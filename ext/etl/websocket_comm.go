@@ -42,7 +42,7 @@ type (
 
 	webSocketComm struct {
 		baseComm
-		sessions []Session
+		sessions map[string]Session
 		m        sync.Mutex
 	}
 
@@ -63,7 +63,7 @@ type (
 		eg  *errgroup.Group
 		ctx context.Context
 
-		finishCb func(Session) // to self-remove from `webSocketComm.sessions`
+		finishCb func(id string) // to self-remove from `webSocketComm.sessions`
 	}
 
 	rwpair struct {
@@ -123,15 +123,10 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		writerCh: make(chan *io.PipeWriter, wockChSize),
 		ctx:      ctx,
 		eg:       group,
-		finishCb: func(session Session) {
+		finishCb: func(id string) {
 			cancel()
 			ws.m.Lock()
-			for i, s := range ws.sessions {
-				if session == s {
-					ws.sessions = append(ws.sessions[:i], ws.sessions[i+1:]...)
-					break
-				}
-			}
+			delete(ws.sessions, id)
 			ws.m.Unlock()
 		},
 	}
@@ -140,7 +135,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 	group.Go(wcs.writeLoop)
 
 	ws.m.Lock()
-	ws.sessions = append(ws.sessions, wcs)
+	ws.sessions[xctn.ID()] = wcs
 	ws.m.Unlock()
 	return wcs, nil
 }
@@ -192,7 +187,7 @@ func (wctx *wsConnCtx) Finish(errCause error) error {
 		nlog.Errorf("error shutting down webSocketComm goroutines: %v", err)
 	}
 	if wctx.finishCb != nil {
-		wctx.finishCb(wctx)
+		wctx.finishCb(wctx.txctn.ID())
 	}
 	return wctx.conn.Close()
 }

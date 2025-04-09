@@ -139,6 +139,8 @@ func LatencyToCounter(latName string) string {
 		return GetCount
 	case PutLatency, PutRedirLatency, PutLatencyTotal:
 		return PutCount
+	case ETLOfflineLatencyTotal:
+		return ETLOfflineCount
 	case RatelimGetRetryLatencyTotal:
 		return RatelimGetRetryCount
 	case RatelimPutRetryLatencyTotal:

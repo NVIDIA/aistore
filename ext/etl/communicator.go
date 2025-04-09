@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +19,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -133,7 +136,7 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		rp.rp = revProxy
 		return rp
 	case WebSocket:
-		ws := &webSocketComm{sessions: make([]Session, 0, 4)}
+		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
 		ws.listener, ws.boot, ws.pw = listener, boot, pw
 		return ws
 	}
@@ -199,7 +202,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: http.StatusNoContent}
 }
 
-func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, daddr string, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
+func doWithTimeout(reqArgs *cmn.HreqArgs, srcSize int64, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
 	var (
 		req  *http.Request
 		resp *http.Response
@@ -208,17 +211,13 @@ func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, daddr 
 		timeout = DefaultReqTimeout
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	req, err = http.NewRequestWithContext(ctx, method, url, body)
+	req, err = http.NewRequestWithContext(ctx, reqArgs.Method, reqArgs.URL(), reqArgs.BodyR)
 	if err != nil {
 		cancel()
 		return nil, 0, err
 	}
 
 	req.ContentLength = srcSize
-	if daddr != "" {
-		// TODO: define and enforce trusted etl containers that can directly make requests to target at `daddr`
-		req.Header.Set(apc.HdrNodeURL, daddr)
-	}
 	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	if err != nil {
 		cancel()
@@ -239,6 +238,9 @@ func doWithTimeout(method, url string, body io.ReadCloser, srcSize int64, daddr 
 		Size: dstSize,
 		DeferCb: func() {
 			cancel()
+			st := core.T.StatsUpdater()
+			st.Inc(stats.ETLOfflineCount)
+			st.Add(stats.ETLOfflineLatencyTotal, int64(mono.Since(started)))
 		},
 	}), resp.StatusCode, nil
 }
@@ -252,10 +254,13 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		return core.ReadResp{Err: err}
 	}
 	var (
-		u       string
+		path    string
 		srcSize int64
 		body    io.ReadCloser
 		oah     cos.OAH = lom
+
+		started = mono.NanoTime()
+		query   = make(url.Values, 2)
 	)
 
 	switch pc.boot.msg.ArgTypeX {
@@ -264,7 +269,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		// - container must be ready to receive complete bucket name including namespace
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
 		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
-		u = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
+		path = lom.Bck().Name + "/" + lom.ObjName
 		srcResp := lom.GetROC(latestVer, sync)
 		if srcResp.Err != nil {
 			return srcResp
@@ -279,24 +284,34 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		}
 
 		body = http.NoBody
-		u = cos.JoinPath(pc.boot.uri, url.PathEscape(lom.FQN))
+		path = url.PathEscape(lom.FQN)
 	default:
 		e := pc.boot.msg.errInvalidArg()
 		debug.AssertNoErr(e) // is validated at construction time
 		nlog.Errorln(e)
 	}
 
-	if targs != "" {
-		q := url.Values{apc.QparamETLTransformArgs: []string{targs}}
-		u = cos.JoinQuery(u, q)
-	}
-
 	if len(pc.command) != 0 { // HpushStdin case
-		q := url.Values{"command": []string{"bash", "-c", strings.Join(pc.command, " ")}}
-		u = cos.JoinQuery(u, q)
+		query = url.Values{"command": []string{"bash", "-c", strings.Join(pc.command, " ")}}
 	}
 
-	r, ecode, err := doWithTimeout(http.MethodPut, u, body, srcSize, daddr, timeout)
+	if targs != "" {
+		query.Set(apc.QparamETLTransformArgs, targs)
+	}
+
+	reqArgs := &cmn.HreqArgs{
+		Method: http.MethodPut,
+		Base:   pc.boot.uri,
+		Path:   path,
+		BodyR:  body,
+		Header: http.Header{
+			cos.HdrContentLength: []string{strconv.Itoa(int(srcSize))},
+			apc.HdrNodeURL:       []string{daddr},
+		},
+		Query: query,
+	}
+
+	r, ecode, err := doWithTimeout(reqArgs, srcSize, timeout, started)
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
@@ -344,12 +359,12 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	}
 
 	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	u := rc.redirectURL(lom, cos.IsParseBool(latestVer))
+	path, query := rc.redirectArgs(lom, cos.IsParseBool(latestVer))
 	if targs != "" {
-		q := url.Values{apc.QparamETLTransformArgs: []string{targs}}
-		u = cos.JoinQuery(u, q)
+		query.Set(apc.QparamETLTransformArgs, targs)
 	}
-	http.Redirect(w, r, u, http.StatusTemporaryRedirect)
+	url := cos.JoinQuery(cos.JoinPath(rc.boot.uri, path), query)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
@@ -358,12 +373,13 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 // TODO: support `sync` option as well
-func (rc *redirectComm) redirectURL(lom *core.LOM, latestVer bool) (u string) {
+func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string, query url.Values) {
+	query = make(url.Values)
 	switch rc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
-		u = cos.JoinPath(rc.boot.uri, transformerPath(lom))
+		path = transformerPath(lom)
 	case ArgTypeFQN:
-		u = cos.JoinPath(rc.boot.uri, url.PathEscape(lom.FQN))
+		path = url.PathEscape(lom.FQN)
 	default:
 		err := rc.boot.msg.errInvalidArg()
 		debug.AssertNoErr(err)
@@ -371,21 +387,35 @@ func (rc *redirectComm) redirectURL(lom *core.LOM, latestVer bool) (u string) {
 	}
 
 	if latestVer {
-		q := url.Values{apc.QparamLatestVer: []string{"true"}}
-		u = cos.JoinQuery(u, q)
+		query.Set(apc.QparamLatestVer, "true")
 	}
-	return u
+	return path, query
 }
 
 func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr string) core.ReadResp {
-	clone := *lom
+	var (
+		started = mono.NanoTime()
+		clone   = *lom
+	)
 	_, err := lomLoad(&clone, rc.boot.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err}
 	}
+	path, query := rc.redirectArgs(&clone, latestVer)
 
-	etlURL := rc.redirectURL(&clone, latestVer)
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), daddr, rc.boot.msg.Timeout.D())
+	reqArgs := &cmn.HreqArgs{
+		Method: http.MethodGet,
+		Base:   rc.boot.uri,
+		Path:   path,
+		BodyR:  http.NoBody,
+		Header: http.Header{
+			cos.HdrContentLength: []string{strconv.Itoa(int(clone.Lsize()))},
+			apc.HdrNodeURL:       []string{daddr},
+		},
+		Query: query,
+	}
+
+	r, ecode, err := doWithTimeout(reqArgs, clone.Lsize(), rc.boot.msg.Timeout.D(), started)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
@@ -413,13 +443,27 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool, daddr string) core.ReadResp {
-	clone := *lom
+	var (
+		started = mono.NanoTime()
+		clone   = *lom
+	)
 	_, err := lomLoad(&clone, rp.boot.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err}
 	}
-	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(&clone))
-	r, ecode, err := doWithTimeout(http.MethodGet, etlURL, http.NoBody, clone.Lsize(), daddr, rp.boot.msg.Timeout.D())
+
+	reqArgs := &cmn.HreqArgs{
+		Method: http.MethodGet,
+		Base:   rp.boot.uri,
+		Path:   transformerPath(&clone),
+		BodyR:  http.NoBody,
+		Header: http.Header{
+			cos.HdrContentLength: []string{strconv.Itoa(int(clone.Lsize()))},
+			apc.HdrNodeURL:       []string{daddr},
+		},
+	}
+
+	r, ecode, err := doWithTimeout(reqArgs, clone.Lsize(), rp.boot.msg.Timeout.D(), started)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, clone.Cname(), err, ecode)

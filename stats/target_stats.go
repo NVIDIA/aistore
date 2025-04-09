@@ -84,6 +84,10 @@ const (
 	DsortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
 	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
+	// ETL
+	ETLOfflineCount        = "etl.offline.n"
+	ETLOfflineLatencyTotal = "etl.offline.ns.total"
+
 	// Downloader
 	DloadSize = "dl.size"
 
@@ -497,6 +501,18 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, DsortExtractShardSize, KindSize,
 		&Extra{
 			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
+		},
+	)
+
+	// ETL
+	r.reg(snode, ETLOfflineCount, KindCounter,
+		&Extra{
+			Help: "Total number of requests to ETL made by offline transform jobs",
+		},
+	)
+	r.reg(snode, ETLOfflineLatencyTotal, KindTotal,
+		&Extra{
+			Help: "Total accumulated latency of requests to ETL made by offline transform jobs (nanoseconds)",
 		},
 	)
 
