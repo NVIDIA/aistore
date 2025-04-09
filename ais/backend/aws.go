@@ -680,7 +680,16 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 	}
 
 	uploader = s3manager.NewUploader(svc)
-	uploader.PartSize = cos.NonZero(int64(lom.Bprops().Extra.AWS.MultiPartSize), aiss3.DefaultPartSize)
+
+	switch partSize := int64(lom.Bprops().Extra.AWS.MultiPartSize); partSize {
+	case -1:
+		uploader.PartSize = lom.Lsize() + 1 // forces single-part upload
+	case 0:
+		uploader.PartSize = aiss3.DefaultPartSize
+	default:
+		uploader.PartSize = partSize
+	}
+
 	uploadOutput, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:   aws.String(cloudBck.Name),
 		Key:      aws.String(lom.ObjName),

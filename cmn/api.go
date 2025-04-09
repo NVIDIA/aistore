@@ -296,13 +296,23 @@ func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
 }
 
 func (c *ExtraProps) ValidateAsProps(arg ...any) error {
+	// part sizes to allow for multipart upload, consistent with Amazon S3 limits
+	const (
+		maxPartSizeAWS = 5 * cos.GiB
+		minPartSizeAWS = 5 * cos.MiB
+	)
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
-	if provider == apc.HT && c.HTTP.OrigURLBck == "" {
-		return errors.New("original bucket URL must be set for a bucket with HTTP provider")
-	}
-	if provider == apc.AWS && c.AWS.MultiPartSize != 0 && (c.AWS.MultiPartSize < 5*cos.MB || c.AWS.MultiPartSize > cos.TB) {
-		return fmt.Errorf("invalid aws.multipart_size %d (expecting range 5MB to 1TB)", c.AWS.MultiPartSize)
+	switch provider {
+	case apc.HT:
+		if c.HTTP.OrigURLBck == "" {
+			return errors.New("original bucket URL must be set for an HTTP provider bucket")
+		}
+	case apc.AWS:
+		size := c.AWS.MultiPartSize
+		if size != -1 && size != 0 && (size < minPartSizeAWS || size > maxPartSizeAWS) {
+			return fmt.Errorf("invalid aws.multipart_size %d (expecting -1 (single-part), 0 (default), or range 5MiB to 5GiB)", size)
+		}
 	}
 	return nil
 }

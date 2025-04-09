@@ -227,3 +227,23 @@ extra.aws.max_pagesize           0
 extra.aws.multipart_size         1GiB
 extra.aws.profile
 ```
+
+## Disabling MultiPart Uploads
+
+Some 3rd party s3 providers don't fully support the `aws-chunked-encoding` used by the AWS SDK for multipart upload.
+
+With [recent updates](https://github.com/aws/aws-sdk-go-v2/discussions/2960), the default for the s3 SDK is now to provide the checksum for any supported API, and to do so using their proprietary `aws-chunked-encoding`.
+AWS provides a way to disable this with the option `request_checksum_calculation=when_required`.
+However, as of writing, the s3 manager tool [does not support this option](https://github.com/aws/aws-sdk-go-v2/issues/3007).
+For these backend buckets, the checksum cannot be read from the client and users will see this error:
+``` 
+InvalidArgument: x-amz-content-sha256 must be UNSIGNED-PAYLOAD, or a valid sha256 value
+```
+
+To disable multipart uploads for compatibility with these backends (or any other reason), you can set
+
+```
+extra.aws.multipart_size  -1
+```
+
+**NOTE:** Setting this to false will result in much slower "single-part" uploads
