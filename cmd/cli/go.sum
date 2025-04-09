@@ -1,6 +1,6 @@
 github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/NVIDIA/aistore v1.3.28-0.20250409161040-970bc1ea6cf4 h1:IbdkqQ+zriaIcKemynG2+Sp2mX7ggD7kcCLzwe9etXI=
-github.com/NVIDIA/aistore v1.3.28-0.20250409161040-970bc1ea6cf4/go.mod h1:jf5Cq2j145N/h8+z1PgQzFZUpKp9+8voj8NyN0g1a5w=
+github.com/NVIDIA/aistore v1.3.28-0.20250409165623-657f42d4b129 h1:lP90HkOajirVN8K2ey+J1Vg2sdDAcNUzU3wtQUNT3xU=
+github.com/NVIDIA/aistore v1.3.28-0.20250409165623-657f42d4b129/go.mod h1:jf5Cq2j145N/h8+z1PgQzFZUpKp9+8voj8NyN0g1a5w=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
