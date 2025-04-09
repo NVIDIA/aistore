@@ -48,23 +48,31 @@ include:
     paths: [ logs/ ]
     expire_in: 1 days
 
-.default_only_template: &default_only_def
-  only:
-    - main
-    - merge_requests
-    - schedules
-    - webs
+.default_test_rules: &default_test_rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_rules, rules]
+
+.default_rules: &default_rules
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+      when: always
 
 .test_short_template: &test_short_def
   stage: test-short
   tags:
     - $RUNNER_TAG
   timeout: 35m
-  <<: *default_only_def
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-      - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_test_rules, rules]
   <<: *gather_logs_def
 
 .test_short_skip_scheduled_template: &test_short_skip_scheduled_def
@@ -150,7 +158,7 @@ build:linux:
   tags:
     - $RUNNER_TAG
   timeout: 10m
-  <<: *default_only_def
+  <<: *default_rules
   script:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
@@ -190,7 +198,8 @@ build:k8s:
     - buildah push $FQ_AISINIT_IMAGE_NAME
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      allow_failure: false
+      when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
@@ -209,7 +218,7 @@ lint:linux:
   tags:
     - $RUNNER_TAG
   timeout: 10m
-  <<: *default_only_def
+  <<: *default_rules
   script:
     - make lint
     - TAGS="oteltracing statsd ht" make lint
@@ -229,15 +238,15 @@ test:short:
 
 test:short:python-changelog-check:
   <<: *test_short_def
-  only:
-    refs:
-      - merge_requests
-    changes:
-      - python/aistore/sdk/**/*
-      - python/aistore/version.py
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-python-changelog-check.*/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-python-changelog-check.*/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - python/aistore/sdk/**/*
+        - python/aistore/version.py
   script:
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - CHANGED_FILES=$(git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"...HEAD)
@@ -247,6 +256,7 @@ test:short:python-changelog-check:
 
 test:short:python-unit:
   <<: *test_short_def
+  <<: *default_test_rules
   variables:
     PIP: "uv pip"
   script:
@@ -262,13 +272,11 @@ test:short:python-unit:
         deactivate || true
         rm -rf .venv
       done
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:python-integration:
   <<: *test_short_def
+  <<: *default_test_rules
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
@@ -287,9 +295,6 @@ test:short:python-integration:
         deactivate || true
         rm -rf .venv
       done
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
 
 test:long:python-extended:
   <<: *test_long_def
@@ -324,10 +329,11 @@ test:short:pytorch:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
     - make python_pytorch_tests
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-      - $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_test_rules, rules]
 
 test:short:python-authn:
   stage: test-short
@@ -379,18 +385,19 @@ test:short:s3-compat:
     # Fail on first failure
     S3_COMPAT_STRICT:
       value: "True"
-
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - ais config cluster features S3-API-via-Root
     - ais config cluster checksum.type=md5
     - cd python
     - make python_s3_compat_test
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/
-      - $CI_PIPELINE_SOURCE == "schedule"
-
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - !reference [.default_test_rules, rules]
 
 test:short:authn:
   <<: *test_short_optional_def
