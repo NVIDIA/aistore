@@ -236,13 +236,14 @@ With [recent updates](https://github.com/aws/aws-sdk-go-v2/discussions/2960), th
 AWS provides a way to disable this with the option `request_checksum_calculation=when_required`.
 However, as of writing, the s3 manager tool [does not support this option](https://github.com/aws/aws-sdk-go-v2/issues/3007).
 For these backend buckets, the checksum cannot be read from the client and users will see this error:
-``` 
+
+```console
 InvalidArgument: x-amz-content-sha256 must be UNSIGNED-PAYLOAD, or a valid sha256 value
 ```
 
 To disable multipart uploads for compatibility with these backends (or any other reason), you can set
 
-```
+```console
 extra.aws.multipart_size  -1
 ```
 

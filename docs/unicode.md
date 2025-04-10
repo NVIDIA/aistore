@@ -16,14 +16,23 @@ This README demonstrates handling these names properly across both native (`ais:
 
 ## Client vs. Server Responsibilities
 
-AIStore does **not** decode percent-encoded object names. The name passed by the client — whether encoded or not — is used **as-is**.
+In accordance with standard HTTP behavior, clients are responsible for percent-encoding object names into valid URL paths. This is especially important when object names contain characters like spaces, slashes, or symbols such as `?`, `#`, or `"`.
 
-- If you upload an object as `"ais://bucket/my%20file"`, it is stored **literally** as `"my%20file"`, not `"my file"`.
-- This preserves performance on the server-side and avoids ambiguity, but it means **clients are responsible** for encoding any special symbols if needed.
+The AIS server — like all HTTP servers — automatically decodes (unescapes) the request path before processing it.
 
-The AIS CLI provides an `--encode-objname` flag to handle this automatically.
+For example:
 
-Below are a few examples.
+- If a client sends a request to read or write `bucket/my%20file`, the server will unescape it and handle it as `bucket/my file`.
+
+- In terms of RESTful API, when a client sends a request with URL path `/v1/objects/bucket/my%20file`, AIS will handle it as `/v1/objects/bucket/my file`.
+
+The bottom line is, AIStore always uses the original UTF-8 string decoded from the HTTP path. The path that you may (or may not) encode on the client side.
+
+For convenience, AIS CLI provides the `--encode-objname` flag to do this automatically, so you can use natural-looking object names even if they contain special characters.
+
+But if you use tools like `curl`, you must encode URLs manually.
+
+Below are examples that demonstrate this behavior.
 
 ## Working with Unicode Object Names
 
@@ -95,7 +104,7 @@ For proper display of Unicode characters in your terminal:
 1. Ensure your terminal supports UTF-8 (most modern terminals do)
 2. Set your locale to UTF-8: `export LANG=en_US.UTF-8`
 3. If using VIM to edit configuration files with Unicode:
-   ```
+   ```bash
    # Add to your .vimrc
    set encoding=utf-8
    set fileencoding=utf-8
@@ -104,9 +113,10 @@ For proper display of Unicode characters in your terminal:
 
 ## Curl
 
-For programmatic access to objects with Unicode names:
+For programmatic access to objects with Unicode names, remember that the URL must be properly encoded:
 
 ```console
+$ export helloworld="こんにちは世界"
 $ curl -L -X GET "http://ais-endpoint/v1/objects/onebucket/$helloworld"
 
 MIT License
@@ -118,15 +128,15 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 
 ## Special Symbols in Object Names
 
-Special symbols such as `; : ' " < > / \ | ? #` may require encoding depending on your shell or toolchain.
+Special symbols such as `;`, `:`, `'`, `"`, `<`, `>`, `/`, `\`, `|`, `?`, `#`, `%`, `+`, and `&` may require encoding depending on your shell or toolchain.
 
-Use the `--encode-objname` flag to safely encode them when using the CLI:
+When using the CLI, specify `--encode-objname` flag with GET and PUT commands:
 
 ```console
 $ ais put LICENSE "ais://threebucket/aaa bbb ccc" --encode-objname
 PUT "LICENSE" => ais://threebucket/aaa bbb ccc
 
-$ ais ls ais://nnn
+$ ais ls ais://threebucket
 NAME             SIZE
 aaa bbb ccc      1.05KiB
 
@@ -144,7 +154,7 @@ Permission is hereby granted, free of charge, to any person obtaining a copy
 
 ## Encoding Helper (Python)
 
-For programmatic clients, here’s how to encode object names using Python:
+For programmatic clients, here's how to encode object names using Python:
 
 ```python
 import urllib.parse
@@ -153,11 +163,13 @@ name = 'my weird/obj?name#with!symbols'
 encoded = urllib.parse.quote(name, safe='')  # fully encode all special chars
 print(encoded)
 # Output: my%20weird%2Fobj%3Fname%23with%21symbols
-
-# Use this in CLI:
-# ais put LICENSE "ais://mybucket/<encoded>" or use --encode-objname
 ```
 
+This encoded string can be used in direct HTTP requests (e.g., with `curl`).
+Similar encoding functions exist in other programming languages - refer to your language's URL encoding documentation.
+
 ---
+
+If you're building your own clients in Go or another language, make sure to encode the object name into a valid `URL.Path` — just as you would for any other HTTP API.
 
 For more information, see the full AIStore documentation at [https://github.com/NVIDIA/aistore](https://github.com/NVIDIA/aistore)
