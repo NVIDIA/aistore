@@ -937,23 +937,22 @@ var (
 	}
 
 	// num-workers
+	noWorkers = indent4 + "\tuse (-1) to indicate single-threaded serial execution (ie., no workers);\n"
+
+	numWorkersFlag = cli.IntFlag{
+		Name: "num-workers",
+		Usage: "Number of concurrent workers; if omitted or zero defaults to a number of target mountpaths (disks);\n" +
+			noWorkers +
+			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
+	}
 	numBlobWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",
 		Usage: "Number of concurrent blob-downloading workers (readers); system default when omitted or zero",
 	}
-
-	noWorkers = indent4 + "\tuse (-1) to indicate single-threaded serial execution (ie., no workers);\n"
-
-	numListRangeWorkersFlag = cli.IntFlag{
-		Name: numBlobWorkersFlag.Name,
-		Usage: "Number of concurrent workers (readers); defaults to a number of target mountpaths if omitted or zero;\n" +
-			noWorkers +
-			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
-	}
 	numGenShardWorkersFlag = cli.IntFlag{
-		Name:  numBlobWorkersFlag.Name,
+		Name:  "num-workers",
 		Value: 10,
-		Usage: "Limits the number of shards created concurrently",
+		Usage: "Number of concurrent shard-creating workers",
 	}
 	numPutWorkersFlag = cli.IntFlag{
 		Name:  numBlobWorkersFlag.Name,

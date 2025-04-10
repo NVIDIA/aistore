@@ -7,6 +7,7 @@ package xs
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -27,10 +29,16 @@ import (
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+)
+
+const (
+	tcbBurstMultiplier = 4
+	tcbMinWorkers      = 2
 )
 
 type (
@@ -51,7 +59,7 @@ type (
 		xact.BckJog
 		// copying parallelism
 		workers []tcbworker
-		workCh  chan *core.LOM
+		workCh  chan core.LIF
 		wg      sync.WaitGroup
 		// args
 		args *xreg.TCBArgs
@@ -81,16 +89,19 @@ func (p *tcbFactory) Start() error {
 		nat       = smap.CountActiveTs()
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // estimate
+		args      = p.Args.Custom.(*xreg.TCBArgs)
+		msg       = args.Msg
 	)
 	debug.AssertNoErr(err)
 
-	r, numWorkers := newTCB(p, slab, config, smap, nat)
+	r := &XactTCB{args: args}
+	r.init(p, slab, config, smap, nat)
 
 	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
 		// TODO upon abort: call r.transform.Finish() to cleanup communicator's state
 		r.owt = cmn.OwtTransform
-		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(r.args.Msg.Transform.Name, r)
+		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(args.Msg.Transform.Name, r)
 		if err != nil {
 			return err
 		}
@@ -102,7 +113,23 @@ func (p *tcbFactory) Start() error {
 
 	// single-node cluster
 	if nat <= 1 {
-		return nil
+		return nil // ---->
+	}
+
+	// intra-cluster copying/transforming parallelism
+	// tune-up num-workers, if specified
+	numWorkers, err := r.numWorkers(msg.NumWorkers)
+	if err != nil {
+		return err
+	}
+
+	if numWorkers > 0 {
+		r.workers = make([]tcbworker, 0, numWorkers)
+		for range numWorkers {
+			r.workers = append(r.workers, tcbworker{r})
+		}
+		r.workCh = make(chan core.LIF, numWorkers*tcbBurstMultiplier)
+		nlog.Infoln(r.Name(), "workers:", numWorkers)
 	}
 
 	// data mover and sentinel
@@ -114,15 +141,6 @@ func (p *tcbFactory) Start() error {
 		return err
 	}
 	r.sntl.init(r, smap, nat)
-
-	// copying parallelism
-	if numWorkers > 0 {
-		r.workers = make([]tcbworker, 0, numWorkers)
-		for range numWorkers {
-			r.workers = append(r.workers, tcbworker{r})
-		}
-		r.workCh = make(chan *core.LOM, numWorkers) // TODO -- FIXME: provide for burst
-	}
 
 	return nil
 }
@@ -176,20 +194,19 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) (r *XactTCB, numWorkers int) {
+func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) {
 	var (
-		args = p.Args.Custom.(*xreg.TCBArgs)
-		msg  = args.Msg
+		args   = r.args
+		msg    = r.args.Msg
+		mpopts = &mpather.JgroupOpts{
+			CTs:      []string{fs.ObjectType},
+			VisitObj: r.do,
+			Prefix:   msg.Prefix,
+			Slab:     slab,
+			DoLoad:   mpather.Load,
+			Throttle: false, // superseded by destination rate-limiting (v3.28)
+		}
 	)
-	r = &XactTCB{args: args}
-	mpopts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
-		VisitObj: r.do,
-		Prefix:   msg.Prefix,
-		Slab:     slab,
-		DoLoad:   mpather.Load,
-		Throttle: false, // superseded by destination rate-limiting (v3.28)
-	}
 	mpopts.Bck.Copy(args.BckFrom.Bucket())
 
 	// ctlmsg
@@ -201,7 +218,7 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	sb.Grow(80)
 	msg.Str(&sb, fromCname, toCname)
 
-	// init
+	// init base
 	r.BckJog.Init(p.UUID(), p.kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
 
 	// xname
@@ -234,7 +251,6 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Sma
 	}
 
 	p.xctn = r
-	return r, msg.NumWorkers // TODO -- FIXME: factor in the current load vs num cores
 }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
@@ -322,7 +338,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		return err
 	}
 
-	r.workCh <- lom // TODO -- FIXME: where's this lom getting freed?
+	r.workCh <- lom.LIF()
 	return nil
 }
 
@@ -430,6 +446,40 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	return
 }
 
+func (r *XactTCB) numWorkers(n int) (int, error) {
+	if n <= 0 {
+		return 0, nil
+	}
+
+	// 1. do not exceed num available cores
+	n = min(sys.MaxParallelism(), n)
+
+	// 2. factor in memory pressure
+	var (
+		mm       = core.T.PageMM()
+		pressure = mm.Pressure()
+	)
+	switch pressure {
+	case memsys.OOM, memsys.PressureExtreme:
+		oom.FreeToOS(true)
+		return 0, errors.New(r.Name() + ": extreme memory pressure - not starting")
+	case memsys.PressureHigh:
+		n = min(tcbMinWorkers+1, n)
+		nlog.Warningln(r.Name(), "high memory pressure detected...")
+	}
+
+	// 3. factor in load averages
+	var (
+		load     = sys.MaxLoad()
+		highLoad = sys.HighLoadWM()
+	)
+	if load >= float64(highLoad) {
+		n = min(tcbMinWorkers, n)
+	}
+
+	return n, nil
+}
+
 ///////////////
 // tcbworker //
 ///////////////
@@ -440,19 +490,28 @@ func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
 		args = r.args // TCBArgs
 	)
 	for {
-		lom, ok := <-r.workCh
+		lif, ok := <-r.workCh
 		if !ok {
 			break
 		}
+		lom, err := lif.LOM()
+		if err != nil {
+			r.Abort(err)
+			break
+		}
+
 		a := r.copier.prepare(lom, args.BckTo, args.Msg)
 		a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
-		err := r.copier.do(a, lom, r.dm)
+		err = r.copier.do(a, lom, r.dm)
 		if err == nil {
 			if args.Msg.Sync {
 				r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
 			}
 		} else {
 			r.AddErr(err)
+		}
+		if r.IsAborted() {
+			break
 		}
 	}
 	r.wg.Done()

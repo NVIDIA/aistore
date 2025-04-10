@@ -61,7 +61,7 @@ var (
 			etlBucketRequestTimeout,
 			listFlag,
 			templateFlag,
-			numListRangeWorkersFlag,
+			numWorkersFlag,
 			verbObjPrefixFlag,
 			// TODO: progressFlag,
 			waitFlag,

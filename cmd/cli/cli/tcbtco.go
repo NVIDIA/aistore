@@ -171,8 +171,8 @@ func _iniTCBMsg(c *cli.Context, msg *apc.TCBMsg) error {
 
 	// TCBMsg
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-	if flagIsSet(c, numListRangeWorkersFlag) {
-		msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
+	if flagIsSet(c, numWorkersFlag) {
+		msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 	}
 	return nil
 }

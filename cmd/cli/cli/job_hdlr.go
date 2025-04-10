@@ -114,7 +114,7 @@ var (
 			noRecursFlag, // (embedded prefix dopOLTP)
 			blobThresholdFlag,
 			yesFlag,
-			numListRangeWorkersFlag,
+			numWorkersFlag,
 			dontHeadRemoteFlag,
 		),
 		cmdBlobDownload: {

@@ -76,8 +76,8 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		msg.Sync = flagIsSet(c, syncFlag)
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 		msg.Prepend = parseStrFlag(c, copyPrependFlag)
-		if flagIsSet(c, numListRangeWorkersFlag) {
-			msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
+		if flagIsSet(c, numWorkersFlag) {
+			msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 		}
 	}
 	// 3. start copying/transforming
@@ -485,8 +485,8 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 					return
 				}
 			}
-			if flagIsSet(c, numListRangeWorkersFlag) {
-				msg.NumWorkers = parseIntFlag(c, numListRangeWorkersFlag)
+			if flagIsSet(c, numWorkersFlag) {
+				msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 			}
 		}
 		xid, err = api.Prefetch(apiBP, lr.bck, msg)

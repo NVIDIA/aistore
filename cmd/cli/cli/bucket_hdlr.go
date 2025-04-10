@@ -160,7 +160,7 @@ var (
 		commandCopy: {
 			listFlag,
 			templateFlag,
-			numListRangeWorkersFlag,
+			numWorkersFlag,
 			verbObjPrefixFlag,
 			copyAllObjsFlag,
 			continueOnErrorFlag,
