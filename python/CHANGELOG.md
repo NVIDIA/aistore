@@ -15,6 +15,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - Add abstract base class `ETLServer` defining the common interface for ETL servers.
       - Includes abstract methods: `transform`, and `start`.  
   - Implement `HTTPMultiThreadedServer`, a multi-threaded server based on `BaseHTTPRequestHandler`.
+  - Implement `FastAPIServer` base class for async ETL processing
 
 ### Changed
 - `props` accessor ensures object properties are refreshed via HEAD request on every access.
