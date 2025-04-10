@@ -12,6 +12,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Changed
 ### Removed
 
+## [1.13.2] - 2025-04-10
+
+### Changed
+- Change `uvicorn` installation to `uvicorn[standard]` for `aistore[etl]` package.
+
 ## [1.13.1] - 2025-04-10
 
 ### Added

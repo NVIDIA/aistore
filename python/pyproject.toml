@@ -79,7 +79,7 @@ etl = [
     "fastapi>=0.109.1",
     "httpx>=0.28.0",
     "aiofiles>=23.2.1",
-    "uvicorn>=0.32.0",
+    "uvicorn[standard]>=0.32.0",
 ]
 
 [project.urls]
