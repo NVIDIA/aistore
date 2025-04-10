@@ -36,6 +36,61 @@ include:
     file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
 
 
+# Rules
+
+.changes_rules:
+  rules:
+    - &etl_changes_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/etl/**/*"
+        - "**/*etl*.py"
+        - "**/*etl*.go"
+        - 'api/apc/*'
+        - 'cmn/k8s/*'
+        - 'core/lom*'
+        - 'core/ldp.go'
+        - 'core/xaction.go'
+        - 'xact/xreg/*'
+        - 'xact/xs/tcb.go'
+        - 'xact/xs/tcobjs.go'
+    - &authn_changes_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "**/authn/**/*"
+        - '**/*authn*.go'
+        - '**/*authn*.py'
+        - 'api/apc/*'
+    - &python_req_changes_rule
+      if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - 'python/aistore/common_requirements'
+
+.default_rules: &default_rules
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+        
+.default_test_rules: &default_test_rules
+  rules:
+    - !reference [.default_rules, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+
+.default_run_rules: &default_run_rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+
+.skip_scheduled_rules: &skip_scheduled_rules
+  rules:
+    - !reference [.default_rules, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+
+
 # Templates
 
 .gather_logs_template: &gather_logs_def
@@ -48,37 +103,14 @@ include:
     paths: [ logs/ ]
     expire_in: 1 days
 
-.default_test_rules: &default_test_rules
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: manual
-      allow_failure: true
-    - !reference [.default_rules, rules]
-
-.default_rules: &default_rules
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-
-.skip_scheduled_rules: &skip_scheduled_rules
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-
 .test_short_template: &test_short_def
   stage: test-short
   tags:
     - $RUNNER_TAG
   timeout: 35m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
-      when: manual
-      allow_failure: true
-    - !reference [.default_test_rules, rules]
   <<: *gather_logs_def
+  <<: *default_test_rules
 
 .test_short_skip_scheduled_template: &test_short_skip_scheduled_def
   stage: test-short
@@ -88,15 +120,15 @@ include:
   <<: *gather_logs_def
   <<: *skip_scheduled_rules
 
-
 .test_short_optional_template: &test_short_optional_def
   stage: test-short
   tags:
     - $RUNNER_TAG
   timeout: 35m
   rules:
+    - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -108,8 +140,9 @@ include:
   # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
+    - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "web"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -123,32 +156,6 @@ include:
   <<: *skip_scheduled_rules
   <<: *gather_logs_def
 
-# Rule Anchors
-
-.etl_change_rules: &etl_change_rules
-  changes:
-    - "**/etl/**/*"
-    - "**/*etl*.py"
-    - "**/*etl*.go"
-    - 'api/apc/*'
-    - 'cmn/k8s/*'
-    - 'core/lom*'
-    - 'core/ldp.go'
-    - 'core/xaction.go'
-    - 'xact/xreg/*'
-    - 'xact/xs/tcb.go'
-    - 'xact/xs/tcobjs.go'
-
-.authn_change_rules: &authn_change_rules
-  changes:
-    - "**/authn/**/*"
-    - '**/*authn*.go'
-    - '**/*authn*.py'
-    - 'api/apc/*'
-
-.python_req_change_rules: &python_req_change_rules
-  changes:
-    - 'python/aistore/common_requirements'
 
 # Stages
 
@@ -157,7 +164,9 @@ build:linux:
   tags:
     - $RUNNER_TAG
   timeout: 10m
-  <<: *default_rules
+  rules:
+    - !reference [.default_rules, rules]
+    - !reference [.default_run_rules, rules]
   script:
     - MODE="" make node # Build node without backends in production mode.
     - MODE="debug" make node # Build node without backends in debug mode.
@@ -196,28 +205,17 @@ build:k8s:
       -f deploy/prod/k8s/aisinit_container/Dockerfile
     - buildah push $FQ_AISINIT_IMAGE_NAME
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
-      allow_failure: false
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-      allow_failure: false
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *etl_change_rules
-      allow_failure: false
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *python_req_change_rules
-      allow_failure: false
+    - !reference [.test_k8s_short_template, rules]
+    - *python_req_changes_rule
 
 lint:linux:
   stage: build
   tags:
     - $RUNNER_TAG
   timeout: 10m
-  <<: *default_rules
+  rules:
+    - !reference [.default_rules, rules]
+    - !reference [.default_run_rules, rules]
   script:
     - make lint
     - TAGS="oteltracing statsd ht" make lint
@@ -227,6 +225,12 @@ lint:linux:
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:
   <<: *test_short_def
+  rules:
+    - !reference [.test_short_template, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_run_rules, rules]
   variables:
     BUCKET: "ais://test"
   script:
@@ -238,8 +242,7 @@ test:short:
 test:short:python-changelog-check:
   <<: *test_short_def
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
+    - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-python-changelog-check.*/'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -255,7 +258,9 @@ test:short:python-changelog-check:
 
 test:short:python-unit:
   <<: *test_short_def
-  <<: *default_test_rules
+  rules:
+    - !reference [.test_short_template, rules]
+    - !reference [.default_run_rules, rules]
   variables:
     PIP: "uv pip"
   script:
@@ -275,7 +280,9 @@ test:short:python-unit:
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:python-integration:
   <<: *test_short_def
-  <<: *default_test_rules
+  rules:
+    - !reference [.test_short_template, rules]
+    - !reference [.default_run_rules, rules]
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
@@ -295,30 +302,6 @@ test:short:python-integration:
         rm -rf .venv
       done
 
-test:long:python-extended:
-  <<: *test_long_def
-  variables:
-    AIS_ENDPOINT: "http://localhost:8080"
-    BUCKET: "aws://ais-ci-python"
-    PIP: "uv pip"
-  timeout: 35m
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-  before_script:
-    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
-  script:
-    - cd python
-    - uv venv --python 3.13 .venv
-    - source .venv/bin/activate
-    - make python_sdk_extended_tests
-    - deactivate || true
-    - rm -rf .venv
-
 test:short:pytorch:
   <<: *test_short_def
   variables:
@@ -329,10 +312,10 @@ test:short:pytorch:
     - cd python
     - make python_pytorch_tests
   rules:
+    - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*pytorch.*/'
       when: manual
       allow_failure: true
-    - !reference [.default_test_rules, rules]
 
 test:short:python-authn:
   stage: test-short
@@ -350,25 +333,22 @@ test:short:python-authn:
     - cd python/
     - make python_authn_tests
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
+    - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *python_req_change_rules
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *authn_change_rules
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
+    - *python_req_changes_rule
+    - *authn_changes_rule
 
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
   <<: *test_short_def
   variables:
     BUCKET: "ais://test"
+  rules:
+    - !reference [.test_short_template, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*python-tests-only.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_run_rules, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
@@ -391,12 +371,12 @@ test:short:s3-compat:
     - cd python
     - make python_s3_compat_test
   rules:
+    - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
-    - !reference [.default_test_rules, rules]
 
 test:short:authn:
   <<: *test_short_optional_def
@@ -446,7 +426,6 @@ test:short:aws:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*aws.*/'
-      when: on_success
     - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
@@ -461,7 +440,6 @@ test:short:gcp:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*gcp.*/'
-      when: on_success
     - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
@@ -476,7 +454,6 @@ test:short:azure:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*azure.*/'
-      when: on_success
     - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
@@ -491,7 +468,6 @@ test:short:oci:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*oci.*/'
-      when: on_success
     - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci
@@ -505,6 +481,23 @@ test:long:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --ht
     - make test-long
 
+test:long:python-extended:
+  <<: *test_long_def
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
+    BUCKET: "aws://ais-ci-python"
+    PIP: "uv pip"
+  timeout: 35m
+  before_script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
+  script:
+    - cd python
+    - uv venv --python 3.13 .venv
+    - source .venv/bin/activate
+    - make python_sdk_extended_tests
+    - deactivate || true
+    - rm -rf .venv
+
 test:long:aws:
   <<: *test_long_def
   variables:
@@ -514,7 +507,6 @@ test:long:aws:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*aws.*/'
-      when: on_success
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --ht
@@ -529,7 +521,6 @@ test:long:gcp:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*gcp.*/'
-      when: on_success
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --ht
@@ -544,7 +535,6 @@ test:long:azure:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*azure.*/'
-      when: on_success
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
@@ -559,7 +549,6 @@ test:long:oci:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*oci.*/'
-      when: on_success
     - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht
@@ -628,6 +617,9 @@ test:long:ishard:
     FS_CNT: 6
     RE: "TestETL|TestConfig|TestMountpath"
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
+  rules:
+    - !reference [.default_test_rules, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
   before_script:
     - cd deploy/dev/k8s/kustomize
     - ./utils/generate_kind_config.sh > kind_config.yml
@@ -651,6 +643,10 @@ test:long:ishard:
   variables:
     NUM_PROXY: 1
     NUM_TARGET: 1
+  rules:
+    - !reference [.test_k8s, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - *etl_changes_rule
 
 .test_k8s_long_template:
   stage: test-long
@@ -658,19 +654,21 @@ test:long:ishard:
   variables:
     NUM_PROXY: 1
     NUM_TARGET: 3
+  rules:
+    - !reference [.test_k8s, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
 
 test:short:k8s:
   extends: .test_k8s_short_template
   timeout: 1h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
+    - !reference [.test_k8s_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *etl_change_rules
+      when: manual
+      allow_failure: true
   variables:
     RE: "TestETL|TestConfig|TestMountpath"
   script:
@@ -679,16 +677,8 @@ test:short:k8s:
 test:short:python-etl:
   extends: .test_k8s_short_template
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *python_req_change_rules
-      when: on_success
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      <<: *etl_change_rules
-      when: on_success
+    - !reference [.test_k8s_short_template, rules]
+    - *python_req_changes_rule
   retry:
     max: 2
     when:
@@ -720,22 +710,17 @@ test:long:k8s:
   ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
+    - !reference [.test_k8s_long_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
-      allow_failure: true
+      allow_failure: true    
   script:
     - make test-run
 
 test:long:k8s:single-target:
   extends: .test_k8s_long_template
   timeout: 4h
-  rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
   variables:
     NUM_TARGET: 1
   script:
@@ -744,11 +729,6 @@ test:long:k8s:single-target:
 test:long:k8s:aisloader:
   extends: .test_k8s_long_template
   timeout: 15m
-  rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
   script:
     - sleep 10 # Give some time for the cluster to stabilize.
     - make aisloader
@@ -757,11 +737,6 @@ test:long:k8s:aisloader:
 test:long:k8s:pyaisloader:
   extends: .test_k8s_long_template
   timeout: 15m
-  rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
   script:
     - sleep 10 # Give some time for the cluster to stabilize.
     - cd ./python; make PYAISLOADER_TEST_TYPE=etl test-pyaisloader
@@ -769,11 +744,6 @@ test:long:k8s:pyaisloader:
 test:long:k8s:all:
   extends: .test_k8s_long_template
   timeout: 5h
-  rules:
-    - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
   variables: 
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
