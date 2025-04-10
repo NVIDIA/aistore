@@ -14,15 +14,17 @@ import (
 
 type (
 	TCBArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		Msg     *apc.TCBMsg
-		Phase   string
+		BckFrom   *meta.Bck
+		BckTo     *meta.Bck
+		Msg       *apc.TCBMsg
+		Phase     string
+		DisableDM bool
 	}
 	TCObjsArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		Msg     *apc.TCOMsg
+		BckFrom   *meta.Bck
+		BckTo     *meta.Bck
+		Msg       *apc.TCOMsg
+		DisableDM bool
 	}
 	DsortArgs struct {
 		BckFrom *meta.Bck

@@ -20,10 +20,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -114,31 +114,37 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActCopyBck, apc.ActETLBck:
 		// TODO: remove redundant unmarshal and validateETL calls in both begin and commit phases.
 		// In the commit phase, messages should already be validated and ready for use.
-		var tcbmsg = &apc.TCBMsg{}
+		var (
+			tcbmsg    = &apc.TCBMsg{}
+			disableDM bool
+		)
 		if err := cos.MorphMarshal(c.msg.Value, tcbmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLBck {
-			if err = validateETL(tcbmsg); err != nil {
-				t.writeErr(w, r, err)
+			if disableDM, err = isDisableDM(tcbmsg); err != nil {
+				t.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}
 		}
-		xid, err = t.tcb(c, tcbmsg)
+		xid, err = t.tcb(c, tcbmsg, disableDM)
 	case apc.ActCopyObjects, apc.ActETLObjects:
-		var tcomsg = &cmn.TCOMsg{}
+		var (
+			tcomsg    = &cmn.TCOMsg{}
+			disableDM bool
+		)
 		if err := cos.MorphMarshal(c.msg.Value, tcomsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLObjects {
-			if err = validateETL(&tcomsg.TCBMsg); err != nil {
-				t.writeErr(w, r, err)
+			if disableDM, err = isDisableDM(&tcomsg.TCBMsg); err != nil {
+				t.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}
 		}
-		xid, err = t.tcobjs(c, tcomsg)
+		xid, err = t.tcobjs(c, tcomsg, disableDM)
 	case apc.ActECEncode:
 		xid, err = t.ecEncode(c)
 	case apc.ActArchive:
@@ -508,15 +514,8 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 	return nil
 }
 
-func validateETL(msg *apc.TCBMsg) error {
-	if !k8s.IsK8s() {
-		return k8s.ErrK8sRequired
-	}
-	return msg.Validate(true)
-}
-
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg) (string, error) {
+func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -546,7 +545,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg) (string, error) {
 		if _, present := bmd.Get(bckFrom); !present {
 			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
-		if err := t._tcbBegin(c, msg); err != nil {
+		if err := t._tcbBegin(c, msg, disableDM); err != nil {
 			return "", err
 		}
 	case apc.ActAbort:
@@ -595,7 +594,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg) (string, error) {
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (err error) {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
@@ -611,7 +610,13 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg) (err error) {
 			return cmn.NewErrBusy("bucket", bckTo.Cname(""))
 		}
 	}
-	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, Msg: msg}
+	custom := &xreg.TCBArgs{
+		Phase:     apc.ActBegin,
+		BckFrom:   bckFrom,
+		BckTo:     bckTo,
+		Msg:       msg,
+		DisableDM: disableDM, // for now, disable data mover only if the ETL doesn't support direct PUT
+	}
 	rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
@@ -637,7 +642,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg) (err error) {
 // Two IDs:
 // - TxnUUID: transaction (txn) ID
 // - xid: xaction ID (will have "tco-" prefix)
-func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg) (xid string, _ error) {
+func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -666,7 +671,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg) (xid string, _ error) {
 			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
-		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg}
+		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg, DisableDM: disableDM}
 		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
@@ -1079,6 +1084,15 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 		}
 	}
 	return nil
+}
+
+func isDisableDM(msg *apc.TCBMsg) (bool, error) {
+	// ensure the communicator is active, and determine whether to disable data mover based on the ETL's init message
+	initMsg, err := etl.GetInitMsg(msg.Transform.Name)
+	if err != nil {
+		return false, err
+	}
+	return initMsg.IsDirectPut(), nil
 }
 
 ////////////

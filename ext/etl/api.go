@@ -34,8 +34,9 @@ const (
 const CommTypeSeparator = "://"
 
 const (
-	CommTypeAnnotation    = "communication_type"
-	WaitTimeoutAnnotation = "wait_timeout"
+	CommTypeAnnotation         = "communication_type" // communication type to use if not explicitly set in the init message
+	SupportDirectPutAnnotation = "support_direct_put" // indicates whether the ETL supports direct PUT; affects how the target interacts with it
+	WaitTimeoutAnnotation      = "wait_timeout"       // timeout duration to wait for the ETL pod to become ready
 )
 
 const (
@@ -83,15 +84,17 @@ type (
 		CommType() string
 		ArgType() string
 		Validate() error
+		IsDirectPut() bool
 		String() string
 	}
 
 	// and implementations
 	InitMsgBase struct {
-		EtlName   string       `json:"id"`
-		CommTypeX string       `json:"communication"` // enum commTypes
-		ArgTypeX  string       `json:"argument"`      // enum argTypes
-		Timeout   cos.Duration `json:"timeout"`
+		EtlName          string       `json:"id"`
+		CommTypeX        string       `json:"communication"` // enum commTypes
+		ArgTypeX         string       `json:"argument"`      // enum argTypes
+		Timeout          cos.Duration `json:"timeout"`
+		SupportDirectPut bool         `json:"support_direct_put"`
 	}
 	InitSpecMsg struct {
 		InitMsgBase
@@ -165,11 +168,12 @@ var (
 	_ InitMsg = (*InitSpecMsg)(nil)
 )
 
-func (m InitMsgBase) CommType() string { return m.CommTypeX }
-func (m InitMsgBase) ArgType() string  { return m.ArgTypeX }
-func (m InitMsgBase) Name() string     { return m.EtlName }
-func (*InitCodeMsg) MsgType() string   { return Code }
-func (*InitSpecMsg) MsgType() string   { return Spec }
+func (m InitMsgBase) CommType() string  { return m.CommTypeX }
+func (m InitMsgBase) ArgType() string   { return m.ArgTypeX }
+func (m InitMsgBase) Name() string      { return m.EtlName }
+func (m InitMsgBase) IsDirectPut() bool { return m.SupportDirectPut }
+func (*InitCodeMsg) MsgType() string    { return Code }
+func (*InitSpecMsg) MsgType() string    { return Spec }
 
 func (m *InitCodeMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s-%s-%s]", Code, m.EtlName, m.CommTypeX, m.ArgTypeX, m.Runtime)
@@ -331,6 +335,13 @@ func (m *InitSpecMsg) Validate() error {
 			return cmn.NewErrETLf(errCtx, "annotations.communication_type must be provided, or specified in the init message")
 		}
 		m.CommTypeX = comm
+	}
+
+	if dp, found := pod.ObjectMeta.Annotations[SupportDirectPutAnnotation]; found {
+		m.SupportDirectPut, err = cos.ParseBool(dp)
+		if err != nil {
+			return err
+		}
 	}
 
 	if !strings.HasSuffix(m.CommTypeX, CommTypeSeparator) {

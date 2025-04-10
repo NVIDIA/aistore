@@ -5,7 +5,6 @@
 package apc
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -63,13 +62,6 @@ type (
 ////////////
 // TCBMsg //
 ////////////
-
-func (msg *TCBMsg) Validate(isEtl bool) (err error) {
-	if isEtl && msg.Transform.Name == "" {
-		err = errors.New("ETL name can't be empty")
-	}
-	return
-}
 
 // Replace extension and add suffix if provided.
 func (msg *TCBMsg) ToName(name string) string {

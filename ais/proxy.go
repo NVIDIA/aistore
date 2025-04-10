@@ -1356,9 +1356,11 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		if err := tcbmsg.Validate(msg.Action == apc.ActETLBck); err != nil {
-			p.writeErr(w, r, err)
-			return
+		if msg.Action == apc.ActETLBck {
+			if err := p.etlExists(tcbmsg.Transform.Name); err != nil {
+				p.writeErr(w, r, err, http.StatusNotFound)
+				return
+			}
 		}
 		if tcbmsg.Sync && tcbmsg.Prepend != "" {
 			p.writeErrf(w, r, errPrependSync, tcbmsg.Prepend)
@@ -1433,6 +1435,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		if err = cos.MorphMarshal(msg.Value, tcomsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
+		}
+		if msg.Action == apc.ActETLBck {
+			if err := p.etlExists(tcomsg.Transform.Name); err != nil {
+				p.writeErr(w, r, err, http.StatusNotFound)
+				return
+			}
 		}
 		if tcomsg.Sync && tcomsg.Prepend != "" {
 			p.writeErrf(w, r, errPrependSync, tcomsg.Prepend)

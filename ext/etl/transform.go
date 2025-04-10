@@ -412,6 +412,14 @@ func GetCommunicator(etlName string) (Communicator, error) {
 	return comm, nil
 }
 
+func GetInitMsg(etlName string) (InitMsg, error) {
+	cc, err := getComm(etlName)
+	if err != nil {
+		return nil, err
+	}
+	return cc.getInitMsg(), nil
+}
+
 func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, error) {
 	cc, err := getComm(etlName)
 	if err != nil {

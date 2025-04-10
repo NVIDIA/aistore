@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -508,4 +509,18 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		break
 	}
 	freeBcastRes(results)
+}
+
+func (p *proxy) etlExists(etlName string) error {
+	if !k8s.IsK8s() {
+		return k8s.ErrK8sRequired
+	}
+	if err := k8s.ValidateEtlName(etlName); err != nil {
+		return err
+	}
+	etlMD := p.owner.etl.get()
+	if _, ok := etlMD.ETLs[etlName]; !ok {
+		return fmt.Errorf("ETL %s doesn't exist", etlName)
+	}
+	return nil
 }

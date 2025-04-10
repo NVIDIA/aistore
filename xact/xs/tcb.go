@@ -117,11 +117,17 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
+	// only need workers and sentinels when there's intra-cluster traffic
+	if !r.args.DisableDM {
+		return nil
+	}
+
 	// data mover and sentinel
 	var sizePDU int32
 	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
+
 	if err := r.newDM(sizePDU); err != nil {
 		return err
 	}

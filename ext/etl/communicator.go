@@ -41,6 +41,7 @@ type (
 		ETLName() string
 		PodName() string
 		SvcName() string
+		getInitMsg() InitMsg
 
 		String() string
 
@@ -122,6 +123,8 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 func (c *baseComm) ETLName() string { return c.boot.msg.EtlName }
 func (c *baseComm) PodName() string { return c.boot.pod.Name }
 func (c *baseComm) SvcName() string { return c.boot.pod.Name /*same as pod name*/ }
+
+func (c *baseComm) getInitMsg() InitMsg { return &c.boot.msg }
 
 func (c *baseComm) ListenSmapChanged() { c.listener.ListenSmapChanged() }
 
