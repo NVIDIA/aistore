@@ -61,7 +61,6 @@ include:
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-      when: always
 
 .test_short_template: &test_short_def
   stage: test-short
