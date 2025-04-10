@@ -26,13 +26,14 @@ type (
 		Config *cmn.Config
 		BckTo  *meta.Bck
 		core.GetROC
-		ObjnameTo string
-		Buf       []byte
-		OWT       cmn.OWT
-		Finalize  bool // copies and EC (as in poi.finalize())
-		DryRun    bool // no changes
-		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
-		Sync      bool // see core.GetROC at core/ldp.go
+		ObjnameTo       string
+		Buf             []byte
+		OWT             cmn.OWT
+		Finalize        bool // copies and EC (as in poi.finalize())
+		DryRun          bool // no changes
+		LatestVer       bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
+		Sync            bool // see core.GetROC at core/ldp.go
+		ContinueOnError bool // when false, a failure to copy triggers abort
 	}
 	CoiRes struct {
 		Err   error
@@ -88,7 +89,7 @@ type (
 	}
 )
 
-func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg) *CoiParams {
+func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, config *cmn.Config, buf []byte, owt cmn.OWT) *CoiParams {
 	toName := msg.ToName(lom.ObjName)
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(tc.r.Name(), lom.Cname(), "=>", bckTo.Cname(toName))
@@ -101,18 +102,22 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg) *CoiP
 	{
 		a.GetROC = tc.getROC
 		a.Xact = tc.r
+		a.Config = config
 		a.BckTo = bckTo
 		a.ObjnameTo = toName
+		a.Buf = buf
+		a.OWT = owt
 		a.DryRun = msg.DryRun
 		a.LatestVer = msg.LatestVer
 		a.Sync = msg.Sync
 		a.Finalize = false
+		a.ContinueOnError = msg.ContinueOnError
 	}
 
 	return a
 }
 
-func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) error {
+func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 	var started int64
 	if tc.bp != nil {
 		started = mono.NanoTime()
@@ -133,10 +138,19 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) error {
 	case cos.IsNotExist(res.Err, 0):
 		// do nothing
 	case cos.IsErrOOS(res.Err):
-		tc.r.Abort(res.Err)
+		err = res.Err
+		tc.r.Abort(err)
 	default:
-		tc.r.AddErr(res.Err, 5, cos.SmoduleXs)
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
+		}
+		if a.ContinueOnError {
+			tc.r.AddErr(res.Err, 5, cos.SmoduleXs)
+		} else {
+			err = res.Err
+			tc.r.Abort(err)
+		}
 	}
 
-	return res.Err
+	return err
 }

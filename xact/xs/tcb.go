@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	tcbBurstMultiplier = 4
+	tcbBurstMultiplier = 4 // TODO -- FIXME: unify
 	tcbMinWorkers      = 2
 )
 
@@ -60,6 +60,7 @@ type (
 		// copying parallelism
 		workers []tcbworker
 		workCh  chan core.LIF
+		stopCh  *cos.StopCh
 		wg      sync.WaitGroup
 		// args
 		args *xreg.TCBArgs
@@ -116,6 +117,15 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
+	// data mover and sentinel
+	var sizePDU int32
+	if p.kind == apc.ActETLBck {
+		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
+	}
+	if err := r.newDM(sizePDU); err != nil {
+		return err
+	}
+
 	// intra-cluster copying/transforming parallelism
 	// tune-up num-workers, if specified
 	numWorkers, err := r.numWorkers(msg.NumWorkers)
@@ -129,17 +139,10 @@ func (p *tcbFactory) Start() error {
 			r.workers = append(r.workers, tcbworker{r})
 		}
 		r.workCh = make(chan core.LIF, numWorkers*tcbBurstMultiplier)
+		r.stopCh = cos.NewStopCh()
 		nlog.Infoln(r.Name(), "workers:", numWorkers)
 	}
 
-	// data mover and sentinel
-	var sizePDU int32
-	if p.kind == apc.ActETLBck {
-		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
-	}
-	if err := r.newDM(sizePDU); err != nil {
-		return err
-	}
 	r.sntl.init(r, smap, nat)
 
 	return nil
@@ -163,7 +166,7 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 
 func (r *XactTCB) newDM(sizePDU int32) error {
-	const trname = "tcb"
+	const trname = "tcb-"
 	config := r.BckJog.Config
 	dmExtra := bundle.Extra{
 		RecvAck:     nil, // no ACKs
@@ -173,7 +176,7 @@ func (r *XactTCB) newDM(sizePDU int32) error {
 		SizePDU:     sizePDU,
 	}
 	// in re cmn.OwtPut: see comment inside _recv()
-	dm := bundle.NewDM(trname+"-"+r.ID(), r.recv, r.owt, dmExtra)
+	dm := bundle.NewDM(trname+r.ID(), r.recv, r.owt, dmExtra)
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}
@@ -277,7 +280,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	if r.args.Msg.Sync {
 		r.prune.run() // the 2nd jgroup
 	}
-	nlog.Infoln(r.Name())
+	nlog.Infoln(core.T.String(), "run:", r.Name())
 
 	err := r.BckJog.Wait()
 	if err == nil {
@@ -304,6 +307,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	if r.workers != nil {
+		r.stopCh.Close()
 		close(r.workCh)
 		r.wg.Wait()
 	}
@@ -328,8 +332,7 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 	if r.workers == nil {
 		args := r.args // TCBArgs
-		a := r.copier.prepare(lom, args.BckTo, args.Msg)
-		a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
+		a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
 
 		err := r.copier.do(a, lom, r.dm)
 		if err == nil && args.Msg.Sync {
@@ -413,6 +416,18 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	return nil
 }
 
+// TODO -- FIXME: unify
+func (r *XactTCB) Abort(err error) bool {
+	if !r.Base.Abort(err) { // already aborted?
+		return false
+	}
+	if r.stopCh != nil {
+		debug.Assert(r.workers != nil)
+		r.stopCh.Close()
+	}
+	return true
+}
+
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.args }
 
 func (r *XactTCB) _name(fromCname, toCname string, numJoggers int) {
@@ -446,6 +461,7 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	return
 }
 
+// TODO -- FIXME: must become a shared code
 func (r *XactTCB) numWorkers(n int) (int, error) {
 	if n <= 0 {
 		return 0, nil
@@ -485,35 +501,43 @@ func (r *XactTCB) numWorkers(n int) (int, error) {
 ///////////////
 
 func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
-	var (
-		r    = worker.r
-		args = r.args // TCBArgs
-	)
+	r := worker.r
+outer:
 	for {
-		lif, ok := <-r.workCh
-		if !ok {
-			break
-		}
-		lom, err := lif.LOM()
-		if err != nil {
-			r.Abort(err)
-			break
-		}
-
-		a := r.copier.prepare(lom, args.BckTo, args.Msg)
-		a.Config, a.Buf, a.OWT = r.Config, buf, r.owt
-		err = r.copier.do(a, lom, r.dm)
-		if err == nil {
-			if args.Msg.Sync {
-				r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+		select {
+		case lif, ok := <-r.workCh:
+			if !ok {
+				break outer
 			}
-		} else {
-			r.AddErr(err)
-		}
-		if r.IsAborted() {
-			break
+			if aborted := worker.do(lif, buf); aborted {
+				break outer
+			}
+		case <-r.stopCh.Listen():
+			break outer
 		}
 	}
 	r.wg.Done()
 	slab.Free(buf)
+}
+
+func (worker *tcbworker) do(lif core.LIF, buf []byte) bool {
+	var (
+		r    = worker.r
+		args = r.args // TCBArgs
+	)
+	lom, err := lif.LOM()
+	if err != nil {
+		nlog.Warningln(r.Name(), lif.Name(), err)
+		r.Abort(err)
+		return true
+	}
+
+	a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+	if err := r.copier.do(a, lom, r.dm); err != nil {
+		return r.IsAborted()
+	}
+	if args.Msg.Sync {
+		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
+	}
+	return false
 }
