@@ -812,7 +812,7 @@ func TestETLBucketDryRun(t *testing.T) {
 
 	m.puts()
 
-	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hpush)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.Echo) })
 
 	msg := &apc.TCBMsg{
@@ -845,7 +845,7 @@ func TestETLStopAndRestartETL(t *testing.T) {
 		etlName    = tetl.Echo // TODO: currently, echo only - add more
 	)
 
-	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpush)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	// 1. Check ETL is in running state
@@ -878,10 +878,10 @@ func TestETLMultipleTransformersAtATime(t *testing.T) {
 		t.Skip("Requires a single-node single-target deployment")
 	}
 
-	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, tetl.Echo, etl.Hpush)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.Echo) })
 
-	_ = tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, tetl.MD5, etl.Hpush)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, tetl.MD5) })
 }
 
@@ -990,7 +990,7 @@ func TestETLList(t *testing.T) {
 	)
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
-	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hrev)
+	_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpush)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	list, err := api.ETLList(baseParams)

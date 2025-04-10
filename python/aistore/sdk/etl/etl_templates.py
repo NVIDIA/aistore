@@ -6,7 +6,7 @@ kind: Pod
 metadata:
   name: transformer-md5
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
+    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -32,7 +32,7 @@ kind: Pod
 metadata:
   name: transformer-hello-world
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
+    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -103,7 +103,7 @@ kind: Pod
 metadata:
   name: echo-go
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
+    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -137,7 +137,7 @@ kind: Pod
 metadata:
   name: transformer-echo
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
+    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -173,7 +173,7 @@ kind: Pod
 metadata:
   name: tar2tf
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
+    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -201,7 +201,7 @@ kind: Pod
 metadata:
   name: transformer-compress
   annotations:
-    # Values `communication_type` can take are ["hpull://", "hrev://", "hpush://", "io://"].
+    # Values `communication_type` can take are ["hpull://", "hpush://", "io://"].
     # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     # for more details.
     communication_type: "{communication_type}://"
@@ -323,7 +323,7 @@ kind: Pod
 metadata:
   name: transformer-torchvision
   annotations:
-    # Values `communication_type` can take are ["hpull://", "hrev://", "hpush://", "io://"].
+    # Values `communication_type` can take are ["hpull://", "hpush://", "io://"].
     # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     communication_type: "{communication_type}://"
     wait_timeout: 10m

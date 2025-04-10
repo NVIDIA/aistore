@@ -19,7 +19,6 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_IO,
     ETL_COMM_HPULL,
-    ETL_COMM_HREV,
 )
 
 from tests.integration import CLUSTER_ENDPOINT
@@ -403,10 +402,10 @@ class TestETLOps(unittest.TestCase):
                 self.assertEqual(transform(bytes(value)), transformed_obj)
 
     @pytest.mark.etl
-    @cases(ETL_COMM_HPUSH, ETL_COMM_HPULL, ETL_COMM_HREV)
+    @cases(ETL_COMM_HPUSH, ETL_COMM_HPULL)
     def test_etl_args(self, communication_type):
         """
-        Test ETL with different communication types: HPUSH, HREV, HPULL.
+        Test ETL with different communication types: HPUSH, HPULL.
         """
         template = HASH.format(communication_type=communication_type)
         spec_etl = self.client.etl(ETL_NAME_SPEC)

@@ -21,6 +21,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Removed
 
+- `hrev://` ETL communication type
+
 ## [1.13.0] - 2025-03-24
 
 ### Added

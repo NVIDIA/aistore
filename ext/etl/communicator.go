@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -85,17 +84,12 @@ type (
 	redirectComm struct {
 		baseComm
 	}
-	revProxyComm struct {
-		baseComm
-		rp *httputil.ReverseProxy
-	}
 )
 
 // interface guard
 var (
 	_ Communicator = (*pushComm)(nil)
 	_ Communicator = (*redirectComm)(nil)
-	_ Communicator = (*revProxyComm)(nil)
 )
 
 //////////////
@@ -115,26 +109,6 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		rc := &redirectComm{}
 		rc.listener, rc.boot, rc.pw = listener, boot, pw
 		return rc
-	case Hrev:
-		rp := &revProxyComm{}
-		rp.listener, rp.boot, rp.pw = listener, boot, pw
-
-		transformerURL, err := url.Parse(boot.uri)
-		debug.AssertNoErr(err)
-		revProxy := &httputil.ReverseProxy{
-			Director: func(req *http.Request) {
-				// Replacing the `req.URL` host with ETL container host
-				req.URL.Scheme = transformerURL.Scheme
-				req.URL.Host = transformerURL.Host
-				req.URL.RawQuery = pruneQuery(req.URL.RawQuery)
-				if _, ok := req.Header["User-Agent"]; !ok {
-					// Explicitly disable `User-Agent` so it's not set to default value.
-					req.Header.Set("User-Agent", "")
-				}
-			},
-		}
-		rp.rp = revProxy
-		return rp
 	case WebSocket:
 		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
 		ws.listener, ws.boot, ws.pw = listener, boot, pw
@@ -377,7 +351,7 @@ func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string
 	query = make(url.Values)
 	switch rc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
-		path = transformerPath(lom)
+		path = url.PathEscape(lom.Uname())
 	case ArgTypeFQN:
 		path = url.PathEscape(lom.FQN)
 	default:
@@ -424,54 +398,6 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr
 	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)
 }
 
-//////////////////
-// revProxyComm: implements Hrev
-//////////////////
-
-func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) (int, error) {
-	_, err := lomLoad(lom, rp.boot.xctn.Kind())
-	if err != nil {
-		return 0, err
-	}
-	path := transformerPath(lom)
-
-	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
-	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
-	rp.rp.ServeHTTP(w, r)
-
-	return 0, nil
-}
-
-func (rp *revProxyComm) OfflineTransform(lom *core.LOM, _, _ bool, daddr string) core.ReadResp {
-	var (
-		started = mono.NanoTime()
-		clone   = *lom
-	)
-	_, err := lomLoad(&clone, rp.boot.xctn.Kind())
-	if err != nil {
-		return core.ReadResp{Err: err}
-	}
-
-	reqArgs := &cmn.HreqArgs{
-		Method: http.MethodGet,
-		Base:   rp.boot.uri,
-		Path:   transformerPath(&clone),
-		BodyR:  http.NoBody,
-		Header: http.Header{
-			cos.HdrContentLength: []string{strconv.Itoa(int(clone.Lsize()))},
-			apc.HdrNodeURL:       []string{daddr},
-		},
-	}
-
-	r, ecode, err := doWithTimeout(reqArgs, clone.Lsize(), rp.boot.msg.Timeout.D(), started)
-
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hrev, clone.Cname(), err, ecode)
-	}
-
-	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)
-}
-
 //
 // utils
 //
@@ -488,28 +414,6 @@ func getComm(etlName string) (communicatorCommon, error) {
 		return comm, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
 	}
 	return comm, nil
-}
-
-// prune query (received from AIS proxy) prior to reverse-proxying the request to/from container -
-// not removing apc.QparamETLName, for instance, would cause infinite loop.
-func pruneQuery(rawQuery string) string {
-	vals, err := url.ParseQuery(rawQuery)
-	if err != nil {
-		nlog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
-		return ""
-	}
-	for _, filtered := range []string{apc.QparamETLName, apc.QparamProxyID, apc.QparamUnixTime} {
-		vals.Del(filtered)
-	}
-	return vals.Encode()
-}
-
-// TODO -- FIXME: unify the way we encode bucket/object:
-// - url.PathEscape(uname) - see below - versus
-// - Bck().Name + "/" + lom.ObjName - see pushComm above - versus
-// - bck.AddToQuery() elsewhere
-func transformerPath(lom *core.LOM) string {
-	return "/" + url.PathEscape(lom.Uname())
 }
 
 func lomLoad(lom *core.LOM, xKind string) (ecode int, err error) {

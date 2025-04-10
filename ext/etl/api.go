@@ -64,8 +64,6 @@ const (
 	// The data is then transformed and returned to the client.
 	Hpull = "hpull://"
 	// Similar to redirection strategy but with usage of reverse proxy.
-	Hrev = "hrev://"
-	// Stdin/stdout communication.
 	HpushStdin = "io://"
 	// WebSocket communication.
 	WebSocket = "ws://"
@@ -153,8 +151,8 @@ type (
 )
 
 var (
-	commTypes = []string{Hpush, Hpull, Hrev, HpushStdin, WebSocket} // NOTE: must contain all
-	argTypes  = []string{ArgTypeDefault, ArgTypeURL, ArgTypeFQN}    // ditto
+	commTypes = []string{Hpush, Hpull, HpushStdin, WebSocket}    // NOTE: must contain all
+	argTypes  = []string{ArgTypeDefault, ArgTypeURL, ArgTypeFQN} // ditto
 )
 
 ////////////////

@@ -185,7 +185,7 @@ func InitCode(msg *InitCodeMsg, xid, secret string) (core.Xact, error) {
 		}})
 }
 
-// generate (from => to) replacements
+// generate (from => to) replacements for podspec.yaml
 func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (
 		chunk string
@@ -208,7 +208,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	ftp = append(ftp, "<FLAGS>", flags, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
 
 	switch msg.CommTypeX {
-	case Hpush, Hpull, Hrev:
+	case Hpush, Hpull:
 		ftp = append(ftp, "<COMMAND>", "['sh', '-c', 'python /server.py']")
 	case HpushStdin:
 		ftp = append(ftp, "<COMMAND>", "['python /code/code.py']")

@@ -86,10 +86,10 @@ var _ = Describe("CommunicatorTest", func() {
 			Expect(receivedEtlTransformArgs).To(Equal(expectedEtlTransformArgs))
 
 			switch r.Method {
-			case http.MethodGet: // hpull, hrev
+			case http.MethodGet: // hpull
 				latestVer, err := cos.ParseBool(r.URL.Query().Get(apc.QparamLatestVer))
 				Expect(err).NotTo(HaveOccurred())
-				Expect(latestVer).To(BeFalse(), "Expected 'latestVer' parameter in hpull and hrev")
+				Expect(latestVer).To(BeFalse(), "Expected 'latestVer' parameter in hpull")
 
 			case http.MethodPut: // hpush
 				hasLatestVer := r.URL.Query().Has(apc.QparamLatestVer)

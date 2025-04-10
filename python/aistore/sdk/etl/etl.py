@@ -79,7 +79,7 @@ class Etl:
             template (str): Kubernetes pod spec template
                 Existing templates can be found at `sdk.etl_templates`
                 For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
-            communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
+            communication_type (str): Communication type of the ETL (options: hpull, hpush)
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes). Defaults to 5m.
         Returns:
             Job ID string associated with this ETL
@@ -129,7 +129,7 @@ class Etl:
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
                 python3.13v2] Runtime environment of the ETL [choose from: python3.9v2, python3.10v2, python3.11v2,
                 python3.12v2, python3.13v2] (see ext/etl/runtime/all.go)
-            communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
+            communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull,
                 hpush, io)
             timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
             chunk_size (int): Chunk size in bytes if transform function in streaming data.

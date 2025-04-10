@@ -1136,7 +1136,6 @@ var (
 			indent4 + "\t - 'hpush' or 'hpush://' - ETL container provides HTTP PUT handler that'll be invoked upon every request to transform\n" +
 			indent4 + "\t -  '' - same as 'hpush://' (default, can be omitted)\n" +
 			indent4 + "\t - 'hpull' or 'hpull://' - same, but ETL container is expected to provide HTTP GET endpoint\n" +
-			indent4 + "\t - 'hrev' or 'hrev://' - same, but aistore nodes will reverse-proxy requests to their respective ETL containers)\n" +
 			indent4 + "\t - 'io' or 'io://' - for each request an aistore node will: run ETL container locally, write data\n" +
 			indent4 + "\t   to its standard input and then read transformed data from the standard output\n" +
 			indent4 + "\t For more defails, see https://aiatscale.org/docs/etl#communication-mechanisms\n",
