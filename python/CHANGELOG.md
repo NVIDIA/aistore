@@ -9,20 +9,25 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Unreleased
 
 ### Added
+### Changed
+### Removed
+
+## [1.13.1] - 2025-04-10
+
+### Added
 - `props_cached` returns cached properties without triggering a network call.
 - Introduce extensible ETL server framework with base and web server implementations.
   - Structured project to promote clean separation between server logic and transformation logic.
   - Add abstract base class `ETLServer` defining the common interface for ETL servers.
       - Includes abstract methods: `transform`, and `start`.  
   - Implement `HTTPMultiThreadedServer`, a multi-threaded server based on `BaseHTTPRequestHandler`.
-  - Implement `FastAPIServer` base class for async ETL processing
+  - Implement `FastAPIServer` base class for async ETL processing.
 
 ### Changed
 - `props` accessor ensures object properties are refreshed via HEAD request on every access.
 
 ### Removed
-
-- `hrev://` ETL communication type
+- `hrev://` ETL communication type.
 
 ## [1.13.0] - 2025-03-24
 
