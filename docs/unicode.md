@@ -1,4 +1,27 @@
-AIStore provides seamless support for object names containing Unicode characters (like Japanese, Chinese, or Korean text), emojis, or other special characters. This README demonstrates how AIStore handles these names properly across both native buckets and S3-compatible storage.
+# Unicode and Special Symbols in Object Names
+
+AIStore provides seamless support for object names containing **Unicode** characters (like Japanese, Chinese, or Korean text), emojis, and **special symbols**.
+
+This README demonstrates handling these names properly across both native (`ais://`) buckets and Cloud storage.
+
+## Table of Contents
+
+- [Client vs. Server Responsibilities](#client-vs-server-responsibilities)
+- [Working with Unicode Object Names](#working-with-unicode-object-names)
+- [Cross-Backend Compatibility (S3)](#cross-backend-compatibility-s3)
+- [Terminal and Environment Considerations](#terminal-and-environment-considerations)
+- [Curl](#curl)
+- [Special Symbols in Object Names](#special-symbols-in-object-names)
+- [Encoding Helper (Python)](#encoding-helper-python)
+
+## Client vs. Server Responsibilities
+
+AIStore does **not** decode percent-encoded object names. The name passed by the client — whether encoded or not — is used **as-is**.
+
+- If you upload an object as `"ais://bucket/my%20file"`, it is stored **literally** as `"my%20file"`, not `"my file"`.
+- This preserves performance on the server-side and avoids ambiguity, but it means **clients are responsible** for encoding any special symbols if needed.
+
+The AIS CLI provides an `--encode-objname` flag to handle this automatically.
 
 Below are a few examples.
 
@@ -90,6 +113,49 @@ MIT License
 Copyright (c) 2017 NVIDIA Corporation
 Permission is hereby granted, free of charge, to any person obtaining a copy
 ...
+```
+
+
+## Special Symbols in Object Names
+
+Special symbols such as `; : ' " < > / \ | ? #` may require encoding depending on your shell or toolchain.
+
+Use the `--encode-objname` flag to safely encode them when using the CLI:
+
+```console
+$ ais put LICENSE "ais://threebucket/aaa bbb ccc" --encode-objname
+PUT "LICENSE" => ais://threebucket/aaa bbb ccc
+
+$ ais ls ais://nnn
+NAME             SIZE
+aaa bbb ccc      1.05KiB
+
+$ ais object cat "ais://threebucket/aaa bbb ccc" --encode-objname
+
+MIT License
+Copyright (c) 2017 NVIDIA Corporation
+Permission is hereby granted, free of charge, to any person obtaining a copy
+...
+```
+
+> Note: object names are always displayed in their original, human-readable form.
+
+---
+
+## Encoding Helper (Python)
+
+For programmatic clients, here’s how to encode object names using Python:
+
+```python
+import urllib.parse
+
+name = 'my weird/obj?name#with!symbols'
+encoded = urllib.parse.quote(name, safe='')  # fully encode all special chars
+print(encoded)
+# Output: my%20weird%2Fobj%3Fname%23with%21symbols
+
+# Use this in CLI:
+# ais put LICENSE "ais://mybucket/<encoded>" or use --encode-objname
 ```
 
 ---

@@ -121,6 +121,7 @@ var (
 			verboseFlag, // client side
 			silentFlag,  // server side
 			dontHeadRemoteFlag,
+			encodeObjnameFlag,
 		},
 
 		commandPut: append(
@@ -141,6 +142,7 @@ var (
 			// append
 			appendConcatFlag,
 			dontHeadRemoteFlag,
+			encodeObjnameFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -165,6 +167,7 @@ var (
 			archpathGetFlag,
 			cksumFlag,
 			forceFlag,
+			encodeObjnameFlag,
 		},
 	}
 

@@ -1231,4 +1231,10 @@ var (
 			indent1 + "\t\t\t--buckets 'ais://b1,ais://b2,ais://b3'\n" +
 			indent1 + "\t\t\t--buckets \"gs://b1, s3://b2\"",
 	}
+
+	// special symbols (usage examples in docs/unicode.md)
+	encodeObjnameFlag = cli.BoolFlag{
+		Name:  "encode-objname",
+		Usage: "Encode object names that contain special symbols (; : ' \" < > / \\ | ? #) that may otherwise break shell parsing or URL interpretation",
+	}
 )

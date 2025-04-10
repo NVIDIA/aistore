@@ -511,6 +511,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 	// finally: http query and API call
 	getArgs.Query = a.getQuery(c, &bck)
 
+	// encode special symbols
+	if flagIsSet(c, encodeObjnameFlag) {
+		objName = url.PathEscape(objName)
+	}
+
 	var oah api.ObjAttrs
 	if flagIsSet(c, cksumFlag) {
 		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)

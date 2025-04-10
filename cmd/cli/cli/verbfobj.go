@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -231,6 +232,12 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 	if isTout {
 		putArgs.BaseParams.Client.Timeout = longClientTimeout
 	}
+
+	// encode special symbols
+	if flagIsSet(c, encodeObjnameFlag) {
+		putArgs.ObjName = url.PathEscape(putArgs.ObjName)
+	}
+
 	_, err = api.PutObject(&putArgs)
 	return
 }
@@ -450,6 +457,10 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		Cksum:      cksum,
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
+	// encode special symbols
+	if flagIsSet(c, encodeObjnameFlag) {
+		putArgs.ObjName = url.PathEscape(putArgs.ObjName)
+	}
 	iters := 1
 	iters += parseRetriesFlag(c, putRetriesFlag, true /*warn*/)
 
@@ -547,6 +558,10 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 				ObjName:    objName,
 				Reader:     reader,
 				Size:       uint64(n),
+			}
+			// encode special symbols
+			if flagIsSet(c, encodeObjnameFlag) {
+				putArgs.ObjName = url.PathEscape(putArgs.ObjName)
 			}
 			_, err = api.PutObject(&putArgs)
 		} else {
