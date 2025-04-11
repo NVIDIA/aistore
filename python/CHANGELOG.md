@@ -12,6 +12,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Changed
 ### Removed
 
+## [1.13.3] - 2025-04-11
+
+### Added
+- Add `FlaskServer` implementation for ETL transformations.
+
 ## [1.13.2] - 2025-04-10
 
 ### Changed
