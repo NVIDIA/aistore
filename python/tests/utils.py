@@ -162,7 +162,7 @@ def create_random_tarballs(
 ):
     def generate_files(
         num_files: int, num_extensions: int, dest_dir: Path
-    ) -> tuple[List[Path], List[str]]:
+    ) -> Tuple[List[Path], List[str]]:
         files_list = []
         filenames_list = []
 
