@@ -39,6 +39,7 @@ class TestAuthNResponseHandler(unittest.TestCase):
 
         err = AuthNResponseHandler().parse_error(response)
         self.assertIsInstance(err, AuthNError)
+        self.assertIsInstance(err, expected_err)
         self.assertEqual(err_status, err.status_code)
         self.assertEqual(err_msg, err.message)
         self.assertEqual(test_url, err.req_url)

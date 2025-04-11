@@ -24,6 +24,13 @@ class TestAISResponseHandler(unittest.TestCase):
         ('bucket "ais://test-bck" does not exist', ErrBckNotFound, 404),
         ('bucket "ais://test-bck" already exists', ErrBckAlreadyExists, 409),
         ("ais://test-bck/test-obj does not exist", ErrObjNotFound, 404),
+        ("ais://test-bck/ test-obj does not exist", ErrObjNotFound, 404),
+        ("ais://test-bck/こんにちは世界 does not exist", ErrObjNotFound, 404),
+        (
+            "ais://test-bck/!@$%^&*()-_=+[{]}\\|;:'\",<.>/`~?# does not exist",
+            ErrObjNotFound,
+            404,
+        ),
         ("etl job test-etl-job already exists", ErrETLAlreadyExists, 409),
         ("etl job test-etl-job does not exist", ErrETLNotFound, 404),
     )
@@ -34,6 +41,7 @@ class TestAISResponseHandler(unittest.TestCase):
 
         err = AISResponseHandler().parse_error(response)
         self.assertIsInstance(err, AISError)
+        self.assertIsInstance(err, expected_err)
         self.assertEqual(err_status, err.status_code)
         self.assertEqual(err_msg, err.message)
         self.assertEqual(test_url, err.req_url)

@@ -174,20 +174,27 @@ def parse_url(url: str) -> Tuple[str, str, str]:
     return parsed_url.scheme, parsed_url.netloc, path
 
 
-def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, str]]:
+def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:
     """
-    Parse any AIS info from a complete URL.
+    Extract provider, bucket, and whether an object is present.
+
     Args:
-        msg (str): Any string that may contain an AIS FQN
+        msg (str): Any string that may contain an AIS FQN.
 
     Returns:
-        Tuple[str, str, str]: Provider, bucket name, and object name, if contained in string, or None.
+        Optional[Tuple[str, str, bool]]: (prov, bck, has_obj) if a FQN is found, otherwise None.
     """
-    url_pattern = r"[a-z0-9]+://[A-Za-z0-9@._/-]+"
-    match = re.search(url_pattern, msg)
-    if match:
-        return parse_url(match.group())
-    return None
+    pattern = r"([a-z0-9]+)://([A-Za-z0-9@._-]+)(/.*)?"
+    match = re.search(pattern, msg)
+
+    if not match:
+        return None
+
+    prov = match.group(1)
+    bck = match.group(2)
+    has_obj = match.group(3) is not None  # true if `/` after bucket
+
+    return prov, bck, has_obj
 
 
 def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):

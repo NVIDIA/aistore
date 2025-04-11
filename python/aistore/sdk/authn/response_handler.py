@@ -15,7 +15,6 @@ from aistore.sdk.authn.errors import (
     ErrRoleAlreadyExists,
     ErrUserAlreadyExists,
 )
-from aistore.sdk.errors import APIRequestError
 from aistore.sdk.response_handler import ResponseHandler
 
 
@@ -25,10 +24,10 @@ class AuthNResponseHandler(ResponseHandler):
     """
 
     @property
-    def exc_class(self) -> Type[APIRequestError]:
+    def exc_class(self) -> Type[AuthNError]:
         return AuthNError
 
-    def parse_error(self, r: requests.Response) -> Exception:
+    def parse_error(self, r: requests.Response) -> AuthNError:
         """
         Parse raw text into an appropriate AuthNError object.
 
@@ -66,4 +65,4 @@ class AuthNResponseHandler(ResponseHandler):
             if "user " in message:
                 exc_class = ErrUserAlreadyExists
 
-        return exc_class(status, message, req_url)
+        return exc_class(status, message, req_url or "")

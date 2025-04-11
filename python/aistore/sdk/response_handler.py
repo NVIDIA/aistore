@@ -3,7 +3,7 @@
 #
 
 from abc import ABC, abstractmethod
-from typing import Type
+from typing import Optional, Type
 
 import requests
 
@@ -28,7 +28,6 @@ class ResponseHandler(ABC):
     Abstract base class for handling HTTP API responses
     """
 
-    # pylint: disable=unused-argument
     def handle_response(self, r: requests.Response) -> requests.Response:
         """
         Method compatible with `requests` hook signature to process an HTTP response
@@ -45,10 +44,10 @@ class ResponseHandler(ABC):
             # Raise specific error type but keep full HTTPError with stack trace
             raise self.parse_error(r) from http_err
         # If not an expected status code, raise general error
-        raise self.exc_class(r.status_code, r.text, r.request.url)
+        raise self.exc_class(r.status_code, r.text, r.request.url or "")
 
     @abstractmethod
-    def parse_error(self, r: requests.Response) -> Exception:
+    def parse_error(self, r: requests.Response) -> APIRequestError:
         """Parse custom exception from failed response (must be implemented)"""
 
     @property
@@ -63,10 +62,10 @@ class AISResponseHandler(ResponseHandler):
     """
 
     @property
-    def exc_class(self) -> Type[APIRequestError]:
+    def exc_class(self) -> Type[AISError]:
         return AISError
 
-    def parse_error(self, r: requests.Response) -> Exception:
+    def parse_error(self, r: requests.Response) -> AISError:
         """
         Parse response contents to raise an appropriate AISError object.
 
@@ -83,32 +82,55 @@ class AISResponseHandler(ResponseHandler):
             ErrETLNotFound: If the error message indicates a missing ETL.
         """
         status, message, req_url = r.status_code, r.text, r.request.url
-        prov, bck, obj = extract_and_parse_url(message) or (None, None, None)
-        if prov:
+        prov, bck, has_obj = extract_and_parse_url(message) or (None, None, None)
+
+        if prov is not None:
             try:
                 prov = Provider.parse(prov)
             except InvalidBckProvider:
                 prov = None
 
-        exc_class = self.exc_class
-        if status == 404:
-            if "etl job" in message:
-                exc_class = ErrETLNotFound
-            elif prov:
-                if obj:
-                    exc_class = ErrObjNotFound
-                elif prov.is_remote() or "@" in bck:
-                    exc_class = ErrRemoteBckNotFound
-                else:
-                    exc_class = ErrBckNotFound
-        elif status == 409:
-            if "etl job" in message:
-                exc_class = ErrETLAlreadyExists
-            elif prov and not obj:
-                exc_class = ErrBckAlreadyExists
-            elif (
-                r.request.method == "GET"
-            ):  # Only raise ErrGETConflict for GET requests
-                exc_class = ErrGETConflict
+        is_remote_alias_bck = bck is not None and "@" in bck
+        is_remote_bck = (prov is not None) and (prov.is_remote() or is_remote_alias_bck)
+        is_etl_err = "etl job" in message
+        is_get_request = r.request.method == "GET"
 
-        return exc_class(status, message, req_url)
+        exc = self.exc_class
+        if status == 404:
+            exc = self._parse_404(is_etl_err, is_remote_bck, prov, has_obj) or exc
+        elif status == 409:
+            exc = self._parse_409(is_etl_err, is_get_request, prov, has_obj) or exc
+
+        return exc(status, message, req_url or "")
+
+    @staticmethod
+    def _parse_404(
+        is_etl_err: bool,
+        is_remote_bck: Optional[bool] = None,
+        provider: Optional[Provider] = None,
+        has_obj: Optional[bool] = None,
+    ) -> Optional[Type[AISError]]:
+        if is_etl_err:
+            return ErrETLNotFound
+        if provider:
+            if has_obj:
+                return ErrObjNotFound
+            if is_remote_bck:
+                return ErrRemoteBckNotFound
+            return ErrBckNotFound
+        return None
+
+    @staticmethod
+    def _parse_409(
+        is_etl_err: bool,
+        is_get_request: bool,
+        provider: Optional[Provider] = None,
+        has_obj: Optional[bool] = None,
+    ) -> Optional[Type[AISError]]:
+        if is_get_request:
+            return ErrGETConflict
+        if is_etl_err:
+            return ErrETLAlreadyExists
+        if provider and not has_obj:
+            return ErrBckAlreadyExists
+        return None
