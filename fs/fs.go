@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -1374,21 +1375,33 @@ func (cs *CapStatus) IsOOS() bool { return int64(cs.PctMax) > cs.OOS }
 
 func (cs *CapStatus) IsNil() bool { return cs.TotalUsed == 0 && cs.TotalAvail == 0 }
 
-func (cs *CapStatus) String() (s string) {
+func (cs *CapStatus) String() string {
 	var (
+		sb         strings.Builder
 		totalUsed  = cos.ToSizeIEC(int64(cs.TotalUsed), 1)
 		totalAvail = cos.ToSizeIEC(int64(cs.TotalAvail), 1)
 	)
-	s = fmt.Sprintf("cap(used %s, avail %s [min=%d%%, avg=%d%%, max=%d%%]", totalUsed, totalAvail,
-		cs.PctMin, cs.PctAvg, cs.PctMax)
+	sb.Grow(80)
+	sb.WriteString("cap(used ")
+	sb.WriteString(totalUsed)
+	sb.WriteString(", avail ")
+	sb.WriteString(totalAvail)
+	sb.WriteString(" [min=")
+	sb.WriteString(strconv.Itoa(int(cs.PctMin)))
+	sb.WriteString("%, avg=")
+	sb.WriteString(strconv.Itoa(int(cs.PctAvg)))
+	sb.WriteString("%, max=")
+	sb.WriteString(strconv.Itoa(int(cs.PctMax)))
+	sb.WriteByte(']')
+
 	switch {
 	case cs.IsOOS():
-		s += ", OOS"
+		sb.WriteString(", OOS")
 	case int64(cs.PctMax) > cs.HighWM:
-		s += ", high-wm"
+		sb.WriteString(", high-wm")
 	}
-	s += ")"
-	return
+	sb.WriteByte(')')
+	return sb.String()
 }
 
 // next time to CapRefresh()

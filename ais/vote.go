@@ -632,8 +632,11 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 	err = res.err
 	freeCR(res)
 	defer freeCargs(cargs)
-	if err == nil || !cos.IsRetriableConnErr(err) {
-		return
+	if err == nil {
+		return nil
+	}
+	if !cos.IsRetriableConnErr(err) {
+		return err
 	}
 	// retry
 	sleep := cmn.Rom.CplaneOperation() / 2
@@ -643,7 +646,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 		err = res.err
 		freeCR(res)
 		if err == nil {
-			return
+			return nil
 		}
 		if !cos.IsRetriableConnErr(err) {
 			break
@@ -654,7 +657,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 		nlog.Errorf("%s: failed to request election from the _next_ primary %s: %v",
 			h.si, nextPrimaryProxy.StringEx(), err)
 	}
-	return
+	return err
 }
 
 func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {

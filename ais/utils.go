@@ -69,20 +69,17 @@ func (addr *localIPv4Info) warn() {
 //
 
 // returns a list of local unicast (IPv4, MTU)
-func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
-	addrlist = make([]*localIPv4Info, 0, 4)
-
-	addrs, e := net.InterfaceAddrs()
-	if e != nil {
-		err = fmt.Errorf("failed to get host unicast IPs: %w", e)
-		return
+func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
+	addrs, ea := net.InterfaceAddrs()
+	if ea != nil {
+		return nil, fmt.Errorf("failed to get host unicast IPs: %w", ea)
 	}
-	iflist, e := net.Interfaces()
-	if e != nil {
-		err = fmt.Errorf("failed to get network interfaces: %w", e)
-		return
+	iflist, ei := net.Interfaces()
+	if ei != nil {
+		return nil, fmt.Errorf("failed to get network interfaces: %w", ei)
 	}
 
+	addrlist := make([]*localIPv4Info, 0, 4)
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
@@ -126,7 +123,7 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		}
 	}
 	if len(addrlist) == 0 {
-		return addrlist, errors.New("the host does not have any IPv4 addresses")
+		return nil, errors.New("the host does not have any IPv4 addresses")
 	}
 	return addrlist, nil
 }

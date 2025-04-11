@@ -594,7 +594,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error)
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) error {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
@@ -618,13 +618,13 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (err erro
 		DisableDM: disableDM, // for now, disable data mover only if the ETL doesn't support direct PUT
 	}
 	rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, custom)
-	if err = rns.Err; err != nil {
+	if err := rns.Err; err != nil {
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
 		nlpFrom.Unlock()
 		if nlpTo != nil {
 			nlpTo.Unlock()
 		}
-		return
+		return err
 	}
 
 	var (
@@ -1011,14 +1011,14 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 }
 
 // scan and, optionally, auto-detect file-share
-func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
+func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int, _ string, err error) {
 	var (
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
 	)
-	cb := func(fqn string, de fs.DirEntry) (err error) {
+	cb := func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return
+			return nil
 		}
 		if len(fqns) == 0 {
 			fqns = make([]string, 0, promoteNumSync)
@@ -1030,7 +1030,7 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 		if autoDetect {
 			cksum.H.Write([]byte(fqn))
 		}
-		return
+		return nil
 	}
 	if autoDetect {
 		cksum = cos.NewCksumHash(cos.ChecksumCesXxh)
@@ -1043,11 +1043,11 @@ func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int,
 	}
 
 	if err != nil || totalN == 0 || !autoDetect {
-		return
+		return fqns, totalN, "", err
 	}
+
 	cksum.Finalize()
-	cksumVal = cksum.Value()
-	return
+	return fqns, totalN, cksum.Value(), nil
 }
 
 // synchronously wo/ xaction

@@ -348,7 +348,7 @@ func (txns *txns) housekeep(int64) (d time.Duration) {
 	l := len(txns.m)
 	if l == 0 {
 		txns.mtx.Unlock()
-		return
+		return d
 	}
 	if l > max(gcTxnsNumKeep<<2, 32) {
 		d >>= 2
@@ -370,7 +370,7 @@ func (txns *txns) housekeep(int64) (d time.Duration) {
 	if len(orphans) > 0 || len(errs) > 0 {
 		go txns.cleanup(orphans, errs)
 	}
-	return
+	return d
 }
 
 func (txns *txns) cleanup(orphans []txn, errs []error) {

@@ -52,8 +52,8 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 		var err error
 		cs, err, errCap = fs.CapRefresh(config, tcdf)
 		if err != nil {
-			nlog.Errorln(t.String(), "failed to update capacity stats:", err)
-			return
+			nlog.Errorln(t.String(), "failed to update capacity stats:", err) // (unlikely)
+			return cs
 		}
 	}
 
@@ -62,11 +62,11 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 	//
 
 	if errCap == nil {
-		return // unlikely; nothing to do
+		return cs // unlikely; nothing to do
 	}
 	if prev := lastTrigOOS.Load(); mono.Since(prev) < minAutoDetectInterval {
 		nlog.Warningf("%s: _not_ running store cleanup: (%v, %v), %s", t, prev, minAutoDetectInterval, cs.String())
-		return
+		return cs
 	}
 
 	if cs.IsOOS() {
@@ -81,15 +81,15 @@ func (t *target) OOS(csRefreshed *fs.CapStatus, config *cmn.Config, tcdf *fs.Tcd
 	//
 	go func() {
 		var xargs xact.ArgsMsg // no bucket, no xid - nothing
-		cs := t.runSpaceCleanup(&xargs, nil /*wg*/)
+		cs2 := t.runSpaceCleanup(&xargs, nil /*wg*/)
 		lastTrigOOS.Store(mono.NanoTime())
-		if cs.Err() != nil {
-			nlog.Warningln(t.String(), "still out of space, running LRU eviction now:", cs.String())
+		if cs2.Err() != nil {
+			nlog.Warningln(t.String(), "still out of space, running LRU eviction now:", cs2.String())
 			t.runLRU("" /*uuid*/, nil /*wg*/, false)
 		}
 	}()
 
-	return
+	return cs
 }
 
 func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.Bck) {
