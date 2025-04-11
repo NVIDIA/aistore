@@ -312,7 +312,13 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	}
 
 	if bck.Props != nil && bck.Props.Versioning.Enabled {
-		versioning = msg.WantProp(apc.GetPropsVersion) && bck.Props.Features.IsSet(feat.S3ListObjectVersions)
+		if msg.WantProp(apc.GetPropsVersion) {
+			// listing s3 versions is expensive - moved it further behind the feature flag
+			versioning = bck.Props.Features.IsSet(feat.S3ListObjectVersions)
+			if !versioning && cloudBck.Provider != bck.Provider && cloudBck.Props != nil {
+				versioning = cloudBck.Props.Features.IsSet(feat.S3ListObjectVersions)
+			}
+		}
 	}
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	if versioning {
@@ -371,6 +377,9 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		return 0, nil
 	}
 
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		nlog.Infoln(tag, cloudBck.Name, "proceed to list", len(lst.Entries), "versions")
+	}
 	// [slow path] for each already listed object:
 	// - set the `ListObjectVersionsInput.Prefix` to the object's full name
 	// - get the versions and lookup the latest one

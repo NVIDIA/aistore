@@ -152,7 +152,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tlog.Logf("%s [%d] - cached: [%v], atime [%v]\n", bck.Cname(m.Name), m.Flags, m.IsPresent(), m.Atime)
+		tlog.Logf("%s: fl [%d], cached [%t], atime [%v], version [%s]\n", bck.Cname(m.Name), m.Flags, m.IsPresent(), m.Atime, m.Version)
 
 		// e.g. misplaced replica
 		if !m.IsStatusOK() {
@@ -348,7 +348,7 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 			}
 		}()
 
-		if bck.Provider == apc.AWS {
+		if b := bck.RemoteBck(); b != nil && b.Provider == apc.AWS {
 			// needed for the test
 			// reminder:
 			// "when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)"
