@@ -3,9 +3,15 @@ import sys
 import unittest
 from http.server import BaseHTTPRequestHandler
 from unittest.mock import MagicMock, patch, AsyncMock
+
 from fastapi.testclient import TestClient
-from aistore.sdk.etl.webserver import HTTPMultiThreadedServer
-from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+from flask.testing import FlaskClient
+
+from aistore.sdk.etl.webserver import (
+    HTTPMultiThreadedServer,
+    FlaskServer,
+    FastAPIServer,
+)
 
 
 class DummyETLServer(HTTPMultiThreadedServer):
@@ -43,6 +49,14 @@ class DummyFastAPIServer(FastAPIServer):
 
     def get_mime_type(self) -> str:
         return "application/test"
+
+
+class DummyFlaskServer(FlaskServer):
+    def transform(self, data: bytes, path: str) -> bytes:
+        return b"flask: " + data
+
+    def get_mime_type(self) -> str:
+        return "application/flask"
 
 
 class TestETLServerLogic(unittest.TestCase):
@@ -131,6 +145,41 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, transformed_content)
 
 
+class TestFlaskServer(unittest.TestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
+        self.etl_server = DummyFlaskServer()
+        self.client: FlaskClient = self.etl_server.app.test_client()
+
+    def test_health_check(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"Running")
+        assert "Content-Length" in response.headers
+        assert int(response.headers["Content-Length"]) == len(response.data)
+
+    def test_transform_put(self):
+        input_data = b"hello"
+        response = self.client.put("/some/key", data=input_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"flask: " + input_data)
+        assert "Content-Length" in response.headers
+        assert int(response.headers["Content-Length"]) == len(response.data)
+
+    def test_transform_get(self):
+        input_data = b"flask get data"
+        path = "/some/key"
+        with patch("aistore.sdk.etl.webserver.flask_server.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(
+                content=input_data, raise_for_status=MagicMock()
+            )
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.data, b"flask: " + input_data)
+            assert "Content-Length" in response.headers
+            assert int(response.headers["Content-Length"]) == len(response.data)
+
+
 class TestBaseEnforcement(unittest.TestCase):
     def test_fastapi_server_without_target_url(self):
         if "AIS_TARGET_URL" in os.environ:
@@ -142,6 +191,18 @@ class TestBaseEnforcement(unittest.TestCase):
 
         with self.assertRaises(EnvironmentError) as context:
             MinimalFastAPIServer()
+        self.assertIn("AIS_TARGET_URL", str(context.exception))
+
+    def test_flask_server_without_target_url(self):
+        if "AIS_TARGET_URL" in os.environ:
+            del os.environ["AIS_TARGET_URL"]
+
+        class MinimalFlaskServer(FlaskServer):
+            def transform(self, data: bytes, path: str) -> bytes:
+                return data
+
+        with self.assertRaises(EnvironmentError) as context:
+            MinimalFlaskServer()
         self.assertIn("AIS_TARGET_URL", str(context.exception))
 
     def test_http_server_server_without_target_url(self):
@@ -175,4 +236,14 @@ class TestBaseEnforcement(unittest.TestCase):
 
         with self.assertRaises(TypeError) as context:
             IncompleteFastAPIServer()  # pylint: disable=abstract-class-instantiated
+        self.assertIn("Can't instantiate abstract class", str(context.exception))
+
+    def test_flask_server_without_transform(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost"
+
+        class IncompleteFlaskServer(FlaskServer):
+            pass
+
+        with self.assertRaises(TypeError) as context:
+            IncompleteFlaskServer()  # pylint: disable=abstract-class-instantiated
         self.assertIn("Can't instantiate abstract class", str(context.exception))
