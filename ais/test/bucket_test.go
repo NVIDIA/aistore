@@ -2262,6 +2262,7 @@ func TestCopyBucket(t *testing.T) {
 		multipleDests    bool // determines if there are multiple destinations to which objects are copied
 		onlyLong         bool
 		evictRemoteSrc   bool
+		numWorkers       int
 	}{
 		// ais -> ais
 		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
@@ -2270,6 +2271,13 @@ func TestCopyBucket(t *testing.T) {
 		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true, onlyLong: true},
 		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true, onlyLong: true},
 
+		// ais -> ais (multi-workers)
+		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false, numWorkers: 4},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, multipleDests: false, onlyLong: true, numWorkers: 4},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: false, onlyLong: true, numWorkers: 4},
+		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true, onlyLong: true, numWorkers: 4},
+		{srcRemote: false, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true, onlyLong: true, numWorkers: 4},
+
 		// remote -> ais
 		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false},
 		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: false},
@@ -2277,12 +2285,26 @@ func TestCopyBucket(t *testing.T) {
 		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
 		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 
+		// remote -> ais (multi-workers)
+		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, numWorkers: 4},
+		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, numWorkers: 4},
+		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, numWorkers: 4},
+		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true, numWorkers: 4},
+		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true, numWorkers: 4},
+
 		// evicted remote -> ais
 		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, evictRemoteSrc: true},
 		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, evictRemoteSrc: true},
 
+		// evicted remote -> ais (multi-workers)
+		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, evictRemoteSrc: true, numWorkers: 4},
+		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, evictRemoteSrc: true, numWorkers: 4},
+
 		// ais -> remote
 		{srcRemote: false, dstRemote: true, dstBckExist: true, dstBckHasObjects: false},
+
+		// ais -> remote (multi-workers)
+		{srcRemote: false, dstRemote: true, dstBckExist: true, dstBckHasObjects: false, numWorkers: 4},
 	}
 
 	for _, test := range tests {
@@ -2310,6 +2332,9 @@ func TestCopyBucket(t *testing.T) {
 		}
 		if test.multipleDests {
 			testName += "/multiple_dests"
+		}
+		if test.numWorkers != 0 {
+			testName += fmt.Sprintf("num_workers=%d", test.numWorkers)
 		}
 
 		t.Run(testName, func(t *testing.T) {
@@ -2439,7 +2464,10 @@ func TestCopyBucket(t *testing.T) {
 				var (
 					uuid string
 					err  error
-					cmsg = &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Force: true}}
+					cmsg = &apc.TCBMsg{
+						CopyBckMsg: apc.CopyBckMsg{Force: true},
+						NumWorkers: test.numWorkers,
+					}
 				)
 				if test.evictRemoteSrc {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg, apc.FltExists)
@@ -2461,16 +2489,20 @@ func TestCopyBucket(t *testing.T) {
 
 			for _, uuid := range xactIDs {
 				// TODO -- FIXME: remove/simplify-out this `if` here and elsewhere
+				var args = xact.ArgsMsg{ID: uuid, Timeout: tools.CopyBucketTimeout}
 				if test.evictRemoteSrc {
-					// wait for TCO idle (different x-kind)
-					args := xact.ArgsMsg{ID: uuid, Timeout: tools.CopyBucketTimeout}
 					err := api.WaitForXactionIdle(baseParams, &args)
 					tassert.CheckFatal(t, err)
 				} else {
-					args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout}
+					args.Kind = apc.ActCopyBck // wait for TCB idle (different x-kind than TCO)
 					_, err := api.WaitForXactionIC(baseParams, &args)
 					tassert.CheckFatal(t, err)
 				}
+				snaps, err := api.QueryXactionSnaps(baseParams, &args)
+				tassert.CheckFatal(t, err)
+				total, err := snaps.TotalRunningTime(uuid)
+				tassert.CheckFatal(t, err)
+				tlog.Logf("copy-bucket[%s] with %d workers took %v\n", uuid, test.numWorkers, total)
 			}
 
 			for _, dstm := range dstms {
@@ -2683,6 +2715,7 @@ func TestCopyBucketSimple(t *testing.T) {
 	t.Run("Prefix", func(t *testing.T) { f(); testCopyBucketPrefix(t, srcBck, m, m.num/2) })
 	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m, sleep) })
 	t.Run("DryRun", func(t *testing.T) { f(); testCopyBucketDryRun(t, srcBck, m) })
+	t.Run("MultiWorker", func(t *testing.T) { f(); testCopyBucketMultiWorker(t, srcBck, m) })
 }
 
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
@@ -2759,7 +2792,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 
 	list, err := api.ListObjects(baseParams, dstBck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == expected, "expected %d to be copied, got %d", m.num, len(list.Entries))
+	tassert.Errorf(t, len(list.Entries) == expected, "expected %d to be copied, got %d", expected, len(list.Entries))
 	for _, e := range list.Entries {
 		tassert.Fatalf(t, strings.HasPrefix(e.Name, m.prefix), "expected %q to have prefix %q", e.Name, m.prefix)
 	}
@@ -2844,6 +2877,55 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, exists == false, "expected destination bucket to not be created")
+}
+
+func testCopyBucketMultiWorker(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+	var (
+		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
+	)
+
+	for numWorkers := range []int{0, 1, 4} {
+		t.Run(fmt.Sprintf("workers=%d", numWorkers), func(t *testing.T) {
+			xid, err := api.CopyBucket(
+				baseParams,
+				srcBck,
+				dstBck,
+				&apc.TCBMsg{
+					CopyBckMsg:      apc.CopyBckMsg{},
+					NumWorkers:      numWorkers,
+					ContinueOnError: false,
+				},
+			)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() {
+				tools.DestroyBucket(t, proxyURL, dstBck)
+			})
+
+			tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
+			_, err = api.WaitForXactionIC(baseParams, &args)
+			tassert.CheckFatal(t, err)
+
+			snaps, err := api.QueryXactionSnaps(baseParams, &args)
+			tassert.CheckFatal(t, err)
+			total, err := snaps.TotalRunningTime(xid)
+			tassert.CheckFatal(t, err)
+			tlog.Logf("Copying bucket %s with %d workers took %v\n", srcBck.Cname(""), numWorkers, total)
+
+			list, err := api.ListObjects(baseParams, dstBck, nil, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, len(list.Entries) == m.num, "expected %d to be copied, got %d", m.num, len(list.Entries))
+			for _, en := range list.Entries {
+				r1, _, err := api.GetObjectReader(baseParams, srcBck, en.Name, &api.GetArgs{})
+				tassert.CheckFatal(t, err)
+				r2, _, err := api.GetObjectReader(baseParams, dstBck, en.Name, &api.GetArgs{})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, tools.ReaderEqual(r1, r2), "object content mismatch: %s vs %s", srcBck.Cname(en.Name), dstBck.Cname(en.Name))
+				tassert.CheckFatal(t, r1.Close())
+				tassert.CheckFatal(t, r2.Close())
+			}
+		})
+	}
 }
 
 // Tries to rename and then copy bucket at the same time.

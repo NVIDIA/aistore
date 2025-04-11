@@ -627,47 +627,65 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 		err            error
 		bckFrom        = m.bck
 		requestTimeout = 30 * time.Second
-
-		msg = &apc.TCBMsg{
-			Transform: apc.Transform{
-				Name:    etlName,
-				Timeout: cos.Duration(requestTimeout),
-			},
-			CopyBckMsg: apc.CopyBckMsg{Force: true},
-		}
 	)
 
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, bp, etlName) })
 	tlog.Logf("Start ETL[%s]: %s => %s ...\n", etlName, bckFrom.Cname(""), bckTo.Cname(""))
 
-	if evictRemoteSrc {
-		kind = apc.ActETLObjects // TODO -- FIXME: remove/simplify-out the reliance on x-kind
-		xid, err = api.ETLBucket(bp, bckFrom, bckTo, msg, apc.FltExists)
-	} else {
-		kind = apc.ActETLBck
-		xid, err = api.ETLBucket(bp, bckFrom, bckTo, msg)
+	numWorkersTest := []int{0, 2}
+
+	if !testing.Short() {
+		numWorkersTestLong := []int{1, 4, 16}
+		numWorkersTest = append(numWorkersTest, numWorkersTestLong...)
 	}
-	tassert.CheckFatal(t, err)
 
-	t.Cleanup(func() {
-		if bckTo.IsRemote() {
-			err = api.EvictRemoteBucket(bp, bckTo, false /*keep md*/)
+	for _, numWorkers := range numWorkersTest {
+		t.Run(fmt.Sprintf("numWorkers=%d", numWorkers), func(t *testing.T) {
+			msg := &apc.TCBMsg{
+				Transform: apc.Transform{
+					Name:    etlName,
+					Timeout: cos.Duration(requestTimeout),
+				},
+				CopyBckMsg: apc.CopyBckMsg{Force: true},
+				NumWorkers: numWorkers,
+			}
+
+			if evictRemoteSrc {
+				kind = apc.ActETLObjects // TODO -- FIXME: remove/simplify-out the reliance on x-kind
+				xid, err = api.ETLBucket(bp, bckFrom, bckTo, msg, apc.FltExists)
+			} else {
+				kind = apc.ActETLBck
+				xid, err = api.ETLBucket(bp, bckFrom, bckTo, msg)
+			}
 			tassert.CheckFatal(t, err)
-			tlog.Logf("[cleanup] %s evicted\n", bckTo.String())
-		} else {
-			tools.DestroyBucket(t, bp.URL, bckTo)
-		}
-	})
 
-	tlog.Logf("ETL[%s]: running %s => %s x-etl[%s]\n", etlName, bckFrom.Cname(""), bckTo.Cname(""), xid)
+			t.Cleanup(func() {
+				if bckTo.IsRemote() {
+					err = api.EvictRemoteBucket(bp, bckTo, false /*keep md*/)
+					tassert.CheckFatal(t, err)
+					tlog.Logf("[cleanup] %s evicted\n", bckTo.String())
+				} else {
+					tools.DestroyBucket(t, bp.URL, bckTo)
+				}
+			})
 
-	err = tetl.WaitForFinished(bp, xid, kind, timeout)
-	tassert.CheckFatal(t, err)
+			tlog.Logf("ETL[%s]: running %s => %s x-etl[%s]\n", etlName, bckFrom.Cname(""), bckTo.Cname(""), xid)
 
-	err = tetl.ListObjectsWithRetry(bp, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
-	tassert.CheckFatal(t, err)
+			err = tetl.WaitForFinished(bp, xid, kind, timeout)
+			tassert.CheckFatal(t, err)
 
-	checkETLStats(t, xid, m.num, m.fileSize*uint64(m.num), skipByteStats)
+			snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout})
+			tassert.CheckFatal(t, err)
+			total, err := snaps.TotalRunningTime(xid)
+			tassert.CheckFatal(t, err)
+			tlog.Logf("Transforming bucket %s with %d workers took %v\n", bckFrom.Cname(""), numWorkers, total)
+
+			err = tetl.ListObjectsWithRetry(bp, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
+			tassert.CheckFatal(t, err)
+
+			checkETLStats(t, xid, m.num, m.fileSize*uint64(m.num), skipByteStats)
+		})
+	}
 }
 
 func TestETLInitCode(t *testing.T) {
