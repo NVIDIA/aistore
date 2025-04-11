@@ -93,21 +93,20 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 		reqParams.Query.Set(apc.QparamUUID, xid)
 	}
 	if hdr, status, err = reqParams.doReqHdr(); err != nil {
-		err = hdr2msg(bck, status, err)
-		return
+		return "", nil, nil, hdr2msg(bck, status, err)
 	}
 
 	hdrProps := hdr.Get(apc.HdrBucketProps)
 	if hdrProps != "" {
 		p = &cmn.Bprops{}
 		if err = jsoniter.Unmarshal([]byte(hdrProps), p); err != nil {
-			return
+			return "", nil, nil, err
 		}
 	}
 	xid = hdr.Get(apc.HdrXactionID)
 	if xid == "" {
 		debug.Assert(status == http.StatusOK && !args.Summarize, status, " ", args.Summarize)
-		return
+		return "", p, nil, nil
 	}
 	debug.Assert(news || xid == args.UUID)
 	if args.DontWait {
@@ -117,11 +116,10 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 				err = jsoniter.Unmarshal([]byte(hdrSumm), info)
 			}
 		}
-		return
+		return xid, p, info, err
 	}
 	if status != http.StatusAccepted {
-		err = _invalidStatus(status)
-		return
+		return xid, p, info, _invalidStatus(status)
 	}
 	if args.Callback != nil {
 		start = mono.NanoTime()
@@ -134,8 +132,7 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 	time.Sleep(sleep / 2)
 	for i := 0; ; i++ {
 		if hdr, status, err = reqParams.doReqHdr(); err != nil {
-			err = hdr2msg(bck, status, err)
-			return
+			return xid, p, info, hdr2msg(bck, status, err)
 		}
 
 		hdrSumm := hdr.Get(apc.HdrBucketSumm)
@@ -144,7 +141,7 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 			err = jsoniter.Unmarshal([]byte(hdrSumm), info)
 		}
 		if err != nil {
-			return // unlikely
+			return xid, p, info, err // unlikely
 		}
 		debug.Assertf(hdr.Get(apc.HdrXactionID) == xid, "%q vs %q", hdr.Get(apc.HdrXactionID), xid)
 
@@ -156,11 +153,10 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args *BinfoArgs) (xid string, p *
 			}
 		}
 		if status == http.StatusOK {
-			return
+			return xid, p, info, nil
 		}
 		if status != http.StatusPartialContent && status != http.StatusAccepted {
-			err = _invalidStatus(status)
-			return
+			return xid, p, info, _invalidStatus(status)
 		}
 
 		time.Sleep(sleep)

@@ -160,7 +160,7 @@ func detectFormat(in string) (f func() error, what string) {
 	if flags.extract {
 		f = e.extract
 	}
-	return
+	return f, what
 }
 
 func parseDetect(in string, extract bool) (f func() error, what string) {
@@ -181,7 +181,7 @@ func parseDetect(in string, extract bool) (f func() error, what string) {
 		fmt.Printf("Failed to auto-detect %q for AIS metadata type - one of %q\n(use '-f' option to specify)\n", in, all)
 		os.Exit(1)
 	}
-	return
+	return f, what
 }
 
 func extractMeta(v jsp.Opts) (err error) {
@@ -189,12 +189,11 @@ func extractMeta(v jsp.Opts) (err error) {
 	if flags.out != "" {
 		f, err = cos.CreateFile(flags.out)
 		if err != nil {
-			return
+			return err
 		}
 	}
-	_, err = jsp.LoadMeta(flags.in, v)
-	if err != nil {
-		return
+	if _, err := jsp.LoadMeta(flags.in, v); err != nil {
+		return err
 	}
 	s, _ := jsoniter.MarshalIndent(v, "", " ")
 	_, err = fmt.Fprintln(f, string(s))
@@ -206,13 +205,13 @@ func extractECMeta() (err error) {
 	if flags.out != "" {
 		f, err = cos.CreateFile(flags.out)
 		if err != nil {
-			return
+			return err
 		}
 	}
 	var v *ec.Metadata
 	v, err = ec.LoadMetadata(flags.in)
 	if err != nil {
-		return
+		return err
 	}
 	s, _ := jsoniter.MarshalIndent(v, "", " ")
 	_, err = fmt.Fprintln(f, string(s))
@@ -255,7 +254,7 @@ func extractLOM() (err error) {
 	if flags.out != "" {
 		f, err = cos.CreateFile(flags.out)
 		if err != nil {
-			return
+			return err
 		}
 	}
 	if flags.in == "" || flags.in == "." {
@@ -267,9 +266,8 @@ func extractLOM() (err error) {
 	_ = mock.NewTarget(mock.NewBaseBownerMock()) // => cluster.Tinit
 
 	lom := &core.LOM{FQN: flags.in}
-	err = lom.LoadMetaFromFS()
-	if err != nil {
-		return
+	if err := lom.LoadMetaFromFS(); err != nil {
+		return err
 	}
 
 	lmi := lomInfo{Attrs: lom.ObjAttrs()}

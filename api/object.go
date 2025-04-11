@@ -659,7 +659,7 @@ func DoWithRetry(client *http.Client, cb newRequestCB, reqArgs *cmn.HreqArgs) (r
 	// first time
 	if req, err = cb(reqArgs); err != nil {
 		cos.Close(reader)
-		return
+		return nil, err
 	}
 	resp, doErr = client.Do(req)
 	err = doErr
@@ -677,14 +677,14 @@ func DoWithRetry(client *http.Client, cb newRequestCB, reqArgs *cmn.HreqArgs) (r
 		sleep += sleep / 2
 		if r, err = reader.Open(); err != nil {
 			_close(resp, doErr)
-			return
+			return resp, err
 		}
 		reqArgs.BodyR = r
 
 		if req, err = cb(reqArgs); err != nil {
 			cos.Close(r)
 			_close(resp, doErr)
-			return
+			return resp, err
 		}
 		_close(resp, doErr)
 		resp, doErr = client.Do(req)
@@ -701,7 +701,7 @@ exit:
 		FreeRp(reqParams)
 	}
 	_close(resp, doErr)
-	return
+	return resp, err
 }
 
 func _close(resp *http.Response, doErr error) {

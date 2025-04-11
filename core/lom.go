@@ -330,13 +330,13 @@ func (lom *LOM) ValidateContentChecksum() (err error) {
 	)
 recomp:
 	if cksumType == cos.ChecksumNone { // as far as do-no-checksum-checking bucket rules
-		return
+		return nil
 	}
 	if !lom.md.Cksum.IsEmpty() {
 		cksumType = lom.md.Cksum.Ty() // takes precedence on the other hand
 	}
 	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
-		return
+		return err
 	}
 	if lom.md.Cksum.IsEmpty() { // store computed
 		lom.md.Cksum = cksums.comp.Clone()
@@ -346,10 +346,10 @@ recomp:
 		if err = lom.Persist(); err != nil {
 			lom.md.Cksum = cksums.stor
 		}
-		return
+		return err
 	}
 	if cksums.comp.Equal(lom.md.Cksum) {
-		return
+		return nil
 	}
 	if reloaded {
 		goto ex
@@ -365,13 +365,13 @@ recomp:
 		}
 		// otherwise, check
 		if cksums.comp.Equal(lom.md.Cksum) {
-			return
+			return nil
 		}
 	}
 ex:
 	err = cos.NewErrDataCksum(&cksums.comp.Cksum, cksums.stor, lom.String())
 	lom.UncacheDel()
-	return
+	return err
 }
 
 func (lom *LOM) ComputeSetCksum() (*cos.Cksum, error) {

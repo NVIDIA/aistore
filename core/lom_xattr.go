@@ -455,7 +455,7 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	buf[1] = mdCksumTyXXHash
 	mdCksumValue := onexxh.Checksum64S(buf[prefLen:], cos.MLCG32)
 	binary.BigEndian.PutUint64(buf[2:], mdCksumValue)
-	return
+	return buf
 }
 
 func _packRecord(buf []byte, key int, value string, sepa bool) []byte {

@@ -283,14 +283,13 @@ func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bo
 		}
 		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
 		if done || !canRetry /*fail*/ {
-			return
+			return status, err
 		}
 		time.Sleep(sleep)
 		sleep = min(maxSleep, sleep+sleep/2)
 
 		if elapsed = mono.Since(begin); elapsed >= total {
-			err = fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
-			return
+			return nil, fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
 		}
 	}
 }

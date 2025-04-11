@@ -203,7 +203,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 	}
 	lom.Unlock(true)
 	slab.Free(buf)
-	return
+	return exists
 }
 
 func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
@@ -222,7 +222,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 
 // increment the object's num copies by (well) copying the former
 // (compare with lom.Copy2FQN below)
-func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
+func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 	var (
 		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
@@ -242,27 +242,24 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 	}
 
 	// do
-	_, _, err = cos.CopyFile(lom.FQN, workFQN, buf, cos.ChecksumNone) // TODO: checksumming
-	if err != nil {
-		return
+	if _, _, err := cos.CopyFile(lom.FQN, workFQN, buf, cos.ChecksumNone); err != nil { // TODO: checksumming
+		return err
 	}
-	if err = cos.Rename(workFQN, copyFQN); err != nil {
+	if err := cos.Rename(workFQN, copyFQN); err != nil {
 		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
-		return
+		return err
 	}
 add:
 	// add md and persist
 	lom.AddCopy(copyFQN, mi)
-	err = lom.Persist()
-	if err != nil {
+	if err := lom.Persist(); err != nil {
 		lom.delCopyMd(copyFQN)
 		nlog.Errorln(err)
 		return err
 	}
-	err = lom.syncMetaWithCopies()
-	return
+	return lom.syncMetaWithCopies()
 }
 
 // copy object => any local destination
@@ -304,14 +301,14 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileCopy)
 	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
-		return
+		return err
 	}
 
 	if err = cos.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
-		return
+		return err
 	}
 
 	if cksumType != cos.ChecksumNone {
@@ -339,7 +336,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 			if errPersist := lom.Persist(); errPersist != nil {
 				nlog.Errorln("nested err:", errPersist)
 			}
-			return
+			return err
 		}
 		err = lom.Persist()
 	} else if err = dst.Persist(); err != nil {
@@ -347,7 +344,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 			nlog.Errorln("nested err:", errRemove)
 		}
 	}
-	return
+	return err
 }
 
 // load-balanced GET
@@ -409,26 +406,27 @@ func (lom *LOM) haveMpath(mpath string) bool {
 }
 
 // must be called under w-lock
-// returns mountpath destination to copy this object, or nil if no copying is required
+// returns mountpath to relocate or copy this lom, or nil if none required/available
+// return fixHrw = true when lom is currently misplaced
 // - checks hrw location first, and
 // - checks copies (if any) against the current configuation and available mountpaths;
 // - does not check `fstat` in either case (TODO: configurable or scrub);
-func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
+func (lom *LOM) ToMpath() (mi *fs.Mountpath, fixHrw bool) {
 	var (
 		avail         = fs.GetAvail()
 		hrwMi, _, err = fs.Hrw(cos.UnsafeB(*lom.md.uname))
 	)
 	if err != nil {
 		nlog.Errorln(err)
-		return
+		return nil, false
 	}
 	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))
 	if lom.mi.Path != hrwMi.Path {
-		return hrwMi, true
+		return hrwMi, true // fixHrw
 	}
 	mirror := lom.MirrorConf()
 	if !mirror.Enabled || mirror.Copies < 2 {
-		return
+		return nil, false
 	}
 	// count copies vs. configuration
 	// take into account mountpath flags but stop short of `fstat`-ing
@@ -442,8 +440,8 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 		}
 	}
 	if expCopies <= gotCopies {
-		return
+		return nil, false
 	}
 	mi = lom.LeastUtilNoCopy() // NOTE: nil when not enough mountpaths
-	return
+	return mi, false
 }
