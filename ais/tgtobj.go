@@ -399,11 +399,12 @@ func (poi *putOI) fini() (ecode int, err error) {
 
 	// ais versioning
 	if bck.IsAIS() && lom.VersionConf().Enabled {
-		if poi.owt < cmn.OwtRebalance {
-			if poi.skipVC {
-				err = lom.IncVersion()
-				debug.AssertNoErr(err)
-			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+		switch {
+		case poi.owt >= cmn.OwtRebalance || poi.owt == cmn.OwtCopy:
+			// rebalance, copy, get*: do nothing
+		default:
+			// best effort
+			if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
 					nlog.Errorln(err) // (unlikely)
 				}
