@@ -6,7 +6,6 @@ kind: Pod
 metadata:
   name: transformer-md5
   annotations:
-    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -16,8 +15,8 @@ spec:
       imagePullPolicy: Always
       ports:
         - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+          containerPort: 8000
+      command: ["python", "/code/md5_server.py"]
       readinessProbe:
         httpGet:
           path: /health
@@ -32,7 +31,6 @@ kind: Pod
 metadata:
   name: transformer-hello-world
   annotations:
-    # Values it can take ["hpull://","hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -43,8 +41,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
-      # command: ["uvicorn", "main:app", "--reload"]
+      command: ["python", "/code/hello_world_server.py"]
       env:
         - name: ARG_TYPE
           value: "{arg_type}"
@@ -137,7 +134,7 @@ kind: Pod
 metadata:
   name: transformer-echo
   annotations:
-    # Values it can take ["hpull://","hpush://"]
+    # Values it can take ["hpull://", "hpush://"]
     communication_type: "{communication_type}://"
     wait_timeout: 5m
 spec:
@@ -148,7 +145,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
+      command: ["python", "/code/echo_server.py"]
       readinessProbe:
         httpGet:
           path: /health
