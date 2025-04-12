@@ -352,8 +352,20 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 			// needed for the test
 			// reminder:
 			// "when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)"
-			setBucketFeatures(t, bck.Clone(), bck.Props, feat.S3ListObjectVersions)
+			var (
+				of = bck.Props.Features
+				nf = feat.S3ListObjectVersions
+			)
+			props := &cmn.BpropsToSet{Features: &nf}
+			_, err := api.SetBucketProps(baseParams, bck.Clone(), props)
+			tassert.CheckFatal(t, err)
+			defer func() {
+				props := &cmn.BpropsToSet{Features: &of}
+				_, err := api.SetBucketProps(baseParams, bck.Clone(), props)
+				tassert.CheckFatal(t, err)
+			}()
 		}
+
 		propsVersion(t, bck.Clone(), bck.Props.Versioning.Enabled, bck.Props.Cksum.Type)
 	})
 }

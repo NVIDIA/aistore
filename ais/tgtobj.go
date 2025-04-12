@@ -470,7 +470,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		ckconf = poi.lom.CksumConf()
 	)
 	if lmfh, err = poi.lom.CreateWork(poi.workFQN); err != nil {
-		return
+		return nil, nil, nil, err
 	}
 	if poi.size <= 0 {
 		buf, slab = poi.t.gmm.Alloc()
@@ -508,7 +508,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		written, err = cos.CopyBuffer(cos.NewWriterMulti(writers...), poi.r, buf) // (ditto)
 	}
 	if err != nil {
-		return
+		return buf, slab, lmfh, err
 	}
 
 	// validate
@@ -518,7 +518,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		if !cksums.compt.Equal(cksums.expct) {
 			err = cos.NewErrDataCksum(cksums.expct, &cksums.compt.Cksum, poi.lom.Cname())
 			poi.t.statsT.IncWith(stats.ErrPutCksumCount, poi._vlabs(true /*detailed*/))
-			return
+			return buf, slab, lmfh, err
 		}
 	}
 
@@ -529,7 +529,6 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 	}
 
 	cos.Close(lmfh)
-	lmfh = nil
 
 	poi.lom.SetSize(written) // TODO: compare with non-zero lom.Lsize() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
@@ -538,7 +537,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		}
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
-	return
+	return buf, slab, nil /*closed lmfh*/, err
 }
 
 // post-write close & cleanup
@@ -553,8 +552,10 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 
 	// not ok
 	poi.r.Close()
-	if nerr := lmfh.Close(); nerr != nil {
-		nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
+	if lmfh != nil {
+		if nerr := lmfh.Close(); nerr != nil {
+			nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
+		}
 	}
 	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil && !os.IsNotExist(nerr) {
 		nlog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
@@ -802,7 +803,7 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 //   - if corrupted and IsAIS or coldGET not permitted, try to recover from redundant
 //     replicas or EC slices
 //   - otherwise, rely on the remote backend for recovery (tradeoff; TODO: make it configurable)
-func (goi *getOI) validateRecover() (coldGet bool, code int, err error) {
+func (goi *getOI) validateRecover() (coldGet bool, ecode int, err error) {
 	var (
 		lom     = goi.lom
 		retried bool
@@ -813,15 +814,14 @@ validate:
 		err = lom.ValidateContentChecksum()
 	}
 	if err == nil {
-		return
+		return false, 0, nil
 	}
-	code = http.StatusInternalServerError
-	if _, ok := err.(*cos.ErrBadCksum); !ok {
-		return
+	ecode = http.StatusInternalServerError
+	if !cos.IsErrBadCksum(err) {
+		return false, ecode, err
 	}
 	if !lom.Bck().IsAIS() && !goi.lom.IsFeatureSet(feat.DisableColdGET) {
-		coldGet = true
-		return
+		return true, ecode, err
 	}
 
 	nlog.Warningln(err)
@@ -830,13 +830,11 @@ validate:
 	// return err if there's no redundancy OR already recovered once (and failed)
 	//
 	if retried || !redundant {
-		//
 		// TODO: mark `deleted` and postpone actual deletion
-		//
 		if erl := lom.RemoveObj(true /*force through rlock*/); erl != nil {
 			nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 		}
-		return
+		return false, ecode, err
 	}
 	//
 	// try to recover from BAD CHECKSUM
@@ -851,7 +849,6 @@ validate:
 		goi.lom.Lock(false)
 		if restored {
 			nlog.Warningf("%s: recovered corrupted %s from local replica", goi.t, lom)
-			code = 0
 			goto validate
 		}
 	}
@@ -859,11 +856,10 @@ validate:
 		retried = true
 		goi.lom.Unlock(false)
 		lom.RemoveMain()
-		_, code, err = goi.restoreFromAny(true /*skipLomRestore*/)
+		_, ecode, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
 		if err == nil {
 			nlog.Warningf("%s: recovered corrupted %s from EC slices", goi.t, lom)
-			code = 0
 			goto validate
 		}
 	}
@@ -872,7 +868,7 @@ validate:
 	if erl := lom.RemoveObj(true /*force through rlock*/); erl != nil {
 		nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 	}
-	return
+	return false, ecode, err
 }
 
 // attempt to restore an object from any/all of the below:
@@ -888,7 +884,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, ecode i
 	// NOTE: including targets 'in maintenance mode'
 	tsi, err = smap.HrwHash2Tall(goi.lom.Digest())
 	if err != nil {
-		return
+		return false, 0, err
 	}
 	if !skipLomRestore {
 		// when resilvering:
@@ -900,8 +896,8 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, ecode i
 		)
 		if resMarked.Interrupted || running || gfnActive {
 			if goi.lom.RestoreToLocation() { // from copies
-				nlog.Infof("%s restored to location", goi.lom)
-				return
+				nlog.Infoln(goi.lom.String(), "restored to location")
+				return false, 0, nil
 			}
 			doubleCheck = running
 		}
@@ -934,7 +930,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, ecode i
 gfn:
 	if gfnNode != nil {
 		if goi.getFromNeighbor(goi.lom, gfnNode) {
-			return
+			return false, 0, nil
 		}
 	}
 
@@ -944,7 +940,7 @@ gfn:
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		if ecErr == nil {
 			nlog.Infoln(goi.t.String(), "EC-recovered", goi.lom.Cname())
-			return
+			return false, 0, nil
 		}
 		err = cmn.NewErrFailedTo(goi.t, "load EC-recovered", goi.lom.Cname(), ecErr)
 		nlog.Errorln(ecErr)
@@ -953,7 +949,7 @@ gfn:
 		if cmn.IsErrCapExceeded(ecErr) {
 			ecode = http.StatusInsufficientStorage
 		}
-		return
+		return doubleCheck, ecode, err
 	}
 
 	if err != nil {
@@ -963,8 +959,7 @@ gfn:
 	} else {
 		err = cos.NewErrNotFound(goi.t, goi.lom.Cname())
 	}
-	ecode = http.StatusNotFound
-	return
+	return doubleCheck, http.StatusNotFound, err
 }
 
 func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
@@ -1382,7 +1377,7 @@ func (a *apndOI) do(r *http.Request) (packedHdl string, ecode int, err error) {
 	switch a.op {
 	case apc.AppendOp:
 		buf, slab := a.t.gmm.Alloc()
-		packedHdl, ecode, err = a.apnd(buf)
+		packedHdl, err = a.apnd(buf)
 		slab.Free(buf)
 	case apc.FlushOp:
 		ecode, err = a.flush()
@@ -1394,7 +1389,7 @@ func (a *apndOI) do(r *http.Request) (packedHdl string, ecode int, err error) {
 	return packedHdl, ecode, err
 }
 
-func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
+func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 	var (
 		fh      cos.LomWriter
 		workFQN = a.hdl.workFQN
@@ -1406,8 +1401,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 			_, a.hdl.partialCksum, err = cos.CopyFile(a.lom.FQN, workFQN, buf, a.lom.CksumType())
 			a.lom.Unlock(false)
 			if err != nil {
-				ecode = http.StatusInternalServerError
-				return
+				return "", err
 			}
 			fh, err = a.lom.AppendWork(workFQN)
 		} else {
@@ -1420,16 +1414,14 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 		debug.Assert(a.hdl.partialCksum != nil)
 	}
 	if err != nil { // failed to open or create
-		ecode = http.StatusInternalServerError
-		return
+		return "", err
 	}
 
 	w := cos.NewWriterMulti(fh, a.hdl.partialCksum.H)
 	_, err = cos.CopyBuffer(w, a.r, buf)
 	cos.Close(fh)
 	if err != nil {
-		ecode = http.StatusInternalServerError
-		return
+		return "", err
 	}
 
 	packedHdl = a.pack(workFQN)
@@ -1444,7 +1436,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, ecode int, err error) {
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infoln("APPEND", a.lom.String(), time.Duration(lat))
 	}
-	return
+	return packedHdl, nil
 }
 
 func (a *apndOI) flush() (int, error) {
@@ -1563,10 +1555,17 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			// to keep not-found
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
+	case lom.FQN == dst.FQN:
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op (resilvering with a single mountpath?)")
+		}
 	default:
 		// fast path: destination is _this_ target
 		// (note coi.send(=> another target) above)
-		res = coi._regular(t, lom, dst)
+		lcopy := lom.Uname() == dst.Uname() // n-way copy
+		lom.Lock(lcopy)
+		res = coi._regular(t, lom, dst, lcopy)
+		lom.Unlock(lcopy)
 	}
 
 	return res
@@ -1670,14 +1669,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM) (res xs.Co
 	return res
 }
 
-func (coi *coi) _regular(t *target, lom, dst *core.LOM) (res xs.CoiRes) {
-	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
-		return
-	}
-	lcopy := lom.Uname() == dst.Uname() // n-way copy
-	lom.Lock(lcopy)
-	defer lom.Unlock(lcopy)
-
+func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiRes) {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cos.IsNotExist(err, 0) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)

@@ -176,7 +176,7 @@ func BenchmarkObjAppend(b *testing.B) {
 				lom.RemoveMain()
 				b.StartTimer()
 
-				newHandle, _, err := aoi.apnd(buf)
+				newHandle, err := aoi.apnd(buf)
 				if err != nil {
 					b.Fatal(err)
 				}

@@ -2334,7 +2334,7 @@ func TestCopyBucket(t *testing.T) {
 			testName += "/multiple_dests"
 		}
 		if test.numWorkers != 0 {
-			testName += fmt.Sprintf("num_workers=%d", test.numWorkers)
+			testName += fmt.Sprintf("/num_workers=%d", test.numWorkers)
 		}
 
 		t.Run(testName, func(t *testing.T) {
