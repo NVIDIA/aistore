@@ -127,8 +127,7 @@ func (dm *DM) RegRecv() error {
 		return errors.New("duplicated reg: " + dm.String())
 	}
 	if err := transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
-		// (unlikely)
-		debug.AssertNoErr(err)
+		debug.Assert(err == nil, dm.String(), ": ", err)
 		return err
 	}
 	if dm.useACKs() {

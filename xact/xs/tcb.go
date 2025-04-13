@@ -7,7 +7,6 @@ package xs
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -21,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -29,16 +27,10 @@ import (
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-)
-
-const (
-	tcbBurstMultiplier = 4 // TODO -- FIXME: unify
-	tcbMinWorkers      = 2
 )
 
 type (
@@ -58,10 +50,12 @@ type (
 		sntl  sentinel
 		xact.BckJog
 		// copying parallelism
-		workers []tcbworker
-		workCh  chan core.LIF
-		stopCh  *cos.StopCh
-		wg      sync.WaitGroup
+		numwp struct {
+			workers []tcbworker
+			workCh  chan core.LIF
+			stopCh  *cos.StopCh
+			wg      sync.WaitGroup
+		}
 		// args
 		args *xreg.TCBArgs
 		dm   *bundle.DM
@@ -117,8 +111,7 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
-	// only need workers and sentinels when there's intra-cluster traffic
-	if !r.args.DisableDM {
+	if r.args.DisableDM {
 		return nil
 	}
 
@@ -127,31 +120,38 @@ func (p *tcbFactory) Start() error {
 	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
-
 	if err := r.newDM(sizePDU); err != nil {
 		return err
 	}
 
+	// only need workers and sentinels when there's intra-cluster traffic
 	// intra-cluster copying/transforming parallelism
 	// tune-up num-workers, if specified
-	numWorkers, err := r.numWorkers(msg.NumWorkers)
+	numWorkers, err := throttleNwp(r.Name(), msg.NumWorkers)
 	if err != nil {
 		return err
 	}
-
+	// unlike tco and other lrit-based xactions,
+	// tcb - via xact.BckJog - employs conventional system joggers;
+	// `nwpNone` not supported
 	if numWorkers > 0 {
-		r.workers = make([]tcbworker, 0, numWorkers)
-		for range numWorkers {
-			r.workers = append(r.workers, tcbworker{r})
-		}
-		r.workCh = make(chan core.LIF, numWorkers*tcbBurstMultiplier)
-		r.stopCh = cos.NewStopCh()
-		nlog.Infoln(r.Name(), "workers:", numWorkers)
+		r._iniNwp(numWorkers)
 	}
 
+	// sentinels, to coordinate aborting and finishing
 	r.sntl.init(r, smap, nat)
 
 	return nil
+}
+
+func (r *XactTCB) _iniNwp(numWorkers int) {
+	r.numwp.workers = make([]tcbworker, 0, numWorkers)
+	for range numWorkers {
+		r.numwp.workers = append(r.numwp.workers, tcbworker{r})
+	}
+	r.numwp.workCh = make(chan core.LIF, numWorkers*nwpBurst)
+	r.numwp.stopCh = cos.NewStopCh()
+	nlog.Infoln(r.Name(), "workers:", numWorkers)
 }
 
 func (p *tcbFactory) Kind() string   { return p.kind }
@@ -276,9 +276,9 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 	wg.Done()
 
-	for _, worker := range r.workers {
+	for _, worker := range r.numwp.workers {
 		buf, slab := core.T.PageMM().Alloc()
-		r.wg.Add(1)
+		r.numwp.wg.Add(1)
 		go worker.run(buf, slab)
 	}
 
@@ -312,10 +312,10 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.prune.wait()
 	}
 
-	if r.workers != nil {
-		r.stopCh.Close()
-		close(r.workCh)
-		r.wg.Wait()
+	if r.numwp.workers != nil {
+		r.numwp.stopCh.Close()
+		close(r.numwp.workCh)
+		r.numwp.wg.Wait()
 	}
 
 	r.sntl.cleanup()
@@ -336,7 +336,7 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	if r.workers == nil {
+	if r.numwp.workers == nil {
 		args := r.args // TCBArgs
 		a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
 
@@ -347,7 +347,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		return err
 	}
 
-	r.workCh <- lom.LIF()
+	r.numwp.workCh <- lom.LIF()
 	return nil
 }
 
@@ -422,14 +422,13 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	return nil
 }
 
-// TODO -- FIXME: unify
 func (r *XactTCB) Abort(err error) bool {
 	if !r.Base.Abort(err) { // already aborted?
 		return false
 	}
-	if r.stopCh != nil {
-		debug.Assert(r.workers != nil)
-		r.stopCh.Close()
+	if r.numwp.stopCh != nil {
+		debug.Assert(r.numwp.workers != nil)
+		r.numwp.stopCh.Close()
 	}
 	return true
 }
@@ -467,62 +466,27 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	return
 }
 
-// TODO -- FIXME: must become a shared code
-func (r *XactTCB) numWorkers(n int) (int, error) {
-	if n <= 0 {
-		return 0, nil
-	}
-
-	// 1. do not exceed num available cores
-	n = min(sys.MaxParallelism(), n)
-
-	// 2. factor in memory pressure
-	var (
-		mm       = core.T.PageMM()
-		pressure = mm.Pressure()
-	)
-	switch pressure {
-	case memsys.OOM, memsys.PressureExtreme:
-		oom.FreeToOS(true)
-		return 0, errors.New(r.Name() + ": extreme memory pressure - not starting")
-	case memsys.PressureHigh:
-		n = min(tcbMinWorkers+1, n)
-		nlog.Warningln(r.Name(), "high memory pressure detected...")
-	}
-
-	// 3. factor in load averages
-	var (
-		load     = sys.MaxLoad()
-		highLoad = sys.HighLoadWM()
-	)
-	if load >= float64(highLoad) {
-		n = min(tcbMinWorkers, n)
-	}
-
-	return n, nil
-}
-
 ///////////////
 // tcbworker //
 ///////////////
 
 func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
-	r := worker.r
+	p := &worker.r.numwp
 outer:
 	for {
 		select {
-		case lif, ok := <-r.workCh:
+		case lif, ok := <-p.workCh:
 			if !ok {
 				break outer
 			}
 			if aborted := worker.do(lif, buf); aborted {
 				break outer
 			}
-		case <-r.stopCh.Listen():
+		case <-p.stopCh.Listen():
 			break outer
 		}
 	}
-	r.wg.Done()
+	p.wg.Done()
 	slab.Free(buf)
 }
 

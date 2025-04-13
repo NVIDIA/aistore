@@ -38,6 +38,7 @@ var (
 	_ core.Xact      = (*evictDelete)(nil)
 	_ xreg.Renewable = (*evdFactory)(nil)
 	_ lrwi           = (*evictDelete)(nil)
+	_ lrxact         = (*evictDelete)(nil)
 )
 
 //
@@ -66,23 +67,25 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 }
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (*evictDelete, error) {
-	ed := &evictDelete{config: cmn.GCO.Get()}
+	r := &evictDelete{config: cmn.GCO.Get()}
 	if kind == apc.ActEvictRemoteBck {
-		ed.InitBase(xargs.UUID, kind, "" /*ctlmsg*/, bck)
-		ed.Finish()
-		return ed, nil
+		r.InitBase(xargs.UUID, kind, "" /*ctlmsg*/, bck)
+		r.Finish()
+		return r, nil
 	}
 
-	if err := ed.lrit.init(ed, msg, bck, lrpWorkersDflt); err != nil {
+	// default num-workers hardcoded
+	// (currently, always num mountpaths)
+	if err := r.lrit.init(r, msg, bck, nwpDflt); err != nil {
 		return nil, err
 	}
 
 	var sb strings.Builder
 	sb.Grow(80)
-	msg.Str(&sb, ed.lrp == lrpPrefix)
-	ed.InitBase(xargs.UUID, kind, sb.String() /*ctlmsg*/, bck)
+	msg.Str(&sb, r.lrp == lrpPrefix)
+	r.InitBase(xargs.UUID, kind, sb.String() /*ctlmsg*/, bck)
 
-	return ed, nil
+	return r, nil
 }
 
 func (r *evictDelete) Run(wg *sync.WaitGroup) {

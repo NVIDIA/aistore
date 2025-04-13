@@ -322,7 +322,7 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	xtco, ok := xctn.(*xs.XactTCObjs)
+	xtco, ok := xctn.(*xs.XactTCO)
 	debug.Assert(ok)
 
 	if err = cos.MorphMarshal(amsg.Value, &tcomsg); err != nil {

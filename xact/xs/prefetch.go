@@ -126,6 +126,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
 	}
+
 	return r, nil
 }
 

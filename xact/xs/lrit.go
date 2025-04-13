@@ -37,14 +37,6 @@ const (
 	lrpPrefix
 )
 
-// when number of workers is not defined in a respective control message
-// (see e.g. PrefetchMsg.NumWorkers)
-// we have two special values
-const (
-	lrpWorkersNone = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
-	lrpWorkersDflt = 0  // num workers = number of mountpaths
-)
-
 // common for all list-range
 type (
 	// one multi-object operation work item
@@ -55,8 +47,10 @@ type (
 	// lrit needs for itself
 	lrxact interface {
 		Abort(error) bool
-		IsAborted() bool
-		Finished() bool
+		IsAborted() bool // used exclusively to break iteration
+		Finished() bool  // ditto
+		Name() string
+		ChanAbort() <-chan error
 	}
 
 	// running concurrency
@@ -70,17 +64,21 @@ type (
 
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
-		parent  lrxact
-		msg     *apc.ListRange
-		bck     *meta.Bck
-		pt      *cos.ParsedTemplate
-		workCh  chan lrpair    // - (num-workers parallelism)
-		prefix  string         // as in: bucket/prefix
-		workers []*lrworker    // - (num-workers parallelism)
-		buf     []byte         // when (prealloc && no-workers)
-		wg      sync.WaitGroup // - (num-workers parallelism)
-		numvis  atomic.Int64   // counter: num visited objects
-		lrp     int            // enum { lrpList, ... }
+		parent lrxact
+		msg    *apc.ListRange
+		bck    *meta.Bck
+		pt     *cos.ParsedTemplate
+		// nwp: num-workers parallelism
+		// (these are _not_ joggers)
+		nwp struct {
+			workCh  chan lrpair
+			workers []*lrworker
+			wg      sync.WaitGroup
+		}
+		prefix string       // as in bucket/prefix
+		buf    []byte       // when (prealloc && no-workers)
+		numvis atomic.Int64 // counter: num visited objects
+		lrp    int          // enum { lrpList, ... }
 	}
 )
 
@@ -94,10 +92,7 @@ type (
 //////////
 
 func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
-	var (
-		avail = fs.GetAvail()
-		l     = len(avail)
-	)
+	l := len(fs.GetAvail())
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)
 		return cmn.ErrNoMountpaths
@@ -115,12 +110,12 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 	}
 
 	// run single-threaded
-	if numWorkers == lrpWorkersNone {
+	if numWorkers == nwpNone {
 		return nil
 	}
 
 	// tuneup number of concurrent workers (heuristic)
-	if numWorkers == lrpWorkersDflt {
+	if numWorkers == nwpDflt {
 		numWorkers = l
 	}
 	if a := sys.MaxParallelism(); a > numWorkers+8 {
@@ -137,20 +132,25 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 		if bump {
 			numWorkers += 2
 		}
-	} else {
-		numWorkers = min(numWorkers, a)
 	}
-	nlog.Infoln("init:", numWorkers, "workers")
+	numWorkers, err := throttleNwp(r.parent.Name(), numWorkers)
+	if err != nil {
+		return err
+	}
 
-	// but note: these are _not_ joggers
-	r.workers = make([]*lrworker, 0, numWorkers)
+	r._iniNwp(numWorkers)
+	return nil
+}
+
+func (r *lrit) _iniNwp(numWorkers int) {
+	r.nwp.workers = make([]*lrworker, 0, numWorkers)
 	for range numWorkers {
-		r.workers = append(r.workers, &lrworker{r})
+		r.nwp.workers = append(r.nwp.workers, &lrworker{r})
 	}
 
 	// [burst] work channel capacity: up to 4 pending work items per
-	r.workCh = make(chan lrpair, min(numWorkers<<2, 512))
-	return nil
+	r.nwp.workCh = make(chan lrpair, numWorkers*nwpBurst)
+	nlog.Infoln(r.parent.Name(), "workers:", numWorkers)
 }
 
 // [NOTE] treating an empty ("") or wildcard ('*') template
@@ -183,13 +183,13 @@ pref:
 }
 
 func (r *lrit) run(wi lrwi, smap *meta.Smap, prealloc bool) (err error) {
-	if r.workers == nil {
+	if r.nwp.workers == nil {
 		if prealloc {
 			r.buf, _ = core.T.PageMM().Alloc()
 		}
 		goto iterate
 	}
-	for _, worker := range r.workers {
+	for _, worker := range r.nwp.workers {
 		var (
 			buf  []byte
 			slab *memsys.Slab
@@ -197,7 +197,7 @@ func (r *lrit) run(wi lrwi, smap *meta.Smap, prealloc bool) (err error) {
 		if prealloc {
 			buf, slab = core.T.PageMM().Alloc()
 		}
-		r.wg.Add(1)
+		r.nwp.wg.Add(1)
 		go worker.run(buf, slab)
 	}
 iterate:
@@ -213,14 +213,14 @@ iterate:
 }
 
 func (r *lrit) wait() {
-	if r.workers == nil {
+	if r.nwp.workers == nil {
 		if r.buf != nil {
 			core.T.PageMM().Free(r.buf)
 		}
 		return
 	}
-	close(r.workCh)
-	r.wg.Wait()
+	close(r.nwp.workCh)
+	r.nwp.wg.Wait()
 }
 
 func (r *lrit) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
@@ -348,13 +348,13 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 		}
 	}
 
-	if r.workers == nil {
+	if r.nwp.workers == nil {
 		wi.do(lom, r, r.buf)
 		r.numvis.Inc()
 		return true, nil
 	}
 
-	r.workCh <- lrpair{lom, wi} // lom eventually freed below
+	r.nwp.workCh <- lrpair{lom, wi} // lom eventually freed below // TODO -- FIXME: consider core.LIF
 	return false, nil
 }
 
@@ -363,19 +363,24 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 //////////////
 
 func (worker *lrworker) run(buf []byte, slab *memsys.Slab) {
+	workCh := worker.lrit.nwp.workCh
+	stopCh := worker.lrit.parent.ChanAbort()
+outer:
 	for {
-		lrpair, ok := <-worker.lrit.workCh
-		if !ok {
-			break
+		select {
+		case lrpair, ok := <-workCh:
+			if !ok {
+				break outer
+			}
+			lrpair.wi.do(lrpair.lom, worker.lrit, buf)
+			core.FreeLOM(lrpair.lom)
+			worker.lrit.numvis.Inc()
+		case <-stopCh:
+			break outer
 		}
-		lrpair.wi.do(lrpair.lom, worker.lrit, buf)
-		core.FreeLOM(lrpair.lom)
-		if worker.lrit.parent.IsAborted() {
-			break
-		}
-		worker.lrit.numvis.Inc()
 	}
-	worker.lrit.wg.Done()
+
+	worker.lrit.nwp.wg.Done()
 	if buf != nil {
 		slab.Free(buf)
 	}

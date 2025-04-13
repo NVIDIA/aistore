@@ -105,8 +105,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	return "", err
 }
 
-func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, owt cmn.OWT, sizePDU int32) error {
-	smap := core.T.Sowner().Get()
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, smap *meta.Smap, owt cmn.OWT, sizePDU int32) error {
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
@@ -119,17 +118,21 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Co
 	p.dm = bundle.NewDM(trname, recv, owt, dmxtra)
 
 	err := p.dm.RegRecv()
-	if err == nil {
-		return nil
+	if err != nil {
+		nlog.Errorln(err)
+		sleep := cos.ProbingFrequency(waitRegRecv)
+		for total := time.Duration(0); err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv; total += sleep {
+			time.Sleep(sleep)
+			err = p.dm.RegRecv()
+		}
 	}
-	nlog.Errorln(err)
-	sleep := cos.ProbingFrequency(waitRegRecv)
-	for total := time.Duration(0); err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv; total += sleep {
-		time.Sleep(sleep)
-		err = p.dm.RegRecv()
+	if err != nil {
+		return err
 	}
 
-	return err
+	p.dm.SetXact(p.xctn)
+	p.dm.Open()
+	return nil
 }
 
 func (r *streamingX) String() (s string) {
@@ -178,7 +181,6 @@ func (r *streamingX) fin(unreg bool) {
 		r.p.dm.UnregRecv()
 		return
 	}
-
 	r.DemandBase.Stop()
 	r.p.dm.Close(r.Err())
 	r.Finish()

@@ -8,7 +8,6 @@ package xs
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -62,28 +61,22 @@ func (rp *prune) wait() {
 		return
 	}
 
-	// wait for: joggers || r-aborted
-	ticker := time.NewTicker(cmn.Rom.MaxKeepalive())
-	rp._wait(ticker)
-
-	// cleanup
-	ticker.Stop()
+	rp._wait()
 	rp.filter.Reset()
 }
 
-func (rp *prune) _wait(ticker *time.Ticker) {
+func (rp *prune) _wait() {
+	stopCh := rp.r.ChanAbort()
+outer:
 	for {
 		select {
-		case <-ticker.C:
-			if rp.r.IsAborted() {
-				rp.joggers.Stop()
-				return
-			}
+		case <-stopCh:
+			break outer
 		case <-rp.joggers.ListenFinished():
-			rp.joggers.Stop()
-			return
+			break outer
 		}
 	}
+	rp.joggers.Stop()
 }
 
 func (rp *prune) do(dst *core.LOM, _ []byte) error {

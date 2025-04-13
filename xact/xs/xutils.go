@@ -6,13 +6,18 @@
 package xs
 
 import (
+	"errors"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
@@ -52,4 +57,55 @@ func (rate *tcrate) acquire() {
 	if rate.dst != nil {
 		rate.dst.RetryAcquire(time.Second)
 	}
+}
+
+//
+// num-workers parallelism
+//
+
+const (
+	nwpBurst = 4  // burst multiplier (channel size)
+	nwpNone  = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
+	nwpMin   = 2  // throttled
+	nwpDflt  = 0  // (number of mountpaths)
+)
+
+// strict rules
+func throttleNwp(xname string, n int) (int, error) {
+	// 1. alert 'too many gorutines'
+	tstats := core.T.StatsUpdater()
+	flags := cos.NodeStateFlags(tstats.Get(cos.NodeAlerts))
+	if flags.IsSet(cos.NumGoroutines) {
+		nlog.Warningln(xname, "too many gorutines")
+		return nwpNone, nil
+	}
+
+	// 2. do not exceed num available cores
+	n = min(sys.MaxParallelism(), n)
+
+	// 3. factor in memory pressure
+	var (
+		mm       = core.T.PageMM()
+		pressure = mm.Pressure()
+	)
+	switch pressure {
+	case memsys.OOM, memsys.PressureExtreme:
+		oom.FreeToOS(true)
+		return 0, errors.New(xname + ": extreme memory pressure - not starting")
+	case memsys.PressureHigh:
+		n = min(nwpMin+1, n)
+		nlog.Warningln(xname, "high memory pressure detected...")
+	}
+
+	// 4. finally, take into account load averages
+	var (
+		load     = sys.MaxLoad()
+		highLoad = sys.HighLoadWM()
+	)
+	if load >= float64(highLoad) {
+		nlog.Warningln(xname, "high load [", load, highLoad, "]")
+		n = min(nwpMin, n)
+	}
+
+	return n, nil
 }

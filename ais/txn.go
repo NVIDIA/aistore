@@ -115,7 +115,7 @@ type (
 		txnBckBase
 	}
 	txnTCObjs struct {
-		xtco *xs.XactTCObjs
+		xtco *xs.XactTCO
 		msg  *cmn.TCOMsg
 		txnBckBase
 	}
@@ -586,7 +586,7 @@ func (txn *txnTCB) String() string {
 // txnTCObjs //
 ///////////////
 
-func newTxnTCObjs(c *txnSrv, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCOMsg) (txn *txnTCObjs) {
+func newTxnTCObjs(c *txnSrv, bckFrom *meta.Bck, xtco *xs.XactTCO, msg *cmn.TCOMsg) (txn *txnTCObjs) {
 	txn = &txnTCObjs{xtco: xtco, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)

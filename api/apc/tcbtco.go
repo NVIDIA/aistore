@@ -43,8 +43,8 @@ type (
 		CopyBckMsg
 
 		// user-defined number of concurrent workers:
-		// - 0 (default) - number of mountpaths
-		// - (-1)        - single thread, serial execution
+		// * 0:  number of mountpaths (default)
+		// * -1: single thread, serial execution
 		NumWorkers int `json:"num-workers"`
 
 		ContinueOnError bool `json:"coer"`

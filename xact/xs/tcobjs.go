@@ -40,7 +40,7 @@ type (
 		args *xreg.TCObjsArgs
 		streamingF
 	}
-	XactTCObjs struct {
+	XactTCO struct {
 		copier
 		transform etl.Session // stateful etl Session
 		args      *xreg.TCObjsArgs
@@ -54,7 +54,7 @@ type (
 		owt      cmn.OWT
 	}
 	tcowi struct {
-		r   *XactTCObjs
+		r   *XactTCO
 		msg *cmn.TCOMsg
 		// finishing
 		refc atomic.Int32
@@ -70,7 +70,8 @@ type (
 
 // interface guard
 var (
-	_ core.Xact      = (*XactTCObjs)(nil)
+	_ core.Xact      = (*XactTCO)(nil)
+	_ lrxact         = (*XactTCO)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 	_ lrwi           = (*tcowi)(nil)
 	_ lrwi           = (*syncwi)(nil)
@@ -98,7 +99,7 @@ func (p *tcoFactory) Start() error {
 
 	// new x-tco
 	workCh := make(chan *cmn.TCOMsg, maxNumInParallel)
-	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
+	r := &XactTCO{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	r.owt = cmn.OwtCopy
 
@@ -123,13 +124,10 @@ func (p *tcoFactory) Start() error {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
 
-	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, r.owt, sizePDU); err != nil {
-		return err
-	}
-
-	if r.p.dm != nil {
-		p.dm.SetXact(r)
-		p.dm.Open()
+	if useDM := !r.args.DisableDM; useDM {
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, smap, r.owt, sizePDU); err != nil {
+			return err
+		}
 	}
 
 	r.copier.r = r
@@ -147,21 +145,21 @@ func (p *tcoFactory) Start() error {
 	return nil
 }
 
-////////////////
-// XactTCObjs //
-////////////////
+/////////////
+// XactTCO //
+/////////////
 
-func (r *XactTCObjs) Name() string {
+func (r *XactTCO) Name() string {
 	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
 }
 
-func (r *XactTCObjs) String() string {
+func (r *XactTCO) String() string {
 	return r.streamingX.String() + " => " + r.args.BckTo.String()
 }
 
-func (r *XactTCObjs) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
+func (r *XactTCO) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
 
-func (r *XactTCObjs) Snap() (snap *core.Snap) {
+func (r *XactTCO) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
@@ -171,7 +169,7 @@ func (r *XactTCObjs) Snap() (snap *core.Snap) {
 	return
 }
 
-func (r *XactTCObjs) BeginMsg(msg *cmn.TCOMsg) {
+func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.mtx.Lock()
 
@@ -181,7 +179,7 @@ func (r *XactTCObjs) BeginMsg(msg *cmn.TCOMsg) {
 	r.pending.mtx.Unlock()
 }
 
-func (r *XactTCObjs) ContMsg(msg *cmn.TCOMsg) {
+func (r *XactTCO) ContMsg(msg *cmn.TCOMsg) {
 	r.IncPending()
 	r.workCh <- msg
 
@@ -196,7 +194,7 @@ func (r *XactTCObjs) ContMsg(msg *cmn.TCOMsg) {
 	}
 }
 
-func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
+func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 
 	r.pending.mtx.Lock()
@@ -220,7 +218,7 @@ func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	wi.refc.Store(int32(nat - 1))
 
 	lrit := &lrit{}
-	if err := lrit.init(r, &msg.ListRange, r.Bck(), lrpWorkersDflt); err != nil {
+	if err := lrit.init(r, &msg.ListRange, r.Bck(), msg.NumWorkers); err != nil {
 		r.AddErr(err)
 		return !msg.ContinueOnError // stop?
 	}
@@ -239,10 +237,10 @@ func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	if msg.Sync && lrit.lrp != lrpList {
 		wg = &sync.WaitGroup{}
 		wg.Add(1)
-		go func(pt *cos.ParsedTemplate) {
+		go func(pt *cos.ParsedTemplate, wg *sync.WaitGroup) {
 			r.prune(lrit, smap, pt)
 			wg.Done()
-		}(lrit.pt.Clone())
+		}(lrit.pt.Clone(), wg)
 	}
 	err := lrit.run(wi, smap, true /*prealloc buf*/)
 	if wg != nil {
@@ -259,7 +257,7 @@ func (r *XactTCObjs) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	return false
 }
 
-func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
+func (r *XactTCO) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 	wg.Done()
 outer:
@@ -278,7 +276,7 @@ outer:
 			break outer
 		}
 	}
-	r.fin(true /*unreg Rx*/)
+	r.fin(true /*unreg Rx*/) // TODO -- FIXME: use sentinels
 	if r.ErrCnt() > 0 {
 		// (see "expecting errors" and cleanup)
 		r.pending.mtx.Lock()
@@ -292,7 +290,7 @@ outer:
 //
 
 // NOTE: strict(est) error handling: abort on any of the errors below
-func (r *XactTCObjs) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *XactTCO) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
 		goto ex
 	}
@@ -308,7 +306,7 @@ ex:
 	return err
 }
 
-func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
+func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode == opDone {
 		r.pending.mtx.Lock()
 		wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
@@ -332,7 +330,7 @@ func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	return err
 }
 
-func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) (err error) {
+func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) (err error) {
 	if err = lom.InitBck(&hdr.Bck); err != nil {
 		return
 	}
@@ -388,7 +386,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 // TODO: probabilistic filtering
 //
 
-func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
+func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
 	rp := prune{r: r, smap: smap}
 	rp.bckFrom, rp.bckTo = r.FromTo()
 
@@ -405,7 +403,7 @@ func (r *XactTCObjs) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplat
 	var syncit lrit
 	debug.Assert(pruneit.lrp == lrpRange)
 
-	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, lrpWorkersDflt)
+	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, nwpDflt) // TODO -- FIXME: stopCh
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)

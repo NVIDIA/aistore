@@ -680,7 +680,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
 
-		xtco := xctn.(*xs.XactTCObjs)
+		xtco := xctn.(*xs.XactTCO)
 
 		debug.Assert(msg.TxnUUID == "" || msg.TxnUUID == c.uuid) // (ref050724)
 		msg.TxnUUID = c.uuid
@@ -841,7 +841,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		archMsg.TxnUUID = c.uuid
 		archMsg.FromBckName = bckFrom.Name
 		archlom := core.AllocLOM(archMsg.ArchName)
-		if err := xarch.Begin(archMsg, archlom); err != nil {
+		if err := xarch.BeginMsg(archMsg, archlom); err != nil {
 			// NOTE: unexpected and unlikely - aborting
 			core.FreeLOM(archlom)
 			xarch.Abort(err)
@@ -871,7 +871,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 			return xid, err
 		}
 		txnArch := txn.(*txnArchMultiObj)
-		txnArch.xarch.Do(txnArch.msg)
+		txnArch.xarch.DoMsg(txnArch.msg)
 		xid = txnArch.xarch.ID()
 		t.txns.term(c.uuid, apc.ActCommit)
 	}
