@@ -426,7 +426,7 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 		cos.RemoveFile(daemon.cli.localConfigPath)
 	}
 	config := cmn.GCO.Get()
-	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, _ error) error {
+	filepath.WalkDir(config.ConfigDir, func(path string, finfo os.DirEntry, _ error) error {
 		if strings.HasPrefix(finfo.Name(), ".ais.") {
 			if err := cos.RemoveFile(path); err != nil {
 				nlog.Errorf("%s: failed to cleanup %q, err: %v", name, path, err)
