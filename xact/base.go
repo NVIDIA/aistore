@@ -162,7 +162,6 @@ func (xctn *Base) Abort(err error) bool {
 	debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) // CAS above
 
 	xctn.abort.ch <- err
-	close(xctn.abort.ch)
 
 	if xctn.Kind() != apc.ActList {
 		nlog.InfoDepth(1, xctn.Name(), err)
@@ -329,6 +328,9 @@ func (xctn *Base) Finish() {
 			err = *perr
 		}
 	}
+
+	close(xctn.abort.ch)
+
 	if xctn.ErrCnt() > 0 {
 		if err == nil {
 			debug.Assert(!aborted)
