@@ -29,9 +29,10 @@ type (
 		notif *NotifXact
 		bck   meta.Bck
 		abort struct {
-			ch   chan error
-			err  ratomic.Pointer[error]
-			done atomic.Bool
+			ch     chan error
+			err    ratomic.Pointer[error]
+			done   atomic.Bool
+			closed atomic.Bool
 		}
 		id     string
 		kind   string
@@ -162,11 +163,57 @@ func (xctn *Base) Abort(err error) bool {
 	debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) // CAS above
 
 	xctn.abort.ch <- err
+	if xctn.abort.closed.CAS(false, true) {
+		close(xctn.abort.ch)
+	}
 
 	if xctn.Kind() != apc.ActList {
 		nlog.InfoDepth(1, xctn.Name(), err)
 	}
 	return true
+}
+
+// atomically set end-time
+func (xctn *Base) Finish() {
+	var (
+		err     error
+		info    string
+		aborted bool
+	)
+	if !xctn.eutime.CAS(0, 1) {
+		return
+	}
+	xctn.eutime.Store(time.Now().UnixNano())
+	if aborted = xctn.IsAborted(); aborted {
+		if perr := xctn.abort.err.Load(); perr != nil {
+			err = *perr
+		}
+	}
+
+	if xctn.abort.closed.CAS(false, true) {
+		close(xctn.abort.ch)
+	}
+
+	if xctn.ErrCnt() > 0 {
+		if err == nil {
+			debug.Assert(!aborted)
+			err = xctn.Err()
+		} else {
+			// abort takes precedence
+			info = "(" + xctn.Err().Error() + ")"
+		}
+	}
+	xctn.onFinished(err, aborted)
+	// log
+	switch {
+	case xctn.Kind() == apc.ActList:
+	case err == nil:
+		nlog.Infoln(xctn.String(), "finished")
+	case aborted:
+		nlog.Warningln(xctn.String(), "aborted:", err, info)
+	default:
+		nlog.Warningln(xctn.String(), "finished w/err:", err)
+	}
 }
 
 //
@@ -310,47 +357,6 @@ func (xctn *Base) AddNotif(n core.Notif) {
 	xctn.notif = n.(*NotifXact)
 	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)     // always fin-notif and points to self
 	debug.Assert(!n.Upon(core.UponProgress) || xctn.notif.P != nil) // progress notification is optional
-}
-
-// atomically set end-time
-func (xctn *Base) Finish() {
-	var (
-		err     error
-		info    string
-		aborted bool
-	)
-	if !xctn.eutime.CAS(0, 1) {
-		return
-	}
-	xctn.eutime.Store(time.Now().UnixNano())
-	if aborted = xctn.IsAborted(); aborted {
-		if perr := xctn.abort.err.Load(); perr != nil {
-			err = *perr
-		}
-	}
-
-	close(xctn.abort.ch)
-
-	if xctn.ErrCnt() > 0 {
-		if err == nil {
-			debug.Assert(!aborted)
-			err = xctn.Err()
-		} else {
-			// abort takes precedence
-			info = "(" + xctn.Err().Error() + ")"
-		}
-	}
-	xctn.onFinished(err, aborted)
-	// log
-	switch {
-	case xctn.Kind() == apc.ActList:
-	case err == nil:
-		nlog.Infoln(xctn.String(), "finished")
-	case aborted:
-		nlog.Warningln(xctn.String(), "aborted:", err, info)
-	default:
-		nlog.Warningln(xctn.String(), "finished w/err:", err)
-	}
 }
 
 // base stats: locally processed
