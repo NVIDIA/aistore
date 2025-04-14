@@ -4,6 +4,26 @@ AIStore v3.28 introduces a unified **rate-limiting** capability that works at bo
 
 This text explains how it all fits together.
 
+## Table of Contents
+1. [Background](#1-background)
+2. [Elements](#2-elements)
+   - [Proactive vs. Reactive](#21-proactive-vs-reactive)
+   - [Frontend vs. Backend](#22-frontend-vs-backend)
+3. [Configuration](#3-configuration)
+   - [Configuration: Summary Table](#31-configuration-summary-table)
+4. [Unified Rate-Limiting Logic](#4-unified-rate-limiting-logic)
+5. [Handling Batch Jobs](#5-handling-batch-jobs)
+6. [Use Cases](#6-use-cases)
+   - [Handling Backend-Imposed Limits](#61-handling-backend-imposed-limits)
+   - [Limiting User Traffic](#62-limiting-user-traffic)
+     - [Limiting User Traffic: Example `aisloader` run](#63-limiting-user-traffic-example-aisloader-run)
+   - [Combined Frontend/Backend Limiting for Cross-Cloud Transfer](#64-combined-frontendbackend-limiting-for-cross-cloud-transfer)
+7. [Monitoring and Troubleshooting](#7-monitoring-and-troubleshooting)
+   - [GET Performance Table](#get-performance-table)
+   - [PUT Performance Table](#put-performance-table)
+   - [Quick Troubleshooting Summary](#quick-troubleshooting-summary)
+8. [Recap](#8-recap)
+
 ## 1. Background
 
 The original motivation was to **gracefully handle** rate-limited cloud storage such as Amazon S3, Google Cloud Storage (GCS), and other remote [backends](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#at-a-glance).
@@ -14,7 +34,7 @@ Not true! In reality, such integrations are always a balancing act: the goal is 
 
 ---
 
-## 2. Key Elements
+## 2. Elements
 
 ### 2.1 Proactive vs. Reactive
 
@@ -95,7 +115,7 @@ rate_limit.frontend.max_tokens           1000
 rate_limit.frontend.per_op_max_tokens
 ```
 
-### 3.1 Configuration Parameters Explained
+### 3.1 Configuration: Summary Table
 
 | Parameter | Description |
 |-----------|-------------|
@@ -191,7 +211,50 @@ This configures a given bucket to:
 - Allow short bursts up to 100 additional requests.
 - Return status `429` ("Too Many Requests") if clients exceed these limits.
 
-### 6.3 Combined Frontend/Backend Limiting for Cross-Cloud Transfer
+### 6.3 Limiting User Traffic: Example `aisloader` run
+
+```console
+$ ais bucket props set ais://nnn rate_limit.frontend.enabled true rate_limit.frontend.max_tokens 2000 rate_limit.frontend.burst_size 500
+"rate_limit.frontend.burst_size" set to: "500" (was: "375")
+"rate_limit.frontend.enabled" set to: "true" (was: "false")
+"rate_limit.frontend.max_tokens" set to: "2000" (was: "1000")
+
+Bucket props successfully updated.
+```
+
+And then:
+
+```console
+$ aisloader -bucket=ais://nnn -cleanup=false -numworkers=8 -quiet -pctput=100 -minsize=1k -maxsize=1k --duration 5m -randomproxy
+Found 0 existing objects
+
+Runtime configuration:
+{
+   "stats interval": "10s",
+   "proxy": "http://ais-endpoint",
+   "bucket": "nnn",
+   "provider": "ais",
+   "namespace": "",
+   "duration": "5m0s",
+   "backed by": "sg",
+   "PUT upper bound": "0",
+   "minimum object size (bytes)": 1024,
+   "maximum object size (bytes)": 1024,
+   "# workers": 8,
+   "% PUT": 100,
+   "seed": "1744663719184760811",
+   "cleanup": false
+}
+
+
+Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
+16:48:50  PUT   11 (11 8 0)             11.0KiB (11.0KiB)       1.101ms    1.060s     7.135s            1.10KiB/s (1.10KiB/s)   -
+PUT failed: ErrRateLimitFrontend: Too Many Requests
+PUT failed: ErrRateLimitFrontend: Too Many Requests
+...
+```
+
+### 6.4 Combined Frontend/Backend Limiting for Cross-Cloud Transfer
 
 **Scenario**: You are migrating or copying data from GCS to S3 and need to respect both providers' limits.
 

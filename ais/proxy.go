@@ -3441,7 +3441,7 @@ func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
 		rl.Store(uhash, brl)
 	}
 	if !brl.TryAcquire() {
-		return errors.New(http.StatusText(http.StatusTooManyRequests))
+		return cmn.NewErrRateLimitFrontend()
 	}
 	return nil
 }

@@ -246,10 +246,13 @@ type (
 		ranges []string // RFC 7233
 		size   int64    // [0, size)
 	}
+
 	ErrTooManyRequests struct {
 		err    error
-		status int
+		status int // not (yet) used
 	}
+	ErrRateLimitFrontend ErrTooManyRequests // to differentiate by tcode
+
 	ErrCreateHreq struct {
 		err error // original
 	}
@@ -1018,6 +1021,15 @@ func IsErrTooManyRequests(err error) bool {
 	_, ok := err.(*ErrTooManyRequests)
 	return ok
 }
+
+func NewErrRateLimitFrontend() *ErrRateLimitFrontend {
+	return &ErrRateLimitFrontend{
+		err:    errors.New(http.StatusText(http.StatusTooManyRequests)),
+		status: http.StatusTooManyRequests,
+	}
+}
+
+func (e *ErrRateLimitFrontend) Error() string { return e.err.Error() }
 
 // ErrCreateHreq
 
