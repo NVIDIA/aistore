@@ -704,25 +704,26 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	}
 }
 
-func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag, caller string, silent bool) (err error) {
-	var oldVer int64
+func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag, caller string, silent bool) error {
 	if msg.UUID == "" {
-		oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
+		oldVer, err := t.applyBMD(newBMD, msg, payload, tag)
 		if err == nil && newBMD.Version > oldVer {
 			logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
 		}
-		return
+		return err
 	}
 
 	// txn [before -- do -- after]
 	if errDone := t.txns.commitBefore(caller, msg); errDone != nil {
-		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
+		err := fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
 			nlog.Errorln(err)
 		}
-		return
+		return err
 	}
-	oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
+
+	oldVer, err := t.applyBMD(newBMD, msg, payload, tag)
+
 	// log
 	switch {
 	case err != nil:
@@ -733,6 +734,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload,
 		nlog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
 			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
 	}
+
 	// --after]
 	if errDone := t.txns.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
@@ -740,7 +742,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload,
 			nlog.Errorln(err)
 		}
 	}
-	return
+	return err
 }
 
 func (t *target) applyBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag string) (int64, error) {
@@ -769,34 +771,37 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, t
 }
 
 // executes under lock
-func (t *target) _syncBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck, oldVer int64, emsg string, err error) {
+// returns: removed buckets, old (ie., prev) version, errmsg(remove buckets), error
+func (t *target) _syncBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, psi *meta.Snode) ([]*meta.Bck, int64, string, error) {
 	var (
-		createErrs  []error
-		destroyErrs []error
-		bmd         = t.owner.bmd.get()
+		bmd    = t.owner.bmd.get()
+		oldVer int64
 	)
-
+	// special
 	if msg.Action == apc.ActPrimaryForce {
 		nlog.Warningln(t.String(), "sync BMD with force [", bmd.String(), bmd.UUID, "] <- [", newBMD.String(), newBMD.UUID, "]")
 		goto skip
 	}
 
-	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
+	// validate; check downgrade
+	if err := bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
 		nlog.Errorln(msg.String(), "-> cluster integrity error")
 		cos.ExitLog(err) // FATAL: cluster integrity error (cie)
-		return
+		return nil, 0, "", err
 	}
-	// check downgrade
 	if oldVer = bmd.version(); newBMD.version() <= oldVer {
 		if newBMD.version() < oldVer {
-			err = newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
+			return nil, oldVer, "", newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
 		}
-		return
+		return nil, oldVer, "", nil
 	}
-skip:
-	nilbmd := bmd.version() == 0 || t.regstate.prevbmd.Load()
 
+skip:
 	// 1. create
+	var (
+		createErrs []error
+		nilbmd     = bmd.version() == 0 || t.regstate.prevbmd.Load()
+	)
 	newBMD.Range(nil, nil, func(bck *meta.Bck) bool {
 		if _, present := bmd.Get(bck); present {
 			return false
@@ -808,18 +813,23 @@ skip:
 		return false
 	})
 	if len(createErrs) > 0 {
-		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v",
+		err := fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v",
 			t, newBMD, bmd, nilbmd, errors.Join(createErrs...))
-		return
+		return nil, oldVer, "", err
 	}
 
 	// 2. persist
-	if err = t.owner.bmd.putPersist(newBMD, payload); err != nil {
+	if err := t.owner.bmd.putPersist(newBMD, payload); err != nil {
 		cos.ExitLog(err)
-		return
+		return nil, oldVer, "", err
 	}
 
 	// 3. delete, ignore errors
+	var (
+		destroyErrs []error
+		rmbcks      []*meta.Bck
+		emsg        string
+	)
 	bmd.Range(nil, nil, func(obck *meta.Bck) bool {
 		f := &delb{obck: obck}
 		newBMD.Range(nil, nil, f.do)
@@ -835,7 +845,7 @@ skip:
 		emsg = fmt.Sprintf("%s: failed to cleanup destroyed buckets: %s, old/cur %s(%t): %v",
 			t, newBMD, bmd, nilbmd, errors.Join(destroyErrs...))
 	}
-	return
+	return rmbcks, oldVer, emsg, nil
 }
 
 func (f *delb) do(nbck *meta.Bck) bool {
@@ -882,26 +892,25 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 }
 
 // is called under lock
-func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
+func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) error {
 	if msg.Action == apc.ActPrimaryForce {
-		err = t.owner.rmd.synch(newRMD, true)
-		return err
+		return t.owner.rmd.synch(newRMD, true)
 	}
 
 	rmd := t.owner.rmd.get()
 	if newRMD.Version <= rmd.Version {
 		if newRMD.Version < rmd.Version {
-			err = newErrDowngrade(t.si, rmd.String(), newRMD.String())
+			return newErrDowngrade(t.si, rmd.String(), newRMD.String())
 		}
-		return
+		return nil
 	}
+
 	smap := t.owner.smap.get()
-	if err = smap.validate(); err != nil {
-		return
+	if err := smap.validate(); err != nil {
+		return err
 	}
 	if smap.GetNode(t.SID()) == nil {
-		err = fmt.Errorf(fmtSelfNotPresent, t, smap.StringEx())
-		return
+		return fmt.Errorf(fmtSelfNotPresent, t, smap.StringEx())
 	}
 	for _, tsi := range rmd.TargetIDs {
 		if smap.GetNode(tsi) == nil {
@@ -912,14 +921,21 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) (err error) {
 	if !t.regstate.disabled.Load() {
 		oxid := xact.RebID2S(rmd.Version)
 		t._runRe(newRMD, msg, smap, oxid)
-	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
+		return nil
+	}
+
+	// standby => join
+	if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
 		nlog.Warningln(t.String(), "standby => join:", msg.String())
-		if _, err = t.joinCluster(msg.Action); err == nil {
+		_, err := t.joinCluster(msg.Action)
+		if err == nil {
 			err = t.endStartupStandby()
 		}
 		t.owner.rmd.put(newRMD)
+		return err
 	}
-	return
+
+	return nil
 }
 
 func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string) {
@@ -1041,9 +1057,9 @@ func (t *target) ensureLatestBMD(msg *actMsgExt, r *http.Request) {
 	}
 }
 
-func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
+func (t *target) getPrimaryBMD(renamed string) (*bucketMD, error) {
 	smap := t.owner.smap.get()
-	if err = smap.validate(); err != nil {
+	if err := smap.validate(); err != nil {
 		return nil, cmn.NewErrFailedTo(t, "get-primary-bmd", smap, err)
 	}
 	var (
@@ -1066,19 +1082,25 @@ func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 	}
 	res := t.call(cargs, smap)
 	if res.err != nil {
+		freeCR(res)
 		time.Sleep(timeout / 2)
 		smap = t.owner.smap.get()
 		res = t.call(cargs, smap)
-		if res.err != nil {
-			err = res.errorf("%s: failed to GET(%q)", t.si, what)
-		}
 	}
-	if err == nil {
-		bmd = res.v.(*bucketMD)
-	}
+
+	bmd, err := _getbmd(res, t.String(), what)
 	freeCargs(cargs)
 	freeCR(res)
-	return
+	return bmd, err
+}
+
+func _getbmd(res *callResult, tname, what string) (bmd *bucketMD, err error) {
+	if res.err != nil {
+		err = res.errorf("%s: failed to GET(%q)", tname, what)
+	} else {
+		bmd = res.v.(*bucketMD)
+	}
+	return bmd, err
 }
 
 func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
@@ -1120,7 +1142,7 @@ func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		t.regstate.mu.Lock()
-		if nlog.Stopping() {
+		if nlog.Stopping() || !t.NodeStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			t.metasyncPut(w, r)
@@ -1200,22 +1222,22 @@ func _stopETLs(newEtlMD, oldEtlMD *etlMD) {
 }
 
 // compare w/ p.receiveConfig
-func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload msPayload, caller string) (err error) {
+func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload msPayload, caller string) error {
 	oldConfig := cmn.GCO.Get()
 	logmsync(oldConfig.Version, newConfig, msg, caller, newConfig.String(), oldConfig.UUID)
 
 	t.owner.config.Lock()
-	err = t._recvCfg(newConfig, msg, payload)
+	err := t._recvCfg(newConfig, msg, payload)
 	t.owner.config.Unlock()
 	if err != nil {
-		return
+		return err
 	}
 
 	if !t.NodeStarted() {
 		if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
 			nlog.Errorf("%s: cannot handle %s (%s => %s) - starting up...", t, msg, oldConfig, newConfig)
 		}
-		return
+		return nil
 	}
 
 	if oldConfig.Space != newConfig.Space {
@@ -1227,16 +1249,17 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		return t.attachDetachRemAis(newConfig, msg)
 	}
 
-	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend, t.String()) {
-		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
-			err = t.attachDetachRemAis(newConfig, msg)
-		} else {
-			aisbp := backend.NewAIS(t, t.statsT, false)
-			t.bps[apc.AIS] = aisbp
-			t.rlbps[apc.AIS] = &rlbackend{Backend: aisbp, t: t}
-		}
+	if newConfig.Backend.EqualRemAIS(&oldConfig.Backend, t.String()) {
+		return nil
 	}
-	return
+	if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
+		return t.attachDetachRemAis(newConfig, msg)
+	}
+	aisbp := backend.NewAIS(t, t.statsT, false)
+	t.bps[apc.AIS] = aisbp
+	t.rlbps[apc.AIS] = &rlbackend{Backend: aisbp, t: t}
+
+	return nil
 }
 
 // NOTE: apply the entire config: add new and update existing entries (remote clusters)

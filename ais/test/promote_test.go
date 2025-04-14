@@ -251,17 +251,18 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	tassert.Errorf(t, len(list.Entries) == expNum, "expected to%s promote %d, got %d", s, test.num*2, len(list.Entries))
 
 	// xaction stats versus `numDel` - but note:
-	// other than the selected few objects that were deleted prior to promoting the 2nd time,
-	// all the rest already exists and is not expected to "show up" in the stats
+	// other than the selected few objects that were deleted prior to promoting the 2nd time
+	// all the rest already exist and are not expected to "show up" in the stats
 	if xid != "" {
 		if test.singleTarget {
 			tassert.Errorf(t, locObjs == int64(numDel),
 				"single-target promote: expected to \"undelete\" %d objects, got %d", expNum, locObjs)
 		} else if !test.notFshare {
 			tassert.Errorf(t, int(locObjs) == numDel && int(inObjs) == 0 && int(outObjs) == 0,
-				"file share: expected each target to handle the entire content locally, got (loc, out, in) = (%d, %d, %d)",
-				locObjs, outObjs, inObjs)
+				"file share: expected each target to handle the entire content locally, got numDel = %d, (loc, out, in) = (%d, %d, %d)",
+				numDel, locObjs, outObjs, inObjs)
 		}
+		//  (loc, out, in) = (10000, 0, 0)
 	}
 }
 

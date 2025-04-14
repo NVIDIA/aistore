@@ -162,3 +162,25 @@ func closeEc(int64) time.Duration {
 func errActEc(act string) error {
 	return fmt.Errorf(fmtErrInvaldAction, act, []string{apc.ActEcOpen, apc.ActEcClose})
 }
+
+func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode, uuid string) error {
+	q := ct.Bck().NewQuery()
+	ct.Bck().AddUnameToQuery(q, apc.QparamBckTo)
+	q.Set(apc.QparamECObject, ct.ObjectName())
+	q.Set(apc.QparamUUID, uuid)
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Base:   tsi.URL(cmn.NetIntraControl),
+			Path:   apc.URLPathEC.Join(apc.ActEcRecover),
+			Query:  q,
+		}
+	}
+	res := t.call(cargs, t.owner.smap.get())
+	freeCargs(cargs)
+	err := res.toErr()
+	freeCR(res)
+	return err
+}
