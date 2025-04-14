@@ -478,10 +478,12 @@ class Bucket(AISSource):
         to_bck: Bucket,
         prefix_filter: str = "",
         prepend: str = "",
+        ext: Optional[Dict[str, str]] = None,
         dry_run: bool = False,
         force: bool = False,
         latest: bool = False,
         sync: bool = False,
+        num_workers: Optional[int] = 0,
     ) -> str:
         """
         Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -490,11 +492,16 @@ class Bucket(AISSource):
             to_bck (Bucket): Destination bucket
             prefix_filter (str, optional): Only copy objects with names starting with this prefix
             prepend (str, optional): Value to prepend to the name of copied objects
+            ext (Dict[str, str], optional): Dict mapping each extension to the extension that will replace it
+                (e.g. {"jpg": "txt"})
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
             force (bool, optional): Override existing destination bucket
             latest (bool, optional): GET the latest object version from the associated remote bucket
             sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+            num_workers (int, optional): Number of concurrent workers for the copy job per target
+                - 0 (default): number of mountpaths
+                - -1: single thread, serial execution
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -507,14 +514,19 @@ class Bucket(AISSource):
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = CopyBckMsg(
-            prefix=prefix_filter,
-            prepend=prepend,
-            dry_run=dry_run,
-            force=force,
-            latest=latest,
-            sync=sync,
+        value = TCBckMsg(
+            ext=ext,
+            num_workers=num_workers,
+            copy_msg=CopyBckMsg(
+                prefix=prefix_filter,
+                prepend=prepend,
+                force=force,
+                dry_run=dry_run,
+                latest=latest,
+                sync=sync,
+            ),
         ).as_dict()
+
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = to_bck.get_path()
         return self.make_request(
@@ -706,11 +718,12 @@ class Bucket(AISSource):
         timeout: str = DEFAULT_ETL_TIMEOUT,
         prefix_filter: str = "",
         prepend: str = "",
-        ext: Dict[str, str] = None,
+        ext: Optional[Dict[str, str]] = None,
         force: bool = False,
         dry_run: bool = False,
         latest: bool = False,
         sync: bool = False,
+        num_workers: Optional[int] = 0,
     ) -> str:
         """
         Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -722,18 +735,22 @@ class Bucket(AISSource):
             timeout (str, optional): Timeout of the ETL job (e.g. 5m for 5 minutes)
             prefix_filter (str, optional): Only transform objects with names starting with this prefix
             prepend (str, optional): Value to prepend to the name of resulting transformed objects
-            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
-                (i.e. {"jpg": "txt"})
+            ext (Dict[str, str], optional): Dict mapping each extension to the extension that will replace it
+                (e.g. {"jpg": "txt"})
             dry_run (bool, optional): determines if the copy should actually happen or not
             force (bool, optional): override existing destination bucket
             latest (bool, optional): GET the latest object version from the associated remote bucket
             sync (bool, optional): synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+            num_workers (int, optional): Number of concurrent workers for the transformation job per target
+                - 0 (default): number of mountpaths
+                - -1: single thread, serial execution
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
         """
         value = TCBckMsg(
             ext=ext,
+            num_workers=num_workers,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
             copy_msg=CopyBckMsg(
                 prefix=prefix_filter,

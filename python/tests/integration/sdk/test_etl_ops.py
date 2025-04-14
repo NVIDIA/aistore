@@ -446,6 +446,31 @@ class TestETLOps(unittest.TestCase):
         spec_etl.stop()
         spec_etl.delete()
 
+    # TODO: Verify that job runs w/ correct number of workers (requires
+    #       number of workers to be added as part of job info)
+    @pytest.mark.etl
+    def test_etl_concurrent_workers(self):
+        def transform(input_bytes):
+            md5 = hashlib.md5()
+            md5.update(input_bytes)
+            return md5.hexdigest().encode()
+
+        dst_bck = self.client.bucket(random_string()).create()
+
+        etl = self.client.etl(ETL_NAME_CODE)
+        etl.init_code(transform=transform)
+
+        num_workers = 10
+        job_id = self.bucket.transform(
+            etl_name=etl.name,
+            to_bck=dst_bck,
+            num_workers=num_workers,
+        )
+
+        self.client.job(job_id).wait()
+
+        self.assertEqual(2, len(dst_bck.list_all_objects()))
+
 
 if __name__ == "__main__":
     unittest.main()

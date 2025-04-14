@@ -9,7 +9,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Unreleased
 
 ### Added
+
+- **BREAKING:** Add support for concurrent bucket-to-bucket copy and transformation jobs using the `num_workers` parameter. [^1] 
+
+[^1]: Concurrent bucket-to-bucket copy and transformation jobs is a new functionality in AIS that has been pushed upstream but not yet officially released. Please use a cluster built with the latest changes (see [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#from-source)).
+
+- Add support for extension re-mapping in bucket-to-bucket copy jobs using the `ext` parameter.
+
 ### Changed
+
 ### Removed
 
 ## [1.13.3] - 2025-04-11

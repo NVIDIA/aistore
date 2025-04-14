@@ -532,11 +532,14 @@ class TCBckMsg(BaseModel):
     ext: Dict[str, str] = None
     copy_msg: CopyBckMsg = None
     transform_msg: TransformBckMsg = None
+    num_workers: int = None
 
     def as_dict(self):
         dict_rep = {}
         if self.ext:
             dict_rep["ext"] = self.ext
+        if self.num_workers:
+            dict_rep["num-workers"] = self.num_workers
         if self.copy_msg:
             for key, val in self.copy_msg.as_dict().items():
                 dict_rep[key] = val

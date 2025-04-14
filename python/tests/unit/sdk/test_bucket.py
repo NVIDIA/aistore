@@ -262,14 +262,20 @@ class TestBucket(unittest.TestCase):
         force = True
         latest = False
         sync = False
-        action_value = {
-            "prefix": prefix_filter,
-            "prepend": prepend_val,
-            "dry_run": dry_run,
-            "force": force,
-            "latest-ver": latest,
-            "synchronize": sync,
-        }
+        ext = {"jpg": "txt"}
+        num_workers = 0
+        action_value = TCBckMsg(
+            ext=ext,
+            num_workers=num_workers,
+            copy_msg=CopyBckMsg(
+                prefix=prefix_filter,
+                prepend=prepend_val,
+                force=force,
+                dry_run=dry_run,
+                latest=latest,
+                sync=sync,
+            ),
+        ).as_dict()
 
         self._copy_exec_assert(
             self.ais_bck,
@@ -278,6 +284,8 @@ class TestBucket(unittest.TestCase):
             prepend=prepend_val,
             dry_run=dry_run,
             force=force,
+            ext=ext,
+            num_workers=num_workers,
         )
 
     def _copy_exec_assert(self, to_bck, expected_act_value, **kwargs):
@@ -492,9 +500,11 @@ class TestBucket(unittest.TestCase):
         timeout = "4m"
         force = True
         dry_run = True
+        num_workers = 0
         # Ensure that request has been made with specified arguments
         action_value = TCBckMsg(
             ext=ext,
+            num_workers=num_workers,
             transform_msg=TransformBckMsg(etl_name=ETL_NAME, timeout=timeout),
             copy_msg=CopyBckMsg(
                 prefix=prefix_filter,
@@ -512,6 +522,7 @@ class TestBucket(unittest.TestCase):
             prepend=prepend_val,
             prefix_filter=prefix_filter,
             ext=ext,
+            num_workers=num_workers,
             force=force,
             dry_run=dry_run,
             timeout=timeout,

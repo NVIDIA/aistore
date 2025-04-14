@@ -116,23 +116,37 @@ class TestBucketOps(ParallelTestBase):
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
 
+    # TODO: Verify that job runs w/ correct number of workers (requires
+    #       number of workers to be added as part of job info)
     def test_copy(self):
         from_bck = self._create_bucket()
         to_bck = self._create_bucket()
         prefix = PREFIX_NAME
         new_prefix = "new-"
+        old_ext = "old-ext"
+        new_ext = "new-ext"
         content = b"test"
-        expected_name = prefix + "-obj"
-        from_bck.object(expected_name).get_writer().put_content(content)
+        num_workers = 10
+
+        original_name = f"{prefix}-obj.{old_ext}"
+        from_bck.object(original_name).get_writer().put_content(content)
         from_bck.object("notprefix-obj").get_writer().put_content(content)
 
-        job_id = from_bck.copy(to_bck, prefix_filter=prefix, prepend=new_prefix)
-
+        job_id = from_bck.copy(
+            to_bck,
+            prefix_filter=prefix,
+            prepend=new_prefix,
+            ext={old_ext: new_ext},
+            num_workers=num_workers,
+        )
         self.assertNotEqual(job_id, "")
+
         self.client.job(job_id).wait()
-        entries = to_bck.list_all_objects()
-        self.assertEqual(1, len(entries))
-        self.assertEqual(new_prefix + expected_name, entries[0].name)
+        copied = to_bck.list_all_objects()
+
+        self.assertEqual(1, len(copied))
+        expected_name = f"{new_prefix}{prefix}-obj.{new_ext}"
+        self.assertEqual(expected_name, copied[0].name)
 
     @unittest.skipIf(
         not AWS_BUCKET,
