@@ -250,6 +250,7 @@ func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Con
 		boot   = &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env, msg: *msg, secret: secret}
 	)
 
+	debug.Assert(xid != "")
 	// 1. Parse spec template and fill Pod object with necessary fields.
 	if err = boot.createPodSpec(); err != nil {
 		return podName, svcName, nil, err
@@ -264,12 +265,12 @@ func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Con
 	}
 
 	if comm != nil {
-		// Restart case: reuse existing xaction and pod watcher
-		xid = comm.Xact().ID()
-		pw = comm.GetPodWatcher()
+		// Restart case: reuse communicator and pod watcher
+		debug.Assert(comm.Xact().Finished(), "xaction should be finished on previous stop")
 		comm.Restart(boot) // Note: pod's uri might change after restart, need to update the bootstrapper
+		pw = comm.GetPodWatcher()
 	} else {
-		// Fresh start (xid must be provided by the caller)
+		// Fresh start
 		pw = newPodWatcher(podName, boot)
 		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
 
@@ -278,11 +279,11 @@ func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Con
 		}
 	}
 
-	debug.Assert(comm != nil && pw != nil && xid != "")
+	debug.Assert(comm != nil && pw != nil)
+	xctn = boot.setupXaction(xid)
 	if err := pw.start(); err != nil {
 		return podName, svcName, nil, err
 	}
-	xctn = boot.setupXaction(xid)
 	core.T.Sowner().Listeners().Reg(comm)
 
 	// 3. Cleanup previously started entities, if any.

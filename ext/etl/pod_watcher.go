@@ -68,10 +68,11 @@ func (pw *podWatcher) processEvents() {
 					// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
 					pw.boot.xctn.Finish()
 				}
-
 				return
 			}
 		case <-pw.stopCh.Listen():
+			return
+		case <-pw.boot.xctn.ChanAbort():
 			return
 		}
 	}

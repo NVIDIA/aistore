@@ -47,9 +47,10 @@ type (
 	}
 
 	wsConnCtx struct {
-		name  string    // for logging
-		txctn core.Xact // the undergoing tcb/tcobjs xaction
-		conn  *websocket.Conn
+		name    string    // for logging
+		etlxctn core.Xact // the parent xaction of the underlying ETL pod (`xs.xactETL` type)
+		txctn   core.Xact // the undergoing tcb/tcobjs xaction that uses this session to perform transformation
+		conn    *websocket.Conn
 
 		// outbound messages of the original objects to send to ETL pod
 		workCh       chan rwpair
@@ -117,6 +118,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 
 	wcs := &wsConnCtx{
 		name:     ws.ETLName(),
+		etlxctn:  ws.Xact(),
 		txctn:    xctn,
 		conn:     conn,
 		workCh:   make(chan rwpair, wockChSize),
@@ -204,6 +206,10 @@ func (wctx *wsConnCtx) readLoop() error {
 		select {
 		case <-wctx.ctx.Done():
 			return nil
+		case <-wctx.txctn.ChanAbort():
+			return nil
+		case <-wctx.etlxctn.ChanAbort():
+			return nil
 		default:
 			_, r, err := wctx.conn.NextReader()
 			if err != nil {
@@ -232,6 +238,10 @@ func (wctx *wsConnCtx) writeLoop() error {
 	for {
 		select {
 		case <-wctx.ctx.Done():
+			return nil
+		case <-wctx.txctn.ChanAbort():
+			return nil
+		case <-wctx.etlxctn.ChanAbort():
 			return nil
 		case rw := <-wctx.workCh:
 			writer, err := wctx.conn.NextWriter(websocket.BinaryMessage)

@@ -146,6 +146,7 @@ func (c *baseComm) Restart(updBoot *etlBootstrapper) {
 	if updBoot.secret != "" {
 		c.boot.secret = updBoot.secret
 	}
+	c.pw.boot = updBoot
 }
 
 func (c *baseComm) Stop() {

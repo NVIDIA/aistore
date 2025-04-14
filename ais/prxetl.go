@@ -282,14 +282,20 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 
 func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
 	var (
-		err  error
-		args = allocBcArgs()
+		err    error
+		args   = allocBcArgs()
+		xid    = etl.PrefixXactID + cos.GenUUID()
+		secret = cos.CryptoRandS(10)
 	)
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPost,
 			Path:   r.URL.Path,
 			Body:   cos.MustMarshal(msg),
+			Query: url.Values{
+				apc.QparamUUID:      []string{xid},
+				apc.QparamETLSecret: []string{secret},
+			},
 		}
 		args.timeout = apc.LongTimeout
 	}
