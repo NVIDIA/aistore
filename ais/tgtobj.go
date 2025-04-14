@@ -1599,7 +1599,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 	if coi.GetROC == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
-			res.Lsize = lom.Lsize()
+			res.Lsize = lom.Lsize(true)
 		}
 		return res
 	}
