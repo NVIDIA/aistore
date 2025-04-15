@@ -587,8 +587,8 @@ func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 
 // ErrMpathNoDisks
 
-func NewErrMpathNoDisks(mpath, fs string, err error) *ErrMpathNoDisks {
-	return &ErrMpathNoDisks{mpath: mpath, fs: fs, err: err}
+func NewErrMpathNoDisks(mpath, fsname string, err error) *ErrMpathNoDisks {
+	return &ErrMpathNoDisks{mpath: mpath, fs: fsname, err: err}
 }
 
 func (e *ErrMpathNoDisks) Error() string {
@@ -597,8 +597,8 @@ func (e *ErrMpathNoDisks) Error() string {
 
 // ErrMpathLostDisk
 
-func NewErrMpathLostDisk(mpath, fs, lostd string, disks, fsdisks []string) *ErrMpathLostDisk {
-	return &ErrMpathLostDisk{mpath: mpath, fs: fs, lostd: lostd, disks: disks, fsdisks: fsdisks}
+func NewErrMpathLostDisk(mpath, fsname, lostd string, disks, fsdisks []string) *ErrMpathLostDisk {
+	return &ErrMpathLostDisk{mpath: mpath, fs: fsname, lostd: lostd, disks: disks, fsdisks: fsdisks}
 }
 
 func (e *ErrMpathLostDisk) Error() string {
@@ -607,8 +607,8 @@ func (e *ErrMpathLostDisk) Error() string {
 
 // ErrMpathNewDisk
 
-func NewErrMpathNewDisk(mpath, fs string, disks, fsdisks []string) *ErrMpathNewDisk {
-	return &ErrMpathNewDisk{mpath: mpath, fs: fs, disks: disks, fsdisks: fsdisks}
+func NewErrMpathNewDisk(mpath, fsname string, disks, fsdisks []string) *ErrMpathNewDisk {
+	return &ErrMpathNewDisk{mpath: mpath, fs: fsname, disks: disks, fsdisks: fsdisks}
 }
 
 func (e *ErrMpathNewDisk) Error() string {

@@ -83,7 +83,7 @@ func _dump(blockDevs BlockDevs) {
 // fs2disks retrieves the underlying disk or disks; it may return multiple disks
 // but only if the filesystem is RAID; it is called upon adding/enabling mountpath.
 // NOTE: blockDevs here are not nil only at startup - see fs.New()
-func fs2disks(mpath, fs string, label cos.MountpathLabel, blockDevs BlockDevs, num int, testingEnv bool) (disks FsDisks, err error) {
+func fs2disks(mpath, fsname string, label cos.MountpathLabel, blockDevs BlockDevs, num int, testingEnv bool) (disks FsDisks, err error) {
 	if blockDevs == nil {
 		blockDevs, err = _lsblk("", nil /*parent*/)
 		if err != nil && !testingEnv {
@@ -92,10 +92,10 @@ func fs2disks(mpath, fs string, label cos.MountpathLabel, blockDevs BlockDevs, n
 	}
 
 	var trimmedFS string
-	if strings.HasPrefix(fs, devPrefixLVM) {
-		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
+	if strings.HasPrefix(fsname, devPrefixLVM) {
+		trimmedFS = strings.TrimPrefix(fsname, devPrefixLVM)
 	} else {
-		trimmedFS = strings.TrimPrefix(fs, devPrefixReg)
+		trimmedFS = strings.TrimPrefix(fsname, devPrefixReg)
 	}
 	disks = make(FsDisks, num)
 	findDevs(blockDevs, trimmedFS, label, disks) // map trimmed(fs) <= disk(s)
@@ -111,17 +111,17 @@ func fs2disks(mpath, fs string, label cos.MountpathLabel, blockDevs BlockDevs, n
 	switch {
 	case len(disks) > 0:
 		s := disks._str()
-		nlog.Infoln("["+fs+label.ToLog()+"]:", s)
+		nlog.Infoln("["+fsname+label.ToLog()+"]:", s)
 	case testingEnv:
 		// anything goes
 	case label.IsNil():
 		// empty label implies _resolvable_ underlying disk or disks
 		e := errors.New("empty label implies _resolvable_ underlying disk (" + trimmedFS + ")")
-		err = cmn.NewErrMpathNoDisks(mpath, fs, e)
+		err = cmn.NewErrMpathNoDisks(mpath, fsname, e)
 		nlog.Errorln(err)
 		_dump(blockDevs)
 	default:
-		nlog.Infoln("No disks for", fs, "[", trimmedFS, label, "]")
+		nlog.Infoln("No disks for", fsname, "[", trimmedFS, label, "]")
 	}
 	return disks, err
 }

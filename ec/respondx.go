@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -192,21 +192,21 @@ func (r *XactRespond) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 
 		// Check if the request is valid: it must contain metadata
 		var (
-			err  error
-			meta = iReq.meta
+			err error
+			md  = iReq.meta
 		)
-		if meta == nil {
+		if md == nil {
 			nlog.Errorln(core.T.String(), "no metadata for", hdr.Cname())
 			return
 		}
-
 		if cmn.Rom.FastV(4, cos.SmoduleEC) {
 			nlog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
-				iReq.meta.SliceID, hdr.Cname(), meta.ObjVersion, meta.CksumValue)
+				iReq.meta.SliceID, hdr.Cname(), md.ObjVersion, md.CksumValue)
 		}
-		md := meta.NewPack()
+
+		mdbytes := md.NewPack()
 		if iReq.isSlice {
-			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation, Xact: r}
+			args := &WriteArgs{Reader: object, MD: mdbytes, BID: iReq.bid, Generation: md.Generation, Xact: r}
 			err = WriteSliceAndMeta(hdr, args)
 		} else {
 			var lom *core.LOM
@@ -214,10 +214,10 @@ func (r *XactRespond) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			if err == nil {
 				args := &WriteArgs{
 					Reader:     object,
-					MD:         md,
+					MD:         mdbytes,
 					Cksum:      hdr.ObjAttrs.Cksum,
 					BID:        iReq.bid,
-					Generation: meta.Generation,
+					Generation: md.Generation,
 					Xact:       r,
 				}
 				err = WriteReplicaAndMeta(lom, args)

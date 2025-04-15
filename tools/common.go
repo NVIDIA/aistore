@@ -140,8 +140,8 @@ func PutRR(tb testing.TB, bp api.BaseParams, objSize int64, cksumType string,
 	bck cmn.Bck, dir string, objCount int) []string {
 	objNames := make([]string, objCount)
 	for i := range objCount {
-		fname := trand.String(20)
-		objName := filepath.Join(dir, fname)
+		fn := trand.String(20)
+		objName := filepath.Join(dir, fn)
 		objNames[i] = objName
 		// FIXME: Separate RandReader per object created inside PutObjRR to workaround
 		// https://github.com/golang/go/issues/30597

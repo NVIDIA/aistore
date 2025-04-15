@@ -330,7 +330,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 	if errA != nil {
 		if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
-			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
+			nlog.Errorf(fmtNested, t, errA, "remove", wfqn, nerr)
 		}
 		s3.WriteMptErr(w, r, errA, 0, lom, uploadID)
 		return
@@ -384,7 +384,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 			s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
 			return
 		}
-		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), err, ecode)
+		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), errF, ecode)
 	}
 
 	// .7 respond

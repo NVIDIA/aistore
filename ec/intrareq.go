@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -56,16 +56,16 @@ var (
 // daemon ID, and sets `Exists:true` that means "local object exists".
 // Later `Exists` can be changed to `false` if local file is unreadable or does
 // not exist
-func newIntraReq(act intraReqType, meta *Metadata, bck *meta.Bck) *intraReq {
+func newIntraReq(act intraReqType, md *Metadata, bck *meta.Bck) *intraReq {
 	req := &intraReq{
-		meta:   meta,
+		meta:   md,
 		exists: true,
 	}
 	if bck != nil && bck.Props != nil {
 		req.bid = bck.Props.BID
 	}
-	if act == reqGet && meta != nil {
-		req.isSlice = !meta.IsCopy
+	if act == reqGet && md != nil {
+		req.isSlice = !md.IsCopy
 	}
 	return req
 }

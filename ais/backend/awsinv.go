@@ -255,7 +255,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 				lom.SetAtimeUnix(csv.mtime.UnixNano())
 				if errN := lom.PersistMain(); errN != nil {
 					debug.AssertNoErr(errN) // (unlikely)
-					nlog.Errorln("failed to persist", lom.Cname(), "err:", err, "- proceeding anyway...")
+					nlog.Errorln("failed to persist", lom.Cname(), "err:", errN, "- proceeding anyway...")
 				} else if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 					nlog.Infoln("done", xblob.String(), "->", lom.Cname(), ctx.Size)
 				}

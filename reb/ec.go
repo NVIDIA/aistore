@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -94,13 +94,13 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) error {
+func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, workFQN ...string) error {
 	var (
 		lom    *core.LOM
 		fqn    = ct.FQN()
 		action = uint32(ecActRebCT)
 	)
-	debug.Assert(meta != nil)
+	debug.Assert(md != nil)
 	if len(workFQN) != 0 {
 		fqn = workFQN[0]
 		action = ecActMoveCT
@@ -138,15 +138,15 @@ func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode,
 	}
 
 	// transmit
-	ntfn := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
+	ntfn := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: md, action: action}
 	o := transport.AllocSend()
-	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: meta.Size}}
+	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: md.Size}}
 	o.Hdr.Bck.Copy(ct.Bck().Bucket())
 	if lom != nil {
 		o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	}
-	if meta.SliceID != 0 {
-		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
+	if md.SliceID != 0 {
+		o.Hdr.ObjAttrs.Size = ec.SliceSize(md.Size, md.Data)
 	}
 
 	o.Hdr.Opaque = ntfn.NewPack(rebMsgEC)

@@ -566,12 +566,12 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	if apiOp == apc.SelfJoin {
 		// respond to the self-joining node with cluster-meta that does not include Smap
-		meta, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
+		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
+		p.writeJSON(w, r, md, path.Join(msg.Action, nsi.ID()))
 	}
 
 	go p.mcastJoined(nsi, msg, nsi.Flags, &regReq)

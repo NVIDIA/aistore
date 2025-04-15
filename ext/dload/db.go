@@ -46,9 +46,9 @@ func newDownloadDB(driver kvdb.Driver) *downloaderDB {
 	}
 }
 
-func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
+func (db *downloaderDB) errors(id string) (errs []TaskErrInfo, _ error) {
 	key := path.Join(downloaderErrors, id)
-	if code, err := db.driver.Get(downloaderCollection, key, &errors); err != nil {
+	if code, err := db.driver.Get(downloaderCollection, key, &errs); err != nil {
 		if !cos.IsErrNotFound(err) {
 			nlog.Errorln(err, code)
 			return nil, err
@@ -57,11 +57,11 @@ func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
 		return db.errCache[id], nil
 	}
 
-	errors = append(errors, db.errCache[id]...)
-	return
+	errs = append(errs, db.errCache[id]...)
+	return errs, nil
 }
 
-func (db *downloaderDB) getErrors(id string) (errors []TaskErrInfo, err error) {
+func (db *downloaderDB) getErrors(id string) ([]TaskErrInfo, error) {
 	db.mtx.RLock()
 	defer db.mtx.RUnlock()
 	return db.errors(id)

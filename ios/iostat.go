@@ -30,8 +30,8 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (FsDisks, error)
-		RescanDisks(mpath, fs string, disks []string) RescanDisksResult
+		AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (FsDisks, error)
+		RescanDisks(mpath, fsname string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m cos.AllDiskStats)
 	}
@@ -151,13 +151,13 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fs string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
 		fspaths    = config.LocalConfig.FSP.Paths
 	)
-	fsdisks, err = fs2disks(mpath, fs, label, blockDevs, len(fspaths), testingEnv)
+	fsdisks, err = fs2disks(mpath, fsname, label, blockDevs, len(fspaths), testingEnv)
 	if err != nil || len(fsdisks) == 0 {
 		return fsdisks, err
 	}
@@ -243,11 +243,11 @@ func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fs
 // - resolve (mpath, filesystem) => disks
 // - revalidate disk(s)
 // - note: part of the alerting mechanism, via filesystem health checker (FSHC)
-func (ios *ios) RescanDisks(mpath, fs string, disks []string) (out RescanDisksResult) {
+func (ios *ios) RescanDisks(mpath, fsname string, disks []string) (out RescanDisksResult) {
 	debug.Assert(len(disks) > 0)
 
 	var err error
-	out.FsDisks, err = fs2disks(mpath, fs, cos.MountpathLabel(""), nil, len(disks), false /*no-disks is ok*/)
+	out.FsDisks, err = fs2disks(mpath, fsname, cos.MountpathLabel(""), nil, len(disks), false /*no-disks is ok*/)
 	if err != nil {
 		out.Fatal = err
 		return out
@@ -255,12 +255,12 @@ func (ios *ios) RescanDisks(mpath, fs string, disks []string) (out RescanDisksRe
 	fsdisks := out.FsDisks
 	for _, d := range disks {
 		if _, ok := fsdisks[d]; !ok {
-			out.Lost = append(out.Lost, cmn.NewErrMpathLostDisk(mpath, fs, d, disks, fsdisks.ToSlice()))
+			out.Lost = append(out.Lost, cmn.NewErrMpathLostDisk(mpath, fsname, d, disks, fsdisks.ToSlice()))
 		}
 	}
 	for d := range fsdisks {
 		if !cos.StringInSlice(d, disks) {
-			out.Attached = append(out.Attached, cmn.NewErrMpathNewDisk(mpath, fs, disks, fsdisks.ToSlice()))
+			out.Attached = append(out.Attached, cmn.NewErrMpathNewDisk(mpath, fsname, disks, fsdisks.ToSlice()))
 
 			// TODO -- FIXME: under lock: update ios.mpath2disks and related state; log
 			ios._update(mpath, fsdisks, disks)

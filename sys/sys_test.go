@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package sys_test
 
@@ -18,8 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-func checkSkipOS(t *testing.T, os ...string) {
-	if cos.StringInSlice(runtime.GOOS, os) {
+func checkSkipOS(t *testing.T, oss ...string) {
+	if cos.StringInSlice(runtime.GOOS, oss) {
 		t.Skipf("skipping test for %s platform", runtime.GOOS)
 	}
 }

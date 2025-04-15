@@ -32,7 +32,7 @@ import (
 type (
 	encodeCtx struct {
 		lom          *core.LOM        // replica
-		meta         *Metadata        //
+		md           *Metadata        //
 		fh           *cos.FileHandle  // file handle for the replica
 		sliceSize    int64            // calculated slice size
 		padSize      int64            // zero tail of the last object's data slice
@@ -237,7 +237,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 		generation            = mono.NanoTime()
 		cksumType, cksumValue = lom.Checksum().Get()
 	)
-	meta := &Metadata{
+	md := &Metadata{
 		MDVersion:   MDVersionLast,
 		Generation:  generation,
 		Size:        lom.Lsize(),
@@ -252,7 +252,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 
 	c.parent.LomAdd(lom)
 
-	ctx, err := c.newCtx(lom, meta)
+	ctx, err := c.newCtx(lom, md)
 	defer c.freeCtx(ctx)
 	if err != nil {
 		return err
@@ -262,16 +262,16 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 		return err
 	}
 	ctx.targets = targets[1:]
-	meta.Daemons[targets[0].ID()] = 0 // main or full replica always on the first target
+	md.Daemons[targets[0].ID()] = 0 // main or full replica always on the first target
 	for i, tgt := range ctx.targets {
 		sliceID := uint16(i + 1)
-		if meta.IsCopy {
+		if md.IsCopy {
 			sliceID = 0
 		}
-		meta.Daemons[tgt.ID()] = sliceID
+		md.Daemons[tgt.ID()] = sliceID
 	}
 
-	if meta.IsCopy {
+	if md.IsCopy {
 		err = c.replicate(ctx)
 	} else {
 		err = c.splitAndDistribute(ctx)
@@ -279,7 +279,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	if err != nil {
 		return err
 	}
-	metaBuf := bytes.NewReader(meta.NewPack())
+	metaBuf := bytes.NewReader(md.NewPack())
 	if err := ctMeta.Write(metaBuf, -1, "" /*work fqn*/); err != nil {
 		return err
 	}
@@ -292,12 +292,12 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	return nil
 }
 
-func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
+func (*putJogger) newCtx(lom *core.LOM, md *Metadata) (ctx *encodeCtx, err error) {
 	ctx = allocCtx()
 	ctx.lom = lom
 	ctx.dataSlices = lom.Bprops().EC.DataSlices
 	ctx.paritySlices = lom.Bprops().EC.ParitySlices
-	ctx.meta = meta
+	ctx.md = md
 
 	totalCnt := ctx.paritySlices + ctx.dataSlices
 	ctx.sliceSize = SliceSize(ctx.lom.Lsize(), ctx.dataSlices)
@@ -361,7 +361,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 	src := &dataSource{
 		reader:   ctx.fh,
 		size:     ctx.lom.Lsize(),
-		metadata: ctx.meta,
+		metadata: ctx.md,
 		reqType:  reqPut,
 	}
 	return c.parent.writeRemote(nodes, ctx.lom, src, nil)
@@ -502,7 +502,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *meta.Snode, idx
 	}
 
 	mcopy := &Metadata{}
-	cos.CopyStruct(mcopy, ctx.meta)
+	cos.CopyStruct(mcopy, ctx.md)
 	mcopy.SliceID = idx + 1
 	mcopy.ObjVersion = ctx.lom.Version()
 	if ctx.slices[idx].cksum != nil {

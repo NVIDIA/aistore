@@ -109,6 +109,7 @@ linters:
       disabled-checks:
         - unnamedResult
         - unnecessaryBlock
+        - importShadow   ## TODO (wtp)
 
     gosec:
       excludes: ## integer overflow; weak rand
