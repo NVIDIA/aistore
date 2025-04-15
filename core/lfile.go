@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -125,10 +126,14 @@ func (lom *LOM) _checkBdir() (err error) {
 	if err = cos.Stat(bdir); err == nil {
 		return nil
 	}
+
 	err = &errBdir{cname: lom.Cname(), err: err}
 	bmd := T.Bowner().Get()
 	if _, present := bmd.Get(&lom.bck); present {
 		err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
+		nlog.Warningln(err, "(", bdir, bmd.String(), ")")
+	} else if cmn.Rom.FastV(4, cos.SmoduleCore) {
+		nlog.Warningln(err, "- benign: bucket does not exist (", bdir, bmd.String(), ")")
 	}
 	return err
 }
@@ -182,7 +187,9 @@ func (lom *LOM) RenameToMain(wfqn string) error {
 func (lom *LOM) RenameFinalize(wfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
-		return &errBdir{cname: lom.Cname(), err: err}
+		e := &errBdir{cname: lom.Cname(), err: err}
+		nlog.Warningln(e, "(", bdir, ")")
+		return e
 	}
 	err := lom.RenameToMain(wfqn)
 	switch {
