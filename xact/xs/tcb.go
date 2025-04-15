@@ -124,24 +124,30 @@ func (p *tcbFactory) Start() error {
 		return err
 	}
 
-	// only need workers and sentinels when there's intra-cluster traffic
-	// intra-cluster copying/transforming parallelism
-	// tune-up num-workers, if specified
+	// - unlike tco and other lrit-based xactions,
+	//   tcb - via xact.BckJog - employs conventional mountpath joggers;
+	// - `nwpNone` (serial execution) not supported;
+	// - num-workers cannot be less than the number of mountpaths (and joggers)
+	// - not using any workers - is the supported default.
+
 	if msg.NumWorkers > 0 {
+		// tune-up the specified number of workers
 		avail := fs.GetAvail()
 		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, len(avail)))
 		if err != nil {
 			return err
 		}
-		// unlike tco and other lrit-based xactions,
-		// tcb - via xact.BckJog - employs conventional system joggers;
-		// `nwpNone` not supported
-		if numWorkers > 0 {
+		if numWorkers >= len(avail) {
+			// delegate intra-cluster copying/transforming to additional workers;
+			// run them in parallel with traversing joggers;
 			r._iniNwp(numWorkers)
+		} else {
+			nlog.Warningln(r.Name(), "workers: 0 (ignoring ", msg.NumWorkers, "under load)")
 		}
 	}
 
-	// sentinels, to coordinate aborting and finishing
+	// sentinels, to coordinate finishing, aborting, and progress;
+	// use DM to communicate sentinel opcodes (opDone, opAbort, ...)
 	r.sntl.init(r, smap, nat)
 
 	return nil
