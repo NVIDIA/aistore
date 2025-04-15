@@ -1,4 +1,8 @@
-name: Build and Push CI Image
+# DEPRECATION NOTICE:
+# The aistorage/ci image and this workflow are deprecated.
+# Please use the aistorage/gitlab-ci image and the "Docker Images" workflow instead.
+
+name: Build and Push CI Image (DEPRECATED)
 
 on:
   workflow_dispatch:
@@ -14,6 +18,7 @@ on:
 
 env:
   CI_IMAGE: 'aistorage/ci'
+  DOCKERFILE: 'debian.dockerfile'
 
 jobs:
   build-ci-image:
@@ -31,5 +36,5 @@ jobs:
       - name: Build and push CI image
         run: |
           pushd $GITHUB_WORKSPACE/deploy/ci
-          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" GO_VERSION="${{ inputs.go_version }}" make -e all
+          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" GO_BASE_VERSION="${{ inputs.go_version }}" DOCKER_FILE="${{ env.DOCKERFILE }}" make -e all
           popd
