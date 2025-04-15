@@ -428,11 +428,12 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	}
 	if pdu.rlength() == 0 {
 		if pdu.last {
-			err = io.EOF
 			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
+				err = io.EOF
 			} else if obj.Size() != obj.off {
-				nlog.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
+				err = fmt.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
+				nlog.Warningln(err)
 			}
 		} else {
 			pdu.reset()
