@@ -309,7 +309,7 @@ class ObjectGroup(AISSource):
             etl_name (str): Name of existing ETL to apply
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
             prepend (str, optional): Value to prepend to the name of resulting transformed objects
-            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
+            ext (Dict[str, str], optional): Dict mapping each extension to the extension that will replace it
                 (i.e. {"jpg": "txt"})
             continue_on_error (bool, optional): Whether to continue if there is an error transforming a single object
             dry_run (bool, optional): Skip performing the transform and just log the intended actions
