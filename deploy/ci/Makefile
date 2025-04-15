@@ -1,9 +1,10 @@
-DOCKER       ?= docker
-REGISTRY_URL ?= docker.io
-CI_IMAGE     ?= aistorage/gitlab-ci
-IMAGE_TAG    ?= 1.0-podman
-GO_VERSION   ?= 1.24.1
-DOCKERFILE   ?= fedora.dockerfile
+DOCKER          ?= docker
+REGISTRY_URL    ?= docker.io
+CI_IMAGE        ?= aistorage/gitlab-ci
+IMAGE_TAG       ?= 1.0-podman
+DOCKERFILE      ?= fedora.dockerfile
+GO_BASE_VERSION ?= 1.24
+GO_VERSION      ?= $(shell curl -s https://go.dev/dl/?mode=json | jq -r '[.[] | select(.version | startswith("go$(GO_BASE_VERSION)"))][0].version | ltrimstr("go")')
 
 all: build push
 
