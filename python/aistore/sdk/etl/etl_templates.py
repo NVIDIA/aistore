@@ -145,7 +145,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["python", "/code/echo_server.py"]
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
       readinessProbe:
         httpGet:
           path: /health
