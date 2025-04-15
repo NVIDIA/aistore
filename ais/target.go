@@ -1115,10 +1115,9 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 }
 
 // NOTE: sets whdr.ContentLength = obj-size, with no response body
-func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (ecode int, err error) {
+func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		fltPresence int
-		hasEC       bool
 		exists      = true
 	)
 	if tmp := q.Get(apc.QparamFltPresence); tmp != "" {
@@ -1126,24 +1125,22 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		fltPresence, erp = strconv.Atoi(tmp)
 		debug.AssertNoErr(erp)
 	}
-	if err = lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrBucketNought(err) {
-			ecode = http.StatusNotFound
+			return http.StatusNotFound, err
 		}
-		return
+		return 0, err
 	}
-	err = lom.Load(true /*cache it*/, false /*locked*/)
-	if err == nil {
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil {
 		if apc.IsFltNoProps(fltPresence) {
-			return
+			return 0, nil
 		}
 		if fltPresence == apc.FltExistsOutside {
-			err = fmt.Errorf(fmtOutside, lom.Cname(), fltPresence)
-			return
+			return 0, fmt.Errorf(fmtOutside, lom.Cname(), fltPresence)
 		}
 	} else {
 		if !cmn.IsErrObjNought(err) {
-			return
+			return 0, err
 		}
 		exists = false
 		if fltPresence == apc.FltPresentCluster {
@@ -1153,13 +1150,15 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 
 	if !exists {
 		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			err = cos.NewErrNotFound(t, lom.Cname())
-			return http.StatusNotFound, err
+			return http.StatusNotFound, cos.NewErrNotFound(t, lom.Cname())
 		}
 	}
 
 	// props
-	op := cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
+	var (
+		op    = cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
+		hasEC bool
+	)
 	if exists {
 		op.ObjAttrs = *lom.ObjAttrs()
 		op.Location = lom.Location()
@@ -1194,8 +1193,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 	latest := cos.IsParseBool(q.Get(apc.QparamLatestVer))
 	if !exists || latest {
 		// cold HEAD
-		var oa *cmn.ObjAttrs
-		oa, ecode, err = t.HeadCold(lom, r)
+		oa, ecode, err := t.HeadCold(lom, r)
 		if err != nil {
 			switch {
 			case ecode == http.StatusTooManyRequests || ecode == http.StatusServiceUnavailable:
@@ -1205,10 +1203,10 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 			case latest:
 				ecode = http.StatusGone
 			}
-			return
+			return ecode, err
 		}
 		if apc.IsFltNoProps(fltPresence) {
-			return
+			return 0, nil
 		}
 
 		if exists && latest {
@@ -1228,7 +1226,8 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		// cos.Cksum does not have default nil/zero value (reflection)
 		op.ObjAttrs.Cksum = cos.NewCksum("", "")
 	}
-	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (err error, b bool) {
+	// TODO: revisit
+	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false
 		}
@@ -1245,7 +1244,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)
-	return
+	return 0, nil
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>

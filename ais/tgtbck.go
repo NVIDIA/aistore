@@ -250,14 +250,14 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, 
 
 // returns `cmn.LsoRes` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) (ok bool) {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) bool /*ok*/ {
 	// (advanced) user-selected target to execute remote ls
 	if lsmsg.SID != "" {
 		smap := t.owner.smap.get()
 		if smap.GetTarget(lsmsg.SID) == nil {
 			err := &errNodeNotFound{t.si, smap, "list-objects failure:", lsmsg.SID}
 			t.writeErr(w, r, err)
-			return
+			return false
 		}
 	}
 
@@ -272,7 +272,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
-		return
+		return false
 	}
 	// run
 	xctn = rns.Entry.Get()
@@ -295,7 +295,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 		resp.Lst.Flags = 1
 	}
 
-	return t.writeMsgPack(w, resp.Lst, "list_objects")
+	return t.writeMsgPack(w, resp.Lst, "list_objects") // ok
 }
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
