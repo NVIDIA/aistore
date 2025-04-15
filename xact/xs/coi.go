@@ -124,6 +124,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 	}
 
 	res := gcoi.CopyObject(lom, dm, a)
+	contOnErr := a.ContinueOnError
 	FreeCOI(a)
 
 	switch {
@@ -144,7 +145,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
 		}
-		if a.ContinueOnError {
+		if contOnErr {
 			tc.r.AddErr(res.Err, 5, cos.SmoduleXs)
 		} else {
 			err = res.Err
