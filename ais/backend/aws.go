@@ -845,6 +845,7 @@ func (sessConf *sessConf) options(options *s3.Options) {
 			options.UsePathStyle = cmn.Rom.Features().IsSet(feat.S3UsePathStyle)
 		}
 	}
+	options.DisableLogOutputChecksumValidationSkipped = true
 }
 
 func _cid(profile, region, endpoint string) string {
