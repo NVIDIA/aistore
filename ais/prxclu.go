@@ -643,24 +643,26 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (
 }
 
 // executes under lock
-func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta, msg *apc.ActMsg) (upd bool, err error) {
+func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta, msg *apc.ActMsg) (upd bool, _ error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
-		return
+		return false, newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
 	}
 
-	keepalive := apiOp == apc.Keepalive
-	osi := smap.GetNode(nsi.ID())
+	var (
+		keepalive = apiOp == apc.Keepalive
+		osi       = smap.GetNode(nsi.ID())
+	)
 	if osi == nil {
 		if keepalive {
 			nlog.Warningln(p.String(), "keepalive", nsi.StringEx(), "- adding back to the", smap.StringEx())
 		}
 	} else {
 		if osi.Type() != nsi.Type() {
-			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
+			err := fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
 				osi.StringEx(), nsi.StringEx(), smap.StringEx(), keepalive)
-			return
+			debug.AssertNoErr(err)
+			return false, err
 		}
 		switch {
 		case keepalive:
@@ -671,37 +673,39 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 			upd = p.rereg(nsi, osi)
 		}
 		if !upd {
-			return // ==> nothing to do
+			return false, nil // ==> nothing to do
 		}
 	}
 	// check for cluster integrity errors (cie)
-	if err = smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
-		return
+	if err := smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
+		return false, err
 	}
-	if apiOp == apc.Keepalive {
+
+	var (
+		err error
+	)
+	if keepalive {
 		// whether IP is in use by a different node
 		// (but only for keep-alive - the other two opcodes have been already checked via handshake)
 		if _, err = smap.IsDupNet(nsi); err != nil {
 			err = errors.New(p.String() + ": " + err.Error())
 		}
 	}
-
 	// when cluster's starting up
 	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); err == nil && (!a || b) {
 		clone := smap.clone()
 		// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
 		clone.putNode(nsi, flags, false /*silent*/)
 		p.owner.smap.put(clone)
-		upd = false
 		if a {
 			actMsgExt := p.newAmsg(msg, nil)
 			_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 		}
-		return
+		return false, nil
 	}
 
 	upd = err == nil
-	return
+	return upd, err
 }
 
 func (p *proxy) _confirmSnode(osi, nsi *meta.Snode) (bool, error) {
@@ -745,7 +749,7 @@ func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 	return true
 }
 
-func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags, regReq *cluMeta) (xid string, err error) {
+func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags, regReq *cluMeta) (string, error) {
 	ctx := &smapModifier{
 		pre:         p._joinedPre,
 		post:        p._joinedPost,
@@ -756,25 +760,24 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		interrupted: regReq.Flags.IsSet(cos.RebalanceInterrupted),
 		restarted:   regReq.Flags.IsSet(cos.NodeRestarted),
 	}
-	if err = p._earlyGFN(ctx, ctx.nsi, msg.Action, true /*joining*/); err != nil {
-		return
+	if err := p._earlyGFN(ctx, ctx.nsi, msg.Action, true /*joining*/); err != nil {
+		return "", err
 	}
-	if err = p.owner.smap.modify(ctx); err != nil {
+	if err := p.owner.smap.modify(ctx); err != nil {
 		debug.AssertNoErr(err)
-		return
+		return "", err
 	}
 	// with rebalance
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
 		debug.Assert(ctx.rmdCtx.rebID != "")
-		xid = ctx.rmdCtx.rebID
-		return
+		return ctx.rmdCtx.rebID, nil // xid
 	}
 
 	// [NOTE]
 	// one (arguably, cosmetic) side effect of not rebalancing is: markers and node state flags
 	// e.g. when a node crashes (and then rejoins back again) in a cluster with rebalance disabled
 	// the node's marker will state "restarted"
-	// and will remain as such until and if the cluster gets eventually rebalanced
+	// and will remain such until the cluster gets eventually rebalanced
 
 	if ctx.gfn {
 		actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
@@ -782,7 +785,7 @@ func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags
 		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, actMsgExt}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
-	return
+	return "", nil
 }
 
 func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
@@ -1569,7 +1572,7 @@ func (p *proxy) rmTarget(si *meta.Snode, msg *apc.ActMsg, reb bool) (rebID strin
 	return
 }
 
-func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
+func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bool) (*smapModifier, error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
@@ -1581,13 +1584,16 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bo
 			flags |= meta.SnodeMaintPostReb
 		}
 	default:
-		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
+		err := fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
-		return
+		return nil, err
 	}
-	var dummy = meta.Snode{Flags: flags}
+
+	var (
+		dummy = meta.Snode{Flags: flags}
+	)
 	nlog.Infof("%s mcast-maint: %s, %s reb=(%t, %t), nflags=%s", p, msg, si.StringEx(), reb, maintPostReb, dummy.Fl2S())
-	ctx = &smapModifier{
+	ctx := &smapModifier{
 		pre:     p._markMaint,
 		post:    p._rebPostRm, // (rmdCtx.rmNode => p.rmNodeFinal when all done)
 		final:   p._syncFinal,
@@ -1596,14 +1602,13 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bo
 		msg:     msg,
 		skipReb: !reb,
 	}
-	if err = p._earlyGFN(ctx, si, msg.Action, false /*joining*/); err != nil {
-		return
+	if err := p._earlyGFN(ctx, si, msg.Action, false /*joining*/); err != nil {
+		return nil, err
 	}
-	if err = p.owner.smap.modify(ctx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	return
+	err := p.owner.smap.modify(ctx)
+	debug.AssertNoErr(err)
+
+	return ctx, err
 }
 
 func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
