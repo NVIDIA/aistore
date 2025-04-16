@@ -37,27 +37,29 @@ const PrefixTcoID = "tco-"
 
 type (
 	tcoFactory struct {
-		args *xreg.TCObjsArgs
+		args *xreg.TCOArgs
 		streamingF
 	}
 	XactTCO struct {
-		copier
 		transform etl.Session // stateful etl Session
-		args      *xreg.TCObjsArgs
-		workCh    chan *cmn.TCOMsg
-		pending   struct {
+		copier
+		sntl   sentinel
+		args   *xreg.TCOArgs
+		workCh chan *cmn.TCOMsg
+		pend   struct {
 			m   map[string]*tcowi
-			mtx sync.RWMutex
+			mtx sync.Mutex
 		}
 		streamingX
 		chanFull atomic.Int64
 		owt      cmn.OWT
 	}
 	tcowi struct {
-		r   *XactTCO
-		msg *cmn.TCOMsg
-		// finishing
-		refc atomic.Int32
+		r    *XactTCO
+		msg  *cmn.TCOMsg
+		pend struct {
+			n atomic.Int64
+		}
 	}
 )
 
@@ -83,7 +85,7 @@ var (
 
 func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 	np := &tcoFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bckFrom}, kind: p.kind}}
-	np.args = args.Custom.(*xreg.TCObjsArgs)
+	np.args = args.Custom.(*xreg.TCOArgs)
 	return np
 }
 
@@ -100,13 +102,11 @@ func (p *tcoFactory) Start() error {
 	// new x-tco
 	workCh := make(chan *cmn.TCOMsg, maxNumInParallel)
 	r := &XactTCO{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
-	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
+	r.pend.m = make(map[string]*tcowi, maxNumInParallel)
 	r.owt = cmn.OwtCopy
 
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
-		// TODO: when the xctn itself encounters unrecoverable error
-		// call r.transform.Finish() to cleanup communicator state
 		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
 		if err != nil {
 			return err
@@ -114,23 +114,33 @@ func (p *tcoFactory) Start() error {
 	}
 
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault) // TODO ctlmsg: arch, tco
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault)
 
 	smap := core.T.Sowner().Get()
-	r.rate.init(p.args.BckFrom, p.args.BckTo, smap.CountActiveTs())
+	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
+		return err
+	}
+	nat := smap.CountActiveTs()
+	r.rate.init(p.args.BckFrom, p.args.BckTo, nat)
 
+	// TODO: add ETL capability to provide Size(transformed-result)
 	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
 
-	if useDM := !r.args.DisableDM; useDM {
+	// TODO: sentinels require DM; no-DM still requires sentinels
+	if useDM := !r.args.DisableDM; useDM && nat > 1 {
 		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, smap, r.owt, sizePDU); err != nil {
 			return err
 		}
 	}
 
 	r.copier.r = r
+
+	// limited use (compare w/ tcb sntl.init)
+	r.sntl.r = r
+	r.sntl.nat = nat
 
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
@@ -166,17 +176,17 @@ func (r *XactTCO) Snap() (snap *core.Snap) {
 	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
-	return
+	return snap
 }
 
 func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 	wi := &tcowi{r: r, msg: msg}
-	r.pending.mtx.Lock()
+	r.pend.mtx.Lock()
 
-	r.pending.m[msg.TxnUUID] = wi
+	r.pend.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
 
-	r.pending.mtx.Unlock()
+	r.pend.mtx.Unlock()
 }
 
 func (r *XactTCO) ContMsg(msg *cmn.TCOMsg) {
@@ -197,9 +207,9 @@ func (r *XactTCO) ContMsg(msg *cmn.TCOMsg) {
 func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	debug.Assert(cos.IsValidUUID(msg.TxnUUID), msg.TxnUUID) // (ref050724: in re: ais/plstcx)
 
-	r.pending.mtx.Lock()
-	wi, ok := r.pending.m[msg.TxnUUID]
-	r.pending.mtx.Unlock()
+	r.pend.mtx.Lock()
+	wi, ok := r.pend.m[msg.TxnUUID]
+	r.pend.mtx.Unlock()
 	if !ok {
 		if r.ErrCnt() > 0 {
 			return true // stop
@@ -214,8 +224,11 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		r.Abort(err)
 		return true // stop
 	}
-	nat := smap.CountActiveTs()
-	wi.refc.Store(int32(nat - 1))
+	if err := r.sntl.checkSmap(smap, nil); err != nil {
+		r.Abort(err)
+		return true // stop
+	}
+	wi.pend.n.Store(int64(r.sntl.nat - 1)) // must dec down to zero
 
 	lrit := &lrit{}
 	if err := lrit.init(r, &msg.ListRange, r.Bck(), msg.NumWorkers); err != nil {
@@ -269,19 +282,29 @@ outer:
 			if stop {
 				break outer
 			}
-			r.sendTerm(msg.TxnUUID, nil, nil)
+			if r.p.dm != nil {
+				r.sntl.bcast(msg.TxnUUID, r.p.dm, nil) // (compare w/ r.ID below)
+			}
 		case <-r.IdleTimer():
 			break outer
 		case <-r.ChanAbort():
 			break outer
 		}
 	}
-	r.fin(true /*unreg Rx*/) // TODO -- FIXME: use sentinels
+	if r.p.dm != nil {
+		if err := r.AbortErr(); err != nil {
+			if _, ok := err.(*recvAbortErr); !ok {
+				r.sntl.bcast(r.ID(), r.p.dm, err)
+			}
+		}
+	}
+
+	r.fin(true /*unreg Rx*/) // TODO: compare w/ tcb quiescing
 	if r.ErrCnt() > 0 {
 		// (see "expecting errors" and cleanup)
-		r.pending.mtx.Lock()
-		clear(r.pending.m)
-		r.pending.mtx.Unlock()
+		r.pend.mtx.Lock()
+		clear(r.pend.m)
+		r.pend.mtx.Unlock()
 	}
 }
 
@@ -307,19 +330,30 @@ ex:
 }
 
 func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	if hdr.Opcode == opDone {
-		r.pending.mtx.Lock()
-		wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
-		if !ok {
-			r.pending.mtx.Unlock()
-			_, err := r.JoinErr()
-			return err
+	if hdr.Opcode != 0 {
+		switch hdr.Opcode {
+		case opDone:
+			uuid := cos.UnsafeS(hdr.Opaque) // txnUUID
+			r.pend.mtx.Lock()
+			wi, ok := r.pend.m[uuid]
+			if !ok {
+				r.pend.mtx.Unlock()
+				_, err := r.JoinErr()
+				return err
+			}
+			n := wi.pend.n.Dec()
+			if n == 0 {
+				r.wiCnt.Dec()
+			}
+			r.pend.mtx.Unlock()
+		case opAbort:
+			uuid := cos.UnsafeS(hdr.Opaque)
+			debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID())
+
+			r.sntl.rxAbort(hdr)
+		default:
+			return abortOpcode(r, hdr.Opcode)
 		}
-		refc := wi.refc.Dec()
-		if refc == 0 {
-			r.wiCnt.Dec()
-		}
-		r.pending.mtx.Unlock()
 		return nil
 	}
 

@@ -22,6 +22,6 @@ func RenewPrefetch(uuid string, bck *meta.Bck, msg *apc.PrefetchMsg) RenewRes {
 }
 
 // kind: (apc.ActCopyObjects | apc.ActETLObjects)
-func RenewTCObjs(kind string, custom *TCObjsArgs) RenewRes {
+func RenewTCObjs(kind string, custom *TCOArgs) RenewRes {
 	return RenewBucketXact(kind, custom.BckFrom, Args{Custom: custom}, custom.BckFrom, custom.BckTo)
 }

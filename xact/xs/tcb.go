@@ -7,7 +7,6 @@ package xs
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -94,7 +93,6 @@ func (p *tcbFactory) Start() error {
 
 	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
-		// TODO upon abort: call r.transform.Finish() to cleanup communicator's state
 		r.owt = cmn.OwtTransform
 		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(args.Msg.Transform.Name, r)
 		if err != nil {
@@ -111,11 +109,13 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
+	// TODO: sentinels require DM; no-DM still requires sentinels
 	if r.args.DisableDM {
 		return nil
 	}
 
 	// data mover and sentinel
+	// TODO: add ETL capability to provide Size(transformed-result)
 	var sizePDU int32
 	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
@@ -274,7 +274,8 @@ func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, sma
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	// make sure `nat` hasn't changed between Start and now (highly unlikely)
 	if r.dm != nil {
-		if err := r.sntl.checkSmap(nil); err != nil {
+		smap := core.T.Sowner().Get()
+		if err := r.sntl.checkSmap(smap, nil); err != nil {
 			r.Abort(err)
 			wg.Done()
 			return
@@ -291,6 +292,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		go worker.run(buf, slab)
 	}
 
+	// run
 	r.BckJog.Run()
 	if r.args.Msg.Sync {
 		r.prune.run() // the 2nd jgroup
@@ -303,14 +305,14 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	if r.dm != nil {
-		r.sntl.bcast(r.dm, err) // broadcast: done | abort
+		r.sntl.bcast("", r.dm, err) // broadcast: done | abort
 		if !r.IsAborted() {
 			r.sntl.initLast(mono.NanoTime())
 			qui := r.Base.Quiesce(r.qival(), r.qcb) // when done: wait for others
 			if qui == core.QuiAborted {
 				err := r.AbortErr()
 				debug.Assert(err != nil)
-				r.sntl.bcast(r.dm, err) // broadcast: abort
+				r.sntl.bcast("", r.dm, err) // broadcast: abort
 			}
 		}
 		// close
@@ -384,10 +386,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		case opResponse:
 			r.sntl.rxProgress(hdr) // handle response: progress by others
 		default:
-			err := fmt.Errorf("invalid header opcode %d", hdr.Opcode)
-			debug.AssertNoErr(err)
-			r.Abort(err)
-			return err
+			return abortOpcode(r, hdr.Opcode)
 		}
 		return nil
 	}

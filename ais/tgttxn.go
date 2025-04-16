@@ -671,7 +671,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
 		// begin
-		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg, DisableDM: disableDM}
+		custom := &xreg.TCOArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg, DisableDM: disableDM}
 		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)

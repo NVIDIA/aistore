@@ -21,10 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
-// TODO:
-// - tco to include/support sentinel
-// - request progress only when not having timely update
-
 // sentinel values
 const (
 	opDone = iota + 27182
@@ -71,12 +67,18 @@ func (s *sentinel) cleanup() {
 	s.pend.p = s.pend.p[:0]
 }
 
-func (s *sentinel) bcast(dm *bundle.DM, abortErr error) {
+func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = opDone
+	if uuid != "" {
+		o.Hdr.Opaque = cos.UnsafeB(uuid)
+	}
 	if abortErr != nil {
+		if _, ok := abortErr.(*recvAbortErr); ok {
+			return // do nothing
+		}
 		o.Hdr.Opcode = opAbort
-		o.Hdr.Opaque = cos.UnsafeB(abortErr.Error()) // abort error via opaque
+		o.Hdr.ObjName = abortErr.Error() // (compare w/ sendTerm)
 	}
 
 	err := dm.Bcast(o, nil /*roc*/)
@@ -119,7 +121,8 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	}
 
 	// 2. check Smap; abort if membership changed
-	if err := s.checkSmap(s.pend.p); err != nil {
+	smap := core.T.Sowner().Get()
+	if err := s.checkSmap(smap, s.pend.p); err != nil {
 		return s._qabort(err)
 	}
 
@@ -152,8 +155,7 @@ func (s *sentinel) _qabort(err error) core.QuiRes {
 	return core.QuiAborted
 }
 
-func (s *sentinel) checkSmap(pending []string) error {
-	smap := core.T.Sowner().Get()
+func (s *sentinel) checkSmap(smap *meta.Smap, pending []string) error {
 	if nat := smap.CountActiveTs(); nat != s.nat {
 		return cmn.NewErrMembershipChanges(fmt.Sprint(s.r.Name(), smap.String(), nat, s.nat))
 	}
@@ -198,12 +200,15 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 }
 
 func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
-	if s.r.IsAborted() || s.r.Finished() {
+	r := s.r
+	if r.IsAborted() || r.Finished() {
 		return
 	}
-	msg := cos.UnsafeS(hdr.Opaque)
-	err := fmt.Errorf("%s: %s aborted, err: %s", s.r.Name(), meta.Tname(hdr.SID), msg)
-	s.r.Abort(err)
+	msg := hdr.ObjName
+	err := &recvAbortErr{
+		err: fmt.Errorf("%s: %s aborted, err: %s", r.Name(), meta.Tname(hdr.SID), msg),
+	}
+	r.Abort(err)
 	nlog.WarningDepth(1, "recv 'abort':", err)
 }
 

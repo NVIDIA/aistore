@@ -7,9 +7,11 @@ package xs
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -109,3 +111,20 @@ func throttleNwp(xname string, n int) (int, error) {
 
 	return n, nil
 }
+
+func abortOpcode(r core.Xact, opcode int) error {
+	err := fmt.Errorf("invalid header opcode (%d)", opcode)
+	debug.AssertNoErr(err)
+	r.Abort(err)
+	return err
+}
+
+//
+// recvAbortErr - to avoid duplicated broadcast
+//
+
+type recvAbortErr struct {
+	err error
+}
+
+func (e *recvAbortErr) Error() string { return e.err.Error() }

@@ -20,7 +20,7 @@ type (
 		Phase     string
 		DisableDM bool
 	}
-	TCObjsArgs struct {
+	TCOArgs struct {
 		BckFrom   *meta.Bck
 		BckTo     *meta.Bck
 		Msg       *apc.TCOMsg
