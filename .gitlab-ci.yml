@@ -62,6 +62,12 @@ include:
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
 
+.skip_scheduled_rules: &skip_scheduled_rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
+      when: manual
+      allow_failure: true
+
 .test_short_template: &test_short_def
   stage: test-short
   tags:
@@ -78,12 +84,9 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 35m
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
+  timeout: 45m
   <<: *gather_logs_def
+  <<: *skip_scheduled_rules
 
 
 .test_short_optional_template: &test_short_optional_def
@@ -117,10 +120,7 @@ include:
     - $RUNNER_TAG
   # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
-      when: manual
-      allow_failure: true
+  <<: *skip_scheduled_rules
   <<: *gather_logs_def
 
 # Rule Anchors
@@ -441,6 +441,13 @@ test:short:aws:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "aws://ais-cicd"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*aws.*/'
+      when: on_success
+    - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws
     - make test-short
@@ -449,6 +456,13 @@ test:short:gcp:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "gs://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*gcp.*/'
+      when: on_success
+    - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
@@ -457,6 +471,13 @@ test:short:azure:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "az://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*azure.*/'
+      when: on_success
+    - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure
     - make test-short
@@ -465,6 +486,13 @@ test:short:oci:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "oc://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*oci.*/'
+      when: on_success
+    - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci
     - . ais/test/oci/mp_tuning.env && make test-short
@@ -481,6 +509,13 @@ test:long:aws:
   <<: *test_long_def
   variables:
     BUCKET: "aws://ais-cicd"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*aws.*/'
+      when: on_success
+    - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --aws --ht
     - make test-long
@@ -489,6 +524,13 @@ test:long:gcp:
   <<: *test_long_def
   variables:
     BUCKET: "gs://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*gcp.*/'
+      when: on_success
+    - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp --ht
     - make test-long
@@ -497,6 +539,13 @@ test:long:azure:
   <<: *test_long_def
   variables:
     BUCKET: "az://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*azure.*/'
+      when: on_success
+    - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --azure --ht
     - make test-long
@@ -505,6 +554,13 @@ test:long:oci:
   <<: *test_long_def
   variables:
     BUCKET: "oc://ais-ci"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*oci.*/'
+      when: on_success
+    - !reference [.test_long_skip_scheduled_template, rules]
   script:
     - . ais/test/oci/mp_tuning.env && ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --oci --ht
     - . ais/test/oci/mp_tuning.env && make test-long
