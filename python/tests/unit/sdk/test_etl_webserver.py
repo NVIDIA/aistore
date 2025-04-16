@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
+from aistore.sdk.const import HEADER_NODE_URL
 from aistore.sdk.etl.webserver import (
     HTTPMultiThreadedServer,
     FlaskServer,
@@ -143,6 +144,25 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, transformed_content)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_direct_put_delivery(self):
+        self.etl_server.arg_type = ""
+        path = "test/object"
+        input_content = b"input data"
+
+        # Mock the direct delivery response (simulate 200 OK)
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        self.etl_server.client = AsyncMock()
+        self.etl_server.client.put.return_value = mock_response
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        response = self.client.put(f"/{path}", content=input_content, headers=headers)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")  # No content returned
+        self.etl_server.client.put.assert_awaited_once()
 
 
 class TestFlaskServer(unittest.TestCase):

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -1522,7 +1523,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		var r cos.ReadOpenCloser
 		if coi.GetROC != nil {
 			// TODO -- FIXME: cleanly separate GetROC call paths for ETL (supports direct delivery) and non-ETL (requires t2t transfer)
-			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), cos.UnsafeS(uname))
+			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))) // use escaped URL to simplify parsing on the ETL side
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, daddr)
 			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
 			if resp.Err != nil || resp.R == nil {

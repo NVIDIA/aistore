@@ -196,6 +196,7 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, srcSize int64, timeout time.Duration, 
 	}
 
 	req.ContentLength = srcSize
+	req.Header = reqArgs.Header
 	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	if err != nil {
 		cancel()

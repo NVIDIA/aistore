@@ -1,6 +1,6 @@
 import os
 import asyncio
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlparse, urlunparse
 from typing import Optional, List
 
 from fastapi import (
@@ -16,6 +16,7 @@ import aiofiles
 import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.const import HEADER_NODE_URL
 
 
 class FastAPIServer(ETLServer):
@@ -108,6 +109,13 @@ class FastAPIServer(ETLServer):
                 )
 
             transformed = await asyncio.to_thread(self.transform, content, path)
+
+            delivery_target_url = request.headers.get(HEADER_NODE_URL)
+            if delivery_target_url:
+                response = await self._direct_put(delivery_target_url, transformed)
+                if response:
+                    return response
+
             return self._build_response(transformed, self.get_mime_type())
 
         except FileNotFoundError as exc:
@@ -152,6 +160,40 @@ class FastAPIServer(ETLServer):
         response = await self.client.get(target_url)
         response.raise_for_status()
         return response.content
+
+    async def _direct_put(self, delivery_target_url: str, data: bytes) -> Response:
+        """
+        Sends the transformed object directly to the specified AIS node (`delivery_target_url`),
+        eliminating the additional network hop through the original target.
+        Used only in bucket-to-bucket offline transforms.
+        """
+        try:
+            parsed_target = urlparse(delivery_target_url)
+            parsed_host = urlparse(self.host_target)
+            url = urlunparse(
+                parsed_host._replace(
+                    netloc=parsed_target.netloc,
+                    path=parsed_host.path + parsed_target.path,
+                )
+            )
+
+            resp = await self.client.put(url, data=data)
+            if resp.status_code == 200:
+                return Response(status_code=204, headers={"Content-Length": "0"})
+
+            error = await resp.text()
+            self.logger.warning(
+                "Failed to deliver object to %s: HTTP %s, %s",
+                delivery_target_url,
+                resp.status_code,
+                error,
+            )
+        except Exception as e:
+            self.logger.warning(
+                "Exception during delivery to %s: %s", delivery_target_url, e
+            )
+
+        return None
 
     def _build_response(self, content: bytes, mime_type: str) -> Response:
         """Construct standardized response with appropriate headers."""
