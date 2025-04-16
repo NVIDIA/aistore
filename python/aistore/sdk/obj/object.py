@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Optional
 import os
 from json import dumps as json_dumps
+from urllib.parse import quote
 
 from requests import Response
 from requests.structures import CaseInsensitiveDict
@@ -82,9 +83,9 @@ class Object:
         self._client = client
         self._bck_details = bck_details
         self._bck_path = f"{URL_PATH_OBJECTS}/{ bck_details.name}"
-        self._object_path = f"{self._bck_path}/{name}"
         self._name = name
         self._props = props
+        self._object_path = f"{self._bck_path}/{quote(name)}"
 
     @property
     def bucket_name(self) -> str:

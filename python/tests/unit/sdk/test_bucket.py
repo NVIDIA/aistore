@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import Mock, call, patch, MagicMock, mock_open
+from urllib.parse import quote
 
 from requests.structures import CaseInsensitiveDict
 
@@ -563,7 +564,7 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(expected_response, result_id)
 
     def test_object(self):
-        obj_name = "testobject"
+        obj_name = "test object!#?"
         props_dict = CaseInsensitiveDict(
             {
                 AIS_BCK_NAME: "test-bck-name",
@@ -581,6 +582,8 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(self.ais_bck.name, new_obj.bucket_name)
         self.assertEqual(self.ais_bck.provider, new_obj.bucket_provider)
         self.assertEqual(self.ais_bck.qparam, new_obj.query_params)
+        # pylint: disable=protected-access
+        self.assertEqual(f"{new_obj._bck_path}/{quote(obj_name)}", new_obj._object_path)
 
         self.assertEqual(props, new_obj.props_cached)
 

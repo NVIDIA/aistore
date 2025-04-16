@@ -13,6 +13,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Changed
 
 - Adjust error handling logic to accommodate updated object naming (see [here](https://github.com/NVIDIA/aistore/blob/main/docs/unicode.md)).
+- URL-encode object names when constructing the object paths for the request URLs (see [here](https://github.com/NVIDIA/aistore/blob/main/docs/unicode.md)).
 - Add `direct put` support in the websocket endpoint of ETL fastapi web server.
 
 ### Removed

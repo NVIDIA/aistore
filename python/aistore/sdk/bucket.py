@@ -841,7 +841,11 @@ class Bucket(AISSource):
             return prepend + obj_name
         return obj_name
 
-    def object(self, obj_name: str, props: ObjectProps = None) -> Object:
+    def object(
+        self,
+        obj_name: str,
+        props: ObjectProps = None,
+    ) -> Object:
         """
         Factory constructor for an object in this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
@@ -855,7 +859,10 @@ class Bucket(AISSource):
         """
         details = BucketDetails(self.name, self.provider, self.qparam, self.get_path())
         return Object(
-            client=self.client, bck_details=details, name=obj_name, props=props
+            client=self.client,
+            bck_details=details,
+            name=obj_name,
+            props=props,
         )
 
     def objects(
