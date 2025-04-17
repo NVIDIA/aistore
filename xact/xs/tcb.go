@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -42,24 +43,30 @@ type (
 		r *XactTCB
 	}
 	XactTCB struct {
-		// sub-function
-		transform etl.Session
+		// function: copy/transform
 		copier
-		prune prune
-		sntl  sentinel
-		xact.BckJog
-		// copying parallelism
-		numwp struct {
-			workers []tcbworker
-			workCh  chan core.LIF
-			stopCh  *cos.StopCh
-			wg      sync.WaitGroup
-		}
+		// function: etl
+		transform etl.Session
 		// args
 		args *xreg.TCBArgs
 		dm   *bundle.DM
 		nam  string
-		owt  cmn.OWT
+		// function: sync
+		prune prune
+		// copying parallelism
+		numwp struct {
+			workCh  chan core.LIF
+			stopCh  *cos.StopCh
+			workers []tcbworker
+			wg      sync.WaitGroup
+		}
+		// function: coordinate finish, abort, progress
+		sntl sentinel
+		// mountpath joggers
+		xact.BckJog
+		// details
+		chanFull atomic.Int64
+		owt      cmn.OWT
 	}
 )
 
@@ -331,6 +338,10 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	r.sntl.cleanup()
 	r.Finish()
+
+	if a := r.chanFull.Load(); a > 0 {
+		nlog.Warningln(r.Name(), "work channel full (final)", a)
+	}
 }
 
 func (r *XactTCB) qival() time.Duration {
@@ -359,7 +370,13 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		return err
 	}
 
+	if l, c := len(r.numwp.workCh), cap(r.numwp.workCh); l > c/2 {
+		if a := r.chanFull.Inc(); a >= 3 && a <= 5 {
+			nlog.Warningln(r.Name(), "work channel full", a)
+		}
+	}
 	r.numwp.workCh <- lom.LIF()
+
 	return nil
 }
 

@@ -68,6 +68,8 @@ type (
 		msg    *apc.ListRange
 		bck    *meta.Bck
 		pt     *cos.ParsedTemplate
+		prefix string // as in bucket/prefix
+		buf    []byte // when (prealloc && no-workers)
 		// nwp: num-workers parallelism
 		// (these are _not_ joggers)
 		nwp struct {
@@ -75,8 +77,6 @@ type (
 			workers []*lrworker
 			wg      sync.WaitGroup
 		}
-		prefix string       // as in bucket/prefix
-		buf    []byte       // when (prealloc && no-workers)
 		numvis atomic.Int64 // counter: num visited objects
 		lrp    int          // enum { lrpList, ... }
 	}
