@@ -16,6 +16,7 @@ linters:
     - dupword
     - durationcheck
     # errcheck
+    # errorlint   ## TODO (wrapped errors; non-wrapping)
     - fatcontext
     - gochecksumtype
     - gocritic

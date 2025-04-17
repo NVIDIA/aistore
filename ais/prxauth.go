@@ -66,7 +66,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 		a.version = newRevoked.Version
 	default:
 		nlog.Errorf("Current token list v%d is greater than received v%d", a.version, newRevoked.Version)
-		return
+		return nil
 	}
 
 	// Add new revoked tokens and remove them from the valid token list.
@@ -95,7 +95,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	if len(allRevoked.Tokens) == 0 {
 		allRevoked = nil
 	}
-	return
+	return allRevoked
 }
 
 func (a *authManager) revokedTokenList() (allRevoked *tokenList) {

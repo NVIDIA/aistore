@@ -19,7 +19,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
@@ -36,7 +35,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -123,48 +121,49 @@ func (p *proxy) init(config *cmn.Config) {
 	p.metasyncer = m
 }
 
-func initPID(config *cmn.Config) (pid string) {
+func initPID(config *cmn.Config) string {
 	// 1. ID from env
-	if pid = envDaemonID(apc.Proxy); pid != "" {
+	if pid := envDaemonID(apc.Proxy); pid != "" {
 		if err := cos.ValidateDaemonID(pid); err != nil {
 			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
 		}
-		nlog.Infof("Initialized %s from env", meta.Pname(pid))
-		return
+		nlog.Infoln("Initialized", meta.Pname(pid), "from env")
+		return pid
 	}
 
 	// 2. ID from Kubernetes Node name.
 	if k8s.IsK8s() {
-		pid = cos.HashK8sProxyID(k8s.NodeName)
-		nlog.Infof("Initialized %s from K8s node name %q", meta.Pname(pid), k8s.NodeName)
+		pid := cos.HashK8sProxyID(k8s.NodeName)
+		nlog.Infoln("Initialized", meta.Pname(pid), "from K8s node nam", k8s.NodeName)
 		return pid
 	}
 
 	// 3. Read ID from persistent file.
-	if pid = readProxyID(config); pid != "" {
+	if pid := readProxyID(config); pid != "" {
 		nlog.Infof("Initialized %s from file %q", meta.Pname(pid), fname.ProxyID)
-		return
+		return pid
 	}
 
 	// 4. initial deployment
-	pid = genDaemonID(apc.Proxy, config)
+	pid := genDaemonID(apc.Proxy, config)
 	err := cos.ValidateDaemonID(pid)
 	debug.AssertNoErr(err)
 
 	// store ID on disk
-	err = os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR)
-	debug.AssertNoErr(err)
-	nlog.Infof("Initialized %s with randomly generated ID", meta.Pname(pid))
-	return
+	if err := os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR); err != nil {
+		cos.ExitLog("failed to write PID:", err, "[", meta.Pname(pid), "]")
+	}
+	nlog.Infoln("Initialized", meta.Pname(pid), "from randomly generated ID")
+	return pid
 }
 
-func readProxyID(config *cmn.Config) (id string) {
+func readProxyID(config *cmn.Config) (pid string) {
 	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
-		id = string(b)
+		pid = string(b)
 	} else if !os.IsNotExist(err) {
 		nlog.Errorln(err)
 	}
-	return
+	return pid
 }
 
 func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebalance */) error {
@@ -1658,195 +1657,6 @@ func crerrStatus(err error) (ecode int) {
 	return
 }
 
-// one page => msgpack rsp
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg) {
-	// LsVerChanged a.k.a. '--check-versions' limitations
-	if lsmsg.IsFlagSet(apc.LsDiff) {
-		if err := _checkVerChanged(bck, lsmsg); err != nil {
-			p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-			p.writeErr(w, r, err)
-			return
-		}
-	}
-
-	// default props & flags => user-provided message
-	switch lsmsg.Props {
-	case "":
-		if lsmsg.IsFlagSet(apc.LsCached) {
-			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
-		} else {
-			lsmsg.AddProps(apc.GetPropsMinimal...)
-			lsmsg.SetFlag(apc.LsNameSize)
-		}
-	case apc.GetPropsName:
-		lsmsg.SetFlag(apc.LsNameOnly)
-	case apc.GetPropsNameSize:
-		lsmsg.SetFlag(apc.LsNameSize)
-	}
-	if bck.IsHT() || lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsCached)
-	}
-
-	// do page
-	beg := mono.NanoTime()
-	lst, err := p.lsPage(bck, amsg, lsmsg, r.Header, p.owner.smap.get())
-	if err != nil {
-		p.statsT.IncBck(stats.ErrListCount, bck.Bucket())
-		p.writeErr(w, r, err)
-		return
-	}
-
-	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
-	p.statsT.IncWith(stats.ListCount, vlabs)
-	p.statsT.AddWith(
-		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg), VarLabs: vlabs},
-	)
-
-	var ok bool
-	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		ok = p.writeMsgPack(w, lst, lsotag)
-	} else {
-		ok = p.writeJS(w, r, lst, lsotag)
-	}
-	if !ok && cmn.Rom.FastV(4, cos.SmoduleAIS) {
-		nlog.Errorln("failed to transmit list-objects page (TCP RST?)")
-	}
-
-	// GC
-	clear(lst.Entries)
-	lst.Entries = lst.Entries[:0]
-	lst.Entries = nil
-}
-
-func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
-	const a = "cannot perform remote versions check"
-	if !bck.HasVersioningMD() {
-		return errors.New(a + ": bucket " + bck.Cname("") + " does not provide (remote) versioning info")
-	}
-	if lsmsg.IsFlagSet(apc.LsNameOnly) || lsmsg.IsFlagSet(apc.LsNameSize) {
-		return errors.New(a + ": flag 'LsVerChanged' is incompatible with 'LsNameOnly', 'LsNameSize'")
-	}
-	if !lsmsg.WantProp(apc.GetPropsCustom) {
-		return fmt.Errorf(a+" without listing %q (object property)", apc.GetPropsCustom)
-	}
-	return nil
-}
-
-// one page; common code (native, s3 api)
-func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX) (*cmn.LsoRes, error) {
-	var (
-		nl             nl.Listener
-		err            error
-		tsi            *meta.Snode
-		lst            *cmn.LsoRes
-		newls          bool
-		listRemote     bool
-		wantOnlyRemote bool
-	)
-	if lsmsg.UUID == "" {
-		lsmsg.UUID = cos.GenUUID()
-		newls = true
-	}
-	tsi, listRemote, wantOnlyRemote, err = p._lsofc(bck, lsmsg, smap)
-	if err != nil {
-		return nil, err
-	}
-	if newls {
-		if wantOnlyRemote {
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, meta.NodeMap{tsi.ID(): tsi}, bck.Bucket())
-		} else {
-			// bcast
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
-		}
-		// NOTE #2: TODO: currently, always primary - hrw redirect vs scenarios***
-		nl.SetOwner(smap.Primary.ID())
-		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
-	}
-
-	if listRemote {
-		if lsmsg.StartAfter != "" {
-			// TODO: remote AIS first, then Cloud
-			return nil, fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
-				lsotag, lsmsg.StartAfter, bck)
-		}
-		// verbose log
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
-			var s string
-			if lsmsg.ContinuationToken != "" {
-				s = " cont=" + lsmsg.ContinuationToken
-			}
-			if lsmsg.SID != "" {
-				s += " via " + tsi.StringEx()
-			}
-			nlog.Infoln(amsg.Action, "[", lsmsg.UUID, "]", bck.Cname(""), s)
-		}
-
-		config := cmn.GCO.Get()
-		lst, err = p.lsObjsR(bck, lsmsg, hdr, smap, tsi, config, wantOnlyRemote)
-
-		// TODO: `status == http.StatusGone`: at this point we know that this
-		// remote bucket exists and is offline. We should somehow try to list
-		// cached objects. This isn't easy as we basically need to start a new
-		// xaction and return a new `UUID`.
-	} else {
-		lst, err = p.lsObjsA(bck, lsmsg)
-	}
-
-	return lst, err
-}
-
-// list-objects flow control helper
-func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta.Snode, listRemote, wantOnlyRemote bool, err error) {
-	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsCached)
-	if !listRemote {
-		if lsmsg.IsFlagSet(apc.LsNotCached) {
-			err = fmt.Errorf("bucket %s is not remote - cannot list 'not cached' objects (by definition, all respective objects are in-cluster)",
-				bck.Cname(""))
-		}
-		return
-	}
-	if bck.Props.BID == 0 {
-		// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
-		// (lsmsg flag below)
-		debug.Assert(bck.IsRemote())
-		debug.Assert(lsmsg.IsFlagSet(apc.LsDontAddRemote))
-		wantOnlyRemote = true
-		if !lsmsg.WantOnlyRemoteProps() {
-			err = fmt.Errorf("cannot list remote and not in-cluster bucket %s for not-only-remote object properties: %q",
-				bck.Cname(""), lsmsg.Props)
-			return
-		}
-	} else {
-		// default
-		wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
-	}
-
-	// designate one target to carry-out backend.list-objects
-	if lsmsg.SID != "" {
-		tsi = smap.GetTarget(lsmsg.SID)
-		if tsi == nil || tsi.InMaintOrDecomm() {
-			err = &errNodeNotFound{p.si, smap, lsotag + " failure:", lsmsg.SID}
-			nlog.Errorln(err)
-			if smap.CountActiveTs() == 1 {
-				// (walk an extra mile)
-				orig := err
-				tsi, err = smap.HrwTargetTask(lsmsg.UUID)
-				if err == nil {
-					nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
-					lsmsg.SID = tsi.ID()
-				}
-			}
-		}
-		return
-	}
-	// if listing using bucket inventory (`apc.HdrInventory`) is requested
-	// target selection can change - see lsObjsR below
-	if tsi, err = smap.HrwTargetTask(lsmsg.UUID); err == nil {
-		lsmsg.SID = tsi.ID()
-	}
-	return
-}
-
 // POST { action } /v1/objects/bucket-name[/object-name]
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := p.readActionMsg(w, r)
@@ -2339,145 +2149,6 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 		RawQuery: q.Encode(),
 	}
 	return u.String()
-}
-
-// lsObjsA reads object list from all targets, combines, sorts and returns
-// the final list. Excess of object entries from each target is remembered in the
-// buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRes, err error) {
-	var (
-		actMsgExt *actMsgExt
-		args      *bcastArgs
-		results   sliceResults
-		smap      = p.owner.smap.get()
-	)
-	if lsmsg.PageSize == 0 {
-		lsmsg.PageSize = apc.MaxPageSizeAIS
-	}
-
-	actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
-	args = allocBcArgs()
-	args.req = cmn.HreqArgs{
-		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Query:  bck.NewQuery(),
-		Body:   cos.MustMarshal(actMsgExt),
-	}
-	args.timeout = apc.LongTimeout
-	args.smap = smap
-	args.cresv = cresmGeneric[cmn.LsoRes]{}
-
-	// Combine the results.
-	results = p.bcastGroup(args)
-	freeBcArgs(args)
-	lists := make([]*cmn.LsoRes, 0, len(results))
-	for _, res := range results {
-		if res.err != nil {
-			if res.details == "" || res.details == dfltDetail {
-				res.details = xact.Cname(apc.ActList, lsmsg.UUID)
-			}
-			err = res.toErr()
-			freeBcastRes(results)
-			return nil, err
-		}
-		lst := res.v.(*cmn.LsoRes)
-		if len(lst.Entries) > 0 {
-			lists = append(lists, lst)
-		}
-	}
-	freeBcastRes(results)
-
-	page := concatLso(lists, lsmsg)
-	finLsoA(page, lsmsg)
-	return page, nil
-}
-
-func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, hdr http.Header, smap *smapX, tsi *meta.Snode, config *cmn.Config,
-	wantOnlyRemote bool) (*cmn.LsoRes, error) {
-	var (
-		results   sliceResults
-		actMsgExt = p.newAmsgActVal(apc.ActList, &lsmsg)
-		args      = allocBcArgs()
-		timeout   = config.Client.ListObjTimeout.D()
-	)
-	if cos.IsParseBool(hdr.Get(apc.HdrInventory)) {
-		// TODO: extend to other Clouds or, more precisely, other list-objects supporting backends
-		if !bck.IsRemoteS3() {
-			return nil, cmn.NewErrUnsupp("list (via bucket inventory) non-S3 bucket", bck.Cname(""))
-		}
-		if lsmsg.ContinuationToken == "" /*first page*/ {
-			// override _lsofc selection (see above)
-			var (
-				err        error
-				_, objName = s3.InvPrefObjname(bck.Bucket(), hdr.Get(apc.HdrInvName), hdr.Get(apc.HdrInvID))
-			)
-			tsi, err = smap.HrwName2T(bck.MakeUname(objName))
-			if err != nil {
-				return nil, err
-			}
-			lsmsg.SID = tsi.ID()
-
-			timeout = config.Client.TimeoutLong.D()
-		}
-	}
-	args.req = cmn.HreqArgs{
-		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Header: hdr,
-		Query:  bck.NewQuery(),
-		Body:   cos.MustMarshal(actMsgExt),
-	}
-	if wantOnlyRemote {
-		cargs := allocCargs()
-		{
-			cargs.si = tsi
-			cargs.req = args.req
-			cargs.timeout = timeout
-			cargs.cresv = cresmGeneric[cmn.LsoRes]{}
-		}
-		// duplicate via query to have target ignoring an (early) failure to initialize bucket
-		if lsmsg.IsFlagSet(apc.LsDontHeadRemote) {
-			cargs.req.Query.Set(apc.QparamDontHeadRemote, "true")
-		}
-		if lsmsg.IsFlagSet(apc.LsDontAddRemote) {
-			cargs.req.Query.Set(apc.QparamDontAddRemote, "true")
-		}
-		res := p.call(cargs, smap)
-		freeCargs(cargs)
-		results = make(sliceResults, 1)
-		results[0] = res
-	} else {
-		args.timeout = timeout
-		args.smap = smap
-		args.cresv = cresmGeneric[cmn.LsoRes]{}
-		results = p.bcastGroup(args)
-	}
-
-	freeBcArgs(args)
-
-	var (
-		lists     = make([]*cmn.LsoRes, 0, len(results))
-		nextToken string
-	)
-	for _, res := range results {
-		if res.err != nil {
-			if res.details == "" || res.details == dfltDetail {
-				res.details = xact.Cname(apc.ActList, lsmsg.UUID)
-			}
-			err := res.toErr()
-			freeBcastRes(results)
-			return nil, err
-		}
-		lst := res.v.(*cmn.LsoRes)
-		debug.Assert(nextToken == "" || nextToken == lst.ContinuationToken)
-		nextToken = lst.ContinuationToken
-		lists = append(lists, lst)
-	}
-	freeBcastRes(results)
-
-	page := concatLso(lists, lsmsg)
-	page.ContinuationToken = nextToken
-	return page, nil
 }
 
 // http-redirect(with-json-message)
@@ -3178,13 +2849,12 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	nlog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 
-func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) (err error) {
+func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) error {
 	rmd := p.owner.rmd.get()
 	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 
 	if msg.Action == apc.ActPrimaryForce {
-		err = p.owner.rmd.synch(newRMD, false)
-		return err
+		return p.owner.rmd.synch(newRMD, false)
 	}
 
 	p.owner.rmd.Lock()
@@ -3192,14 +2862,18 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) (err er
 	if newRMD.version() <= rmd.version() {
 		p.owner.rmd.Unlock()
 		if newRMD.version() < rmd.version() {
-			err = newErrDowngrade(p.si, rmd.String(), newRMD.String())
+			return newErrDowngrade(p.si, rmd.String(), newRMD.String())
 		}
-		return
+		return nil
 	}
 	p.owner.rmd.put(newRMD)
-	err = p.owner.rmd.persist(newRMD)
-	debug.AssertNoErr(err)
+	err := p.owner.rmd.persist(newRMD)
 	p.owner.rmd.Unlock()
+
+	if err != nil {
+		nlog.Errorln("FATAL:", err)
+		debug.AssertNoErr(err)
+	}
 
 	// Register `nl` for rebalance/resilver
 	smap := p.owner.smap.get()
@@ -3216,7 +2890,8 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) (err er
 			debug.AssertNoErr(err)
 		}
 	}
-	return
+
+	return nil
 }
 
 func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags) {
@@ -3284,35 +2959,40 @@ func (p *proxy) _getSI(osi *meta.Snode) (si *meta.Snode, err error) {
 	return
 }
 
-func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
+func (p *proxy) headRemoteBck(bck *cmn.Bck, query url.Values) (http.Header, int, error) {
 	var (
-		tsi  *meta.Snode
 		path = apc.URLPathBuckets.Join(bck.Name)
 		smap = p.owner.smap.get()
 	)
-	if tsi, err = smap.GetRandTarget(); err != nil {
-		return
+	tsi, err := smap.GetRandTarget()
+	if err != nil {
+		return nil, 0, err
 	}
 	if bck.IsBuiltTagged() {
 		config := cmn.GCO.Get()
 		if config.Backend.Get(bck.Provider) == nil {
-			err = &cmn.ErrMissingBackend{Provider: bck.Provider}
-			statusCode = http.StatusNotFound
-			err = cmn.NewErrFailedTo(p, "lookup bucket", bck, err, statusCode)
-			return
+			err := &cmn.ErrMissingBackend{Provider: bck.Provider}
+			ecode := http.StatusNotFound
+			return nil, ecode, cmn.NewErrFailedTo(p, "lookup bucket", bck, err, ecode)
 		}
 	}
-	q = bck.AddToQuery(q)
-	cargs := allocCargs()
+
+	// call
+	var (
+		hdr   http.Header
+		q     = bck.AddToQuery(query)
+		cargs = allocCargs()
+	)
 	{
 		cargs.si = tsi
 		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Path: path, Query: q}
 		cargs.timeout = apc.DefaultTimeout
 	}
 
-	// call
 	res := p.call(cargs, smap)
-	switch res.status {
+	ecode := res.status
+
+	switch ecode {
 	case http.StatusNotFound:
 		if err = res.err; err == nil {
 			err = cmn.NewErrRemoteBckNotFound(bck)
@@ -3321,13 +3001,12 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 		err = cmn.NewErrRemoteBckOffline(bck)
 	default:
 		err = res.err
-		header = res.header
+		hdr = res.header
 	}
 
-	statusCode = res.status
 	freeCargs(cargs)
 	freeCR(res)
-	return
+	return hdr, ecode, err
 }
 
 ////////////////

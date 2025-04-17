@@ -78,6 +78,7 @@ func ToSizeIEC(b int64, digits int) string {
 
 // when `units` arg is empty conversion is defined by the suffix
 func ParseSize(size, units string) (int64, error) {
+	const tag = "ParseSize"
 	if size == "" {
 		return 0, nil
 	}
@@ -86,7 +87,7 @@ func ParseSize(size, units string) (int64, error) {
 		switch units {
 		case "", UnitsIEC, UnitsSI, UnitsRaw:
 		default:
-			return 0, fmt.Errorf("ParseSize %q: invalid units %q (expecting %s, %s, or %s)", size, units,
+			return 0, fmt.Errorf("%s %q: invalid units %q (expecting %s, %s, or %s)", tag, size, units,
 				UnitsRaw, UnitsSI, UnitsIEC)
 		}
 	}
@@ -99,13 +100,13 @@ func ParseSize(size, units string) (int64, error) {
 	if strings.IndexByte(suffix, 'I') > 0 { // IEC
 		u = UnitsIEC
 		if units != "" && units != UnitsIEC {
-			return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)
+			return 0, fmt.Errorf("%s %q error: %q vs %q units", tag, size, u, units)
 		}
 	} else if suffix != "" && suffix != "B" { // SI
 		u = UnitsSI
 		if units != "" {
 			if units == UnitsRaw {
-				return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)
+				return 0, fmt.Errorf("%s %q error: %q vs %q units", tag, size, u, units)
 			}
 			// NOTE: the case when units (arg) take precedence over the suffix
 			u = units
@@ -138,19 +139,19 @@ func _suffix(s string) string {
 	return ""
 }
 
-func _convert(s, units string, mult, multIEC int64) (val int64, err error) {
+func _convert(s, units string, mult, multIEC int64) (int64, error) {
 	if strings.IndexByte(s, '.') >= 0 {
-		var f float64
-		f, err = strconv.ParseFloat(s, 64)
+		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return
+			return 0, err
 		}
 		if units == UnitsIEC {
-			return int64(f * float64(multIEC)), err
+			return int64(f * float64(multIEC)), nil
 		}
-		return int64(f * float64(mult)), err
+		return int64(f * float64(mult)), nil
 	}
-	val, err = strconv.ParseInt(s, 10, 64)
+
+	val, err := strconv.ParseInt(s, 10, 64)
 	if units == UnitsIEC {
 		return val * multIEC, err
 	}
