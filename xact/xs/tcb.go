@@ -299,13 +299,19 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 	nlog.Infoln(core.T.String(), "run:", r.Name())
 
-	err := r.BckJog.Wait()
-	if err == nil {
-		err = r.AbortErr()
+	errJog := r.BckJog.Wait()
+	if errJog != nil && !r.IsAborted() {
+		nlog.Warningln(r.Name(), errJog, "- benign?")
+	}
+
+	if r.numwp.workers != nil {
+		// at this point, we are done with all do() calls on the workers
+		close(r.numwp.workCh)
+		r.numwp.wg.Wait()
 	}
 
 	if r.dm != nil {
-		r.sntl.bcast("", r.dm, err) // broadcast: done | abort
+		r.sntl.bcast("", r.dm, r.AbortErr()) // broadcast: done | abort
 		if !r.IsAborted() {
 			r.sntl.initLast(mono.NanoTime())
 			qui := r.Base.Quiesce(r.qival(), r.qcb) // when done: wait for others
@@ -316,17 +322,11 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 			}
 		}
 		// close
-		r.dm.Close(err)
+		r.dm.Close(r.AbortErr())
 		r.dm.UnregRecv()
 	}
 	if r.args.Msg.Sync {
 		r.prune.wait()
-	}
-
-	if r.numwp.workers != nil {
-		r.numwp.stopCh.Close()
-		close(r.numwp.workCh)
-		r.numwp.wg.Wait()
 	}
 
 	r.sntl.cleanup()
@@ -340,6 +340,7 @@ func (r *XactTCB) qival() time.Duration {
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	nwait := r.sntl.pend.n.Load()
 	if nwait > 0 {
+		// have "pending" targets
 		progressTimeout := max(r.Config.Timeout.SendFile.D(), time.Minute)
 		return r.sntl.qcb(r.dm, tot, r.qival(), progressTimeout, r.ErrCnt())
 	}

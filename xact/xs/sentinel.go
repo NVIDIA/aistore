@@ -144,6 +144,8 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	o.Hdr.Opcode = opRequest
 
 	if err := dm.Bcast(o, nil); err != nil {
+		// (is it too harsh?)
+		nlog.Warningln(s.r.Name(), err)
 		return s._qabort(err)
 	}
 	return core.QuiActive
