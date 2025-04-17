@@ -2276,7 +2276,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	}
 }
 
-func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIntra string, netPubs ...string) (redirect string) {
+func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIntra string, netPubs ...string) string {
 	var (
 		nodeURL string
 		netPub  = cmn.NetPublic
@@ -2301,17 +2301,44 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 			nodeURL = si.URL(netPub)
 		}
 	}
-	redirect = nodeURL + r.URL.Path + "?"
-	if r.URL.RawQuery != "" {
-		redirect += r.URL.RawQuery + "&"
+	// fast path
+	if !strings.ContainsAny(r.URL.Path, "?#") {
+		var (
+			q = url.Values{
+				apc.QparamProxyID:  []string{p.SID()},
+				apc.QparamUnixTime: []string{cos.UnixNano2S(ts.UnixNano())},
+			}
+		)
+		debug.Assertf(!strings.Contains(r.URL.Path, "%"), "path %q contains %%", r.URL.Path)
+		if r.URL.RawQuery != "" {
+			return nodeURL + r.URL.Path + "?" + r.URL.RawQuery + "&" + q.Encode()
+		}
+		return nodeURL + r.URL.Path + "?" + q.Encode()
 	}
 
-	query := url.Values{
-		apc.QparamProxyID:  []string{p.SID()},
-		apc.QparamUnixTime: []string{cos.UnixNano2S(ts.UnixNano())},
+	// slow path
+	// it is conceivable that at some future point we may need to url.Parse nodeURL
+	// and then use both scheme and host from the parsed result; not now though (NOTE)
+	var (
+		scheme = "http"
+		host   string
+	)
+	if strings.HasPrefix(nodeURL, "https://") {
+		scheme = "https"
+		host = strings.TrimPrefix(nodeURL, "https://")
+	} else {
+		host = strings.TrimPrefix(nodeURL, "http://")
 	}
-	redirect += query.Encode()
-	return
+	q := r.URL.Query()
+	q.Set(apc.QparamProxyID, p.SID())
+	q.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
+	u := url.URL{
+		Scheme:   scheme,
+		Host:     host,
+		Path:     r.URL.Path,
+		RawQuery: q.Encode(),
+	}
+	return u.String()
 }
 
 // lsObjsA reads object list from all targets, combines, sorts and returns
