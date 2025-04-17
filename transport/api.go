@@ -36,7 +36,7 @@ const (
 func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 const (
-	SizeUnknown = -1 // obj size unknown (not set)
+	SizeUnknown = cos.ContentLengthUnknown // -1: obj size unknown (not set)
 
 	dfltSizePDU = memsys.DefaultBufSize
 	maxSizePDU  = memsys.MaxPageSlabSize
