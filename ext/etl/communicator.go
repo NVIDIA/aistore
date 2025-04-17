@@ -85,6 +85,18 @@ type (
 	redirectComm struct {
 		baseComm
 	}
+
+	// The http standard library automatically closes the request body on error,
+	// which also releases the associated LOM lock (see `deferROC.Close()` in `core/ldp.go`).
+	// The getBody function restores the body reader with the LOM properly locked again for retries.
+	getBodyFunc func() core.ReadResp
+	retryer     struct {
+		client  *http.Client
+		reqArgs *cmn.HreqArgs
+		ctx     context.Context
+		resp    *http.Response
+		getBody getBodyFunc
+	}
 )
 
 // interface guard
@@ -164,9 +176,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 		return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
 	}
 	switch ecode {
-	case http.StatusOK:
-	case http.StatusAccepted:
-	case 0:
+	case http.StatusOK, http.StatusAccepted, 0:
 		return core.ReadResp{R: r, OAH: oah, Ecode: http.StatusOK}
 	case http.StatusNoContent:
 		// already delivered to destination target, no additional action needed
@@ -180,48 +190,35 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: http.StatusNoContent}
 }
 
-func doWithTimeout(reqArgs *cmn.HreqArgs, srcSize int64, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
-	var (
-		req  *http.Request
-		resp *http.Response
-	)
+func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
 	if timeout == 0 {
 		timeout = DefaultReqTimeout
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	req, err = http.NewRequestWithContext(ctx, reqArgs.Method, reqArgs.URL(), reqArgs.BodyR)
-	if err != nil {
-		cancel()
-		return nil, 0, err
-	}
 
-	req.ContentLength = srcSize
-	req.Header = reqArgs.Header
-	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+	rtyr := &retryer{client: core.T.DataClient(), reqArgs: reqArgs, ctx: ctx, getBody: getBody}
+	ecode, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+		Call:      rtyr.call,
+		SoftErr:   10,
+		HardErr:   2,
+		Verbosity: cmn.RetryLogVerbose,
+		Sleep:     max(cmn.Rom.MaxKeepalive(), time.Second*5),
+	})
 	if err != nil {
 		cancel()
-		if resp != nil {
-			ecode = resp.StatusCode
-		}
 		return nil, ecode, err
 	}
 
-	// if the transformed object's size is unknown, fall back to the original source size.
-	dstSize := resp.ContentLength
-	if dstSize == cos.ContentLengthUnknown {
-		dstSize = srcSize
-	}
-
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
-		R:    resp.Body,
-		Size: dstSize,
+		R:    rtyr.resp.Body,
+		Size: rtyr.resp.ContentLength,
 		DeferCb: func() {
 			cancel()
 			st := core.T.StatsUpdater()
 			st.Inc(stats.ETLOfflineCount)
 			st.Add(stats.ETLOfflineLatencyTotal, int64(mono.Since(started)))
 		},
-	}), resp.StatusCode, nil
+	}), rtyr.resp.StatusCode, nil
 }
 
 //////////////
@@ -235,10 +232,10 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 	var (
 		path    string
 		srcSize int64
-		body    io.ReadCloser
-		oah     cos.OAH = lom
+		getBody getBodyFunc
 
 		started = mono.NanoTime()
+		oah     = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
 		query   = make(url.Values, 2)
 	)
 
@@ -249,20 +246,14 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
 		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
 		path = lom.Bck().Name + "/" + lom.ObjName
-		srcResp := lom.GetROC(latestVer, sync)
-		if srcResp.Err != nil {
-			return srcResp
-		}
-
-		body = srcResp.R
-		srcSize = srcResp.OAH.Lsize()
-		oah = srcResp.OAH
+		getBody = func() core.ReadResp { return lom.GetROC(latestVer, sync) }
+		oah.Size = srcSize
 	case ArgTypeFQN:
 		if ecode, err := lomLoad(lom, pc.boot.xctn.Kind()); err != nil {
 			return core.ReadResp{Err: err, Ecode: ecode}
 		}
 
-		body = http.NoBody
+		// body = http.NoBody
 		path = url.PathEscape(lom.FQN)
 	default:
 		e := pc.boot.msg.errInvalidArg()
@@ -282,7 +273,6 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		Method: http.MethodPut,
 		Base:   pc.boot.uri,
 		Path:   path,
-		BodyR:  body,
 		Header: http.Header{
 			cos.HdrContentLength: []string{strconv.Itoa(int(srcSize))},
 			apc.HdrNodeURL:       []string{daddr},
@@ -290,7 +280,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		Query: query,
 	}
 
-	r, ecode, err := doWithTimeout(reqArgs, srcSize, timeout, started)
+	r, ecode, err := doWithTimeout(reqArgs, getBody, timeout, started)
+	oah.Size = r.Size()
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
@@ -387,14 +378,11 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr
 		Base:   rc.boot.uri,
 		Path:   path,
 		BodyR:  http.NoBody,
-		Header: http.Header{
-			cos.HdrContentLength: []string{strconv.Itoa(int(clone.Lsize()))},
-			apc.HdrNodeURL:       []string{daddr},
-		},
-		Query: query,
+		Header: http.Header{apc.HdrNodeURL: []string{daddr}},
+		Query:  query,
 	}
 
-	r, ecode, err := doWithTimeout(reqArgs, clone.Lsize(), rc.boot.msg.Timeout.D(), started)
+	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.Timeout.D(), started)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
@@ -428,4 +416,37 @@ func lomLoad(lom *core.LOM, xKind string) (ecode int, err error) {
 		}
 	}
 	return http.StatusAccepted, err
+}
+
+/////////////
+// retryer //
+/////////////
+
+func (rtyr *retryer) call() (status int, err error) {
+	debug.Assert(rtyr.reqArgs != nil && rtyr.client != nil)
+	var (
+		body io.ReadCloser = http.NoBody
+		size int64
+	)
+
+	// If a fresh body is needed (e.g., for retries), fetch it via getBody
+	if rtyr.getBody != nil {
+		src := rtyr.getBody()
+		body = src.R
+		size = src.OAH.Lsize()
+	}
+
+	req, err := http.NewRequestWithContext(rtyr.ctx, rtyr.reqArgs.Method, rtyr.reqArgs.URL(), body)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header = rtyr.reqArgs.Header
+	req.ContentLength = size
+
+	rtyr.resp, err = rtyr.client.Do(req) //nolint:bodyclose // closed by a caller
+	if rtyr.resp != nil {
+		status = rtyr.resp.StatusCode
+	}
+	return status, err
 }

@@ -1661,12 +1661,12 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM) (res xs.Co
 	}
 
 	ecode, err := poi.putObject()
+	res.Lsize = poi.lom.Lsize()
 	freePOI(poi)
 	if err != nil {
 		return xs.CoiRes{Ecode: ecode, Err: err}
 	}
 
-	res.Lsize = resp.OAH.Lsize()
 	return res
 }
 

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 )
 
 type (
@@ -121,7 +123,11 @@ func ValidateSecret(etlName, secret string) error {
 	mgr.mtx.RLock()
 	defer mgr.mtx.RUnlock()
 
-	if mgr.m[etlName].comm.GetSecret() == secret {
+	en, ok := mgr.m[etlName]
+	if !ok {
+		return cos.NewErrNotFound(core.T, "etl not found"+etlName)
+	}
+	if en.comm.GetSecret() == secret {
 		return nil
 	}
 
