@@ -76,7 +76,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 
 	// default num-workers hardcoded
 	// (currently, always num mountpaths)
-	if err := r.lrit.init(r, msg, bck, nwpDflt); err != nil {
+	if err := r.lrit.init(r, msg, bck, nwpDflt, 0 /*burst*/); err != nil {
 		return nil, err
 	}
 

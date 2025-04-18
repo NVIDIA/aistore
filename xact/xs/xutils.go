@@ -66,10 +66,11 @@ func (rate *tcrate) acquire() {
 //
 
 const (
-	nwpBurst = 4  // burst multiplier (channel size)
-	nwpNone  = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
-	nwpMin   = 2  // throttled
-	nwpDflt  = 0  // (number of mountpaths)
+	nwpBurst = 32 // work channel burst multiplier (channel size = burst * num-workers)
+
+	nwpNone = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
+	nwpMin  = 2  // throttled
+	nwpDflt = 0  // (number of mountpaths)
 )
 
 // strict rules
@@ -82,8 +83,8 @@ func throttleNwp(xname string, n int) (int, error) {
 		return nwpNone, nil
 	}
 
-	// 2. do not exceed num available cores
-	n = min(sys.MaxParallelism(), n)
+	// 2. number of available cores(*)
+	n = min(sys.MaxParallelism()+4, n)
 
 	// 3. factor in memory pressure
 	var (

@@ -31,9 +31,6 @@ const (
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
 	waitUnregMax  = 2 * waitUnregRecv
-
-	// TODO -- FIXME: grow 2x upon chanFull
-	maxNumInParallel = 256
 )
 
 type (
@@ -106,7 +103,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	return "", err
 }
 
-func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, smap *meta.Smap, owt cmn.OWT, sizePDU int32) error {
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, smap *meta.Smap, dmxtra bundle.Extra, owt cmn.OWT) error {
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
@@ -114,8 +111,6 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Co
 		return nil
 	}
 
-	// consider adding config.X.Compression, config.X.SbundleMult (currently, always 1), etc.
-	dmxtra := bundle.Extra{Config: config, Multiplier: 1, SizePDU: sizePDU}
 	p.dm = bundle.NewDM(trname, recv, owt, dmxtra)
 
 	err := p.dm.RegRecv()

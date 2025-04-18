@@ -165,7 +165,7 @@ func (r *XactTCB) _iniNwp(numWorkers int) {
 	for range numWorkers {
 		r.numwp.workers = append(r.numwp.workers, tcbworker{r})
 	}
-	r.numwp.workCh = make(chan core.LIF, numWorkers*nwpBurst)
+	r.numwp.workCh = make(chan core.LIF, max(numWorkers*nwpBurst, r.Config.TCB.Burst))
 	r.numwp.stopCh = cos.NewStopCh()
 	nlog.Infoln(r.Name(), "workers:", numWorkers)
 }
@@ -333,6 +333,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.UnregRecv()
 	}
 	if r.args.Msg.Sync {
+		// TODO -- FIXME: revisit stopCh and related
 		r.prune.wait()
 	}
 

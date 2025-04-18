@@ -105,7 +105,7 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.PrefetchMsg) (r *prefetch, err error) {
 	r = &prefetch{config: cmn.GCO.Get(), msg: msg}
 
-	err = r.lrit.init(r, &msg.ListRange, bck, msg.NumWorkers)
+	err = r.lrit.init(r, &msg.ListRange, bck, msg.NumWorkers, 0 /*burst*/)
 	if err != nil {
 		return nil, err
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -114,18 +115,31 @@ func (p *archFactory) Start() (err error) {
 	if err != nil {
 		return err
 	}
-	//
+
 	// new x-archive
-	//
-	r := &XactArch{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}}
-	r.pending.m = make(map[string]*archwi, maxNumInParallel)
+	var (
+		config = cmn.GCO.Get()
+		burst  = max(256, config.Arch.Burst)
+		r      = &XactArch{streamingX: streamingX{p: &p.streamingF, config: config}}
+	)
+	r.pending.m = make(map[string]*archwi, burst)
+
 	avail := fs.GetAvail()
 	r.joggers.m = make(map[string]*jogger, len(avail))
 	r.smap = core.T.Sowner().Get()
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.kind, "" /*delay ctlmsg until Do()*/, p.Bck /*from*/, xact.IdleDefault)
 
-	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, r.smap, cmn.OwtPut, 0 /*pdu*/); err != nil {
+	// delay ctlmsg until DoMsg()
+	r.DemandBase.Init(p.UUID(), p.kind, "" /*ctlmsg*/, p.Bck /*from*/, xact.IdleDefault)
+
+	dmxtra := bundle.Extra{
+		RecvAck:     nil, // no ACKs
+		Config:      r.config,
+		Compression: r.config.Arch.Compression,
+		Multiplier:  r.config.Arch.SbundleMult,
+		SizePDU:     0,
+	}
+	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.smap, dmxtra, cmn.OwtPut); err != nil {
 		return err
 	}
 
@@ -163,6 +177,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 
 	// bind a new/existing jogger to this archwi based on archlom's mountpath
 	var (
+		burst  = max(256, r.config.Arch.Burst)
 		mpath  = archlom.Mountpath()
 		exists bool
 	)
@@ -171,7 +186,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		r.joggers.m[mpath.Path] = &jogger{
 			r:      r,
 			mpath:  mpath,
-			workCh: make(chan *archtask, maxNumInParallel*2), // TODO -- FIXME: unify
+			workCh: make(chan *archtask, burst),
 		}
 		wi.j = r.joggers.m[mpath.Path]
 		r.joggers.wg.Add(1)
@@ -253,7 +268,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	// lrpWorkersNone since we need a single writer to serialize adding files
 	// into an eventual `archlom`
 	lrit := &lrit{}
-	err := lrit.init(r, &msg.ListRange, r.Bck(), nwpNone)
+	err := lrit.init(r, &msg.ListRange, r.Bck(), nwpNone, r.config.Arch.Burst)
 	if err != nil {
 		r.Abort(err)
 		r.DecPending()

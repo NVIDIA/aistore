@@ -102,7 +102,9 @@ type (
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Auth        AuthConf        `json:"auth"`
 		Cksum       CksumConf       `json:"checksum"`
-		TCB         TCBConf         `json:"tcb"` // transform (offline) or copy src bucket => dst bucket
+		TCB         TCBConf         `json:"tcb"`
+		TCO         TCOConf         `json:"tco"`
+		Arch        ArchConf        `json:"arch"`
 		Tracing     TracingConf     `json:"tracing"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
@@ -655,14 +657,29 @@ type (
 		MinPctFree     *int          `json:"min_pct_free,omitempty"`
 	}
 
-	TCBConf struct {
+	// generic xaction --
+	XactConf struct {
 		Compression string `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
 		SbundleMult int    `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
+		Burst       int    `json:"burst_buffer"`      // xaction channel (buffer) size
 	}
-	TCBConfToSet struct {
+	XactConfToSet struct {
 		Compression *string `json:"compression,omitempty"`
 		SbundleMult *int    `json:"bundle_multiplier,omitempty"`
+		Burst       *int    `json:"burst_buffer,omitempty"`
 	}
+
+	// bucket-to-bucket copy/transform
+	TCBConf      struct{ XactConf }
+	TCBConfToSet struct{ XactConfToSet }
+
+	// multi-object copy/transform
+	TCOConf      struct{ XactConf }
+	TCOConfToSet struct{ XactConfToSet }
+
+	// multi-object archive (multiple objects => shard)
+	ArchConf      struct{ XactConf }
+	ArchConfToSet struct{ XactConfToSet }
 
 	WritePolicyConf struct {
 		Data apc.WritePolicy `json:"data"`
@@ -1779,17 +1796,20 @@ func (c *TransportConf) Validate() (err error) {
 	return nil
 }
 
-/////////////
-// TCBConf //
-/////////////
+//////////////
+// XactConf //
+//////////////
 
-func (c *TCBConf) Validate() error {
-	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid tcb.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
-	}
+func (c *XactConf) Validate() error {
 	if !apc.IsValidCompression(c.Compression) {
-		return fmt.Errorf("invalid tcb.compression: %q (expecting one of: %v)",
+		return fmt.Errorf("invalid compression: %q (expecting one of: %v)",
 			c.Compression, apc.SupportedCompression)
+	}
+	if c.SbundleMult < 0 || c.SbundleMult > 16 {
+		return fmt.Errorf("invalid bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+	}
+	if c.Burst < 0 || c.Burst > 10_000 {
+		return fmt.Errorf("invalid burst_buffer: %v (expected range [0, 10000])", c.Burst)
 	}
 	return nil
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -100,9 +101,16 @@ func (p *tcoFactory) Start() error {
 	p.Args.UUID = PrefixTcoID + uuid
 
 	// new x-tco
-	workCh := make(chan *cmn.TCOMsg, maxNumInParallel)
-	r := &XactTCO{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
-	r.pend.m = make(map[string]*tcowi, maxNumInParallel)
+	var (
+		config = cmn.GCO.Get()
+		burst  = max(256, config.TCO.Burst)
+		r      = &XactTCO{
+			streamingX: streamingX{p: &p.streamingF, config: config},
+			args:       p.args,
+			workCh:     make(chan *cmn.TCOMsg, burst),
+		}
+	)
+	r.pend.m = make(map[string]*tcowi, burst)
 	r.owt = cmn.OwtCopy
 
 	if p.kind == apc.ActETLObjects {
@@ -131,7 +139,14 @@ func (p *tcoFactory) Start() error {
 
 	// TODO: sentinels require DM; no-DM still requires sentinels
 	if useDM := !r.args.DisableDM; useDM && nat > 1 {
-		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, smap, r.owt, sizePDU); err != nil {
+		dmxtra := bundle.Extra{
+			RecvAck:     nil, // no ACKs
+			Config:      r.config,
+			Compression: r.config.TCO.Compression,
+			Multiplier:  r.config.TCO.SbundleMult,
+			SizePDU:     sizePDU,
+		}
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, smap, dmxtra, r.owt); err != nil {
 			return err
 		}
 	}
@@ -231,7 +246,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	wi.pend.n.Store(int64(r.sntl.nat - 1)) // must dec down to zero
 
 	lrit := &lrit{}
-	if err := lrit.init(r, &msg.ListRange, r.Bck(), msg.NumWorkers); err != nil {
+	if err := lrit.init(r, &msg.ListRange, r.Bck(), msg.NumWorkers, r.config.TCO.Burst); err != nil {
 		r.AddErr(err)
 		return !msg.ContinueOnError // stop?
 	}
@@ -248,6 +263,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	}
 	// run
 	if msg.Sync && lrit.lrp != lrpList {
+		// TODO -- FIXME: revisit stopCh and related
 		wg = &sync.WaitGroup{}
 		wg.Add(1)
 		go func(pt *cos.ParsedTemplate, wg *sync.WaitGroup) {
@@ -256,11 +272,11 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		}(lrit.pt.Clone(), wg)
 	}
 	err := lrit.run(wi, smap, true /*prealloc buf*/)
+
+	lrit.wait()
 	if wg != nil {
 		wg.Wait()
 	}
-
-	lrit.wait()
 	if r.IsAborted() {
 		return true // stop
 	}
@@ -437,7 +453,7 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) 
 	var syncit lrit
 	debug.Assert(pruneit.lrp == lrpRange)
 
-	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, nwpDflt) // TODO -- FIXME: stopCh
+	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, nwpDflt, r.config.TCO.Burst)
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)

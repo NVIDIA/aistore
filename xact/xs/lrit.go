@@ -91,7 +91,7 @@ type (
 // lrit //
 //////////
 
-func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers int) error {
+func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers, confBurst int) error {
 	l := len(fs.GetAvail())
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)
@@ -138,18 +138,18 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers i
 		return err
 	}
 
-	r._iniNwp(numWorkers)
+	r._iniNwp(numWorkers, confBurst)
 	return nil
 }
 
-func (r *lrit) _iniNwp(numWorkers int) {
+func (r *lrit) _iniNwp(numWorkers, confBurst int) {
 	r.nwp.workers = make([]*lrworker, 0, numWorkers)
 	for range numWorkers {
 		r.nwp.workers = append(r.nwp.workers, &lrworker{r})
 	}
 
 	// [burst] work channel capacity: up to 4 pending work items per
-	r.nwp.workCh = make(chan lrpair, numWorkers*nwpBurst)
+	r.nwp.workCh = make(chan lrpair, max(numWorkers*nwpBurst, confBurst))
 	nlog.Infoln(r.parent.Name(), "workers:", numWorkers)
 }
 

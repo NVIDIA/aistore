@@ -37,8 +37,11 @@ var (
 	}
 
 	defaultTCB = aiscmn.TCBConf{
-		Compression: aisapc.CompressNever,
-		SbundleMult: 2,
+		XactConf: aiscmn.XactConf{
+			Compression: aisapc.CompressNever,
+			SbundleMult: 2,
+			Burst:       512,
+		},
 	}
 
 	defaultDisk = aiscmn.DiskConf{
