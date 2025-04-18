@@ -36,13 +36,14 @@ var (
 		LZ4BlockMaxSize: cos.SizeIEC(256 * cos.KiB),
 	}
 
-	defaultTCB = aiscmn.TCBConf{
-		XactConf: aiscmn.XactConf{
-			Compression: aisapc.CompressNever,
-			SbundleMult: 2,
-			Burst:       512,
-		},
+	defaultXconf = aiscmn.XactConf{
+		Compression: aisapc.CompressNever,
+		SbundleMult: 2,
+		Burst:       512,
 	}
+	defaultTCB  = aiscmn.TCBConf{XactConf: defaultXconf}
+	defaultTCO  = aiscmn.TCOConf{XactConf: defaultXconf}
+	defaultArch = aiscmn.ArchConf{XactConf: defaultXconf}
 
 	defaultDisk = aiscmn.DiskConf{
 		DiskUtilLowWM:   20,
@@ -177,6 +178,8 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		Client:     defaultClientConf,
 		Transport:  defaultTransport,
 		TCB:        defaultTCB,
+		TCO:        defaultTCO,
+		Arch:       defaultArch,
 		Disk:       defaultDisk,
 		Net:        defaultNet,
 		FSHC:       defaultFSHC,

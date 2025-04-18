@@ -170,6 +170,14 @@ cat > $AIS_CONF_FILE <<EOL
 		"compression":		"never",
 		"bundle_multiplier":	2
 	},
+	"tco": {
+		"compression":		"never",
+		"bundle_multiplier":	2
+	},
+	"arch": {
+		"compression":		"never",
+		"bundle_multiplier":	2
+	},
 	"write_policy": {
 		"data": "${WRITE_POLICY_DATA:-}",
 		"md": "${WRITE_POLICY_MD:-}"
