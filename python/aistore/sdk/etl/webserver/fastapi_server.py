@@ -66,9 +66,29 @@ class FastAPIServer(ETLServer):
                 self.active_connections.append(websocket)
 
                 while True:
-                    data = await websocket.receive_bytes()
-                    self.logger.info("Received message of length: %d", len(data))
+                    delivery_target_url = None
+                    msg = await websocket.receive()
+                    if "text" in msg:
+                        delivery_target_url = msg["text"]
+                        data = await websocket.receive_bytes()
+                    elif "bytes" in msg:
+                        data = msg["bytes"]
+                    else:
+                        self.logger.warning("Received unknown message format: %s", msg)
+                        continue
+
+                    self.logger.debug("Received message of length: %d", len(data))
+
                     transformed = await asyncio.to_thread(self.transform, data, "")
+
+                    if delivery_target_url:
+                        response = await self._direct_put(
+                            delivery_target_url, transformed
+                        )
+                        if response:
+                            await websocket.send_text("direct put success")
+                            continue
+
                     await websocket.send_bytes(transformed)
 
             except WebSocketDisconnect:

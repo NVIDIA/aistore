@@ -473,9 +473,19 @@ func TestETLBucketTransformParallel(t *testing.T) {
 		parallel    = 3
 	)
 
-	for _, commType := range []string{etl.WebSocket, etl.Hpush, etl.Hpull} {
-		t.Run("etl_bucket_transform_parallel__"+commType, func(t *testing.T) {
-			_ = tetl.InitSpec(t, baseParams, transformer, commType)
+	tests := []struct {
+		commType string
+		onlyLong bool
+	}{
+		{commType: etl.Hpush},
+		{commType: etl.Hpull},
+		{commType: etl.WebSocket, onlyLong: true},
+	}
+
+	for _, test := range tests {
+		t.Run("etl_bucket_transform_parallel__"+test.commType, func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
+			_ = tetl.InitSpec(t, baseParams, transformer, test.commType)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
 			wg := &sync.WaitGroup{}
@@ -528,7 +538,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.WebSocket},
+			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true},
 			{transformer: tetl.Echo, comm: etl.Hpull},
 			{transformer: tetl.Echo, comm: etl.Hpush},
 		}

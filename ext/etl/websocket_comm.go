@@ -68,8 +68,9 @@ type (
 	}
 
 	rwpair struct {
-		r io.ReadCloser
-		w *io.PipeWriter
+		r     io.ReadCloser
+		w     *io.PipeWriter
+		daddr string
 	}
 )
 
@@ -154,14 +155,14 @@ func (ws *webSocketComm) Stop() {
 // wsConnCtx //
 ///////////////
 
-func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, _ string) core.ReadResp {
+func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
 	srcResp := lom.GetROC(latestVer, sync)
 	if srcResp.Err != nil {
 		return srcResp
 	}
 	pr, pw := io.Pipe()
 
-	wctx.workCh <- rwpair{srcResp.R, pw}
+	wctx.workCh <- rwpair{srcResp.R, pw, daddr}
 	if l, c := len(wctx.workCh), cap(wctx.workCh); l > c/2 {
 		runtime.Gosched() // poor man's throttle
 		if l == c {
@@ -176,7 +177,7 @@ func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, _ string) 
 		R:      cos.NopOpener(pr),
 		OAH:    srcResp.OAH, // TODO: estimate the post-transformed Lsize for stats
 		Err:    nil,
-		Ecode:  http.StatusOK,
+		Ecode:  http.StatusNoContent, // promise to deliver
 		Remote: srcResp.Remote,
 	}
 }
@@ -195,10 +196,6 @@ func (wctx *wsConnCtx) Finish(errCause error) error {
 }
 
 func (wctx *wsConnCtx) readLoop() error {
-	wctx.conn.SetPingHandler(func(msg string) error {
-		return wctx.conn.WriteMessage(websocket.PongMessage, []byte(msg))
-	})
-
 	buf, slab := core.T.PageMM().Alloc()
 	defer slab.Free(buf)
 
@@ -211,20 +208,23 @@ func (wctx *wsConnCtx) readLoop() error {
 		case <-wctx.etlxctn.ChanAbort():
 			return nil
 		default:
-			_, r, err := wctx.conn.NextReader()
+			ty, r, err := wctx.conn.NextReader()
 			if err != nil {
 				err = fmt.Errorf("error on reading message from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
-				return err
 			}
 			writer := <-wctx.writerCh
 
-			// TODO: do not abort on soft error
+			// direct put success (TextMessage ack from ETL server)
+			if ty == websocket.TextMessage {
+				cos.Close(writer)
+				continue
+			}
+
 			if _, err = cos.CopyBuffer(writer, r, buf); err != nil {
 				cos.Close(writer)
 				err = fmt.Errorf("error on copying message from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
-				return err
 			}
 			cos.Close(writer)
 		}
@@ -244,26 +244,36 @@ func (wctx *wsConnCtx) writeLoop() error {
 		case <-wctx.etlxctn.ChanAbort():
 			return nil
 		case rw := <-wctx.workCh:
+			// Leverages the fact that WebSocket preserves message order and boundaries.
+			// Sends two consecutive WebSocket messages:
+			//   1. A TextMessage containing the direct PUT address
+			//   2. A BinaryMessage containing the object content
+			//
+			// The ETL server is expected to consume them in the same order and treat them as logically linked.
+
+			// 1. send direct put address
+			err := wctx.conn.WriteMessage(websocket.TextMessage, []byte(rw.daddr))
+			if err != nil {
+				err = fmt.Errorf("error on writing direct put address %s: %w", wctx.name, err)
+				wctx.txctn.AddErr(err)
+			}
+
+			// 2. send object content
 			writer, err := wctx.conn.NextWriter(websocket.BinaryMessage)
 			if err != nil {
 				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
-				return err
 			}
-
-			// TODO: do not abort on soft error
 			if _, err := cos.CopyBuffer(writer, rw.r, buf); err != nil {
 				cos.Close(rw.r)
 				cos.Close(writer)
 				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
-				return err
 			}
 			cos.Close(rw.r)
-			// Leverages the fact that WebSocket preserves message order and boundaries.
+
 			// For each object sent to the ETL via `wctx.workCh`, we reserve a corresponding slot in `wctx.writerCh`
 			// for its writer. This guarantees that the correct writer is matched with the response when it arrives.
-
 			wctx.writerCh <- rw.w
 			if l, c := len(wctx.writerCh), cap(wctx.writerCh); l > c/2 {
 				runtime.Gosched() // poor man's throttle

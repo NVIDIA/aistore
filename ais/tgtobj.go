@@ -1526,7 +1526,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))) // use escaped URL to simplify parsing on the ETL side
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, daddr)
 			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
-			if resp.Err != nil || resp.R == nil {
+			if resp.Err != nil || resp.R == nil || resp.Ecode == http.StatusNoContent {
 				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
 			}
 			coi.OAH = resp.OAH

@@ -152,10 +152,10 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         input_content = b"input data"
 
         # Mock the direct delivery response (simulate 200 OK)
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
+        mock_response_success = AsyncMock()
+        mock_response_success.status_code = 200
         self.etl_server.client = AsyncMock()
-        self.etl_server.client.put.return_value = mock_response
+        self.etl_server.client.put.return_value = mock_response_success
 
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
         response = self.client.put(f"/{path}", content=input_content, headers=headers)
@@ -163,6 +163,59 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")  # No content returned
         self.etl_server.client.put.assert_awaited_once()
+
+        # Mock the direct delivery response (simulate 500 FAIL)
+        mock_response_fail = AsyncMock()
+        mock_response_fail.status_code = 500
+        self.etl_server.client = AsyncMock()
+        self.etl_server.client.put.return_value = mock_response_fail
+
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+        response = self.client.put(f"/{path}", content=input_content, headers=headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.content, input_content[::-1]
+        )  # Original content returned
+        self.etl_server.client.put.assert_awaited_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket(self):
+        with self.client.websocket_connect("/ws") as websocket:
+            original_data = b"abcdef"
+            websocket.send_text("")  # No delivery target URL
+            websocket.send_bytes(original_data)
+            result = websocket.receive_bytes()
+            self.assertEqual(result, original_data[::-1])
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_with_direct_put(self):
+        input_data = b"testdata"
+        # Mock the direct delivery response (simulate 200 OK)
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 200
+            mock_client.put.return_value = mock_resp
+
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_text("http://localhost:8080/ais/@/etl_dst/final")
+                websocket.send_bytes(input_data)
+                result = websocket.receive_text()
+                self.assertEqual(result, "direct put success")
+                mock_client.put.assert_awaited_once()
+
+        # Mock the direct delivery response (simulate 500 FAIL)
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 500
+            mock_client.put.return_value = mock_resp
+
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_text("http://localhost:8080/ais/@/etl_dst/final")
+                websocket.send_bytes(input_data)
+                result = websocket.receive_bytes()
+                self.assertEqual(result, input_data[::-1])
+                mock_client.put.assert_awaited_once()
 
 
 class TestFlaskServer(unittest.TestCase):
