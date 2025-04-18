@@ -182,7 +182,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 		return err
 	}
 
-	if err := m.dsorter.init(); err != nil {
+	m.config = cmn.GCO.Get()
+	if err := m.dsorter.init(m.config); err != nil {
 		return err
 	}
 
@@ -190,10 +191,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 		return err
 	}
 
-	// NOTE: Total size of the records metadata can sometimes be large
-	// and so this is why we need such a long timeout.
-	m.config = cmn.GCO.Get()
-
+	// NOTE: total size of the records metadata can sometimes be large, and so this is why such a long timeout
 	cargs := cmn.TransportArgs{
 		DialTimeout: m.config.Client.Timeout.D(),
 		Timeout:     m.config.Client.TimeoutLong.D(),

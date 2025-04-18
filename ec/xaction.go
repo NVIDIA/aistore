@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	requestBufSizeFS     = 70
-	requestBufSizeEncode = 16
+	getxBurstSize   = 128
+	putxBurstSize   = 128
+	encodeBurstSize = 128
 )
 
 type (

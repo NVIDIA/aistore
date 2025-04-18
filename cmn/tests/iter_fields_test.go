@@ -75,6 +75,7 @@ var _ = Describe("IterFields", func() {
 					"ec.data_slices":       0,
 					"ec.objsize_limit":     int64(0),
 					"ec.compression":       "",
+					"ec.burst_buffer":      0,
 					"ec.bundle_multiplier": 0,
 					"ec.disk_only":         false,
 
@@ -147,6 +148,7 @@ var _ = Describe("IterFields", func() {
 					"ec.data_slices":       (*int)(nil),
 					"ec.objsize_limit":     (*int64)(nil),
 					"ec.compression":       (*string)(nil),
+					"ec.burst_buffer":      (*int)(nil),
 					"ec.bundle_multiplier": (*int)(nil),
 					"ec.disk_only":         (*bool)(nil),
 
@@ -298,10 +300,11 @@ var _ = Describe("IterFields", func() {
 					"mirror.copies":       "120",  // type == int
 					"mirror.burst_buffer": "9560", // type == int64
 
+					// XactConfToSet: {Compression: "never", SbundleMult: nil, Burst: nil}
 					"ec.enabled":       true,
 					"ec.parity_slices": 1024,
 					"ec.objsize_limit": int64(0),
-					"ec.compression":   "",
+					"ec.compression":   "never",
 
 					"versioning.enabled": false,
 
@@ -323,7 +326,9 @@ var _ = Describe("IterFields", func() {
 						Enabled:      apc.Ptr(true),
 						ParitySlices: apc.Ptr(1024),
 						ObjSizeLimit: apc.Ptr[int64](0),
-						Compression:  apc.Ptr(""),
+						XactConfToSet: cmn.XactConfToSet{
+							Compression: apc.Ptr(apc.CompressNever),
+						},
 					},
 					Cksum: &cmn.CksumConfToSet{
 						Type:            apc.Ptr(cos.ChecksumOneXxh),

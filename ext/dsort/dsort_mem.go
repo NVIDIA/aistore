@@ -184,9 +184,9 @@ func newDsorterMem(m *Manager) *dsorterMem {
 
 func (*dsorterMem) name() string { return MemType }
 
-func (ds *dsorterMem) init() error {
+func (ds *dsorterMem) init(config *cmn.Config) error {
 	ds.creationPhase.connector = newRWConnector(ds.m)
-	ds.creationPhase.requestedShards = make(chan string, 10000)
+	ds.creationPhase.requestedShards = make(chan string, max(1024, config.Dsort.Burst))
 
 	ds.creationPhase.adjuster.read = newConcAdjuster(
 		ds.m.Pars.CreateConcMaxLimit,

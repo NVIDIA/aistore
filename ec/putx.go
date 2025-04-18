@@ -113,8 +113,8 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	j := &putJogger{
 		parent: r,
 		mpath:  mpath,
-		putCh:  make(chan *request, requestBufSizeFS),
-		xactCh: make(chan *request, requestBufSizeEncode),
+		putCh:  make(chan *request, max(putxBurstSize, r.config.EC.Burst)),
+		xactCh: make(chan *request, max(encodeBurstSize, r.config.EC.Burst)),
 	}
 	j.stopCh.Init()
 	return j

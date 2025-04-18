@@ -49,7 +49,7 @@ type (
 		shard.ContentLoader
 
 		name() string
-		init() error
+		init(*cmn.Config) error
 		start() error
 		postExtraction()
 		postRecordDistribution()

@@ -160,7 +160,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		parent: r,
 		mpath:  mpath,
 		client: client,
-		workCh: make(chan *request, requestBufSizeFS),
+		workCh: make(chan *request, max(getxBurstSize, r.config.EC.Burst)),
 	}
 	j.stopCh.Init()
 	return j

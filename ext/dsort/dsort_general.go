@@ -118,7 +118,7 @@ func (ds *dsorterGeneral) pullStreamWriter(objName string) *streamWriter {
 
 func (*dsorterGeneral) name() string { return GeneralType }
 
-func (ds *dsorterGeneral) init() error {
+func (ds *dsorterGeneral) init(*cmn.Config) error {
 	ds.creationPhase.adjuster = newConcAdjuster(
 		ds.m.Pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/

@@ -185,7 +185,7 @@ type (
 	}
 
 	ECConf struct {
-		Compression string `json:"compression"` // enum { CompressAlways, ... } in api/apc/compression.go
+		XactConf
 
 		// ObjSizeLimit is object size threshold _separating_ intra-cluster mirroring from
 		// erasure coding.
@@ -212,19 +212,16 @@ type (
 		// storage nodes (a.k.a. targets).
 		ParitySlices int `json:"parity_slices"`
 
-		SbundleMult int `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
-
 		Enabled  bool `json:"enabled"`   // EC is enabled
 		DiskOnly bool `json:"disk_only"` // if true, EC does not use SGL - data goes directly to drives
 	}
 	ECConfToSet struct {
-		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
-		Compression  *string `json:"compression,omitempty"`
-		SbundleMult  *int    `json:"bundle_multiplier,omitempty"`
-		DataSlices   *int    `json:"data_slices,omitempty"`
-		ParitySlices *int    `json:"parity_slices,omitempty"`
-		Enabled      *bool   `json:"enabled,omitempty"`
-		DiskOnly     *bool   `json:"disk_only,omitempty"`
+		XactConfToSet
+		ObjSizeLimit *int64 `json:"objsize_limit,omitempty"`
+		DataSlices   *int   `json:"data_slices,omitempty"`
+		ParitySlices *int   `json:"parity_slices,omitempty"`
+		Enabled      *bool  `json:"enabled,omitempty"`
+		DiskOnly     *bool  `json:"disk_only,omitempty"`
 	}
 
 	LogConf struct {
@@ -401,15 +398,13 @@ type (
 	}
 
 	RebalanceConf struct {
-		Compression   string       `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
-		DestRetryTime cos.Duration `json:"dest_retry_time"`   // max wait for ACKs & neighbors to complete
-		SbundleMult   int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
-		Enabled       bool         `json:"enabled"`           // true=auto-rebalance | manual rebalancing
+		XactConf
+		DestRetryTime cos.Duration `json:"dest_retry_time"` // max wait for ACKs & neighbors to complete
+		Enabled       bool         `json:"enabled"`         // true=auto-rebalance | manual rebalancing
 	}
 	RebalanceConfToSet struct {
+		XactConfToSet
 		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
-		Compression   *string       `json:"compression,omitempty"`
-		SbundleMult   *int          `json:"bundle_multiplier"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -595,17 +590,17 @@ type (
 	}
 
 	DsortConf struct {
+		XactConf
 		DuplicatedRecords   string       `json:"duplicated_records"`
 		MissingShards       string       `json:"missing_shards"` // cmn.SupportedReactions enum
 		EKMMalformedLine    string       `json:"ekm_malformed_line"`
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
-		Compression         string       `json:"compression"` // {CompressAlways,...} in api/apc/compression.go
 		CallTimeout         cos.Duration `json:"call_timeout"`
-		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num to destination
 	}
 	DsortConfToSet struct {
+		XactConfToSet
 		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
 		MissingShards       *string       `json:"missing_shards,omitempty"`
 		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
@@ -613,8 +608,6 @@ type (
 		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
 		CallTimeout         *cos.Duration `json:"call_timeout,omitempty"`
 		DsorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
-		Compression         *string       `json:"compression,omitempty"`
-		SbundleMult         *int          `json:"bundle_multiplier,omitempty"`
 	}
 
 	TransportConf struct {

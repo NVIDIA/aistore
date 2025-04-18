@@ -72,7 +72,7 @@ var (
 	}
 
 	defaultDsort = aiscmn.DsortConf{
-		Compression:         aisapc.CompressNever,
+		XactConf:            defaultXconf,
 		DuplicatedRecords:   aiscmn.IgnoreReaction,
 		MissingShards:       aiscmn.IgnoreReaction,
 		EKMMalformedLine:    aisapc.Abort,
@@ -80,7 +80,6 @@ var (
 		DefaultMaxMemUsage:  "80%",
 		DsorterMemThreshold: "100GB",
 		CallTimeout:         cos.Duration(10 * time.Minute),
-		SbundleMult:         2,
 	}
 
 	defaultDownloader = aiscmn.DownloaderConf{
@@ -88,12 +87,11 @@ var (
 	}
 
 	defaultEC = aiscmn.ECConf{
+		XactConf:     defaultXconf,
 		Enabled:      false,
 		ObjSizeLimit: 262144,
 		DataSlices:   2,
 		ParitySlices: 2,
-		SbundleMult:  2,
-		Compression:  aisapc.CompressNever,
 	}
 
 	defaultKeepalive = aiscmn.KeepaliveConf{
@@ -151,10 +149,9 @@ var (
 	}
 
 	defaultRebalance = aiscmn.RebalanceConf{
+		XactConf:      defaultXconf,
 		Enabled:       true,
-		Compression:   aisapc.CompressNever,
 		DestRetryTime: cos.Duration(2 * time.Minute),
-		SbundleMult:   2,
 	}
 
 	defaultTimeout = aiscmn.TimeoutConf{

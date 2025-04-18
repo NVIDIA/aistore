@@ -141,11 +141,13 @@ var _ = Describe("API", func() {
 						Enabled: apc.Ptr(false),
 					},
 					EC: &cmn.ECConfToSet{
+						XactConfToSet: cmn.XactConfToSet{
+							Compression: apc.Ptr(apc.CompressNever),
+						},
 						Enabled:      apc.Ptr(true),
 						ObjSizeLimit: apc.Ptr[int64](1024),
 						DataSlices:   apc.Ptr(1024),
 						ParitySlices: apc.Ptr(1024),
-						Compression:  apc.Ptr("false"),
 					},
 					Access: apc.Ptr[apc.AccessAttrs](1024),
 					WritePolicy: &cmn.WritePolicyConfToSet{
@@ -170,11 +172,13 @@ var _ = Describe("API", func() {
 						Enabled: false,
 					},
 					EC: cmn.ECConf{
+						XactConf: cmn.XactConf{
+							Compression: apc.CompressNever,
+						},
 						Enabled:      true,
 						ObjSizeLimit: 1024,
 						DataSlices:   1024,
 						ParitySlices: 1024,
-						Compression:  "false",
 					},
 					Access: 1024,
 					WritePolicy: cmn.WritePolicyConf{

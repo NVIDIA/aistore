@@ -98,7 +98,7 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 	}
 
 	// (re)init
-	size := lazyChanSize
+	size := max(lazyChanSize, config.Rebalance.Burst)
 	if r.chanFull.Load() {
 		// NOTE: never resetting chanFull (a simplified attempt to avoid one)
 		size <<= 2
