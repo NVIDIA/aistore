@@ -1,17 +1,14 @@
 echo "Creating GCP credentials secret..."
-kubectl delete secret gcp-credentials || true
 kubectl create secret generic gcp-credentials \
     --from-file=creds.json=${GOOGLE_APPLICATION_CREDENTIALS}
 
 echo "Creating AWS credentials secrets..."
-kubectl delete secret aws-credentials || true
 kubectl create secret generic aws-credentials \
     --from-literal=AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
     --from-literal=AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
     --from-literal=AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
 
 echo "Creating OCI credentials secret..."
-kubectl delete secret oci-credentials || true
 kubectl create secret generic oci-credentials \
     --from-file=OCI_PRIVATE_KEY=${ORACLE_PRIVATE_KEY} \
     --from-literal=OCI_TENANCY_OCID=${OCI_TENANCY_OCID} \
