@@ -16,7 +16,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 
@@ -40,10 +39,48 @@ type (
 		Finish(errCause error) error
 	}
 
+	// +--------------------------------------------------------------------------------------------+
+	// |                                       Target Node                                          |
+	// |            |                                                                               |
+	// |            |       +-------------------+                 +---------------------------+     |
+	// |            |       |   webSocketComm   | --- K8s API --> |   ETL Pod (Transformer)   |     |
+	// |            |       +---|-----------|---+                 +---------------------------+     |
+	// |            |           v           |                           ^ ^ ^ ^ ^   ^ ^ ^ ^ ^       |
+	// |            |       +-------------------+                       | | | | |   | | | | |       |
+	// |            |       |    wsSession (1) -|--> wsConnCtx (1)(1) <-+ | | | |   | | | | |       |
+	// |            |       |                / -|--> wsConnCtx (1)(2) <---+ | | |   | | | | |       |
+	// |  TCB (1) --------- | ---> workCh ---  -|--> wsConnCtx (1)(3) <-----+ | |   | | | | |       |
+	// |            |       |                \ -|--> wsConnCtx (1)(4) <-------+ |   | | | | |       |
+	// |            |       |                  -|--> wsConnCtx (1)(5) <---------+   | | | | |       |
+	// |            |       +-------------------+                                   | | | | |       |
+	// |            |                       |                                       | | | | |       |
+	// |            |                       v                           (ws conns)  | | | | |       |
+	// |            |       +-------------------+                                   | | | | |       |
+	// |            |       |    wsSession (2) -|--> wsConnCtx (2)(1) <-------------+ | | | |       |
+	// |            |       |                / -|--> wsConnCtx (2)(2) <---------------+ | | |       |
+	// |  TCB (2) --------- | ---> workCh ---  -|--> wsConnCtx (2)(3) <-----------------+ | |       |
+	// |            |       |                \ -| -> wsConnCtx (2)(4) <-------------------+-|       |
+	// |            |       |                  -| -> wsConnCtx (2)(5) <---------------------+       |
+	// |            |       +-------------------+                                                   |
+	// +--------------------------------------------------------------------------------------------+
+
 	webSocketComm struct {
 		baseComm
 		sessions map[string]Session
 		m        sync.Mutex
+
+		commCtx       context.Context
+		commCtxCancel context.CancelFunc
+	}
+
+	wsSession struct {
+		txctn        core.Xact
+		connections  []*wsConnCtx
+		workCh       chan rwpair
+		workChanFull atomic.Int64
+
+		sessionCtx       context.Context
+		sessionCtxCancel context.CancelFunc
 	}
 
 	wsConnCtx struct {
@@ -53,8 +90,7 @@ type (
 		conn    *websocket.Conn
 
 		// outbound messages of the original objects to send to ETL pod
-		workCh       chan rwpair
-		workChanFull atomic.Int64
+		workCh chan rwpair
 
 		// inbound messages of post-transformed objects from ETL pod
 		writerCh       chan *io.PipeWriter
@@ -63,8 +99,6 @@ type (
 		// wait for read/write loop goroutines to exit when cleaning up
 		eg  *errgroup.Group
 		ctx context.Context
-
-		finishCb func(id string) // to self-remove from `webSocketComm.sessions`
 	}
 
 	rwpair struct {
@@ -77,14 +111,14 @@ type (
 // interface guard
 var (
 	_ statefulCommunicator = (*webSocketComm)(nil)
-	_ Session              = (*wsConnCtx)(nil)
+	_ Session              = (*wsSession)(nil)
 )
 
 const (
-	// TODO: make this limit configurable
+	// TODO: make this limit configurable (depends on etl side configuration)
 	maxMsgSize = 16 * cos.GiB
 	// TODO: compare performance over different channel sizes
-	wockChSize = 128
+	wockChSize = 512
 )
 
 // SetupConnection establishes a test connection to the ETL pod's websocket endpoint.
@@ -107,68 +141,78 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		return nil, cos.NewErrNotFound(core.T, "invalid xact parameter")
 	}
 
-	conn, resp, err := websocket.DefaultDialer.Dial(ws.boot.uri, nil)
-	if err != nil {
-		return nil, fmt.Errorf("%s: failed to dial %s: %w", xctn.Name(), ws.boot.uri, err)
+	connPerSession := ws.boot.config.TCB.SbundleMult // TODO: add specific ETL config on this
+	wss := &wsSession{
+		txctn:       xctn,
+		workCh:      make(chan rwpair, wockChSize),
+		connections: make([]*wsConnCtx, 0, connPerSession),
 	}
-	resp.Body.Close()
-	conn.SetReadLimit(maxMsgSize)
+	wss.sessionCtx, wss.sessionCtxCancel = context.WithCancel(ws.commCtx)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	group, ctx := errgroup.WithContext(ctx)
+	for i := range connPerSession {
+		conn, resp, err := websocket.DefaultDialer.Dial(ws.boot.uri, nil)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed to dial %s: %w", xctn.Name(), ws.boot.uri, err)
+		}
+		resp.Body.Close()
 
-	wcs := &wsConnCtx{
-		name:     ws.ETLName(),
-		etlxctn:  ws.Xact(),
-		txctn:    xctn,
-		conn:     conn,
-		workCh:   make(chan rwpair, wockChSize),
-		writerCh: make(chan *io.PipeWriter, wockChSize),
-		ctx:      ctx,
-		eg:       group,
-		finishCb: func(id string) {
-			cancel()
-			ws.m.Lock()
-			delete(ws.sessions, id)
-			ws.m.Unlock()
-		},
+		// connection is expected to remain active due to continuous data flow, don't need liveness checks via ping/pong
+		conn.SetPongHandler(nil)
+		conn.SetPingHandler(nil)
+		conn.SetReadLimit(maxMsgSize)
+
+		group, ctx := errgroup.WithContext(wss.sessionCtx)
+
+		wcs := &wsConnCtx{
+			name:     fmt.Sprintf("%s-%d", ws.ETLName(), i),
+			etlxctn:  ws.Xact(), // for abort listening and runtime error report
+			txctn:    xctn,      // for abort listening and runtime error report
+			conn:     conn,
+			workCh:   wss.workCh,
+			writerCh: make(chan *io.PipeWriter, wockChSize),
+			ctx:      ctx,
+			eg:       group,
+		}
+
+		group.Go(wcs.readLoop)
+		group.Go(wcs.writeLoop)
+
+		wss.connections = append(wss.connections, wcs)
 	}
-
-	group.Go(wcs.readLoop)
-	group.Go(wcs.writeLoop)
 
 	ws.m.Lock()
-	ws.sessions[xctn.ID()] = wcs
+	ws.sessions[xctn.ID()] = wss
 	ws.m.Unlock()
-	return wcs, nil
+	return wss, nil
 }
 
 func (ws *webSocketComm) Stop() {
 	for _, session := range ws.sessions {
 		session.Finish(cmn.ErrXactUserAbort)
 	}
-	debug.Assert(len(ws.sessions) == 0)
+	ws.sessions = nil
+	ws.commCtxCancel()
 	ws.baseComm.Stop()
 }
 
 ///////////////
-// wsConnCtx //
+// wsSession //
 ///////////////
 
-func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
+func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
 	srcResp := lom.GetROC(latestVer, sync)
 	if srcResp.Err != nil {
 		return srcResp
 	}
 	pr, pw := io.Pipe()
 
-	wctx.workCh <- rwpair{srcResp.R, pw, daddr}
-	if l, c := len(wctx.workCh), cap(wctx.workCh); l > c/2 {
+	wss.workCh <- rwpair{srcResp.R, pw, daddr}
+	if l, c := len(wss.workCh), cap(wss.workCh); l > c/2 {
 		runtime.Gosched() // poor man's throttle
 		if l == c {
-			cnt := wctx.workChanFull.Inc()
+			cnt := wss.workChanFull.Inc()
 			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleETL)) {
-				nlog.Errorln(cos.ErrWorkChanFull, "outbound messages channel of session", wctx.name, "cnt", cnt)
+				nlog.Errorln(cos.ErrWorkChanFull, "work channel of session", wss.txctn.ID(), "cnt", cnt)
 			}
 		}
 	}
@@ -182,15 +226,24 @@ func (wctx *wsConnCtx) Transform(lom *core.LOM, latestVer, sync bool, daddr stri
 	}
 }
 
-func (wctx *wsConnCtx) Finish(errCause error) error {
+func (wss *wsSession) Finish(errCause error) error {
+	wss.sessionCtxCancel()
+	for _, wsConn := range wss.connections {
+		wsConn.finish(errCause)
+	}
+	return nil
+}
+
+///////////////
+// wsConnCtx //
+///////////////
+
+func (wctx *wsConnCtx) finish(errCause error) error {
 	if errCause != nil {
 		wctx.txctn.Abort(errCause)
 	}
 	if err := wctx.eg.Wait(); err != nil {
 		nlog.Errorf("error shutting down webSocketComm goroutines: %v", err)
-	}
-	if wctx.finishCb != nil {
-		wctx.finishCb(wctx.txctn.ID())
 	}
 	return wctx.conn.Close()
 }

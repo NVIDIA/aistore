@@ -220,6 +220,9 @@ func (r *XactTCB) TxnAbort(err error) {
 		r.dm.UnregRecv()
 	}
 	r.AddErr(err)
+	if r.transform != nil {
+		r.transform.Finish(err)
+	}
 	r.Base.Finish()
 }
 

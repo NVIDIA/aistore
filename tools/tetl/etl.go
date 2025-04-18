@@ -312,6 +312,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	msg := &etl.InitSpecMsg{}
 	msg.EtlName = etlName
 	msg.CommTypeX = comm
+	msg.Timeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
 	msg.Spec = spec

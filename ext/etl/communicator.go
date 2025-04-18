@@ -124,6 +124,7 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		return rc
 	case WebSocket:
 		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
+		ws.commCtx, ws.commCtxCancel = context.WithCancel(context.Background())
 		ws.listener, ws.boot, ws.pw = listener, boot, pw
 		return ws
 	}

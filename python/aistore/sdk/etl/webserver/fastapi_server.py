@@ -67,14 +67,23 @@ class FastAPIServer(ETLServer):
 
                 while True:
                     delivery_target_url = None
-                    msg = await websocket.receive()
+                    try:
+                        msg = await websocket.receive()
+                    except RuntimeError as e:
+                        self.logger.warning("WebSocket receive error: %s", e)
+                        break
+
                     if "text" in msg:
                         delivery_target_url = msg["text"]
-                        data = await websocket.receive_bytes()
+                        try:
+                            data = await websocket.receive_bytes()
+                        except RuntimeError as e:
+                            self.logger.warning("WebSocket receive_bytes error: %s", e)
+                            break
                     elif "bytes" in msg:
                         data = msg["bytes"]
                     else:
-                        self.logger.warning("Received unknown message format: %s", msg)
+                        self.logger.warning("Unexpected message format: %s", msg)
                         continue
 
                     self.logger.debug("Received message of length: %d", len(data))
@@ -93,13 +102,13 @@ class FastAPIServer(ETLServer):
 
             except WebSocketDisconnect:
                 self.logger.warning("WebSocket disconnected: %s", websocket.client)
-                self.active_connections.remove(websocket)
-
             except Exception as e:
                 self.logger.error(
                     "Unexpected WebSocket error from %s: %s", websocket.client, e
                 )
-                self.active_connections.remove(websocket)
+            finally:
+                if websocket in self.active_connections:
+                    self.active_connections.remove(websocket)
                 await websocket.close()
 
     async def startup_event(self):
