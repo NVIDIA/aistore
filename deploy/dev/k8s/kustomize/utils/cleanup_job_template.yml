@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "${JOB_NAME}"
+spec:
+  ttlSecondsAfterFinished: 0
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - "${NODE_NAME}"
+      containers:
+        - name: delete-files
+          image: busybox
+          command: ["sh", "-c", "if [ -d ${HOST_PATH} ]; then rm -rf ${HOST_PATH}; fi; if [ -d ${LOG_PATH} ]; then rm -rf ${LOG_PATH}; fi"]
+          volumeMounts:
+            - name: host-volume
+              mountPath: "${PARENT_DIR}"
+            - name: log-volume
+              mountPath: "${LOG_PARENT_DIR}"
+      restartPolicy: Never
+      volumes:
+        - name: host-volume
+          hostPath:
+            path: "${PARENT_DIR}"
+        - name: log-volume
+          hostPath:
+            path: "${LOG_PARENT_DIR}"

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../../../base/target
+
+patches:
+- path: statefulset.yaml
+
+secretGenerator:
+- name: gcp-credentials
+  files:
+    - ./creds.json
+- name: aws-credentials
+  literals:
+    - AWS_DEFAULT_REGION=<AWS_DEFAULT_REGION>
+    - AWS_ACCESS_KEY_ID=<AWS_ACCESS_KEY_ID>
+    - AWS_SECRET_ACCESS_KEY=<AWS_SECRET_ACCESS_KEY>
