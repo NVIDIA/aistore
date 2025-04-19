@@ -508,7 +508,7 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 	smap = y.p.owner.smap.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
-		return
+		return nil, smap
 	}
 	for _, serverMap := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, si := range serverMap {
@@ -541,7 +541,7 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 			pending.Add(si)
 		}
 	}
-	return
+	return pending, smap
 }
 
 // gets invoked when retryTimer fires; returns updated number of still pending

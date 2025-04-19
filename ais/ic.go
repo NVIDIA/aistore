@@ -109,7 +109,7 @@ begin:
 outer:
 	switch owner {
 	case "": // not owned
-		return
+		return false
 	case equalIC:
 		if selfIC {
 			owner = ic.p.SID()
@@ -135,7 +135,7 @@ outer:
 		debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
 	}
 	if owner == ic.p.SID() {
-		return
+		return false
 	}
 	// otherwise, hand it over
 	if msg != nil {

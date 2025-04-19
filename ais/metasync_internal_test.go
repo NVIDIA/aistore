@@ -796,7 +796,7 @@ func TestMetasyncMembership(t *testing.T) {
 func TestMetasyncReceive(t *testing.T) {
 	{
 		emptyAisMsg := func(a *actMsgExt) {
-			if a.Action != "" || a.Name != "" || a.Value != nil {
+			if a != nil && a.Action != "" {
 				t.Fatal("Expecting empty action message", a)
 			}
 		}

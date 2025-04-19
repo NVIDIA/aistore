@@ -1555,21 +1555,26 @@ func logmsync(lver int64, revs revs, msg *actMsgExt, opts ...string) { // caller
 	}
 }
 
-func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *actMsgExt, err error) {
-	if _, ok := payload[revsConfTag]; !ok {
-		return
+// return extracted (new) config with associated action message; otherwise error
+func (h *htrun) extractConfig(payload msPayload, caller string) (*globalConfig, *actMsgExt, error) {
+	confValue, ok := payload[revsConfTag]
+	if !ok {
+		return nil, nil, nil
 	}
-	newConfig, msg = &globalConfig{}, &actMsgExt{}
-	confValue := payload[revsConfTag]
-	reader := bytes.NewBuffer(confValue)
+
+	var (
+		newConfig = &globalConfig{}
+		msg       = &actMsgExt{}
+		reader    = bytes.NewBuffer(confValue)
+	)
 	if _, err1 := jsp.Decode(reader, newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Config", cos.BHead(confValue), err1)
-		return
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Config", cos.BHead(confValue), err1)
+		return nil, nil, err
 	}
 	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
-			return
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
+			return newConfig, nil, err
 		}
 	}
 	config := cmn.GCO.Get()
@@ -1578,63 +1583,76 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	}
 	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() < config.Version {
-			err = newErrDowngrade(h.si, config.String(), newConfig.String())
+			return newConfig, msg, newErrDowngrade(h.si, config.String(), newConfig.String())
 		}
 		newConfig = nil
 	}
-	return
+
+	return newConfig, msg, nil
 }
 
-func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, msg *actMsgExt, err error) {
-	if _, ok := payload[revsEtlMDTag]; !ok {
-		return
+// return extracted (new) etl metadata with associated action message; otherwise error
+func (h *htrun) extractEtlMD(payload msPayload, caller string) (*etlMD, *actMsgExt, error) {
+	etlMDValue, ok := payload[revsEtlMDTag]
+	if !ok {
+		return nil, nil, nil
 	}
-	newMD, msg = newEtlMD(), &actMsgExt{}
-	etlMDValue := payload[revsEtlMDTag]
-	reader := bytes.NewBuffer(etlMDValue)
+	var (
+		newMD  = newEtlMD()
+		msg    = &actMsgExt{}
+		reader = bytes.NewBuffer(etlMDValue)
+	)
 	if _, err1 := jsp.Decode(reader, newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new EtlMD", cos.BHead(etlMDValue), err1)
-		return
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "new EtlMD", cos.BHead(etlMDValue), err1)
+		return nil, nil, err
 	}
 	if msgValue, ok := payload[revsEtlMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
-			return
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
+			return newMD, nil, err
 		}
 	}
+
 	etlMD := h.owner.etl.get()
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(etlMD.Version, newMD, msg, caller)
 	}
 	if newMD.version() <= etlMD.version() && msg.Action != apc.ActPrimaryForce {
 		if newMD.version() < etlMD.version() {
-			err = newErrDowngrade(h.si, etlMD.String(), newMD.String())
+			return newMD, msg, newErrDowngrade(h.si, etlMD.String(), newMD.String())
 		}
 		newMD = nil
 	}
-	return
+
+	return newMD, msg, nil
 }
 
-func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (newSmap *smapX, msg *actMsgExt, err error) {
-	const act = "extract-smap"
-	if _, ok := payload[revsSmapTag]; !ok {
-		return
+// return extracted (new) Smap with associated action message; otherwise error
+func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (*smapX, *actMsgExt, error) {
+	const (
+		act = "extract-smap"
+	)
+	smapValue, ok := payload[revsSmapTag]
+	if !ok {
+		return nil, nil, nil
 	}
-	newSmap, msg = &smapX{}, &actMsgExt{}
-	smapValue := payload[revsSmapTag]
-	reader := bytes.NewBuffer(smapValue)
+
+	var (
+		newSmap = &smapX{}
+		msg     = &actMsgExt{}
+		reader  = bytes.NewBuffer(smapValue)
+	)
 	if _, err1 := jsp.Decode(reader, newSmap, newSmap.JspOpts(), act); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Smap", cos.BHead(smapValue), err1)
-		return
+		return nil, nil, fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Smap", cos.BHead(smapValue), err1)
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
-			return
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
+			return newSmap, nil, err
 		}
 	}
 	if skipValidation || (msg.Action == apc.ActPrimaryForce && newSmap.isValid()) {
-		return
+		return newSmap, msg, nil
 	}
 
 	var (
@@ -1643,28 +1661,26 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		isManualReb = msg.Action == apc.ActRebalance && msg.Value != nil
 	)
 	if newSmap.version() == curVer && !isManualReb {
-		newSmap = nil
-		return
+		return nil, nil, nil
 	}
 	if !newSmap.isValid() {
-		err = cmn.NewErrFailedTo(h, "extract", newSmap, newSmap.validate())
-		return
+		return newSmap, msg, cmn.NewErrFailedTo(h, "extract", newSmap, newSmap.validate())
 	}
 
 	if !newSmap.isPresent(h.si) {
-		err = &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
-
+		err := &errSelfNotFound{act: act, si: h.si, tag: "new", smap: newSmap}
 		if msg.Action != apc.ActPrimaryForce {
-			return
+			return newSmap, msg, err
 		}
+
 		nlog.Warningln(err, "- proceeding with force")
-		err = nil
-		return
+		return newSmap, msg, nil
 	}
 
-	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
-		return // FATAL: cluster integrity error
+	if err := smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
+		return newSmap, msg, err // FATAL: cluster integrity error
 	}
+
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(smap.Version, newSmap, msg, caller, newSmap.String(), smap.UUID)
 	}
@@ -1672,29 +1688,35 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	debug.Assert(sameOrigin)
 	if newSmap.version() < curVer {
 		if !eq {
-			err = newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
-			return
+			err := newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
+			return newSmap, msg, err
 		}
 		nlog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
 		newSmap = nil
 	}
-	return
+
+	return newSmap, msg, nil
 }
 
-func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg *actMsgExt, err error) {
-	if _, ok := payload[revsRMDTag]; !ok {
-		return
+// return extracted (new) RMD with associated action message; otherwise error
+func (h *htrun) extractRMD(payload msPayload, caller string) (*rebMD, *actMsgExt, error) {
+	rmdValue, ok := payload[revsRMDTag]
+	if !ok {
+		return nil, nil, nil
 	}
-	newRMD, msg = &rebMD{}, &actMsgExt{}
-	rmdValue := payload[revsRMDTag]
+
+	var (
+		newRMD = &rebMD{}
+		msg    = &actMsgExt{}
+	)
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new RMD", cos.BHead(rmdValue), err1)
-		return
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "new RMD", cos.BHead(rmdValue), err1)
+		return nil, nil, err
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
-			return
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
+			return newRMD, nil, err
 		}
 	}
 
@@ -1702,55 +1724,64 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
 
 	if msg.Action == apc.ActPrimaryForce {
-		return
+		return newRMD, msg, nil
 	}
 
 	if newRMD.CluID != "" && newRMD.CluID != rmd.CluID && rmd.CluID != "" {
-		err = h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
+		err := h.owner.rmd.newClusterIntegrityErr(h.String(), newRMD.CluID, rmd.CluID, rmd.Version)
 		cos.ExitLog(err) // FATAL
+		return newRMD, msg, err
 	}
 
 	if newRMD.version() <= rmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newRMD.version() < rmd.version() {
-			err = newErrDowngrade(h.si, rmd.String(), newRMD.String())
+			return newRMD, msg, newErrDowngrade(h.si, rmd.String(), newRMD.String())
 		}
 		newRMD = nil
 	}
-	return
+
+	return newRMD, msg, nil
 }
 
-func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, msg *actMsgExt, err error) {
-	if _, ok := payload[revsBMDTag]; !ok {
-		return
+// return extracted (new) BMD with associated action message; otherwise error
+func (h *htrun) extractBMD(payload msPayload, caller string) (*bucketMD, *actMsgExt, error) {
+	bmdValue, ok := payload[revsBMDTag]
+	if !ok {
+		return nil, nil, nil
 	}
-	newBMD, msg = &bucketMD{}, &actMsgExt{}
-	bmdValue := payload[revsBMDTag]
-	reader := bytes.NewBuffer(bmdValue)
+
+	var (
+		newBMD = &bucketMD{}
+		msg    = &actMsgExt{}
+		reader = bytes.NewBuffer(bmdValue)
+	)
 	if _, err1 := jsp.Decode(reader, newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new BMD", cos.BHead(bmdValue), err1)
-		return
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "new BMD", cos.BHead(bmdValue), err1)
+		return nil, nil, err
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
-			return
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
+			return newBMD, nil, err
 		}
 	}
+
 	bmd := h.owner.bmd.get()
 	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
-		return
+		return newBMD, msg, nil
 	}
 	if newBMD.version() <= bmd.version() && msg.Action != apc.ActPrimaryForce {
 		if newBMD.version() < bmd.version() {
-			err = newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
+			return newBMD, msg, newErrDowngrade(h.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		newBMD = nil
 	}
-	return
+
+	return newBMD, msg, nil
 }
 
 func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, caller string, cb smapUpdatedCB) error {
@@ -1868,7 +1899,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 //   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err error) {
+func (h *htrun) join(htext htext, contactURLs ...string) (*callResult, error) {
 	var (
 		config             = cmn.GCO.Get()
 		_, primaryURL, psi = h._primus(nil, config)
@@ -1902,7 +1933,10 @@ func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err e
 		candidates = _addCan(u, selfPublicURL.Host, selfIntraURL.Host, candidates)
 	}
 
-	sleep := max(2*time.Second, cmn.Rom.MaxKeepalive())
+	var (
+		res   *callResult
+		sleep = max(2*time.Second, cmn.Rom.MaxKeepalive())
+	)
 	for range 4 { // retry
 		for _, candidateURL := range candidates {
 			if nlog.Stopping() {
@@ -1915,7 +1949,7 @@ func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err e
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 			if res.err == nil {
 				nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
-				return // ok
+				return res, nil // ok
 			}
 			resPrev = res
 		}
@@ -1933,23 +1967,28 @@ func (h *htrun) join(htext htext, contactURLs ...string) (res *callResult, err e
 	// Failed to join cluster using config, try getting primary URL using existing smap.
 	nsti, _ := h.bcastHealth(smap, false /*checkAll*/)
 	if nsti == nil {
-		return res, fmt.Errorf("%s: failed to discover new Smap", h)
+		return nil, fmt.Errorf("%s: failed to discover new Smap", h)
 	}
 	if nsti.Smap.Version < smap.version() {
-		return res, fmt.Errorf("%s: current %s version is newer than %d from the primary (%s)",
+		return nil, fmt.Errorf("%s: current %s version is newer than %d from the primary (%s)",
 			h, smap, nsti.Smap.Version, nsti.Smap.Primary.ID)
 	}
 	primaryURL = nsti.Smap.Primary.PubURL
 
 	// Daemon is stopping skip register
 	if nlog.Stopping() {
-		return res, h.errStopping()
+		return nil, h.errStopping()
 	}
+
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, htext, false /*keepalive*/)
 	if res.err == nil {
 		nlog.Infoln(h.String()+": joined cluster via", primaryURL)
+		return res, nil
 	}
-	return
+
+	err := res.err
+	freeCR(res)
+	return res, err
 }
 
 func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {
@@ -2086,7 +2125,8 @@ func (h *htrun) _primus(smap *smapX, config *cmn.Config) (string /*pid*/, string
 	return smap.Primary.ID(), smap.Primary.URL(cmn.NetIntraControl), smap.Primary
 }
 
-func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti *cos.NodeStateInfo) {
+// return NodeStateInfo.Smap with a new or changed primary; otherwise nil
+func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) *cos.NodeStateInfo {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()
@@ -2098,7 +2138,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 		total += sleep
 		rediscover += sleep
 		if nlog.Stopping() {
-			return
+			return nil
 		}
 		smap := h.owner.smap.get()
 		if smap.validate() != nil {
@@ -2106,7 +2146,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 		}
 		if h.si.IsProxy() && smap.isPrimary(h.si) { // TODO: unlikely - see httpRequestNewPrimary
 			nlog.Warningln(h.String(), "started as a non-primary and got _elected_ during startup")
-			return
+			return nil
 		}
 		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap, false /*retry pub-addr*/); err == nil {
 			// log
@@ -2132,7 +2172,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 			} else {
 				nlog.Infoln(s)
 			}
-			return
+			return nil
 		}
 
 		if rediscover >= config.Timeout.Startup.D()/2 {
@@ -2142,10 +2182,10 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxNsti
 				if psi != nil {
 					pid = psi.ID()
 				}
+				// (primary changed)
 				if nsti.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
 					nlog.Warningf("%s: change of primary %s => %s - must rejoin", h.si, pid, nsti.Smap.Primary.ID)
-					maxNsti = nsti
-					return
+					return nsti
 				}
 			}
 		}
@@ -2215,32 +2255,29 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 // intra-cluster request validations and helpers
 //
 
-func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) (err error) {
-	debug.Assert(hdr != nil)
+func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	var (
 		smap       = h.owner.smap.get()
 		callerID   = hdr.Get(apc.HdrCallerID)
 		callerName = hdr.Get(apc.HdrCallerName)
 		callerSver = hdr.Get(apc.HdrCallerSmapVer)
-		callerVer  int64
-		erP        error
 	)
 	if ok := callerID != "" && callerName != ""; !ok {
 		return errIntraControl
 	}
 	if !smap.isValid() {
-		return
+		return nil
 	}
 	caller := smap.GetNode(callerID)
 	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
-		return
+		return nil
 	}
 	if callerSver != smap.vstr && callerSver != "" {
-		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
-		if erP != nil {
-			debug.AssertNoErr(erP)
-			nlog.Errorln(erP)
-			return
+		callerVer, err := strconv.ParseInt(callerSver, 10, 64)
+		if err != nil { // (unlikely)
+			e := fmt.Errorf("%s: invalid caller's Smap ver [%s, %q, %v], %s", h, callerName, callerSver, err, smap)
+			nlog.Errorln(e)
+			return e
 		}
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
@@ -2250,7 +2287,7 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 				nlog.ErrorDepth(1, warn, "- proceeding anyway...")
 			}
 			runtime.Gosched()
-			return
+			return nil
 		}
 	}
 	if caller == nil {
