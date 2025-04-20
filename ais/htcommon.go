@@ -546,16 +546,11 @@ func _copy(destination io.WriteCloser, source io.ReadCloser) {
 	destination.Close()
 }
 
-func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config) (err error) {
-	var (
-		httpHandler = server.muxers
-		tag         = "HTTP"
-		retried     bool
-	)
+func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config) error {
 	server.Lock()
 	server.s = &http.Server{
 		Addr:              addr,
-		Handler:           httpHandler,
+		Handler:           server.muxers,
 		ErrorLog:          logger,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 	}
@@ -567,28 +562,39 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 	if (server.sndRcvBufSize > 0 || server.lowLatencyToS) && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener
 	}
-
 	server.s.TLSConfig = tlsConf
 	server.Unlock()
+
+	return server._listen(config)
+}
+
+func (server *netServer) _listen(config *cmn.Config) (err error) {
+	var (
+		tag     = "HTTP"
+		retried bool
+	)
 retry:
 	if config.Net.HTTP.UseHTTPS {
 		tag = "HTTPS"
-		// Listen and Serve TLS using certificates provided using the GetCertificate() instead of static files.
-		err = server.s.ListenAndServeTLS("", "")
+		// Listen and Serve TLS; certificates provided via tlsConf.GetCertificate()
+		// (ie., via certloader.GetCert())
+		err = server.s.ListenAndServeTLS("" /*certFile*/, "" /*keyFile*/)
 	} else {
 		err = server.s.ListenAndServe()
 	}
-	if err == http.ErrServerClosed {
+	if err == http.ErrServerClosed { // ref: "ListenAndServe always returns a non-nil error"
 		return nil
 	}
+
 	if errors.Is(err, syscall.EADDRINUSE) && !retried {
-		nlog.Warningf("%q - shutting-down-and-restarting or else? will retry once...", err)
+		nlog.Warningf("%q - shutting-down-and-restarting or else? retrying just once...", err)
 		time.Sleep(max(5*time.Second, config.Timeout.MaxKeepalive.D()))
 		retried = true
 		goto retry
 	}
+
 	nlog.Errorf("%s terminated with error: %v", tag, err)
-	return
+	return err
 }
 
 func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {

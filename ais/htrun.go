@@ -460,10 +460,10 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	loaded, err := h.owner.smap.load(smap)
 	if err != nil {
 		nlog.Errorln(h.String(), "failed to load Smap:", err, "- reinitializing")
-		return
+		return nil, false
 	}
 	if !loaded {
-		return // no local replica - joining from scratch
+		return nil, false // no local replica of a cluster map - bootstrapping (joining from scratch)
 	}
 
 	node := smap.GetNode(h.SID())
@@ -477,7 +477,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	if node.Type() != h.si.Type() {
 		cos.ExitLogf("%s: %s is %q while the node in the loaded %s is %q", cmn.BadSmapPrefix,
 			h.si, h.si.Type(), smap.StringEx(), node.Type())
-		return
+		return nil, false
 	}
 
 	//
@@ -486,8 +486,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	if _, err := smap.IsDupNet(h.si); err != nil {
 		nlog.Warningln(err, "- proceeding with the loaded", smap.String(), "anyway...")
 	}
-	reliable = true
-	return
+	return smap, true
 }
 
 func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, query url.Values) {
@@ -1230,36 +1229,34 @@ func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Val
 }
 
 // see also: cli 'log get --all'
-func (h *htrun) targzLogs(severity string) (tempdir, archname string, err error) {
-	var (
-		wfh      *os.File
-		dentries []os.DirEntry
-		logdir   = cmn.GCO.Get().LogDir
-	)
-	dentries, err = os.ReadDir(logdir)
+func (h *htrun) targzLogs(severity string) (tempdir, archname string, _ error) {
+	logdir := cmn.GCO.Get().LogDir
+	dentries, err := os.ReadDir(logdir)
 	if err != nil {
-		err = fmt.Errorf("read-dir %w", err)
-		return
+		return "", "", fmt.Errorf("read-logdir %s: %w", logdir, err)
 	}
+
 	tempdir = filepath.Join(os.TempDir(), "aislogs-"+h.SID())
-	err = cos.CreateDir(tempdir)
-	if err != nil {
-		err = fmt.Errorf("create-dir %w", err)
-		return
+	if err := cos.CreateDir(tempdir); err != nil {
+		return "", "", fmt.Errorf("create-tempdir %s: %w", tempdir, err)
 	}
-	wfh, err = os.CreateTemp(tempdir, "")
-	if err != nil {
-		err = fmt.Errorf("create-temp %w", err)
-		return
+
+	wfh, erw := os.CreateTemp(tempdir, "")
+	if erw != nil {
+		return "", "", fmt.Errorf("create-archive %s/<...>: %w", tempdir, erw)
 	}
+
 	archname = wfh.Name()
 	aw := archive.NewWriter(archive.ExtTarGz, wfh, nil /*checksum*/, nil /*opts*/)
 
-	defer func() {
-		aw.Fini()
-		wfh.Close()
-	}()
+	e := _targzLogs(aw, logdir, severity, dentries)
 
+	aw.Fini()
+	wfh.Close()
+	return tempdir, archname, e
+}
+
+func _targzLogs(aw archive.Writer, logdir, severity string, dentries []os.DirEntry) error {
 	for _, dent := range dentries {
 		if !dent.Type().IsRegular() {
 			continue
@@ -1268,28 +1265,28 @@ func (h *htrun) targzLogs(severity string) (tempdir, archname string, err error)
 		if errV != nil {
 			continue
 		}
-		var (
-			fullPath = filepath.Join(logdir, finfo.Name())
-			rfh      *os.File
-		)
+		fullPath := filepath.Join(logdir, finfo.Name())
 		if !logname2Sev(fullPath, severity) {
 			continue
 		}
-		rfh, err = os.Open(fullPath)
-		if err != nil {
-			if os.IsNotExist(err) {
+
+		rfh, errO := os.Open(fullPath)
+		if errO != nil {
+			if os.IsNotExist(errO) {
 				continue
 			}
-			return
+			return fmt.Errorf("open-log %s: %w", fullPath, errO)
 		}
+
 		oah := cos.SimpleOAH{Size: finfo.Size(), Atime: finfo.ModTime().UnixNano()}
-		err = aw.Write(finfo.Name(), oah, rfh)
+		err := aw.Write(finfo.Name(), oah, rfh)
 		rfh.Close()
 		if err != nil {
-			return
+			return fmt.Errorf("write-arch-log %s: %w", fullPath, err)
 		}
 	}
-	return
+
+	return nil
 }
 
 func sev2Logname(severity string) (log string, err error) {

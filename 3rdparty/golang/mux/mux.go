@@ -212,7 +212,7 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 	}
 	h, pattern = mux.match(path)
 	if h != nil {
-		return
+		return h, pattern
 	}
 
 	// All other requests have any port stripped and path cleaned

@@ -110,7 +110,7 @@ func (*configOwner) version() int64 { return cmn.GCO.Get().Version }
 func (co *configOwner) _runPre(ctx *configModifier) (clone *globalConfig, err error) {
 	clone, err = co.get()
 	if err != nil {
-		return
+		return nil, err
 	}
 	if clone == nil {
 		// missing config - try to load initial plain-text
