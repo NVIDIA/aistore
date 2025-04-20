@@ -107,23 +107,23 @@ const (
 	LocIsCopyMissingObj // missing "main replica"
 
 	// LsoEntry Flags
-	EntryIsCached   = 1 << (EntryStatusBits + 1)
-	EntryInArch     = 1 << (EntryStatusBits + 2)
-	EntryIsDir      = 1 << (EntryStatusBits + 3)
-	EntryIsArchive  = 1 << (EntryStatusBits + 4)
-	EntryVerChanged = 1 << (EntryStatusBits + 5) // see also: QparamLatestVer, et al.
-	EntryVerRemoved = 1 << (EntryStatusBits + 6) // ditto
+	EntryIsCached   = 1 << (statusBits + 1)
+	EntryInArch     = 1 << (statusBits + 2)
+	EntryIsDir      = 1 << (statusBits + 3)
+	EntryIsArchive  = 1 << (statusBits + 4)
+	EntryVerChanged = 1 << (statusBits + 5) // see also: QparamLatestVer, et al.
+	EntryVerRemoved = 1 << (statusBits + 6) // ditto
 	// added v3.26
-	EntryHeadFail = 1 << (EntryStatusBits + 7)
+	EntryHeadFail = 1 << (statusBits + 7)
 )
 
-// ObjEntry.Flags field
+// cmn/objlist_utils
 const (
-	EntryStatusBits = 5                          // N bits
-	EntryStatusMask = (1 << EntryStatusBits) - 1 // mask for N low bits
+	statusBits    = 5
+	LsoStatusMask = (1 << statusBits) - 1
 )
 
-// LsoMsg and HEAD(object) enum (NOTE: compare with `cmn.ObjectProps`)
+// LsoMsg and HEAD(object) enum
 const (
 	GetPropsName     = "name"
 	GetPropsSize     = "size"

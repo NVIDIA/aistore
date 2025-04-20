@@ -124,8 +124,7 @@ func (p *archFactory) Start() (err error) {
 	)
 	r.pending.m = make(map[string]*archwi, burst)
 
-	avail := fs.GetAvail()
-	r.joggers.m = make(map[string]*jogger, len(avail))
+	r.joggers.m = make(map[string]*jogger, fs.NumAvail())
 	r.smap = core.T.Sowner().Get()
 	p.xctn = r
 

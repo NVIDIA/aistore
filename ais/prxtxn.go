@@ -1216,10 +1216,11 @@ func (r *_tcbfin) cb(nl nl.Listener) {
 		return
 	default:
 		nlog.Warningln("abort:", err)
-		if r.existed {
+		if r.existed || nlog.Stopping() || strings.Contains(err.Error(), apc.ActShutdownCluster) {
 			return
 		}
 	}
-	// when (tcb aborted) and (did not exist prior)
+
+	// NOTE: when (tcb aborted) && (destination bucket did not exist prior)
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
 }

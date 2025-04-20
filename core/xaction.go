@@ -1,10 +1,11 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -91,14 +92,14 @@ type (
 		DstBck    cmn.Bck   `json:"dst-bck"`
 		ID        string    `json:"id"`
 		Kind      string    `json:"kind"`
-		CtlMsg    string    `json:"ctlmsg,omitempty"` // initiating control msg (added v3.26)
+		CtlMsg    string    `json:"ctlmsg,omitempty"` // initiating control msg (a.k.a. "run options"; added v3.26)
 
 		// extended error info
 		AbortErr string `json:"abort-err"`
 		Err      string `json:"err"`
 
-		// rebalance-only
-		RebID int64 `json:"glob.id,string"`
+		// packed field: number of workers, et al.
+		Packed int64 `json:"glob.id,string"`
 
 		// common runtime: stats counters (above) and state
 		Stats    Stats `json:"stats"`
@@ -113,11 +114,33 @@ type (
 )
 
 //////////
-// Snap //
+// Snap (see related MultiSnap in xact/api)
 //////////
 
-func (snp *Snap) IsAborted() bool { return snp.AbortedX }
-func (snp *Snap) IsIdle() bool    { return snp.IdleX }
-func (snp *Snap) Started() bool   { return !snp.StartTime.IsZero() }
-func (snp *Snap) Running() bool   { return snp.Started() && !snp.IsAborted() && snp.EndTime.IsZero() }
-func (snp *Snap) Finished() bool  { return snp.Started() && !snp.EndTime.IsZero() }
+func (xsnap *Snap) IsAborted() bool { return xsnap.AbortedX }
+func (xsnap *Snap) IsIdle() bool    { return xsnap.IdleX }
+func (xsnap *Snap) Started() bool   { return !xsnap.StartTime.IsZero() }
+
+func (xsnap *Snap) Running() bool {
+	return xsnap.Started() && !xsnap.IsAborted() && xsnap.EndTime.IsZero()
+}
+
+func (xsnap *Snap) Finished() bool { return xsnap.Started() && !xsnap.EndTime.IsZero() }
+
+const (
+	gorBits = 10
+	chShift = 2 * gorBits
+	gorMask = (1 << gorBits) - 1
+)
+
+func (xsnap *Snap) Pack(njoggers, nworkers int, chanFull int64) {
+	chfull := int(min(chanFull, math.MaxInt))
+	xsnap.Packed = int64((njoggers & gorMask) | (nworkers&gorMask)<<gorBits | chfull<<chShift)
+}
+
+func (xsnap *Snap) Unpack() (njoggers, nworkers, chanFull int) {
+	njoggers = int(xsnap.Packed & gorMask)
+	nworkers = int(xsnap.Packed>>gorBits) & gorMask
+	chanFull = int(xsnap.Packed >> chShift)
+	return njoggers, nworkers, chanFull
+}

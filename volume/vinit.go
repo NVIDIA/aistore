@@ -96,8 +96,8 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 // MPI => VMD
 func NewFromMPI(tid string) (vmd *VMD, err error) {
 	var (
-		curVersion          uint64
-		available, disabled = fs.Get()
+		curVersion      uint64
+		avail, disabled = fs.Get()
 	)
 	vmd, err = loadVMD(tid, nil)
 	if err != nil {
@@ -106,10 +106,10 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 	if vmd != nil {
 		curVersion = vmd.Version
 	}
-	vmd = newVMD(len(available))
+	vmd = newVMD(len(avail))
 	vmd.DaemonID = tid
 	vmd.Version = curVersion + 1 // Bump the version.
-	for _, mi := range available {
+	for _, mi := range avail {
 		vmd.addMountpath(mi, true /*enabled*/)
 	}
 	for _, mi := range disabled {

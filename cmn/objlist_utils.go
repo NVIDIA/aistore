@@ -25,7 +25,7 @@ func (entries LsoEntries) cmp(i, j int) bool {
 }
 
 ////////////
-// LsoEnt //
+// LsoEnt (for apc.* constants, see api/apc/lsmsg)
 ////////////
 
 // flags:
@@ -39,7 +39,7 @@ func (be *LsoEnt) IsAnyFlagSet(fl uint16) bool { return be.Flags&fl != 0 }
 
 // location _status_
 func (be *LsoEnt) IsStatusOK() bool { return be.Status() == 0 }
-func (be *LsoEnt) Status() uint16   { return be.Flags & apc.EntryStatusMask }
+func (be *LsoEnt) Status() uint16   { return be.Flags & apc.LsoStatusMask }
 
 // sorting
 func (be *LsoEnt) less(oe *LsoEnt) bool {

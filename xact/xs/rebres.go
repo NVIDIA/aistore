@@ -127,7 +127,6 @@ func (xreb *Rebalance) RebID() int64 {
 func (xreb *Rebalance) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	xreb.ToSnap(snap)
-	snap.RebID = xreb.RebID()
 
 	snap.IdleX = xreb.IsIdle()
 

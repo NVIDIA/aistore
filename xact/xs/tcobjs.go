@@ -53,6 +53,7 @@ type (
 		}
 		streamingX
 		chanFull atomic.Int64
+		nworkers atomic.Int64 // total across all pending
 		owt      cmn.OWT
 	}
 	tcowi struct {
@@ -188,6 +189,8 @@ func (r *XactTCO) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
+	snap.Pack(0, int(r.nworkers.Load()), r.chanFull.Load())
+
 	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
@@ -250,6 +253,8 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		r.AddErr(err)
 		return !msg.ContinueOnError // stop?
 	}
+	nworkers := int64(len(lrit.nwp.workers))
+	r.nworkers.Add(nworkers)
 
 	// run
 	var wg *sync.WaitGroup
@@ -274,6 +279,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	err := lrit.run(wi, smap, true /*prealloc buf*/)
 
 	lrit.wait()
+	r.nworkers.Sub(nworkers)
 	if wg != nil {
 		wg.Wait()
 	}

@@ -10,7 +10,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -77,8 +76,7 @@ type (
 			workers []*lrworker
 			wg      sync.WaitGroup
 		}
-		numvis atomic.Int64 // counter: num visited objects
-		lrp    int          // enum { lrpList, ... }
+		lrp int // enum { lrpList, ... }
 	}
 )
 
@@ -92,7 +90,7 @@ type (
 //////////
 
 func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers, confBurst int) error {
-	l := len(fs.GetAvail())
+	l := fs.NumAvail()
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)
 		return cmn.ErrNoMountpaths
@@ -350,11 +348,12 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 
 	if r.nwp.workers == nil {
 		wi.do(lom, r, r.buf)
-		r.numvis.Inc()
 		return true, nil
 	}
 
-	r.nwp.workCh <- lrpair{lom, wi} // lom eventually freed below // TODO -- FIXME: consider core.LIF
+	// lom eventually freed below
+	// TODO: consider core.LIF with subsequent lif.LOM() conversion
+	r.nwp.workCh <- lrpair{lom, wi}
 	return false, nil
 }
 
@@ -374,7 +373,6 @@ outer:
 			}
 			lrpair.wi.do(lrpair.lom, worker.lrit, buf)
 			core.FreeLOM(lrpair.lom)
-			worker.lrit.numvis.Inc()
 		case <-stopCh:
 			break outer
 		}

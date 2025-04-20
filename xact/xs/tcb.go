@@ -33,6 +33,10 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// NOTE the limitation:
+// - sentinels and workers require DM
+// - DM is not available when explicitly disabled (below) and for a single-node cluster
+
 type (
 	tcbFactory struct {
 		xreg.RenewBase
@@ -139,12 +143,12 @@ func (p *tcbFactory) Start() error {
 
 	if msg.NumWorkers > 0 {
 		// tune-up the specified number of workers
-		avail := fs.GetAvail()
-		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, len(avail)))
+		l := fs.NumAvail()
+		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, l))
 		if err != nil {
 			return err
 		}
-		if numWorkers >= len(avail) {
+		if numWorkers >= l {
 			// delegate intra-cluster copying/transforming to additional workers;
 			// run them in parallel with traversing joggers;
 			r._iniNwp(numWorkers)
@@ -388,7 +392,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		return err
 	}
 
-	// control; // TODO -- FIXME: must become a shared code w/ tco
+	// control
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
 		case opDone:
@@ -486,6 +490,8 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 func (r *XactTCB) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
+
+	snap.Pack(fs.NumAvail(), len(r.numwp.workers), r.chanFull.Load())
 
 	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()

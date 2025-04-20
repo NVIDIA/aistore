@@ -443,7 +443,6 @@ class JobSnapshot(BaseModel):
     bucket: Optional[BucketModel] = Field(default=None, alias="bck")
     source_bck: Optional[BucketModel] = Field(default=None, alias="src-bck")
     destination_bck: Optional[BucketModel] = Field(default=None, alias="dst-bck")
-    rebalance_id: str = Field(default="", alias="glob.id")
     stats: Optional[JobStats] = Field(default=None)
     aborted: bool = Field(default=False)
     is_idle: bool = Field(default=False)

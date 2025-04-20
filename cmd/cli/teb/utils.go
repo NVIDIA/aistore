@@ -96,7 +96,6 @@ var (
 		"FormatACL":            fmtACL,
 		"FormatNameDirArch":    fmtNameDirArch,
 		"FormatXactRunFinAbrt": FmtXactRunFinAbrt,
-		"FormatCtlMsg":         fmtCtlMsg,
 		//  misc. helpers
 		"IsUnsetTime":   isUnsetTime,
 		"IsEqS":         func(a, b string) bool { return a == b },
@@ -536,13 +535,6 @@ func FmtXactRunFinAbrt(snap *core.Snap) (s string) {
 		s += " with errors: \"" + snap.Err + "\""
 	}
 	return
-}
-
-func fmtCtlMsg(ctlmsg string) string {
-	if ctlmsg == "" {
-		return NotSetVal
-	}
-	return "'" + ctlmsg + "'"
 }
 
 func extECGetStats(base *core.Snap) *ec.ExtECGetStats {

@@ -551,6 +551,11 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			// do nothing
 		case ctlmsg == "":
 			ctlmsg = nmsg
+
+			// TODO -- FIXME: draft
+			// a, b, c := snaps[0].Unpack()
+			// ctlmsg += fmt.Sprintf("; parallelism: (joggers: %d, workers: %d, chan-full: %d", a, b, c)
+
 		case strings.HasSuffix(ctlmsg, "..."):
 			// do nothing
 		case strings.Contains(ctlmsg, nmsg):
