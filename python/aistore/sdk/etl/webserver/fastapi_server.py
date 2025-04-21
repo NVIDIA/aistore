@@ -9,7 +9,6 @@ from fastapi import (
     HTTPException,
     Response,
     WebSocket,
-    WebSocketDisconnect,
 )
 import httpx
 import aiofiles
@@ -54,10 +53,6 @@ class FastAPIServer(ETLServer):
 
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
-            self.logger.debug(
-                "New WebSocket connection attempt from: %s", websocket.client
-            )
-
             try:
                 await websocket.accept()
                 self.logger.debug(
@@ -66,42 +61,34 @@ class FastAPIServer(ETLServer):
                 self.active_connections.append(websocket)
 
                 while True:
-                    delivery_target_url = None
-                    try:
-                        msg = await websocket.receive()
-                    except RuntimeError as e:
-                        self.logger.warning("WebSocket receive error: %s", e)
-                        break
+                    msg = await websocket.receive()
 
-                    if "text" in msg:
-                        delivery_target_url = msg["text"]
-                        try:
-                            data = await websocket.receive_bytes()
-                        except RuntimeError as e:
-                            self.logger.warning("WebSocket receive_bytes error: %s", e)
-                            break
-                    elif "bytes" in msg:
-                        data = msg["bytes"]
-                    else:
+                    if "text" not in msg and "bytes" not in msg:
                         self.logger.warning("Unexpected message format: %s", msg)
                         continue
 
-                    self.logger.debug("Received message of length: %d", len(data))
+                    delivery_target_url = msg.get("text")
+                    if delivery_target_url is not None:
+                        data = await websocket.receive_bytes()
+                    else:
+                        data = msg["bytes"]
 
+                    self.logger.debug("Received message of length: %d", len(data))
                     transformed = await asyncio.to_thread(self.transform, data, "")
 
                     if delivery_target_url:
-                        response = await self._direct_put(
-                            delivery_target_url, transformed
-                        )
-                        if response:
-                            await websocket.send_text("direct put success")
-                            continue
+                        try:
+                            response = await self._direct_put(
+                                delivery_target_url, transformed
+                            )
+                            if response:
+                                await websocket.send_text("direct put success")
+                                continue
+                        except Exception as e:
+                            self.logger.warning("Direct put failed: %s", e)
 
                     await websocket.send_bytes(transformed)
 
-            except WebSocketDisconnect:
-                self.logger.warning("WebSocket disconnected: %s", websocket.client)
             except Exception as e:
                 self.logger.error(
                     "Unexpected WebSocket error from %s: %s", websocket.client, e
@@ -109,7 +96,10 @@ class FastAPIServer(ETLServer):
             finally:
                 if websocket in self.active_connections:
                     self.active_connections.remove(websocket)
-                await websocket.close()
+                try:
+                    await websocket.close()  # might have already been closed by peer
+                except RuntimeError as e:
+                    self.logger.debug("Skip close: %s", e)
 
     async def startup_event(self):
         """Initialize resources on server startup."""

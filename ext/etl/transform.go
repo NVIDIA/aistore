@@ -243,7 +243,7 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * err - any error occurred that should be passed on.
 func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
-		comm   communicatorCommon
+		comm   communicator
 		pw     *podWatcher
 		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
@@ -400,13 +400,13 @@ func StopAll() {
 	}
 }
 
-func GetCommunicator(etlName string) (Communicator, error) {
+func GetCommunicator(etlName string) (HTTPCommunicator, error) {
 	cc, err := getComm(etlName)
 	if err != nil {
 		return nil, err
 	}
 
-	comm, ok := cc.(Communicator)
+	comm, ok := cc.(HTTPCommunicator)
 	if !ok {
 		return nil, cos.NewErrNotFound(core.T, etlName+" the communicator doesn't support inline transform")
 	}
@@ -428,7 +428,7 @@ func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, 
 	}
 
 	switch comm := cc.(type) {
-	case Communicator:
+	case HTTPCommunicator:
 		return comm.OfflineTransform, nil, nil
 	case statefulCommunicator:
 		session, err := comm.createSession(xctn)

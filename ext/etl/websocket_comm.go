@@ -9,10 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"sync"
-
-	"github.com/NVIDIA/aistore/cmn/atomic"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -27,7 +24,7 @@ type (
 	// statefulCommunicator manages long-lived connection channels to ETL pod (e.g., WebSocket)
 	// and creates per-xaction sessions that use those channels to exchange data with ETL pods.
 	statefulCommunicator interface {
-		communicatorCommon
+		communicator
 		createSession(xctn core.Xact) (Session, error)
 	}
 
@@ -76,7 +73,7 @@ type (
 	wsSession struct {
 		txctn       core.Xact
 		connections []*wsConnCtx
-		workCh      chan rwpair
+		workCh      chan transformTask
 		chanFull    cos.ChanFull
 
 		sessionCtx       context.Context
@@ -90,18 +87,18 @@ type (
 		conn    *websocket.Conn
 
 		// outbound messages of the original objects to send to ETL pod
-		workCh chan rwpair
+		workCh chan transformTask
 
 		// inbound messages of post-transformed objects from ETL pod
 		writerCh       chan *io.PipeWriter
-		writerChanFull atomic.Int64
+		writerChanFull cos.ChanFull
 
 		// wait for read/write loop goroutines to exit when cleaning up
 		eg  *errgroup.Group
 		ctx context.Context
 	}
 
-	rwpair struct {
+	transformTask struct {
 		r     io.ReadCloser
 		w     *io.PipeWriter
 		daddr string
@@ -144,7 +141,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 	connPerSession := ws.boot.config.TCB.SbundleMult // TODO: add specific ETL config on this
 	wss := &wsSession{
 		txctn:       xctn,
-		workCh:      make(chan rwpair, wockChSize),
+		workCh:      make(chan transformTask, wockChSize),
 		connections: make([]*wsConnCtx, 0, connPerSession),
 	}
 	wss.sessionCtx, wss.sessionCtxCancel = context.WithCancel(ws.commCtx)
@@ -156,9 +153,6 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		}
 		resp.Body.Close()
 
-		// connection is expected to remain active due to continuous data flow, don't need liveness checks via ping/pong
-		conn.SetPongHandler(nil)
-		conn.SetPingHandler(nil)
 		conn.SetReadLimit(maxMsgSize)
 
 		group, ctx := errgroup.WithContext(wss.sessionCtx)
@@ -209,7 +203,7 @@ func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, daddr strin
 	l, c := len(wss.workCh), cap(wss.workCh)
 	wss.chanFull.Check(l, c)
 
-	wss.workCh <- rwpair{srcResp.R, pw, daddr}
+	wss.workCh <- transformTask{srcResp.R, pw, daddr}
 
 	return core.ReadResp{
 		R:      cos.NopOpener(pr),
@@ -259,6 +253,7 @@ func (wctx *wsConnCtx) readLoop() error {
 			if err != nil {
 				err = fmt.Errorf("error on reading message from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
+				return err
 			}
 			writer := <-wctx.writerCh
 
@@ -272,6 +267,7 @@ func (wctx *wsConnCtx) readLoop() error {
 				cos.Close(writer)
 				err = fmt.Errorf("error on copying message from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
+				return err
 			}
 			cos.Close(writer)
 		}
@@ -299,10 +295,13 @@ func (wctx *wsConnCtx) writeLoop() error {
 			// The ETL server is expected to consume them in the same order and treat them as logically linked.
 
 			// 1. send direct put address
-			err := wctx.conn.WriteMessage(websocket.TextMessage, []byte(rw.daddr))
-			if err != nil {
-				err = fmt.Errorf("error on writing direct put address %s: %w", wctx.name, err)
-				wctx.txctn.AddErr(err)
+			if rw.daddr != "" {
+				err := wctx.conn.WriteMessage(websocket.TextMessage, []byte(rw.daddr))
+				if err != nil {
+					err = fmt.Errorf("error on writing direct put address %s: %w", wctx.name, err)
+					wctx.txctn.AddErr(err)
+					return err
+				}
 			}
 
 			// 2. send object content
@@ -310,27 +309,22 @@ func (wctx *wsConnCtx) writeLoop() error {
 			if err != nil {
 				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
+				return err
 			}
 			if _, err := cos.CopyBuffer(writer, rw.r, buf); err != nil {
 				cos.Close(rw.r)
 				cos.Close(writer)
 				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
 				wctx.txctn.AddErr(err)
+				return err
 			}
 			cos.Close(rw.r)
 
 			// For each object sent to the ETL via `wctx.workCh`, we reserve a corresponding slot in `wctx.writerCh`
 			// for its writer. This guarantees that the correct writer is matched with the response when it arrives.
+			l, c := len(wctx.writerCh), cap(wctx.writerCh)
+			wctx.writerChanFull.Check(l, c)
 			wctx.writerCh <- rw.w
-			if l, c := len(wctx.writerCh), cap(wctx.writerCh); l > c/2 {
-				runtime.Gosched() // poor man's throttle
-				if l == c {
-					cnt := wctx.writerChanFull.Inc()
-					if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleETL)) {
-						nlog.Errorln(cos.ErrWorkChanFull, "inbound messages channel of session", wctx.name, "cnt", cnt)
-					}
-				}
-			}
 			cos.Close(writer)
 		}
 	}

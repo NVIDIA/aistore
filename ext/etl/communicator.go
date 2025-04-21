@@ -33,9 +33,9 @@ type (
 		OutBytes() int64
 	}
 
-	// communicatorCommon is responsible for managing communications with local ETL pod.
+	// communicator is responsible for managing communications with local ETL pod.
 	// It listens to cluster membership changes and terminates ETL pod, if need be.
-	communicatorCommon interface {
+	communicator interface {
 		meta.Slistener
 
 		ETLName() string
@@ -55,9 +55,9 @@ type (
 		CommStats        // only stats for `apc.ActETLInline` inline transform
 	}
 
-	// Communicator manages stateless communication to ETL pod through HTTP requests
-	Communicator interface {
-		communicatorCommon
+	// HTTPCommunicator manages stateless communication to ETL pod through HTTP requests
+	HTTPCommunicator interface {
+		communicator
 
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
@@ -101,15 +101,15 @@ type (
 
 // interface guard
 var (
-	_ Communicator = (*pushComm)(nil)
-	_ Communicator = (*redirectComm)(nil)
+	_ HTTPCommunicator = (*pushComm)(nil)
+	_ HTTPCommunicator = (*redirectComm)(nil)
 )
 
 //////////////
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) communicatorCommon {
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) communicator {
 	switch boot.msg.CommTypeX {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
@@ -282,6 +282,9 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 	}
 
 	r, ecode, err := doWithTimeout(reqArgs, getBody, timeout, started)
+	if err != nil {
+		return core.ReadResp{Err: err, Ecode: ecode}
+	}
 	oah.Size = r.Size()
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
@@ -398,7 +401,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr
 
 // getComm retrieves the communicator from registry by etl name
 // Returns an error if not found or not in the Running stage.
-func getComm(etlName string) (communicatorCommon, error) {
+func getComm(etlName string) (communicator, error) {
 	comm, stage := mgr.getByName(etlName)
 	if comm == nil {
 		return nil, cos.NewErrNotFound(core.T, etlName)
@@ -433,6 +436,9 @@ func (rtyr *retryer) call() (status int, err error) {
 	// If a fresh body is needed (e.g., for retries), fetch it via getBody
 	if rtyr.getBody != nil {
 		src := rtyr.getBody()
+		if src.Err != nil {
+			return src.Ecode, src.Err
+		}
 		body = src.R
 		size = src.OAH.Lsize()
 	}

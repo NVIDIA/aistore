@@ -18,7 +18,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - URL-encode object names when constructing the object paths for the request URLs (see [here](https://github.com/NVIDIA/aistore/blob/main/docs/unicode.md)).
 - Add `direct put` support in the websocket endpoint of ETL fastapi web server.
 - Remove `rebalance_id` from job JobSnapshot (not used; deprecated)
-- Enhanced error handling and connection management in the websocket endpoint of ETL fastapi web server.
+- Enhanced error handling on closing connection in the websocket endpoint of ETL fastapi web server.
 
 ### Removed
 
