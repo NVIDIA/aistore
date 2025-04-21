@@ -6,7 +6,6 @@ package mpather
 
 import (
 	"fmt"
-	"runtime"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,10 +31,11 @@ type (
 		workers map[string]*worker
 	}
 	worker struct {
-		opts   *WorkerGroupOpts
-		mi     *fs.Mountpath
-		workCh chan core.LIF
-		stopCh cos.StopCh
+		opts     *WorkerGroupOpts
+		mi       *fs.Mountpath
+		workCh   chan core.LIF
+		chanFull cos.ChanFull
+		stopCh   cos.StopCh
 	}
 )
 
@@ -66,12 +66,12 @@ func (wg *WorkerGroup) PostLIF(lom *core.LOM) (chanFull bool, err error) {
 	if !ok {
 		return false, fmt.Errorf("post-lif: %s not found", mi)
 	}
-	worker.workCh <- lom.LIF()
-	if l, c := len(worker.workCh), cap(worker.workCh); l > c/2 {
-		runtime.Gosched() // poor man's throttle
+	if l, c := len(worker.workCh), cap(worker.workCh); worker.chanFull.Check(l, c) {
 		chanFull = l == c
 	}
-	return
+	worker.workCh <- lom.LIF()
+
+	return chanFull, nil
 }
 
 // Stop aborts all the workers. It should be called after we are sure no more

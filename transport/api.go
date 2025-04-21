@@ -8,7 +8,6 @@ package transport
 import (
 	"io"
 	"math"
-	"runtime"
 	"time"
 	"unsafe"
 
@@ -159,13 +158,11 @@ func (s *Stream) Send(obj *Obj) (err error) {
 		return
 	}
 
+	l, c := len(s.workCh), cap(s.workCh)
+	s.chanFull.Check(l, c)
+
 	s.workCh <- obj
-	if l, c := len(s.workCh), cap(s.workCh); l > (c - c>>2) {
-		runtime.Gosched() // poor man's throttle
-		if l == c {
-			s.chanFull.Inc()
-		}
-	}
+
 	return
 }
 

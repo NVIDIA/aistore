@@ -1,15 +1,18 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
+	"errors"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type (
@@ -255,3 +258,46 @@ func (lwg *LimitedWaitGroup) Done() {
 func (lwg *LimitedWaitGroup) Wait() {
 	lwg.wg.Wait()
 }
+
+//
+// common channel-full helper
+//
+
+const (
+	chanFullSleep = 200 * time.Millisecond
+)
+
+type (
+	ChanFull struct {
+		atomic.Int64
+	}
+)
+
+var ErrWorkChanFull = errors.New("work channel full")
+
+func _threshold(c int) int { return c - c>>3 }
+
+// where l = len(workCh), c = cap(workCh)
+// - returns true on error and warning, both
+// - may resched and sleep
+func (u *ChanFull) Check(l, c int) bool {
+	switch {
+	case l < _threshold(c):
+		return false
+	case l == c:
+		cnt := u.Inc()
+		if cnt == 5 || cnt%100 == 99 {
+			nlog.ErrorDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "]")
+		}
+		time.Sleep(chanFullSleep)
+	default:
+		if l == _threshold(c) {
+			nlog.WarningDepth(1, ErrWorkChanFull)
+		} else {
+			runtime.Gosched()
+		}
+	}
+	return true
+}
+
+func (u *ChanFull) Load() int64 { return u.Int64.Load() }

@@ -8,7 +8,6 @@ package xs
 import (
 	"fmt"
 	"io"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -52,7 +51,7 @@ type (
 			mtx sync.Mutex
 		}
 		streamingX
-		chanFull atomic.Int64
+		chanFull cos.ChanFull
 		nworkers atomic.Int64 // total across all pending
 		owt      cmn.OWT
 	}
@@ -209,17 +208,11 @@ func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 
 func (r *XactTCO) ContMsg(msg *cmn.TCOMsg) {
 	r.IncPending()
-	r.workCh <- msg
 
-	if l, c := len(r.workCh), cap(r.workCh); l > c/2 {
-		runtime.Gosched() // poor man's throttle
-		if l == c {
-			cnt := r.chanFull.Inc()
-			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleXs)) {
-				nlog.Errorln(cos.ErrWorkChanFull, r.Name(), "cnt", cnt)
-			}
-		}
-	}
+	l, c := len(r.workCh), cap(r.workCh)
+	r.chanFull.Check(l, c)
+
+	r.workCh <- msg
 }
 
 func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
@@ -279,7 +272,11 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	err := lrit.run(wi, smap, true /*prealloc buf*/)
 
 	lrit.wait()
+
 	r.nworkers.Sub(nworkers)
+	r.chanFull.Add(lrit.nwp.chanFull.Load()) // NOTE: (adding apples to oranges)
+
+	// wait sync
 	if wg != nil {
 		wg.Wait()
 	}
@@ -327,6 +324,10 @@ outer:
 		r.pend.mtx.Lock()
 		clear(r.pend.m)
 		r.pend.mtx.Unlock()
+	}
+
+	if a := r.chanFull.Load(); a > 0 {
+		nlog.Warningln(r.Name(), "work channel full (final)", a)
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -58,19 +57,19 @@ type (
 		// function: sync
 		prune prune
 		// copying parallelism
-		numwp struct {
-			workCh  chan core.LIF
-			stopCh  *cos.StopCh
-			workers []tcbworker
-			wg      sync.WaitGroup
+		nwp struct {
+			workCh   chan core.LIF
+			chanFull cos.ChanFull
+			stopCh   *cos.StopCh
+			workers  []tcbworker
+			wg       sync.WaitGroup
 		}
 		// function: coordinate finish, abort, progress
 		sntl sentinel
 		// mountpath joggers
 		xact.BckJog
 		// details
-		chanFull atomic.Int64
-		owt      cmn.OWT
+		owt cmn.OWT
 	}
 )
 
@@ -165,12 +164,12 @@ func (p *tcbFactory) Start() error {
 }
 
 func (r *XactTCB) _iniNwp(numWorkers int) {
-	r.numwp.workers = make([]tcbworker, 0, numWorkers)
+	r.nwp.workers = make([]tcbworker, 0, numWorkers)
 	for range numWorkers {
-		r.numwp.workers = append(r.numwp.workers, tcbworker{r})
+		r.nwp.workers = append(r.nwp.workers, tcbworker{r})
 	}
-	r.numwp.workCh = make(chan core.LIF, max(numWorkers*nwpBurst, r.Config.TCB.Burst))
-	r.numwp.stopCh = cos.NewStopCh()
+	r.nwp.workCh = make(chan core.LIF, max(numWorkers*nwpBurst, r.Config.TCB.Burst))
+	r.nwp.stopCh = cos.NewStopCh()
 	nlog.Infoln(r.Name(), "workers:", numWorkers)
 }
 
@@ -300,9 +299,9 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 	wg.Done()
 
-	for _, worker := range r.numwp.workers {
+	for _, worker := range r.nwp.workers {
 		buf, slab := core.T.PageMM().Alloc()
-		r.numwp.wg.Add(1)
+		r.nwp.wg.Add(1)
 		go worker.run(buf, slab)
 	}
 
@@ -318,10 +317,10 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		nlog.Warningln(r.Name(), errJog, "- benign?")
 	}
 
-	if r.numwp.workers != nil {
+	if r.nwp.workers != nil {
 		// at this point, we are done with all do() calls on the workers
-		close(r.numwp.workCh)
-		r.numwp.wg.Wait()
+		close(r.nwp.workCh)
+		r.nwp.wg.Wait()
 	}
 
 	if r.dm != nil {
@@ -347,7 +346,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.sntl.cleanup()
 	r.Finish()
 
-	if a := r.chanFull.Load(); a > 0 {
+	if a := r.nwp.chanFull.Load(); a > 0 {
 		nlog.Warningln(r.Name(), "work channel full (final)", a)
 	}
 }
@@ -367,7 +366,7 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
-	if r.numwp.workers == nil {
+	if r.nwp.workers == nil {
 		args := r.args // TCBArgs
 		a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
 
@@ -378,12 +377,10 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 		return err
 	}
 
-	if l, c := len(r.numwp.workCh), cap(r.numwp.workCh); l > c/2 {
-		if a := r.chanFull.Inc(); a >= 3 && a <= 5 {
-			nlog.Warningln(r.Name(), "work channel full", a)
-		}
-	}
-	r.numwp.workCh <- lom.LIF()
+	l, c := len(r.nwp.workCh), cap(r.nwp.workCh)
+	r.nwp.chanFull.Check(l, c)
+
+	r.nwp.workCh <- lom.LIF()
 
 	return nil
 }
@@ -460,9 +457,9 @@ func (r *XactTCB) Abort(err error) bool {
 	if !r.Base.Abort(err) { // already aborted?
 		return false
 	}
-	if r.numwp.stopCh != nil {
-		debug.Assert(r.numwp.workers != nil)
-		r.numwp.stopCh.Close()
+	if r.nwp.stopCh != nil {
+		debug.Assert(r.nwp.workers != nil)
+		r.nwp.stopCh.Close()
 	}
 	return true
 }
@@ -494,7 +491,7 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
-	snap.Pack(fs.NumAvail(), len(r.numwp.workers), r.chanFull.Load())
+	snap.Pack(fs.NumAvail(), len(r.nwp.workers), r.nwp.chanFull.Load())
 
 	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
@@ -507,7 +504,7 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 ///////////////
 
 func (worker *tcbworker) run(buf []byte, slab *memsys.Slab) {
-	p := &worker.r.numwp
+	p := &worker.r.nwp
 outer:
 	for {
 		select {

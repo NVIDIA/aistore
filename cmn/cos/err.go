@@ -57,8 +57,6 @@ var (
 	errQuantityNonNegative = errors.New("quantity should not be negative")
 )
 
-var ErrWorkChanFull = errors.New("work channel full")
-
 var errBufferUnderrun = errors.New("buffer underrun")
 
 // ErrNotFound

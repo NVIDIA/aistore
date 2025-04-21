@@ -27,6 +27,7 @@ type (
 		callback ObjSentCB // to free SGLs, close files, etc.
 		lz4s     *lz4Stream
 		sendoff  sendoff
+		chanFull cos.ChanFull
 		streamBase
 	}
 	lz4Stream struct {

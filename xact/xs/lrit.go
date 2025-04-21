@@ -72,17 +72,13 @@ type (
 		// nwp: num-workers parallelism
 		// (these are _not_ joggers)
 		nwp struct {
-			workCh  chan lrpair
-			workers []*lrworker
-			wg      sync.WaitGroup
+			workCh   chan lrpair
+			workers  []*lrworker
+			chanFull cos.ChanFull
+			wg       sync.WaitGroup
 		}
 		lrp int // enum { lrpList, ... }
 	}
-)
-
-// concrete list-range type xactions (see also: archive.go)
-type (
-	TestXFactory struct{ prfFactory } // tests only
 )
 
 //////////
@@ -351,8 +347,12 @@ func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done
 		return true, nil
 	}
 
+	l, c := len(r.nwp.workCh), cap(r.nwp.workCh)
+	r.nwp.chanFull.Check(l, c)
+
 	// lom eventually freed below
 	// TODO: consider core.LIF with subsequent lif.LOM() conversion
+
 	r.nwp.workCh <- lrpair{lom, wi}
 	return false, nil
 }

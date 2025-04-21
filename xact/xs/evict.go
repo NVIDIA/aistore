@@ -118,6 +118,8 @@ func (r *evictDelete) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
+	snap.Pack(0, len(r.lrit.nwp.workers), r.lrit.nwp.chanFull.Load())
+
 	snap.IdleX = r.IsIdle()
 	return
 }

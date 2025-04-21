@@ -74,10 +74,10 @@ type (
 	}
 
 	wsSession struct {
-		txctn        core.Xact
-		connections  []*wsConnCtx
-		workCh       chan rwpair
-		workChanFull atomic.Int64
+		txctn       core.Xact
+		connections []*wsConnCtx
+		workCh      chan rwpair
+		chanFull    cos.ChanFull
 
 		sessionCtx       context.Context
 		sessionCtxCancel context.CancelFunc
@@ -204,18 +204,12 @@ func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, daddr strin
 	if srcResp.Err != nil {
 		return srcResp
 	}
-	pr, pw := io.Pipe()
+	pr, pw := io.Pipe() // TODO -- FIXME: revise and remove
+
+	l, c := len(wss.workCh), cap(wss.workCh)
+	wss.chanFull.Check(l, c)
 
 	wss.workCh <- rwpair{srcResp.R, pw, daddr}
-	if l, c := len(wss.workCh), cap(wss.workCh); l > c/2 {
-		runtime.Gosched() // poor man's throttle
-		if l == c {
-			cnt := wss.workChanFull.Inc()
-			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleETL)) {
-				nlog.Errorln(cos.ErrWorkChanFull, "work channel of session", wss.txctn.ID(), "cnt", cnt)
-			}
-		}
-	}
 
 	return core.ReadResp{
 		R:      cos.NopOpener(pr),

@@ -7,7 +7,6 @@ package ec
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -53,7 +52,7 @@ type (
 		mi       *fs.Mountpath
 		workCh   chan *core.LOM
 		parent   *XactBckEncode
-		chanFull atomic.Int64
+		chanFull cos.ChanFull
 	}
 )
 
@@ -320,12 +319,10 @@ func (j *rcvyJogger) run() {
 		if !ok {
 			break
 		}
-		if l, c := len(j.workCh), cap(j.workCh); l > (c - c>>2) {
-			runtime.Gosched() // poor man's throttle
-			if l == c {
-				j.chanFull.Inc()
-			}
-		}
+
+		l, c := len(j.workCh), cap(j.workCh)
+		j.chanFull.Check(l, c)
+
 		err := ECM.Recover(lom)
 		j.parent.setLast(lom, err)
 		core.FreeLOM(lom)

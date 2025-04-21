@@ -139,6 +139,7 @@ type (
 		stopCh       chan struct{}     // stop channel
 		workCh       chan revsReq      // work channel
 		retryTimer   *time.Timer       // timer to sync pending
+		chanFull     cos.ChanFull      // as implied
 		timerStopped bool              // true if retryTimer has been stopped, false otherwise
 	}
 	// metasync Rx structured error
@@ -214,9 +215,8 @@ func (y *metasyncer) Run() error {
 				y.retryTimer.Reset(config.Periodic.RetrySyncTime.D())
 				y.timerStopped = false
 
-				if l, c := len(y.workCh), cap(y.workCh); l > c/2 {
-					nlog.Errorln("Warning:", y.p.String(), "[hp]:", cos.ErrWorkChanFull, "len", l, "cap", c,
-						"failed", failedCnt)
+				if l, c := len(y.workCh), cap(y.workCh); y.chanFull.Check(l, c) {
+					nlog.Errorln("[hp full]:", y.chanFull.Load(), "failed", failedCnt)
 				}
 			} else {
 				y.timerStopped = true
