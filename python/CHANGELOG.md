@@ -24,11 +24,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [1.13.4] - 2025-04-16
 
+### Changed
+
+- **BREAKING:** Update control structure used for bucket-to-bucket copy jobs (`CopyBckMsg` => `TCBckMsg`), which is not backward compatible with cluster version 3.27 and below.
+
 ### Added
 
-- **BREAKING:** Add support for concurrent bucket-to-bucket copy and transformation jobs using the `num_workers` parameter. [^1] 
-
-[^1]: Concurrent bucket-to-bucket copy and transformation jobs is a new functionality in AIS that has been pushed upstream but not yet officially released. Please use a cluster built with the latest changes (see [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#from-source)).
+- Add support for concurrent bucket-to-bucket copy and transformation jobs using the `num_workers` parameter.
 - Add support for extension re-mapping in bucket-to-bucket copy jobs using the `ext` parameter.
 - Add `direct put` support in the ETL fastapi web server.
 
