@@ -143,7 +143,7 @@ func (r *lrit) _iniNwp(numWorkers, confBurst int) {
 	}
 
 	// [burst] work channel capacity: up to 4 pending work items per
-	r.nwp.workCh = make(chan lrpair, max(numWorkers*nwpBurst, confBurst))
+	r.nwp.workCh = make(chan lrpair, max(min(numWorkers*nwpBurstMult, nwpBurstMax), confBurst))
 	nlog.Infoln(r.parent.Name(), "workers:", numWorkers)
 }
 

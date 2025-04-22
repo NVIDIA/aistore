@@ -8,6 +8,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -528,6 +529,12 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		ctlmsg             string
 		fromToBck, haveBck bool
 		dts                = make([]nodeSnaps, 0, len(filteredXs))
+
+		// TODO -- FIXME
+		// - (xsnap.Packed => [joggers. workers, channel-full count])
+		// - instead of min/max - in verbose mode add extra column to show per target info
+		jwfmin = [3]int{math.MaxInt, math.MaxInt, math.MaxInt}
+		jwfmax = [3]int{}
 	)
 	for tid, snaps := range filteredXs {
 		if len(snaps) == 0 {
@@ -543,6 +550,14 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			haveBck = true
 		}
 
+		j, w, f := snaps[0].Unpack()
+		jwfmax[0] = max(jwfmax[0], j)
+		jwfmax[1] = max(jwfmax[1], w)
+		jwfmax[2] = max(jwfmax[2], f)
+		jwfmin[0] = min(jwfmin[0], j)
+		jwfmin[1] = min(jwfmin[1], w)
+		jwfmin[2] = min(jwfmin[2], f)
+
 		// a.k.a "run options"
 		// try to show more but not too much
 		nmsg := snaps[0].CtlMsg
@@ -551,19 +566,12 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			// do nothing
 		case ctlmsg == "":
 			ctlmsg = nmsg
-
-			// TODO -- FIXME: draft
-			a, b, c := snaps[0].Unpack()
-			ctlmsg += fmt.Sprintf("; parallelism: (joggers: %d, workers: %d, chan-full: %d", a, b, c)
-
 		case strings.HasSuffix(ctlmsg, "..."):
 			// do nothing
 		case strings.Contains(ctlmsg, nmsg):
 			// do nothing
-		case len(ctlmsg)+len(nmsg) < 60:
-			ctlmsg += "; " + nmsg
 		default:
-			ctlmsg += "; ..."
+			ctlmsg += "; " + nmsg
 		}
 
 		dts = append(dts, nodeSnaps{DaemonID: tid, XactSnaps: snaps})
@@ -574,6 +582,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	_, xname := xact.GetKindName(xargs.Kind)
 	if caption {
+		ctlmsg += _parallelism(jwfmin, jwfmax)
 		jobCptn(c, xname, xargs.ID, ctlmsg, xargs.OnlyRunning, xargs.DaemonID != "")
 	}
 
@@ -649,6 +658,36 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		}
 	}
 	return l, nil
+}
+
+// ctlmsg += _parallelism()
+func _parallelism(jwfmin, jwfmax [3]int) (s string) {
+	if jwfmax[0] == 0 && jwfmax[1] == 0 && jwfmax[2] == 0 {
+		return ""
+	}
+	s = " parallelism:"
+	if jwfmax[0] != 0 {
+		if jwfmax[0] == jwfmin[0] {
+			s += " j[" + strconv.Itoa(jwfmax[0]) + "]"
+		} else {
+			s += " j[" + strconv.Itoa(jwfmin[0]) + "," + strconv.Itoa(jwfmax[0]) + "]"
+		}
+	}
+	if jwfmax[1] != 0 {
+		if jwfmax[1] == jwfmin[1] {
+			s += " w[" + strconv.Itoa(jwfmax[1]) + "]"
+		} else {
+			s += " w[" + strconv.Itoa(jwfmin[1]) + "," + strconv.Itoa(jwfmax[1]) + "]"
+		}
+	}
+	if jwfmax[2] != 0 {
+		if jwfmax[2] == jwfmin[2] {
+			s += " chan-full[" + strconv.Itoa(jwfmax[2]) + "]"
+		} else {
+			s += " chan-full[" + strconv.Itoa(jwfmin[2]) + "," + strconv.Itoa(jwfmax[2]) + "]"
+		}
+	}
+	return s
 }
 
 func showObjectHandler(c *cli.Context) error {

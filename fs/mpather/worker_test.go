@@ -1,6 +1,6 @@
 // Package mpather provides per-mountpath concepts.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package mpather_test
 
@@ -32,12 +32,14 @@ func TestWorkerGroup(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	wg := mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
+	wg, err := mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback: func(_ *core.LOM, _ []byte) {
 			counter.Inc()
 		},
-		QueueSize: 10,
+		WorkChSize: 10,
 	})
+	tassert.CheckFatal(t, err)
+
 	defer wg.Stop()
 
 	wg.Run()
@@ -47,7 +49,7 @@ func TestWorkerGroup(t *testing.T) {
 		err := lom.InitFQN(fqn, &out.Bck)
 		tassert.CheckError(t, err)
 
-		_, err = wg.PostLIF(lom)
+		err = wg.PostLIF(lom)
 		tassert.CheckError(t, err)
 	}
 

@@ -264,7 +264,7 @@ func (lwg *LimitedWaitGroup) Wait() {
 //
 
 const (
-	chanFullSleep = 200 * time.Millisecond
+	chanFullSleep = 100 * time.Millisecond
 )
 
 type (
@@ -286,8 +286,8 @@ func (u *ChanFull) Check(l, c int) bool {
 		return false
 	case l == c:
 		cnt := u.Inc()
-		if cnt == 5 || cnt%100 == 99 {
-			nlog.ErrorDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "]")
+		if (cnt > 5 && cnt < 10) || cnt%1000 == 999 {
+			nlog.WarningDepth(1, ErrWorkChanFull, "[ len:", l, "cap:", c, "]")
 		}
 		time.Sleep(chanFullSleep)
 	default:

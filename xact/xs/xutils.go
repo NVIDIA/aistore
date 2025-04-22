@@ -66,8 +66,16 @@ func (rate *tcrate) acquire() {
 //
 
 const (
-	nwpBurst = 32 // work channel burst multiplier (channel size = burst * num-workers)
+	minTcoWorkChSize  = 256
+	minArchWorkChSize = 256
+)
 
+// workers (tcb and tco, the latter via lrit)
+const (
+	nwpBurstMult = 48 // shared work channel burst multiplier (channel size = burst * num-workers)
+	nwpBurstMax  = 4096
+)
+const (
 	nwpNone = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
 	nwpMin  = 2  // throttled
 	nwpDflt = 0  // (number of mountpaths)

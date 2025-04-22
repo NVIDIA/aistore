@@ -127,6 +127,11 @@ func (xsnap *Snap) Running() bool {
 
 func (xsnap *Snap) Finished() bool { return xsnap.Started() && !xsnap.EndTime.IsZero() }
 
+// snap.Packed layout:
+//
+// [[ --------- bits 20 through 63 ----------] [--- bits 10 through 19 ---] [------ bits 0 through 9 ------]]
+//             channel-full counter                 number of workers          number of mountpath joggers
+
 const (
 	gorBits = 10
 	chShift = 2 * gorBits

@@ -34,7 +34,7 @@ import (
 )
 
 // TODO:
-// - enable multi-threaded list-range iter (see lrit.init)
+// - multi-worker list-range iter (see lrit.init)
 // - one source multiple destination buckets (feature)
 
 type (
@@ -62,9 +62,10 @@ type (
 		lrit *lrit
 	}
 	jogger struct {
-		r      *XactArch
-		mpath  *fs.Mountpath
-		workCh chan *archtask
+		r        *XactArch
+		mi       *fs.Mountpath
+		workCh   chan *archtask
+		chanFull cos.ChanFull
 	}
 )
 
@@ -73,13 +74,13 @@ type (
 		bckTo   *meta.Bck
 		smap    *meta.Smap
 		joggers struct {
-			m  map[string]*jogger
-			wg sync.WaitGroup
-			sync.RWMutex
+			m   map[string]*jogger
+			wg  sync.WaitGroup
+			mtx sync.RWMutex
 		}
 		pending struct {
-			m map[string]*archwi
-			sync.RWMutex
+			m   map[string]*archwi
+			mtx sync.Mutex
 		}
 		streamingX
 	}
@@ -119,7 +120,7 @@ func (p *archFactory) Start() (err error) {
 	// new x-archive
 	var (
 		config = cmn.GCO.Get()
-		burst  = max(256, config.Arch.Burst)
+		burst  = max(minArchWorkChSize, config.Arch.Burst)
 		r      = &XactArch{streamingX: streamingX{p: &p.streamingF, config: config}}
 	)
 	r.pending.m = make(map[string]*archwi, burst)
@@ -174,27 +175,32 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		return err
 	}
 
-	// bind a new/existing jogger to this archwi based on archlom's mountpath
+	// set archwi jogger based on the archlom's mountpath
 	var (
-		burst  = max(256, r.config.Arch.Burst)
-		mpath  = archlom.Mountpath()
-		exists bool
+		burst = max(minArchWorkChSize, r.config.Arch.Burst)
+		mi    = archlom.Mountpath()
 	)
-	r.joggers.Lock()
-	if wi.j, exists = r.joggers.m[mpath.Path]; !exists {
-		r.joggers.m[mpath.Path] = &jogger{
+	r.joggers.mtx.Lock()
+	if j, ok := r.joggers.m[mi.Path]; ok {
+		wi.j = j
+	} else {
+		// [on demand] create and run just once for this job
+		j = &jogger{
 			r:      r,
-			mpath:  mpath,
+			mi:     mi,
 			workCh: make(chan *archtask, burst),
 		}
-		wi.j = r.joggers.m[mpath.Path]
+		r.joggers.m[mi.Path] = j
+		wi.j = j
+
+		// and run this one right away
 		r.joggers.wg.Add(1)
-		go func() {
-			wi.j.run()
-			r.joggers.wg.Done()
-		}()
+		go func(j *jogger, wg *sync.WaitGroup) {
+			j.run()
+			wg.Done()
+		}(j, &r.joggers.wg)
 	}
-	r.joggers.Unlock()
+	r.joggers.mtx.Unlock()
 
 	// fcreate at BEGIN time
 	if core.T.SID() == wi.tsi.ID() {
@@ -243,18 +249,18 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		}
 	}
 
-	r.pending.Lock()
+	r.pending.mtx.Lock()
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
-	r.pending.Unlock()
+	r.pending.mtx.Unlock()
 	return nil
 }
 
 func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	r.IncPending()
-	r.pending.RLock()
+	r.pending.mtx.Lock()
 	wi, ok := r.pending.m[msg.TxnUUID]
-	r.pending.RUnlock()
+	r.pending.mtx.Unlock()
 	if !ok || wi == nil {
 		// NOTE: unexpected and unlikely - aborting
 		debug.Assert(r.ErrCnt() > 0) // see cleanup
@@ -303,7 +309,11 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 		return
 	}
 
-	wi.j.workCh <- &archtask{wi, lrit}
+	j := wi.j
+	l, c := len(j.workCh), cap(j.workCh)
+	j.chanFull.Check(l, c)
+
+	j.workCh <- &archtask{wi, lrit}
 	if r.Err() != nil {
 		wi.cleanup()
 		r.Abort(r.Err())
@@ -314,6 +324,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 func (r *XactArch) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 	wg.Done()
+
 	select {
 	case <-r.IdleTimer():
 		r.cleanup()
@@ -329,12 +340,12 @@ func (r *XactArch) cleanup() {
 	}
 
 	// [cleanup] close and rm unfinished archives (compare w/ finalize)
-	r.pending.Lock()
+	r.pending.mtx.Lock()
 	for _, wi := range r.pending.m {
 		wi.cleanup()
 	}
 	clear(r.pending.m)
-	r.pending.Unlock()
+	r.pending.mtx.Unlock()
 
 	r.joggers.wg.Wait()
 }
@@ -367,9 +378,9 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 }
 
 func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	r.pending.RLock()
+	r.pending.mtx.Lock()
 	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
-	r.pending.RUnlock()
+	r.pending.mtx.Unlock()
 	if !ok {
 		if r.Finished() || r.IsAborted() {
 			return nil
@@ -408,10 +419,10 @@ func (r *XactArch) finalize(wi *archwi) {
 		r.AddErr(err, 4, cos.SmoduleXs)
 	}
 
-	r.pending.Lock()
+	r.pending.mtx.Lock()
 	delete(r.pending.m, wi.msg.TxnUUID)
 	r.wiCnt.Dec()
-	r.pending.Unlock()
+	r.pending.mtx.Unlock()
 
 	ecode, err := r._fini(wi)
 	r.DecPending()
@@ -492,9 +503,20 @@ func (r *XactArch) FromTo() (src, dst *meta.Bck) {
 	return
 }
 
+func (r *XactArch) chanFullTotal() (n int64) {
+	r.joggers.mtx.Lock()
+	for _, j := range r.joggers.m {
+		n += j.chanFull.Load()
+	}
+	r.joggers.mtx.Unlock()
+	return n
+}
+
 func (r *XactArch) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
+
+	snap.Pack(len(r.joggers.m), 0 /*currently, always zero*/, r.chanFullTotal())
 
 	snap.IdleX = r.IsIdle()
 	if f, t := r.FromTo(); f != nil {
@@ -508,7 +530,7 @@ func (r *XactArch) Snap() (snap *core.Snap) {
 ////////////
 
 func (j *jogger) run() {
-	nlog.Infoln("start jogger", j.r.Name(), j.mpath)
+	nlog.Infoln("start jogger", j.r.Name(), j.mi)
 outer:
 	for {
 		select {
@@ -521,25 +543,29 @@ outer:
 			break outer
 		}
 	}
-	nlog.Infoln("stop jogger", j.r.Name(), j.mpath)
+	nlog.Infoln("stop jogger", j.r.Name(), j.mi)
 }
 
 func (j *jogger) do(archtask *archtask) {
-	lrit, wi := archtask.lrit, archtask.wi
-	err := lrit.run(wi, j.r.smap, false /*prealloc buf*/)
-	if err != nil {
+	var (
+		r        = j.r
+		lrit, wi = archtask.lrit, archtask.wi
+	)
+	debug.Assert(r == wi.r)
+	if err := lrit.run(wi, j.r.smap, false /*prealloc buf*/); err != nil {
 		wi.r.AddErr(err)
 	}
 
 	lrit.wait()
+
 	if core.T.SID() == wi.tsi.ID() {
 		go wi.r.finalize(wi) // TODO -- FIXME: async finalize this shard vs stopping
 	} else {
 		wi.r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil)
-		wi.r.pending.Lock()
+		wi.r.pending.mtx.Lock()
 		delete(wi.r.pending.m, wi.msg.TxnUUID)
 		wi.r.wiCnt.Dec()
-		wi.r.pending.Unlock()
+		wi.r.pending.mtx.Unlock()
 		wi.r.DecPending()
 
 		core.FreeLOM(wi.archlom)

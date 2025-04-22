@@ -52,7 +52,7 @@ type (
 		}
 		streamingX
 		chanFull cos.ChanFull
-		nworkers atomic.Int64 // total across all pending
+		nworkers atomic.Int64 // total across all pending (currently, always zero)
 		owt      cmn.OWT
 	}
 	tcowi struct {
@@ -103,7 +103,7 @@ func (p *tcoFactory) Start() error {
 	// new x-tco
 	var (
 		config = cmn.GCO.Get()
-		burst  = max(256, config.TCO.Burst)
+		burst  = max(minTcoWorkChSize, config.TCO.Burst)
 		r      = &XactTCO{
 			streamingX: streamingX{p: &p.streamingF, config: config},
 			args:       p.args,
