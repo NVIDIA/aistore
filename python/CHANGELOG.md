@@ -11,6 +11,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Added
 
 - Add `direct put` support in the websocket endpoint of ETL fastapi web server.
+- Introduce `glob_id` field on `JobSnapshot` and implement `unpack()` to decode (njoggers, nworkers, chan_full) from the packed integer.
 
 ### Changed
 
@@ -19,6 +20,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `direct put` support in the websocket endpoint of ETL fastapi web server.
 - Remove `rebalance_id` from job JobSnapshot (not used; deprecated)
 - Enhanced error handling on closing connection in the websocket endpoint of ETL fastapi web server.
+- Rename `JobSnapshot` → `JobSnap` and `AggregatedJobSnapshots` → `AggregatedJobSnaps` for naming consistency
 
 ### Removed
 

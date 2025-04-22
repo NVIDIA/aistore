@@ -18,6 +18,7 @@ from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.types import BucketModel
 from tests.const import KB
+from tests.integration.sdk import DEFAULT_TEST_CLIENT
 
 
 # pylint: disable=too-few-public-methods
@@ -241,3 +242,11 @@ def create_api_error_response(req_url: str, status: str, msg: str) -> requests.R
     response._content = msg.encode("utf-8")
     response.request = req
     return response
+
+
+def has_targets(n: int = 2) -> bool:
+    """Check if the cluster has at least two targets before running tests."""
+    try:
+        return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= n
+    except Exception:
+        return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)

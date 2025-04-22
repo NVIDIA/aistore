@@ -19,7 +19,7 @@ from aistore.sdk.provider import Provider
 
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
-from tests.utils import random_string, cases
+from tests.utils import random_string, cases, has_targets
 from tests.const import (
     OBJECT_COUNT,
     OBJ_CONTENT,
@@ -116,8 +116,7 @@ class TestBucketOps(ParallelTestBase):
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
 
-    # TODO: Verify that job runs w/ correct number of workers (requires
-    #       number of workers to be added as part of job info)
+    @unittest.skipIf(not has_targets(2), "Test requires more than one target")
     def test_copy(self):
         from_bck = self._create_bucket()
         to_bck = self._create_bucket()
@@ -141,7 +140,9 @@ class TestBucketOps(ParallelTestBase):
         )
         self.assertNotEqual(job_id, "")
 
-        self.client.job(job_id).wait()
+        job = self.client.job(job_id)
+        job.wait()
+        self.assertEqual(num_workers, job.get_details().get_num_workers())
         copied = to_bck.list_all_objects()
 
         self.assertEqual(1, len(copied))

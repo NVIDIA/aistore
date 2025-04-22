@@ -25,22 +25,14 @@ from tests.const import (
     OBJ_READ_TYPE_CHUNK,
     TEST_TIMEOUT,
 )
-from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
     cases,
     create_archive,
     string_to_dict,
+    has_targets,
 )
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
-
-
-def has_enough_targets():
-    """Check if the cluster has at least two targets before running tests."""
-    try:
-        return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= 2
-    except Exception:
-        return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
 
 
 # pylint: disable=unused-variable, too-many-public-methods
@@ -417,7 +409,7 @@ class TestObjectOps(ParallelTestBase):
             fetched_content = fetched_obj.get_reader().read_all()
             self.assertEqual(content, fetched_content)
 
-    @unittest.skipIf(not has_enough_targets(), "Test requires more than one target")
+    @unittest.skipIf(not has_targets(2), "Test requires more than one target")
     def test_get_object_direct(self):
         """
         Test fetching objects directly from the target node.
@@ -452,7 +444,7 @@ class TestObjectOps(ParallelTestBase):
                 len(obj_from_direct), 0, f"Object data is empty for object: {obj_name}"
             )
 
-    @unittest.skipIf(not has_enough_targets(), "Test requires more than one target")
+    @unittest.skipIf(not has_targets(2), "Test requires more than one target")
     def test_get_object_direct_all_targets(self):
         """
         Test retrieving an object directly from all targets in the cluster.

@@ -2,7 +2,6 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-import itertools
 from datetime import datetime, timedelta
 from typing import List, Optional
 import time
@@ -25,9 +24,9 @@ from aistore.sdk.types import (
     JobStatus,
     JobArgs,
     ActionMsg,
-    JobSnapshot,
+    JobSnap,
     BucketModel,
-    AggregatedJobSnapshots,
+    AggregatedJobSnap,
 )
 from aistore.sdk.utils import probing_frequency, get_logger
 
@@ -237,7 +236,7 @@ class Job:
 
     def get_within_timeframe(
         self, start_time: datetime, end_time: Optional[datetime] = None
-    ) -> List[JobSnapshot]:
+    ) -> List[JobSnap]:
         """
         Retrieves jobs that started after a specified start_time and optionally ended before a specified end_time.
 
@@ -267,7 +266,7 @@ class Job:
             raise JobInfoNotFound("No relevant job info found")
         return jobs_found
 
-    def get_details(self) -> AggregatedJobSnapshots:
+    def get_details(self) -> AggregatedJobSnap:
         """
         Retrieve detailed job snapshot information across all targets.
 
@@ -281,7 +280,7 @@ class Job:
             path=URL_PATH_CLUSTER,
             json=job_args,
             params=query_params,
-            res_model=AggregatedJobSnapshots,
+            res_model=AggregatedJobSnap,
         )
 
     def get_total_time(self) -> Optional[timedelta]:
@@ -330,7 +329,7 @@ class Job:
         except IndexError:
             return None  # No valid timestamps
 
-    def _get_all_snapshots(self) -> List[JobSnapshot]:
+    def _get_all_snapshots(self) -> List[JobSnap]:
         """
         Returns a flat list of all job snapshots across all target nodes.
 
@@ -339,7 +338,7 @@ class Job:
         """
         details = self.get_details()
         # Access the __root__ dictionary and chain its values
-        return list(itertools.chain.from_iterable(details.__root__.values()))
+        return details.list_snapshots()
 
     def _check_snapshot_finished(self, snapshots):
         job_found = False

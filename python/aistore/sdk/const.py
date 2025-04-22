@@ -176,3 +176,20 @@ BYTE_RANGE_PREFIX_LENGTH = 6
 
 # Custom seed (MLCG32)
 XX_HASH_SEED = 1103515245
+
+# Job Masked Field Constants
+# Ref:
+# ┌──────────────────────────────────────────┬───────────────┬──────────────────────────┐
+# │             bits 20 through 63           │ bits 10–19    │ bits 0–9                 │
+# │        CHANNEL_BUFFERED_COUNT (44 bits)  │ WORKER_COUNT  │ JOGGER_COUNT             │
+# └──────────────────────────────────────────┴───────────────┴──────────────────────────┘
+JOGGER_COUNT_BITS = 10
+WORKER_COUNT_BITS = 10
+CHANNEL_COUNT_BITS = 64 - (JOGGER_COUNT_BITS + WORKER_COUNT_BITS)
+
+# bit‐masks and shifts
+JOGGER_COUNT_MASK = (1 << JOGGER_COUNT_BITS) - 1
+WORKER_COUNT_SHIFT = JOGGER_COUNT_BITS
+WORKER_COUNT_MASK = ((1 << WORKER_COUNT_BITS) - 1) << WORKER_COUNT_SHIFT
+CHANNEL_COUNT_SHIFT = JOGGER_COUNT_BITS + WORKER_COUNT_BITS
+CHANNEL_COUNT_MASK = ((1 << CHANNEL_COUNT_BITS) - 1) << CHANNEL_COUNT_SHIFT

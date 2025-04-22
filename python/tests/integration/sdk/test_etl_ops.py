@@ -23,7 +23,7 @@ from aistore.sdk.etl.etl_const import (
 
 from tests.integration import CLUSTER_ENDPOINT
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
-from tests.utils import cases, create_and_put_object, random_string
+from tests.utils import cases, create_and_put_object, random_string, has_targets
 
 ETL_NAME_CODE = "etl-" + random_string(5)
 ETL_NAME_CODE_IO = "etl-" + random_string(5)
@@ -446,9 +446,8 @@ class TestETLOps(unittest.TestCase):
         spec_etl.stop()
         spec_etl.delete()
 
-    # TODO: Verify that job runs w/ correct number of workers (requires
-    #       number of workers to be added as part of job info)
     @pytest.mark.etl
+    @unittest.skipIf(not has_targets(2), "Test requires more than one target")
     def test_etl_concurrent_workers(self):
         def transform(input_bytes):
             md5 = hashlib.md5()
@@ -467,7 +466,9 @@ class TestETLOps(unittest.TestCase):
             num_workers=num_workers,
         )
 
-        self.client.job(job_id).wait()
+        job = self.client.job(job_id)
+        job.wait()
+        self.assertEqual(num_workers, job.get_details().get_num_workers())
 
         self.assertEqual(2, len(dst_bck.list_all_objects()))
 

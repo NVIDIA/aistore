@@ -20,6 +20,11 @@ from aistore.sdk.const import (
     AIS_OBJ_NAME,
     AIS_LOCATION,
     AIS_MIRROR_COPIES,
+    JOGGER_COUNT_MASK,
+    WORKER_COUNT_MASK,
+    WORKER_COUNT_SHIFT,
+    CHANNEL_COUNT_MASK,
+    CHANNEL_COUNT_SHIFT,
 )
 from aistore.sdk.utils import get_digest, xoshiro256_hash
 
@@ -431,7 +436,7 @@ class JobStats(BaseModel):
         allow_population_by_field_name = True
 
 
-class JobSnapshot(BaseModel):
+class JobSnap(BaseModel):
     """
     Represents a snapshot of a job on a target node.
     """
@@ -447,19 +452,58 @@ class JobSnapshot(BaseModel):
     aborted: bool = Field(default=False)
     is_idle: bool = Field(default=False)
     abort_err: str = Field(default="", alias="abort-err")
+    packed: int = Field(
+        default=0, alias="glob.id"
+    )  # Bitwise representation of the number of joggers, workers, and channel full status
 
     class Config:  # pylint: disable=missing-class-docstring
         allow_population_by_field_name = True
 
+    def unpack_glob_id(self) -> tuple[int, int, int]:
+        """
+        Unpack the `glob_id` into (njoggers, nworkers, chan_full).
+        The packed value is a bitwise representation of the number of joggers, workers, and channel full status.
+        """
+        njoggers = self.packed & JOGGER_COUNT_MASK
+        nworkers = (self.packed & WORKER_COUNT_MASK) >> WORKER_COUNT_SHIFT
+        chbuf_cnt = (self.packed & CHANNEL_COUNT_MASK) >> CHANNEL_COUNT_SHIFT
+        return njoggers, nworkers, chbuf_cnt
 
-class AggregatedJobSnapshots(BaseModel):
+
+class AggregatedJobSnap(BaseModel):
     """
     Represents job snapshots grouped by target ID.
 
-    The __root__ attribute is a dictionary mapping target node IDs to lists of JobSnapshot instances.
+    Under the hood this is a root model (mapping node IDs →
+    lists of JobSnapshot), but we expose it via the `snapshots`
+    property so that static checkers don’t get confused.
     """
 
-    __root__: Dict[str, List[JobSnapshot]] = Field(default={})
+    __root__: Dict[str, List[JobSnap]] = Field(default_factory=dict)
+
+    @property
+    def snapshots(self) -> Dict[str, List[JobSnap]]:
+        """
+        Return the underlying dict of nodeID → [JobSnapshot,...].
+        """
+        # __root__ in __dict__ is the real dict, not a FieldInfo
+        return self.__dict__.get("__root__", {})
+
+    def list_snapshots(self) -> List[JobSnap]:
+        """
+        Return a flat list of all JobSnapshot instances.
+        """
+        return [snap for snaps in self.snapshots.values() for snap in snaps]
+
+    def get_num_workers(self) -> int:
+        """
+        Return the nworkers from any one snapshot (as all are the same).
+        """
+        for snaps in self.snapshots.values():
+            if snaps:
+                # unpack() → (njoggers, nworkers, chan_full)
+                return snaps[0].unpack_glob_id()[1]
+        return 0
 
 
 class CopyBckMsg(BaseModel):
