@@ -1,62 +1,46 @@
-.PHONY: minimal minimal-cleanup minimal-https minimal-https-cleanup minimal-cloud minimal-cloud-cleanup ci ci-envs ci-secrets
+export LOCAL_DEVELOPMENT ?= false
+export CLUSTER_TYPE ?= kind
 
-# Run AIStore cluster consisting of 1 proxy/gateway and 1 target
+# Quick start target
+.PHONY: try
+try: create-cluster minimal
+
+# Minimal deployment targets
+.PHONY: minimal minimal-cleanup
 minimal:
-	kubectl apply -k base/common
-	kubectl apply -k base/proxy
-	kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
-	kubectl apply -k base/target
-	kubectl rollout status statefulset/ais-target
+	./utils/deploy_ais.sh base/common base/proxy base/target
 
 minimal-cleanup:
-	kubectl delete -k base/common || true
-	kubectl delete -k base/proxy || true
-	kubectl delete -k base/target || true
-	./utils/node_cleanup.sh
+	./utils/cleanup_ais.sh base/common base/proxy base/target
 
-# Run AIStore cluster consisting of 1 proxy/gateway and 1 target w/ HTTPS enabled
+# Sample HTTPs deployment targets
+.PHONY: minimal-https minimal-https-cleanup install-cmctl
 minimal-https: install-cmctl
 	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.1/cert-manager.yaml
 	cmctl check api --wait=2m
-	kubectl apply -k overlays/samples/https/common
-	kubectl apply -k overlays/samples/https/proxy
-	kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
-	kubectl apply -k overlays/samples/https/target
-	kubectl rollout status statefulset/ais-target
+	./utils/deploy_ais.sh overlays/samples/https/common overlays/samples/https/proxy overlays/samples/https/target
 
 minimal-https-cleanup:
 	kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.1/cert-manager.yaml
-	kubectl delete -k overlays/samples/https/common || true
-	kubectl delete -k overlays/samples/https/proxy || true
-	kubectl delete -k overlays/samples/https/target || true
-	./utils/node_cleanup.sh
+	./utils/cleanup_ais.sh overlays/samples/https/common overlays/samples/https/proxy overlays/samples/https/target
 
 install-cmctl:
 	@if ! command -v cmctl >/dev/null 2>&1; then \
 		go install github.com/cert-manager/cmctl/v2@latest; \
 	fi
 
-# Run AIStore cluster consisting of 1 proxy/gateway and 1 target w/ AWS and GCP backends
+# Sample cloud deployment targets
+.PHONY: minimal-cloud minimal-cloud-cleanup
 minimal-cloud:
-	kubectl apply -k overlays/samples/cloud/common
-	kubectl apply -k base/proxy
-	kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
-	kubectl apply -k overlays/samples/cloud/target
-	kubectl rollout status statefulset/ais-target
+	./utils/deploy_ais.sh overlays/samples/cloud/common base/proxy overlays/samples/cloud/target
 
 minimal-cloud-cleanup:
-	kubectl delete -k overlays/samples/cloud/common || true
-	kubectl delete -k base/proxy || true
-	kubectl delete -k overlays/samples/cloud/target || true
-	./utils/node_cleanup.sh
+	./utils/cleanup_ais.sh overlays/samples/cloud/common base/proxy overlays/samples/cloud/target
 
-# Run AIStore cluster in CI
+# CI deployment targets
+.PHONY: ci ci-envs ci-secrets
 ci: ci-envs ci-secrets
-	kubectl apply -k overlays/ci/common
-	kubectl kustomize overlays/ci/proxy --load-restrictor LoadRestrictionsNone | kubectl apply -f -
-	kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
-	kubectl kustomize overlays/ci/target --load-restrictor LoadRestrictionsNone | kubectl apply -f -
-	kubectl rollout status statefulset/ais-target --timeout=2m
+	./utils/deploy_ais.sh overlays/ci/common overlays/ci/proxy overlays/ci/target
 
 ci-envs:
 	./utils/ci/envs.sh
@@ -64,3 +48,15 @@ ci-envs:
 ci-secrets:
 	./utils/ci/secrets/setup.sh
 
+# K8s cluster management targets
+.PHONY: create_cluster delete_cluster
+create-cluster:
+	./utils/create_cluster.sh
+
+delete-cluster:
+	./utils/delete_cluster.sh
+
+# AIStore utility targets
+.PHONY: get-endpoint
+get-endpoint:
+	@. ./utils/export_endpoint.sh && echo "To connect to the cluster, use: AIS_ENDPOINT=$$AIS_ENDPOINT"

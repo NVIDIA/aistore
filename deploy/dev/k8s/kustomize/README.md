@@ -1,8 +1,8 @@
 # Local/Development K8s Deployment
 
-The local, development deployment of AIStore on Kubernetes is a lightweight version that closely mirrors a [production deployment](https://github.com/NVIDIA/ais-k8s), providing a similar architecture and operational model while requiring fewer resources and simplifying setup for testing and prototyping.
+The local development deployment of AIStore on Kubernetes is a lightweight version that closely mirrors a [production deployment](https://github.com/NVIDIA/ais-k8s), providing a similar architecture and operational model while requiring fewer resources and simplifying setup for testing and prototyping.
 
-Running a local, development deployment of AIStore on Kubernetes requires a local Kubernetes cluster solution such as [Minikube](https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download) or [KinD](https://kind.sigs.k8s.io/docs/user/quick-start/); for the purposes of this guide, KinD will be used.
+Running a local development deployment of AIStore on Kubernetes requires a local Kubernetes cluster solution such as [Minikube](https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download) or [KinD](https://kind.sigs.k8s.io/docs/user/quick-start/); for the purposes of this guide, KinD will be used, but all Makefile targets can be used with either Minikube or KinD. **For Minikube, use the environment variable `CLUSTER_TYPE` and set it to `minikube`.**
 
 ## Prerequisites
 
@@ -18,40 +18,28 @@ This setup requires Linux. Before proceeding, ensure the following dependencies 
 
 ### Create KinD Cluster
 
-To run a simple, single-node KinD cluster, run:
+To start, run the following to create a minimal KinD cluster:
 
 ```bash
-$ kind create cluster --name ais-k8s-local
-Creating cluster "ais-k8s-local" ...
+$ make create-cluster 
+./utils/create_cluster.sh
+Creating cluster "kind" ...
  ✓ Ensuring node image (kindest/node:v1.32.2) 🖼
  ✓ Preparing nodes 📦  
  ✓ Writing configuration 📜 
  ✓ Starting control-plane 🕹️ 
  ✓ Installing CNI 🔌 
  ✓ Installing StorageClass 💾 
-Set kubectl context to "kind-ais-k8s-local"
+Set kubectl context to "kind-kind"
 You can now use your cluster with:
 
-kubectl cluster-info --context kind-ais-k8s-local
+kubectl cluster-info --context kind-kind
 
-Thanks for using kind! 😊
-```
-
-Once the cluster is created, check the status of the cluster with:
-
-```bash
-$ kubectl cluster-info --context kind-ais-k8s-local
-Kubernetes control plane is running at https://127.0.0.1:34805
-CoreDNS is running at https://127.0.0.1:34805/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+Kubernetes control plane is running at https://127.0.0.1:38003
+CoreDNS is running at https://127.0.0.1:38003/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
 
 To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
-
-$ kubectl get nodes
-NAME                          STATUS   ROLES           AGE    VERSION
-ais-k8s-local-control-plane   Ready    control-plane   2m5s   v1.32.2
-
-$ kubectl get pods
-No resources found in default namespace.
 ```
 
 ### Deploy Minimal AIStore Cluster
@@ -60,30 +48,26 @@ Next, deploy a minimal AIStore cluster (1 proxy and 1 target) on the KinD cluste
 
 ```bash
 $ make minimal
-
-kubectl apply -k base/common
+./utils/deploy_ais.sh base/common base/proxy base/target
 clusterrolebinding.rbac.authorization.k8s.io/ais-rbac created
 configmap/ais-cluster-config-override created
-kubectl apply -k base/proxy
 configmap/ais-proxy-local-config-template created
 service/ais-proxy created
 statefulset.apps/ais-proxy created
-kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
 pod/ais-proxy-0 condition met
-kubectl apply -k base/target
 configmap/ais-target-local-config-template created
 service/ais-target created
 statefulset.apps/ais-target created
-kubectl rollout status statefulset/ais-target
 Waiting for 1 pods to be ready...
 partitioned roll out complete: 1 new pods have been updated...
+
+To connect to the cluster: export AIS_ENDPOINT=http://172.18.0.2:8080
 ```
 
 Verify that the cluster is up and running:
 
 ```bash
 $ kubectl get pods
-
 NAME           READY   STATUS    RESTARTS   AGE
 ais-proxy-0    1/1     Running   0          90s
 ais-target-0   1/1     Running   0          71s
@@ -91,34 +75,12 @@ ais-target-0   1/1     Running   0          71s
 
 ### Interacting w/ AIStore
 
-To interact with the AIStore cluster, export the `AIS_ENDPOINT` environment variable to the address of the AIStore primary proxy (e.g. `ais-proxy-0`), which is the IP of the host node:
+Use the AIStore [CLI](/docs/cli.md) to interact with the AIStore cluster:
 
 ```bash
-$ kubectl get pods -o wide
-NAME           READY   STATUS    RESTARTS   AGE     IP           NODE                          NOMINATED NODE   READINESS GATES
-ais-proxy-0    1/1     Running   0          2m25s   10.244.0.5   ais-k8s-local-control-plane   <none>           <none>
-ais-target-0   1/1     Running   0          2m6s    10.244.0.6   ais-k8s-local-control-plane   <none>           <none>
-```
+$ export AIS_ENDPOINT=http://172.18.0.2:8080
 
-Since the primary proxy is running on the control plane node `ais-k8s-local-control-plane`, the IP of the host node can then be found with:
-
-```bash
-$ kubectl get nodes -o wide
-NAME                          STATUS   ROLES           AGE     VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION      CONTAINER-RUNTIME
-ais-k8s-local-control-plane   Ready    control-plane   6m36s   v1.32.2   172.25.0.5    <none>        Debian GNU/Linux 12 (bookworm)   6.11.0-21-generic   containerd://2.0.2
-```
-
-The IP of the host node is `172.25.0.5`, so the `AIS_ENDPOINT` environment variable should be set to `http://172.25.0.5:8080` (`8080` is the public port of the proxy):
-
-```bash
-$ export AIS_ENDPOINT=http://172.25.0.5:8080
-```
-
-Use the AIStore [CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md) to interact with the AIStore cluster:
-
-```bash
 $ ais show cluster
-
 PROXY			 MEM USED(%)	 MEM AVAIL	 LOAD AVERAGE	 UPTIME	 STATUS
 p[xpdr9787zw1nb][P]	 0.09%		 51.92GiB	 [1.2 1.4 1.2]	 5m0s	 online
 
@@ -139,37 +101,44 @@ Summary:
    Build:		2025-04-10T00:25:45+0000
 ```
 
-Alternatively, use the [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk#ais-python-sdk) to interact with the AIStore cluster:
+Alternatively, use the [Python SDK](/python/aistore/sdk/README.md) to interact with the AIStore cluster:
 
 ```python
 from aistore.sdk.client import Client
 
-client = Client("http://172.25.0.5:8080")
+client = Client("http://172.18.0.2:8080")
 ```
 
 To clean up and undeploy the minimal AIStore cluster, run:
 
 ```bash
 $ make minimal-cleanup
-kubectl delete -k base/common || true
+./utils/cleanup_ais.sh base/common base/proxy base/target
 clusterrolebinding.rbac.authorization.k8s.io "ais-rbac" deleted
 configmap "ais-cluster-config-override" deleted
-kubectl delete -k base/proxy || true
 configmap "ais-proxy-local-config-template" deleted
 service "ais-proxy" deleted
 statefulset.apps "ais-proxy" deleted
-kubectl delete -k base/target || true
 configmap "ais-target-local-config-template" deleted
 service "ais-target" deleted
 statefulset.apps "ais-target" deleted
-job.batch/deployment-cleanup created
+job.batch/node-cleanup-kind-control-plane created
+```
+
+To delete the KinD cluster itself, run:
+
+```bash
+$ make delete-cluster
+./utils/delete_cluster.sh
+Deleting cluster "kind" ...
+Deleted nodes: ["kind-control-plane"]
 ```
 
 ## Further Customizations
 
 To further customize the deployment, simply define an overlay.
 
-For example, to deploy a cluster with 2 proxies and 3 targets, create an overlay that modifies the number of replicas for the respective statefulsets:
+For example, to deploy a cluster with 2 proxies and 3 targets, create an overlay that modifies the number of replicas for the respective StatefulSets:
 
 ```bash
 $ mkdir -p overlays/custom-deployment/proxy
@@ -217,12 +186,12 @@ patches:
 EOF
 ```
 
-> **Note:** The deployment schedules at most one proxy and one target per node. To run multiple proxies and targets on the same node, ensure the cluster has enough nodes as the maximum of replicas for the proxy and target statefulsets.
+> **Note:** The deployment requires that each node should run at most one proxy and one target. If you plan to run multiple proxies and targets, ensure the cluster has at least as many nodes as the larger of the proxy or target StatefulSet replica counts. For guidance on running multi-node clusters, see [this guide](https://kind.sigs.k8s.io/docs/user/quick-start/#multi-node-clusters) for KinD and [this guide](https://minikube.sigs.k8s.io/docs/tutorials/multi_node/) for Minikube.
 
 To deploy the custom overlay, run:
 
 ```bash
-$ kubectl apply -k base/common  # Apply base/common since it is not modified in the overlay
+$ kubectl apply -k base/common  # Apply base/common since it is not modified in the custom overlay
 clusterrolebinding.rbac.authorization.k8s.io/ais-rbac created
 configmap/ais-cluster-config-override created
 
@@ -244,6 +213,13 @@ Waiting for 3 pods to be ready...
 Waiting for 2 pods to be ready...
 Waiting for 1 pods to be ready...
 partitioned roll out complete: 3 new pods have been updated...
+```
+
+To get the endpoint for the cluster, run:
+
+```bash
+$ make get-endpoint
+To connect to the cluster, use: AIS_ENDPOINT=http://172.18.0.2:8080 
 ```
 
 And to clean up and undeploy the custom deployment, run:
@@ -269,125 +245,13 @@ job.batch/node-cleanup-kind-worker2 created
 job.batch/node-cleanup-kind-worker3 created
 ```
 
-## Deploy w/ Local Changes (Development)
-
-For changes to `aisnode`, build the `aisnode` container image:
-
-```bash
-$ cd ../../../prod/k8s/aisnode_container
-$ IMAGE_REPO=my-repo/ais-init IMAGE_TAG=test-tag make build
-```
-
-For changes to `ais-init`, build the `ais-init` container image:
-
-```bash
-$ cd ../../../prod/k8s/aisnode_container
-$ IMAGE_REPO=my-repo/aisnode IMAGE_TAG=test-tag make build
-```
-
-Load the built images into the KinD cluster:
-
-```bash
-$ kind load docker-image my-repo/aisnode:test-tag
-Image: "my-repo/aisnode:test-tag" with ID "sha256:13cb3d735f93f5dfcd43d5af30ebee4b91491e159991d2139ef97f9356e6bee1" not yet present on node "kind-control-plane", loading...
-
-$ kind load docker-image my-repo/ais-init:test-tag
-Image: "my-repo/ais-init:test-tag" with ID "sha256:3d1b0b78e9088fcdf608dc31b7eb1f6117633756d3db47c9fb398f0b96cd5792" not yet present on node "kind-control-plane", loading...
-```
-
-Then, define an overlay to use the images in the deployment:
-
-```bash
-$ mkdir -p overlays/custom-deployment/proxy
-
-$ cat <<EOF > overlays/custom-deployment/proxy/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-- ../../../base/proxy
-
-images:
-  - name: aistorage/aisnode
-    newName: my-repo/aisnode
-    newTag: test-tag
-  - name: aistorage/ais-init
-    newName: my-repo/ais-init
-    newTag: test-tag
-EOF
-
-$ mkdir -p overlays/custom-deployment/target
-
-$ cat <<EOF > overlays/custom-deployment/target/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-- ../../../base/target
-
-images:
-  - name: aistorage/aisnode
-    newName: my-repo/aisnode
-    newTag: test-tag
-  - name: aistorage/ais-init
-    newName: my-repo/ais-init
-    newTag: test-tag
-EOF
-```
-
-Lastly, deploy the cluster:
-
-```bash
-$ kubectl apply -k base/common  # Apply base/common since it is not modified in the overlay
-clusterrolebinding.rbac.authorization.k8s.io/ais-rbac created
-configmap/ais-cluster-config-override created
-
-$ kubectl apply -k overlays/custom-deployment/proxy
-configmap/ais-proxy-local-config-template created
-service/ais-proxy created
-statefulset.apps/ais-proxy created
-
-$ kubectl wait --for="condition=ready" --timeout=2m pod ais-proxy-0
-pod/ais-proxy-0 condition met
-
-$ kubectl apply -k overlays/custom-deployment/target
-configmap/ais-target-local-config-template created
-service/ais-target created
-statefulset.apps/ais-target created
-
-$ kubectl rollout status statefulset/ais-target
-Waiting for 1 pods to be ready...
-partitioned roll out complete: 1 new pods have been updated...
-```
-
-Again, to clean up and undeploy the custom deployment, run:
-
-```bash
-$ kubectl delete -k base/common
-clusterrolebinding.rbac.authorization.k8s.io "ais-rbac" deleted
-configmap "ais-cluster-config-override" deleted
-
-$ kubectl delete -k overlays/custom-deployment/proxy
-configmap "ais-proxy-local-config-template" deleted
-service "ais-proxy" deleted
-statefulset.apps "ais-proxy" deleted
-
-$ kubectl delete -k overlays/custom-deployment/target
-configmap "ais-target-local-config-template" deleted
-service "ais-target" deleted
-statefulset.apps "ais-target" deleted
-
-$ ./utils/node_cleanup.sh
-job.batch/node-cleanup-kind-control-plane created
-```
-
 ## Enable HTTPs / Cloud Backends
 
 Sample overlays, located in `overlays/samples`, are provided as templates for enabling additional features such as HTTPs and cloud backends.
 
 These overlays can be used directly or further extended with additional customizations as needed.
 
-### HTTPs
+### [HTTPs](/docs/https.md)
 
 The `https` sample overlay provides a basic example using a self-signed certificate issued via `cert-manager`'s built-in self-signed issuer for development purposes. 
 
@@ -427,7 +291,7 @@ To clean up and undeploy the minimal cluster with HTTPs enabled, run:
 $ make minimal-https-cleanup
 ```
 
-### Cloud Backends
+### [Cloud Backends](/docs/providers.md)
 
 The cloud sample overlay configures AWS and GCP backends because the default `aistorage/aisnode` image is built with support for both AWS and GCP cloud providers included.
 
@@ -464,3 +328,17 @@ To clean up and undeploy the minimal cluster with cloud backends enabled, run:
 ```bash
 $ make minimal-cloud-cleanup
 ```
+
+## Deploy w/ Local Changes (Development)
+
+For convenience, all provided Makefile targets for sample deployments (e.g. `minimal`, `minimal-https`, `minimal-cloud`) support environment variable `LOCAL_DEVELOPMENT`, which if set, deploys with local changes to `aisnode` as well as `aisinit`:
+
+```bash
+$ LOCAL_DEVELOPMENT=true make minimal
+```
+
+## References
+
+- [Makefile](/deploy/dev/k8s/kustomize/Makefile)
+- [Local/Cluster Configuration](/docs/configuration.md)
+- [Environment Variables](/docs/environment-vars.md)
