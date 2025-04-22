@@ -16,7 +16,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["python", "/code/md5_server.py"]
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
       readinessProbe:
         httpGet:
           path: /health
@@ -41,7 +41,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["python", "/code/hello_world_server.py"]
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
       env:
         - name: ARG_TYPE
           value: "{arg_type}"
@@ -49,14 +49,6 @@ spec:
         httpGet:
           path: /health
           port: default
-      volumeMounts:
-        - name: ais
-          mountPath: /tmp/
-  volumes:
-    - name: ais
-      hostPath:
-        path: /tmp/
-        type: Directory
 """
 
 # Returns "Hello World!" on any request.
@@ -150,14 +142,6 @@ spec:
         httpGet:
           path: /health
           port: default
-      volumeMounts:
-        - name: ais
-          mountPath: /tmp/
-  volumes:
-    - name: ais
-      hostPath:
-        path: /tmp/
-        type: Directory
 """
 
 # Returns the transformed TensorFlow compatible data for the input TAR files. For
