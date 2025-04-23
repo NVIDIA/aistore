@@ -152,7 +152,7 @@ func (*gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs
 // LIST OBJECTS
 //
 
-func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
+func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
@@ -179,8 +179,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
 		}
-		ecode, err = gcpErrorToAISError(errPage, cloudBck)
-		return
+		return gcpErrorToAISError(errPage, cloudBck)
 	}
 
 	lst.ContinuationToken = nextPageToken
@@ -221,61 +220,57 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
-	return
+
+	return 0, nil
 }
 
 //
 // LIST BUCKETS
 //
 
-func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) {
+func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 	if gsbp.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
 			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
-	bcks = make(cmn.Bcks, 0, 16)
-	it := gcpClient.Buckets(context.Background(), gsbp.projectID)
+	var (
+		bcks = make(cmn.Bcks, 0, 16)
+		it   = gcpClient.Buckets(context.Background(), gsbp.projectID)
+	)
 	for {
-		var battrs *storage.BucketAttrs
-
-		battrs, err = it.Next()
-		if err == iterator.Done {
-			err = nil
-			break
-		}
+		battrs, err := it.Next()
 		if err != nil {
-			ecode, err = gcpErrorToAISError(err, &cmn.Bck{Provider: apc.GCP})
-			return
+			if err == iterator.Done {
+				return bcks, 0, nil
+			}
+			ecode, errV := gcpErrorToAISError(err, &cmn.Bck{Provider: apc.GCP})
+			return bcks, ecode, errV
 		}
-		bcks = append(bcks, cmn.Bck{
-			Name:     battrs.Name,
-			Provider: apc.GCP,
-		})
+
+		bcks = append(bcks, cmn.Bck{Name: battrs.Name, Provider: apc.GCP})
 		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
-			nlog.Infof("[bucket_names] %s: created %v, versioning %t",
-				battrs.Name, battrs.Created, battrs.VersioningEnabled)
+			nlog.Infof("[bucket_names] %s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
 	}
-	return
 }
 
 //
 // HEAD OBJECT
 //
 
-func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
-		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	attrs, err = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
+	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
-		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
-		return
+		ecode, errV := handleObjectError(ctx, gcpClient, err, cloudBck)
+		return nil, ecode, errV
 	}
-	oa = &cmn.ObjAttrs{}
+
+	oa := &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 6)
 	oa.SetCustomKey(cmn.SourceObjMD, apc.GCP)
 	oa.Size = attrs.Size
@@ -307,7 +302,8 @@ func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *c
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
-	return
+
+	return oa, 0, nil
 }
 
 //

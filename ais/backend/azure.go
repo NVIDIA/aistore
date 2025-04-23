@@ -435,14 +435,14 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return
+		return res
 	}
 
 	// Get checksum
 	respProps, err := client.GetProperties(ctx, nil)
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return
+		return res
 	}
 
 	// (0, 0) range indicates "whole object"

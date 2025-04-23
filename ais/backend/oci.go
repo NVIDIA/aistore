@@ -167,18 +167,12 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 
 	bp.compartmentOCID = os.Getenv(env.OCICompartmentOCID)
 
-	if configFilePath := os.Getenv(env.OCIConfigFilePath); configFilePath == "" {
-		configFileProvider, err = ocicmn.ConfigurationProviderFromFileWithProfile(
-			filepath.Join(os.Getenv("HOME"), configFilePathDefault), profile, "")
-		if err != nil {
-			return
-		}
-	} else {
-		configFileProvider, err = ocicmn.ConfigurationProviderFromFileWithProfile(
-			configFilePath, profile, "")
-		if err != nil {
-			return
-		}
+	configFilePath := os.Getenv(env.OCIConfigFilePath)
+	if configFilePath == "" {
+		configFilePath = filepath.Join(os.Getenv("HOME"), configFilePathDefault)
+	}
+	if configFileProvider, err = ocicmn.ConfigurationProviderFromFileWithProfile(configFilePath, profile, ""); err != nil {
+		return err
 	}
 
 	if tenancyOCID = os.Getenv(env.OCITenancyOCID); tenancyOCID == "" {
@@ -230,40 +224,36 @@ func (bp *ocibp) fetchCliConfig() (err error) {
 	return nil
 }
 
-func (bp *ocibp) fetchTuningENVs() (err error) {
-	if err = bp.set(env.OCIMaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
-		return
+func (bp *ocibp) fetchTuningENVs() error {
+	if err := bp.set(env.OCIMaxPageSize, maxPageSizeMin, maxPageSizeMax, maxPageSizeDefault, &bp.maxPageSize); err != nil {
+		return err
 	}
-	if err = bp.set(env.OCIMaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
+	if err := bp.set(env.OCIMaxDownloadSegmentSize, mpdSegmentMaxSizeMin, mpdSegmentMaxSizeMax,
 		mpdSegmentMaxSizeDefault, &bp.mpdSegmentMaxSize); err != nil {
-		return
+		return err
 	}
-	if err = bp.set(env.OCIMultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
+	if err := bp.set(env.OCIMultiPartDownloadThreshold, mpdThresholdMin, mpdThresholdMax,
 		mpdThresholdDefault, &bp.mpdThreshold); err != nil {
-		return
+		return err
 	}
-	if err = bp.set(env.OCIMultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
+	if err := bp.set(env.OCIMultiPartDownloadMaxThreads, mpdMaxThreadsMin, mpdMaxThreadsMax,
 		mpdMaxThreadsDefault, &bp.mpdMaxThreads); err != nil {
-		return
+		return err
 	}
-	if err = bp.set(env.OCIMaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
+	if err := bp.set(env.OCIMaxUploadSegmentSize, mpuSegmentMaxSizeMin, mpuSegmentMaxSizeMax,
 		mpuSegmentMaxSizeDefault, &bp.mpuSegmentMaxSize); err != nil {
-		return
+		return err
 	}
-	if err = bp.set(env.OCIMultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
+	if err := bp.set(env.OCIMultiPartUploadThreshold, mpuThresholdMin, mpuThresholdMax,
 		mpuThresholdDefault, &bp.mpuThreshold); err != nil {
-		return
+		return err
 	}
-	if err = bp.set(env.OCIMultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
+	if err := bp.set(env.OCIMultiPartUploadMaxThreads, mpuMaxThreadsMin, mpuMaxThreadsMax,
 		mpuMaxThreadsDefault, &bp.mpuMaxThreads); err != nil {
-		return
-	}
-	if err = bp.set(env.OCIMultiPartThreadPoolSize, mpThreadPoolSizeMin, mpThreadPoolSizeMax,
-		mpThreadPoolSizeDefault, &bp.mpThreadPoolSize); err != nil {
-		return
+		return err
 	}
 
-	return nil
+	return bp.set(env.OCIMultiPartThreadPoolSize, mpThreadPoolSizeMin, mpThreadPoolSizeMax, mpThreadPoolSizeDefault, &bp.mpThreadPoolSize)
 }
 
 func (*ocibp) set(envName string, envMin, envMax, envDefault int64, out *int64) error {

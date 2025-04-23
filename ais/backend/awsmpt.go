@@ -76,10 +76,10 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 	return id, ecode, err
 }
 
-func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (etag string,
-	ecode int, _ error) {
+func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (string, int, error) {
 	h := cmn.BackendHelpers.Amazon
 
+	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, r, oq)
 		resp, err := pts.Do(core.T.DataClient())
@@ -87,12 +87,12 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 			return "", resp.StatusCode, err
 		}
 		if resp != nil {
-			ecode = resp.StatusCode
-			etag, _ = h.EncodeETag(resp.Header.Get(cos.HdrETag))
-			return
+			etag, _ := h.EncodeETag(resp.Header.Get(cos.HdrETag))
+			return etag, resp.StatusCode, nil
 		}
 	}
 
+	// regular
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
@@ -112,18 +112,19 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 
 	out, err := svc.UploadPart(context.Background(), &input)
 	if err != nil {
-		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-	} else {
-		etag, _ = h.EncodeETag(out.ETag)
+		ecode, errV := awsErrorToAISError(err, cloudBck, lom.ObjName)
+		return "", ecode, errV
 	}
 
-	return etag, ecode, err
+	etag, _ := h.EncodeETag(out.ETag)
+	return etag, 0, nil
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte, parts *aiss3.CompleteMptUpload) (version, etag string,
-	ecode int, _ error) {
+func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte,
+	parts *aiss3.CompleteMptUpload) (version, etag string, _ int, _ error) {
 	h := cmn.BackendHelpers.Amazon
 
+	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oq)
 		resp, err := pts.Do(core.T.DataClient())
@@ -137,10 +138,11 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 			}
 			version, _ = h.EncodeVersion(resp.Header.Get(cos.S3VersionHeader))
 			etag, _ = h.EncodeETag(result.ETag)
-			return
+			return version, etag, 0, nil
 		}
 	}
 
+	// regular
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
@@ -161,13 +163,13 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 
 	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
 	if err != nil {
-		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-	} else {
-		version, _ = h.EncodeVersion(out.VersionId)
-		etag, _ = h.EncodeETag(out.ETag)
+		ecode, errV := awsErrorToAISError(err, cloudBck, lom.ObjName)
+		return "", "", ecode, errV
 	}
 
-	return version, etag, ecode, err
+	version, _ = h.EncodeVersion(out.VersionId)
+	etag, _ = h.EncodeETag(out.ETag)
+	return version, etag, 0, nil
 }
 
 func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {

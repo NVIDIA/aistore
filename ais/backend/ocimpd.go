@@ -80,21 +80,21 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, lom *core.LOM, resp *oc
 		lom.ObjAttrs().Size = *resp.ContentLength
 		res.R = resp.Content
 		res.Size = *resp.ContentLength
-		return
+		return res
 	}
 
 	_, partLength, objectSize, err = cmn.ParseRangeHdr(*resp.ContentRange)
 	if err != nil {
 		res.Err = err
 		res.ErrCode = ociStatus(nil)
-		return
+		return res
 	}
 
 	if partLength == objectSize {
 		lom.ObjAttrs().Size = *resp.ContentLength
 		res.R = resp.Content
 		res.Size = *resp.ContentLength
-		return
+		return res
 	}
 
 	mpdFirstChild = &ociMPDChildStruct{
@@ -125,7 +125,7 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, lom *core.LOM, resp *oc
 	res.R = mpd
 	res.Size = objectSize
 
-	return
+	return res
 }
 
 // launchChildren will append sufficient children of mpd.childList to either reach objectSize
@@ -187,31 +187,31 @@ func (mpdChild *ociMPDChildStruct) String() string {
 		mpdChild.mpd.objectSize)
 }
 
-func (mpd *ociMPDStruct) Read(p []byte) (n int, err error) {
+func (mpd *ociMPDStruct) Read(p []byte) (int, error) {
 	mpd.Lock()
 	defer mpd.Unlock()
+
 	le := mpd.childList.Front()
 	if le == nil {
 		if mpd.nextStart == mpd.objectSize {
-			err = io.EOF
-		} else {
-			// We have nothing to return just yet, but at least another
-			// child can be launched to serve a subsequent call to Read()
-			mpd.launchChildren()
+			return 0, io.EOF
 		}
-		return
+		// We have nothing to return just yet, but at least another
+		// child can be launched to serve a subsequent call to Read()
+		mpd.launchChildren()
+		return 0, nil
 	}
+
 	mpdChild, ok := le.Value.(*ociMPDChildStruct)
 	if !ok {
-		err = errors.New("(*ociMPDStruct).Read() le.Value.(*ociMPDChildStruct) returned !ok")
-		return
+		return 0, errors.New("(*ociMPDStruct).Read() le.Value.(*ociMPDChildStruct) returned !ok")
 	}
 	mpdChild.Wait()
 	if mpdChild.err != nil {
-		err = mpdChild.err
-		return
+		return 0, mpdChild.err
 	}
-	n, err = mpdChild.rc.Read(p)
+
+	n, err := mpdChild.rc.Read(p)
 	if err == io.EOF {
 		mpdChild.err = mpdChild.rc.Close()
 		if mpdChild.err == nil {
@@ -222,7 +222,7 @@ func (mpd *ociMPDStruct) Read(p []byte) (n int, err error) {
 			err = mpdChild.err
 		}
 	}
-	return
+	return n, err
 }
 
 func (mpd *ociMPDStruct) Close() (err error) {
