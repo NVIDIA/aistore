@@ -556,10 +556,10 @@ func (r *smapOwner) put(smap *smapX) {
 
 func (r *smapOwner) get() *smapX { return r.smap.Load() }
 
-func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
-	if err = newSmap.validate(); err != nil {
+func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) error {
+	if err := newSmap.validate(); err != nil {
 		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
-		return
+		return err
 	}
 
 	var (
@@ -576,29 +576,32 @@ func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayloa
 	if smap != nil {
 		curVer, newVer := smap.Version, newSmap.version()
 		if newVer <= curVer {
+			var err error
 			if newVer < curVer {
-				// NOTE: considered benign in most cases
+				// considered benign in most cases
 				err = newErrDowngrade(si, smap.String(), newSmap.String())
 			}
 			r.mu.Unlock()
-			return
+			return err
 		}
 	}
+
 	if !r.persistBytes(payload) {
-		err = r.persist(newSmap)
+		if err := r.persist(newSmap); err != nil {
+			r.mu.Unlock()
+			return err
+		}
 	}
-	if err == nil {
-		r.put(newSmap)
-	}
+	r.put(newSmap)
+
 	r.mu.Unlock()
 
-	if err == nil {
-		if ofl != nfl {
-			nlog.Infof("%s flags: from %s to %s", si, ofs, nfs)
-		}
-		cb(newSmap, smap, nfl, ofl)
+	if ofl != nfl {
+		nlog.Infof("%s flags: from %s to %s", si, ofs, nfs)
 	}
-	return
+	cb(newSmap, smap, nfl, ofl)
+
+	return nil
 }
 
 // write metasync-sent bytes directly (no json)

@@ -89,13 +89,17 @@ func dpqFree(dpq *dpq) {
 
 const maxNumQparams = 100
 
-func (dpq *dpq) parse(rawQuery string) (err error) {
+func (dpq *dpq) parse(rawQuery string) error {
 	var (
 		iters int
 		query = rawQuery // r.URL.RawQuery
 	)
+
 	for query != "" && iters < maxNumQparams {
-		key, value := query, ""
+		var (
+			value string
+			key   = query
+		)
 		if i := strings.IndexByte(key, '&'); i >= 0 {
 			key, query = key[:i], key[i+1:]
 			iters++
@@ -112,8 +116,9 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		case apc.QparamProvider:
 			dpq.bck.provider = value
 		case apc.QparamNamespace:
+			var err error
 			if dpq.bck.namespace, err = url.QueryUnescape(value); err != nil {
-				return
+				return err
 			}
 		case apc.QparamSkipVC:
 			dpq.skipVC = cos.IsParseBool(value)
@@ -122,20 +127,22 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 		case apc.QparamUUID:
 			dpq.uuid = value
 		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
-			if err = dpq._arch(key, value); err != nil {
-				return
+			if err := dpq._arch(key, value); err != nil {
+				return err
 			}
 		case apc.QparamIsGFNRequest:
 			dpq.isGFN = cos.IsParseBool(value)
 		case apc.QparamOrigURL:
+			var err error
 			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
-				return
+				return err
 			}
 		case apc.QparamAppendType:
 			dpq.apnd.ty = value
 		case apc.QparamAppendHandle:
+			var err error
 			if dpq.apnd.hdl, err = url.QueryUnescape(value); err != nil {
-				return
+				return err
 			}
 		case apc.QparamOWT:
 			dpq.owt = value
@@ -161,16 +168,17 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 				continue
 			}
 			if _, ok := _except[key]; !ok {
-				err = fmt.Errorf("invalid query parameter: %q (raw query: %q)", key, rawQuery)
+				err := fmt.Errorf("invalid query parameter: %q (raw query: %q)", key, rawQuery)
 				nlog.Errorln(err)
 				return err
 			}
 		}
 	}
-	if err == nil && iters >= maxNumQparams {
-		err = errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
+	if iters >= maxNumQparams {
+		return errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
 	}
-	return err
+
+	return nil
 }
 
 func _dpqKeqV(s string) (string, string, bool) {
