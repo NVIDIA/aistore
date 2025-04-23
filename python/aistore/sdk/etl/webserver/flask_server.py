@@ -1,10 +1,11 @@
 import os
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlparse, urlunparse
 
 import requests
 from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.const import HEADER_NODE_URL
 
 
 class FlaskServer(ETLServer):
@@ -31,9 +32,19 @@ class FlaskServer(ETLServer):
 
     def _handle_request(self, path):
         try:
+            transformed = None
             if request.method == "GET":
-                return self._handle_get(path)
-            return self._handle_put(path)
+                transformed = self._handle_get(path)
+            else:
+                transformed = self._handle_put(path)
+
+            direct_put_url = request.headers.get(HEADER_NODE_URL)
+            if direct_put_url:
+                resp = self._direct_put(direct_put_url, transformed)
+                if resp is not None:
+                    return resp
+
+            return Response(response=transformed, content_type=self.get_mime_type())
         except FileNotFoundError:
             self.logger.error("File not found: %s", path)
             return (
@@ -64,8 +75,7 @@ class FlaskServer(ETLServer):
             resp.raise_for_status()
             content = resp.content
 
-        transformed = self.transform(content, path)
-        return Response(response=transformed, content_type=self.get_mime_type())
+        return self.transform(content, path)
 
     def _handle_put(self, path):
         if self.arg_type == "fqn":
@@ -73,8 +83,7 @@ class FlaskServer(ETLServer):
         else:
             content = request.get_data()
 
-        transformed = self.transform(content, path)
-        return Response(response=transformed, content_type=self.get_mime_type())
+        return self.transform(content, path)
 
     def _get_fqn_content(self, path: str) -> bytes:
         decoded_path = unquote(path)
@@ -82,6 +91,40 @@ class FlaskServer(ETLServer):
         self.logger.debug("Reading local file: %s", safe_path)
         with open(safe_path, "rb") as f:
             return f.read()
+
+    def _direct_put(self, direct_put_url: str, data: bytes):
+        """
+        Sends the transformed object directly to the specified AIS node (`direct_put_url`),
+        eliminating the additional network hop through the original target.
+        Used only in bucket-to-bucket offline transforms.
+        """
+        try:
+            parsed_target = urlparse(direct_put_url)
+            parsed_host = urlparse(self.host_target)
+            url = urlunparse(
+                parsed_host._replace(
+                    netloc=parsed_target.netloc,
+                    path=parsed_host.path + parsed_target.path,
+                )
+            )
+
+            resp = requests.put(url, data, timeout=None)
+            if resp.status_code == 200:
+                return Response(status=204)
+
+            error = resp.text()
+            self.logger.warning(
+                "Failed to deliver object to %s: HTTP %s, %s",
+                direct_put_url,
+                resp.status_code,
+                error,
+            )
+        except Exception as e:
+            self.logger.warning(
+                "Exception during delivery to %s: %s", direct_put_url, e
+            )
+
+        return None
 
     # Example Gunicorn command to run this server:
     # command: ["gunicorn", "your_module:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4"]

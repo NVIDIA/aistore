@@ -252,6 +252,33 @@ class TestFlaskServer(unittest.TestCase):
             assert "Content-Length" in response.headers
             assert int(response.headers["Content-Length"]) == len(response.data)
 
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_direct_put_delivery(self):
+        self.etl_server.arg_type = ""
+        path = "test/object"
+        input_content = b"input data"
+        headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
+
+        with patch("aistore.sdk.etl.webserver.flask_server.requests.put") as mock_put:
+            # Mock the direct delivery response (simulate 200 OK)
+            mock_put.return_value = MagicMock(status_code=200)
+            response = self.client.put(f"/{path}", data=input_content, headers=headers)
+
+            self.assertEqual(response.status_code, 204)
+            self.assertEqual(response.data, b"")  # No content returned
+
+        with patch("aistore.sdk.etl.webserver.flask_server.requests.put") as mock_put:
+            # Mock the direct delivery response (simulate 500 FAIL)
+            mock_put.return_value = MagicMock(status_code=500)
+            response = self.client.put(f"/{path}", data=input_content, headers=headers)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.data, b"flask: " + input_content
+            )  # Original content returned
+            assert "Content-Length" in response.headers
+            assert int(response.headers["Content-Length"]) == len(response.data)
+
 
 class TestBaseEnforcement(unittest.TestCase):
     def test_fastapi_server_without_target_url(self):
