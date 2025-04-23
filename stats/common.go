@@ -529,7 +529,7 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 		if !flags.IsSet(cos.OOM) {
 			set |= cos.OOM
 			clr |= cos.LowMemory
-			nlog.Errorln(mm.Str(&r.mem))
+			nlog.Errorln(r.node.String(), mm.Str(&r.mem))
 		}
 		oom.FreeToOS(true)
 	case pressure >= memsys.PressureHigh:
@@ -541,12 +541,12 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 	default:
 		if flags.IsAnySet(cos.LowMemory | cos.OOM) {
 			clr |= cos.OOM | cos.LowMemory
-			nlog.Infoln(mm.Name, "back to normal")
+			nlog.Infoln(r.node.String(), mm.Name, "back to normal")
 		}
 	}
 
 	// load, second
-	nset, nclr := _load(flags, set, clr)
+	nset, nclr := _load(r.node.String(), flags, set, clr)
 
 	r.SetClrFlag(NodeAlerts, nset, nclr)
 }
@@ -555,21 +555,21 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 // - for watermarks, using system defaults from sys/cpu.go
 // - compare with fs/throttle and memsys/gc
 
-func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
+func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
 	const tag = "CPU utilization:"
 	var (
 		load = sys.MaxLoad()
 		ncpu = sys.NumCPU()
 	)
-	// ok
+	// 1. normal
 	if load < float64(ncpu>>1) { // 50%
 		if flags.IsAnySet(cos.LowCPU | cos.OOCPU) {
 			clr |= cos.OOCPU | cos.LowCPU
-			nlog.Infoln(tag, "back to normal")
+			nlog.Infoln(sname, tag, "back to normal")
 		}
 		return set, clr
 	}
-	// extreme
+	// 2. extreme
 	var (
 		fcpu  = float64(ncpu)
 		oocpu = max(fcpu*sys.ExtremeLoad/100, 1)
@@ -578,17 +578,17 @@ func _load(flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStat
 		if !flags.IsSet(cos.OOCPU) {
 			set |= cos.OOCPU
 			clr |= cos.LowCPU
-			nlog.Errorln(tag, "extremely high [", load, ncpu, "]")
+			nlog.Errorln(sname, tag, "extremely high [", load, ncpu, "]")
 		}
 		return set, clr
 	}
-	// high
+	// 3. high
 	highcpu := fcpu * sys.HighLoad / 100
 	if load >= highcpu {
 		clr |= cos.OOCPU
 		if !flags.IsSet(cos.LowCPU) {
 			set |= cos.LowCPU
-			nlog.Warningln(tag, "high [", load, ncpu, "]")
+			nlog.Warningln(sname, tag, "high [", load, ncpu, "]")
 		}
 	}
 

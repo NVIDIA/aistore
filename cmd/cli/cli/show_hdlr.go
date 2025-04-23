@@ -30,19 +30,22 @@ import (
 	"github.com/urfave/cli"
 )
 
-const showJobUsage = "Show running and/or finished jobs,\n" +
-	indent1 + "\te.g.:\n" +
+var showJobUsage = "Show running and/or finished jobs:\n" +
+	indent1 + "\t" + formatJobNames() +
+	indent1 + "(use any of these names with 'ais show job' command, or try shortcuts: \"evict\", \"prefetch\", \"copy\", \"delete\", \"ec\")\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t- show job prefetch-listrange\t- show all running prefetch jobs;\n" +
+	indent1 + "\t- show job prefetch\t- same as above;\n" +
 	indent1 + "\t- show job tco-cysbohAGL\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
 	indent1 + "\t- show job copy-listrange\t- show all running multi-object copies;\n" +
 	indent1 + "\t- show job copy-objects\t- same as above (using display name);\n" +
 	indent1 + "\t- show job copy\t- show all copying jobs including both bucket-to-bucket and multi-object;\n" +
 	indent1 + "\t- show job copy-objects --all\t- show both running and already finished (or stopped) multi-object copies;\n" +
+	indent1 + "\t- show job ec\t- show all erasure-coding;\n" +
 	indent1 + "\t- show job list\t- show all running list-objects jobs;\n" +
 	indent1 + "\t- show job ls\t- same as above;\n" +
 	indent1 + "\t- show job ls --refresh 10\t- same as above with periodic _refreshing_ every 10 seconds;\n" +
 	indent1 + "\t- show job ls --refresh 10 --count 4\t- same as above but only for the first four 10-seconds intervals;\n" +
-	indent1 + "\t- show job prefetch-listrange\t- show all running prefetch jobs;\n" +
-	indent1 + "\t- show job prefetch\t- same as above;\n" +
 	indent1 + "\t- show job prefetch --refresh 1m\t- show all running prefetch jobs at 1 minute intervals (until Ctrl-C);\n" +
 	indent1 + "\t- show job evict\t- all running bucket and/or data evicting jobs;\n" +
 	indent1 + "\t- show job --all\t- show absolutely all jobs, running and finished."
@@ -225,6 +228,27 @@ var (
 	}
 )
 
+func formatJobNames() string {
+	const (
+		maxPerLine = 6
+	)
+	var (
+		sb    strings.Builder
+		names = xact.ListDisplayNames(false)
+	)
+	for i, name := range names {
+		if i > 0 && i%maxPerLine == 0 {
+			sb.WriteString("\n\t")
+		}
+		sb.WriteString(name)
+		if i != len(names)-1 {
+			sb.WriteByte('\t')
+		}
+	}
+	sb.WriteByte('\n')
+	return sb.String()
+}
+
 // args [NAME] [JOB_ID] [NODE_ID] [BUCKET] may:
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
@@ -242,6 +266,8 @@ func showJobsHandler(c *cli.Context) error {
 	}
 
 	if name == "" && xid != "" {
+		// [usability]
+		// keywords: multi-match, multiple selection, shortcut, job name prefix
 		name, _, multimatch = xid2Name(xid)
 	}
 

@@ -155,42 +155,51 @@ Use `ais show performance` and its variations in combination with `ais show job`
 ```console
 $ ais show job --help
 NAME:
-   ais show job - show running and/or finished jobs
-     - 'show job tco-cysbohAGL'              - show a given (multi-object copy/transform) job identified by its unique ID;
-     - 'show job copy-listrange'             - show all running multi-object copies;
-     - 'show job copy-objects'               - same as above (using display name);
-     - 'show job copy-objects --all'         - show both running and already finished (or stopped) multi-object copies;
-     - 'show job list'                       - show all running list-objects jobs;
-     - 'show job ls'                         - same as above;
-     - 'show job ls --refresh 10'            - same as above with periodic _refreshing_ every 10 seconds;
-     - 'show job ls --refresh 10 --count 4'  - same as above but only for the first four 10-seconds intervals;
-     - 'show job prefetch-listrange'         - show all running prefetch jobs;
-     - 'show job prefetch'                   - same as above;
-     - 'show job prefetch --refresh 1m'      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - 'show job --all'                      - show absolutely all jobs, running and already finished
-   press <TAB-TAB> to select, '--help' for more options.
+   ais show job - Show running and/or finished jobs:
+     archive        blob-download  cleanup     copy-bucket       copy-objects   delete-objects
+     download       dsort          ec-bucket   ec-get            ec-put         ec-resp
+     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects  evict-remote-bucket
+     list           lru-eviction   mirror      prefetch-objects  promote-files  put-copies
+     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+   (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
+   e.g.:
+     - show job prefetch-listrange         - show all running prefetch jobs;
+     - show job prefetch                   - same as above;
+     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
+     - show job copy-listrange             - show all running multi-object copies;
+     - show job copy-objects               - same as above (using display name);
+     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
+     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job ec                         - show all erasure-coding;
+     - show job list                       - show all running list-objects jobs;
+     - show job ls                         - same as above;
+     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
+     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
+     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - show job evict                      - all running bucket and/or data evicting jobs;
+     - show job --all                      - show absolutely all jobs, running and finished.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
-   --refresh value   time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value     used together with '--refresh' to limit the number of generated reports, e.g.:
-                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --json, -j        json input/output
-   --all             all jobs, including finished and aborted
-   --regex value     regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
-   --no-headers, -H  display tables without headers
-   --verbose, -v     show extended statistics
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --date-time       override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
-   --progress        show progress bar(s) and progress of execution in real time
-   --log value       filename to log metrics (statistics)
-   --help, -h        show help
+   all           Include all jobs: running, finished, and aborted
+   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
+                  '--refresh 10 --count 5' - run 5 times with 10s interval
+   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   json,j        JSON input/output
+   log           Filename to log metrics (statistics)
+   no-headers,H  Display tables without headers
+   progress      Show progress bar(s) and progress of execution in real time
+   refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                 valid time units: ns, us (or µs), ms, s (default), m, h
+   regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                 iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                 si  - SI (metric) format, e.g.: KB, MB, GB
+                 raw - do not convert to (or from) human-readable format
+   verbose,v     Show extended statistics
+   help, h       Show help
 ```
 
 The command has no statically defined subcommands. When you type `ais show job <TAB-TAB>`, the resulting set of shell completions will only include job names (aka "kinds") that are **currently running**. Example:
@@ -234,27 +243,51 @@ Here's at a glance:
 ```console
 $ ais show job --help
 NAME:
-   ais show job - show running and finished jobs ('--all' for all, or press <TAB-TAB> to select, '--help' for options)
+   ais show job - Show running and/or finished jobs:
+     archive        blob-download  cleanup     copy-bucket       copy-objects   delete-objects
+     download       dsort          ec-bucket   ec-get            ec-put         ec-resp
+     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects  evict-remote-bucket
+     list           lru-eviction   mirror      prefetch-objects  promote-files  put-copies
+     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+   (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
+   e.g.:
+     - show job prefetch-listrange         - show all running prefetch jobs;
+     - show job prefetch                   - same as above;
+     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
+     - show job copy-listrange             - show all running multi-object copies;
+     - show job copy-objects               - same as above (using display name);
+     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
+     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job ec                         - show all erasure-coding;
+     - show job list                       - show all running list-objects jobs;
+     - show job ls                         - same as above;
+     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
+     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
+     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
+     - show job evict                      - all running bucket and/or data evicting jobs;
+     - show job --all                      - show absolutely all jobs, running and finished.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
-   --refresh value   interval for continuous monitoring;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
-   --json, -j        json input/output
-   --all             all jobs, including finished and aborted
-   --regex value     regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
-   --no-headers, -H  display tables without headers
-   --verbose, -v     verbose
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --progress        show progress bar(s) and progress of execution in real time
-   --log value       path to file where the metrics will be saved
-   --help, -h        show help
+   all           Include all jobs: running, finished, and aborted
+   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
+                  '--refresh 10 --count 5' - run 5 times with 10s interval
+   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   json,j        JSON input/output
+   log           Filename to log metrics (statistics)
+   no-headers,H  Display tables without headers
+   progress      Show progress bar(s) and progress of execution in real time
+   refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                 valid time units: ns, us (or µs), ms, s (default), m, h
+   regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                 iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                 si  - SI (metric) format, e.g.: KB, MB, GB
+                 raw - do not convert to (or from) human-readable format
+   verbose,v     Show extended statistics
+   help, h       Show help
 ```
 
 ### Example: show all currently running jobs, and narrow the selection to a given target node:
