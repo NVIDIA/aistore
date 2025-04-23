@@ -157,7 +157,7 @@ func (oah *ObjAttrs) Size() int64 {
 
 func (oah *ObjAttrs) Attrs() (out cmn.ObjAttrs) {
 	out.Cksum = out.FromHeader(oah.wrespHeader)
-	return
+	return out
 }
 
 // e.g. usage: range read response

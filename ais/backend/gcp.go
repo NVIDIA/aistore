@@ -394,39 +394,40 @@ func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum
 // PUT OBJECT
 //
 
-func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
+func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
 	var (
-		attrs    *storage.ObjectAttrs
-		written  int64
-		cloudBck = lom.Bck().RemoteBck()
-		md       = make(cos.StrKVs, 2)
-		gcpObj   = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
-		wc       = gcpObj.NewWriter(ctx)
+		cloudBck            = lom.Bck().RemoteBck()
+		cksumType, cksumVal = lom.Checksum().Get()
+		gcpObj              = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
+		wc                  = gcpObj.NewWriter(ctx)
 	)
-	md[gcpChecksumType], md[gcpChecksumVal] = lom.Checksum().Get()
+	wc.Metadata = map[string]string{
+		gcpChecksumType: cksumType,
+		gcpChecksumVal:  cksumVal,
+	}
 
-	wc.Metadata = md
 	buf, slab := gsbp.t.PageMM().Alloc()
-	written, err = io.CopyBuffer(wc, r, buf)
+	written, err := io.CopyBuffer(wc, r, buf)
 	slab.Free(buf)
 	cos.Close(r)
+
 	if err != nil {
-		return
+		return 0, err
 	}
-	if err = wc.Close(); err != nil {
-		ecode, err = gcpErrorToAISError(err, cloudBck)
-		return
+	if err := wc.Close(); err != nil {
+		return gcpErrorToAISError(err, cloudBck)
 	}
-	attrs, err = gcpObj.Attrs(ctx)
-	if err != nil {
-		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
-		return
+
+	attrs, errV := gcpObj.Attrs(ctx)
+	if errV != nil {
+		return handleObjectError(ctx, gcpClient, errV, cloudBck)
 	}
+
 	_ = setCustomGs(lom, attrs)
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s, size %d", lom, written)
 	}
-	return
+	return 0, nil
 }
 
 //

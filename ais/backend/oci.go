@@ -627,7 +627,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	if err != nil {
 		res.Err = err
 		res.ErrCode = ociStatus(resp.RawResponse)
-		return
+		return res
 	}
 
 	if attemptingMPD {

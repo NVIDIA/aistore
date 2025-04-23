@@ -474,7 +474,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 
 	svc, err = sessConf.s3client(tag)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 	headOutput, err = svc.HeadObject(context.Background(), &s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -482,8 +482,9 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	})
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-		return
+		return nil, ecode, err
 	}
+
 	oa = &cmn.ObjAttrs{}
 	oa.CustomMD = make(cos.StrKVs, 6)
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AWS)
@@ -523,7 +524,7 @@ exit:
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln(tag, cloudBck.Cname(lom.ObjName))
 	}
-	return
+	return oa, 0, nil
 }
 
 //
@@ -579,7 +580,7 @@ func (*s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 	svc, err := sessConf.s3client("[get_obj_reader]")
 	if err != nil {
 		res.Err = err
-		return
+		return res
 	}
 	if length > 0 {
 		rng := cmn.MakeRangeHdr(offset, length)
@@ -671,13 +672,13 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 				VersionID: aws.String(resp.Header.Get(cos.S3VersionHeader)),
 				ETag:      aws.String(resp.Header.Get(cos.HdrETag)),
 			}
-			goto exit
+			goto setmd
 		}
 	}
 
 	svc, err = sessConf.s3client(tag)
 	if err != nil {
-		return
+		return 0, err
 	}
 
 	md[cos.S3MetadataChecksumType] = cksumType
@@ -705,13 +706,13 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 		Body:     r,
 		Metadata: md,
 	})
+	cos.Close(r)
+
 	if err != nil {
-		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
-		cos.Close(r)
-		return
+		return awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 
-exit:
+setmd:
 	// compare with _getCustom() above
 	if v, ok := h.EncodeVersion(uploadOutput.VersionID); ok {
 		lom.SetCustomKey(cmn.VersionObjMD, v)
@@ -733,8 +734,7 @@ exit:
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln(tag, lom.String())
 	}
-	cos.Close(r)
-	return
+	return 0, nil
 }
 
 //

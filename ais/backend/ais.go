@@ -204,6 +204,7 @@ func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 		cfg              = cmn.GCO.Get()
 		cliPlain, cliTLS = remaisClients(&cfg.Client)
 	)
+
 	m.mu.RLock()
 	res.A = make([]*meta.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
@@ -246,7 +247,8 @@ func (m *AISbp) GetInfo(clusterConf cmn.BackendConfAIS) (res meta.RemAisVec) {
 		}
 	}
 	m.mu.RUnlock()
-	return
+
+	return res
 }
 
 func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) {
@@ -257,20 +259,21 @@ func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) 
 // same time. So, the method must use both kind of clients and select the
 // correct one at the moment it sends a request. First successful request
 // saves the good client for the future usage.
-func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (offline bool, err error) {
+func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (bool /*offline*/, error) {
 	var (
-		url           string
-		remSmap, smap *meta.Smap
-
+		url          string
+		remSmap      *meta.Smap
 		clientL      http.Client
 		cliH, cliTLS = remaisClients(&cfg.Client)
 	)
+
 	for _, u := range confURLs {
 		client := cliH
 		if cos.IsHTTPS(u) {
 			client = cliTLS
 		}
-		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua}); err != nil {
+		smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua})
+		if err != nil {
 			nlog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)
 			continue
 		}
@@ -279,19 +282,19 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 			continue
 		}
 		if remSmap.UUID != smap.UUID {
-			err = fmt.Errorf("%q(%v) references two different clusters: uuid=%q vs uuid=%q",
+			return false, fmt.Errorf("%q(%v) references two different clusters: uuid=%q vs uuid=%q",
 				alias, confURLs, remSmap.UUID, smap.UUID)
-			return
 		}
 		if remSmap.Version < smap.Version {
 			remSmap, url = smap, u
 		}
 	}
+
 	if remSmap == nil {
-		err = fmt.Errorf("remote cluster failed to reach %q via any/all of the configured URLs %v", alias, confURLs)
-		offline = true
-		return
+		err := fmt.Errorf("remote cluster failed to reach %q via any/all of the configured URLs %v", alias, confURLs)
+		return true, err // offline
 	}
+
 	r.smap, r.url = remSmap, url
 	if cos.IsHTTPS(url) {
 		r.bp = api.BaseParams{Client: cliTLS, URL: url, UA: ua}
@@ -306,12 +309,12 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	r.bpL.Client = &clientL
 	r.uuid = remSmap.UUID
 
-	return
+	return false, nil
 }
 
 // NOTE: supporting remote attachments both by alias and by UUID interchangeably,
 // with mappings: 1(uuid) to 1(cluster) and 1(alias) to 1(cluster)
-func (m *AISbp) add(newAis *remAis, newAlias string) (err error) {
+func (m *AISbp) add(newAis *remAis, newAlias string) error {
 	if remAis, ok := m.remote[newAlias]; ok {
 		return fmt.Errorf("cannot attach %s: alias %q is already in use as uuid for %s",
 			newAlias, newAlias, remAis)
@@ -352,7 +355,7 @@ func (m *AISbp) add(newAis *remAis, newAlias string) (err error) {
 ad:
 	m.remote[newAis.smap.UUID] = newAis
 	nlog.Infof("%s %s", newAis, tag)
-	return
+	return nil
 }
 
 func (m *AISbp) getRemAis(aliasOrUUID string) (remAis *remAis, err error) {
@@ -476,7 +479,7 @@ func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err e
 		// caller provided uuid (or alias)
 		bcks, err = m.blist(qbck.Ns.UUID, qbck)
 		ecode, err = extractErrCode(err, qbck.Ns.UUID)
-		return
+		return bcks, ecode, err
 	}
 
 	// all attached
@@ -487,7 +490,7 @@ func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err e
 	}
 	m.mu.RUnlock()
 	if len(uuids) == 0 {
-		return
+		return nil, 0, nil
 	}
 	for _, uuid := range uuids {
 		remoteBcks, errV := m.blist(uuid, qbck)
@@ -501,7 +504,7 @@ func (m *AISbp) ListBuckets(qbck cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err e
 	} else {
 		ecode, err = extractErrCode(err, "")
 	}
-	return
+	return bcks, ecode, err
 }
 
 // NOTE:
@@ -593,7 +596,7 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 		remoteBck = lom.Bck().Clone()
 	)
 	if remAis, res.Err = m.getRemAis(remoteBck.Ns.UUID); res.Err != nil {
-		return
+		return res
 	}
 	unsetUUID(&remoteBck)
 
@@ -608,7 +611,7 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent, Silent: true}
 		if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, hargs); res.Err != nil {
 			res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
-			return
+			return res
 		}
 		oa := lom.ObjAttrs()
 		*oa = op.ObjAttrs
@@ -617,22 +620,21 @@ func (m *AISbp) GetObjReader(_ context.Context, lom *core.LOM, offset, length in
 		res.ExpCksum = oa.Cksum
 		lom.SetCksum(nil)
 	}
+
 	res.R, res.Size, res.Err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, args)
 	res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
-	return
+	return res
 }
 
 // TODO: retry upon 'unreachable' or timeout
-func (m *AISbp) PutObj(_ context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (ecode int, err error) {
-	var (
-		oah       api.ObjAttrs
-		remAis    *remAis
-		remoteBck = lom.Bck().Clone()
-	)
-	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
+func (m *AISbp) PutObj(_ context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+	remoteBck := lom.Bck().Clone()
+	remAis, err := m.getRemAis(remoteBck.Ns.UUID)
+	if err != nil {
 		cos.Close(r)
-		return
+		return 0, err
 	}
+
 	unsetUUID(&remoteBck)
 	size := lom.Lsize(true) // _special_ as it's still a workfile at this point
 	args := api.PutArgs{
@@ -643,19 +645,20 @@ func (m *AISbp) PutObj(_ context.Context, r io.ReadCloser, lom *core.LOM, _ *htt
 		Reader:     r.(cos.ReadOpenCloser),
 		Size:       uint64(size),
 	}
-	if oah, err = api.PutObject(&args); err != nil {
-		ecode, err = extractErrCode(err, remAis.uuid)
-		return
+	oah, errV := api.PutObject(&args)
+	if errV != nil {
+		return extractErrCode(errV, remAis.uuid)
 	}
+
 	// compare w/ lom.CopyAttrs
 	oa := lom.ObjAttrs()
 	*oa = oah.Attrs()
 
 	// NOTE: restore back into the lom as PUT response header does not contain "Content-Length" (cos.HdrContentLength)
 	oa.Size = size
-
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
-	return
+
+	return 0, nil
 }
 
 func (m *AISbp) DeleteObj(_ context.Context, lom *core.LOM) (ecode int, err error) {
