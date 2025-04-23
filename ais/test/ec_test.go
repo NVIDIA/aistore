@@ -2249,10 +2249,10 @@ func TestECBucketEncode(t *testing.T) {
 			ParitySlices: apc.Ptr(parityCnt),
 		},
 	}
-	_, err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
+	xid, err := api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Wait for EC %s\n", m.bck.String())
+	tlog.Logf("Wait for ec-bucket[%s] %s\n", xid, m.bck.String())
 	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(t, err)

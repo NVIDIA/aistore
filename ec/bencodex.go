@@ -26,6 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// TODO: support num-workers (see xact/xs)
+
 const rcvyWorkChanSize = 256
 
 type (
@@ -51,7 +53,7 @@ type (
 	rcvyJogger struct {
 		mi       *fs.Mountpath
 		workCh   chan *core.LOM
-		parent   *XactBckEncode
+		r        *XactBckEncode
 		chanFull cos.ChanFull
 	}
 )
@@ -72,10 +74,17 @@ func (*encFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *encFactory) Start() (err error) {
+func (p *encFactory) Start() error {
 	custom := p.Args.Custom.(*xreg.ECEncodeArgs)
-	p.xctn, err = newXactBckEncode(p.Bck, p.UUID(), custom.Recover)
-	return err
+	r := &XactBckEncode{
+		bck:             p.Bck,
+		checkAndRecover: custom.Recover,
+	}
+	if err := r.init(p.UUID()); err != nil {
+		return err
+	}
+	p.xctn = r
+	return nil
 }
 
 func (*encFactory) Kind() string     { return apc.ActECEncode }
@@ -96,29 +105,27 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *XactBckEncode, _ error) {
+func (r *XactBckEncode) init(uuid string) error {
+	r.wg = &sync.WaitGroup{}
+	r.smap = core.T.Sowner().Get()
+
 	var ctlmsg string
-	r = &XactBckEncode{
-		bck:             bck,
-		wg:              &sync.WaitGroup{},
-		smap:            core.T.Sowner().Get(),
-		checkAndRecover: checkAndRecover,
-	}
-	if checkAndRecover {
+	if r.checkAndRecover {
 		ctlmsg = "recover"
 		r.probFilter = prob.NewDefaultFilter()
 	}
-	r.InitBase(uuid, apc.ActECEncode, ctlmsg, bck)
+	r.InitBase(uuid, apc.ActECEncode, ctlmsg, r.bck)
 
-	if err := bck.Init(core.T.Bowner()); err != nil {
-		return nil, err
+	if err := r.bck.Init(core.T.Bowner()); err != nil {
+		return err
 	}
-	if !bck.Props.EC.Enabled {
-		return nil, fmt.Errorf("EC is disabled for %s", bck.Cname(""))
+	if !r.bck.Props.EC.Enabled {
+		return fmt.Errorf("EC is disabled for %s", r.bck.Cname(""))
 	}
+
 	avail := fs.GetAvail()
 	if len(avail) == 0 {
-		return nil, cmn.ErrNoMountpaths
+		return cmn.ErrNoMountpaths
 	}
 	if r.checkAndRecover {
 		// construct recovery joggers
@@ -127,13 +134,13 @@ func newXactBckEncode(bck *meta.Bck, uuid string, checkAndRecover bool) (r *Xact
 			j := &rcvyJogger{
 				mi:     mi,
 				workCh: make(chan *core.LOM, rcvyWorkChanSize),
-				parent: r,
+				r:      r,
 			}
 			r.rcvyJG[mi.Path] = j
 		}
 	}
 
-	return r, nil
+	return nil
 }
 
 func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
@@ -174,23 +181,29 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	}
 	if r.checkAndRecover {
 		// wait for in-flight and pending recovery
-		r.Quiesce(config.Timeout.MaxHostBusy.D(), r._quiesce)
-		r.done.Store(true)
+		r.Quiesce(xact.IdleDefault, r._quiesce)
 	}
+	r.done.Store(true)
 	r.wg.Wait() // wait for before/afterEncode
 
-	for _, j := range r.rcvyJG {
-		close(j.workCh)
+	if !r.IsAborted() {
+		for _, j := range r.rcvyJG {
+			close(j.workCh)
+		}
 	}
 
 	r.Finish()
+
+	if a := r.chanFullTotal(); a > 0 {
+		nlog.Warningln(r.Name(), "work channel full (final)", a)
+	}
 }
 
 // at least max-host-busy without Rx or jogger action _prior_ to counting towards timeout
 func (r *XactBckEncode) _quiesce(time.Duration) core.QuiRes {
 	last := r.last.Load()
 	debug.Assert(last != 0)
-	if mono.Since(last) < max(cmn.Rom.MaxKeepalive(), 4*time.Second) {
+	if mono.Since(last) < max(xact.IdleDefault>>1, 20*time.Second) {
 		return core.QuiActive
 	}
 	return core.QuiInactiveCB
@@ -255,8 +268,17 @@ func (r *XactBckEncode) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 
+	snap.Pack(fs.NumAvail(), len(r.rcvyJG), r.chanFullTotal())
+
 	snap.IdleX = r.IsIdle()
 	return
+}
+
+func (r *XactBckEncode) chanFullTotal() (n int64) {
+	for _, j := range r.rcvyJG {
+		n += j.chanFull.Load()
+	}
+	return n
 }
 
 // given CT, ask the "main" target to restore the corresponding object and slices, if need be
@@ -278,6 +300,7 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 	uname := lom.UnamePtr()
 	bname := cos.UnsafeBptr(uname)
 	if r.probFilter.Lookup(*bname) {
+		core.FreeLOM(lom)
 		return
 	}
 
@@ -285,17 +308,21 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 	j, ok := r.rcvyJG[lom.Mountpath().Path]
 	if !ok {
 		err := errLossMpath(r, lom)
-		debug.Assert(false, err)
 		r.Abort(err)
 		return
 	}
-	if !r.done.Load() {
-		j.workCh <- lom
+
+	if r.done.Load() || r.IsAborted() || r.Finished() {
+		core.FreeLOM(lom)
+		return
 	}
+
+	j.workCh <- lom
 }
 
 func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 	r.last.Store(mono.NanoTime())
+
 	switch err {
 	case nil:
 		r.LomAdd(lom) // TODO: instead, count restored slices, metafiles, possibly - objects
@@ -313,10 +340,13 @@ func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 ////////////////
 
 func (j *rcvyJogger) run() {
-	var n int64
+	var (
+		r = j.r
+		n int64
+	)
 	for {
 		lom, ok := <-j.workCh
-		if !ok {
+		if !ok || r.done.Load() || r.IsAborted() || r.Finished() {
 			break
 		}
 
@@ -324,7 +354,7 @@ func (j *rcvyJogger) run() {
 		j.chanFull.Check(l, c)
 
 		err := ECM.Recover(lom)
-		j.parent.setLast(lom, err)
+		r.setLast(lom, err)
 		core.FreeLOM(lom)
 
 		n++
@@ -336,11 +366,8 @@ func (j *rcvyJogger) run() {
 			}
 		}
 	}
-	if cnt := j.chanFull.Load(); cnt > 1 {
-		nlog.Warningln(j.String(), cos.ErrWorkChanFull, "cnt:", cnt)
-	}
 }
 
 func (j *rcvyJogger) String() string {
-	return fmt.Sprintf("j-rcvy %s[%s/%s]", j.parent.ID(), j.mi, j.parent.Bck())
+	return "j-rcvy " + j.r.ID() + "[" + j.mi.String() + "/" + j.r.Bck().Cname("") + "]"
 }

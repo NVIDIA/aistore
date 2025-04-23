@@ -24,6 +24,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// TODO: support num-workers (see xact/xs)
+
 type (
 	putFactory struct {
 		xreg.RenewBase

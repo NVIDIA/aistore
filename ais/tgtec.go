@@ -112,7 +112,8 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 
 		uuid := query.Get(apc.QparamUUID)
 		xctn, errN := xreg.GetXact(uuid)
-		if errN != nil || xctn == nil {
+		switch {
+		case errN != nil || xctn == nil:
 			// [TODO]
 			// - to be used to recover individual objects and assorted (ranges, lists of) objects
 			// - requires API & CLI
@@ -125,12 +126,15 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.writeErr(w, r, cmn.NewErrFailedTo(t, "EC-recover", cname, err))
 			}
-		} else if !xctn.Finished() {
+		case !xctn.Finished() && !xctn.IsAborted():
 			xbenc, ok := xctn.(*ec.XactBckEncode)
 			debug.Assert(ok, xctn.String())
 
 			// async, via j.workCh
 			xbenc.RecvRecover(lom)
+		default:
+			nlog.Errorln(xctn.Name(), "already finished - dropping", lom.Cname())
+			core.FreeLOM(lom)
 		}
 	case apc.ActEcOpen:
 		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time

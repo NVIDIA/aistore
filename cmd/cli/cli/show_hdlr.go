@@ -582,7 +582,16 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	_, xname := xact.GetKindName(xargs.Kind)
 	if caption {
-		ctlmsg += _parallelism(jwfmin, jwfmax)
+		s := _parallelism(jwfmin, jwfmax)
+		if s != "" {
+			ctlmsg = strings.TrimSuffix(ctlmsg, " ")
+			switch ctlmsg {
+			case "":
+				ctlmsg = s
+			default:
+				ctlmsg += ", " + s
+			}
+		}
 		jobCptn(c, xname, xargs.ID, ctlmsg, xargs.OnlyRunning, xargs.DaemonID != "")
 	}
 
@@ -665,7 +674,7 @@ func _parallelism(jwfmin, jwfmax [3]int) (s string) {
 	if jwfmax[0] == 0 && jwfmax[1] == 0 && jwfmax[2] == 0 {
 		return ""
 	}
-	s = " parallelism:"
+	s = "parallelism:"
 	if jwfmax[0] != 0 {
 		if jwfmax[0] == jwfmin[0] {
 			s += " j[" + strconv.Itoa(jwfmax[0]) + "]"

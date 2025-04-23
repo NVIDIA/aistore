@@ -649,8 +649,8 @@ var (
 
 	copiesFlag = cli.IntFlag{Name: "copies", Usage: "Number of object replicas", Value: 1, Required: true}
 
-	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,d", Value: 2, Usage: "Number of data slices"}
-	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,p", Value: 2, Usage: "Number of parity slices"}
+	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,d", Usage: "Number of data slices"}
+	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,p", Usage: "Number of parity slices"}
 
 	checkAndRecoverFlag = cli.BoolFlag{
 		Name:  "recover",
