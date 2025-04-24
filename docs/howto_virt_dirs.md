@@ -54,7 +54,7 @@ The interaction between these flags can be confusing but follows a logical patte
 | (none)            | -                                  | Lists all objects recursively                      | No                | Yes                            |
 | `--nr`            | `apc.LsNoRecursion`                | Lists immediate entries only                       | Yes               | No                             |
 | `--no-dirs`       | `apc.LsNoDirs`                     | Lists all objects without directories              | No                | Yes                            |
-| `--nr --no-dirs`  | `apc.LsNoRecursion | apc.LsNoDirs` | Lists immediate objects only, excluding directories| No                | No                             |
+| `--nr --no-dirs`  | `apc.LsNoRecursion \| apc.LsNoDirs` | Lists immediate objects only, excluding directories| No                | No                             |
 
 ## Examples
 
