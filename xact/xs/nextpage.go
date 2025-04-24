@@ -116,18 +116,27 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 	var (
 		bck  = npg.bck.Bucket()
 		post = npg.wi.lomVisitedCb
+		msg  = npg.wi.msg
 		i    int
 	)
+
 	for _, en := range lst.Entries {
-		if en.IsAnyFlagSet(apc.EntryIsDir) {
-			// collecting virtual dir-s when apc.LsNoRecursion is on - skipping here
-			continue
-		}
 		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(en.Name))
 		if err != nil {
 			return err
 		}
 		if si.ID() != core.T.SID() {
+			continue
+		}
+
+		// [NOTE]
+		// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
+		// * https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+
+		if en.IsAnyFlagSet(apc.EntryIsDir) && !msg.IsFlagSet(apc.LsNoDirs) {
+			// collect virtual dir-s aka "common prefixes"
+			lst.Entries[i] = en
+			i++
 			continue
 		}
 
@@ -142,7 +151,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		if err := lom.Load(true /* cache it*/, false /*locked*/); err != nil {
 			goto keep
 		}
-		if npg.wi.msg.IsFlagSet(apc.LsNotCached) {
+		if msg.IsFlagSet(apc.LsNotCached) {
 			core.FreeLOM(lom)
 			continue
 		}

@@ -301,6 +301,11 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 		return 0, err
 	}
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
+
+	// [NOTE]
+	// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
+	// * https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+
 	if msg.IsFlagSet(apc.LsNoRecursion) {
 		params.Delimiter = aws.String("/")
 	}

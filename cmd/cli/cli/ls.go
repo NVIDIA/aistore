@@ -619,7 +619,14 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 		return nil
 	}
 
-	// otherwise, print names
+	// otherwise, print but NOTE:
+	// * the flow: teb.LsoTemplate generated template to display list objects output
+	// * when applied to listed objects - the `matched` below -
+	//   - teb.ObjectPropsMap(prop) => FormatNameDirArch
+	// * the latter looks at whether the EntryIsDir, among other things
+	// * two related flags and semantics:
+	//   - https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+
 	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol)
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, false /*incl. calendar date*/)}
 	if err := teb.Print(matched, tmpl, opts); err != nil {

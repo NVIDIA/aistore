@@ -457,6 +457,10 @@ func fmtACL(acl apc.AccessAttrs) string {
 	return acl.Describe(true /*incl. all*/)
 }
 
+// [NOTE]
+// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
+// * https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+
 func fmtNameDirArch(val string, flags uint16) string {
 	if flags&apc.EntryInArch == 0 {
 		if flags&apc.EntryIsDir != 0 {
