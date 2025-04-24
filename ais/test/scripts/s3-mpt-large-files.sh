@@ -86,7 +86,7 @@ if [[ "$generate" == "true" ]]; then  ## generate
   echo "Generating large files ..."
   count=499
   for i in $(seq 1 1 $numfiles); do
-    dd if=/dev/random of="$srcdir/mpt-$count" bs=4024k count=$count | exit $?
+    dd if=/dev/urandom of="$srcdir/mpt-$count" bs=4024k count=$count | exit $?
     count=`expr $count + 500`
   done
 fi
