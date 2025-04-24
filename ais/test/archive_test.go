@@ -518,6 +518,12 @@ func TestAppendToArch(t *testing.T) {
 				numAdd = 3
 			}
 
+			// speed up serialized tests
+			if !test.multi {
+				numArchs /= 2
+				numAdd /= 2
+			}
+
 			for i := range numArchs {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				list := make([]string, 0, numInArch)

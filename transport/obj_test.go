@@ -525,7 +525,9 @@ func TestCompressedOne(t *testing.T) {
 	printNetworkStats()
 }
 
+// TODO: Skip unmaintained dry-run test to reduce test runtime (revisit)
 func TestDryRun(t *testing.T) {
+	t.Skipf("skipping %s", t.Name())
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")

@@ -20,18 +20,27 @@ run_tests() {
     timeout="-timeout=30m"
   fi
 
+  LOG_FILE=$(mktemp)
+
   # NOTE: cannot run tests in parallel (e.g. `-parallel 4`) because of ginkgo v2
   # ("Ginkgo detected configuration issues...")
   failed_tests=$(
     BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
       go test -v -p 1 -tags debug -count 1 ${timeout} ${short} ${shuffle} ${re} "${tests_dir}" 2>&1 \
-    | tee -a /dev/stderr \
+    | tee "${LOG_FILE}" | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \
     exit ${PIPESTATUS[0]} # Exit with the status of the first command in the pipe(line).
   )
   exit_code=$?
 
   echo "Tests took: $((SECONDS/3600))h$(((SECONDS%3600)/60))m$((SECONDS%60))s"
+
+  echo -e "\nTop-20 Slowest Tests:"
+  grep -E '^--- (PASS|FAIL):' "${LOG_FILE}" \
+    | sort -t'(' -k2,2nr \
+    | head -20
+
+  rm -f "${LOG_FILE}"
 
   if [[ $exit_code -ne 0 ]]; then
     echo "${failed_tests}"
@@ -157,7 +166,6 @@ test-docker)
   errs=$("${AISTORE_PATH}/deploy/test-in-docker/test.sh" --name=${branch} 2>&1 | tee -a /dev/stderr | grep -e "^--- FAIL: Bench\|^--- FAIL: Test"  )
   perror $1 "${errs}"
   ;;
-
 
 test-bench)
   echo "Running benchmark tests..." >&2
