@@ -8,6 +8,8 @@ DEFAULT_ETL_RUNTIME = "python3.13v2"
 ETL_COMM_HPUSH = "hpush"
 # ext/etl/api.go Hpull
 ETL_COMM_HPULL = "hpull"
+# ext/etl/api.go WebSocket
+ETL_COMM_WS = "ws"
 # ext/etl/api.go HpushStdin
 ETL_COMM_IO = "io"
 
@@ -17,7 +19,7 @@ ETL_STAGE_RUNNING = "Running"
 ETL_STAGE_STOPPED = "Stopped"
 
 ETL_COMM_CODE = [ETL_COMM_IO, ETL_COMM_HPUSH, ETL_COMM_HPULL]
-ETL_COMM_SPEC = [ETL_COMM_HPUSH, ETL_COMM_HPULL]
+ETL_COMM_SPEC = [ETL_COMM_HPUSH, ETL_COMM_HPULL, ETL_COMM_WS]
 
 ETL_SUPPORTED_PYTHON_VERSIONS = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 

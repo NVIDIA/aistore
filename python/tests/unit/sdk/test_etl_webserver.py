@@ -91,6 +91,8 @@ class TestRequestHandlerHelpers(unittest.TestCase):
 class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ARG_TYPE"] = ""
+        os.environ["DIRECT_PUT"] = "false"
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
@@ -146,7 +148,24 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, transformed_content)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_direct_put_delivery(self):
+    async def test_websocket(self):
+        with self.client.websocket_connect("/ws") as websocket:
+            original_data = b"abcdef"
+            websocket.send_bytes(original_data)
+            result = websocket.receive_bytes()
+            self.assertEqual(result, original_data[::-1])
+
+
+class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ARG_TYPE"] = ""
+        os.environ["DIRECT_PUT"] = "true"
+        self.etl_server = DummyFastAPIServer()
+        self.client = TestClient(self.etl_server.app)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_direct_put(self):
         self.etl_server.arg_type = ""
         path = "test/object"
         input_content = b"input data"
@@ -180,42 +199,123 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.etl_server.client.put.assert_awaited_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_websocket(self):
-        with self.client.websocket_connect("/ws") as websocket:
-            original_data = b"abcdef"
-            websocket.send_text("")  # No delivery target URL
-            websocket.send_bytes(original_data)
-            result = websocket.receive_bytes()
-            self.assertEqual(result, original_data[::-1])
-
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_websocket_with_direct_put(self):
+        self.etl_server.arg_type = ""
         input_data = b"testdata"
-        # Mock the direct delivery response (simulate 200 OK)
+        direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
+
+        # Mock the direct put response (simulate 200 OK) => return "direct put success" as ACK
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             mock_resp = AsyncMock()
             mock_resp.status_code = 200
             mock_client.put.return_value = mock_resp
 
             with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_text("http://localhost:8080/ais/@/etl_dst/final")
+                websocket.send_text(direct_put_url)
                 websocket.send_bytes(input_data)
                 result = websocket.receive_text()
                 self.assertEqual(result, "direct put success")
-                mock_client.put.assert_awaited_once()
 
-        # Mock the direct delivery response (simulate 500 FAIL)
+            mock_client.put.assert_awaited_once()
+            mock_client.put.assert_called_once_with(
+                direct_put_url, data=input_data[::-1]
+            )
+
+        # Mock the direct put response (simulate 500 FAIL) => return transformed object
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             mock_resp = AsyncMock()
             mock_resp.status_code = 500
             mock_client.put.return_value = mock_resp
 
             with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_text("http://localhost:8080/ais/@/etl_dst/final")
+                websocket.send_text(direct_put_url)
                 websocket.send_bytes(input_data)
                 result = websocket.receive_bytes()
                 self.assertEqual(result, input_data[::-1])
-                mock_client.put.assert_awaited_once()
+
+            mock_client.put.assert_awaited_once()
+            mock_client.put.assert_called_once_with(
+                direct_put_url, data=input_data[::-1]
+            )
+
+        # Mock the empty direct put url (don't need direct put on this object) => return transformed object
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_text("")  # empty direct put url
+                websocket.send_bytes(input_data)
+                result = websocket.receive_bytes()
+                self.assertEqual(result, input_data[::-1])
+            mock_client.put.assert_not_called()  # direct put shouldn't be called
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_websocket_with_direct_put_and_fqn(self):
+        fqn = "test/object"
+        original_content = b"original data"
+        direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
+        self.etl_server.arg_type = "fqn"  # Use fqn
+        # Mock the direct put response (simulate 200 OK)
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 200
+            mock_client.put.return_value = mock_resp
+
+            with patch.object(
+                self.etl_server,
+                "_get_fqn_content",
+                AsyncMock(return_value=original_content),
+            ) as get_fqn_mock:
+                with self.client.websocket_connect("/ws") as websocket:
+                    websocket.send_text(direct_put_url)
+                    websocket.send_text(fqn)
+                    result = websocket.receive_text()
+                    self.assertEqual(result, "direct put success")
+
+                get_fqn_mock.assert_called_once_with(fqn)
+
+            mock_client.put.assert_awaited_once()
+            mock_client.put.assert_called_once_with(
+                direct_put_url, data=original_content[::-1]
+            )
+
+        # Mock the direct put response (simulate 500 FAIL) => return transformed object
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 500
+            mock_client.put.return_value = mock_resp
+
+            with patch.object(
+                self.etl_server,
+                "_get_fqn_content",
+                AsyncMock(return_value=original_content),
+            ) as get_fqn_mock:
+                with self.client.websocket_connect("/ws") as websocket:
+                    websocket.send_text(direct_put_url)
+                    websocket.send_text(fqn)
+                    result = websocket.receive_bytes()
+                    self.assertEqual(result, original_content[::-1])
+
+                get_fqn_mock.assert_called_once_with(fqn)
+
+            mock_client.put.assert_awaited_once()
+            mock_client.put.assert_called_once_with(
+                direct_put_url, data=original_content[::-1]
+            )
+
+        # Mock the empty direct put url (don't need direct put on this object) => return transformed object
+        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
+            with patch.object(
+                self.etl_server,
+                "_get_fqn_content",
+                AsyncMock(return_value=original_content),
+            ) as get_fqn_mock:
+                with self.client.websocket_connect("/ws") as websocket:
+                    websocket.send_text("")
+                    websocket.send_text(fqn)
+                    result = websocket.receive_bytes()
+                    self.assertEqual(result, original_content[::-1])
+
+                get_fqn_mock.assert_called_once_with(fqn)
+            mock_client.put.assert_not_called()
 
 
 class TestFlaskServer(unittest.TestCase):

@@ -60,26 +60,37 @@ class FastAPIServer(ETLServer):
                 )
                 self.active_connections.append(websocket)
 
+                # Message receiving matrix:
+                # ┌──────────────┬──────────────┬─────────────────────────────────────────────────────────────┐
+                # │ direct_put   │ arg_type     │ Incoming Message Pattern                                    │
+                # ├──────────────┼──────────────┼─────────────────────────────────────────────────────────────┤
+                # │ True         │ "fqn"        │ TextMessage (direct_put_url) + TextMessage (file path)      │
+                # │ True         │ not "fqn"    │ TextMessage (direct_put_url) + BinaryMessage (object bytes) │
+                # │ False        │ "fqn"        │ TextMessage (file path)                                     │
+                # │ False        │ not "fqn"    │ BinaryMessage (object bytes)                                │
+                # └──────────────┴──────────────┴─────────────────────────────────────────────────────────────┘
                 while True:
-                    msg = await websocket.receive()
+                    direct_put_url, data = None, None
 
-                    if "text" not in msg and "bytes" not in msg:
-                        self.logger.warning("Unexpected message format: %s", msg)
-                        continue
+                    try:
+                        if self.direct_put:
+                            direct_put_url = await websocket.receive_text()
 
-                    delivery_target_url = msg.get("text")
-                    if delivery_target_url is not None:
-                        data = await websocket.receive_bytes()
-                    else:
-                        data = msg["bytes"]
+                        if self.arg_type == "fqn":
+                            path = await websocket.receive_text()
+                            data = await self._get_fqn_content(path)
+                        else:
+                            data = await websocket.receive_bytes()
+                    except Exception as e:
+                        self.logger.warning("Error on receiving: %s", e)
 
                     self.logger.debug("Received message of length: %d", len(data))
                     transformed = await asyncio.to_thread(self.transform, data, "")
 
-                    if delivery_target_url:
+                    if direct_put_url:
                         try:
                             response = await self._direct_put(
-                                delivery_target_url, transformed
+                                direct_put_url, transformed
                             )
                             if response:
                                 await websocket.send_text("direct put success")

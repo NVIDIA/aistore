@@ -381,6 +381,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 		Base:   rc.boot.uri,
 		Path:   path,
 		BodyR:  http.NoBody,
+		Header: http.Header{},
 		Query:  query,
 	}
 

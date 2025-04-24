@@ -9,11 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 
@@ -74,6 +77,7 @@ type (
 	wsSession struct {
 		txctn       core.Xact
 		isDirectPut bool
+		argType     string
 		connections []*wsConnCtx
 		workCh      chan transformTask
 		chanFull    cos.ChanFull
@@ -104,6 +108,7 @@ type (
 		r     io.ReadCloser
 		w     *io.PipeWriter
 		daddr string
+		fqn   string
 	}
 )
 
@@ -144,6 +149,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 	wss := &wsSession{
 		txctn:       xctn,
 		isDirectPut: ws.boot.msg.IsDirectPut(),
+		argType:     ws.boot.msg.ArgType(),
 		workCh:      make(chan transformTask, wockChSize),
 		connections: make([]*wsConnCtx, 0, connPerSession),
 	}
@@ -197,31 +203,45 @@ func (ws *webSocketComm) Stop() {
 ///////////////
 
 func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
-	srcResp := lom.GetROC(latestVer, sync)
-	if srcResp.Err != nil {
-		return srcResp
-	}
-	pr, pw := io.Pipe() // TODO -- FIXME: revise and remove
-
-	l, c := len(wss.workCh), cap(wss.workCh)
-	wss.chanFull.Check(l, c)
-
 	var (
 		daddr string
+		fqn   string
 		err   error
+		r     io.ReadCloser
+		oah   = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
 	)
+	switch wss.argType {
+	case ArgTypeDefault, ArgTypeURL:
+		srcResp := lom.GetROC(latestVer, sync)
+		if srcResp.Err != nil {
+			return srcResp
+		}
+		r = srcResp.R
+		oah.Size = srcResp.OAH.Lsize()
+	case ArgTypeFQN:
+		if ecode, err := lomLoad(lom, wss.txctn.Kind()); err != nil {
+			return core.ReadResp{Err: err, Ecode: ecode}
+		}
+		fqn = url.PathEscape(lom.FQN)
+	}
+
+	pr, pw := io.Pipe() // TODO -- FIXME: revise and remove
+
 	if wss.isDirectPut && gargs != nil && !gargs.Local {
 		daddr = gargs.Daddr
 		err = cmn.ErrSkip
 	}
-	wss.workCh <- transformTask{srcResp.R, pw, daddr}
+
+	l, c := len(wss.workCh), cap(wss.workCh)
+	wss.chanFull.Check(l, c)
+
+	wss.workCh <- transformTask{r, pw, daddr, fqn}
 
 	return core.ReadResp{
-		R:      cos.NopOpener(pr),
-		OAH:    srcResp.OAH, // TODO: estimate the post-transformed Lsize for stats
-		Err:    err,
-		Ecode:  http.StatusNoContent, // promise to deliver
-		Remote: srcResp.Remote,
+		R:     cos.NopOpener(pr),
+		OAH:   oah, // TODO: estimate the post-transformed Lsize for stats
+		Err:   err,
+		Ecode: http.StatusNoContent, // promise to deliver
 	}
 }
 
@@ -305,38 +325,48 @@ func (wctx *wsConnCtx) writeLoop() error {
 			//
 			// The ETL server is expected to consume them in the same order and treat them as logically linked.
 
-			// 1. send direct put address
-			if rw.daddr != "" {
-				err := wctx.conn.WriteMessage(websocket.TextMessage, []byte(rw.daddr))
+			// 1. send direct put address (empty string for local object)
+			err := wctx.conn.WriteMessage(websocket.TextMessage, cos.UnsafeB(rw.daddr))
+			if err != nil {
+				err = fmt.Errorf("error on writing direct put address %s: %w", wctx.name, err)
+				wctx.txctn.AddErr(err)
+				return err
+			}
+
+			// 2. send object content or FQN path
+			switch {
+			case rw.fqn != "":
+				err := wctx.conn.WriteMessage(websocket.TextMessage, cos.UnsafeB(rw.fqn))
 				if err != nil {
 					err = fmt.Errorf("error on writing direct put address %s: %w", wctx.name, err)
 					wctx.txctn.AddErr(err)
 					return err
 				}
-			}
-
-			// 2. send object content
-			writer, err := wctx.conn.NextWriter(websocket.BinaryMessage)
-			if err != nil {
-				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
-				wctx.txctn.AddErr(err)
-				return err
-			}
-			if _, err := cos.CopyBuffer(writer, rw.r, buf); err != nil {
+			case rw.r != nil:
+				writer, err := wctx.conn.NextWriter(websocket.BinaryMessage)
+				if err != nil {
+					err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
+					wctx.txctn.AddErr(err)
+					return err
+				}
+				if _, err := cos.CopyBuffer(writer, rw.r, buf); err != nil {
+					cos.Close(rw.r)
+					cos.Close(writer)
+					err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
+					wctx.txctn.AddErr(err)
+					return err
+				}
 				cos.Close(rw.r)
 				cos.Close(writer)
-				err = fmt.Errorf("error on getting next writter from %s: %w", wctx.name, err)
-				wctx.txctn.AddErr(err)
-				return err
+			default:
+				debug.Assert(false, "transform task should be either reader or fqn")
 			}
-			cos.Close(rw.r)
 
 			// For each object sent to the ETL via `wctx.workCh`, we reserve a corresponding slot in `wctx.writerCh`
 			// for its writer. This guarantees that the correct writer is matched with the response when it arrives.
 			l, c := len(wctx.writerCh), cap(wctx.writerCh)
 			wctx.writerChanFull.Check(l, c)
 			wctx.writerCh <- rw.w
-			cos.Close(writer)
 		}
 	}
 }
