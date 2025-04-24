@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -31,7 +32,7 @@ type (
 	// Session represents a per-xaction communication context created by the statefulCommunicator.
 	Session interface {
 		// Transform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
-		Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp
+		Transform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp
 		// Finish cleans up the job's communication channel, and aborts the undergoing xaction (`TCB`/`TCO`) if errCause is provided
 		Finish(errCause error) error
 	}
@@ -72,6 +73,7 @@ type (
 
 	wsSession struct {
 		txctn       core.Xact
+		isDirectPut bool
 		connections []*wsConnCtx
 		workCh      chan transformTask
 		chanFull    cos.ChanFull
@@ -138,9 +140,10 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		return nil, cos.NewErrNotFound(core.T, "invalid xact parameter")
 	}
 
-	connPerSession := ws.boot.config.TCB.SbundleMult // TODO: add specific ETL config on this
+	connPerSession := ws.boot.config.TCB.SbundleMult * 4 // TODO: add specific ETL config on this
 	wss := &wsSession{
 		txctn:       xctn,
+		isDirectPut: ws.boot.msg.IsDirectPut(),
 		workCh:      make(chan transformTask, wockChSize),
 		connections: make([]*wsConnCtx, 0, connPerSession),
 	}
@@ -158,7 +161,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 		group, ctx := errgroup.WithContext(wss.sessionCtx)
 
 		wcs := &wsConnCtx{
-			name:     fmt.Sprintf("%s-%d", ws.ETLName(), i),
+			name:     ws.ETLName() + "-" + strconv.Itoa(i),
 			etlxctn:  ws.Xact(), // for abort listening and runtime error report
 			txctn:    xctn,      // for abort listening and runtime error report
 			conn:     conn,
@@ -193,7 +196,7 @@ func (ws *webSocketComm) Stop() {
 // wsSession //
 ///////////////
 
-func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
+func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	srcResp := lom.GetROC(latestVer, sync)
 	if srcResp.Err != nil {
 		return srcResp
@@ -203,12 +206,20 @@ func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, daddr strin
 	l, c := len(wss.workCh), cap(wss.workCh)
 	wss.chanFull.Check(l, c)
 
+	var (
+		daddr string
+		err   error
+	)
+	if wss.isDirectPut && gargs != nil && !gargs.Local {
+		daddr = gargs.Daddr
+		err = cmn.ErrSkip
+	}
 	wss.workCh <- transformTask{srcResp.R, pw, daddr}
 
 	return core.ReadResp{
 		R:      cos.NopOpener(pr),
 		OAH:    srcResp.OAH, // TODO: estimate the post-transformed Lsize for stats
-		Err:    nil,
+		Err:    err,
 		Ecode:  http.StatusNoContent, // promise to deliver
 		Remote: srcResp.Remote,
 	}

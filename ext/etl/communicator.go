@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -70,7 +69,7 @@ type (
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
-		OfflineTransform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp
+		OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp
 	}
 
 	baseComm struct {
@@ -184,11 +183,11 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 		if r != nil {
 			cos.Close(r)
 		}
-		return core.ReadResp{R: nil, OAH: oah, Ecode: http.StatusNoContent}
+		return core.ReadResp{R: nil, OAH: oah, Err: cmn.ErrSkip, Ecode: http.StatusNoContent}
 	default:
 		nlog.Errorln("unexpected ecode from etl:", ecode, oah, err)
 	}
-	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: http.StatusNoContent}
+	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
 }
 
 func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
@@ -226,13 +225,12 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string, latestVer, sync bool, daddr string) core.ReadResp {
+func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
 		return core.ReadResp{Err: err}
 	}
 	var (
 		path    string
-		srcSize int64
 		getBody getBodyFunc
 
 		started = mono.NanoTime()
@@ -248,7 +246,6 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
 		path = lom.Bck().Name + "/" + lom.ObjName
 		getBody = func() core.ReadResp { return lom.GetROC(latestVer, sync) }
-		oah.Size = srcSize
 	case ArgTypeFQN:
 		if ecode, err := lomLoad(lom, pc.boot.xctn.Kind()); err != nil {
 			return core.ReadResp{Err: err, Ecode: ecode}
@@ -274,13 +271,15 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 		Method: http.MethodPut,
 		Base:   pc.boot.uri,
 		Path:   path,
-		Header: http.Header{
-			cos.HdrContentLength: []string{strconv.Itoa(int(srcSize))},
-			apc.HdrNodeURL:       []string{daddr},
-		},
-		Query: query,
+		Header: http.Header{},
+		Query:  query,
 	}
 
+	if pc.boot.msg.IsDirectPut() && gargs != nil && !gargs.Local {
+		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
+	}
+
+	// note: `Content-Length` header is set during `retryer.call()` below
 	r, ecode, err := doWithTimeout(reqArgs, getBody, timeout, started)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
@@ -291,7 +290,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
 	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false, "")
+	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false, nil)
 	if resp.Err != nil {
 		return resp.Ecode, resp.Err
 	}
@@ -311,8 +310,8 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom 
 	return 0, err
 }
 
-func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, daddr string) core.ReadResp {
-	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), "", latestVer, sync, daddr)
+func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
+	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), "", latestVer, sync, gargs)
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err, resp.Ecode)
 	}
@@ -366,7 +365,7 @@ func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string
 	return path, query
 }
 
-func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr string) core.ReadResp {
+func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs *core.GetROCArgs) core.ReadResp {
 	var (
 		started = mono.NanoTime()
 		clone   = *lom
@@ -382,8 +381,11 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, daddr
 		Base:   rc.boot.uri,
 		Path:   path,
 		BodyR:  http.NoBody,
-		Header: http.Header{apc.HdrNodeURL: []string{daddr}},
 		Query:  query,
+	}
+
+	if rc.boot.msg.IsDirectPut() && gargs != nil && !gargs.Local {
+		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
 	}
 
 	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.Timeout.D(), started)

@@ -6,6 +6,7 @@ package etl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,9 +26,12 @@ import (
 const PrefixXactID = "etl-"
 
 const (
-	Spec    = "spec"
-	Code    = "code"
-	ArgType = "ARG_TYPE"
+	Spec = "spec"
+	Code = "code"
+
+	// additional environment variables to set in ETL container
+	ArgType   = "ARG_TYPE"
+	DirectPut = "DIRECT_PUT"
 )
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
@@ -258,6 +262,12 @@ func (m *InitMsgBase) validate(detail string) error {
 	if m.CommType() == "" {
 		cos.Infoln("Warning: empty comm-type, defaulting to", Hpush)
 		m.CommTypeX = Hpush
+	}
+	if m.CommType() == WebSocket && !m.IsDirectPut() {
+		err := errors.New("WebSocket without direct put is not supported yet. " +
+			"Ensure that the `metadata.annotations.support_direct_put` annotation is set to `true` " +
+			"and that your ETL server properly implements the direct put mechanism")
+		return cmn.NewErrUnsuppErr(err)
 	}
 	// NOTE: default timeout
 	if m.Timeout == 0 {

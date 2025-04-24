@@ -479,7 +479,7 @@ func TestETLBucketTransformParallel(t *testing.T) {
 	}{
 		{commType: etl.Hpush},
 		{commType: etl.Hpull},
-		{commType: etl.WebSocket, onlyLong: true},
+		{commType: etl.WebSocket},
 	}
 
 	for _, test := range tests {
@@ -538,7 +538,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true},
+			{transformer: tetl.Echo, comm: etl.WebSocket},
 			{transformer: tetl.Echo, comm: etl.Hpull},
 			{transformer: tetl.Echo, comm: etl.Hpush},
 		}

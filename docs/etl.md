@@ -50,7 +50,9 @@ Technically, the service supports running user-provided ETL containers **and** c
     - [Forbidden fields](#forbidden-fields)
     - [Communication Mechanisms](#communication-mechanisms)
     - [Argument Types](#argument-types-1)
+    - [Direct Put Optimization](#direct-put-optimization)
 - [Transforming objects](#transforming-objects)
+- [ETL Pod Lifecycle](#etl-pod-lifecycle)
 - [API Reference](#api-reference)
 - [ETL name specifications](#etl-name-specifications)
 
@@ -288,6 +290,7 @@ and contain all necessary fields to start the Pod.
 | --- | --- | --- | --- |
 | `metadata.annotations.communication_type` | `false` | [Communication type](#communication-mechanisms) of an ETL. | `hpush://` |
 | `metadata.annotations.wait_timeout` | `false` | Timeout on ETL Pods starting on target machines. See [annotations](#annotations) | infinity |
+| `metadata.annotations.support_direct_put` | `false` | Enable [direct put](#direct-put-optimization) optimization of an ETL. | - |
 | `spec.containers` | `true` | Containers running inside a Pod, exactly one required. | - |
 | `spec.containers[0].image` | `true` | Docker image of ETL container. | - |
 | `spec.containers[0].ports` | `true` (except `io://` communication type) | Ports exposed by a container, at least one expected. | - |
@@ -307,14 +310,15 @@ and contain all necessary fields to start the Pod.
 
 #### Communication Mechanisms
 
-AIS currently supports 3 (three) distinct target ⇔ container communication mechanisms to facilitate the fly or offline transformation.
+AIS currently supports 4 distinct target ⇔ container communication mechanisms to facilitate inline or offline transformation.
 Users  can choose and specify (via YAML spec) any of the following:
 
 | Name | Value | Description |
 |---|---|---|
-| **post** | `hpush://` | A target issues a POST request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
-| **redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send a (GET) request to cluster using an ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
-| **input/output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
+| **HTTP Push** | `hpush://` | A target issues a PUT request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
+| **HTTP Redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send a (GET) request to cluster using an ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
+| **WebSocket** | `ws://` | A target uses [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) to send the requested object to its ETL container as individual messages. |
+| **Input/Output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
 
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
@@ -322,12 +326,28 @@ Users  can choose and specify (via YAML spec) any of the following:
 #### Argument Types
 
 The AIStore `etl init spec` provides three `arg_type` parameter options for specifying the type of object specification between the AIStore and ETL container. These options are utilized as follows:
+> ETL container will have `ARG_TYPE` environment variable set to the corresponding parameter value.
 
 | Parameter Value | Description |
 |-----------------|-------------|
 | "" (Empty String) | This serves as the default option, allowing the object to be passed as bytes. When initializing ETLs, the `arg_type` parameter can be entirely omitted, and it will automatically default to passing the object as bytes to the transformation function. |
 | "url" | Pass the URL of the objects to be transformed to the user-defined transform function. It's important to note that this option is limited to '--comm-type=hpull'. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
 | "fqn" | Pass a fully-qualified name (FQN) of the locally stored object. User is responsible for opening, reading, transforming, and closing the corresponding file. |
+
+#### Direct Put Optimization
+
+> _Applicable only to bucket-to-bucket offline transformations._
+
+In bucket-to-bucket offline transformations, the destination target for a transformed object may differ from the original target. By default, the ETL container sends the transformed data back to the original target, which then forwards it to the destination. The **direct put** optimization streamlines this flow by allowing the ETL container to send the transformed object directly to the destination target.
+
+> The ETL container will have the `DIRECT_PUT` environment variable set to `"true"` or `"false"` accordingly.
+
+The destination address is provided based on the communication mechanism in use:
+
+| Communication Mechanism | Execution Steps |
+|-------------------------|-----------------|
+| **HTTP Push/Redirect** | For each HTTP request, the destination target's address is provided in the `ais-node-url` header. The ETL container should perform an additional `PUT` request to that address with the transformed object as the payload. |
+| **WebSocket** | Since WebSocket preserves message order and boundaries, the ETL container receives two consecutive messages: (1) a `TextMessage` containing the destination address, and (2) a `BinaryMessage` with the object content. The container should process them in order and issue a `PUT` request to the destination with the transformed object. |
 
 ## Transforming objects
 

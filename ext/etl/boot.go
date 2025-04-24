@@ -348,6 +348,10 @@ func (b *etlBootstrapper) _setPodEnv() {
 				Value: ArgTypeFQN,
 			})
 		}
+		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
+			Name:  DirectPut,
+			Value: strconv.FormatBool(b.msg.IsDirectPut()),
+		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 				Name:  k,

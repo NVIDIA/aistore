@@ -1509,7 +1509,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 
 	// (no-op transform) and (remote source) => same flow as actual transform but with default reader
 	if coi.GetROC == nil && lom.Bck().IsRemote() {
-		coi.GetROC = core.DefaultGetROC
+		coi.GetROC = core.GetDefaultROC
 	}
 
 	// 1: dst location
@@ -1519,14 +1519,17 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
-	if tsi.ID() != t.SID() {
+	local := tsi.ID() == t.SID()
+	gargs := &core.GetROCArgs{
+		Daddr: cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))), // use escaped URL to simplify parsing on the ETL side
+		Local: local,
+	}
+	if !local {
 		var r cos.ReadOpenCloser
 		if coi.GetROC != nil {
-			// TODO -- FIXME: cleanly separate GetROC call paths for ETL (supports direct delivery) and non-ETL (requires t2t transfer)
-			daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))) // use escaped URL to simplify parsing on the ETL side
-			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, daddr)
+			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
 			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
-			if resp.Err != nil || resp.R == nil || resp.Ecode == http.StatusNoContent {
+			if resp.Err != nil {
 				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
 			}
 			coi.OAH = resp.OAH
@@ -1551,7 +1554,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
 		}
 	case coi.GetROC != nil:
-		res = coi._reader(t, dm, lom, dst)
+		res = coi._reader(t, dm, lom, dst, gargs)
 		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
 			// to keep not-found
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
@@ -1605,7 +1608,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 		return res
 	}
 
-	resp := coi.GetROC(lom, false, false, "" /*daddr*/)
+	resp := coi.GetROC(lom, false /*latestVer*/, false /*sync*/, nil /*GetROCArgs*/)
 	if resp.Err != nil {
 		return xs.CoiRes{Err: resp.Err}
 	}
@@ -1628,8 +1631,8 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 // further debated.
 //
 //nolint:dupword // intentional
-func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM) (res xs.CoiRes) {
-	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, "" /*daddr*/)
+func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
+	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}

@@ -33,8 +33,13 @@ type (
 	//
 	// Implementations include:
 	// - `core.DefaultGetROC`: fetches from local or remote backend
-	// - `etl.Communicator.OfflineTransform`: fetches transformed object from ETL pod
-	GetROC func(lom *LOM, latestVer, sync bool, daddr string) ReadResp
+	// - `etl.HTTPCommunicator.OfflineTransform`: fetches transformed object from ETL pod through HTTP response
+	// - `etl.statefulCommnicator.Transform`: fetches transformed object from ETL pod through WebSocket message
+	GetROCArgs struct {
+		Daddr string // destination target's address for direct put
+		Local bool   // indicates if the destination is the local target; used by communicator to decide whether to perform direct put
+	}
+	GetROC func(lom *LOM, latestVer, sync bool, args *GetROCArgs) ReadResp
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {
@@ -138,7 +143,7 @@ remote:
 	return resp
 }
 
-func DefaultGetROC(lom *LOM, latestVer, sync bool, _ string) ReadResp {
+func GetDefaultROC(lom *LOM, latestVer, sync bool, _ *GetROCArgs) ReadResp {
 	return lom.GetROC(latestVer, sync)
 }
 

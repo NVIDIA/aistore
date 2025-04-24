@@ -305,9 +305,6 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 }
 
 func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string) {
-	if comm == etl.WebSocket {
-		tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1})
-	}
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
 	msg := &etl.InitSpecMsg{}
 	msg.EtlName = etlName
@@ -319,14 +316,16 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
 	xid, err = api.ETLInit(bp, msg)
+	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.TypeCode == "ErrUnsupp" && msg.CommType() == etl.WebSocket {
+		t.Skipf("skipping, WebSocket only work with direct put supported transformers")
+	}
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)
-
-	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
-
 	// reread `InitMsg` and compare with the specified
 	etlMsg, err := api.ETLGetInitMsg(bp, etlName)
 	tassert.CheckFatal(t, err)
+
+	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
 
 	initSpec := etlMsg.(*etl.InitSpecMsg)
 	tassert.Errorf(t, initSpec.Name() == etlName, "expected etlName %s != %s", etlName, initSpec.Name())
