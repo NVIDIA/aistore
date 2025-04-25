@@ -1,27 +1,28 @@
 FROM quay.io/podman/stable:latest
 
-ARG GO_VERSION=1.24.1
+ARG GO_VERSION=1.24.2
 
 RUN dnf -y update && \
     dnf -y install \
-       sysstat \
        attr \
-       gcc \
-       lsof \
-       coreutils \
-       python3.11 \
-       python3-pip \
-       python3-setuptools \
-       s3cmd \
-       uuid \
+       awk \
        bc \
+       cargo \
+       coreutils \
+       curl \
+       gcc \
        gettext \
        git \
+       lsof \
        make \
-       curl \
-       tar \
        procps-ng \
-       cargo \
+       python3-pip \
+       python3-setuptools \
+       python3.11 \
+       s3cmd \
+       sysstat \
+       tar \
+       uuid \
        which \
     && dnf clean all
 
@@ -66,6 +67,7 @@ make install-python-deps && \
 cd .. && rm -rf aistore
 
 # Cache all dependencies from `ais-k8s/operator`
+ENV LOCALBIN=$GOBIN
 RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && \
 cd ais-k8s/operator && \
 go mod download && \

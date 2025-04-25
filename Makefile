@@ -274,7 +274,7 @@ lint:
 	@$(MAKE) -C $(BUILD_DIR)/ishard lint
 
 install-python-deps:
-	@pip3 install -r ./python/aistore/common_requirements
+	@cd python && make common_deps botocore_deps
 
 fmt-check: install-python-deps ## Check code formatting
 	@pip3 install --upgrade black[jupyter] -q
