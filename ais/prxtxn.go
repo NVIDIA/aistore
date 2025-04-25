@@ -162,6 +162,31 @@ func (c *txnCln) bcastAbort(what fmt.Stringer, err error) {
 	freeBcastRes(results)
 }
 
+func (c *txnCln) createDstBck(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, waitmsync bool) (existsTo bool, _ error) {
+	p := c.p
+	ctx := &bmdModifier{
+		pre:   bmodCpProps,
+		final: p.bmodSync,
+		msg:   msg,
+		txnID: c.uuid,
+		bcks:  []*meta.Bck{bckFrom, bckTo},
+		wait:  waitmsync,
+	}
+	bmd, err := p.owner.bmd.modify(ctx)
+	if err != nil {
+		c.bcastAbort(bckFrom, err)
+		return false, err
+	}
+	c.msg.BMDVersion = bmd.version()
+	if !ctx.terminate {
+		debug.Assert(!existsTo)
+		c.req.Query.Set(apc.QparamWaitMetasync, "true")
+	} else {
+		existsTo = true // creation race (unlikely)
+	}
+	return existsTo, nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 // cp transactions (the proxy part)
 //
@@ -596,31 +621,16 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (str
 		c         = p.newTxnC(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
-	if err := c.begin(bckFrom); err != nil {
+	err := c.begin(bckFrom)
+	if err != nil {
 		return "", err
 	}
 
 	// 3. create dst bucket if doesn't exist - clone bckFrom props
 	if !dryRun && !existsTo {
-		ctx := &bmdModifier{
-			pre:   bmodCpProps,
-			final: p.bmodSync,
-			msg:   msg,
-			txnID: c.uuid,
-			bcks:  []*meta.Bck{bckFrom, bckTo},
-			wait:  waitmsync,
-		}
-		bmd, err := p.owner.bmd.modify(ctx)
+		existsTo, err = c.createDstBck(bckFrom, bckTo, msg, waitmsync)
 		if err != nil {
-			c.bcastAbort(bckFrom, err)
 			return "", err
-		}
-		c.msg.BMDVersion = bmd.version()
-		if !ctx.terminate {
-			debug.Assert(!existsTo)
-			c.req.Query.Set(apc.QparamWaitMetasync, "true")
-		} else {
-			existsTo = true // creation race (extremely unlikely)
 		}
 	}
 
@@ -635,15 +645,15 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (str
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	xid, _, err := c.commit(bckFrom, c.cmtTout(waitmsync))
+	xid, _, errV := c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
-	if err != nil {
-		c.bcastAbort(bckFrom, err) // cleanup txn
+	if errV != nil {
+		c.bcastAbort(bckFrom, errV) // cleanup txn
 		if !existsTo {
 			_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo) // rm the one that we have just created
 		}
 	}
-	return xid, err
+	return xid, errV
 }
 
 // transform or copy a list or a range of objects
@@ -666,42 +676,27 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 
 	// 2. begin
-	if err := c.begin(bckFrom); err != nil {
+	err := c.begin(bckFrom)
+	if err != nil {
 		return "", err
 	}
 
 	// 3. create dst bucket if doesn't exist - clone bckFrom props
 	if !tcomsg.TCBMsg.DryRun && !existsTo {
-		ctx := &bmdModifier{
-			pre:   bmodCpProps,
-			final: p.bmodSync,
-			msg:   msg,
-			txnID: c.uuid,
-			bcks:  []*meta.Bck{bckFrom, bckTo},
-			wait:  waitmsync,
-		}
-		bmd, err := p.owner.bmd.modify(ctx)
+		existsTo, err = c.createDstBck(bckFrom, bckTo, msg, waitmsync)
 		if err != nil {
-			c.bcastAbort(bckFrom, err)
 			return "", err
-		}
-		c.msg.BMDVersion = bmd.version()
-		if !ctx.terminate {
-			debug.Assert(!existsTo)
-			c.req.Query.Set(apc.QparamWaitMetasync, "true")
-		} else {
-			existsTo = true // creation race (extremely unlikely)
 		}
 	}
 
 	// 4. commit - that is, execute xtco.Do(msg)
-	xid, all, err := c.commit(bckFrom, c.cmtTout(waitmsync))
-	if err != nil {
+	xid, all, errV := c.commit(bckFrom, c.cmtTout(waitmsync))
+	if errV != nil {
 		if !existsTo {
 			// rm the one that we just created
 			_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
 		}
-		return "", err
+		return "", errV
 	}
 
 	if xid == "" {
