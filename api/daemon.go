@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 
@@ -23,21 +23,73 @@ type GetLogInput struct {
 	All      bool
 }
 
-// GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
-func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err error) {
+// Returns log of a specific node in a cluster.
+func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, error) {
+	w := args.Writer
+	q := make(url.Values, 3)
+	q.Set(apc.QparamWhat, apc.WhatLog)
+	if args.Severity != "" {
+		q.Set(apc.QparamLogSev, args.Severity)
+	}
+	if args.Offset != 0 {
+		q.Set(apc.QparamLogOff, strconv.FormatInt(args.Offset, 10))
+	}
+	if args.All {
+		q.Set(apc.QparamAllLogs, "true")
+	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMountpaths}}
+		reqParams.Query = q
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
+	}
+	wrap, err := reqParams.doWriter(w)
+	FreeRp(reqParams)
+	if err == nil {
+		return wrap.n, nil
+	}
+	return 0, err
+}
+
+// Returns target's mountpaths
+func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err error) {
+	mpl = &apc.MountpathList{}
+	err = getNodeReverse(bp, node, apc.WhatMountpaths, mpl)
+	return
+}
+
+// GetDaemonConfig returns the configuration of a specific daemon in a cluster.
+// (compare with `api.GetClusterConfig`)
+func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err error) {
+	config = &cmn.Config{}
+	err = getNodeReverse(bp, node, apc.WhatNodeConfig, config)
+	return
+}
+
+// Returns metric names and kinds: (name, kind) pairs
+func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error) {
+	kvs = make(cos.StrKVs, 32)
+	err = getNodeReverse(bp, node, apc.WhatMetricNames, kvs)
+	return
+}
+
+// common internal helper, to get the "what" from the specified node
+func getNodeReverse(bp BaseParams, node *meta.Snode, what string, out any) (err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
 		reqParams.Header = http.Header{
 			apc.HdrNodeID: []string{node.ID()},
 		}
 	}
-	_, err = reqParams.DoReqAny(&mpl)
+	_, err = reqParams.DoReqAny(out)
 	FreeRp(reqParams)
-	return mpl, err
+	return err
 }
 
 func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, label ...cos.MountpathLabel) error {
@@ -103,67 +155,6 @@ func _actMpath(bp BaseParams, node *meta.Snode, mountpath, action string, q url.
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
 	return err
-}
-
-// GetDaemonConfig returns the configuration of a specific daemon in a cluster.
-// (compare with `api.GetClusterConfig`)
-func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeConfig}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	_, err = reqParams.DoReqAny(&config)
-	FreeRp(reqParams)
-	return config, err
-}
-
-// names _and_ kinds, i.e. (name, kind) pairs
-func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMetricNames}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	_, err = reqParams.DoReqAny(&kvs)
-	FreeRp(reqParams)
-	return
-}
-
-// Returns log of a specific node in a cluster.
-func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, error) {
-	w := args.Writer
-	q := make(url.Values, 3)
-	q.Set(apc.QparamWhat, apc.WhatLog)
-	if args.Severity != "" {
-		q.Set(apc.QparamLogSev, args.Severity)
-	}
-	if args.Offset != 0 {
-		q.Set(apc.QparamLogOff, strconv.FormatInt(args.Offset, 10))
-	}
-	if args.All {
-		q.Set(apc.QparamAllLogs, "true")
-	}
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = q
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	wrap, err := reqParams.doWriter(w)
-	FreeRp(reqParams)
-	if err == nil {
-		return wrap.n, nil
-	}
-	return 0, err
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
