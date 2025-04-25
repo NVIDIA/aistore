@@ -5,7 +5,7 @@ import requests
 from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.const import HEADER_NODE_URL
+from aistore.sdk.const import HEADER_NODE_URL, STATUS_NO_CONTENT
 
 
 class FlaskServer(ETLServer):
@@ -110,19 +110,17 @@ class FlaskServer(ETLServer):
 
             resp = requests.put(url, data, timeout=None)
             if resp.status_code == 200:
-                return Response(status=204)
+                return Response(status=STATUS_NO_CONTENT)
 
             error = resp.text()
-            self.logger.warning(
+            self.logger.error(
                 "Failed to deliver object to %s: HTTP %s, %s",
                 direct_put_url,
                 resp.status_code,
                 error,
             )
         except Exception as e:
-            self.logger.warning(
-                "Exception during delivery to %s: %s", direct_put_url, e
-            )
+            self.logger.error("Exception during delivery to %s: %s", direct_put_url, e)
 
         return None
 

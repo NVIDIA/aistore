@@ -10,9 +10,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- Add `direct put` support in PUT and GET endpoints of all ETL web servers.
 - Add `FQN` support in the websocket endpoint of ETL fastapi web server.
-- Add `direct put` support in the websocket endpoint of ETL fastapi web server.
-- Add `direct put` support in PUT and GET endpoints of ETL flask web server.
 - Introduce `glob_id` field on `JobSnapshot` and implement `unpack()` to decode (njoggers, nworkers, chan_full) from the packed integer.
 
 ### Changed

@@ -15,7 +15,7 @@ import aiofiles
 import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.const import HEADER_NODE_URL
+from aistore.sdk.const import HEADER_NODE_URL, HEADER_CONTENT_LENGTH, STATUS_NO_CONTENT
 
 
 class FastAPIServer(ETLServer):
@@ -209,17 +209,19 @@ class FastAPIServer(ETLServer):
 
             resp = await self.client.put(url, data=data)
             if resp.status_code == 200:
-                return Response(status_code=204, headers={"Content-Length": "0"})
+                return Response(
+                    status_code=STATUS_NO_CONTENT, headers={HEADER_CONTENT_LENGTH: "0"}
+                )
 
             error = await resp.text()
-            self.logger.warning(
+            self.logger.error(
                 "Failed to deliver object to %s: HTTP %s, %s",
                 delivery_target_url,
                 resp.status_code,
                 error,
             )
         except Exception as e:
-            self.logger.warning(
+            self.logger.error(
                 "Exception during delivery to %s: %s", delivery_target_url, e
             )
 
@@ -230,7 +232,7 @@ class FastAPIServer(ETLServer):
         return Response(
             content=content,
             media_type=mime_type,
-            headers={"Content-Length": str(len(content))},
+            headers={HEADER_CONTENT_LENGTH: str(len(content))},
         )
 
     def start(self):

@@ -1,7 +1,7 @@
 import os
 import sys
+import io
 import unittest
-from http.server import BaseHTTPRequestHandler
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from fastapi.testclient import TestClient
@@ -15,7 +15,7 @@ from aistore.sdk.etl.webserver import (
 )
 
 
-class DummyETLServer(HTTPMultiThreadedServer):
+class DummyHTTPETLServer(HTTPMultiThreadedServer):
     """Dummy ETL server for testing transform and MIME type override."""
 
     def transform(self, data: bytes, path: str) -> bytes:
@@ -25,18 +25,28 @@ class DummyETLServer(HTTPMultiThreadedServer):
         return "text/caps"
 
 
-class DummyRequestHandler(BaseHTTPRequestHandler):
+class DummyRequestHandler(HTTPMultiThreadedServer.RequestHandler):
     """Fake handler that mocks HTTP methods for isolated testing of `set_headers()`."""
 
-    # pylint: disable=super-init-not-called
+    # pylint: disable=super-init-not-called, too-many-instance-attributes
     def __init__(self):
         # Don't call super().__init__(), just mock the necessary parts
+        self.path = "/test/object"
+        self.rfile = io.BytesIO(b"test input")
+        self.wfile = io.BytesIO()
+        self.headers = {}
+
         self.send_response = MagicMock()
         self.send_header = MagicMock()
         self.end_headers = MagicMock()
+        self.send_error = MagicMock()
+        # self._direct_put = MagicMock()
+
         self.server = MagicMock()
         self.server.etl_server = MagicMock()
+        self.server.etl_server.host_target = "http://localhost:8080"
         self.server.etl_server.get_mime_type.return_value = "application/test"
+        self.server.etl_server.transform.return_value = b"transformed"
 
     def set_headers(self, status_code: int = 200):
         self.send_response(status_code)
@@ -63,7 +73,7 @@ class DummyFlaskServer(FlaskServer):
 class TestETLServerLogic(unittest.TestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        self.etl = DummyETLServer()
+        self.etl = DummyHTTPETLServer()
 
     def test_transform_uppercase(self):
         """Ensure transform() converts content to uppercase."""
@@ -86,6 +96,89 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.send_response.assert_called_once_with(202)
         handler.send_header.assert_called_once_with("Content-Type", "application/test")
         handler.end_headers.assert_called_once()
+
+    @patch("requests.get")
+    def test_transform_get(self, mock_get):
+        handler = DummyRequestHandler()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"original"
+        mock_get.return_value = mock_resp
+
+        handler.do_GET()
+
+        mock_get.assert_called_once()
+        handler.server.etl_server.transform.assert_called_with(
+            b"original", "/test/object"
+        )
+        self.assertIn(b"transformed", handler.wfile.getvalue())
+
+    def test_transform_put(self):
+        handler = DummyRequestHandler()
+        handler.headers = {"Content-Length": "10"}
+        handler.rfile = io.BytesIO(b"1234567890")
+
+        handler.do_PUT()
+
+        handler.server.etl_server.transform.assert_called_with(
+            b"1234567890", "/test/object"
+        )
+        self.assertIn(b"transformed", handler.wfile.getvalue())
+
+    @patch("requests.get")
+    @patch("requests.put")
+    def test_transform_get_with_direct_put(self, mock_put, mock_get):
+        direct_put_url = "http://some-target/put/object"
+        handler = DummyRequestHandler()
+        handler.headers = {HEADER_NODE_URL: direct_put_url}
+
+        mock_get_resp = MagicMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.content = b"original"
+        mock_get.return_value = mock_get_resp
+
+        # Simulate direct put success (200)
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 200
+        mock_put.return_value = mock_put_resp
+        handler.do_GET()
+        mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
+        handler.send_response.assert_called_with(204)
+        self.assertEqual(handler.wfile.getvalue(), b"")
+
+        # Simulate direct put fail (500)
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 500
+        mock_put.return_value = mock_put_resp
+        handler.do_GET()
+        mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
+        handler.send_response.assert_called_with(200)
+        self.assertEqual(handler.wfile.getvalue(), b"transformed")
+
+    @patch("requests.put")
+    def test_transform_put_with_direct_put(self, mock_put):
+        direct_put_url = "http://some-target/put/object"
+        handler = DummyRequestHandler()
+        handler.headers = {HEADER_NODE_URL: direct_put_url}
+
+        # Simulate direct put success (200)
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 200
+        mock_put.return_value = mock_put_resp
+        handler.do_PUT()
+        mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
+        handler.send_response.assert_called_with(204)
+        self.assertEqual(handler.wfile.getvalue(), b"")
+
+        # Simulate direct put fail (500)
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 500
+        mock_put.return_value = mock_put_resp
+        handler.do_PUT()
+        mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
+        handler.send_response.assert_called_with(200)
+        self.assertEqual(handler.wfile.getvalue(), b"transformed")
 
 
 class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):

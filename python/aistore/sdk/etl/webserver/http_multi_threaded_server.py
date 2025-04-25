@@ -8,12 +8,18 @@ from socketserver import ThreadingMixIn
 from typing import Type, Tuple
 import signal
 import threading
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse, urlunparse
 
 import requests
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.const import HEADER_CONTENT_LENGTH, HEADER_CONTENT_TYPE, STATUS_OK
+from aistore.sdk.const import (
+    HEADER_CONTENT_LENGTH,
+    HEADER_CONTENT_TYPE,
+    HEADER_NODE_URL,
+    STATUS_OK,
+    STATUS_NO_CONTENT,
+)
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -59,6 +65,39 @@ class HTTPMultiThreadedServer(ETLServer):
         def log_request(self, code="-", size="-"):
             # Suppress default request logging (or override as needed)
             pass
+
+        def _direct_put(self, direct_put_url: str, data: bytes) -> bool:
+            """
+            Sends the transformed object directly to the specified AIS node (`direct_put_url`),
+            eliminating the additional network hop through the original target.
+            Used only in bucket-to-bucket offline transforms.
+            """
+            logger = self.server.etl_server.logger
+            try:
+                parsed_target = urlparse(direct_put_url)
+                parsed_host = urlparse(self.server.etl_server.host_target)
+                url = urlunparse(
+                    parsed_host._replace(
+                        netloc=parsed_target.netloc,
+                        path=parsed_host.path + parsed_target.path,
+                    )
+                )
+
+                resp = requests.put(url, data, timeout=None)
+                if resp.status_code == 200:
+                    return True
+
+                error = resp.text()
+                logger.error(
+                    "Failed to deliver object to %s: HTTP %s, %s",
+                    direct_put_url,
+                    resp.status_code,
+                    error,
+                )
+            except Exception as e:
+                logger.error("Exception during delivery to %s: %s", direct_put_url, e)
+
+            return False
 
         def _get_fqn_content(self, path: str) -> bytes:
             """
@@ -111,6 +150,15 @@ class HTTPMultiThreadedServer(ETLServer):
                     content = resp.content
 
                 transformed = self.server.etl_server.transform(content, path)
+
+                direct_put_url = self.headers.get(HEADER_NODE_URL)
+                if direct_put_url:
+                    success = self._direct_put(direct_put_url, transformed)
+                    if success:
+                        self._set_headers(length=0)
+                        self.send_response(STATUS_NO_CONTENT)
+                        return
+
                 self._set_headers(length=len(transformed))
                 self.wfile.write(transformed)
 
@@ -141,6 +189,15 @@ class HTTPMultiThreadedServer(ETLServer):
                     content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
                     content = self.rfile.read(content_length)
                 transformed = self.server.etl_server.transform(content, path)
+
+                direct_put_url = self.headers.get(HEADER_NODE_URL)
+                if direct_put_url:
+                    success = self._direct_put(direct_put_url, transformed)
+                    if success:
+                        self._set_headers(length=0)
+                        self.send_response(STATUS_NO_CONTENT)
+                        return
+
                 self._set_headers(length=len(transformed))
                 self.wfile.write(transformed)
 
