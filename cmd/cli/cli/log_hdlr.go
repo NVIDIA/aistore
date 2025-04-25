@@ -25,16 +25,18 @@ import (
 
 const clusterCompletion = "cluster"
 
-// (compare with getCluLogUsage)
-const getLogUsage = "Download the current log or entire log history from: a) selected node, or b) entire cluster,\n" +
-	indent1 + "\t e.g.:\n" +
-	indent1 + "\t - 'ais log get NODE_ID /tmp'\t- download the specified node's current log and save it in the specified directory;\n" +
-	indent1 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10'\t- download the node's current log _as_ /tmp/out\n" +
-	indent1 + "\t    \t  and keep updating (ie., appending) the latter every 10s;\n" +
-	indent1 + "\t - 'ais log get cluster /tmp'\t- download TAR.GZ archived logs of _all_ nodes in the cluster\n" +
-	indent1 + "\t    \t  and save the result in the specified local directory (note that 'get cluster' implies '--all');\n" +
-	indent1 + "\t - 'ais log get NODE_ID --all'\t- given 'NODE-ID' download the node's entire log TAR.GZ archive\n" +
-	indent1 + "\t - 'ais log get NODE_ID --all --severity e'\t- archive logged errors and warnings"
+// (compare with getCluLogsUsage)
+const getLogUsage = "Download logs from a selected node or the entire cluster;\n" +
+	indent4 + "\t   supports downloading current logs or TAR.GZ archives.\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t- 'ais log get NODE_ID /tmp'\t- download the current log from NODE_ID and save it in the specified directory;\n" +
+	indent1 + "\t- 'ais log get NODE_ID /tmp/out' --refresh 10\t- download the current log from NODE_ID as /tmp/out\n" +
+	indent1 + "\t\t  and continuously update it every 10 seconds;\n" +
+	indent1 + "\t- 'ais log get cluster /tmp'\t- download TAR.GZ archives from all cluster nodes\n" +
+	indent1 + "\t\t  and save them in the specified directory ('get cluster' implies '--all');\n" +
+	indent1 + "\t- 'ais log get NODE_ID --all'\t- download the complete log archive (TAR.GZ) from NODE_ID;\n" +
+	indent1 + "\t- 'ais log get NODE_ID --all --severity error'\t- download only errors and warnings from NODE_ID;\n" +
+	indent1 + "\t- 'ais log get NODE_ID --all --severity e'\t- same as above."
 
 var (
 	nodeLogFlags = map[string][]cli.Flag{

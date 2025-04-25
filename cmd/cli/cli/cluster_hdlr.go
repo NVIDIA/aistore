@@ -27,15 +27,17 @@ const (
 )
 
 // (compare with getLogUsage)
-const getCluLogsUsage = "Download log archives from all clustered nodes (one TAR.GZ per node), e.g.:\n" +
-	indent4 + "\t - 'download-logs /tmp/www' - save log archives to /tmp/www directory\n" +
-	indent4 + "\t - 'download-logs --severity w' - errors and warnings to /tmp directory\n" +
-	indent4 + "\t   (see related: 'ais log show', 'ais log get')"
+const getCluLogsUsage = "Download log archives from all clustered nodes (one TAR.GZ per node),\n" +
+	indent1 + "e.g.:\n" +
+	indent1 + "\t - 'ais download-logs /tmp/www'\t- save log archives to /tmp/www directory\n" +
+	indent1 + "\t - 'ais download-logs --severity w'\t- errors and warnings to /tmp directory\n" +
+	indent1 + "see related:\n" +
+	indent1 + "\t - 'ais log get --help'"
 
-const shutdownUsage = "Shutdown a node, gracefully or immediately;\n" +
-	indent4 + "\tnote: upon shutdown the node won't be decommissioned - it'll remain in the cluster map\n" +
-	indent4 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
-	indent4 + "\tsee also: 'ais advanced " + cmdRmSmap + "'"
+const shutdownUsage = "Shutdown a node, gracefully or immediately.\n" +
+	indent1 + "\tNote: upon shutdown, the node won't be decommissioned - it'll remain in the cluster map\n" +
+	indent1 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
+	indent1 + "\tsee also: 'ais advanced " + cmdRmSmap + "'"
 
 var (
 	clusterCmdsFlags = map[string][]cli.Flag{

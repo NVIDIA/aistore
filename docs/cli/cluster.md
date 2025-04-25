@@ -33,21 +33,30 @@ Alternatively, use `--help` to show subcommands with brief descriptions:
 ```console
 $ ais cluster  --help
 NAME:
-   ais cluster - monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
+   ais cluster - Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
 
 USAGE:
-   ais cluster command [arguments...] [command options]
+   ais cluster command [arguments...]  [command options]
 
 COMMANDS:
-   show              show cluster nodes and utilization
-   remote-attach     attach remote ais cluster
-   remote-detach     detach remote ais cluster
-   rebalance         administratively start and stop global rebalance; show global rebalance
-   set-primary       select a new primary proxy/gateway
-   shutdown          shut down entire cluster
-   decommission      decommission entire cluster
-   add-remove-nodes  manage cluster membership (add/remove nodes, temporarily or permanently)
-   reset-stats       reset cluster or node stats (all cumulative metrics or only errors)
+   show                  Main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
+   remote-attach         Attach remote ais cluster
+   remote-detach         Detach remote ais cluster
+   rebalance             Administratively start and stop global rebalance; show global rebalance
+   set-primary           Select a new primary proxy/gateway
+   download-logs         Download all log archives from all clustered nodes (one TAR.GZ per node), e.g.:
+                          - 'download-logs /tmp/www' - save log archives to /tmp/www directory
+                          - 'download-logs --severity w' - errors and warnings to /tmp directory
+                            (see related: 'ais log show', 'ais log get')
+   shutdown              Shut down entire cluster
+   decommission          Decommission entire cluster
+   add-remove-nodes      Manage cluster membership (add/remove nodes, temporarily or permanently)
+   reset-stats           Reset cluster or node stats (all cumulative metrics or only errors)
+   drop-lcache           Drop (discard) in-memory object metadata cache
+   reload-backend-creds  Reload (updated) backend credentials
+
+OPTIONS:
+   --help, -h  Show help
 ```
 
 As always, each subcommand will have its own help and usage examples, the latter possibly spread across multiple documents.
@@ -103,6 +112,7 @@ COMMANDS:
 - [Remove a node](#remove-a-node)
 - [Reset (ie., zero out) stats counters and other metrics](#reset-ie-zero-out-stats-counters-and-other-metrics)
 - [Reload backend credentials](#reload-backend-credentials)
+- [Download log archive](#download-log-archive)
 
 ## Cluster and Node status
 
@@ -731,4 +741,26 @@ USAGE:
 
 OPTIONS:
    --help, -h  Show help
+```
+
+## Download log archive
+
+The command is 'ais cluster download-logs' or, same, 'ais log get cluster'.
+
+```console
+NAME:
+   ais cluster download-logs - Download log archives from all clustered nodes (one TAR.GZ per node),
+   e.g.:
+      - 'ais download-logs /tmp/www'      - save log archives to /tmp/www directory
+      - 'ais download-logs --severity w'  - errors and warnings to /tmp directory
+   see related:
+      - 'ais log get --help'
+
+USAGE:
+   ais cluster download-logs [OUT_DIR] [command options]
+
+OPTIONS:
+   severity   Log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain
+              only errors and warnings, e.g.: '--severity info', '--severity error', '--severity e'
+   help, h    Show help
 ```
