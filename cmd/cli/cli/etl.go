@@ -207,7 +207,7 @@ func findETL(etlName, xid string) *etl.Info {
 	return nil
 }
 
-func etlInitSpecHandler(c *cli.Context) (err error) {
+func etlInitSpecHandler(c *cli.Context) error {
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
 		return fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
@@ -226,7 +226,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		msg.Spec = spec
 	}
 
-	if err = msg.Validate(); err != nil {
+	if err := msg.Validate(); err != nil {
 		if e, ok := err.(*cmn.ErrETL); ok {
 			err = errors.New(e.Reason)
 		}
@@ -234,14 +234,15 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	}
 
 	// msg.ID is `metadata.name` from podSpec
-	if err = etlAlreadyExists(msg.Name()); err != nil {
-		return
+	if err := etlAlreadyExists(msg.Name()); err != nil {
+		return err
 	}
 
-	xid, err := api.ETLInit(apiBP, msg)
-	if err != nil {
-		return V(err)
+	xid, errV := api.ETLInit(apiBP, msg)
+	if errV != nil {
+		return V(errV)
 	}
+
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
 }
@@ -257,11 +258,11 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	msg.EtlName = parseStrFlag(c, etlNameFlag)
 	if msg.Name() != "" {
-		if err = k8s.ValidateEtlName(msg.Name()); err != nil {
-			return
+		if err := k8s.ValidateEtlName(msg.Name()); err != nil {
+			return err
 		}
-		if err = etlAlreadyExists(msg.Name()); err != nil {
-			return
+		if err := etlAlreadyExists(msg.Name()); err != nil {
+			return err
 		}
 	}
 
@@ -305,10 +306,11 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	// start
-	xid, err := api.ETLInit(apiBP, msg)
-	if err != nil {
-		return V(err)
+	xid, errV := api.ETLInit(apiBP, msg)
+	if errV != nil {
+		return V(errV)
 	}
+
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
 }

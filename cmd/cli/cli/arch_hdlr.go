@@ -286,7 +286,7 @@ ex:
 	return nil
 }
 
-func putApndArchHandler(c *cli.Context) (err error) {
+func putApndArchHandler(c *cli.Context) error {
 	{
 		src, dst := c.Args().Get(0), c.Args().Get(1)
 		if _, _, err := parseBckObjURI(c, src, true); err == nil {
@@ -297,8 +297,8 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		}
 	}
 	a := archput{}
-	if err = a.parse(c); err != nil {
-		return
+	if err := a.parse(c); err != nil {
+		return err
 	}
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
@@ -308,15 +308,15 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		if a.archpath == "" {
 			a.archpath = filepath.Base(a.src.abspath)
 		}
-		if err = a2aRegular(c, &a); err != nil {
-			return
+		if err := a2aRegular(c, &a); err != nil {
+			return err
 		}
 		msg := fmt.Sprintf("%s %s to %s", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname))
 		if a.archpath != a.src.arg {
 			msg += " as \"" + a.archpath + "\""
 		}
 		actionDone(c, msg+"\n")
-		return
+		return nil
 	}
 
 	//
@@ -336,7 +336,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 			fmt.Fprintf(c.App.ErrWriter, "Assuming %s - proceeding to execute...\n\n", qflprn(archAppendOrPutFlag))
 		} else {
 			if ok := confirm(c, fmt.Sprintf("Proceed to execute 'archive put %s'?", flprn(archAppendOrPutFlag))); !ok {
-				return
+				return nil
 			}
 		}
 		a.appendOrPut = true
@@ -348,7 +348,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 			warn := fmt.Sprintf("no trailing filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
 			actionWarn(c, warn)
 			if !confirm(c, "Proceed anyway?") {
-				return
+				return nil
 			}
 		}
 	}

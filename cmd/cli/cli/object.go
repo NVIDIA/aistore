@@ -58,18 +58,17 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	return nil
 }
 
-func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
+func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) error {
 	props := make(cos.StrKVs)
 	propArgs := c.Args().Tail()
 
 	if len(propArgs) == 1 && isJSON(propArgs[0]) {
-		if err = jsoniter.Unmarshal([]byte(propArgs[0]), &props); err != nil {
-			return
+		if err := jsoniter.Unmarshal([]byte(propArgs[0]), &props); err != nil {
+			return err
 		}
 	} else {
 		if len(propArgs) == 0 {
-			err = missingArgumentsError(c, "property key-value pairs")
-			return
+			return missingArgumentsError(c, "property key-value pairs")
 		}
 		for _, pair := range propArgs {
 			nv := strings.Split(pair, "=")
@@ -82,9 +81,10 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 		}
 	}
 	setNewCustom := flagIsSet(c, setNewCustomMDFlag)
-	if err = api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
-		return
+	if err := api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
+		return err
 	}
+
 	msg := fmt.Sprintf("Custom props successfully updated (to show updates, run 'ais show object %s --props=all').",
 		bck.Cname(objName))
 	actionDone(c, msg)
@@ -351,7 +351,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	return false, teb.Print(propNVs, teb.PropValTmpl)
 }
 
-func propVal(op *cmn.ObjectProps, name string) (v string, err error) {
+func propVal(op *cmn.ObjectProps, name string) (v string, _ error) {
 	switch name {
 	case apc.GetPropsName:
 		v = op.Bck.Cname(op.Name)
@@ -366,7 +366,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string, err error) {
 	case apc.GetPropsCached:
 		if op.Bck.IsAIS() {
 			debug.Assert(op.Present)
-			return
+			return "", nil
 		}
 		v = teb.FmtBool(op.Present)
 	case apc.GetPropsCopies:
@@ -389,7 +389,8 @@ func propVal(op *cmn.ObjectProps, name string) (v string, err error) {
 	default:
 		return "", fmt.Errorf("invalid object property %q (expecting one of: %v)", name, apc.GetPropsAll)
 	}
-	return
+
+	return v, nil
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {

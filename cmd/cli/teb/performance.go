@@ -362,7 +362,7 @@ func _metricToPrintedColName(mname string, cols []*header, metrics, n2n cos.StrK
 	case stats.KindCounter:
 		printedName += "(n)"
 	}
-	return
+	return printedName
 }
 
 func _filter(cols, printedColumns []*header, regex *regexp.Regexp) ([]*header, []*header) {

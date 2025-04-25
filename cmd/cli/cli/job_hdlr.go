@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -443,11 +442,11 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	src, dst := c.Args().Get(0), c.Args().Get(1)
-	source, err := parseSource(src)
+	source, err := parseDlSource(src)
 	if err != nil {
 		return err
 	}
-	bck, pathSuffix, err := parseDest(c, dst)
+	bck, pathSuffix, err := parseBckObjAux(c, dst)
 	if err != nil {
 		return err
 	}
@@ -1290,7 +1289,7 @@ func removeDsortRegex(c *cli.Context, regex string) error {
 //
 
 // facilitate flexibility and common-sense argument omissions, do away with rigid name -> id -> ... ordering
-func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonID string, bck cmn.Bck, err error) {
+func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonID string, bck cmn.Bck, _ error) {
 	// prelim. assignments
 	name = c.Args().Get(shift)
 	xid = c.Args().Get(shift + 1)
@@ -1298,10 +1297,11 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 
 	// validate and reassign
 	if name == commandCopy {
-		err = fmt.Errorf("'%s' is ambiguous and may correspond to copying multiple objects (%s) or entire bucket (%s)",
+		err := fmt.Errorf("'%s' is ambiguous and may correspond to copying multiple objects (%s) or entire bucket (%s)",
 			commandCopy, apc.ActCopyObjects, apc.ActCopyBck)
-		return
+		return "", "", "", cmn.Bck{}, err
 	}
+
 	if name == commandList {
 		name = apc.ActList
 	} else if name != "" && name != apc.ActDsort {
@@ -1314,35 +1314,38 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 		}
 	}
 	if xid != "" {
-		var errV error
-		if bck, errV = parseBckURI(c, xid, false); errV == nil {
+		var err error
+		if bck, err = parseBckURI(c, xid, false); err == nil {
 			xid = "" // arg #1 is a bucket
 		}
 	}
 	if daemonID != "" && bck.IsEmpty() {
-		var errV error
-		if bck, errV = parseBckURI(c, daemonID, false); errV == nil {
+		var err error
+		if bck, err = parseBckURI(c, daemonID, false); err == nil {
 			daemonID = "" // ditto arg #2
 		}
 	}
+
 	if xid != "" && daemonID == "" {
-		if node, _, errV := getNode(c, xid); errV == nil {
+		if node, _, err := getNode(c, xid); err == nil {
 			daemonID, xid = node.ID(), ""
-			return
+			return name, xid, daemonID, bck, nil
 		}
 	}
+
 	if ignoreDaemonID {
-		return
+		return name, xid, daemonID, bck, nil
 	}
+
 	// sname => sid
 	if daemonID != "" {
-		var node *meta.Snode
-		node, _, err = getNode(c, daemonID)
+		node, _, err := getNode(c, daemonID)
 		if err == nil {
 			daemonID = node.ID()
 		}
 	}
-	return
+
+	return name, xid, daemonID, bck, nil
 }
 
 // 1. support assorted system job prefixes via multi-match

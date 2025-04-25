@@ -51,7 +51,7 @@ func (htbp *htbp) client(u string) *http.Client {
 	return htbp.cliH
 }
 
-func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -71,7 +71,7 @@ func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.S
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("HEAD(%s) failed, status %d", origURL, resp.StatusCode)
+		err := fmt.Errorf("HEAD(%s) failed, status %d", origURL, resp.StatusCode)
 		return nil, resp.StatusCode, err
 	}
 
@@ -80,9 +80,10 @@ func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.S
 		nlog.Errorf("Warning: missing header %s (response header: %+v)", cos.HdrETag, resp.Header)
 	}
 
-	bckProps = make(cos.StrKVs)
+	bckProps := make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.HT
-	return
+
+	return bckProps, 0, nil
 }
 
 func (*htbp) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes) (ecode int, err error) {
@@ -110,7 +111,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	return origURL, nil
 }
 
-func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -129,7 +130,8 @@ func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
 	}
-	oa = &cmn.ObjAttrs{}
+
+	oa := &cmn.ObjAttrs{}
 	oa.SetCustomKey(cmn.SourceObjMD, apc.HT)
 	if resp.ContentLength >= 0 {
 		oa.Size = resp.ContentLength
@@ -140,7 +142,7 @@ func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", lom)
 	}
-	return
+	return oa, 0, nil
 }
 
 func (htbp *htbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {

@@ -101,7 +101,7 @@ func NormalizeProvider(provider string) (p string, err error) {
 	if p = apc.NormalizeProvider(provider); p == "" {
 		err = &ErrInvalidBackendProvider{Bck{Provider: provider}}
 	}
-	return
+	return p, err
 }
 
 ////////
@@ -124,16 +124,18 @@ func ParseNsUname(s string) (n Ns) {
 		n.UUID = s[:idx]
 		n.Name = s[idx+1:]
 	}
-	return
+	return n
 }
 
-func (n Ns) String() (res string) {
-	var sb strings.Builder
+func (n Ns) String() string {
 	if n.IsGlobal() {
-		return
+		return ""
 	}
+
+	var sb strings.Builder
 	sb.Grow(n.Len() + 1)
 	n._str(&sb)
+
 	return sb.String()
 }
 
@@ -298,7 +300,7 @@ func (b *Bck) Validate() (err error) {
 	if err == nil {
 		err = b.Ns.validate()
 	}
-	return
+	return err
 }
 
 func (b *Bck) ValidateName() error {

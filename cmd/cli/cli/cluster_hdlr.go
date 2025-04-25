@@ -268,7 +268,7 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 
 // (compare with node-level `nodeMaintShutDecommHandler` operations)
 
-func clusterShutdownHandler(c *cli.Context) (err error) {
+func clusterShutdownHandler(c *cli.Context) error {
 	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 	}
 
 	actionDone(c, "Cluster successfully shut down")
-	return
+	return nil
 }
 
 func clusterDecommissionHandler(c *cli.Context) error {
@@ -384,21 +384,20 @@ func joinNodeHandler(c *cli.Context) (err error) {
 		flags = meta.SnodeNonElectable
 	}
 	if rebID, nodeInfo.DaeID, err = api.JoinCluster(apiBP, nodeInfo, flags); err != nil {
-		return
+		return err
 	}
 
 	// double check
-	var sname string
-	_, sname, err = getNode(c, nodeInfo.DaeID)
-	if err != nil {
-		return
+	_, sname, errV := getNode(c, nodeInfo.DaeID)
+	if errV != nil {
+		return errV
 	}
 	fmt.Fprintf(c.App.Writer, "%s successfully joined the cluster\n", sname)
 
 	if rebID != "" {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, rebID)
 	}
-	return
+	return nil
 }
 
 // (compare w/ cluster-level clusterDecommissionHandler & clusterShutdownHandler)

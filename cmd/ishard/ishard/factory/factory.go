@@ -93,7 +93,8 @@ func NewShardFactory(baseParams api.BaseParams, fromBck, toBck cmn.Bck, ext, sha
 
 	sf.pollWg.Add(1)
 	go sf.poll()
-	return
+
+	return sf, nil
 }
 
 func (sf *ShardFactory) Create(recs *shard.Records, size int64, errCh chan error) {

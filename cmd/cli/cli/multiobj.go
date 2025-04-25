@@ -347,7 +347,7 @@ func _prefetchOne(c *cli.Context, shift int) error {
 // lrCtx: evict, rm, prefetch
 //
 
-func (lr *lrCtx) do(c *cli.Context) (err error) {
+func (lr *lrCtx) do(c *cli.Context) error {
 	var (
 		fileList      []string
 		kind          string
@@ -358,25 +358,26 @@ func (lr *lrCtx) do(c *cli.Context) (err error) {
 	if lr.listObjs != "" {
 		fileList = splitCsv(lr.listObjs)
 	} else {
+		var err error
 		pt, err = cos.NewParsedTemplate(lr.tmplObjs) // NOTE: prefix w/ no range is fine
 		if err != nil {
 			if err != cos.ErrEmptyTemplate {
 				fmt.Fprintf(c.App.Writer, "invalid template %q: %v\n", lr.tmplObjs, err)
-				return
+				return err
 			}
-			err, emptyTemplate = nil, true // NOTE: empty tmplObjs means "all objects"
+			emptyTemplate = true // NOTE: empty tmplObjs means "all objects"
 		}
 	}
 
 	// 2. [DRY-RUN]
 	if flagIsSet(c, dryRunFlag) {
 		lr.dry(c, fileList, &pt)
-		return
+		return nil
 	}
 
 	// 3. do
 	xid, kind, action, errV := lr._do(c, fileList)
-	if err != nil {
+	if errV != nil {
 		return V(errV)
 	}
 
@@ -465,14 +466,15 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 	if isAlias(c) {
 		verb = lastAliasedWord(c)
 	}
+
 	switch verb {
 	case commandRemove:
 		xid, err = api.DeleteMultiObj(apiBP, lr.bck, fileList, lr.tmplObjs)
 		kind = apc.ActDeleteObjects
 		action = "rm"
 	case commandPrefetch:
-		if err = ensureRemoteProvider(lr.bck); err != nil {
-			return
+		if err := ensureRemoteProvider(lr.bck); err != nil {
+			return "", "", "", err
 		}
 		var msg apc.PrefetchMsg
 		{
@@ -482,7 +484,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			if flagIsSet(c, blobThresholdFlag) {
 				msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
 				if err != nil {
-					return
+					return "", "", "", err
 				}
 			}
 			if flagIsSet(c, numWorkersFlag) {
@@ -493,8 +495,8 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		kind = apc.ActPrefetchObjects
 		action = "prefetch"
 	case commandEvict:
-		if err = ensureRemoteProvider(lr.bck); err != nil {
-			return
+		if err := ensureRemoteProvider(lr.bck); err != nil {
+			return "", "", "", err
 		}
 		xid, err = api.EvictMultiObj(apiBP, lr.bck, fileList, lr.tmplObjs)
 		kind = apc.ActEvictObjects
@@ -502,5 +504,6 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 	default:
 		debug.Assert(false, "invalid subcommand: ", verb)
 	}
+
 	return xid, kind, action, err
 }

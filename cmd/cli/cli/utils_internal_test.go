@@ -184,7 +184,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 	}
 
 	for _, test := range parseSourceTests {
-		source, err := parseSource(test.input)
+		source, err := parseDlSource(test.input)
 		if err != nil {
 			t.Errorf("unexpected error while parsing source URI %s: %v", test.input, err)
 		}
@@ -211,7 +211,7 @@ func TestParseDestValidURIs(t *testing.T) {
 	}
 
 	for _, test := range parseDestTests {
-		bucket, pathSuffix, err := parseDest(&cli.Context{}, test.url)
+		bucket, pathSuffix, err := parseBckObjAux(&cli.Context{}, test.url)
 		if err != nil {
 			t.Errorf("unexpected error while parsing dest URI %s: %v", test.url, err)
 		}
@@ -235,7 +235,7 @@ func TestParseDestInvalidURIs(t *testing.T) {
 	}
 
 	for _, test := range parseDestTests {
-		_, _, err := parseDest(&cli.Context{}, test)
+		_, _, err := parseBckObjAux(&cli.Context{}, test)
 		if err == nil {
 			t.Errorf("expected error while parsing dest URI %s", test)
 		}

@@ -311,10 +311,10 @@ func (u *uctx) init(c *cli.Context, fobj fobj) (fh *cos.FileHandle, bar *mpb.Bar
 			fmt.Fprint(c.App.Writer, str)
 		}
 		u.errCount.Inc()
-		return
+		return nil, nil, err
 	}
 	if !u.showProgress || !u.verbose {
-		return
+		return fh, nil, nil
 	}
 
 	// setup "verbose" bar
@@ -333,7 +333,7 @@ func (u *uctx) init(c *cli.Context, fobj fobj) (fh *cos.FileHandle, bar *mpb.Bar
 		options = append(options, mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)))
 	}
 	bar = u.progress.AddBar(fobj.size, options...)
-	return
+	return fh, bar, nil
 }
 
 func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, updateBar func(int, error)) {

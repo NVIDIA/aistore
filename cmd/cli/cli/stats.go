@@ -49,7 +49,7 @@ const versionSepa = "."
 
 func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
-		return
+		return nil, nil, nil, err
 	}
 	var (
 		wg         cos.WG
@@ -81,7 +81,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatus
 	if ok && pstatusMap != nil {
 		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)
 	}
-	return
+	return smap, tstatusMap, pstatusMap, nil
 }
 
 func isRebalancing(tstatusMap teb.StstMap) bool {

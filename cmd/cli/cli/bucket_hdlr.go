@@ -525,15 +525,15 @@ func _parseBprops(c *cli.Context) (props *cmn.BpropsToSet, nvs cos.StrKVs, err e
 	if c.Command.Name == commandCreate {
 		inputProps := parseStrFlag(c, bucketPropsFlag)
 		if isJSON(inputProps) {
-			err = jsoniter.Unmarshal([]byte(inputProps), &props)
-			return
+			err := jsoniter.Unmarshal([]byte(inputProps), &props)
+			return props, nil, err
 		}
 		propArgs = strings.Split(inputProps, " ")
 	}
 
 	if len(propArgs) == 1 && isJSON(propArgs[0]) {
-		err = jsoniter.Unmarshal([]byte(propArgs[0]), &props)
-		return
+		err := jsoniter.Unmarshal([]byte(propArgs[0]), &props)
+		return props, nil, err
 	}
 
 	if len(propArgs) == 0 {

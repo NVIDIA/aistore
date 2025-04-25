@@ -264,7 +264,7 @@ func parseBucketACL(values []string, idx int) (access apc.AccessAttrs, newIdx in
 			}
 			access |= acc
 		}
-		return
+		return access, newIdx, nil
 	}
 
 	// 2: direct hexadecimal input, e.g. `access 0x342`
@@ -337,7 +337,7 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 		return nil, false
 	})
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	nvs = make(cos.StrKVs, 8)
@@ -399,7 +399,7 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	if cmd != "" {
 		return nil, fmt.Errorf("missing property %q value", cmd)
 	}
-	return
+	return nvs, nil
 }
 
 func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
@@ -548,7 +548,7 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 	sort.Slice(propList, func(i, j int) bool {
 		return propList[i].Name < propList[j].Name
 	})
-	return
+	return propList
 }
 
 func fmtBucketCreatedTime(created int64) string {
@@ -744,7 +744,8 @@ func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
 	return
 }
 
-func _printSection(c *cli.Context, in any, section string) (done bool) {
+// return true if successfully parsed and printed
+func _printSection(c *cli.Context, in any, section string) bool {
 	var (
 		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
 		end       = regexp.MustCompile(`},\n`)
@@ -753,14 +754,14 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 	)
 	out, err := jsonMarshalIndent(in)
 	if err != nil {
-		return
+		return false
 	}
 
 	from := beg.FindIndex(out)
 	if from == nil {
 		loc := nonstruct.FindIndex(out)
 		if loc == nil {
-			return
+			return false
 		}
 		res := out[loc[0] : loc[1]-1]
 		fmt.Fprintln(c.App.Writer, "{"+string(res)+"\n}")
@@ -769,7 +770,7 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 
 	to := end.FindIndex(out[from[1]:])
 	if to == nil {
-		return
+		return false
 	}
 	res := out[from[0] : from[1]+to[1]-1]
 
@@ -789,7 +790,7 @@ func _printSection(c *cli.Context, in any, section string) (done bool) {
 				}
 			}
 		}
-		return
+		return false
 	}
 done:
 	if l := len(res); res[l-1] == ',' {
@@ -927,10 +928,10 @@ type (
 )
 
 // Replace protocol (gs://, s3://, az://, oc://) with proper GCP/AWS/Azure/OCI URL
-func parseSource(rawURL string) (source dlSource, err error) {
+func parseDlSource(rawURL string) (dlSource, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return
+		return dlSource{}, err
 	}
 
 	var (
@@ -987,8 +988,7 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		scheme = apc.DefaultScheme
 	case "https", "http":
 	default:
-		err = fmt.Errorf("invalid scheme: %s", scheme)
-		return
+		return dlSource{}, fmt.Errorf("invalid scheme: %s", scheme)
 	}
 
 	normalizedURL := url.URL{

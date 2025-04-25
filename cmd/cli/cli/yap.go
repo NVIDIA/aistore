@@ -103,7 +103,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		uri := c.Args().Get(0) // dst
 		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, emptyDstOnameOK)
 		if err != nil {
-			return
+			return err
 		}
 
 		// source files via '--list' or '--template'
@@ -228,9 +228,9 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 		return err
 	}
 
-	oltp, err := dopOLTP(c, a.rsrc.bck, objNameOrTmpl)
-	if err != nil {
-		return err
+	oltp, errV := dopOLTP(c, a.rsrc.bck, objNameOrTmpl)
+	if errV != nil {
+		return errV
 	}
 	if oltp.list == "" && oltp.tmpl == "" {
 		oltp.list = oltp.objName // (compare with `_prefetchOne`, `copyTransform`)
@@ -240,7 +240,8 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 	} else {
 		a.rsrc.lr.Template = oltp.tmpl
 	}
-	return
+
+	return nil
 }
 
 func (*archput) verb() string { return "APPEND" }

@@ -280,17 +280,17 @@ func _lsTip(c *cli.Context, qbck cmn.QueryBcks) {
 //   - e.g., `backend_bck=gcp://bucket_name` with `backend_bck.name=bucket_name` and
 //     `backend_bck.provider=gcp` to match expected fields.
 //   - `backend_bck=none` with `backend_bck.name=""` and `backend_bck.provider=""`.
-func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
+func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) error {
 	var (
 		originBck cmn.Bck
 		v         string
 		ok        bool
 	)
-
 	if v, ok = nvs[cmn.PropBackendBckName]; ok && v != "" {
+		var err error
 		if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
 			nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
-			return
+			return err
 		}
 	}
 
@@ -301,6 +301,7 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 	}
 
 	if v != apc.NilValue {
+		var err error
 		if originBck, err = parseBckURI(c, v, true /*error only*/); err != nil {
 			return fmt.Errorf("invalid '%s=%s': expecting %q to be a valid bucket name",
 				cmn.PropBackendBck, v, v)
@@ -309,7 +310,11 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 
 	nvs[cmn.PropBackendBckName] = originBck.Name
 	if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
+		var err error
 		nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
+		if err != nil {
+			return err
+		}
 	} else {
 		nvs[cmn.PropBackendBckProvider] = originBck.Provider
 	}
@@ -319,28 +324,24 @@ validate:
 		return fmt.Errorf("invalid %q: bucket name cannot be empty when bucket provider (%q) is set",
 			cmn.PropBackendBckName, cmn.PropBackendBckProvider)
 	}
-	return err
+	return nil
 }
 
 // Get bucket props
-func showBucketProps(c *cli.Context) (err error) {
-	var (
-		bck cmn.Bck
-		p   *cmn.Bprops
-	)
-
+func showBucketProps(c *cli.Context) error {
 	if c.NArg() > 2 {
 		return incorrectUsageMsg(c, "", c.Args()[2:])
 	}
 
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
+	if err != nil {
+		return err
+	}
+	p, err := headBucket(bck, !flagIsSet(c, addRemoteFlag) /* don't add */)
+	if err != nil {
+		return err
+	}
 	section := c.Args().Get(1)
-
-	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
-		return
-	}
-	if p, err = headBucket(bck, !flagIsSet(c, addRemoteFlag) /* don't add */); err != nil {
-		return
-	}
 
 	if bck.IsRemoteAIS() {
 		if all, err := api.GetRemoteAIS(apiBP); err == nil {
@@ -367,9 +368,9 @@ func showBucketProps(c *cli.Context) (err error) {
 		return teb.Print(p, "", opts)
 	}
 
-	defProps, err := defaultBckProps(bck)
-	if err != nil {
-		return err
+	defProps, errV := defaultBckProps(bck)
+	if errV != nil {
+		return errV
 	}
 	return headBckTable(c, p, defProps, section)
 }

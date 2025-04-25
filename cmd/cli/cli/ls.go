@@ -538,41 +538,40 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err
 	if flagIsSet(c, pageSizeFlag) {
 		pageSize = int64(parseIntFlag(c, pageSizeFlag))
 		if pageSize < 0 {
-			err = fmt.Errorf("invalid %s: page size (%d) cannot be negative", qflprn(pageSizeFlag), pageSize)
-			return
+			return 0, 0, 0, fmt.Errorf("invalid %s: page size (%d) cannot be negative", qflprn(pageSizeFlag), pageSize)
 		}
 		if pageSize > b.MaxPageSize() {
 			if b.Props == nil {
 				if b.Props, err = headBucket(bck, true /* don't add */); err != nil {
-					return
+					return 0, 0, 0, err
 				}
 			}
 			// still?
 			if pageSize > b.MaxPageSize() {
-				err = fmt.Errorf("invalid %s: page size (%d) cannot exceed the maximum (%d)",
+				err := fmt.Errorf("invalid %s: page size (%d) cannot exceed the maximum (%d)",
 					qflprn(pageSizeFlag), pageSize, b.MaxPageSize())
-				return
+				return 0, 0, 0, err
 			}
 		}
 	}
 
 	limit = int64(parseIntFlag(c, objLimitFlag))
 	if limit < 0 {
-		err = fmt.Errorf("invalid %s=%d: max number of objects to list cannot be negative", qflprn(objLimitFlag), limit)
-		return
+		err := fmt.Errorf("invalid %s=%d: max number of objects to list cannot be negative", qflprn(objLimitFlag), limit)
+		return 0, 0, 0, err
 	}
 	if limit == 0 && maxPages > 0 {
 		limit = maxPages * b.MaxPageSize()
 	}
 	if limit == 0 {
-		return
+		return pageSize, maxPages, 0, nil
 	}
 
 	// when limit "wins"
 	if limit < pageSize || (limit < b.MaxPageSize() && pageSize == 0) {
 		pageSize = limit
 	}
-	return
+	return pageSize, maxPages, limit, nil
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column

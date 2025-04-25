@@ -349,13 +349,13 @@ func extractXactIDsForKind(xs xact.MultiSnap, xactKind string) (xactIDs []string
 		xactIDs = append(xactIDs, xid)
 	}
 	if len(xactIDs) <= 1 {
-		return
+		return xactIDs
 	}
 	sort.Slice(xactIDs, func(i, j int) bool {
 		xi, xj := xactIDs[i], xactIDs[j]
 		return timedIDs[xi].Before(timedIDs[xj])
 	})
-	return
+	return xactIDs
 }
 
 // [backward compatibility] added xargs.Flags in 44f77dfe56376e

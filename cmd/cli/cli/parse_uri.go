@@ -21,11 +21,11 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	err error) {
 	if c.NArg() == shift {
 		err = missingArgumentsError(c, bckFromArg, bckToArg)
-		return
+		return cmn.Bck{}, cmn.Bck{}, "", err
 	}
 	if c.NArg() == shift+1 {
 		err = missingArgumentsError(c, bckToArg)
-		return
+		return cmn.Bck{}, cmn.Bck{}, "", err
 	}
 
 	// src
@@ -43,7 +43,7 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
 		}
-		return
+		return cmn.Bck{}, cmn.Bck{}, "", err
 	}
 
 	// dst
@@ -55,8 +55,10 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
 		}
+		return cmn.Bck{}, cmn.Bck{}, "", err
 	}
-	return
+
+	return bckFrom, bckTo, objFrom, err
 }
 
 func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
@@ -111,16 +113,15 @@ func preparseBckObjURI(uri string) string {
 	return uri // unchanged
 }
 
-func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err error) {
-	bck, pathSuffix, err = parseBckObjURI(c, uri, true /*optional objName*/)
+func parseBckObjAux(c *cli.Context, uri string) (bck cmn.Bck, objnameOrPrefix string, err error) {
+	bck, objnameOrPrefix, err = parseBckObjURI(c, uri, true /*optional objName*/)
 	if err != nil {
-		return
-	} else if bck.IsHT() {
-		err = errors.New("http bucket is not supported as destination")
-		return
+		return bck, "", err
 	}
-	pathSuffix = strings.Trim(pathSuffix, "/")
-	return
+	if bck.IsHT() {
+		return bck, "", errors.New("http bucket is not supported as destination")
+	}
+	return bck, strings.Trim(objnameOrPrefix, "/"), nil
 }
 
 func parseQueryBckURI(uri string) (cmn.QueryBcks, string, error) {
@@ -142,7 +143,7 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 		var hbo *cmn.HTTPBckObj
 		hbo, err = cmn.NewHTTPObjPath(uri)
 		if err != nil {
-			return
+			return bck, "", err
 		}
 		bck, objName = hbo.Bck, hbo.ObjName
 	} else {

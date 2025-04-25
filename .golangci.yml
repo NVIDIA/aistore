@@ -29,7 +29,7 @@ linters:
     - ineffassign
     - intrange
     - misspell
-    # nakedret    ## TODO (wtp)
+    - nakedret
     - nilnesserr
     - nolintlint
     - perfsprint

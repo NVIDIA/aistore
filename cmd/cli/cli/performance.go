@@ -385,7 +385,7 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 		}
 	}
 	idle = num == 0
-	return
+	return idle
 }
 
 // (main method)

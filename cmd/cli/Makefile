@@ -11,7 +11,7 @@ cli:
 
 lint:
 	@echo "Running lint cmd/cli..."
-	@golangci-lint run --config ../../.golangci.yml `go list -f {{.Dir}} ./...`
+	@golangci-lint run --max-issues-per-linter=0 --config ../../.golangci.yml `go list -f {{.Dir}} ./...`
 
 #
 # go modules

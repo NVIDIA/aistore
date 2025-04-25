@@ -279,7 +279,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 	)
 
 	if bck, oldObj, err = parseBckObjURI(c, oldObjFull, false); err != nil {
-		return
+		return err
 	}
 	if oldObj == "" {
 		return incorrectUsageMsg(c, "no object specified in %q", oldObjFull)
@@ -305,12 +305,12 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "source and destination are the same object")
 	}
 
-	if err = api.RenameObject(apiBP, bck, oldObj, newObj); err != nil {
-		return
+	if err := api.RenameObject(apiBP, bck, oldObj, newObj); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(c.App.Writer, "%q moved to %q\n", oldObj, newObj)
-	return
+	return nil
 }
 
 // main PUT handler: cases 1 through 4

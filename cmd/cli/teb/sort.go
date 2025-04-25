@@ -1,6 +1,6 @@
 // Package teb contains templates and (templated) tables to format CLI output.
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package teb
 
@@ -31,7 +31,7 @@ func (psts StstMap) sortPODs(smap *meta.Smap, proxies bool) (ids []string) {
 		hasp bool
 	)
 	if len(psts) == 0 {
-		return
+		return nil
 	}
 	ids = make([]string, 0, len(psts))
 	for sid, ds := range psts {
