@@ -32,6 +32,9 @@ RUN curl -fSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.
     && rm /tmp/go.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOBIN="/bin"
+# Create statically-linked binaries
+ENV CGO_ENABLED=0
+ENV GOFLAGS="-ldflags=-extldflags=-static -tags=timetzdata"
 
 # Configure Python
 RUN python3.11 -m venv /opt/venv
@@ -71,7 +74,7 @@ ENV LOCALBIN=$GOBIN
 RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && \
 cd ais-k8s/operator && \
 go mod download && \
-make kustomize controller-gen envtest golangci-lint && \
+make kustomize controller-gen envtest golangci-lint mockgen && \
 cd ../.. && rm -rf ais-k8s
 
 # Install `uv` and multiple Python versions for testing
