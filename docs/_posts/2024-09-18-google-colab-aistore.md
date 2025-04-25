@@ -6,7 +6,7 @@ author: Abhishek Gaikwad
 categories: aistore google-colab data-loading
 ---
 
-Working with data stored in cloud services like GCP, AWS, and Azure in [Google Colab](https://colab.research.google.com/) can be challenging. The entire process—from installing libraries and configuring the backend to pulling data and dealing with performance and usability issues—is often frustrating. We often end up downloading the same data repeatedly instead of caching it locally.
+Working with data stored in cloud services like GCP, AWS, Azure, and OCI in [Google Colab](https://colab.research.google.com/) can be challenging. The entire process—from installing libraries and configuring the backend to pulling data and dealing with performance and usability issues—is often frustrating. We often end up downloading the same data repeatedly instead of caching it locally.
 
 In this blog, we'll show you how to use AIStore on Google Colab for quick experiments and easy data loading. AIStore stores your data on Colab's local disk space, so after the initial download from the cloud, your data is cached locally on the instance. This means subsequent data access is much faster, as it loads directly from the local disk instead of the cloud. With Google Colab's free tier offering around **60 GB** of disk space, you can cache a significant amount of data without any additional cost.
 

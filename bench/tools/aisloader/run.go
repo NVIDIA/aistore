@@ -11,7 +11,7 @@
 // storage performance with aistore in front of S3 vs _without_.
 //
 // (*) aisloader can be further easily extended to work directly with any
-// Cloud storage including, but not limited to, aistore-supported GCP and Azure.
+// Cloud storage including, but not limited to, aistore-supported GCP, OCI, and Azure.
 //
 // In addition, `aisloader` generates synthetic workloads that mimic training and
 // inference workloads - the capability that allows to run benchmarks in isolation
@@ -517,7 +517,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "bucket name or bucket URI. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
-		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\"  for Azure, Amazon, and Google clouds, respectively")
+		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"oci\" for Azure, Amazon, Google, and Oracle clouds, respectively")
 
 	f.StringVar(&ip, "ip", defaultClusterIP, "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")

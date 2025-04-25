@@ -81,7 +81,7 @@ $ ais config cluster log --json
 
 ```console
 $ ais config cluster backend.conf --json
-    "backend": {"aws":{},"azure":{},"gcp":{}}
+    "backend": {"aws":{},"azure":{},"gcp":{},"oci":{}}
 ```
 
 See also:

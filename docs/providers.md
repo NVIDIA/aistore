@@ -21,6 +21,7 @@ AIStore natively integrates with multiple backend providers:
 | `aws` | `aws://`, `s3://` | [Amazon Cloud Storage](#cloud-object-storage) |
 | `azure` | `azure://`, `az://` | [Azure Cloud Storage](#cloud-object-storage)|
 | `gcp` | `gcp://`, `gs://` | [Google Cloud Storage](#cloud-object-storage) |
+| `oci` | `oc://`, `oci://` | [Oracle Cloud Storage](#cloud-object-storage)[^1] |
 | `ht` | `ht://` | [HTTP(S) based dataset](#https-based-dataset) |
 
 **Native integration**, in turn, implies:
@@ -147,6 +148,7 @@ Cloud-based object storage include:
 * `aws` - [Amazon S3](https://aws.amazon.com/s3)
 * `azure` - [Microsoft Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs)
 * `gcp` - [Google Cloud Storage](https://cloud.google.com)
+* `oci` - [Oracle Cloud Storage](https://www.oracle.com/cloud/storage/)[^1]
 
 In each case, we use the vendor's own SDK/API to provide transparent access to Cloud storage with the additional capability of *persistently caching* all read data in the AIStore's [remote buckets](bucket.md).
 
@@ -249,3 +251,5 @@ would all be stored in a single AIS bucket that would have a protocol prefix `ht
 
 WARNING: Currently HTTP(S) based datasets can only be used with clients which support an option of overriding the proxy for certain hosts (for e.g. `curl ... --noproxy=$(curl -s G/v1/cluster?what=target_ips)`).
 If used otherwise, we get stuck in a redirect loop, as the request to target gets redirected via proxy.
+
+[^1]: **Note:** OCI support is currently experimental and may have limited functionality or stability.

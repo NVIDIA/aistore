@@ -182,6 +182,7 @@ The corresponding environment "belongs" to the internal [backend](https://github
 | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` | GCP account with permissions to access Google Cloud Storage buckets |
 | `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` | Azure account with  permissions to access Blob Storage containers |
 | `AIS_AZURE_URL` | Azure endpoint, e.g. `http://<account_name>.blob.core.windows.net` |
+| `OCI_TENANCY_OCID`, `OCI_USER_OCID`, `OCI_REGION`, `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY`, `OCI_COMPARTMENT_OCID` | OCI account with permissions to access Object Storage buckets and compartments |
 
 Notice in the table above that the variables `S3_ENDPOINT` and `AWS_PROFILE` are designated as _global_: cluster-wide.
 

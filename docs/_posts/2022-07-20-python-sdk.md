@@ -197,7 +197,7 @@ client.bucket(FROM_BUCKET, provider="gcp").copy(TO_BUCKET)
 client.bucket(FROM_BUCKET, provider="gcp").evict()
 ```
 
-Eviction of a cloud storage bucket destroys any instance of the cloud storage bucket (and its objects) from the AIStore cluster metadata. Eviction does **not** delete or affect the actual cloud storage bucket (in AWS S3, GCP, or Azure).
+Eviction of a cloud storage bucket destroys any instance of the cloud storage bucket (and its objects) from the AIStore cluster metadata. Eviction does **not** delete or affect the actual cloud storage bucket (in AWS S3, GCP, Azure, or OCI).
 
 
 ## PyTorch

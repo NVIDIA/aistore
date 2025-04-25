@@ -13,7 +13,7 @@ AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage 
 
 In fact, aisloader can list, write, and read S3(**) buckets _directly_, which makes it quite useful, convenient, and easy to use benchmark to compare storage performance **with** aistore in front of S3 and **without**.
 
-> (**) `aisloader` can be further easily extended to work directly with any Cloud storage provider including, but not limited to, aistore-supported GCP and Azure.
+> (**) `aisloader` can be further easily extended to work directly with any Cloud storage provider including, but not limited to, aistore-supported GCP, OCI, and Azure.
 
 In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable) avoiding compute-side bottlenecks (if any) and associated complexity.
 
@@ -82,7 +82,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -pctupdate | `int` | Percentage of GET requests that are followed by a PUT "update" (i.e., creation of a new version of the object) | `0` |
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -port | `int` | Port number for proxy server | `8080` |
-| -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively | `ais` |
+| -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp", "aws", "azure", "oci" for Google, Amazon, Azure, and Oracle clouds, respectively | `ais` |
 | -putshards | `int` | Spread generated objects over this many subdirectories (max 100k) | `0` |
 | -quiet | `bool` | When starting to run, do not print command line arguments, default settings, and usage examples | `false` |
 | -randomname | `bool` | when true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |

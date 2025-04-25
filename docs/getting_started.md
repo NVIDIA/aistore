@@ -26,7 +26,7 @@ AIStore runs on commodity Linux machines with no special requirements whatsoever
 * Linux kernel 6.8+
 * [Go 1.23 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see next section)
-* Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
+* Optionally, Amazon (AWS), Google Cloud Platform (GCP), Microsoft Azure, and/or Oracle Cloud Infrastructure (OCI) Object Storage accounts.
 * Optionally, [golangci-lint 1.62 or later](https://golangci-lint.run/welcome/install/)
 
 > (**) [Mac](#macOS) is also supported albeit in a limited (development only) way.
@@ -585,11 +585,11 @@ $ MODE="" make node
 # 2) build aisnode with no build tags but with debug
 $ MODE="debug" make node
 
-# 3) all 3 cloud backends, no debug
-$ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+# 3) all 4 cloud backends, no debug
+$ AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="" make node
 
 # 4) cloud backends, with debug
-$ AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+$ AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="debug" make node
 
 # 5) cloud backends, debug, statsd
 ## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.

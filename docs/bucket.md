@@ -51,6 +51,7 @@ AIS buckets *contain* user data performing the same function as, for instance:
 * [Amazon S3 buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html)
 * [Google Cloud (GCP) buckets](https://cloud.google.com/storage/docs/key-terms#buckets)
 * [Microsoft Azure Blob containers](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)
+* [Oracle Cloud Infrastructure (OCI) buckets](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingbuckets.htm)
 
 In addition, AIS supports multiple storage **backends** including itself:
 
@@ -324,8 +325,8 @@ train-002.tgz     136.44KiB
 
 # Remote Bucket
 
-Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure or HDFS) when AIS is deployed as [fast tier](overview.md#fast-tier).
-Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure, but not HDFS).
+Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure/OCI or HDFS) when AIS is deployed as [fast tier](overview.md#fast-tier).
+Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure/OCI, but not HDFS).
 
 > By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
 
