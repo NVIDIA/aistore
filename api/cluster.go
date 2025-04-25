@@ -465,58 +465,50 @@ func _backend(bp BaseParams, path string) error {
 // Maintenance API
 //
 
+// perform a membership change: gracefully add/remove node from a running cluster and,
+// by default, rebalance cluster to comply with an updated cluster map;
+// includes: start or stop maintenance, shutdown or completely decommission a node
+// returns: xid - UUID of the global rebalance triggered by the membership change
+// see also:
+// - apc.ActValRmNode for parameters that also include disabling global rebalance (not recommended!)
+// - 'ais cluster add-remove-nodes --help'
+// - docs/lifecycle_node.md
+func membership(bp BaseParams, action string, actValue *apc.ActValRmNode) (xid string, err error) {
+	msg := apc.ActMsg{
+		Action: action,
+		Value:  actValue,
+	}
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+	}
+	_, err = reqParams.doReqStr(&xid)
+	FreeRp(reqParams)
+	return xid, err
+}
+
+// StartMaintenance puts a node into maintenance mode
 func StartMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActMsg{
-		Action: apc.ActStartMaintenance,
-		Value:  actValue,
-	}
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-	}
-	_, err = reqParams.doReqStr(&xid)
-	FreeRp(reqParams)
-	return xid, err
+	return membership(bp, apc.ActStartMaintenance, actValue)
 }
 
-func DecommissionNode(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActMsg{
-		Action: apc.ActDecommissionNode,
-		Value:  actValue,
-	}
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-	}
-	_, err = reqParams.doReqStr(&xid)
-	FreeRp(reqParams)
-	return xid, err
-}
-
+// StopMaintenance takes a node out of maintenance mode
 func StopMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
-	msg := apc.ActMsg{
-		Action: apc.ActStopMaintenance,
-		Value:  actValue,
-	}
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-	}
-	_, err = reqParams.doReqStr(&xid)
-	FreeRp(reqParams)
-	return xid, err
+	return membership(bp, apc.ActStopMaintenance, actValue)
+}
+
+// ShutdownNode shuts down a node
+func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
+	return membership(bp, apc.ActShutdownNode, actValue)
+}
+
+// DecommissionNode decommissions a node from the cluster
+func DecommissionNode(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
+	return membership(bp, apc.ActDecommissionNode, actValue)
 }
 
 // ShutdownCluster shuts down the whole cluster
@@ -555,25 +547,6 @@ func DecommissionCluster(bp BaseParams, rmUserData bool) error {
 		err = nil
 	}
 	return err
-}
-
-// ShutdownNode shuts down a specific node
-func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err error) {
-	msg := apc.ActMsg{
-		Action: apc.ActShutdownNode,
-		Value:  actValue,
-	}
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(msg)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-	}
-	_, err = reqParams.doReqStr(&id)
-	FreeRp(reqParams)
-	return id, err
 }
 
 // Remove node from the cluster immediately.
