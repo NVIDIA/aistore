@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -63,12 +62,8 @@ type (
 	}
 
 	dsorterMem struct {
-		m       *Manager
-		streams struct {
-			cleanupDone atomic.Bool
-			builder     *bundle.Streams // streams for sending information about building shards
-			records     *bundle.Streams // streams for sending the record
-		}
+		m             *Manager
+		streams       dsortStreams
 		creationPhase struct {
 			connector       *rwConnector // used to connect readers (streams, local data) with writers (shards)
 			requestedShards chan string
@@ -239,39 +234,13 @@ func (ds *dsorterMem) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.builder = bundle.New(client, reqSbArgs)
-	ds.streams.records = bundle.New(client, respSbArgs)
+	ds.streams.request = bundle.New(client, reqSbArgs)
+	ds.streams.response = bundle.New(client, respSbArgs)
 	return nil
 }
 
 func (ds *dsorterMem) cleanupStreams() (err error) {
-	if !ds.streams.cleanupDone.CAS(false, true) {
-		return nil
-	}
-
-	if ds.streams.builder != nil {
-		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
-			err = errors.WithStack(unhandleErr)
-		}
-	}
-
-	if ds.streams.records != nil {
-		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
-			err = errors.WithStack(unhandleErr)
-		}
-	}
-
-	for _, streamBundle := range []*bundle.Streams{ds.streams.builder, ds.streams.records} {
-		if streamBundle != nil {
-			// NOTE: We don't want stream to send a message at this point as the
-			//  receiver might have closed its corresponding stream.
-			streamBundle.Close(false /*gracefully*/)
-		}
-	}
-
-	return err
+	return ds.m.cleanupDsortStreams(&ds.streams)
 }
 
 func (*dsorterMem) cleanup() {}
@@ -293,7 +262,7 @@ func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error
 	o := transport.AllocSend()
 	o.Hdr.Opaque = bsi.NewPack(core.T.ByteMM())
 	if ds.m.smap.HasActiveTs(core.T.SID() /*except*/) {
-		if err := ds.streams.builder.Send(o, nil); err != nil {
+		if err := ds.streams.request.Send(o, nil); err != nil {
 			return err
 		}
 	}
@@ -658,7 +627,7 @@ func (resp *dsmCS) connectOrSend(r cos.ReadOpenCloser) (err error) {
 		o := transport.AllocSend()
 		o.Hdr = resp.hdr
 		o.Callback, o.CmplArg = resp.ds.sentCallback, &resp.rsp
-		err = resp.ds.streams.records.Send(o, r, resp.tsi)
+		err = resp.ds.streams.response.Send(o, r, resp.tsi)
 		resp.decRef = true // sentCallback will call decrementRef
 	}
 	return

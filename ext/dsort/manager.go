@@ -122,6 +122,14 @@ type (
 	}
 )
 
+type (
+	dsortStreams struct {
+		cleanupDone atomic.Bool
+		request     *bundle.Streams // streams for sending information about building shards
+		response    *bundle.Streams // streams for sending the record
+	}
+)
+
 var g global
 
 // interface guard
@@ -281,6 +289,36 @@ func (m *Manager) cleanupStreams() (err error) {
 		if streamBundle != nil {
 			// NOTE: We don't want stream to send a message at this point as the
 			// receiver might have closed its corresponding stream.
+			streamBundle.Close(false /*gracefully*/)
+		}
+	}
+
+	return err
+}
+
+func (m *Manager) cleanupDsortStreams(streams *dsortStreams) (err error) {
+	if !streams.cleanupDone.CAS(false, true) {
+		return nil
+	}
+
+	if streams.request != nil {
+		trname := fmt.Sprintf(recvReqStreamNameFmt, m.ManagerUUID)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
+		}
+	}
+
+	if streams.response != nil {
+		trname := fmt.Sprintf(recvRespStreamNameFmt, m.ManagerUUID)
+		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
+			err = errors.WithStack(unhandleErr)
+		}
+	}
+
+	for _, streamBundle := range []*bundle.Streams{streams.request, streams.response} {
+		if streamBundle != nil {
+			// NOTE: We don't want stream to send a message at this point as the
+			//  receiver might have closed its corresponding stream.
 			streamBundle.Close(false /*gracefully*/)
 		}
 	}

@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -47,14 +46,9 @@ const (
 
 type (
 	dsorterGeneral struct {
-		m  *Manager
-		mw *memoryWatcher
-
-		streams struct {
-			cleanupDone atomic.Bool
-			request     *bundle.Streams
-			response    *bundle.Streams
-		}
+		m       *Manager
+		mw      *memoryWatcher
+		streams dsortStreams
 
 		creationPhase struct {
 			adjuster *concAdjuster
@@ -173,34 +167,8 @@ func (ds *dsorterGeneral) start() error {
 	return ds.mw.watch()
 }
 
-func (ds *dsorterGeneral) cleanupStreams() (err error) {
-	if !ds.streams.cleanupDone.CAS(false, true) {
-		return nil
-	}
-
-	if ds.streams.request != nil {
-		trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
-		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
-			err = errors.WithStack(unhandleErr)
-		}
-	}
-
-	if ds.streams.response != nil {
-		trname := fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-		if unhandleErr := transport.Unhandle(trname); unhandleErr != nil {
-			err = errors.WithStack(unhandleErr)
-		}
-	}
-
-	for _, streamBundle := range []*bundle.Streams{ds.streams.request, ds.streams.response} {
-		if streamBundle != nil {
-			// NOTE: We don't want stream to send a message at this point as the
-			//  receiver might have closed its corresponding stream.
-			streamBundle.Close(false /*gracefully*/)
-		}
-	}
-
-	return err
+func (ds *dsorterGeneral) cleanupStreams() error {
+	return ds.m.cleanupDsortStreams(&ds.streams)
 }
 
 func (ds *dsorterGeneral) cleanup() {
