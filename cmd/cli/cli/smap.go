@@ -73,7 +73,7 @@ func getNode(c *cli.Context, arg string) (node *meta.Snode, sname string, err er
 		err = &errDoesNotExist{
 			what:   "node",
 			name:   arg,
-			suffix: " (" + tabHelpOpt + ", or see 'ais show cluster')",
+			suffix: " (" + tabHelpOpt + ", check available nodes by running 'ais show cluster')",
 		}
 		return
 	}

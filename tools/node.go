@@ -299,7 +299,7 @@ func pidFromURL(smap *meta.Smap, proxyURL string) string {
 }
 
 func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *meta.Smap, err error) {
-	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
+	return WaitForClusterState(proxyURL, "new Smap version", prevVersion, 0, 0)
 }
 
 func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {

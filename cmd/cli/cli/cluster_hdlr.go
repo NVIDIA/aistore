@@ -519,24 +519,7 @@ func setPrimaryHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	var (
-		toID  = c.Args().Get(0)
-		toURL = c.Args().Get(1)
-		force = flagIsSet(c, forceFlag)
-	)
-	if force {
-		err := api.SetPrimary(apiBP, toID, toURL, force)
-		if err == nil {
-			var s string
-			if toURL != "" {
-				s = " (at " + toURL + ")"
-			}
-			actionDone(c, fmt.Sprintf("%s%s is now a new primary", toID, s))
-		}
-		return err
-	}
-
-	node, sname, err := getNode(c, toID)
+	node, sname, err := arg0Node(c)
 	if err != nil {
 		return err
 	}
@@ -544,6 +527,24 @@ func setPrimaryHandler(c *cli.Context) error {
 		return incorrectUsageMsg(c, "%s is not a proxy", sname)
 	}
 
+	// force
+	var (
+		toURL = c.Args().Get(1)
+		force = flagIsSet(c, forceFlag)
+	)
+	if force {
+		if err := api.SetPrimary(apiBP, node.ID(), toURL, true /*force*/); err != nil {
+			return err
+		}
+		var s string
+		if toURL != "" {
+			s = " (at " + toURL + ")"
+		}
+		actionDone(c, fmt.Sprintf("%s%s is now a new primary", sname, s))
+		return nil
+	}
+
+	// regular
 	switch {
 	case node.Flags.IsSet(meta.SnodeMaint):
 		return fmt.Errorf("%s is currently in maintenance", sname)
@@ -553,11 +554,12 @@ func setPrimaryHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is non-electable", sname)
 	}
 
-	err = api.SetPrimary(apiBP, toID, toURL, force)
-	if err == nil {
-		actionDone(c, sname+" is now a new primary")
+	if err := api.SetPrimary(apiBP, node.ID(), toURL, false /*force*/); err != nil {
+		return err
 	}
-	return err
+
+	actionDone(c, sname+" is now a new primary")
+	return nil
 }
 
 func startRebHandler(c *cli.Context) (err error) {
