@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -28,14 +29,14 @@ type (
 	// statefulCommunicator manages long-lived connection channels to ETL pod (e.g., WebSocket)
 	// and creates per-xaction sessions that use those channels to exchange data with ETL pods.
 	statefulCommunicator interface {
-		communicator
+		Communicator
 		createSession(xctn core.Xact) (Session, error)
 	}
 
 	// Session represents a per-xaction communication context created by the statefulCommunicator.
 	Session interface {
-		// Transform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
-		Transform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp
+		// OfflineTransform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
+		OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp
 		// Finish cleans up the job's communication channel, and aborts the undergoing xaction (`TCB`/`TCO`) if errCause is provided
 		Finish(errCause error) error
 	}
@@ -140,6 +141,63 @@ func (ws *webSocketComm) SetupConnection() (err error) {
 	return conn.Close() // closing after verifying connectivity
 }
 
+func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, _ string) (int, error) {
+	// establish WebSocket connection to ETL
+	conn, resp, err := websocket.DefaultDialer.Dial(ws.boot.uri, nil)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	defer resp.Body.Close()
+	defer conn.Close()
+
+	// if the ETL expects direct put, send an initial empty TextMessage before streaming the object content
+	if ws.boot.msg.IsDirectPut() {
+		conn.WriteMessage(websocket.TextMessage, []byte(""))
+	}
+
+	// send object content with configued arg type
+	writer, err := conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	buf, slab := core.T.PageMM().Alloc()
+	defer slab.Free(buf)
+
+	switch ws.boot.msg.ArgType() {
+	case ArgTypeDefault, ArgTypeURL:
+		latestVer := r.URL.Query().Get(apc.QparamLatestVer)
+		srcResp := lom.GetROC(cos.IsParseBool(latestVer), false)
+		if srcResp.Err != nil {
+			return srcResp.Ecode, srcResp.Err
+		}
+		if _, err := cos.CopyBuffer(writer, srcResp.R, buf); err != nil {
+			return http.StatusInternalServerError, err
+		}
+		srcResp.R.Close()
+	case ArgTypeFQN:
+		if ecode, err := lomLoad(lom, ws.Xact().Kind()); err != nil {
+			return ecode, err
+		}
+		fqn := url.PathEscape(lom.FQN)
+		if _, err := writer.Write(cos.UnsafeB(fqn)); err != nil {
+			return http.StatusInternalServerError, err
+		}
+	}
+	writer.Close()
+
+	// receive transformed object back
+	ty, reader, err := conn.NextReader()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	debug.Assert(ty == websocket.BinaryMessage)
+	if _, err := cos.CopyBuffer(w, reader, buf); err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	return 0, nil
+}
+
 func (ws *webSocketComm) createSession(xctn core.Xact) (Session, error) {
 	if xctn == nil {
 		return nil, cos.NewErrNotFound(core.T, "invalid xact parameter")
@@ -202,7 +260,7 @@ func (ws *webSocketComm) Stop() {
 // wsSession //
 ///////////////
 
-func (wss *wsSession) Transform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
+func (wss *wsSession) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	var (
 		daddr string
 		fqn   string

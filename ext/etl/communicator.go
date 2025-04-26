@@ -32,9 +32,9 @@ type (
 		OutBytes() int64
 	}
 
-	// communicator is responsible for managing communications with local ETL pod.
+	// Communicator is responsible for managing communications with local ETL pod.
 	// It listens to cluster membership changes and terminates ETL pod, if need be.
-	communicator interface {
+	Communicator interface {
 		meta.Slistener
 
 		ETLName() string
@@ -52,16 +52,16 @@ type (
 
 		Xact() core.Xact // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
 		CommStats        // only stats for `apc.ActETLInline` inline transform
-	}
-
-	// HTTPCommunicator manages stateless communication to ETL pod through HTTP requests
-	HTTPCommunicator interface {
-		communicator
 
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
 		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error)
+	}
+
+	// httpCommunicator manages stateless communication to ETL pod through HTTP requests
+	httpCommunicator interface {
+		Communicator
 
 		// OfflineTransform is an instance of `core.GetROC` function, which is driven by `TCB` and `TCO` to provide offline transformation
 		// Implementations include:
@@ -100,15 +100,15 @@ type (
 
 // interface guard
 var (
-	_ HTTPCommunicator = (*pushComm)(nil)
-	_ HTTPCommunicator = (*redirectComm)(nil)
+	_ httpCommunicator = (*pushComm)(nil)
+	_ httpCommunicator = (*redirectComm)(nil)
 )
 
 //////////////
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) communicator {
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) Communicator {
 	switch boot.msg.CommTypeX {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
@@ -401,20 +401,6 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 //
 // utils
 //
-
-// getComm retrieves the communicator from registry by etl name
-// Returns an error if not found or not in the Running stage.
-func getComm(etlName string) (communicator, error) {
-	comm, stage := mgr.getByName(etlName)
-	if comm == nil {
-		return nil, cos.NewErrNotFound(core.T, etlName)
-	}
-
-	if stage != Running {
-		return comm, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
-	}
-	return comm, nil
-}
 
 func lomLoad(lom *core.LOM, xKind string) (ecode int, err error) {
 	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {

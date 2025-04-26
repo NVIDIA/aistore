@@ -30,7 +30,7 @@ import (
 var _ = Describe("CommunicatorTest", func() {
 	var (
 		tmpDir            string
-		comm              HTTPCommunicator
+		comm              httpCommunicator
 		transformerServer *httptest.Server
 		targetServer      *httptest.Server
 		proxyServer       *httptest.Server
@@ -147,7 +147,7 @@ var _ = Describe("CommunicatorTest", func() {
 					uri:  transformerServer.URL,
 					xctn: xctn,
 				}
-				comm = newCommunicator(nil, boot, nil).(HTTPCommunicator)
+				comm = newCommunicator(nil, boot, nil).(httpCommunicator)
 
 				switch testType {
 				case "inline":

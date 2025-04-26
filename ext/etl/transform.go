@@ -243,7 +243,7 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * err - any error occurred that should be passed on.
 func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
-		comm   communicator
+		comm   Communicator
 		pw     *podWatcher
 		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
@@ -400,21 +400,22 @@ func StopAll() {
 	}
 }
 
-func GetCommunicator(etlName string) (HTTPCommunicator, error) {
-	cc, err := getComm(etlName)
-	if err != nil {
-		return nil, err
+// GetCommunicator retrieves the Communicator from registry by etl name
+// Returns an error if not found or not in the Running stage.
+func GetCommunicator(etlName string) (Communicator, error) {
+	comm, stage := mgr.getByName(etlName)
+	if comm == nil {
+		return nil, cos.NewErrNotFound(core.T, etlName)
 	}
 
-	comm, ok := cc.(HTTPCommunicator)
-	if !ok {
-		return nil, cos.NewErrNotFound(core.T, etlName+" the communicator doesn't support inline transform")
+	if stage != Running {
+		return comm, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
 	}
 	return comm, nil
 }
 
 func GetInitMsg(etlName string) (InitMsg, error) {
-	cc, err := getComm(etlName)
+	cc, err := GetCommunicator(etlName)
 	if err != nil {
 		return nil, err
 	}
@@ -422,20 +423,20 @@ func GetInitMsg(etlName string) (InitMsg, error) {
 }
 
 func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, error) {
-	cc, err := getComm(etlName)
+	cc, err := GetCommunicator(etlName)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	switch comm := cc.(type) {
-	case HTTPCommunicator:
+	case httpCommunicator:
 		return comm.OfflineTransform, nil, nil
 	case statefulCommunicator:
 		session, err := comm.createSession(xctn)
 		if err != nil {
 			return nil, nil, err
 		}
-		return session.Transform, session, nil
+		return session.OfflineTransform, session, nil
 	default:
 		debug.Assert(false, "unknown communicator type")
 		return nil, nil, cos.NewErrNotFound(core.T, etlName+" unknown communicator type")
@@ -445,7 +446,7 @@ func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, 
 func List() []Info { return mgr.list() }
 
 func PodLogs(transformID string) (logs Logs, err error) {
-	c, err := getComm(transformID)
+	c, err := GetCommunicator(transformID)
 	if err != nil {
 		return logs, err
 	}
@@ -464,7 +465,7 @@ func PodLogs(transformID string) (logs Logs, err error) {
 }
 
 func PodHealth(etlName string) (string, error) {
-	c, err := getComm(etlName)
+	c, err := GetCommunicator(etlName)
 	if err != nil {
 		return "", err
 	}
@@ -476,7 +477,7 @@ func PodHealth(etlName string) (string, error) {
 }
 
 func PodMetrics(etlName string) (*CPUMemUsed, error) {
-	c, err := getComm(etlName)
+	c, err := GetCommunicator(etlName)
 	if err != nil {
 		return nil, err
 	}
