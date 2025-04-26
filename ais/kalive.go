@@ -102,15 +102,8 @@ var (
 
 func newTalive(t *target, statsT stats.Tracker, startedUp *atomic.Bool) *talive {
 	config := cmn.GCO.Get()
-
 	tkr := &talive{t: t}
-	tkr.keepalive.name = "talive"
-	tkr.keepalive.k = tkr
-	tkr.statsT = statsT
-	tkr.keepalive.startedUp = startedUp
-	tkr.hb = newHB(config.Keepalive.Target.Interval.D())
-	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	tkr.interval = config.Keepalive.Target.Interval.D()
+	tkr.keepalive.init(tkr, statsT, startedUp, "talive", config.Keepalive.Target.Interval.D())
 	return tkr
 }
 
@@ -119,7 +112,7 @@ func (tkr *talive) Run() error {
 		return nil
 	}
 
-	tkr.init(tkr.t.owner.smap.get(), tkr.t.SID())
+	tkr.prepopulate(tkr.t.owner.smap.get(), tkr.t.SID())
 
 	nlog.Infoln("Starting", tkr.Name())
 	tkr._run()
@@ -171,15 +164,8 @@ func (tkr *talive) do(config *cmn.Config) (stopped bool) {
 
 func newPalive(p *proxy, statsT stats.Tracker, startedUp *atomic.Bool) *palive {
 	config := cmn.GCO.Get()
-
 	pkr := &palive{p: p}
-	pkr.keepalive.name = "palive"
-	pkr.keepalive.k = pkr
-	pkr.statsT = statsT
-	pkr.keepalive.startedUp = startedUp
-	pkr.hb = newHB(config.Keepalive.Proxy.Interval.D())
-	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
-	pkr.interval = config.Keepalive.Proxy.Interval.D()
+	pkr.keepalive.init(pkr, statsT, startedUp, "palive", config.Keepalive.Proxy.Interval.D())
 	return pkr
 }
 
@@ -188,7 +174,7 @@ func (pkr *palive) Run() error {
 		return nil
 	}
 
-	pkr.init(pkr.p.owner.smap.get(), pkr.p.SID())
+	pkr.prepopulate(pkr.p.owner.smap.get(), pkr.p.SID())
 
 	nlog.Infoln("Starting", pkr.Name())
 	pkr._run()
@@ -471,6 +457,16 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, tout time.Duration
 
 func (k *keepalive) Name() string { return k.name }
 
+func (k *keepalive) init(keepaliver keepaliver, statsT stats.Tracker, startedUp *atomic.Bool, name string, ival time.Duration) {
+	k.name = name
+	k.k = keepaliver
+	k.statsT = statsT
+	k.startedUp = startedUp
+	k.controlCh = make(chan controlSignal) // unbuffered on purpose
+	k.interval = ival
+	k.hb = newHB(ival)
+}
+
 func (k *keepalive) heardFrom(sid string) int64 {
 	return k.hb.HeardFrom(sid, 0 /*now*/)
 }
@@ -505,8 +501,8 @@ func (k *keepalive) _wait(ticker *time.Ticker) (stopped bool) {
 	}
 }
 
-// pre-populate hb
-func (k *keepalive) init(smap *smapX, self string) {
+// prepopulate hb
+func (k *keepalive) prepopulate(smap *smapX, self string) {
 	for _, nm := range []meta.NodeMap{smap.Pmap, smap.Tmap} {
 		for sid := range nm {
 			if sid == self {
