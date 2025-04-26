@@ -420,6 +420,7 @@ func (*bmdOwnerTgt) modify(_ *bmdModifier) (*bucketMD, error) {
 	return nil, nil
 }
 
+//nolint:dupl // BMD vs EtlMD: similar code, different types
 func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 	for _, mpath := range mpaths {
 		bmd := loadBMDFromMpath(mpath, path)

@@ -86,25 +86,17 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 /////////////
 
 func newPutXact(bck *cmn.Bck, mgr *Manager) *XactPut {
-	var (
-		avail, disabled = fs.Get()
-		totalPaths      = len(avail) + len(disabled)
-		config          = cmn.GCO.Get()
-		xctn            = &XactPut{
-			putJoggers: make(map[string]*putJogger, totalPaths),
-		}
-	)
-	xctn.xactECBase.init(config, bck, mgr)
+	xctn := &XactPut{}
+	xctn.xactECBase.init(cmn.GCO.Get(), bck, mgr)
 	xctn.xactReqBase.init()
 
-	// create all runners but do not start them until Run is called
-	for mpath := range avail {
-		putJog := xctn.newPutJogger(mpath)
-		xctn.putJoggers[mpath] = putJog
-	}
-	for mpath := range disabled {
-		putJog := xctn.newPutJogger(mpath)
-		xctn.putJoggers[mpath] = putJog
+	// construct all joggers
+	avail, disabled := fs.Get()
+	xctn.putJoggers = make(map[string]*putJogger, len(avail)+len(disabled))
+	for _, mpi := range []fs.MPI{avail, disabled} {
+		for mpath := range mpi {
+			xctn.putJoggers[mpath] = xctn.newPutJogger(mpath)
+		}
 	}
 	return xctn
 }

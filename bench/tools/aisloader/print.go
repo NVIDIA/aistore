@@ -219,6 +219,7 @@ func fprintf(w io.Writer, format string, a ...any) {
 	debug.AssertNoErr(err)
 }
 
+//nolint:dupl // format PUT and GET stats: minor field differences justify seemingly duplicated code blocks
 func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 	p := fprintf
 	pn := prettyNumber

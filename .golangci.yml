@@ -49,7 +49,7 @@ linters:
 # See: https://golangci-lint.run/usage/linters/
   settings:
     dupl:
-      threshold: 150 ## TODO (make it 100; skip test)
+      threshold: 100
 
     revive:
       # ignore-generated-header: true

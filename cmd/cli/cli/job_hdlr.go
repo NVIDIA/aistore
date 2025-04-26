@@ -935,6 +935,7 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	}
 }
 
+//nolint:dupl // stop downloads and dsorts: different API methods justify seemingly duplicated code
 func stopDownloadRegex(c *cli.Context, regex string) error {
 	dlList, err := api.DownloadGetList(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
@@ -967,6 +968,7 @@ func stopDownloadHandler(c *cli.Context, id string) (err error) {
 	return
 }
 
+//nolint:dupl // stop downloads and dsorts: different API methods justify seemingly duplicated code
 func stopDsortRegex(c *cli.Context, regex string) error {
 	dsortLst, err := api.ListDsort(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
@@ -1187,6 +1189,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 // job remove
 //
 
+//nolint:dupl // remove download and dsort jobs: different API methods justify seemingly duplicated code
 func removeDownloadHandler(c *cli.Context) error {
 	regex := parseStrFlag(c, regexJobsFlag)
 	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {
@@ -1235,6 +1238,7 @@ func removeDownloadRegex(c *cli.Context, regex string) error {
 	return nil
 }
 
+//nolint:dupl // remove download and dsort jobs: different API methods justify seemingly duplicated code
 func removeDsortHandler(c *cli.Context) error {
 	regex := parseStrFlag(c, regexJobsFlag)
 	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {

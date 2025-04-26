@@ -86,26 +86,19 @@ func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 /////////////
 
 func newGetXact(bck *cmn.Bck, mgr *Manager) *XactGet {
-	var (
-		avail, disabled = fs.Get()
-		totalPaths      = len(avail) + len(disabled)
-		config          = cmn.GCO.Get()
-		xctn            = &XactGet{
-			getJoggers: make(map[string]*getJogger, totalPaths),
-		}
-	)
-	xctn.xactECBase.init(config, bck, mgr)
+	xctn := &XactGet{}
+	xctn.xactECBase.init(cmn.GCO.Get(), bck, mgr)
 	xctn.xactReqBase.init()
 
-	// create all runners but do not start them until Run is called
-	for mpath := range avail {
-		getJog := xctn.newGetJogger(mpath)
-		xctn.getJoggers[mpath] = getJog
+	// constuct joggers
+	avail, disabled := fs.Get()
+	xctn.getJoggers = make(map[string]*getJogger, len(avail)+len(disabled))
+	for _, mpi := range []fs.MPI{avail, disabled} {
+		for mpath := range mpi {
+			xctn.getJoggers[mpath] = xctn.newGetJogger(mpath)
+		}
 	}
-	for mpath := range disabled {
-		getJog := xctn.newGetJogger(mpath)
-		xctn.getJoggers[mpath] = getJog
-	}
+
 	return xctn
 }
 

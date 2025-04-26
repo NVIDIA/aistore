@@ -259,6 +259,7 @@ func (*etlMDOwnerTgt) modify(_ *etlMDModifier) (*etlMD, error) {
 	return nil, nil
 }
 
+//nolint:dupl // EtlMD vs BMD: similar code, different types
 func loadEtlMD(mpaths fs.MPI, path string) (mainEtlMD *etlMD) {
 	for _, mpath := range mpaths {
 		etlMD := loadEtlMDFromMpath(mpath, path)

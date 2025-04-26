@@ -314,6 +314,7 @@ func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.
 // GET OBJECT
 //
 
+//nolint:dupl // GCP vs Azure: similar code, different BPs
 func (gsbp *gsbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
 	res := gsbp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {

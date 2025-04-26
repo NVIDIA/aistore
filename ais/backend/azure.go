@@ -413,6 +413,7 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 // GET OBJECT
 //
 
+//nolint:dupl // Azure vs GCP: similar code, different BPs
 func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
 	res := azbp.GetObjReader(ctx, lom, 0, 0)
 	if res.Err != nil {
