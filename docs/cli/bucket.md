@@ -411,11 +411,24 @@ OPTIONS:
 | `--bytes` | `bool` | show sizes in bytes (ie., do not convert to KiB, MiB, GiB, etc.) | `false` |
 | `--name-only` | `bool` | fast request to retrieve only the names of objects in the bucket; if defined, all comma-separated fields in the `--props` flag will be ignored with only two exceptions: `name` and `status` | `false` |
 
+### Footer Information:
+
+When listing objects, a footer will be displayed showing:
+- Total number of objects listed
+- For remote buckets with `--cached` option: number of objects present in-cluster
+- For `--paged` option: current page number
+- For `--count-only` option: time elapsed to fetch the list
+
+Examples of footer variations:
+* `Listed 12345 names`
+* `Listed 12345 names (in-cluster: 456)`
+* `Page 123: 1000 names (in-cluster: none)`
+
 ### Examples
 
 #### List AIS and Cloud buckets with all defaults
 
-List objects in the AIS bucket `bucket_name`.
+**1**. List objects in the AIS bucket `bucket_name`.
 
 ```console
 $ ais ls ais://bucket_name
@@ -425,7 +438,7 @@ shard-1.tar	16.00KiB
 ...
 ```
 
-List objects in the remote bucket `bucket_name`.
+**2**. List objects in the remote bucket `bucket_name`.
 
 ```console
 ais ls aws://bucket_name
@@ -434,6 +447,55 @@ shard-0.tar	16.00KiB
 shard-1.tar	16.00KiB
 ...
 ```
+
+**3**. List objects from a remote AIS cluster with a namespace:
+```
+$ ais ls ais://@Bghort1l#ml/bucket_name
+NAME                SIZE        VERSION
+shard-0.tar         16.00KiB    1
+shard-1.tar         16.00KiB    1
+...
+```
+
+**4**. List objects with paged output (showing page numbers):
+```
+$ ais ls ais://bucket_name --paged --limit 100
+[... object listing ...]
+
+Page 1: 100 names
+```
+
+**5**. List cached objects from a remote bucket:
+```
+$ ais ls s3://bucket_name --cached
+[... listing of only in-cluster objects ...]
+
+Listed 456789 names
+```
+
+**6**. Count objects in a bucket:
+```
+$ ais ls s3://bucket_name/aprefix --count-only
+Listed 28,230 names in 5.62s
+```
+
+**7**. Count objects with paged output:
+```
+$ ais ls s3://bucket_name/bprefix --count-only --paged
+
+Page 1: 1,000 names in 772ms
+Page 2: 1,000 names in 180ms
+Page 3: 1,000 names in 265ms
+...
+Page 29: 230 names in 130ms
+```
+
+### Notes:
+
+- When using `--paged` with remote buckets, the footer will show both page number and in-cluster object count when applicable
+- The `--diff` option requires remote backends supporting some form of versioning (e.g., object version, checksum, and/or ETag)
+- For more information on working with archived content, see docs/archive.md
+- To fully synchronize in-cluster content with remote backend, see documentation on [out-of-band updates](/docs/out_of_band.md)
 
 #### Include all properties
 

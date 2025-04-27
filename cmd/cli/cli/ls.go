@@ -450,7 +450,10 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	// list (and immediately show) pages, one page at a time
 	if flagIsSet(c, pagedFlag) {
-		pageCounter, toShow := 0, int(limit)
+		var (
+			pageCounter int
+			toShow      = int(limit)
+		)
 		for {
 			if catOnly {
 				now = mono.NanoTime()
@@ -469,7 +472,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 				toPrint = lst.Entries
 			}
 			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
-				addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
+				pageCounter+1, addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
 			if err != nil {
 				return err
 			}
@@ -514,7 +517,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	if len(lst.Entries) == 0 && !printEmpty {
 		return fmt.Errorf("%s/%s not found", bck.Cname(""), msg.Prefix)
 	}
-	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now,
+	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now, 0, /*npage*/
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
 }
 
@@ -575,9 +578,10 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
-func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, now int64,
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, now int64, npage int,
 	addCachedCol, isRemote, addStatusCol bool) error {
 	var (
+		numCached      = -1
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		hideFooter     = flagIsSet(c, noFooterFlag)
 		matched, other = lstFilter.apply(entries)
@@ -588,22 +592,25 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	}
 
 	propsList := splitCsv(props)
-	if isRemote && !addStatusCol {
-		if addCachedCol && !cos.StringInSlice(apc.GetPropsStatus, propsList) {
-			for _, en := range entries {
-				if en.IsAnyFlagSet(apc.EntryVerChanged | apc.EntryVerRemoved) {
-					addStatusCol = true
-					break
-				}
-			}
-		}
-	}
 
-	// validate props for typos
+	// validate props
 	for _, prop := range propsList {
 		if _, ok := teb.ObjectPropsMap[prop]; !ok {
 			return fmt.Errorf("unknown object property %q (expecting one of: %v)",
 				prop, cos.StrKVs(teb.ObjectPropsMap).Keys())
+		}
+	}
+
+	// remote bucket: count cached; additional condition to add status
+	if isRemote && addCachedCol {
+		numCached = 0
+		for _, en := range matched {
+			if en.IsPresent() {
+				numCached++
+			}
+			if en.IsAnyFlagSet(apc.EntryVerChanged | apc.EntryVerRemoved) {
+				addStatusCol = true
+			}
 		}
 	}
 
@@ -613,8 +620,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 		if _listed != nil && _listed.cptn {
 			return nil
 		}
-		elapsed := teb.FormatDuration(mono.Since(now))
-		fmt.Fprintln(c.App.Writer, listedText, cos.FormatBigInt(len(matched)), "names in", elapsed)
+		lsCptn(c, npage, len(matched), numCached, mono.Since(now))
 		return nil
 	}
 
@@ -633,7 +639,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	}
 
 	if !hideFooter && len(matched) > 10 {
-		fmt.Fprintln(c.App.Writer, fblue(listedText), cos.FormatBigInt(len(matched)), "names")
+		lsCptn(c, npage, len(matched), numCached, 0)
 	}
 	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
 		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
@@ -643,6 +649,27 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 		}
 	}
 	return nil
+}
+
+func lsCptn(c *cli.Context, npage, ntotal, ncached int, elapsed time.Duration) {
+	var (
+		prompt = listedText
+		names  = "names"
+	)
+	if npage > 0 {
+		prompt = "Page " + strconv.Itoa(npage) + ":"
+	}
+	if ncached == 0 {
+		names += " (in-cluster: none)"
+	} else if ncached > 0 && ncached != ntotal {
+		debug.Assert(ncached < ntotal, ncached, " vs ", ntotal)
+		names += " (in-cluster: " + cos.FormatBigInt(ncached) + ")"
+	}
+	if elapsed > 0 {
+		fmt.Fprintln(c.App.Writer, fblue(prompt), cos.FormatBigInt(ntotal), names, "in", teb.FormatDuration(elapsed))
+	} else {
+		fmt.Fprintln(c.App.Writer, fblue(prompt), cos.FormatBigInt(ntotal), names)
+	}
 }
 
 ///////////////
@@ -764,6 +791,7 @@ func (u *_listed) cb(lsoCounter *api.LsoCounter) {
 	if lsoCounter.IsFinished() || (u.limit > 0 && u.limit <= lsoCounter.Count()) {
 		u.done = true
 		if !flagIsSet(u.c, noFooterFlag) {
+			// (compare w/ lsCptn)
 			elapsed := teb.FormatDuration(lsoCounter.Elapsed())
 			fmt.Fprintf(u.c.App.Writer, "\r%s %s names in %s\n", listedText, cos.FormatBigInt(lsoCounter.Count()), elapsed)
 			u.cptn = true
