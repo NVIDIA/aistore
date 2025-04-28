@@ -1,7 +1,7 @@
 DOCKER          ?= docker
 REGISTRY_URL    ?= docker.io
 CI_IMAGE        ?= aistorage/gitlab-ci
-IMAGE_TAG       ?= 1.3-podman
+IMAGE_TAG       ?= latest
 IMAGE_URL = $(REGISTRY_URL)/$(CI_IMAGE):$(IMAGE_TAG)
 
 all: build push
