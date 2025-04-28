@@ -12,6 +12,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- Improve ETL FastAPI web server error reporting by logging the expected message type on `ValueError` during receive.
+
 ## [1.13.5] - 2025-04-25
 
 ### Added

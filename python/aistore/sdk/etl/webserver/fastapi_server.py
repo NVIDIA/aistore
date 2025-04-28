@@ -51,6 +51,7 @@ class FastAPIServer(ETLServer):
         async def handle_put(path: str, request: Request):
             return await self._handle_request(path, request, is_get=False)
 
+        # pylint: disable=too-many-branches
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             try:
@@ -71,16 +72,32 @@ class FastAPIServer(ETLServer):
                 # └──────────────┴──────────────┴─────────────────────────────────────────────────────────────┘
                 while True:
                     direct_put_url, data = None, None
-
                     try:
+                        # First step: expect direct_put_url if enabled
                         if self.direct_put:
-                            direct_put_url = await websocket.receive_text()
+                            msg = await websocket.receive()
+                            if "text" not in msg:
+                                raise ValueError(
+                                    f"Expected a TextMessage for direct_put URL, but received: {msg}"
+                                )
+                            direct_put_url = msg["text"]
 
+                        # Second step: expect file path or object content
+                        msg = await websocket.receive()
                         if self.arg_type == "fqn":
-                            path = await websocket.receive_text()
+                            if "text" not in msg:
+                                raise ValueError(
+                                    f"Expected a TextMessage for FQN path, but received: {msg}"
+                                )
+                            path = msg["text"]
                             data = await self._get_fqn_content(path)
                         else:
-                            data = await websocket.receive_bytes()
+                            if "bytes" not in msg:
+                                raise ValueError(
+                                    f"Expected a BinaryMessage for object content, but received: {msg}"
+                                )
+                            data = msg["bytes"]
+
                     except Exception as e:
                         self.logger.warning("Error on receiving: %s", e)
 
@@ -144,7 +161,10 @@ class FastAPIServer(ETLServer):
             if delivery_target_url:
                 response = await self._direct_put(delivery_target_url, transformed)
                 if response:
-                    return response
+                    return Response(
+                        status_code=STATUS_NO_CONTENT,
+                        headers={HEADER_CONTENT_LENGTH: "0"},
+                    )
 
             return self._build_response(transformed, self.get_mime_type())
 
@@ -191,11 +211,14 @@ class FastAPIServer(ETLServer):
         response.raise_for_status()
         return response.content
 
-    async def _direct_put(self, delivery_target_url: str, data: bytes) -> Response:
+    async def _direct_put(self, delivery_target_url: str, data: bytes) -> bool:
         """
         Sends the transformed object directly to the specified AIS node (`delivery_target_url`),
         eliminating the additional network hop through the original target.
         Used only in bucket-to-bucket offline transforms.
+
+        Returns:
+            True if the direct put succeeds, False otherwise.
         """
         try:
             parsed_target = urlparse(delivery_target_url)
@@ -209,9 +232,7 @@ class FastAPIServer(ETLServer):
 
             resp = await self.client.put(url, data=data)
             if resp.status_code == 200:
-                return Response(
-                    status_code=STATUS_NO_CONTENT, headers={HEADER_CONTENT_LENGTH: "0"}
-                )
+                return True
 
             error = await resp.text()
             self.logger.error(
@@ -225,7 +246,7 @@ class FastAPIServer(ETLServer):
                 "Exception during delivery to %s: %s", delivery_target_url, e
             )
 
-        return None
+        return False
 
     def _build_response(self, content: bytes, mime_type: str) -> Response:
         """Construct standardized response with appropriate headers."""
