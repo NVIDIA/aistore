@@ -11,10 +11,6 @@ on:
         description: 'Tag for the CI image (aistorage/ci)'
         required: true
         default: 'latest'
-      go_version:
-        description: 'Version of GO used as the CI image base'
-        required: true
-        default: '1.24'
 
 env:
   CI_IMAGE: 'aistorage/ci'
@@ -36,5 +32,5 @@ jobs:
       - name: Build and push CI image
         run: |
           pushd $GITHUB_WORKSPACE/deploy/ci
-          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" GO_BASE_VERSION="${{ inputs.go_version }}" DOCKER_FILE="${{ env.DOCKERFILE }}" make -e all
+          IMAGE_TAG="${{ inputs.image_tag }}" make -e all
           popd
