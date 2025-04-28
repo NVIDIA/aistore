@@ -97,13 +97,13 @@ func showJobsHandler(c *cli.Context) error {
 			prefix = xid
 			cnt    int
 		)
-		names := xact.ListDisplayNames(false /*only-startable*/)
-		sort.Strings(names)
-		for _, name = range names {
+		allnames := xact.ListDisplayNames(false /*only-startable*/)
+		sort.Strings(allnames)
+		for _, xname := range allnames {
 			if !strings.HasPrefix(name, prefix) { // filter
 				continue
 			}
-			ll, errV := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
+			ll, errV := _showJobs(c, xname, "" /*xid*/, daemonID, bck, true)
 			if errV != nil {
 				actionWarn(c, errV.Error())
 				err = errV
@@ -420,7 +420,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 	}
 
 	// multiple target nodes: append totals as a single special `nodeSnap`
-	if len(filteredXs) > 1 {
+	if len(filteredXs) > 1 && totals.Objs > 0 {
 		dts = append(dts, nodeSnaps{
 			DaemonID: teb.XactColTotals,
 			XactSnaps: []*core.Snap{
