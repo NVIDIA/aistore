@@ -97,13 +97,15 @@ var (
 		"FormatNameDirArch":    fmtNameDirArch,
 		"FormatXactRunFinAbrt": FmtXactRunFinAbrt,
 		//  misc. helpers
-		"IsUnsetTime":   isUnsetTime,
-		"IsEqS":         func(a, b string) bool { return a == b },
-		"IsFalse":       func(v bool) bool { return !v },
-		"JoinList":      fmtStringList,
-		"JoinListNL":    func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
-		"ExtECGetStats": extECGetStats,
-		"ExtECPutStats": extECPutStats,
+		"IsUnsetTime":      isUnsetTime,
+		"IsEqS":            func(a, b string) bool { return a == b },
+		"IsTotals":         func(a string) bool { return a == XactColTotals },
+		"FancyTotalsCheck": func() string { return fblue(" ✓") },
+		"IsFalse":          func(v bool) bool { return !v },
+		"JoinList":         fmtStringList,
+		"JoinListNL":       func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
+		"ExtECGetStats":    extECGetStats,
+		"ExtECPutStats":    extECPutStats,
 		// StatsAndStatusHelper:
 		// select specific field and make a slice, and then a string out of it
 		"OnlineStatus": func(h StatsAndStatusHelper) string { return toString(h.onlineStatus()) },

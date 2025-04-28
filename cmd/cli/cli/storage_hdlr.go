@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 
@@ -546,6 +547,13 @@ func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 //
 
 func showMpathHandler(c *cli.Context) error {
+	type (
+		targetMpath struct {
+			DaemonID string
+			Mpl      *apc.MountpathList
+			Tcdf     fs.Tcdf
+		}
+	)
 	var (
 		nodes           []*meta.Snode
 		tsi, sname, err = arg0Node(c)
