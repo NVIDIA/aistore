@@ -38,6 +38,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 	var (
 		lrMsg        apc.ListRange
 		numObjs      int64
+		isPrefix     bool
 		showProgress = flagIsSet(c, progressFlag)
 	)
 	// 1. list or template
@@ -49,6 +50,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		// motivation:
 		// - copy the entire bucket via x-tco rather than x-tcb
 		// - compare with copying or transforming not "cached" data from remote buckets
+		isPrefix = true
 	default:
 		pt, err := cos.NewParsedTemplate(tmplObjs)
 		if err != nil && err != cos.ErrEmptyTemplate { // NOTE same as above: empty => entire bucket
@@ -56,6 +58,8 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		}
 		if len(pt.Ranges) > 0 {
 			numObjs = pt.Count()
+		} else {
+			isPrefix = true
 		}
 		lrMsg.Template = tmplObjs
 	}
@@ -74,6 +78,13 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		}
 		msg.LatestVer = flagIsSet(c, latestVerFlag)
 		msg.Sync = flagIsSet(c, syncFlag)
+
+		msg.NonRecurs = flagIsSet(c, noRecursFlag)
+		if msg.NonRecurs && !isPrefix {
+			return fmt.Errorf("option %s is incompatible with the specified [list %q, range %q]",
+				noRecursFlag, listObjs, tmplObjs)
+		}
+
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 		msg.Prepend = parseStrFlag(c, copyPrependFlag)
 		if flagIsSet(c, numWorkersFlag) {
@@ -481,6 +492,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			msg.ObjNames = fileList
 			msg.Template = lr.tmplObjs
 			msg.LatestVer = flagIsSet(c, latestVerFlag)
+			msg.NonRecurs = flagIsSet(c, noRecursFlag)
 			if flagIsSet(c, blobThresholdFlag) {
 				msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
 				if err != nil {

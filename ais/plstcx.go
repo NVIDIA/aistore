@@ -435,7 +435,7 @@ func dedupLso(entries cmn.LsoEntries, maxSize int, noDirs bool) []*cmn.LsoEnt {
 }
 
 ///////////
-// lstc* //
+// lstc* - list remote (non-present, not-cached) objects and feed resulting pages to x-tco
 ///////////
 
 type (
@@ -514,6 +514,9 @@ func (c *lstcx) do() (string, error) {
 		PageSize: 0, // i.e., backend.MaxPageSize()
 	}
 	c.lsmsg.SetFlag(apc.LsNameOnly | apc.LsNoDirs)
+	if c.tcomsg.TCBMsg.NonRecurs {
+		c.lsmsg.SetFlag(apc.LsNoRecursion)
+	}
 	c.smap = c.p.owner.smap.get()
 	tsi, err := c.smap.HrwTargetTask(c.lsmsg.UUID)
 	if err != nil {

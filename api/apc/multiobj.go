@@ -58,6 +58,7 @@ type PrefetchMsg struct {
 	NumWorkers      int   `json:"num-workers"`    // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
 	ContinueOnError bool  `json:"coer"`           // ignore non-critical errors, keep going
 	LatestVer       bool  `json:"latest-ver"`     // when true & in-cluster: check with remote whether (deleted | version-changed)
+	NonRecurs       bool  `json:"non-recurs"`     // do not prefetch contents of nested virtual subdirectories (compare with `apc.LsNoRecursion`)
 }
 
 // +ctlmsg
@@ -78,6 +79,10 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	if msg.LatestVer {
 		msg.delim(&sb)
 		sb.WriteString("latest")
+	}
+	if msg.NonRecurs {
+		msg.delim(&sb)
+		sb.WriteString("non-recurs")
 	}
 	return sb.String()
 }

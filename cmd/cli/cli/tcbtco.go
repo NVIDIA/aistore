@@ -163,6 +163,7 @@ func _iniTCBMsg(c *cli.Context, msg *apc.TCBMsg) error {
 		msg.Force = flagIsSet(c, forceFlag)
 		msg.LatestVer = flagIsSet(c, latestVerFlag)
 		msg.Sync = flagIsSet(c, syncFlag)
+		msg.NonRecurs = flagIsSet(c, noRecursFlag)
 	}
 	if msg.Sync && msg.Prepend != "" {
 		return fmt.Errorf("prepend option (%q) is incompatible with %s (the latter requires identical source/destination naming)",

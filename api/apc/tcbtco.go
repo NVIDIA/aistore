@@ -24,6 +24,7 @@ type (
 		Force     bool   `json:"force"`       // force running in presence of "limited coexistence" type conflicts
 		LatestVer bool   `json:"latest-ver"`  // see also: QparamLatestVer, 'versioning.validate_warm_get', PrefetchMsg
 		Sync      bool   `json:"synchronize"` // see also: 'versioning.synchronize'
+		NonRecurs bool   `json:"non-recurs"`  // do not copy contents of nested virtual subdirectories (compare with `apc.LsNoRecursion`)
 	}
 	Transform struct {
 		Name    string       `json:"id,omitempty"`
@@ -92,5 +93,8 @@ func (msg *CopyBckMsg) Str(sb *strings.Builder, fromCname, toCname string) {
 	}
 	if msg.Sync {
 		sb.WriteString(", sync")
+	}
+	if msg.NonRecurs {
+		sb.WriteString(", non-recurs")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -64,11 +65,14 @@ type (
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
 		parent lrxact
-		msg    *apc.ListRange
 		bck    *meta.Bck
-		pt     *cos.ParsedTemplate
-		prefix string // as in bucket/prefix
-		buf    []byte // when (prealloc && no-workers)
+		// [--- traverse
+		msg     *apc.ListRange
+		pt      *cos.ParsedTemplate
+		prefix  string // bucket/prefix
+		lsflags uint64 // assorted lsmsg flags (`LsNoRecursion`)
+		// --- traverse]
+		buf []byte // when (prealloc && no-workers)
 		// nwp: num-workers parallelism
 		// (these are _not_ joggers)
 		nwp struct {
@@ -85,7 +89,7 @@ type (
 // lrit //
 //////////
 
-func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers, confBurst int) error {
+func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, lsflags uint64, numWorkers, confBurst int) error {
 	l := fs.NumAvail()
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)
@@ -94,10 +98,13 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, numWorkers, 
 	r.parent = xctn
 	r.msg = msg
 	r.bck = bck
+	r.lsflags = lsflags
 
 	if msg.IsList() {
+		debug.Assert(lsflags == 0, "not expecting 'lsflags' with list iterator: ", lsflags)
 		r.lrp = lrpList
 	} else {
+		// init _range or _prefix
 		if err := r._inipr(msg); err != nil {
 			return err
 		}
@@ -257,33 +264,32 @@ func (r *lrit) _range(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-// TODO -- FIXME: this is the last remaining place where we list remote bucket by each and every target
-
 // (compare with ais/plstcx)
 func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	var (
-		err     error
-		ecode   int
 		lst     *cmn.LsoRes
-		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus}
+		lsmsg   = &apc.LsoMsg{Prefix: r.prefix, Props: apc.GetPropsStatus, Flags: r.lsflags | apc.LsNoDirs}
 		npg     = newNpgCtx(r.bck, lsmsg, noopCb, nil /*inventory*/, nil /*bp: see below*/)
 		bremote = r.bck.IsRemote()
 	)
-	lsmsg.SetFlag(apc.LsNoDirs)
-
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
-	if !bremote {
-		smap = nil // not needed
-	} else {
+	if bremote {
 		npg.bp = core.T.Backend(r.bck)
+	} else {
+		smap = nil // no need
 	}
 
 	for !r.done() {
+		var (
+			err   error
+			ecode int
+		)
 		if bremote {
 			lst = &cmn.LsoRes{Entries: allocLsoEntries()}
-			ecode, err = core.T.Backend(r.bck).ListObjects(r.bck, lsmsg, lst) // (TODO comment above)
+			// TODO: this is the last remaining place where we list remote bucket by each and every target
+			ecode, err = npg.bp.ListObjects(r.bck, lsmsg, lst)
 		} else {
 			npg.page.Entries = allocLsoEntries()
 			err = npg.nextPageA()
@@ -324,6 +330,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 		// token for the next page
 		lsmsg.ContinuationToken = lst.ContinuationToken
 	}
+
 	return nil
 }
 

@@ -34,6 +34,7 @@ type prune struct {
 	joggers *mpather.Jgroup
 	filter  *prob.Filter
 	prefix  string
+	lsflags uint64
 	same    bool
 }
 

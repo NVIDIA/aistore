@@ -160,9 +160,8 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, 
 	)
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 
-	// [NOTE]
 	// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
-	// * https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+	// https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
 
 	if prefix := msg.Prefix; prefix != "" {
 		query = &storage.Query{Prefix: prefix}

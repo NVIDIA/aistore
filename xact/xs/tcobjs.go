@@ -241,11 +241,24 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 	}
 	wi.pend.n.Store(int64(r.sntl.nat - 1)) // must dec down to zero
 
-	lrit := &lrit{}
-	if err := lrit.init(r, &msg.ListRange, r.Bck(), msg.NumWorkers, r.config.TCO.Burst); err != nil {
+	var (
+		lrit    = &lrit{}
+		lsflags uint64
+	)
+	if msg.TCBMsg.NonRecurs {
+		lsflags = apc.LsNoRecursion
+	}
+	if err := lrit.init(r, &msg.ListRange, r.Bck(), lsflags, msg.NumWorkers, r.config.TCO.Burst); err != nil {
 		r.AddErr(err)
 		return !msg.ContinueOnError // stop?
 	}
+	if lrit.lrp == lrpPrefix {
+		// ambiguity: two possible `prefix` values, with ListRange.Template default
+		debug.Assert(msg.TCBMsg.Prefix == "" || lrit.prefix == "" || msg.TCBMsg.Prefix == lrit.prefix,
+			msg.TCBMsg.Prefix, " vs ", lrit.prefix)
+		lrit.prefix = cos.Left(lrit.prefix, msg.TCBMsg.Prefix)
+	}
+
 	nworkers := int64(len(lrit.nwp.workers))
 	r.nworkers.Add(nworkers)
 
@@ -265,7 +278,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		wg = &sync.WaitGroup{}
 		wg.Add(1)
 		go func(pt *cos.ParsedTemplate, wg *sync.WaitGroup) {
-			r.prune(lrit, smap, pt)
+			r.prune(lrit, smap, pt, lsflags)
 			wg.Done()
 		}(lrit.pt.Clone(), wg)
 	}
@@ -443,8 +456,8 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 // TODO: probabilistic filtering
 //
 
-func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) {
-	rp := prune{r: r, smap: smap}
+func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate, lsflags uint64) {
+	rp := prune{r: r, smap: smap, lsflags: lsflags}
 	rp.bckFrom, rp.bckTo = r.FromTo()
 
 	// tcb use case
@@ -460,7 +473,7 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate) 
 	var syncit lrit
 	debug.Assert(pruneit.lrp == lrpRange)
 
-	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, nwpDflt, r.config.TCO.Burst)
+	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, lsflags, nwpDflt, r.config.TCO.Burst)
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)

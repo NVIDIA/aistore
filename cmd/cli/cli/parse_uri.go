@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/urfave/cli"
 )
@@ -265,7 +266,12 @@ func dopOLTP(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (oltp oltp, err 
 		return oltp, err
 	case isPattern(objNameOrTmpl):
 		oltp.tmpl = objNameOrTmpl
-	case flagIsSet(c, noRecursFlag):
+
+	case flagIsSet(c, noRecursFlag) && !cos.IsLastB(objNameOrTmpl, '/'):
+		warn := fmt.Sprintf("ambiguity resolving %q as an object name or embedded prefix - use %s to disambiguate",
+			objNameOrTmpl, qflprn(listObjPrefixFlag))
+		actionWarn(c, warn)
+		briefPause(1)
 		oltp.objName = objNameOrTmpl
 
 	case len(objNameOrTmpl) > 255:

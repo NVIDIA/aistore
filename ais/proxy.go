@@ -1445,7 +1445,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, errPrependSync, tcomsg.Prepend)
 			return
 		}
-		tcomsg.Prefix = cos.TrimPrefix(tcomsg.Prefix)
+		tcomsg.Prefix = cos.TrimPrefix(tcomsg.Prefix) // trim trailing wildcard
 		bckTo = meta.CloneBck(&tcomsg.ToBck)
 
 		if bck.Equal(bckTo, true, true) {
