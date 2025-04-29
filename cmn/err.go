@@ -188,8 +188,8 @@ type (
 	}
 	ErrETL struct {
 		Reason string
-		Ecode  int
 		ETLErrCtx
+		Ecode int
 	}
 	ETLErrCtx struct {
 		TID              string

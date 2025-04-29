@@ -27,16 +27,14 @@ const (
 // podWatcher uses the Kubernetes API to capture ETL pod status changes,
 // providing diagnostic information about the pod's internal state.
 type podWatcher struct {
-	podName         string
+	watcher         watch.Interface
+	podCtx          context.Context
 	boot            *etlBootstrapper
 	recentPodStatus *k8s.PodStatus
-	watcher         watch.Interface
-
-	// sync
-	podCtx       context.Context
-	podCtxCancel context.CancelFunc
-	stopCh       *cos.StopCh
-	psMutex      sync.Mutex
+	podCtxCancel    context.CancelFunc
+	stopCh          *cos.StopCh
+	podName         string
+	psMutex         sync.Mutex
 }
 
 func newPodWatcher(podName string, boot *etlBootstrapper) (pw *podWatcher) {

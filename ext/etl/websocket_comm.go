@@ -68,41 +68,33 @@ type (
 
 	webSocketComm struct {
 		baseComm
-		sessions map[string]Session
-		m        sync.Mutex
-
 		commCtx       context.Context
+		sessions      map[string]Session
 		commCtxCancel context.CancelFunc
+		m             sync.Mutex
 	}
 
 	wsSession struct {
-		txctn       core.Xact
-		isDirectPut bool
-		argType     string
-		connections []*wsConnCtx
-		workCh      chan transformTask
-		chanFull    cos.ChanFull
-
+		txctn            core.Xact
 		sessionCtx       context.Context
+		workCh           chan transformTask
 		sessionCtxCancel context.CancelFunc
+		argType          string
+		connections      []*wsConnCtx
+		chanFull         cos.ChanFull
+		isDirectPut      bool
 	}
 
 	wsConnCtx struct {
-		name    string    // for logging
-		etlxctn core.Xact // the parent xaction of the underlying ETL pod (`xs.xactETL` type)
-		txctn   core.Xact // the undergoing tcb/tcobjs xaction that uses this session to perform transformation
-		conn    *websocket.Conn
-
-		// outbound messages of the original objects to send to ETL pod
-		workCh chan transformTask
-
-		// inbound messages of post-transformed objects from ETL pod
-		writerCh       chan *io.PipeWriter
+		etlxctn        core.Xact // parent xaction of the underlying ETL pod (`xs.xactETL` type)
+		txctn          core.Xact // tcb/tcobjs xaction that uses this session to perform transformatio
+		ctx            context.Context
+		conn           *websocket.Conn
+		workCh         chan transformTask  // outbound messages of the original objects to send to ETL pod
+		writerCh       chan *io.PipeWriter // inbound (post-transform) messages from ETL pod
+		eg             *errgroup.Group
+		name           string
 		writerChanFull cos.ChanFull
-
-		// wait for read/write loop goroutines to exit when cleaning up
-		eg  *errgroup.Group
-		ctx context.Context
 	}
 
 	transformTask struct {

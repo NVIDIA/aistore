@@ -101,28 +101,31 @@ type (
 		SupportDirectPut bool         `json:"support_direct_put"`
 	}
 	InitSpecMsg struct {
-		InitMsgBase
 		Spec []byte `json:"spec"`
+		InitMsgBase
 	}
 
+	// ========================================================================================
+	// InitCodeMsg carries the name of the transforming function;
+	// the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
+	// by the `Runtime` container (see etl/runtime/all.go for all supported pre-built runtimes);
+	// ChunkSize:
+	//     0 (zero) - read the entire payload in memory and then transform it in one shot;
+	//     > 0      - use chunk-size buffering and transform incrementally, one chunk at a time
+	// Flags:
+	//     bitwise flags: (streaming | debug | strict | ...) future enhancements
+	// =========================================================================================
 	InitCodeMsg struct {
-		InitMsgBase
-		Code    []byte `json:"code"`
-		Deps    []byte `json:"dependencies"`
 		Runtime string `json:"runtime"`
-		// ========================================================================================
-		// InitCodeMsg carries the name of the transforming function;
-		// the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
-		// by the `Runtime` container (see etl/runtime/all.go for all supported pre-built runtimes);
-		// =========================================================================================
-		Funcs struct {
-			Transform string `json:"transform"` // cannot be omitted
+		Funcs   struct {
+			Transform string `json:"transform"`
 		}
-		// 0 (zero) - read the entire payload in memory and then transform it in one shot;
-		// > 0 - use chunk-size buffering and transform incrementally, one chunk at a time
+		Code []byte `json:"code"` // cannot be omitted
+
+		Deps []byte `json:"dependencies"`
+		InitMsgBase
 		ChunkSize int64 `json:"chunk_size"`
-		// bitwise flags: (streaming | debug | strict | ...) future enhancements
-		Flags int64 `json:"flags"`
+		Flags     int64 `json:"flags"`
 	}
 )
 

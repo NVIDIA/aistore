@@ -24,15 +24,13 @@ import (
 )
 
 const (
-	VoteYes Vote = "YES"
-	VoteNo  Vote = "NO"
+	VoteYes = "YES"
+	VoteNo  = "NO"
 )
 
 const maxRetryElectReq = 3
 
 type (
-	Vote string
-
 	VoteRecord struct {
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
@@ -368,7 +366,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 			}
 		} else {
 			resCh <- voteResult{
-				yes:      VoteYes == Vote(res.bytes),
+				yes:      VoteYes == cos.UnsafeS(res.bytes),
 				daemonID: res.si.ID(),
 				err:      nil,
 			}
@@ -554,7 +552,7 @@ func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			nlog.Errorf("%s: failed to synch %s, err %v - voting No", h, newSmap, err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
-			_, err := w.Write([]byte(VoteNo))
+			_, err := w.Write(cos.UnsafeB(VoteNo))
 			debug.AssertNoErr(err)
 			return
 		}
@@ -567,10 +565,10 @@ func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 	}
 	if vote {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteYes)))
-		_, err = w.Write([]byte(VoteYes))
+		_, err = w.Write(cos.UnsafeB(VoteYes))
 	} else {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
-		_, err = w.Write([]byte(VoteNo))
+		_, err = w.Write(cos.UnsafeB(VoteNo))
 	}
 	debug.AssertNoErr(err)
 }

@@ -176,7 +176,10 @@ func InitCode(msg *InitCodeMsg, xid, secret string) (core.Xact, error) {
 	// Start ETL
 	// (the point where InitCode flow converges w/ InitSpec)
 	return InitSpec(
-		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
+		&InitSpecMsg{
+			Spec:        cos.UnsafeB(podSpec),
+			InitMsgBase: msg.InitMsgBase,
+		},
 		xid,
 		secret,
 		StartOpts{Env: map[string]string{

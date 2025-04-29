@@ -145,7 +145,7 @@ func NewListObjectResult(bucket string) *ListObjectResult {
 }
 
 func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
@@ -238,37 +238,37 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 }
 
 func (r *CopyObjectResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
 
 func (r *InitiateMptUploadResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
 
 func (r *CompleteMptUploadResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
 
 func (r *ListPartsResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
 
 func (r *ListMptUploadsResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
 
 func (r *DeleteResult) MustMarshal(sgl *memsys.SGL) {
-	sgl.Write([]byte(xml.Header))
+	sgl.Write(cos.UnsafeB(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }

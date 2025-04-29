@@ -48,21 +48,21 @@ const (
 
 type (
 	Bprops struct {
-		BackendBck  Bck             `json:"backend_bck,omitempty"` // makes remote bucket out of a given ais bucket
-		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"`
-		WritePolicy WritePolicyConf `json:"write_policy"`
-		Provider    string          `json:"provider" list:"readonly"`       // backend provider
-		Renamed     string          `list:"omit"`                           // non-empty if the bucket has been renamed
-		Cksum       CksumConf       `json:"checksum"`                       // the bucket's checksum
-		EC          ECConf          `json:"ec"`                             // erasure coding
-		LRU         LRUConf         `json:"lru"`                            // LRU (watermarks and enabled/disabled)
-		Mirror      MirrorConf      `json:"mirror"`                         // mirroring
-		Access      apc.AccessAttrs `json:"access,string"`                  // access permissions
-		Features    feat.Flags      `json:"features,string"`                // assorted features from feat.Bucket
-		BID         uint64          `json:"bid,string" list:"omit"`         // unique ID
-		Created     int64           `json:"created,string" list:"readonly"` // creation timestamp
-		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit")
-		RateLimit   RateLimitConf   `json:"rate_limit"`                     // adaptive rate limiting (front, back) if enabled
+		BackendBck  Bck             `json:"backend_bck,omitempty"`            // makes a remote bucket out of a given ais://
+		WritePolicy WritePolicyConf `json:"write_policy"`                     // write object metadata (immediate | delayed | never)
+		Provider    string          `json:"provider" list:"readonly"`         // backend provider
+		Renamed     string          `list:"omit"`                             // non-empty iff the bucket has been renamed
+		Cksum       CksumConf       `json:"checksum"`                         // this bucket's checksum (for supported enum, see cmn/cos.cksum)
+		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"` // e.g., AWS.Endpoint for this bucket
+		RateLimit   RateLimitConf   `json:"rate_limit"`                       // frontend and backend rate limiting - bursty and adaptive, respectively
+		EC          ECConf          `json:"ec"`                               // erasure coding
+		Mirror      MirrorConf      `json:"mirror"`                           // n-way mirroring
+		LRU         LRUConf         `json:"lru"`                              // LRU watermarks and enable/disable
+		Access      apc.AccessAttrs `json:"access,string"`                    // access permissions
+		Features    feat.Flags      `json:"features,string"`                  // to flip assorted enumerated defaults (e.g. "S3-Use-Path-Style"; see cmn/feat)
+		BID         uint64          `json:"bid,string" list:"omit"`           // unique ID
+		Created     int64           `json:"created,string" list:"readonly"`   // creation timestamp
+		Versioning  VersionConf     `json:"versioning"`                       // see "inherit"
 	}
 
 	ExtraProps struct {

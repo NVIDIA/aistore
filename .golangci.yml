@@ -141,7 +141,7 @@ linters:
   # Defines a set of rules to ignore issues.
   # It does not skip the analysis, and so does not ignore "typecheck" errors.
   exclusions:
-    warn-unused: false ## TODO (wtp)
+    warn-unused: false ## TODO (e.g., warn skipped [Path: "tools/", Linters: "nakedret"])
     # Predefined exclusion rules.
     # Default: []
     presets:

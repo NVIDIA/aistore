@@ -56,8 +56,8 @@ type (
 		UUID   string
 	}
 	RenewBase struct {
-		Args
 		Bck *meta.Bck
+		Args
 	}
 	// simplified non-JSON QueryMsg (internal AIS use)
 	Flt struct {
@@ -79,11 +79,10 @@ type (
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
-		err error // original cause (or reason), e.g. cmn.ErrUserAbort
-		// criteria
-		bcks   []*meta.Bck // run on a slice of buckets
-		scope  []int       // one of { ScopeG, ScopeB, ... } enum
-		kind   string      // all of a kind
+		err    error
+		kind   string      // criteria: all of a kind
+		bcks   []*meta.Bck // buckets to apply
+		scope  []int       // { ScopeG, ScopeB, ... } enum
 		newreb bool        // (rebalance is starting) vs (dtor.AbortRebRes)
 	}
 
@@ -96,11 +95,11 @@ type (
 	// All entries in the registry. The entries are periodically cleaned up
 	// to make sure that we don't keep old entries forever.
 	registry struct {
-		renewMtx    sync.RWMutex // TODO: revisit to optimiz out
-		entries     entries
 		bckXacts    map[string]Renewable
 		nonbckXacts map[string]Renewable
+		entries     entries
 		finDelta    atomic.Int64
+		renewMtx    sync.RWMutex // TODO: revisit
 	}
 )
 
