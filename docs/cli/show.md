@@ -293,8 +293,8 @@ OPTIONS:
 ### Example: show all currently running jobs, and narrow the selection to a given target node:
 
 ```console
-
 $ ais show job t[ugoFtqUrrm]
+
 NODE          ID            KIND         BUCKET                     OBJECTS     BYTES        START           END             STATE
 ugoFtqUrrm    vOYSo5pHG     ec-get       mybucket-ec-rebalance      -           -            12-03 10:32:25  -               Running
 ugoFtqUrrm    b4Ks45pHv     ec-get       mybucket-obj-n-slice       9           42.36MiB     12-03 10:31:33  -               Running
@@ -311,6 +311,7 @@ ugoFtqUrrm    g5            rebalance    -                          6           
 
 ```console
 $ ais show job resilver --all
+
 resilver[G0p7yXYiUg]
 NODE             ID              KIND            OBJECTS         BYTES           START           END             STATE
 HAAt8090         G0p7yXYiUg      resilver        11              18.38KiB        13:04:51        13:04:51        Finished
@@ -319,6 +320,7 @@ LDgt8088         G0p7yXYiUg      resilver        14              20.81KiB       
 OBIt8089         G0p7yXYiUg      resilver        4               7.04KiB         13:04:51        13:04:51        Finished
 VUCt8091         G0p7yXYiUg      resilver        9               14.50KiB        13:04:51        13:04:51        Finished
 qVJt8087         G0p7yXYiUg      resilver        9               14.21KiB        13:04:51        13:04:51        Finished
+                                 Total:         57              89.80KiB ✓
 ```
 
 > Here and elsewhere in the documentation, CLI colors used to highlight certain (notable) items on screen - are not shown.
@@ -369,9 +371,12 @@ JVnt8086         n2O4CJxUg       list    ais://TESTAISBUCKET-ec-rebalance       
 LDgt8088         n2O4CJxUg       list    ais://TESTAISBUCKET-ec-rebalance        2               3.59MiB         13:36:55        -       Idle
 OBIt8089         n2O4CJxUg       list    ais://TESTAISBUCKET-ec-rebalance        6               11.72MiB        13:36:55        -       Idle
 VUCt8091         n2O4CJxUg       list    ais://TESTAISBUCKET-ec-rebalance        10              37.53MiB        13:36:55        -       Idle
+i                               Total:                                          44              138.31MiB ✓
+
 list[J-bfCJxVp]
 NODE             ID              KIND    BUCKET                                  OBJECTS         BYTES           START           END     STATE
 qVJt8087         J-bfCJxVp       list    ais://TESTAISBUCKET-ec-rebalance        22              60.91MiB        13:37:18        -       Idle
+
 rebalance[g8]
 NODE             ID      KIND            OBJECTS         BYTES           START           END     STATE
 HAAt8090         g8      rebalance       4               27.46MiB        13:37:18        -       Running
@@ -381,6 +386,7 @@ OBIt8089         g8      rebalance       4               23.49MiB        13:37:1
 VUCt8091         g8      rebalance       32              -               13:37:18        -       Running
 qVJt8087         g8      rebalance       6               39.38MiB        13:37:18        -       Running
 ^[^C$ ais show job --refresh 5
+
 rebalance[g15]
 NODE             ID      KIND            OBJECTS         BYTES           START           END     STATE
 HAAt8090         g15     rebalance       648             971.49KiB       13:40:54        -       Running

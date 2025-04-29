@@ -115,12 +115,11 @@ const (
 
 	xactBucketHdr = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 
-	// xactBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactBucketBodyOne + "{{end}}" // DEBUG
 	xactBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
 		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
-		"\t\tTotal:\t\t\t" +
+		"\t\tTotal:\t\t" + // tabs to align total stats under the corresponding OBJECTS\t BYTES\t
 		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
-		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}{{FancyTotalsCheck}}\t\t\t\n" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
 		"{{else}}" +
 		xactBucketBodyOne +
 		"{{end}}" +
@@ -143,12 +142,11 @@ const (
 
 	xactNoBucketHdr = "NODE\t ID\t KIND\t OBJECTS\t BYTES\t START\t END\t STATE\n"
 
-	// xactNoBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactNoBucketBodyOne + "{{end}}" // DEBUG
 	xactNoBucketBodyAll = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
 		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
-		"\t\tTotal:\t\t" +
+		"\t\tTotal:\t" +
 		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
-		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}{{FancyTotalsCheck}}\t\t\t\n" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
 		"{{else}}" +
 		xactNoBucketBodyOne +
 		"{{end}}" +
@@ -173,7 +171,7 @@ const (
 		"{{if (IsTotals $nodeSnaps.DaemonID)}}" + // XactColTotals
 		"\t\tTotal:\t\t\t" + // tabs to align total stats under the corresponding OBJECTS\t BYTES\t
 		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
-		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}{{FancyTotalsCheck}}\t\t\t\n" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
 		"{{else}}" +
 		xactFromToBodyOne +
 		"{{end}}" +
@@ -197,12 +195,11 @@ const (
 
 	xactECGetStatsHdr = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t STATE\n"
 
-	// xactECGetBody = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactECGetStatsBody + "{{end}}" // DEBUG
 	xactECGetBody = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
 		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
-		"\t\tTotal:\t\t" +
+		"\t\tTotal:\t" +
 		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
-		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}{{FancyTotalsCheck}}\t\t\t\t\t\n" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
 		"{{else}}" +
 		xactECGetStatsBody +
 		"{{end}}" +
@@ -228,12 +225,11 @@ const (
 
 	xactECPutStatsHdr = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t STATE\n"
 
-	// xactECPutBody      = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" + xactECPutStatsBody + "{{end}}" // DEBUG
 	xactECPutBody = "{{range $key, $xctn := $nodeSnaps.XactSnaps}}" +
 		"{{if (IsTotals $nodeSnaps.DaemonID)}}" +
-		"\t\tTotal:\t\t" +
+		"\t\tTotal:\t" +
 		"{{if (eq $xctn.Stats.Objs 0)}}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t" +
-		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{end}}{{FancyTotalsCheck}}\t\t\t\t\t\t\n" +
+		"{{if (eq $xctn.Stats.Bytes 0)}}-{{else}}{{FormatBytesSig $xctn.Stats.Bytes 2}}{{FancyTotalsCheck}}{{end}}\n" +
 		"{{else}}" +
 		xactECPutStatsBody +
 		"{{end}}" +

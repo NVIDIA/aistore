@@ -84,10 +84,14 @@ func showJobsHandler(c *cli.Context) error {
 		return showRebalanceHandler(c)
 	}
 
+	// [usability]
+	// keywords: multi-match, multiple selection, shortcut, job name prefix
 	if name == "" && xid != "" {
-		// [usability]
-		// keywords: multi-match, multiple selection, shortcut, job name prefix
-		name, _, multimatch = xid2Name(xid)
+		var prefix string
+		name, prefix, multimatch = xid2Name(xid)
+		if multimatch && prefix != "" {
+			xid = prefix // see below
+		}
 	}
 
 	setLongRunParams(c, 72)
@@ -100,9 +104,10 @@ func showJobsHandler(c *cli.Context) error {
 		allnames := xact.ListDisplayNames(false /*only-startable*/)
 		sort.Strings(allnames)
 		for _, xname := range allnames {
-			if !strings.HasPrefix(name, prefix) { // filter
+			if !strings.HasPrefix(xname, prefix) { // filter
 				continue
 			}
+
 			ll, errV := _showJobs(c, xname, "" /*xid*/, daemonID, bck, true)
 			if errV != nil {
 				actionWarn(c, errV.Error())

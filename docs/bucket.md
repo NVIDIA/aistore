@@ -22,6 +22,7 @@ redirect_from:
   - [Public Cloud Buckets](#public-cloud-buckets)
   - [Remote AIS cluster](#remote-ais-cluster)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
+    - [Example prefetching objects](#example-prefetching-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
 - [Backend Bucket](#backend-bucket)
   - [AIS bucket as a reference](#ais-bucket-as-a-reference)
@@ -406,6 +407,107 @@ $ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 
 * [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 * to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
+
+## Example prefetching objects
+
+This example demonstrates how to prefetch objects from a remote bucket, and how to monitor the progress of the operation.
+
+### Checking cached objects
+
+First, let's check which objects are currently stored in-cluster (if any):
+
+```console
+$ ais ls s3://cloud-bucket --cached
+NAME     SIZE
+1000052  1.00MiB
+10000a2  1.00MiB
+10000b4  1.00MiB
+10000bd  1.00MiB
+...
+```
+
+### Evicting cached objects
+
+To remove all in-cluster content while preserving the bucket's metadata:
+
+> Separately, note that the terms **"in-cluster" and "cached" are used interchangeably** throughout the entire documentation.
+
+```console
+$ ais evict s3://cloud-bucket --keep-md
+Evicted s3://cloud-bucket contents from aistore: the bucket is now empty
+
+$ ais ls s3://cloud-bucket --cached
+NAME     SIZE
+```
+
+### Prefetching objects
+
+To prefetch objects with a specific prefix from a cloud bucket:
+
+```console
+$ ais prefetch s3://cloud-bucket --prefix 10 --num-workers 16
+
+prefetch-objects[MV4ex8u6h]: prefetch "10" from s3://cloud-bucket. To monitor the progress, run 'ais show job MV4ex8u6h'
+```
+
+> The prefix in the example is "10"
+
+### Monitoring progress
+
+You can monitor the progress of the prefetch operation using the `ais show job prefetch` command. Add the `--refresh` flag followed by a time in seconds to get automatic updates:
+
+```console
+$ ais show job prefetch
+
+prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[0,6])
+NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
+KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
+XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 4               4.00MiB         18:28:55        -       Running
+YMjtIJKL         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
+oJXtMNOP         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 6               6.00MiB         18:28:55        -       Running
+vWrtQRST         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
+ybTtUVWX         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
+                                Total:                                  30              30.00MiB ✓
+```
+
+The output shows statistics for each node in the AIStore cluster:
+- NODE: The name of the node
+- ID: The job ID
+- KIND: The type of operation
+- BUCKET: Source bucket
+- OBJECTS: Number of objects processed
+- BYTES: Amount of data prefetched
+- START: Job start time
+- END: Job end time (empty if job is still running)
+- STATE: Current job state
+
+The output also includes a "Total" row at the bottom that provides cluster-wide aggregated values for the number of objects prefetched and bytes transferred. The checkmark (✓) indicates that all nodes are reporting byte statistics.
+
+You can see the progress over time with automatic refresh:
+
+```console
+$ ais show job prefetch --refresh 10
+
+prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[8,32])
+NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
+KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 27              27.00MiB        18:28:55        -       Running
+XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 23              23.00MiB        18:28:55        -       Running
+YMjtIJKL         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 41              41.00MiB        18:28:55        -       Running
+oJXtMNOP         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 34              34.00MiB        18:28:55        -       Running
+vWrtQRST         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 23              23.00MiB        18:28:55        -       Running
+ybTtUVWX         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 31              31.00MiB        18:28:55        -       Running
+                                Total:                                  179             179.00MiB ✓
+```
+
+### Stopping jobs
+
+To stop all in-progress jobs:
+
+```console
+$ ais stop --all
+```
+
+This will stop all running jobs. To stop a specific job, use `ais stop job JOB_ID`.
 
 ## Evict Remote Bucket
 

@@ -36,7 +36,8 @@ rmb             bucket rm
 - [Evict remote bucket](#evict-remote-bucket)
 - [Move or Rename a bucket](#move-or-rename-a-bucket)
 - [Copy (list, range, and/or prefix) selected objects or entire (in-cluster or remote) buckets](#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
-- [Example copying buckets and multi-objects with simultaneous synchronization](#example-copying-buckets-and-multi-objects-with-simultaneous-synchronization)
+  - [Example copying buckets](#example-copying-buckets)
+  - [Example copying buckets and multi-objects with simultaneous synchronization](#example-copying-buckets-and-multi-objects-with-simultaneous-synchronization)
 - [Show bucket summary](#show-bucket-summary)
 - [Start N-way Mirroring](#start-n-way-mirroring)
 - [Start Erasure Coding](#start-erasure-coding)
@@ -918,6 +919,64 @@ In particular, the option will make sure that aistore has the **latest** version
 ### See also
 
 * [Out of band updates](/docs/out_of_band.md)
+
+## Example copying buckets
+
+This example demonstrates how to copy objects between buckets using the AIStore CLI, and how to monitor the progress of the copy operation. AIStore supports all possible permutations of copying: Cloud to AIStore, Cloud to another (or same) Cloud, AIStore to Cloud, and between AIStore buckets.
+
+To copy all objects with a common prefix from an S3 bucket to an AIStore bucket:
+
+```console
+$ ais cp s3://src-bucket/a ais://dst-bucket --all
+
+Warning: destination ais://dst-bucket doesn't exist and will be created with configuration copied from the source (s3://src-bucket))
+Copying objects s3://src-bucket => ais://dst-bucket. To monitor the progress, run 'ais show job tco-goDbhCxtf'
+```
+
+Note: The "Warning" message is benign and will only appear if the destination bucket does not exist.
+
+### Monitoring progress
+
+You can monitor the progress of the copy operation using the `ais show job copy` command. Add the `--refresh` flag followed by a time in seconds to get automatic updates:
+
+```console
+$ ais show job copy --refresh 10
+
+copy-objects[tco-goDbhCxtf] (run options: s3://src-bucket=>ais://dst-bucket prefix:a, parallelism: w[6])
+NODE             ID              KIND            SRC BUCKET      DST BUCKET      OBJECTS         BYTES           START           END     STATE
+KactABCD         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 82              11.00MiB        18:04:15        -       Running
+XXytEFGH         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 80              8.00MiB         18:04:15        -       Running
+YMjtIJKL         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 104             23.00MiB        18:04:15        -       Running
+oJXtMNOP         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 134             18.00MiB        18:04:15        -       Running
+vWrtQRST         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 118             12.00MiB        18:04:15        -       Running
+ybTtUVWX         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 71              10.02MiB        18:04:15        -       Running
+                                Total:                                          589             82.02MiB ✓
+```
+
+The output shows statistics for each node in the AIStore cluster:
+- NODE: The name of the node
+- ID: The job ID
+- KIND: The type of operation
+- SRC BUCKET: Source bucket
+- DST BUCKET: Destination bucket
+- OBJECTS: Number of objects processed
+- BYTES: Amount of data transferred
+- START: Job start time
+- END: Job end time (empty if job is still running)
+- STATE: Current job state
+
+The output also includes a "Total" row at the bottom that provides cluster-wide aggregated values for the number of objects processed and bytes transferred. The checkmark (✓) indicates that all nodes are reporting byte statistics.
+
+### Stopping all jobs
+
+To stop all in-progress jobs:
+
+```console
+$ ais stop --all
+Stopped copy-listrange[tco-goDbhCxtf]
+```
+
+> In our example, there'd be a single job ID `tco-goDbhCxtf`
 
 ## Example copying buckets and multi-objects with simultaneous synchronization
 

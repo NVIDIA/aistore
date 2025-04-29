@@ -1356,8 +1356,14 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 // 2. disambiguate download/dsort/etl job ID vs xaction UUID
 func xid2Name(xid string) (name, otherID string, multimatch bool) {
 	switch xid {
-	case "evict", "prefetch", "copy", "delete", "ec":
+	case "evict", "prefetch", "delete":
 		return "", "", true
+	case "copy", "cp":
+		return "", "copy-", true
+	case "ec", "encode":
+		return "", "ec-", true
+	case "etl", "transform":
+		return "", "etl-", true
 	}
 
 	switch {
@@ -1375,5 +1381,5 @@ func xid2Name(xid string) (name, otherID string, multimatch bool) {
 			otherID = l.Name
 		}
 	}
-	return
+	return name, otherID, false
 }

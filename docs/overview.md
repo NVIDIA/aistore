@@ -188,7 +188,11 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-Common way to use AIStore include the most fundamental and, often, the very first step: populating AIS cluster with an existing dataset, or datasets. Those (datasets) can come from remote buckets (AWS, Google Cloud, Azure), HDFS directories, NFS shares, local files, or any vanilla HTTP(S) locations.
+Common way to use AIStore include the most fundamental and, often, the very first step: populating AIS cluster with an existing dataset, or datasets. Those (datasets) can come from remote buckets (AWS, Google Cloud, Azure), NFS shares, local files, or any vanilla HTTP(S) locations.
+
+> In the context of populating AIS cluster - note: the terms **"in-cluster objects" and "cached objects" are used interchangeably** throughout the entire documentation.
+
+> While the terms 'in-cluster objects' and 'cached objects' are used interchangeably, it is also important to note that AIStore is not a caching solution. Although it can function as an LRU cache when LRU (feature) is enabled, AIS is designed to provide reliable storage, equipped with a comprehensive set of data protection features and configurable data redundancy options on a per-bucket basis.
 
 To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories.
 
