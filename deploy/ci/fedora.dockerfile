@@ -15,6 +15,7 @@ RUN dnf -y update && \
        git \
        lsof \
        make \
+       podman-docker \
        procps-ng \
        python3-pip \
        python3-setuptools \
