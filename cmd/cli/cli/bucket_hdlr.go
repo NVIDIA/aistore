@@ -53,7 +53,8 @@ const copyBucketUsage = "Copy entire bucket or selected objects (to select, use 
 	indent1 + "\t- 'ais cp ais://nnn/111 ais://mmm'\t- copy all ais://nnn objects that match prefix '111';\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'\t- copy up to 1000 objects that share the specified prefix;\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens';\n" +
-	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above."
+	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above;\n" +
+	indent1 + "\t- 'ais cp s3://abc/dir/ ais://dst --nr'\t- copy only immediate contents of 'dir/' (non-recursive)."
 
 // ais ls (note duplicated `archExts` constant)
 const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted objects,\n" +

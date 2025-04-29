@@ -1786,7 +1786,6 @@ This is `ais start prefetch` or, same, `ais prefetch` command:
 
 ```console
 $ ais prefetch --help
-
 NAME:
    ais prefetch - (alias for "object prefetch") Prefetch one remote bucket, multiple remote buckets, or
    selected objects in a given remote bucket or buckets, e.g.:
@@ -1795,6 +1794,7 @@ NAME:
      - 'prefetch gs:'                                               - prefetch all visible/accessible GCP buckets;
      - 'prefetch gs: --num-workers=48'                              - same as above employing 48 workers;
      - 'prefetch gs://abc --prefix images/'                         - prefetch all objects from the virtual subdirectory "images";
+     - 'prefetch gs://abc --prefix images/ --nr'                    - prefetch only immediate contents of "images/" (non-recursive);
      - 'prefetch gs://abc --template images/'                       - same as above;
      - 'prefetch gs://abc/images/'                                  - same as above;
      - 'prefetch gs://abc --template "shard-{0000..9999}.tar.lz4"'  - prefetch the matching range (prefix + brace expansion);

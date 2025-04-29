@@ -729,7 +729,6 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 
 ```console
 $ ais cp --help
-
 NAME:
    ais cp - (alias for "bucket cp") Copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),
      e.g.:
@@ -748,7 +747,8 @@ NAME:
      - 'ais cp ais://nnn/111 ais://mmm'                                                           - copy all ais://nnn objects that match prefix '111';
      - 'ais cp gs://webdataset-coco ais:/dst --template d-tokens/shard-{000000..000999}.tar.lz4'  - copy up to 1000 objects that share the specified prefix;
      - 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'                 - show progress while copying virtual subdirectory 'd-tokens';
-     - 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'                          - same as above.
+     - 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'                          - same as above;
+     - 'ais cp s3://abc/dir/ ais://dst --nr'                                                      - copy only immediate contents of 'dir/' (non-recursive).
 
 USAGE:
    ais cp SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET [command options]

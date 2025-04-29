@@ -34,6 +34,7 @@ const prefetchUsage = "Prefetch one remote bucket, multiple remote buckets, or\n
 	indent1 + "\t- 'prefetch gs:'\t- prefetch all visible/accessible GCP buckets;\n" +
 	indent1 + "\t- 'prefetch gs: --num-workers=48'\t- same as above employing 48 workers;\n" +
 	indent1 + "\t- 'prefetch gs://abc --prefix images/'\t- prefetch all objects from the virtual subdirectory \"images\";\n" +
+	indent1 + "\t- 'prefetch gs://abc --prefix images/ --nr'\t- prefetch only immediate contents of \"images/\" (non-recursive);\n" +
 	indent1 + "\t- 'prefetch gs://abc --template images/'\t- same as above;\n" +
 	indent1 + "\t- 'prefetch gs://abc/images/'\t- same as above;\n" +
 	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
