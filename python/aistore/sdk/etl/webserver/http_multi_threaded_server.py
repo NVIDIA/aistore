@@ -155,8 +155,7 @@ class HTTPMultiThreadedServer(ETLServer):
                 if direct_put_url:
                     success = self._direct_put(direct_put_url, transformed)
                     if success:
-                        self._set_headers(length=0)
-                        self.send_response(STATUS_NO_CONTENT)
+                        self._set_headers(status_code=STATUS_NO_CONTENT, length=0)
                         return
 
                 self._set_headers(length=len(transformed))
@@ -194,8 +193,7 @@ class HTTPMultiThreadedServer(ETLServer):
                 if direct_put_url:
                     success = self._direct_put(direct_put_url, transformed)
                     if success:
-                        self._set_headers(length=0)
-                        self.send_response(STATUS_NO_CONTENT)
+                        self._set_headers(status_code=STATUS_NO_CONTENT, length=0)
                         return
 
                 self._set_headers(length=len(transformed))
