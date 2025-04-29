@@ -586,14 +586,14 @@ type (
 	}
 
 	DsortConf struct {
-		DuplicatedRecords   string `json:"duplicated_records"`
-		MissingShards       string `json:"missing_shards"`
-		EKMMalformedLine    string `json:"ekm_malformed_line"`
-		EKMMissingKey       string `json:"ekm_missing_key"`
-		DefaultMaxMemUsage  string `json:"default_max_mem_usage"`
-		DsorterMemThreshold string `json:"dsorter_mem_threshold"`
 		XactConf
-		CallTimeout cos.Duration `json:"call_timeout"`
+		DuplicatedRecords   string       `json:"duplicated_records"`
+		MissingShards       string       `json:"missing_shards"` // cmn.SupportedReactions enum
+		EKMMalformedLine    string       `json:"ekm_malformed_line"`
+		EKMMissingKey       string       `json:"ekm_missing_key"`
+		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
+		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
+		CallTimeout         cos.Duration `json:"call_timeout"`
 	}
 	DsortConfToSet struct {
 		XactConfToSet
