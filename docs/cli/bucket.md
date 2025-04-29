@@ -174,27 +174,42 @@ Operation "destroy-bck" is not supported by "aws://bucket_name"
 
 ```console
 $ ais ls --help
-
 NAME:
-   ais ls - (alias for "bucket ls") list buckets, objects in buckets, and files in (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects,
+   ais ls - (alias for "bucket ls") List buckets, objects in buckets, and files in (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted objects,
    e.g.:
      * ais ls                                              - list all buckets in a cluster (all providers);
-     * ais ls ais://abc -props name,size,copies,location   - list all objects from a given bucket, include only the (4) specified properties;
-     * ais ls ais://abc -props all                         - same as above but include all properties;
-     * ais ls ais://abc --page-size 20 --refresh 3s        - list a very large bucket (20 items in each page), report progress every 3s;
+     * ais ls ais://abc -props name,size,copies,location   - list objects with only these specific properties;
+     * ais ls ais://abc -props all                         - list objects with all available properties;
+     * ais ls ais://abc --page-size 20 --refresh 3s        - list large bucket (20 items per page), progress every 3s;
+     * ais ls ais://abc --page-size 20 --refresh 3         - same as above;
      * ais ls ais                                          - list all ais buckets;
-     * ais ls s3                                           - list all s3 buckets that are present in the cluster;
-     * ais ls s3 --all                                     - list all s3 buckets, both present and remote;
+     * ais ls s3                                           - list all s3 buckets present in the cluster;
+     * ais ls s3 --all                                     - list all s3 buckets (both in-cluster and remote).
+   list archive contents:
+     * ais ls ais://abc/sample.tar --archive   - list files inside a tar archive;
+   list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):
+     * ais ls s3://abc --paged --limit 1234000        - limited paged output (1234 pages), with default properties;
+     * ais ls s3://abc --paged --limit 1234000 --nr   - same as above, non-recursively (skips nested directories);
    with template, regex, and/or prefix:
-     * ais ls gs: --regex "^abc" --all                       - list all accessible GCP buckets with names starting with "abc";
-     * ais ls ais://abc --regex ".md" --props size,checksum  - list *.md objects with their respective sizes and checksums;
-     * ais ls gs://abc --template images/                    - list all objects from the virtual subdirectory called "images";
-     * ais ls gs://abc --prefix images/                      - same as above (for more examples, see '--template' below);
-     * ais ls gs://abc/images/                               - same as above.
-   and summary (stats):
-     * ais ls s3 --summary                  - for each s3 bucket in the cluster: print object numbers and total size(s);
-     * ais ls s3 --summary --all            - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;
-     * ais ls s3 --summary --all --dont-add - same as above but without adding _non-present_ remote buckets to cluster's BMD.
+     * ais ls gs: --regex "^abc" --all                          - list all accessible GCP buckets with names starting with "abc";
+     * ais ls ais://abc --regex "\.md$" --props size,checksum   - list markdown files with size and checksum;
+     * ais ls gs://abc --template images/                       - list all objects from virtual subdirectory "images";
+     * ais ls gs://abc --prefix images/                         - same as above (for more examples, see '--template' below);
+     * ais ls gs://abc/images/                                  - same as above.
+   with in-cluster vs remote content comparison (diff):
+     * ais ls s3://abc --check-versions            - for each remote object: check for identical in-cluster copy
+       →                                             and show missing objects;
+     * ais ls s3://abc --check-versions --cached   - for each in-cluster object: check for identical remote copy
+       →                                             and show deleted objects.
+   with summary (bucket sizes and numbers of objects):
+     * ais ls ais://nnn --summary --prefix=aaa/bbb   - summarize objects matching the given prefix;
+     * ais ls ais://nnn/aaa/bbb --summary            - same as above;
+     * ais ls az://azure-bucket --count-only         - fastest way to count objects in a bucket;
+     * ais ls s3 --summary                           - for each s3 bucket: print object count and total size;
+     * ais ls s3 --summary --all                     - summary report for all s3 buckets including remote/non-present;
+     * ais ls s3 --summary --all --dont-add          - same, without adding non-present buckets to cluster metadata.
+...
+...
 ```
 
 ## Assorted options
@@ -270,33 +285,39 @@ The command's inline help is also quite extensive, with (inline) examples follow
 ```console
 $ ais ls --help
 NAME:
-   ais ls - (alias for "bucket ls") List buckets, objects in buckets, and files in (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects,
+   ais ls - (alias for "bucket ls") List buckets, objects in buckets, and files in (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted objects,
    e.g.:
      * ais ls                                              - list all buckets in a cluster (all providers);
-     * ais ls ais://abc -props name,size,copies,location   - list all objects from a given bucket, include only the (4) specified properties;
-     * ais ls ais://abc -props all                         - same as above but include all properties;
-     * ais ls ais://abc --page-size 20 --refresh 3s        - list a very large bucket (20 items in each page), report progress every 3s;
+     * ais ls ais://abc -props name,size,copies,location   - list objects with only these specific properties;
+     * ais ls ais://abc -props all                         - list objects with all available properties;
+     * ais ls ais://abc --page-size 20 --refresh 3s        - list large bucket (20 items per page), progress every 3s;
      * ais ls ais://abc --page-size 20 --refresh 3         - same as above;
      * ais ls ais                                          - list all ais buckets;
-     * ais ls s3                                           - list all s3 buckets that are present in the cluster;
-     * ais ls s3 --all                                     - list all s3 buckets, both in-cluster and remote.
+     * ais ls s3                                           - list all s3 buckets present in the cluster;
+     * ais ls s3 --all                                     - list all s3 buckets (both in-cluster and remote).
+   list archive contents:
+     * ais ls ais://abc/sample.tar --archive   - list files inside a tar archive;
+   list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):
+     * ais ls s3://abc --paged --limit 1234000        - limited paged output (1234 pages), with default properties;
+     * ais ls s3://abc --paged --limit 1234000 --nr   - same as above, non-recursively (skips nested directories);
    with template, regex, and/or prefix:
-     * ais ls gs: --regex "^abc" --all                        - list all accessible GCP buckets with names starting with "abc";
-     * ais ls ais://abc --regex ".md" --props size,checksum   - list *.md objects with their respective sizes and checksums;
-     * ais ls gs://abc --template images/                     - list all objects from the virtual subdirectory called "images";
-     * ais ls gs://abc --prefix images/                       - same as above (for more examples, see '--template' below);
-     * ais ls gs://abc/images/                                - same as above.
+     * ais ls gs: --regex "^abc" --all                          - list all accessible GCP buckets with names starting with "abc";
+     * ais ls ais://abc --regex "\.md$" --props size,checksum   - list markdown files with size and checksum;
+     * ais ls gs://abc --template images/                       - list all objects from virtual subdirectory "images";
+     * ais ls gs://abc --prefix images/                         - same as above (for more examples, see '--template' below);
+     * ais ls gs://abc/images/                                  - same as above.
    with in-cluster vs remote content comparison (diff):
-     * ais ls s3://abc --check-versions           - for each remote object in s3://abc: check whether it has identical in-cluster copy
-                                                    and show missing objects;
-     * ais ls s3://abc --check-versions --cached  - for each in-cluster object in s3://abc: check whether it has identical remote copy
-                                                    and show deleted objects.
+     * ais ls s3://abc --check-versions            - for each remote object: check for identical in-cluster copy
+       →                                             and show missing objects;
+     * ais ls s3://abc --check-versions --cached   - for each in-cluster object: check for identical remote copy
+       →                                             and show deleted objects.
    with summary (bucket sizes and numbers of objects):
-     * ais ls ais://nnn --summary --prefix=aaa/bbb'   - summarize objects that match a given prefix;
-     * ais ls ais://nnn/aaa/bbb --summary'            - same as above;
-     * ais ls s3 --summary                            - for each s3 bucket: print number of objects and total size (bytes);
-     * ais ls s3 --summary --all                      - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;
-     * ais ls s3 --summary --all --dont-add           - same as above but without adding _non-present_ remote buckets to the cluster's BMD.
+     * ais ls ais://nnn --summary --prefix=aaa/bbb   - summarize objects matching the given prefix;
+     * ais ls ais://nnn/aaa/bbb --summary            - same as above;
+     * ais ls az://azure-bucket --count-only         - fastest way to count objects in a bucket;
+     * ais ls s3 --summary                           - for each s3 bucket: print object count and total size;
+     * ais ls s3 --summary --all                     - summary report for all s3 buckets including remote/non-present;
+     * ais ls s3 --summary --all --dont-add          - same, without adding non-present buckets to cluster metadata.
 
 USAGE:
    ais ls [BUCKET[/PREFIX]] [PROVIDER] [command options]

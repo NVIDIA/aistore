@@ -55,34 +55,40 @@ const copyBucketUsage = "Copy entire bucket or selected objects (to select, use 
 	indent1 + "\t- 'ais cp gs://webdataset-coco ais:/dst --prefix d-tokens/ --progress --all'\t- show progress while copying virtual subdirectory 'd-tokens';\n" +
 	indent1 + "\t- 'ais cp gs://webdataset-coco/d-tokens/ ais:/dst --progress --all'\t- same as above."
 
-// ais ls
-var listAnyUsage = "List buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
+// ais ls (note duplicated `archExts` constant)
+const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted objects,\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
-	indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
-	indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
-	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
+	indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list objects with only these specific properties;\n" +
+	indent1 + "\t* ais ls ais://abc -props all \t- list objects with all available properties;\n" +
+	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list large bucket (20 items per page), progress every 3s;\n" +
 	indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3 \t- same as above;\n" +
 	indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
-	indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
-	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets, both in-cluster and remote.\n" +
+	indent1 + "\t* ais ls s3 \t- list all s3 buckets present in the cluster;\n" +
+	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets (both in-cluster and remote).\n" +
+	indent1 + "list archive contents:\n" +
+	indent1 + "\t* ais ls ais://abc/sample.tar --archive \t- list files inside a tar archive;\n" +
+	indent1 + "list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):\n" +
+	indent1 + "\t* ais ls s3://abc --paged --limit 1234000 \t- limited paged output (1234 pages), with default properties;\n" +
+	indent1 + "\t* ais ls s3://abc --paged --limit 1234000 --nr \t- same as above, non-recursively (skips nested directories);\n" +
 	indent1 + "with template, regex, and/or prefix:\n" +
 	indent1 + "\t* ais ls gs: --regex \"^abc\" --all \t- list all accessible GCP buckets with names starting with \"abc\";\n" +
-	indent1 + "\t* ais ls ais://abc --regex \".md\" --props size,checksum \t- list *.md objects with their respective sizes and checksums;\n" +
-	indent1 + "\t* ais ls gs://abc --template images/\t- list all objects from the virtual subdirectory called \"images\";\n" +
-	indent1 + "\t* ais ls gs://abc --prefix images/\t- same as above (for more examples, see '--template' below);\n" +
-	indent1 + "\t* ais ls gs://abc/images/\t- same as above.\n" +
+	indent1 + "\t* ais ls ais://abc --regex \"\\.md$\" --props size,checksum \t- list markdown files with size and checksum;\n" +
+	indent1 + "\t* ais ls gs://abc --template images/ \t- list all objects from virtual subdirectory \"images\";\n" +
+	indent1 + "\t* ais ls gs://abc --prefix images/ \t- same as above (for more examples, see '--template' below);\n" +
+	indent1 + "\t* ais ls gs://abc/images/ \t- same as above.\n" +
 	indent1 + "with in-cluster vs remote content comparison (diff):\n" +
-	indent1 + "\t* ais ls s3://abc --check-versions         \t- for each remote object in s3://abc: check whether it has identical in-cluster copy\n" +
-	indent1 + "\t                                           \t  and show missing objects;\n" +
-	indent1 + "\t* ais ls s3://abc --check-versions --cached\t- for each in-cluster object in s3://abc: check whether it has identical remote copy\n" +
-	indent1 + "\t                                           \t  and show deleted objects.\n" +
+	indent1 + "\t* ais ls s3://abc --check-versions         \t- for each remote object: check for identical in-cluster copy\n" +
+	indent1 + "\t  →                                        \t  and show missing objects;\n" +
+	indent1 + "\t* ais ls s3://abc --check-versions --cached \t- for each in-cluster object: check for identical remote copy\n" +
+	indent1 + "\t  →                                        \t  and show deleted objects.\n" +
 	indent1 + "with summary (bucket sizes and numbers of objects):\n" +
-	indent1 + "\t* ais ls ais://nnn --summary --prefix=aaa/bbb' \t- summarize objects that match a given prefix;\n" +
-	indent1 + "\t* ais ls ais://nnn/aaa/bbb --summary' \t- same as above;\n" +
-	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket: print number of objects and total size (bytes);\n" +
-	indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_;\n" +
-	indent1 + "\t* ais ls s3 --summary --all --dont-add\t- same as above but without adding _non-present_ remote buckets to the cluster's BMD."
+	indent1 + "\t* ais ls ais://nnn --summary --prefix=aaa/bbb \t- summarize objects matching the given prefix;\n" +
+	indent1 + "\t* ais ls ais://nnn/aaa/bbb --summary \t- same as above;\n" +
+	indent1 + "\t* ais ls az://azure-bucket --count-only \t- fastest way to count objects in a bucket;\n" +
+	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket: print object count and total size;\n" +
+	indent1 + "\t* ais ls s3 --summary --all \t- summary report for all s3 buckets including remote/non-present;\n" +
+	indent1 + "\t* ais ls s3 --summary --all --dont-add \t- same, without adding non-present buckets to cluster metadata."
 
 // ais bucket ... props
 const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
