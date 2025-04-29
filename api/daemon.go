@@ -71,7 +71,7 @@ func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err e
 // Returns metric names and kinds: (name, kind) pairs
 func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error) {
 	kvs = make(cos.StrKVs, 32)
-	err = getNodeReverse(bp, node, apc.WhatMetricNames, kvs)
+	err = getNodeReverse(bp, node, apc.WhatMetricNames, &kvs)
 	return
 }
 
