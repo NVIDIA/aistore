@@ -119,10 +119,12 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
-	// TODO: sentinels require DM; no-DM still requires sentinels
-	if r.args.DisableDM {
-		return nil
-	}
+	// TODO: Revisit `r.args.DisableDM` — consider removing it.
+	// Previously, if the ETL transformer supported direct put, we skipped initializing the data mover
+	// to avoid unnecessary setup, since transformed objects were directly delivered to targets.
+	// We used `r.args.DisableDM` (derived from the ETL’s `directPut` flag) to skip DM initialization,
+	// which also bypassed the multi-worker setup below.
+	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
 
 	// data mover and sentinel
 	// TODO: add ETL capability to provide Size(transformed-result)
