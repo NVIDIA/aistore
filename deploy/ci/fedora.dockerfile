@@ -46,11 +46,6 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     && chmod +x kubectl \
     && mv kubectl /usr/local/bin/kubectl
 
-# Install KinD
-RUN curl -Lo /usr/local/bin/kind \
-    "https://github.com/kubernetes-sigs/kind/releases/download/v0.27.0/kind-linux-amd64" \
-    && chmod +x /usr/local/bin/kind
-
 # Configure Podman
 RUN sed -i \
   -e 's|^utsns=".*"|utsns="private"|' \
@@ -72,7 +67,7 @@ ENV LOCALBIN=$GOBIN
 RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && \
 cd ais-k8s/operator && \
 go mod download && \
-make kustomize controller-gen envtest golangci-lint mockgen && \
+make kustomize controller-gen envtest golangci-lint mockgen kind cloud-provider-kind && \
 cd ../.. && rm -rf ais-k8s
 
 # Image for internal KinD tests in ais-k8s
