@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Iterator, Optional, Tuple, Type, TypeVar, Union
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import braceexpand
 import humanize
@@ -281,3 +281,26 @@ def convert_to_seconds(time_val: Union[str, int]) -> int:
         raise ValueError(f"Invalid numeric value in time: '{num}'.")
 
     return int(num) * multipliers[unit]
+
+
+def compose_etl_direct_put_url(direct_put_url: str, host_target: str) -> str:
+    """
+    Composes the final direct PUT URL by merging the AIS target base URL (`host_target`)
+    with the destination node address and object path from `direct_put_url`.
+
+    Args:
+        direct_put_url (str): The destination node's direct PUT URL, including path and query.
+        host_target (str): The base AIS target URL used as the scheme and path base.
+
+    Returns:
+        str: A complete direct PUT URL targeting the appropriate AIS node.
+    """
+    parsed_target = urlparse(direct_put_url)
+    parsed_host = urlparse(host_target)
+    return urlunparse(
+        parsed_host._replace(
+            netloc=parsed_target.netloc,
+            path=parsed_host.path + parsed_target.path,
+            query=parsed_target.query,  # pass xid on direct put for statistics
+        )
+    )

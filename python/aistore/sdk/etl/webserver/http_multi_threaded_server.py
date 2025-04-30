@@ -8,11 +8,12 @@ from socketserver import ThreadingMixIn
 from typing import Type, Tuple
 import signal
 import threading
-from urllib.parse import unquote, urlparse, urlunparse
+from urllib.parse import unquote
 
 import requests
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.utils import compose_etl_direct_put_url
 from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     HEADER_CONTENT_TYPE,
@@ -74,15 +75,9 @@ class HTTPMultiThreadedServer(ETLServer):
             """
             logger = self.server.etl_server.logger
             try:
-                parsed_target = urlparse(direct_put_url)
-                parsed_host = urlparse(self.server.etl_server.host_target)
-                url = urlunparse(
-                    parsed_host._replace(
-                        netloc=parsed_target.netloc,
-                        path=parsed_host.path + parsed_target.path,
-                    )
+                url = compose_etl_direct_put_url(
+                    direct_put_url, self.server.etl_server.host_target
                 )
-
                 resp = requests.put(url, data, timeout=None)
                 if resp.status_code == 200:
                     return True

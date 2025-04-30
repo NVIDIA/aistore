@@ -10,6 +10,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+- Add `compose_etl_direct_put_url` utility function to compose direct put url from the provided request header
+
 ### Changed
 
 - Improve ETL FastAPI web server error reporting by logging the expected message type on `ValueError` during receive.

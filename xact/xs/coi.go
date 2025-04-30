@@ -139,7 +139,8 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 	case cos.IsNotExist(res.Err, 0):
 		// do nothing
 	case res.Err == cmn.ErrSkip:
-		// do nothing as well
+		// ErrSkip is returned when the object is transmitted through direct put
+		tc.r.OutObjsAdd(1, lom.Lsize())
 	case cos.IsErrOOS(res.Err):
 		err = res.Err
 		tc.r.Abort(err)

@@ -1,10 +1,11 @@
 import os
-from urllib.parse import unquote, quote, urlparse, urlunparse
+from urllib.parse import unquote, quote
 
 import requests
 from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.utils import compose_etl_direct_put_url
 from aistore.sdk.const import HEADER_NODE_URL, STATUS_NO_CONTENT
 
 
@@ -99,15 +100,7 @@ class FlaskServer(ETLServer):
         Used only in bucket-to-bucket offline transforms.
         """
         try:
-            parsed_target = urlparse(direct_put_url)
-            parsed_host = urlparse(self.host_target)
-            url = urlunparse(
-                parsed_host._replace(
-                    netloc=parsed_target.netloc,
-                    path=parsed_host.path + parsed_target.path,
-                )
-            )
-
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target)
             resp = requests.put(url, data, timeout=None)
             if resp.status_code == 200:
                 return Response(status=STATUS_NO_CONTENT)

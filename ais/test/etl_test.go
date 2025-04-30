@@ -249,15 +249,15 @@ func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCn
 	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckFatal(t, err)
 
-	objs, outObjs, inObjs := snaps.ObjCounts(xid)
+	localObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 
-	if objs != int64(expectedObjCnt) {
-		tlog.Logf("Warning: expected %d objects, got %d (where sent %d, received %d)", expectedObjCnt, objs, outObjs, inObjs)
+	if localObjs+outObjs != int64(expectedObjCnt) {
+		tlog.Logf("Warning: expected %d objects, got %d (where sent %d, received %d)\n", expectedObjCnt, localObjs, outObjs, inObjs)
 	}
 	if outObjs != inObjs {
 		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
 	} else {
-		tlog.Logf("Num sent/received objects: %d, total objects: %d\n", outObjs, objs)
+		tlog.Logf("Num sent/received objects: %d, local objects: %d\n", outObjs, localObjs)
 	}
 
 	if skipByteStats {

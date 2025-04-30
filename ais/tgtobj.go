@@ -216,6 +216,10 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		if poi.owt == cmn.OwtPromote {
 			poi.xctn.InObjsAdd(1, poi.lom.Lsize())
 		}
+		// from ETL direct put
+		if poi.owt == cmn.OwtTransform && poi.t2t {
+			poi.xctn.InObjsAdd(1, poi.lom.Lsize())
+		}
 	} else if !poi.t2t && poi.owt == cmn.OwtPut && poi.restful {
 		// user PUT
 		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
@@ -1520,10 +1524,13 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		return xs.CoiRes{Err: err}
 	}
 	local := tsi.ID() == t.SID()
-	gargs := &core.GetROCArgs{
-		Daddr: cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))), // use escaped URL to simplify parsing on the ETL side
-		Local: local,
+	daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))) // use escaped URL to simplify parsing on the ETL side)
+
+	// include xid and owt for statistics on direct put
+	if coi.Xact != nil {
+		daddr = cos.JoinWords(daddr, fmt.Sprintf("?%s=%s", apc.QparamUUID, coi.Xact.ID()), fmt.Sprintf("?%s=%s", apc.QparamOWT, coi.OWT.ToS()))
 	}
+	gargs := &core.GetROCArgs{Daddr: daddr, Local: local}
 	if !local {
 		var r cos.ReadOpenCloser
 		if coi.GetROC != nil {

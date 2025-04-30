@@ -1,6 +1,6 @@
 import os
 import asyncio
-from urllib.parse import unquote, quote, urlparse, urlunparse
+from urllib.parse import unquote, quote
 from typing import Optional, List
 
 from fastapi import (
@@ -15,6 +15,7 @@ import aiofiles
 import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
+from aistore.sdk.utils import compose_etl_direct_put_url
 from aistore.sdk.const import HEADER_NODE_URL, HEADER_CONTENT_LENGTH, STATUS_NO_CONTENT
 
 
@@ -221,15 +222,7 @@ class FastAPIServer(ETLServer):
             True if the direct put succeeds, False otherwise.
         """
         try:
-            parsed_target = urlparse(delivery_target_url)
-            parsed_host = urlparse(self.host_target)
-            url = urlunparse(
-                parsed_host._replace(
-                    netloc=parsed_target.netloc,
-                    path=parsed_host.path + parsed_target.path,
-                )
-            )
-
+            url = compose_etl_direct_put_url(delivery_target_url, self.host_target)
             resp = await self.client.put(url, data=data)
             if resp.status_code == 200:
                 return True
