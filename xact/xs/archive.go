@@ -314,7 +314,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	j.chanFull.Check(l, c)
 
 	j.workCh <- &archtask{wi, lrit}
-	if r.Err() != nil {
+	if r.ErrCnt() > 0 {
 		wi.cleanup()
 		r.Abort(r.Err())
 		r.cleanup()
@@ -335,7 +335,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 
 func (r *XactArch) cleanup() {
 	r.streamingX.fin(true /*unreg Rx*/)
-	if r.Err() == nil {
+	if r.ErrCnt() == 0 {
 		return
 	}
 

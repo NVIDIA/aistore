@@ -175,15 +175,18 @@ func (xctn *Base) Abort(err error) bool {
 
 // atomically set end-time
 func (xctn *Base) Finish() {
-	var (
-		err     error
-		info    string
-		aborted bool
-	)
 	if !xctn.eutime.CAS(0, 1) {
 		return
 	}
-	xctn.eutime.Store(time.Now().UnixNano())
+
+	var (
+		err     error
+		n, xerr = xctn._nerr()
+		xname   = xctn.String()
+		now     = time.Now()
+		aborted bool
+	)
+	xctn.eutime.Store(now.UnixNano())
 	if aborted = xctn.IsAborted(); aborted {
 		if perr := xctn.abort.err.Load(); perr != nil {
 			err = *perr
@@ -194,25 +197,28 @@ func (xctn *Base) Finish() {
 		close(xctn.abort.ch)
 	}
 
-	if xctn.ErrCnt() > 0 {
-		if err == nil {
-			debug.Assert(!aborted)
-			err = xctn.Err()
-		} else {
-			// abort takes precedence
-			info = "(" + xctn.Err().Error() + ")"
-		}
+	if err == nil {
+		debug.Assert(!aborted) // expecting xctn.abort.err
+		err = xerr
 	}
+
 	xctn.onFinished(err, aborted)
+
 	// log
 	switch {
-	case xctn.Kind() == apc.ActList:
 	case err == nil:
-		nlog.Infoln(xctn.String(), "finished")
+		debug.Assert(n == 0, n)
+		nlog.Infoln(xname, "finished")
+		return
+	case xctn.Kind() == apc.ActList:
+		// skip
 	case aborted:
-		nlog.Warningln(xctn.String(), "aborted:", err, info)
+		nlog.Warningln(xname, "aborted:", err)
 	default:
-		nlog.Warningln(xctn.String(), "finished w/err:", err)
+		nlog.Warningln(xname, "finished w/err: [", err, "]")
+	}
+	if xerr != nil && xerr != err {
+		nlog.Warningln("\t\t[", xerr, n, "]")
 	}
 }
 
@@ -244,11 +250,18 @@ func (xctn *Base) AddErr(err error, logExtra ...int) {
 	}
 }
 
-func (xctn *Base) Err() error {
-	if xctn.ErrCnt() == 0 {
-		return nil
+func (xctn *Base) _nerr() (n int, err error) {
+	if n = xctn.ErrCnt(); n > 0 {
+		err = &xctn.err
 	}
-	return &xctn.err
+	return
+}
+
+func (xctn *Base) Err() (err error) {
+	if xctn.ErrCnt() > 0 {
+		err = &xctn.err
+	}
+	return
 }
 
 func (xctn *Base) JoinErr() (int, error) { return xctn.err.JoinErr() }

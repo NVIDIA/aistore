@@ -110,7 +110,7 @@ func IsNotExist(err error, ecode int) bool {
 // Errs
 // add Unwrap() if need be
 
-const maxErrs = 4
+const maxErrs = 8
 
 func (e *Errs) Add(err error) {
 	debug.Assert(err != nil)
@@ -141,27 +141,22 @@ func (e *Errs) JoinErr() (cnt int, err error) {
 }
 
 // Errs is an error
-func (e *Errs) Error() (s string) {
+func (e *Errs) Error() string {
 	var (
 		err error
 		cnt = e.Cnt()
 	)
 	if cnt == 0 {
-		return
+		return ""
 	}
 	e.mu.Lock()
-	if cnt = len(e.errs); cnt > 0 {
-		err = e.errs[0]
-	}
+	debug.Assert(len(e.errs) > 0)
+	err = e.errs[0]
 	e.mu.Unlock()
-	if err == nil {
-		return // unlikely
-	}
 	if cnt > 1 {
 		err = fmt.Errorf("%v (and %d more error%s)", err, cnt-1, Plural(cnt-1))
 	}
-	s = err.Error()
-	return
+	return err.Error()
 }
 
 //
