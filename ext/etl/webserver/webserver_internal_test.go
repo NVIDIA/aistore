@@ -1,0 +1,321 @@
+// Package webserver provides a framework to impelemnt etl transformation webserver in golang.
+/*
+ * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ */
+package webserver
+
+import (
+	"bytes"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"testing"
+
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
+)
+
+type EchoServer struct {
+	ETLServer
+}
+
+func (*EchoServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, error) {
+	data, err := io.ReadAll(input)
+	if err != nil {
+		return nil, err
+	}
+	input.Close()
+	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+func TestInvalidETLServer(t *testing.T) {
+	err := Run(nil, "0.0.0.0", 8080)
+	if err == nil {
+		t.Fatalf("invalid ETL Server should return an error")
+	}
+}
+
+func TestETLServerPutHandler(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		svr = &etlServerBase{
+			aisTargetURL: host + secretPrefix,
+			argType:      etl.ArgTypeDefault,
+			endpoint:     host + ":" + port,
+			client:       &http.Client{},
+			ETLServer:    &EchoServer{},
+		}
+	)
+
+	t.Run("directPut=none", func(t *testing.T) {
+		t.Run("argType=default", func(t *testing.T) {
+			var (
+				body = []byte("test bytes")
+				req  = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+				w    = httptest.NewRecorder()
+			)
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+			tassert.Fatalf(t, tools.ReaderEqual(resp.Body, bytes.NewReader(body)), "expected body %s, got %s", body, resp.Body)
+		})
+
+		t.Run("argType=fqn", func(t *testing.T) {
+			svr.argType = etl.ArgTypeFQN
+			file, content := createFQNFile(t)
+			defer os.Remove(file)
+
+			var (
+				path = "/" + url.PathEscape(file)
+				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
+				w    = httptest.NewRecorder()
+			)
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+			tassert.Fatalf(t, tools.ReaderEqual(resp.Body, bytes.NewReader(content)), "expected content %s, got %s", content, resp.Body)
+		})
+	})
+
+	t.Run("directPut=success", func(t *testing.T) {
+		var directPutPath = "ais@#test/obj"
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		t.Run("argType=default", func(t *testing.T) {
+			svr.argType = etl.ArgTypeDefault
+			var (
+				content = []byte("test bytes")
+				req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+				w       = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			result, _ := io.ReadAll(resp.Body)
+
+			tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+			tassert.Fatalf(t, len(result) == 0, "expected no content")
+		})
+
+		t.Run("argType=fqn", func(t *testing.T) {
+			svr.argType = etl.ArgTypeFQN
+			file, _ := createFQNFile(t)
+			defer os.Remove(file)
+
+			var (
+				path = "/" + url.PathEscape(file)
+				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
+				w    = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			result, _ := io.ReadAll(resp.Body)
+
+			tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+			tassert.Fatalf(t, len(result) == 0, "expected no content")
+		})
+	})
+	t.Run("directPut=fail", func(t *testing.T) {
+		var directPutPath = "ais@#test/obj"
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer directPutTargetServer.Close()
+
+		t.Run("argType=default", func(t *testing.T) {
+			svr.argType = etl.ArgTypeDefault
+			var (
+				content = []byte("test bytes")
+				req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
+				w       = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusInternalServerError == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
+		})
+
+		t.Run("argType=fqn", func(t *testing.T) {
+			svr.argType = etl.ArgTypeFQN
+			file, _ := createFQNFile(t)
+			defer os.Remove(file)
+
+			var (
+				path = "/" + url.PathEscape(file)
+				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
+				w    = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.putHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusInternalServerError == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
+		})
+	})
+}
+
+func TestEchoServerGetHandler(t *testing.T) {
+	var (
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+
+		objUname   = "ais@#test/obj"
+		objContent = []byte("mocked object content")
+	)
+	localTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tassert.Fatalf(t, r.Method == http.MethodGet, "expected GET method, got %s", r.Method)
+		tassert.Fatalf(t, cos.JoinWords(secretPrefix, objUname) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, objUname), r.URL.Path)
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(objContent)
+	}))
+	defer localTargetServer.Close()
+
+	svr := &etlServerBase{
+		aisTargetURL: localTargetServer.URL + secretPrefix,
+		argType:      etl.ArgTypeDefault,
+		endpoint:     host + ":" + port,
+		client:       &http.Client{},
+		ETLServer:    &EchoServer{},
+	}
+
+	t.Run("directPut=none", func(t *testing.T) {
+		t.Run("argType=default", func(t *testing.T) {
+			svr.argType = etl.ArgTypeDefault
+			var (
+				req = httptest.NewRequest(http.MethodGet, "/"+objUname, http.NoBody)
+				w   = httptest.NewRecorder()
+			)
+
+			svr.getHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+			tassert.Fatalf(t, tools.ReaderEqual(resp.Body, bytes.NewReader(objContent)), "expected content %s, got %s", objContent, resp.Body)
+		})
+
+		t.Run("argType=fqn", func(t *testing.T) {
+			svr.argType = etl.ArgTypeFQN
+			file, content := createFQNFile(t)
+			defer os.Remove(file)
+
+			var (
+				path = "/" + url.PathEscape(file)
+				req  = httptest.NewRequest(http.MethodGet, path, http.NoBody)
+				w    = httptest.NewRecorder()
+			)
+
+			svr.getHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			tassert.Fatalf(t, http.StatusOK == resp.StatusCode, "expected status code 200, got %d", resp.StatusCode)
+			tassert.Fatalf(t, tools.ReaderEqual(resp.Body, bytes.NewReader(content)), "expected content %s, got %s", content, resp.Body)
+		})
+	})
+
+	t.Run("directPut=success", func(t *testing.T) {
+		var directPutPath = "ais@#test/obj"
+		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
+			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer directPutTargetServer.Close()
+
+		t.Run("argType=default", func(t *testing.T) {
+			svr.argType = etl.ArgTypeDefault
+			var (
+				req = httptest.NewRequest(http.MethodGet, "/"+objUname, http.NoBody)
+				w   = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.getHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			result, _ := io.ReadAll(resp.Body)
+
+			tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+			tassert.Fatalf(t, len(result) == 0, "expected no content")
+		})
+
+		t.Run("argType=fqn", func(t *testing.T) {
+			svr.argType = etl.ArgTypeFQN
+			file, _ := createFQNFile(t)
+			defer os.Remove(file)
+
+			var (
+				path = "/" + url.PathEscape(file)
+				req  = httptest.NewRequest(http.MethodGet, path, http.NoBody)
+				w    = httptest.NewRecorder()
+			)
+			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
+
+			svr.getHandler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			result, _ := io.ReadAll(resp.Body)
+
+			tassert.Fatalf(t, http.StatusNoContent == resp.StatusCode, "expected status code 204, got %d", resp.StatusCode)
+			tassert.Fatalf(t, len(result) == 0, "expected no content")
+		})
+	})
+}
+
+func createFQNFile(t *testing.T) (string, []byte) {
+	var content = []byte("mocked file content")
+	tmpfile, err := os.CreateTemp(t.TempDir(), "mockfile")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	if _, err := tmpfile.Write(content); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	tmpfile.Close()
+	return tmpfile.Name(), content
+}
