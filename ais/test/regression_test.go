@@ -746,7 +746,8 @@ func TestPrefetchList(t *testing.T) {
 
 	// 2. Evict those objects from the cache and prefetch them
 	tlog.Logf("Evicting and prefetching %d objects\n", len(m.objNames))
-	xid, err := api.EvictMultiObj(baseParams, bck, m.objNames, "" /*template*/)
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: m.objNames, Template: ""}}
+	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -759,7 +760,7 @@ func TestPrefetchList(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = m.objNames
-		xid, err = api.Prefetch(baseParams, bck, msg)
+		xid, err = api.Prefetch(baseParams, bck, &msg)
 		if err != nil {
 			t.Error(err)
 		}
@@ -822,7 +823,8 @@ func TestDeleteList(t *testing.T) {
 		tlog.Logf("PUT done.\n")
 
 		// 2. Delete the objects
-		xid, err := api.DeleteMultiObj(baseParams, b, files, "" /*template*/)
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files, Template: ""}}
+		xid, err := api.DeleteMultiObj(baseParams, b, evdMsg)
 		tassert.CheckError(t, err)
 
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
@@ -880,7 +882,8 @@ func TestPrefetchRange(t *testing.T) {
 	// 3. Evict those objects from the cache, and then prefetch them
 	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
 	tlog.Logf("Evicting and prefetching %d objects (range: %s)\n", len(files), rng)
-	xid, err := api.EvictMultiObj(baseParams, bck, nil /*lst objnames*/, rng)
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: rng}}
+	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -889,7 +892,7 @@ func TestPrefetchRange(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.Template = rng
-		xid, err = api.Prefetch(baseParams, bck, msg)
+		xid, err = api.Prefetch(baseParams, bck, &msg)
 		tassert.CheckError(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
@@ -963,7 +966,8 @@ func TestDeleteRange(t *testing.T) {
 
 		// 2. Delete the small range of objects
 		tlog.Logf("Delete in range %s\n", smallrange)
-		xid, err := api.DeleteMultiObj(baseParams, b, nil /*lst objnames*/, smallrange)
+		evdSmallMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: smallrange}}
+		xid, err := api.DeleteMultiObj(baseParams, b, evdSmallMsg)
 		tassert.CheckError(t, err)
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
@@ -992,7 +996,8 @@ func TestDeleteRange(t *testing.T) {
 
 		tlog.Logf("Delete in range %s\n", bigrange)
 		// 4. Delete the big range of objects
-		xid, err = api.DeleteMultiObj(baseParams, b, nil /*lst objnames*/, bigrange)
+		evdBigMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: bigrange}}
+		xid, err = api.DeleteMultiObj(baseParams, b, evdBigMsg)
 		tassert.CheckError(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
@@ -1069,7 +1074,8 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tlog.Logf("Deleting objects in range: %s\n", partialRange)
-	xid, err := api.DeleteMultiObj(baseParams, bck, nil /*lst objnames*/, partialRange)
+	evdPartialMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: partialRange}}
+	xid, err := api.DeleteMultiObj(baseParams, bck, evdPartialMsg)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -1101,7 +1107,8 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tlog.Logf("Deleting objects in range: %s\n", fullRange)
-	xid, err = api.DeleteMultiObj(baseParams, bck, nil /*lst objnames*/, fullRange)
+	evdFullMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: fullRange}}
+	xid, err = api.DeleteMultiObj(baseParams, bck, evdFullMsg)
 	tassert.CheckError(t, err)
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)

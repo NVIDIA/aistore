@@ -367,7 +367,7 @@ func TestSameBucketName(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = files
-		prefetchListID, err := api.Prefetch(baseParams, bckRemote, msg)
+		prefetchListID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
@@ -378,7 +378,7 @@ func TestSameBucketName(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.Template = objRange
-		prefetchRangeID, err := api.Prefetch(baseParams, bckRemote, msg)
+		prefetchRangeID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args := xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
@@ -390,7 +390,8 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList %v\n", files)
-	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, files, "" /*template*/)
+	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files, Template: ""}}
+	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	status, err := api.WaitForXactionIC(baseParams, &args)
@@ -398,7 +399,8 @@ func TestSameBucketName(t *testing.T) {
 	tassert.Errorf(t, status.ErrMsg != "", "expecting errors when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
-	evictRangeID, err := api.EvictMultiObj(baseParams, bckRemote, nil /*lst objnames*/, objRange)
+	evdRangeMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: objRange}}
+	evictRangeID, err := api.EvictMultiObj(baseParams, bckRemote, evdRangeMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -433,14 +435,14 @@ func TestSameBucketName(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = files
-		prefetchListID, err := api.Prefetch(baseParams, bckRemote, msg)
+		prefetchListID, err := api.Prefetch(baseParams, bckRemote, &msg)
 		tassert.CheckFatal(t, err)
 		args = xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}
 
-	evictListID, err = api.EvictMultiObj(baseParams, bckRemote, files, "" /*template*/)
+	evictListID, err = api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -448,7 +450,7 @@ func TestSameBucketName(t *testing.T) {
 
 	// Delete from cloud bucket
 	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
-	deleteID, err := api.DeleteMultiObj(baseParams, bckRemote, files, "" /*template*/)
+	deleteID, err := api.DeleteMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -456,7 +458,7 @@ func TestSameBucketName(t *testing.T) {
 
 	// Delete from ais bucket
 	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
-	deleteID, err = api.DeleteMultiObj(baseParams, bckLocal, files, "" /*template*/)
+	deleteID, err = api.DeleteMultiObj(baseParams, bckLocal, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -1720,17 +1722,18 @@ func TestOperationsWithRanges(t *testing.T) {
 					tlog.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
 
 					var (
-						err  error
-						xid  string
-						kind string
-						msg  = &apc.LsoMsg{Prefix: "test/"}
+						err    error
+						xid    string
+						kind   string
+						lsmsg  = &apc.LsoMsg{Prefix: "test/"}
+						evdMsg = &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: test.rangeStr}}
 					)
 					if evict {
-						xid, err = api.EvictMultiObj(baseParams, b, nil /*lst objnames*/, test.rangeStr)
-						msg.Flags = apc.LsCached
+						xid, err = api.EvictMultiObj(baseParams, b, evdMsg)
+						lsmsg.Flags = apc.LsCached
 						kind = apc.ActEvictObjects
 					} else {
-						xid, err = api.DeleteMultiObj(baseParams, b, nil /*lst objnames*/, test.rangeStr)
+						xid, err = api.DeleteMultiObj(baseParams, b, evdMsg)
 						kind = apc.ActDeleteObjects
 					}
 					if err != nil {
@@ -1743,7 +1746,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta
-					objList, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
+					objList, err := api.ListObjects(baseParams, b, lsmsg, api.ListArgs{})
 					if err != nil {
 						t.Error(err)
 						continue

@@ -1396,7 +1396,8 @@ func TestAtimePrefetch(t *testing.T) {
 	for obj := range nameCh {
 		objs = append(objs, obj)
 	}
-	xid, err := api.EvictMultiObj(baseParams, bck, objs, "" /*template*/)
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs, Template: ""}}
+	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -1407,7 +1408,7 @@ func TestAtimePrefetch(t *testing.T) {
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = objs
-		xid, err = api.Prefetch(baseParams, bck, msg)
+		xid, err = api.Prefetch(baseParams, bck, &msg)
 		tassert.CheckFatal(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, &args)

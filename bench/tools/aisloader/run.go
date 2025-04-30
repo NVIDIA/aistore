@@ -1130,7 +1130,8 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		b := min(t, runParams.batchSize)
 		n := t / b
 		for i := range n {
-			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, objs[i*b:(i+1)*b], "" /*template*/)
+			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[i*b : (i+1)*b], Template: ""}}
+			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
@@ -1141,7 +1142,8 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		}
 
 		if t%b != 0 {
-			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, objs[n*b:], "" /*template*/)
+			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[n*b:], Template: ""}}
+			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}

@@ -19,6 +19,12 @@ type (
 		Template string   `json:"template"`
 		ObjNames []string `json:"objnames"`
 	}
+	EvdMsg struct {
+		ListRange
+		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
+		ContinueOnError bool `json:"coer,omitempty"`        // ignore non-critical errors, keep going
+		NonRecurs       bool `json:"non-recurs,omitempty"`  // do not prefetch contents of nested virtual subdirectories (compare with `apc.LsNoRecursion`)
+	}
 )
 
 // [NOTE]

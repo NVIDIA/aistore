@@ -468,7 +468,7 @@ func EvictObject(bp BaseParams, bck cmn.Bck, objName string) error {
 func PrefetchObject(bp BaseParams, bck cmn.Bck, objName string) (string, error) {
 	var msg apc.PrefetchMsg
 	msg.ObjNames = []string{objName}
-	return Prefetch(bp, bck, msg)
+	return Prefetch(bp, bck, &msg)
 }
 
 // Archive the content of a reader (`args.Reader` - e.g., an open file). =======================================

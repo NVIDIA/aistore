@@ -130,7 +130,8 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	}
 
 	baseParams := tools.BaseAPIParams(proxyURL)
-	xid, err := api.EvictMultiObj(baseParams, bck, toEvictList, "" /*template*/)
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: toEvictList, Template: ""}}
+	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 	}

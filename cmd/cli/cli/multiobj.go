@@ -480,7 +480,11 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 
 	switch verb {
 	case commandRemove:
-		xid, err = api.DeleteMultiObj(apiBP, lr.bck, fileList, lr.tmplObjs)
+		msg := &apc.EvdMsg{
+			ListRange: apc.ListRange{ObjNames: fileList, Template: lr.tmplObjs},
+			NonRecurs: flagIsSet(c, noRecursFlag),
+		}
+		xid, err = api.DeleteMultiObj(apiBP, lr.bck, msg)
 		kind = apc.ActDeleteObjects
 		action = "rm"
 	case commandPrefetch:
@@ -503,14 +507,18 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 				msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 			}
 		}
-		xid, err = api.Prefetch(apiBP, lr.bck, msg)
+		xid, err = api.Prefetch(apiBP, lr.bck, &msg)
 		kind = apc.ActPrefetchObjects
 		action = "prefetch"
 	case commandEvict:
 		if err := ensureRemoteProvider(lr.bck); err != nil {
 			return "", "", "", err
 		}
-		xid, err = api.EvictMultiObj(apiBP, lr.bck, fileList, lr.tmplObjs)
+		msg := &apc.EvdMsg{
+			ListRange: apc.ListRange{ObjNames: fileList, Template: lr.tmplObjs},
+			NonRecurs: flagIsSet(c, noRecursFlag),
+		}
+		xid, err = api.EvictMultiObj(apiBP, lr.bck, msg)
 		kind = apc.ActEvictObjects
 		action = "evict"
 	default:

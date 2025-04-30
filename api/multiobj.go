@@ -55,23 +55,21 @@ func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCOMsg, fltPresence ..
 	return dolr(bp, bckFrom, apc.ActETLObjects, msg, q)
 }
 
-func DeleteMultiObj(bp BaseParams, bck cmn.Bck, objNames []string, template string) (string, error) {
+func DeleteMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) {
 	bp.Method = http.MethodDelete
 	q := qalloc()
 	bck.SetQuery(q)
-	msg := apc.ListRange{ObjNames: objNames, Template: template}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
-func EvictMultiObj(bp BaseParams, bck cmn.Bck, objNames []string, template string) (string, error) {
+func EvictMultiObj(bp BaseParams, bck cmn.Bck, msg *apc.EvdMsg) (string, error) {
 	bp.Method = http.MethodDelete
 	q := qalloc()
 	bck.SetQuery(q)
-	msg := apc.ListRange{ObjNames: objNames, Template: template}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
-func Prefetch(bp BaseParams, bck cmn.Bck, msg apc.PrefetchMsg) (string, error) {
+func Prefetch(bp BaseParams, bck cmn.Bck, msg *apc.PrefetchMsg) (string, error) {
 	bp.Method = http.MethodPost
 	q := qalloc()
 	bck.SetQuery(q)

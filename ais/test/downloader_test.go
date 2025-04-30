@@ -551,7 +551,8 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tlog.Logf("(1) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck.String())
-			xid, err := api.EvictMultiObj(baseParams, test.srcBck, expectedObjs, "" /*template*/)
+			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: expectedObjs, Template: ""}}
+			xid, err := api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, &args)
@@ -583,7 +584,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			// Test cancellation
 			tlog.Logf("(2) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck.String())
-			xid, err = api.EvictMultiObj(baseParams, test.srcBck, expectedObjs, "" /*template*/)
+			xid, err = api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
 			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 			status, err := api.WaitForXactionIC(baseParams, &args)
