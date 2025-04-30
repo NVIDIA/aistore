@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -155,7 +156,9 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				return memExcess > 0 // continue if we need more
 			})
 
-			oom.FreeToOS(false /*force*/)
+			if pressure := g.mem.Pressure(); pressure >= memsys.PressureHigh {
+				oom.FreeToOS(false /*force*/)
+			}
 		case <-mw.m.listenAborted():
 			return
 		case <-mw.excess.stopCh.Listen():

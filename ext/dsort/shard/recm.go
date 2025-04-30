@@ -221,7 +221,9 @@ func (recm *RecordManager) MergeEnqueuedRecords() {
 
 		recm.Records.merge(records)
 	}
-	oom.FreeToOS(false /*force*/)
+	if pressure := core.T.PageMM().Pressure(); pressure >= memsys.PressureHigh {
+		oom.FreeToOS(false /*force*/)
+	}
 }
 
 func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {

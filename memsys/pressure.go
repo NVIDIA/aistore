@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -12,7 +12,56 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// memory _pressure_
+/*
+ * The major requirement is supporting variety of deployments ranging from small VMs to
+ * multi-terabyte servers. Other requirements include: early warning and quick reaction
+ * to running out of memory (OOM).
+ *
+ * ------------
+ * 1. Pressure Levels: Memory pressure is enumerated as follows:
+ *    - PressureLow:      plenty of memory
+ *    - PressureModerate: enough memory
+ *    - PressureHigh:     approaching memory limits
+ *    - PressureExtreme:  severely constrained, immediate action required
+ *    - OOM:              out-of-memory, with substantial risk to be killed by the kernel
+ *
+ * 2. Detection Mechanisms:
+ *    a) Absolute thresholds:
+ *       - MMSA.MinFree: minimum acceptable free memory
+           (NOTE: cluster-configurable via "memsys.min_free" and/or "memsys.min_pct_free")
+ *       - Low watermark: threshold for transitioning between pressure states
+ *
+ *    b) Swap trend (the MMSA.swap structure):
+ *       - Tracks incremental increases in swap usage over time
+ *       - Maintains a criticality counter (ncrit) that increases when swap usage grows
+ *         and decreases when swap usage stabilizes or decreases
+ *       - Provides early warning by detecting sustained swap pressure trends
+ *
+ * 3. Housekeeping:
+ *    - Periodic memory checks with adaptive intervals based on pressure level
+ *    - Memory return to OS only under moderate+ pressure conditions
+ *    - Garbage collection triggered when freed memory exceeds threshold
+ *      (NOTE: cluster-configurable via "memsys.to_gc")
+ *
+ * Implementation:
+ * ---------------------
+ * The updSwap() method:
+ * - Increments the swap criticality (MMSA.swap.ncrit) counter when swap usage increases
+ * - Decrements when swap usage stabilizes or decreases
+ * - Maintains stateful tracking to distinguish between temporary and sustained pressure
+ *
+ * The Pressure() method:
+ * - Determines current pressure level using both absolute free memory and swap trends
+ * - Uses tiered logic to handle various combinations of indicators
+ * - Calculates pressure between thresholds using proportional scaling
+ *
+ * TODO:
+ * -----
+ * 1. Consider incorporating/utilizing Linux PSI: https://docs.kernel.org/accounting/psi.html
+ *
+ * 2. Dynamic thresholds (MemFree, sizeToGC) based on the rate of memory allocation (or deallocation).
+ *    2.1. will also require review of the hysteresis logic, to eliminate oscillation near thresholds.
+*/
 
 const (
 	PressureLow = iota

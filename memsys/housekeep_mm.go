@@ -22,8 +22,8 @@ const (
 
 // hk tunables (via config.Memsys section)
 var (
-	sizeToGC      = int64(cos.GiB + cos.GiB>>1) // run GC when sum(`freed`) > sizeToGC
-	memCheckAbove = 3 * time.Minute             // default HK interval (gets modified up or down)
+	sizeToGC      = int64(cos.GiB << 2) // run GC when sum(`freed`) > sizeToGC
+	memCheckAbove = 3 * time.Minute     // default HK interval (gets modified up or down)
 )
 
 // API: on-demand memory freeing to the user-provided specification
@@ -38,7 +38,9 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 			spec.MinSize = sizeToGC // using default
 		}
 		pressure := r.Pressure()
-		r.freeMemToOS(spec.MinSize, pressure, spec.ToOS /* force */)
+		if pressure >= PressureModerate {
+			r.freeMemToOS(spec.MinSize, pressure, spec.ToOS /* force */)
+		}
 	}
 }
 
