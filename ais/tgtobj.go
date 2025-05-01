@@ -1524,13 +1524,19 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		return xs.CoiRes{Err: err}
 	}
 	local := tsi.ID() == t.SID()
-	daddr := cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))) // use escaped URL to simplify parsing on the ETL side)
 
-	// include xid and owt for statistics on direct put
-	if coi.Xact != nil {
-		daddr = cos.JoinWords(daddr, fmt.Sprintf("?%s=%s", apc.QparamUUID, coi.Xact.ID()), fmt.Sprintf("?%s=%s", apc.QparamOWT, coi.OWT.ToS()))
+	daddr, err := url.Parse(cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname)))) // use escaped URL to simplify parsing on the ETL side)
+	if err != nil {
+		return xs.CoiRes{Err: err}
 	}
-	gargs := &core.GetROCArgs{Daddr: daddr, Local: local}
+	if coi.Xact != nil {
+		// include xid and owt for statistics on direct put
+		q := daddr.Query()
+		q.Set(apc.QparamUUID, coi.Xact.ID())
+		q.Set(apc.QparamOWT, coi.OWT.ToS())
+		daddr.RawQuery = q.Encode()
+	}
+	gargs := &core.GetROCArgs{Daddr: daddr.String(), Local: local}
 	if !local {
 		var r cos.ReadOpenCloser
 		if coi.GetROC != nil {

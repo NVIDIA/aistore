@@ -119,23 +119,6 @@ func (p *tcbFactory) Start() error {
 		return nil // ---->
 	}
 
-	// TODO: Revisit `r.args.DisableDM` — consider removing it.
-	// Previously, if the ETL transformer supported direct put, we skipped initializing the data mover
-	// to avoid unnecessary setup, since transformed objects were directly delivered to targets.
-	// We used `r.args.DisableDM` (derived from the ETL’s `directPut` flag) to skip DM initialization,
-	// which also bypassed the multi-worker setup below.
-	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
-
-	// data mover and sentinel
-	// TODO: add ETL capability to provide Size(transformed-result)
-	var sizePDU int32
-	if p.kind == apc.ActETLBck {
-		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
-	}
-	if err := r.newDM(sizePDU); err != nil {
-		return err
-	}
-
 	// - unlike tco and other lrit-based xactions,
 	//   tcb - via xact.BckJog - employs conventional mountpath joggers;
 	// - `nwpNone` (serial execution) not supported;
@@ -156,6 +139,26 @@ func (p *tcbFactory) Start() error {
 		} else {
 			nlog.Warningln(r.Name(), "workers: 0 (ignoring ", msg.NumWorkers, "under load)")
 		}
+	}
+
+	// TODO: Revisit `r.args.DisableDM` — consider removing it.
+	// Previously, if the ETL transformer supported direct put, we skipped initializing the data mover
+	// to avoid unnecessary setup, since transformed objects were directly delivered to targets.
+	// We used `r.args.DisableDM` (derived from the ETL’s `directPut` flag) to skip DM initialization,
+	// which also bypassed the multi-worker setup below.
+	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
+	if r.args.DisableDM {
+		return nil
+	}
+
+	// data mover and sentinel
+	// TODO: add ETL capability to provide Size(transformed-result)
+	var sizePDU int32
+	if p.kind == apc.ActETLBck {
+		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
+	}
+	if err := r.newDM(sizePDU); err != nil {
+		return err
 	}
 
 	// sentinels, to coordinate finishing, aborting, and progress;
