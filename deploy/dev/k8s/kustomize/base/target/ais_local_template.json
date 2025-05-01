@@ -7,7 +7,7 @@
       "port_intra_data": "10080"
     },
     "test_fspaths": {
-      "root": "/tmp/ais",
+      "root": "/mnt/data/ais",
       "count": 4,
       "instance": 0
     }

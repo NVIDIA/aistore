@@ -30,4 +30,4 @@ kubectl kustomize "$3" --load-restrictor LoadRestrictionsNone | ( [ "$LOCAL_DEVE
 kubectl rollout status statefulset/ais-target --timeout=2m
 
 source ./utils/export_endpoint.sh
-echo -e "\nTo connect to the cluster: export AIS_ENDPOINT=\$AIS_ENDPOINT"
+echo -e "\nTo connect to the cluster: export AIS_ENDPOINT=$AIS_ENDPOINT"

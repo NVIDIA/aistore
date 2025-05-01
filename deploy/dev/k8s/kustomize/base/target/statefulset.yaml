@@ -101,6 +101,8 @@ spec:
           volumeMounts:
             - name: ais-config
               mountPath: /etc/ais
+            - name: ais-fs
+              mountPath: /mnt/data/ais
             - name: ais-logs
               mountPath: /ais/log
       volumes:
@@ -112,6 +114,10 @@ spec:
             name: ais-target-local-config-template
         - name: ais-config
           emptyDir: {}
+        - name: ais-fs
+          hostPath:
+            path: /mnt/data/ais
+            type: DirectoryOrCreate
         - name: ais-logs
           hostPath:
             path: /ais/log
