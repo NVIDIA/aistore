@@ -138,7 +138,7 @@ var (
 		maxPagesFlag,
 		startAfterFlag,
 		bckSummaryFlag,
-		noRecursFlag,
+		nonRecursFlag,
 		noDirsFlag,
 		dontHeadRemoteFlag,
 		dontAddRemoteFlag,
@@ -181,7 +181,7 @@ var (
 			waitJobXactFinishedFlag,
 			latestVerFlag,
 			syncFlag,
-			noRecursFlag, // (embedded prefix dopOLTP)
+			nonRecursFlag, // (embedded prefix dopOLTP)
 			nonverboseFlag,
 		},
 		commandRename: {
@@ -195,8 +195,8 @@ var (
 			keepMDFlag,
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			dryRunFlag,
-			noRecursFlag, // (embedded prefix dopOLTP)
-			verboseFlag,  // not yet used
+			nonRecursFlag, // (embedded prefix dopOLTP)
+			verboseFlag,   // NIY
 			nonverboseFlag,
 			dontHeadRemoteFlag,
 		),

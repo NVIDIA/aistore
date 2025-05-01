@@ -111,7 +111,7 @@ var (
 			dryRunFlag,
 			verbObjPrefixFlag,
 			latestVerFlag,
-			noRecursFlag, // (embedded prefix dopOLTP)
+			nonRecursFlag, // (embedded prefix dopOLTP)
 			blobThresholdFlag,
 			yesFlag,
 			numWorkersFlag,

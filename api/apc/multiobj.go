@@ -23,7 +23,7 @@ type (
 		ListRange
 		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
 		ContinueOnError bool `json:"coer,omitempty"`        // ignore non-critical errors, keep going
-		NonRecurs       bool `json:"non-recurs,omitempty"`  // do not prefetch contents of nested virtual subdirectories (compare with `apc.LsNoRecursion`)
+		NonRecurs       bool `json:"non-recurs,omitempty"`  // do not evict (delete) nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`)
 	}
 )
 
@@ -64,7 +64,7 @@ type PrefetchMsg struct {
 	NumWorkers      int   `json:"num-workers"`    // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
 	ContinueOnError bool  `json:"coer"`           // ignore non-critical errors, keep going
 	LatestVer       bool  `json:"latest-ver"`     // when true & in-cluster: check with remote whether (deleted | version-changed)
-	NonRecurs       bool  `json:"non-recurs"`     // do not prefetch contents of nested virtual subdirectories (compare with `apc.LsNoRecursion`)
+	NonRecurs       bool  `json:"non-recurs"`     // do not prefetch nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`, `apc.EvdMsg`)
 }
 
 // +ctlmsg
@@ -112,8 +112,9 @@ type ArchiveMsg struct {
 	ArchName    string `json:"archname"` // one of the archive.FileExtensions
 	Mime        string `json:"mime"`     // user-specified mime type (NOTE: takes precedence if defined)
 	ListRange
-	BaseNameOnly    bool `json:"bnonly"` // only extract the base name of objects as names of archived objects
-	InclSrcBname    bool `json:"isbn"`   // include source bucket name into the names of archived objects
-	AppendIfExists  bool `json:"aate"`   // adding a list or a range of objects to an existing archive
-	ContinueOnError bool `json:"coer"`   // on err, keep running arc xaction in a any given multi-object transaction
+	BaseNameOnly    bool `json:"bnonly"`     // only extract the base name of objects as names of archived objects
+	InclSrcBname    bool `json:"isbn"`       // include source bucket name into the names of archived objects
+	AppendIfExists  bool `json:"aate"`       // adding a list or a range of objects to an existing archive
+	ContinueOnError bool `json:"coer"`       // on err, keep running arc xaction in a any given multi-object transaction
+	NonRecurs       bool `json:"non-recurs"` // do not archive contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`)
 }

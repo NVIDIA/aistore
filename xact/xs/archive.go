@@ -270,10 +270,16 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 		return
 	}
 
-	// lrpWorkersNone since we need a single writer to serialize adding files
-	// into an eventual `archlom`
-	lrit := &lrit{}
-	err := lrit.init(r, &msg.ListRange, r.Bck(), 0 /*lsflags*/, nwpNone, r.config.Arch.Burst)
+	var (
+		lsflags uint64
+		lrit    = &lrit{}
+	)
+	if msg.NonRecurs {
+		lsflags = apc.LsNoRecursion
+	}
+
+	// `nwpNone` since we need a single writer to serialize adding files into an eventual `archlom`
+	err := lrit.init(r, &msg.ListRange, r.Bck(), lsflags, nwpNone, r.config.Arch.Burst)
 	if err != nil {
 		r.Abort(err)
 		r.DecPending()

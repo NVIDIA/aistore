@@ -83,7 +83,7 @@ var (
 			rmrfFlag,
 			verboseFlag, // rm -rf
 			nonverboseFlag,
-			noRecursFlag, // (embedded prefix dopOLTP dop)
+			nonRecursFlag, // (embedded prefix dopOLTP dop)
 			yesFlag,
 			dontHeadRemoteFlag,
 		),

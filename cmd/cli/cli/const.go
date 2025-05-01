@@ -897,13 +897,14 @@ var (
 	disableFlag = cli.BoolFlag{Name: "disable", Usage: "Disable"}
 	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "Recursive operation"}
 
-	noRecursFlag = cli.BoolFlag{
+	nonRecursFlag = cli.BoolFlag{
 		Name: "non-recursive,nr",
 		Usage: "Non-recursive operation, e.g.:\n" +
-			"\t- 'ais ls gs://bucket/prefix --nr'\t- list objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
-			"\t- 'ais ls gs://bucket/prefix/ --nr'\t- list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;\n" +
-			"\t- 'ais prefetch s3://bck/abcd --nr'\t- prefetch a single named object (see 'ais prefetch --help' for details);\n" +
-			"\t- 'ais rmo gs://bucket/prefix --nr'\t- remove a single object with the specified name (see 'ais rmo --help' for details)",
+			"\t- 'ais ls gs://bck/sub --nr'\t- list objects and/or virtual subdirectories with names starting with the specified prefix;\n" +
+			"\t- 'ais ls gs://bck/sub/ --nr'\t- list only immediate contents of 'sub/' subdirectory (non-recursive);\n" +
+			"\t- 'ais prefetch s3://bck/abcd --nr'\t- prefetch a single named object;\n" +
+			"\t- 'ais evict gs://bck/sub/ --nr'\t- evict only immediate contents of 'sub/' subdirectory (non-recursive);\n" +
+			"\t- 'ais evict gs://bck --prefix=sub/ --nr'\t- same as above",
 	}
 	noDirsFlag = cli.BoolFlag{Name: "no-dirs", Usage: "Do not return virtual subdirectories (applies to remote buckets only)"}
 

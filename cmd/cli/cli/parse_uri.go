@@ -267,9 +267,10 @@ func dopOLTP(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (oltp oltp, err 
 	case isPattern(objNameOrTmpl):
 		oltp.tmpl = objNameOrTmpl
 
-	case flagIsSet(c, noRecursFlag) && !cos.IsLastB(objNameOrTmpl, '/'):
+	case flagIsSet(c, nonRecursFlag) && !cos.IsLastB(objNameOrTmpl, '/'):
+		// ambiguity #1
 		warn := fmt.Sprintf("ambiguity resolving %q as an object name or embedded prefix - use %s to disambiguate",
-			objNameOrTmpl, qflprn(listObjPrefixFlag))
+			objNameOrTmpl, qflprn(verbObjPrefixFlag))
 		actionWarn(c, warn)
 		briefPause(1)
 		oltp.objName = objNameOrTmpl
@@ -279,16 +280,19 @@ func dopOLTP(c *cli.Context, bck cmn.Bck, objNameOrTmpl string) (oltp oltp, err 
 		oltp.objName = objNameOrTmpl
 
 	default:
-		// [NOTE] additional list-objects call to disambiguate: differentiate embedded prefix from object name
+		// [NOTE] calling api.ListObjectsPage to disambiguate embedded prefix vs object name
 		dop, err := lsObjVsPref(bck, objNameOrTmpl)
 		oltp.notFound = dop.notFound
 		switch {
 		case err != nil:
 			return oltp, err
+
+		// ambiguity #2
 		case dop.isObj && dop.isPref:
 			err := fmt.Errorf("part of the URI %q can be interpreted as an object name and/or mutli-object matching prefix\n"+
-				"(Tip:  to disambiguate, use either %s or %s)", objNameOrTmpl, qflprn(noRecursFlag), qflprn(verbObjPrefixFlag))
+				"(Tip:  to disambiguate, use either %s or %s)", objNameOrTmpl, qflprn(nonRecursFlag), qflprn(verbObjPrefixFlag))
 			return oltp, err
+
 		case dop.isObj:
 			oltp.objName = objNameOrTmpl
 		case dop.isPref:

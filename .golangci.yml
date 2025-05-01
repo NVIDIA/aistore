@@ -57,15 +57,12 @@ linters:
       rules:
         # name: import-shadowing ## (e.g., url)
         # name: unhandled-error  ## TODO (wtp)
-        # name: line-length-limit
-        # name: dot-imports
         - name: blank-imports
         - name: context-as-argument
         - name: context-keys-type
         - name: early-return
         - name: error-naming
         - name: error-strings
-        # name: exported
         - name: if-return
         - name: increment-decrement
         - name: indent-error-flow
@@ -93,9 +90,9 @@ linters:
       check-blank: true
       disable-default-exclusions: false
       exclude-functions:
-        - io/ioutil.ReadFile
-        - io.Copy(*bytes.Buffer)
-        - io.Copy(os.Stdout)
+        # io/ioutil.ReadFile
+        # io.Copy(*bytes.Buffer)
+        # io.Copy(os.Stdout)
 
     govet:
       enable-all: true

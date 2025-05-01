@@ -202,21 +202,33 @@ func (*archbck) verb() string { return "ARCHIVE" }
 func (a *archbck) dest() string { return a.dst.bck.Cname(a.dst.oname) }
 
 func (a *archbck) parse(c *cli.Context) (err error) {
-	err = a.putargs.parse(c, false /*empty dst oname ok*/)
-	if a.dst.bck.IsEmpty() || err == nil {
-		return err
+	if c.NArg() == 1 {
+		err = a.putargs.parse(c, false /*empty dst oname ok*/)
+		if err != nil {
+			return err
+		}
+	} else {
+		uri := c.Args().Get(1) // dst
+		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, false)
+		if err != nil {
+			return err
+		}
 	}
+
 	//
-	// parse a.rsrc (TODO -- FIXME: support archiving local a.src)
+	// parse a.rsrc
 	//
-	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		return missingArgumentsError(c,
-			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
-				flprn(listFlag), flprn(templateFlag)))
-	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
 			flprn(listFlag), flprn(templateFlag)))
+	}
+	if flagIsSet(c, listFlag) && flagIsSet(c, verbObjPrefixFlag) {
+		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
+			flprn(listFlag), flprn(verbObjPrefixFlag)))
+	}
+	if flagIsSet(c, templateFlag) && flagIsSet(c, verbObjPrefixFlag) {
+		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
+			flprn(templateFlag), flprn(verbObjPrefixFlag)))
 	}
 
 	// source bucket[/obj-or-range]
@@ -232,8 +244,16 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 	if errV != nil {
 		return errV
 	}
+
+	if oltp.objName == "" && oltp.list == "" && oltp.tmpl == "" {
+		a.rsrc.lr.Template = cos.WildcardMatchAll
+	}
 	if oltp.list == "" && oltp.tmpl == "" {
-		oltp.list = oltp.objName // (compare with `_prefetchOne`, `copyTransform`)
+		if flagIsSet(c, nonRecursFlag) {
+			oltp.tmpl = oltp.objName
+		} else {
+			oltp.list = oltp.objName
+		}
 	}
 	if oltp.list != "" {
 		a.rsrc.lr.ObjNames = splitCsv(oltp.list)

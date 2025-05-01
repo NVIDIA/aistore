@@ -361,32 +361,50 @@ As such, `ais archive bucket` is one of the supported [multi-object operations](
 ```console
 $ ais archive bucket --help
 NAME:
-   ais archive bucket - archive multiple objects from SRC_BUCKET as (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted shard
+   ais archive bucket - Archive selected or matching objects from SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] as
+   (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object (a.k.a. "shard"):
+     - 'ais archive bucket ais://src gs://dst/a.tar.lz4 --template "trunk-{001..997}"'       - archive (prefix+range) matching objects from ais://src;
+     - 'ais archive bucket "ais://src/trunk-{001..997}" gs://dst/a.tar.lz4'                  - same as above (notice double quotes);
+     - 'ais archive bucket "ais://src/trunk-{998..999}" gs://dst/a.tar.lz4 --append-or-put'  - add two more objects to an existing shard;
+     - 'ais archive bucket s3://src/trunk-00 ais://dst/b.tar'                                - archive "trunk-00" prefixed objects from an s3 bucket as a given TAR destinati
+on
 
 USAGE:
-   ais archive bucket SRC_BUCKET DST_BUCKET/SHARD_NAME [command options]
+   ais archive bucket SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET/SHARD_NAME [command options]
 
 OPTIONS:
-   --template value   template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                      (with optional steps and gaps), e.g.:
-                      --template "" # (an empty or '*' template matches eveything)
-                      --template 'dir/subdir/'
-                      --template 'shard-{1000..9999}.tar'
-                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                      and similarly, when specifying files and directories:
-                      --template '/home/dir/subdir/'
-                      --template "/abc/prefix-{0010..9999..2}-suffix"
-   --list value       comma-separated list of object or file names, e.g.:
-                      --list 'o1,o2,o3'
-                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-                      or, when listing files and/or directories:
-                      --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   --dry-run          preview the results without really running the action
-   --include-src-bck  prefix the names of archived files with the source bucket name
-   --append-or-put    if destination object ("archive", "shard") exists append to it, otherwise archive a new one
-   --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
-   --wait             wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --help, -h         show help
+   append-or-put     Append to an existing destination object ("archive", "shard") iff exists; otherwise PUT a new archive (shard);
+                     note that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted
+   cont-on-err       Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   dry-run           Preview the results without really running the action
+   include-src-bck   Prefix the names of archived files with the source bucket name
+   list              Comma-separated list of object or file names, e.g.:
+                     --list 'o1,o2,o3'
+                     --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                     or, when listing files and/or directories:
+                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   non-recursive,nr  Non-recursive operation, e.g.:
+                     - 'ais ls gs://bck/sub --nr'               - list objects and/or virtual subdirectories with names starting with the specified prefix;
+                     - 'ais ls gs://bck/sub/ --nr'              - list only immediate contents of 'sub/' subdirectory (non-recursive);
+                     - 'ais prefetch s3://bck/abcd --nr'        - prefetch a single named object;
+                     - 'ais evict gs://bck/sub/ --nr'           - evict only immediate contents of 'sub/' subdirectory (non-recursive);
+                     - 'ais evict gs://bck --prefix=sub/ --nr'  - same as above
+   prefix            Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   skip-lookup       Skip checking source and destination buckets' existence (trading off extra lookup for performance)
+
+   template   Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+              (with optional steps and gaps), e.g.:
+              --template "" # (an empty or '*' template matches eveything)
+              --template 'dir/subdir/'
+              --template 'shard-{1000..9999}.tar'
+              --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+              and similarly, when specifying files and directories:
+              --template '/home/dir/subdir/'
+              --template "/abc/prefix-{0010..9999..2}-suffix"
+   wait       Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   help, h    Show help
 ```
 
 ### Examples

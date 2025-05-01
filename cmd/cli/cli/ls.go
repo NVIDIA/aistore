@@ -332,7 +332,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	if flagIsSet(c, dontAddRemoteFlag) {
 		msg.SetFlag(apc.LsDontAddRemote)
 	}
-	if flagIsSet(c, noRecursFlag) {
+	if flagIsSet(c, nonRecursFlag) {
 		msg.SetFlag(apc.LsNoRecursion)
 	}
 	if flagIsSet(c, noDirsFlag) {

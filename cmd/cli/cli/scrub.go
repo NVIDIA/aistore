@@ -94,7 +94,7 @@ var (
 		noHeaderFlag,
 		noFooterFlag,
 		maxPagesFlag,
-		noRecursFlag,
+		nonRecursFlag,
 		smallSizeFlag,
 		largeSizeFlag,
 		scrubObjCachedFlag,

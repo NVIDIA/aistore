@@ -79,10 +79,10 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		msg.LatestVer = flagIsSet(c, latestVerFlag)
 		msg.Sync = flagIsSet(c, syncFlag)
 
-		msg.NonRecurs = flagIsSet(c, noRecursFlag)
+		msg.NonRecurs = flagIsSet(c, nonRecursFlag)
 		if msg.NonRecurs && !isPrefix {
 			return fmt.Errorf("option %s is incompatible with the specified [list %q, range %q]",
-				noRecursFlag, listObjs, tmplObjs)
+				nonRecursFlag, listObjs, tmplObjs)
 		}
 
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
@@ -482,7 +482,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 	case commandRemove:
 		msg := &apc.EvdMsg{
 			ListRange: apc.ListRange{ObjNames: fileList, Template: lr.tmplObjs},
-			NonRecurs: flagIsSet(c, noRecursFlag),
+			NonRecurs: flagIsSet(c, nonRecursFlag),
 		}
 		xid, err = api.DeleteMultiObj(apiBP, lr.bck, msg)
 		kind = apc.ActDeleteObjects
@@ -496,7 +496,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			msg.ObjNames = fileList
 			msg.Template = lr.tmplObjs
 			msg.LatestVer = flagIsSet(c, latestVerFlag)
-			msg.NonRecurs = flagIsSet(c, noRecursFlag)
+			msg.NonRecurs = flagIsSet(c, nonRecursFlag)
 			if flagIsSet(c, blobThresholdFlag) {
 				msg.BlobThreshold, err = parseSizeFlag(c, blobThresholdFlag)
 				if err != nil {
@@ -516,7 +516,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		}
 		msg := &apc.EvdMsg{
 			ListRange: apc.ListRange{ObjNames: fileList, Template: lr.tmplObjs},
-			NonRecurs: flagIsSet(c, noRecursFlag),
+			NonRecurs: flagIsSet(c, nonRecursFlag),
 		}
 		xid, err = api.EvictMultiObj(apiBP, lr.bck, msg)
 		kind = apc.ActEvictObjects
