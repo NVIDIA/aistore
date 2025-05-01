@@ -1575,7 +1575,6 @@ Some of the supported functionality can be quickly demonstrated with the followi
 
 ```console
 $ ais evict --help
-
 NAME:
    ais evict - (alias for "bucket evict") Evict one remote bucket, multiple remote buckets, or
      selected objects in a given remote bucket or buckets,
@@ -1585,9 +1584,10 @@ NAME:
      - evict gs:                                               - evict all GCP buckets from the cluster;
      - evict gs://abc --prefix images/                         - evict all gs://abc objects from the virtual subdirectory "images";
      - evict gs://abc/images/                                  - same as above;
+     - evict gs://abc/images/ --nr                             - same as above, but do not recurse into virtual subdirs;
      - evict gs://abc --template images/                       - same as above;
      - evict gs://abc --template "shard-{0000..9999}.tar.lz4"  - evict the matching range (prefix + brace expansion);
-     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (note the double quotes around the BUCKET/TEMPLATE argument)
+     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (notice BUCKET/TEMPLATE argument in quotes)
 
 USAGE:
    ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
@@ -2070,9 +2070,10 @@ NAME:
      - 'rm s3://abc' --all                                    - remove all objects including those that are not _present_ in the cluster;
      - 'rm gs://abc --prefix images/'                         - remove all objects from the virtual subdirectory "images";
      - 'rm gs://abc/images/'                                  - same as above;
+     - 'rm gs://abc/images/ --nr'                             - same as above, but do not recurse into virtual subdirs;
      - 'rm gs://abc --template images/'                       - same as above;
      - 'rm gs://abc --template "shard-{0000..9999}.tar.lz4"'  - remove the matching range (prefix + brace expansion);
-     - 'rm "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+     - 'rm "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice BUCKET/TEMPLATE argument in quotes)
 
 USAGE:
    ais object rm BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
@@ -2165,7 +2166,6 @@ Here's inline help, and specifically notice the _multi-object_ options: `--templ
 
 ```concole
 $ ais evict --help
-
 NAME:
    ais evict - (alias for "bucket evict") Evict one remote bucket, multiple remote buckets, or
      selected objects in a given remote bucket or buckets,
@@ -2175,9 +2175,10 @@ NAME:
      - evict gs:                                               - evict all GCP buckets from the cluster;
      - evict gs://abc --prefix images/                         - evict all gs://abc objects from the virtual subdirectory "images";
      - evict gs://abc/images/                                  - same as above;
+     - evict gs://abc/images/ --nr                             - same as above, but do not recurse into virtual subdirs;
      - evict gs://abc --template images/                       - same as above;
      - evict gs://abc --template "shard-{0000..9999}.tar.lz4"  - evict the matching range (prefix + brace expansion);
-     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (note the double quotes around the BUCKET/TEMPLATE argument)
+     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (notice BUCKET/TEMPLATE argument in quotes)
 
 USAGE:
    ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]

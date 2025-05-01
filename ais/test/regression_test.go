@@ -746,7 +746,7 @@ func TestPrefetchList(t *testing.T) {
 
 	// 2. Evict those objects from the cache and prefetch them
 	tlog.Logf("Evicting and prefetching %d objects\n", len(m.objNames))
-	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: m.objNames, Template: ""}}
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: m.objNames}}
 	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	if err != nil {
 		t.Error(err)
@@ -823,7 +823,7 @@ func TestDeleteList(t *testing.T) {
 		tlog.Logf("PUT done.\n")
 
 		// 2. Delete the objects
-		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files, Template: ""}}
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files}}
 		xid, err := api.DeleteMultiObj(baseParams, b, evdMsg)
 		tassert.CheckError(t, err)
 

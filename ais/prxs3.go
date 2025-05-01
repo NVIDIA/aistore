@@ -271,13 +271,15 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	}
 
 	var (
-		msg   = apc.ActMsg{Action: apc.ActDeleteObjects}
-		lrMsg = &apc.ListRange{ObjNames: make([]string, 0, len(lst.Object))}
+		msg      = apc.ActMsg{Action: apc.ActDeleteObjects}
+		objNames = make([]string, 0, len(lst.Object))
+		evdMsg   = &apc.EvdMsg{}
 	)
 	for _, obj := range lst.Object {
-		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)
+		objNames = append(objNames, obj.Key)
 	}
-	msg.Value = lrMsg
+	evdMsg.ObjNames = objNames
+	msg.Value = evdMsg
 
 	// marshal+unmarshal to convince `p.listrange` to treat `listMsg` as `map[string]interface`
 	var (
@@ -291,7 +293,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if _, err := p.listrange(http.MethodDelete, bucket, &msg2, query); err != nil {
+	if _, err := p.bcastMultiobj(http.MethodDelete, bucket, &msg2, query); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
 	// TODO: The client wants the response containing two lists:
@@ -301,8 +303,8 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	// whether there were any errors while deleting objects.
 	// So, we fill only "Deleted successfully" response part.
 	// See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html
-	all := &s3.DeleteResult{Objs: make([]s3.DeletedObjInfo, 0, len(lrMsg.ObjNames))}
-	for _, name := range lrMsg.ObjNames {
+	all := &s3.DeleteResult{Objs: make([]s3.DeletedObjInfo, 0, len(evdMsg.ObjNames))}
+	for _, name := range evdMsg.ObjNames {
 		all.Objs = append(all.Objs, s3.DeletedObjInfo{Key: name})
 	}
 	sgl := p.gmm.NewSGL(0)

@@ -515,7 +515,6 @@ This is `ais bucket evict` command but most of the time we'll be using its `ais 
 
 ```console
 $ ais evict --help
-
 NAME:
    ais evict - (alias for "bucket evict") Evict one remote bucket, multiple remote buckets, or
      selected objects in a given remote bucket or buckets,
@@ -525,9 +524,10 @@ NAME:
      - evict gs:                                               - evict all GCP buckets from the cluster;
      - evict gs://abc --prefix images/                         - evict all gs://abc objects from the virtual subdirectory "images";
      - evict gs://abc/images/                                  - same as above;
+     - evict gs://abc/images/ --nr                             - same as above, but do not recurse into virtual subdirs;
      - evict gs://abc --template images/                       - same as above;
      - evict gs://abc --template "shard-{0000..9999}.tar.lz4"  - evict the matching range (prefix + brace expansion);
-     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (note the double quotes around the BUCKET/TEMPLATE argument)
+     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (notice BUCKET/TEMPLATE argument in quotes)
 
 USAGE:
    ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]

@@ -400,19 +400,19 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErr(w, r, errs[0]) // only 1 err is possible for 1 bck
 		}
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		lrMsg := &apc.ListRange{}
-		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
+		evdMsg := &apc.EvdMsg{}
+		if err := cos.MorphMarshal(msg.Value, evdMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
-		// extra safety check
-		for _, name := range lrMsg.ObjNames {
+		// NOTE: validate object names - each name individually
+		for _, name := range evdMsg.ObjNames {
 			if err := cmn.ValidateOname(name); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		rns := xreg.RenewEvictDelete(msg.UUID, msg.Action /*xaction kind*/, apireq.bck, lrMsg)
+		rns := xreg.RenewEvictDelete(msg.UUID, msg.Action /*xaction kind*/, apireq.bck, evdMsg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return

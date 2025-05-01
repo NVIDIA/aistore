@@ -1396,7 +1396,7 @@ func TestAtimePrefetch(t *testing.T) {
 	for obj := range nameCh {
 		objs = append(objs, obj)
 	}
-	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs, Template: ""}}
+	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs}}
 	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}

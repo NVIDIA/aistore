@@ -551,7 +551,7 @@ func TestDownloadRemote(t *testing.T) {
 			}
 
 			tlog.Logf("(1) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck.String())
-			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: expectedObjs, Template: ""}}
+			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: expectedObjs}}
 			xid, err := api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}

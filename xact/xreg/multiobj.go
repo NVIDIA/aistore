@@ -13,7 +13,7 @@ func RenewPutArchive(bckFrom, bckTo *meta.Bck) RenewRes {
 	return RenewBucketXact(apc.ActArchive, bckFrom, Args{Custom: bckTo}, bckFrom, bckTo)
 }
 
-func RenewEvictDelete(uuid, kind string, bck *meta.Bck, msg *apc.ListRange) RenewRes {
+func RenewEvictDelete(uuid, kind string, bck *meta.Bck, msg *apc.EvdMsg) RenewRes {
 	return RenewBucketXact(kind, bck, Args{UUID: uuid, Custom: msg})
 }
 

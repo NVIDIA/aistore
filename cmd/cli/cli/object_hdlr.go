@@ -63,9 +63,10 @@ const objRmUsage = "Remove object or selected objects from the specified bucket,
 	indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
 	indent1 + "\t- 'rm gs://abc --prefix images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
 	indent1 + "\t- 'rm gs://abc/images/'\t- same as above;\n" +
+	indent1 + "\t- 'rm gs://abc/images/ --nr'\t- same as above, but do not recurse into virtual subdirs;\n" +
 	indent1 + "\t- 'rm gs://abc --template images/'\t- same as above;\n" +
 	indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
-	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice BUCKET/TEMPLATE argument in quotes)"
 
 const concatUsage = "Append a file, a directory, or multiple files and/or directories\n" +
 	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +

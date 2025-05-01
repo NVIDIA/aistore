@@ -390,7 +390,7 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList %v\n", files)
-	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files, Template: ""}}
+	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files}}
 	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}

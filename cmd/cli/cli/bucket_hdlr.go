@@ -112,9 +112,10 @@ const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "\t- evict gs:\t- evict all GCP buckets from the cluster;\n" +
 	indent1 + "\t- evict gs://abc --prefix images/\t- evict all gs://abc objects from the virtual subdirectory \"images\";\n" +
 	indent1 + "\t- evict gs://abc/images/\t- same as above;\n" +
+	indent1 + "\t- evict gs://abc/images/ --nr\t- same as above, but do not recurse into virtual subdirs;\n" +
 	indent1 + "\t- evict gs://abc --template images/\t- same as above;\n" +
 	indent1 + "\t- evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"\t- evict the matching range (prefix + brace expansion);\n" +
-	indent1 + "\t- evict \"gs://abc/shard-{0000..9999}.tar.lz4\"\t- same as above (note the double quotes around the BUCKET/TEMPLATE argument)"
+	indent1 + "\t- evict \"gs://abc/shard-{0000..9999}.tar.lz4\"\t- same as above (notice BUCKET/TEMPLATE argument in quotes)"
 
 // flags
 var (

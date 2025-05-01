@@ -994,7 +994,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 				return
 			}
 		}
-		xid, err := p.listrange(r.Method, bck.Name, msg, apireq.query)
+		xid, err := p.bcastMultiobj(r.Method, bck.Name, msg, apireq.query)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1491,7 +1491,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-		if xid, err = p.listrange(r.Method, bucket, msg, query); err != nil {
+		if xid, err = p.bcastMultiobj(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2169,7 +2169,7 @@ func (p *proxy) redirectAction(w http.ResponseWriter, r *http.Request, bck *meta
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-func (p *proxy) listrange(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
+func (p *proxy) bcastMultiobj(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
 	var (
 		smap      = p.owner.smap.get()
 		actMsgExt = p.newAmsg(msg, nil, cos.GenUUID())

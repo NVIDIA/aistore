@@ -23,7 +23,7 @@ type (
 	evdFactory struct {
 		xreg.RenewBase
 		xctn *evictDelete
-		msg  *apc.ListRange
+		msg  *apc.EvdMsg
 		kind string
 	}
 	evictDelete struct {
@@ -49,7 +49,7 @@ func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	if p.kind == apc.ActEvictRemoteBck {
 		return &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind}
 	}
-	msg := args.Custom.(*apc.ListRange)
+	msg := args.Custom.(*apc.EvdMsg)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	return &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
 }
@@ -66,7 +66,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (*evictDelete, error) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMsg) (*evictDelete, error) {
 	r := &evictDelete{config: cmn.GCO.Get()}
 	if kind == apc.ActEvictRemoteBck {
 		r.InitBase(xargs.UUID, kind, "" /*ctlmsg*/, bck)
@@ -74,9 +74,11 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 		return r, nil
 	}
 
-	// default num-workers hardcoded
-	// (currently, always num mountpaths)
-	if err := r.lrit.init(r, msg, bck, 0 /*lsflags*/, nwpDflt, 0 /*burst*/); err != nil {
+	var lsflags uint64
+	if msg.NonRecurs {
+		lsflags = apc.LsNoRecursion
+	}
+	if err := r.lrit.init(r, &msg.ListRange, bck, lsflags, msg.NumWorkers, 0 /*burst*/); err != nil {
 		return nil, err
 	}
 
