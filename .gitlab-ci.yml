@@ -1,6 +1,6 @@
 variables:
   MODE: debug # run aistore and tests with debug asserts enabled
-  CI_IMAGE: aistorage/gitlab-ci:latest
+  CI_IMAGE: aistorage/gitlab-ci:1.3-podman # TODO: revert back to latest
   RUNNER_TAG: "ais-ci"
   SCRIPTS_DIR: "./scripts"
   NUM_TARGET:
