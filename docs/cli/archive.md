@@ -1,121 +1,48 @@
 ---
 layout: post
-title: BUCKET
+title: ARCHIVE
 permalink: /docs/cli/archive
 redirect_from:
  - /cli/archive.md/
  - /docs/cli/archive.md/
 ---
 
-# When objects are called _shards_
+# Working with Archives (Shards)
+
+In AIStore, *archives* (also called *shards*) are special objects that contain multiple files packaged together in formats like TAR, TGZ, ZIP, or TAR.LZ4. Working with archives is essential for efficiently managing collections of related files and for operations like distributed sorting.
 
 In this document:
-* commands to read, write, extract, and list *archives* - objects formatted as `TAR`, `TGZ` (or `TAR.GZ`) , `ZIP`, or `TAR.LZ4`.
+* Commands to read, write, extract, and list *archives* - objects formatted as `TAR`, `TGZ` (or `TAR.GZ`) , `ZIP`, or `TAR.LZ4`.
 
-For the most recently updated list of supported archival formats, please refer to [this source](https://github.com/NVIDIA/aistore/blob/main/cmn/archive/mime.go).
+> For the most recently updated list of supported archival formats, please refer to [this source](https://github.com/NVIDIA/aistore/blob/main/cmn/archive/mime.go).
 
 The corresponding subset of CLI commands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual (reading, writing, etc.) operation.
 
-```console
-$ ais archive get --help
+## Table of Contents
+- [Subcommands](#archive-commands)
+- [Archive Files and Directories (`ais archive put`)](#archive-files-and-directories-ais-archive-put)
+- [Append Files to Existing Archives](#append-files-to-existing-archives)
+- [Archive Multiple Objects (`ais archive bucket`)](#archive-multiple-objects-ais-archive-bucket)
+- [List Archived Content (`ais archive ls`)](#list-archived-content)
+- [Get Archived Content ('ais archive get`)](#get-archived-content-ais-archive-get)
+- [Get Archived Content: Multiple-Selection](#get-archived-content-multiple-selection)
+- [Generate Shards for Testing](#generate-shards)
 
-NAME:
-   ais archive get - Get a shard and extract its content; get an archived file;
-              write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
-              assorted options further include:
-              - '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);
-              - '--progress' and '--refresh' to watch progress bar;
-              - '-v' to produce verbose output when getting multiple objects.
-   'ais archive get' examples:
-              - ais://abc/trunk-0123.tar.lz4 /tmp/out - get and extract entire shard to /tmp/out/trunk/*
-              - ais://abc/trunk-0123.tar.lz4 --archpath file45.jpeg /tmp/out - extract one named file
-              - ais://abc/trunk-0123.tar.lz4/file45.jpeg /tmp/out - same as above (and note that '--archpath' is implied)
-              - ais://abc/trunk-0123.tar.lz4/file45 /tmp/out/file456.new - same as above, with destination explicitly (re)named
-   'ais archive get' multi-selection examples:
-              - ais://abc/trunk-0123.tar 111.tar --archregx=jpeg --archmode=suffix - return 111.tar with all *.jpeg files from a given shard
-              - ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--
-              - ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--
+## Subcommands
 
-USAGE:
-   ais archive get BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-] [command options]
+The corresponding subset of subcommands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual operation:
 
-OPTIONS:
-   --archive            List archived content (see docs/archive.md for details)
-   --archmime value     Expected format (mime type) of an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
-                        especially usable for shards with non-standard extensions
-   --archmode value     Enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
-                          * regexp - general purpose regular expression;
-                          * prefix - matching filename starts with;
-                          * suffix - matching filename ends with;
-                          * substr - matching filename contains;
-                          * wdskey - WebDataset key
-                        example:
-                          given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
-                          and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
-   --archpath value     Extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
-                        see also: '--archregx'
-   --archregx value     Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
-                        to select possibly multiple matching archived files from a given shard;
-                        is used in combination with '--archmode' ("matching mode") option
-   --blob-download      Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
-   --cached             Only get in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
-   --checksum           Validate checksum
-   --chunk-size value   Chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
-   --extract, -x        Extract all files from archive(s)
-   --inv-id value       Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
-   --inv-name value     Bucket inventory name (optional; system default name is '.inventory')
-   --inventory          List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
-                        boost when used with very large s3 buckets; e.g. usage:
-                          1) 'ais ls s3://abc --inventory'
-                          2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
-                        (see also: docs/s3inventory.md)
-   --latest             Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
-                        from the associated remote bucket;
-                        the option provides operation-level control over object versioning (and version synchronization)
-                        without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
-                        see also:
-                          - 'ais show bucket BUCKET versioning'
-                          - 'ais bucket props set BUCKET versioning'
-                          - 'ais ls --check-versions'
-                        supported commands include:
-                          - 'ais cp', 'ais prefetch', 'ais get'
-   --limit value        The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
-                        e.g.:
-                        - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
-                        - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
-                        - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
-   --num-workers value  Number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
-   --prefix value       Get objects with names starting with the specified prefix, e.g.:
-                        '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
-                        a/b that have their names (relative to this directory) starting with 'c';
-                        '--prefix ""' - get entire bucket (all objects)
-   --progress           Show progress bar(s) and progress of execution in real time
-   --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                        valid time units: ns, us (or µs), ms, s (default), m, h
-   --silent             Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
-   --skip-lookup        Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
-                         1) adding remote bucket to aistore without first checking the bucket's accessibility
-                            (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
-                         2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
-   --units value        Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
-                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                        si  - SI (metric) format, e.g.: KB, MB, GB
-                        raw - do not convert to (or from) human-readable format
-   --verbose, -v        Verbose output
-   --yes, -y            Assume 'yes' to all questions
-   --help, -h           Show help
+```
+ais archive ls		# List archived content
+ais archive put		# Archive files from local filesystem
+ais archive get		# Extract content from archives
+ais archive bucket	# Archive objects from a bucket
+ais archive gen-shards	# Generate test archives
 ```
 
-## Table of Contents
-- [Archive files and directories](#archive-files-and-directories)
-- [Append files and directories to an existing archive](#append-files-and-directories-to-an-existing-archive)
-- [Archive multiple objects](#archive-multiple-objects)
-- [List archived content](#list-archived-content)
-- [Get archived content](#get-archived-content)
-- [Get archived content: multiple-selection](#get-archived-content-multiple-selection)
-- [Generate shards](#generate-shards)
+For detailed help on any command, use the `--help` option:
 
-## Archive files and directories
+## Archive files and directories (`ais archive put`)
 
 Archive multiple files.
 
@@ -338,25 +265,22 @@ shard-2.tar                                      7.50KiB
     shard-2.tar/license.test                     1.05KiB
 ```
 
-## Archive multiple objects
+## Archive multiple objects (`ais archive bucket`)
 
-This is a yet another archive-**creating** operation that:
+The `ais archive bucket` command creates archives (shards) from multiple objects stored in a bucket. This is a powerful operation that:
 
-1. takes in multiple objects from a given **source bucket**, and
-2. archives them all as a shard in the specified destination bucket,
+1. Takes objects from a specified **source bucket**
+2. Archives them as a single shard in the specified **destination bucket**
 
-   where:
+### Features
 
-* source and destination buckets may not necessarily be different;
-* both `--list` and `--template` options are supported
-* supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
-* archiving is carried out asynchronously, in parallel by all AIS targets.
+- Source and destination buckets can be the same or different
+- Supports multiple selection methods (lists, templates, prefixes)
+- Supports all backend providers
+- Supports various archival formats (.tar, .tar.gz/.tgz, .zip, .tar.lz4)
+- Executes asynchronously and in parallel across all AIS nodes for maximum performance
 
-As such, `ais archive bucket` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets).
-
-**NOTE:**
-
-* `ais archive bucket` multi-object bucket-to-bucket archiving shall _not_ be confused with `ais archive put` command - the latter is used to archive multiple source **files** from a local (or locally accessible) source **directory**.
+### Usage
 
 ```console
 $ ais archive bucket --help
@@ -405,11 +329,143 @@ OPTIONS:
               --template "/abc/prefix-{0010..9999..2}-suffix"
    wait       Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    help, h    Show help
+
 ```
 
-### Examples
+## Selection Options
 
-1. Archive a list of objects from a given bucket:
+The command provides multiple ways to select objects for archiving:
+
+1. **Template matching**: Use patterns with ranges to select objects
+   ```
+   ais archive bucket ais://src gs://dst/a.tar --template "trunk-{001..997}"
+   ```
+
+2. **List-based selection**: Specify a comma-separated list of objects
+   ```
+   ais archive bucket ais://bck/arch.tar --list obj1,obj2,obj3
+   ```
+
+3. **Prefix-based selection**: Select objects that share a common prefix
+   ```
+   ais archive bucket ais://src ais://dst/archive.tar --prefix data/logs/
+   ```
+
+### Non-Recursive Option (--nr)
+
+The `--nr` (or `--non-recursive`) flag limits the scope of the archiving operation to only include objects at the specified directory level, without descending into subdirectories.
+
+### Examples with Non-Recursive Flag
+
+1. Archive only the files directly in a directory (not its subdirectories):
+   ```
+   ais archive bucket ais://nnn/aaa/ ais://dst/archive.tar --nr
+   ```
+   This will only archive objects directly in the `aaa/` directory, skipping any objects in subdirectories like `aaa/bbb/`.
+
+2. Compare with recursive archiving (default behavior):
+   ```
+   ais archive bucket ais://nnn/aaa/ ais://dst/archive.tar
+   ```
+   This will archive all objects under the `aaa/` prefix, including those in subdirectories like `aaa/bbb/`.
+
+### Visual Example
+
+For a bucket with this structure:
+```
+ais://nnn
+├── aaa/
+│   ├── 777
+│   ├── 888
+│   ├── 999
+│   └── bbb/
+│       ├── 111
+│       ├── 222
+│       └── 333
+```
+
+With `--nr` flag:
+```
+ais archive bucket ais://nnn/aaa/ ais://dst/f.tar --nr
+```
+Result:
+```
+f.tar
+├── aaa/777
+├── aaa/888
+└── aaa/999
+```
+
+Without `--nr` flag:
+```
+ais archive bucket ais://nnn/aaa/ ais://dst/g.tar
+```
+Result:
+```
+g.tar
+├── aaa/777
+├── aaa/888
+├── aaa/999
+├── aaa/bbb/111
+├── aaa/bbb/222
+└── aaa/bbb/333
+```
+
+### Additional Options
+
+- `--append-or-put`: Append to an existing archive if it exists; otherwise create new
+- `--cont-on-err`: Continue archiving despite errors in multi-object transactions
+- `--dry-run`: Preview the results without executing
+- `--include-src-bck`: Prefix archived file names with the source bucket name
+- `--skip-lookup`: Skip checking bucket existence for better performance
+- `--wait`: Wait for the asynchronous operation to complete
+
+### Complete Examples
+
+**1**. Archive objects with a specific prefix, non-recursively:
+
+```console
+$ ais archive bucket s3://src-bck/aaa/ ais://dst/example.tar --nr
+Archived s3://src-bck/aaa/ => ais://dst/example.tar
+
+$ ais ls ais://dst/example.tar --archive
+NAME				  SIZE
+example.tar			  106.00KiB
+    example.tar/aaa/777	          16.84KiB
+    example.tar/aaa/888	          16.84KiB
+    example.tar/aaa/999	          16.84KiB
+    example.tar/aaa/trunk-777     16.84KiB
+    example.tar/aaa/trunk-888     16.84KiB
+    example.tar/aaa/trunk-999     16.84KiB
+```
+
+**2**. Archive objects using a template range:
+
+```console
+$ ais archive bucket ais://src ais://dst/range.tar --template "obj-{0..9}"
+Archiving "ais://dst/range.tar" ...
+
+$ ais archive ls ais://dst/range.tar
+
+NAME                     SIZE
+range.tar                92.60KiB
+    range.tar/obj-0      9.26KiB
+    range.tar/obj-1      9.26KiB
+    ...
+    range.tar/obj-9      9.26KiB
+```
+
+**3**. Incrementally append to an existing archive:
+
+```console
+$ ais archive bucket ais://bck/incremental.tar --template "obj{1..3}"
+Archived "ais://bck/incremental.tar" ...
+
+$ ais archive bucket ais://bck/incremental.tar --template "obj{4..5}" --append
+Archived "ais://bck/incremental.tar"
+```
+
+**4**. Archive a list of objects from a given bucket:
 
 ```console
 $ ais archive bucket ais://bck/arch.tar --list obj1,obj2
@@ -418,7 +474,7 @@ Archiving "ais://bck/arch.tar" ...
 
 Resulting `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
 
-2. Archive objects from a different bucket, use template (range):
+**5**. Archive objects from a different bucket, use template (range):
 
 ```console
 $ ais archive bucket ais://src ais://dst/arch.tar --template "obj-{0..9}"
@@ -428,7 +484,7 @@ Archiving "ais://dst/arch.tar" ...
 
 `ais://dst/arch.tar` now contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
 
-3. Archive 3 objects and then append 2 more:
+**6**. Archive 3 objects and then append 2 more:
 
 ```console
 $ ais archive bucket ais://bck/arch1.tar --template "obj{1..3}"
@@ -452,6 +508,18 @@ arch1.tar                51.00KiB
     arch1.tar/obj4       9.26KiB
     arch1.tar/obj5       9.26KiB
 ```
+
+### Notes
+
+- `ais archive bucket` must not be confused with `ais archive put`
+    - `archive bucket` archives objects in the cluster
+       - more precisely, objects accessible by the cluster
+    - `archive put` archives files from your local or locally accessible (NFS, SMB) directories
+- The operation runs asynchronously
+    - use `--wait` to wait for completion; see `--help` for details
+- When using the `--nr` (non-recursive) flag, only the immediate contents of the specified virtual directory is archived
+- For more information on multi-object operations, please see:
+    - [operations on lists and ranges documentation](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets).
 
 ## List archived content
 
@@ -603,44 +671,96 @@ NAME                                             SIZE
 Listed: 4 names
 ```
 
-## Get archived content
+## Get archived content ('ais archive get`)
 
 ```console
-$ ais get --help
-
-   ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
+$ ais archive get --help
+NAME:
+   ais archive get - Get a shard and extract its content; get an archived file;
               write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
               assorted options further include:
-              - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);
-              - '--extract' or '--archpath' to extract archived content;
+              - '--prefix' to get multiple shards in one shot (empty prefix for the entire bucket);
               - '--progress' and '--refresh' to watch progress bar;
               - '-v' to produce verbose output when getting multiple objects.
+   'ais archive get' examples:
+              - ais://abc/trunk-0123.tar.lz4 /tmp/out - get and extract entire shard to /tmp/out/trunk/*
+              - ais://abc/trunk-0123.tar.lz4 --archpath file45.jpeg /tmp/out - extract one named file
+              - ais://abc/trunk-0123.tar.lz4/file45.jpeg /tmp/out - same as above (and note that '--archpath' is implied)
+              - ais://abc/trunk-0123.tar.lz4/file45 /tmp/out/file456.new - same as above, with destination explicitly (re)named
+   'ais archive get' multi-selection examples:
+              - ais://abc/trunk-0123.tar 111.tar --archregx=jpeg --archmode=suffix - return 111.tar with all *.jpeg files from a given shard
+              - ais://abc/trunk-0123.tar 222.tar --archregx=file45 --archmode=wdskey - return 222.tar with all file45.* files --/--
+              - ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--
 
 USAGE:
-   ais get BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-] [command options]
+   ais archive get BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-] [command options]
 
 OPTIONS:
-   --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
-   --checksum        validate checksum
-   --yes, -y         assume 'yes' to all questions
-   --refresh value   interval for continuous monitoring;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --progress        show progress bar(s) and progress of execution in real time
-   --archpath value  extract the specified file from an archive (shard)
-   --extract, -x     extract all files from archive(s)
-   --prefix value    get objects that start with the specified prefix, e.g.:
-                     '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
-                     a/b that have their names (relative to this directory) starting with c;
-                     '--prefix ""' - get entire bucket
-   --cached          get only those objects from a remote bucket that are present ("cached") in AIS
-   --archive         list archived content (see docs/archive.md for details)
-   --limit value     limit object name count (0 - unlimited) (default: 0)
-   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose outout when getting multiple objects
-   --help, -h        show help
+   archive         List archived content (see docs/archive.md for details)
+   archmime        Expected format (mime type) of an object ("shard") formatted as .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                   especially usable for shards with non-standard extensions
+   archmode        Enumerated "matching mode" that tells aistore how to handle '--archregx', one of:
+                     * regexp - general purpose regular expression;
+                     * prefix - matching filename starts with;
+                     * suffix - matching filename ends with;
+                     * substr - matching filename contains;
+                     * wdskey - WebDataset key
+                   example:
+                     given a shard containing (subdir/aaa.jpg, subdir/aaa.json, subdir/bbb.jpg, subdir/bbb.json, ...)
+                     and wdskey=subdir/aaa, aistore will match and return (subdir/aaa.jpg, subdir/aaa.json)
+   archpath        Extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+                   see also: '--archregx'
+   archregx        Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
+                   to select possibly multiple matching archived files from a given shard;
+                   is used in combination with '--archmode' ("matching mode") option
+   blob-download   Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
+   cached          Only get in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
+   checksum        Validate checksum
+   chunk-size      Chunk size in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   encode-objname  Encode object names that contain special symbols (; : ' " < > / \ | ? #) that may otherwise break shell parsing or URL interpretation
+   extract,x       Extract all files from archive(s)
+   inv-id          Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
+   inv-name        Bucket inventory name (optional; system default name is '.inventory')
+   inventory       List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+                   boost when used with very large s3 buckets; e.g. usage:
+                     1) 'ais ls s3://abc --inventory'
+                     2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
+                   (see also: docs/s3inventory.md)
+   latest          Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+                   from the associated remote bucket;
+                   the option provides operation-level control over object versioning (and version synchronization)
+                   without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+                   see also:
+                     - 'ais show bucket BUCKET versioning'
+                     - 'ais bucket props set BUCKET versioning'
+                     - 'ais ls --check-versions'
+                   supported commands include:
+                     - 'ais cp', 'ais prefetch', 'ais get'
+   limit           The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+                   e.g.:
+                   - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+                   - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+                   - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/--
+   num-workers     Number of concurrent blob-downloading workers (readers); system default when omitted or zero
+   prefix          Get objects with names starting with the specified prefix, e.g.:
+                   '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
+                   a/b that have their names (relative to this directory) starting with 'c';
+                   '--prefix ""' - get entire bucket (all objects)
+   progress        Show progress bar(s) and progress of execution in real time
+   refresh         Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                   valid time units: ns, us (or µs), ms, s (default), m, h
+   silent          Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
+   skip-lookup     Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                    1) adding remote bucket to aistore without first checking the bucket's accessibility
+                       (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                    2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   units           Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                   iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                   si  - SI (metric) format, e.g.: KB, MB, GB
+                   raw - do not convert to (or from) human-readable format
+   verbose,v       Verbose output
+   yes,y           Assume 'yes' to all questions
+   help, h         Show help
 ```
 
 ### Example: extract one file
