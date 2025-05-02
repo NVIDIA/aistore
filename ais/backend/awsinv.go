@@ -330,7 +330,8 @@ func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoM
 
 		// prefix
 		if msg.IsFlagSet(apc.LsNoRecursion) {
-			if _, errN := cmn.HandleNoRecurs(msg.Prefix, objName); errN != nil {
+			// TODO: revisit no-recurs case when returned addDirEntry = true
+			if _, errN := cmn.CheckDirNoRecurs(msg.Prefix, objName); errN != nil {
 				continue
 			}
 		} else if msg.Prefix != "" && !strings.HasPrefix(objName, msg.Prefix) {

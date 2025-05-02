@@ -614,13 +614,14 @@ func (r *LsoXact) shiftLastPage(token string) {
 	r.page = r.page[:l-j]
 }
 
+// (compare w/ nextPageA() via lrit)
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
+		ValidateCb: r.validateCb,
+		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
-	opts.ValidateCb = r.validateCb
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
 			r.AddErr(err, 0)
@@ -634,29 +635,27 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 	if !de.IsDir() {
 		return nil
 	}
-	err := r.walk.wi.processDir(fqn)
-	if err != nil {
+	ct, err := r.walk.wi.processDir(fqn)
+	if err != nil || ct == nil {
 		return err
 	}
 	if !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
 		return nil
 	}
 
-	// no recursion: check the level of nesting, add virtual dir-s
-
-	ct, err := core.NewCTFromFQN(fqn, nil)
-	if err != nil {
-		return nil
-	}
-	entry, err := cmn.HandleNoRecurs(r.walk.wi.msg.Prefix, ct.ObjectName())
-	if entry != nil {
+	// no recursion:
+	// - check the level of nesting
+	// - possibly add virt dir entry
+	addDirEntry, errN := cmn.CheckDirNoRecurs(r.walk.wi.msg.Prefix, ct.ObjectName())
+	if addDirEntry {
+		entry := &cmn.LsoEnt{Name: ct.ObjectName(), Flags: apc.EntryIsDir}
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
 			return errStopped
 		}
 	}
-	return err
+	return errN // filepath.SkipDir or nil
 }
 
 func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {

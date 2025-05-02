@@ -1,3 +1,5 @@
+//go:build !stdlibwalk
+
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
@@ -50,7 +52,7 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 	scratch, slab := memsys.PageMM().AllocSize(memsys.DefaultBufSize)
 	gOpts := &godirwalk.Options{
 		ErrorCallback: ew.PathErrToAction, // "halts the walk" or "skips the node" (detailed comment above)
-		Callback: func(fqn string, de *godirwalk.Dirent) error {
+		Callback: func(fqn string, de *godirwalk.Dirent) error { // TODO -- FIXME: ref
 			return opts.Callback(fqn, de)
 		},
 		Unsorted:      !opts.Sorted,

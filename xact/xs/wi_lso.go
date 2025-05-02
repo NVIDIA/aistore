@@ -60,24 +60,24 @@ func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 
 func (wi *walkInfo) lsmsg() *apc.LsoMsg { return wi.msg }
 
-func (wi *walkInfo) processDir(fqn string) error {
+func (wi *walkInfo) processDir(fqn string) (*core.CT, error) {
 	ct, err := core.NewCTFromFQN(fqn, nil)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	if wi.msg.Prefix != "" && !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
-		return filepath.SkipDir
+		return nil, filepath.SkipDir
 	}
 
 	// e.g., when `markerDir` "b/c/d/" we skip directories "a/", "b/a/",
 	// "b/b/" etc. but do not skip entire "b/" and "b/c/" since it is our
 	// parent that we need to traverse ("b/" < "b/c/d/").
 	if wi.markerDir != "" && ct.ObjectName() < wi.markerDir && !strings.HasPrefix(wi.markerDir, ct.ObjectName()) {
-		return filepath.SkipDir
+		return nil, filepath.SkipDir
 	}
 
-	return nil
+	return ct, nil
 }
 
 func (wi *walkInfo) match(objName string) bool {

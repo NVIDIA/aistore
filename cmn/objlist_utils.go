@@ -111,26 +111,25 @@ func ObjHasPrefix(objName, prefix string) bool {
 }
 
 // no recursion (LsNoRecursion) helper function:
-// - check the level of nesting
-// - possibly, return virtual directory (to be included in LsoRes) and/or filepath.SkipDir
-func HandleNoRecurs(prefix, relPath string) (*LsoEnt, error) {
-	debug.Assert(relPath != "")
+// check the level of nesting
+// return:
+//   - true, to include virtual directory
+//   - filepath.SkipDir, to skip further recursion
+func CheckDirNoRecurs(prefix, relPath string) (addDirEntry bool, _ error) {
 	if prefix == "" || prefix == cos.PathSeparator {
-		return &LsoEnt{Name: relPath, Flags: apc.EntryIsDir}, filepath.SkipDir
+		return true, filepath.SkipDir
 	}
-
 	prefix = cos.TrimLastB(prefix, '/')
 	suffix := strings.TrimPrefix(relPath, prefix)
 	if suffix == relPath {
 		// wrong subtree (unlikely, given higher-level traversal logic)
-		return nil, filepath.SkipDir
+		return false, filepath.SkipDir
 	}
-
 	if strings.Contains(suffix, cos.PathSeparator) {
 		// nesting-wise, we are deeper than allowed by the prefix
-		return nil, filepath.SkipDir
+		return false, filepath.SkipDir
 	}
-	return &LsoEnt{Name: relPath, Flags: apc.EntryIsDir}, nil
+	return true, nil
 }
 
 //

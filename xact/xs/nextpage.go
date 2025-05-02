@@ -44,20 +44,15 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb, ctx *core.LsoInv
 	return npg
 }
 
-// limited usage: bucket summary, multi-obj
+// limited usage: lrit (compare w/ LsoXact.doWalk)
 func (npg *npgCtx) nextPageA() error {
 	npg.page.UUID = npg.wi.msg.UUID
 	npg.idx = 0
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
+		ValidateCb: npg.validateCb,
+		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(npg.bck.Bucket())
-	opts.ValidateCb = func(fqn string, de fs.DirEntry) error {
-		if de.IsDir() {
-			return npg.wi.processDir(fqn)
-		}
-		return nil
-	}
 	err := fs.WalkBck(opts)
 	if err != nil {
 		freeLsoEntries(npg.page.Entries)
@@ -67,8 +62,26 @@ func (npg *npgCtx) nextPageA() error {
 	return err
 }
 
+func (npg *npgCtx) validateCb(fqn string, de fs.DirEntry) error {
+	if !de.IsDir() {
+		return nil
+	}
+	ct, err := npg.wi.processDir(fqn)
+	if err != nil || ct == nil {
+		return err
+	}
+	if !npg.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+		return nil
+	}
+	// multi-object (lrit) operation: skip virtual dir entries
+	// ie., always ignore returned `addDirEntry`
+	_, err = cmn.CheckDirNoRecurs(npg.wi.msg.Prefix, ct.ObjectName())
+	return err
+}
+
 func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 	entry, err := npg.wi.callback(fqn, de)
+
 	if entry == nil && err == nil {
 		return nil
 	}
