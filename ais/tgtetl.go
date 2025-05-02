@@ -161,45 +161,50 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 	}
 }
 
-func (t *target) getFromETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
+func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
 	var (
 		name  = dpq.etl.name  // apc.QparamETLName
 		targs = dpq.etl.targs // apc.QparamETLTransformArgs
 	)
-	comm, err := etl.GetCommunicator(name)
-	if err != nil {
-		if cos.IsErrNotFound(err) {
+	comm, errN := etl.GetCommunicator(name)
+	if errN != nil {
+		if cos.IsErrNotFound(errN) {
 			smap := t.owner.smap.Get()
-			errV := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
-				err, smap.Primary.URL(cmn.NetPublic))
-			t.writeErr(w, r, errV, http.StatusNotFound)
+			errNV := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
+				errN, smap.Primary.URL(cmn.NetPublic))
+			t.writeErr(w, r, errNV, http.StatusNotFound)
 			return
 		}
-		t.writeErr(w, r, err)
+		t.writeErr(w, r, errN)
 		return
 	}
 
+	// do
 	xetl := comm.Xact()
 	ecode, err := comm.InlineTransform(w, r, lom, targs)
-	if err != nil {
-		// Wait for possible abort errors from the xaction (e.g., pod runtime errors)
-		if abortErr := xetl.AbortedAfter(etl.DefaultReqTimeout); abortErr != nil {
-			t.writeErr(w, r, abortErr, ecode)
-			return
-		}
-		ectx := &cmn.ETLErrCtx{
-			ETLName:          name,
-			ETLTransformArgs: targs,
-			PodName:          comm.PodName(),
-			SvcName:          comm.SvcName(),
-		}
-		errV := cmn.NewErrETL(ectx, err.Error(), ecode)
-		xetl.AddErr(errV)
-		t.writeErr(w, r, errV, ecode)
+
+	if err == nil {
+		xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
 		return
 	}
 
-	xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
+	// NOTE:
+	// - poll for a while here for a possible abort error (e.g., pod runtime error)
+	// - and notice hardcoded timeout
+	if abortErr := xetl.AbortedAfter(etl.DefaultReqTimeout); abortErr != nil {
+		t.writeErr(w, r, abortErr, ecode)
+		return
+	}
+
+	ectx := &cmn.ETLErrCtx{
+		ETLName:          name,
+		ETLTransformArgs: targs,
+		PodName:          comm.PodName(),
+		SvcName:          comm.SvcName(),
+	}
+	errV := cmn.NewErrETL(ectx, err.Error(), ecode)
+	xetl.AddErr(errV)
+	t.writeErr(w, r, errV, ecode)
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {
