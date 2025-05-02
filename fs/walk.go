@@ -45,7 +45,7 @@ type (
 	}
 
 	errCallbackWrapper struct {
-		counter atomic.Int64
+		counter atomic.Int64 // (soft errors)
 	}
 
 	walkDirWrapper struct {

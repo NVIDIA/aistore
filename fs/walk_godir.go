@@ -44,6 +44,10 @@ func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.Err
 	return godirwalk.Halt
 }
 
+func (opts *WalkOpts) cb(fqn string, de *godirwalk.Dirent) error {
+	return opts.Callback(fqn, de)
+}
+
 func (godir) walk(fqns []string, opts *WalkOpts) error {
 	var (
 		err error
@@ -52,9 +56,7 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 	scratch, slab := memsys.PageMM().AllocSize(memsys.DefaultBufSize)
 	gOpts := &godirwalk.Options{
 		ErrorCallback: ew.PathErrToAction, // "halts the walk" or "skips the node" (detailed comment above)
-		Callback: func(fqn string, de *godirwalk.Dirent) error { // TODO -- FIXME: ref
-			return opts.Callback(fqn, de)
-		},
+		Callback:      opts.cb,
 		Unsorted:      !opts.Sorted,
 		ScratchBuffer: scratch,
 	}
