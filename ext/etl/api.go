@@ -127,6 +127,13 @@ type (
 		ChunkSize int64 `json:"chunk_size"`
 		Flags     int64 `json:"flags"`
 	}
+
+	WebsocketCtrlMsg struct {
+		Daddr string `json:"dst_addr,omitempty"`
+		Targs string `json:"etl_args,omitempty"`
+		FQN   string `json:"fqn,omitempty"`
+		Path  string `json:"path,omitempty"`
+	}
 )
 
 type (

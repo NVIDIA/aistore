@@ -107,10 +107,7 @@ type (
 	}
 
 	transformTask struct {
-		Daddr  string `json:"dst_addr,omitempty"`
-		Targs  string `json:"etl_args,omitempty"`
-		FQN    string `json:"fqn,omitempty"`
-		Path   string `json:"path,omitempty"`
+		WebsocketCtrlMsg
 		rwpair `json:"-"`
 	}
 
@@ -218,7 +215,10 @@ func (ws *webSocketComm) Stop() {
 		session.Finish(cmn.ErrXactUserAbort)
 	}
 	ws.offlineSessions = nil
-	ws.inlineSession.Finish(cmn.ErrXactUserAbort)
+	if ws.inlineSession != nil {
+		ws.inlineSession.Finish(cmn.ErrXactUserAbort)
+		ws.inlineSession = nil
+	}
 	ws.commCtxCancel()
 	ws.baseComm.Stop()
 }
@@ -229,11 +229,12 @@ func (ws *webSocketComm) Stop() {
 
 func (wss *wsSession) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	var (
-		task = &transformTask{Path: lom.ObjName}
+		task = &transformTask{}
 		err  error
 		r    io.ReadCloser
 		oah  = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
 	)
+	task.Path = lom.ObjName
 	switch wss.argType {
 	case ArgTypeDefault, ArgTypeURL:
 		srcResp := lom.GetROC(latestVer, sync)

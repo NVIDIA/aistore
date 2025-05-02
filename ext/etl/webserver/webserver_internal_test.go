@@ -11,7 +11,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -166,7 +169,7 @@ func TestETLServerPutHandler(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-			tassert.Fatalf(t, http.StatusInternalServerError == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
+			tassert.Fatalf(t, http.StatusBadRequest == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
@@ -186,7 +189,7 @@ func TestETLServerPutHandler(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 
-			tassert.Fatalf(t, http.StatusInternalServerError == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
+			tassert.Fatalf(t, http.StatusBadRequest == resp.StatusCode, "expected status code 500, got %d", resp.StatusCode)
 		})
 	})
 }
@@ -305,6 +308,93 @@ func TestEchoServerGetHandler(t *testing.T) {
 			tassert.Fatalf(t, len(result) == 0, "expected no content")
 		})
 	})
+}
+
+func TestWebSocketHandler(t *testing.T) {
+	var (
+		originalData = []byte("hello")
+		directPutURL = "/ais/etl_dst/obj"
+
+		secretPrefix = "/v1/_object/some_secret"
+		host         = "http://0.0.0.0"
+		port         = "8080"
+	)
+
+	// Direct PUT target
+	directPutServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		tassert.Fatalf(t, bytes.Equal(data, originalData), "direct PUT got unexpected data")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer directPutServer.Close()
+
+	// ETL server with websocket handler
+	wsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/ws" {
+			base := &etlServerBase{
+				aisTargetURL: host + secretPrefix,
+				argType:      etl.ArgTypeDefault,
+				endpoint:     host + ":" + port,
+				client:       &http.Client{},
+				ETLServer:    &EchoServer{},
+			}
+			base.websocketHandler(w, r)
+		}
+	}))
+	defer wsSrv.Close()
+
+	// Connect to WebSocket endpoint
+	u := "ws" + strings.TrimPrefix(wsSrv.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(u, nil) //nolint:bodyclose // closed below
+	tassert.Fatalf(t, err == nil, "WebSocket connection failed: %v", err)
+
+	// Test direct PUT
+	err = conn.WriteJSON(etl.WebsocketCtrlMsg{Daddr: directPutServer.URL + directPutURL})
+	tassert.Fatalf(t, err == nil, "Write JSON failed")
+	err = conn.WriteMessage(websocket.BinaryMessage, originalData)
+	tassert.Fatalf(t, err == nil, "Write message failed")
+
+	mt, msg, err := conn.ReadMessage()
+	tassert.CheckError(t, err)
+	err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"))
+	tassert.CheckError(t, err)
+	tassert.CheckError(t, conn.Close())
+	tassert.Fatalf(t, mt == websocket.TextMessage, "Expected TextMessage")
+	tassert.Fatalf(t, string(msg) == "direct put success", "Unexpected ack: %s", msg)
+
+	// Test fallback: no direct PUT
+	conn2, _, err := websocket.DefaultDialer.Dial(u, nil) //nolint:bodyclose // closed below
+	tassert.Fatalf(t, err == nil, "WebSocket connection 2 failed")
+	err = conn2.WriteJSON(etl.WebsocketCtrlMsg{}) // no dst_addr
+	tassert.Fatalf(t, err == nil, "Write empty JSON failed")
+	err = conn2.WriteMessage(websocket.BinaryMessage, originalData)
+	tassert.Fatalf(t, err == nil, "Write message failed")
+
+	mt, msg, err = conn2.ReadMessage()
+	tassert.CheckError(t, err)
+	err = conn2.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"))
+	tassert.CheckError(t, err)
+	tassert.CheckError(t, conn2.Close())
+	tassert.Fatalf(t, mt == websocket.BinaryMessage, "Expected BinaryMessage")
+	tassert.Fatalf(t, bytes.Equal(msg, originalData), "Unexpected content: %s", msg)
+
+	// Test FQN
+	conn3, _, err := websocket.DefaultDialer.Dial(u, nil) //nolint:bodyclose // closed below
+	tassert.Fatalf(t, err == nil, "WebSocket connection failed: %v", err)
+	file, content := createFQNFile(t)
+	defer os.Remove(file)
+
+	err = conn3.WriteJSON(etl.WebsocketCtrlMsg{FQN: file})
+	tassert.Fatalf(t, err == nil, "Write JSON failed")
+
+	mt, msg, err = conn3.ReadMessage()
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, mt == websocket.BinaryMessage, "expected BinaryMessage")
+	tassert.Fatalf(t, bytes.Equal(msg, content), "unexpected content: %s", msg)
+
+	err = conn3.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"))
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, conn3.Close())
 }
 
 func createFQNFile(t *testing.T) (string, []byte) {
