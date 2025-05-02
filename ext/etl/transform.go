@@ -435,7 +435,7 @@ func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, 
 	case httpCommunicator:
 		return comm.OfflineTransform, nil, nil
 	case statefulCommunicator:
-		session, err := comm.createSession(xctn)
+		session, err := comm.createSession(xctn, offlineSessionMultiplier)
 		if err != nil {
 			return nil, nil, err
 		}

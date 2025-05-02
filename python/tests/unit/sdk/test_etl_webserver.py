@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
-from aistore.sdk.const import HEADER_NODE_URL
+from aistore.sdk.const import HEADER_NODE_URL, ETL_WS_FQN, ETL_WS_DESTINATION_ADDR
 from aistore.sdk.etl.webserver import (
     HTTPMultiThreadedServer,
     FlaskServer,
@@ -244,6 +244,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     async def test_websocket(self):
         with self.client.websocket_connect("/ws") as websocket:
             original_data = b"abcdef"
+            websocket.send_json(data={}, mode="binary")
             websocket.send_bytes(original_data)
             result = websocket.receive_bytes()
             self.assertEqual(result, original_data[::-1])
@@ -304,7 +305,12 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             mock_client.put.return_value = mock_resp
 
             with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_text(direct_put_url)
+                websocket.send_json(
+                    data={
+                        ETL_WS_DESTINATION_ADDR: direct_put_url,
+                    },
+                    mode="binary",
+                )
                 websocket.send_bytes(input_data)
                 result = websocket.receive_text()
                 self.assertEqual(result, "direct put success")
@@ -321,7 +327,12 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             mock_client.put.return_value = mock_resp
 
             with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_text(direct_put_url)
+                websocket.send_json(
+                    data={
+                        ETL_WS_DESTINATION_ADDR: direct_put_url,
+                    },
+                    mode="binary",
+                )
                 websocket.send_bytes(input_data)
                 result = websocket.receive_bytes()
                 self.assertEqual(result, input_data[::-1])
@@ -334,7 +345,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         # Mock the empty direct put url (don't need direct put on this object) => return transformed object
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_text("")  # empty direct put url
+                websocket.send_json(data={}, mode="binary")
                 websocket.send_bytes(input_data)
                 result = websocket.receive_bytes()
                 self.assertEqual(result, input_data[::-1])
@@ -358,8 +369,13 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=original_content),
             ) as get_fqn_mock:
                 with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_text(direct_put_url)
-                    websocket.send_text(fqn)
+                    websocket.send_json(
+                        data={
+                            ETL_WS_DESTINATION_ADDR: direct_put_url,
+                            ETL_WS_FQN: fqn,
+                        },
+                        mode="binary",
+                    )
                     result = websocket.receive_text()
                     self.assertEqual(result, "direct put success")
 
@@ -382,8 +398,13 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=original_content),
             ) as get_fqn_mock:
                 with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_text(direct_put_url)
-                    websocket.send_text(fqn)
+                    websocket.send_json(
+                        data={
+                            ETL_WS_DESTINATION_ADDR: direct_put_url,
+                            ETL_WS_FQN: fqn,
+                        },
+                        mode="binary",
+                    )
                     result = websocket.receive_bytes()
                     self.assertEqual(result, original_content[::-1])
 
@@ -402,8 +423,13 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value=original_content),
             ) as get_fqn_mock:
                 with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_text("")
-                    websocket.send_text(fqn)
+                    websocket.send_json(
+                        data={
+                            ETL_WS_DESTINATION_ADDR: "",
+                            ETL_WS_FQN: fqn,
+                        },
+                        mode="binary",
+                    )
                     result = websocket.receive_bytes()
                     self.assertEqual(result, original_content[::-1])
 

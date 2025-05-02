@@ -16,7 +16,13 @@ import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.utils import compose_etl_direct_put_url
-from aistore.sdk.const import HEADER_NODE_URL, HEADER_CONTENT_LENGTH, STATUS_NO_CONTENT
+from aistore.sdk.const import (
+    HEADER_NODE_URL,
+    HEADER_CONTENT_LENGTH,
+    STATUS_NO_CONTENT,
+    ETL_WS_FQN,
+    ETL_WS_DESTINATION_ADDR,
+)
 
 
 class FastAPIServer(ETLServer):
@@ -62,49 +68,21 @@ class FastAPIServer(ETLServer):
                 )
                 self.active_connections.append(websocket)
 
-                # Message receiving matrix:
-                # ┌──────────────┬──────────────┬─────────────────────────────────────────────────────────────┐
-                # │ direct_put   │ arg_type     │ Incoming Message Pattern                                    │
-                # ├──────────────┼──────────────┼─────────────────────────────────────────────────────────────┤
-                # │ True         │ "fqn"        │ TextMessage (direct_put_url) + TextMessage (file path)      │
-                # │ True         │ not "fqn"    │ TextMessage (direct_put_url) + BinaryMessage (object bytes) │
-                # │ False        │ "fqn"        │ TextMessage (file path)                                     │
-                # │ False        │ not "fqn"    │ BinaryMessage (object bytes)                                │
-                # └──────────────┴──────────────┴─────────────────────────────────────────────────────────────┘
                 while True:
-                    direct_put_url, data = None, None
-                    try:
-                        # First step: expect direct_put_url if enabled
-                        if self.direct_put:
-                            msg = await websocket.receive()
-                            if "text" not in msg:
-                                raise ValueError(
-                                    f"Expected a TextMessage for direct_put URL, but received: {msg}"
-                                )
-                            direct_put_url = msg["text"]
+                    ctrl_msg = await websocket.receive_json(mode="binary")
+                    self.logger.debug("Received control message: %s", ctrl_msg)
 
-                        # Second step: expect file path or object content
-                        msg = await websocket.receive()
-                        if self.arg_type == "fqn":
-                            if "text" not in msg:
-                                raise ValueError(
-                                    f"Expected a TextMessage for FQN path, but received: {msg}"
-                                )
-                            path = msg["text"]
-                            data = await self._get_fqn_content(path)
-                        else:
-                            if "bytes" not in msg:
-                                raise ValueError(
-                                    f"Expected a BinaryMessage for object content, but received: {msg}"
-                                )
-                            data = msg["bytes"]
+                    fqn = ctrl_msg.get(ETL_WS_FQN)
+                    content = (
+                        await self._get_fqn_content(fqn)
+                        if fqn
+                        else await websocket.receive_bytes()
+                    )
 
-                    except Exception as e:
-                        self.logger.warning("Error on receiving: %s", e)
+                    self.logger.debug("Received content length: %d", len(content))
+                    transformed = await asyncio.to_thread(self.transform, content, "")
 
-                    self.logger.debug("Received message of length: %d", len(data))
-                    transformed = await asyncio.to_thread(self.transform, data, "")
-
+                    direct_put_url = ctrl_msg.get(ETL_WS_DESTINATION_ADDR)
                     if direct_put_url:
                         try:
                             response = await self._direct_put(

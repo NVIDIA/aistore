@@ -36,8 +36,9 @@ type (
 	// - `etl.HTTPCommunicator.OfflineTransform`: fetches transformed object from ETL pod through HTTP response
 	// - `etl.statefulCommnicator.Transform`: fetches transformed object from ETL pod through WebSocket message
 	GetROCArgs struct {
-		Daddr string // destination target's address for direct put
-		Local bool   // indicates if the destination is the local target; used by communicator to decide whether to perform direct put
+		Daddr         string // destination target's address for direct put
+		Local         bool   // indicates if the destination is the local target; used by communicator to decide whether to perform direct put
+		TransformArgs string // optional and ETL-specific; can be used to indicate transformation on a per-object basis
 	}
 	GetROC func(lom *LOM, latestVer, sync bool, args *GetROCArgs) ReadResp
 

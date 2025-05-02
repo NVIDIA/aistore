@@ -162,11 +162,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 }
 
 func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
-	var (
-		name  = dpq.etl.name  // apc.QparamETLName
-		targs = dpq.etl.targs // apc.QparamETLTransformArgs
-	)
-	comm, errN := etl.GetCommunicator(name)
+	comm, errN := etl.GetCommunicator(dpq.etl.name)
 	if errN != nil {
 		if cos.IsErrNotFound(errN) {
 			smap := t.owner.smap.Get()
@@ -181,7 +177,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 
 	// do
 	xetl := comm.Xact()
-	ecode, err := comm.InlineTransform(w, r, lom, targs)
+	ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
 
 	if err == nil {
 		xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
@@ -197,8 +193,8 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	}
 
 	ectx := &cmn.ETLErrCtx{
-		ETLName:          name,
-		ETLTransformArgs: targs,
+		ETLName:          dpq.etl.name,
+		ETLTransformArgs: dpq.etl.targs,
 		PodName:          comm.PodName(),
 		SvcName:          comm.SvcName(),
 	}

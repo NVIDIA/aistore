@@ -56,7 +56,7 @@ type (
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error)
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error)
 	}
 
 	// httpCommunicator manages stateless communication to ETL pod through HTTP requests
@@ -122,7 +122,7 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		rc.listener, rc.boot, rc.pw = listener, boot, pw
 		return rc
 	case WebSocket:
-		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
+		ws := &webSocketComm{offlineSessions: make(map[string]Session, 4)}
 		ws.commCtx, ws.commCtxCancel = context.WithCancel(context.Background())
 		ws.listener, ws.boot, ws.pw = listener, boot, pw
 		return ws
@@ -288,9 +288,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
-	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, cos.IsParseBool(latestVer), false, nil)
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
+	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, latestVer, false, nil)
 	if resp.Err != nil {
 		return resp.Ecode, resp.Err
 	}
@@ -322,7 +321,7 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs 
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, targs string) (int, error) {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
 	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return 0, err
 	}
@@ -331,8 +330,7 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 		return 0, err
 	}
 
-	latestVer := r.URL.Query().Get(apc.QparamLatestVer)
-	path, query := rc.redirectArgs(lom, cos.IsParseBool(latestVer))
+	path, query := rc.redirectArgs(lom, latestVer)
 	if targs != "" {
 		query.Set(apc.QparamETLTransformArgs, targs)
 	}
@@ -390,6 +388,9 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 	}
 
 	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.Timeout.D(), started)
+	if err != nil {
+		return core.ReadResp{Err: err, Ecode: ecode}
+	}
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, clone.Cname(), err, ecode)

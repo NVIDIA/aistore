@@ -65,6 +65,9 @@ QPARAM_NEW_CUSTOM = "set-new-custom"
 # etl
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_ETL_ARGS = "etl_args"
+# etl websocket
+ETL_WS_DESTINATION_ADDR = "dst_addr"
+ETL_WS_FQN = "fqn"
 
 # URL Param values
 # See api/apc/query.go
