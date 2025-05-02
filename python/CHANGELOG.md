@@ -16,6 +16,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Improve ETL FastAPI web server error reporting by logging the expected message type on `ValueError` during receive.
 - Refactor the websocket message pattern in ETL FastAPI web server to always expect a control message as the first incoming message.
+- Enhance `transform` method in ETL Webservers to accept `etl_args` for data processing.
 
 ## [1.13.5] - 2025-04-25
 

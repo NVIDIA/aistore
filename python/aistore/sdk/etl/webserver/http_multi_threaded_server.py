@@ -8,7 +8,7 @@ from socketserver import ThreadingMixIn
 from typing import Type, Tuple
 import signal
 import threading
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse, parse_qs
 
 import requests
 
@@ -20,6 +20,7 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     STATUS_OK,
     STATUS_NO_CONTENT,
+    QPARAM_ETL_ARGS,
 )
 
 
@@ -111,12 +112,18 @@ class HTTPMultiThreadedServer(ETLServer):
             Handle GET requests by forwarding them to the AIS target or reading from FQN,
             applying the ETL transformation and returning the result.
             """
-            path = self.path
+
             logger = self.server.etl_server.logger
-            logger.debug("Received GET request for path: %s", path)
+
+            parsed = urlparse(self.path)
+            raw_path = parsed.path
+            params = parse_qs(parsed.query)
+            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0]
+
+            logger.debug("Received GET request for path: %s", raw_path)
 
             # Health check
-            if path == "/health":
+            if raw_path == "/health":
                 resp = b"Running"
                 self._set_headers(length=len(resp))
                 self.wfile.write(resp)
@@ -124,9 +131,9 @@ class HTTPMultiThreadedServer(ETLServer):
 
             try:
                 if self.server.etl_server.arg_type == "fqn":
-                    content = self._get_fqn_content(path)
+                    content = self._get_fqn_content(raw_path)
                 else:
-                    target_url = f"{self.server.etl_server.host_target}{path}"
+                    target_url = f"{self.server.etl_server.host_target}{raw_path}"
                     logger.debug("Forwarding GET to AIS target: %s", target_url)
 
                     resp = requests.get(target_url, timeout=None)
@@ -144,7 +151,9 @@ class HTTPMultiThreadedServer(ETLServer):
 
                     content = resp.content
 
-                transformed = self.server.etl_server.transform(content, path)
+                transformed = self.server.etl_server.transform(
+                    content, raw_path, etl_args
+                )
 
                 direct_put_url = self.headers.get(HEADER_NODE_URL)
                 if direct_put_url:
@@ -157,8 +166,8 @@ class HTTPMultiThreadedServer(ETLServer):
                 self.wfile.write(transformed)
 
             except FileNotFoundError:
-                logger.error("File not found: %s", path)
-                self.send_error(404, f"Local file not found: {path}")
+                logger.error("File not found: %s", raw_path)
+                self.send_error(404, f"Local file not found: {raw_path}")
 
             except requests.RequestException as e:
                 logger.error("Request to AIS target failed: %s", str(e))
@@ -173,16 +182,22 @@ class HTTPMultiThreadedServer(ETLServer):
             Handle PUT requests by transforming the incoming data and responding with the transformed data.
             """
             logger = self.server.etl_server.logger
-            path = self.path
-            logger.debug("Received PUT request for path: %s", path)
+            parsed = urlparse(self.path)
+            raw_path = parsed.path
+            params = parse_qs(parsed.query)
+            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0]
+
+            logger.debug("Received PUT request for path: %s", raw_path)
 
             try:
                 if self.server.etl_server.arg_type == "fqn":
-                    content = self._get_fqn_content(path)
+                    content = self._get_fqn_content(raw_path)
                 else:
                     content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
                     content = self.rfile.read(content_length)
-                transformed = self.server.etl_server.transform(content, path)
+                transformed = self.server.etl_server.transform(
+                    content, raw_path, etl_args
+                )
 
                 direct_put_url = self.headers.get(HEADER_NODE_URL)
                 if direct_put_url:
@@ -195,8 +210,8 @@ class HTTPMultiThreadedServer(ETLServer):
                 self.wfile.write(transformed)
 
             except FileNotFoundError:
-                logger.error("File not found: %s", path)
-                self.send_error(404, f"Local file not found: {path}")
+                logger.error("File not found: %s", raw_path)
+                self.send_error(404, f"Local file not found: {raw_path}")
 
             except Exception as e:
                 logger.error("Error processing PUT request: %s", str(e))

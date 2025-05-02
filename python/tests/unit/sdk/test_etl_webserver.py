@@ -18,7 +18,7 @@ from aistore.sdk.etl.webserver import (
 class DummyHTTPETLServer(HTTPMultiThreadedServer):
     """Dummy ETL server for testing transform and MIME type override."""
 
-    def transform(self, data: bytes, path: str) -> bytes:
+    def transform(self, data: bytes, *_args) -> bytes:
         return data.upper()
 
     def get_mime_type(self) -> str:
@@ -55,16 +55,16 @@ class DummyRequestHandler(HTTPMultiThreadedServer.RequestHandler):
 
 
 class DummyFastAPIServer(FastAPIServer):
-    def transform(self, data: bytes, path: str) -> bytes:
-        return data[::-1]  # Simple reverse transform for testing purposes
+    def transform(self, data: bytes, _path: str, _etl_args: str) -> bytes:
+        return data[::-1]
 
     def get_mime_type(self) -> str:
         return "application/test"
 
 
 class DummyFlaskServer(FlaskServer):
-    def transform(self, data: bytes, path: str) -> bytes:
-        return b"flask: " + data
+    def transform(self, data: bytes, _path: str, etl_args: str) -> bytes:
+        return b"flask: " + data + etl_args.encode()
 
     def get_mime_type(self) -> str:
         return "application/flask"
@@ -110,7 +110,7 @@ class TestRequestHandlerHelpers(unittest.TestCase):
 
         mock_get.assert_called_once()
         handler.server.etl_server.transform.assert_called_with(
-            b"original", "/test/object"
+            b"original", "/test/object", ""
         )
         self.assertIn(b"transformed", handler.wfile.getvalue())
 
@@ -122,7 +122,7 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.do_PUT()
 
         handler.server.etl_server.transform.assert_called_with(
-            b"1234567890", "/test/object"
+            b"1234567890", "/test/object", ""
         )
         self.assertIn(b"transformed", handler.wfile.getvalue())
 
@@ -196,7 +196,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
     # pylint: disable=protected-access
     async def test_get_network_content(self):
-        path = "test/path"
+        path = "test/path?etl_args=arg"
         fake_content = b"fake data"
 
         with patch.object(self.etl_server, "client", AsyncMock()) as mock_client:
@@ -214,7 +214,7 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_handle_get_request(self):
         self.etl_server.arg_type = ""
-        path = "test/object"
+        path = "test/object?etl_args=arg"
         original_content = b"original data"
         transformed_content = original_content[::-1]
 
@@ -452,22 +452,22 @@ class TestFlaskServer(unittest.TestCase):
 
     def test_transform_put(self):
         input_data = b"hello"
-        response = self.client.put("/some/key", data=input_data)
+        response = self.client.put("/some/key?etl_args=arg", data=input_data)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, b"flask: " + input_data)
+        self.assertEqual(response.data, b"flask: " + input_data + b"arg")
         assert "Content-Length" in response.headers
         assert int(response.headers["Content-Length"]) == len(response.data)
 
     def test_transform_get(self):
         input_data = b"flask get data"
-        path = "/some/key"
+        path = "/some/key?etl_args=arg"
         with patch("aistore.sdk.etl.webserver.flask_server.requests.get") as mock_get:
             mock_get.return_value = MagicMock(
                 content=input_data, raise_for_status=MagicMock()
             )
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.data, b"flask: " + input_data)
+            self.assertEqual(response.data, b"flask: " + input_data + b"arg")
             assert "Content-Length" in response.headers
             assert int(response.headers["Content-Length"]) == len(response.data)
 
@@ -505,7 +505,7 @@ class TestBaseEnforcement(unittest.TestCase):
             del os.environ["AIS_TARGET_URL"]
 
         class MinimalFastAPIServer(FastAPIServer):
-            def transform(self, data: bytes, path: str) -> bytes:
+            def transform(self, data: bytes, *_args) -> bytes:
                 return data
 
         with self.assertRaises(EnvironmentError) as context:
@@ -517,7 +517,7 @@ class TestBaseEnforcement(unittest.TestCase):
             del os.environ["AIS_TARGET_URL"]
 
         class MinimalFlaskServer(FlaskServer):
-            def transform(self, data: bytes, path: str) -> bytes:
+            def transform(self, data: bytes, *_args) -> bytes:
                 return data
 
         with self.assertRaises(EnvironmentError) as context:
@@ -529,7 +529,7 @@ class TestBaseEnforcement(unittest.TestCase):
             del os.environ["AIS_TARGET_URL"]
 
         class MinimalHTTPServer(HTTPMultiThreadedServer):
-            def transform(self, data: bytes, path: str) -> bytes:
+            def transform(self, data: bytes, *_args) -> bytes:
                 return data
 
         with self.assertRaises(EnvironmentError) as context:
@@ -566,3 +566,45 @@ class TestBaseEnforcement(unittest.TestCase):
         with self.assertRaises(TypeError) as context:
             IncompleteFlaskServer()  # pylint: disable=abstract-class-instantiated
         self.assertIn("Can't instantiate abstract class", str(context.exception))
+
+
+class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
+        os.environ["ARG_TYPE"] = ""
+        os.environ["DIRECT_PUT"] = "false"
+
+        class ArgFastAPI(FastAPIServer):
+            def transform(self, _data: bytes, _path: str, etl_args: str) -> bytes:
+                return etl_args.encode()
+
+        self.etl_server = ArgFastAPI()
+        self.client = TestClient(self.etl_server.app)
+
+    # pylint: disable=protected-access
+    async def test_get_with_etl_args(self):
+        path = "test/path?etl_args=arg"
+
+        with patch.object(self.etl_server, "client", AsyncMock()) as mock_client:
+            mock_response = AsyncMock()
+            mock_response.content = b"arg"
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.get.return_value = mock_response
+
+            result = await self.etl_server._get_network_content(path)
+
+            self.assertEqual(result, b"arg")
+            mock_client.get.assert_called_once()
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_put_with_etl_args(self):
+        self.etl_server.arg_type = ""
+        path = "test/object?etl_args=arg"
+        input_content = b"input data"
+        transformed_content = b"arg"
+
+        response = self.client.put(f"/{path}", content=input_content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, transformed_content)

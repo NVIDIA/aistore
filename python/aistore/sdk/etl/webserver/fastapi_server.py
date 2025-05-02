@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+
 import os
 import asyncio
 from urllib.parse import unquote, quote
@@ -22,6 +26,7 @@ from aistore.sdk.const import (
     STATUS_NO_CONTENT,
     ETL_WS_FQN,
     ETL_WS_DESTINATION_ADDR,
+    QPARAM_ETL_ARGS,
 )
 
 
@@ -78,9 +83,12 @@ class FastAPIServer(ETLServer):
                         if fqn
                         else await websocket.receive_bytes()
                     )
+                    etl_args = ctrl_msg.get(QPARAM_ETL_ARGS)
 
                     self.logger.debug("Received content length: %d", len(content))
-                    transformed = await asyncio.to_thread(self.transform, content, "")
+                    transformed = await asyncio.to_thread(
+                        self.transform, content, "ws", etl_args
+                    )
 
                     direct_put_url = ctrl_msg.get(ETL_WS_DESTINATION_ADDR)
                     if direct_put_url:
@@ -123,6 +131,9 @@ class FastAPIServer(ETLServer):
         self.logger.info(
             "Processing %s request for path: %s", "GET" if is_get else "PUT", path
         )
+        etl_args: str = request.query_params.get(QPARAM_ETL_ARGS, "")
+
+        self.logger.debug("etl_args = %r", etl_args)
 
         try:
             if self.arg_type == "fqn":
@@ -134,7 +145,9 @@ class FastAPIServer(ETLServer):
                     else await request.body()
                 )
 
-            transformed = await asyncio.to_thread(self.transform, content, path)
+            transformed = await asyncio.to_thread(
+                self.transform, content, path, etl_args
+            )
 
             delivery_target_url = request.headers.get(HEADER_NODE_URL)
             if delivery_target_url:

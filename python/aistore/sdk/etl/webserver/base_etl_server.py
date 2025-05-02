@@ -50,14 +50,15 @@ class ETLServer(ABC):
         self.logger.setLevel(logging.INFO)
 
     @abstractmethod
-    def transform(self, data: bytes, path: str) -> bytes:
+    def transform(self, data: bytes, path: str, etl_args: str) -> bytes:
         """
         Transform the data received from a request.
 
         Args:
             data (bytes): The original content fetched from AIS.
             path (str): The request path. This is usually the path
-                to the object. It can be used to determine the `etl_args`.
+                to the object.
+            etl_args (str): The arguments passed for the transformation.
 
         Returns:
             bytes: Transformed data to return to the caller.

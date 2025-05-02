@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+#
+
 import os
 from urllib.parse import unquote, quote
 
@@ -6,7 +10,7 @@ from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.utils import compose_etl_direct_put_url
-from aistore.sdk.const import HEADER_NODE_URL, STATUS_NO_CONTENT
+from aistore.sdk.const import HEADER_NODE_URL, STATUS_NO_CONTENT, QPARAM_ETL_ARGS
 
 
 class FlaskServer(ETLServer):
@@ -66,6 +70,7 @@ class FlaskServer(ETLServer):
             return jsonify({"error": str(e)}), 500
 
     def _handle_get(self, path):
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "")
         if self.arg_type == "fqn":
             content = self._get_fqn_content(path)
         else:
@@ -75,16 +80,18 @@ class FlaskServer(ETLServer):
             resp = requests.get(target_url, timeout=None)
             resp.raise_for_status()
             content = resp.content
-
-        return self.transform(content, path)
+        return self.transform(content, path, etl_args)
 
     def _handle_put(self, path):
+
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "")
+
         if self.arg_type == "fqn":
             content = self._get_fqn_content(path)
         else:
             content = request.get_data()
 
-        return self.transform(content, path)
+        return self.transform(content, path, etl_args)
 
     def _get_fqn_content(self, path: str) -> bytes:
         decoded_path = unquote(path)
