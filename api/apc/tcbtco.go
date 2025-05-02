@@ -18,13 +18,13 @@ import (
 
 type (
 	CopyBckMsg struct {
-		Prepend   string `json:"prepend"`     // destination naming, as in: dest-obj-name = Prepend + source-obj-name
-		Prefix    string `json:"prefix"`      // prefix to select matching _source_ objects or virtual directories
-		DryRun    bool   `json:"dry_run"`     // visit all source objects, don't make any modifications
-		Force     bool   `json:"force"`       // force running in presence of "limited coexistence" type conflicts
-		LatestVer bool   `json:"latest-ver"`  // see also: QparamLatestVer, 'versioning.validate_warm_get', PrefetchMsg
-		Sync      bool   `json:"synchronize"` // see also: 'versioning.synchronize'
-		NonRecurs bool   `json:"non-recurs"`  // do not copy contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.EvdMsg`)
+		Prepend   string `json:"prepend"`              // destination naming, as in: dest-obj-name = Prepend + source-obj-name
+		Prefix    string `json:"prefix"`               // prefix to select matching _source_ objects or virtual directories
+		DryRun    bool   `json:"dry_run"`              // visit all source objects, don't make any modifications
+		Force     bool   `json:"force"`                // force running in presence of "limited coexistence" type conflicts
+		LatestVer bool   `json:"latest-ver"`           // see also: QparamLatestVer, 'versioning.validate_warm_get', PrefetchMsg
+		Sync      bool   `json:"synchronize"`          // see also: 'versioning.synchronize'
+		NonRecurs bool   `json:"non-recurs,omitempty"` // do not copy contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.EvdMsg`)
 	}
 	Transform struct {
 		Name    string       `json:"id,omitempty"`
@@ -46,9 +46,9 @@ type (
 		// user-defined number of concurrent workers:
 		// * 0:  number of mountpaths (default)
 		// * -1: single thread, serial execution
-		NumWorkers int `json:"num-workers"`
+		NumWorkers int `json:"num-workers,omitempty"`
 
-		ContinueOnError bool `json:"coer"`
+		ContinueOnError bool `json:"coer,omitempty"`
 	}
 
 	// multi-object

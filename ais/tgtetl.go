@@ -164,14 +164,15 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
 	comm, errN := etl.GetCommunicator(dpq.etl.name)
 	if errN != nil {
-		if cos.IsErrNotFound(errN) {
+		switch {
+		case cos.IsErrNotFound(errN):
 			smap := t.owner.smap.Get()
-			errNV := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
-				errN, smap.Primary.URL(cmn.NetPublic))
-			t.writeErr(w, r, errNV, http.StatusNotFound)
-			return
+			pub := smap.Primary.URL(cmn.NetPublic)
+			err := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint", errN, pub)
+			t.writeErr(w, r, err, http.StatusNotFound)
+		default:
+			t.writeErr(w, r, errN)
 		}
-		t.writeErr(w, r, errN)
 		return
 	}
 
@@ -181,7 +182,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 
 	if err == nil {
 		xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
-		return
+		return                           // ok
 	}
 
 	// NOTE:
