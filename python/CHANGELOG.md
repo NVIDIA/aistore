@@ -10,6 +10,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
+### Changed
+
+## [1.13.6] - 2025-05-02
+
+### Added
+
 - Add `compose_etl_direct_put_url` utility function to compose direct put url from the provided request header
 
 ### Changed
