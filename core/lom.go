@@ -194,24 +194,23 @@ func (lom *LOM) IsHRW() bool {
 	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
 }
 
-func (lom *LOM) Bprops() *cmn.Bprops { return lom.bck.Props }
-
-// bprops accessors for convenience
+// assorted accessors
+func (lom *LOM) Bck() *meta.Bck                 { return &lom.bck }
+func (lom *LOM) Bprops() *cmn.Bprops            { return lom.bck.Props }
 func (lom *LOM) ECEnabled() bool                { return lom.Bprops().EC.Enabled }
 func (lom *LOM) IsFeatureSet(f feat.Flags) bool { return lom.Bprops().Features.IsSet(f) }
 func (lom *LOM) MirrorConf() *cmn.MirrorConf    { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf      { return lom.bck.CksumConf() }
 func (lom *LOM) CksumType() string              { return lom.bck.CksumConf().Type }
 func (lom *LOM) VersionConf() cmn.VersionConf   { return lom.bck.VersionConf() }
+func (lom *LOM) Location() string               { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string       { return lom.ObjName }
-func (lom *LOM) Bck() *meta.Bck           { return &lom.bck }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
-func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
-// chunks vs whole // TODO -- FIXME: NIY
+// chunks vs whole // TODO: NIY
 func (lom *LOM) IsChunked(special ...bool) bool {
 	debug.Assert(len(special) > 0 || lom.loaded())
 	return false

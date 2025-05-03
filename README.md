@@ -1,29 +1,29 @@
-**AIStore is a lightweight object storage system with the capability to linearly scale out with each added storage node and a special focus on petascale deep learning.**
+**AIStore: High-Performance, Scalable Object Storage for AI Workloads**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a lightweight, built-from-scratch storage stack tailored for AI applications. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
+AIStore (AIS) is a lightweight distributed storage stack tailored for AI applications. Built from scratch, AIS provides linear scale-out across storage nodes, consistent performance, and a flexible deployment model.
 
-AIS [consistently shows balanced I/O distribution and linear scalability](https://aistore.nvidia.com/blog/2024/02/16/multihome-bench) across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aistore.nvidia.com/blog/2023/06/09/aisio-transforms-with-webdataset-pt-3) custom dataset transformations (often referred to as [ETL](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
+AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered nodes. The system supports fast data access, reliability, and rich customization for data transformation workloads.
 
 ## Features
 
-* ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no deployment limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - AIS runs on any Linux machine, whether virtual or physical.
-* ✅ **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
-* ✅ **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
-* ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, Microsoft Azure, and Oracle (OCI) Object Storage.
-* ✅ **Network of clusters**. Any AIS cluster can attach any other AIS cluster, thus gaining immediate visibility and fast access to the respective hosted datasets.
-* ✅ **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
-* ✅ **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
-* ✅ **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
-* ✅ **Read-after-write consistency**. Reading and writing (along with other control and data plane operations) can be performed via any AIS gateway, whether random, selected, or load-balanced. Once the first replica of an object is written and _finalized_, subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously (via `put-copies` and `ec-put` jobs, respectively).
-* ✅ **Write-through**. In presence of any [remote backend](/docs/providers.md), AIS executes remote write (e.g., using vendor's SDK) as part of the [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that places and _finalizes_ the first replica.
-* ✅ **Small file datasets.** To serialize small files and facilitate batch processing, AIS supports TAR, TAR.GZ (or TGZ), ZIP, and TAR.LZ4 formatted objects (often called _shards_). Resharding (for optimal sorting and sizing), listing contained files (samples), appending to existing shards, and generating new ones from existing objects and/or client-side files - is also fully supported.
-* ✅ **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator).
-* ✅ **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
-* ✅ **Distributed shuffle** extension for massively parallel resharding of very large datasets.
-* ✅ **Batch jobs**. APIs and CLI tools to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
+* ✅ **Universal Multi-Cloud Access:** Seamlessly access and manage content across multiple [cloud backends](/docs/overview.md#at-a-glance) (including AWS S3, GCS, Azure, OCI), with an additional benefit of fast-tier performance and configurable data redundancy.
+* ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment or functionality.
+* ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
+* ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
+* ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
+* ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
+* ✅ **Custom ETL Offload:** Execute I/O intensive data transformations close to the data, either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
+* ✅ **Existing File Datasets:** Ingest file datasets from any local or remote source, either on-demand (ad-hoc) or through asynchronous [batch](/docs/overview.md#promote-local-or-shared-files).
+* ✅ **Read-after-Write Consistency:** Once the first object replica is finalized, subsequent reads are guaranteed to view the same content, with operations performed through any AIS gateway. Additional copies or erasure-coded slices are added asynchronously, if configured.
+* ✅ **Write-through:** In presence of remote backends, AIS executes remote writes (using the vendor's SDK) as part of the same [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that finalizes storing the object's first replica in the cluster. (If the remote write fails, the entire write operation will also fail.)
+* ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 formats for batching and processing small files. Supported features include resharding for optimal sorting, appending to existing shards, and listing contained files.
+* ✅ **Kubernetes**. For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). A dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains Ansible scripts, Helm charts, and deployment guidance.
+* ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
+* ✅ **Distributed Shuffle:** Efficiently reshard large datasets in parallel.
+* ✅ **Batch Jobs:** Start, monitor, and control cluster-wide [batch operations](/docs/batch.md).
 
 For ease of use, management, and monitoring, there's also:
 * **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:
