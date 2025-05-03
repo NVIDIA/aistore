@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -318,10 +319,24 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	xactID := amsg.Name
-	if xctn, err = xreg.GetXact(xactID); err != nil {
-		t.writeErr(w, r, err)
+	if strings.IndexByte(xactID, xact.SepaID[0]) > 0 {
+		uuids := strings.Split(xactID, xact.SepaID)
+		for _, xid := range uuids {
+			if xctn, err = xreg.GetXact(xid); err == nil {
+				break
+			}
+		}
+	} else {
+		if xctn, err = xreg.GetXact(xactID); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+	if xctn == nil {
+		t.writeErr(w, r, cos.NewErrNotFound(t, xactID), http.StatusNotFound)
 		return
 	}
+
 	xtco, ok := xctn.(*xs.XactTCO)
 	debug.Assert(ok)
 

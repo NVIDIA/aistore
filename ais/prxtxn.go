@@ -700,7 +700,9 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 	}
 
 	if xid == "" {
-		xid = strings.Join(all, xact.SepaID) // return comma-separated x-tco IDs
+		// return comma-separated x-tco IDs
+		// see x-tco for related: p.genBEID
+		xid = strings.Join(all, xact.SepaID)
 	}
 	return xid, nil
 }
