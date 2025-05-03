@@ -1,47 +1,70 @@
 #!/bin/bash
 
-# This script starts or restarts minikube with a specific amount of resources, 
-# registers a gitlab runner if necessary, then opens a minikube tunnel 
+# This script starts or restarts a Minikube cluster and registers a GitLab runner if necessary.
+
+set -e
+
+RUNNER_TOKEN=""
+NODES=1
+CONCURRENCY=1
+DATA_ROOT=""
+LPP_VERSION="v0.0.31"
+TUNNEL=false
 
 # Parse command line arguments
-RUNNER_TOKEN=""
-NODES=""
-
-
 while [[ $# -gt 0 ]]; do
-  case $1 in
-    --token=*)
-      RUNNER_TOKEN="${1#*=}"
-      shift
-      ;;
-    --token)
-      RUNNER_TOKEN="$2"
-      shift 2
+  case "$1" in
+    --nodes)
+      NODES="$2" && shift 2
       ;;
     --nodes=*)
-      NODES="${1#*=}"
-      shift
+      NODES="${1#*=}" && shift
       ;;
-    --nodes)
-      NODES="$2"
-      shift 2
+    --tunnel)
+      TUNNEL="$2" && shift 2
+      ;;
+    --tunnel=*)
+      TUNNEL="${1#*=}" && shift
+      ;;
+    --token)
+      RUNNER_TOKEN="$2" && shift 2
+      ;;
+    --token=*)
+      RUNNER_TOKEN="${1#*=}" && shift
+      ;;
+    --data-root)
+      DATA_ROOT="$2" && shift 2
+      ;;
+    --data-root=*)
+      DATA_ROOT="${1#*=}" && shift
+      ;;
+    --concurrency)
+      CONCURRENCY="$2" && shift 2
+      ;;
+    --concurrency=*)
+      CONCURRENCY="${1#*=}" && shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 [--nodes <number_of_nodes>] [--token <runner_token>] [--data-root <absolute_path>] [--concurrency <runner_concurrency>] [--tunnel <true|false>]"
+      exit 0
       ;;
     *)
       echo "Unknown parameter: $1"
-      echo "Usage: $0 --nodes <number_of_nodes> [--token <runner_token>]"
+      echo "Usage: $0 [--nodes <number_of_nodes>] [--token <runner_token>] [--data-root <absolute_path>] [--concurrency <runner_concurrency>] [--tunnel <true|false>]"
       exit 1
       ;;
   esac
 done
 
-if [ -z "$NODES" ]; then
-  echo "Error: --nodes parameter is required"
-  echo "Usage: $0 --nodes=<number_of_nodes> [--token=<runner_token>]"
-  exit 1
-fi
-
+# Warn if no runner token
 if [ -z "$RUNNER_TOKEN" ]; then
   echo "No runner token provided. No new runner will be registered."
+fi
+
+# Validate DATA_ROOT if provided
+if [ -n "$DATA_ROOT" ] && [[ "$DATA_ROOT" != /* ]]; then
+  echo "Error: --data-root must be an absolute path (e.g. /data)"
+  exit 1
 fi
 
 GITLAB_HOST="https://gitlab-master.nvidia.com/"
@@ -51,12 +74,14 @@ MAX_CPU=16
 MAX_RAM=32768
 MIN_CPU=2
 MIN_RAM=4096
+
 # Reserved for host system
 HOST_MEM=2000
 HOST_CPU=2
 
 NUM_CPU=$(nproc --all)
 TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
+
 # Reserve 2 cores for the host system, but do not exceed the max number of cores
 MINIKUBE_CPU=$(((NUM_CPU-HOST_CPU) / NODES))
 if [ "$MINIKUBE_CPU" -gt "$MAX_CPU" ]; then
@@ -94,47 +119,55 @@ cleanup_minikube() {
           fi
       done
   fi
-  rm minikube_tunnel.log
-  minikube stop
-  minikube delete
+  rm -f minikube_tunnel.log
+  minikube delete || true
 }
 
-# (Re)Start minikube
+# (Re)start Minikube
 cleanup_minikube
 minikube start --cpus=$MINIKUBE_CPU --memory=$MINIKUBE_MEMORY --nodes="$NODES"
 
 # Required for hostPath mounts on multi-node clusters https://minikube.sigs.k8s.io/docs/tutorials/multi_node/
 minikube addons enable volumesnapshots
 minikube addons enable csi-hostpath-driver
-# Cannot build with "minikube docker-env" for multi-node, so use registry
-minikube addons enable registry
-
-# Apply RBAC to allow the default service account admin privileges
-kubectl apply -f minikube_rbac.yaml
 
 # Install local path provisioner to allow dynamic local storage for state (used by k8s operator tests)
-kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.28/deploy/local-path-storage.yaml
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner${LPP_VERSION}/deploy/local-path-storage.yaml
 
 # Apply modified coredns config to allow for faster DNS updates
 # Useful for tests where we create and destroy new services rapidly
 kubectl replace -f coredns_config.yaml
 
-# Register the runner in short-lived config container if a runner token is provided
+# Register the runner if a token is provided
 if [ -n "$RUNNER_TOKEN" ]; then
-echo "Running gitlab-runner register to create config with new token"
-  sudo gitlab-runner register \
-  --non-interactive \
-  --url "$GITLAB_HOST" \
-  --token "$RUNNER_TOKEN" \
-  --name test-runner \
-  --executor kubernetes \
-  --kubernetes-host "$(minikube ip):8443" \
-  --kubernetes-image ubuntu:22.04 \
-  --kubernetes-namespace default \
-  --kubernetes-cert-file "$MINIKUBE_HOME/profiles/minikube/apiserver.crt" \
-  --kubernetes-key-file "$MINIKUBE_HOME/profiles/minikube/apiserver.key" \
-  --kubernetes-ca-file "$MINIKUBE_HOME/ca.crt"
+  echo "Registering GitLab Runner"
+  sudo sed -i "1s/.*/concurrent = $CONCURRENCY/" /etc/gitlab-runner/config.toml
+  REG_CMD=(
+    sudo gitlab-runner register
+    --non-interactive
+    --url "$GITLAB_HOST"
+    --token "$RUNNER_TOKEN"
+    --name test-runner
+    --executor kubernetes
+    --kubernetes-host "$(minikube ip):8443"
+    --kubernetes-image ubuntu:22.04
+    --kubernetes-namespace default
+    --kubernetes-cert-file "$MINIKUBE_HOME/profiles/minikube/apiserver.crt"
+    --kubernetes-key-file "$MINIKUBE_HOME/profiles/minikube/apiserver.key"
+    --kubernetes-ca-file "$MINIKUBE_HOME/ca.crt"
+    --kubernetes-privileged=true
+  )
+  if [ -n "$DATA_ROOT" ]; then
+    REG_CMD+=(
+      --builds-dir "${DATA_ROOT}/builds"
+      --cache-dir  "${DATA_ROOT}/cache"
+    )
+  fi
+  "${REG_CMD[@]}"
 fi
 
-# Open a minikube tunnel indefinitely
-nohup minikube tunnel > minikube_tunnel.log 2>&1 &
+# Optionally open a Minikube tunnel indefinitely in the background
+if [ "$TUNNEL" = "true" ]; then
+  echo "Starting Minikube tunnel in the background..."
+  nohup minikube tunnel > minikube_tunnel.log 2>&1 &
+fi
