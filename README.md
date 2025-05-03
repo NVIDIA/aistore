@@ -1,4 +1,4 @@
-**AIStore: High-Performance, Scalable Object Storage for AI Workloads**
+**AIStore: High-Performance, Scalable Storage for AI Workloads**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
