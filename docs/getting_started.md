@@ -40,7 +40,7 @@ See also:
 
 Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, and/or `attr` packages. These packages must be installed.
 
-Speaking of distributions, our current default recommendation is Ubuntu Server 20.04 LTS. But Ubuntu 18.04 and CentOS 8.x (or later) will also work. As well as numerous others.
+Speaking of distributions, our current default recommendation is Ubuntu Server 24.04 LTS or Ubuntu Server 22.04 LTS, as it has been our experience. However, AIStore has no special dependencies, so virtually any distribution will work.
 
 For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs and more.
 

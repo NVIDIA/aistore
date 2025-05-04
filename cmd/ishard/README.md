@@ -1,6 +1,6 @@
 # Initial Sharder
 
-Initial Sharding utility (`ishard`) is intended to create well-formed [WebDataset-formatted](https://github.com/webdataset/webdataset?tab=readme-ov-file#the-webdataset-format) shards from the original dataset. 
+Initial Sharding utility (`ishard`) is intended to create well-formed [WebDataset-formatted](https://github.com/webdataset/webdataset?tab=readme-ov-file#the-webdataset-format) shards from the original dataset.
 
 Note that original ML datasets will have an arbitrary structure, a massive number of small files and/or very large files, and deeply nested directories. Notwithstanding, there's almost always the need to batch associated files (that constitute computable samples) together and maybe pre-shuffle them for immediate consumption by a model.
 
@@ -20,7 +20,12 @@ To give a quick example, `a/b/c/toyota.jpeg` and `a/b/c/toyota.json` from an ori
 
 - **File**: Represents individual files in the source bucket. The file names are substituted into sample keys based on a configurable rule called `sample_key_pattern`.
 - **Sample**: Groups multiple files with the same sample key into a single structure. After `ishard` execution, samples are indivisible and will always be included together in the same output shard.
-- **Shard**: Represents the output of `ishard`, which is a collection of files archived in `.tar`, `.tgz` or `.tar.gz`, `.zip`, or `.tar.lz4` formats.
+- **Shard**: Collection of files archived in `.tar`, `.tgz` or `.tar.gz`, `.zip`, or `.tar.lz4` formats.
+
+### See also:
+
+* [Terminology: Shard](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology).
+* [Blog: Initial Sharding of Machine Learning Datasets](https://aistore.nvidia.com/blog/2024/08/16/ishard)
 
 ## CLI Parameters
 

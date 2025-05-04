@@ -57,25 +57,25 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 
 ## Terminology
 
-* **Target** - a storage node. To store user data, targets utilize **mountpaths** (see next). In the docs and the code, instead of saying something like "storage node in an aistore cluster" we simply say: "target."
+* **Target**: a storag  node. To store user data, targets utilize **mountpaths** (see below). In the documentation and code, we refer to a "target" simply as "target" instead of saying "storage node in an AIS cluster."
 
-* **Proxy** - a **gateway** providing [API](#aistore-api) access point. Proxies are diskless - they do not have direct access to user data, and do not "see" user data in-flight. One of the proxies is elected, or designated, as the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways (but only one _primary_ at any given time).
+* **Proxy**: a **gateway** providing [API](#aistore-api) access point. Proxies are diskless, mesaning they do not have direct access to user data, and do not "see" user data in-flight. One of the proxies is elected, or designated, as the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways (but only one _primary_ at a time). AIS proxy/gateway provides HTTP-based APIs, both [native](#aistore-api) and S3 compatible option. In the event of a failure of the current _primary_ the remaining proxies collaborate to perform a majority-voted HA failover. The terms "proxy" and "gateway" are used interchangeably.
 
-> AIS proxy/gateway implements RESTful APIs, both [native](#aistore-api) and S3 compatible. Upon _primary_ failure, remaining proxies collaborate with each other to perform majority-voted HA failover. The terms "proxy" and "gateway" are used interchangeably.
+> In a cluster, there is no direct correlation between the number of proxies and targets; however, for symmetry, we typically deploy one proxy for each target node.
 
-> In AIS cluster, there is no correlation between the numbers of proxies and targets, although for symmetry we usually deploy one proxy for each target (storage) node.
+* [Backend provider](providers.md) (or simply **backend**) - an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "local" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
+
+* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
+
+* [Xaction](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) (or simply **job**) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs**, a more familiar term that can be used interchangeably. Examples include erasure coding, n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and more. All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) for displaying both common counters (byte and object numbers) and operation-specific extended statistics.
+
+* [Shard](archive.md) In AIStore, sharding refers to the process of serializing original files (such as images and labels) into objects formatted as TAR, TGZ, ZIP, or TAR.LZ4. A shard is an object that follows a specific convention, often referred to as the [WebDataset format](https://aistore.nvidia.com/blog/2024/08/16/ishard). The benefits of serialization are well-established: iterable formats like TAR enable purely sequential I/O operations, significantly improving performance on local drives. In the context of machine learning, sharding enhances data shuffling and eliminates bias, allowing for global shuffling of shard names and the use of a shuffle buffer on the client side to ensure adequate randomization of training data.
 
 * [Mountpath](configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath - meaning **no disk sharing**. Secondly, mountpath directories cannot be nested. Further:
    - a mountpath can be temporarily disabled and (re)enabled;
    - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
    - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
-
-* [Backend Provider](providers.md) - an abstraction, and simultaneously an API-supported option, that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
-
-* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
-
-* [Xaction](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
 ## Design Philosophy
 

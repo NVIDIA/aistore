@@ -1,4 +1,4 @@
-# Minimal Production-Ready Standalone Docker Deployment
+# Minimal Standalone Docker Deployment
 
 The idea is to quickly run a fully functional (albeit minimal) AIS cluster consisting of a single gateway and a single storage node.
 

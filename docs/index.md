@@ -123,7 +123,7 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 
 Since AIS natively supports [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3, GCS, Azure, and OCI buckets, and more.
 
-## Guides and References
+## Guides and References (extended index)
 
 - [Getting Started](/docs/getting_started.md)
 - [Technical Blog](https://aistore.nvidia.com/blog)
@@ -144,7 +144,7 @@ Since AIS natively supports [remote backends](/docs/providers.md), you can also 
   - [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
   - [Monitoring](/docs/cli/show.md)
     - [`ais show cluster`](/docs/cli/show.md)
-    - [`ais show performance`](/docs/cli/show.md)
+    - [`ais performance`](/docs/cli/performance.md)
     - [`ais show job`](/docs/cli/show.md)
   - [Cluster and node management](/docs/cli/cluster.md)
   - [Mountpath (disk) management](/docs/cli/storage.md)
@@ -155,10 +155,13 @@ Since AIS natively supports [remote backends](/docs/providers.md), you can also 
   - [Jobs](/docs/cli/job.md)
 - Security and Access Control
   - [Authentication Server (AuthN)](/docs/authn.md)
-- Power tools and extensions
+- Archiving and Sharding
   - [Reading, writing, and listing *archives*](/docs/archive.md)
+  - [Initial Sharding of Machine Learning Datasets](https://aistore.nvidia.com/blog/2024/08/16/ishard)
   - [Distributed Shuffle](/docs/dsort.md)
+- Power tools and extensions
   - [Downloader](/docs/downloader.md)
+  - [Distributed Shuffle](/docs/dsort.md)
   - [Extract, Transform, Load](/docs/etl.md)
   - [Tools and utilities](/docs/tools.md)
 - Benchmarking and tuning Performance
