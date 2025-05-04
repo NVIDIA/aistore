@@ -127,7 +127,7 @@ Let others know your project is powered by high-performance AI storage:
 
 * [Overview and design](/docs/overview.md)
 * [Getting Started](/docs/getting_started.md)
-- [Technical Blog](https://aistore.nvidia.com/blog)
+* [Technical Blog](https://aistore.nvidia.com/blog)
 * [S3 Compatibility](/docs/s3compat.md)
 * [Batch Jobs](/docs/batch.md)
 * [Performance](/docs/performance.md) and [CLI: performance](/docs/cli/performance.md)
