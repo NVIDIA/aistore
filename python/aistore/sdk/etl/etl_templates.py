@@ -380,7 +380,7 @@ HASH = """
 apiVersion: v1
 kind: Pod
 metadata:
-  name: transformer-hash-with-metadata
+  name: transformer-hash-with-args
   annotations:
     communication_type: "{communication_type}://"
     wait_timeout: 5m
@@ -391,8 +391,8 @@ spec:
       imagePullPolicy: Always
       ports:
         - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+          containerPort: 8000
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
       readinessProbe:
         httpGet:
           path: /health
