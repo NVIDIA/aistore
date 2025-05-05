@@ -1,42 +1,46 @@
 ---
 layout: post
-title: AIStore - scalable storage for AI applications
+title: AIStore: High-Performance, Scalable Storage for AI Workloads
 permalink: /
 redirect_from:
  - /index.md/
  - /README.md/
 ---
 
-**AIStore is a lightweight object storage system with the capability to linearly scale out with each added storage node and a special focus on petascale deep learning.**
-
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Version](https://img.shields.io/badge/version-v3.28-green.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS for short) is a lightweight, built-from-scratch storage stack tailored for AI applications. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
+AIStore (AIS) is a lightweight distributed storage stack tailored for AI applications. Built from scratch, AIS provides linear scale-out across storage nodes, consistent performance, and a flexible deployment model.
 
-AIS [consistently shows balanced I/O distribution and linear scalability](https://aistore.nvidia.com/blog/2024/02/16/multihome-bench) across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aistore.nvidia.com/blog/2023/06/09/aisio-transforms-with-webdataset-pt-3) custom dataset transformations (often referred to as [ETL](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
+AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered nodes. The system supports fast data access, reliability, and rich customization for data transformation workloads.
 
 ## Features
 
-* ✅ **Deploys anywhere**. AIS can be deployed anywhere, from an [all-in-one](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) ready-to-use Docker container and Google [Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) notebook to multi-petabyte [Kubernetes](https://github.com/NVIDIA/ais-k8s) clusters at NVIDIA data centers. There are [no deployment limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) - AIS runs on any Linux machine, whether virtual or physical.
-* ✅ **Highly available** control and data planes, end-to-end data protection, self-healing, n-way mirroring, erasure coding, and arbitrary number of extremely lightweight access points.
-* ✅ **REST API**. Comprehensive native HTTP-based API, as well as compliant [Amazon S3 API](/docs/s3compat.md) to run unmodified S3 clients and apps.
-* ✅ **Unified namespace** across multiple [remote backends](/docs/providers.md) including Amazon S3, Google Cloud, Microsoft Azure, and Oracle (OCI) Object Storage.
-* ✅ **Network of clusters**. Any AIS cluster can attach any other AIS cluster, thus gaining immediate visibility and fast access to the respective hosted datasets.
-* ✅ **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
-* ✅ **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
-* ✅ **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
-* ✅ **Read-after-write consistency**. Reading and writing (along with other control and data plane operations) can be performed via any AIS gateway, whether random, selected, or load-balanced. Once the first replica of an object is written and _finalized_, subsequent reads are guaranteed to view the same content. Additional copies and/or EC slices, if configured, are added asynchronously (via `put-copies` and `ec-put` jobs, respectively).
-* ✅ **Write-through**. In presence of any [remote backend](/docs/providers.md), AIS executes remote write (e.g., using vendor's SDK) as part of the [transaction](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#read-after-write-consistency) that places and _finalizes_ the first replica.
-* ✅ **Small file datasets.** To serialize small files and facilitate batch processing, AIS supports TAR, TAR.GZ (or TGZ), ZIP, and TAR.LZ4 formatted objects (often called _shards_). Resharding (for optimal sorting and sizing), listing contained files (samples), appending to existing shards, and generating new ones from existing objects and/or client-side files - is also fully supported.
-* ✅ **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator).
-* ✅ **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.
-* ✅ **Distributed shuffle** extension for massively parallel resharding of very large datasets.
-* ✅ **Batch jobs**. APIs and CLI tools to start, stop, and monitor documented [batch operations](/docs/batch.md), such as `prefetch`, `download`, copy or transform datasets, and many more.
+* ✅ **Multi-Cloud Access:** Seamlessly access and manage content across multiple [cloud backends](/docs/overview.md#at-a-glance) (including AWS S3, GCS, Azure, OCI), with an additional benefit of fast-tier performance and configurable data redundancy.
+* ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment or functionality.
+* ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
+* ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
+* ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
+* ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
+* ✅ **Custom ETL Offload:** Execute I/O intensive data transformations close to the data, either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
+* ✅ **Existing File Datasets:** Ingest file datasets from any local or remote source, either on-demand (ad-hoc) or through asynchronous [batch](/docs/overview.md#promote-local-or-shared-files).
+* ✅ **Read-after-Write Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write consistency) across all gateways.
+* ✅ **Write-through:** In presence of remote backends, AIS executes remote writes as part of the same [wriiting transaction](/docs/overview.md#write-through).
+* ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 serialization for batching and processing small files. Supported features include [initial sharding](https://aistore.nvidia.com/blog/2024/08/16/ishard), distributed shuffle (re-sharding), appending to existing shards, listing contained files, and [more](/docs/overview.md#shard).
+* ✅ **Kubernetes**. For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). A dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains Ansible scripts, Helm charts, and deployment guidance.
+* ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
+* ✅ **Batch Jobs:** Start, monitor, and control cluster-wide [batch operations](/docs/batch.md).
 
-For ease of use, management, and monitoring, there's also:
-* **Integrated easy-to-use [CLI](/docs/cli.md)**, with top-level commands including:
+The list of supported features is constantly growing and also includes: removing/adding nodes [at runtime](/docs/lifecycle_node.md), adaptive [rate limiting](/docs/rate_limit.md), managing [TLS certificates](/docs/cli/x509.md), listing and operating on [virtual directories](/docs/howto_virt_dirs.md), [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests), and more.
 
+For the original **white paper** and design philosophy, please see [AIStore Overview](/docs/overview.md), which also includes high-level block diagram, terminology, APIs, CLI, and more.
+
+For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
+
+## CLI
+
+AIS includes an integrated, scriptable [CLI](/docs/cli.md) for managing clusters, buckets, and objects, running and monitoring batch jobs, viewing and downloading logs, generating performance reports, and more:
 
 ```console
 $ ais <TAB-TAB>
@@ -50,68 +54,64 @@ bucket           etl              object           scrub            tls
 cluster          evict            performance      search           wait
 ```
 
+### Developer Tools
+
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
 For developers and data scientists, there's also:
-* native [Go (language) API](https://github.com/NVIDIA/aistore/tree/main/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
-  - [Python SDK reference guide](/docs/python_sdk.md)
+
+* [Go API](https://github.com/NVIDIA/aistore/tree/main/api) used in [CLI](/docs/cli.md) and [benchmarking tools](/docs/aisloader.md)
+* [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) + [Reference Guide](/docs/python_sdk.md)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) and usage examples
-* [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
-  - and other [Botocore](https://github.com/boto/botocore) derivatives.
+* [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
 
-For the original AIS **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
+## Quick Start
 
-Finally, [getting started](/docs/getting_started.md) with AIS takes only a few minutes.
+1. Read the [Getting Started Guide](/docs/getting_started.md) for a 5-minute local install, or
+2. Run a [minimal](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) AIS cluster consisting of a single gateway and a single storage node, or
+3. Clone the repo and run `make kill cli aisloader deploy` followed by `ais show cluster`
 
 ---------------------
 
 ## Deployment options
 
-AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](/deploy/README.md).
+AIS deployment options, as well as intended (development vs. production vs. first-time) usages, are all [summarized here](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md).
 
 Since the prerequisites essentially boil down to having Linux with a disk the deployment options range from [all-in-one container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) to a petascale bare-metal cluster of any size, and from a single VM to multiple racks of high-end servers. Practical use cases require, of course, further consideration.
 
 Some of the most popular deployment options include:
 
-| Option | Objective |
+| Option | Use Case |
 | --- | ---|
-| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS; to get started, run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/overview.md#terminology), `M` - [gateways](/docs/overview.md#terminology) |
+| [Local playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) | AIS developers or first-time users, Linux or Mac OS. Run `make kill cli aisloader deploy <<< $'N\nM'`, where `N` is a number of [targets](/docs/overview.md#target), `M` - [gateways](/docs/overview.md#proxy) |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
-| [Easy automated GCP/GKE deployment](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
-| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
+| [Docker container](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/docker/single) | Quick testing and evaluation; single-node setup |
+| [GCP/GKE automated install](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
+| [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes; provided via [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-Further, there's the capability referred to as [global namespace](https://github.com/NVIDIA/aistore/blob/main/docs/providers.md#remote-ais-cluster): given HTTP(S) connectivity, AIS clusters can be easily interconnected to "see" each other's datasets. Hence, the idea to start "small" to gradually and incrementally build high-performance shared capacity.
+> For performance tuning, see [performance](/docs/performance.md) and [AIS K8s Playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks/host-config).
 
-> For detailed discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
+## Existing Datasets
 
-> For performance tuning and preparing AIS nodes for bare-metal deployment, see [performance](/docs/performance.md).
+AIS supports multiple ingestion modes:
 
-## Existing datasets
+* ✅ **On Demand:** Transparent cloud access during workloads.
+* ✅ **PUT:** Locally accessible files and directories.
+* ✅ **Promote:** Import local target directories and/or NFS/SMB shares mounted on AIS targets.
+* ✅ **Copy:** Full buckets, virtual subdirectories, and lists or ranges (via Bash expansion).
+* ✅ **Download:** HTTP(S)-accessible datasets and objects.
+* ✅ **Prefetch:** Remote buckets or selected objects (from remote buckets), including subdirectories, lists, and/or ranges.
+* ✅ **Archive:** [Group and store](https://aistore.nvidia.com/blog/2024/08/16/ishard) related small files from an original dataset.
 
-AIS supports multiple ways to populate itself with existing datasets, including (but not limited to):
+## Install from Release Binaries
 
-* **on demand**, often during the first epoch;
-* **copy** entire bucket or its selected virtual subdirectories;
-* **copy** multiple matching objects;
-* **archive** multiple objects
-* **prefetch** remote bucket or parts of thereof;
-* **download** raw http(s) addressable directories, including (but not limited to) Cloud storages;
-* **promote** NFS or SMB shares accessible by one or multiple (or all) AIS [target](/docs/overview.md#terminology) nodes;
-
-> The on-demand "way" is maybe the most popular, whereby users just start running their workloads against a [remote bucket](/docs/providers.md) with AIS cluster positioned as an intermediate fast tier.
-
-But there's more. In [v3.22](https://github.com/NVIDIA/aistore/releases/tag/v1.3.22), we introduce [blob downloader](/docs/blob_downloader.md), a special facility to download very large remote objects (BLOBs). And in [v3.23](https://github.com/NVIDIA/aistore/releases/tag/v1.3.23), there's a new capability, dubbed [bucket inventory](/docs/s3inventory.md), to list very large S3 buckets _fast_.
-
-## Installing from release binaries
-
-Generally, AIS (cluster) requires at least some sort of [deployment](/deploy#contents) procedure. There are standalone binaries, though, that can be [built](/Makefile) from source or installed directly from GitHub:
+You can install the CLI and benchmarking tools using:
 
 ```console
-$ ./scripts/install_from_binaries.sh --help
+./scripts/install_from_binaries.sh --help
 ```
 
-The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the most recent, or the previous, GitHub [release](https://github.com/NVIDIA/aistore/releases). For CLI, it'll also enable auto-completions (which is strongly recommended).
+The script pulls from the latest or previous [GitHub Release](https://github.com/NVIDIA/aistore/releases) and enables CLI auto-completion.
 
 ## PyTorch integration
 
@@ -121,7 +121,15 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 * [AIS plugin for PyTorch: usage examples](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
 * [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
 
-Since AIS natively supports [remote backends](/docs/providers.md), you can also use (PyTorch + AIS) to iterate over Amazon S3, GCS, Azure, and OCI buckets, and more.
+## AIStore Badge
+
+Let others know your project is powered by high-performance AI storage:
+
+[![aistore](https://img.shields.io/badge/powered%20by-AIStore-76B900?style=flat&labelColor=000000)](https://github.com/NVIDIA/aistore)
+
+```markdown
+[![aistore](https://img.shields.io/badge/powered%20by-AIStore-76B900?style=flat&labelColor=000000)](https://github.com/NVIDIA/aistore)
+```
 
 ## Guides and References (extended index)
 

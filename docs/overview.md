@@ -13,21 +13,23 @@ Training deep learning (DL) models on petascale datasets is essential for achiev
 
 In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore (AIS) and components, and then compare system performance experimentally using image classification workloads and storing training data on a variety of backends.
 
-See also:
-
-* [blog](https://aistore.nvidia.com/blog)
-* [white paper](https://arxiv.org/abs/2001.01858)
-* [at-a-glance poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
-
 The rest of this document is structured as follows:
 
 - [At a glance](#at-a-glance)
 - [Terminology](#terminology)
+  - [Target](#target)
+  - [Proxy](#proxy)
+  - [Backend Provider](#backend provider)
+  - [Unified Namespace](#unified namespace)
+  - [Xaction](#xaction)
+  - [Shard](#shard)
+  - [Mountpath](#mountpath)
+  - [Read-after-Write Consistency](#read-after-write consistency)
+  - [Write-through](#write-through)
 - [Design Philosophy](#design-philosophy)
-- [Key Concepts and Diagrams](#key-concepts-and-diagrams)
+- [Original Diagrams](#original-diagrams)
 - [AIStore API](#aistore-api)
 - [Traffic Patterns](#traffic-patterns)
-- [Read-after-write consistency](#read-after-write-consistency)
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
@@ -36,7 +38,7 @@ The rest of this document is structured as follows:
 - [Networking](#networking)
 - [HA](#ha)
 - [Other Services](#other-services)
-- [dSort](#dsort)
+- [Sharding extensions: dSort and iShard](#sharding-extensions-dsort-and-ishard)
 - [CLI](#cli)
 - [ETL](#etl)
 - [_No limitations_ principle](#no-limitations-principle)
@@ -47,7 +49,7 @@ Following is a high-level **block diagram** with an emphasis on supported fronte
 
 ![At-a-Glance](images/cluster-block-v3.26.png)
 
-In any aistore cluster, there are **two kinds of nodes**: proxies (a.k.a. gateways) and storage nodes (targets):
+In any AIS cluster, there are **two kinds of nodes**: proxies (a.k.a. gateways) and targets (storage nodes):
 
 ![Proxies and Targets](images/proxy-target-block-2024.png)
 
@@ -57,25 +59,119 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 
 ## Terminology
 
-* **Target**: a storag  node. To store user data, targets utilize **mountpaths** (see below). In the documentation and code, we refer to a "target" simply as "target" instead of saying "storage node in an AIS cluster."
+### Target
 
-* **Proxy**: a **gateway** providing [API](#aistore-api) access point. Proxies are diskless, mesaning they do not have direct access to user data, and do not "see" user data in-flight. One of the proxies is elected, or designated, as the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways (but only one _primary_ at a time). AIS proxy/gateway provides HTTP-based APIs, both [native](#aistore-api) and S3 compatible option. In the event of a failure of the current _primary_ the remaining proxies collaborate to perform a majority-voted HA failover. The terms "proxy" and "gateway" are used interchangeably.
+A storage node. In the documentation and code, we refer to a "target" simply as "target" instead of saying "storage node in an AIS cluster."
+
+To store user data, targets utilize any number [mountpaths](#mountpath).
+
+### Proxy
+
+A **gateway** providing [API](#aistore-api) access point. Proxies are diskless, mesaning they do not have direct access to user data, and do not "see" user data in-flight. One of the proxies is elected, or designated, as the _primary_ (or leader) of the cluster. There may be any number of ais proxies/gateways (but only one _primary_ at a time). AIS proxy/gateway provides HTTP-based APIs, both [native](#aistore-api) and S3 compatible option.
+
+In the event of a failure of the current _primary_ the remaining proxies collaborate to perform a majority-voted HA failover. The terms "proxy" and "gateway" are used interchangeably.
 
 > In a cluster, there is no direct correlation between the number of proxies and targets; however, for symmetry, we typically deploy one proxy for each target node.
 
-* [Backend provider](providers.md) (or simply **backend**) - an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "local" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
+### Backend Provider
 
-* [Unified Global Namespace](providers.md) - AIS clusters *attached* to each other, effectively, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
+Backend provider (or simply **backend**) is an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "local" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
 
-* [Xaction](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) (or simply **job**) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs**, a more familiar term that can be used interchangeably. Examples include erasure coding, n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and more. All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) for displaying both common counters (byte and object numbers) and operation-specific extended statistics.
+> See the [providers](providers.md) readme for the most recently updated list of supported cloud storage options; instructions for running AIS as a backend for another AIS cluster are also included.
 
-* [Shard](archive.md) In AIStore, sharding refers to the process of serializing original files (such as images and labels) into objects formatted as TAR, TGZ, ZIP, or TAR.LZ4. A shard is an object that follows a specific convention, often referred to as the [WebDataset format](https://aistore.nvidia.com/blog/2024/08/16/ishard). The benefits of serialization are well-established: iterable formats like TAR enable purely sequential I/O operations, significantly improving performance on local drives. In the context of machine learning, sharding enhances data shuffling and eliminates bias, allowing for global shuffling of shard names and the use of a shuffle buffer on the client side to ensure adequate randomization of training data.
+### Unified Namespace
 
-* [Mountpath](configuration.md) - a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath - meaning **no disk sharing**. Secondly, mountpath directories cannot be nested. Further:
-   - a mountpath can be temporarily disabled and (re)enabled;
-   - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
-   - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
-   - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
+AIS clusters, when *attached* to each other, form a super-cluster providing unified global namespace whereby all buckets and all objects of all included clusters are uniformly accessible via any and all individual access points (of those clusters).
+
+Users can use a single AIS endpoint while referencing shared buckets with cluster-specific identifiers.
+
+### Xaction
+
+Extended action (or simply *xaction*) is asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute.
+
+CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs**, a more familiar term that we use interchangeably. Examples include erasure coding, n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and more.
+
+All [eXtended actions](https://github.com/NVIDIA/aistore/blob/main/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md) for displaying both common counters (byte and object numbers) and operation-specific extended statistics.
+
+The list of supported jobs can be viewed via the CLI `show` command and currently includes:
+
+```console
+$ ais show job --help
+
+NAME:
+   ais show job - Show running and/or finished jobs:
+
+     archive        blob-download  cleanup     copy-bucket       copy-objects      delete-objects
+     download       dsort          ec-bucket   ec-get            ec-put            ec-resp
+     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects     evict-remote-bucket
+     list           lru-eviction   mirror      prefetch-objects  promote-files     put-copies
+     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+```
+
+### Shard
+
+In AIStore, _sharding_ refers to the process of serializing original files and/or objects (such as images and labels) into larger-sized objects formatted as TAR, TGZ, ZIP, or TAR.LZ4 archives.
+
+The benefits of serialization are well-established: iterable formats like TAR enable purely sequential I/O operations, significantly improving performance on local drives. In the context of machine learning, sharding enhances data shuffling and eliminates bias, allowing for global shuffling of shard names and the use of a shuffle buffer on the client side to ensure adequate randomization of training data.
+
+Additionally, a shard is an object that can follow a specific convention, where related files (such as abc.jpeg, abc.cls, and abc.json) are packaged together in a single TAR archive. While AIS can read, write, and list any TAR, using this convention ensures that the necessary components for learning are kept together. For more information on the WebDataset format, see the [Hugging Face documentation](https://huggingface.co/docs/hub/en/datasets-webdataset).
+
+For more details, see:
+
+* [AIS can natively read, write, append, and list archives](/docs/archive.md)
+* [CLI: archive](/docs/cli/archive.md)
+* [Initial Sharding Tool (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
+* [Distributed Shuffle](/docs/cli/dsort.md)
+
+### Mountpath
+
+An AIS mountpath is defined as:
+
+* A single disk or a volume (such as a RAID) formatted with a local filesystem of your choice, and
+* A local directory that AIS can fully own and utilize to store user data and system metadata.
+
+Please note that any given disk (or RAID) can have at most one AIS mountpath — disk sharing is not permitted.
+
+Additionally, mountpath directories cannot be nested.
+
+Furthermore:
+
+* A mountpath can be temporarily disabled and (re)enabled.
+* A mountpath can also be detached and (re)attached, effectively supporting the growth and "shrinkage" of local capacity.
+* It is safe to execute the four listed operations (enable, disable, attach, detach) at any point during runtime.
+* In a typical deployment, the total number of mountpaths is calculated as the direct product of the number of storage targets and the number of disks in each [target](#target).
+
+### Read-after-Write Consistency
+
+The `PUT(object)` operation is a transaction. A new object (or a new version of an existing object) becomes visible and accessible only after AIS has finished writing the first replica and its associated metadata.
+
+For S3 or any other remote [backends](#backend-provider), this process includes:
+
+* Performing a remote PUT via the vendor's SDK library.
+* Executing a local write (that won't be visible to the user).
+* Receiving a successful remote response that carries the remote metadata.
+* Simultaneously computing the checksum (as per bucket configuration).
+* Optionally validating the checksum, if configured.
+* Finally, writing the combined object metadata, at which point the object becomes visible and accessible.
+
+Once the first object replica is finalized, subsequent reads are guaranteed to view the same content, regardless of the AIS gateway used. Additional copies or erasure-coded slices are added asynchronously, if configured. For example, in a bucket with 3-way replication, you may be able to read the first replica while the other two copies are still being processed.
+
+It is important to emphasize that the same rules of data protection and consistency are universally enforced across all _writing_ scenarios, including (but not limited to):
+
+* Cold GET
+* Copy bucket
+* Transform bucket
+* Multi-object copy, multi-object transform, multi-object archive
+* Prefetch remote bucket
+* Download large remote objects (blobs)
+* Rename bucket
+* Promote NFS share
+
+And more.
+
+### Write-through
+
+In presence of remote backends, AIS executes remote writes (using the vendor's SDK) as part of the same [transaction](#read-after-write-consistency) that finalizes storing the object's first replica in the cluster. If the remote write fails, the entire write operation will also fail (with subsequent associated cleanup).
 
 ## Design Philosophy
 
@@ -88,9 +184,7 @@ The corollary of this statement is two-fold:
 
 Notice that the same exact approach works for the other side of the spectrum - the proverbial [small-file problem](https://www.quora.com/What-is-the-small-file-problem-in-Hadoop). Here again, instead of optimizing small-size IOPS, we focus on application-specific (re)sharding, whereby each shard would have a desirable size, contain a batch of the original (small) files, and where the files (aka samples) would be sorted to optimizes subsequent computation.
 
-## Key Concepts and Diagrams
-
-In this section: high-level diagrams that introduce key concepts and architecture, as well as possible deployment options.
+## Original Diagrams
 
 AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
 
@@ -98,17 +192,13 @@ AIS cluster *comprises* arbitrary (and not necessarily equal) numbers of **gatew
 
 Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on any commodity hardware with pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
-The diagram depicting AIS clustered node follows below, and makes the point that gateways and storage targets can be colocated in a single machine (or a VM) but not necessarily:
-
-![One AIS machine](images/ais-host-20-block.png)
-
 AIS can be deployed as a self-contained standalone persistent storage cluster or a fast tier in front of any of the supported backends including Amazon S3 and Google Cloud (GCP). The built-in caching mechanism provides LRU replacement policy on a per-bucket basis while taking into account configurable high and low capacity watermarks (see [LRU](storage_svcs.md#lru) for details). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
 If (compute + storage) rack is a *unit of deployment*, it may as well look as follows:
 
 ![One rack](images/ais-rack-20-block.png)
 
-Finally, AIS target provides a number of storage services with [S3-like RESTful API](http_api.md) on top and a MapReduce layer that we call [dSort](#dsort).
+Here's an older (and simpler) diagram that depicts AIS target node:
 
 ![AIS target block diagram](images/ais-target-20-block.png)
 
@@ -143,36 +233,6 @@ As far as the datapath is concerned, there are no extra hops in the line of comm
 > For detailed traffic patterns diagrams, please refer to [this readme](traffic_patterns.md).
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
-
-## Read-after-write consistency
-
-`PUT(object)` is a transaction. New object (or new version of the object) becomes visible/accessible only when aistore finishes writing the first replica and its metadata.
-
-For S3 or any other remote [backend](/docs/providers.md), the latter includes:
-
-* remote PUT via vendor's SDK library;
-* local write under a temp name;
-* getting successful remote response that carries remote metadata;
-* simultaneously, computing checksum (per bucket config);
-* optionally, checksum validation, if configured;
-* finally, writing combined object metadata, at which point the object becomes visible and accessible.
-
-But _not_ prior to that point!
-
-If configured, additional copies and EC slices are added asynchronously. E.g., given a bucket with 3-way replication you may already read the first replica when the other two (copies) are still pending.
-
-It is worth emphasizing that the same rules of data protection and consistency are universally enforced across the board for all _data writing_ scenarios, including (but not limited to):
-
-* RESTful PUT (above);
-* cold GET (as in: `ais get s3://abc/xyz /dev/null` when S3 has `abc/xyz` while aistore doesn't);
-* copy bucket; transform bucket;
-* multi-object copy; multi-object transform; multi-object archive;
-* prefetch remote bucket;
-* download very large remote objects (blobs);
-* rename bucket;
-* promote NFS share
-
-and more.
 
 ## Open Format
 
@@ -369,13 +429,19 @@ The (quickly growing) list of services includes (but is not limited to):
 
 > Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#read-load-balancing).
 
-Most notably, AIStore provides **[dSort](/docs/dsort.md)** - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
+## Sharding extensions: dSort and iShard
 
-## dSort
+Distributed shuffle (codename dSort) “views” AIS data as named shards that comprise archived key/value data. The service supports tar, zip, tar-gzip, and tar-lz4 formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including `tf.Record` and `tf.Example` ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tfrecord)) and [MessagePack](https://msgpack.org/index.html).
 
-Dsort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including `tf.Record` and `tf.Example` ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tfrecord)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
+User runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
 
-By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
+Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
+
+Initial Sharding (`ishard`) utility will generate WebDataset-formatted shards from the original file-based dataset without spliting computable samples. The ultimate goal is to allow users to treat AIStore as a vast data lake, where they can easily upload training data in its raw format, regardless of size and directory structure.
+
+For more details, see:
+* [dSort](/docs/dsort.md)
+* [ishard](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
 
 ## CLI
 

@@ -18,7 +18,7 @@ Cluster-wide (global) configuration is protected, namely: checksummed, versioned
 
 Local config includes:
 
-1. node's own hostnames (or IP addresses) and [mountpaths](overview.md#terminology) (data drives);
+1. node's own hostnames (or IP addresses) and [mountpaths](overview.md#mountpath) (data drives);
 2. optionally, names-and-values that were changed for *this* specific node. For each node in the cluster, the corresponding capability (dubbed *config-override*) boils down to:
    * **inheriting** cluster configuration, and optionally
    * optionally, **locally overriding** assorted inherited defaults (see usage examples below).
@@ -494,7 +494,7 @@ $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -
 
 ## Managing mountpaths
 
-* [Mountpath](overview.md#terminology) - is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath (meaning **no disk sharing**) and mountpath directories cannot be nested. Further:
+* [Mountpath](overview.md#mountpath) - is a single disk **or** a volume (a RAID) formatted with a local filesystem of choice, **and** a local directory that AIS can fully own and utilize (to store user data and system metadata). Note that any given disk (or RAID) can have (at most) one mountpath (meaning **no disk sharing**) and mountpath directories cannot be nested. Further:
    - a mountpath can be temporarily disabled and (re)enabled;
    - a mountpath can also be detached and (re)attached, thus effectively supporting growth and "shrinkage" of local capacity;
    - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;

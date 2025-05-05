@@ -255,7 +255,7 @@ To the (fully expected) question of where the `prr` query comes from - all suppo
 
 ### Mountpaths and Disks
 
-Special subset of node operations (see previous section) to manage disks attached to specific storage target. The corresponding AIS abstraction is called [mountpath](/docs/overview.md#terminology).
+Special subset of node operations (see previous section) to manage disks attached to specific storage target. The corresponding AIS abstraction is called [mountpath](/docs/overview.md#mountpath).
 
 These APIs also require specific node ID (to identify the target in the cluster to operate on):
 
@@ -546,7 +546,7 @@ $ curl -s -L -X GET -H 'Content-Type: application/json' -d '{"action": "list", "
 
 ### Starting, stopping, and querying batch operations (jobs)
 
-The term we use in the code and elsewhere is [xaction](/docs/overview.md#terminology) - a shortcut for *eXtended action*. For definition and further references, see:
+The term we use in the code and elsewhere is [xaction](/docs/overview.md#xaction) - a shortcut for *eXtended action*. For definition and further references, see:
 
 * [Terminology](/docs/overview.md#terminology)
 * [Batch operations](/docs/batch.md)

@@ -13,7 +13,7 @@ One of the many associated challenges is a so-called [small-file problem](https:
 
 One way to address the small-file problem involves providing some sort of *serialization* or *sharding* that allows to run **unmodified** clients and apps.
 
-[Sharding](overview.md#terminology) is exactly the approach that we took in AIStoreo (AIS). Archiving or sharding, in the context, means utilizing TAR, for instance, to combine small files into .tar formatted shards.
+[Sharding](overview.md#shard) is exactly the approach that we took in AIStore (AIS). Archiving or sharding, in the context, means utilizing TAR, for instance, to combine small files into .tar formatted shards.
 
 > While I/O performance was always the primary motivation, the fact that a sharded dataset is, effectively, a backup of the original one must be considered an important added bonus.
 

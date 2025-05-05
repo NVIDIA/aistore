@@ -75,7 +75,7 @@ In aistore, all the migration (aka "rebalancing") that's taking in place is the 
 
 ### Proper location
 
-For any object in a cluster, its _proper_ location is defined by the current cluster map and locally - on each target node - by the locally configured target's [mountpaths](overview.md#terminology).
+For any object in a cluster, its _proper_ location is defined by the current cluster map and locally - on each target node - by the locally configured target's [mountpaths](overview.md#mountpath).
 
 In that sense, the "maintenance" state, for instance, has its _beginning_ - when the cluster starts rebalancing, and the post-rebalancing _end_, whereby the corresponding sub-state get recorded in a new version of the cluster map, which then gets safely distributed across all nodes, etc., etc.
 
