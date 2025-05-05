@@ -458,7 +458,7 @@ One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md
 
 ![CLI-tab](images/cli-overview.gif)
 
-AIS CLI is currently quickly developing. For more information, please see the project's own [README](/docs/cli.md).
+AIS CLI, at version (`ais version`) v1.17 at the time of this is writing, keeps actively developing. For more information, please see the project's own [README](/docs/cli.md).
 
 ## ETL
 

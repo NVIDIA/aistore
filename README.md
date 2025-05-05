@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-v3.28-green.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/NVIDIA/aistore)
 
-AIStore (AIS) is a lightweight distributed storage stack tailored for AI applications. Built from scratch, AIS provides linear scale-out across storage nodes, consistent performance, and a flexible deployment model.
+AIStore (AIS) is a lightweight distributed storage stack tailored for AI applications. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size. Built from scratch, AIS provides linear scale-out across storage nodes, consistent performance, and a flexible deployment model.
 
 AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered nodes. The system supports fast data access, reliability, and rich customization for data transformation workloads.
 
@@ -25,11 +25,10 @@ AIS consistently shows balanced I/O distribution and linear scalability across a
 * ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
 * ✅ **Batch Jobs:** Start, monitor, and control cluster-wide [batch operations](/docs/batch.md).
 
-The list of supported features is constantly growing and also includes: removing/adding nodes [at runtime](/docs/lifecycle_node.md), adaptive [rate limiting](/docs/rate_limit.md), managing [TLS certificates](/docs/cli/x509.md), listing and operating on [virtual directories](/docs/howto_virt_dirs.md), [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests), and more.
+The feature set is actively growing and also includes: [adding/removing nodes at runtime](/docs/lifecycle_node.md), managing [TLS certificates](/docs/cli/x509.md) at runtime, listing, copying, prefetching, and transforming [virtual directories](/docs/howto_virt_dirs.md), executing [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests), adaptive [rate limiting](/docs/rate_limit.md), and more.
 
-For the original **white paper** and design philosophy, please see [AIStore Overview](/docs/overview.md), which also includes high-level block diagram, terminology, APIs, CLI, and more.
-
-For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
+> For the original **white paper** and design philosophy, please see [AIStore Overview](/docs/overview.md), which also includes high-level block diagram, terminology, APIs, CLI, and more.
+> For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
 
 ## CLI
 
@@ -47,7 +46,7 @@ bucket           etl              object           scrub            tls
 cluster          evict            performance      search           wait
 ```
 
-### Developer Tools
+## Developer Tools
 
 AIS runs natively on Kubernetes and features open format - thus, the freedom to copy or move your data from AIS at any time using the familiar Linux `tar(1)`, `scp(1)`, `rsync(1)` and similar.
 
@@ -104,7 +103,7 @@ You can install the CLI and benchmarking tools using:
 ./scripts/install_from_binaries.sh --help
 ```
 
-The script pulls from the latest or previous [GitHub Release](https://github.com/NVIDIA/aistore/releases) and enables CLI auto-completion.
+The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the latest or previous GitHub [release](https://github.com/NVIDIA/aistore/releases) and enables CLI auto-completions.
 
 ## PyTorch integration
 
