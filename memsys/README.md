@@ -32,7 +32,7 @@ A typical initialization sequence includes steps, e.g.:
     }
     ```
 
-The example above shows initialization that ignores errors - in particular, insifficient minimum required memory (see the previous section).
+The example above shows initialization that ignores errors - in particular, insufficient minimum required memory (see the previous section).
 
 Alternatively, MMSA can be initialized *not* to panic on errors:
 
@@ -83,7 +83,7 @@ mm.Terminate()
 Once constructed and initialized, memory-manager-and-slab-allocator (MMSA) can be exercised via its public API that includes `GetSlab`, on the one hand and `Alloc`/`AllocSize` on the other.
 
 Notice the difference:
-* `GetSlab(fixed-bufsize)` returns Slab that contains presizely fixed-bufsize sized reusable buffers
+* `GetSlab(fixed-bufsize)` returns Slab that contains precisely fixed-bufsize sized reusable buffers
 * `Alloc()` and `AllocSize()` return both a Slab and an already allocated buffer from this Slab.
 
 Note as well that `Alloc()` uses default buffer size for a given MMSA, while `AllocSize()` accepts the specified size (as the name implies).

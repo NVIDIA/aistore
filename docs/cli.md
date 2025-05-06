@@ -23,7 +23,7 @@ AIS command-line interface (CLI) is a tool to easily manage and monitor every as
 
 In addition, CLI provides dataset management commands, reading and writing primitives, and more.
 
-Goven an existing aistore instance, maybe the very first command you execute would be `ais show cluster` - a variant of numerous `ais show` subcommands.  For example:
+Given an existing aistore instance, maybe the very first command you execute would be `ais show cluster` - a variant of numerous `ais show` subcommands.  For example:
 
 ```console
 $ ais show cluster
@@ -57,7 +57,7 @@ Summary:
    Build:               2024-01-29T00:29:36+0000
 ```
 
-Next, montoring wise, you'd maybe run `ais show performance`, etc.
+Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
 
 ## Getting Started
 

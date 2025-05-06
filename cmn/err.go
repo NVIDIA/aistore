@@ -343,7 +343,7 @@ func isErrUnsupp(err error) bool {
 func NewErrNotImpl(action, what string) *ErrNotImpl { return &ErrNotImpl{action, what} }
 
 func (e *ErrNotImpl) Error() string {
-	return fmt.Sprintf("cannot %s %s - not impemented yet", e.action, e.what)
+	return fmt.Sprintf("cannot %s %s - not implemented yet", e.action, e.what)
 }
 
 func isErrNotImpl(err error) bool {

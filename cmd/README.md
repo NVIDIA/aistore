@@ -43,7 +43,7 @@ OPTIONS:
   --completions         install and enable _only_ CLI autocompletions (ie., skip installing binaries)
 ```
 
-**NOTE:** For CLI, the script will also enable auto-completions. CLI can be used without (bash, zsh) auto-completions but, generally, using using auto-completions is strongly recommended.
+**NOTE:** For CLI, the script will also enable auto-completions. CLI can be used without (bash, zsh) auto-completions but, generally, using auto-completions is strongly recommended.
 
 ### Example: download 'ais' and 'aisloader' binaries from the latest release
 
