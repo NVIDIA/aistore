@@ -31,8 +31,7 @@ Further, cluster-wide rebalancing does not require any downtime.
 Incoming GET requests for the objects that haven't yet migrated (or are being moved) are handled internally via the mechanism that we call "get-from-neighbor".
 The (rebalancing) target that must (according to the new cluster map) have the object but doesn't, will locate its "neighbor", get the object, and satisfy the original GET request transparently from the user.
 
-Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the documented [RESTful API](http_api.md).
-It might be easier and faster, though, to use [AIS CLI](/docs/cli.md) - see next section.
+Similar to all other AIS modules and sub-systems, global rebalance is controlled and monitored via the native HTTP-based [Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) APIs, or [CLI](/docs/cli.md).
 
 ## CLI: usage examples
 

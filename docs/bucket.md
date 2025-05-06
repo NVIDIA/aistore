@@ -7,59 +7,123 @@ redirect_from:
  - /docs/bucket.md/
 ---
 
-# Table of Contents
+A **bucket** is a named container for objects: files with associated metadata. Buckets are the primary unit of data organization and policy application in AIStore (AIS).
 
-- [Bucket](#bucket)
-  - [Default Bucket Properties](#default-bucket-properties)
-  - [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
-  - [Backend Provider](#backend-provider)
-- [List Buckets](#list-buckets)
-- [AIS Bucket](#ais-bucket)
-  - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
-  - [CLI: specifying and listing remote buckets](#cli-specifying-and-listing-remote-buckets)
-  - [CLI: working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
-- [Remote Bucket](#remote-bucket)
-  - [Public Cloud Buckets](#public-cloud-buckets)
-  - [Remote AIS cluster](#remote-ais-cluster)
-  - [Prefetch/Evict Objects](#prefetchevict-objects)
-    - [Example prefetching objects](#example-prefetching-objects)
-  - [Evict Remote Bucket](#evict-remote-bucket)
-- [Backend Bucket](#backend-bucket)
-  - [AIS bucket as a reference](#ais-bucket-as-a-reference)
-- [Bucket Properties](#bucket-properties)
-  - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
-- [Bucket Access Attributes](#bucket-access-attributes)
-- [AWS-specific configuration](#aws-specific-configuration)
-- [List Objects](#list-objects)
-  - [Options](#options)
-  - [Results](#results)
+> Object metadata includes: checksum, version, references to copies (replicas), size, last access time, source bucket (assuming [remote backend](/docs/overview.md#backend-provider), custom user-defined attributes, and more.
 
-# Bucket
+AIS uses a **flat hierarchy**: `bucket-name/object-name`. However, it supports [virtual directories](/docs/howto_virt_dirs.md) through prefix-based naming and offers recursive and non-recursive operations on them.
 
-AIStore uses the popular and well-known bucket abstraction, originally (likely) introduced by Amazon S3.
+AIS buckets are **configurable** at creation time or runtime and support per-bucket overrides of [global defaults](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L93). By default, created buckets **inherit** global configuration. Each bucket is, effectively, a point of applying (per-bucket) management policies that include:
 
-Similar to S3, AIS bucket is a _container for objects_.
+- Data protection (checksumming, erasure coding, mirroring)
+- Versioning and validation
+- Access controls
+- Rate limiting (frontend/backend)
+- Caching and eviction (via LRU)
 
-> An object, in turn, is a file **and** a metadata that describes that object and normally includes: checksum, version, references to copies (replicas), size, last access time, source bucket (if object's origin is a Cloud bucket), custom user-defined attributes and more.
+AIS supports multiple [storage backends](/docs/overview.md#backend-provider):
 
-AIS is a flat `<bucket-name>/<object-name>` storage hierarchy where named buckets store user datasets.
+| Type              | Description                          | Example Name                  |
+| ----------------- | ------------------------------------ | ----------------------------- |
+| AIS Bucket        | Native bucket managed by AIS         | `ais://mybucket`              |
+| Remote AIS Bucket | Bucket in a remote AIS cluster       | `ais://@cluster/mybucket`     |
+| Cloud Bucket      | Remote bucket (e.g., S3, GCS, Azure) | `s3://dataset`                |
+| Backend Bucket    | AIS bucket linked to a remote bucket | `ais://cachebucket → s3://x`  |
 
-In addition, each AIS bucket is a point of applying (per-bucket) management policies: checksumming, versioning, erasure coding, mirroring, LRU eviction, checksum and/or version validation.
+> See [Unified Namespace](/docs/overview.md#unified-namespace) for details on remote AIS clusters.
 
-AIS buckets *contain* user data performing the same function as, for instance:
+One major distinction between an AIS bucket (e.g., `ais://mybucket`) and a remote bucket (e.g., `ais://@cluster/mybucket`, `s3://dataset`, etc.) boils down to the fact that - [for a variety of real-life reasons](/docs/out_of_band.md) - **in-cluster** content of the remote bucket may be different from its remote content.
+
+> Note that the terms **in-cluster** and **cached** are used interchangeably throughout the entire documentation and CLI.
+
+Further, remote buckets and `ais://` buckets support the same API with the following distinction:
+
+1. Remote buckets can be *prefetched* and *evicted* from AIS, entirely or selectively.
+2. `ais://` buckets can be created, renamed, and deleted via AIS's native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
+3. For remote buckets, AIS supports **on-the-fly** creation. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
+
+
+Finally, AIS supports multiple storage **backends**, including its own:
+
+![Supported Backends](images/supported-backends.png)
+
+Respectively, the supported cloud storages include:
 
 * [Amazon S3 buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html)
 * [Google Cloud (GCP) buckets](https://cloud.google.com/storage/docs/key-terms#buckets)
 * [Microsoft Azure Blob containers](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)
 * [Oracle Cloud Infrastructure (OCI) buckets](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingbuckets.htm)
 
-In addition, AIS supports multiple storage **backends** including itself:
+> For multiple supported ways to populate an AIS cluster with data from remote buckets, see [existing datasets](/docs/overview.md#existing-datasets).
 
-![Supported Backends](images/supported-backends.png)
+## Bucket Properties
 
-But there's more.
+Properties of any given bucket can be viewed and/or modified using CLI, for instance: `ais bucket props show BUCKET --json`,
 
-AIStore supports vendor-specific configuration on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
+The list will contain several sections that can be also viewed individually - e.g. erasure coding: `ais bucket props BUCKET ec`
+
+The table below contains a few - not all - of those sections and their respective properties.
+
+| Category | Property | Description |
+|----------|----------|-------------|
+| **Backend** | `provider` | "ais", "aws" or "s3", "azure" or "az", "gcp" or "gs", "oci" |
+| | `backend_bck` | Reference to a remote bucket (if any) |
+| **Authentication and Access control** | `access` | [Authentication and Access control](/docs/authn.md) |
+| **Feature flags** | `features` | [Feature flags](/docs/feature_flags.md) |
+| **Checksumming** | `checksum.type` | Checksum algorithm (xxhash2, md5, etc.) |
+| | `checksum.validate_cold_get` | Validate checksums on cold GETs |
+| | `checksum.validate_warm_get` | Validate checksums on warm GETs |
+| | `checksum.validate_obj_move` | Validate checksums during object movement |
+| | `checksum.enable_read_range` | Enable checksum validation for range reads |
+| **Mirroring** | `mirror.enabled` | Enable object replication |
+| | `mirror.copies` | Number of replicas to maintain |
+| | `mirror.burst_buffer` | Size of the replication buffer |
+| **Erasure Coding** | `ec.enabled` | Enable erasure coding |
+| | `ec.data_slices` | Number of data slices |
+| | `ec.parity_slices` | Number of parity slices |
+| | `ec.objsize_limit` | Minimum object size for EC (smaller objects use mirroring) |
+| | `ec.compression` | When to compress EC slices ("never", "always", etc.) |
+| | `ec.disk_only` | Store EC data only on disk (not in memory) |
+| **LRU** | `lru.enabled` | Enable LRU eviction |
+| | `lru.dont_evict_time` | Minimum time before eviction |
+| | `lru.capacity_upd_time` | Frequency of capacity updates |
+| **Versioning** | `versioning.enabled` | Enable object versioning |
+| | `versioning.validate_warm_get` | Validate object versions on warm GETs |
+| | `versioning.synchronize` | Synchronize object versions with backend |
+| **Rate Limiting** | `rate_limit.backend.enabled` | Enable rate limits for backend requests |
+| | `rate_limit.backend.max_tokens` | Maximum operations per interval |
+| | `rate_limit.frontend.enabled` | Enable rate limits for client requests |
+| **Write Policy** | `write_policy.data` | Data write policy ("immediate", "never", etc.) |
+| | `write_policy.md` | Metadata write policy |
+| **Provider-Specific** | `extra.aws.cloud_region` | AWS region |
+| | `extra.http` | HTTP-specific settings |
+| | `extra.hdfs` | HDFS-specific settings |
+
+### Bucket Properties (JSON)
+
+The table below presents selected bucket properties with a focus on their raw JSON structure. It complements the higher-level summary above and is especially useful when configuring buckets via API or editing JSON directly. Some entries may partially duplicate earlier content.
+
+| Bucket Property | JSON | Description | Fields |
+| --- | --- | --- | --- |
+| Provider | `provider` | "ais", "aws", "azure", "gcp", or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"ht"` |
+| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
+| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `space.lowwm` and `space.highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `space.out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `space.highwm`. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": {"dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }`. Note: `space.*` are cluster level properties. |
+| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "enabled": bool }` |
+| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
+| Versioning | `versioning` | Configuration for object versioning support where `enabled` represents if object versioning is enabled for a bucket. For remote bucket versioning must be enabled in the corresponding backend (e.g. Amazon S3). `validate_warm_get`: determines if the object's version is checked | `"versioning": { "enabled": true, "validate_warm_get": false }`|
+| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
+| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
+| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
+
+### System Properties
+
+The following properties are system-managed and cannot be directly modified:
+
+- `bid`: Unique bucket ID
+- `created`: Bucket creation timestamp (in nanoseconds since Unix epoch)
+- `Renamed`: Original name if bucket was renamed
+
+Additionally, AIStore supports **vendor-specific configuration** on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
 
 * named AWS profiles (with alternative credentials and/or region)
 * s3 endpoints
@@ -73,22 +137,51 @@ AIStore supports vendor-specific configuration on a per bucket basis. For instan
 
 All the [supported storage services](storage_svcs.md) equally apply to all storage backends with only a few exceptions. The following table summarizes them.
 
-| Kind | Description | Supported Storage Services |
+| Kind | Description | Conventional Storage Services |
 | --- | --- | --- |
-| AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). Unlike remote buckets, ais buckets can be created through the [RESTful API](http_api.md). Similar to remote buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
-| remote buckets | When AIS is deployed as [fast tier](providers.md), buckets in the cloud storage can be viewed and accessed through the [RESTful API](http_api.md) in AIS, in the exact same way as ais buckets. When this happens, AIS creates local instances of said buckets which then serves as a cache. These are referred to as **3rd party backend-based buckets**. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local mirroring and load balancing](storage_svcs.md#local-mirroring-and-load-balancing) |
+| AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). AIS (`ais://`) buckets can be created through the . Similar to remote buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing), [Rate Limiting](/docs/rate_limit.md) |
+| remote buckets | When AIS is deployed as a fast tier, remote buckets can be viewed and accessed through HTTP-based APIs (S3-compatible, native [Go](https://github.com/NVIDIA/aistore/tree/main/api), or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) or [CLI](/docs/cli.md), just like `ais://` buckets. In this case, AIS creates **in-cluster** instances of those buckets. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing), [Rate Limiting](/docs/rate_limit.md) |
 
-3rd party backend-based and AIS buckets support the same API with a few documented exceptions. Remote buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
+Remote buckets and AIS (`ais://`) buckets support the same API with the following distinction:
+
+* Remote buckets can be *prefetched* and *evicted* from AIS, entirely or selectively.
+* `ais://` buckets can be created, renamed, and deleted via native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
+* For remote buckets, AIS supports **on-the-fly creation**. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
+
+-----------
+
+Rest of this document is structured as follows:
+
+- [Default Bucket Properties](#default-bucket-properties)
+- [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
+- [List Buckets](#list-buckets)
+- [AIS Bucket](#ais-bucket)
+  - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
+  - [CLI: specifying and listing remote buckets](#cli-specifying-and-listing-remote-buckets)
+  - [CLI: working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
+- [Remote Bucket](#remote-bucket)
+  - [Public Cloud Buckets](#public-cloud-buckets)
+  - [Remote AIS cluster](#remote-ais-cluster)
+  - [Prefetch/Evict Objects](#prefetchevict-objects)
+    - [Example prefetching objects](#example-prefetching-objects)
+  - [Evict Remote Bucket](#evict-remote-bucket)
+- [Backend Bucket](#backend-bucket)
+  - [AIS bucket as a reference](#ais-bucket-as-a-reference)
+- [Bucket Access Attributes](#bucket-access-attributes)
+- [AWS-specific configuration](#aws-specific-configuration)
+- [List Objects](#list-objects)
+  - [Options](#options)
+  - [Results](#results)
 
 ## Default Bucket Properties
 
-By default, created buckets inherit their properties from the cluster-wide global [configuration](configuration.md).
+By default, created buckets **inherit** their properties from the cluster-wide global [configuration](configuration.md).
 Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration")
 is protected (versioned, checksummed) and replicated across the entire cluster.
 
 **Important**:
 
-* Bucket properties can be changed at any time via `api.SetBucketProps`.
+* Bucket properties can be changed at any time via Go `api.SetBucketProps`, or the respective [Python API](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk), or CLI.
 * In addition, `api.CreateBucket` allows to specify (non-default) properties at bucket creation time.
 * Inherited defaults include (but are not limited to) checksum, LRU, versioning, n-way mirroring, and erasure-coding configurations.
 * By default, LRU is disabled for AIS (`ais://`) buckets.
@@ -97,7 +190,7 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 
 | Configuration section | References |
 | --- | --- |
-| Backend | [Backend Provider](#backend-provider) |
+| Backend | [Backend Provider](/docs/overview.md#backend-provider) |
 | Checksum | [Supported Checksums and Brief Theory of Operations](checksum.md) |
 | LRU | [Storage Services: LRU](storage_svcs.md#lru) |
 | N-way mirror | [Storage Services: n-way mirror](storage_svcs.md#n-way-mirror) |
@@ -117,19 +210,10 @@ $ ais create ais://abc --props='{"mirror": {"enabled": true, "copies": 4}}'
 
 ## Inherited Bucket Properties and LRU
 
-1. [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `space.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
-2. By default, `space.highwm` = `90%` of total storage space.
-3. Another important knob is `lru.enabled` that defines whether a given bucket can be a subject of LRU eviction in the first place.
-4. By default, these two and all the other knobs are [inherited](#default-bucket-properties) by a newly created bucket from [default (global, cluster-wide) configuration](configuration.md#cluster-and-node-configuration).
-5. However, those inherited defaults can be changed - [overridden](#default-bucket-properties) - both at bucket creation time, and at any later time.
-
-Going back to [LRU](storage_svcs.md#lru), it can be disabled (or enabled) on a per bucket basis.
-
-Prior to the version 3.8, [LRU](storage_svcs.md#lru) eviction **was by default globally enabled**. Starting v3.8, [LRU](storage_svcs.md#lru) is enabled by default **only for remote buckets**.
-
-> AIS buckets that have remote backends are, by definition, remote buckets. See [next section](#backend-provider) for details.
-
-In summary, starting v3.8, a newly created AIS bucket inherits default configuration that makes the bucket *non-evictable*.
+* [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `space.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
+* An important knob is `lru.enabled` that defines whether a given bucket can be a subject of LRU eviction in the first place.
+* By default, all LRU settings are [inherited](#default-bucket-properties) by a newly created bucket from [default (global, cluster-wide) configuration](configuration.md#cluster-and-node-configuration).
+* However, those inherited defaults can be changed - [overridden](#default-bucket-properties) - both at bucket creation time, and/or at any later time.
 
 Useful CLI commands include:
 
@@ -150,25 +234,9 @@ See also:
 
 * [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 * [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
-* [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
-* [CLI documentation and many more examples](cli/bucket.md)
+* [CLI documentation and examples](/docs/cli/bucket.md)
 
-## Backend Provider
-
-[Backend Provider](providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster.
-For complete definition and details, please refer to the [backend provider document](providers.md).
-
-Backend provider is realized as an optional parameter in the GET, PUT, APPEND, DELETE and [Range/List](batch.md) operations with supported enumerated values that include:
-* `ais` - for AIS buckets
-* `aws` or `s3` - for Amazon S3 buckets
-* `azure` or `az` - for Microsoft Azure Blob Storage buckets
-* `gcp` or `gs` - for Google Cloud Storage buckets
-* `ht` - for HTTP(S) based datasets
-
-For API reference, please refer [to the RESTful API and examples](http_api.md).
-The rest of this document serves to further explain features and concepts specific to storage buckets.
-
-# List Buckets
+## List Buckets
 
 To list all buckets, both _present_ in the cluster and remote, simply run:
 
@@ -186,16 +254,16 @@ And more:
 * `ais ls s3: --all --regex abc`  - list _all_ s3 buckets that match a given regex ("abc", in the example) 
 * `ais ls gs: --summary`          - report usage statistics: numbers of objects and total sizes
 
-## See also
+### See also
 
 * `ais ls --help`
 * [CLI: `ais ls`](/docs/cli/bucket.md)
 
-# AIS Bucket
+## AIS Bucket
 
-AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
+AIS (`ais://`) buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
-The [RESTful API](http_api.md) can be used to create, copy, rename and, destroy ais buckets.
+AIS (`ais://`) buckets can be created using native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
 
 New ais buckets must be given a unique name that does not duplicate any existing ais bucket.
 
@@ -386,9 +454,7 @@ Example working with remote AIS cluster (as well as easy-to-use scripts) can be 
 
 ## Prefetch/Evict Objects
 
-Objects within remote buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
-
-The [RESTful API](http_api.md) can be used to manually fetch a group of objects from the remote bucket (called prefetch) into storage targets or to remove them from AIS (called evict).
+Objects within remote buckets are automatically fetched into storage targets when accessed through AIS, and _may be_ evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
 
 Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
 
@@ -575,11 +641,11 @@ OPTIONS:
 
 Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
 
-Once there is a request to access the bucket, or a request to change the bucket's properties (see `set bucket props` in [REST API](http_api.md)), then the AIS cluster starts keeping track of the bucket.
+For remote buckets, AIS supports **on-the-fly** creation. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
 
-In an evict bucket operation, AIS will remove all traces of the remote bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the remote bucket.
+In an evict-bucket operation with **no** arguments (see above), AIS will remove all traces of the remote bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the remote bucket.
 
-For example, to evict `abc` remote bucket from the AIS cluster, run:
+For example, to evict `s3://abc` completely from the AIS cluster, run:
 
 ```console
 $ ais bucket evict aws://abc
@@ -593,7 +659,7 @@ This behavior can be applied to other remote buckets by using the `--keep-md` fl
 * [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
 * to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
 
-# Backend Bucket
+## Backend Bucket
 
 So far, we have covered AIS and remote buckets. These abstractions are sufficient for almost all use cases. But there are times when we would like to download objects from an existing remote bucket and then make use of the features available only for AIS buckets.
 
@@ -663,50 +729,7 @@ Caching wise, when you walk `ais://llm-latest` (or any other aistore bucket with
 
 > In re "cold GET" vs "warm GET" performance, see [AIStore as a Fast Tier Storage](https://aistore.nvidia.com/blog/2023/11/27/aistore-fast-tier) blog.
 
-# Bucket Properties
-
-The full list of bucket properties are:
-
-| Bucket Property | JSON | Description | Fields |
-| --- | --- | --- | --- |
-| Provider | `provider` | "ais", "aws", "azure", "gcp", or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"ht"` |
-| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
-| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `space.lowwm` and `space.highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `space.out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `space.highwm`. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": {"dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }`. Note: `space.*` are cluster level properties. |
-| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "enabled": bool }` |
-| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
-| Versioning | `versioning` | Configuration for object versioning support where `enabled` represents if object versioning is enabled for a bucket. For remote bucket versioning must be enabled in the corresponding backend (e.g. Amazon S3). `validate_warm_get`: determines if the object's version is checked | `"versioning": { "enabled": true, "validate_warm_get": false }`|
-| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
-| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
-| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
-
-## CLI examples: listing and setting bucket properties
-
-### List bucket properties
-
-```console
-$ ais show bucket mybucket
-...
-$
-$ # Or, the same to get output in a (raw) JSON form:
-$ ais show bucket mybucket --json
-...
-```
-
-### Enable erasure coding on a bucket
-
-```console
-$ ais bucket props mybucket ec.enabled=true
-```
-
-### Enable object versioning and then list updated bucket properties
-
-```console
-$ ais bucket props mybucket versioning.enabled=true
-$ ais show bucket mybucket
-...
-```
-
-# Bucket Access Attributes
+## Bucket Access Attributes
 
 Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
 
@@ -732,7 +755,7 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "set-bpro
 
 > `18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)`
 
-# AWS-specific configuration
+## AWS-specific configuration
 
 AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket that is backed up by an AWS S3 bucket (**) can be configured to use alternative:
 
@@ -741,7 +764,7 @@ AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket
 
 For background and usage examples, please see [CLI: AWS-specific bucket configuration](/docs/cli/aws_profile_endpoint.md).
 
-# List Objects
+## List Objects
 
 **Note**: some of the following content **may be outdated**. For the most recent updates, please check:
 
@@ -758,7 +781,7 @@ The returned [result](#list-result) has non-zero value(the least significant bit
 To get the correct list, either re-request the list after the rebalance ends or read the list with [the option](#list-options) `SelectMisplaced` enabled.
 In the latter case, the list may contain duplicated entries.
 
-## Options
+### Options
 
 The properties-and-options specifier must be a JSON-encoded structure, for instance `{"props": "size"}` (see examples).
 An empty structure `{}` results in getting just the names of the objects (from the specified bucket) with no other metadata.

@@ -19,12 +19,12 @@ The rest of this document is structured as follows:
 - [Terminology](#terminology)
   - [Target](#target)
   - [Proxy](#proxy)
-  - [Backend Provider](#backend provider)
-  - [Unified Namespace](#unified namespace)
+  - [Backend Provider](#backend-provider)
+  - [Unified Namespace](#unified-namespace)
   - [Xaction](#xaction)
   - [Shard](#shard)
   - [Mountpath](#mountpath)
-  - [Read-after-Write Consistency](#read-after-write consistency)
+  - [Read-after-Write Consistency](#read-after-write-consistency)
   - [Write-through](#write-through)
 - [Design Philosophy](#design-philosophy)
 - [Original Diagrams](#original-diagrams)
@@ -37,7 +37,6 @@ The rest of this document is structured as follows:
 - [Scale-Out](#scale-out)
 - [Networking](#networking)
 - [HA](#ha)
-- [Other Services](#other-services)
 - [Sharding extensions: dSort and iShard](#sharding-extensions-dsort-and-ishard)
 - [CLI](#cli)
 - [ETL](#etl)
@@ -158,7 +157,7 @@ Once the first object replica is finalized, subsequent reads are guaranteed to v
 
 It is important to emphasize that the same rules of data protection and consistency are universally enforced across all _writing_ scenarios, including (but not limited to):
 
-* Cold GET
+* [Cold GET](#existing-datasets)
 * Copy bucket
 * Transform bucket
 * Multi-object copy, multi-object transform, multi-object archive
@@ -248,31 +247,37 @@ Notwithstanding, AIS stores and then maintains object replicas, erasure-coded sl
 
 ## Existing Datasets
 
-Common way to use AIStore include the most fundamental and, often, the very first step: populating AIS cluster with an existing dataset, or datasets. Those (datasets) can come from remote buckets (AWS, Google Cloud, Azure), NFS shares, local files, or any vanilla HTTP(S) locations.
+Common ways to utilize AIStore entail populating an AIS cluster with existing datasets. These datasets can originate from various sources, including:
 
-> In the context of populating AIS cluster - note: the terms **"in-cluster objects" and "cached objects" are used interchangeably** throughout the entire documentation.
+* remote buckets: AWS, Google Cloud, Azure, Oracle Cloud, and remote AIS clusters
+* NFS or SMB shares
+* local files and directories
+* standard HTTP(S) locations.
 
-> While the terms 'in-cluster objects' and 'cached objects' are used interchangeably, it is also important to note that AIStore is not a caching solution. Although it can function as an LRU cache when LRU (feature) is enabled, AIS is designed to provide reliable storage, equipped with a comprehensive set of data protection features and configurable data redundancy options on a per-bucket basis.
+### Example: user starts training
 
-To this end, AIS provides 6 (six) easy ways ranging from the conventional on-demand caching to *promoting* colocated files and directories.
+User starts training a model on a dataset called `s3://dataset`, with AIStore performing as a fast tier between the user's GPU nodes and AWS Cloud.
 
-> Related references and examples include this [technical blog](https://aistore.nvidia.com/blog/2021/12/07/cp-files-to-ais) that shows how to copy a file-based dataset in two easy steps.
+Regardless of whether the in-cluster part of the `s3://dataset` is complete or non-existent, after the first training epoch, the in-cluster content will fully synchronize with the remote dataset. This process is facilitated by a mechanism known as **cold GET**.
+
+**Cold GET** is a compound transaction that involves three key operations: a remote GET, a local write with checksumming, and in-cluster redundancy. The primary goal of a cold GET is to perform this operation quickly and efficiently, minimizing the need to repeatedly read from the slower cloud storage. This ensures rapid data synchronization while maintaining data integrity and, of course, performance during subsequent access to the same data.
+
+Overall, some of the ways to _get_ an existing dataset _into_ an AIS cluster include (but are not limited to):
 
 1. [Cold GET](#existing-datasets-cold-get)
-2. [Prefetch](#existing-datasets-batch-prefetch)
-3. [Internet Downloader](#existing-datasets-integrated-downloader)
-4. [HTTP(S) Datasets](#existing-datasets-https-datasets)
-5. [Promote local or shared files](#promote-local-or-shared-files)
-6. [Backend Bucket](bucket.md#backend-bucket)
-7. [Download very large objects (BLOBs)](/docs/cli/blob-downloader.md)
-8. [Copy remote bucket](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
-9. [Copy multiple remote objects](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+2. [Prefetch (ie, load data in advance for faster access)](#existing-datasets-batch-prefetch)
+3. [Copy remote bucket](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+4. [Copy multiple remote objects](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
+5. [Download very large objects (BLOBs)](/docs/cli/blob-downloader.md)
+6. [Downloader](#existing-datasets-downloader)
+7. [HTTP(S) Datasets](#existing-datasets-https-datasets)
+8. [Promote local or shared files](#promote-local-or-shared-files)
 
-In particular:
+> Note: The terms **in-cluster** and **cached** are used interchangeably in this documentation. However, it's important to note that AIS is not primarily a caching solution, although it can function as one when the LRU feature is enabled. AIS is designed for reliable storage, offering a comprehensive set of data protection features and configurable redundancy options on a per-bucket basis.
 
 ### Existing Datasets: Cold GET
 
-If the dataset in question is accessible via S3-like object API, start working with it via GET primitive of the [AIS API](http_api.md). Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
+If the dataset in question is accessible via S3-like object API, use one of the supported [APIs](#aistore-api) or CLI to read it. Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
 > As far as supported S3-like backends, AIS currently supports Amazon S3, Google Cloud, Microsoft Azure, and Oracle OCI.
 
@@ -288,7 +293,7 @@ For CLI usage, see:
 
 * [CLI: prefetch](/docs/cli/object.md#prefetch-objects)
 
-### Existing Datasets: integrated Downloader
+### Existing Datasets: Downloader
 
 But what if the dataset in question exists in the form of (vanilla) HTTP/HTTPS URL(s)? What if there's a popular bucket in, say, Google Cloud that contains images that you'd like to bring over into your Data Center and make available locally for AI researchers?
 
@@ -409,7 +414,7 @@ See also:
 
 ## HA
 
-AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](http_api.md).
+AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](#aistore-api).
 
 Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
@@ -417,17 +422,6 @@ Gateways can be ad hoc added and removed, deployed remotely and/or locally to th
 AIS can be deployed as a fast tier in front of any of the multiple supported [backends](providers.md).
 
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](batch.md#listrange-operations)) that runs in the background to download batches of objects.
-
-## Other Services
-
-The (quickly growing) list of services includes (but is not limited to):
-* [health monitoring and recovery](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md)
-* [range read](http_api.md)
-* [dry-run (to measure raw network and disk performance)](performance.md#performance-testing)
-* performance and capacity monitoring with full observability via StatsD/Grafana
-* load balancing
-
-> Load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](storage_svcs.md#read-load-balancing).
 
 ## Sharding extensions: dSort and iShard
 

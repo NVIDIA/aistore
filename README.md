@@ -19,7 +19,7 @@ AIS consistently shows balanced I/O distribution and linear scalability across a
 * ✅ **Custom ETL Offload:** Execute I/O intensive data transformations close to the data, either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
 * ✅ **Existing File Datasets:** Ingest file datasets from any local or remote source, either on-demand (ad-hoc) or through asynchronous [batch](/docs/overview.md#promote-local-or-shared-files).
 * ✅ **Read-after-Write Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write consistency) across all gateways.
-* ✅ **Write-through:** In presence of remote backends, AIS executes remote writes as part of the same [wriiting transaction](/docs/overview.md#write-through).
+* ✅ **Write-through:** In presence of [remote backend](/docs/overview.md#backend-provider), AIS executes remote writes as part of the same [writing transaction](/docs/overview.md#write-through).
 * ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 serialization for batching and processing small files. Supported features include [initial sharding](https://aistore.nvidia.com/blog/2024/08/16/ishard), distributed shuffle (re-sharding), appending to existing shards, listing contained files, and [more](/docs/overview.md#shard).
 * ✅ **Kubernetes**. For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). A dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains Ansible scripts, Helm charts, and deployment guidance.
 * ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
@@ -90,7 +90,7 @@ AIS supports multiple ingestion modes:
 * ✅ **On Demand:** Transparent cloud access during workloads.
 * ✅ **PUT:** Locally accessible files and directories.
 * ✅ **Promote:** Import local target directories and/or NFS/SMB shares mounted on AIS targets.
-* ✅ **Copy:** Full buckets, virtual subdirectories, and lists or ranges (via Bash expansion).
+* ✅ **Copy:** Full buckets, virtual subdirectories (recursively or non-recursively), lists or ranges (via Bash expansion).
 * ✅ **Download:** HTTP(S)-accessible datasets and objects.
 * ✅ **Prefetch:** Remote buckets or selected objects (from remote buckets), including subdirectories, lists, and/or ranges.
 * ✅ **Archive:** [Group and store](https://aistore.nvidia.com/blog/2024/08/16/ishard) related small files from an original dataset.
@@ -125,8 +125,9 @@ Let others know your project is powered by high-performance AI storage:
 
 ## More Docs & Guides
 
-* [Overview and design](/docs/overview.md)
+* [Overview and Design](/docs/overview.md)
 * [Getting Started](/docs/getting_started.md)
+* [Buckets and Bucket Management](/docs/bucket.md)
 * [Technical Blog](https://aistore.nvidia.com/blog)
 * [S3 Compatibility](/docs/s3compat.md)
 * [Batch Jobs](/docs/batch.md)

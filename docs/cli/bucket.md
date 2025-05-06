@@ -12,7 +12,7 @@ It is easy to see all CLI operations on *buckets*:
 ```console
 $ ais bucket <TAB-TAB>
 
-ls        summary   lru       evict     show      create    cp        mv        rm        props
+ls   summary    validate   lru     evict   show    create     cp     mv      rm       props
 ```
 
 For convenience, a few of the most popular verbs are also aliased:
@@ -26,7 +26,7 @@ ls              bucket ls
 rmb             bucket rm
 ```
 
-> For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, see [in-depth overview](/docs/bucket.md).
+> For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and more usage examples, see [in-depth overview](/docs/bucket.md).
 
 ## Table of Contents
 - [Create bucket](#create-bucket)
@@ -249,7 +249,7 @@ List all _existing_ buckets for the specific provider.
 
 ### `ais ls aws --all` or (same) `ais ls s3: --all`
 
-List absolutely all buckets that cluster can "see" inclduing those that are not necessarily **present** in the cluster.
+List absolutely all buckets that cluster can "see" including those that are not necessarily **present** in the cluster.
 
 ### `ais ls ais://` or (same) `ais ls ais`
 
@@ -1254,7 +1254,7 @@ Overall, the topic called "bucket properties" is rather involved and includes su
 
 * [Default Bucket Properties](/docs/bucket.md#default-bucket-properties)
 * [Inherited Bucket Properties and LRU](/docs/bucket.md#inherited-bucket-properties-and-lru)
-* [Backend Provider](/docs/bucket.md#backend-provider)
+* [Backend Provider](/docs/overview.md#backend-provider)
 * [Global cluster-wide configuration](/docs/configuration.md#cluster-and-node-configuration).
 
 Now, as far as CLI, run the following to list [properties](/docs/bucket.md#properties-and-options) of the specified bucket.

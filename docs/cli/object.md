@@ -1884,7 +1884,7 @@ NAME     SIZE
 
 To remove all in-cluster content while preserving the bucket's metadata:
 
-> Separately, note that the terms **"in-cluster" and "cached" are used interchangeably** throughout the entire documentation.
+> The terms **in-cluster** and **cached** are used interchangeably throughout the entire documentation and CLI.
 
 ```console
 $ ais evict s3://cloud-bucket --keep-md

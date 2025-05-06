@@ -24,7 +24,7 @@ AIS consistently shows balanced I/O distribution and linear scalability across a
 * ✅ **Custom ETL Offload:** Execute I/O intensive data transformations close to the data, either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
 * ✅ **Existing File Datasets:** Ingest file datasets from any local or remote source, either on-demand (ad-hoc) or through asynchronous [batch](/docs/overview.md#promote-local-or-shared-files).
 * ✅ **Read-after-Write Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write consistency) across all gateways.
-* ✅ **Write-through:** In presence of remote backends, AIS executes remote writes as part of the same [wriiting transaction](/docs/overview.md#write-through).
+* ✅ **Write-through:** In presence of [remote backend](/docs/overview.md#backend-provider), AIS executes remote writes as part of the same [writing transaction](/docs/overview.md#write-through).
 * ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 serialization for batching and processing small files. Supported features include [initial sharding](https://aistore.nvidia.com/blog/2024/08/16/ishard), distributed shuffle (re-sharding), appending to existing shards, listing contained files, and [more](/docs/overview.md#shard).
 * ✅ **Kubernetes**. For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). A dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains Ansible scripts, Helm charts, and deployment guidance.
 * ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
@@ -120,8 +120,10 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 
 ## Guides and References (extended index)
 
-- [Getting Started](/docs/getting_started.md)
-- [Technical Blog](https://aistore.nvidia.com/blog)
+* [Overview and Design](/docs/overview.md)
+* [Getting Started](/docs/getting_started.md)
+* [Buckets and Bucket Management](/docs/bucket.md)
+* [Technical Blog](https://aistore.nvidia.com/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/main/api)
   - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore), and also:
@@ -213,7 +215,7 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
   - [Start/stop maintenance mode, shutdown, decommission, and related operations](/docs/lifecycle_node.md)
-  - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
+  - [Buckets: definition, operations, properties](/docs/bucket.md)
   - [Out-of-band updates](/docs/out_of_band.md)
   - [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
   - [Using Rate Limits to Enhance Reliability and Performance](/docs/rate_limit.md)

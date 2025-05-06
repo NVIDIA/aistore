@@ -46,8 +46,8 @@ The full taxonomy of the supported backends is shown below (and note that AIS su
 
 Further:
 
-* For additional information on working with buckets, please refer to [bucket readme](bucket.md).
-* For API reference, see [the RESTful API reference and examples](http_api.md).
+* For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and more usage examples, see [in-depth overview](/docs/bucket.md)
+* For API reference, see [APIs](/docs/overview.md#aistore-api).
 * For AIS command-line management, see [CLI](cli.md).
 
 ## Remote AIS cluster
@@ -157,7 +157,7 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 
 > Notwithstanding, *remote buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
-> Note as well that AIS provides [5 (five) easy ways to populate its *remote buckets*](overview.md) - including, but not limited to conventional on-demand caching (aka *cold GET*).
+> Note as well that AIS provides [multiple easy ways to populate its *remote buckets*](overview.md#existing-datasets) - including, but not limited to conventional on-demand self-populating dubbed [cold GET](/docs/overview.md#existing-datasets).
 
 ## Example: accessing Cloud storage via remote AIS
 

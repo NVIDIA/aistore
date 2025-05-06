@@ -283,7 +283,7 @@ There's a price, though, and the scenarios where you could make an educated choi
 
 In particular, let's say that we are massively writing a new content into a bucket.
 
-> Type of the bucket doesn't matter - it may be an `ais://` bucket, or `s3://`, or any other supported [backend](/docs/bucket.md#backend-provider) including HDFS and HTTP.
+> Type of the bucket doesn't matter - it may be an `ais://` bucket, or `s3://`, or any other supported [backend](/docs/overview.md#backend-provider) including HDFS and HTTP.
 
 What matters is that we do *know* that we'll be overwriting few objects, percentage-wise. Then it would stand to reason that AIS, on its end, should probably refrain from trying to load the destination object's metadata. Skip loading existing object's metadata in order to compare checksums (and thus maybe avoid writing altogether if the checksums match) and/or update the object's version, etc.
 

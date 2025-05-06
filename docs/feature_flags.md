@@ -39,7 +39,7 @@ By default, all features are disabled, and the corresponding 64-bit field is set
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `S3-Presigned-Request(*)` | pass-through client-signed (presigned) S3 requests for subsequent authentication by S3 |
 | `Do-not-Optimize-Listing-Virtual-Dirs` | when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ object names (as in: `a/subdir/obj1`, `a/subdir/obj2`, but also `a/subdir-obj3`) |
-| `Disable-Cold-GET` | do not perform cold GET request when using remote bucket |
+| `Disable-Cold-GET` | do not perform [cold GET](/docs/overview.md#existing-datasets) request when using remote bucket |
 | `S3-Reverse-Proxy` | use reverse proxy calls instead of HTTP-redirect for S3 API |
 | `S3-Use-Path-Style` | use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY |
 | `Do-not-Delete-When-Rebalancing` | disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects |

@@ -137,12 +137,12 @@ No assumption is being made on whether any of the above is present (except, of c
 The rules are simple:
 
 * compare _existing_ items of the same kind (`size` vs `size`, `MD5` and `MD5`, etc.);
-* fail immediately - that is, require cold GET - if any pair of comparable items differ;
+* fail immediately - that is, require [cold GET](/docs/overview.md#existing-datasets) - if any pair of comparable items differ;
 * count all matches except `size` (in other words, same size does _not_ contribute to decision in favor of skipping cold GET);
 * exclude double counting (which is mostly relevant for `ETag` vs `MD5`);
 * require **two or more matches**.
 
-When there are no matches, we go ahead with cold GET.
+When there are no matches, we go ahead with [cold GET](/docs/overview.md#existing-datasets).
 
 A single match - e.g. only the `version` (if exists), or only `ETag`, etc. - is currently resolved positively iff the source backend is the same as well.
 
