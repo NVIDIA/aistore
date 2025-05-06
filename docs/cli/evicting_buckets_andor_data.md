@@ -5,7 +5,9 @@ This guide demonstrates three ways to evict remote bucket content from AIStore u
 You can:
 1. Evict an **entire** remote bucket (data + metadata).
 2. Evict **only the data**, retaining bucket metadata.
-3. Evict a **subset of objects**, using a prefix, template, or list.
+3. Evict a **subset of objects** using a prefix, template, or list.
+
+> The **template** is usually an optional prefix, range (Bash expansion, e.g., `{start..end}`), and optional suffix.
 
 ---
 

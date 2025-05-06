@@ -495,9 +495,15 @@ NAME     SIZE
 
 ### Evicting cached objects
 
-To remove all in-cluster content while preserving the bucket's metadata:
+There are 3 (**three**) ways to carry out the eviction operation:
 
-> Separately, note that the terms **"in-cluster" and "cached" are used interchangeably** throughout the entire documentation.
+1. Evict an **entire** remote bucket (data + metadata).
+2. Evict **only the data**, retaining bucket metadata.
+3. Evict a **subset of objects** using a prefix, template, or list.
+
+> The **template** is usually an optional prefix, range (Bash expansion, e.g., `{start..end}`), and optional suffix.
+
+For instance, to remove all in-cluster content while preserving the bucket's metadata:
 
 ```console
 $ ais evict s3://cloud-bucket --keep-md
@@ -506,6 +512,8 @@ Evicted s3://cloud-bucket contents from aistore: the bucket is now empty
 $ ais ls s3://cloud-bucket --cached
 NAME     SIZE
 ```
+
+> Note that the terms **"in-cluster" and "cached" are used interchangeably** throughout the entire documentation.
 
 ### Prefetching objects
 

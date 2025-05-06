@@ -652,13 +652,26 @@ Listed: 4 names
 
 ## Evict remote bucket
 
-Evict a [remote bucket](/docs/bucket.md#remote-bucket).
+AIS supports multiple [storage backends](/docs/overview.md#backend-provider):
 
-Read more about this feature [here](/docs/bucket.md#evict-remote-bucket).
+| Type              | Description                          | Example Name                  |
+| ----------------- | ------------------------------------ | ----------------------------- |
+| AIS Bucket        | Native bucket managed by AIS         | `ais://mybucket`              |
+| Remote AIS Bucket | Bucket in a remote AIS cluster       | `ais://@cluster/mybucket`     |
+| Cloud Bucket      | Remote bucket (e.g., S3, GCS, Azure) | `s3://dataset`                |
+| Backend Bucket    | AIS bucket linked to a remote bucket | `ais://cachebucket → s3://x`  |
 
-Some of the supported functionality can be quickly demonstrated with the following examples:
+> See [Unified Namespace](/docs/overview.md#unified-namespace) for details on remote AIS clusters.
+
+One major distinction between an AIS bucket (e.g., `ais://mybucket`) and a remote bucket (e.g., `ais://@cluster/mybucket`, `s3://dataset`, etc.) boils down to the fact that - [for a variety of real-life reasons](/docs/out_of_band.md) - **in-cluster** content of the remote bucket may be different from its remote content.
+
+> Note that the terms **in-cluster** and **cached** are used interchangeably throughout the entire documentation and CLI.
+
+Remote buckets can be *prefetched* and *evicted* from AIS, entirely or selectively:
 
 * [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
+
+Some of the supported functionality can be quickly demonstrated with the following examples:
 
 ```console
 $ ais bucket evict aws://abc
@@ -674,7 +687,7 @@ $ ais bucket evict --keep-md aws://abc
 "aws://abc" bucket evicted
 ```
 
-Here's a fuller example that lists remote bucket and then reads and evicts a selected object:
+Here's a more complete example that lists remote bucket, then reads and evicts a given object:
 
 ```console
 $ ais ls gs://wrQkliptRt
