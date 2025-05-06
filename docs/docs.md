@@ -33,21 +33,22 @@ redirect_from:
 
 ## Command Line Interface
 
-- [CLI](/docs/cli.md)
-  - [`ais help`](/docs/cli/help.md)
-  - [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
-  - [Monitoring](/docs/cli/show.md)
-    - [`ais show cluster`](/docs/cli/show.md)
-    - [`ais show performance`](/docs/cli/show.md)
-    - [`ais show job`](/docs/cli/show.md)
-  - [Cluster and node management](/docs/cli/cluster.md)
-  - [Mountpath (disk) management](/docs/cli/storage.md)
-  - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
-  - [Start, stop, and monitor downloads](/docs/cli/download.md)
-  - [Distributed shuffle](/docs/cli/dsort.md)
-  - [User account and access management](/docs/cli/auth.md)
-  - [Jobs](/docs/cli/job.md)
-  - [`aisnode` command line](/docs/command_line.md)
+- [Overview](/docs/cli.md)
+- [`ais help`](/docs/cli/help.md)
+- [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
+- [Monitoring](/docs/cli/show.md)
+  - [`ais show cluster`](/docs/cli/show.md)
+  - [`ais show performance`](/docs/cli/show.md)
+  - [`ais show job`](/docs/cli/show.md)
+  - [`ais show config`](/docs/cli/show.md)
+- [Cluster and node management](/docs/cli/cluster.md)
+- [Mountpath (disk) management](/docs/cli/storage.md)
+- [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
+- [Start, stop, and monitor downloads](/docs/cli/download.md)
+- [Distributed shuffle](/docs/cli/dsort.md)
+- [User account and access management](/docs/cli/auth.md)
+- [Jobs](/docs/cli/job.md)
+- [`aisnode` command line](/docs/command_line.md)
 
 ## Storage Management
 
