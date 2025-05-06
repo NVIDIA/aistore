@@ -8,9 +8,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.13.7] - 2025-05-06
+
 ### Added
 
-### Changed
+- Add `path` argument in WebSocket control message of ETL FastAPI web server
 
 ## [1.13.6] - 2025-05-02
 

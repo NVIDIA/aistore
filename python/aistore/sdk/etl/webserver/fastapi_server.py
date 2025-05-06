@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     STATUS_NO_CONTENT,
     ETL_WS_FQN,
+    ETL_WS_PATH,
     ETL_WS_DESTINATION_ADDR,
     QPARAM_ETL_ARGS,
 )
@@ -78,6 +79,7 @@ class FastAPIServer(ETLServer):
                     self.logger.debug("Received control message: %s", ctrl_msg)
 
                     fqn = ctrl_msg.get(ETL_WS_FQN)
+                    path = ctrl_msg.get(ETL_WS_PATH)
                     content = (
                         await self._get_fqn_content(fqn)
                         if fqn
@@ -87,7 +89,7 @@ class FastAPIServer(ETLServer):
 
                     self.logger.debug("Received content length: %d", len(content))
                     transformed = await asyncio.to_thread(
-                        self.transform, content, "ws", etl_args
+                        self.transform, content, path, etl_args
                     )
 
                     direct_put_url = ctrl_msg.get(ETL_WS_DESTINATION_ADDR)

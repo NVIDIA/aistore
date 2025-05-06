@@ -68,6 +68,7 @@ QPARAM_ETL_ARGS = "etl_args"
 # etl websocket
 ETL_WS_DESTINATION_ADDR = "dst_addr"
 ETL_WS_FQN = "fqn"
+ETL_WS_PATH = "path"
 
 # URL Param values
 # See api/apc/query.go

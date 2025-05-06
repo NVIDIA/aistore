@@ -110,6 +110,7 @@ type (
 		Daddr  string `json:"dst_addr,omitempty"`
 		Targs  string `json:"etl_args,omitempty"`
 		FQN    string `json:"fqn,omitempty"`
+		Path   string `json:"path,omitempty"`
 		rwpair `json:"-"`
 	}
 
@@ -228,7 +229,7 @@ func (ws *webSocketComm) Stop() {
 
 func (wss *wsSession) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	var (
-		task = &transformTask{}
+		task = &transformTask{Path: lom.ObjName}
 		err  error
 		r    io.ReadCloser
 		oah  = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
