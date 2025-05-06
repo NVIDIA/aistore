@@ -2,6 +2,7 @@ import itertools
 import random
 import time
 
+from pyaisloader.client_config import client
 from pyaisloader.utils.bucket_utils import (
     add_one_object,
     bucket_exists,
@@ -63,8 +64,8 @@ class BenchmarkStats:
 class Benchmark:
     """Abstract class for all benchmarks"""
 
-    def __init__(self, bucket, workers, cleanup):
-        self.bucket = bucket
+    def __init__(self, bucket_model, workers, cleanup):
+        self.bucket_model = bucket_model
         self.workers = workers
         self.cleanup = cleanup
         self.objs_created = []
@@ -73,6 +74,18 @@ class Benchmark:
         self.bck_created = False
 
         self.setup()
+
+    @property
+    def client(self):
+        return client
+
+    @property
+    def bucket(self):
+        return self.client.bucket(
+            self.bucket_model.name,
+            self.bucket_model.provider,
+            self.bucket_model.namespace,
+        )
 
     def run(self, *args, **kwargs):
         raise NotImplementedError("This method should be implemented by subclasses.")
@@ -186,7 +199,8 @@ class PutGetMixedBenchmark(Benchmark):
         maxsize=None,
         duration=None,
         totalsize=None,
-        etl=None,
+        etl_name=None,
+        etl_spec_type=None,
         *args,
         **kwargs,
     ):
@@ -196,7 +210,12 @@ class PutGetMixedBenchmark(Benchmark):
         self.totalsize = totalsize
         self.minsize = minsize
         self.maxsize = maxsize
-        self.etl = etl
+        self.etl_name = etl_name
+        self.etl_spec_type = etl_spec_type
+
+    @property
+    def etl_config(self):
+        return ETLConfig(self.etl_name) if self.etl_name else None
 
     def run(self):
         if self.put_pct == 100:
@@ -212,14 +231,14 @@ class PutGetMixedBenchmark(Benchmark):
         totalsize = None if self.totalsize is None else (self.totalsize // self.workers)
         print_in_progress(
             "Performing PUT benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         results = multiworker_deploy(
             self, self.put_benchmark, (self.duration, totalsize)
         )
         print_success(
             "Completed PUT benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         result = []
         for worker_result, worker_objs_created in results:
@@ -233,22 +252,21 @@ class PutGetMixedBenchmark(Benchmark):
             result,
             title=(
                 "Benchmark Results (100% PUT)"
-                + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+                + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
 
     def __run_get(self):
         if bucket_obj_count(self.bucket) == 0:
             add_one_object(self)
-        self.get_objs_queue = self.bucket.list_all_objects()
         print_in_progress(
             "Performing GET benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         result = multiworker_deploy(self, self.get_benchmark, (self.duration,))
         print_success(
             "Completed GET benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         result = combine_results(result, self.workers)
         if self.cleanup:
@@ -258,7 +276,7 @@ class PutGetMixedBenchmark(Benchmark):
             result,
             title=(
                 "Benchmark Results (100% GET)"
-                + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+                + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
 
@@ -267,12 +285,12 @@ class PutGetMixedBenchmark(Benchmark):
             add_one_object(self)
         print_in_progress(
             "Performing MIXED benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         result = multiworker_deploy(self, self.mixed_benchmark, (self.duration,))
         print_success(
             "Completed MIXED benchmark"
-            + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+            + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
         )
         workers_objs_created = [
             obj for worker_result in result for obj in worker_result[2]
@@ -289,14 +307,14 @@ class PutGetMixedBenchmark(Benchmark):
             result_put,
             title=(
                 "Benchmark Results for PUT operations"
-                + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+                + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
         print_results(
             result_get,
             title=(
                 "Benchmark Results for GET operations"
-                + (f" with ETL {self.etl.spec_type}" if self.etl else "")
+                + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
 
@@ -329,7 +347,7 @@ class PutGetMixedBenchmark(Benchmark):
             )
             print_success("Skipped Pre-Population")
 
-    def put_benchmark(self, duration, totalsize):  # Done
+    def put_benchmark(self, duration, totalsize):
         prefix = generate_random_str()  # Each worker with unique prefix
         pstats = BenchmarkStats()
 
@@ -351,7 +369,7 @@ class PutGetMixedBenchmark(Benchmark):
 
         return pstats.result, pstats.objs_created
 
-    def __put_benchmark_h(self, stats, prefix, suffix):  # Done
+    def __put_benchmark_h(self, stats, prefix, suffix):
         content, size = generate_bytes(self.minsize, self.maxsize)
         obj = self.bucket.object(prefix + str(suffix))
         op_start = time.time()
@@ -363,27 +381,29 @@ class PutGetMixedBenchmark(Benchmark):
 
         return obj
 
-    def get_benchmark(self, duration):  # Done
+    def get_benchmark(self, duration):
         gstats = BenchmarkStats()
 
+        objs = self.bucket.list_all_objects()
+
         while gstats.total_op_time < duration:
-            self.__get_benchmark_h(gstats, self.get_objs_queue)
+            self.__get_benchmark_h(gstats, objs)
 
         gstats.produce_stats()
 
         return gstats.result
 
-    def __get_benchmark_h(self, stats, objs):  # Done
+    def __get_benchmark_h(self, stats, objs):
         op_start = time.time()
         content = self.bucket.object(random.choice(objs).name).get_reader(
-            etl=ETLConfig(self.etl.name) if self.etl else None
+            etl=self.etl_config if self.etl_config else None
         )
         size = len(content.read_all())
         op_end = time.time()
         latency = op_end - op_start
         stats.update(size, latency)
 
-    def mixed_benchmark(self, duration):  # Done
+    def mixed_benchmark(self, duration):
         prefix = generate_random_str()  # Each worker with unique prefix
 
         gstats = BenchmarkStats()

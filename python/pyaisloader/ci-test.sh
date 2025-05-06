@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ -z "$1" ]; then
     echo "No argument supplied. Please provide a test type: 'short', 'long', or 'etl'."
     exit 1
