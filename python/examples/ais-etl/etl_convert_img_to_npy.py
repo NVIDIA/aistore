@@ -9,9 +9,7 @@ from aistore import Client
 import numpy as np
 import cv2
 
-client = Client(
-    "http://192.168.49.2:8080"
-)  # ip addr of aistore cluster (in k8s or minikube)
+client = Client("http://192.168.49.2:8080") # Change to your AIS cluster endpoint
 
 
 def transform(input_bytes):

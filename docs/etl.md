@@ -13,52 +13,43 @@ redirect_from:
 * **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
 * **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
 
-The latter can be AIStore (AIS). The system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. With AIS, you can effortlessly manage the AIS cluster by executing custom transformations in two ways:
+AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) can serve as both the source for extraction and the destination for loading. The AIStore ETL system is designed from the ground up to execute all 3 stages of the ETL process *locally*. With AIStore ETL, you can easily manage and transform your dataset using custom transformation logic.
 
-1. **Inline**: This involves transforming datasets on the fly, where the data is read and streamed in a transformed format directly to computing clients.
-2. **Offline**: Here, the transformed output is stored as a new dataset, which AIS makes accessible for any future computations.
+Why is it worth to adopt AIStore ETL? Because at scale, it dramatically accelerates the ETL process. AIStore ETL can deliver up to **50x** performance gains compared to traditional client-side extract-transform-load operations, while preserving full flexibility to define your own transformation logic. Specifically, AIStore ETL enables you to dynamically plug in your own transformation logic into the cluster and leverage the compute resources already available in the cluster to transform your dataset efficiently.
 
+![ETL Inline & Offline Transformation Flow](assets/ais_etl_series/etl-inline-offline.gif)
 
-> Implementation-wise, *offline* transformations of any kind, on the one hand, and copying datasets, on the other, are closely related - the latter being, effectively, a *no-op* offline transformation.
+Find more information on the architecture and implementation of `ais-etl` [here](/ext/etl/README.md).
 
-Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
-
-This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)).
-And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore. Find more information on the architecture and implementation of `ais-etl` [here](/ext/etl/README.md).
-
-Technically, the service supports running user-provided ETL containers **and** custom Python scripts within the storage cluster.
-
-**Note:** AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
+**Note:** AIStore ETL requires [Kubernetes](https://kubernetes.io).
 
 ## Table of Contents
 
-- [Getting Started](#getting-started)
-- [Inline ETL example](#inline-etl-example)
-- [Offline ETL example](#offline-etl-example)
-- [Kubernetes Deployment](#kubernetes-deployment)
-- [Extract, Transform and Load using user-defined functions](#extract-transform-and-load-using-user-defined-functions)
-- [Extract, Transform and Load using custom containers](#extract-transform-and-load-using-custom-containers)
-- [*init code* request](#init-code-request)
-  - [`hpush://` communication](#hpush-communication)
-  - [`io://` communication](#io-communication)
+- [Quick Start](#quick-start)
+  - [Inline ETL Transformation](#inline-etl-transformation)
+  - [Offline ETL Transformation](#offline-etl-transformation)
+- [Communication Mechanisms](#communication-mechanisms)
+- [*init code* - Transform by User-Defined Python Functions](#init-code-request---transform-by-user-defined-python-functions)
+  - [`hpush://` and `hpull://` Communication](#hpush-and-hpull-communications)
+  - [`io://` Communication](#io-communication)
   - [Runtimes](#runtimes)
   - [Argument Types](#argument-types)
-- [*init spec* request](#init-spec-request)
-    - [Requirements](#requirements)
-    - [Specification YAML](#specification-yaml)
-    - [Required or additional fields](#required-or-additional-fields)
-    - [Forbidden fields](#forbidden-fields)
-    - [Communication Mechanisms](#communication-mechanisms)
-    - [Argument Types](#argument-types-1)
-    - [Direct Put Optimization](#direct-put-optimization)
-- [Transforming objects](#transforming-objects)
+- [*init spec* - Transform by Custom ETL Container](#init-spec---transform-by-custom-etl-container)
+  - [Build Custom ETL Container Image](#build-custom-etl-container-image)
+    - [Build from AIStore-Provided Frameworks](#recommended-approach-use-aistore-provided-frameworks)
+    - [Build from Scratch](#advanced-approach-build-container-image-from-scratch)
+  - [Specification YAML](#specification-yaml)
+    - [Required or Additional Fields](#required-or-additional-fields)
+    - [Forbidden Fields](#forbidden-fields)
+  - [Argument Types](#argument-types-1)
+  - [Direct Put Optimization](#direct-put-optimization)
 - [ETL Pod Lifecycle](#etl-pod-lifecycle)
 - [API Reference](#api-reference)
-- [ETL name specifications](#etl-name-specifications)
+- [ETL Name Specifications](#etl-name-specifications)
 
-## Getting Started with ETL in AIStore
+## Quick Start
 
-To begin using ETLs in AIStore, you'll need to run AIStore within a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
+To begin using ETLs in AIStore, you'll need to deploy AIStore on a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
 
 1. **AIStore Development with Native Kubernetes (minikube)**:
    - Folder: [deploy/dev/k8s](/deploy/dev/k8s)
@@ -80,7 +71,11 @@ $ ais etl show
 
 If you receive an empty response without any errors, your AIStore cluster is now ready to run ETL tasks.
 
-## Inline ETL example
+**Note**: Unlike most AIStore features that are available immediately via a single command, ETL requires an *initialization step* where the transformation logic is defined and plugged into the system.
+
+### Inline ETL Transformation
+
+ETL inline transform involves transforming datasets on the fly, where the data is read, transformed, and streamed directly to the requesting clients. You can think of inline transformation as a variant of [GET object](/docs/cli/object.md#get-object) operation, except the object content is passed through a user-defined transformation before being returned.
 
 To follow this and subsequent examples, make sure you have the [AIS CLI](/docs/cli.md) installed on your system.
 
@@ -98,13 +93,12 @@ $ ais etl show
 $ echo "hello world" > text.txt
 $ ais put text.txt ais://src
 
-# Step 4: Create a spec file to initialize the ETL process
+# Step 4: Create a spec file to initialize the ETL
 # In this example, we are using the MD5 transformer as a sample ETL.
 $ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml -o md5_spec.yaml
 
-# Step 5: Initialize the ETL process
-$ export COMMUNICATION_TYPE="hpull://"
-$ ais etl init spec --from-file md5_spec.yaml --name etl-md5 --comm-type $COMMUNICATION_TYPE
+# Step 5: Initialize the ETL
+$ ais etl init spec --from-file md5_spec.yaml --name etl-md5 --comm-type hpull://
 
 # Step 6: Check if the ETL is running
 $ ais etl show
@@ -114,7 +108,10 @@ $ ais etl show
 $ ais etl object etl-md5 ais://src/text.txt -
 ```
 
-## Offline ETL example
+### Offline ETL Transformation
+
+Offline ETL transformations produce a new dataset (bucket) as output, which AIStore stores and makes available for future use. You can think of an ETL offline transformation as a variant of [Bucket Copy](/docs/cli/bucket.md#copy-ais-bucket) operation, except each object copied into the destination bucket is passed through the user-defined ETL transformation.
+
 ```console
 $ # Download Imagenet dataset
 $ wget -O imagenet.tar https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar --no-check-certificate
@@ -174,51 +171,56 @@ $ ais ls ais://imagenet-transformed | head -5
 $ # Verify one of the images by downloading its content
 $ ais object get ais://imagenet-transformed/ILSVRC2012_val_00050000.JPEG test.JPEG
 ```
-## Extract, Transform, and Load using User-Defined Functions
 
-1. To perform Extract, Transform, and Load (ETL) using user-defined functions, send the transform function in the [**init code** request](#init-code-request) to an AIStore endpoint.
+**Note**: there are two ways to run ETL initialization and transformation:
+- [ETL CLI](/docs/cli/etl.md)
+- [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
 
-2. Upon receiving the **init code** request, the AIStore proxy broadcasts the request to all AIStore targets in the cluster.
 
-3. When an AIStore target receives the **init code**, it initiates the execution of the container **locally** on the target's machine (also known as [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+## Communication Mechanisms
 
-## Extract, Transform, and Load using Custom Containers
+AIS currently supports 4 distinct target_to_container communication mechanisms to facilitate inline or offline transformation.
 
-1. To perform Extract, Transform, and Load (ETL) using custom containers, execute the [**init spec** API](#init-spec-request) to an AIStore endpoint.
-   
-   > The request contains a YAML spec and ultimately triggers the creation of [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+![ETL Communication Types](assets/ais_etl_series/etl-communication-types.png)
 
-2. Upon receiving the **init spec** request, the AIStore proxy broadcasts the request to all AIStore targets in the cluster.
+Users can choose and specify any of the following:
 
-3. When a target receives the **init spec**, it starts the user container **locally** on the target's machine (also known as [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+| Name | Value | Description |
+|---|---|---|
+| **HTTP Push** | `hpush://` | A target issues a PUT request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
+| **HTTP Redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send a (GET) request to cluster using an ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
+| **WebSocket** | `ws://` | A target uses [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) to send the requested object to its ETL container as individual messages. |
+| **Input/Output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
 
-## *init code* request
+> ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
+> To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
 
-You can write your custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
-You can then use the *init code* request to execute this `transform` on the entire distributed dataset.
+## *init code* - Transform by User-Defined Python Functions
 
-In effect, a user can skip the entire step of writing their Dockerfile and building a custom ETL container - the *init code* capability allows the user to skip this step entirely.
+The *init code* request allows you to define a custom `transform` function that takes input object bytes as a parameter and returns output bytes (the transformed object's content).
 
+Once initialized, this transformation function is immediately available across the entire cluster and can be applied to any AIStore-accessible dataset, in-cluster or remote.
+
+> In effect, a user can skip the entire step of writing their Dockerfile and building a custom ETL container - the *init code* capability allows the user to skip this step entirely.
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
+The `init_code` request currently supports three communication types:
 
-The `init_code` request currently supports two communication types:
+### `hpush://` and `hpull://` communications
 
-### `hpush://` communication
-
-In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush.py)
+In `hpush` or `hpull://` communication types, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush.py)
 
 ```python
 def transform(input_bytes: bytes) -> bytes
 ```
 
-You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0).
+**Note:**
+- If the function requires external dependencies, the user can provide an optional dependencies file or specify them in the elt().init() function of the Python SDK.
+- These requirements will be installed on the machine executing the `transform` function and will be available for the function.
 
-e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush_streaming.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_hpush.py).
+> Example: [ETL that uses OpenCV library to convert image files to numpy numerical representation](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_hpush.py)
 
-> **Note:**
->- If the function uses external dependencies, a user can provide an optional dependencies file or in the `elt().init()` function of Python SDK. These requirements will be installed on the machine executing the `transform` function and will be available for the function.
+- You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0). e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush_streaming.py).
 
 ### `io://` communication
 
@@ -233,9 +235,11 @@ def transform() -> None:
 
 e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_io.py)
 
+For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
+
 ### Runtimes
 
-AIS-ETL provides several *runtimes* out of the box.
+AIS-ETL provides several *runtimes* out of the box for the *init code* request.
 Each *runtime* determines the programming language of your custom `transform` function and the set of pre-installed packages and tools that your `transform` can utilize.
 
 Currently, the following runtimes are supported:
@@ -258,27 +262,98 @@ The AIStore `etl init code` provides two `arg_type` parameter options for specif
 | Parameter Value | Description |
 |-----------------|-------------|
 | "" (Empty String) | This serves as the default option, allowing the object to be passed as bytes. When initializing ETLs, the `arg_type` parameter can be entirely omitted, and it will automatically default to passing the object as bytes to the transformation function. |
-| "url" | When set to "url," this option allows the passing of the URL of the objects to be transformed to the user-defined transform function. It's important to note that this option is limited to '--comm-type=hpull'. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
+| "url" | When set to "url," this option allows the passing of the URL of the objects to be transformed to the user-defined transform function. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
 
+## *init spec* - Transform by Custom ETL Container
 
-## *init spec* request
+*init spec* request covers all, even the most sophisticated ETL use case.
+It allows running any container image that implements certain requirements on communication with AIStore cluster.
 
-*Init spec* request covers all, even the most sophisticated, cases of ETL initialization.
-It allows running any Docker image that implements certain requirements on communication with the cluster.
-The *init spec* request requires writing a Pod specification following specification requirements.
+### Build Custom ETL Container Image
 
-For a detailed step-by-step tutorial on *init spec* request, please see the [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
-
-#### Requirements
-
-Custom ETL container is expected to satisfy the following requirements:
+A custom ETL container must meet the following requirements:
 
 1. Start a web server that supports at least one of the listed [communication mechanisms](#communication-mechanisms).
 2. The server can listen on any port, but the port must be specified in Pod spec with `containerPort` - the cluster
  must know how to contact the Pod.
-3. AIS target(s) may send requests in parallel to the web server inside the ETL container - any synchronization, therefore, must be done on the server-side.
+3. AIS target(s) may send requests in parallel to the web server inside the ETL container, any necessary synchronization must be handled within the server implementation.
 
-#### Specification YAML
+#### Recommended Approach: Use AIStore-Provided Frameworks
+
+AIStore provides extensible frameworks that fulfill all the requirements for building custom ETL containers using any supported communication mechanism and argument types.
+
+Much like the `init code` approach, these frameworks hide the details of web server implementation and internal optimizations, allowing users to focus solely on defining the transformation logic. They also offer mechanisms to programmatically manage the state of the ETL instance used to process individual objects.
+
+Below is the minimum example `md5.py` (and the corresponding [`Dockerfile`](https://github.com/NVIDIA/ais-etl/blob/main/transformers/echo/Dockerfile)) to implement a custom ETL that transforms objects into their MD5 checksum value.
+```python
+import hashlib
+from aistore.sdk.etl.webserver import FastAPIServer
+
+class MD5Server(FastAPIServer):
+    """
+    FastAPI-based HTTP server for MD5 hashing.
+
+    Inherits from FastAPIServer to handle concurrent transform requests.
+    """
+    def transform(self, data: bytes, path: str, args: str) -> bytes:
+        """
+        Compute the MD5 digest of the request payload.
+        """
+        return hashlib.md5(data).hexdigest().encode()
+
+fastapi_server = MD5Server(port=8000)
+fastapi_app = fastapi_server.app  # Expose the FastAPI app
+```
+
+> Check the [AIStore ETL Webserver Python SDK Document](/python/aistore/sdk/etl/webserver/README.md) for more details and examples on how to fully utilize the Python webserver frameworks.
+
+Here’s the equivalent Golang version, along with the related [`Dockerfile`](https://github.com/NVIDIA/ais-etl/blob/main/transformers/go_echo/Dockerfile) and [`dependency`](https://github.com/NVIDIA/ais-etl/tree/main/transformers/go_echo) files:
+```go
+import (
+	"crypto/md5"
+	"io"
+	"bytes"
+
+	"github.com/NVIDIA/aistore/ext/etl/webserver"
+)
+
+type MD5Server struct {
+    webserver.ETLServer
+}
+
+func (*MD5Server) Transform(input io.ReadCloser, path, args string) (io.ReadCloser, error) {
+	hash := md5.New()
+	if _, err := io.Copy(hash, input); err != nil {
+		return nil, err
+	}
+	input.Close()
+	return io.NopCloser(bytes.NewReader(hash.Sum(nil))), nil
+}
+
+// Interface guard to ensure MD5Server satisfies webserver.ETLServer at compile time
+var _ webserver.ETLServer = (*MD5Server)(nil)
+
+func main() {
+	svr := &MD5Server{}
+	webserver.Run(svr, "0.0.0.0", 8000)
+}
+```
+
+> Check the [AIStore Golang ETL Webserver Document](/ext/etl/webserver/README.md) for more details and examples on how to fully utilize the Golang webserver frameworks.
+
+After these setup, build a container image from the code:
+```
+$ docker build -t docker.io/<your-profile>/md5:latest .
+$ docker push docker.io/<your-profile>/md5:latest
+```
+
+**Note**: In the examples above, the `etl_args` string corresponds to the value provided via the `--args` flag when using the `ais etl object` CLI command, or the `args` parameter in the `ETLConfig` class when using the Python SDK. This argument allows users to dynamically pass additional parameters to the inline transformation logic at runtime.
+
+#### Advanced Approach: Build Container Image from Scratch
+
+For a detailed step-by-step tutorial on building a custom ETL container from scratch for *init spec* request, please see the [MD5 ETL playbook](/docs/tutorials/etl/compute_md5.md).
+
+### Specification YAML
 
 Specification of an ETL should be in the form of a YAML file.
 It is required to follow the Kubernetes [Pod template format](https://kubernetes.io/docs/concepts/workloads/pods/#pod-templates)
@@ -308,22 +383,7 @@ and contain all necessary fields to start the Pod.
 | --- | --- |
 | `spec.affinity.nodeAffinity` | Used by AIStore to colocate ETL containers with targets. |
 
-#### Communication Mechanisms
-
-AIS currently supports 4 distinct target ⇔ container communication mechanisms to facilitate inline or offline transformation.
-Users  can choose and specify (via YAML spec) any of the following:
-
-| Name | Value | Description |
-|---|---|---|
-| **HTTP Push** | `hpush://` | A target issues a PUT request to its ETL container with the body containing the requested object. After finishing the request, the target forwards the response from the ETL container to the user. |
-| **HTTP Redirect** | `hpull://` | A target uses [HTTP redirect](https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections) to send a (GET) request to cluster using an ETL container. ETL container should make a GET request to the target, transform bytes, and return it to a user. |
-| **WebSocket** | `ws://` | A target uses [WebSocket](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket) to send the requested object to its ETL container as individual messages. |
-| **Input/Output** | `io://` | A target remotely runs the binary or the code and sends the data to standard input and excepts the transformed bytes to be sent on standard output. |
-
-> ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
-> To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
-
-#### Argument Types
+### Argument Types
 
 The AIStore `etl init spec` provides three `arg_type` parameter options for specifying the type of object specification between the AIStore and ETL container. These options are utilized as follows:
 > ETL container will have `ARG_TYPE` environment variable set to the corresponding parameter value.
@@ -331,14 +391,14 @@ The AIStore `etl init spec` provides three `arg_type` parameter options for spec
 | Parameter Value | Description |
 |-----------------|-------------|
 | "" (Empty String) | This serves as the default option, allowing the object to be passed as bytes. When initializing ETLs, the `arg_type` parameter can be entirely omitted, and it will automatically default to passing the object as bytes to the transformation function. |
-| "url" | Pass the URL of the objects to be transformed to the user-defined transform function. It's important to note that this option is limited to '--comm-type=hpull'. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
+| "url" | Pass the URL of the objects to be transformed to the user-defined transform function. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
 | "fqn" | Pass a fully-qualified name (FQN) of the locally stored object. User is responsible for opening, reading, transforming, and closing the corresponding file. |
 
-#### Direct Put Optimization
+### Direct Put Optimization
 
 > _Applicable only to bucket-to-bucket offline transformations._
 
-In bucket-to-bucket offline transformations, the destination target for a transformed object may differ from the original target. By default, the ETL container sends the transformed data back to the original target, which then forwards it to the destination. The **direct put** optimization streamlines this flow by allowing the ETL container to send the transformed object directly to the destination target.
+In bucket-to-bucket offline transformations, the destination target for a transformed object may differ from the original target. By default, the ETL container sends the transformed data back to the original target, which then forwards it to the destination. The **direct put** optimization streamlines this flow by allowing the ETL container to send the transformed object directly to the destination target. Our stress tests across multiple transformation types consistently show a 3 - 5x performance improvement with direct put enabled.
 
 > The ETL container will have the `DIRECT_PUT` environment variable set to `"true"` or `"false"` accordingly.
 
@@ -347,17 +407,7 @@ The destination address is provided based on the communication mechanism in use:
 | Communication Mechanism | Execution Steps |
 |-------------------------|-----------------|
 | **HTTP Push/Redirect** | For each HTTP request, the destination target's address is provided in the `ais-node-url` header. The ETL container should perform an additional `PUT` request to that address with the transformed object as the payload. |
-| **WebSocket** | Since WebSocket preserves message order and boundaries, the ETL container receives two consecutive messages: (1) a `TextMessage` containing the destination address, and (2) a `BinaryMessage` with the object content. The container should process them in order and issue a `PUT` request to the destination with the transformed object. |
-
-## Transforming objects
-
-AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
-
-There are two ways to run ETL transformations:
-- HTTP RESTful APIs are described in [API Reference section](#api-reference) of this document.
-- [ETL CLI](/docs/cli/etl.md)
-- [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
-- [AIS Loader](/docs/aisloader.md)
+| **WebSocket** | Since WebSocket preserves message order and boundaries, the ETL container receives two consecutive messages: (1) a control message in JSON format containing the destination address, FQN, and associated ETL argument, and (2) a binary message with the object content. The container should process them in order and issue a `PUT` request to the destination with the transformed object. |
 
 ## ETL Pod Lifecycle
 

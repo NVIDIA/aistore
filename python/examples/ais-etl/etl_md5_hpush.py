@@ -9,8 +9,7 @@ import hashlib
 from aistore import Client
 from aistore.sdk import Bucket
 
-client = Client("http://192.168.49.2:8080")
-
+client = Client("http://192.168.49.2:8080") # Change to your AIS cluster endpoint
 
 def transform(input_bytes):
     md5 = hashlib.md5()
