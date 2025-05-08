@@ -47,14 +47,15 @@ For anything beyond the simplest workloads, our ETL Webserver SDK is a better fi
 
     ```python
     # echo_server.py
-    from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
+    from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 
-    class EchoServer(HTTPMultiThreadedServer):
+    class EchoServerFastAPI(FastAPIServer):
         def transform(self, data, *_):
             return data
 
-    if __name__ == "__main__":
-        EchoServer(port=8000).start()
+    # Create the server instance and expose the FastAPI app
+    fastapi_server = EchoServerFastAPI(port=8000)
+    fastapi_app = fastapi_server.app
     ```
 
 2. **Containerize**
@@ -90,7 +91,7 @@ For anything beyond the simplest workloads, our ETL Webserver SDK is a better fi
       - name: server
         image: <myrepo>/echo-etl:latest
         ports: [{ name: default, containerPort: 8000 }]
-        command: ["python", "echo_server.py"]
+        command: ["uvicorn", "echo_server.py:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
         readinessProbe:
           httpGet: { path: /health, port: default }
     ```
@@ -102,6 +103,48 @@ For anything beyond the simplest workloads, our ETL Webserver SDK is a better fi
     ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
     ```
 
+5. **Optional:** Running other frameworks
+
+   * **Flask-based**
+
+     ```python
+     # echo_server.py
+     from aistore.sdk.etl.webserver.flask_server import FlaskServer
+
+     class EchoServerFlask(FlaskServer):
+         def transform(self, data, *_args):
+             return data
+
+     flask_server = EchoServerFlask(port=8000)
+     flask_app = flask_server.app
+     ```
+
+     In your `init_spec.yaml`:
+
+     ```yaml
+     command: ["gunicorn", "echo_server:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4", "--log-level", "debug"]
+     ```
+   * **HTTP-based**
+
+     ```python
+     # echo_server.py
+     from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
+
+     class EchoServer(HTTPMultiThreadedServer):
+         def transform(self, data, *_):
+             return data
+
+     if __name__ == "__main__":
+         EchoServer(port=8000).start()
+     ```
+
+     In your `init_spec.yaml`:
+
+     ```yaml
+     command: ["python", "echo_server.py"]
+     ```
+  > **Note:**
+  > To switch to a different webserver type, rebuild your container image and re-initialize the ETL with the new configuration.
 ---
 
 ## Examples
