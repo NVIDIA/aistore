@@ -219,7 +219,7 @@ Flags:
 Note: some roles include "global" permissions - it is roles which are not bound to all clusters.
 You can create such role by omitting `--cluster` flag while adding or updating a role.
 To list "global" roles, pass a **list** which contains an empty cluster ID.
-List that contains olny "global" cluster ID is `","`. E.g, `ais auth show role --cluster=,`.
+List that contains only "global" cluster ID is `","`. E.g, `ais auth show role --cluster=,`.
 
 ```console
 $ ais auth show role

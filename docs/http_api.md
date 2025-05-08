@@ -145,7 +145,7 @@ $ curl -s -L -X GET 'http://aistore/gs/my-google-bucket' | jq
 
 > AIS provides S3 compatibility layer via its "/s3" endpoint. [S3 compatibility](/docs/s3compat.md) shall not be confused with "easy URL" mapping, whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with "v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request and response parameters and components.
 
-> For detals and additional usage examples, please see [easy URL readme](/docs/easy_url.md).
+> For details and additional usage examples, please see [easy URL readme](/docs/easy_url.md).
 
 ## API Reference
 

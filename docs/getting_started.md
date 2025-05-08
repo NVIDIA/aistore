@@ -58,7 +58,7 @@ $ getfattr -n user.bar foo
 
 ### macOS
 
-For developers, there's also macOS aka Darwin option. Certain capabilities related to querrying the state and status of local hardware resources (memory, CPU, disks) may be missing. In fact, it is easy to review specifics with a quick check on the sources:
+For developers, there's also macOS aka Darwin option. Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks) may be missing. In fact, it is easy to review specifics with a quick check on the sources:
 
 ```console
 $ find . -name "*darwin*"

@@ -157,7 +157,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 			return err
 		}
 
-		// best-effort parsing: (inline range) | (local file or directrory)
+		// best-effort parsing: (inline range) | (local file or directory)
 
 		// inline "range" w/ no flag, e.g.: "/tmp/www/test{0..2}{0..2}.txt" ais://nnn/www
 		pt, e1 := cos.ParseBashTemplate(a.src.abspath)

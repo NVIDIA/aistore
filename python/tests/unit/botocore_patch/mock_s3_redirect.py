@@ -12,7 +12,7 @@ import wrapt
 # Specifically, if the `redirections_enabled` is set to `True` by user,
 # fake HTTP redirects for the following operations.
 #
-# Not all response operatons found in moto's
+# Not all response operations found in moto's
 # S3Response are found below; they don't all
 # provide us with sufficient information to
 # patch successfully.

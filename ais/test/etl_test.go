@@ -1192,7 +1192,7 @@ def transform(input_bytes):
 			msg := etl.InitCodeMsg{
 				InitMsgBase: etl.InitMsgBase{
 					EtlName:   test.etlName,
-					CommTypeX: etl.Hpush, // TODO: enalbe runtime error retrieval for hpull in inline transform calls
+					CommTypeX: etl.Hpush, // TODO: enable runtime error retrieval for hpull in inline transform calls
 					Timeout:   etlBucketTimeout,
 				},
 				Code:    []byte(strings.Replace(failureTransformFunc, "<EXIT_CODE>", exitCode, 1)),

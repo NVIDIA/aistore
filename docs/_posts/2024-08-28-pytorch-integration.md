@@ -75,7 +75,7 @@ for names, data in loader:
     # Process data (e.g training loop)
 ```
 
-Whats going on here in the code? First, the user declares a dataset that can read from a given bucket(*) and passes this dataset to PyTorch DataLoader. Since the DataLoader can take advantage of multiprocessing and workers, samples can be fetched in parallel from our dataset which are then yielded by the DataLoader to the training code.
+What's going on here in the code? First, the user declares a dataset that can read from a given bucket(*) and passes this dataset to PyTorch DataLoader. Since the DataLoader can take advantage of multiprocessing and workers, samples can be fetched in parallel from our dataset which are then yielded by the DataLoader to the training code.
 
 ![PyTorch Workers](/assets/pytorch-dataloading/pytorch-dataloading.gif)
 

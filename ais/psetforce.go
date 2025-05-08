@@ -736,7 +736,7 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 		return
 	}
 
-	// update cluMeta in mem (= desination, brute force)
+	// update cluMeta in mem (= destination, brute force)
 	nconfig := &ncm.Config.ClusterConfig
 	if err := cmn.GCO.Update(nconfig); err != nil {
 		err = fmt.Errorf("%s failed to update config %s: %v", tag, nconfig.String(), err)

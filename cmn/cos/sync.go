@@ -44,7 +44,7 @@ type (
 		s chan struct{}
 	}
 
-	// DynSemaphore implements sempahore which can change its size during usage.
+	// DynSemaphore implements semaphore which can change its size.
 	DynSemaphore struct {
 		c    *sync.Cond
 		size int

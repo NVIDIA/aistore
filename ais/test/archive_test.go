@@ -191,7 +191,7 @@ func TestGetFromArch(t *testing.T) {
 	})
 }
 
-// archive multple obj-s with an option to append if exists
+// archive multiple obj-s with an option to append if exists
 func TestArchMultiObj(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {

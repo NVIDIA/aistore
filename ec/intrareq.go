@@ -12,7 +12,7 @@ import (
 
 const (
 	// a target sends a replica or slice to store on another target
-	// the destionation does not have to respond
+	// the destination does not have to respond
 	reqPut intraReqType = iota
 	// response for requested slice/replica by another target
 	respPut

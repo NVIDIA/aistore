@@ -181,7 +181,7 @@ For convenience, a table that summarizes target metrics follows below.
 | `cleanup.store.n` | `cleanup_store_count` | counter | space cleanup: number of removed misplaced objects and old work files | default |
 | `cleanup.store.size` | `cleanup_store_bytes` | size | space cleanup: total size (bytes) of all removed misplaced objects and old work files (not including removed deleted objects) | default |
 | `ver.change.n` | `ver_change_count` | counter | number of out-of-band updates (by a 3rd party performing remote PUTs from outside this cluster) | default |
-| `ver.change.size` | `ver_change_bytes` | size | total cumulative size (bytes) of objects that were updated out-of-band across all backends combined | defaul t |
+| `ver.change.size` | `ver_change_bytes` | size | total cumulative size (bytes) of objects that were updated out-of-band across all backends combined | default |
 | `remote.deleted.del.n` | `remote_deleted_del_count` | counter | number of out-of-band deletes (by a 3rd party remote DELETE(object) from outside this cluster) | default |
 | `put.ns` | `put_ms` | latency | PUT: average time (milliseconds) over the last periodic.stats_time interval | default |
 | `put.ns.total` | `put_ns_total` | total | PUT: total cumulative time (nanoseconds) | default |

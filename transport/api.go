@@ -121,7 +121,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	debug.Assert(s.usePDU() == extra.UsePDU())
 
 	chsize := burst(extra)             // num objects the caller can post without blocking
-	s.workCh = make(chan *Obj, chsize) // Send Qeueue (SQ)
+	s.workCh = make(chan *Obj, chsize) // Send Queue (SQ)
 	s.cmplCh = make(chan cmpl, chsize) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)

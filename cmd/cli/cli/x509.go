@@ -34,7 +34,7 @@ var (
 	}
 	validateTLS = cli.Command{
 		Name:      cmdValidateTLS,
-		Usage:     "Check that all TLS certficates are identical",
+		Usage:     "Check that all TLS certificates are identical",
 		ArgsUsage: optionalNodeIDArgument,
 		Action:    validateCertHandler,
 	}

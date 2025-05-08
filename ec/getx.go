@@ -90,7 +90,7 @@ func newGetXact(bck *cmn.Bck, mgr *Manager) *XactGet {
 	xctn.xactECBase.init(cmn.GCO.Get(), bck, mgr)
 	xctn.xactReqBase.init()
 
-	// constuct joggers
+	// construct joggers
 	avail, disabled := fs.Get()
 	xctn.getJoggers = make(map[string]*getJogger, len(avail)+len(disabled))
 	for _, mpi := range []fs.MPI{avail, disabled} {

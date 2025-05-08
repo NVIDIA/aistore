@@ -796,7 +796,7 @@ var (
 		Name: "template",
 		Usage: "Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges\n" +
 			"\t(with optional steps and gaps), e.g.:\n" +
-			indent4 + "\t--template \"\" # (an empty or '*' template matches eveything)\n" +
+			indent4 + "\t--template \"\" # (an empty or '*' template matches everything)\n" +
 			indent4 + "\t--template 'dir/subdir/'\n" +
 			indent4 + "\t--template 'shard-{1000..9999}.tar'\n" +
 			indent4 + "\t--template \"prefix-{0010..0013..2}-gap-{1..2}-suffix\"\n" +
@@ -1138,7 +1138,7 @@ var (
 			indent4 + "\t - 'hpull' or 'hpull://' - same, but ETL container is expected to provide HTTP GET endpoint\n" +
 			indent4 + "\t - 'io' or 'io://' - for each request an aistore node will: run ETL container locally, write data\n" +
 			indent4 + "\t   to its standard input and then read transformed data from the standard output\n" +
-			indent4 + "\t For more defails, see https://aiatscale.org/docs/etl#communication-mechanisms\n",
+			indent4 + "\t For more details, see https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms",
 	}
 
 	funcTransformFlag = cli.StringFlag{

@@ -146,7 +146,7 @@ const (
 
 // QparamFltPresence enum.
 //
-// Descibes both buckets and objects with respect to their existence/presence (or non-existence/non-presence)
+// Describes both buckets and objects with respect to their existence/presence (or non-existence/non-presence)
 // in AIS cluster.
 //
 // "FltPresent*" refers to availability ("presence") in the cluster. For details, see the values and comments below.

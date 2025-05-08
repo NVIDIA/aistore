@@ -273,7 +273,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	_, err = tools.WaitForClusterState(proxyURL, "proxy restored", smap.Version, origProxyCnt, origTargetCnt)
 	tassert.CheckFatal(t, err)
 
-	// 4. Ensure the proxy has lastest updated config
+	// 4. Ensure the proxy has latest updated config
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
 	tassert.Fatalf(t, daemonConfig.EC.Enabled == newECEnabled,
 		"expected 'ec.Enabled' to be %v, got: %v", newECEnabled, daemonConfig.EC.Enabled)

@@ -708,7 +708,7 @@ func LimitedCoexistence(tsi *meta.Snode, bck *meta.Bck, action string, otherBck 
 func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck ...*meta.Bck) error {
 	var (
 		nd    *xact.Descriptor // the one that wants to run
-		admin bool             // admin-requested action that'd generate protential conflict
+		admin bool             // admin-requested action that'd generate a conflict
 	)
 	switch action {
 	case apc.ActStartMaintenance, apc.ActStopMaintenance, apc.ActShutdownNode, apc.ActDecommissionNode:

@@ -301,7 +301,7 @@ For these and similar use cases we have [AIS Downloader](/docs/downloader.md) - 
 
 ### Promote local or shared files
 
-AIS can also `promote` files and directories to objects. The operation entails synchronous or asynchronus massively-parallel downloading of any accessible file source, including:
+AIS can also `promote` files and directories to objects. The operation entails synchronous or asynchronous massively-parallel downloading of any accessible file source, including:
 
 - a local directory (or directories) of any target node (or nodes);
 - a file share mounted on one or several (or all) target nodes in the cluster.
@@ -431,7 +431,7 @@ User runs dSort by specifying an input dataset, by-key or by-value (i.e., by con
 
 Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
-Initial Sharding (`ishard`) utility will generate WebDataset-formatted shards from the original file-based dataset without spliting computable samples. The ultimate goal is to allow users to treat AIStore as a vast data lake, where they can easily upload training data in its raw format, regardless of size and directory structure.
+Initial Sharding (`ishard`) utility will generate WebDataset-formatted shards from the original file-based dataset without splitting computable samples. The ultimate goal is to allow users to treat AIStore as a vast data lake, where they can easily upload training data in its raw format, regardless of size and directory structure.
 
 For more details, see:
 * [dSort](/docs/dsort.md)

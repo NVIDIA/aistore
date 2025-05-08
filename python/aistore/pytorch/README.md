@@ -8,7 +8,7 @@ PyTorch comes with powerful data loading capabilities, but loading data in PyTor
 
 ![PyTorch Structure](/docs/images/pytorch_structure.webp)
 
-In our plugin, we extend the base Dataset, Sampler, and IterableDataset Torch clases to provide AIStore Object functionality natively to PyTorch. You can extend AISBaseMapDataset instead of Dataset and AISBaseIterDataset instead of IterableDataset in your custom datasets to automatically obtain object fetching functionality. But if you'd like fully complete datasets that fetch objects and load their data, then you can use AISMapDataset and AISIterData.
+In our plugin, we extend the base Dataset, Sampler, and IterableDataset Torch classes to provide AIStore Object functionality natively to PyTorch. You can extend AISBaseMapDataset instead of Dataset and AISBaseIterDataset instead of IterableDataset in your custom datasets to automatically obtain object fetching functionality. But if you'd like fully complete datasets that fetch objects and load their data, then you can use AISMapDataset and AISIterData.
 
 ### PyTorch DataLoader
 

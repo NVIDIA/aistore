@@ -605,7 +605,7 @@ func TestECChange(t *testing.T) {
 	bucketProps.EC.Enabled = apc.Ptr(true)
 	bucketProps.EC.ObjSizeLimit = apc.Ptr[int64](300000)
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
-	tassert.Errorf(t, err != nil, "Modifiying EC properties must fail")
+	tassert.Errorf(t, err != nil, "Modifying EC properties must fail")
 
 	tlog.Logln("Resetting bucket properties")
 	_, err = api.ResetBucketProps(baseParams, bck)

@@ -137,7 +137,7 @@ type (
 		putTime time.Time // time when the object is put into main queue
 		tm      time.Time // to measure different steps
 		IsCopy  bool      // replicate or use erasure coding
-		rebuild bool      // true - internal request to reencode, e.g., from ec-encode xaction
+		rebuild bool      // true - internal request to re-encode, e.g., from ec-encode xaction
 	}
 
 	RequestsControlMsg struct {

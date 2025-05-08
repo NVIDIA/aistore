@@ -409,7 +409,7 @@ func (lom *LOM) haveMpath(mpath string) bool {
 // returns mountpath to relocate or copy this lom, or nil if none required/available
 // return fixHrw = true when lom is currently misplaced
 // - checks hrw location first, and
-// - checks copies (if any) against the current configuation and available mountpaths;
+// - checks copies (if any) against the current configuration and available mountpaths;
 // - does not check `fstat` in either case (TODO: configurable or scrub);
 func (lom *LOM) ToMpath() (mi *fs.Mountpath, fixHrw bool) {
 	var (

@@ -385,7 +385,7 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 //
 
 type (
-	// ArchiveBckMsg contains parameters to archive mutiple objects from the specified (source) bucket.
+	// ArchiveBckMsg contains parameters to archive multiple objects from the specified (source) bucket.
 	// Destination bucket may the same as the source or a different one.
 	// --------------------  NOTE on terminology:   ---------------------
 	// "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object often also called "shard"

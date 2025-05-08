@@ -393,7 +393,7 @@ OPTIONS:
                           note: applies only to buckets and objects that are _present_ in the cluster
    --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                           (with optional steps and gaps), e.g.:
-                          --template "" # (an empty or '*' template matches eveything)
+                          --template "" # (an empty or '*' template matches everything)
                           --template 'dir/subdir/'
                           --template 'shard-{1000..9999}.tar'
                           --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
@@ -586,7 +586,7 @@ NAME                     SIZE
 .inventory/ais-vm.csv    143.61MiB
 ```
 
-#### List archived contect
+#### List archived content
 
 ```console
 $ ais ls ais://abc/ --prefix log
@@ -818,7 +818,7 @@ OPTIONS:
                             - 'ais ls --check-versions'
    --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                           (with optional steps and gaps), e.g.:
-                          --template "" # (an empty or '*' template matches eveything)
+                          --template "" # (an empty or '*' template matches everything)
                           --template 'dir/subdir/'
                           --template 'shard-{1000..9999}.tar'
                           --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
@@ -1100,14 +1100,14 @@ A few additional words must be said about `--validate`. The option is provided t
 
 > Location of each stored object must at any point in time correspond to the current cluster map and, within each storage target, to the target's [mountpaths](/docs/overview.md#terminology). A failure to abide by location rules is called *misplacement*; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
 
-* [global rebalance and reslver](/docs/rebalance.md)
+* [global rebalance and resilver](/docs/rebalance.md)
 * [resilvering selected targets: advanced usage](/docs/resourcesvanced.md)
 
 ### Notes
 
 > `--validate` may take considerable time to execute (depending, of course, on sizes of the datasets in question and the capabilities of the underlying hardware);
 > non-zero *misplaced* objects in the (validated) output is a direct indication that the cluster requires rebalancing and/or resilvering;
-> an alternative way to execute _validation_ is to run `ais strorage validate` or (simply) `ais scrub`:
+> an alternative way to execute _validation_ is to run `ais storage validate` or (simply) `ais scrub`:
 
 ```console
 $ ais scrub --help
@@ -1263,7 +1263,7 @@ All options are required and must be greater than `0`.
 
 ## Show bucket properties
 
-Overall, the topic called "bucket properties" is rather involved and includes sub-topics "bucket property inhertance" and "cluster-wide global defaults". For background, please first see:
+Overall, the topic called "bucket properties" is rather involved and includes sub-topics "bucket property inheritance" and "cluster-wide global defaults". For background, please first see:
 
 * [Default Bucket Properties](/docs/bucket.md#default-bucket-properties)
 * [Inherited Bucket Properties and LRU](/docs/bucket.md#inherited-bucket-properties-and-lru)
@@ -1660,7 +1660,7 @@ OPTIONS:
 
    template   Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
               (with optional steps and gaps), e.g.:
-              --template "" # (an empty or '*' template matches eveything)
+              --template "" # (an empty or '*' template matches everything)
               --template 'dir/subdir/'
               --template 'shard-{1000..9999}.tar'
               --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"

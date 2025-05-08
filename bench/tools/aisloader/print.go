@@ -302,7 +302,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 	}
 }
 
-// writeStatus writes stats to the writter.
+// writeStatus writes stats to the specified io.Writer.
 // if final = true, writes the total; otherwise writes the interval stats
 func writeStats(to io.Writer, jsonFormat, final bool, s, t *sts) {
 	if final {

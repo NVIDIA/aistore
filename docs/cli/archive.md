@@ -90,7 +90,7 @@ OPTIONS:
    --skip-vc            Skip loading object metadata (and the associated checksum & version related processing)
    --template value     Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                         (with optional steps and gaps), e.g.:
-                        --template "" # (an empty or '*' template matches eveything)
+                        --template "" # (an empty or '*' template matches everything)
                         --template 'dir/subdir/'
                         --template 'shard-{1000..9999}.tar'
                         --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
@@ -320,7 +320,7 @@ OPTIONS:
 
    template   Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
               (with optional steps and gaps), e.g.:
-              --template "" # (an empty or '*' template matches eveything)
+              --template "" # (an empty or '*' template matches everything)
               --template 'dir/subdir/'
               --template 'shard-{1000..9999}.tar'
               --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
@@ -615,7 +615,7 @@ OPTIONS:
                           note: applies only to buckets and objects that are _present_ in the cluster
    --template value       Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                           (with optional steps and gaps), e.g.:
-                          --template "" # (an empty or '*' template matches eveything)
+                          --template "" # (an empty or '*' template matches everything)
                           --template 'dir/subdir/'
                           --template 'shard-{1000..9999}.tar'
                           --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"

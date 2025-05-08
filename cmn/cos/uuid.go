@@ -151,7 +151,7 @@ func IsAlphaNice(s string) bool {
 	return true
 }
 
-// alpha-numeric++ including letters, numbers, dashes (-), and underscores (_)
+// alphanumeric++ including letters, numbers, dashes (-), and underscores (_)
 // period (.) is allowed except for '..' (OnlyPlus const)
 func CheckAlphaPlus(s, tag string) error {
 	l := len(s)

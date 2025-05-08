@@ -18,7 +18,7 @@ Get ready!
 
 ## Prerequisites
 
-* AIStore cluster deployed on Kubernetes. We recommend following guide: [Deploy AIStore on local Kuberenetes cluster](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
+* AIStore cluster deployed on Kubernetes. We recommend following guide: [Deploy AIStore on local Kubernetes cluster](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
 
 ## Prepare ETL
 

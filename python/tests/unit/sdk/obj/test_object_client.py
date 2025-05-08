@@ -104,7 +104,7 @@ class TestObjectClient(unittest.TestCase):
     @patch("aistore.sdk.obj.object_client.ObjectClient._retry_with_new_smap")
     def test_obj_not_found_retry(self, mock_retry_with_new_smap):
         """
-        Test that the get method retries with a new smap when ErrObjNotFound is raised and catched.
+        Test that the get method retries with a new smap when ErrObjNotFound is raised and caught.
         """
         self.request_client.request.side_effect = ErrObjNotFound(
             404, "Object not found", "object_url"

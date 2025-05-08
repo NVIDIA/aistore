@@ -632,7 +632,7 @@ OPTIONS:
                       2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
    template          Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
                      (with optional steps and gaps), e.g.:
-                     --template "" # (an empty or '*' template matches eveything)
+                     --template "" # (an empty or '*' template matches everything)
                      --template 'dir/subdir/'
                      --template 'shard-{1000..9999}.tar'
                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"

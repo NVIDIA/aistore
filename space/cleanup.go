@@ -671,7 +671,7 @@ func (j *clnJ) rmLeftovers() (size int64, _ error) {
 	}
 	j.misplaced.loms = j.misplaced.loms[:0]
 
-	// 3. rm EC slices and replicas that are still without correcponding metafile
+	// 3. rm EC slices and replicas that are still without corresponding metafile
 	for _, ct := range j.misplaced.ec {
 		metaFQN := fs.CSM.Gen(ct, fs.ECMetaType, "")
 		if cos.Stat(metaFQN) == nil {

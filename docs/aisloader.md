@@ -447,7 +447,7 @@ Following is a brief illustrated sequence to enable detailed tracing, capture st
 **IMPORTANT NOTE:**
 > The amount of generated (and extremely detailed) metrics can put a strain on your StatsD server. That's exactly the reason for runtime switch to **toggle** HTTP tracing on/off. The example below shows how to do it (in particular, see `kill -HUP`).
 
-### 1. Run aisloader for 90s (32 workes, 100% write, sizes between 1KB and 1MB) with detailed tracing enabled:
+### 1. Run aisloader for 90s (32 workers, 100% write, sizes between 1KB and 1MB) with detailed tracing enabled:
 
 ```console
 $ aisloader -bucket=ais://abc -duration 90s -numworkers=32 -minsize=1K -maxsize=1M -pctput=50 --cleanup=false --trace-http=true

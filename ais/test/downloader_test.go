@@ -1198,7 +1198,7 @@ func TestDownloadSync(t *testing.T) {
 	dlBody.Sync = false
 	downloadObjectRemote(t, dlBody, m.num, m.num)
 
-	tlog.Logln("5. overridding the objects and deleting some of them...")
+	tlog.Logln("5. overriding the objects and deleting some of them...")
 	m.remotePuts(false /*evict*/, true /*override*/)
 	m.del(objsToDelete)
 

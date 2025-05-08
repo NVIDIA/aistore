@@ -620,7 +620,7 @@ proceed:
 
 	case objName != "":
 		// (1) list archive, or
-		// (2) show (as in: HEAD) specied object, or
+		// (2) show (as in: HEAD) specified object, or
 		// (3) show part of a bucket that matches prefix = objName, or
 		// (4) summarize part of a bucket that --/--
 		if flagIsSet(c, listArchFlag) {

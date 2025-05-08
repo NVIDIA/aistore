@@ -156,7 +156,7 @@ func parseCmdLine() (p params, err error) {
 	}
 
 	os.Args = []string{os.Args[0]}
-	flag.Parse() // Called so that imported packages don't compain
+	flag.Parse() // Called so that imported packages don't complain
 
 	if p.minSize > p.maxSize {
 		return params{}, fmt.Errorf("minsize %d greater than maxsize %d", p.minSize, p.maxSize)

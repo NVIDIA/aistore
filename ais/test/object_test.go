@@ -1473,7 +1473,7 @@ func Test_checksum(t *testing.T) {
 
 	m.remotePuts(true /*evict*/)
 
-	// Disable checkum.
+	// Disable checksum.
 	if p.Cksum.Type != cos.ChecksumNone {
 		propsToSet := &cmn.BpropsToSet{
 			Cksum: &cmn.CksumConfToSet{

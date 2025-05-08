@@ -55,7 +55,7 @@ The remainder of this text groups aistore environment variables by their respect
 - [Package: memsys](#package-memsys)
 - [Package: transport](#package-transport)
 
-separately, there's authenication server config:
+separately, there's authentication server config:
 - [AuthN](#authn)
 
 and finally:

@@ -144,7 +144,7 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 // OCI_CLI_RC_FILE ENV that defaults to ~/.oci/oci_cli_rc), it (like the configFile)
 // is in so-called INI file format. A default for the Profile is found at
 // [OCI_CLI_SETTINGS]default_profile. That Profile (defaults to "DEFAULT") would still
-// be overidden by the presence of a (non-empty) OCI_CLI_PROFILE ENV. The selected
+// be overridden by the presence of a (non-empty) OCI_CLI_PROFILE ENV. The selected
 // or defaulted Profile would then define a section in the rcFile (as it does in the
 // configFile) with a key named "compartment-id". That value of that key would be used
 // if the OCI_COMPARTMENT_OCID ENV is not set or empty. Parsing the rcFile is apparently

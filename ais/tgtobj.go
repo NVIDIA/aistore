@@ -1634,7 +1634,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 // PUT lom => dst
 // NOTE: no assumpions are being made on whether the source lom is present in cluster.
 // (can be a "pure" metadata of a (non-existing) Cloud object; accordingly, GetROC must
-// be able to hande cold get, warm get, etc.)
+// be able to handle cold get, warm get, etc.)
 //
 // If destination bucket is remote:
 // - create a local replica of the object on one of the targets, and
@@ -1988,7 +1988,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 }
 
 //
-// put mirorr (main)
+// put mirror (main)
 //
 
 func (t *target) putMirror(lom *core.LOM) {

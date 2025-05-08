@@ -741,7 +741,7 @@ func _doResp(args *callArgs, req *http.Request, resp *http.Response, res *callRe
 	}
 
 	// read and decode via call-result-value (`cresv`), if provided;
-	// othwerwise, read and return bytes for the caller to unmarshal
+	// otherwise, read and return bytes for the caller to unmarshal
 	if args.cresv != nil {
 		res.v = args.cresv.newV()
 		args.cresv.read(res, resp.Body)

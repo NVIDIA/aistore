@@ -84,7 +84,7 @@ std_bed_count = df[' "Beds"'].std()
 dd.compute({"mean_price": mean_price, "mean_bed_count": bed_sum, "mean_size": mean_size, "std_price": std_price, "std_size", "std_bed_count": std_bed_count})
 ```
 
-Dask DataFrames also support more complex computations familiar to previous Pandas users such as calculating statistcs by group and filtering rows:
+Dask DataFrames also support more complex computations familiar to previous Pandas users such as calculating statistics by group and filtering rows:
 
 ```python
 # Mean list price of homes grouped by bed count

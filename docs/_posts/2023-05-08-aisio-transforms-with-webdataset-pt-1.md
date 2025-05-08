@@ -133,7 +133,7 @@ Wait for the job to complete:
 ais wait `YourSortJobID`
 ```
 
-Now we can see the ouptut shards as defined in the dSort job spec above, each containing a random set of the data samples. 
+Now we can see the output shards as defined in the dSort job spec above, each containing a random set of the data samples. 
 
 ```bash
 ais bucket ls ais://images -prefix shuffled

@@ -31,7 +31,7 @@ const (
 	// expand archives as directories
 	LsArchDir
 
-	// return only object names and, spearately, statuses
+	// return only object names and, separately, statuses
 	LsNameOnly
 
 	// same as above and size (minor speedup)

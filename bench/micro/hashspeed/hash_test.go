@@ -1,4 +1,4 @@
-// Package hashspeed is a benchmark througput benchmark
+// Package hashspeed is a benchmark throughput benchmark
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */

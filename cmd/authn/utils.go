@@ -48,7 +48,7 @@ func mergeBckACLs(toACLs, fromACLs bckACLList, cluIDFlt string) []*authn.BckACL 
 }
 
 // mergeClusterACLs appends cluster ACLs from fromACLs which are not in toACL.
-// If a cluster ACL is already in the list, its persmissions are updated.
+// If a cluster ACL is already in the list, its permissions are updated.
 // If cluIDFlt is set, only ACLs for cluster with this ID are appended.
 func mergeClusterACLs(toACLs, fromACLs cluACLList, cluIDFlt string) []*authn.CluACL {
 	for _, n := range fromACLs {

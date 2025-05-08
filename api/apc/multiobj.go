@@ -100,7 +100,7 @@ func (*PrefetchMsg) delim(sb *strings.Builder) {
 }
 
 // ArchiveMsg contains the parameters (all except the destination bucket)
-// for archiving mutiple objects as one of the supported archive.FileExtensions types
+// for archiving multiple objects as one of the supported archive.FileExtensions types
 // at the specified (bucket) destination.
 // See also: api.PutApndArchArgs
 // --------------------  terminology   ---------------------

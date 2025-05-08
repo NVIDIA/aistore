@@ -37,7 +37,7 @@ func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool,
 			fltPresence)
 		tassert.CheckFatal(t, err)
 
-		// TODO -- FIXME: do intead smth like: `remoteClusterBuckets.Equal(allRemaisBuckets)`
+		// TODO -- FIXME: do instead smth like: `remoteClusterBuckets.Equal(allRemaisBuckets)`
 		tassert.Errorf(
 			t, len(remoteClusterBuckets) == len(allRemaisBuckets),
 			"specific namespace %q => %v, while all-remote %q => %v, where presence=%d\n",

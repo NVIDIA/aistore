@@ -176,7 +176,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	cnt, cntsub := countFiles(t, tempdir)
 	if !test.deleteSrc {
 		tassert.Errorf(t, cnt == test.num && cntsub == test.num,
-			"delete-src == false: expected cnt (%d) == cntsub (%d) == num (%d) gererated",
+			"delete-src == false: expected cnt (%d) == cntsub (%d) == num (%d) generated",
 			cnt, cntsub, test.num)
 	}
 

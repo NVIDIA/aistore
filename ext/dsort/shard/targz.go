@@ -1,5 +1,5 @@
 // Package shard provides Extract(shard), Create(shard), and associated methods
-// across all suppported archival formats (see cmn/archive/mime.go)
+// across all supported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */

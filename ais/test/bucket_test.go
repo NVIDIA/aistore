@@ -2760,7 +2760,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+	tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -2785,7 +2785,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+	tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -2857,7 +2857,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
+	tlog.Logf("Waiting for x-%s[%s]\n", apc.ActCopyBck, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -2901,7 +2901,7 @@ func testCopyBucketMultiWorker(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 				tools.DestroyBucket(t, proxyURL, dstBck)
 			})
 
-			tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+			tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 			_, err = api.WaitForXactionIC(baseParams, &args)
 			tassert.CheckFatal(t, err)

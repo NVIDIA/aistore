@@ -861,7 +861,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 }
 
 // Broadcast request for object's metadata. The function returns the list of
-// nodes(with their EC metadata) that have the lastest object version
+// nodes(with their EC metadata) that have the latest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
 		wg     = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 8)

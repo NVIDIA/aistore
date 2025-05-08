@@ -123,7 +123,7 @@ Utilizing 64 1MB segments more than doubles the performance of the S3 backend's 
 
 ## Conclusion
 
-This analysis hightlights how backend selection impacts performance in AIStore when working
+This analysis highlights how backend selection impacts performance in AIStore when working
 with OCI Object Storage. While the S3 API provides interoperability, the OCI Native API
 can outperform the S3 API in both reads and writes when properly tuned.
 

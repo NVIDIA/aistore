@@ -52,7 +52,7 @@ extra.aws.multipart_size         0B
 extra.aws.profile
 ```
 
-Notice that the bucket's region (`cloud_region` above) is automatically populated when AIS looks up the bucket in s3. But the other two varables are settable and can provide alternative credentials and/or access endpoint.
+Notice that the bucket's region (`cloud_region` above) is automatically populated when AIS looks up the bucket in s3. But the other two variables are settable and can provide alternative credentials and/or access endpoint.
 
 ## Environment variables
 

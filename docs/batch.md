@@ -9,7 +9,7 @@ redirect_from:
 
 ## Introduction
 
-Extended actions (_xactions_) are batch operations, or jobs, that run asynchronously, report satistics (viewable at runtime and later), can be waited upon, and can be stopped (aborted).
+Extended actions (_xactions_) are batch operations, or jobs, that run asynchronously, report statistics (viewable at runtime and later), can be waited upon, and can be stopped (aborted).
 
 The list of supported jobs can be viewed via the CLI `show` command and currently includes:
 

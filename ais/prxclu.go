@@ -2010,7 +2010,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// primary (and cluster) to start and finalize rebalancing status _prior_ to removing invidual nodes
+	// primary (and cluster) to start and finalize rebalancing status _prior_ to removing individual nodes
 	if err := p.pready(smap, true); err != nil {
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
