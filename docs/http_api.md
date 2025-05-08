@@ -74,7 +74,7 @@ For example: /v1/cluster where `v1` is the currently supported API version and `
 | `daemon` (aka **node**) | control-plane request to update or query specific AIS daemon (proxy or target). In the documentation, the terms "daemon" and "node" are used interchangeably. |
 | `buckets` | create, destroy, rename, copy, transform (entire) buckets; list objects in a given bucket; get bucket names for a given provider (or all providers); get bucket properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
-| `download` | download external datasets and/or selected files from remote buckets, HDFS, or even specific HTTP locations |
+| `download` | download external datasets and/or selected files from remote buckets or even specific HTTP locations |
 | `sort` | user-defined distributed shuffle |
 
 and more.

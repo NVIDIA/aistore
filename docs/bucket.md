@@ -97,7 +97,6 @@ The table below contains a few - not all - of those sections and their respectiv
 | | `write_policy.md` | Metadata write policy |
 | **Provider-Specific** | `extra.aws.cloud_region` | AWS region |
 | | `extra.http` | HTTP-specific settings |
-| | `extra.hdfs` | HDFS-specific settings |
 
 ### Bucket Properties (JSON)
 
@@ -393,8 +392,8 @@ train-002.tgz     136.44KiB
 
 # Remote Bucket
 
-Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure/OCI or HDFS) when AIS is deployed as [fast tier](overview.md#fast-tier).
-Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure/OCI, but not HDFS).
+Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure/OCI) when AIS is deployed as [fast tier](overview.md#fast-tier).
+Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure/OCI).
 
 > By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
 
@@ -658,9 +657,6 @@ For example, to evict `s3://abc` completely from the AIS cluster, run:
 ```console
 $ ais bucket evict aws://abc
 ```
-
-Note: When an HDFS bucket is evicted, AIS will only delete objects stored in the cluster. AIS will retain the bucket's metadata to allow the bucket to re-register later.
-This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais bucket evict`.
 
 ### See also
 
