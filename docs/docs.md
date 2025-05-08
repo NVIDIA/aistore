@@ -89,8 +89,8 @@ redirect_from:
 
 - [AIStore ETL Overview](/docs/etl.md)
 - [ETL Transformer Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl)
-- [ETL Python Webserver SDK](/python/aistore/sdk/etl/webserver/README.md)
-- [ETL Golang Webserver Package](/ext/etl/webserver/README.md)
+- [ETL Python Webserver SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl/webserver/README.md)
+- [ETL Golang Webserver Package](https://github.com/NVIDIA/aistore/blob/main/ext/etl/webserver/README.md)
 
 ## Advanced Features and Tools
 
