@@ -137,7 +137,6 @@ include:
   stage: test-long
   tags:
     - $RUNNER_TAG
-  # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
     - !reference [.default_test_rules, rules]
@@ -151,7 +150,6 @@ include:
   stage: test-long
   tags:
     - $RUNNER_TAG
-  # NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   <<: *skip_scheduled_rules
   <<: *gather_logs_def
@@ -707,7 +705,6 @@ test:short:assorted:k8s:
 
 test:long:k8s:
   extends: .test_k8s_long_template
-  ## NOTE: when changing, make sure to update $SCRIPTS_DIR/bootstrap.sh and GitLab /settings/ci_cd
   timeout: 4h
   rules:
     - !reference [.test_k8s_long_template, rules]
