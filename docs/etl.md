@@ -7,19 +7,19 @@ redirect_from:
  - /docs/etl.md/
 ---
 
-**ETL** stands for **E**xtract, **T**ransform, **L**oad. More specifically:
+**ETL** — **Extract**, **Transform**, **Load** — is a core workflow in data pipelines:
 
-* **E**xtract - data from different original formats and/or multiple sources;
-* **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
-* **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
+- **Extract** data from various formats and sources  
+- **Transform** it into a unified format optimized for compute (e.g., deep learning)  
+- **Load** the result into a new destination
 
-AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) can serve as both the source for extraction and the destination for loading. The AIStore ETL system is designed from the ground up to execute all 3 stages of the ETL process *locally*. With AIStore ETL, you can easily manage and transform your dataset using custom transformation logic.
+The AIStore ETL system is designed from the ground up to execute all 3 stages of the ETL process *locally*. AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) can serve as both the source for extraction and the destination for loading. Unlike traditional ETL pipelines that extract data out of storage, transform it externally, and push it back, AIStore deploys custom transformation logic directly on the nodes that store the data. This drastically **reduces data movement**, **improves performance**, and **eliminates infrastructure overhead**.
 
-Why is it worth to adopt AIStore ETL? Because at scale, it dramatically accelerates the ETL process. AIStore ETL can deliver up to **50x** performance gains compared to traditional client-side extract-transform-load operations, while preserving full flexibility to define your own transformation logic. Specifically, AIStore ETL enables you to dynamically plug in your own transformation logic into the cluster and leverage the compute resources already available in the cluster to transform your dataset efficiently.
+AIStore ETL is fully language- and framework-agnostic. You can deploy your own custom web server as a transformation pod or use our plug-and-play ETL servers by simply providing the transformation logic. It supports both **inline transformations** (real-time processing via GET requests) and **offline batch transformations** (bucket-to-bucket), delivering up to **50×** performance gains over traditional client-side ETL workflows.
 
 ![ETL Inline & Offline Transformation Flow](assets/ais_etl_series/etl-inline-offline.gif)
 
-Find more information on the architecture and implementation of `ais-etl` [here](/ext/etl/README.md).
+Learn more about the architecture and implementation [here](/ext/etl/README.md).
 
 **Note:** AIStore ETL requires [Kubernetes](https://kubernetes.io).
 
