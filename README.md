@@ -134,11 +134,11 @@ Let others know your project is powered by high-performance AI storage:
 * [CLI Reference](/docs/cli.md)
 * [Authentication](/docs/authn.md)
 * [Prometheus & Metrics](/docs/metrics.md)
-* [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s)
+* [Production Deployment: Kubernetes Operator, Ansible Playbooks, Helm Charts, Monitoring](https://github.com/NVIDIA/ais-k8s)
 
 ### How to find information
 
-* See [extended index](docs/index.md#guides-and-references-extended-index)
+* See [Extended Index](/docs/docs.md)
 * Use CLI `search` command, e.g.: `ais search copy`
 * Clone the repository and run `git grep`, e.g.: `git grep -n out-of-band -- "*.md"`
 

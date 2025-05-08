@@ -9,8 +9,8 @@ redirect_from:
 
 **ETL** — **Extract**, **Transform**, **Load** — is a core workflow in data pipelines:
 
-- **Extract** data from various formats and sources  
-- **Transform** it into a unified format optimized for compute (e.g., deep learning)  
+- **Extract** data from various formats and sources
+- **Transform** it into a unified format optimized for compute (e.g., deep learning)
 - **Load** the result into a new destination
 
 The AIStore ETL system is designed from the ground up to execute all 3 stages of the ETL process *locally*. AIStore and any of its [supported backends](https://github.com/NVIDIA/aistore/blob/main/docs/images/supported-backends.png) can serve as both the source for extraction and the destination for loading. Unlike traditional ETL pipelines that extract data out of storage, transform it externally, and push it back, AIStore deploys custom transformation logic directly on the nodes that store the data. This drastically **reduces data movement**, **improves performance**, and **eliminates infrastructure overhead**.
@@ -149,7 +149,7 @@ preprocess = T.Compose(
 
 # Define the transform function
 def transform(data: bytes) -> bytes:
-    image = Image.open(io.BytesIO(data))    
+    image = Image.open(io.BytesIO(data))
     processed = preprocess(image)
     buf = io.BytesIO()
     processed.save(buf, format='JPEG')
@@ -162,8 +162,8 @@ torchvision==0.15.2
 
 $ ais etl init code --name etl-torchvision --from-file code.py --deps-file deps.txt --runtime python3.11v2 --comm-type hpull
 
-$ # Perform an offline transformation 
-$ ais etl bucket etl-torchvision ais://imagenet ais://imagenet-transformed --ext="{JPEG:JPEG}" 
+$ # Perform an offline transformation
+$ ais etl bucket etl-torchvision ais://imagenet ais://imagenet-transformed --ext="{JPEG:JPEG}"
 
 $ # Check if the transformed dataset is available in the bucket
 $ ais ls ais://imagenet-transformed | head -5
@@ -420,7 +420,7 @@ ETL follows a structured lifecycle to enhance observability. The lifecycle consi
 | Initializing |  ------------->  | Running |
 +--------------+                  +---------+
        | ^                             |
- Error | | User Restarts               | 
+ Error | | User Restarts               |
        v |                             |
 +--------------+      Runtime Error    |
 |   Stopped    |  <--------------------+

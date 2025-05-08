@@ -75,8 +75,10 @@ AIS target mountpath is a formatted disk (or RAID volume) **plus** a directory t
 
 * One mountpath per physical disk/RAID (no sharing).
 * Mountpath directories cannot be nested.
-* Mountpaths can be **enabled / disabled** and **attached / detached** at runtime to expand or shrink capacity safely.
+* Mountpaths can be **enabled / disabled** and **attached / detached** at runtime to replace faulted drives, expand or shrink capacity with no downtime.
 * In a typical deployment, *total mountpaths = number of targets × disks-per-target*.
+
+> **Note on Kubernetes deployments**: While AIStore natively supports hot-plugging mountpaths at runtime, this capability is limited in Kubernetes environments. Kubernetes (as of v1.33) does not support attaching new Persistent Volumes to running pods. In production Kubernetes deployments, adding new storage typically requires a controlled pod restart (meaning, zero-downtime is not possible without specialized extensions).
 
 ---
 

@@ -9,13 +9,13 @@ redirect_from:
 
 ## Introduction
 
-- [Brief overview](/README.md)
-- [In-depth overview](/docs/overview.md)
-- [Getting started](/docs/getting_started.md)
-- [CLI: overview, getting started](/docs/cli.md)
+- [Main README](/README.md)
+- [In-depth Overview](/docs/overview.md)
+- [Getting Started](/docs/getting_started.md)
+- [CLI: overview](/docs/cli.md)
 - [CLI: reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
 - [Technical Blog](https://aistore.nvidia.com/blog)
-- [Deployments](https://github.com/NVIDIA/aistore/tree/main/deploy)
+- [How to deploy AIStore (useful links)](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md)
 
 ## API and SDKs
 
@@ -31,7 +31,7 @@ redirect_from:
   - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
   - [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)
 
-## Command Line Interface
+## CLI
 
 - [Overview](/docs/cli.md)
 - [`ais help`](/docs/cli/help.md)
@@ -48,7 +48,6 @@ redirect_from:
 - [Distributed shuffle](/docs/cli/dsort.md)
 - [User account and access management](/docs/cli/auth.md)
 - [Jobs](/docs/cli/job.md)
-- [`aisnode` command line](/docs/command_line.md)
 
 ## Storage Management
 
@@ -117,21 +116,29 @@ redirect_from:
 - [Using Rate Limits to Enhance Reliability and Performance](https://aistore.nvidia.com/blog/2025/03/19/rate-limit-blog)
 - [Checksumming: brief theory of operations](/docs/checksum.md)
 - [Blog: Maintaining Resilient Connectivity During Lifecycle Events](https://aistore.nvidia.com/blog/2025/04/02/python-retry)
-- [Traffic patterns](/docs/traffic_patterns.md)
 
 ## Observability and Monitoring
 
+- [Prometheus & Metrics](/docs/metrics.md)
 - [Prometheus](/docs/prometheus.md)
-  - [Reference: all supported metrics](/docs/metrics-reference.md)
-- [Observability overview: StatsD and Prometheus, logs, and CLI](/docs/metrics.md)
-- [CLI: `ais show performance`](/docs/cli/show.md)
+- [Reference: all supported metrics](/docs/metrics-reference.md)
+- [CLI: `ais performance` command](/docs/cli/performance.md)
 
 ## Developer Resources
 
-- [Getting started](/docs/getting_started.md)
+- [Getting Started](/docs/getting_started.md)
+- [How to deploy AIStore (useful links)](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md)
 - [Docker](/docs/docker_main.md)
-- [Useful scripts](/docs/development.md)
-- [Profiling, race-detecting and more](/docs/development.md)
+- [Assorted scripts; profiling](/docs/development.md)
+- [`aisnode` command line](/docs/command_line.md)
+
+## Production Deployment
+
+* [AIStore on Kubernetes](https://github.com/NVIDIA/ais-k8s)
+* [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
+* [Ansible Playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
+* [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
+- [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
 ## Special Cases and Advanced Topics
 
@@ -141,3 +148,4 @@ redirect_from:
 - [Blog: Comparing OCI's Native Object Storage and S3 API Backends](https://aistore.nvidia.com/blog/2025/02/26/oci-object-native-vs-s3-api)
 - [Blog: AIStore Python SDK: Maintaining Resilient Connectivity During Lifecycle Events](https://aistore.nvidia.com/blog/2025/04/02/python-retry)
 - [Blog: Adding Data to AIStore -- PUT Performance](https://aistore.nvidia.com/blog/2024/11/22/put-performance)
+- [Traffic patterns](/docs/traffic_patterns.md)
