@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Opportunities Galore: Using Rate Limits to Enhance Reliability and Performance"
+title:  "Unified Rate Limiting: Frontend and Backend"
 date:   Mar 19, 2025
 author: Alex Aizman
 categories: reliability performance aistore
