@@ -109,21 +109,26 @@ func NewOCI(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 	}
 
 	if err := bp.fetchCliConfig(); err != nil {
+		_, err = ociErrorToAISError("NewOCI(fetch cli config)", "", "", "", err, nil)
 		return nil, err
 	}
 	if err := bp.fetchTuningENVs(); err != nil {
+		_, err = ociErrorToAISError("NewOCI(fetch tuning envs)", "", "", "", err, nil)
 		return nil, err
 	}
 
 	client, err := ocios.NewObjectStorageClientWithConfigurationProvider(bp.configurationProvider)
 	if err != nil {
+		_, err = ociErrorToAISError("NewOCI(client create)", "", "", "", err, nil)
 		return nil, err
 	}
 	bp.client = client
 	resp, err := bp.client.GetNamespace(context.Background(), ocios.GetNamespaceRequest{})
 	if err != nil {
+		_, err = ociErrorToAISError("NewOCI(GetNamespace)", "", "", "", err, resp)
 		return nil, err
 	}
+
 	bp.namespace = *resp.Value
 
 	bp.base.init(t.Snode(), tstats, startingUp)
@@ -277,13 +282,84 @@ func (*ocibp) set(envName string, envMin, envMax, envDefault int64, out *int64) 
 	return nil
 }
 
-func ociStatus(rawResponse *http.Response) (ecode int) {
-	if rawResponse == nil {
-		ecode = http.StatusInternalServerError
+const ociErrPrefix = "oci-error"
+
+func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn error, respOrStatus any) (int, error) {
+	var (
+		errOut      error
+		ok          bool
+		path        string
+		rawResponse *http.Response
+		statusCode  int
+	)
+
+	if respOrStatus == nil {
+		statusCode = 0
 	} else {
-		ecode = rawResponse.StatusCode
+		statusCode, ok = respOrStatus.(int)
+		if !ok {
+			switch resp := respOrStatus.(type) {
+			case ocios.AbortMultipartUploadResponse:
+				rawResponse = resp.RawResponse
+			case ocios.CommitMultipartUploadResponse:
+				rawResponse = resp.RawResponse
+			case ocios.CreateMultipartUploadResponse:
+				rawResponse = resp.RawResponse
+			case ocios.DeleteObjectResponse:
+				rawResponse = resp.RawResponse
+			case ocios.GetNamespaceResponse:
+				rawResponse = resp.RawResponse
+			case ocios.GetObjectResponse:
+				rawResponse = resp.RawResponse
+			case ocios.HeadBucketResponse:
+				rawResponse = resp.RawResponse
+			case ocios.HeadObjectResponse:
+				rawResponse = resp.RawResponse
+			case ocios.ListBucketsResponse:
+				rawResponse = resp.RawResponse
+			case ocios.ListObjectsResponse:
+				rawResponse = resp.RawResponse
+			case ocios.PutObjectResponse:
+				rawResponse = resp.RawResponse
+			case ocios.UploadPartResponse:
+				rawResponse = resp.RawResponse
+			default:
+				rawResponse = nil
+			}
+
+			if rawResponse == nil {
+				statusCode = 0
+			} else {
+				statusCode = rawResponse.StatusCode
+			}
+		}
 	}
-	return
+
+	switch statusCode {
+	case http.StatusRequestedRangeNotSatisfiable:
+		errOut = cmn.NewErrRangeNotSatisfiable(errIn, []string{byteRange}, 0)
+	case http.StatusTooManyRequests:
+		errOut = cmn.NewErrTooManyRequests(nil, statusCode)
+	default:
+		if bucketName == "" {
+			path = objectPath // possibly itself also ""
+		} else {
+			if objectPath == "" {
+				path = bucketName
+			} else {
+				path = bucketName + "/" + objectPath
+			}
+		}
+		errOut = cmn.NewErrFailedTo(nil, "oci-backend: "+op, path, errIn)
+	}
+
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+		nlog.InfoDepth(1, "begin "+ociErrPrefix+" =========================")
+		nlog.InfoDepth(1, errOut)
+		nlog.InfoDepth(1, "end "+ociErrPrefix+" ===========================")
+	}
+
+	return statusCode, errOut
 }
 
 func (bp *ocibp) pooledLauchChild(mpChild mpChildIf) {
@@ -383,7 +459,7 @@ func (bp *ocibp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (i
 
 		resp, err := bp.client.ListObjects(context.Background(), req)
 		if err != nil {
-			return ociStatus(resp.RawResponse), err
+			return ociErrorToAISError("ListObjects", cloudBck.Name, msg.Prefix, "", err, resp)
 		}
 
 		// Note that we are trusting OCI to return a list of objects and, if present
@@ -465,9 +541,9 @@ func (bp *ocibp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 	}
 	resp, err := bp.client.ListBuckets(context.Background(), req)
 	if err != nil {
-		return nil, ociStatus(resp.RawResponse), err
+		ecode, err := ociErrorToAISError("ListBuckets", "", "", "", err, resp)
+		return nil, ecode, err
 	}
-
 	bcks := make(cmn.Bcks, len(resp.Items))
 	for idx, item := range resp.Items {
 		bcks[idx] = cmn.Bck{
@@ -509,7 +585,7 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 	// Note: in case PutObject() failed to close r...
 	_ = r.Close()
 	if err != nil {
-		return ociStatus(resp.RawResponse), err
+		return ociErrorToAISError("PutObject", cloudBck.Name, lom.ObjName, "", err, resp)
 	}
 
 	h := cmn.BackendHelpers.OCI
@@ -535,7 +611,7 @@ func (bp *ocibp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 
 	resp, err := bp.client.DeleteObject(ctx, req)
 	if err != nil {
-		return ociStatus(resp.RawResponse), err
+		return ociErrorToAISError("DeleteObject", cloudBck.Name, lom.ObjName, "", err, resp)
 	}
 	return 0, nil
 }
@@ -549,7 +625,8 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int
 
 	resp, err := bp.client.HeadBucket(ctx, req)
 	if err != nil {
-		return nil, ociStatus(resp.RawResponse), err
+		ecode, err := ociErrorToAISError("HeadBucket", cloudBck.Name, "", "", err, resp)
+		return nil, ecode, err
 	}
 
 	bckProps := make(cos.StrKVs, 2)
@@ -570,7 +647,8 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 
 	resp, err := bp.client.HeadObject(ctx, req)
 	if err != nil {
-		return nil, ociStatus(resp.RawResponse), err
+		ecode, err := ociErrorToAISError("HeadObject", cloudBck.Name, lom.ObjName, "", err, resp)
+		return nil, ecode, err
 	}
 
 	objAttrs := &cmn.ObjAttrs{
@@ -625,8 +703,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 
 	resp, err := bp.client.GetObject(ctx, req)
 	if err != nil {
-		res.Err = err
-		res.ErrCode = ociStatus(resp.RawResponse)
+		res.ErrCode, res.Err = ociErrorToAISError("GetObject", cloudBck.Name, lom.ObjName, rangeHeader, err, resp)
 		return res
 	}
 

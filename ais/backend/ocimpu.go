@@ -9,7 +9,6 @@ package backend
 import (
 	"container/list"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -73,7 +72,6 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 		err        error
 		mpu        *ociMPUStruct
 		mpuChild   *ociMPUChildStruct
-		status     int
 		totalParts int
 	)
 
@@ -105,7 +103,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 
 	createResp, err := bp.client.CreateMultipartUpload(mpu.ctx, createReq)
 	if err != nil {
-		return ociStatus(createResp.RawResponse), err
+		return ociErrorToAISError("CreateMultipartUpload", cloudBck.Name, lom.ObjName, "", err, createResp)
 	}
 
 	mpu.uploadID = *createResp.MultipartUpload.UploadId
@@ -124,23 +122,12 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 			UploadId:      &mpu.uploadID,
 		}
 
-		abortResp, err := bp.client.AbortMultipartUpload(mpu.ctx, abortReq)
-		if err == nil {
-			status = ociStatus(nil)
-			errConcat := ""
-			for _, err = range mpu.err {
-				if errConcat == "" {
-					errConcat = "[]string{\"" + err.Error() + "\""
-				} else {
-					errConcat += ",\"" + err.Error() + "\""
-				}
-			}
-			errConcat += "}"
-			err = errors.New(errConcat)
-		} else {
-			status = ociStatus(abortResp.RawResponse)
-		}
-		return status, err
+		// Note: We are ignoring the Status returned by the Abort...() call as this is
+		//       just trying to clean up for some prior error we are already handling.
+		_, _ = bp.client.AbortMultipartUpload(mpu.ctx, abortReq)
+
+		err = fmt.Errorf("%v of %v part uploads failed", len(mpu.err), totalParts)
+		return ociErrorToAISError("UploadPart", mpu.bucketName, mpu.objectName, "", err, nil)
 	}
 
 	commitReq := ocios.CommitMultipartUploadRequest{
@@ -164,7 +151,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 
 	commitResp, err := bp.client.CommitMultipartUpload(mpu.ctx, commitReq)
 	if err != nil {
-		return ociStatus(commitResp.RawResponse), err
+		return ociErrorToAISError("CommitMultipartUpload", mpu.bucketName, mpu.objectName, "", err, commitResp)
 	}
 
 	h := cmn.BackendHelpers.OCI

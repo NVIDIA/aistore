@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -85,8 +86,7 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, lom *core.LOM, resp *oc
 
 	_, partLength, objectSize, err = cmn.ParseRangeHdr(*resp.ContentRange)
 	if err != nil {
-		res.Err = err
-		res.ErrCode = ociStatus(nil)
+		res.ErrCode, res.Err = ociErrorToAISError("ParseRangeHdr", cloudBck.Name, lom.ObjName, *resp.ContentRange, err, int(http.StatusRequestedRangeNotSatisfiable))
 		return res
 	}
 
@@ -171,7 +171,7 @@ func (mpdChild *ociMPDChildStruct) Run() {
 	if err == nil {
 		mpdChild.rc = resp.Content
 	} else {
-		mpdChild.err = err
+		_, mpdChild.err = ociErrorToAISError("GetObject", mpdChild.mpd.bucketName, mpdChild.mpd.objectName, rangeHeader, err, resp)
 	}
 
 	mpdChild.Done()
