@@ -708,7 +708,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	}
 
 	if attemptingMPD {
-		return bp.getObjReaderViaMPD(ctx, lom, &resp)
+		return bp.getObjReaderViaMPD(lom, &resp)
 	}
 
 	res.R = resp.Content

@@ -34,7 +34,6 @@ type ociMPUChildStruct struct {
 type ociMPUStruct struct {
 	sync.Mutex      // serializes access to .abortInProgress, .childList, .childSlice, err, & .rc
 	sync.WaitGroup  // .Wait() will return when last .childList element completes & no others are needed
-	ctx             context.Context
 	bp              *ocibp
 	namespaceName   string
 	bucketName      string
@@ -79,7 +78,6 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 	totalParts /= int(bp.mpuSegmentMaxSize)
 
 	mpu = &ociMPUStruct{
-		ctx:           context.Background(),
 		bp:            bp,
 		namespaceName: bp.namespace,
 		bucketName:    cloudBck.Name,
@@ -101,7 +99,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 		},
 	}
 
-	createResp, err := bp.client.CreateMultipartUpload(mpu.ctx, createReq)
+	createResp, err := bp.client.CreateMultipartUpload(context.Background(), createReq)
 	if err != nil {
 		return ociErrorToAISError("CreateMultipartUpload", cloudBck.Name, lom.ObjName, "", err, createResp)
 	}
@@ -124,7 +122,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 
 		// Note: We are ignoring the Status returned by the Abort...() call as this is
 		//       just trying to clean up for some prior error we are already handling.
-		_, _ = bp.client.AbortMultipartUpload(mpu.ctx, abortReq)
+		_, _ = bp.client.AbortMultipartUpload(context.Background(), abortReq)
 
 		err = fmt.Errorf("%v of %v part uploads failed", len(mpu.err), totalParts)
 		return ociErrorToAISError("UploadPart", mpu.bucketName, mpu.objectName, "", err, nil)
@@ -149,7 +147,7 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64) 
 			})
 	}
 
-	commitResp, err := bp.client.CommitMultipartUpload(mpu.ctx, commitReq)
+	commitResp, err := bp.client.CommitMultipartUpload(context.Background(), commitReq)
 	if err != nil {
 		return ociErrorToAISError("CommitMultipartUpload", mpu.bucketName, mpu.objectName, "", err, commitResp)
 	}
@@ -225,7 +223,7 @@ func (mpuChild *ociMPUChildStruct) Run() {
 		UploadPartBody: mpuChild,
 	}
 
-	resp, err := mpuChild.mpu.bp.client.UploadPart(mpuChild.mpu.ctx, req)
+	resp, err := mpuChild.mpu.bp.client.UploadPart(context.Background(), req)
 
 	mpuChild.mpu.Lock()
 	defer mpuChild.mpu.Unlock()
