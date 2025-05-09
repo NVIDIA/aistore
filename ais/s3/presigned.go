@@ -133,29 +133,29 @@ func (pts *PresignedReq) DoHead(client *http.Client) (*PresignedResp, error) {
 	if err != nil || resp == nil {
 		return resp, err
 	}
+	// note: usually, we cos.Close() and ignore
 	if err := resp.BodyR.Close(); err != nil {
-		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response body, err: %w", err)
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response, err: %w", err)
 	}
 	return &PresignedResp{Header: resp.Header, StatusCode: resp.StatusCode}, nil
 }
 
-// Do sends request and returns already read body if successful.
-//
-// NOTE: If error occurs `PresignedResp` with `StatusCode` will be set.
+// Do request/response.
+// Always return `PresignedResp` (on error - with `StatusCode = 400`)
 func (pts *PresignedReq) Do(client *http.Client) (*PresignedResp, error) {
 	resp, err := pts.DoReader(client)
 	if err != nil || resp == nil {
 		return resp, err
 	}
 
-	var output []byte
-	output, err = cos.ReadAllN(resp.BodyR, resp.Size)
+	output, errN := cos.ReadAllN(resp.BodyR, resp.Size)
 	errClose := resp.BodyR.Close()
-	if err != nil {
-		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response body, err: %w", err)
+	if errN != nil {
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to read response: %w", errN)
 	}
+	// note: usually, we cos.Close() and ignore
 	if errClose != nil {
-		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response body, err: %w", errClose)
+		return &PresignedResp{StatusCode: http.StatusBadRequest}, fmt.Errorf("failed to close response: %w", errClose)
 	}
 
 	nsize := int64(len(output)) // == ContentLength == resp.Size
