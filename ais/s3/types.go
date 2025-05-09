@@ -96,8 +96,8 @@ type (
 		Bucket         string             `xml:"Bucket"`
 		UploadIDMarker string             `xml:"UploadIdMarker"`
 		Uploads        []UploadInfoResult `xml:"Upload"`
-		MaxUploads     int
-		IsTruncated    bool
+		MaxUploads     int                `xml:"MaxUploads"`
+		IsTruncated    bool               `xml:"IsTruncated"`
 	}
 
 	// Deleted result: list of deleted objects and errors

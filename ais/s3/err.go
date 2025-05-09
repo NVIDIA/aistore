@@ -20,10 +20,18 @@ import (
 
 const ErrPrefix = "aws-error"
 
+// See https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+// e.g. XML:
+// <Error>
+// <Code>NoSuchKey</Code>
+// <Message>The resource you requested does not exist</Message>
+// <Resource>/mybucket/myfoto.jpg</Resource>
+// <RequestId>4442587FB7D0A2F9</RequestId>
+// </Error>
 type Error struct {
-	Code      string
-	Message   string
-	Resource  string
+	Code      string `xml:"Code"`
+	Message   string `xml:"Message"`
+	Resource  string `xml:"Resource"`
 	RequestID string `xml:"RequestId"`
 }
 
