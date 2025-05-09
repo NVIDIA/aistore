@@ -27,12 +27,6 @@ on:
         type: boolean
         default: false
 
-      build_aisnode_minikube_image:
-        description: 'Build aisnode-minikube image (aistorage/aisnode-minikube)'
-        required: true
-        type: boolean
-        default: false
-
       build_authn_image:
         description: 'Build AuthN (aistorage/authn)'
         required: true
@@ -56,7 +50,6 @@ env:
   AISINIT_IMAGE: 'aistorage/ais-init'
   CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
   CI_IMAGE: 'aistorage/gitlab-ci'
-  AISNODE_MINIKUBE_IMAGE: 'aistorage/aisnode-minikube'
   AUTHN_IMAGE: 'aistorage/authn'
 
 jobs:
@@ -105,13 +98,6 @@ jobs:
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/docker/single
           IMAGE_REPO="${{ env.CLUSTER_MINIMAL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-          popd
-
-      - name: Build and push `aisnode-minikube` image
-        if: ${{ inputs.build_aisnode_minikube_image }}
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/dev/k8s
-          IMAGE_REPO="${{ env.AISNODE_MINIKUBE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e docker-all
           popd
 
       - name: Build and push `authn` image

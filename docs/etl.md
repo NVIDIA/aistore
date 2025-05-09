@@ -51,11 +51,11 @@ Learn more about the architecture and implementation [here](/ext/etl/README.md).
 
 To begin using ETLs in AIStore, you'll need to deploy AIStore on a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
 
-1. **AIStore Development with Native Kubernetes (minikube)**:
-   - Folder: [deploy/dev/k8s](/deploy/dev/k8s)
-   - Intended for: AIStore development using native Kubernetes provided by [minikube](https://minikube.sigs.k8s.io/docs)
-   - How to use: Run minikube and deploy the AIS cluster on it using the carefully documented steps available [here](/deploy/dev/k8s/README.md).
-   - Documentation: [README](/deploy/dev/k8s/README.md)
+1. **AIStore Development with Local Kubernetes**:
+   - Folder: [deploy/dev/k8s/kustomize](/deploy/dev/k8s/kustomize)
+   - Intended for: AIStore development using local Kubernetes.
+   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](/deploy/dev/k8s/kustomize/README.md).
+   - Documentation: [README](/deploy/dev/k8s/kustomize/README.md)
 
 2. **Production Deployment with Kubernetes**:
    - Folder: [deploy/prod/k8s](/deploy/prod/k8s)

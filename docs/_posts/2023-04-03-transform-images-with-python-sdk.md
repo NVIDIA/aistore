@@ -17,7 +17,7 @@ In a previous series of posts, we transformed the ImageNet dataset using a mixtu
 
 As we did in the posts above, we'll assume that an instance of AIStore has been already deployed on Kubernetes. All the code below will expect an `AIS_ENDPOINT` environment variable set to the cluster's endpoint.
 
-> To set up a local Kubernetes cluster with Minikube, checkout the [docs here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/).
+> To set up a local Kubernetes cluster and deploy AIStore on it, checkout the [docs here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/).
 
 We'll be using PyTorch's `torchvision` to transform [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/) - as illustrated:
 
@@ -213,7 +213,7 @@ Full code examples for each action above can be found [here](/examples/transform
 1. [AIStore & ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
 2. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
-    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md)
+    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/kustomize/README.md)
     - [AIS/Kubernetes Operator, AIS on bare-metal, Deployment Playbooks, Helm](https://github.com/NVIDIA/ais-k8s)
     - [AIS-ETL containers and specs](https://github.com/NVIDIA/ais-etl)
 3. Documentation, blogs, videos:
