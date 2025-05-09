@@ -34,7 +34,6 @@ type ociMPDChildStruct struct {
 
 type ociMPDStruct struct {
 	sync.Mutex      // serializes accessed to .nextStart, .closeInProgress, & .childList
-	ctx             context.Context
 	bp              *ocibp
 	bucketName      string
 	objectName      string
@@ -58,7 +57,7 @@ type ociMPDStruct struct {
 // Errors will be reported as and when each such child is called upon to return its data. The
 // role of GetObjectReaderViaMPD is merely to set up those children to return their data (or
 // errors obtaining their data) via the returned io.ReadCloser (res.R).
-func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, lom *core.LOM, resp *ocios.GetObjectResponse) (res core.GetReaderResult) {
+func (bp *ocibp) getObjReaderViaMPD(lom *core.LOM, resp *ocios.GetObjectResponse) (res core.GetReaderResult) {
 	var (
 		cloudBck      = lom.Bck().RemoteBck()
 		err           error
@@ -107,7 +106,6 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, lom *core.LOM, resp *oc
 	}
 
 	mpd = &ociMPDStruct{
-		ctx:        ctx,
 		bp:         bp,
 		bucketName: cloudBck.Name,
 		objectName: lom.ObjName,
@@ -144,6 +142,7 @@ func (mpd *ociMPDStruct) launchChildren() {
 			} else {
 				partLength = mpd.objectSize - mpd.nextStart
 			}
+
 			mpdChild = &ociMPDChildStruct{
 				mpd:    mpd,
 				start:  mpd.nextStart,
@@ -167,10 +166,11 @@ func (mpdChild *ociMPDChildStruct) Run() {
 		Range:         &rangeHeader,
 	}
 
-	resp, err := mpdChild.mpd.bp.client.GetObject(mpdChild.mpd.ctx, req)
+	resp, err := mpdChild.mpd.bp.client.GetObject(context.Background(), req)
 	if err == nil {
 		mpdChild.rc = resp.Content
 	} else {
+		mpdChild.rc = nil
 		_, mpdChild.err = ociErrorToAISError("GetObject", mpdChild.mpd.bucketName, mpdChild.mpd.objectName, rangeHeader, err, resp)
 	}
 
@@ -245,10 +245,12 @@ func (mpd *ociMPDStruct) Close() (err error) {
 			return
 		}
 		mpdChild.Wait()
-		err = mpdChild.rc.Close()
-		if err != nil {
-			err = fmt.Errorf("(*ociMPDStruct).Close() mpdChild.Close() failed: %v", err)
-			return
+		if mpdChild.rc != nil {
+			err = mpdChild.rc.Close()
+			if err != nil {
+				err = fmt.Errorf("(*ociMPDStruct).Close() mpdChild.Close() failed: %v", err)
+				return
+			}
 		}
 		_ = mpd.childList.Remove(mpdChild.le)
 	}
