@@ -26,7 +26,7 @@ const GitHubHome = "https://github.com/NVIDIA/aistore"
 //   `jsp` formats its *signature* and other implementation details.
 
 const (
-	VersionAIStore = "3.28.rc1"
+	VersionAIStore = "3.28"
 	VersionCLI     = "1.17"
 	VersionLoader  = "1.13"
 	VersionAuthN   = "1.2"
