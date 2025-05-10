@@ -3,12 +3,12 @@ layout: post
 title:  "AIStore v3.28: Boost ETL Performance with Optimized Data Movement and Specialized Web Server Framework"
 date:   May 09, 2025
 author: Tony Chen, Abhishek Gaikwad
-categories: aistore etl python-sdk
+categories: aistore etl python-sdk ffmpeg
 ---
 
-ETL — **Extract**, **Transform**, **Load** — is a widely adopted data preprocessing workflow. It offers a structured way to apply custom logic and convert a dataset into the desired format. But while many open-source and cloud-native ETL tools exist, they are general-purpose by design. And that comes at a cost: they have *no awareness* of where your data actually lives. This usually results in significant performance overhead from unnecessary data movement in a distributed system.
+The current state of the art involves executing data pre-processing, augmentation, and a wide variety of custom ETL workflows on individual client machines. This approach lacks scalability and often leads to significant performance degradation due to unnecessary data movement. While many open-source and cloud-native ETL tools exist, they typically do not account for data locality.
 
-This is exactly why we build an ETL system specific for AIStore. As a distributed storage system, AIStore knows exactly where every object lives in your dataset. This awareness eliminates redundant data movement, streamlining the entire pipeline and delivering up to **~35×** speedups compared to traditional client-side ETL workflows.
+This is precisely why we developed an ETL subsystem for AIStore. As a distributed storage system, AIStore has precise knowledge of where every object resides within your dataset. This awareness eliminates redundant data movement, streamlining the entire pipeline and delivering, as we demonstrate below, a 35x speedup compared to conventional client-side ETL workflows.
 
 This post highlights recent performance improvements across all three ETL stages in AIStore:
 
@@ -22,14 +22,14 @@ In distributed systems, the choice of communication protocol can significantly i
 
 To reduce this overhead, AIStore ETL now supports a new communication type: **WebSocket**.
 
-WebSocket enables long-lived TCP connections that facilitate continuous data streaming between targets and ETL containers without repeatedly setting up and tearing down. In contrast, HTTP-based traffic involves repeated connection establishment and termination with an overhead that grows inversely proportionally to the transfer sizes" 
+WebSocket enables long-lived TCP connections that facilitate continuous data streaming between targets and ETL containers without repeatedly setting up and tearing down. In contrast, HTTP-based traffic involves repeated connection establishment and termination with an overhead that grows inversely proportionally to the transfer sizes"
 
 Specifically, for each offline (bucket-to-bucket) transform request, AIStore:
 1. Pre-establishes multiple long-lived WebSocket connections to the ETL server.
 2. Distributes source objects across these connections.
 3. Streams transformed object bytes back through the same connection.
 
-![ETL WebSocket](/docs/assets/ais_etl_series/etl-websocket-communication.png)
+![ETL WebSocket](/assets/ais_etl_series/etl-websocket-communication.png)
 
 This upgrade significantly reduces overhead and improves throughput, especially in high-volume transformations involving small-sized objects.
 
@@ -48,7 +48,8 @@ Choosing the right framework and communication method often depends on the size 
 
 To simplify this, we’ve introduced **AIS-ETL Web Server Framework** in both **Go** and **Python**. These SDKs abstract away the boilerplate—so you can build and deploy custom ETL containers in minutes. Focus solely on your transformation logic; the SDK handles everything else, including networking, protocol handling, and high-throughput optimizations.
 
-### Getting Started 
+### Getting Started
+
 * [Python SDK Quickstart (FastAPI, Flask, HTTP Multi-threaded)](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl/webserver/README.md#quickstart)
 * [Go Web Server Framework Guide](https://github.com/NVIDIA/aistore/blob/main/ext/etl/webserver/README.md)
 * Examples: [Python](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl/webserver/README.md#examples) | [Go](https://github.com/NVIDIA/aistore/blob/main/ext/etl/webserver/examples)
@@ -57,9 +58,9 @@ To simplify this, we’ve introduced **AIS-ETL Web Server Framework** in both **
 
 In offline transformations, the destination target for a transformed object usually differs from the original target. By default, the ETL container sends the transformed data back to the original source target, which then forwards it to the destination. The **direct put** optimization streamlines this flow by allowing the ETL container to send the transformed object directly to the destination target.
 
-![AIStore ETL Direct Put Optimization](/docs/assets/ais_etl_series/etl-direct-put-optimization.png)
+![AIStore ETL Direct Put Optimization](/assets/ais_etl_series/etl-direct-put-optimization.png)
 
-## Benchmark Summary: FFmpeg ETL Audio Transformation
+## Benchmark: FFmpeg Audio Transformation
 
 To benchmark the performance of AIStore's ETL framework and its optimized data movement capabilities, an audio transformation pipeline was implemented using **FFmpeg**, one of the most widely adopted multimedia processing tools. The transformer converts `.flac` audio files to `.wav` format, with configurable control over **Audio Channels** (`AC`) and **Audio Rate** (`AR`).
 
@@ -70,11 +71,11 @@ The motivation:
 
 Three Python-based web server implementations—**FastAPI**, **Flask**, and a multi-threaded HTTP server—were used to expose FFmpeg as a transformation service. Each configuration was tested with and without `direct_put` and `fqn`.
 
-### Configuration and Setup
+### Setup and Configuration
 
 #### System
 
-* **Kubernetes Cluster**: 3 Nodes (each running a Proxy and a Target)
+* **Kubernetes Cluster**: 3 bare-metal Nodes (each running one [proxy](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#proxy) and one [target](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#target))
 * **Storage**: 10 HDDs per target (9.1 TiB each)
 * **CPU**: 48 cores per node
 * **Memory**: 187 GiB per node
@@ -103,7 +104,7 @@ Benchmarks were performed across all three Python-based web servers: **FastAPI**
 
 The chart below summarizes the performance across configurations:
 
-![benchmark](/docs/assets/ais_etl_series/etl-benchmark.png)
+![benchmark](/assets/ais_etl_series/etl-benchmark.png)
 
 | Webserver   | Communication Type | FQN   | Direct Put   |   Seconds |
 |:------------|:-------|:------|:------------:|----------:|
