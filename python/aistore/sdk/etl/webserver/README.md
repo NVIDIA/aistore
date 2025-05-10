@@ -27,16 +27,20 @@ pip install aistore[etl]
 
 ---
 
-## When *not* to use INIT code
+## `ais etl init code` vs. AIStore ETL SDK Webservers
 
-The “init code” path is great for tiny one-off functions, but:
+While AIStore supports `ais etl init code` for deploying simple ETL functions quickly, it comes with several limitations that make it less suitable for production-grade or performance-sensitive workloads.
 
-* Lacks an init hook for heavy setup
-* Can’t bundle system binaries or native libs
-* Forces a single-function style
-* Limited runtimes & no WebSocket support
+The **`init code`** approach is ideal for basic, lightweight use cases, but it:
 
-For anything beyond the simplest workloads, our ETL Webserver SDK is a better fit.
+- Offers **no initialization hook** for preloading models or heavy setup
+- **Cannot bundle system binaries or native libraries**
+- Enforces a **single-function (`transform()`) structure**
+- Has **limited runtime support** (e.g., no Go, no WebSocket support)
+- Lacks support for **direct-put optimizations**
+- Provides **no concurrency tuning or advanced configuration**
+
+For anything beyond the most basic transformation logic, the SDK webserver approach is the recommended path. It lets you scale efficiently, build robust services, and focus entirely on your transformation logic while the SDK takes care of everything else.
 
 ---
 
@@ -91,7 +95,7 @@ For anything beyond the simplest workloads, our ETL Webserver SDK is a better fi
       - name: server
         image: <myrepo>/echo-etl:latest
         ports: [{ name: default, containerPort: 8000 }]
-        command: ["uvicorn", "echo_server.py:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+        command: ["uvicorn", "echo_server.py:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"],
         readinessProbe:
           httpGet: { path: /health, port: default }
     ```
