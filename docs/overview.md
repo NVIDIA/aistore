@@ -28,6 +28,7 @@ The rest of this document is structured as follows:
   - [Write-through](#write-through)
 - [Design Philosophy](#design-philosophy)
 - [Original Diagrams](#original-diagrams)
+- [CLI](#cli)
 - [AIStore API](#aistore-api)
 - [Traffic Patterns](#traffic-patterns)
 - [Open Format](#open-format)
@@ -38,7 +39,6 @@ The rest of this document is structured as follows:
 - [Networking](#networking)
 - [HA](#ha)
 - [Sharding extensions: dSort and iShard](#sharding-extensions-dsort-and-ishard)
-- [CLI](#cli)
 - [ETL](#etl)
 - [_No limitations_ principle](#no-limitations-principle)
 
@@ -150,7 +150,7 @@ If the remote `PUT` fails, the whole operation fails and AIS rolls back locally.
 ### Xaction
 Xaction (*eXtended action*) is a supported batch job that executes asynchronously.
 
-All xactions support uniform API/CLI to start, stop, and wait for, as well as common (generic) and job-specific stats.
+All xactions support uniform [API](#aistore-api) and [CLI](#cli) to start, stop, and wait for, as well as common (generic) and job-specific stats.
 
 Common jobs include erasure coding (EC), n-way mirroring, resharding, transforming a given virtual directory, archiving ([sharding](#shard)) multiple objects, copying remote bucket, and more:
 
@@ -195,7 +195,46 @@ Here's an older (and simpler) diagram that depicts AIS target node:
 
 ![AIS target block diagram](images/ais-target-20-block.png)
 
-## AIStore API
+## CLI
+
+AIS CLI is an integrated, easy-to-use management and monitoring tool. Once installed (e.g., see `./scripts/install_from_binaries.sh --help`), you can immediately start using it by executing:
+
+> For more information on how to build, install, and get started with AIS CLI, please see [getting started](/docs/cli.md#getting-started).
+
+```console
+$ export AIS_ENDPOINT=http://ais-gateway:port
+```
+
+Here, `ais-gateway:port` represents the `<hostname:port>` address of any AIS gateway (for developers, this is often `localhost:8080`). Note that the "export" command only needs to be executed once.
+
+Your first command could be:
+
+```console
+$ ais --help
+```
+
+One notable feature of AIS CLI is its Bash-style auto-completions), which allow users to easily navigate supported operations and options by simply pressing the TAB key:
+
+```console
+$ ais  <TAB-TAB>
+advanced         bucket           download         help             performance      rmo              start
+alias            cluster          dsort            job              prefetch         scrub            stop
+archive          config           etl              log              put              search           storage
+auth             cp               evict            ls               remote-cluster   show             tls
+blob-download    create           get              object           rmb              space-cleanup    wait
+
+$ ais cluster <TAB-TAB>
+show                   rebalance              shutdown               reset-stats
+remote-attach          set-primary            decommission           drop-lcache
+remote-detach          download-logs          add-remove-nodes       reload-backend-creds
+$ ais cluster
+
+## and so on...
+```
+
+At the time of this writing, AIS CLI is at version (ais version) v1.17 and is actively being maintained, improved, and extended. For more information, please see the [CLI overview](/docs/cli.md).
+
+## AIStore APIs
 
 In addition to industry-standard [S3](/docs/s3compat.md), AIS provides its own (value-added) native API that can be (conveniently) called directly from Go and Python programs:
 
@@ -413,7 +452,7 @@ AIS features a [highly-available control plane](ha.md) where all gateways are ab
 Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
-AIS can be deployed as a fast tier in front of any of the multiple supported [backends](providers.md).
+AIS can be deployed as a fast tier in front of any of the supported [backends](providers.md).
 
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](batch.md#listrange-operations)) that runs in the background to download batches of objects.
 
@@ -430,23 +469,6 @@ Initial Sharding (`ishard`) utility will generate WebDataset-formatted shards fr
 For more details, see:
 * [dSort](/docs/dsort.md)
 * [ishard](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
-
-## CLI
-
-AIStore includes an easy-to-use management-and-monitoring facility called [AIS CLI](/docs/cli.md). Once [installed](/docs/cli.md#getting-started), to start using it, simply execute:
-
- ```console
-$ export AIS_ENDPOINT=http://ais-gateway:port
-$ ais --help
- ```
-
-where `ais-gateway:port` (above) denotes a `hostname:port` address of any AIS gateway (for developers it'll often be `localhost:8080`). Needless to say, the "exporting" must be done only once.
-
-One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md#ais-cli-shell-auto-complete) that allow users to easily navigate supported operations and options by simply pressing the TAB key:
-
-![CLI-tab](images/cli-overview.gif)
-
-AIS CLI, at version (`ais version`) v1.17 at the time of this is writing, keeps actively developing. For more information, please see the project's own [README](/docs/cli.md).
 
 ## ETL
 

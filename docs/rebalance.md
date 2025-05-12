@@ -122,7 +122,7 @@ In other words, global rebalance handles scaling (up and down) of the entire AIS
 As stated, mountpath removal can be done administratively (via API) or be triggered by a disk fault (see [filesystem health checking](https://github.com/NVIDIA/aistore/blob/main/fs/health/README.md).
 
 Irrespectively of the original cause, mountpath-level events activate resilver that in many ways performs the same set of steps as the rebalance.
-The one salient difference is that all object migrations are local (and, therefore, relatively fast(er)).
+The one notable difference is that all object migrations are local (and, therefore, relatively fast(er)).
 
 ### CLI Usage
 
