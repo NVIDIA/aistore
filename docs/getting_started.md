@@ -7,34 +7,31 @@ redirect_from:
  - /docs/getting_started.md/
 ---
 
-AIStore runs on a single Linux or Mac machine. Bare-metal Kubernetes and [GCP/GKE](https://cloud.google.com/kubernetes-engine) Cloud-based deployments are also supported. There are numerous other options.
+AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or a managed Kubernetes installation in the cloud.
 
-Generally, when deciding how to deploy a system like AIS with so many possibilities to choose from, a good place to start would be answering the following two fundamental questions:
+## Deployment Considerations
 
-* what's the dataset size, or sizes?
-* what hardware will I use?
+Before you pick a path, answer two quick questions:
 
-For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. On the other hand, the [Cloud deployment](#cloud-deployment) option may sound attractive for its ubiquitous convenience and for  _not_ thinking about the hardware and the sizes - at least, not right away.
+1. **Dataset size** – e.g., tens of terabytes or multi-petabyte?
+2. **Available hardware** – laptop, workstation, a few bare-metal servers, or Kubernetes?
 
-> Note as well that **you can always start small**: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called *unified global namespace* - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
+For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. Expecting growth or already past that mark? Plan for multi-node or cloud.
+
+Note as well that you can always start small: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called [unified namespace](/docs/overview.md#unified-namespace) - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#key-concepts-and-diagrams) are identical, hardware-wise.
+AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#target) are identical, hardware-wise.
 
-* [Linux](#Linux) distribution with `GCC`, `sysstat`, `attr` and `util-linux` packages(**)
-* Linux kernel 6.8+
-* [Go 1.23 or later](https://golang.org/dl/)
-* Extended attributes (`xattrs` - see next section)
-* Optionally, Amazon (AWS), Google Cloud Platform (GCP), Microsoft Azure, and/or Oracle Cloud Infrastructure (OCI) Object Storage accounts.
-* Optionally, [golangci-lint 1.62 or later](https://golangci-lint.run/welcome/install/)
+* Linux with `gcc`, `sysstat`, `attr`, `util-linux`
+* Linux **kernel ≥ 6.8**
+* [Go ≥ 1.23](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
+* Local filesystem with **extended attributes** ([xattrs](https://en.wikipedia.org/wiki/Extended_file_attributes)) enabled
+* *Optional* – cloud credentials (AWS, GCP, Azure, OCI)
+* *Optional* – [golangci-lint 2.x](https://golangci-lint.run/welcome/install/)
 
-> (**) [Mac](#macOS) is also supported albeit in a limited (development only) way.
-
-See also:
-
-* Section [assorted command lines](#assorted-command-lines), and
-* `CROSS_COMPILE` comment below.
+[Mac](#mac) is also supported albeit in a limited (development only) way.
 
 ### Linux
 
@@ -44,7 +41,7 @@ Speaking of distributions, our current default recommendation is Ubuntu Server 2
 
 For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs and more.
 
-Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would _not_ be recommended. But can be used, and will work.
+Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would not be recommended. But can be used, and will work.
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long-time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running the `setfattr` command.
 
@@ -56,7 +53,7 @@ $ setfattr -n user.bar -v ttt foo
 $ getfattr -n user.bar foo
 ```
 
-### macOS
+### Mac
 
 For developers, there's also macOS aka Darwin option. Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks) may be missing. In fact, it is easy to review specifics with a quick check on the sources:
 
@@ -80,40 +77,39 @@ The rest of this document is structured as follows:
 
 ------------------------------------------------
 
-## Table of Contents
+## Document Structure
+
+The rest of this document is structured as follows:
 
 - [Finding Things (Tip)](#finding-things-tip)
 - [Local Playground](#local-playground)
-  - [From source](#from-source)
-  - [Running Local Playground with emulated disks](#running-local-playground-with-emulated-disks)
-  - [Running Local Playground remotely](#running-local-playground-remotely)
 - [Make](#make)
 - [System environment variables](#system-environment-variables)
 - [Multiple deployment options](#multiple-deployment-options)
-  - [Kubernetes deployments](#kubernetes-deployments)
-  - [Minimal all-in-one-docker Deployment](#minimal-all-in-one-docker-deployment)
-  - [Testing your cluster](#testing-your-cluster)
 - [Running AIStore in Google Colab](#running-aistore-in-google-colab)
 - [Kubernetes Playground](#kubernetes-playground)
 - [Setting Up HTTPS Locally](#setting-up-https-locally)
 - [Build, Make, and Development Tools](#build-make-and-development-tools)
-  - [A note on conditional linkage](#a-note-on-conditional-linkage)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [Assorted Curl](#assorted-curl)
 
 ## Finding Things (Tip)
 
-AIStore has been around for a while; during this _while_ the repository has accumulated quite a bit of information that can be immediately located.
+AIStore has been around for a while; the repository has accumulated quite a bit of information that can be immediately located as follows:
 
-For any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep` command. For instance:
+1. See [Extended Index](/docs/docs.md)
+2. Use CLI `search` command, e.g.: `ais search copy`
+3. Clone the repository and run `git grep`, e.g.: `git grep -n out-of-band -- "*.md"`
+
+Any of the above will work. In particular, for any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep` command. For instance:
 
 ```console
 $ git grep -n out-of-band -- "*.md"
-docs/cli/archive.md:469:        - detecting remote version changes (a.k.a. out-of-band updates), and
+docs/cli/archive.md:555:         - detecting remote version changes (a.k.a. out-of-band updates), and
 ...
 ...
 $ git grep out-of-band -- "*.md" | wc -l
-34
+44
 ```
 
 Alternatively, use a combination of `find`, `xargs`, and/or `grep` to search through existing texts of any kind, including source comments. For example:
@@ -151,7 +147,7 @@ $ ais cp --help
 
 If you're looking for speedy evaluation, want to experiment with [supported features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features), get a feel of initial usage, or development - for any and all of these reasons running AIS from its GitHub source might be a good option.
 
-Hence, we introduced and keep maintaining **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
+Hence, we introduced (and keep maintaining) **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
 
 > Some of the most popular deployment options are also **summarized** in this [table](https://github.com/NVIDIA/aistore/tree/main/deploy#readme). The list includes Local Playground, and its complementary guide [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md).
 
@@ -163,18 +159,16 @@ To run AIStore from source, one would typically need to have **Go**: compiler, l
 
 To install Go(lang) on Linux:
 
-* Download the latest `go1.21.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* Download the latest `go1.<x.y>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * Follow [installation instructions](https://go.dev/doc/install)
-* **Or** simply run: `tar -C /usr/local -xzf go1.21.<x>.linux-amd64.tar.gz` and add `/usr/local/go/bin` to $PATH
 
 Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
-Here's an additional [5-minute introduction](/deploy/dev/local/README.md) that talks more in-depth about setting up the Go environment variables.
+> Here's an additional [5-minute introduction](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md) that talks more in-depth about setting up the Go environment variables.
 
-Once done, we can run AIS as follows:
+Once done, we can run AIS as follows (**steps 1 through 4** below):
 
-
-## Step 1: Clone the AIStore repository and preload dependencies
+#### Step 1: Clone the AIStore repository and preload dependencies
 
 We want to clone the repository into the following path so we can access
 some of the associated binaries through the environment variables we set up earlier.
@@ -185,13 +179,13 @@ $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore
 ```
 
-Optionally, run `go mod tidy` (or the command below) to preload dependencies:
+To preload dependencies, optionally, run `go mod tidy` (or same, `make mod-tidy`):
 
 ```console
 $ make mod-tidy
 ```
 
-## Step 2: Deploy cluster and verify the running status using `ais` cli
+#### Step 2: Deploy cluster and verify the running status using `ais` cli
 
 > **NOTE**: For a local deployment, we do not need production filesystem paths. For more information, read about [configuration basics](/docs/configuration.md#rest-of-this-document-is-structured-as-follows). If you need a physical disk or virtual block device, you must add them to the fspaths config. See [running local playground with emulated disks](#running-local-playground-with-emulated-disks) for more information.
 
@@ -219,12 +213,12 @@ The cluster than can be observed as follows:
 $ ais show cluster
 ```
 
-### `clean_deploy.sh`
+#### `clean_deploy.sh`
 
-Alternatively (to `make deploy`) or, rather, in addition, one can also use:
+Alternatively or in addition (to `make deploy`), one can also use:
 
-* [`clean_deploy.sh`](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
-* [`clean_deploy.sh readme`](/docs/development.md#clean-deploy)
+* [`clean_deploy.sh` script](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
+* [`clean_deploy.sh README`](/docs/development.md#clean-deploy)
 
 With no arguments, this script also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses.
 
@@ -232,7 +226,7 @@ With no arguments, this script also builds AIStore binaries (such as `aisnode` a
 $ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local --cleanup
 ```
 
-## Step 3: Run `aisloader` tool
+#### Step 3: Run `aisloader` tool
 
 We can now run the `aisloader` tool to benchmark our new cluster.
 
@@ -242,7 +236,7 @@ $ make aisloader # build aisloader tool
 $ aisloader -bucket=ais://abc -duration 2m -numworkers=8 -minsize=1K -maxsize=1K -pctput=100 --cleanup=false # run aisloader for 2 minutes (8 workers, 1KB size, 100% write, no cleanup)
 ```
 
-## Step 4: Run iostat (or use any of the multiple [documented](/docs/prometheus.md) ways to monitor AIS performance)
+#### Step 4: Run iostat (or use any of the multiple [documented](/docs/prometheus.md) ways to monitor AIS performance)
 
 ```console
 $ iostat -dxm 10 sda sdb
@@ -379,19 +373,19 @@ $ make deploy
 $ make kill clean
 ```
 
-### Example: shutdown/cleanup, and then deploy non-interactively a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with GCP and AWS backends
+### Example: shutdown/cleanup, build CLI, and then deploy non-interactively a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with GCP and AWS backends
 ```console
-$ make kill clean deploy <<< $'7\n2\n4\ny\ny\nn\n0\n'
+$ make kill clean cli deploy <<< $'7\n2\n4\ny\ny\nn\n'
 ```
 
 ### Example: same as above
 ```console
-$ AIS_BACKEND_PROVIDERS="aws gcp" make kill clean deploy <<< $'7\n2'
+$ AIS_BACKEND_PROVIDERS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 ```
 
 ### Example: same as above
 ```console
-$ TAGS="aws gcp" make kill clean deploy <<< $'7\n2'
+$ TAGS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 ```
 
 > Use `TAGS` environment to specify any/all supported build tags that also include conditionally linked remote backends (see next).
@@ -402,7 +396,7 @@ $ TAGS="aws gcp" make kill clean deploy <<< $'7\n2'
 
 ### Example: same as above but also build `aisnode` with debug info
 ```console
-$ TAGS="aws gcp debug" make kill clean deploy <<< $'7\n2'
+$ TAGS="aws gcp debug" make kill clean cli deploy <<< $'7\n2'
 ```
 
 ### Further:
@@ -437,11 +431,11 @@ $ ais config node <NODE> local host_net --json
 
 where `NODE` is, effectively, any clustered proxy (that'll show up if you type `ais config node` and press `<TAB-TAB>`).
 
-Other variables, such as [`AIS_PRIMARY_EP`](environment-vars.md#primary) and [`AIS_USE_HTTPS`](environment-vars.md#https) can prove to be useful at deployment time.
+Other variables, such as [`AIS_PRIMARY_EP`](/docs/environment-vars.md#primary) and [`AIS_USE_HTTPS`](/docs/environment-vars.md#https) can prove to be useful at deployment time.
 
 For developers, CLI `ais config cluster log.modules ec xs` (for instance) would allow to selectively raise and/or reduce logging verbosity on a per module bases - modules EC (erasure coding) and xactions (batch jobs) in this particular case.
 
-> To list all log modules, type `ais config cluster` or `ais config node` and press `<TAB-TAB>`.
+> To list all log modules, type `ais config cluster log` (or `ais config node NODE inherited log`) and press `<TAB-TAB>`.
 
 Finally, there's also HTTPS configuration (including **X.509** certificates and options), and the corresponding [environment](#tls-testing-with-self-signed-certificates).
 
@@ -467,16 +461,19 @@ In the software, _type of the deployment_ is also present in some minimal way. I
 | `k8s` | Kubernetes |
 | `linux` | Linux |
 
-> The most recently updated enumeration can be found in the [source](https://github.com/NVIDIA/aistore/blob/main/ais/utils.go#L329)
+> The most recently updated enumeration can be found in the [source](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go)
 
 > The _type_ shows up in the `show cluster` output - see example above.
 
 ### Kubernetes deployments
 
-For any Kubernetes deployments (including, of course, production deployments) please use a separate and dedicated [AIS-K8s GitHub](https://github.com/NVIDIA/ais-k8s/blob/main/docs/README.md) repository.
-The repo contains detailed [Ansible playbooks](https://github.com/NVIDIA/ais-k8s/tree/main/playbooks) that cover a variety of use cases and configurations.
+For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). This dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains:
 
-Finally, the [repository](https://github.com/NVIDIA/ais-k8s) hosts the [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator) project that will eventually replace Helm charts and will become the main deployment, lifecycle, and operation management "vehicle" for AIStore.
+* [AIStore on Kubernetes](https://github.com/NVIDIA/ais-k8s)
+* [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
+* [Ansible Playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
+* [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
+- [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
 ### Minimal all-in-one-docker Deployment
 
