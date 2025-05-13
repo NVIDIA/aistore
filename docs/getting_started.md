@@ -9,6 +9,24 @@ redirect_from:
 
 AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or a managed Kubernetes installation in the cloud.
 
+## Contents
+* [Deployment Considerations](#deployment-considerations)
+* [Prerequisites](#prerequisites)
+* [Quick Start](#quick-start)
+* [Next Steps](#next-steps)
+  * [Local Playground](#local-playground)
+  * [Make](#make)
+  * [System environment variables](#system-environment-variables)
+  * [Multiple deployment options](#multiple-deployment-options)
+* [Assorted Topics](#assorted-topics)
+  * [Finding Things (Tip)](#finding-things-tip)
+  * [Running AIStore in Google Colab](#running-aistore-in-google-colab)
+  * [Kubernetes Playground](#kubernetes-playground)
+  * [Setting Up HTTPS Locally](#setting-up-https-locally)
+  * [Build, Make, and Development Tools](#build-make-and-development-tools)
+  * [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
+  * [Curl](#curl)
+
 ## Deployment Considerations
 
 Before you pick a path, answer two quick questions:
@@ -74,73 +92,72 @@ $ find . -name "*darwin*"
 
 Benchmarking and stress-testing is done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
 
-## Document Structure
+## Quick Start
 
-The rest of this document is structured as follows:
+This section provides the fastest way to get an AIStore cluster running on your local machine. For more detailed steps, see the [Local Playground](#local-playground) section.
 
-- [Finding Things (Tip)](#finding-things-tip)
-- [Local Playground](#local-playground)
-- [Make](#make)
-- [System environment variables](#system-environment-variables)
-- [Multiple deployment options](#multiple-deployment-options)
-- [Running AIStore in Google Colab](#running-aistore-in-google-colab)
-- [Kubernetes Playground](#kubernetes-playground)
-- [Setting Up HTTPS Locally](#setting-up-https-locally)
-- [Build, Make, and Development Tools](#build-make-and-development-tools)
-- [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
-- [Assorted Curl](#assorted-curl)
+### Install Go (if not already installed)
 
-## Finding Things (Tip)
+Follow the official [Go installation instructions](https://go.dev/doc/install) for your platform (use the Linux tab for AIStore deployments).
 
-AIStore has been around for a while; the repository has accumulated quite a bit of information that can be immediately located as follows:
+Setup your `GOPATH` environment variable when done.
 
-1. See [Extended Index](/docs/docs.md)
-2. Use CLI `search` command, e.g.: `ais search copy`
-3. Clone the repository and run `git grep`, e.g.: `git grep -n out-of-band -- "*.md"`
-
-Any of the above will work. In particular, for any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep` command. For instance:
+### Clone and Deploy AIStore
 
 ```console
-$ git grep -n out-of-band -- "*.md"
-docs/cli/archive.md:555:         - detecting remote version changes (a.k.a. out-of-band updates), and
-...
-...
-$ git grep out-of-band -- "*.md" | wc -l
-44
+# Clone the repository
+$ mkdir -p $GOPATH/src/github.com/NVIDIA
+$ cd $GOPATH/src/github.com/NVIDIA
+$ git clone https://github.com/NVIDIA/aistore.git
+$ cd aistore
+
+# Build CLI and `aisloader` (bench), and deploy a minimal cluster (1 gateway, 1 target)
+$ make kill clean cli aisloader deploy <<< $'1\n1'
+
+# Verify the cluster is running
+$ ais show cluster
 ```
 
-Alternatively, use a combination of `find`, `xargs`, and/or `grep` to search through existing texts of any kind, including source comments. For example:
+### Create a Bucket and Put/Get Objects
 
 ```console
-$ find . -name "*.md" | xargs grep -n "out-of-band"
+# Create a new bucket
+$ ais create ais://mybucket
+
+# Put an object using CLI
+$ echo "Hello AIStore" > hello.txt
+$ ais put hello.txt ais://mybucket
+
+# List objects in the bucket
+$ ais ls ais://mybucket
+
+# Get the object
+$ ais get ais://mybucket/hello.txt downloaded.txt
+$ cat downloaded.txt
 ```
 
-In addition, there's the user-friendly [CLI](/docs/cli.md). For example, to search for commands related to copy, you could:
+At this point, it is maybe a good idea to also run (and review):
 
 ```console
-$ ais search copy
-
-ais bucket cp
-ais cp
-ais download
-ais job rm download
-ais job start copy-bck
-ais job start download
-ais job start mirror
-ais object cp
-ais start copy-bck
-ais start download
-ais start mirror
-...
+$ ais --help
+$ ais alias
+$ ais <TAB-TAB>
 ```
 
-For the CLI, remember to use the `--help` option, which will universally show specific supported options and usage examples. For example:
+### Run a Benchmark
 
 ```console
-$ ais cp --help
+# Run a quick benchmark with aisloader: 100% write followed by 50/50%
+$ aisloader -bucket=ais://mybucket -duration=10s -numworkers=4 -pctput=100 -cleanup=false
+
+$ aisloader -bucket=ais://mybucket -duration=10s -numworkers=8 -pctput=50 -cleanup=false
 ```
 
-## Local Playground
+That's it! You now have a running AIStore deployment you can experiment with. Continue reading for more detailed setup options and advanced configurations.
+
+## Next Steps
+
+### Local Playground
 
 If you're looking for speedy evaluation, want to experiment with [supported features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features), get a feel of initial usage, or development - for any and all of these reasons running AIS from its GitHub source might be a good option.
 
@@ -194,7 +211,7 @@ In particular, we can use `make` to deploy our very first 3 nodes (and 3 gateway
 $ make kill clean cli aisloader deploy <<< $'3\n3'
 ```
 
-This `make` command executes several make targets (not to confuse with ais targets) - in particular, it:
+This `make` command executes several make targets (not to confuse with AIS [targets](/docs/overview.md#target)) - in particular, it:
 
 * shuts down (via `make kill`) AIStore that _may_ have been previously deployed in the local playground;
 * removes its metadata and data (`make clean`);
@@ -204,7 +221,7 @@ and, finally:
 
 * deploys (3 storage nodes, 3 gateways) cluster.
 
-The cluster than can be observed as follows:
+The cluster then can be observed as follows:
 
 ```console
 $ ais show cluster
@@ -239,7 +256,7 @@ $ aisloader -bucket=ais://abc -duration 2m -numworkers=8 -minsize=1K -maxsize=1K
 $ iostat -dxm 10 sda sdb
 ```
 
-### Running Local Playground with emulated disks
+#### Running Local Playground with emulated disks
 
 Here's a quick walk-through (with more references included below).
 
@@ -310,7 +327,7 @@ See also:
 > [cluster and node configuration](configuration.md);
 > [supported deployments: summary table and links](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md).
 
-### Running Local Playground remotely
+#### Running Local Playground remotely
 
 AIStore (product and solution) is fully based on HTTP(S) utilizing the protocol both externally (to support both frontend interfaces and communications with remote backends) and internally, for [intra-cluster streaming](/transport).
 
@@ -346,7 +363,7 @@ index e0b467d82..b18361155 100755                                               
    AIS_PRIMARY_URL="https://localhost:$PORT"                                                                                                     |
 ```
 
-## Make
+### Make
 
 AIS comes with its own build system that we use to build both standalone binaries and container images for a variety of deployment options.
 
@@ -358,27 +375,29 @@ $ make help
 
 This shows all subcommands, environment variables, and numerous usage examples, including:
 
-### Example: deploy cluster locally
+#### Example: deploy cluster locally
 ```console
 $ make deploy
 ```
 
-### Example: shutdown cluster and cleanup all its data and metadata
+#### Example: shutdown cluster and cleanup all its data and metadata
 ```console
 $ make kill clean
 ```
 
-### Example: shutdown/cleanup, build CLI, and then deploy non-interactively a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with GCP and AWS backends
+> For shutdown options, see `ais cluster shutdown --help`
+
+#### Example: shutdown/cleanup, build CLI, and then deploy non-interactively a cluster consisting of 7 targets (4 mountpaths each) and 2 proxies
 ```console
 $ make kill clean cli deploy <<< $'7\n2\n4\ny\ny\nn\n'
 ```
 
-### Example: same as above
+#### Example: same as above but also build `aisnode` executable with GCP and AWS backends
 ```console
 $ AIS_BACKEND_PROVIDERS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 ```
 
-### Example: same as above
+#### Example: same as above
 ```console
 $ TAGS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 ```
@@ -389,12 +408,12 @@ $ TAGS="aws gcp" make kill clean cli deploy <<< $'7\n2'
 
 > For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
 
-### Example: same as above but also build `aisnode` with debug info
+#### Example: same as above but also build `aisnode` with debug info
 ```console
 $ TAGS="aws gcp debug" make kill clean cli deploy <<< $'7\n2'
 ```
 
-### Further:
+#### Further:
 
 * `make kill`    - terminate local AIStore.
 * `make restart` - shut it down and immediately restart using the existing configuration.
@@ -404,7 +423,7 @@ For even more development options and tools, please refer to:
 
 * [development docs](/docs/development.md)
 
-## System environment variables
+### System environment variables
 
 The variables include `AIS_ENDPOINT`, `AIS_AUTHN_TOKEN_FILE`, and [more](/api/env).
 
@@ -432,13 +451,11 @@ For developers, CLI `ais config cluster log.modules ec xs` (for instance) would 
 
 > To list all log modules, type `ais config cluster log` (or `ais config node NODE inherited log`) and press `<TAB-TAB>`.
 
-Finally, there's also HTTPS configuration (including **X.509** certificates and options), and the corresponding [environment](#tls-testing-with-self-signed-certificates).
+Finally, there's also HTTPS configuration including X.509 certificates and options. For details, please refer to:
 
-For details, please refer to:
+* [HTTPS: loading, reloading, generating certificates, and more](/docs/https.md)
 
-* [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
-
-## Multiple deployment options
+### Multiple deployment options
 
 AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
 
@@ -456,11 +473,11 @@ In the software, _type of the deployment_ is also present in some minimal way. I
 | `k8s` | Kubernetes |
 | `linux` | Linux |
 
-> The most recently updated enumeration can be found in the [source](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go)
+> The most recently updated enumeration can be found in the [source](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go).
 
 > The _type_ shows up in the `show cluster` output - see example above.
 
-### Kubernetes deployments
+#### Kubernetes deployments
 
 For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). This dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains:
 
@@ -470,11 +487,11 @@ For production deployments, we developed the [AIS/K8s Operator](https://github.c
 * [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
 * [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
-### Minimal all-in-one-docker Deployment
+#### Minimal all-in-one-docker Deployment
 
 This option has the unmatched convenience of requiring an absolute minimum time and resources - please see this [README](/deploy/prod/docker/single/README.md) for details.
 
-### Testing your cluster
+#### Testing your cluster
 
 For development, health-checking a new deployment, or for any other (functional and performance testing) related reason you can run any/all of the included tests.
 
@@ -507,7 +524,59 @@ The command randomly shuffles existing short tests and then, depending on your p
 
 > Ctrl-C or any other (kind of) abnormal termination of a running test may have a side effect of leaving some test data in the test bucket.
 
-## Running AIStore in Google Colab
+## Assorted Topics
+
+### Finding Things (Tip)
+
+AIStore has been around for a while; the repository has accumulated quite a bit of information that can be immediately located as follows:
+
+1. See [Extended Index](/docs/docs.md)
+2. Use CLI `search` command, e.g.: `ais search copy`
+3. Clone the repository and run `git grep`, e.g.: `git grep -n out-of-band -- "*.md"`
+
+Any of the above will work. In particular, for any keyword or text of any kind, you can easily look up examples and descriptions via a simple `find` or `git grep` command. For instance:
+
+```console
+$ git grep -n out-of-band -- "*.md"
+docs/cli/archive.md:555:         - detecting remote version changes (a.k.a. out-of-band updates), and
+...
+...
+$ git grep out-of-band -- "*.md" | wc -l
+44
+```
+
+Alternatively, use a combination of `find`, `xargs`, and/or `grep` to search through existing texts of any kind, including source comments. For example:
+
+```console
+$ find . -name "*.md" | xargs grep -n "out-of-band"
+```
+
+In addition, there's the user-friendly [CLI](/docs/cli.md). For example, to search for commands related to copy, you could:
+
+```console
+$ ais search copy
+
+ais bucket cp
+ais cp
+ais download
+ais job rm download
+ais job start copy-bck
+ais job start download
+ais job start mirror
+ais object cp
+ais start copy-bck
+ais start download
+ais start mirror
+...
+```
+
+For the CLI, remember to use the `--help` option, which will universally show specific supported options and usage examples. For example:
+
+```console
+$ ais cp --help
+```
+
+### Running AIStore in Google Colab
 
 To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb):
 
@@ -515,26 +584,26 @@ To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https:
 - This sample installs Go v1.23.1, the supported Go version and toolchain at the time of writing.
 - AIStore runs in the background. However, if you stop any cell, it sends a "SIGINT" (termination signal) to all background processes, terminating AIStore. To restart AIStore, simply rerun the relevant cell.
 
-## Kubernetes Playground
+### Kubernetes Playground
 
 In our development and testing, we make use of [Minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and the capability, further documented [here](/deploy/dev/k8s/README.md), to run the Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/docs/etl.md), for example - can be developed rather efficiently.
 
 * [AIStore on Minikube](/deploy/dev/k8s/README.md)
 
-## Setting Up HTTPS Locally
+### Setting Up HTTPS Locally
 
 So far, all examples in this getting-started document run a bunch of local web servers that listen for plain HTTP and collaborate to provide clustered storage.
 
 There's a separate document that tackles HTTPS topics that, in part, include:
 
-- [Generating self-signed certificates](https.md#generating-self-signed-certificates)
-- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
-- [Accessing the cluster](https.md#accessing-the-cluster)
-- [Testing with self-signed certificates](https.md#testing-with-self-signed-certificates)
-- [Updating and reloading X.509 certificates](https.md#updating-and-reloading-x509-certificates)
-- [Switching cluster between HTTP and HTTPS](https.md#switching-cluster-between-http-and-https)
+- [Generating self-signed certificates](/docs/https.md#generating-self-signed-certificates)
+- [Deploying: 4 targets, 1 gateway, 6 mountpaths, AWS backend](/docs/https.md#deploying-4-targets-1-gateway-6-mountpaths-aws-backend)
+- [Accessing the cluster](/docs/https.md#accessing-the-cluster)
+- [Testing with self-signed certificates](/docs/https.md#testing-with-self-signed-certificates)
+- [Updating and reloading X.509 certificates](/docs/https.md#updating-and-reloading-x509-certificates)
+- [Switching cluster between HTTP and HTTPS](/docs/https.md#switching-cluster-between-http-and-https)
 
-## Build, Make, and Development Tools
+### Build, Make, and Development Tools
 
 As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
@@ -556,7 +625,7 @@ In summary:
 * for docker and minikube builds supported by _this_ repository, see [docker and minikube](https://github.com/NVIDIA/aistore/tree/main/deploy) deployments;
 * finally, for production build and deployment, please refer to the [ais-k8s repository](https://github.com/NVIDIA/ais-k8s).
 
-### A note on conditional linkage
+#### A note on conditional linkage
 
 AIStore build supports conditional linkage of the supported remote backends: [S3, GCS, Azure, OCI](https://github.com/NVIDIA/aistore/blob/main/docs/images/cluster-block-v3.26.png).
 
@@ -600,8 +669,7 @@ In addition, to build [AuthN](/docs/authn.md), [CLI](/docs/cli.md), and/or [aisl
 
 respectively. With each of these `make`s, you can also use `MODE=debug` - debug mode is universally supported.
 
-
-## Containerized Deployments: Host Resource Sharing
+### Containerized Deployments: Host Resource Sharing
 
 The following **applies to all containerized deployments**:
 
@@ -619,7 +687,7 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
 
-## Assorted Curl
+### Curl
 
 Some will say that using AIS [CLI](/docs/cli.md) with aistore is an order of magnitude more convenient than [curl](https://curl.se/). Or two orders.
 
@@ -627,7 +695,7 @@ Must be a matter of taste, though, and so here are a few `curl` examples.
 
 > As always, `http://localhost:8080` address (below) simply indicates [Local Playground](#local-playground) and must be understood as a placeholder for an _arbitrary_ aistore endpoint (`AIS_ENDPOINT`).
 
-### Example: PUT via aistore [S3 interface](/docs/s3compat.md); specify PUT content inline (in the curl command):
+#### Example: PUT via aistore [S3 interface](/docs/s3compat.md); specify PUT content inline (in the curl command):
 
 ```console
 $ ais create ais://nnn ## create bucket, if doesn't exist
@@ -639,7 +707,7 @@ NAME     SIZE
 qqq      10B
 ```
 
-### Example: same as above using [Easy URL](/docs/http_api.md#easy-url)
+#### Example: same as above using [Easy URL](/docs/http_api.md#easy-url)
 
 ```console
 ## notice PROVIDER/BUCKET/OBJECT notation
@@ -652,7 +720,7 @@ eee      10B
 qqq      10B
 ```
 
-### Finally, same as above using native aistore API
+#### Finally, same as above using native AIS API
 
 ```console
 ## notice '/v1/objects' API endpoint
