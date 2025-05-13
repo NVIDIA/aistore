@@ -93,7 +93,7 @@ In particular, all API requests that operate on a bucket carry the bucket's spec
 
 > The reference below is "formulated" in [curl](https://curl.se/) - i.e., using `curl` command lines. It is possible, however, and often much easier (and, therefore, **preferable**), to execute the same operations using [AIS CLI](/docs/cli.md). For more `curl` examples, please also see:
 
-* [Assorted Curl](/docs/getting_started.md#assorted-curl)
+* [Assorted Curl](/docs/getting_started.md#curl)
 
 6. And finally, **HTTP request and response headers**
 

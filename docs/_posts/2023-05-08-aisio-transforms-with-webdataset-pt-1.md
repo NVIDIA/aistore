@@ -33,7 +33,7 @@ For this example we will be using:
 - Python 3.10
 - [WebDataset Python Library v0.2.48](https://pypi.org/project/webdataset/0.2.48/) 
 - [AIStore Python SDK v1.2.2](https://pypi.org/project/aistore/)
-- [AIStore Cluster v3.17](https://github.com/NVIDIA/aistore) -- Running in Kubernetes (see [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md) for minikube deployment or [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-deployments) for more advanced options)
+- [AIStore Cluster v3.17](https://github.com/NVIDIA/aistore) -- Running in Kubernetes (see [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md) for minikube deployment or [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-playground) for more advanced options)
 
 --- 
 ## The Dataset

@@ -141,7 +141,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, lsflags uint
 	if numWorkers == nwpNone {
 		return nil
 	}
-	debug.Assert(numWorkers > 0 && numWorkers < 9999)
+	debug.Assert(numWorkers > 0 && numWorkers < 9999, numWorkers)
 
 	r._iniNwp(numWorkers, confBurst)
 	return nil

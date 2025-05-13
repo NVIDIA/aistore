@@ -155,7 +155,7 @@ $ ais config cluster features S3-Presigned-Request
 
 Rest of this section uses [curl](https://curl.se/); more (and easier to use) examples can be found at:
 
-* [Assorted Curl](/docs/getting_started.md#assorted-curl)
+* [Assorted Curl](/docs/getting_started.md#curl)
 
 ### 2. Create presigned S3 request
 

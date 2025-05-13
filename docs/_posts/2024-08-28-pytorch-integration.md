@@ -251,14 +251,14 @@ This implementation is a first pass at our dynamic batching efforts. There are o
 
 We conducted benchmarks on a virtual machine with the following configuration:
 
-- **OS:** Ubuntu 22.04.1 LTS              
+- **OS:** Ubuntu 22.04.1 LTS
 - **Kernel:** Linux 5.15.0-46-generic
 - **Architecture:** x86-64
 - **CPU:** Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
 - **Cores:** 16
 - **Memory:** 32 GB
 
-Note that this machine was also running a [local AIStore playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) deployed with the following [script](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#step-2-deploy-cluster-and-verify-the-running-status-using-ais-cli):
+Note that this machine was also running a [local AIStore playground](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#local-playground) deployed with the following [script](https://github.com/NVIDIA/aistore/tree/main/scripts#clean_deploysh):
 
 ```console
 $ ./scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1 --deployment local --cleanup
