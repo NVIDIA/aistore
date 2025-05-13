@@ -16,20 +16,21 @@ Before you pick a path, answer two quick questions:
 1. **Dataset size** – e.g., tens of terabytes or multi-petabyte?
 2. **Available hardware** – laptop, workstation, a few bare-metal servers, or Kubernetes?
 
-For datasets, say, below 50TB a single host may suffice and should, therefore, be considered a viable option. Expecting growth or already past that mark? Plan for multi-node or cloud.
+For datasets below (ballpark) 50TB, a single host may suffice and should be considered a viable option.
 
-Note as well that you can always start small: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called [unified namespace](/docs/overview.md#unified-namespace) - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
+Expecting growth or already past that mark? Plan for multi-node or cloud.
+
+Note that you can always start small: a single-host deployment, a 3-node cluster in the Cloud or on-premises, etc. AIStore supports many options to inter-connect existing clusters - the capability called [unified namespace](/docs/overview.md#unified-namespace) - or migrate existing datasets (on-demand or via supported storage services). For introductions and further pointers, please refer to the [AIStore Overview](/docs/overview.md).
 
 ## Prerequisites
 
-AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#target) are identical, hardware-wise.
+AIStore runs on commodity Linux machines with no special requirements. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#target) are identical, hardware-wise.
 
-* Linux with `gcc`, `sysstat`, `attr`, `util-linux`
+* [Linux](#linux) with `gcc`, `sysstat`, `attr`, `util-linux`
 * Linux **kernel ≥ 6.8**
 * [Go ≥ 1.23](https://golang.org/dl/) (or build via `CROSS_COMPILE`)
 * Local filesystem with **extended attributes** ([xattrs](https://en.wikipedia.org/wiki/Extended_file_attributes)) enabled
-* *Optional* – cloud credentials (AWS, GCP, Azure, OCI)
-* *Optional* – [golangci-lint 2.x](https://golangci-lint.run/welcome/install/)
+* **Optional** – cloud credentials (AWS, GCP, Azure, OCI)
 
 [Mac](#mac) is also supported albeit in a limited (development only) way.
 
@@ -37,13 +38,13 @@ AIStore runs on commodity Linux machines with no special requirements whatsoever
 
 Depending on your Linux distribution, you may or may not have `GCC`, `sysstat`, and/or `attr` packages. These packages must be installed.
 
-Speaking of distributions, our current default recommendation is Ubuntu Server 24.04 LTS or Ubuntu Server 22.04 LTS, as it has been our experience. However, AIStore has no special dependencies, so virtually any distribution will work.
+Speaking of distributions, our current default recommendation (based on our experience) is Ubuntu Server 24.04 LTS or Ubuntu Server 22.04 LTS. However, AIStore has no special dependencies, so virtually any distribution will work.
 
-For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this (default) recommendation shall not be interpreted as a limitation of any kind: other fine choices include zfs, ext4, f2fs and more.
+For the [local filesystem](/docs/performance.md), we currently recommend xfs. But again, this default recommendation should not be interpreted as a limitation: other fine choices include zfs, ext4, f2fs and more.
 
-Since AIS itself provides n-way mirroring and erasure coding, hardware RAID would not be recommended. But can be used, and will work.
+Since AIS itself provides n-way mirroring and erasure coding, hardware RAID is not recommended. But it can be used and will work.
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long-time POSIX legacy supported by all mainstream filesystems with no exceptions. Unfortunately, `xattrs` may not always be enabled in the Linux kernel configurations - the fact that can be easily found out by running the `setfattr` command.
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or `xattrs`, is a long-time POSIX legacy supported by all mainstream filesystems without exceptions. Unfortunately, `xattrs` may not always be enabled in Linux kernel configurations - which can be easily verified by running the `setfattr` command.
 
 If disabled, please make sure to enable xattrs in your Linux kernel configuration. To quickly check:
 
@@ -71,11 +72,7 @@ $ find . -name "*darwin*"
 ...
 ```
 
-Benchmarking and stress-testing is also being done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
-
-The rest of this document is structured as follows:
-
-------------------------------------------------
+Benchmarking and stress-testing is done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
 
 ## Document Structure
 
@@ -218,7 +215,7 @@ $ ais show cluster
 Alternatively or in addition (to `make deploy`), one can also use:
 
 * [`clean_deploy.sh` script](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
-* [`clean_deploy.sh README`](/docs/development.md#clean-deploy)
+* [`clean_deploy.sh` README](/docs/development.md#clean-deploy)
 
 With no arguments, this script also builds AIStore binaries (such as `aisnode` and `ais` CLI). You can pass in arguments to configure the same options that the `make deploy` command above uses.
 
@@ -280,8 +277,6 @@ or, same:
 
 ```console
 $ TAGS=aws TEST_LOOPBACK_SIZE=1G make kill clean cli deploy <<< $'1\n1\n'
-```
-
 
 $ mount | grep dev/loop
 /dev/loop23 on /tmp/ais/mp1 type ext4 (rw,relatime)
@@ -321,7 +316,7 @@ AIStore (product and solution) is fully based on HTTP(S) utilizing the protocol 
 
 Connectivity-wise, what that means is that your local deployment at `localhost:8080` can as easily run at any **arbitrary HTTP(S)** address.
 
-Here're the quick change you make to deploy Local Playground at (e.g.) `10.0.0.207`, whereby the main gateway's listening port would still remain `8080` default:
+Here's the quick change you make to deploy Local Playground at (e.g.) `10.0.0.207`, whereby the main gateway's listening port would still remain `8080` default:
 
 ```diff
 diff --git a/deploy/dev/local/aisnode_config.sh b/deploy/dev/local/aisnode_config.sh                                                             |
@@ -473,7 +468,7 @@ For production deployments, we developed the [AIS/K8s Operator](https://github.c
 * [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
 * [Ansible Playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
 * [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
-- [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
+* [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
 ### Minimal all-in-one-docker Deployment
 
@@ -514,7 +509,7 @@ The command randomly shuffles existing short tests and then, depending on your p
 
 ## Running AIStore in Google Colab
 
-To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb): 
+To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https://colab.research.google.com/) notebook, use our ready-to-use [notebook](https://colab.research.google.com/github/NVIDIA/aistore/blob/main/python/examples/google_colab/aistore_deployment.ipynb):
 
 **Important Notes:**
 - This sample installs Go v1.23.1, the supported Go version and toolchain at the time of writing.

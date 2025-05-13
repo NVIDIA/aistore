@@ -134,10 +134,10 @@ redirect_from:
 
 ## Production Deployment
 
-* [AIStore on Kubernetes](https://github.com/NVIDIA/ais-k8s)
-* [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
-* [Ansible Playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
-* [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
+- [AIStore on Kubernetes](https://github.com/NVIDIA/ais-k8s)
+- [Kubernetes Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md)
+- [Ansible Playbooks](https://github.com/NVIDIA/ais-k8s/blob/main/playbooks/README.md)
+- [Helm Charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
 - [Monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 
 ## Special Cases and Advanced Topics
