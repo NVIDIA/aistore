@@ -52,7 +52,7 @@ func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
 func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	// use command search
 	cmds := findCmdMultiKeyAlt(commandShow, c.Command.Name)
-	if len(cmds) == 0 {
+	if len(cmds) == 0 || xjid != "" {
 		// generic
 		cmds = findCmdMultiKeyAlt(commandShow, commandJob)
 	}
