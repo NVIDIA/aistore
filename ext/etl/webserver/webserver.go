@@ -12,13 +12,14 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
@@ -72,7 +73,7 @@ func (*etlServerBase) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Running"))
 	default:
-		invalidMsgHandler(w, "invalid http method %s", r.Method)
+		cmn.WriteErr405(w, r, r.Method)
 	}
 }
 
@@ -83,7 +84,7 @@ func (base *etlServerBase) handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		base.getHandler(w, r)
 	default:
-		invalidMsgHandler(w, "invalid http method %s", r.Method)
+		cmn.WriteErr405(w, r, r.Method)
 	}
 }
 
@@ -100,16 +101,16 @@ func (base *etlServerBase) putHandler(w http.ResponseWriter, r *http.Request) {
 	case etl.ArgTypeFQN:
 		objReader, err = base.getFQNReader(r.URL.Path)
 		if err != nil {
-			invalidMsgHandler(w, "GET from FQN failed; err %v", err)
+			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from FQN failed", err))
 			return
 		}
 	default:
-		invalidMsgHandler(w, "invalid arg_type: %s", base.argType)
+		cmn.WriteErrMsg(w, r, "invalid arg_type: "+base.argType)
 	}
 
 	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
 	if err != nil {
-		invalidMsgHandler(w, "failed to transform: %v", err)
+		cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "failed to transform", err))
 		return
 	}
 	objReader.Close() // objReader is supposed to be fully consumed by the custom transform function - safe to close at this point
@@ -129,14 +130,14 @@ func (base *etlServerBase) putHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := io.Copy(w, transformedReader); err != nil {
-		invalidMsgHandler(w, "%v", err)
+		cmn.WriteErr(w, r, err)
 	}
 }
 
 // GET /
 func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 	if base.aisTargetURL == "" {
-		invalidMsgHandler(w, "missing env variable AIS_TARGET_URL")
+		cmn.WriteErrMsg(w, r, "missing env variable AIS_TARGET_URL")
 		return
 	}
 
@@ -153,30 +154,30 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 	case etl.ArgTypeDefault, etl.ArgTypeURL:
 		resp, err := wrapHTTPError(base.client.Get(fmt.Sprintf("%s/%s", base.aisTargetURL, p))) //nolint:bodyclose // is closed from objReader
 		if err != nil {
-			invalidMsgHandler(w, "GET from AIStore failed; err %v", err)
+			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from AIStore failed", err))
 			return
 		}
 		objReader = resp.Body
 	case etl.ArgTypeFQN:
 		objReader, err = base.getFQNReader(r.URL.Path)
 		if err != nil {
-			invalidMsgHandler(w, "GET from FQN failed; err %v", err)
+			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from FQN failed", err))
 			return
 		}
 	default:
-		invalidMsgHandler(w, "invalid arg_type: %s", base.argType)
+		cmn.WriteErrMsg(w, r, "invalid arg_type: "+base.argType)
 	}
 
 	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
 	if err != nil {
-		invalidMsgHandler(w, "failed to transform: %v", err)
+		cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "failed to transform", err))
 		return
 	}
 	objReader.Close() // objReader is supposed to be fully consumed by the custom transform function - safe to close at this point
 
 	if directPutURL := r.Header.Get(apc.HdrNodeURL); directPutURL != "" {
 		if err := base.handleDirectPut(directPutURL, transformedReader); err != nil {
-			invalidMsgHandler(w, "%v", err)
+			w.WriteHeader(http.StatusBadRequest)
 		} else {
 			setResponseHeaders(w.Header(), 0)
 			w.WriteHeader(http.StatusNoContent)
@@ -185,7 +186,7 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := io.Copy(w, transformedReader); err != nil {
-		logErrorf("%v", err)
+		cmn.WriteErr(w, r, err)
 	}
 }
 
@@ -195,7 +196,7 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logErrorf("failed to upgrade to websocket: %v", err)
+		nlog.Errorln("failed to upgrade to websocket", err)
 		return
 	}
 	defer conn.Close()
@@ -209,32 +210,32 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				break
 			}
-			log.Printf("error reading control message: %v", err)
+			nlog.Errorln("error reading control message", err)
 			break
 		}
 
 		if ctrl.FQN != "" {
 			fqn, err := url.PathUnescape(ctrl.FQN)
 			if err != nil {
-				logErrorf("failed to unescape: %v", err)
+				nlog.Errorln("failed to unescape", err)
 				break
 			}
 			reader, err = base.getFQNReader(fqn)
 			if err != nil {
-				logErrorf("failed to read FQN: %v", err)
+				nlog.Errorln("failed to read FQN", err)
 				break
 			}
 		} else {
 			_, reader, err = conn.NextReader()
 			if err != nil {
-				logErrorf("failed to read binary: %v", err)
+				nlog.Errorln("failed to read binary", err)
 				break
 			}
 		}
 
-		transformed, err := base.Transform(io.NopCloser(reader), "", ctrl.Targs)
+		transformed, err := base.Transform(io.NopCloser(reader), ctrl.Path, ctrl.Targs)
 		if err != nil {
-			logErrorf("transform error: %v", err)
+			nlog.Errorln("transform error", err)
 			break
 		}
 
@@ -244,23 +245,23 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 				conn.WriteMessage(websocket.TextMessage, cos.UnsafeB("direct put success"))
 				continue
 			}
-			logErrorf("direct put failed: %v", err)
+			nlog.Errorln("direct put failed", err)
 		}
 
 		writer, err := conn.NextWriter(websocket.BinaryMessage)
 		if err != nil {
-			logErrorf("write error: %v", err)
+			nlog.Errorln("write error", err)
 			break
 		}
 		if _, err := io.Copy(writer, transformed); err != nil {
-			logErrorf("copy error: %v", err)
+			nlog.Errorln("copy error", err)
 		}
 		writer.Close()
 	}
 }
 
 func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {
-	fqn := filepath.Join("/", strings.TrimLeft(urlPath, "/"))
+	fqn := cos.JoinWords(urlPath)
 	return os.Open(fqn)
 }
 

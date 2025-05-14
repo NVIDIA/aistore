@@ -8,22 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"runtime/debug"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const GetContentType = "binary/octet-stream"
-
-func invalidMsgHandler(w http.ResponseWriter, format string, a ...any) {
-	logErrorf(format, a...)
-	w.Header().Set(cos.HdrContentType, "text/plain")
-	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprintf(w, format, a...)
-}
 
 func setResponseHeaders(header http.Header, size int64) {
 	header.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
@@ -48,8 +39,4 @@ func wrapHTTPError(resp *http.Response, err error) (*http.Response, error) {
 	}
 
 	return resp, nil
-}
-
-func logErrorf(format string, a ...any) {
-	log.Printf(string(debug.Stack())+" : "+format, a...)
 }
