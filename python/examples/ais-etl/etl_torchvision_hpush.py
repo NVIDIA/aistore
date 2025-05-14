@@ -36,7 +36,7 @@ def apply_image_transforms(reader, writer):
 client.etl("etl-torchvision").init_code(
     transform=apply_image_transforms,
     dependencies=["Pillow", "torchvision"],
-    timeout="10m",
+    init_timeout="10m",
 )
 
 # Transform bucket with given ETL name

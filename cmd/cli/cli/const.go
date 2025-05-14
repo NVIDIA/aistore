@@ -769,7 +769,7 @@ var (
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitPodReadyTimeoutFlag = DurationFlag{
-		Name: waitJobXactFinishedFlag.Name,
+		Name: "init-timeout",
 		Usage: "AIS target waiting time for POD to become ready;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
@@ -1106,9 +1106,9 @@ var (
 		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
 		Required: true,
 	}
-	etlBucketRequestTimeout = DurationFlag{
-		Name: "etl-timeout",
-		Usage: "Server-side timeout transforming a single object;\n" +
+	etlObjectRequestTimeout = DurationFlag{
+		Name: "object-timeout",
+		Usage: "Server-side timeout of transforming a single object;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	etlTransformArgsFlag = cli.StringFlag{

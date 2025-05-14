@@ -36,6 +36,7 @@ var (
 			argTypeFlag,
 			chunkSizeFlag,
 			waitPodReadyTimeoutFlag,
+			etlObjectRequestTimeout,
 			etlNameFlag,
 		},
 		cmdSpec: {
@@ -43,6 +44,7 @@ var (
 			commTypeFlag,
 			argTypeFlag,
 			waitPodReadyTimeoutFlag,
+			etlObjectRequestTimeout,
 			etlNameFlag,
 		},
 		cmdStop: {
@@ -58,7 +60,6 @@ var (
 			forceFlag,
 			copyPrependFlag,
 			copyDryRunFlag,
-			etlBucketRequestTimeout,
 			listFlag,
 			templateFlag,
 			numWorkersFlag,
@@ -222,7 +223,8 @@ func etlInitSpecHandler(c *cli.Context) error {
 		msg.EtlName = parseStrFlag(c, etlNameFlag)
 		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
 		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
-		msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
+		msg.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
+		msg.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
 		msg.Spec = spec
 	}
 
@@ -292,7 +294,8 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
+	msg.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
+	msg.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
 
 	// funcs
 	msg.Funcs.Transform = parseStrFlag(c, funcTransformFlag)

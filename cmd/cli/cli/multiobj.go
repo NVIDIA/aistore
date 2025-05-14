@@ -73,8 +73,8 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 	{
 		msg.ListRange = lrMsg
 		msg.DryRun = flagIsSet(c, copyDryRunFlag)
-		if flagIsSet(c, etlBucketRequestTimeout) {
-			msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
+		if flagIsSet(c, etlObjectRequestTimeout) {
+			msg.Timeout = cos.Duration(etlObjectRequestTimeout.Value)
 		}
 		msg.LatestVer = flagIsSet(c, latestVerFlag)
 		msg.Sync = flagIsSet(c, syncFlag)
