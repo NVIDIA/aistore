@@ -22,6 +22,7 @@ from aistore.sdk.etl.etl_const import (
     DEFAULT_ETL_RUNTIME,
     DEFAULT_ETL_COMM,
     DEFAULT_ETL_TIMEOUT,
+    DEFAULT_ETL_OBJ_TIMEOUT,
     ETL_COMM_SPEC,
     ETL_COMM_CODE,
     CODE_TEMPLATE,
@@ -65,11 +66,13 @@ class Etl:
         """Name of the ETL"""
         return self._name
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def init_spec(
         self,
         template: str,
         communication_type: str = DEFAULT_ETL_COMM,
-        timeout: str = DEFAULT_ETL_TIMEOUT,
+        init_timeout: str = DEFAULT_ETL_TIMEOUT,
+        obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
         arg_type: str = "",
     ) -> str:
         """
@@ -80,7 +83,8 @@ class Etl:
                 Existing templates can be found at `sdk.etl_templates`
                 For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
             communication_type (str): Communication type of the ETL (options: hpull, hpush)
-            timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes). Defaults to 5m.
+            init_timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
+            obj_timeout (str): [optional, default="45s"] Timeout of transforming a single object
         Returns:
             Job ID string associated with this ETL
         """
@@ -95,14 +99,15 @@ class Etl:
             spec=spec_encoded,
             etl_name=self._name,
             communication_type=communication_type,
-            timeout=timeout,
+            init_timeout=init_timeout,
+            obj_timeout=obj_timeout,
             arg_type=arg_type,
         ).as_dict()
 
         return self._client.request(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
-            timeout=convert_to_seconds(timeout),
+            timeout=convert_to_seconds(init_timeout),
             json=value,
         ).text
 
@@ -114,7 +119,8 @@ class Etl:
         preimported_modules: List[str] = None,
         runtime: str = _get_default_runtime(),
         communication_type: str = DEFAULT_ETL_COMM,
-        timeout: str = DEFAULT_ETL_TIMEOUT,
+        init_timeout: str = DEFAULT_ETL_TIMEOUT,
+        obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
         chunk_size: int = None,
         arg_type: str = "",
     ) -> str:
@@ -131,7 +137,8 @@ class Etl:
                 python3.12v2, python3.13v2] (see ext/etl/runtime/all.go)
             communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull,
                 hpush, io)
-            timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
+            init_timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
+            obj_timeout (str): [optional, default="45s"] Timeout of transforming a single object
             chunk_size (int): Chunk size in bytes if transform function in streaming data.
                 (whole object is read by default)
             arg_type (optional, str): The type of argument the runtime will provide the transform function.
@@ -151,7 +158,8 @@ class Etl:
             etl_name=self._name,
             runtime=runtime,
             communication_type=communication_type,
-            timeout=timeout,
+            init_timeout=init_timeout,
+            obj_timeout=obj_timeout,
             dependencies=self._encode_dependencies(dependencies),
             functions=functions,
             code=self._encode_transform(
@@ -164,7 +172,7 @@ class Etl:
         return self._client.request(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
-            timeout=convert_to_seconds(timeout),
+            timeout=convert_to_seconds(init_timeout),
             json=value,
         ).text
 

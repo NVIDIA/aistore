@@ -188,7 +188,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	// NOTE:
 	// - poll for a while here for a possible abort error (e.g., pod runtime error)
 	// - and notice hardcoded timeout
-	if abortErr := xetl.AbortedAfter(etl.DefaultReqTimeout); abortErr != nil {
+	if abortErr := xetl.AbortedAfter(etl.DefaultObjTimeout); abortErr != nil {
 		t.writeErr(w, r, abortErr, ecode)
 		return
 	}

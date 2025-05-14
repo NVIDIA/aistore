@@ -44,8 +44,8 @@ const (
 )
 
 const (
-	DefaultTimeout    = 45 * time.Second
-	DefaultReqTimeout = 10 * time.Second
+	DefaultInitTimeout = 45 * time.Second
+	DefaultObjTimeout  = 10 * time.Second
 )
 
 // enum ETL lifecycle status (see docs/etl.md#etl-pod-lifecycle for details)
@@ -97,8 +97,9 @@ type (
 		EtlName          string       `json:"id"`
 		CommTypeX        string       `json:"communication"` // enum commTypes
 		ArgTypeX         string       `json:"argument"`      // enum argTypes
-		Timeout          cos.Duration `json:"timeout"`
-		SupportDirectPut bool         `json:"support_direct_put"`
+		InitTimeout      cos.Duration `json:"init_timeout,omitempty"`
+		ObjTimeout       cos.Duration `json:"obj_timeout,omitempty"`
+		SupportDirectPut bool         `json:"support_direct_put,omitempty"`
 	}
 	InitSpecMsg struct {
 		Spec []byte `json:"spec"`
@@ -190,11 +191,11 @@ func (*InitCodeMsg) MsgType() string    { return Code }
 func (*InitSpecMsg) MsgType() string    { return Spec }
 
 func (m *InitCodeMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s-%s]", Code, m.EtlName, m.CommTypeX, m.ArgTypeX, m.Runtime)
+	return fmt.Sprintf("init-%s[%s-%s-%s-%s], init-timeout=%s, object-timeout=%s", Code, m.EtlName, m.CommTypeX, m.ArgTypeX, m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s]", Spec, m.EtlName, m.CommTypeX, m.ArgTypeX)
+	return fmt.Sprintf("init-%s[%s-%s-%s], init-timeout=%s, object-timeout=%s", Spec, m.EtlName, m.CommTypeX, m.ArgTypeX, m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (m *InitSpecMsg) errInvalidArg() error {
@@ -280,8 +281,11 @@ func (m *InitMsgBase) validate(detail string) error {
 		return cmn.NewErrUnsuppErr(err)
 	}
 	// NOTE: default timeout
-	if m.Timeout == 0 {
-		m.Timeout = cos.Duration(DefaultTimeout)
+	if m.InitTimeout == 0 {
+		m.InitTimeout = cos.Duration(DefaultInitTimeout)
+	}
+	if m.ObjTimeout == 0 {
+		m.ObjTimeout = cos.Duration(DefaultObjTimeout)
 	}
 	return nil
 }

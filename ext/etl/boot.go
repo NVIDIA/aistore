@@ -194,7 +194,7 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 // NOTE: currently, we do require readinessProbe config in the ETL spec.
 func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	var (
-		timeout     = b.msg.Timeout.D()
+		timeout     = b.msg.InitTimeout.D()
 		interval    = cos.ProbingFrequency(timeout)
 		client, err = k8s.GetClient()
 	)

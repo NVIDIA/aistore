@@ -785,9 +785,9 @@ def transform(input_bytes: bytes) -> bytes:
 			t.Run(testType+"__"+test.etlName, func(t *testing.T) {
 				msg := etl.InitCodeMsg{
 					InitMsgBase: etl.InitMsgBase{
-						EtlName:   test.etlName,
-						CommTypeX: test.commType,
-						Timeout:   etlBucketTimeout,
+						EtlName:     test.etlName,
+						CommTypeX:   test.commType,
+						InitTimeout: etlBucketTimeout,
 					},
 					Code:      []byte(test.code),
 					Deps:      []byte(test.deps),
@@ -1054,9 +1054,9 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 
 			msg := &etl.InitSpecMsg{
 				InitMsgBase: etl.InitMsgBase{
-					EtlName:   test.etlName,
-					CommTypeX: test.commType,
-					Timeout:   failureTestTimeout,
+					EtlName:     test.etlName,
+					CommTypeX:   test.commType,
+					InitTimeout: failureTestTimeout,
 				},
 				Spec: spec,
 			}
@@ -1125,9 +1125,9 @@ def not_transform_func(input_bytes):
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			msg := etl.InitCodeMsg{
 				InitMsgBase: etl.InitMsgBase{
-					EtlName:   test.etlName,
-					CommTypeX: test.commType,
-					Timeout:   failureTestTimeout,
+					EtlName:     test.etlName,
+					CommTypeX:   test.commType,
+					InitTimeout: failureTestTimeout,
 				},
 				Code:    []byte(test.code),
 				Deps:    []byte(test.deps),
@@ -1191,9 +1191,9 @@ def transform(input_bytes):
 		t.Run(test.etlName, func(t *testing.T) {
 			msg := etl.InitCodeMsg{
 				InitMsgBase: etl.InitMsgBase{
-					EtlName:   test.etlName,
-					CommTypeX: etl.Hpush, // TODO: enable runtime error retrieval for hpull in inline transform calls
-					Timeout:   etlBucketTimeout,
+					EtlName:     test.etlName,
+					CommTypeX:   etl.Hpush, // TODO: enable runtime error retrieval for hpull in inline transform calls
+					InitTimeout: etlBucketTimeout,
 				},
 				Code:    []byte(strings.Replace(failureTransformFunc, "<EXIT_CODE>", exitCode, 1)),
 				Runtime: test.runtime,

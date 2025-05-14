@@ -60,7 +60,7 @@ def transform(input_bytes):
 	m.puts()
 
 	msg := etl.InitCodeMsg{
-		InitMsgBase: etl.InitMsgBase{EtlName: "etl-build-conn-err", Timeout: etlBucketTimeout},
+		InitMsgBase: etl.InitMsgBase{EtlName: "etl-build-conn-err", InitTimeout: etlBucketTimeout},
 		Code:        []byte(timeoutFunc),
 		Runtime:     runtime.Py39,
 		ChunkSize:   0,
@@ -218,7 +218,7 @@ def transform(input_bytes):
 				etlName = test.name
 				{
 					test.etlCodeMsg.EtlName = etlName
-					test.etlCodeMsg.Timeout = etlBucketTimeout
+					test.etlCodeMsg.InitTimeout = etlBucketTimeout
 					test.etlCodeMsg.Funcs.Transform = "transform"
 				}
 				_ = tetl.InitCode(t, baseParams, &test.etlCodeMsg)

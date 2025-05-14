@@ -317,9 +317,7 @@ func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Con
 		goto cleanup
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("pod %q is running, %+v, %s", podName, msg, boot.errCtx)
-	}
+	nlog.Infof("pod %q is running, %+v, %s", podName, msg, boot.errCtx)
 
 	return podName, svcName, xctn, nil
 
@@ -547,8 +545,8 @@ func deleteEntity(errCtx *cmn.ETLErrCtx, entityType, entityName string) error {
 	}
 
 	// wait
-	interval := cos.ProbingFrequency(DefaultTimeout)
-	err = wait.PollUntilContextTimeout(context.Background(), interval, DefaultTimeout, false, /*immediate*/
+	interval := cos.ProbingFrequency(DefaultInitTimeout)
+	err = wait.PollUntilContextTimeout(context.Background(), interval, DefaultInitTimeout, false, /*immediate*/
 		func(context.Context) (done bool, err error) {
 			var exists bool
 			exists, err = client.CheckExists(entityType, entityName)

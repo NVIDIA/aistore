@@ -318,7 +318,8 @@ class ETLDetails(BaseModel):
 
     id: str
     communication: str
-    timeout: str
+    init_timeout: Optional[str]
+    obj_timeout: Optional[str]
     code: Optional[bytes]
     spec: Optional[str]
     dependencies: Optional[str]
@@ -346,7 +347,8 @@ class InitETLArgs(BaseModel):
 
     etl_name: str
     communication_type: str
-    timeout: str
+    init_timeout: Optional[str]
+    obj_timeout: Optional[str]
     arg_type: str = ""
 
 
@@ -360,7 +362,8 @@ class InitSpecETLArgs(InitETLArgs):
     def as_dict(self):
         return {
             "id": self.etl_name,
-            "timeout": self.timeout,
+            "init_timeout": self.init_timeout,
+            "obj_timeout": self.obj_timeout,
             "communication": f"{self.communication_type}://",
             "spec": self.spec,
             "argument": self.arg_type,
@@ -383,7 +386,8 @@ class InitCodeETLArgs(InitETLArgs):
             "id": self.etl_name,
             "runtime": self.runtime,
             "communication": f"{self.communication_type}://",
-            "timeout": self.timeout,
+            "init_timeout": self.init_timeout,
+            "obj_timeout": self.obj_timeout,
             "funcs": self.functions,
             "code": self.code,
             "dependencies": self.dependencies,

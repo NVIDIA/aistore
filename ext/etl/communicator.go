@@ -192,7 +192,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 
 func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
 	if timeout == 0 {
-		timeout = DefaultReqTimeout
+		timeout = DefaultObjTimeout
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
@@ -225,7 +225,7 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
+func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
 		return core.ReadResp{Err: err}
 	}
@@ -280,7 +280,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
-	r, ecode, err := doWithTimeout(reqArgs, getBody, timeout, started)
+	r, ecode, err := doWithTimeout(reqArgs, getBody, pc.boot.msg.ObjTimeout.D(), started)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -289,7 +289,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, timeout time.Duration, targs string
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
-	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), targs, latestVer, false, nil)
+	resp := pc.doRequest(lom, targs, latestVer, false, nil)
 	if resp.Err != nil {
 		return resp.Ecode, resp.Err
 	}
@@ -310,7 +310,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 }
 
 func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
-	resp := pc.doRequest(lom, pc.boot.msg.Timeout.D(), "", latestVer, sync, gargs)
+	resp := pc.doRequest(lom, "", latestVer, sync, gargs)
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err, resp.Ecode)
 	}
@@ -387,7 +387,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
 	}
 
-	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.Timeout.D(), started)
+	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.ObjTimeout.D(), started)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}

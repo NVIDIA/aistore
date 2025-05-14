@@ -20,6 +20,7 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPULL,
     ETL_COMM_IO,
     DEFAULT_ETL_TIMEOUT,
+    DEFAULT_ETL_OBJ_TIMEOUT,
 )
 
 from aistore.sdk.etl.etl import Etl, _get_default_runtime
@@ -37,6 +38,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def test_init_spec_default_params(self):
         expected_action = {
             "communication": "hpush://",
+            "init_timeout": DEFAULT_ETL_TIMEOUT,
+            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
             "argument": "",
         }
         self.init_spec_exec_assert(expected_action)
@@ -47,13 +50,17 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_init_spec(self):
         communication_type = ETL_COMM_HPUSH
-        timeout = "6m"
+        init_timeout = "6m"
+        obj_timeout = "20s"
         expected_action = {
             "communication": f"{communication_type}://",
-            "timeout": timeout,
+            "init_timeout": init_timeout,
+            "obj_timeout": obj_timeout,
             "argument": "",
         }
-        self.init_spec_exec_assert(expected_action, timeout=timeout)
+        self.init_spec_exec_assert(
+            expected_action, init_timeout=init_timeout, obj_timeout=obj_timeout
+        )
 
     def init_spec_exec_assert(self, expected_action, **kwargs):
         template = "pod spec template"
@@ -61,10 +68,6 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             template.encode(UTF_ENCODING)
         ).decode(UTF_ENCODING)
         expected_action["id"] = self.etl_name
-
-        # all ETL INIT SPEC messages have timeout
-        if "timeout" not in expected_action:
-            expected_action["timeout"] = DEFAULT_ETL_TIMEOUT
 
         expected_response_text = self.etl_name
         mock_response = Mock()
@@ -76,17 +79,16 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(expected_response_text, response)
 
         # All ETL messages are called with timeout
-        if "timeout" not in kwargs:
-            kwargs["timeout"] = DEFAULT_ETL_TIMEOUT
+        if "init_timeout" not in kwargs:
+            kwargs["init_timeout"] = DEFAULT_ETL_TIMEOUT
 
-        req_timeout = convert_to_seconds(kwargs.pop("timeout"))
+        req_timeout = convert_to_seconds(kwargs.pop("init_timeout"))
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
             timeout=req_timeout,
             json=expected_action,
-            **kwargs,
         )
 
     def test_init_code_default_runtime(self):
@@ -111,7 +113,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         expected_action = {
             "runtime": _get_default_runtime(),
             "communication": f"{communication_type}://",
-            "timeout": "5m",
+            "init_timeout": DEFAULT_ETL_TIMEOUT,
+            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
             "funcs": {"transform": "transform"},
             "code": self.encode_fn([], self.transform_fn, communication_type),
             "dependencies": base64.b64encode(b"cloudpickle>=3.0.0").decode(
@@ -128,7 +131,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def test_init_code(self):
         runtime = "python-non-default"
         communication_type = ETL_COMM_HPULL
-        timeout = "6m"
+        init_timeout = "6m"
+        obj_timeout = "6m"
         preimported = ["pytorch"]
         user_dependencies = ["pytorch"]
         chunk_size = 123
@@ -143,7 +147,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         expected_action = {
             "runtime": runtime,
             "communication": f"{communication_type}://",
-            "timeout": timeout,
+            "init_timeout": init_timeout,
+            "obj_timeout": obj_timeout,
             "funcs": {"transform": "transform"},
             "code": self.encode_fn(preimported, self.transform_fn, communication_type),
             "dependencies": expected_dep_str,
@@ -156,7 +161,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             dependencies=user_dependencies,
             runtime=runtime,
             communication_type=communication_type,
-            timeout=timeout,
+            init_timeout=init_timeout,
+            obj_timeout=obj_timeout,
             chunk_size=chunk_size,
             arg_type=arg_type,
         )
@@ -184,14 +190,11 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
         response = self.etl.init_code(transform=self.transform_fn, **kwargs)
 
-        if "timeout" not in expected_action:
-            expected_action["timeout"] = DEFAULT_ETL_TIMEOUT
-
         self.assertEqual(expected_response_text, response)
 
-        if "timeout" not in kwargs:
-            kwargs["timeout"] = DEFAULT_ETL_TIMEOUT
-        req_timeout = convert_to_seconds(kwargs.pop("timeout"))
+        if "init_timeout" not in kwargs:
+            kwargs["init_timeout"] = DEFAULT_ETL_TIMEOUT
+        req_timeout = convert_to_seconds(kwargs.pop("init_timeout"))
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,

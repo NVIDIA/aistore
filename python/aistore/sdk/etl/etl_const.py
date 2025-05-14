@@ -1,6 +1,7 @@
 # Defaults
 DEFAULT_ETL_COMM = "hpush"
 DEFAULT_ETL_TIMEOUT = "5m"
+DEFAULT_ETL_OBJ_TIMEOUT = "45s"
 DEFAULT_ETL_RUNTIME = "python3.13v2"
 
 # ETL comm types

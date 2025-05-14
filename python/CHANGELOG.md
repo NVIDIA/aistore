@@ -8,6 +8,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- Add `obj_timeout` and `init_timeout` fields in `InitETLArgs` type to align with updated API fields.
+
 ## [1.13.7] - 2025-05-06
 
 ### Added

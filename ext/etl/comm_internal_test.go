@@ -139,8 +139,8 @@ var _ = Describe("CommunicatorTest", func() {
 				boot := &etlBootstrapper{
 					msg: InitSpecMsg{
 						InitMsgBase: InitMsgBase{
-							CommTypeX: commType,
-							Timeout:   cos.Duration(DefaultTimeout),
+							CommTypeX:   commType,
+							InitTimeout: cos.Duration(DefaultInitTimeout),
 						},
 					},
 					pod:  pod,
