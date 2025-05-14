@@ -155,7 +155,7 @@ func TestMultipartUploadUsingScript(t *testing.T) {
 	tempdir := t.TempDir()
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
-	// 1. set MD5 to satisfy `s3cmd` (for details, see docs/s3cmd.md & docs/s3compat.md)
+	// 1. set MD5 to satisfy `s3cmd` (for details, see docs/s3compat.md)
 	bprops := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumMD5)},
 	}

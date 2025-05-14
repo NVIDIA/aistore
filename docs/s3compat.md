@@ -1,635 +1,584 @@
 ---
 layout: post
-title: S3COMPAT
+title: S3 Compatibility
 permalink: /docs/s3compat
 redirect_from:
  - /s3compat.md/
  - /docs/s3compat.md/
 ---
 
-AIS supports Amazon S3 in 3 (three) distinct and different ways:
+# AIStore & Amazon S3 Compatibility
 
-1. On the back, via [backend](providers.md) abstraction. Specifically for the S3 [backend](providers.md), the implementation currently utilizes [AWS SDK for Go v2](https://github.com/aws/aws-sdk-go-v2).
-2. On the client-facing front, AIS provides S3 compatible API, so that existing S3 applications could use AIStore out of the box and without the need to change their (existing) code.
-3. Similar to the option 2. but instead of instantiating, signing, and issuing requests to S3, AIS executes already signed S3 request ([presigned URLs](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide). Elsewhere in the documentation and the source, we refer to this mechanism as a _pass-through_.
+**AIStore** (AIS) is a lightweight, distributed object storage system designed to scale linearly with each added storage node. It provides a uniform API across various storage backends while maintaining high performance for AI/ML and data analytics workloads.
 
-This document talks about the 2. and 3. - about AIS providing S3 compatible API to clients and apps.
+AIS integrates with Amazon S3 on **three fronts**:
 
-There's a separate, albeit closely related, [document](/docs/s3cmd.md) that explains how to configure `s3cmd` and then maybe tweak AIStore configuration to work with it:
+1. **Backend storage** – via the [backend provider abstraction](/docs/overview.md#backend-provider), AIStore can be utiized to access (and cache or reliably store in-cluster) a remote cloud bucket such as `s3://my-bucket` (`aws://` is accepted as an alias). This provides seamless access to existing S3 data.
 
-* [Getting Started with `s3cmd`](/docs/s3cmd.md) - also contains configuration, tips, usage examples and more.
+2. **Front‑end compatibility** – every gateway speaks the S3 REST API. The default endpoint is `http(s)://gw-host:port/s3`, but you can enable the `S3-API-via-Root` [feature flag](/docs/feature_flags.md) to serve requests at the cluster root (`http(s)://gw-host:port/`). The same API works uniformly across all bucket types—native `ais://`, cloud‑backed `s3://`, `gs://`, and more.
 
-For additional background, see:
+3. **Presigned request offload** – AIS can receive a presigned S3 URL, execute it, and store the resulting object in the cluster. This lets you leverage S3's authentication while using AIS for storage.
 
-* [High-level AIS block diagram](overview.md#at-a-glance) that shows frontend and backend APIs and capabilities.
-* [Setting custom S3 endpoint](/docs/cli/bucket.md) can come in handy when a bucket is hosted by an S3 compliant backend (such as, e.g., minio).
+---
+
+**Which interface should I use?**
+
+AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API for advanced, cluster‑aware workloads. The table below helps decide which path fits your scenario:
+
+| Use the **S3 compatibility API** when you…                                                                              | Use the **native AIS API / CLI** when you…                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Need drop‑in support for unmodified S3 tools & SDKs (`aws`, `boto3`, `s3cmd`, …)                                        | Want cluster‑wide batch jobs (`ais etl`, `ais prefetch`, `ais copy`, `ais archive`, …)                          |
+| Rely on an existing S3‑centric workflow or third‑party app                                                              | Need fine‑grained control‑plane ops (`ais cluster`, `ais bucket props set`, node lifecycle)                     |
+| Accept MD5‑based ETag semantics—even though MD5 is slower and not crypto‑secure                                         | Value AIS‑native features: virtual directories, adaptive rate‑limiting, WebSocket ETL, streaming cold‑GET, etc. |
+| Accept that some S3 features (CORS, Website hosting, CloudFront) are **not** yet implemented                            | Care about advanced list-objects options (to list [shards](/docs/overview.md#shard)), working with [remote clusters](/docs/overview.md#unified-namespace), non-S3 buckets)                              |
+| Are okay with slight performance overhead from the S3‑to‑AIS adaptation layer (MD5 hashing, XML marshaling/translation) | Want full [Prometheus](/docs/prometheus.md) visibility with AIS‑rich metrics & labels                                                  |
+
+---
 
 ## Table of Contents
 
-- [Quick example using `aws` CLI](#quick-example-using-aws-cli)
-  - [PUT(object)](#putobject)
-  - [GET(object)](#getobject)
-    - [Range Read](#range-read)
-  - [HEAD(object)](#headobject)
-- [Presigned S3 requests](#presigned-s3-requests)
-  - [1. Enable presigned S3 requests](#1-enable-presigned-s3-requests)
-  - [2. Create presigned S3 request](#2-create-presigned-s3-request)
-  - [3. Execute presigned S3 request](#3-execute-presigned-s3-request)
-  - [4. Finally, check the status](#4-finally-check-the-status)
-  - [Using Go client to execute presigned S3 requests](#using-go-client-to-execute-presigned-s3-requests)
-- [Quick example using Internet Browser](#quick-example-using-internet-browser)
-- [`s3cmd` command line](#s3cmd-command-line)
-- [ETag and MD5](#etag-and-md5)
-- [Last Modification Time](#last-modification-time)
-- [Multipart Upload using `aws`](#multipart-upload-using-aws)
-- [More Usage Examples](#more-usage-examples)
-  - [Create bucket](#create-bucket)
-  - [Remove bucket](#remove-bucket)
-  - [Upload large object](#upload-large-object)
-- [TensorFlow Demo](#tensorflow-demo)
-- [S3 Compatibility](#s3-compatibility)
-  - [Supported S3](#supported-s3)
-  - [Unsupported S3](#unsupported-s3)
-- [Boto3 Compatibility](#boto3-compatibility)
-- [Amazon CLI tools](#amazon-cli-tools)
+* [Quick Start](#quick-start)
+  * [aws CLI](#quick-start-with-aws-cli)
+  * [s3cmd](#quick-start-with-s3cmd)
+* [Configuring Clients](#configuring-clients)
+  * [Finding the AIS endpoint](#finding-the-ais-endpoint)
+  * [Checksum considerations](#checksum-considerations)
+  * [HTTPS vs HTTP](#https-vs-http)
+* [Using s3cmd with AIS](#using-s3cmd-with-ais)
+  * [Interactive `s3cmd --configure` transcript](#interactive-s3cmd---configure-transcript)
+  * [Example `.s3cfg`](#example-s3cfg)
+  * [Multipart uploads](#multipart-uploads-with-s3cmd)
+  * [JWT authentication](#authentication-jwt-tips)
+* [Supported Operations](#supported-operations)
+  * [PUT / GET / HEAD](#put--get--head)
+  * [Range reads](#range-reads)
+  * [Multipart uploads (aws CLI)](#multipart-uploads-with-aws-cli)
+  * [Presigned requests](#presigned-s3-requests)
+* [S3 Bucket Inventory](#s3-bucket-inventory-support)
+  * [Why inventories matter](#why-inventories-matter)
+  * [Enabling inventory via AWS CLI](#enabling-inventory-via-aws-cli)
+  * [Managing inventories with helper scripts](#managing-inventories-with-helper-scripts)
+  * [Inventory XML example](#inventory-xml-example)
+* [Compatibility Matrix](#compatibility-matrix)
+* [Boto3 Examples](#boto3-examples)
+* [FAQs & Troubleshooting](#faqs--troubleshooting)
+* [Further reading](#further-reading)
 
-## Quick example using `aws` CLI
+---
 
-The following was tested with an _older_ version of `aws` CLI, namely:
+> **Environment assumption – Local Playground**
+> 
+> The CLI examples below use `localhost:8080`, which is the default endpoint when running AIS in the [Local Playground](/docs/getting_started.md#local-playground).
+>
+> For other deployment modes (including [Kubernetes Playground](/docs/getting_started.md#kubernetes-playground), Docker Compose, bare-metal cluster, or [Kubernetes for production deployments](https://github.com/NVIDIA/ais-k8s)) — replace the `host:port` with any **AIS gateway** endpoint.
+> 
+> See [Deployment Options](/docs/getting_started.md#multiple-deployment-options) and the main project [Features](https://github.com/NVIDIA/aistore/tree/main?tab=readme-ov-file#features) list for a broader overview.
 
-```console
-$ aws --version
-aws-cli/1.15.58 Python/3.5.2 Linux/5.4.0-124-generic botocore/1.10.57
-```
+---
 
-You can create buckets and execute PUT/GET verbs, etc.
+## Quick Start
 
-```console
-$ aws --endpoint-url http://localhost:8080/s3 s3 mb s3://abc
-make_bucket: abc
-```
-
-### PUT(object)
+### Quick start with `aws CLI`
 
 ```console
-# PUT using AIS CLI:
-$ ais put README.md ais://abc
-
-# The same via `aws` CLI:
-$ aws --endpoint-url http://localhost:8080/s3 s3api put-object --bucket abc --key LICENSE --body LICENSE
-$ ais ls ais://abc
-NAME             SIZE
-LICENSE          1.05KiB
-README.md        10.44KiB
+AWS_EP=http://localhost:8080/s3
+aws --endpoint-url "$AWS_EP" s3 mb s3://demo
+aws --endpoint-url "$AWS_EP" s3 cp README.md s3://demo/
+aws --endpoint-url "$AWS_EP" s3 ls s3://demo
+# Expected output:
+# 2023-05-14 14:25     10493   s3://demo/README.md
 ```
 
-### GET(object)
+### Quick start with `s3cmd`
+
+One‑liner (HTTP):
 
 ```console
-# GET using `aws` CLI:
-$ aws --endpoint-url http://localhost:8080/s3 s3api get-object --bucket abc --key README.md /tmp/readme
-{
-    "ContentType": "text/plain; charset=utf-8",
-    "Metadata": {},
-    "ContentLength": 10689
-}
-$ diff -uN README.md /tmp/readme
+s3cmd put README.md s3://demo \
+  --no-ssl \
+  --host=localhost:8080/s3 \
+  --host-bucket="localhost:8080/s3/%(bucket)"
+
+# Expected output:
+# upload: 'README.md' -> 's3://demo/README.md' [1 of 1]
+# 10493 of 10493   100% in    0s     4.20 MB/s  done
 ```
 
-#### Range Read
+> **Tip — use a cluster‑specific `.s3cfg`** so you can drop the `--host*` flags. See the [Example .s3cfg](#example-s3cfg) section below.
 
-1. If needed: create a bucket (while making sure its checksum is the conventional MD5), and PUT an object:
+---
+
+## Configuring Clients
+
+### Finding the AIS endpoint
+
+Choose **any** gateway's `host:port` and append `/s3`, e.g. `10.10.0.1:51080/s3`. All gateways accept reads and writes, so you can connect to any of them.
+
+> In fact, AIS gateways are completely equivalent, [API-wise](/docs/overview.md#aistore-api).
+
+---
+
+### Checksum considerations
+
+Amazon S3's `ETag` is MD5 (or a multipart hash); AIS defaults to **xxhash** for better performance. To avoid client mismatch warnings, set MD5 per bucket:
 
 ```console
-$ ais create ais://abc
-$ ais bucket props set ais://abc checksum.type md5
-$ ais put README.md ais://abc
+ais bucket props set ais://demo checksum.type=md5      # per bucket
+# OR cluster‑wide default
+ais config cluster checksum.type=md5
 ```
 
-2. Next, read an arbitrary range using `aws` CLI:
+Setting the checksum type to MD5 ensures compatibility with S3 clients that validate checksums, though it comes with a minor performance cost compared to xxhash.
 
-```console
-$ aws s3api --endpoint-url http://localhost:8080/s3 get-object --bucket abc --key README.md --range bytes=0-99 README-partial.md
-{
-    "ContentLength": 100,
-    "ETag": "\"2940e853a9b97580df19b76d10d3ea31\"",
-    "Metadata": {},
-    "ContentType": "application/octet-stream",
-    "AcceptRanges": "bytes",
-    "LastModified": "Tue, 08 Apr 2025 14:51:53 GMT",
-    "ContentRange": "bytes 0-99/17242"
-}
+---
+
+### HTTPS vs HTTP
+
+Enable TLS in `ais.json` (`net.http.use_https=true`) or pass `--no-ssl`/`--insecure` flags when using tools. By default, AIS uses HTTP, while many S3 clients expect HTTPS.
+
+---
+
+## Using `s3cmd` with AIS
+
+### Interactive `s3cmd --configure` transcript
+
+```text
+$ s3cmd --configure
+Enter new values or accept defaults in brackets with Enter.
+Access Key: FAKEKEY
+Secret Key: FakeSecret
+Default Region [US]:
+Use HTTPS protocol [Yes]: n
+HTTP Proxy server name:
+New settings:
+  Access Key: FAKEKEY
+  Secret Key: FAKESECRET
+  Region: US
+  Use HTTPS protocol: False
+  HTTP Proxy server name:
+
+Test access with supplied credentials? [Y/n] y
+Please wait, attempting to list buckets...
 ```
 
-3. Finally, check the result:
+During the test, **enter your AIS endpoint** when prompted:
 
-```console
-$ cat README-partial.md
-**AIStore is a lightweight object storage system with the capability to linearly scale out with each$
+```
+Hostname: localhost:8080/s3
+Bucket host: localhost:8080/s3/%(bucket)
 ```
 
-### HEAD(object)
-
-```console
-# Get object metadata using `aws` CLI:
-$ aws s3api --endpoint-url http://localhost:8080/s3 head-object --bucket abc --key LICENSE
-{
-    "Metadata": {},
-    "ContentLength": 1075,
-    "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
-    "LastModified": "Mon, 19 Dec 2022 22:23:05 GMT"
-}
 ```
-
-## Presigned S3 requests
-
-AIStore also supports (passing through) [presigned S3 requests](https://docs.aws.amazon.com/search/doc-search.html?searchPath=documentation-guide&searchQuery=presigned&this_doc_product=Amazon%20Simple%20Storage%20Service&this_doc_guide=User%20Guide).
-
-To use this _feature_, you need to enable it first - as follows:
-
-### 1. Enable presigned S3 requests
-
-```console
-$ ais config cluster features S3-Presigned-Request
-```
-
-Rest of this section uses [curl](https://curl.se/); more (and easier to use) examples can be found at:
-
-* [Assorted Curl](/docs/getting_started.md#curl)
-
-### 2. Create presigned S3 request
-
-Once we have our cluster configured to execute presigned requests we can then start creating them and sending to AIStore.
-
-```console
-$ aws s3 presign s3://bucket/test.txt
-
-https://bucket.s3.us-west-2.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456
-```
-
-> [!NOTE] 
-> In some cases signed request may be in form of `https://s3.us-west-2.amazonaws.com/bucket/test.txt?...` (`path` style) and not `https://bucket.s3.us-west-2.amazonaws.com/test.txt?...` (`virtual-hosted` style).
-> If your requests are signed this way, they might fail when sending to AIStore as it has no way of knowing which style was used to sign, and it always assumes the `virtual-hosted` style by default.
-> To fix this you need to provide `ais-s3-signed-request-style: path` header to instruct AIStore to use `path` style.
-
-### 3. Execute presigned S3 request
-
-Let's assumes that there's S3 bucket called `s3://bucket`, and we have read/write access to it.
-
-Further, `https://localhost:8080` address (below) simply indicates [Local Playground](/docs/getting_started.md#local-playground) and must be understood as a demonstration-only placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
-
-```console
-$ curl -L -X PUT -d 'testing 1 2 3' "https://localhost:8080/s3/bucket/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAEXAMPLE123456789%2F20210621%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20210621T041609Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=EXAMBLE1234494d5fba3fed607f98018e1dfc62e2529ae96d844123456"
-```
-
-(as it was pointed in previous step, you might need to pass `-H "ais-s3-signed-request-style: path"` option in case your requests were signed with `path` style)
-
-At this point, AIStore will send the presigned (PUT) URL to S3 and, if successful, store the object in cluster.
-
-**NOTE:** when using HTTPS (as in: `AIS_USE_HTTPS`) and having AIS deployed with a self-signed TLS certificate you may get the following `curl` failure:
-
-```sh
-curl: (60) SSL certificate problem: unable to get local issuer certificate
-More details here: https://curl.se/docs/sslcerts.html
-```
-
-In this case, simply ask it to skip checking, e.g.: `echo insecure >> ~/.curlrc`
-
-### 4. Finally, check the status
-
-Finally (and optionally), let's check the status of the new object - `s3://bucket/test.txt`, in this case:
-
-```console
-$ ais bucket ls s3://bucket
-NAME          SIZE   CACHED  STATUS
-test.txt      13B    yes     ok
-```
-
-### Using Go client to execute presigned S3 requests
-
-In the previous section, we used `curl` client. Of course, it is also possible to achieve the same using many other HTTP clients - for instance, Go.
-
-In Go, you will need to define a custom `RoundTripper` that changes URL from S3 to AIStore, e.g.:
-
-```go
-type customTransport struct {
-	rt http.RoundTripper
-}
-
-func (t *customTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	bucket := strings.Split(req.URL.Host, ".")[0]
-	req.URL.Host = "localhost:8080" // <--- CHANGE THIS.
-	req.URL.Path = "/s3/" + bucket + req.URL.Path
-	return t.rt.RoundTrip(req)
-}
-
+Success. Your access key and secret key worked fine :-)
 ...
+Save settings? [y/N] y
+Configuration saved to ~/.s3cfg
+```
 
-func main() {
-	customClient := &http.Client{...}
-	s3Client := s3.New(s3.Options{HTTPClient: customClient})
-	getOutput, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
-		Bucket: aws.String("bucket"),
-		Key:    aws.String("test.txt"),
-	})
-	...
+### Example `.s3cfg`
+
+Edit your `~/.s3cfg` file to include these lines (replace with your actual gateway endpoint):
+
+```ini
+host_base = 10.10.0.1:51080/s3
+host_bucket = 10.10.0.1:51080/s3/%(bucket)
+access_key = FAKEKEY
+secret_key = FAKESECRET
+signature_v2 = False
+use_https = False
+```
+
+This configuration allows you to run `s3cmd` commands without having to specify the host parameters each time.
+
+### Multipart uploads with s3cmd
+
+For large files, use multipart uploads to improve reliability and performance:
+
+```console
+s3cmd put ./large.bin s3://demo --multipart-chunk-size-mb=8
+```
+
+The optimal chunk size depends on your network conditions and file size, but 8-16MB chunks work well for most cases.
+
+### Authentication (JWT) tips
+
+If AIS Authentication is enabled, you'll need to attach a JWT token manually because `s3cmd`'s signer overwrites the `--add-header` option:
+
+```diff
+# s3cmd/S3/S3.py (single‑line patch)
+-        pass
++        self.headers["Authorization"] = "Bearer <token>"
+```
+
+Replace `<token>` with your actual JWT token. This modification ensures the token is included in every request.
+
+---
+
+## Supported Operations
+
+### PUT / GET / HEAD
+
+Regular verbs work with `aws`, `s3cmd`, or the native `ais` CLI:
+
+```console
+# Using aws CLI
+aws --endpoint-url "$AWS_EP" s3api put-object --bucket demo --key obj --body file.txt
+aws --endpoint-url "$AWS_EP" s3api get-object --bucket demo --key obj output.txt
+aws --endpoint-url "$AWS_EP" s3api head-object --bucket demo --key obj
+# Output:
+# {
+#     "AcceptRanges": "bytes",
+#     "LastModified": "Wed, 14 May 2025 14:30:22 GMT",
+#     "ContentLength": 1024,
+#     "ETag": "\"a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6\"",
+#     "ContentType": "text/plain"
+# }
+
+# Native AIS CLI equivalents
+ais put file.txt ais://demo/obj
+ais get ais://demo/obj output.txt
+ais object show ais://demo/obj
+```
+
+### Range reads
+
+S3 API supports byte range requests for partial object downloads:
+
+```console
+aws s3api get-object \
+  --range bytes=0-99 \
+  --bucket demo --key README.md \
+  part.txt \
+  --endpoint-url "$AWS_EP"
+# Output:
+# {
+#     "AcceptRanges": "bytes",
+#     "LastModified": "Wed, 14 May 2025 14:30:22 GMT",
+#     "ContentRange": "bytes 0-99/10493",
+#     "ContentLength": 100,
+#     "ETag": "\"a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6\"",
+#     "ContentType": "text/plain"
+# }
+```
+
+This would download only the first 100 bytes of the file.
+
+---
+
+### Multipart uploads with aws CLI
+
+```console
+# 1 — initiate
+aws s3api create-multipart-upload --bucket demo --key big \
+  --endpoint-url "$AWS_EP"
+# Output:
+# {
+#     "Bucket": "demo",
+#     "Key": "big",
+#     "UploadId": "xu3DvVzJK"
+# }
+
+# 2 — upload parts individually
+aws s3api upload-part --bucket demo --key big \
+  --part-number 1 --body part1.bin \
+  --upload-id "YOUR-UPLOAD-ID" \
+  --endpoint-url "$AWS_EP"
+# Repeat for each part, incrementing the part-number
+# Output:
+# {
+#     "ETag": "\"a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6\""
+# }
+
+# 3 — complete (requires a JSON file listing all parts)
+aws s3api complete-multipart-upload --bucket demo --key big \
+  --upload-id "YOUR-UPLOAD-ID" --multipart-upload file://parts.json \
+  --endpoint-url "$AWS_EP"
+```
+
+Example `parts.json`:
+```json
+{
+  "Parts": [
+    {
+      "PartNumber": 1,
+      "ETag": "etag-from-upload-part-response"
+    },
+    {
+      "PartNumber": 2,
+      "ETag": "etag-from-upload-part-response"
+    }
+  ]
 }
 ```
 
-## Quick example using Internet Browser
+### Presigned S3 requests
 
-AIStore gateways provide HTTP/HTTPS interface, which is also why it is maybe sometimes convenient (and very fast) to use your Browser to execute `GET` type queries.
+Presigned URLs allow temporary access to objects without sharing credentials:
 
-Specifically - since in this document we are talking about s3-compatible API - here's an example that utilizes `/s3` endpoint to list all buckets:
+1. Enable feature:
+
+   ```console
+   ais config cluster features S3-Presigned-Request
+   ```
+2. Generate URL (typically done on the system with AWS credentials):
+
+   ```console
+   aws s3 presign s3://demo/README.md --endpoint-url https://s3.amazonaws.com
+   # Returns a URL with authentication parameters in the query string
+   ```
+3. Replace the host with `AIS_ENDPOINT/s3` and add header when using path style:
+
+   ```console
+   curl -H 'ais-s3-signed-request-style: path' '<PRESIGNED_URL>' -o README.md
+   ```
+
+This allows AIS to handle the authenticated S3 request on behalf of the client.
+
+---
+
+## S3 Bucket Inventory Support
+
+### Why inventories matter
+
+For buckets with millions of objects, using S3's `ListObjectsV2` API can be slow, expensive, and time-consuming. S3 Bucket Inventory provides a manifest file (CSV/ORC/Parquet) of all objects that AIS can process instantly. This is crucial for efficiently working with very large buckets.
+
+For example, listing a 10-million object bucket could take:
+- Without inventory: Minutes of API calls, potentially costing money
+- With inventory: Seconds to parse a pre-generated manifest file
+
+---
+
+### Enabling inventory via AWS CLI
+
+```console
+aws s3api put-bucket-inventory-configuration \
+  --bucket webdataset \
+  --id ais-scan \
+  --inventory-configuration file://inventory.json
+```
+
+**`inventory.json`**
+
+```json
+{
+  "Id": "ais-scan",
+  "IsEnabled": true,
+  "IncludedObjectVersions": "All",
+  "Destination": {
+    "S3BucketDestination": {
+      "Bucket": "arn:aws:s3:::webdataset-inv",
+      "Format": "CSV"
+    }
+  },
+  "Prefix": "",
+  "Schedule": { "Frequency": "Daily" }
+}
+```
+
+### Managing inventories with helper scripts
+
+AIS repo ships ready‑to‑use wrappers in `scripts/s3/`:
+
+| Script                       | Purpose                    |
+| ---------------------------- | -------------------------- |
+| `put-bucket-inventory.sh`    | create/update an inventory |
+| `list-bucket-inventory.sh`   | list existing configs      |
+| `delete-bucket-inventory.sh` | disable inventory          |
+| `get-bucket-inventory.sh`    | show detailed info for a specific inventory |
+| `put-bucket-policy.sh`       | grant access for S3 to store inventory files |
+
+These scripts simplify inventory management with minimal required parameters.
+
+---
+
+### Inventory XML example
 
 ```xml
-<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01">
-  <Owner>
-     <ID>1</ID>
-     <DisplayName>ListAllMyBucketsResult</DisplayName>
-  </Owner>
-<Buckets>
-  <Bucket>
-    <Name>bucket-111</Name>
-    <CreationDate>2022-08-23T09:16:40-04:00</CreationDate>
-    <String>Provider: ais</String>
-  </Bucket>
-  <Bucket>
-    <Name>bucket-222</Name>
-    <CreationDate>2022-08-23T13:47:00-04:00</CreationDate>
-    <String>Provider: ais</String>
-  </Bucket>
-  <Bucket>
-  <Name>bucket-222</Name>
-    <CreationDate>2022-08-23T13:21:21-04:00</CreationDate>
-    <String>Provider: aws (WARNING: {bucket-222, Provider: ais} and {bucket-222, Provider: aws} share the same name)</String>
-  </Bucket>
-  <Bucket>
-    <Name>bucket-333</Name>
-    <CreationDate>2022-08-23T13:26:32-04:00</CreationDate>
-    <String>Provider: gcp</String>
-  </Bucket>
-</Buckets>
-</ListBucketResult>
+<InventoryConfiguration>
+  <Id>ais-scan</Id>
+  <IsEnabled>true</IsEnabled>
+  <IncludedObjectVersions>All</IncludedObjectVersions>
+  <Schedule>
+    <Frequency>Daily</Frequency>
+  </Schedule>
+  <Destination>
+    <S3BucketDestination>
+      <Bucket>arn:aws:s3:::webdataset-inv</Bucket>
+      <Format>CSV</Format>
+    </S3BucketDestination>
+  </Destination>
+</InventoryConfiguration>
 ```
 
-> Notice the "sharing the same name" warning above. For background, please refer to [backend providers](/docs/providers.md).
-
-> In re `/s3 endpoint` mentioned above, the corresponding request URL in the browser's address bar would look something like `ais-gateway-host:port/s3`.
-
-## `s3cmd` Command Line
-
-For a detailed `s3cmd` setup guide, please refer to this [documentation](/docs/s3cmd.md).
-
-Below is a table outlining some key `s3cmd` options that can be particularly useful when working with AIStore:
-
-| Option | Description | Example |
-| --- | --- | --- |
-| `--host` | Set the AIS cluster endpoint | `--host=10.10.0.1:51080/s3` |
-| `--host-bucket` | Define the URL path for accessing a bucket in the AIS cluster | `--host-bucket="10.10.0.1:51080/s3/"` |
-| `--no-ssl` | Use HTTP instead of HTTPS | |
-| `--no-check-certificate` | Disable certificate verification (useful for self-signed certificates) | |
-| `--region` | Specify the region for a bucket | `--region=us-west-1` |
-
-## ETag and MD5
-
-When you are reading an object from Amazon S3, the response will contain [ETag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag).
-
-Amazon S3 ETag is the object's checksum. Amazon computes those checksums using `md5`.
-
-On the other hand, the default checksum type that AIS uses is [xxhash](http://cyan4973.github.io/xxHash/).
-
-Therefore, it is advisable to:
-
-1. keep in mind this dichotomy, and
-2. possibly, configure AIS bucket in question with `md5`.
-
-Here's a simple scenario:
-
-Say, an S3-based client performs a GET or a PUT operation and calculates `md5` of an object that's being GET (or PUT). When the operation finishes, the client then compares the checksum with the `ETag` value in the response header. If checksums differ, the client raises the error "MD5 sum mismatch."
-
-To enable MD5 checksum at bucket creation time:
+Once inventory lands (typically after 24 hours for the first run), you can instantly list bucket contents:
 
 ```console
-$ ais create ais://bck --props="checksum.type=md5"
-"ais://bck2" bucket created
-
-$ ais show bucket ais://bck | grep checksum
-checksum         Type: md5 | Validate: ColdGET
+ais ls s3://webdataset --all --inventory
 ```
 
-Or, you can change bucket's checksum type at any later time:
+This is dramatically faster than listing objects via the standard API calls, particularly for large buckets.
 
-```console
-$ ais bucket props ais://bck checksum.type=md5
-Bucket props successfully updated
-"checksum.type" set to:"md5" (was:"xxhash")
+---
+
+## Compatibility Matrix
+
+| S3 feature              | AIS         | s3cmd            | aws CLI                |
+| ----------------------- | ----------- | ---------------- | ---------------------- |
+| Create/Destroy bucket   | ✅           | ✅ `mb/rb`        | ✅ `mb/rb`              |
+| PUT / GET / HEAD object | ✅           | ✅ `put/get/info` | ✅ `cp/head`            |
+| Range reads             | ✅           | —                | ✅ `get-object --range` |
+| Multipart upload        | ✅           | ✅                | ✅                      |
+| Copy object             | S3 API only | partial          | ✅                      |
+| Inventory listing       | ✅           | —                | —                      |
+| Authentication          | JWT         | modified         | ✅                      |
+| Presigned URLs          | ✅           | —                | ✅                      |
+
+> **Not yet supported**: Regions, CORS, Website hosting, CloudFront; full ACL parity (AIS uses its own ACL model).
+
+---
+
+## Boto3 Examples
+
+Python applications can use [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) (the AWS SDK for Python) to connect to AIStore. Since AIStore implements S3 API compatibility, most standard Boto3 S3 operations work with minimal changes.
+
+### Prerequisites
+
+For Boto3 to work with AIStore, you need to patch Boto3's redirect handling:
+
+```python
+# Import the patch before using boto3
+from aistore.botocore_patch import botocore
+import boto3
 ```
 
-Please note that changing the bucket's checksum does not trigger updating (existing) checksums of *existing* objects - only new writes will be checksummed with the newly configured checksum.
+This patch modifies Boto3's HTTP client behavior to handle AIStore's redirect-based load balancing. For details, see the [Boto3 compatibility documentation](/python/aistore/botocore_patch/README.md).
 
-## Last Modification Time
+### Client Initialization
 
-AIS tracks object last *access* time and returns it as `LastModified` for S3 clients. If an object has never been accessed, which can happen when AIS bucket uses a Cloud bucket as a backend one, zero Unix time is returned.
-
-Example when access time is undefined (not set):
-
-```console
-# create AIS bucket with AWS backend bucket (for supported backends and details see docs/providers.md)
-$ ais create ais://bck
-$ ais bucket props ais://bck backend_bck=aws://bckaws
-$ ais bucket props ais://bck checksum.type=md5
-
-# put an object using native ais API and note access time (same as creation time in this case)
-$ ais put object.txt ais://bck/obj-ais
-
-# put object with s3cmd - the request bypasses ais, so no access time in the `ls` results
-$ s3cmd put object.txt s3://bck/obj-aws --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
-
-$ ais ls ais://bck --props checksum,size,atime
-NAME            CHECKSUM                                SIZE            ATIME
-obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
-obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
-
-$ s3cmd ls s3://bck --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
-2020-12-08 11:25     71671   s3://test/obj-ais
-1969-12-31 16:00     71671   s3://test/obj-aws
+```python
+client = boto3.client(
+    "s3",
+    region_name="us-east-1",  # Any valid region will work
+    endpoint_url="http://localhost:8080/s3",  # Your AIStore endpoint
+    aws_access_key_id="YOUR_ACCESS_KEY",      # Can be dummy values when
+    aws_secret_access_key="YOUR_SECRET_KEY",  # AIS auth is disabled
+)
 ```
 
-> See related: [multipart upload](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/s3-mpt-large-files.sh) test and usage comments inline.
+### Basic Bucket Operations
 
-## Multipart Upload using `aws`
+```python
+# Create a bucket
+client.create_bucket(Bucket="my-bucket")
 
-Example below reproduces the following [Amazon Knowledge-Center instruction](https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli/).
+# List all buckets
+response = client.list_buckets()
+bucket_names = [bucket["Name"] for bucket in response["Buckets"]]
+print(f"Existing buckets: {bucket_names}")
 
-> Used `aws-cli/1.15.58 Python/3.5.2 Linux/5.15.0-46-generic botocore/1.10.57`
-
-> Compare with (user-friendly and easy-to-execute) multipart examples from the [s3cmd companion doc](/docs/s3cmd.md).
-
-But first and separately, we create `ais://` bucket and configure it with MD5:
-
-```console
-$ ais create ais://abc
-"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)
-$ ais bucket props set ais://abc checksum.type=md5
-Bucket props successfully updated
-"checksum.type" set to: "md5" (was: "xxhash")
+# Delete a bucket
+client.delete_bucket(Bucket="my-bucket")
 ```
 
-Next, the uploading sequence:
+### Object Operations
 
-```console
-# 1. initiate multipart upload
-$ aws s3api create-multipart-upload --bucket abc --key large-test-file --endpoint-url http://localhost:8080/s3                                   {
-    "Key": "large-test-file",
-    "UploadId": "uu3DuXsJG",
-    "Bucket": "abc"
-}
+```python
+# Upload an object
+client.put_object(
+    Bucket="my-bucket",
+    Key="sample.txt",
+    Body="Hello, AIStore!"
+)
+
+# Download an object
+response = client.get_object(Bucket="my-bucket", Key="sample.txt")
+content = response["Body"].read().decode("utf-8")
+print(f"Object content: {content}")
+
+# Delete an object
+client.delete_object(Bucket="my-bucket", Key="sample.txt")
 ```
 
-```console
-# 2. upload the first part (w/ upload-id copied from the previous command)
-$ aws s3api upload-part --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --part-number 1 --body README.md --upload-id uu3DuXsJG
-{
-    "ETag": "9bc8111718e22a34f9fa6a099da1f3df"
-}
+### Multipart Upload Example
+
+For large files, you can use multipart uploads:
+
+```python
+import boto3
+from aistore.botocore_patch import botocore
+
+# Initialize the client
+client = boto3.client(
+    "s3",
+    region_name="us-east-1",
+    endpoint_url="http://localhost:8080/s3",
+    aws_access_key_id="FAKEKEY",
+    aws_secret_access_key="FAKESECRET",
+)
+
+# Create a bucket if it doesn't exist
+bucket_name = "multipart-demo"
+try:
+    client.head_bucket(Bucket=bucket_name)
+except:
+    client.create_bucket(Bucket=bucket_name)
+
+# Prepare data for multipart upload
+object_key = "large-file.txt"
+data = "x" * 10_000_000  # 10MB of data
+chunk_size = 5_000_000   # 5MB chunks
+chunks = [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
+
+# Initiate multipart upload
+response = client.create_multipart_upload(Bucket=bucket_name, Key=object_key)
+upload_id = response["UploadId"]
+
+# Upload individual parts
+parts = []
+for i, chunk in enumerate(chunks):
+    part_num = i + 1  # Part numbers start at 1
+    response = client.upload_part(
+        Body=chunk,
+        Bucket=bucket_name,
+        Key=object_key,
+        PartNumber=part_num,
+        UploadId=upload_id,
+    )
+    parts.append({"PartNumber": part_num, "ETag": response["ETag"]})
+
+# Complete the multipart upload
+client.complete_multipart_upload(
+    Bucket=bucket_name,
+    Key=object_key,
+    UploadId=upload_id,
+    MultipartUpload={"Parts": parts}
+)
+
+# Verify upload was successful
+response = client.head_object(Bucket=bucket_name, Key=object_key)
+print(f"Successfully uploaded {response['ContentLength']} bytes")
 ```
 
-```console
-# 3. upload the second, etc. parts
-$ aws s3api upload-part --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --part-number 2 --body LICENSE --upload-id uu3DuXsJG
-{
-    "ETag": "f70a21a0c5fa26a93820b0bef5be7619"
-}
-```
+---
 
-```console
-# 4. list active upload by its ID (upload-id)
-$ aws s3api list-parts --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --upload-id uu3DuXsJG                          {
-    "Owner": null,
-    "StorageClass": null,
-    "Initiator": null,
-    "Parts": [
-        {
-            "PartNumber": 1,
-            "ETag": "9bc8111718e22a34f9fa6a099da1f3df",
-            "Size": 10725
-        },
-        {
-            "PartNumber": 2,
-            "ETag": "f70a21a0c5fa26a93820b0bef5be7619",
-            "Size": 1075
-        }
-    ]
-}
-```
+## FAQs & Troubleshooting
 
-And finally:
+| Symptom                                        | Cause & Fix                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| `MD5 sum mismatch`                             | Set bucket checksum to `md5` with `ais bucket props set BUCKET checksum.type=md5` |
+| `SSL certificate problem`                      | Self-signed cert ➜ use `--no-ssl` or `--insecure`                  |
+| Presigned URL fails                            | Add header `ais-s3-signed-request-style: path` for path‑style URLs |
+| `Authorization header missing` (s3cmd + AuthN) | Patch `S3.py` to include JWT as shown in [Authentication](#authentication-jwt-tips) |
+| Upload fails with timeout                      | Try with smaller multipart chunks (e.g., `--multipart-chunk-size-mb=5`) |
+| Unable to list large S3 bucket                 | Use [bucket inventory](#s3-bucket-inventory-support) to efficiently list contents |
+| Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch]((https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md)) for redirects |
 
-```console
-# 5. complete upload, and be done
-$ aws s3api complete-multipart-upload --endpoint-url http://localhost:8080/s3 --bucket abc --key large-test-file --multipart-upload file://up.json  --upload-id uu3DuXsJG
-{
-    "Key": "large-test-file",
-    "Bucket": "abc",
-    "ETag": "799e69a43a00794a86eebffb5fbaf4e6-2"
-}
-$ s3cmd ls s3://abc
-2022-08-31 20:36        11800  s3://abc/large-test-file
-```
+---
 
-Notice `file://up.json` in the `complete-multipart-upload` command. It simply contains the "Parts" section(**) copied from the "list active upload" step (above).
+## Further Reading
 
-> (**) with no sizes
-
-See https://aws.amazon.com/premiumsupport/knowledge-center/s3-multipart-upload-cli for details.
-
-
-## More Usage Examples
-
-Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. To access an AIS bucket, one has to pass the correct `endpoint` to the client. The endpoint is the primary proxy URL and `/s3` path, e.g, `http://10.0.0.20:51080/s3`.
-
-### Create bucket
-
-```shell
-# check that AIS cluster has no buckets, and create a new one
-$ ais ls ais://
-AIS Buckets (0)
-$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
-make_bucket: bck1
-
-# list buckets via native CLI
-$ ais ls ais://
-AIS Buckets (1)
-```
-
-### Remove bucket
-
-```shell
-$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
-2020-04-21 16:21:08 bck1
-
-$ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
-remove_bucket: aws1
-$ s3cmd --host http://localhost:51080/s3 s3 ls s3://
-```
-
-### Upload large object
-
-In this section, we use all 3 (three) clients:
-
-1. `s3cmd` client pre-configured to communicate with (and via) AIS
-2. `aws` CLI that sends requests directly to AWS S3 standard endpoint (with no AIS in-between)
-3. and, finally, native AIS CLI
-
-```shell
-# 1. Upload via `s3cmd` => `aistore`
-
-$ s3cmd put $(which aisnode) s3://abc --multipart-chunk-size-mb=8
-upload: 'bin/aisnode' -> 's3://abc/aisnode'  [part 1 of 10, 8MB] [1 of 1]
- 8388608 of 8388608   100% in    0s   233.84 MB/s  done
-...
- 8388608 of 8388608   100% in    0s   234.19 MB/s  done
-upload: 'bin/aisnode' -> 's3://abc/aisnode'  [part 10 of 10, 5MB] [1 of 1]
- 5975140 of 5975140   100% in    0s   233.39 MB/s  done
-```
-
-```shell
-# 2. View object metadata via native CLI
-$ ais show object s3://abc/aisnode --all
-PROPERTY         VALUE
-atime            30 Aug 54 17:47 LMT
-cached           yes
-checksum         md5[a38030ea13e1b59c...]
-copies           1 [/tmp/ais/mp3/11]
-custom           [source:aws ETag:"e3be082db698af7c15b0502f6a88265d-16" version:3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2]
-ec               -
-location         t[MKpt8091]:mp[/tmp/ais/mp3/11, nvme0n1]
-name             s3://abc/aisnode
-size             77.70MiB
-version          3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2
-```
-
-```shell
-# 3. View object metadata via `aws` CLI => directly to AWS (w/ no aistore in-between):
-$ aws s3api head-object --bucket abc --key aisnode
-{
-    "LastModified": "Tue, 20 Dec 2022 17:43:16 GMT",
-    "ContentLength": 81472612,
-    "Metadata": {
-        "x-amz-meta-ais-cksum-type": "md5",
-        "x-amz-meta-ais-cksum-val": "a38030ea13e1b59c529e888426001eed"
-    },
-    "ETag": "\"e3be082db698af7c15b0502f6a88265d-16\"",
-    "AcceptRanges": "bytes",
-    "ContentType": "binary/octet-stream",
-    "VersionId": "3QEKSH7LowuRB2OnUHjWCFsp58aZpsC2"
-}
-```
-
-```shell
-# 4. Finally, view object metadata via `s3cmd` => `aistore`
-$ s3cmd info s3://abc/aisnode
-s3://abc/aisnode (object):
-   File size: 81472612
-   Last mod:  Fri, 30 Aug 1754 22:43:41 GMT
-   MIME type: none
-   Storage:   STANDARD
-   MD5 sum:   a38030ea13e1b59c529e888426001eed
-   SSE:       none
-   Policy:    none
-   CORS:      none
-   ACL:       none
-```
-
-## TensorFlow Demo
-
-Setup `S3_ENDPOINT` and `S3_USE_HTTPS` environment variables prior to running a TensorFlow job. `S3_ENDPOINT` must be primary proxy hostname:port and URL path `/s3` (e.g., `S3_ENDPOINT=10.0.0.20:51080/s3`). Secure HTTP is disabled by default, so `S3_USE_HTTPS` must be `0`.
-
-Example running a training task:
-
-```
-S3_ENDPOINT=10.0.0.20:51080/s3 S3_USE_HTTPS=0 python mnist.py
-```
-
-TensorFlow on AIS training screencast:
-
-![TF training in action](images/ais-s3-tf.gif)
-
-## S3 Compatibility
-
-AIStore fully supports [Amazon S3 API](https://docs.aws.amazon.com/s3/index.html) with a few exceptions documented and detailed below. The functionality has been tested using native Amazon S3 clients:
-
-* [TensorFlow](https://docs.w3cub.com/tensorflow~guide/deploy/s3)
-* [s3cmd](https://github.com/s3tools/s3cmd)
-* [aws CLI](https://aws.amazon.com/cli)
-
-Speaking of command-line tools, in addition to its own native [CLI](/docs/cli.md) AIStore also supports Amazon's `s3cmd` and `aws` CLIs. Python-based Amazon S3 clients that will often use Amazon Web Services (AWS) Software Development Kit for Python called [Boto3](https://github.com/boto/boto3) are also supported - see a note below on [AIS <=> Boto3 compatibility](#boto3-compatibility).
-
-By way of quick summary, Amazon S3 supports the following API categories:
-
-- Create and delete a bucket
-- HEAD bucket
-- Get a list of buckets
-- PUT, GET, HEAD, and DELETE objects
-- Get a list of objects in a bucket (important options include name prefix and page size)
-- Copy object within the same bucket or between buckets
-- Multi-object deletion
-- Get, enable, and disable bucket versioning
-
-and a few more. The following table summarizes S3 APIs and provides the corresponding AIS (native) CLI, as well as [s3cmd](https://github.com/s3tools/s3cmd) and [aws CLI](https://aws.amazon.com/cli) examples (along with comments on limitations, if any).
-
-> See also: a note on [AIS <=> Boto3 compatibility](#boto3-compatibility).
-
-### Supported S3
-
-| API | AIS CLI and comments | [s3cmd](https://github.com/s3tools/s3cmd) | [aws CLI](https://aws.amazon.com/cli) |
-| --- | --- | --- | --- |
-| Create bucket | `ais create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
-| Head bucket | `ais bucket show ais://bck` | `s3cmd info s3://bck` | `aws s3api head-bucket` |
-| Destroy bucket (aka "remove bucket") | `ais bucket rm ais://bck` | `s3cmd rb`, `aws s3 rb` ||
-| List buckets | `ais ls ais://` (or, same: `ais ls ais:`) | `s3cmd ls s3://` | `aws s3 ls s3://` |
-| PUT object | `ais put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..` |
-| GET object | `ais get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..` |
-| GET object(range) | `ais get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..` |
-| HEAD object | `ais object show ais://bck/obj` | `s3cmd info s3://bck/obj` | `aws s3api head-object` |
-| List objects in a bucket | `ais ls ais://bck` | `s3cmd ls s3://bucket-name/` | `aws s3 ls s3://bucket-name/` |
-| Copy object in a given bucket or between buckets | S3 API is fully supported; we have yet to implement our native CLI to copy objects (we do copy buckets, though) | **Limited support**: `s3cmd` performs GET followed by PUT instead of AWS API call | `aws s3api copy-object ...` calls copy object API |
-| Last modification time | AIS always stores only one - the last - version of an object. Therefore, we track creation **and** last access time but not "modification time". | - | - |
-| Bucket creation time | `ais bucket show ais://bck` | `s3cmd` displays creation time via `ls` subcommand: `s3cmd ls s3://` | - |
-| Versioning | AIS tracks and updates versioning information but only for the **latest** object version. Versioning is enabled by default; to disable, run: `ais bucket props ais://bck versioning.enabled=false` | - | `aws s3api get/put-bucket-versioning` |
-| ACL | Limited support; AIS provides an extensive set of configurable permissions - see `ais bucket props ais://bck access` and `ais auth` and the corresponding documentation | - | - |
-| Multipart upload(**) | - (added in v3.12) | `s3cmd put ... s3://bck --multipart-chunk-size-mb=5` | `aws s3api create-multipart-upload --bucket abc ...` |
-
-> (**) With the only exception of [UploadPartCopy](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html) operation.
-
-### Unsupported S3
-
-* Amazon Regions (us-east-1, us-west-1, etc.)
-* Retention Policy
-* CORS
-* Website endpoints
-* CloudFront CDN
-* S3 ACLs (table above)
-
-## Boto3 Compatibility
-
-Arguably, extremely few HTTP client-side libraries do _not_ follow [HTTP redirects](https://www.rfc-editor.org/rfc/rfc7231#page-54), and Amazon's [botocore](https://github.com/boto/botocore), used by [Boto3](https://github.com/boto/boto3), just happens to be one of those (libraries).
-
-AIStore provides a patch to modify `botocore` and `boto3` behavior, making them compatible with AIStore’s redirect-based load balancing.
-
-To use `boto3` or `botocore` with AIStore, refer [here](/python/aistore/botocore_patch/README.md) for detailed instructions.
-
-## Amazon CLI tools
-
-As far as existing Amazon-native CLI tools, `s3cmd` would be the preferred and recommended option. Please see [`s3cmd` readme](/docs/s3cmd.md) for usage examples and a variety of topics, including:
-
-- [`s3cmd` Configuration](/docs/s3cmd.md#s3cmd-configuration)
-- [Getting Started](/docs/s3cmd.md#getting-started)
-  - [1. AIS Endpoint](/docs/s3cmd.md#1-ais-endpoint)
-  - [2. How to have `s3cmd` calling AIS endpoint](/docs/s3cmd.md#2-how-to-have-s3cmd-calling-ais-endpoint)
-  - [3. Alternatively](/docs/s3cmd.md#3-alternatively)
-  - [4. Note and, possibly, update AIS configuration](/docs/s3cmd.md#4-note-and-possibly-update-ais-configuration)
-  - [5. Create bucket and PUT/GET objects using `s3cmd`](/docs/s3cmd.md#5-create-bucket-and-putget-objects-using-s3cmd)
-  - [6. Multipart upload using `s3cmd`](/docs/s3cmd.md#6-multipart-upload-using-s3cmd)
-
+* [Backend Providers](/docs/overview.md#backend-provider)
+* [AIS CLI reference](/docs/cli.md)
+* [Auth & ACL](/docs/auth.md)
+* [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
+* [Boto3 compatibility](https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md)

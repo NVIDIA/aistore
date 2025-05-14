@@ -267,7 +267,7 @@ AIS (`ais://`) buckets can be created using native HTTP-based ([Go](https://gith
 New ais buckets must be given a unique name that does not duplicate any existing ais bucket.
 
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
-For details, see [S3 compatibility](s3compat.md#s3-compatibility).
+For details, see [S3 compatibility](/docs/s3compat.md).
 
 ## CLI: create, rename and, destroy ais bucket
 

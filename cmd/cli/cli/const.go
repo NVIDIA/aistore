@@ -630,11 +630,11 @@ var (
 
 	useInventoryFlag = cli.BoolFlag{
 		Name: "inventory",
-		Usage: "List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance\n" +
+		Usage: "List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance\n" +
 			indent4 + "\tboost when used with very large s3 buckets; e.g. usage:\n" +
 			indent4 + "\t  1) 'ais ls s3://abc --inventory'\n" +
 			indent4 + "\t  2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'\n" +
-			indent4 + "\t(see also: docs/s3inventory.md)",
+			indent4 + "\t(see also: docs/s3compat.md)",
 	}
 	invNameFlag = cli.StringFlag{
 		Name:  "inv-name", // compare w/ HdrInvName

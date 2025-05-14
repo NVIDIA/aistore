@@ -345,11 +345,11 @@ OPTIONS:
                           use the job's UUID to query the results interactively
    --inv-id value         Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
    --inv-name value       Bucket inventory name (optional; system default name is '.inventory')
-   --inventory            List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+   --inventory            List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance
                           boost when used with very large s3 buckets; e.g. usage:
                             1) 'ais ls s3://abc --inventory'
                             2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
-                          (see also: docs/s3inventory.md)
+                          (see also: docs/s3compat.md)
    --limit value          The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
                           e.g.:
                           - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects

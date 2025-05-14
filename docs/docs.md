@@ -26,7 +26,7 @@ redirect_from:
 - [REST API](/docs/http_api.md)
   - [Easy URL](https://github.com/NVIDIA/aistore/blob/main/docs/easy_url.md)
 - Amazon S3
-  - [`s3cmd` client](/docs/s3cmd.md)
+  - [`s3cmd` client](/docs/s3compat.md#quick-start-with-s3cmd)
   - [S3 compatibility](/docs/s3compat.md)
   - [Presigned S3 requests](/docs/s3compat.md#presigned-s3-requests)
   - [Boto3 support](https://github.com/NVIDIA/aistore/tree/main/python/aistore/botocore_patch)

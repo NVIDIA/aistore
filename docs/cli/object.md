@@ -119,11 +119,11 @@ OPTIONS:
    --extract, -x        Extract all files from archive(s)
    --inv-id value       Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
    --inv-name value     Bucket inventory name (optional; system default name is '.inventory')
-   --inventory          List objects using _bucket inventory_ (docs/s3inventory.md); requires s3:// backend; will provide significant performance
+   --inventory          List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance
                         boost when used with very large s3 buckets; e.g. usage:
                           1) 'ais ls s3://abc --inventory'
                           2) 'ais ls s3://abc --inventory --paged --prefix=subdir/'
-                        (see also: docs/s3inventory.md)
+                        (see also: docs/s3compat.md)
    --latest             Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
                         from the associated remote bucket;
                         the option provides operation-level control over object versioning (and version synchronization)
