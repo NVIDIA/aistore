@@ -1,14 +1,17 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-import requests
+from requests.exceptions import ChunkedEncodingError, ConnectionError, ReadTimeout
+from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from io import BufferedIOBase, BufferedWriter
 from typing import Optional
 from overrides import override
 from aistore.sdk.obj.content_iterator import ContentIterator
-from aistore.sdk.obj.obj_file.utils import handle_chunked_encoding_error
 from aistore.sdk.utils import get_logger
+from aistore.sdk.obj.obj_file.utils import (
+    handle_broken_stream,
+)
 
 logger = get_logger(__name__)
 
@@ -22,9 +25,9 @@ class ObjectFileReader(BufferedIOBase):
     data is insufficient to satisfy the request, the `read()` method fetches additional chunks from the provided
     `content_iterator` as needed, until the requested size is fulfilled or the end of the stream is reached.
 
-    In case of stream interruptions (e.g., `ChunkedEncodingError`), the `read()` method automatically retries and
-    resumes fetching data from the last successfully retrieved chunk. The `max_resume` parameter controls how many
-    retry attempts are made before an error is raised.
+    In case of unexpected stream interruptions (e.g. `ChunkedEncodingError`, `ConnectionError`) or timeouts (e.g.
+    `ReadTimeout`), the `read()` method automatically retries and resumes fetching data from the last successfully
+    retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
     Args:
         content_iterator (ContentIterator): An iterator that can fetch object data from AIS in chunks.
@@ -33,11 +36,14 @@ class ObjectFileReader(BufferedIOBase):
 
     def __init__(self, content_iterator: ContentIterator, max_resume: int):
         self._content_iterator = content_iterator
-        self._iterable = self._content_iterator.iter()
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
-        self._remainder = None  # Remainder from the last chunk as a memoryview
-        self._resume_position = 0  # Tracks the current position in the stream
-        self._resume_total = 0  # Tracks the number of resume attempts
+        self._reset()
+
+    def _reset(self):
+        self._iterable = self._content_iterator.iter()
+        self._remainder = None
+        self._resume_position = 0
+        self._resume_total = 0
         self._closed = False
 
     @property
@@ -47,11 +53,7 @@ class ObjectFileReader(BufferedIOBase):
 
     @override
     def __enter__(self):
-        self._iterable = self._content_iterator.iter()
-        self._remainder = None
-        self._resume_position = 0
-        self._resume_total = 0
-        self._closed = False
+        self._reset()
         return self
 
     @override
@@ -101,12 +103,16 @@ class ObjectFileReader(BufferedIOBase):
             while size:
                 try:
                     chunk = memoryview(next(self._iterable))
-                except StopIteration:
-                    # End of stream, exit loop
-                    break
-                except requests.exceptions.ChunkedEncodingError as err:
-                    # Handle ChunkedEncodingError and attempt to resume the stream
-                    self._iterable, self._resume_total = handle_chunked_encoding_error(
+                except (
+                    ConnectionError,
+                    ChunkedEncodingError,
+                    ProtocolError,
+                    ReadTimeout,
+                    ReadTimeoutError,
+                ) as err:
+                    # If the stream is broken (e.g. TCP reset, dropped connection, malformed or incomplete chunk)
+                    # or there is a timeout, retry with a new iterator from the last known position
+                    self._iterable, self._resume_total = handle_broken_stream(
                         self._content_iterator,
                         self._resume_position,
                         self._resume_total,
@@ -114,6 +120,9 @@ class ObjectFileReader(BufferedIOBase):
                         err,
                     )
                     continue
+                except StopIteration:
+                    # End of stream, exit loop
+                    break
 
                 # Track the position of the stream by adding the length of each fetched chunk
                 self._resume_position += len(chunk)

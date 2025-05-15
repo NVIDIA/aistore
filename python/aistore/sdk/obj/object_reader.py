@@ -98,7 +98,8 @@ class ObjectReader:
         """
         Create a read-only, non-seekable `ObjectFileReader` instance for streaming object data in chunks.
         This file-like object primarily implements the `read()` method to retrieve data sequentially,
-        with automatic retry/resumption in case of stream interruptions such as `ChunkedEncodingError`.
+        with automatic retry/resumption in case of stream interruptions (e.g. `ChunkedEncodingError`,
+        `ConnectionError`) or timeouts (e.g. `ReadTimeout`, `ConnectTimeout`).
 
         Args:
             buffer_size (int, optional): Currently unused; retained for backward compatibility and future

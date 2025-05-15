@@ -1,42 +1,14 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import Iterator, Optional, Tuple
+from typing import Iterator, Tuple
 
 from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.utils import get_logger
-from aistore.sdk.obj.obj_file.errors import (
-    ObjectFileReaderStreamError,
-    ObjectFileReaderMaxResumeError,
-)
 
 logger = get_logger(__name__)
-
-
-def reset_iterator(
-    content_iterator: ContentIterator,
-    resume_position: Optional[int] = 0,
-) -> Iterator[bytes]:
-    """
-    Return a new iterator for establishing an object stream and reading chunks of data from
-    byte position `resume_position`.
-
-    Args:
-        content_iterator (ContentIterator): An instance of `ContentIterator` to read data from.
-        resume_position (int, optional): The byte position to resume reading from. Defaults to 0.
-
-    Returns:
-        Iterator[bytes]: An iterator to read chunks of data from the object stream.
-
-    Raises:
-        ObjectFileReaderStreamError if a connection cannot be made.
-    """
-    try:
-        return content_iterator.iter(offset=resume_position)
-    except Exception as err:
-        logger.error("Error establishing object stream: (%s)", err)
-        raise ObjectFileReaderStreamError(err) from err
 
 
 def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
@@ -60,7 +32,7 @@ def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
     return resume_total
 
 
-def handle_chunked_encoding_error(
+def handle_broken_stream(
     content_iterator: ContentIterator,
     resume_position: int,
     resume_total: int,
@@ -68,8 +40,8 @@ def handle_chunked_encoding_error(
     err: Exception,
 ) -> Tuple[Iterator[bytes], int]:
     """
-    Handle the chunked encoding error by incrementing the resume count, logging a warning,
-    and resetting the iterator from the last known position.
+    Handle the broken stream/iterator by incrementing the resume count, logging a warning,
+    and returning a newly instanatiated iterator from the last known position.
 
     Args:
         content_iterator (ContentIterator): The content iterator used to read the data.
@@ -93,5 +65,6 @@ def handle_chunked_encoding_error(
         resume_total,
         max_resume,
     )
-    chunk_iterator = reset_iterator(content_iterator, resume_position)
-    return chunk_iterator, resume_total
+    # Create a new iterator from the last read position
+    new_iter = content_iterator.iter(offset=resume_position)
+    return new_iter, resume_total

@@ -16,7 +16,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `urllib3.exceptions.TimeoutError` to retry config to handle additional timeout scenarios.
 
 ### Changed
+
 - Enhance object file logging to include the object path for better traceability.
+- Refactored `ObjectFileReader` to handle additional relevant stream and connection level errors and fixed incorrect assumptions about when certain errors occur (during iteration rather than iterator instantiation).
 
 ## [1.13.7] - 2025-05-06
 
