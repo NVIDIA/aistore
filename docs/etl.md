@@ -19,7 +19,7 @@ AIStore ETL is fully language- and framework-agnostic. You can deploy your own c
 
 ![ETL Inline & Offline Transformation Flow](assets/ais_etl_series/etl-inline-offline.gif)
 
-Learn more about the architecture and implementation [here](/ext/etl/README.md).
+Learn more about the architecture and implementation [here](https://github.com/NVIDIA/aistore/tree/main/ext/etl).
 
 **Note:** AIStore ETL requires [Kubernetes](https://kubernetes.io).
 
@@ -52,13 +52,13 @@ Learn more about the architecture and implementation [here](/ext/etl/README.md).
 To begin using ETLs in AIStore, you'll need to deploy AIStore on a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
 
 1. **AIStore Development with Local Kubernetes**:
-   - Folder: [deploy/dev/k8s/kustomize](/deploy/dev/k8s/kustomize)
+   - Folder: [deploy/dev/k8s/kustomize](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize)
    - Intended for: AIStore development using local Kubernetes.
-   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](/deploy/dev/k8s/kustomize/README.md).
-   - Documentation: [README](/deploy/dev/k8s/kustomize/README.md)
+   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize).
+   - Documentation: [README](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize)
 
 2. **Production Deployment with Kubernetes**:
-   - Folder: [deploy/prod/k8s](/deploy/prod/k8s)
+   - Folder: [deploy/prod/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/k8s)
    - Intended for: Production use
    - How to use: Utilize the Dockerfiles in this folder to build AIS images for production deployment. For this purpose, there is a separate dedicated [repository](https://github.com/NVIDIA/ais-k8s) that contains corresponding tools, scripts, and documentation.
    - Documentation: [AIS/K8s Operator and Deployment Playbooks](https://github.com/NVIDIA/ais-k8s)
@@ -305,7 +305,7 @@ fastapi_server = MD5Server(port=8000)
 fastapi_app = fastapi_server.app  # Expose the FastAPI app
 ```
 
-> Check the [AIStore ETL Webserver Python SDK Document](/python/aistore/sdk/etl/webserver/README.md) for more details and examples on how to fully utilize the Python webserver frameworks.
+> Check the [AIStore ETL Webserver Python SDK Document](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk/etl/webserver/README.md) for more details and examples on how to fully utilize the Python webserver frameworks.
 
 Here’s the equivalent Golang version, along with the related [`Dockerfile`](https://github.com/NVIDIA/ais-etl/blob/main/transformers/go_echo/Dockerfile) and [`dependency`](https://github.com/NVIDIA/ais-etl/tree/main/transformers/go_echo) files:
 ```go
@@ -339,7 +339,7 @@ func main() {
 }
 ```
 
-> Check the [AIStore Golang ETL Webserver Document](/ext/etl/webserver/README.md) for more details and examples on how to fully utilize the Golang webserver frameworks.
+> Check the [AIStore Golang ETL Webserver Document](https://github.com/NVIDIA/aistore/tree/main/ext/etl/webserver/README.md) for more details and examples on how to fully utilize the Golang webserver frameworks.
 
 After these setup, build a container image from the code:
 ```
