@@ -68,7 +68,7 @@ spec:
     - name: server
       image: <myrepo>/echo-etl:latest
       ports: [{ name: default, containerPort: 8000 }]
-	  command: ["./echo", "-l", "0.0.0.0", "-p", "8000"]
+      command: ["./echo", "-l", "0.0.0.0", "-p", "8000"]
       readinessProbe:
         httpGet: { path: /health, port: default }
 ```
@@ -83,17 +83,21 @@ ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
 ## Examples
 
 * **Echo**
-  HTTP, Flask, FastAPI and GO variants that return input data verbatim.
+  Returns the original input data on every request.
   [Source](https://github.com/NVIDIA/ais-etl/tree/main/transformers/go_echo)
 * **Hello World**
   Returns `b"Hello World!"` on every request.
   [Source](https://github.com/NVIDIA/ais-etl/tree/main/transformers/go_hello_world)
+* **FFmpeg**
+  Transform audio files into WAV format with control over Audio Channels (`AC`) and Audio Rate (`AR`).
+  [Source](https://github.com/NVIDIA/ais-etl/tree/main/transformers/go_FFmpeg)
 
 ## Endpoints
 
 - `GET /<object-path>`: Fetch and transform an object
 - `PUT /<object-path>`: Send object content to be transformed
 - `GET /health`: Health check
+- `/ws`: Establish WebSocket connection
 
 ## Notes
 
