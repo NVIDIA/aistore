@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "AIStore v3.28: Boost ETL Performance with Optimized Data Movement and Specialized Web Server Framework"
-date:   May 14, 2025
+date:   May 15, 2025
 author: Tony Chen, Abhishek Gaikwad
 categories: aistore etl python-sdk ffmpeg
 ---
@@ -43,8 +43,8 @@ However, building such a server from scratch involves more than just writing tra
 
 * Performing health checks
 * Communicating with AIStore targets
-* Parsing [`etl_args`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/etl.md#transform-object-with-arguments)—user-defined parameters that control the transformation behavior
-* Supporting [`direct_put`](#direct-put-optimization-faster-bucket-to-bucket-etl-transformation), which allows transformed objects to be directly written to the target bucket without going through the client
+* Parsing [`etl args`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/etl.md#transform-object-with-arguments)—user-defined parameters that control the transformation behavior
+* Supporting [`direct put`](#direct-put-optimization-faster-bucket-to-bucket-etl-transformation), which allows transformed objects to be directly written to the target bucket without going through the client
 * Managing HTTP and WebSocket protocols with proper concurrency control
 
 Selecting the right web server and communication strategy depends on factors like object size and volume, desired concurrency model, and whether you need a synchronous ([WSGI](https://peps.python.org/pep-3333/)) or asynchronous ([ASGI](https://asgi.readthedocs.io/en/latest/introduction.html)) stack. Each option has its own trade-offs.
@@ -80,11 +80,11 @@ Why FFmpeg?
 
 To expose FFmpeg as a transformation service, we used three different Python-based web servers—**FastAPI**, **Flask**, and a multi-threaded HTTP server. Each implementation was tested under multiple configurations, toggling `direct_put` (to control upload paths) and `fqn` (to apply fully qualified object naming).
 
-### Setup and Configuration
+### 1. Setup and Configuration
 
 To ensure the benchmark reflects production-like conditions, we ran all tests on a high-performance Kubernetes cluster with ample CPU, memory, and storage capacity.
 
-#### System Specs
+#### 1.1. System Specs
 
 The benchmark was run on a high-performance AIStore cluster using the following system configuration:
 * **Kubernetes Cluster**: 3 bare-metal nodes, each hosting one [proxy](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#proxy) and one [target](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#target)
@@ -92,18 +92,18 @@ The benchmark was run on a high-performance AIStore cluster using the following 
 * **CPU**: 48 cores per node
 * **Memory**: 187 GiB per node
 
-#### Transformer and Scripts
+#### 1.2. Transformer and Scripts
 
 The transformer and benchmark were implemented using the following components from the [AIS ETL](https://github.com/NVIDIA/ais-etl) repository:
 
 * [FFmpeg Transformer Source](https://github.com/NVIDIA/ais-etl/tree/main/transformers/FFmpeg)
 * [Benchmark Script](https://github.com/NVIDIA/ais-etl/blob/main/transformers/tests/test_ffmpeg.py)
 
-#### Dataset
+#### 1.3. Dataset
 
 We used the [LibriSpeech (500 Hours)](https://www.openslr.org/resources/12/train-other-500.tar.gz) dataset, which contains approximately 149,000 `.flac` audio files. Each file was converted to **stereo** at **44,100 Hz** and saved as `.wav`.
 
-### Baseline: Client-Side Transformation
+### 2. Baseline: Client-Side Transformation
 
 Before diving into AIStore-based benchmarks, it's helpful to understand the baseline: how long would this transformation take using traditional methods?
 
@@ -112,7 +112,7 @@ In typical object storage workflows, data preprocessing happens on client machin
 * **Total time:** 2 hours 15 minutes 6 seconds
 * [Local Benchmark Script](https://github.com/NVIDIA/ais-etl/blob/main/transformers/tests/local_benchmark/ffmpeg_benchmark.py)
 
-### AIStore ETL Benchmarks
+### 3. AIStore ETL Benchmarks
 
 With the baseline in place, we turned to benchmarking server-side transformation using AIStore ETL. We tested all three web servers—**FastAPI**, **Flask**, and **HTTP**—across multiple combinations of:
 
@@ -122,7 +122,7 @@ With the baseline in place, we turned to benchmarking server-side transformation
 
 Each configuration was measured for total transformation time.
 
-#### Results Summary
+#### 3.1. Results Summary
 
 The following chart summarizes performance across the different configurations:
 
@@ -156,10 +156,12 @@ The following chart summarizes performance across the different configurations:
 | http        | hpull  |       | False        |   906.59  |
 | http        | hpull  |       | True         |  1070.84  |
 
-### Performance Insights
+### 4. Performance Insights
 
-The best-performing configuration—**FastAPI** using WebSocket, with `fqn` and `direct_put` enabled, completed the entire job in just **3 minutes 39 seconds**.
+The best-performing configuration—**FastAPI** using WebSocket, with `fqn` and `direct_put` enabled—completed the entire job in just **3 minutes 39 seconds**.
 
-This is a massive improvement over the baseline, reducing the total transformation time by **\~35x**. Even beyond raw speed, AIStore ETL’s server-side design removes the need for data movement and client-side processing, allowing pipelines to scale horizontally with the cluster.
+This marks a **\~35× speedup** compared to the client-side baseline, where the same workload took over **2 hours** to finish.
 
-> **Note:** As the cluster size grows, performance scales linearly with added nodes and disks, offering even greater throughput potential.
+> ⚠️ **Caveat**: The baseline was run on a single client machine, while the AIStore benchmark used a 3-node cluster. This is **not** a 1:1 hardware comparison—but that’s exactly the point. AIStore ETL is built to **scale horizontally**. Client-side processing, even on powerful machines, hits I/O and CPU limits quickly. In contrast, AIStore parallelizes the workload across all available nodes.
+
+Beyond raw speed, AIStore ETL eliminates unnecessary data movement, reduces client-side compute costs, and simplifies pipeline management. As the cluster size grows, performance scales linearly with added nodes/disks, offering even greater throughput potential.
