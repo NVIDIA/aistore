@@ -40,6 +40,11 @@ class ObjectFileReader(BufferedIOBase):
         self._resume_total = 0  # Tracks the number of resume attempts
         self._closed = False
 
+    @property
+    def content_iterator(self) -> ContentIterator:
+        """Return the content iterator."""
+        return self._content_iterator
+
     @override
     def __enter__(self):
         self._iterable = self._content_iterator.iter()
@@ -125,8 +130,14 @@ class ObjectFileReader(BufferedIOBase):
                     size -= len(chunk)
 
         except Exception as err:
-            # Handle any unexpected errors, log them, close the file, and re-raise
-            logger.error("Error reading, closing file: (%s)", err)
+            obj_path = self.content_iterator.client.path
+            # Handle any unexpected errors, log them with context, close the file, and re-raise
+            logger.error(
+                "Error while reading object at '%s': %s. Closing file.",
+                obj_path,
+                err,
+                exc_info=True,
+            )
             self.close()
             raise err
 

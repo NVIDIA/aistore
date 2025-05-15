@@ -44,6 +44,16 @@ class ObjectClient:
         if uname:
             self._initialize_target_client()
 
+    @property
+    def path(self) -> str:
+        """
+        Get the URL path for the object.
+
+        Returns:
+            str: The URL path for the object.
+        """
+        return self._request_path
+
     def _initialize_target_client(self, force: bool = False):
         """
         Initialize a new RequestClient pointing to the target node for the object.

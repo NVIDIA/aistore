@@ -8,9 +8,15 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.13.7] - 2025-05-15
+
 ### Added
 
 - Add `obj_timeout` and `init_timeout` fields in `InitETLArgs` type to align with updated API fields.
+- Add `urllib3.exceptions.TimeoutError` to retry config to handle additional timeout scenarios.
+
+### Changed
+- Enhance object file logging to include the object path for better traceability.
 
 ## [1.13.7] - 2025-05-06
 

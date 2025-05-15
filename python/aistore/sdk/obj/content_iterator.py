@@ -21,6 +21,16 @@ class ContentIterator:
         self._client = client
         self._chunk_size = chunk_size
 
+    @property
+    def client(self) -> ObjectClient:
+        """
+        Get the client associated with this content iterator.
+
+        Returns:
+            ObjectClient: The client used to access object content.
+        """
+        return self._client
+
     def iter(self, offset: int = 0) -> Iterator[bytes]:
         """
         Create an iterator over the object content, applying an optional offset.

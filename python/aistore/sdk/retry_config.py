@@ -5,6 +5,7 @@ Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 import logging
 from dataclasses import dataclass
 from urllib3.util.retry import Retry
+from urllib3.exceptions import TimeoutError as Urllib3TimeoutError
 from tenacity import (
     Retrying,
     wait_exponential,
@@ -27,6 +28,7 @@ NETWORK_RETRY_EXCEPTIONS = (
     ChunkedEncodingError,
     RequestsConnectionError,
     AISRetryableError,
+    Urllib3TimeoutError,
 )
 
 
@@ -82,7 +84,7 @@ class RetryConfig:
                 wait=wait_exponential(multiplier=1, min=1, max=10),
                 stop=stop_after_delay(60),
                 retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
-                before_sleep=before_sleep_log(logging.getLogger(), logging.DEBUG),
+                before_sleep=before_sleep_log(logging.getLogger(), logging.WARNING),
                 reraise=True,
             ),
         )
