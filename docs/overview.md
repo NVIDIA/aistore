@@ -1,12 +1,3 @@
----
-layout: post
-title: OVERVIEW
-permalink: /docs/overview
-redirect_from:
- - /overview.md/
- - /docs/overview.md/
----
-
 ## Introduction
 
 Training large models on petascale datasets is essential for achieving competitive and state-of-the-art performance in applications such as speech, video analytics, and object recognition. However, existing distributed filesystems were not designed for the access patterns and usability requirements of petascale AI jobs.

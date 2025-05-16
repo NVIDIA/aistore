@@ -1,16 +1,14 @@
 name: Deploy Website
+
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 jobs:
   deploy_website:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./docs
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,15 +17,17 @@ jobs:
         with:
           ruby-version: 3.1.3
 
-      - run: |
-          bundle install
-          bundle exec jekyll build
+      - name: Prepare docs with front-matter
+        run: |
+          ./scripts/website-preprocess.sh
 
-      - name: Install Netlify CLI
-        run: npm install -g netlify-cli --save-dev
-
-      - name: Deploy site on Netlify
+      - name: Build and deploy
         env:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        run: netlify deploy --dir=_site --prod
+        run: |
+          cd docs
+          bundle install --quiet
+          bundle exec jekyll build
+          npm install -g netlify-cli
+          netlify deploy --dir=_site --prod
