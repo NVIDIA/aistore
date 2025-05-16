@@ -264,7 +264,7 @@ As far as, specifically, StatsD alternative, additional environment includes:
 | name | comment |
 | ---- | ------- |
 | `AIS_MINMEM_FREE` | for details, see [Memory Manager, Slab Allocator (MMSA)](https://github.com/NVIDIA/aistore/blob/main/memsys/README.md) |
-| `AIS_MINMEM_PCT_TOTAL` | same as above and, specifically, te section "Minimum Available Memory" |
+| `AIS_MINMEM_PCT_TOTAL` | same as above and, specifically, the section "Minimum Available Memory" |
 | `AIS_MINMEM_PCT_FREE` | (ditto) |
 
 ## Package: transport
