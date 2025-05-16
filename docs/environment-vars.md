@@ -1,12 +1,3 @@
----
-layout: post
-title: Environment Variables
-permalink: /docs/environment-vars
-redirect_from:
- - /environment-vars.md/
- - /docs/environment-vars.md/
----
-
 ## Introduction
 
 Generally, aistore configuration comprises several sources:

@@ -26,8 +26,11 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
         run: |
+          # ── build inside docs ───────────────────
           cd docs
           bundle install --quiet
           bundle exec jekyll build
+          # ── deploy from repo root ───────────────
+          cd "$GITHUB_WORKSPACE"
           npm install -g netlify-cli
-          netlify deploy --dir=_site --prod
+          netlify deploy --dir=docs/_site --prod

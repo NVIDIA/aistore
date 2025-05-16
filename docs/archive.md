@@ -1,12 +1,3 @@
----
-layout: post
-title: ARCHIVE
-permalink: /docs/archive
-redirect_from:
- - /archive.md/
- - /docs/archive.md/
----
-
 Training neural networks on very large datasets is not easy (an understatement).
 
 One of the many associated challenges is a so-called [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - the problem that gets progressively worse given continuous random access to the entirety of an underlying dataset (that often also has a tendency to annually double in size).

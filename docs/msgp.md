@@ -1,12 +1,3 @@
----
-layout: post
-title: MSGPACK
-permalink: /docs/msgp
-redirect_from:
- - /msgp.md/
- - /docs/msgp.md/
----
-
 ## Table of Contents
 
 - [Introduction](#introduction)

@@ -1,12 +1,3 @@
----
-layout: post
-title: CONDITIONAL LINKAGE
-permalink: /docs/build_tags
-redirect_from:
- - /build_tags.md/
- - /docs/build_tags.md/
----
-
 Conditional linkage generally refers to the inclusion or exclusion of certain pieces of code or libraries during the build process.
 
 In Go, we use **build tags** to achieve the same.

@@ -1,12 +1,3 @@
----
-layout: post
-title: BUCKET
-permalink: /docs/bucket
-redirect_from:
- - /bucket.md/
- - /docs/bucket.md/
----
-
 A **bucket** is a named container for objects: files with associated metadata. Buckets are the primary unit of data organization and policy application in AIStore (AIS).
 
 > Object metadata includes: checksum, version, references to copies (replicas), size, last access time, source bucket (assuming [remote backend](/docs/overview.md#backend-provider), custom user-defined attributes, and more.

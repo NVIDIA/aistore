@@ -1,12 +1,3 @@
----
-layout: post
-title: BATCH
-permalink: /docs/batch
-redirect_from:
- - /batch.md/
- - /docs/batch.md/
----
-
 ## Introduction
 
 Extended actions (_xactions_) are batch operations, or jobs, that run asynchronously, report statistics (viewable at runtime and later), can be waited upon, and can be stopped (aborted).

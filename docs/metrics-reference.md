@@ -1,12 +1,3 @@
----
-layout: post
-title: METRICS-REFERENCE
-permalink: /docs/metrics-reference
-redirect_from:
- - /metrics-reference.md/
- - /docs/metrics-reference.md/
----
-
 Here's a non-exhaustive, albeit detailed, summary of supported Prometheus metrics. This includes each metric's name, description, and associated variable labels (which provide additional context and granularity to the metrics).
 
 ## Table of Contents

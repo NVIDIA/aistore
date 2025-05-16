@@ -1,12 +1,3 @@
----
-layout: post
-title: TRAFFIC PATTERNS
-permalink: /docs/traffic-patterns
-redirect_from:
- - /traffic_patterns.md/
- - /docs/traffic_patterns.md/
----
-
 ## Table of Contents
 
 - [Read and Write Traffic Patterns](#read-and-write-traffic-patterns)

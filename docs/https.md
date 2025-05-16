@@ -1,12 +1,3 @@
----
-layout: post
-title: Loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS
-permalink: /docs/https
-redirect_from:
- - /https.md/
- - /docs/https.md/
----
-
 In this document:
 
 - [Generating self-signed certificates](#generating-self-signed-certificates)

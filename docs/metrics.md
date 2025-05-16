@@ -1,12 +1,3 @@
----
-layout: post
-title: METRICS
-permalink: /docs/metrics
-redirect_from:
- - /metrics.md/
- - /docs/metrics.md/
----
-
 **UPDATE**: to build `aisnode` with support for StatsD, use the namesake build tag: `statsd`. Note that Prometheus is the default supported option.
 
 > See also: [conditional linkage](/docs/build_tags.md)

@@ -1,12 +1,3 @@
----
-layout: post
-title: ETL
-permalink: /docs/etl
-redirect_from:
- - /etl.md/
- - /docs/etl.md/
----
-
 **ETL** — **Extract**, **Transform**, **Load** — is a core workflow in data pipelines:
 
 - **Extract** data from various formats and sources

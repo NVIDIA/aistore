@@ -1,12 +1,3 @@
----
-layout: post
-title: PROVIDERS
-permalink: /docs/providers
-redirect_from:
- - /providers.md/
- - /docs/providers.md/
----
-
 ## Introduction
 
 Terminology first:

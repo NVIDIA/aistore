@@ -1,12 +1,3 @@
----
-layout: post
-title: CONFIGURATION
-permalink: /docs/configuration
-redirect_from:
- - /configuration.md/
- - /docs/configuration.md/
----
-
 AIS configuration comprises:
 
 | Name | Scope | Comment |

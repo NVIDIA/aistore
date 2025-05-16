@@ -1,12 +1,3 @@
----
-layout: post
-title: S3 Compatibility
-permalink: /docs/s3compat
-redirect_from:
- - /s3compat.md/
- - /docs/s3compat.md/
----
-
 # AIStore & Amazon S3 Compatibility
 
 **AIStore** (AIS) is a lightweight, distributed object storage system designed to scale linearly with each added storage node. It provides a uniform API across various storage backends while maintaining high performance for AI/ML and data analytics workloads.

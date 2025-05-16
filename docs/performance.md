@@ -1,12 +1,3 @@
----
-layout: post
-title: PERFORMANCE
-permalink: /docs/performance
-redirect_from:
- - /performance.md/
- - /docs/performance.md/
----
-
 AIStore is all about performance. It's all about performance and reliability, to be precise. An assortment of tips and recommendations that you find in this text will go a long way to ensure that AIS _does_ deliver.
 
 But first, one important consideration:

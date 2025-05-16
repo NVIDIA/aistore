@@ -1,12 +1,3 @@
----
-layout: post
-title: DSORT
-permalink: /docs/dsort
-redirect_from:
- - /dsort.md/
- - /docs/dsort.md/
----
-
 Dsort is extension for AIStore. It was designed to perform map-reduce like
 operations on terabytes and petabytes of AI datasets. As a part of the whole
 system, Dsort is capable of taking advantage of objects stored on AIStore without

@@ -1,12 +1,3 @@
----
-layout: post
-title: ON DISK LAYOUT
-permalink: /docs/on-disk-layout
-redirect_from:
- - /on_disk_layout.md/
- - /docs/on_disk_layout.md/
----
-
 AIStore 3.0 introduced new on-disk layout that addressed several motivations including (but not limited to) the motivation to support multiple remote backends.
 
 One of those remote backends can be AIStore itself, with immediate availability of AIS-to-AIS caching and a gamut of related data recovery capabilities.

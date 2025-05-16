@@ -1,12 +1,3 @@
----
-layout: post
-title: COMMAND LINE
-permalink: /docs/command-line
-redirect_from:
- - /command_line.md/
- - /docs/command_line.md/
----
-
 ### Command-Line arguments
 
 There is a single AIS node (`aisnode`) binary that functions either as AIS proxy (gateway) or AIS target, depending on the `-role` option - examples follow below:

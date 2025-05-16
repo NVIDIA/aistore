@@ -1,13 +1,3 @@
----
-layout: post
-title: Out-of-band updates
-permalink: /docs/out_of_band
-redirect_from:
- - /out_of_band.md/
- - /docs/out_of_band.md/
----
-
-
 **Table of Contents**
 - [Example](#example)
 - [Out-of-band updates](#out-of-band-updates)

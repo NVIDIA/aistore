@@ -1,12 +1,3 @@
----
-layout: post
-title: AISLOADER
-permalink: /docs/aisloader
-redirect_from:
- - /aisloader.md/
- - /docs/aisloader.md/
----
-
 # AIS Loader
 
 AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore) or any S3-compatible backend.

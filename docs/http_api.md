@@ -1,12 +1,3 @@
----
-layout: post
-title: RESTFUL API
-permalink: /docs/http-api
-redirect_from:
- - /http_api.md/
- - /docs/http_api.md/
----
-
 ## Table of Contents
 
 - [Notation](#notation)

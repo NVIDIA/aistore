@@ -1,12 +1,3 @@
----
-layout: post
-title: PROMETHEUS
-permalink: /docs/prometheus
-redirect_from:
- - /prometheus.md/
- - /docs/prometheus.md/
----
-
 **August 2024 UPDATES**:
 * added [complete reference](/docs/metrics-reference.md) that includes all supported metric names (both internal and visible externally), their respective types, and descriptions:
 * building `aisnode` with StatsD requires the corresponding build tag; build-wise, Prometheus is, effectively, the default.

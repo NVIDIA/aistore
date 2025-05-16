@@ -1,12 +1,3 @@
----
-layout: post
-title: PYTHON SDK
-permalink: /docs/python-sdk
-redirect_from:
- - /python_sdk.md/
- - /docs/python_sdk.md/
----
-
 AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters. This document contains API documentation
 for the AIStore Python SDK.
 

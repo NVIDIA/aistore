@@ -1,12 +1,3 @@
----
-layout: post
-title: STORAGE SVCS
-permalink: /docs/storage-svcs
-redirect_from:
- - /storage_svcs.md/
- - /docs/storage_svcs.md/
----
-
 ## Table of Contents
 
 - [Storage Services](#storage-services)

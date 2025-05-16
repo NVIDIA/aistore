@@ -1,12 +1,3 @@
----
-layout: post
-title: Reverse Proxy and pubic HTTP(s) datasets
-permalink: /docs/reverse
-redirect_from:
- - /reverse.md/
- - /docs/reverse.md/
----
-
 **August 2024 UPDATE**: `reverse-proxying`, `ht://` backend, and associated capabilities described in this document are _obsolete_. The corresponding functionality is not supported and most likely will be eventually completely removed.
 
 ## AIS as reverse proxy

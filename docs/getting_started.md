@@ -1,12 +1,3 @@
----
-layout: post
-title: GETTING STARTED
-permalink: /docs/getting-started
-redirect_from:
- - /getting_started.md/
- - /docs/getting_started.md/
----
-
 AIStore can scale from a **single Linux machine** to a **rack-scale cluster** or a managed Kubernetes installation in the cloud.
 
 ## Contents

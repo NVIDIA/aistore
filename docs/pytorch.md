@@ -1,12 +1,3 @@
----
-layout: post
-title: PYTORCH
-permalink: /docs/pytorch
-redirect_from:
- - /pytorch.md/
- - /docs/pytorch.md/
----
-
 The AIStore PyTorch integration is a growing set of datasets, samplers, and more that allow you to use easily add AIStore support
 to a codebase using PyTorch. This document contains API documentation for the AIStore PyTorch integration.
 

@@ -1,12 +1,3 @@
----
-layout: post
-title: JOIN CLUSTER
-permalink: /docs/join-cluster
-redirect_from:
- - /join_cluster.md/
- - /docs/join_cluster.md/
----
-
 **Note**: for the most recent updates on the topic of cluster membership and node lifecycle, please also check:
 
 * [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)

@@ -1,12 +1,3 @@
----
-layout: post
-title: LEAVE CLUSTER
-permalink: /docs/leave-cluster
-redirect_from:
- - /leave_cluster.md/
- - /docs/leave_cluster.md/
----
-
 **Note**: for the most recent updates on the topic of cluster membership and node lifecycle, please also check:
 
 * [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)

@@ -1,12 +1,3 @@
----
-layout: post
-title: FEATURE FLAGS
-permalink: /docs/feature-flags
-redirect_from:
- - /feature_flags.md/
- - /docs/feature_flags.md/
----
-
 ## Table of Contents
 
 - [Feature flags](#feature-flags)

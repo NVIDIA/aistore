@@ -1,11 +1,3 @@
----
-layout: post
-title: AUTHN
-permalink: /docs/authn
-redirect_from:
- - /authn.md/
- - /docs/authn.md/
----
 The AIStore Authentication Server (AuthN) provides secure access to AIStore by leveraging [OAuth 2.0](https://oauth.net/2/) compliant [JSON Web Tokens (JWT)](https://datatracker.ietf.org/doc/html/rfc7519).
 
 For more details:

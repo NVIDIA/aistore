@@ -1,12 +1,3 @@
----
-layout: post
-title: TROUBLESHOOTING
-permalink: /docs/troubleshooting
-redirect_from:
- - /troubleshooting.md/
- - /docs/troubleshooting.md/
----
-
 ## Introduction
 
 This text is intended to help troubleshooting AIStore operation. Easy-to-use TAB-completion based [CLI](/docs/cli.md) is one of the first tools to consider, and of the first commands would be the one that shows the state of the cluster:

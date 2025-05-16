@@ -1,12 +1,3 @@
----
-layout: post
-title: DEVELOPMENT
-permalink: /docs/development
-redirect_from:
- - /development.md/
- - /docs/development.md/
----
-
 ## Table of Contents
 
 - [Debugging: build time](#debugging-build-time)

@@ -1,12 +1,3 @@
----
-layout: post
-title: Blob Downloader
-permalink: /docs/blob_downloader
-redirect_from:
- - /blob_downloader.md/
- - /docs/blob_downloader.md/
----
-
 ## Background
 
 AIStore supports multiple ways to populate itself with existing datasets, including (but not limited to):

@@ -1,12 +1,3 @@
----
-layout: post
-title: TOOLS
-permalink: /docs/tools
-redirect_from:
- - /tools.md/
- - /docs/tools.md/
----
-
 ## Table of Contents
 - [Executables](#executables)
 - [Installing from GitHub](#installing-from-github)

@@ -1,12 +1,3 @@
----
-layout: post
-title: CLI
-permalink: /docs/cli
-redirect_from:
- - /cli.md/
- - /docs/cli.md/
----
-
 ## Table of contents
 
 - [Getting Started](#getting-started)
