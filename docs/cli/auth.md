@@ -1,12 +1,3 @@
----
-layout: post
-title: AUTH
-permalink: /docs/cli/auth
-redirect_from:
- - /cli/auth.md/
- - /docs/cli/auth.md/
----
-
 For quick getting-started (local-playground) session _and_ in-depth overview, please refer to:
 
 * [AIS AuthN documentation](/docs/authn.md).

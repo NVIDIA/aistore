@@ -1,12 +1,3 @@
----
-layout: post
-title: OBJECT
-permalink: /docs/cli/object
-redirect_from:
- - /cli/object.md/
- - /docs/cli/object.md/
----
-
 # CLI Reference for Objects
 This document contains `ais object` commands - the commands to read (GET), write (PUT), APPEND, PROMOTE, PREFETCH, EVICT etc. user data.
 

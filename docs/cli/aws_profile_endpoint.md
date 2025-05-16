@@ -1,12 +1,3 @@
----
-layout: post
-title: AWS_PROFILE_ENDPOINT
-permalink: /docs/cli/aws_profile_endpoint
-redirect_from:
- - /cli/aws_profile_endpoint.md/
- - /docs/cli/aws_profile_endpoint.md/
----
-
 AIStore supports vendor-specific configuration on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
 
 * named AWS profiles (with alternative credentials and/or AWS region)

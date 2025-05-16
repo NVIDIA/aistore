@@ -1,12 +1,3 @@
----
-layout: post
-title: Blob downloader
-permalink: /docs/cli/blob-downloader
-redirect_from:
- - /cli/blob-downloader.md/
- - /docs/cli/blob-downloader.md/
----
-
 AIS comes with built-in blob downloading facility that employs multiple concurrent readers to speed-up reading very large remote objects.
 
 In terms of its from/to operation, blob downloading can be compared to [prefetching](/docs/cli/object.md#prefetch-objects).

@@ -1,12 +1,3 @@
----
-layout: post
-title: ETL
-permalink: /docs/cli/etl
-redirect_from:
- - /cli/etl.md/
- - /docs/cli/etl.md/
----
-
 # CLI Reference for ETLs
 
 This section documents ETL management operations with `ais etl`. But first, note:

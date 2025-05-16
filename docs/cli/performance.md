@@ -1,12 +1,3 @@
----
-layout: post
-title: PERFORMANCE
-permalink: /docs/cli/performance
-redirect_from:
- - /cli/performance.md/
- - /docs/cli/performance.md/
----
-
 `ais performance` or (same) `ais show performance` command supports the following 5 (five) subcommands:
 
 ```console

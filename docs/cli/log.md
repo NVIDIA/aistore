@@ -1,12 +1,3 @@
----
-layout: post
-title: LOG
-permalink: /docs/cli/log
-redirect_from:
- - /cli/log.md/
- - /docs/cli/log.md/
----
-
 # Table of Contents
 - [Download log or all logs (including history)](#ais-log-get-command)
 - [View current log](#ais-log-show-command)

@@ -1,12 +1,3 @@
----
-layout: post
-title: BUCKET
-permalink: /docs/cli/bucket
-redirect_from:
- - /cli/bucket.md/
- - /docs/cli/bucket.md/
----
-
 It is easy to see all CLI operations on *buckets*:
 
 ```console

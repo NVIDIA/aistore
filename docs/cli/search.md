@@ -1,12 +1,3 @@
----
-layout: post
-title: SEARCH
-permalink: /docs/cli/search
-redirect_from:
- - /cli/search.md/
- - /docs/cli/search.md/
----
-
 # CLI Command Search
 
 AIS CLI is designed for ease of usage. In most cases, there must be no need to spend time reading CLI docs.

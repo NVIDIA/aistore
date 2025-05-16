@@ -1,12 +1,3 @@
----
-layout: post
-title: HELP
-permalink: /docs/cli/help
-redirect_from:
- - /cli/help.md/
- - /docs/cli/help.md/
----
-
 This readme is a loose assortment of quick tips.
 
 ## Installing CLI directly from the latest GitHub release

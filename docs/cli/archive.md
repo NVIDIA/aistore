@@ -1,12 +1,3 @@
----
-layout: post
-title: ARCHIVE
-permalink: /docs/cli/archive
-redirect_from:
- - /cli/archive.md/
- - /docs/cli/archive.md/
----
-
 # Working with Archives (Shards)
 
 In AIStore, *archives* (also called *shards*) are special objects that contain multiple files packaged together in formats like TAR, TGZ, ZIP, or TAR.LZ4. Working with archives is essential for efficiently managing collections of related files and for operations like distributed sorting.

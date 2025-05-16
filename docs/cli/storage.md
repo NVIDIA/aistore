@@ -1,12 +1,3 @@
----
-layout: post
-title: STORAGE
-permalink: /docs/cli/storage
-redirect_from:
- - /cli/storage.md/
- - /docs/cli/storage.md/
----
-
 `ais storage` command supports the following subcommands:
 
 ```console

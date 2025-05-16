@@ -1,12 +1,3 @@
----
-layout: post
-title: CLUSTER
-permalink: /docs/cli/cluster
-redirect_from:
- - /cli/cluster.md/
- - /docs/cli/cluster.md/
----
-
 # `ais cluster` command
 
 The `ais cluster` command is the main tool for monitoring and managing an AIS (AIStore) cluster. It provides functionalities to

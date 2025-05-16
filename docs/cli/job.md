@@ -1,12 +1,3 @@
----
-layout: post
-title: JOB
-permalink: /docs/cli/job
-redirect_from:
- - /cli/job.md/
- - /docs/cli/job.md/
----
-
 # Introduction, background, definitions
 
 Batch operations that run asynchronously and may take seconds (minutes, hours, etc.) to execute - are called eXtended actions (xactions).

@@ -1,12 +1,3 @@
----
-layout: post
-title: ALIAS
-permalink: /docs/cli/alias
-redirect_from:
- - /cli/alias.md/
- - /docs/cli/alias.md/
----
-
 # CLI Reference for Aliases
 
 AIS CLI supports user-defined aliases, similar to the Unix `alias` command. Defining your own alias for an existing command can make the AIS CLI more intuitive and efficient to use.

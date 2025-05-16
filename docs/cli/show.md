@@ -1,12 +1,3 @@
----
-layout: post
-title: SHOW
-permalink: /docs/cli/show
-redirect_from:
- - /cli/show.md/
- - /docs/cli/show.md/
----
-
 # `ais show` command
 
 AIS CLI `show` command can universally be used to view summaries and details on a cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below).

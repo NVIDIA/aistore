@@ -1,12 +1,3 @@
----
-layout: post
-title: CONFIG
-permalink: /docs/cli/config
-redirect_from:
- - /cli/config.md/
- - /docs/cli/config.md/
----
-
 Primarily, there are two main configuration-managing commands, each having multiple subcommands and sub-subcommands:
 
 1. `ais config`		- show and update configuration

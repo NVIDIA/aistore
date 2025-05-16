@@ -1,12 +1,3 @@
----
-layout: post
-title: ADVANCED
-permalink: /docs/cli/advanced
-redirect_from:
- - /cli/advanced.md/
- - /docs/cli/advanced.md/
----
-
 Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, whereby a certain level of understanding of possible consequences is assumed (and required).
 
 ## Table of Contents
