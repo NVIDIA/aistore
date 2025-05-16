@@ -5,8 +5,9 @@
 # pylint: disable=protected-access
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from io import IOBase
+from requests.exceptions import ChunkedEncodingError
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from tests.utils import BadContentIterator
@@ -142,16 +143,18 @@ class TestObjectFileReaderResume(unittest.TestCase):
     def setUp(self):
         self.data = b"chunk1chunk2chunk3chunk4"
         self.chunk_size = 6
-        self.max_resume_attempts = 3
 
-        # Simulate a content iterator that fails after reading each chunk (fails every other).
-        self.content_iterator = BadContentIterator(
-            data=self.data, fail_on_read=2, chunk_size=self.chunk_size
+    def _create_reader_with_bad_iterator(self, exc, fail_on_read, max_resume_attempts):
+        err_instance = (
+            exc if isinstance(exc, BaseException) else exc("Simulated Exception")
         )
-        self.object_file = ObjectFileReader(
-            content_iterator=self.content_iterator,
-            max_resume=self.max_resume_attempts,
+        iterator = BadContentIterator(
+            data=self.data,
+            fail_on_read=fail_on_read,
+            chunk_size=self.chunk_size,
+            error=err_instance,
         )
+        return ObjectFileReader(iterator, max_resume=max_resume_attempts)
 
     def test_read_raises_any_exception_and_closes(self):
         """
@@ -160,25 +163,21 @@ class TestObjectFileReaderResume(unittest.TestCase):
         - Simulate a generic exception occurring during a read operation.
         - Ensure the file is properly closed after the exception is raised.
         """
-        # Reinitialize BadContentIterator to raise a generic Exception
-        self.content_iterator = BadContentIterator(
-            data=self.data,
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every other read w/ a max of 3 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=Exception,
             fail_on_read=2,
-            chunk_size=self.chunk_size,
-            error=Exception("Simulated Exception"),
-        )
-        self.object_file = ObjectFileReader(
-            content_iterator=self.content_iterator,
-            max_resume=self.max_resume_attempts,
+            max_resume_attempts=3,
         )
 
         # Assert that the exception is raised during the read
         with self.assertRaises(Exception) as context:
-            self.object_file.read()
+            object_file.read()
         self.assertEqual(str(context.exception), "Simulated Exception")
 
         # Verify that the file was closed after the exception
-        self.assertTrue(self.object_file._closed)
+        self.assertTrue(object_file._closed)
 
     def test_read_success_after_resumes(self):
         """
@@ -193,14 +192,22 @@ class TestObjectFileReaderResume(unittest.TestCase):
 
         Total of 3 resumes, which is within the set limit of `max_resume=3`.
         """
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every other read w/ a max of 3 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=2,
+            max_resume_attempts=3,
+        )
+
         # Read the entire content and verify it handles the error and resumes correctly
-        result = self.object_file.read()
+        result = object_file.read()
 
         # Ensure that we received the full data
         self.assertEqual(result, self.data)
 
         # Verify that the file was not closed
-        self.assertFalse(self.object_file._closed)
+        self.assertFalse(object_file._closed)
 
     def test_read_fail_after_max_retries(self):
         """
@@ -215,15 +222,20 @@ class TestObjectFileReaderResume(unittest.TestCase):
 
         Total of 3 resumes, which exceeds the set limit of `max_resume=3`.
         """
-        # Reduce max_resume to 2 to test failure scenario
-        self.object_file._max_resume = 2
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every other read w/ a max of 2 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=2,
+            max_resume_attempts=2,
+        )
 
         # Attempting to read should fail after exceeding max retries
         with self.assertRaises(ObjectFileReaderMaxResumeError):
-            self.object_file.read()
+            object_file.read()
 
         # Verify that the file was closed after the exception
-        self.assertTrue(self.object_file._closed)
+        self.assertTrue(object_file._closed)
 
     def test_multiple_reads_success_after_resumes(self):
         """
@@ -240,16 +252,24 @@ class TestObjectFileReaderResume(unittest.TestCase):
 
         Total of 3 resumes, within the set limit of `max_resume=3`.
         """
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every other read w/ a max of 3 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=2,
+            max_resume_attempts=3,
+        )
+
         # Read portion of content and verify it handles the error and resumes correctly
-        result = self.object_file.read(10)
+        result = object_file.read(10)
         self.assertEqual(result, b"chunk1chun")
 
         # Read rest of content and verify it handles the error and resumes correctly
-        result = self.object_file.read(14)
+        result = object_file.read(14)
         self.assertEqual(result, b"k2chunk3chunk4")
 
         # Verify that the file was not closed
-        self.assertFalse(self.object_file._closed)
+        self.assertFalse(object_file._closed)
 
     def test_multiple_reads_fail_after_resumes(self):
         """
@@ -264,16 +284,69 @@ class TestObjectFileReaderResume(unittest.TestCase):
 
         Total of 3 resumes, exceeding the set limit of `max_resume=2`.
         """
-        # Reduce max_resume to 2 to test failure scenario
-        self.object_file._max_resume = 2
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every other read w/ a max of 2 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=2,
+            max_resume_attempts=2,
+        )
 
         # Read portion of content and verify it handles the error and resumes correctly
-        result = self.object_file.read(10)
+        result = object_file.read(10)
         self.assertEqual(result, b"chunk1chun")
 
         # Attempting to read should fail after exceeding max retries
         with self.assertRaises(ObjectFileReaderMaxResumeError):
-            self.object_file.read(14)
+            object_file.read(14)
 
         # Verify that the file was closed after the exception
-        self.assertTrue(self.object_file._closed)
+        self.assertTrue(object_file._closed)
+
+    def test_reset_if_not_cached(self):
+        """
+        Test that ObjectFileReader resets correctly if the object is not cached on attempt to resume.
+        """
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every read w/ a max of 1 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=1,
+            max_resume_attempts=1,
+        )
+
+        # Simulate the object not being cached
+        object_file.content_iterator.client.head = Mock(
+            return_value=Mock(present=False)
+        )
+        # Attempt to read should fail after exceeding one max retry
+        with patch.object(
+            object_file, "_reset", wraps=object_file._reset
+        ) as mock_reset:
+            with self.assertRaises(ObjectFileReaderMaxResumeError):
+                object_file.read()
+        # Verify that _reset was called once with retain_resumes=True
+        mock_reset.assert_called_once_with(retain_resumes=True)
+
+    def test_resume_if_cached(self):
+        """
+        Test that ObjectFileReader resumes (does not reset) if the object is cached on attempt to resume.
+        """
+        # Create an ObjectFileReader with a bad iterator that raises ChunkedEncodingError
+        # and simulates a failure on every read w/ a max of 1 resumes
+        object_file = self._create_reader_with_bad_iterator(
+            exc=ChunkedEncodingError,
+            fail_on_read=1,
+            max_resume_attempts=1,
+        )
+
+        # Simulate the object being cached
+        object_file.content_iterator.client.head = Mock(return_value=Mock(present=True))
+        # Attempt to read should fail after exceeding one max retry
+        with patch.object(
+            object_file, "_reset", wraps=object_file._reset
+        ) as mock_reset:
+            with self.assertRaises(ObjectFileReaderMaxResumeError):
+                object_file.read()
+        # Verify that _reset was not called
+        mock_reset.assert_not_called()

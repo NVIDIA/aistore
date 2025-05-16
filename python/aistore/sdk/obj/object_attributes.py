@@ -11,6 +11,7 @@ from aistore.sdk.const import (
     AIS_ACCESS_TIME,
     AIS_VERSION,
     AIS_CUSTOM_MD,
+    AIS_PRESENT,
 )
 
 
@@ -70,6 +71,13 @@ class ObjectAttributes:
         if len(custom_md_header) > 0:
             return self._parse_custom(custom_md_header)
         return {}
+
+    @property
+    def present(self) -> bool:
+        """
+        Whether the object is present/cached.
+        """
+        return self._response_headers.get(AIS_PRESENT, "") == "true"
 
     @staticmethod
     def _parse_custom(custom_md_header) -> Dict[str, str]:

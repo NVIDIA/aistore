@@ -11,6 +11,7 @@ from aistore.sdk.obj.content_iterator import ContentIterator
 from aistore.sdk.utils import get_logger
 from aistore.sdk.obj.obj_file.utils import (
     handle_broken_stream,
+    compute_loop_size,
 )
 
 logger = get_logger(__name__)
@@ -39,12 +40,13 @@ class ObjectFileReader(BufferedIOBase):
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
         self._reset()
 
-    def _reset(self):
+    def _reset(self, retain_resumes: bool = False) -> None:
         self._iterable = self._content_iterator.iter()
         self._remainder = None
         self._resume_position = 0
-        self._resume_total = 0
         self._closed = False
+        if not retain_resumes:
+            self._resume_total = 0
 
     @property
     def content_iterator(self) -> ContentIterator:
@@ -82,9 +84,13 @@ class ObjectFileReader(BufferedIOBase):
             raise ValueError("I/O operation on closed file.")
         if size == 0:
             return b""
+        if size is None:
+            size = -1
 
-        # If size is -1, set it to infinity to read until the end of the stream
-        size = float("inf") if size == -1 else size
+        # Cache original requested size in case of reset
+        original_size = size
+
+        size = compute_loop_size(size)
         result = []
 
         try:
@@ -119,7 +125,16 @@ class ObjectFileReader(BufferedIOBase):
                         self._max_resume,
                         err,
                     )
+
+                    # If the object is remote and not cached, reset the iterator and restart the read operation
+                    # to avoid timeouts when streaming non-cached remote objects with byte ranges (must wait for
+                    # entire object to be cached in-cluster).
+                    if not self._iterable:
+                        self._reset(retain_resumes=True)
+                        size = compute_loop_size(original_size)
+
                     continue
+
                 except StopIteration:
                     # End of stream, exit loop
                     break
