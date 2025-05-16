@@ -59,7 +59,7 @@ def test_with_interruptions(
 
     # Perform ObjectFileReader read
     downloaded_data, resume_total = obj_file_reader_read(
-        object_reader, READ_SIZE, BUFFER_SIZE, MAX_RESUME
+        object_reader, READ_SIZE, MAX_RESUME
     )
 
     end_time = time.time()

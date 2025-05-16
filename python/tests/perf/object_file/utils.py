@@ -48,13 +48,11 @@ def create_and_put_objects(bucket: Bucket, obj_size: int, num_objects: int) -> N
 
 
 def obj_file_reader_read(
-    object_reader: ObjectReader, read_size: int, buffer_size: int, max_resume: int
+    object_reader: ObjectReader, read_size: int, max_resume: int
 ) -> Tuple[bytes, int]:
     """Reads via ObjectFileReader instantiated from provided ObjectReader. Returns the downloaded data and total number of resumes."""
     result = bytearray()
-    with object_reader.as_file(
-        buffer_size=buffer_size, max_resume=max_resume
-    ) as obj_file:
+    with object_reader.as_file(max_resume=max_resume) as obj_file:
         while True:
             data = obj_file.read(read_size)
             if not data:

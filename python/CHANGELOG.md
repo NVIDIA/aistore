@@ -8,7 +8,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
-## [1.13.7] - 2025-05-15
+### Changed
+
+- Improve `ObjectFileReader` logging to include the full exception details and traceback when retrying and resuming.
+
+## [1.13.8] - 2025-05-15
 
 ### Added
 

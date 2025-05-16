@@ -59,12 +59,13 @@ def handle_broken_stream(
     resume_total = increment_resume(resume_total, max_resume, err)
     obj_path = content_iterator.client.path
     logger.warning(
-        "Chunked encoding error while reading '%s': (%s), retrying %d/%d",
+        "Error while reading '%s', retrying %d/%d",
         obj_path,
-        err,
         resume_total,
         max_resume,
+        exc_info=err,
     )
+
     # Create a new iterator from the last read position
     new_iter = content_iterator.iter(offset=resume_position)
     return new_iter, resume_total
