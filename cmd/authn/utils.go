@@ -33,7 +33,7 @@ func (cluList cluACLList) updated(cluACL *authn.CluACL) bool {
 }
 
 // mergeBckACLs appends bucket ACLs from fromACLs which are not in toACL.
-// If a bucket ACL is already in the list, its persmissions are updated.
+// If a bucket ACL is already in the list, its permissions are updated.
 // If cluIDFlt is set, only ACLs for buckets of the cluster with this ID are appended.
 func mergeBckACLs(toACLs, fromACLs bckACLList, cluIDFlt string) []*authn.BckACL {
 	for _, n := range fromACLs {

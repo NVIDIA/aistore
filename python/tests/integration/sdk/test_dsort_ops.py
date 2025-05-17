@@ -390,7 +390,7 @@ class TestDsortOps(ParallelTestBase):
         # Create enough files to make the dSort job slow enough to abort
         self._generate_shards(input_bck, tarfile.GNU_FORMAT, 200, 1000)
 
-        # re-use the shuffle framework from other tests -- it doesn't matter as we'll abort
+        # reuse the shuffle framework from other tests -- it doesn't matter as we'll abort
         dsort_framework = self._create_shuffle_dsort_framework(input_bck, out_bck)
 
         dsort = self.client.dsort()

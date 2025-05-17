@@ -189,7 +189,7 @@ func (n Ns) validate() (err error) {
 	if n.IsGlobal() {
 		return nil
 	}
-	if err = cos.CheckAlphaPlus(n.Name, "namepace"); err == nil {
+	if err = cos.CheckAlphaPlus(n.Name, "namespace"); err == nil {
 		if cos.IsAlphaNice(n.UUID) {
 			return nil
 		}

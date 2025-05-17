@@ -370,12 +370,12 @@ func (wctx *wsConnCtx) writeLoop() error {
 			if task.r != nil {
 				writer, err := wctx.conn.NextWriter(websocket.BinaryMessage)
 				if err != nil {
-					err = fmt.Errorf("error getting next writter from %s: %w", wctx.name, err)
+					err = fmt.Errorf("error getting next writer from %s: %w", wctx.name, err)
 					wctx.txctn.AddErr(err)
 					return err
 				}
 				if _, err := cos.CopyBuffer(writer, task.r, buf); err != nil {
-					err = fmt.Errorf("error getting next writter from %s: %w", wctx.name, err)
+					err = fmt.Errorf("error writing to %s: %w", wctx.name, err)
 					wctx.txctn.AddErr(err)
 					return err
 				}

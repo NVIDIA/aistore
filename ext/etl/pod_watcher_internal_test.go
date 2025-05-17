@@ -132,7 +132,7 @@ var _ = Describe("ETLPodWatcherTest", func() {
 			Expect(pw.GetPodStatus().CtrName).To(Equal("server"))
 			Expect(pw.GetPodStatus().State).To(Equal(ctrTerminated))
 			// the captured pod status should stay as the first received Terminated state event (number 0),
-			// since the pod watcher goroutine exits on the first termination state chagne with non-zero exit code
+			// since the pod watcher goroutine exits on the first termination state change with non-zero exit code
 			Expect(pw.GetPodStatus().Reason).To(Equal(fmt.Sprintf(reasonFmt, testName, 0)))
 			Expect(pw.GetPodStatus().Message).To(Equal(fmt.Sprintf(messageFmt, testName, 0)))
 		})
