@@ -1,23 +1,23 @@
+# Logs and temp/work
 *.log
-*.test
 *.csv
-*.svg
-.*.swp
 *.key
 *.crt
 *.csr
+.*.swp
 
-## PYTHON ##
+# OS
+.DS_Store
 
-# Byte-compiled / optimized / DLL files
+# IDE
+.vscode/
+.idea/
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -35,18 +35,10 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
-# Unit test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -58,11 +50,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
-
-# pyenv
 .python-version
-
-# Environments
 .env
 .venv
 venv/
@@ -70,17 +58,14 @@ ENV/
 env.bak/
 venv.bak/
 
-# Website related stuff
-.netlify/
-_site/
+# Jekyll & Netlify
+.jekyll-cache/
 .sass-cache/
+_site/
+.netlify/
+
+# do not ignore website assets
 !/docs/assets/**/*.svg
-
-# VSCode
-.vscode
-
-# JetBrains
-.idea
-
-# MacOS folder metadata
-.DS_Store
+!/docs/assets/**/*.png
+!/docs/assets/**/*.jpg
+!/docs/assets/**/*.gif
