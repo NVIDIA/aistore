@@ -188,20 +188,13 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	// NOTE:
 	// - poll for a while here for a possible abort error (e.g., pod runtime error)
 	// - and notice hardcoded timeout
-	if abortErr := xetl.AbortedAfter(etl.DefaultObjTimeout); abortErr != nil {
+	if abortErr := xetl.AbortedAfter(etl.DefaultAbortTimeout); abortErr != nil {
 		t.writeErr(w, r, abortErr, ecode)
 		return
 	}
 
-	ectx := &cmn.ETLErrCtx{
-		ETLName:          dpq.etl.name,
-		ETLTransformArgs: dpq.etl.targs,
-		PodName:          comm.PodName(),
-		SvcName:          comm.SvcName(),
-	}
-	errV := cmn.NewErrETL(ectx, err.Error(), ecode)
-	xetl.AddErr(errV)
-	t.writeErr(w, r, errV, ecode)
+	xetl.AddErr(err)
+	t.writeErr(w, r, err, ecode)
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {

@@ -30,15 +30,18 @@ import (
 )
 
 const (
-	NonExistImage = "non-exist-image"
-	InvalidYaml   = "invalid-yaml"
-	Tar2TF        = "tar2tf"
-	Echo          = "transformer-echo"
-	EchoGolang    = "echo-go"
-	MD5           = "transformer-md5"
-	HashWithArgs  = "hash-with-args"
-	Tar2tfFilters = "tar2tf-filters"
-	tar2tfFilter  = `
+	EchoETLSpec         = "echo-etl-spec"
+	HashWithArgsETLSpec = "hash-with-args-etl-spec"
+	MD5ETLSpec          = "md5-etl-spec"
+	NonExistImage       = "non-exist-image"
+	InvalidYaml         = "invalid-yaml"
+	Tar2TF              = "tar2tf"
+	Echo                = "transformer-echo"
+	EchoGolang          = "echo-go"
+	MD5                 = "transformer-md5"
+	HashWithArgs        = "hash-with-args"
+	Tar2tfFilters       = "tar2tf-filters"
+	tar2tfFilter        = `
 {
   "conversions": [
     { "type": "Decode", "ext_name": "png"},
@@ -52,6 +55,32 @@ const (
 `
 )
 
+// ETL specs
+const (
+	echoETLSpec = `
+name: echo-etl-spec
+runtime:
+  image: aistorage/transformer_echo:latest
+  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+`
+	hashWithArgsETLSpec = `
+name: hash-with-args-etl-spec
+runtime:
+  image: aistorage/transformer_hash_with_args:latest
+  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+  env:
+    - name: SEED_DEFAULT
+    - value: "0"
+`
+	md5ETLSpec = `
+name: md5-etl-spec
+runtime:
+  image: aistorage/transformer_md5:latest
+  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+`
+)
+
+// invalid pod specs
 const (
 	nonExistImageSpec = `
 apiVersion: v1
@@ -100,9 +129,12 @@ var (
 		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/pod.yaml",
 	}
 
-	invalidSpecs = map[string]string{
-		NonExistImage: nonExistImageSpec,
-		InvalidYaml:   invalidYamlSpec,
+	testSpecs = map[string]string{
+		NonExistImage:       nonExistImageSpec,
+		InvalidYaml:         invalidYamlSpec,
+		EchoETLSpec:         echoETLSpec,
+		HashWithArgsETLSpec: hashWithArgsETLSpec,
+		MD5ETLSpec:          md5ETLSpec,
 	}
 
 	client = &http.Client{}
@@ -116,7 +148,7 @@ func validateETLName(name string) error {
 }
 
 func GetTransformYaml(etlName string) ([]byte, error) {
-	if spec, ok := invalidSpecs[etlName]; ok {
+	if spec, ok := testSpecs[etlName]; ok {
 		return []byte(spec), nil
 	}
 	if err := validateETLName(etlName); err != nil {
@@ -409,9 +441,9 @@ func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 func SpecToInitMsg(spec []byte /*yaml*/) (*etl.InitSpecMsg, error) {
 	errCtx := &cmn.ETLErrCtx{}
 	msg := &etl.InitSpecMsg{Spec: spec}
-	pod, err := etl.ParsePodSpec(errCtx, msg.Spec)
+	pod, err := msg.ParsePodSpec()
 	if err != nil {
-		return msg, err
+		return msg, cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(msg.Spec))
 	}
 	errCtx.ETLName = pod.GetName()
 	msg.EtlName = pod.GetName()

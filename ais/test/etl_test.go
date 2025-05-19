@@ -340,6 +340,7 @@ func TestETLInline(t *testing.T) {
 
 		tests = []testObjConfig{
 			{transformer: tetl.MD5, comm: etl.Hpush},
+			{transformer: tetl.MD5ETLSpec, comm: etl.Hpush},
 		}
 	)
 
@@ -431,12 +432,15 @@ func TestETLInlineObjWithArgs(t *testing.T) {
 		transformer = tetl.HashWithArgs
 
 		tests = []struct {
-			name     string
-			commType string
-			onlyLong bool
+			name        string
+			commType    string
+			transformer string
+			onlyLong    bool
 		}{
-			{name: "etl-args-hpush", commType: etl.Hpush},
-			{name: "etl-args-hpull", commType: etl.Hpull},
+			{name: "etl-args-hpush", commType: etl.Hpush, transformer: tetl.HashWithArgs},
+			{name: "etl-args-hpush", commType: etl.Hpush, transformer: tetl.HashWithArgsETLSpec},
+			{name: "etl-args-hpull", commType: etl.Hpull, transformer: tetl.HashWithArgs},
+			{name: "etl-args-hpull", commType: etl.Hpull, transformer: tetl.HashWithArgsETLSpec},
 		}
 	)
 
@@ -538,9 +542,10 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true}, // TODO -- FIXME: re-enable this test after echo transformer updated
+			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true},
 			{transformer: tetl.Echo, comm: etl.Hpull},
 			{transformer: tetl.Echo, comm: etl.Hpush},
+			{transformer: tetl.EchoETLSpec, comm: etl.Hpush},
 		}
 	)
 

@@ -277,6 +277,9 @@ func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Con
 		pw = newPodWatcher(podName, boot)
 		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
 
+		if comm == nil {
+			return podName, svcName, nil, err
+		}
 		if err := mgr.add(msg.Name(), comm); err != nil {
 			return podName, svcName, nil, err
 		}

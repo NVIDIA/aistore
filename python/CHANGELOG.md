@@ -13,6 +13,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Improve `ObjectFileReader` logging to include the full exception details and traceback when retrying and resuming.
 - Update `ObjectFileReader` resume logic to accommodate for limitation w/ the `Streaming-Cold-GET` and read range as to not cause a timeout. 
   - If the remote object is not cached, resuming via stream is not possible and reading must restart from the beginning.
+- Replace `id` fields with `name` in `InitSpecETLArgs` and `InitCodeETLArgs` types to align with updated ETL init API spec.
 
 ## [1.13.8] - 2025-05-15
 

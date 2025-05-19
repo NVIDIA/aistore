@@ -46,8 +46,8 @@ type etlBootstrapper struct {
 }
 
 func (b *etlBootstrapper) createPodSpec() (err error) {
-	if b.pod, err = ParsePodSpec(b.errCtx, b.msg.Spec); err != nil {
-		return
+	if b.pod, err = b.msg.ParsePodSpec(); err != nil {
+		return cmn.NewErrETLf(b.errCtx, "failed to parse pod spec: %v\n%q", err, string(b.msg.Spec))
 	}
 	b.originalPodName = b.pod.GetName()
 	b.errCtx.ETLName = b.originalPodName
@@ -60,6 +60,7 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 	b.pod.SetName(k8s.CleanName(b.msg.Name() + "-" + core.T.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
+	b.pod.Kind = "Pod"
 
 	// The following combination of Affinity and Anti-Affinity provides for:
 	// 1. The ETL container is always scheduled on the target invoking it.

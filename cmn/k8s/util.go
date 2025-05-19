@@ -20,6 +20,9 @@ const (
 func ValidateEtlName(name string) error {
 	const prefix = "ETL name %q "
 	l := len(name)
+	if l == 0 {
+		return fmt.Errorf(prefix+"is empty", name)
+	}
 	if l < shortNameETL {
 		return fmt.Errorf(prefix+"is too short", name)
 	}

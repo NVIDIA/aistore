@@ -67,7 +67,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         expected_action["spec"] = base64.b64encode(
             template.encode(UTF_ENCODING)
         ).decode(UTF_ENCODING)
-        expected_action["id"] = self.etl_name
+        expected_action["name"] = self.etl_name
 
         expected_response_text = self.etl_name
         mock_response = Mock()
@@ -181,7 +181,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         return base64.b64encode(template).decode(UTF_ENCODING)
 
     def init_code_exec_assert(self, expected_action, **kwargs):
-        expected_action["id"] = self.etl_name
+        expected_action["name"] = self.etl_name
 
         expected_response_text = "response text"
         mock_response = Mock()

@@ -200,7 +200,6 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 	ecode, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      rtyr.call,
 		SoftErr:   10,
-		HardErr:   2,
 		Verbosity: cmn.RetryLogVerbose,
 		Sleep:     max(cmn.Rom.MaxKeepalive(), time.Second*5),
 	})

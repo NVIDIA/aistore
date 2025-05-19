@@ -1102,9 +1102,8 @@ var (
 	// ETL
 	etlExtFlag  = cli.StringFlag{Name: "ext", Usage: "Mapping from old to new extensions of transformed objects' names"}
 	etlNameFlag = cli.StringFlag{
-		Name:     "name",
-		Usage:    "unique ETL name (leaving this field empty will have unique ID auto-generated)",
-		Required: true,
+		Name:  "name",
+		Usage: "unique ETL name (leaving this field empty will have unique ID auto-generated)",
 	}
 	etlObjectRequestTimeout = DurationFlag{
 		Name: "object-timeout",

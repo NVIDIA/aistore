@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -20,6 +21,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -44,8 +47,10 @@ const (
 )
 
 const (
-	DefaultInitTimeout = 45 * time.Second
-	DefaultObjTimeout  = 10 * time.Second
+	DefaultInitTimeout   = 45 * time.Second
+	DefaultObjTimeout    = 10 * time.Second
+	DefaultAbortTimeout  = 2 * time.Second
+	DefaultContainerPort = 8000
 )
 
 // enum ETL lifecycle status (see docs/etl.md#etl-pod-lifecycle for details)
@@ -94,16 +99,28 @@ type (
 
 	// and implementations
 	InitMsgBase struct {
-		EtlName          string       `json:"id"`
-		CommTypeX        string       `json:"communication"` // enum commTypes
-		ArgTypeX         string       `json:"argument"`      // enum argTypes
-		InitTimeout      cos.Duration `json:"init_timeout,omitempty"`
-		ObjTimeout       cos.Duration `json:"obj_timeout,omitempty"`
-		SupportDirectPut bool         `json:"support_direct_put,omitempty"`
+		EtlName          string       `json:"name" yaml:"name"`
+		CommTypeX        string       `json:"communication" yaml:"communication"`
+		ArgTypeX         string       `json:"argument" yaml:"argument"`
+		InitTimeout      cos.Duration `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty"`
+		ObjTimeout       cos.Duration `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty"`
+		SupportDirectPut bool         `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
 	}
 	InitSpecMsg struct {
 		Spec []byte `json:"spec"`
 		InitMsgBase
+	}
+
+	// ETLSpec is a YAML representation of the ETL pod spec.
+	ETLSpec struct {
+		InitMsgBase             // included all optional fields from InitMsgBase
+		Runtime     RuntimeSpec `json:"runtime" yaml:"runtime"`
+	}
+
+	RuntimeSpec struct {
+		Image   string          `json:"image" yaml:"image"`
+		Command []string        `json:"command,omitempty" yaml:"command,omitempty"`
+		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
 	}
 
 	// ========================================================================================
@@ -280,6 +297,11 @@ func (m *InitMsgBase) validate(detail string) error {
 			"and that your ETL server properly implements the direct put mechanism")
 		return cmn.NewErrUnsuppErr(err)
 	}
+
+	if !strings.HasSuffix(m.CommTypeX, CommTypeSeparator) {
+		m.CommTypeX += CommTypeSeparator
+	}
+
 	// NOTE: default timeout
 	if m.InitTimeout == 0 {
 		m.InitTimeout = cos.Duration(DefaultInitTimeout)
@@ -319,9 +341,9 @@ func (m *InitSpecMsg) Validate() error {
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 
 	// Check pod specification constraints.
-	pod, err := ParsePodSpec(errCtx, m.Spec)
+	pod, err := m.ParsePodSpec()
 	if err != nil {
-		return err
+		return cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(m.Spec))
 	}
 	if len(pod.Spec.Containers) != 1 {
 		return cmn.NewErrETLf(errCtx, "unsupported number of containers (%d), expected: 1", len(pod.Spec.Containers))
@@ -353,14 +375,6 @@ func (m *InitSpecMsg) Validate() error {
 		return cmn.NewErrETLf(errCtx, "readinessProbe port must be the %q port", k8s.Default)
 	}
 
-	if m.CommTypeX == "" {
-		comm, found := pod.ObjectMeta.Annotations[CommTypeAnnotation]
-		if !found {
-			return cmn.NewErrETLf(errCtx, "annotations.communication_type must be provided, or specified in the init message")
-		}
-		m.CommTypeX = comm
-	}
-
 	if dp, found := pod.ObjectMeta.Annotations[SupportDirectPutAnnotation]; found {
 		m.SupportDirectPut, err = cos.ParseBool(dp)
 		if err != nil {
@@ -368,22 +382,86 @@ func (m *InitSpecMsg) Validate() error {
 		}
 	}
 
-	if !strings.HasSuffix(m.CommTypeX, CommTypeSeparator) {
-		m.CommTypeX += CommTypeSeparator
-	}
-
 	return m.InitMsgBase.validate(m.String())
 }
 
-func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {
-	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(spec, nil, nil)
+func (s *ETLSpec) Validate() error {
+	errCtx := &cmn.ETLErrCtx{ETLName: s.Name()}
+	if s.Runtime.Image == "" {
+		return cmn.NewErrETLf(errCtx, "runtime.image must be specified")
+	}
+	return nil
+}
+
+// ParsePodSpec parses `m.Spec` into a Kubernetes Pod object.
+// First, it tries to parse as an ETLSpec. If that fails, it falls back to a full Pod spec.
+func (m *InitSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
+	if pod, err := m.parseAsETLSpec(); err == nil {
+		return pod, nil
+	}
+	return m.parseAsFullPodSpec()
+}
+
+func (m *InitSpecMsg) parseAsETLSpec() (*corev1.Pod, error) {
+	var etlSpec ETLSpec
+	if err := yaml.Unmarshal(m.Spec, &etlSpec); err != nil {
+		return nil, err
+	}
+	if err := etlSpec.Validate(); err != nil {
+		return nil, err
+	}
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:            etlSpec.EtlName,
+				Image:           etlSpec.Runtime.Image,
+				ImagePullPolicy: corev1.PullAlways,
+				Ports:           []corev1.ContainerPort{{Name: k8s.Default, ContainerPort: DefaultContainerPort}},
+				ReadinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Path: "/" + apc.ETLHealth,
+							Port: intstr.FromString(k8s.Default),
+						},
+					},
+				},
+				Command: etlSpec.Runtime.Command,
+				Env:     etlSpec.Runtime.Env,
+			}},
+		},
+	}
+
+	// Override optional InitMsg fields if present in etlSpec
+	if etlSpec.EtlName != "" {
+		m.EtlName = etlSpec.EtlName
+	}
+	if commType := etlSpec.CommType(); commType != "" {
+		m.CommTypeX = commType
+	}
+	if argType := etlSpec.ArgType(); argType != "" {
+		m.ArgTypeX = argType
+	}
+	if etlSpec.IsDirectPut() {
+		m.SupportDirectPut = true
+	}
+	if etlSpec.InitTimeout != 0 {
+		m.InitTimeout = etlSpec.InitTimeout
+	}
+	if etlSpec.ObjTimeout != 0 {
+		m.ObjTimeout = etlSpec.ObjTimeout
+	}
+	return pod, nil
+}
+
+func (m *InitSpecMsg) parseAsFullPodSpec() (*corev1.Pod, error) {
+	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(m.Spec, nil, nil)
 	if err != nil {
-		return nil, cmn.NewErrETLf(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
+		return nil, err
 	}
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return nil, cmn.NewErrETL(errCtx, "expected pod spec, got: "+kind)
+		return nil, errors.New("expected pod spec, got: " + kind)
 	}
 	return pod, nil
 }

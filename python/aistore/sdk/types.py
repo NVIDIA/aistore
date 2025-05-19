@@ -316,7 +316,7 @@ class ETLDetails(BaseModel):
     Represents the API response of queries on single ETL details
     """
 
-    id: str
+    name: str
     communication: str
     init_timeout: Optional[str]
     obj_timeout: Optional[str]
@@ -361,7 +361,7 @@ class InitSpecETLArgs(InitETLArgs):
 
     def as_dict(self):
         return {
-            "id": self.etl_name,
+            "name": self.etl_name,
             "init_timeout": self.init_timeout,
             "obj_timeout": self.obj_timeout,
             "communication": f"{self.communication_type}://",
@@ -383,7 +383,7 @@ class InitCodeETLArgs(InitETLArgs):
 
     def as_dict(self):
         dict_rep = {
-            "id": self.etl_name,
+            "name": self.etl_name,
             "runtime": self.runtime,
             "communication": f"{self.communication_type}://",
             "init_timeout": self.init_timeout,
