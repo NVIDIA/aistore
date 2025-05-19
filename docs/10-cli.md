@@ -1,22 +1,38 @@
-# Observability: CLI
+# AIStore Observability: CLI
 
 > The CLI is the fastest way to interrogate an AIS cluster from a terminal. This page is a jump‑table to the handful of commands every SRE or developer uses when triaging performance or capacity issues. For full syntax hit <kbd>--help</kbd> on any command or see the separate [CLI reference](/docs/cli.md).
 
-## Install
+## Table of Contents
+- [Installation](#installation)
+- [Cluster Status](#cluster-status)
+  - [Example: Node-level Alerts](#example-node-level-alerts)
+- [Node Alerts](#node-alerts)
+- [Live Performance Monitoring](#live-performance-monitoring)
+  - [Key Flags](#key-flags)
+- [Log Management](#log-management)
+- [Common Command Examples](#common-command-examples)
+- [Best Practices](#best-practices)
+- [Troubleshooting Common Issues](#troubleshooting-common-issues)
+- [CLI Resources](#cli-resources)
+- [Related Documentation](#related-documentation)
 
-There are several ways to install AIS CLI. The easiest maybe is using:
+## Installation
+
+There are several ways to install AIS CLI:
+
+1. Using the installation script (recommended):
 
 ```console
 ./scripts/install_from_binaries.sh --help
 ```
 
-The script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the latest or previous GitHub [release](https://github.com/NVIDIA/aistore/releases) and enables CLI auto-completions.
+This script installs [aisloader](/docs/aisloader.md) and [CLI](/docs/cli.md) from the latest or previous GitHub [release](https://github.com/NVIDIA/aistore/releases) and enables CLI auto-completions.
 
-Or, you could also follow this [quick-start](/docs/getting_started.md(#quick-start) instruction.
+2. Follow the [quick-start](/docs/getting_started.md#quick-start) instructions.
 
-Finally, for detailed introduction (including installation) and usage, see the [CLI Overview](/docs/cli.md).
+3. For detailed introduction (including installation) and usage, see the [CLI Overview](/docs/cli.md).
 
-When done with installing CLI, do not forget to configure AIS endpoint - via `ais config cli` command or environment:
+After installation, configure your AIS endpoint via the `ais config cli` command or environment variables:
 
 ```console
 ## HTTP
@@ -42,7 +58,7 @@ ais show cluster
 ais show cluster --help
 ```
 
-### Example: node-level alerts
+### Example: Node-level Alerts
 
 ```console
 $ ais show cluster
@@ -57,7 +73,43 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1
 ...
 ```
 
-## Live performance loops
+## Node Alerts
+
+AIStore node states are categorized into three severity levels:
+
+1. **Red Alerts** - Critical issues requiring immediate attention:
+   - `OOS` - Out of space condition
+   - `OOM` - Out of memory condition
+   - `OOCPU` - Out of CPU resources
+   - `DiskFault` - Disk failures detected
+   - `NoMountpaths` - No available mountpaths
+   - `NumGoroutines` - Excessive number of goroutines
+   - `CertificateExpired` - TLS certificate has expired
+   - `CertificateInvalid` - TLS certificate is invalid
+
+2. **Warning Alerts** - Potential issues that may require attention:
+   - `Rebalancing` - Rebalance operation in progress
+   - `RebalanceInterrupted` - Rebalance was interrupted
+   - `Resilvering` - Resilvering operation in progress
+   - `ResilverInterrupted` - Resilver was interrupted
+   - `NodeRestarted` - Node was restarted (powercycle, crash)
+   - `MaintenanceMode` - Node is in maintenance mode
+   - `LowCapacity` - Low storage capacity (OOS possible soon)
+   - `LowMemory` - Low memory condition (OOM possible soon)
+   - `LowCPU` - Low CPU availability
+   - `CertWillSoonExpire` - TLS certificate will expire soon
+   - `KeepAliveErrors` - Recent keep-alive errors detected
+
+3. **Information States** - Normal operational states:
+   - `ClusterStarted` - Cluster has started (primary) or node has joined cluster
+   - `NodeStarted` - Node has started (may not have joined cluster yet)
+   - `VoteInProgress` - Voting process is in progress
+
+Node state flags are also exposed via Prometheus metrics - for details, see:
+
+* [Node Alerts in AIStore Prometheus docs](/docs/30-prometheus.md#node-alerts).
+
+## Live Performance Monitoring
 
 `ais performance` (alias `ais show performance`) exposes five sub‑commands. The two most used are **throughput** and **latency**.
 
@@ -69,7 +121,7 @@ $ ais performance throughput --refresh 30
 $ ais performance latency --refresh 10 --regex "get"
 ```
 
-### Key flags
+### Key Flags
 
 | Flag              | Meaning                               |
 | ----------------- | ------------------------------------- |
@@ -80,7 +132,7 @@ $ ais performance latency --refresh 10 --regex "get"
 
 > See [`cli-performance.md`](/docs/cli/performance.md) for sub‑command specifics.
 
-## Log streaming & collection
+## Log Management
 
 | Task                                   | Command                                     |
 | -------------------------------------- | ------------------------------------------- |
@@ -88,9 +140,11 @@ $ ais performance latency --refresh 10 --regex "get"
 | Download all logs for a support bundle | `ais cluster download-logs`                 |
 | Rotate logs on one node                | `ais advanced rotate-logs <NODE_ID>`        |
 
----
+For more details on log configuration and analysis, see [Observability: Logs](/docs/20-logs.md).
 
-## One‑liners you’ll actually type
+## Common Command Examples
+
+Here are some frequently used command combinations for everyday operations:
 
 ```console
 # Daily capacity & health snapshot
@@ -111,13 +165,13 @@ ais scrub gs --nr --refresh 20s --count 3
 - **Performance Baselines**: Establish baseline performance with `ais performance show` after initial deployment
 - **Monitoring Script**: Create a shell script with key monitoring commands for daily checks
 - **Alert Integration**: Pipe CLI output to monitoring systems for automated alerting
-- **Log Collection**: To collect logs, Integrate with Kubernetes monitoring stack or (at least) use `ais cluster download-logs`
+- **Log Collection**: To collect logs, integrate with a Kubernetes monitoring stack or (at least) use `ais cluster download-logs`
 
 ## Troubleshooting Common Issues
 
 | Issue | CLI Command | What to Look For |
 |-------|------------|------------------|
-| Node experiencing problems, transitioned to maintenance mode, or went offline | `ais show cluster` | Check the ALERT column (example above) |
+| Node experiencing problems or went offline | `ais show cluster` | Check the ALERT column (example above) |
 | Disk failures | `ais storage mountpath` | Look for disabled or detached mountpaths |
 | Performance degradation | `ais performance --refresh 30s` | Compare against baseline numbers |
 | Failed operations | `ais log show --severity error` | Common error patterns |
@@ -141,7 +195,7 @@ ais scrub gs --nr --refresh 20s --count 3
 - [Jobs](/docs/cli/job.md)
 - [AIS CLI Reference](/docs/cli.md)
 
-## Related Observability Documentation
+## Related Documentation
 
 | Document | Description |
 |----------|-------------|

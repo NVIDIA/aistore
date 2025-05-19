@@ -2,6 +2,30 @@
 
 This document explains how to integrate AIStore with Grafana for visualization and monitoring of AIStore metrics. Grafana provides powerful visualization capabilities for Prometheus metrics collected from AIStore nodes.
 
+## Table of Contents
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Deployment Options](#deployment-options)
+  - [Kubernetes Deployment](#kubernetes-deployment)
+  - [Standalone Deployment](#standalone-deployment)
+- [Grafana Setup](#grafana-setup)
+  - [Adding Prometheus Data Source](#adding-prometheus-data-source)
+  - [Importing AIStore Dashboards](#importing-aistore-dashboards)
+- [Available Dashboards](#available-dashboards)
+  - [AIStore Cluster Dashboard](#aistore-cluster-dashboard)
+  - [AIStore Kubernetes Dashboard](#aistore-kubernetes-dashboard)
+- [Creating Custom Dashboards](#creating-custom-dashboards)
+  - [Key Metrics to Visualize](#key-metrics-to-visualize)
+  - [Example PromQL Queries](#example-promql-queries)
+  - [Variable Templates](#variable-templates)
+- [Alert Configuration](#alert-configuration)
+  - [Node State Alerts](#node-state-alerts)
+  - [Performance Alerts](#performance-alerts)
+  - [Resource Alerts](#resource-alerts)
+- [Production Best Practices](#production-best-practices)
+- [Troubleshooting](#troubleshooting)
+- [Further Resources](#further-resources)
+
 ## Architecture
 
 The integration architecture follows a standard monitoring pattern:
@@ -15,27 +39,56 @@ The integration architecture follows a standard monitoring pattern:
 └─────────────┘      └─────────────┘      └─────────────┘
 ```
 
-1. AIStore nodes expose metrics endpoints
+1. AIStore nodes expose metrics endpoints (via the `/metrics` HTTP endpoint)
 2. Prometheus scrapes metrics at regular intervals
-3. Grafana queries Prometheus and visualizes the data
+3. Grafana queries Prometheus and visualizes the data through customizable dashboards
 
 ## Prerequisites
 
-- AIStore cluster with Prometheus metrics enabled
+- AIStore cluster with Prometheus metrics enabled (default in current versions)
 - Prometheus server configured to scrape AIStore metrics
 - Grafana server (v9.0+ recommended)
 
-## Grafana Installation
+## Deployment Options
 
-If you don't have Grafana installed yet:
+### Kubernetes Deployment
 
-### Docker Installation
+For production deployments, AIStore is typically deployed on Kubernetes using the [ais-k8s operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator).
+
+The [github.com/NVIDIA/ais-k8s](https://github.com/NVIDIA/ais-k8s) repository includes monitoring components that set up Prometheus and Grafana with preconfigured dashboards in the [monitoring](https://github.com/NVIDIA/ais-k8s/tree/main/monitoring) directory.
+
+To deploy AIStore with monitoring on Kubernetes:
+
+1. Clone the ais-k8s repository:
+   ```bash
+   git clone https://github.com/NVIDIA/ais-k8s.git
+   cd ais-k8s
+   ```
+
+2. Deploy AIStore with the operator, which includes monitoring stack:
+   ```bash
+   # Follow the operator deployment instructions in ais-k8s documentation
+   ```
+
+3. The monitoring stack includes:
+   - Prometheus for metrics collection
+   - Grafana for visualization
+   - AlertManager for alert routing
+   - Preconfigured dashboards for AIStore
+
+### Standalone Deployment
+
+For non-Kubernetes deployments or development environments, you can set up Grafana separately.
+
+#### Grafana Installation
+
+##### Docker Installation
 
 ```bash
 docker run -d -p 3000:3000 --name grafana grafana/grafana-oss
 ```
 
-### Standard Installation
+##### Standard Installation
 
 ```bash
 # Debian/Ubuntu
@@ -51,14 +104,14 @@ sudo systemctl start grafana-server
 
 For other platforms, see the [Grafana installation documentation](https://grafana.com/docs/grafana/latest/installation/).
 
-## Configuring Grafana
+## Grafana Setup
 
 ### Adding Prometheus Data Source
 
 1. Log in to Grafana (default: http://localhost:3000, admin/admin)
 2. Go to Configuration > Data Sources > Add data source
 3. Select Prometheus
-4. Set the URL to your Prometheus server (e.g., http://localhost:9090)
+4. Set the URL to your Prometheus server (e.g., http://prometheus-server:9090)
 5. Click "Save & Test" to verify the connection
 
 ### Importing AIStore Dashboards
@@ -68,7 +121,6 @@ AIStore provides pre-built Grafana dashboards for monitoring:
 #### Method 1: Import from JSON
 
 1. Download the AIStore dashboard JSON file:
-   - [AIStore Cluster Dashboard](https://github.com/NVIDIA/aistore/blob/main/deploy/grafana/dashboards/ais_dashboard.json)
    - [AIStore Kubernetes Dashboard](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/kube-prom/dashboard-configmap/ais_dashboard.json)
 
 2. In Grafana, go to Dashboards > Import
@@ -76,12 +128,14 @@ AIStore provides pre-built Grafana dashboards for monitoring:
 4. Select your Prometheus data source
 5. Click Import
 
-#### Method 2: Import via Grafana.com
+#### Method 2: Manual Dashboard Creation
 
-1. In Grafana, go to Dashboards > Import
-2. Enter the dashboard ID: `10770` (AIStore Cluster Dashboard)
-3. Select your Prometheus data source
-4. Click Import
+If you prefer to build dashboards from scratch:
+
+1. In Grafana, create a new dashboard (+ > Create > Dashboard)
+2. Add panels with AIStore-specific metrics using the PromQL queries provided in the [Example PromQL Queries](#example-promql-queries) section
+3. Organize panels into logical sections (cluster overview, node details, operations, etc.)
+4. Save the dashboard
 
 ## Available Dashboards
 
@@ -96,17 +150,26 @@ The main AIStore dashboard provides:
 - Error rates
 - Resource usage (CPU, memory)
 
-![AIStore Grafana Dashboard](https://github.com/NVIDIA/aistore/blob/main/docs/images/grafana_dashboard.png)
+![AIStore Grafana Dashboard](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/images/grafana.png)
+
+Key panels include:
+
+- **Cluster Health**: Node status, rebalance status
+- **Operations**: GET/PUT/DELETE throughput, latency statistics
+- **Storage**: Capacity, utilization, growth trends
+- **Resources**: CPU, memory, network usage by node
+- **Errors**: Error rates, error distribution by type
 
 ### AIStore Kubernetes Dashboard
 
-For Kubernetes deployments, a specialized dashboard includes:
+For Kubernetes deployments, the specialized dashboard includes:
 
 - Pod status and health
-- Node resource utilization
+- Node resource utilization by pod
 - Storage performance by pod
 - Network metrics
 - Rebalance monitoring
+- Kubernetes-specific resource allocation
 
 ## Creating Custom Dashboards
 
@@ -118,11 +181,13 @@ When creating custom dashboards, consider including:
    - Number of online nodes
    - Storage capacity and usage
    - Error rates
+   - Node states and alerts
 
 2. **Performance**
    - Throughput (GET/PUT/DELETE)
    - Operation latency
    - Request rates
+   - Cache hit ratios
 
 3. **Resources**
    - CPU utilization
@@ -130,62 +195,50 @@ When creating custom dashboards, consider including:
    - Disk I/O
    - Network traffic
 
-### Example Dashboard Panels
+### Example PromQL Queries
 
-#### Throughput Panel
-
-```
-# Query A (GET throughput)
-sum(rate(ais_throughput_bytes{op="get"}[5m]))
-
-# Query B (PUT throughput)
-sum(rate(ais_throughput_bytes{op="put"}[5m]))
-
-# Query C (DELETE throughput)
-sum(rate(ais_throughput_bytes{op="delete"}[5m]))
-```
-
-#### Latency Panel
+#### Throughput Panels
 
 ```
-# Query A (GET latency)
-sum(rate(ais_latency_ns{op="get"}[5m])) / sum(rate(ais_operations_count{op="get"}[5m])) / 1000000
+# GET throughput (bytes/sec)
+sum(rate(ais_target_get_bytes[5m]))
 
-# Query B (PUT latency)
-sum(rate(ais_latency_ns{op="put"}[5m])) / sum(rate(ais_operations_count{op="put"}[5m])) / 1000000
+# PUT throughput (bytes/sec)
+sum(rate(ais_target_put_bytes[5m]))
+
+# DELETE operations/sec
+sum(rate(ais_target_delete_count[5m]))
+```
+
+#### Latency Panels
+
+```
+# GET latency (milliseconds) using PromQL
+sum(rate(ais_target_get_ns_total[5m])) / sum(rate(ais_target_get_count[5m])) / 1000000
+
+# PUT latency (milliseconds) using PromQL
+sum(rate(ais_target_put_ns_total[5m])) / sum(rate(ais_target_put_count[5m])) / 1000000
 ```
 
 #### Storage Usage Panel
 
 ```
-# Query
-100 * sum(ais_disk_used_bytes) / sum(ais_disk_capacity_bytes)
+# Cluster storage utilization percentage
+100 * sum(ais_target_capacity_used) / sum(ais_target_capacity_total)
+
+# Storage used by node
+ais_target_capacity_used{node_id="$node"}
 ```
 
-## Alert Configuration
+#### Node State Panels
 
-Grafana can be configured to send alerts based on metric thresholds:
+```
+# Node state flags (alert conditions)
+ais_target_state_flags{node_id="$node"}
 
-1. Edit a panel in your dashboard
-2. Go to the Alert tab
-3. Configure alert conditions, for example:
-   - Condition: avg() of query(A,5m,now) is above 90
-   - (For disk usage > 90%)
-4. Set the notification channel (email, Slack, etc.)
-5. Save the alert
-
-### Common Alert Thresholds
-
-| Metric | Warning | Critical | Description |
-|--------|---------|----------|-------------|
-| Disk Usage | 85% | 95% | Storage capacity utilization |
-| Error Rate | 1% | 5% | Operation error percentage |
-| Node Count | n-1 | n-2 | Number of online nodes vs. expected |
-| CPU Usage | 70% | 90% | CPU utilization |
-| Memory Usage | 80% | 95% | Memory utilization |
-| Latency | 2x baseline | 5x baseline | Operation latency increase |
-
-## Advanced Visualization
+# Nodes with red alerts (OOS - out of space)
+ais_target_state_flags > 0 and ais_target_state_flags & 8192 > 0
+```
 
 ### Variable Templates
 
@@ -196,32 +249,50 @@ Create dashboard variables to make your dashboard more interactive:
    - Name: `node`
    - Type: Query
    - Data source: Prometheus
-   - Query: `label_values(ais_daemon_info, daemon_id)`
+   - Query: `label_values(ais_target_uptime, node_id)`
 
-Use the variable in your queries: `{daemon_id="$node"}`
+Use the variable in your queries: `{node_id="$node"}`
 
-### Heatmaps for Latency Distribution
+## Alert Configuration
 
-For latency visualization, consider using Grafana heatmaps:
+Grafana can be configured to send alerts based on metric thresholds:
 
-1. Add a new panel
-2. Select Heatmap visualization
-3. Use a query like:
-   ```
-   rate(ais_latency_ns_bucket{op="get"}[5m])
-   ```
-4. Format as Heatmap
+### Node State Alerts
 
-### Multi-Cluster Comparison
+Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AIStore Prometheus docs](/docs/30-prometheus.md#node-alerts) for all available states):
 
-For comparing multiple AIStore clusters:
+1. Create an alert for red alert conditions:
+   - Condition: `ais_target_state_flags{node_id=~"$node"} > 0 and (ais_target_state_flags{node_id=~"$node"} & 8192 > 0 or ais_target_state_flags{node_id=~"$node"} & 16384 > 0)`
+   - Description: "Critical node state alert detected"
+   - Severity: Critical
 
-1. Create a variable for cluster selection:
-   - Name: `cluster`
-   - Type: Query
-   - Query: `label_values(ais_cluster_version, cluster_name)`
+2. Create an alert for warning conditions:
+   - Condition: `ais_target_state_flags{node_id=~"$node"} > 0 and (ais_target_state_flags{node_id=~"$node"} & 128 > 0 or ais_target_state_flags{node_id=~"$node"} & 4096 > 0)`
+   - Description: "Warning node state alert detected"
+   - Severity: Warning
 
-2. Use in your queries: `{cluster_name="$cluster"}`
+### Performance Alerts
+
+1. High latency alert:
+   - Condition: `sum(rate(ais_target_get_ns_total[5m])) / sum(rate(ais_target_get_count[5m])) / 1000000 > 200`
+   - Description: "GET operation latency exceeds 200ms"
+
+2. Error rate alert:
+   - Condition: `sum(rate(ais_target_err_get_count[5m])) / sum(rate(ais_target_get_count[5m])) * 100 > 1`
+   - Description: "GET error rate exceeds 1%"
+
+### Resource Alerts
+
+Common alert thresholds:
+
+| Metric | Warning | Critical | Description |
+|--------|---------|----------|-------------|
+| Disk Usage | 85% | 95% | Storage capacity utilization |
+| Error Rate | 1% | 5% | Operation error percentage |
+| Node Count | n-1 | n-2 | Number of online nodes vs. expected |
+| CPU Usage | 70% | 90% | CPU utilization |
+| Memory Usage | 80% | 95% | Memory utilization |
+| Latency | 2x baseline | 5x baseline | Operation latency increase |
 
 ## Production Best Practices
 
@@ -238,38 +309,68 @@ For comparing multiple AIStore clusters:
 3. **Performance Considerations**
    - Limit the number of panels per dashboard
    - Use appropriate time ranges
-   - Avoid overly complex queries
+   - Avoid overly complex queries that could impact Prometheus
 
-4. **User Management**
+4. **High Availability**
+   - Deploy Prometheus with high availability for production
+   - Consider using Grafana Enterprise for critical environments
+   - Set up redundant alerting paths
+
+5. **Security**
    - Configure proper authentication
    - Set up appropriate user roles
    - Share dashboards with read-only permissions
+   - Use TLS for all communications
 
 ## Troubleshooting
 
 ### No Data in Grafana
 
-1. Verify Prometheus data source connection
-2. Check if Prometheus is successfully scraping AIStore metrics
-3. Validate that the query returns data in Prometheus UI
-4. Check time range settings in Grafana
+1. Verify Prometheus data source connection:
+   - Check Prometheus server health
+   - Ensure connectivity between Grafana and Prometheus
+   - Test connection in Data Sources section
+
+2. Check metrics collection:
+   - Verify AIStore nodes are exposing metrics
+   - Test direct access to metrics endpoint: `curl http://<aistore-node>:<port>/metrics`
+   - Check Prometheus targets status
+
+3. Validate PromQL queries:
+   - Test queries directly in Prometheus UI
+   - Check for typos in metric names
+   - Verify label selectors match your deployment
 
 ### Incomplete Metrics
 
-1. Ensure all AIStore nodes are being scraped
-2. Verify that AIStore has Prometheus metrics enabled
-3. Check for any errors in Prometheus logs
+1. Ensure all AIStore nodes are being scraped:
+   - Check Prometheus targets
+   - Verify scrape configurations
+   - Check for connectivity issues
+
+2. Check for missing or incomplete metrics:
+   - Review AIStore logs for metrics-related messages
+   - Verify AIStore version compatibility with dashboards
+   - Check for misconfiguration in Prometheus scrape settings
 
 ### Dashboard Performance Issues
 
-1. Simplify complex queries
-2. Reduce the number of panels
-3. Increase the minimum refresh interval
-4. Use recording rules for frequently used queries
+1. Optimize queries:
+   - Simplify complex queries
+   - Add appropriate time ranges
+   - Use recording rules for frequently used queries
+
+2. Reduce load:
+   - Decrease dashboard refresh rate
+   - Limit the number of panels per dashboard
+   - Consider splitting complex dashboards
 
 ## Further Resources
 
-- [AIStore Metrics Reference](31-metrics-reference.md)
+- [AIStore Metrics Reference](/docs/31-metrics-reference.md)
+- [AIStore Prometheus Integration](/docs/30-prometheus.md)
+- [AIStore K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator)
+- [AIStore K8s Monitoring](https://github.com/NVIDIA/ais-k8s/tree/main/monitoring)
 - [Grafana Documentation](https://grafana.com/docs/)
 - [Prometheus and Grafana Best Practices](https://prometheus.io/docs/practices/instrumentation/)
 - [Advanced PromQL Queries](https://prometheus.io/docs/prometheus/latest/querying/examples/)
