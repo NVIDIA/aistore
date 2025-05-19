@@ -287,9 +287,9 @@ For convenience, a table that summarizes target metrics follows below.
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: CLI](10-cli.md) | Command-line monitoring tools |
-| [Observability: Logs](20-logs.md) | Log-based observability |
-| [Observability: Prometheus](30-prometheus.md) | Configuring Prometheus with AIS |
-| [Observability: Grafana](40-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Observability: Kubernetes](50-k8s.md) | Working with Kubernetes monitoring stacks |
+| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
+| [Observability: CLI](/docs/10-cli.md) | Command-line monitoring tools |
+| [Observability: Logs](/docs/20-logs.md) | Log-based observability |
+| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
+| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |

@@ -1,6 +1,6 @@
 # Observability: CLI
 
-The Command Line Interface (CLI) provides powerful tools for monitoring and troubleshooting your AIStore (AIS) deployment. This document covers CLI commands specifically focused on observability.
+> The CLI is the fastest way to interrogate an AIS cluster from a terminal. This page is a jump‑table to the handful of commands every SRE or developer uses when triaging performance or capacity issues. For full syntax hit <kbd>--help</kbd> on any command or see the separate [CLI reference](/docs/cli.md).
 
 ## Install
 
@@ -28,6 +28,12 @@ export AIS_ENDPOINT=https://your-ais-cluster-endpoint:port
 
 ## Cluster Status
 
+| Question                            | Command                 | Typical flags   |
+| ----------------------------------- | ----------------------- | --------------- |
+| Nodes and their respective health? Any alerts? Out of space? Out of memory? | `ais show cluster`  | `--refresh 1m` |
+| How much space is left?             | `ais storage summary`   | `--cached`, `--units`, `--prefix`, `--refresh`  |
+| Are any mountpaths down?            | `ais storage mountpath` | `--fshc` (to run filesystem health checker), `--rescan-disks` |
+
 ```console
 # Get summary of cluster membership, capacity, and health
 ais show cluster
@@ -51,6 +57,54 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1
 ...
 ```
 
+## Live performance loops
+
+`ais performance` (alias `ais show performance`) exposes five sub‑commands. The two most used are **throughput** and **latency**.
+
+```console
+# 30‑second rolling throughput for all targets
+$ ais performance throughput --refresh 30
+
+# 10‑second latency slice, filter to GET operations
+$ ais performance latency --refresh 10 --regex "get"
+```
+
+### Key flags
+
+| Flag              | Meaning                               |
+| ----------------- | ------------------------------------- |
+| `--refresh <dur>` | Continuous mode; prints every *dur*   |
+| `--count <n>`     | Stop after *n* refreshes              |
+| `--regex <re>`    | Show only columns matching the regexp |
+| `--no‑headers`    | Suppress table headers                |
+
+> See [`cli-performance.md`](/docs/cli/performance.md) for sub‑command specifics.
+
+## Log streaming & collection
+
+| Task                                   | Command                                     |
+| -------------------------------------- | ------------------------------------------- |
+| Tail a given node's log                | `ais log show --refresh DURATION --help`    |
+| Download all logs for a support bundle | `ais cluster download-logs`                 |
+| Rotate logs on one node                | `ais advanced rotate-logs <NODE_ID>`        |
+
+---
+
+## One‑liners you’ll actually type
+
+```console
+# Daily capacity & health snapshot
+ais show cluster && ais storage summary
+
+# Watch GET latency for a single target
+ais performance latency t[EkMt8081] --refresh 30 --regex "get(\(t\)|cold)"
+
+# Verify no misplaced objects in GCS buckets (non‑recursive)
+ais scrub gs --nr --refresh 20s --count 3
+```
+
+> Flags such as `--refresh <duration>`, `--count <n>`, `--regex <re>`, `--no-headers`, and `--units` are accepted by most monitoring commands; see `--help` for the definitive list.
+
 ## Best Practices
 
 - **Regular Health Checks**: Run `ais show cluster` and `ais storage summary` daily to ensure cluster health and capacity
@@ -69,7 +123,7 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1
 | Failed operations | `ais log show --severity error` | Common error patterns |
 | Network issues | `ais status network` | High latency or timeout errors |
 
-## Resources
+## CLI Resources
 
 - [`ais help`](/docs/cli/help.md)
 - [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
@@ -86,3 +140,14 @@ t[pDztYhhb]      98.02GiB   16%             960.824GiB  [9.1 13.4 8.3]  108h30m1
 - [User account and access management](/docs/cli/auth.md)
 - [Jobs](/docs/cli/job.md)
 - [AIS CLI Reference](/docs/cli.md)
+
+## Related Observability Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
+| [Observability: Logs](/docs/20-logs.md) | Configuring, accessing, and utilizing AIS logs |
+| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
+| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
+| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |

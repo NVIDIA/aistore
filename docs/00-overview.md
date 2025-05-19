@@ -48,12 +48,12 @@ AIS began with StatsD for metrics collection but has evolved to primarily use Pr
 
 | Method | Description | Use Cases | Documentation |
 |--------|-------------|-----------|---------------|
-| **CLI** | Command-line tools for monitoring and troubleshooting | Quick checks, diagnostics, interactive troubleshooting | [Observability: CLI](10-cli.md) |
-| **Logs** | Detailed event logs with configurable verbosity | Debugging, audit trails, understanding system behavior | [Observability: Logs](20-logs.md) |
-| **Prometheus** | Time-series metrics exposed via HTTP endpoints | Performance monitoring, alerting, trend analysis | [Observability: Prometheus](30-prometheus.md) |
-| **Metrics Reference** | Metric groups, names, and descriptions | Quick search for specific metric | [Observability: Metrics Reference](31-metrics-reference.md) |
-| **Grafana** | Visualization dashboards for AIS metrics | Visual monitoring, sharing operational status | [Observability: Grafana](40-grafana.md) |
-| **Kubernetes** |  Kubernetes deployments | Working with Kubernetes monitoring stacks | [Observability: Kubernetes](50-k8s.md) |
+| **CLI** | Command-line tools for monitoring and troubleshooting | Quick checks, diagnostics, interactive troubleshooting | [Observability: CLI](/docs/10-cli.md) |
+| **Logs** | Detailed event logs with configurable verbosity | Debugging, audit trails, understanding system behavior | [Observability: Logs](/docs/20-logs.md) |
+| **Prometheus** | Time-series metrics exposed via HTTP endpoints | Performance monitoring, alerting, trend analysis | [Observability: Prometheus](/docs/30-prometheus.md) |
+| **Metrics Reference** | Metric groups, names, and descriptions | Quick search for specific metric | [Observability: Metrics Reference](/docs/31-metrics-reference.md) |
+| **Grafana** | Visualization dashboards for AIS metrics | Visual monitoring, sharing operational status | [Observability: Grafana](/docs/40-grafana.md) |
+| **Kubernetes** |  Kubernetes deployments | Working with Kubernetes monitoring stacks | [Observability: Kubernetes](/docs/50-k8s.md) |
 
 ## Kubernetes Integration
 
@@ -112,12 +112,10 @@ ybTtUVWX         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 31   
 
 ## Best Practices
 
-- Configure appropriate [log levels](/docs/cli/config.md) based on your deployment stage (development or production)
-- Set up alerting for critical metrics using Prometheus AlertManager
-- Implement regular dashboard reviews to identify performance trends
-- View or download logs via CLI `ais log` or `ais cluster download-logs` (use `--help` for details)
-- Retain logs according to your organization's retention policies
-- Use metrics to guide optimization efforts and capacity planning
+- Configure appropriate [log levels](/docs/cli/config.md) based on your deployment stage (development or production).
+- Set up alerting for critical metrics using [Prometheus AlertManager](https://prometheus.io/docs/alerting/latest/alertmanager/) to proactively monitor system health.
+- Implement regular [dashboard reviews](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md) to analyze short- and long-term statistics and identify performance trends.
+- View or download logs via [Loki](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/loki/README.md). You can also use the CLI commands `ais log` or `ais cluster download-logs` (use `--help` for details) to access logs for troubleshooting and analysis.
 
 ## Further Reading
 

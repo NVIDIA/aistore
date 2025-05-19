@@ -1,32 +1,60 @@
 # AIStore Observability: Logs
 
-AIStore (AIS) provides comprehensive logging that captures system operations, performance metrics, and error conditions. This document explains how to configure, access, and utilize AIS logs for observability and troubleshooting.
+AIStore (AIS) provides comprehensive logging that captures system operations, performance metrics, and error conditions. 
 
-## Log Configuration
+> **Scope.** How to configure, collect, and read AIS logs.
 
-AIS log settings can be configured in the cluster configuration and viewed using the CLI command `ais config cluster log`. Key settings include:
+AIS logs are the cluster’s ground truth: every proxy or target writes a chronological stream of events, warnings, and periodic performance snapshots. Well‑rotated logs let operators
 
-- **level**: Controls verbosity (from 0 to 5)
-- **max_size**: Maximum size of a single log file before rotation
-- **max_total**: Maximum total size of all log files
-- **flush_time**: How frequently logs are flushed to disk
-- **stats_time**: How frequently performance statistics are logged
-- **to_stderr**: Whether to also output logs to stderr
+* reconstruct incidents (root‑cause analysis),
+* correlate client symptoms with internal state changes, and
+* spot long‑running jobs without polling the control plane.
 
-### Example Configuration
+---
 
-Here's the default configuration from an AIS Local Playground development environment:
+## Configuring logging
+
+```bash
+# show the cluster‑wide logging section (current values)
+ais config cluster log
+```
+
+| Key          | Purpose                                                                                                                            | Typical prod value |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `level`      | Info verbosity **0-5** (`3` = normal, `4`/`5` = chatty, `<3` disables *info*). `W` and `E` are **always** logged.                  | `3`                |
+| `modules`    | Space‑separated list of modules whose *info* lines are forced to **level 5** (e.g., `ec space`). Use `none` to clear the override. | `none`             |
+| `max_size`   | Rotate when a single file exceeds this size                                                                                        | `32MiB`            |
+| `max_total`  | Upper bound for the entire directory (oldest files deleted first)                                                                  | `1GiB`             |
+| `flush_time` | How often each daemon flushes its in‑memory buffer                                                                                 | `10s`              |
+| `stats_time` | Interval for automatic performance snapshots                                                                                       | `60s`              |
+| `to_stderr`  | Duplicate log lines to stderr (handy for systemd / kubectl logs)                                                                   | `false`            |
+
+```
+
+Show current values:
+
+```bash
+ais config cluster log               # cluster‑wide
+ais config node   NODE_ID log        # single node (effective)
+```
+
+The new value propagates to every node within a second.
+
+### Example (development defaults)
 
 ```json
-    "log": {
-        "level": "3",
-        "max_size": "4MiB",
-        "max_total": "128MiB",
-        "flush_time": "1m",
-        "stats_time": "1m",
-        "to_stderr": false
-    }
+"log": {
+    "level": "3",
+    "modules": "none",
+    "max_size": "4MiB",
+    "max_total": "128MiB",
+    "flush_time": "1m",
+    "stats_time": "1m",
+    "to_stderr": false
+}
 ```
+
+### Example (production configuration)
 
 In production environments, settings are typically adjusted for higher retention and less frequent statistics collection:
 
@@ -48,6 +76,131 @@ I 19:28:24.774518 config:2143 log.dir: "/var/log/ais"; l4.proto: tcp; pub port: 
 I 19:28:24.774523 config:2145 config: "/etc/ais/.ais.conf"; stats_time: 10s; authentication: false; backends: [aws]
 ```
 
+---
+
+## Severity & verbosity
+
+AIS prepends every line with a **severity prefix** and—in the case of informational messages—an **internal numeric level**.
+
+### Severity prefixes
+
+| Prefix | Meaning                              | Printed when             |
+| ------ | ------------------------------------ | ------------------------ |
+| `E`    | Error – unrecoverable / user‑visible | Always                   |
+| `W`    | Warning – succeeded but suspicious   | Always                   |
+| `I`    | Informational                        | Only if allowed by level |
+
+### Numeric levels for *I* lines
+
+| Level   | Typical use (examples)                             |
+| ------- | -------------------------------------------------- |
+| **5**   | Hot‑path trace, request headers, per‑part          |
+| **4**   | Verbose progress, retries, caching stats           |
+| **3**   | Startup, shutdown, xaction summaries **(default)** |
+| **2‑0** | Progressively quieter; at `≤2` almost silent       |
+
+> **Tip.** Temporarily crank a node:
+>
+> ```bash
+> ais config node set TARGET_ID log.level 4
+> ais config cluster log.modules ec xs   # focus on EC & xactions
+> ```
+
+### Per‑module overrides (`log.modules`)
+
+`log.modules` lets you boost just a subset of subsystems to level 5 without flooding the whole cluster.
+
+```bash
+# Elevate erasure‑coding (ec) and xaction scheduler (xs):
+ais config cluster log.modules ec xs
+
+# Revert to normal
+ais config cluster log.modules none
+```
+
+---
+
+## Log file layout & rotation
+
+| Environment | Where the bytes land | Notes                            |
+| ----------- | -------------------- | -------------------------------- |
+| Bare‑metal  | `/var/log/ais/` | One file per daemon              |
+| Kubernetes  | Container **stdout** | Collected by runtime / log agent |
+
+Log files rotate when `max_size` is hit; AIS deletes the oldest ones to abide by the configured `max_total` limitation (no compression inside AIS cluster itself).
+
+---
+
+## Log format cheat‑sheet
+
+```
+I 2025‑05‑19 13:42:17.791884 cpu:60 Reducing GOMAXPROCS (prev=256) to 32
+│ │            │      │              └─ message
+│ │            │      └─ Go file:line inside AIS source
+│ │            └─ timestamp (µs precision)
+│ └─ severity prefix
+└─ ‘I’ for INFO
+```
+
+Common prefixes:
+
+* `config:`   – effective runtime configuration
+* `x-<name>:` – extended (batch) action lifecycle
+* `nvmeXnY:` – per‑disk I/O snapshot
+* `kvstats:` – cluster‑wide key‑value metrics (see below)
+
+---
+
+## Log file layout & rotation
+
+| Environment | Where logs appear                   | Notes                                |
+| ----------- | ----------------------------------- | ------------------------------------ |
+| Bare‑metal  | `/var/log/ais/<node>.log`         | One file per daemon (proxy / target) |
+| Kubernetes  | container **stdout** (kubectl logs) | Collected by CRI‑O / containerd      |
+
+File names include the node ID plus a sequence number (`target‑A43c.log.3`). Rotation is triggered by `max_size`; retention is enforced by `max_total`.
+
+---
+
+## Severity & verbosity
+
+AIS prints every line with a **severity prefix** and, for *info* lines, a **numeric verbosity level**.
+
+### Severity prefixes
+
+| Prefix | Meaning                               |
+| ------ | ------------------------------------- |
+| `E`    | Error – non‑recoverable failure       |
+| `W`    | Warning – operation succeeded but odd |
+| `I`    | Informational                         |
+
+### Info verbosity (`log.level`)
+
+The cluster‑wide `log.level` flag controls *only* informational lines:
+
+* `5` – maximum detail (hot‑path trace, request headers)
+* `4` – verbose (xaction progress, retry notices)
+* `3` – **default** (startup, shutdown, job summaries)
+* `<3` – suppress *I* lines entirely (still logs **W** and **E**)
+
+Temporarily change a single node:
+
+```bash
+ais config node set target‑A43c log.level 4
+```
+
+\---------|--------|----------------------------------------|
+\| `0`     | `E`    | Error – non‑recoverable failure        |
+\| `1`     | `W`    | Warning – operation succeeded but odd  |
+\| `2‑5`   | `I`    | Info – increasing detail as number ↑   |
+
+> **Tip.** Temporarily increase verbosity on a single node when debugging:
+>
+> ```bash
+> ais config node set target‑A43c log.level 4
+> ```
+
+
 ## Log Format and Structure
 
 AIS logs follow a consistent format with the following components:
@@ -64,17 +217,6 @@ I 19:28:24.774540 daemon:311 Version 3.28.2ec8b22, build 2025-05-13T19:20:12+000
 W 19:28:24.774555 cpu:60 Reducing GOMAXPROCS (prev = 256) to 32
 I 19:28:24.775140 k8s:68 Checking pod: "ais-proxy-15"
 ```
-
-## Log Levels
-
-AIS uses the following log levels:
-
-| Level | Character | Description |
-|-------|-----------|-------------|
-| 0 | E | Error conditions and critical issues |
-| 1 | W | Warning conditions that don't stop operations |
-| 2-3 | I | Informational messages (default) |
-| 4-5 | D | Debug and trace information |
 
 The default log level is 3 (Info).
 
@@ -149,16 +291,18 @@ I 18:06:18.785011 {aws.head.n:114227,aws.head.ns.total:16799090100532,del.n:109,
 
 The key-value statistics contain valuable operational metrics:
 
-| Metric | Description |
+| Key / pattern | Description |
 |--------|-------------|
 | `get.n` | Number of GET operations |
 | `put.n` | Number of PUT operations |
-| `get.size` | Total size of GET operations |
+| `get.size`, `put.size` | Cumulative bytes, GET and PUT respectively |
 | `get.bps` | Bytes per second for GET operations |
+| `aws.<name>.ns.total`         | Cumulative latency against a cloud backend (AWS S3, in this example) |
 | `aws.head.n` | Number of HEAD requests to AWS S3 |
 | `err.get.n` | Number of GET errors |
-| `disk.[device].read.bps` | Read throughput for specific disk |
-| `disk.[device].util` | Utilization percentage for specific disk |
+| `err.io.get.n` | Number of in-cluster GET I/O errors (excluding network and remote backend errors, e.g. "broken pipe", "connection reset") |
+| `disk.<device>.read.bps` | Read throughput for specific disk |
+| `disk.[device>.util` | Device utilization (percentage) |
 
 ## Log Rotation
 
@@ -181,24 +325,32 @@ I 19:28:24.786304 k8s:103   config-template
 I 19:28:24.786306 k8s:103   config-mount
 ```
 
-## Analyzing Logs for Troubleshooting
+## Troubleshooting checklist
 
-When troubleshooting issues, focus on:
-
-1. Error (E) and Warning (W) log entries
-2. Unusual patterns in performance metrics
-3. Operation failures indicated by error counters
-4. Disk utilization rates above expected thresholds
+1. Scan for **^E** & **^W** lines around the timeframe.
+2. Look for spikes in `err.<name>.n` counters; pay special attention to `err.io.<name>` error counters.
+3. Watch disk `util` > 80 % or sustained `read.bps` plateaus.
+4. Temporarily raise `log.level` or `log.modules` on a single node to capture more detail.
 
 For advanced log analysis, consider forwarding logs to external systems for aggregation and visualization.
+
+## Operational tips
+
+* Watch K8s dashboard and/or `ais show cluster` for any alerts.
+* Pay special attention to `err.io.<name>` error counters.
+* Keep `log.level=3` in production; raise to `4` or `5` only while debugging.
+* Per-module verbosity is controlled via `log.modules`. Lower log level to `2` or below if you truly need silence.
+* Raise `stats_time` (≥ 60 s) if logs get noisy on busy systems.
+* Ship rotated logs off‑host weekly.
+* Always attach `ais cluster download-logs` tarball to GitHub issues.
 
 ## Related Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: CLI](10-cli.md) | Command-line monitoring tools |
-| [Observability: Prometheus](30-prometheus.md) | Configuring Prometheus with AIS |
-| [Observability: Metrics Reference](31-metrics-reference.md) | Complete metrics catalog |
-| [Observability: Grafana](40-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Observability: Kubernetes](50-k8s.md) | Working with Kubernetes monitoring stacks |
+| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
+| [Observability: CLI](/docs/10-cli.md) | Command-line monitoring tools |
+| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
+| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
+| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |
