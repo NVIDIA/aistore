@@ -561,7 +561,8 @@ func (xs MultiSnap) _get(xid string) (aborted, running, notstarted bool) {
 func (xs MultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
 	if xid == "" {
 		uuids := xs.GetUUIDs()
-		debug.Assert(len(uuids) == 1, uuids)
+		l := len(uuids)
+		debug.Assert(l == 1, uuids[:min(l, 4)], "( len:", l, " )")
 		xid = uuids[0]
 	}
 	for _, snaps := range xs {

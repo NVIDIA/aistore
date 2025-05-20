@@ -733,7 +733,7 @@ do: // retry uplock or ec-recovery, the latter only once
 				err = goi.coldStream(&res)
 				goi.unlocked = true
 				return 0, err
-			case goi.lom.IsFeatureSet(feat.SystemReserved): // TODO: deprecated; remove along with the feature flag
+			case cmn.Rom.Features().IsSet(feat.SystemReserved): // TODO: deprecated; remove along with the feature flag
 				err = goi.coldReopen(&res)
 				goi.unlocked = true
 				return 0, err
