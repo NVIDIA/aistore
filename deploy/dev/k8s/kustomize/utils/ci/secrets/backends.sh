@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "Creating GCP credentials secret..."
 kubectl create secret generic gcp-credentials \
     --from-file=creds.json=${GOOGLE_APPLICATION_CREDENTIALS}

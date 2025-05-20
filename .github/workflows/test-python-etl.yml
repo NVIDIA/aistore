@@ -8,6 +8,10 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
 jobs:
   test:
     strategy:
@@ -23,7 +27,7 @@ jobs:
       - name: Run AIStore in KinD
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s/kustomize
-          make minimal
+          make github-ci
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

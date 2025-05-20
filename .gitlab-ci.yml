@@ -623,7 +623,7 @@ test:long:ishard:
     - ./utils/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
-    - make ci
+    - make gitlab-ci
     - source ./utils/export_endpoint.sh
     - cd ../../../..
     - make cli
@@ -749,7 +749,7 @@ test:long:k8s:all:
     - ./utils/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
-    - make ci
+    - make gitlab-ci
     - source ./utils/export_endpoint.sh
     - cd ../../../..
     # Make sure that metrics collection is enabled.

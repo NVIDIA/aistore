@@ -38,18 +38,23 @@ minimal-cloud-cleanup:
 	./utils/cleanup_ais.sh overlays/samples/cloud/common base/proxy overlays/samples/cloud/target
 
 # CI deployment targets
-.PHONY: ci ci-envs ci-secrets
-ci: ci-envs ci-secrets
+.PHONY: gitlab-ci github-ci ci-envs ci-backend-secrets ci-dockerhub-secrets
+gitlab-ci: ci-envs ci-backend-secrets ci-dockerhub-secrets
 	./utils/deploy_ais.sh overlays/ci/common overlays/ci/proxy overlays/ci/target
+
+github-ci: ci-dockerhub-secrets minimal
 
 ci-envs:
 	./utils/ci/envs.sh
 
-ci-secrets:
-	./utils/ci/secrets/setup.sh
+ci-backend-secrets:
+	./utils/ci/secrets/backends.sh
+
+ci-dockerhub-secrets:
+	./utils/ci/secrets/dockerhub.sh
 
 # K8s cluster management targets
-.PHONY: create_cluster delete_cluster
+.PHONY: create-cluster delete-cluster
 create-cluster:
 	./utils/create_cluster.sh
 
