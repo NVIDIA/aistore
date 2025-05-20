@@ -21,7 +21,7 @@ class ResponseHandlerImpl(ResponseHandler):
         return MockAPIException
 
     def parse_error(self, r: requests.Response):
-        return self.exc_class(r.status_code, r.text, r.request.url)
+        return self.exc_class(r.status_code, r.text, r.request.url, r.request)
 
 
 # pylint: disable=unused-variable
@@ -53,3 +53,4 @@ class TestResponseHandler(unittest.TestCase):
         self.assertEqual(status, context.exception.status_code)
         self.assertEqual(err_msg, context.exception.message)
         self.assertEqual(test_url, context.exception.req_url)
+        self.assertEqual(response.request, context.exception.req)

@@ -65,4 +65,4 @@ class AuthNResponseHandler(ResponseHandler):
             if "user " in message:
                 exc_class = ErrUserAlreadyExists
 
-        return exc_class(status, message, req_url or "")
+        return exc_class(status, message, req_url or "", r.request)

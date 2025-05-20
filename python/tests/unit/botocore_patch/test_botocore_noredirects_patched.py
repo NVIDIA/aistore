@@ -6,7 +6,7 @@
 from tests.botocore_common import BotocoreBaseTest
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,duplicate-code
 class PatchedTestCase(BotocoreBaseTest):
     """
     A passthrough test to check we're not breaking botocore

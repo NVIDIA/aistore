@@ -10,6 +10,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Added
 
 - Add serialization utilities for ETLServer subclasses.
+- All APIRequestErrors including AISError and AuthNErrors will contain a field `request` containing the original request (consistent with requests library Errors)
+- Added `cold_get_conf` to AISRetryConfig with configurable values for retrying when fetching remote objects.
+
+### Changed
+
+- Update core `RequestClient` to delay retries on `ReadTimeoutError` when waiting on AIS to fetch remote objects into cluster 
+
 
 ### Changed
 

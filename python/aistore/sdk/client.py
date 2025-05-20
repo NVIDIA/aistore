@@ -92,7 +92,7 @@ class Client:
             session_manager=session_manager,
             timeout=timeout,
             token=token,
-            network_retry_config=self.retry_config.network_retry,
+            retry_config=self.retry_config,
         )
 
     def bucket(

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import requests
+from requests import PreparedRequest
 
 from aistore.sdk.const import HTTP_METHOD_HEAD, HTTP_METHOD_GET, HEADER_RANGE
 from aistore.sdk.request_client import RequestClient
@@ -107,7 +108,7 @@ class TestObjectClient(unittest.TestCase):
         Test that the get method retries with a new smap when ErrObjNotFound is raised and caught.
         """
         self.request_client.request.side_effect = ErrObjNotFound(
-            404, "Object not found", "object_url"
+            404, "Object not found", "object_url", Mock(PreparedRequest)
         )
         # pylint: disable=protected-access
         self.object_client._uname = (
@@ -135,7 +136,7 @@ class TestObjectClient(unittest.TestCase):
         """
         object_client = ObjectClient(self.request_client, self.path, self.params)
         self.request_client.request.side_effect = ErrObjNotFound(
-            404, "Object not found", "object_url"
+            404, "Object not found", "object_url", Mock(PreparedRequest)
         )
 
         with self.assertRaises(ErrObjNotFound):

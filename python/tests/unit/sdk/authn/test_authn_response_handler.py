@@ -11,7 +11,7 @@ from aistore.sdk.authn.errors import (
     AuthNError,
 )
 from aistore.sdk.authn.response_handler import AuthNResponseHandler
-from tests.utils import cases, create_api_error_response
+from tests.utils import cases, handler_parse_and_assert
 
 
 # pylint: disable=unused-variable
@@ -32,14 +32,5 @@ class TestAuthNResponseHandler(unittest.TestCase):
         ),
         ("invalid credentials", ErrUserInvalidCredentials, 401),
     )
-    def test_parse_ais_error(self, test_case):
-        err_msg, expected_err, err_status = test_case
-        test_url = "http://test-url"
-        response = create_api_error_response(test_url, err_status, err_msg)
-
-        err = AuthNResponseHandler().parse_error(response)
-        self.assertIsInstance(err, AuthNError)
-        self.assertIsInstance(err, expected_err)
-        self.assertEqual(err_status, err.status_code)
-        self.assertEqual(err_msg, err.message)
-        self.assertEqual(test_url, err.req_url)
+    def test_parse_authn_error(self, test_case):
+        handler_parse_and_assert(self, AuthNResponseHandler(), AuthNError, test_case)

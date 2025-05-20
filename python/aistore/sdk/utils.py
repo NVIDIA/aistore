@@ -15,6 +15,7 @@ import xxhash
 
 from msgspec import msgpack
 from pydantic.v1 import BaseModel, parse_raw_as
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
@@ -176,13 +177,13 @@ def parse_url(url: str) -> Tuple[str, str, str]:
 
 def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:
     """
-    Extract provider, bucket, and whether an object is present.
+    Extract provider, bucket, and object from raw string.
 
     Args:
         msg (str): Any string that may contain an AIS FQN.
 
     Returns:
-        Optional[Tuple[str, str, bool]]: (prov, bck, has_obj) if a FQN is found, otherwise None.
+        Optional[Tuple[str, str, bool]]: (prov, bck, obj) if a FQN is found, otherwise None.
     """
     pattern = r"([a-z0-9]+)://([A-Za-z0-9@._-]+)(/.*)?"
     match = re.search(pattern, msg)
@@ -192,9 +193,9 @@ def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:
 
     prov = match.group(1)
     bck = match.group(2)
-    has_obj = match.group(3) is not None  # true if `/` after bucket
+    obj = match.group(3)  # Not None if `/` after bucket
 
-    return prov, bck, has_obj
+    return prov, bck, obj
 
 
 def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):
@@ -304,3 +305,21 @@ def compose_etl_direct_put_url(direct_put_url: str, host_target: str) -> str:
             query=parsed_target.query,  # pass xid on direct put for statistics
         )
     )
+
+
+def is_read_timeout(exc: requests.ConnectionError) -> bool:
+    """
+    Check if a given ConnectionError was caused by an underlying ReadTimeoutError
+    Args:
+        exc: Any requests.ConnectionError.
+
+    Returns: If ReadTimeoutError cause the exception.
+
+    """
+    if len(exc.args) < 1:
+        return False
+    inner_exc = exc.args[0]
+    # Expect it to be wrapped in urllib's retry
+    if not isinstance(inner_exc, MaxRetryError):
+        return False
+    return isinstance(inner_exc.reason, ReadTimeoutError)

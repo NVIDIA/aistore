@@ -4,6 +4,7 @@ import shutil
 import string
 import tarfile
 import io
+import unittest
 from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
@@ -22,6 +23,7 @@ from requests.exceptions import ChunkedEncodingError
 from aistore.sdk import Client, Object
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from tests.const import KB
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
@@ -229,7 +231,7 @@ def create_random_tarballs(
     return filename_list, extension_list, num_input_shards
 
 
-def create_api_error_response(req_url: str, status: str, msg: str) -> requests.Response:
+def create_api_error_response(req_url: str, status: int, msg: str) -> requests.Response:
     """
        Given test details, manually generate a requests.Response object
 
@@ -240,7 +242,7 @@ def create_api_error_response(req_url: str, status: str, msg: str) -> requests.R
 
     Returns: requests.Response containing the given details
     """
-    req = requests.Request()
+    req = requests.PreparedRequest()
     req.url = req_url
     response = requests.Response()
     response.status_code = status
@@ -256,6 +258,34 @@ def has_targets(n: int = 2) -> bool:
         return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= n
     except Exception:
         return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
+
+
+def handler_parse_and_assert(
+    test: unittest.TestCase,
+    handler: "ResponseHandler",
+    error_type: Any,
+    test_case: Tuple[str, Any, int],
+):
+    """
+    Utility function for different response handler tests to pass their handler class type, expected parsed error,
+        and test parameters and assert the proper error is created.
+    Args:
+        test: TestCase using this function.
+        handler: Type of ResponseHandler class.
+        error_type: Expected error type created by the handler's parser.
+        test_case:  Parameters to test.
+    """
+    err_msg, expected_err, err_status = test_case
+    test_url = "http://test-url"
+    response = create_api_error_response(test_url, err_status, err_msg)
+
+    err = handler.parse_error(response)
+    test.assertIsInstance(err, error_type)
+    test.assertIsInstance(err, expected_err)
+    test.assertEqual(err_status, err.status_code)
+    test.assertEqual(err_msg, err.message)
+    test.assertEqual(test_url, err.req_url)
+    test.assertEqual(response.request, err.req)
 
 
 @retry(

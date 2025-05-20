@@ -4,9 +4,11 @@
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
 
+import requests.exceptions
 from requests import Response
 from tenacity import Retrying
 
+from aistore.sdk import utils
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
@@ -22,6 +24,8 @@ from aistore.sdk.const import (
     QPARAM_WHAT,
     HTTP_METHOD_GET,
 )
+from aistore.sdk.presence_poller import PresencePoller
+
 from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
@@ -48,7 +52,7 @@ class RequestClient:
         response_handler (ResponseHandler): Handler for processing HTTP responses. Defaults to AISResponseHandler.
     """
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-instance-attributes
     def __init__(
         self,
         endpoint: str,
@@ -56,7 +60,7 @@ class RequestClient:
         timeout: Optional[Union[float, Tuple[float, float]]] = None,
         token: str = None,
         response_handler: ResponseHandler = AISResponseHandler(),
-        network_retry_config: Retrying = None,
+        retry_config: Optional[RetryConfig] = None,
     ):
         self._base_url = urljoin(endpoint, "v1")
         self._session_manager = session_manager
@@ -65,8 +69,10 @@ class RequestClient:
         self._response_handler = response_handler
         # smap is used to calculate the target node for a given object
         self._smap = None
-        self._network_retry_config = (
-            network_retry_config or RetryConfig.default().network_retry
+        retry_config = retry_config or RetryConfig.default()
+        self._network_retry_config = retry_config.network_retry
+        self._presence_poller = PresencePoller(
+            self._session_request, retry_config.cold_get_conf
         )
 
     @property
@@ -178,26 +184,15 @@ class RequestClient:
         resp = self.request(method, path, **kwargs)
         return decode_response(res_model, resp)
 
-    def _retryable_session_request(
+    def _request_with_retry(
         self, method: str, url: str, headers: dict, **kwargs
     ) -> Response:
         """
-        Makes an HTTP request with automatic retries on connection-related errors.
-
-        Retries the request if it encounters transient network issues such as:
-        - ConnectTimeout
-        - ReadTimeout
-        - ConnectionError (refused connection, reset by peer)
-        - AISRetryableError (custom error for AIS)
-        - ChunkedEncodingError
+        Makes an HTTP request to AIStore.
+        This method is expected to be called within the context of an instance of tenacity.Retrying.
 
         If the request is an HTTPS request with a payload (`data`), it uses `_request_with_manual_redirect`.
-        Otherwise, it falls back to `_session_request`.
-
-        **Why `tenacity.retry` over `urllib3.Retry` for this function?**
-        `urllib3.Retry` always retries the **same failing URL**, which is problematic if a target is down or restarting.
-        Instead, we retry via the **proxy URL** to reach another available target—something `urllib3.Retry` does not
-        support.
+        Otherwise, it makes a direct call using the current session manager with `_session_request`.
 
         Args:
             method (str): HTTP method (e.g., GET, POST).
@@ -208,31 +203,69 @@ class RequestClient:
         Returns:
             Response: The HTTP response from the server.
         """
+        try:
+            if url.startswith(HTTPS) and "data" in kwargs:
+                response = self._request_with_manual_redirect(
+                    method, url, headers, **kwargs
+                )
+            else:
+                response = self._session_request(
+                    method=method, url=url, headers=headers, **kwargs
+                )
+            return self._response_handler.handle_response(response)
+        except requests.ConnectionError as exc:
+            self._handle_connection_error(exc)
+            # Re-raise original error for retries to handle
+            raise
 
-        if url.startswith(HTTPS) and "data" in kwargs:
-            response = self._request_with_manual_redirect(
-                method, url, headers, **kwargs
-            )
-        else:
-            response = self._session_request(method, url, headers, **kwargs)
-        return self._response_handler.handle_response(response)
+    def _handle_connection_error(self, exc: requests.ConnectionError):
+        """
+        If we get a read timeout, it's possible another AIS worker thread is currently downloading a remote object,
+         so our initial request failed to acquire a read lock.
+        Retrying immediately means we expect AIS to be finished downloading from remote,
+         which may take longer than our default retry.
+        This creates and uses a PresencePoller to poll until the object is present.
+        Args:
+            exc (requests.ConnectionError): original exception
+        """
+        if not utils.is_read_timeout(exc):
+            return
+        req = exc.request
+        if exc.request is None:
+            return
+        # Do nothing if we're not getting an object from remote bucket
+        if req.method is not None and req.method.lower() != HTTP_METHOD_GET:
+            logger.debug("Received ReadTimeoutError from non-GET request")
+            return
+        logger.debug("Waiting for object presence after ReadTimeoutError")
+        try:
+            self._presence_poller.wait_for_presence(exc.request)
+        # If any exception happens while polling for presence, raise but keep the original exception as cause
+        except Exception as retry_err:
+            raise retry_err from exc
 
     def request(
         self,
         method: str,
         path: str,
         endpoint: str = None,
-        headers: Dict = None,
+        headers: Dict[str, Any] = None,
         **kwargs,
     ) -> Response:
         """
-        Make a request.
+        Make a request, wrapping it with the request_client's retry config.
+
+        **Why `tenacity.retry` over `urllib3.Retry` for request_client?**
+        `urllib3.Retry` always retries the **same failing URL**, which is problematic if a target is down or restarting.
+        Instead, we retry at this stage with tenacity to re-create the initial request to the **proxy URL**.
+        This request will then get redirected to the latest selected target.
 
         Args:
             method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
             path (str): URL path to call.
             endpoint (str): Alternative endpoint for the AIS cluster (e.g. for connecting to a specific proxy).
-            headers (dict): Extra headers to be passed with the request. Content-Type and User-Agent will be overridden.
+            headers (Dict[str, Any]): Extra headers to be passed with the request.
+                Content-Type and User-Agent will be overridden.
             **kwargs (optional): Optional keyword arguments to pass with the call to request.
 
         Returns:
@@ -240,16 +273,21 @@ class RequestClient:
         """
         base = urljoin(endpoint, "v1") if endpoint else self._base_url
         url = f"{base}/{path.lstrip('/')}"
+        headers = self._generate_headers(headers)
+        return self.network_retry_config(
+            self._request_with_retry, method, url, headers, **kwargs
+        )
+
+    def _generate_headers(
+        self, headers: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         if headers is None:
             headers = {}
         headers[HEADER_CONTENT_TYPE] = JSON_CONTENT_TYPE
         headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
         if self.token:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
-        # If the request is a GET to the daemon, we need to set the User-Agent header to avoid a 403 Forbidden
-        return self.network_retry_config(
-            self._retryable_session_request, method, url, headers, **kwargs
-        )
+        return headers
 
     def _request_with_manual_redirect(
         self, method: str, url: str, headers, **kwargs
@@ -286,10 +324,14 @@ class RequestClient:
         if resp.status_code in (STATUS_REDIRECT_PERM, STATUS_REDIRECT_TMP):
             target_url = resp.headers.get(HEADER_LOCATION)
             # Redirected request to target
-            resp = self._session_request(method, target_url, headers, **kwargs)
+            resp = self._session_request(
+                method=method, url=target_url, headers=headers, **kwargs
+            )
         return resp
 
-    def _session_request(self, method, url, headers, **kwargs) -> Response:
+    def _session_request(
+        self, method: str, url: str, headers: Any, **kwargs
+    ) -> Response:
         request_kwargs = {"headers": headers, **kwargs}
         if self._timeout is not None and "timeout" not in request_kwargs:
             request_kwargs["timeout"] = self._timeout

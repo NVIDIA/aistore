@@ -3,15 +3,16 @@ Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 from urllib3.util.retry import Retry
 from urllib3.exceptions import TimeoutError as Urllib3TimeoutError
 from tenacity import (
     Retrying,
-    wait_exponential,
-    stop_after_delay,
     retry_if_exception_type,
     before_sleep_log,
+    wait_random_exponential,
+    stop_after_attempt,
 )
 from requests.exceptions import (
     ConnectTimeout,
@@ -19,6 +20,8 @@ from requests.exceptions import (
     ChunkedEncodingError,
     ConnectionError as RequestsConnectionError,
 )
+
+from aistore.sdk.const import GB
 from aistore.sdk.errors import AISRetryableError
 
 # Default Retry Exceptions
@@ -30,6 +33,36 @@ NETWORK_RETRY_EXCEPTIONS = (
     AISRetryableError,
     Urllib3TimeoutError,
 )
+
+
+@dataclass
+class ColdGetConf:
+    """
+    Configuration class for retrying HEAD requests to objects that are not present in cluster when attempting a cold
+    GET.
+
+    **Attributes:**
+        est_bandwidth_bps (int): Estimated bandwidth in bytes per second from the AIS cluster to backend buckets.
+            Used to determine retry intervals for fetching remote objects.
+            Raising this will decrease the initial time we expect object fetch to take.
+            Defaults to 1 Gbps.
+        max_cold_wait (int): Maximum total number of seconds to wait for an object to be present before re-raising a
+            ReadTimeoutError to be handled by the top-level RetryConfig.
+            Defaults to 3 minutes.
+    """
+
+    est_bandwidth_bps: int
+    max_cold_wait: int
+
+    @staticmethod
+    def default() -> "ColdGetConf":
+        """
+        Returns the default cold get config options.
+        """
+        return ColdGetConf(
+            est_bandwidth_bps=1 * GB / 8,
+            max_cold_wait=180,
+        )
 
 
 @dataclass
@@ -51,10 +84,12 @@ class RetryConfig:
         http_retry (urllib3.Retry): Defines retry behavior for transient HTTP errors.
         network_retry (tenacity.Retrying): Configured `tenacity.Retrying` instance managing retries for network-related
             issues, such as connection failures, timeouts, or unreachable targets.
+        cold_get_conf (ColdGetConf): Configuration for retrying COLD GET requests, see ColdGetConf class.
     """
 
     http_retry: Retry
     network_retry: Retrying
+    cold_get_conf: ColdGetConf = field(default_factory=ColdGetConf.default)
 
     @staticmethod
     def default() -> "RetryConfig":
@@ -81,8 +116,8 @@ class RetryConfig:
                 read=0,
             ),
             network_retry=Retrying(
-                wait=wait_exponential(multiplier=1, min=1, max=10),
-                stop=stop_after_delay(60),
+                wait=wait_random_exponential(multiplier=1, min=1, max=30),
+                stop=stop_after_attempt(7),
                 retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
                 before_sleep=before_sleep_log(logging.getLogger(), logging.WARNING),
                 reraise=True,

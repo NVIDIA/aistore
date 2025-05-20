@@ -22,3 +22,5 @@ from aistore.sdk.archive_config import ArchiveConfig
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.dataset.data_shard import DataShard
 from aistore.sdk.list_object_flag import ListObjectFlag
+from aistore.sdk.retry_config import ColdGetConf
+from aistore.sdk.retry_config import RetryConfig

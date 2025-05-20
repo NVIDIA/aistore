@@ -44,7 +44,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             session_manager=mock_sm.return_value,
             timeout=(3, 20),
             token=None,
-            network_retry_config=retry_config.network_retry,
+            retry_config=retry_config,
         )
 
     @cases(
@@ -108,7 +108,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
             session_manager=mock_sm.return_value,
             timeout=timeout,
             token=token,
-            network_retry_config=network_retry,
+            retry_config=retry_config,
         )
 
     @cases(*Provider)

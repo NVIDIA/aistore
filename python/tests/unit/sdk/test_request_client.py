@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch, Mock, call
 
-from requests import Response, Session
+import urllib3
+from requests import Response, Session, PreparedRequest
 from requests.exceptions import (
     ConnectTimeout,
     ConnectionError as RequestsConnectionError,
@@ -16,12 +17,15 @@ from aistore.sdk.const import (
     HEADER_USER_AGENT,
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
+    HTTP_METHOD_GET,
 )
+from aistore.sdk.presence_poller import PresencePoller
+
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.errors import AISRetryableError
-from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS
+from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
 from tests.utils import cases
 
 
@@ -38,7 +42,10 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             HEADER_CONTENT_TYPE: JSON_CONTENT_TYPE,
             HEADER_USER_AGENT: f"{USER_AGENT_BASE}/{sdk_version}",
         }
-        self.default_request_client = RequestClient(
+        self.default_request_client = self._create_request_client()
+
+    def _create_request_client(self):
+        return RequestClient(
             self.endpoint,
             self.mock_session_manager,
             response_handler=self.mock_response_handler,
@@ -212,7 +219,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_response.status_code = 200
         self.mock_response.text = "Success"
         mock_request.return_value = self.mock_response
-        response = self.default_request_client.request("GET", "http://test-url", {})
+        response = self.default_request_client.request("GET", "http://test-url")
 
         # Validate expected attributes
         self.assertEqual(response.status_code, 200)
@@ -230,7 +237,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             self.mock_response,
         ]  # Fails once, then succeeds
 
-        response = self.default_request_client.request("GET", "http://test-url", {})
+        response = self.default_request_client.request("GET", "http://test-url")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_request.call_count, 2)  # Retries once before success
@@ -244,18 +251,89 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             RequestsConnectionError,
             self.mock_response,
         ]
-        response = self.default_request_client.request("GET", "http://test-url", {})
+        response = self.default_request_client.request("GET", "http://test-url")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_request.call_count, 3)  # Retries twice before success
+
+    def run_delayed_retry_test(self, mock_session_request, source_exception):
+        initial_request = Mock(spec=PreparedRequest, method="GET")
+        mock_retry_err = Mock(spec=urllib3.exceptions.MaxRetryError)
+        # Delayed retry will trigger iff this source exception is ReadTimeoutError
+        mock_retry_err.reason = Mock(source_exception)
+        mock_err = RequestsConnectionError(mock_retry_err, request=initial_request)
+        self.mock_response.status_code = 200
+
+        # Fail the session request with a ConnectionError not caused by ReadTimeout
+        # When we make the request again, it should succeed
+        mock_session_request.side_effect = [mock_err, self.mock_response]
+        # Create request client with a mocked presence poller
+        req_client = self._create_request_client()
+        response = req_client.request(HTTP_METHOD_GET, "http://test-url")
+        self.assertEqual(response.status_code, 200)
+        return initial_request
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    @patch("aistore.sdk.request_client.PresencePoller")
+    def test_delayed_retry_on_readtimeout_error(
+        self, mock_presence_poller, mock_session_request
+    ):
+        """Test that the function uses the presence retryer on a ReadTimeoutError."""
+        initial_request = self.run_delayed_retry_test(
+            mock_session_request, urllib3.exceptions.ReadTimeoutError
+        )
+        mock_presence_poller.assert_called_once_with(
+            mock_session_request, RetryConfig.default().cold_get_conf
+        )
+        mock_presence_poller.return_value.wait_for_presence.assert_called_once_with(
+            initial_request
+        )
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    @patch("aistore.sdk.request_client.PresencePoller")
+    def test_no_delayed_retry_on_connection_error(
+        self, mock_presence_poller, mock_session_request
+    ):
+        """Test that the function does NOT delay retries on a ConnectionError that's not a ReadTimeout."""
+        # Fail the session request with a ConnectionError not caused by ReadTimeout
+        self.run_delayed_retry_test(mock_session_request, urllib3.exceptions.HTTPError)
+        mock_presence_poller.assert_called_once_with(
+            mock_session_request, RetryConfig.default().cold_get_conf
+        )
+        # No use of presence poller, because no ReadTimeout
+        mock_presence_poller.return_value.wait_for_presence.assert_not_called()
+
+    @patch("aistore.sdk.request_client.RequestClient._session_request")
+    @patch("aistore.sdk.request_client.PresencePoller")
+    def test_failed_presence_poller(self, mock_presence_poller, mock_request):
+        """Test that the function raises properly if the presence poller also raises an error on a ReadTimeoutError."""
+        # Same setup as the success-flow, but this time make the poller error
+        initial_request = Mock(spec=PreparedRequest, method="GET")
+        mock_retry_err = Mock(spec=urllib3.exceptions.MaxRetryError)
+        mock_retry_err.reason = Mock(urllib3.exceptions.ReadTimeoutError)
+        mock_err = RequestsConnectionError(mock_retry_err, request=initial_request)
+        inner_exc = RuntimeError("An error inside the presence poller")
+        mock_poller_instance = Mock(spec=PresencePoller)
+        mock_presence_poller.return_value = mock_poller_instance
+        mock_poller_instance.wait_for_presence.side_effect = [inner_exc, None]
+        self.mock_response.status_code = 200
+        # Fail the session request with a ConnectionError wrapping MaxRetryError wrapping ReadTimeout
+        # Then fail polling with a RuntimeError, which propagates all the way out of the top retry (not retry-able)
+        mock_request.side_effect = mock_err
+        with self.assertRaises(RuntimeError) as exc_context:
+            # Create request client with a mocked presence poller
+            self._create_request_client().request("GET", "http://test-url")
+            mock_poller_instance.wait_for_presence.assert_called_once_with(mock_request)
+        self.assertIsInstance(exc_context.exception.__cause__, RequestsConnectionError)
 
     @patch("aistore.sdk.request_client.RequestClient._session_request")
     def test_max_retries_exceeded(self, mock_request):
         """Test that the function raises an error after max retries are exceeded."""
         mock_request.side_effect = RequestsConnectionError  # Always fails
 
+        retry_conf = RetryConfig.default()
         # change retry logic for this request
-        network_retry_conf = Retrying(
+        retry_conf.network_retry = Retrying(
             stop=stop_after_attempt(5),
             retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
             reraise=True,
@@ -264,10 +342,10 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             self.endpoint,
             self.mock_session_manager,
             response_handler=self.mock_response_handler,
-            network_retry_config=network_retry_conf,
+            retry_config=retry_conf,
         )
         with self.assertRaises(RequestsConnectionError):
-            self.default_request_client.request("GET", "http://test-url", {})
+            self.default_request_client.request("GET", "http://test-url")
 
         self.assertEqual(mock_request.call_count, 5)  # Stops at max retry limit
 
@@ -279,7 +357,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         )  # Simulate unexpected failure
 
         with self.assertRaises(ValueError):
-            self.default_request_client.request("GET", "http://test-url", {})
+            self.default_request_client.request("GET", "http://test-url")
 
         mock_request.assert_called_once()  # Should fail immediately, no retries
 
@@ -288,11 +366,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         """Test that the function is retried if it raises AISRetryableError."""
         self.mock_response.status_code = 200
         mock_request.side_effect = [
-            AISRetryableError(409, "Conflict", "http://test-url"),
+            AISRetryableError(409, "Conflict", "http://test-url", mock_request),
             self.mock_response,
         ]
 
-        response = self.default_request_client.request("GET", "http://test-url", {})
+        response = self.default_request_client.request("GET", "http://test-url")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_request.call_count, 2)  # Retries once before success

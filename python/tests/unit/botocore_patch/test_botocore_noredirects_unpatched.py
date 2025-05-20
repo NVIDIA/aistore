@@ -6,7 +6,7 @@
 from tests.botocore_common import BotocoreBaseTest
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,duplicate-code
 class UnpatchedTestCase(BotocoreBaseTest):
     """
     Our control case.

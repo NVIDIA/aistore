@@ -11,7 +11,6 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 
 from aistore.sdk.const import AIS_CLIENT_CA, AIS_CLIENT_KEY, AIS_CLIENT_CRT, HTTPS, HTTP
-from aistore.sdk.retry_config import RetryConfig
 
 
 class SessionManager:
@@ -33,13 +32,13 @@ class SessionManager:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(
         self,
-        retry: Retry = None,
+        retry: Optional[Retry] = None,
         ca_cert: Optional[str] = None,
         skip_verify: bool = False,
         client_cert: Optional[Union[str, Tuple[str, str]]] = None,
         max_pool_size: int = 10,
     ):
-        self._retry = retry or RetryConfig.default().http_retry
+        self._retry = retry
         self._ca_cert = ca_cert
         self._skip_verify = skip_verify
         if not client_cert:

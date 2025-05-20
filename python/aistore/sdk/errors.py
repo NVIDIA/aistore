@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
+import requests
 
 
 class APIRequestError(Exception):
@@ -8,10 +9,17 @@ class APIRequestError(Exception):
     Base class for errors from HTTP servers, e.g. AIS or AuthN
     """
 
-    def __init__(self, status_code: int, message: str, req_url: str):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        req_url: str,
+        req: requests.PreparedRequest,
+    ):
         self.status_code = status_code
         self.message = message
-        self.req_url = req_url  # Standardize attribute name across errors
+        self.req_url = req_url
+        self.req = req
         super().__init__(f"STATUS:{status_code}, MESSAGE:{message}, REQ_URL:{req_url}")
 
 
@@ -74,7 +82,7 @@ class ErrETLAlreadyExists(AISError):
 
 class ErrGETConflict(AISRetryableError):
     """
-    Raised when an ETL is created but already exists in AIS
+    Raised when AIS cannot obtain a write lock because another process is currently writing this object to local storage
     """
 
 
