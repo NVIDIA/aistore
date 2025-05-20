@@ -91,7 +91,7 @@ This section provides the fastest way to get an AIStore cluster running on your 
 
 Follow the official [Go installation instructions](https://go.dev/doc/install) for your platform (use the Linux tab for AIStore deployments).
 
-Setup your `GOPATH` environment variable when done.
+Set up your `GOPATH` environment variable when done.
 
 ### Clone and Deploy AIStore
 
@@ -156,7 +156,7 @@ Hence, we introduced (and keep maintaining) **Local Playground** - one of the se
 
 > Some of the most popular deployment options are also **summarized** in this [table](https://github.com/NVIDIA/aistore/tree/main/deploy#readme). The list includes Local Playground, and its complementary guide [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/README.md).
 
-> Local Playground is **not intended** for production and is not meant to provide optimal performance.
+> Local Playground is for **development** purposes and is not meant to provide optimal performance.
 
 To run AIStore from source, one would typically need to have **Go**: compiler, linker, tools, and required packages. However:
 
@@ -249,7 +249,7 @@ $ iostat -dxm 10 sda sdb
 
 #### Running Local Playground with emulated disks
 
-Here's a quick walk-through (with more references included below).
+Here's a quick walkthrough (with more references included below).
 
 * Step 1: patch `deploy/dev/local/aisnode_config.sh` as follows:
 
