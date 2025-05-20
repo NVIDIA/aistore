@@ -43,6 +43,7 @@ const (
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction
+	SystemReserved            // reserved; do not set: the flag may be redefined or removed at any time
 )
 
 var Cluster = [...]string{
@@ -66,6 +67,7 @@ var Cluster = [...]string{
 	"Trust-Crypto-Safe-Checksums",
 	"S3-ListObjectVersions",
 	"Enable-Detailed-Prom-Metrics",
+	"System-Reserved",
 
 	// "none" ====================
 }

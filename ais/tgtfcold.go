@@ -21,6 +21,11 @@ import (
 
 const ftcg = "Warning: failed to cold-GET"
 
+// [NOTE]
+// The coldReopen path is now DISABLED by default and only enabled
+// with the `feat.SystemReserved` flag. This is (only) for internal
+// benchmarking and regression testing, and will be removed in a future
+// release. Do not enable `feat.SystemReserved` in production.
 func (goi *getOI) coldReopen(res *core.GetReaderResult) error {
 	var (
 		err    error

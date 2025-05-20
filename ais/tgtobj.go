@@ -724,21 +724,22 @@ do: // retry uplock or ec-recovery, the latter only once
 		goi.cold = true
 
 		//
-		// three alternative ways to cold GET
+		// alternative ways to cold GET
 		//
 		if goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" &&
 			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
-			if goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET) {
-				// 1)
+			switch {
+			case goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET):
 				err = goi.coldStream(&res)
-			} else {
-				// 2)
+				goi.unlocked = true
+				return 0, err
+			case goi.lom.IsFeatureSet(feat.SystemReserved): // TODO: deprecated; remove along with the feature flag
 				err = goi.coldReopen(&res)
+				goi.unlocked = true
+				return 0, err
 			}
-			goi.unlocked = true // always
-			return 0, err
 		}
-		// otherwise, 3) regular path
+		// otherwise, a regular path
 		ecode, err = goi.coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
