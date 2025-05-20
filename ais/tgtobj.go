@@ -2026,19 +2026,22 @@ func (t *target) putMirror(lom *core.LOM) {
 const uplockWarn = "conflict getting remote"
 
 func (goi *getOI) uplock(c *cmn.Config) (u *_uplock) {
+	const (
+		retries = 5
+	)
 	u = &_uplock{sleep: time.Second}
 	// jitter
 	switch goi.ltime & 0x3 {
 	case 0:
 		u.sleep += 3 * time.Millisecond
-	case 0x01:
+	case 0x1:
 		u.sleep += 7 * time.Millisecond
-	case 0x10:
+	case 0x2:
 		u.sleep -= 7 * time.Millisecond
-	case 0x11:
+	case 0x3:
 		u.sleep -= 3 * time.Millisecond
 	}
-	u.timeout = max(c.Timeout.MaxHostBusy.D()-c.Timeout.CplaneOperation.D(), c.Timeout.MaxKeepalive.D())
+	u.timeout = max(retries*u.sleep, c.Timeout.MaxKeepalive.D())
 	return u
 }
 

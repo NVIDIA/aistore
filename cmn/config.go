@@ -300,7 +300,7 @@ type (
 		// intra-cluster EC streams; default=EcStreamsDflt; never timeout when negative
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
-		ObjectMD cos.Duration `json:"object_md"`
+		ObjectMD cos.Duration `json:"object_md,omitempty"`
 	}
 	TimeoutConfToSet struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -310,7 +310,7 @@ type (
 		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
 		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty"`
-		ObjectMD        *cos.Duration `json:"object_md"`
+		ObjectMD        *cos.Duration `json:"object_md,omitempty"`
 	}
 
 	ClientConf struct {
