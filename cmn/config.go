@@ -301,6 +301,8 @@ type (
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
 		ObjectMD cos.Duration `json:"object_md,omitempty"`
+		// prior to returning 409 conflict (ie., cmn.ErrBusy)
+		ColdGetConflict cos.Duration `json:"cold_get_conflict,omitempty"`
 	}
 	TimeoutConfToSet struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
@@ -311,6 +313,7 @@ type (
 		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
 		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty"`
 		ObjectMD        *cos.Duration `json:"object_md,omitempty"`
+		ColdGetConflict *cos.Duration `json:"cold_get_conflict,omitempty"`
 	}
 
 	ClientConf struct {
@@ -1816,6 +1819,9 @@ const (
 	LcacheEvictDflt = 2 * time.Hour
 	LcacheEvictMax  = 16 * time.Hour
 
+	ColdGetConflictDflt = 5 * time.Second
+	ColdGetConflictMin  = time.Second
+
 	// and a few more hardcoded below
 )
 
@@ -1848,6 +1854,10 @@ func (c *TimeoutConf) Validate() error {
 	if c.ObjectMD != 0 && (c.ObjectMD.D() < LcacheEvictMin || c.ObjectMD.D() > LcacheEvictMax) {
 		return fmt.Errorf("invalid timeout.object_md=%s (expecting 0 (zero) for system default or [%v, %v] range)",
 			c.ObjectMD, LcacheEvictMin, LcacheEvictMax)
+	}
+	if c.ColdGetConflict != 0 && (c.ColdGetConflict.D() < ColdGetConflictMin || c.ColdGetConflict > c.MaxHostBusy) {
+		return fmt.Errorf("invalid timeout.cold_get_conflict=%s (expecting 0 (zero) for system default or [%v, max_host_busy=%v] range)",
+			c.ColdGetConflict, ColdGetConflictMin, c.MaxHostBusy)
 	}
 	return nil
 }
