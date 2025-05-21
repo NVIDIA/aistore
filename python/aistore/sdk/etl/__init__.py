@@ -4,3 +4,7 @@
 #
 
 from aistore.sdk.etl.etl_config import ETLConfig
+from aistore.sdk.etl.webserver.utils import (
+    serialize_class,
+    deserialize_class,
+)

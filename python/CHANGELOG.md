@@ -6,6 +6,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ---
 
+## Unreleased
+
+### Added
+
+- Add serialization utilities for ETLServer subclasses.
+
 ## [1.13.8] - 2025-05-16
 
 ### Changed
