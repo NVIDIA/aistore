@@ -119,10 +119,12 @@ redirect_from:
 
 ## Observability and Monitoring
 
-- [Prometheus & Metrics](/docs/metrics.md)
-- [Prometheus](/docs/prometheus.md)
-- [Reference: all supported metrics](/docs/metrics-reference.md)
-- [CLI: `ais performance` command](/docs/cli/performance.md)
+- [Introduction to AIS observability](/docs/monitoring-overview.md)
+- [Configuring, accessing, and utilizing AIS logs](/docs/monitoring-logs.md)
+- [Prometheus integration](/docs/monitoring-prometheus.md)
+- [Metrics reference](/docs/monitoring-metrics.md)
+- [Visualizing AIS metrics with Grafana](/docs/monitoring-grafana.md)
+- [Working with Kubernetes monitoring stacks](/docs/monitoring-kubernetes.md)
 
 ## Developer Resources
 

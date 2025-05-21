@@ -14,6 +14,7 @@ AIS consistently shows balanced I/O distribution and linear scalability across a
 * ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no built-in limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment size or functionality.
 * ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
+* ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [Observability](/docs/monitoring-overview.md) for details.
 * ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
 * ✅ **ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
@@ -127,13 +128,13 @@ Let others know your project is powered by high-performance AI storage:
 * [Overview and Design](/docs/overview.md)
 * [Getting Started](/docs/getting_started.md)
 * [Buckets and Bucket Management](/docs/bucket.md)
+* [Observability](/docs/monitoring-overview.md)
 * [Technical Blog](https://aistore.nvidia.com/blog)
 * [S3 Compatibility](/docs/s3compat.md)
 * [Batch Jobs](/docs/batch.md)
 * [Performance](/docs/performance.md) and [CLI: performance](/docs/cli/performance.md)
 * [CLI Reference](/docs/cli.md)
 * [Authentication](/docs/authn.md)
-* [Prometheus & Metrics](/docs/metrics.md)
 * [Production Deployment: Kubernetes Operator, Ansible Playbooks, Helm Charts, Monitoring](https://github.com/NVIDIA/ais-k8s)
 
 ### How to find information

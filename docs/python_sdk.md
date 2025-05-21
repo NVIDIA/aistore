@@ -1907,7 +1907,7 @@ Retrieves the raw performance and status data from each target node in the AISto
 
 - `Dict` - A dictionary where each key is the ID of a target node and each value is the
   raw AIS performance/status JSON returned by that node (for more information,
-  see https://aistore.nvidia.com/docs/metrics-reference#target-metrics).
+  see https://aistore.nvidia.com/docs/monitoring-metrics#target-metrics).
   
 
 **Raises**:

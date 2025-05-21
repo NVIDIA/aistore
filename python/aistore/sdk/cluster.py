@@ -188,7 +188,7 @@ class Cluster:
         Returns:
             Dict: A dictionary where each key is the ID of a target node and each value is the
                     raw AIS performance/status JSON returned by that node (for more information,
-                    see https://aistore.nvidia.com/docs/metrics-reference#target-metrics).
+                    see https://aistore.nvidia.com/docs/monitoring-metrics#target-metrics).
 
         Raises:
             requests.RequestException: If there's an ambiguous exception while processing the request

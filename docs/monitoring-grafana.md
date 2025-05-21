@@ -259,7 +259,7 @@ Grafana can be configured to send alerts based on metric thresholds:
 
 ### Node State Alerts
 
-Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AIStore Prometheus docs](/docs/30-prometheus.md#node-alerts) for all available states):
+Set up alerts based on the AIStore node state flags (refer to [Node Alerts in AIStore Prometheus docs](/docs/monitoring-prometheus.md#node-alerts) for all available states):
 
 1. Create an alert for red alert conditions:
    - Condition: `ais_target_state_flags{node_id=~"$node"} > 0 and (ais_target_state_flags{node_id=~"$node"} & 8192 > 0 or ais_target_state_flags{node_id=~"$node"} & 16384 > 0)`
@@ -367,8 +367,8 @@ Common alert thresholds:
 
 ## Further Resources
 
-- [AIStore Metrics Reference](/docs/31-metrics-reference.md)
-- [AIStore Prometheus Integration](/docs/30-prometheus.md)
+- [AIStore Metrics Reference](/docs/monitoring-metrics.md)
+- [AIStore Prometheus Integration](/docs/monitoring-prometheus.md)
 - [AIStore K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator)
 - [AIStore K8s Monitoring](https://github.com/NVIDIA/ais-k8s/tree/main/monitoring)
 - [Grafana Documentation](https://grafana.com/docs/)

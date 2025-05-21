@@ -241,7 +241,7 @@ $ make aisloader # build aisloader tool
 $ aisloader -bucket=ais://abc -duration 2m -numworkers=8 -minsize=1K -maxsize=1K -pctput=100 --cleanup=false # run aisloader for 2 minutes (8 workers, 1KB size, 100% write, no cleanup)
 ```
 
-#### Step 4: Run iostat (or use any of the multiple [documented](/docs/prometheus.md) ways to monitor AIS performance)
+#### Step 4: Run iostat (or use any of the multiple [documented](/docs/monitoring-prometheus.md) ways to monitor AIS performance)
 
 ```console
 $ iostat -dxm 10 sda sdb
@@ -645,7 +645,8 @@ $ AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="debug" make node
 
 # 5) cloud backends, debug, statsd
 ## Note: if `statsd` build tag is not specified `aisnode` will get built with Prometheus support.
-## For more information (including the binary choice between StatsD and Prometheus), please see docs/metrics.md and docs/prometheus.md
+
+## For AIS observability (including CLI, Prometheus, and Kubernetes integration), please see docs/monitoring-overview.md
 $ TAGS="aws azure gcp statsd debug" make node
 
 # 6) statsd, debug, nethttp (note that fasthttp is used by default)

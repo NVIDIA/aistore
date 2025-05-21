@@ -107,7 +107,7 @@ AIStore node states are categorized into three severity levels:
 
 Node state flags are also exposed via Prometheus metrics - for details, see:
 
-* [Node Alerts in AIStore Prometheus docs](/docs/30-prometheus.md#node-alerts).
+* [Node Alerts in AIStore Prometheus docs](/docs/monitoring-prometheus.md#node-alerts).
 
 ## Live Performance Monitoring
 
@@ -140,7 +140,7 @@ $ ais performance latency --refresh 10 --regex "get"
 | Download all logs for a support bundle | `ais cluster download-logs`                 |
 | Rotate logs on one node                | `ais advanced rotate-logs <NODE_ID>`        |
 
-For more details on log configuration and analysis, see [Observability: Logs](/docs/20-logs.md).
+For more details on log configuration and analysis, see [Observability: Logs](/docs/monitoring-logs.md).
 
 ## Common Command Examples
 
@@ -199,9 +199,9 @@ ais scrub gs --nr --refresh 20s --count 3
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: Logs](/docs/20-logs.md) | Configuring, accessing, and utilizing AIS logs |
-| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
-| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
-| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |
+| [Overview](/docs/monitoring-overview.md) | Introduction to AIS observability |
+| [Logs](/docs/monitoring-logs.md) | Configuring, accessing, and utilizing AIS logs |
+| [Prometheus](/docs/monitoring-prometheus.md) | Configuring Prometheus with AIS |
+| [Metrics Reference](/docs/monitoring-metrics.md) | Complete metrics catalog |
+| [Grafana](/docs/monitoring-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Kubernetes](/docs/monitoring-kubernetes.md) | Working with Kubernetes monitoring stacks |

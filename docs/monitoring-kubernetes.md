@@ -785,9 +785,9 @@ To correlate issues with metrics:
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: CLI](/docs/10-cli.md) | Command-line monitoring tools |
-| [Observability: Logs](/docs/20-logs.md) | Configuring, accessing, and utilizing AIS logs |
-| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
-| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
-| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Overview](/docs/monitoring-overview.md) | Introduction to AIS observability |
+| [CLI](/docs/monitoring-cli.md) | Command-line monitoring tools |
+| [Logs](/docs/monitoring-logs.md) | Configuring, accessing, and utilizing AIS logs |
+| [Prometheus](/docs/monitoring-prometheus.md) | Configuring Prometheus with AIS |
+| [Metrics Reference](/docs/monitoring-metrics.md) | Complete metrics catalog |
+| [Grafana](/docs/monitoring-grafana.md) | Visualizing AIS metrics with Grafana |

@@ -275,7 +275,7 @@ When running a copy or transform job between these buckets, AIStore automaticall
 
 ## 7. Monitoring and Troubleshooting
 
-There are statistics (and [Prometheus metrics](/docs/metrics.md)) to monitor all performance-related aspects including (but not limited to) rate-limiting.
+There are statistics and Prometheus metrics to [monitor](/docs/monitoring-overview.md) all performance-related aspects including (but not limited to) rate-limiting.
 
 Below are two tables — one for `GET`, another for `PUT` — that illustrate how the performance monitoring might look for an AIStore cluster under the described rate-limited scenario.
 

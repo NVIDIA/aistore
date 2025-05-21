@@ -275,9 +275,9 @@ For advanced log analysis, consider forwarding logs to external systems for aggr
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: CLI](/docs/10-cli.md) | Command-line monitoring tools |
-| [Observability: Prometheus](/docs/30-prometheus.md) | Configuring Prometheus with AIS |
-| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
-| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |
+| [Overview](/docs/monitoring-overview.md) | Introduction to AIS observability |
+| [CLI](/docs/monitoring-cli.md) | Command-line monitoring tools |
+| [Prometheus](/docs/monitoring-prometheus.md) | Configuring Prometheus with AIS |
+| [Metrics Reference](/docs/monitoring-metrics.md) | Complete metrics catalog |
+| [Grafana](/docs/monitoring-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Kubernetes](/docs/monitoring-kubernetes.md) | Working with Kubernetes monitoring stacks |

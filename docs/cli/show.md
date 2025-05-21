@@ -138,8 +138,8 @@ Use `ais show performance` and its variations in combination with `ais show job`
 
 ### See also
 
-* [Observability](/docs/metrics.md)
-* [Prometheus](/docs/prometheus.md)
+* [Observability](/docs/monitoring-overview.md)
+* [Prometheus](/docs/monitoring-prometheus.md)
 
 ## `ais show job`
 
@@ -638,3 +638,11 @@ ais show log OqlWpgwrY --severity=warning
 ais show log OqlWpgwrY --severity=w | less
 ```
 
+## Related Documentation
+
+- [Introduction to AIS observability](/docs/monitoring-overview.md)
+- [Configuring, accessing, and utilizing AIS logs](/docs/monitoring-logs.md)
+- [Prometheus integration](/docs/monitoring-prometheus.md)
+- [Metrics reference](/docs/monitoring-metrics.md)
+- [Visualizing AIS metrics with Grafana](/docs/monitoring-grafana.md)
+- [Working with Kubernetes monitoring stacks](/docs/monitoring-kubernetes.md)

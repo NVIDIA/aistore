@@ -184,7 +184,7 @@ rm $TMPF 2>/dev/null
 
 ## NOTE: to enable StatsD instead of Prometheus, use build tag `statsd` in the make command, as follows:
 ## TAGS=statsd make ...
-## see docs/metrics.md and docs/prometheus.md for more information.
+## For more information, see docs/build_tags.md and/or docs/monitoring-overview.md.
 ##
 if ! TAGS=${TAGS} AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS} make --no-print-directory -C ${AISTORE_PATH} node; then
   exit_error "failed to compile 'aisnode' binary"

@@ -1,4 +1,4 @@
-AIStore supports distributed tracing via OpenTelemetry (OTEL), enhancing its observability capabilities alongside existing extensive [metrics and logging features](/docs/metrics.md).
+AIStore supports distributed tracing via OpenTelemetry (OTEL), enhancing its observability capabilities alongside existing extensive [metrics and logging features](/docs/monitoring-overview.md).
 Distributed tracing enables tracking client requests across AIStore's proxy and target daemons, providing better visibility into the request flow and offering valuable performance insights
 
 For more details:

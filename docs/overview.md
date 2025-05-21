@@ -26,6 +26,7 @@ The rest of this document is structured as follows:
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
   - [Erasure Coding vs IO Performance](#erasure-coding-vs-io-performance)
+- [Observability](#observability)
 - [Scale-Out](#scale-out)
 - [Networking](#networking)
 - [HA](#ha)
@@ -365,6 +366,40 @@ This is because AIS was created to perform and scale in the first place. AIS alw
 AIS will utilize EC to automatically self-heal upon detecting corruption (of the full replica). When a client performs a read on a non-existing (or not found) name, AIS will check with EC - assuming, obviously, that the bucket is erasure coded.
 
 EC-related philosophy can be summarized as one word: **recovery**. EC plays no part in the fast path.
+
+## Observability
+
+AIS provides multiple _layers_ of observability:
+
+```
+┌─────────────────────────────────┐
+│       Visualization Layer       │
+│  ┌───────────┐    ┌───────────┐ │
+│  │  Grafana  │    │   Custom  │ │
+│  │ Dashboard │    │   UIs     │ │
+│  └───────────┘    └───────────┘ │
+├─────────────────────────────────┤
+│       Collection Layer          │
+│  ┌───────────┐    ┌───────────┐ │
+│  │ Prometheus│    │  StatsD*  │ │
+│  │           │    │           │ │
+│  └───────────┘    └───────────┘ │
+├─────────────────────────────────┤
+│       Instrumentation Layer     │
+│  ┌───────────┐    ┌───────────┐ │
+│  │  Metrics  │    │   Logs    │ │
+│  │ Endpoints │    │           │ │
+│  └───────────┘    └───────────┘ │
+├─────────────────────────────────┤
+│          Access Layer           │
+│  ┌───────────┐    ┌───────────┐ │
+│  │    CLI    │    │   REST    │ │
+│  │ Interface │    │   APIs    │ │
+│  └───────────┘    └───────────┘ │
+└─────────────────────────────────┘
+```
+
+See [Observability](/docs/monitoring-overview.md) for details.
 
 ## Scale-Out
 

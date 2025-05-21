@@ -66,7 +66,7 @@ This layout provides:
 
 - Direct metric collection from AIS nodes
 - Centralized metric storage in Prometheus
-- Powerful visualization through [Grafana dashboards](/docs/40-grafana.md)
+- Powerful visualization through [Grafana dashboards](/docs/monitoring-grafana.md)
 - Historical trend analysis and alerting capabilities
 
 ## Prometheus Integration
@@ -335,7 +335,7 @@ $ statsd_exporter --help
 To maximize the value of AIStore's Prometheus integration:
 
 1. **Retention Planning**: Configure appropriate retention periods in Prometheus based on your monitoring needs
-2. **Dashboard Organization**: Create dedicated [Grafana dashboards](/docs/40-grafana.md) for:
+2. **Dashboard Organization**: Create dedicated [Grafana dashboards](/docs/monitoring-grafana.md) for:
    - Cluster overview (high-level health)
    - Per-node performance
    - Resource utilization
@@ -360,9 +360,9 @@ To maximize the value of AIStore's Prometheus integration:
 
 | Document | Description |
 |----------|-------------|
-| [Observability: Overview](/docs/00-overview.md) | Introduction to AIS observability approaches |
-| [Observability: CLI](/docs/10-cli.md) | Command-line monitoring tools |
-| [Observability: Logs](/docs/20-logs.md) | Log-based observability |
-| [Observability: Metrics Reference](/docs/31-metrics-reference.md) | Complete metrics catalog |
-| [Observability: Grafana](/docs/40-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Observability: Kubernetes](/docs/50-k8s.md) | Working with Kubernetes monitoring stacks |
+| [Overview](/docs/monitoring-overview.md) | Introduction to AIS observability |
+| [CLI](/docs/monitoring-cli.md) | Command-line monitoring tools |
+| [Logs](/docs/monitoring-logs.md) | Log-based observability |
+| [Metrics Reference](/docs/monitoring-metrics.md) | Complete metrics catalog |
+| [Grafana](/docs/monitoring-grafana.md) | Visualizing AIS metrics with Grafana |
+| [Kubernetes](/docs/monitoring-kubernetes.md) | Working with Kubernetes monitoring stacks |

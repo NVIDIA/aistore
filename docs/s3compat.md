@@ -22,7 +22,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
 | Rely on an existing S3‑centric workflow or third‑party app                                                              | Need fine‑grained control‑plane ops (`ais cluster`, `ais bucket props set`, node lifecycle)                     |
 | Accept MD5‑based ETag semantics—even though MD5 is slower and not crypto‑secure                                         | Value AIS‑native features: virtual directories, adaptive rate‑limiting, WebSocket ETL, streaming cold‑GET, etc. |
 | Accept that some S3 features (CORS, Website hosting, CloudFront) are **not** yet implemented                            | Care about advanced list-objects options (to list [shards](/docs/overview.md#shard)), working with [remote clusters](/docs/overview.md#unified-namespace), non-S3 buckets)                              |
-| Are okay with slight performance overhead from the S3‑to‑AIS adaptation layer (MD5 hashing, XML marshaling/translation) | Want full [Prometheus](/docs/prometheus.md) visibility with AIS‑rich metrics & labels                                                  |
+| Are okay with slight performance overhead from the S3‑to‑AIS adaptation layer (MD5 hashing, XML marshaling/translation) | Want full [Prometheus](/docs/monitoring-prometheus.md) visibility with AIS‑rich metrics & labels                                                  |
 
 ---
 

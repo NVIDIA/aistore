@@ -48,12 +48,12 @@ AIS began with StatsD for metrics collection but has evolved to primarily use Pr
 
 | Method | Description | Use Cases | Documentation |
 |--------|-------------|-----------|---------------|
-| **CLI** | Command-line tools for monitoring and troubleshooting | Quick checks, diagnostics, interactive troubleshooting | [Observability: CLI](/docs/10-cli.md) |
-| **Logs** | Detailed event logs with configurable verbosity | Debugging, audit trails, understanding system behavior | [Observability: Logs](/docs/20-logs.md) |
-| **Prometheus** | Time-series metrics exposed via HTTP endpoints | Performance monitoring, alerting, trend analysis | [Observability: Prometheus](/docs/30-prometheus.md) |
-| **Metrics Reference** | Metric groups, names, and descriptions | Quick search for specific metric | [Observability: Metrics Reference](/docs/31-metrics-reference.md) |
-| **Grafana** | Visualization dashboards for AIS metrics | Visual monitoring, sharing operational status | [Observability: Grafana](/docs/40-grafana.md) |
-| **Kubernetes** |  Kubernetes deployments | Working with Kubernetes monitoring stacks | [Observability: Kubernetes](/docs/50-k8s.md) |
+| **CLI** | Command-line tools for monitoring and troubleshooting | Quick checks, diagnostics, interactive troubleshooting | [Observability: CLI](/docs/monitoring-cli.md) |
+| **Logs** | Detailed event logs with configurable verbosity | Debugging, audit trails, understanding system behavior | [Observability: Logs](/docs/monitoring-logs.md) |
+| **Prometheus** | Time-series metrics exposed via HTTP endpoints | Performance monitoring, alerting, trend analysis | [Observability: Prometheus](/docs/monitoring-prometheus.md) |
+| **Metrics Reference** | Metric groups, names, and descriptions | Quick search for specific metric | [Observability: Metrics Reference](/docs/monitoring-metrics.md) |
+| **Grafana** | Visualization dashboards for AIS metrics | Visual monitoring, sharing operational status | [Observability: Grafana](/docs/monitoring-grafana.md) |
+| **Kubernetes** |  Kubernetes deployments | Working with Kubernetes monitoring stacks | [Observability: Kubernetes](/docs/monitoring-kubernetes.md) |
 
 ## Kubernetes Integration
 
@@ -61,7 +61,7 @@ For Kubernetes deployments, AIS provides additional observability features desig
 
 There's a dedicated (and separate) GitHub [repository](https://github.com/NVIDIA/ais-k8s) that, in particular, provides Helm charts for AIS Cluster monitoring.
 
-See the [Kubernetes Observability](50-k8s.md) document for details.
+See the [Kubernetes Observability](monitoring-kubernetes.md) document for details.
 
 ## Key Metrics Categories
 

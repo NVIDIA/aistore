@@ -1,4 +1,4 @@
-# AIS Loader
+# AIS Loader (`aisloader`)
 
 AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore) or any S3-compatible backend.
 
@@ -15,6 +15,12 @@ There's a large set of command-line switches that allow to realize almost any co
 * read and write ratios
 
 Detailed protocol-level tracing statistics are also available - see [HTTP tracing](#http-tracing) section below for brief introduction.
+
+---
+
+**May 2025 UPDATE**: `aisloader`/StatsD integration and associated capabilities described in this document are _obsolete_. The corresponding functionality is not supported and most likely will be eventually completely removed.
+
+---
 
 ## Table of Contents
 
@@ -416,7 +422,7 @@ format:
 * `metric_type` - can be: `gauge`, `timer`, `counter`
 * `hostname` - is the hostname of the machine on which the loader is ran
 * `loaderid` - see: `-loaderid` option
-* `metric` - can be: `latency.*`, `get.*`, `put.*` (see: [aisloader metrics](/docs/metrics.md#ais-loader-metrics))
+* `metric` - can be: `latency.*`, `get.*`, `put.*`
 
 ### Grafana
 
@@ -504,18 +510,14 @@ Detailed latency info is enabled
 
 # AISLoader Composer
 
-For benchmarking production-level clusters, a single AISLoader instance may not be able to fully saturate the load the cluster can handle. In this case, multiple aisloader instances can be coordinated via the [AISLoader Composer](/bench/tools/aisloader-composer/). See the [README](/bench/tools/aisloader-composer/README.md) for instructions on setting up. 
+For benchmarking production-level clusters, a single AISLoader instance may not be able to fully saturate the load the cluster can handle. In this case, multiple aisloader instances can be coordinated via the [AISLoader Composer](/bench/tools/aisloader-composer/). See the [README](/bench/tools/aisloader-composer/README.md) for instructions on setting up.
 
 
 ## References
 
-For documented `aisloader` metrics, please refer to:
+For AIS observability (including CLI, Prometheus, and Kubernetes integration), please see:
 
-* [aisloader metrics](/docs/metrics.md#ais-loader-metrics)
-
-The same readme (above) also describes:
-
-* [Statistics, Collected Metrics, Visualization](/docs/metrics.md)
+* [AIS Observability Overview](/docs/monitoring-overview.md)
 
 For [StatsD](https://github.com/etsy/statsd) compliant backends, see:
 
@@ -523,4 +525,4 @@ For [StatsD](https://github.com/etsy/statsd) compliant backends, see:
 
 Finally, for another supported - and alternative to StatsD - monitoring via Prometheus integration, see:
 
-* [Prometheus](/docs/prometheus.md)
+* [Prometheus](/docs/monitoring-prometheus.md)

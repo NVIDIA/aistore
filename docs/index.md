@@ -19,9 +19,10 @@ AIS consistently shows balanced I/O distribution and linear scalability across a
 * ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no built-in limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment size or functionality.
 * ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
+* ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [Observability](/docs/monitoring-overview.md) for details.
 * ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
-* ✅ **Custom ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
+* ✅ **ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
 * ✅ **Existing File Datasets:** Ingest file datasets from any local or remote source, either on-demand (ad-hoc) or through asynchronous [batch](/docs/overview.md#promote-local-or-shared-files).
 * ✅ **Data Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write-consistency) across all gateways, with [write-through](/docs/overview.md#write-through) semantics in presence of [remote backends](/docs/overview.md#backend-provider).
 * ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 serialization for batching and processing small files. Features include [initial sharding](https://aistore.nvidia.com/blog/2024/08/16/ishard), distributed shuffle (re-sharding), appending to existing shards, listing contained files, and [more](/docs/overview.md#shard).
@@ -122,13 +123,13 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 * [Overview and Design](/docs/overview.md)
 * [Getting Started](/docs/getting_started.md)
 * [Buckets and Bucket Management](/docs/bucket.md)
+* [Observability](/docs/monitoring-overview.md)
 * [Technical Blog](https://aistore.nvidia.com/blog)
 * [S3 Compatibility](/docs/s3compat.md)
 * [Batch Jobs](/docs/batch.md)
 * [Performance](/docs/performance.md) and [CLI: performance](/docs/cli/performance.md)
 * [CLI Reference](/docs/cli.md)
 * [Authentication](/docs/authn.md)
-* [Prometheus & Metrics](/docs/metrics.md)
 * [Production Deployment](https://github.com/NVIDIA/ais-k8s)
 
 ### How to find information
