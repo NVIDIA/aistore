@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -24,6 +25,26 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
+
+var DefaultWaitRetry = WaitRetryOpts{MaxRetries: 3, Interval: time.Second * 3}
+
+func WaitForCondition(condition func() bool, opts WaitRetryOpts) error {
+	var (
+		i             int
+		retries       = opts.MaxRetries
+		retryInterval = opts.Interval
+	)
+	for {
+		if success := condition(); success {
+			return nil
+		}
+		time.Sleep(retryInterval)
+		i++
+		if i >= retries {
+			return fmt.Errorf("max retries (%d) exceeded", retries)
+		}
+	}
+}
 
 // Generates an object name that hashes to a different target than `baseName`.
 func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap) string {

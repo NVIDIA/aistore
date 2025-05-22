@@ -2813,7 +2813,6 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.
 	err = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckError(t, err)
 
-	time.Sleep(time.Second)
 	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckError(t, err)
 	aborted, finished := _isAbortedOrFinished(xid, snaps)
@@ -2824,11 +2823,16 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.
 		tlog.Logf("%s[%s] already finished\n", apc.ActCopyBck, xid)
 	}
 
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
-	tassert.CheckError(t, err)
+	err = tools.WaitForCondition(
+		func() bool {
+			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
+			tassert.CheckError(t, err)
+			return !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck))
+		}, tools.DefaultWaitRetry,
+	)
+
 	if aborted {
-		tassert.Errorf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck)),
-			"when aborted, should not contain destination bucket %s", dstBck.String())
+		tassert.Fatalf(t, err == nil, "when aborted, should not contain destination bucket %s", dstBck.String())
 	}
 }
 
