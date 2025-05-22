@@ -130,13 +130,14 @@ const (
 	cmdMpathDetach  = cmdDetach
 	cmdMpathDisable = "disable"
 
-	// More mountpath commands (advanced usage)
+	// mountpath commands (advanced)
 	cmdMpathRescanDisks = "rescan-disks"
 	cmdMpathFshc        = "fshc"
-
-	// backend enable/disable (advanced use only)
+	// backend enable/disable (advanced)
 	cmdBackendEnable  = "enable-backend"
 	cmdBackendDisable = "disable-backend"
+	// object-locked enum (advanced)
+	cmdCheckLock = "check-lock"
 
 	cmdLoadTLS     = "load-certificate"
 	cmdValidateTLS = "validate-certificates"

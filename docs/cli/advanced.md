@@ -7,6 +7,7 @@ Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, 
 - [Remove node from Smap](#remove-node-from-smap)
 - [Rotate logs: individual nodes or entire cluster](#rotate-logs-individual-nodes-or-entire-cluster)
 - [Disable/Enable cloud backend at runtime](#disableenable-cloud-backend-at-runtime)
+- [Check object(s) lock status](#check-objects-lock-status)
 
 ## `ais advanced`
 
@@ -30,6 +31,7 @@ COMMANDS:
    rotate-logs       Rotate aistore logs
    enable-backend    (Re)enable cloud backend (see also: 'ais config cluster backend')
    disable-backend   Disable cloud backend (see also: 'ais config cluster backend')
+   check-lock        Check object lock status (read/write/unlocked)
 
 OPTIONS:
    --help, -h  Show help
@@ -215,4 +217,25 @@ NAME     SIZE            CACHED
 
 $ ais get s3://test-bucket/333 /dev/null
 GET (and discard) 333 from s3://test-bucket (15.97KiB)
+```
+
+## Check object(s) lock status
+
+```
+$ ais get s3://test-bucket/large-object /dev/null & for i in {1..10}; do ais advanced check-lock s3://test-bucket/large-object; sleep 1; done
+[1] 443660
+
+s3://test-bucket/large-object: unlocked
+s3://test-bucket/large-object: write-locked
+s3://test-bucket/large-object: write-locked
+s3://test-bucket/large-object: write-locked
+s3://test-bucket/large-object: write-locked
+s3://test-bucket/large-object: write-locked
+GET and discard .inventory/ais-vm/ais-vm/data/9dac8de5-cff9-432c-9663-b054ae5ce357.csv.gz from s3://ais-vm (54.14MiB)
+[1]+  Done                    ais get s3://test-bucket/large-object /dev/null
+s3://test-bucket/large-object: unlocked
+s3://test-bucket/large-object: unlocked
+s3://test-bucket/large-object: unlocked
+...
+^C  ## Ctrl-C
 ```

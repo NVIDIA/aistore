@@ -73,6 +73,13 @@ var (
 				Action:       backendDisableHandler,
 				BashComplete: suggestCloudProvider,
 			},
+			{
+				Name:         cmdCheckLock,
+				Usage:        "Check object lock status (read/write/unlocked)",
+				ArgsUsage:    "BUCKET/OBJECT",
+				Action:       checkObjectLockHandler,
+				BashComplete: bucketCompletions(bcmplop{separator: true}),
+			},
 		},
 	}
 )
@@ -199,5 +206,42 @@ func backendDisableHandler(c *cli.Context) error {
 		return err
 	}
 	actionDone(c, "cluster: disabled "+cloudProvider+" backend")
+	return nil
+}
+
+func checkObjectLockHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	} else if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "", c.Args()[1:])
+	}
+
+	uri := c.Args().Get(0)
+	bck, objName, err := parseBckObjURI(c, uri, true)
+	if err != nil {
+		return err
+	}
+	if objName == "" {
+		return fmt.Errorf("missing object name in %q", uri)
+	}
+
+	lockState, err := api.CheckObjectLock(apiBP, bck, objName)
+	if err != nil {
+		return V(err)
+	}
+
+	var status string
+	switch lockState {
+	case apc.LockNone:
+		status = "unlocked"
+	case apc.LockRead:
+		status = "read-locked"
+	case apc.LockWrite:
+		status = "write-locked"
+	default:
+		return fmt.Errorf("unexpected return from 'api.CheckObjectLock': (%d)", lockState)
+	}
+
+	fmt.Fprintf(c.App.Writer, "%s: %s\n", uri, status)
 	return nil
 }
