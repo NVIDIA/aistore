@@ -202,12 +202,34 @@ func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string)
 func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.Flt) {
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
-		t.writeJSON(w, r, stats, what)
+		t.writeJSON(w, r, stats, what) // ok
 		return
 	}
-	if cmn.IsErrXactNotFound(err) {
+
+	xactID := xactQuery.ID
+	switch {
+	case cmn.IsErrXactNotFound(err):
 		t.writeErr(w, r, err, http.StatusNotFound, Silent)
-	} else {
+	case xactID != "" && strings.IndexByte(xactID, xact.SepaID[0]) > 0:
+		var (
+			uuids = strings.Split(xactID, xact.SepaID)
+			errN  error
+		)
+		for _, xid := range uuids {
+			xactQuery.ID = xid
+			stats, err := xreg.GetSnap(xactQuery)
+			if err == nil {
+				t.writeJSON(w, r, stats, what) // ok
+				return
+			}
+			errN = err
+		}
+		if cmn.IsErrXactNotFound(err) {
+			t.writeErr(w, r, errN, http.StatusNotFound, Silent)
+		} else {
+			t.writeErr(w, r, errN)
+		}
+	default:
 		t.writeErr(w, r, err)
 	}
 }
