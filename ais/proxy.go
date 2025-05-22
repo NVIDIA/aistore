@@ -1663,7 +1663,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err != nil {
 		return
 	}
-	if msg.Action == apc.ActRenameObject {
+	if msg.Action == apc.ActRenameObject || msg.Action == apc.ActCheckLock {
 		apireq.after = 2
 	}
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -1737,6 +1737,11 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 		objName := msg.Name
 		p.redirectAction(w, r, bck, objName, msg)
+	case apc.ActCheckLock:
+		if err := p.checkAccess(w, r, bck, apc.AccessRO); err != nil {
+			return
+		}
+		p.redirectAction(w, r, bck, apireq.items[1], msg)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}

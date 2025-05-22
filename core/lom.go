@@ -633,16 +633,10 @@ func (lom *LOM) whingeSize(size int64) error {
 
 func (lom *LOM) getLocker() *nlc { return &g.locker[lom.CacheIdx()] } // (lif.getLocker())
 
-func (lom *LOM) isLockedExcl() (exclusive bool) {
+// returns {apc.LockNone, ...} enum
+func (lom *LOM) IsLocked() int {
 	nlc := lom.getLocker()
-	_, exclusive = nlc.IsLocked(lom.Uname())
-	return exclusive
-}
-
-func (lom *LOM) isLockedRW() bool {
-	nlc := lom.getLocker()
-	rc, exclusive := nlc.IsLocked(lom.Uname())
-	return exclusive || rc > 0
+	return nlc.IsLocked(lom.Uname())
 }
 
 func (lom *LOM) TryLock(exclusive bool) bool {

@@ -32,3 +32,10 @@ const (
 	DefaultTimeout = time.Duration(-1)
 	LongTimeout    = time.Duration(-2)
 )
+
+// locks
+const (
+	LockNone = iota
+	LockRead
+	LockWrite
+)

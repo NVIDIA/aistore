@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -71,7 +72,7 @@ func (lom *LOM) Open() (fh cos.LomReader, err error) {
 //
 
 func (lom *LOM) Create() (cos.LomWriter, error) {
-	debug.Assert(lom.isLockedExcl(), lom.Cname()) // caller must wlock
+	debug.Assert(lom.IsLocked() == apc.LockWrite, "must be wlocked: ", lom.Cname())
 	return lom._cf(lom.FQN)
 }
 
@@ -156,11 +157,12 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 	lom.UncacheDel()
 
 	debug.AssertFunc(func() bool {
-		if lom.isLockedExcl() {
+		locked := lom.IsLocked()
+		if locked == apc.LockWrite {
 			return true
 		}
 		// NOTE: making "rlock" exception to be able to forcefully rm corrupted object in the GET path
-		return len(force) > 0 && force[0] && lom.isLockedRW()
+		return len(force) > 0 && force[0] && locked == apc.LockRead
 	})
 	err = lom.RemoveMain()
 	for copyFQN := range lom.md.copies {

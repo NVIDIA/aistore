@@ -102,6 +102,9 @@ const (
 	ActListenToNotif     = "watch-xaction"
 	ActMergeOwnershipTbl = "ic-merge-own-tbl"
 	ActRegGlobalXaction  = "reg-global-xaction"
+
+	// advanced usage
+	ActCheckLock = "check-lock"
 )
 
 // internal use

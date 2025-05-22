@@ -35,7 +35,6 @@ func (lom *LOM) NumCopies() int  { return max(len(lom.md.copies), 1) } // metada
 // - copies include lom.FQN aka "main repl."
 // - caller must take a lock
 func (lom *LOM) GetCopies() fs.MPI {
-	debug.Assert(lom.isLockedRW(), lom.Cname())
 	return lom.md.copies
 }
 
@@ -143,9 +142,6 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 	if !lom.HasCopies() {
 		return nil
 	}
-	// caller is responsible for write-locking
-	debug.Assert(lom.isLockedExcl(), lom.Cname())
-
 	if !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
 		return nil

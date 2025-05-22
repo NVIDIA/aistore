@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 
@@ -78,15 +79,21 @@ func (nlc *nlc) init() {
 	nlc.m = make(map[string]*lockInfo, initCapacity)
 }
 
-func (nlc *nlc) IsLocked(uname string) (rc int, exclusive bool) {
+// returns {apc.LockNone, ...} enum
+func (nlc *nlc) IsLocked(uname string) int {
 	nlc.mu.Lock()
 	defer nlc.mu.Unlock()
 
 	lockInfo, found := nlc.m[uname]
-	if !found {
-		return
+	switch {
+	case !found:
+		return apc.LockNone
+	case lockInfo.exclusive:
+		return apc.LockWrite
+	case lockInfo.rc > 0:
+		return apc.LockRead
 	}
-	return int(lockInfo.rc), lockInfo.exclusive
+	return apc.LockNone
 }
 
 func (nlc *nlc) TryLock(uname string, exclusive bool) (locked bool) {

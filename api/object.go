@@ -636,6 +636,50 @@ func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err
 	return xid, err
 }
 
+// Check if an object is currently locked by ongoing operations.
+// Handles HTTP status from AIStore:
+// - 200 OK:       object unlocked
+// - 202 Accepted: read lock (NOTE: internal convention)
+// - 423 Locked:   write lock
+// Returns {apc.LockNone, ...} enum or an error
+func CheckObjectLock(bp BaseParams, bck cmn.Bck, objName string) (int, error) {
+	var (
+		q      = qalloc()
+		actMsg = apc.ActMsg{Action: apc.ActCheckLock}
+	)
+
+	bp.Method = http.MethodPost
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Body = cos.MustMarshal(actMsg)
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+		bck.SetQuery(q)
+		reqParams.Query = q
+	}
+
+	resp, err := reqParams.do()
+	FreeRp(reqParams)
+	qfree(q)
+	if err != nil {
+		return 0, err
+	}
+	resp.Body.Close()
+
+	switch status := resp.StatusCode; status {
+	case http.StatusAccepted: // NOTE convention
+		return apc.LockRead, nil
+	case http.StatusLocked:
+		return apc.LockWrite, nil
+	case http.StatusOK:
+		return apc.LockNone, nil
+	default:
+		err := &cmn.ErrHTTP{Message: http.StatusText(status), Status: status}
+		return 0, err
+	}
+}
+
 //
 // misc. helpers
 //

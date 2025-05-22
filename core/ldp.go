@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -202,7 +203,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 
 // NOTE: Sync is false (ie., not deleting)
 func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err error) {
-	debug.Assert(lom.isLockedRW(), lom.Cname()) // caller must take a lock
+	debug.Assert(lom.IsLocked() > apc.LockNone, "must be locked: ", lom.Cname())
 
 	err = lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {

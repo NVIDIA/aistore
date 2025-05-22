@@ -1082,6 +1082,9 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 
 			// lom is eventually freed by x-blob
 		}
+	case apc.ActCheckLock:
+		t._checkLocked(w, r, apireq.bck, apireq.items[1])
+		return
 	default:
 		t.writeErrAct(w, r, msg.Action)
 		return
@@ -1090,6 +1093,34 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErr(w, r, err)
 		core.FreeLOM(lom)
 	}
+}
+
+// return object's lock status (enum { apc.LockNone, ... }) via HTTP status:
+// - 200 OK:       unlocked
+// - 202 Accepted: read lock (NOTE: convention)
+// - 423 Locked:   write lock
+func (t *target) _checkLocked(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
+	var (
+		ecode  int
+		locked int
+		lom    = core.AllocLOM(objName)
+	)
+	defer core.FreeLOM(lom)
+	if err := lom.InitBck(bck.Bucket()); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	locked = lom.IsLocked()
+	switch locked {
+	case apc.LockWrite:
+		ecode = http.StatusLocked
+	case apc.LockRead:
+		ecode = http.StatusAccepted
+	default:
+		debug.Assert(locked == apc.LockNone)
+		ecode = http.StatusOK
+	}
+	w.WriteHeader(ecode)
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
