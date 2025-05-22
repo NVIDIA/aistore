@@ -7,9 +7,11 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 
@@ -77,6 +79,7 @@ var (
 				Name:         cmdCheckLock,
 				Usage:        "Check object lock status (read/write/unlocked)",
 				ArgsUsage:    "BUCKET/OBJECT",
+				Flags:        []cli.Flag{verbObjPrefixFlag},
 				Action:       checkObjectLockHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
@@ -217,31 +220,75 @@ func checkObjectLockHandler(c *cli.Context) error {
 	}
 
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjURI(c, uri, true)
+	bck, objName, err := parseBckObjURI(c, uri, false)
 	if err != nil {
 		return err
 	}
-	if objName == "" {
-		return fmt.Errorf("missing object name in %q", uri)
+
+	var prefix string
+	if flagIsSet(c, verbObjPrefixFlag) {
+		prefix = parseStrFlag(c, verbObjPrefixFlag)
+	}
+	if strings.HasSuffix(objName, "/") {
+		if prefix != "" && prefix != objName {
+			return fmt.Errorf("prefix %q vs prefix %q ambiguity", prefix, objName)
+		}
+		prefix = objName
+
+		return _checkLockMany(c, bck, prefix, uri)
 	}
 
-	lockState, err := api.CheckObjectLock(apiBP, bck, objName)
+	lockState, err := _checkLockOne(bck, objName)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.App.Writer, "%s: %s\n", uri, lockState)
+	return nil
+}
+
+func _checkLockMany(c *cli.Context, bck cmn.Bck, prefix, uri string) error {
+	// List objects with the given prefix
+	msg := &apc.LsoMsg{
+		Prefix: prefix,
+		Props:  apc.GetPropsName, // Only need object names
+	}
+
+	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{})
 	if err != nil {
 		return V(err)
 	}
 
-	var status string
-	switch lockState {
-	case apc.LockNone:
-		status = "unlocked"
-	case apc.LockRead:
-		status = "read-locked"
-	case apc.LockWrite:
-		status = "write-locked"
-	default:
-		return fmt.Errorf("unexpected return from 'api.CheckObjectLock': (%d)", lockState)
+	if len(objList.Entries) == 0 {
+		fmt.Fprintf(c.App.ErrWriter, "No objects found with prefix %q\n", uri)
+		return nil
 	}
 
-	fmt.Fprintf(c.App.Writer, "%s: %s\n", uri, status)
+	for _, entry := range objList.Entries {
+		lockState, err := _checkLockOne(bck, entry.Name)
+		if err != nil {
+			warn := fmt.Sprintf("%s: %v", bck.Cname(entry.Name), err)
+			actionWarn(c, warn)
+			continue
+		}
+		fmt.Fprintf(c.App.Writer, "%s: %s\n", bck.Cname(entry.Name), lockState)
+	}
+
 	return nil
+}
+
+func _checkLockOne(bck cmn.Bck, objName string) (string, error) {
+	lockState, err := api.CheckObjectLock(apiBP, bck, objName)
+	if err != nil {
+		return "", V(err)
+	}
+	switch lockState {
+	case apc.LockNone:
+		return "unlocked", nil
+	case apc.LockRead:
+		return "read-locked", nil
+	case apc.LockWrite:
+		return "write-locked", nil
+	default:
+		return "", fmt.Errorf("unexpected return from 'api.CheckObjectLock': %d", lockState)
+	}
 }

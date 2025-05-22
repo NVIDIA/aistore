@@ -221,6 +221,25 @@ GET (and discard) 333 from s3://test-bucket (15.97KiB)
 
 ## Check object(s) lock status
 
+Prefix-based (multi-object) selection is also supported:
+
+```console
+$ ais advanced check-lock --help
+NAME:
+   ais advanced check-lock - Check object lock status (read/write/unlocked)
+
+USAGE:
+   ais advanced check-lock BUCKET/OBJECT [command options]
+
+OPTIONS:
+   prefix     Select virtual directories or objects with names starting with the specified prefix, e.g.:
+              '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+              '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   help, h    Show help
+```
+
+### Check a single object
+
 ```
 $ ais get s3://test-bucket/large-object /dev/null & for i in {1..10}; do ais advanced check-lock s3://test-bucket/large-object; sleep 1; done
 [1] 443660
@@ -231,11 +250,41 @@ s3://test-bucket/large-object: write-locked
 s3://test-bucket/large-object: write-locked
 s3://test-bucket/large-object: write-locked
 s3://test-bucket/large-object: write-locked
-GET and discard .inventory/ais-vm/ais-vm/data/9dac8de5-cff9-432c-9663-b054ae5ce357.csv.gz from s3://ais-vm (54.14MiB)
+GET and discard large-object from s3://test-bucket (54.14MiB)
 [1]+  Done                    ais get s3://test-bucket/large-object /dev/null
 s3://test-bucket/large-object: unlocked
 s3://test-bucket/large-object: unlocked
 s3://test-bucket/large-object: unlocked
+...
+^C  ## Ctrl-C
+```
+
+### Check entire virtual directory
+
+For illustration purposes, the directory in question will contain only two objects:
+
+```
+$ ais get s3://test-bucket/dir/large-object /dev/null & for i in {1..10}; do ais advanced check-lock s3://test-bucket/dir/; sleep 1; done
+[1] 466350
+
+s3://test-bucket/dir/large-object: unlocked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: write-locked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: write-locked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: write-locked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: write-locked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: write-locked
+s3://test-bucket/dir/small-object: unlocked
+GET and discard dir/large-object from s3://test-bucket (54.14MiB)
+[1]+  Done                    ais get s3://test-bucket/dir/large-object /dev/null
+s3://test-bucket/dir/large-object: unlocked
+s3://test-bucket/dir/small-object: unlocked
+s3://test-bucket/dir/large-object: unlocked
+s3://test-bucket/dir/small-object: unlocked
 ...
 ^C  ## Ctrl-C
 ```
