@@ -8,11 +8,9 @@ from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
 from aistore.sdk.const import HEADER_NODE_URL, ETL_WS_FQN, ETL_WS_DESTINATION_ADDR
-from aistore.sdk.etl.webserver import (
-    HTTPMultiThreadedServer,
-    FlaskServer,
-    FastAPIServer,
-)
+from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
+from aistore.sdk.etl.webserver.flask_server import FlaskServer
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 
 
 class DummyHTTPETLServer(HTTPMultiThreadedServer):

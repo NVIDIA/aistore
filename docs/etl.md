@@ -278,7 +278,7 @@ Much like the `init code` approach, these frameworks hide the details of web ser
 Below is the minimum example `md5.py` (and the corresponding [`Dockerfile`](https://github.com/NVIDIA/ais-etl/blob/main/transformers/echo/Dockerfile)) to implement a custom ETL that transforms objects into their MD5 checksum value.
 ```python
 import hashlib
-from aistore.sdk.etl.webserver import FastAPIServer
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 
 class MD5Server(FastAPIServer):
     """
