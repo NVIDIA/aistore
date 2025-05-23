@@ -316,7 +316,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		if bck.IsAIS() {
 			return fmt.Errorf("flag %s requires remote bucket (have: %s)", qflprn(listNotCachedFlag), bck.String())
 		}
-		msg.SetFlag(apc.LsNotCached)
+		msg.SetFlag(apc.LsNotCached | apc.LsNoDirs)
 	}
 
 	// NOTE: `--all` combines two separate meanings:
