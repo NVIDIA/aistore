@@ -8,7 +8,13 @@ from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
 
-from typing import Dict, List, Iterator, Tuple
+from typing import Any, Callable, Dict, List, Iterator, Tuple
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 import requests
 from requests.exceptions import ChunkedEncodingError
@@ -250,3 +256,15 @@ def has_targets(n: int = 2) -> bool:
         return len(DEFAULT_TEST_CLIENT.cluster().get_info().tmap) >= n
     except Exception:
         return False  # Assume failure means insufficient targets or unreachable cluster (AuthN)
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=0.4, max=6),
+    retry=retry_if_exception_type(AssertionError),
+    reraise=True,
+)
+def assert_with_retries(
+    assertion_fn: Callable[..., None], *args: Any, **kwargs: Any
+) -> None:
+    assertion_fn(*args, **kwargs)

@@ -23,7 +23,7 @@ from tests.const import (
 )
 from tests.integration import REMOTE_SET, AWS_BUCKET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
-from tests.utils import random_string
+from tests.utils import random_string, assert_with_retries
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -241,11 +241,21 @@ class TestObjectGroupOps(ParallelTestBase):
             self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
         copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 3)
+
+        # NOTE: S3 and similar providers are only *eventually* consistent.
+        #       Wrap emptiness assertions in a retry to avoid flakes.
+
         # check to see if all the objects in dst disappear after cp multi-obj sync
-        self.assertEqual(len(to_bck.list_all_objects(prefix=self.obj_prefix)), 0)
+        assert_with_retries(
+            self.assertEqual, 0, len(to_bck.list_all_objects(prefix=self.obj_prefix))
+        )
         # objects also disappear from src bck
-        self.assertEqual(len(self.bucket.list_all_objects(prefix=self.obj_prefix)), 0)
+        assert_with_retries(
+            self.assertEqual,
+            0,
+            len(self.bucket.list_all_objects(prefix=self.obj_prefix)),
+        )
 
     @unittest.skipIf(
         not AWS_BUCKET,
