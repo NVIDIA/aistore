@@ -341,7 +341,7 @@ func (ctx *scrCtx) ls(bck cmn.Bck) (*scrBp, error) {
 		lsmsg.SetFlag(apc.LsCached)
 	}
 
-	pageSize, maxPages, limit, err := _setPage(ctx.c, bck)
+	pageSize, maxPages, limit, err := setLsoPage(ctx.c, bck)
 	if err != nil {
 		return nil, err
 	}

@@ -229,12 +229,21 @@ NAME:
    ais advanced check-lock - Check object lock status (read/write/unlocked)
 
 USAGE:
-   ais advanced check-lock BUCKET/OBJECT [command options]
+   ais advanced check-lock BUCKET[/OBJECT_NAME_or_PREFIX] [command options]
 
 OPTIONS:
    prefix     Select virtual directories or objects with names starting with the specified prefix, e.g.:
               '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
               '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   max-pages  Maximum number of pages to display (see also '--page-size' and '--limit')
+              e.g.: 'ais ls az://abc --paged --page-size 123 --max-pages 7
+   limit      The maximum number of objects to list, get, or otherwise handle (0 - unlimited; see also '--max-pages'),
+              e.g.:
+              - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
+              - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
+              - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/--
+   page-size  Maximum number of object names per page; when the flag is omitted or 0
+              the maximum is defined by the corresponding backend; see also '--max-pages' and '--paged'
    help, h    Show help
 ```
 
@@ -261,30 +270,58 @@ s3://test-bucket/large-object: unlocked
 
 ### Check entire virtual directory
 
-For illustration purposes, the directory in question will contain only two objects:
-
 ```
-$ ais get s3://test-bucket/dir/large-object /dev/null & for i in {1..10}; do ais advanced check-lock s3://test-bucket/dir/; sleep 1; done
+$ ais get s3://test-bucket/dir/large-object /dev/null & for i in {1..10}; do ais advanced check-lock s3://test-bucket/dir/ --page-size 20; sleep 1; done
 [1] 466350
+...
 
-s3://test-bucket/dir/large-object: unlocked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: write-locked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: write-locked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: write-locked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: write-locked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: write-locked
-s3://test-bucket/dir/small-object: unlocked
+Page 5 =========
+OBJECT                            LOCK STATUS
+s3://test-bucket/dir/1000cd6      unlocked
+s3://test-bucket/dir/1000cea      unlocked
+s3://test-bucket/dir/1000d52      unlocked
+s3://test-bucket/dir/1000d6       unlocked
+s3://test-bucket/dir/1000da2      unlocked
+s3://test-bucket/dir/1000db4      unlocked
+s3://test-bucket/dir/1000dbd      unlocked
+s3://test-bucket/dir/1000dd6      unlocked
+s3://test-bucket/dir/large-object write-locked
+s3://test-bucket/dir/1000e52      unlocked
+s3://test-bucket/dir/1000ea       unlocked
+s3://test-bucket/dir/1000ea2      unlocked
+s3://test-bucket/dir/1000eb4      unlocked
+s3://test-bucket/dir/1000ebd      unlocked
+
 GET and discard dir/large-object from s3://test-bucket (54.14MiB)
 [1]+  Done                    ais get s3://test-bucket/dir/large-object /dev/null
-s3://test-bucket/dir/large-object: unlocked
-s3://test-bucket/dir/small-object: unlocked
-s3://test-bucket/dir/large-object: unlocked
-s3://test-bucket/dir/small-object: unlocked
-...
-^C  ## Ctrl-C
+
+s3://test-bucket/dir/1000ed6      unlocked
+s3://test-bucket/dir/1000eea      unlocked
+s3://test-bucket/dir/1000f52      unlocked
+s3://test-bucket/dir/1000fa2      unlocked
+s3://test-bucket/dir/1000fb4      unlocked
+s3://test-bucket/dir/1000fbd      unlocked
+
+Page 6 =========
+OBJECT                            LOCK STATUS
+s3://test-bucket/dir/1000cd6      unlocked
+s3://test-bucket/dir/1000cea      unlocked
+s3://test-bucket/dir/1000d52      unlocked
+s3://test-bucket/dir/1000d6       unlocked
+s3://test-bucket/dir/1000da2      unlocked
+s3://test-bucket/dir/1000db4      unlocked
+s3://test-bucket/dir/1000dbd      unlocked
+s3://test-bucket/dir/1000dd6      unlocked
+s3://test-bucket/dir/large-object unlocked
+s3://test-bucket/dir/1000e52      unlocked
+s3://test-bucket/dir/1000ea       unlocked
+s3://test-bucket/dir/1000ea2      unlocked
+s3://test-bucket/dir/1000eb4      unlocked
+s3://test-bucket/dir/1000ebd      unlocked
+s3://test-bucket/dir/1000ed6      unlocked
+s3://test-bucket/dir/1000eea      unlocked
+s3://test-bucket/dir/1000f52      unlocked
+s3://test-bucket/dir/1000fa2      unlocked
+s3://test-bucket/dir/1000fb4      unlocked
+s3://test-bucket/dir/1000fbd      unlocked
 ```

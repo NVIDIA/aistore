@@ -7,10 +7,12 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -78,8 +80,8 @@ var (
 			{
 				Name:         cmdCheckLock,
 				Usage:        "Check object lock status (read/write/unlocked)",
-				ArgsUsage:    "BUCKET/OBJECT",
-				Flags:        []cli.Flag{verbObjPrefixFlag},
+				ArgsUsage:    optionalPrefixArgument,
+				Flags:        []cli.Flag{verbObjPrefixFlag, maxPagesFlag, objLimitFlag, pageSizeFlag},
 				Action:       checkObjectLockHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
@@ -219,12 +221,14 @@ func checkObjectLockHandler(c *cli.Context) error {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 
+	// parse
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjURI(c, uri, false)
+	bck, objName, err := parseBckObjURI(c, uri, true)
 	if err != nil {
 		return err
 	}
 
+	// prefix
 	var prefix string
 	if flagIsSet(c, verbObjPrefixFlag) {
 		prefix = parseStrFlag(c, verbObjPrefixFlag)
@@ -234,10 +238,14 @@ func checkObjectLockHandler(c *cli.Context) error {
 			return fmt.Errorf("prefix %q vs prefix %q ambiguity", prefix, objName)
 		}
 		prefix = objName
+	}
 
+	// many
+	if prefix != "" || objName == "" {
 		return _checkLockMany(c, bck, prefix, uri)
 	}
 
+	// one
 	lockState, err := _checkLockOne(bck, objName)
 	if err != nil {
 		return err
@@ -247,33 +255,81 @@ func checkObjectLockHandler(c *cli.Context) error {
 }
 
 func _checkLockMany(c *cli.Context, bck cmn.Bck, prefix, uri string) error {
-	// List objects with the given prefix
-	msg := &apc.LsoMsg{
-		Prefix: prefix,
-		Props:  apc.GetPropsName, // Only need object names
+	type res struct {
+		Name   string
+		Status string
 	}
-
-	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{})
-	if err != nil {
-		return V(err)
+	var (
+		pageIdx int
+		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsName}
+	)
+	pageSize, maxPages, limit, errN := setLsoPage(c, bck)
+	if errN != nil {
+		return errN
 	}
+	msg.PageSize = pageSize
+	toShow := int(limit) // countdown
 
-	if len(objList.Entries) == 0 {
-		fmt.Fprintf(c.App.ErrWriter, "No objects found with prefix %q\n", uri)
-		return nil
-	}
-
-	for _, entry := range objList.Entries {
-		lockState, err := _checkLockOne(bck, entry.Name)
+	for {
+		// next page
+		lst, err := api.ListObjectsPage(apiBP, bck, msg, api.ListArgs{})
 		if err != nil {
-			warn := fmt.Sprintf("%s: %v", bck.Cname(entry.Name), err)
-			actionWarn(c, warn)
-			continue
+			return lsoErr(msg, err)
 		}
-		fmt.Fprintf(c.App.Writer, "%s: %s\n", bck.Cname(entry.Name), lockState)
-	}
 
-	return nil
+		if len(lst.Entries) == 0 {
+			if pageIdx == 0 {
+				if prefix == "" || prefix == "/" {
+					fmt.Fprintln(c.App.Writer, "No objects")
+				} else {
+					fmt.Fprintf(c.App.Writer, "No objects with prefix %q\n", uri)
+				}
+			}
+			return nil
+		}
+
+		// handle page
+		var (
+			out     = lst.Entries
+			results []res
+		)
+		if limit > 0 && toShow < len(lst.Entries) {
+			out = lst.Entries[:toShow]
+		}
+		for _, entry := range out {
+			lockState, err := _checkLockOne(bck, entry.Name)
+			if err != nil {
+				warn := fmt.Sprintf("%s: %v", bck.Cname(entry.Name), err)
+				actionWarn(c, warn)
+				continue
+			}
+			results = append(results, res{Name: bck.Cname(entry.Name), Status: lockState})
+		}
+
+		// print page
+		if pageIdx > 0 {
+			fmt.Fprintln(c.App.Writer, "\n"+fblue("Page "+strconv.Itoa(pageIdx+1)), "=========")
+		}
+
+		if err := teb.Print(results, teb.ObjLockTmpl); err != nil {
+			return err
+		}
+
+		// loop
+		if msg.ContinuationToken == "" {
+			return nil
+		}
+		pageIdx++
+		if maxPages > 0 && pageIdx >= int(maxPages) {
+			return nil
+		}
+		if limit > 0 {
+			toShow -= len(lst.Entries)
+			if toShow <= 0 {
+				return nil
+			}
+		}
+	}
 }
 
 func _checkLockOne(bck cmn.Bck, objName string) (string, error) {

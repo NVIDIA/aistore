@@ -425,7 +425,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	if flagIsSet(c, startAfterFlag) {
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
-	pageSize, maxPages, limit, err := _setPage(c, bck)
+	pageSize, maxPages, limit, err := setLsoPage(c, bck)
 	if err != nil {
 		return err
 	}
@@ -535,7 +535,7 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 // - list-objects
 // - get multiple (`getMultiObj`)
 // - scrub
-func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err error) {
+func setLsoPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, err error) {
 	maxPages = int64(parseIntFlag(c, maxPagesFlag))
 	b := meta.CloneBck(&bck)
 	if flagIsSet(c, pageSizeFlag) {

@@ -62,6 +62,10 @@ const (
 	PropValTmpl      = propValTmplHdr + PropValTmplNoHdr
 	PropValTmplNoHdr = "{{range $p := . }}" + "{{$p.Name}}\t {{$p.Value}}\n" + "{{end}}"
 
+	objLockTmplHdr   = "OBJECT\t LOCK STATUS\n"
+	ObjLockTmpl      = objLockTmplHdr + ObjLockTmplNoHdr
+	ObjLockTmplNoHdr = "{{range $o := . }}" + "{{$o.Name}}\t {{$o.Status}}\n" + "{{end}}"
+
 	// w/ special arrangement for feature flags
 	FeatDescTmplHdr = "FEATURE\t DESCRIPTION\n"
 
