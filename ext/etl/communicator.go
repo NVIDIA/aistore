@@ -109,11 +109,11 @@ var (
 //////////////
 
 func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) Communicator {
-	switch boot.msg.CommTypeX {
+	switch boot.msg.CommType() {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
 		pc.listener, pc.boot, pc.pw = listener, boot, pw
-		if boot.msg.CommTypeX == HpushStdin { // io://
+		if boot.msg.CommType() == HpushStdin { // io://
 			pc.command = boot.originalCommand
 		}
 		return pc
@@ -128,20 +128,20 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		return ws
 	}
 
-	debug.Assert(false, "unknown comm-type '"+boot.msg.CommTypeX+"'")
+	debug.Assert(false, "unknown comm-type '"+boot.msg.CommType()+"'")
 	return nil
 }
 
-func (c *baseComm) ETLName() string { return c.boot.msg.EtlName }
+func (c *baseComm) ETLName() string { return c.boot.msg.Name() }
 func (c *baseComm) PodName() string { return c.boot.pod.Name }
 func (c *baseComm) SvcName() string { return c.boot.pod.Name /*same as pod name*/ }
 
-func (c *baseComm) getInitMsg() InitMsg { return &c.boot.msg }
+func (c *baseComm) getInitMsg() InitMsg { return c.boot.msg }
 
 func (c *baseComm) ListenSmapChanged() { c.listener.ListenSmapChanged() }
 
 func (c *baseComm) String() string {
-	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommTypeX)
+	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommType())
 }
 
 func (c *baseComm) Xact() core.Xact { return c.boot.xctn }
@@ -237,7 +237,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		query   = make(url.Values, 2)
 	)
 
-	switch pc.boot.msg.ArgTypeX {
+	switch pc.boot.msg.ArgType() {
 	case ArgTypeDefault, ArgTypeURL:
 		// [TODO] to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
@@ -253,7 +253,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		// body = http.NoBody
 		path = url.PathEscape(lom.FQN)
 	default:
-		e := pc.boot.msg.errInvalidArg()
+		e := fmt.Errorf("%s: unexpected argument type %q", pc.boot.msg, pc.boot.msg.ArgType())
 		debug.AssertNoErr(e) // is validated at construction time
 		nlog.Errorln(e)
 	}
@@ -279,7 +279,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
-	r, ecode, err := doWithTimeout(reqArgs, getBody, pc.boot.msg.ObjTimeout.D(), started)
+	_, objTimeout := pc.boot.msg.Timeouts()
+	r, ecode, err := doWithTimeout(reqArgs, getBody, objTimeout.D(), started)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -345,13 +346,13 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 // TODO: support `sync` option as well
 func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string, query url.Values) {
 	query = make(url.Values)
-	switch rc.boot.msg.ArgTypeX {
+	switch rc.boot.msg.ArgType() {
 	case ArgTypeDefault, ArgTypeURL:
 		path = url.PathEscape(lom.Uname())
 	case ArgTypeFQN:
 		path = url.PathEscape(lom.FQN)
 	default:
-		err := rc.boot.msg.errInvalidArg()
+		err := fmt.Errorf("%s: unexpected argument type %q", rc.boot.msg, rc.boot.msg.ArgType())
 		debug.AssertNoErr(err)
 		nlog.Errorln(err)
 	}
@@ -386,7 +387,8 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
 	}
 
-	r, ecode, err := doWithTimeout(reqArgs, nil, rc.boot.msg.ObjTimeout.D(), started)
+	_, objTimeout := rc.boot.msg.Timeouts()
+	r, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D(), started)
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}

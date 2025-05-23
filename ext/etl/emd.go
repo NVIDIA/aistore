@@ -108,6 +108,8 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 			e.ETLs[k] = &InitCodeMsg{}
 		case Spec:
 			e.ETLs[k] = &InitSpecMsg{}
+		case ETLSpec:
+			e.ETLs[k] = &ETLSpecMsg{}
 		default:
 			err = fmt.Errorf("invalid InitMsg type %q", v.Type)
 			debug.AssertNoErr(err)

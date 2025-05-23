@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 const (
@@ -338,13 +339,24 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 
 func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string) {
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
-	msg := &etl.InitSpecMsg{}
-	msg.EtlName = etlName
-	msg.CommTypeX = comm
-	msg.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
-	msg.Spec = spec
+
+	var (
+		etlSpec  etl.ETLSpecMsg
+		initSpec etl.InitSpecMsg
+		msg      etl.InitMsg
+	)
+	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
+		msg = &etlSpec
+	} else {
+		initSpec.EtlName = etlName
+		initSpec.CommTypeX = comm
+		initSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
+		initSpec.Spec = spec
+		msg = &initSpec
+	}
+
 	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
 	xid, err = api.ETLInit(bp, msg)
@@ -359,10 +371,12 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 
 	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
 
-	initSpec := etlMsg.(*etl.InitSpecMsg)
-	tassert.Errorf(t, initSpec.Name() == etlName, "expected etlName %s != %s", etlName, initSpec.Name())
-	tassert.Errorf(t, initSpec.CommType() == comm, "expected communicator type %s != %s", comm, initSpec.CommType())
-	tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ")
+	tassert.Errorf(t, etlMsg.Name() == etlName, "expected etlName %s, got %s", etlName, etlMsg.Name())
+	tassert.Errorf(t, etlMsg.CommType() == comm, "expected communicator type %s, got %s", comm, etlMsg.CommType())
+
+	if initSpec, ok := etlMsg.(*etl.InitSpecMsg); ok {
+		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
+	}
 
 	return
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
 	corev1 "k8s.io/api/core/v1"
@@ -97,10 +96,6 @@ type (
 		name        string
 		mtx         sync.Mutex
 	}
-
-	StartOpts struct {
-		Env map[string]string
-	}
 )
 
 // interface guard
@@ -145,10 +140,10 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-// (common for both `InitCode` and `InitSpec` flows)
-func InitSpec(msg *InitSpecMsg, xid, secret string, opts StartOpts) (core.Xact, error) {
+// (common for both `InitCode`, `InitSpec`, and `ETLSpec` flows)
+func Init(msg InitMsg, xid, secret string) (core.Xact, error) {
 	config := cmn.GCO.Get()
-	podName, svcName, xctn, err := start(msg, xid, secret, opts, config)
+	podName, svcName, xctn, err := start(msg, xid, secret, config)
 	if err != nil {
 		return nil, err
 	}
@@ -157,35 +152,6 @@ func InitSpec(msg *InitSpecMsg, xid, secret string, opts StartOpts) (core.Xact, 
 		nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", msg.Name(), msg, podName, svcName)
 	}
 	return xctn, nil
-}
-
-// Given user message `InitCodeMsg`:
-// - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
-// - execute `InitSpec` with the modified podspec
-// See also: etl/runtime/podspec.yaml
-func InitCode(msg *InitCodeMsg, xid, secret string) (core.Xact, error) {
-	var (
-		ftp      = fromToPairs(msg)
-		replacer = strings.NewReplacer(ftp...)
-	)
-	r, exists := runtime.Get(msg.Runtime)
-	debug.Assert(exists, msg.Runtime) // must've been checked by proxy
-
-	podSpec := replacer.Replace(r.PodSpec())
-
-	// Start ETL
-	// (the point where InitCode flow converges w/ InitSpec)
-	return InitSpec(
-		&InitSpecMsg{
-			Spec:        cos.UnsafeB(podSpec),
-			InitMsgBase: msg.InitMsgBase,
-		},
-		xid,
-		secret,
-		StartOpts{Env: map[string]string{
-			r.CodeEnvName(): string(msg.Code),
-			r.DepsEnvName(): string(msg.Deps),
-		}})
 }
 
 // generate (from => to) replacements for podspec.yaml
@@ -244,13 +210,13 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg *InitSpecMsg, xid, secret string, opts StartOpts, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
+func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
 		comm   Communicator
 		pw     *podWatcher
 		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
-		boot   = &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env, msg: *msg, secret: secret}
+		boot   = &etlBootstrapper{errCtx: errCtx, config: config, msg: msg, secret: secret}
 	)
 
 	debug.Assert(xid != "")

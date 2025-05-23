@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
@@ -22,15 +23,16 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
 const PrefixXactID = "etl-"
 
 const (
-	Spec = "spec"
-	Code = "code"
+	// init message types
+	Spec    = "spec"     // corresponding to `InitSpecMsg` below
+	Code    = "code"     // corresponding to `InitCodeMsg` below
+	ETLSpec = "etl-spec" // corresponding to `ETLSpecMsg` below
 
 	// additional environment variables to set in ETL container
 	ArgType   = "ARG_TYPE"
@@ -94,25 +96,29 @@ type (
 		ArgType() string
 		Validate() error
 		IsDirectPut() bool
+		ParsePodSpec() (*corev1.Pod, error)
+		Timeouts() (initTimeout, objTimeout cos.Duration)
+		GetEnv() []corev1.EnvVar
 		String() string
 	}
 
 	// and implementations
 	InitMsgBase struct {
-		EtlName          string       `json:"name" yaml:"name"`
-		CommTypeX        string       `json:"communication" yaml:"communication"`
-		ArgTypeX         string       `json:"argument" yaml:"argument"`
-		InitTimeout      cos.Duration `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty"`
-		ObjTimeout       cos.Duration `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty"`
-		SupportDirectPut bool         `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
+		EtlName          string          `json:"name" yaml:"name"`
+		CommTypeX        string          `json:"communication" yaml:"communication"`
+		ArgTypeX         string          `json:"argument" yaml:"argument"`
+		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty"`
+		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty"`
+		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
+		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
 	}
 	InitSpecMsg struct {
 		Spec []byte `json:"spec"`
 		InitMsgBase
 	}
 
-	// ETLSpec is a YAML representation of the ETL pod spec.
-	ETLSpec struct {
+	// ETLSpecMsg is a YAML representation of the ETL pod spec.
+	ETLSpecMsg struct {
 		InitMsgBase             // included all optional fields from InitMsgBase
 		Runtime     RuntimeSpec `json:"runtime" yaml:"runtime"`
 	}
@@ -198,31 +204,48 @@ var (
 var (
 	_ InitMsg = (*InitCodeMsg)(nil)
 	_ InitMsg = (*InitSpecMsg)(nil)
+	_ InitMsg = (*ETLSpecMsg)(nil)
 )
 
-func (m InitMsgBase) CommType() string  { return m.CommTypeX }
-func (m InitMsgBase) ArgType() string   { return m.ArgTypeX }
-func (m InitMsgBase) Name() string      { return m.EtlName }
-func (m InitMsgBase) IsDirectPut() bool { return m.SupportDirectPut }
-func (*InitCodeMsg) MsgType() string    { return Code }
-func (*InitSpecMsg) MsgType() string    { return Spec }
+func (m *InitMsgBase) CommType() string  { return m.CommTypeX }
+func (m *InitMsgBase) ArgType() string   { return m.ArgTypeX }
+func (m *InitMsgBase) Name() string      { return m.EtlName }
+func (m *InitMsgBase) IsDirectPut() bool { return m.SupportDirectPut }
+
+func (m *InitMsgBase) GetEnv() []corev1.EnvVar { return m.Env }
+func (m *InitMsgBase) Timeouts() (initTimeout, objTimeout cos.Duration) {
+	return m.InitTimeout, m.ObjTimeout
+}
+
+func (*InitCodeMsg) MsgType() string { return Code }
+func (*InitSpecMsg) MsgType() string { return Spec }
+func (*ETLSpecMsg) MsgType() string  { return ETLSpec }
 
 func (m *InitCodeMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s-%s], init-timeout=%s, object-timeout=%s", Code, m.EtlName, m.CommTypeX, m.ArgTypeX, m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s-%s-%s], timeout=(%v, %v)", Code, m.Name(), m.CommType(), m.ArgType(), m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s], init-timeout=%s, object-timeout=%s", Spec, m.EtlName, m.CommTypeX, m.ArgTypeX, m.InitTimeout.D(), m.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", Spec, m.Name(), m.CommType(), m.ArgType(), m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
-func (m *InitSpecMsg) errInvalidArg() error {
-	return fmt.Errorf("%s: unexpected argument type %q", m, m.ArgTypeX)
+func (e *ETLSpecMsg) String() string {
+	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", ETLSpec, e.Name(), e.CommType(), e.ArgType(), e.InitTimeout.D(), e.ObjTimeout.D())
 }
 
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
+	// try parsing it as ETLSpecMsg first
+	var etlSpec ETLSpecMsg
+	if err = jsoniter.Unmarshal(b, &etlSpec); err == nil {
+		if etlSpec.Validate() == nil {
+			return &etlSpec, nil
+		}
+	}
+
+	// if fail, try parsing it as InitSpecMsg or InitCodeMsg
 	var msgInf map[string]json.RawMessage
 	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
-		return
+		return nil, err
 	}
 
 	_, hasCode := msgInf[Code]
@@ -235,15 +258,14 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 	if hasCode {
 		msg = &InitCodeMsg{}
 		err = jsoniter.Unmarshal(b, msg)
-		return
+		return msg, err
 	}
 	if hasSpec {
 		msg = &InitSpecMsg{}
 		err = jsoniter.Unmarshal(b, msg)
-		return
+		return msg, err
 	}
-	err = fmt.Errorf("invalid etl.InitMsg: %+v", msgInf)
-	return
+	return nil, fmt.Errorf("invalid etl.InitMsg: %+v", msgInf)
 }
 
 func (m *InitMsgBase) validate(detail string) error {
@@ -385,36 +407,59 @@ func (m *InitSpecMsg) Validate() error {
 	return m.InitMsgBase.validate(m.String())
 }
 
-func (s *ETLSpec) Validate() error {
-	errCtx := &cmn.ETLErrCtx{ETLName: s.Name()}
-	if s.Runtime.Image == "" {
+func (e *ETLSpecMsg) Validate() error {
+	errCtx := &cmn.ETLErrCtx{ETLName: e.Name()}
+	if e.Runtime.Image == "" {
 		return cmn.NewErrETLf(errCtx, "runtime.image must be specified")
 	}
-	return nil
+	return e.InitMsgBase.validate(e.String())
 }
 
 // ParsePodSpec parses `m.Spec` into a Kubernetes Pod object.
-// First, it tries to parse as an ETLSpec. If that fails, it falls back to a full Pod spec.
 func (m *InitSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
-	if pod, err := m.parseAsETLSpec(); err == nil {
-		return pod, nil
-	}
-	return m.parseAsFullPodSpec()
-}
-
-func (m *InitSpecMsg) parseAsETLSpec() (*corev1.Pod, error) {
-	var etlSpec ETLSpec
-	if err := yaml.Unmarshal(m.Spec, &etlSpec); err != nil {
+	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(m.Spec, nil, nil)
+	if err != nil {
 		return nil, err
 	}
-	if err := etlSpec.Validate(); err != nil {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		kind := obj.GetObjectKind().GroupVersionKind().Kind
+		return nil, errors.New("expected pod spec, got: " + kind)
+	}
+	return pod, nil
+}
+
+func (m *InitCodeMsg) ParsePodSpec() (*corev1.Pod, error) {
+	var (
+		ftp      = fromToPairs(m)
+		replacer = strings.NewReplacer(ftp...)
+	)
+	r, exists := runtime.Get(m.Runtime)
+	debug.Assert(exists, m.Runtime) // must've been checked by proxy
+
+	podSpec := replacer.Replace(r.PodSpec())
+
+	m.Env = append(m.Env,
+		corev1.EnvVar{Name: r.CodeEnvName(), Value: string(m.Code)},
+		corev1.EnvVar{Name: r.DepsEnvName(), Value: string(m.Deps)},
+	)
+
+	msg := &InitSpecMsg{
+		Spec:        cos.UnsafeB(podSpec),
+		InitMsgBase: m.InitMsgBase,
+	}
+	return msg.ParsePodSpec()
+}
+
+func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
+	if err := e.Validate(); err != nil {
 		return nil, err
 	}
 	pod := &corev1.Pod{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
-				Name:            etlSpec.EtlName,
-				Image:           etlSpec.Runtime.Image,
+				Name:            e.Name(),
+				Image:           e.Runtime.Image,
 				ImagePullPolicy: corev1.PullAlways,
 				Ports:           []corev1.ContainerPort{{Name: k8s.Default, ContainerPort: DefaultContainerPort}},
 				ReadinessProbe: &corev1.Probe{
@@ -425,43 +470,10 @@ func (m *InitSpecMsg) parseAsETLSpec() (*corev1.Pod, error) {
 						},
 					},
 				},
-				Command: etlSpec.Runtime.Command,
-				Env:     etlSpec.Runtime.Env,
+				Command: e.Runtime.Command,
+				Env:     e.Runtime.Env,
 			}},
 		},
-	}
-
-	// Override optional InitMsg fields if present in etlSpec
-	if etlSpec.EtlName != "" {
-		m.EtlName = etlSpec.EtlName
-	}
-	if commType := etlSpec.CommType(); commType != "" {
-		m.CommTypeX = commType
-	}
-	if argType := etlSpec.ArgType(); argType != "" {
-		m.ArgTypeX = argType
-	}
-	if etlSpec.IsDirectPut() {
-		m.SupportDirectPut = true
-	}
-	if etlSpec.InitTimeout != 0 {
-		m.InitTimeout = etlSpec.InitTimeout
-	}
-	if etlSpec.ObjTimeout != 0 {
-		m.ObjTimeout = etlSpec.ObjTimeout
-	}
-	return pod, nil
-}
-
-func (m *InitSpecMsg) parseAsFullPodSpec() (*corev1.Pod, error) {
-	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(m.Spec, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		kind := obj.GetObjectKind().GroupVersionKind().Kind
-		return nil, errors.New("expected pod spec, got: " + kind)
 	}
 	return pod, nil
 }

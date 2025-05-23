@@ -31,9 +31,8 @@ type etlBootstrapper struct {
 	// construction
 	errCtx *cmn.ETLErrCtx
 	config *cmn.Config
-	msg    InitSpecMsg
+	msg    InitMsg
 	secret string
-	env    map[string]string
 
 	// runtime
 	xctn            core.Xact
@@ -47,7 +46,7 @@ type etlBootstrapper struct {
 
 func (b *etlBootstrapper) createPodSpec() (err error) {
 	if b.pod, err = b.msg.ParsePodSpec(); err != nil {
-		return cmn.NewErrETLf(b.errCtx, "failed to parse pod spec: %v\n%q", err, string(b.msg.Spec))
+		return cmn.NewErrETLf(b.errCtx, "failed to parse: %v", err)
 	}
 	b.originalPodName = b.pod.GetName()
 	b.errCtx.ETLName = b.originalPodName
@@ -194,20 +193,18 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 //
 // NOTE: currently, we do require readinessProbe config in the ETL spec.
 func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
-	var (
-		timeout     = b.msg.InitTimeout.D()
-		interval    = cos.ProbingFrequency(timeout)
-		client, err = k8s.GetClient()
-	)
+	initTimeout, _ := b.msg.Timeouts()
+	interval := cos.ProbingFrequency(initTimeout.D())
+	client, err := k8s.GetClient()
 	if err != nil {
 		return cmn.NewErrETL(b.errCtx, err.Error())
 	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("waiting pod %q ready (%+v, %s) timeout=%v ival=%v",
-			b.pod.Name, b.msg.String(), b.errCtx, timeout, interval)
+		nlog.Infof("waiting pod %q ready (%+v, %s) initTimeout=%v ival=%v",
+			b.pod.Name, b.msg.String(), b.errCtx, initTimeout, interval)
 	}
 	// wait
-	err = wait.PollUntilContextTimeout(podCtx, interval, timeout, false, /*immediate*/
+	err = wait.PollUntilContextTimeout(podCtx, interval, initTimeout.D(), false, /*immediate*/
 		func(context.Context) (ready bool, err error) {
 			return checkPodReady(client, b.pod.Name)
 		},
@@ -228,7 +225,7 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 }
 
 func (b *etlBootstrapper) setupXaction(xid string) core.Xact {
-	rns := xreg.RenewETL(&b.msg, xid)
+	rns := xreg.RenewETL(b.msg, xid)
 	debug.AssertNoErr(rns.Err)
 	b.xctn = rns.Entry.Get()
 	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
@@ -236,7 +233,7 @@ func (b *etlBootstrapper) setupXaction(xid string) core.Xact {
 }
 
 func (b *etlBootstrapper) _updPodCommand() {
-	if b.msg.CommTypeX != HpushStdin {
+	if b.msg.CommType() != HpushStdin {
 		return
 	}
 
@@ -341,9 +338,9 @@ func (b *etlBootstrapper) _setPodEnv() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(b.msg.EtlName, b.secret),
+			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(b.msg.Name(), b.secret),
 		})
-		if b.msg.ArgTypeX == ArgTypeFQN {
+		if b.msg.ArgType() == ArgTypeFQN {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 				Name:  ArgType,
 				Value: ArgTypeFQN,
@@ -353,18 +350,18 @@ func (b *etlBootstrapper) _setPodEnv() {
 			Name:  DirectPut,
 			Value: strconv.FormatBool(b.msg.IsDirectPut()),
 		})
-		for k, v := range b.env {
+		for _, v := range b.msg.GetEnv() {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
-				Name:  k,
-				Value: v,
+				Name:  v.Name,
+				Value: v.Value,
 			})
 		}
 	}
 	for idx := range b.pod.Spec.InitContainers {
-		for k, v := range b.env {
+		for _, v := range b.msg.GetEnv() {
 			b.pod.Spec.InitContainers[idx].Env = append(b.pod.Spec.InitContainers[idx].Env, corev1.EnvVar{
-				Name:  k,
-				Value: v,
+				Name:  v.Name,
+				Value: v.Value,
 			})
 		}
 	}

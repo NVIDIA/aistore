@@ -26,7 +26,7 @@ type (
 	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
 	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
 	xactETL struct {
-		msg *etl.InitSpecMsg
+		msg etl.InitMsg
 		xact.Base
 	}
 )
@@ -57,7 +57,7 @@ func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // (tests only)
 
 func newETL(p *etlFactory) *xactETL {
-	msg, ok := p.Args.Custom.(*etl.InitSpecMsg)
+	msg, ok := p.Args.Custom.(etl.InitMsg)
 	debug.Assert(ok)
 	xctn := &xactETL{msg: msg}
 	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)

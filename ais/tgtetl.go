@@ -375,15 +375,7 @@ func (t *target) initETLFromMsg(r *http.Request) error {
 	}
 	xid := r.URL.Query().Get(apc.QparamUUID)
 	secret := r.URL.Query().Get(apc.QparamETLSecret)
-
-	switch msg := initMsg.(type) {
-	case *etl.InitSpecMsg:
-		xetl, err = etl.InitSpec(msg, xid, secret, etl.StartOpts{})
-	case *etl.InitCodeMsg:
-		xetl, err = etl.InitCode(msg, xid, secret)
-	default:
-		debug.Assert(false, initMsg.String())
-	}
+	xetl, err = etl.Init(initMsg, xid, secret)
 
 	if err != nil {
 		return err
