@@ -123,7 +123,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		if len(allSnaps) > 0 {
 			sort.Slice(allSnaps, func(i, j int) bool {
 				if allSnaps[i].snap.ID != allSnaps[j].snap.ID {
-					return allSnaps[i].snap.ID > allSnaps[j].snap.ID
+					return allSnaps[i].snap.ID < allSnaps[j].snap.ID
 				}
 				return allSnaps[i].tid < allSnaps[j].tid
 			})
