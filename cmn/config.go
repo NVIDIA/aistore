@@ -725,8 +725,8 @@ type (
 		NumRetries int `json:"num_retries"`
 	}
 	AdaptiveToSet struct {
-		RateLimitBaseToSet
-		NumRetries *int `json:"num_retries,omitempty"`
+		RateLimitBaseToSet      // NOTE: must be in the same exact order/position as above
+		NumRetries         *int `json:"num_retries,omitempty"`
 	}
 
 	// rate limit that fails 'too-many requests' while permitting a certain level of burstiness
