@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
@@ -111,62 +110,6 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
-	return nil
-}
-
-// Evict remote bucket
-func evictBucket(c *cli.Context, bck cmn.Bck) error {
-	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintf(c.App.Writer, "Evict: %q\n", bck.Cname(""))
-		return nil
-	}
-	bmd, err := api.GetBMD(apiBP)
-	if err != nil {
-		return err
-	}
-	if !bck.IsQuery() {
-		// check presence unless remais (in re: bck/@alias/name vs bck/@uuid/name)
-		if !bck.IsRemoteAIS() {
-			if _, present := bmd.Get((*meta.Bck)(&bck)); !present {
-				return fmt.Errorf("%s does not exist - nothing to do", bck.String())
-			}
-		}
-		return _evictBck(c, bck)
-	}
-
-	// evict multiple
-	var (
-		provider *string
-		ns       *cmn.Ns
-		qbck     = cmn.QueryBcks(bck)
-	)
-	if qbck.Provider != "" {
-		provider = &qbck.Provider
-	}
-	if !qbck.Ns.IsGlobal() {
-		ns = &qbck.Ns
-	}
-	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
-		err = _evictBck(c, bck.Clone())
-		return err != nil
-	})
-
-	return err
-}
-
-func _evictBck(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = ensureRemoteProvider(bck); err != nil {
-		return err
-	}
-	keep := flagIsSet(c, keepMDFlag)
-	if err = api.EvictRemoteBucket(apiBP, bck, keep); err != nil {
-		return V(err)
-	}
-	if !keep {
-		actionDone(c, "Evicted bucket "+bck.Cname("")+" from aistore")
-	} else {
-		actionDone(c, "Evicted "+bck.Cname("")+" contents from aistore: the bucket is now empty")
-	}
 	return nil
 }
 

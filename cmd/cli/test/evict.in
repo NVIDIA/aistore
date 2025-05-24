@@ -1,0 +1,15 @@
+# Test evict command - error handling for non-remote buckets
+# Evict only works on remote buckets (s3://, gs://, etc.)
+
+# Test 1: Attempt to evict from AIS bucket (should fail)
+ais bucket create ais://$BUCKET // IGNORE
+echo "test1" > /tmp/$RANDOM_1.txt
+ais put /tmp/$RANDOM_1.txt ais://$BUCKET/obj1.txt // IGNORE
+ais evict ais://$BUCKET/obj1.txt // FAIL "evicting objects from AIS buckets"
+
+# Test 2: Attempt to evict entire AIS bucket (should fail)
+ais evict ais://$BUCKET // FAIL "evicting objects from AIS buckets"
+
+# Cleanup
+rm -f /tmp/$RANDOM_1.txt // IGNORE
+ais bucket rm ais://$BUCKET -y // IGNORE 
