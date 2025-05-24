@@ -19,7 +19,7 @@ class FlaskServer(ETLServer):
     Compatible with environments where Flask is preferred over FastAPI.
     """
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 80):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8000):
         super().__init__()
         self.host = host
         self.port = port

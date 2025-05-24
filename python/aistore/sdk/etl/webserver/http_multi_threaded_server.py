@@ -45,7 +45,7 @@ class HTTPMultiThreadedServer(ETLServer):
     Handles GET and PUT requests via a request handler class.
     """
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 80):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8000):
         super().__init__()
         self.host = host
         self.port = port
