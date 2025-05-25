@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -31,11 +32,13 @@ var showJobUsage = "Show running and/or finished jobs:\n" +
 	indent1 + "e.g.:\n" +
 	indent1 + "\t- show job prefetch-listrange\t- show all running prefetch jobs;\n" +
 	indent1 + "\t- show job prefetch\t- same as above;\n" +
+	indent1 + "\t- show job prefetch --top 5\t- show 5 most recent prefetch jobs;\n" +
 	indent1 + "\t- show job tco-cysbohAGL\t- show a given (multi-object copy/transform) job identified by its unique ID;\n" +
 	indent1 + "\t- show job copy-listrange\t- show all running multi-object copies;\n" +
 	indent1 + "\t- show job copy-objects\t- same as above (using display name);\n" +
 	indent1 + "\t- show job copy\t- show all copying jobs including both bucket-to-bucket and multi-object;\n" +
 	indent1 + "\t- show job copy-objects --all\t- show both running and already finished (or stopped) multi-object copies;\n" +
+	indent1 + "\t- show job copy-objects --all --top 10\t- show 10 most recent multi-object copy jobs;\n" +
 	indent1 + "\t- show job ec\t- show all erasure-coding;\n" +
 	indent1 + "\t- show job list\t- show all running list-objects jobs;\n" +
 	indent1 + "\t- show job ls\t- same as above;\n" +
@@ -54,6 +57,7 @@ var showJobFlags = append(
 	verboseJobFlag,
 	unitsFlag,
 	dateTimeFlag,
+	topFlag,
 	// download and dsort only
 	progressFlag,
 	dsortLogFlag,
@@ -301,9 +305,22 @@ func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {
 	var (
 		ll           int
 		allXactKinds = extractXactKinds(xs)
+		topN         = c.Int(topFlag.Name)
 	)
+
+	// Validate --top flag if explicitly set
+	if flagIsSet(c, topFlag) && topN <= 0 {
+		return 0, fmt.Errorf("invalid value for %s: %d (must be positive)", qflprn(topFlag), topN)
+	}
+
 	for _, xactKind := range allXactKinds {
 		xactIDs := extractXactIDsForKind(xs, xactKind)
+
+		// Apply --top filtering if specified
+		if topN > 0 && len(xactIDs) > 0 {
+			xactIDs = xactListTopN(xs, xactKind, xactIDs, topN)
+		}
+
 		for _, xid := range xactIDs {
 			xargs.Kind, xargs.ID = xactKind, xid
 			l, err := xlistByKindID(c, xargs, caption, xs)
@@ -316,6 +333,65 @@ func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {
 	return ll, nil
 }
 
+// xactListTopN filters xaction IDs to return only the top N most recent ones
+// based on their start times. Jobs that haven't started (zero time) are excluded.
+func xactListTopN(xs xact.MultiSnap, xactKind string, xactIDs []string, topN int) []string {
+	type xidWithTime struct {
+		xid       string
+		startTime time.Time
+	}
+
+	xidsWithTime := make([]xidWithTime, 0, len(xactIDs))
+
+	for _, xid := range xactIDs {
+		// Find any start time for this xaction ID
+		var (
+			startTime time.Time
+			found     bool
+		)
+
+		// Look for the first valid start time and use it
+		for _, snaps := range xs {
+			for _, snap := range snaps {
+				if snap.ID == xid && snap.Kind == xactKind {
+					// Skip zero times (job hasn't started)
+					if !snap.StartTime.IsZero() {
+						startTime = snap.StartTime
+						found = true
+						break
+					}
+				}
+			}
+			if found {
+				break
+			}
+		}
+
+		// Only include jobs that have actually started
+		if found {
+			xidsWithTime = append(xidsWithTime, xidWithTime{xid: xid, startTime: startTime})
+		}
+	}
+
+	// Sort by start time (most recent first)
+	sort.Slice(xidsWithTime, func(i, j int) bool {
+		return xidsWithTime[i].startTime.After(xidsWithTime[j].startTime)
+	})
+
+	// Take only top N
+	if len(xidsWithTime) > topN {
+		xidsWithTime = xidsWithTime[:topN]
+	}
+
+	// Extract just the xaction IDs
+	xactIDs = make([]string, len(xidsWithTime))
+	for i, xwt := range xidsWithTime {
+		xactIDs[i] = xwt.xid
+	}
+
+	return xactIDs
+}
+
 func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.MultiSnap) (int, error) {
 	type (
 		nodeSnaps struct {
@@ -326,6 +402,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	// first, extract snaps for: xargs.ID, Kind
 	filteredXs := make(xact.MultiSnap, 8)
+
 	for tid, snaps := range xs {
 		for _, snap := range snaps {
 			if snap.ID != xargs.ID {

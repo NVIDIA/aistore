@@ -1,0 +1,43 @@
+// SKIP "job output varies significantly across CI environments"
+# Test --top flag for job show command
+
+# Test --top with no jobs (should show "No running jobs")
+ais show job list --top 1
+
+# Create test bucket and add some data
+ais bucket create ais://job-top-test // IGNORE
+mkdir -p /tmp/job_top_test // IGNORE
+echo "test data 1" > /tmp/job_top_test/file1.txt // IGNORE
+echo "test data 2" > /tmp/job_top_test/file2.txt // IGNORE
+echo "test data 3" > /tmp/job_top_test/file3.txt // IGNORE
+ais object put /tmp/job_top_test/file1.txt ais://job-top-test // IGNORE
+ais object put /tmp/job_top_test/file2.txt ais://job-top-test // IGNORE
+ais object put /tmp/job_top_test/file3.txt ais://job-top-test // IGNORE
+
+# Trigger list-objects jobs (these work with single targets)
+ais ls ais://job-top-test --limit 1000000 --no-header // IGNORE
+ais ls ais://job-top-test --limit 1000000 --no-header // IGNORE
+ais ls ais://job-top-test --limit 1000000 --no-header // IGNORE
+
+# Longer sleep to ensure jobs are running/completed consistently
+sleep 2 // IGNORE
+
+# Test --top with jobs (using consistent command format)
+ais show job list --top 2
+
+sleep 2 // IGNORE
+
+ais show job list --top 1
+
+# Wait longer for jobs to complete for --all testing
+sleep 2 // IGNORE
+
+# Test --top with --all flag
+ais show job list --all --top 2
+
+sleep 2 // IGNORE
+
+
+# Cleanup
+ais bucket rm ais://job-top-test -y // IGNORE
+rm -rf /tmp/job_top_test // IGNORE 

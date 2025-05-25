@@ -570,6 +570,11 @@ var (
 		Usage: "Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well",
 	}
 
+	topFlag = cli.IntFlag{
+		Name:  "top",
+		Usage: "Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)",
+	}
+
 	// list-objects
 	startAfterFlag = cli.StringFlag{
 		Name:  "start-after",
