@@ -680,16 +680,16 @@ var (
 	// Download
 	descJobFlag = cli.StringFlag{Name: "description,desc", Usage: "job description"}
 
-	dloadTimeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
+	dloadTimeoutFlag = DurationFlag{
 		Name: "download-timeout",
 		Usage: "Server-side time limit for downloading a single file from remote source;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
-	dloadProgressFlag = cli.StringFlag{ // TODO ditto
+	dloadProgressFlag = DurationFlag{
 		Name: "progress-interval",
 		Usage: "Download progress interval for continuous monitoring;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
-		Value: dload.DownloadProgressInterval.String(),
+		Value: dload.DownloadProgressInterval,
 	}
 
 	limitConnectionsFlag = cli.IntFlag{

@@ -420,9 +420,9 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 func startDownloadHandler(c *cli.Context) error {
 	var (
 		description      = parseStrFlag(c, descJobFlag)
-		timeout          = parseStrFlag(c, dloadTimeoutFlag)
+		timeout          = parseDurationFlag(c, dloadTimeoutFlag).String()
 		objectsListPath  = parseStrFlag(c, objectsListFlag)
-		progressInterval = parseStrFlag(c, dloadProgressFlag)
+		progressInterval = parseDurationFlag(c, dloadProgressFlag).String()
 		id               string
 	)
 	if c.NArg() == 0 {
@@ -454,10 +454,6 @@ func startDownloadHandler(c *cli.Context) error {
 
 	limitBPH, err := parseSizeFlag(c, limitBytesPerHourFlag)
 	if err != nil {
-		return err
-	}
-
-	if _, err := time.ParseDuration(progressInterval); err != nil {
 		return err
 	}
 
