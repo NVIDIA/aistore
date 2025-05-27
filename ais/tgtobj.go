@@ -681,11 +681,7 @@ do: // retry uplock or ec-recovery, the latter only once
 
 	// cold-GET: upgrade rlock => wlock and call t.Backend.GetObjReader
 	if cold {
-		var (
-			res    core.GetReaderResult
-			ckconf = goi.lom.CksumConf()
-			bp     = goi.t.Backend(goi.lom.Bck())
-		)
+		bp := goi.t.Backend(goi.lom.Bck())
 		if cs.IsNil() {
 			cs = fs.Cap()
 		}
@@ -712,7 +708,7 @@ do: // retry uplock or ec-recovery, the latter only once
 
 		// get remote reader (compare w/ t.GetCold)
 		goi.rget = true
-		res = bp.GetObjReader(goi.ctx, goi.lom, 0, 0)
+		res := bp.GetObjReader(goi.ctx, goi.lom, 0, 0)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true
@@ -723,23 +719,13 @@ do: // retry uplock or ec-recovery, the latter only once
 		}
 		goi.cold = true
 
-		//
-		// alternative ways to cold GET
-		//
-		if goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" &&
-			(ckconf.Type == cos.ChecksumNone || (!ckconf.ValidateColdGet && !ckconf.EnableReadRange)) {
-			switch {
-			case goi.ranges.Range == "" && goi.lom.IsFeatureSet(feat.StreamingColdGET):
-				err = goi.coldStream(&res)
-				goi.unlocked = true
-				return 0, err
-			case cmn.Rom.Features().IsSet(feat.SystemReserved): // TODO: deprecated; remove along with the feature flag
-				err = goi.coldReopen(&res)
-				goi.unlocked = true
-				return 0, err
-			}
+		if goi.isStreamingColdGet() {
+			err = goi.coldStream(&res)
+			goi.unlocked = true
+			return 0, err
 		}
-		// otherwise, a regular path
+
+		// regular path
 		ecode, err = goi.coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
@@ -764,6 +750,15 @@ fin:
 		}
 	}
 	return ecode, err
+}
+
+func (goi *getOI) isStreamingColdGet() bool {
+	if !goi.lom.IsFeatureSet(feat.StreamingColdGET) {
+		return false
+	}
+	ckconf := goi.lom.CksumConf()
+	return goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" && goi.ranges.Range == "" &&
+		(ckconf.Type == cos.ChecksumNone || !ckconf.ValidateColdGet)
 }
 
 func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
