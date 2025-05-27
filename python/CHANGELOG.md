@@ -16,10 +16,6 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Changed
 
 - Update core `RequestClient` to delay retries on `ReadTimeoutError` when waiting on AIS to fetch remote objects into cluster 
-
-
-### Changed
-
 - Change default Python ETL web server port from `80` to `8000`.
 
 ## [1.13.8] - 2025-05-16
