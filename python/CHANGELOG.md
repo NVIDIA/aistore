@@ -5,7 +5,7 @@ All notable changes to the AIStore Python SDK project are documented in this fil
 We structure this changelog in accordance with [Keep a Changelog](https://keepachangelog.com/) guidelines, and this project follows [Semantic Versioning](https://semver.org/).
 
 ---
-## Unreleased
+## [1.14.0] - 2025-05-27
 
 ### Added
 
