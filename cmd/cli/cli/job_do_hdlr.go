@@ -605,7 +605,8 @@ func downloadRefreshRate(c *cli.Context) time.Duration {
 
 func pbDownload(c *cli.Context, id string) (err error) {
 	refreshRate := downloadRefreshRate(c)
-	downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
+	// Note: timeout=0 for progress monitoring (server-side download-timeout still applies)
+	downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate, 0).run()
 	if err != nil {
 		return err
 	}
@@ -615,7 +616,7 @@ func pbDownload(c *cli.Context, id string) (err error) {
 }
 
 func wtDownload(c *cli.Context, id string) error {
-	if err := waitDownload(c, id); err != nil {
+	if err := waitDownloadHandler(c, id); err != nil {
 		return err
 	}
 	resp, err := api.DownloadStatus(apiBP, id, true /*only active*/)
@@ -673,38 +674,6 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	}
 
 	return err
-}
-
-func waitDownload(c *cli.Context, id string) (err error) {
-	var (
-		elapsed, timeout time.Duration
-		refreshRate      = _refreshRate(c)
-		qn               = xact.Cname(cmdDownload, id)
-		aborted          bool
-	)
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	for {
-		resp, err := api.DownloadStatus(apiBP, id, true)
-		if err != nil {
-			return V(err)
-		}
-
-		aborted = resp.Aborted
-		if aborted || resp.JobFinished() {
-			break
-		}
-		time.Sleep(refreshRate)
-		elapsed += refreshRate
-		if timeout != 0 && elapsed > timeout {
-			return fmt.Errorf("timed out waiting for %s", qn)
-		}
-	}
-	if aborted {
-		return fmt.Errorf("download job %s was aborted", id)
-	}
-	return nil
 }
 
 func startLRUHandler(c *cli.Context) error {
@@ -1104,8 +1073,9 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 
 func waitDownloadHandler(c *cli.Context, id string) error {
 	refreshRate := downloadRefreshRate(c)
+	timeout := parseDurationFlag(c, dloadTimeoutFlag)
 	if flagIsSet(c, progressFlag) {
-		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
+		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate, timeout).run()
 		if err != nil {
 			return err
 		}
@@ -1115,9 +1085,8 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 
 	// poll at a refresh rate
 	var (
-		total   time.Duration
-		timeout time.Duration
-		qn      = xact.Cname(cmdDownload, id)
+		total time.Duration
+		qn    = xact.Cname(cmdDownload, id)
 	)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)

@@ -45,6 +45,7 @@ type (
 		id          string
 		apiBP       api.BaseParams
 		refreshTime time.Duration
+		timeout     time.Duration
 
 		states map[string]*fileDownloadingState
 
@@ -100,11 +101,12 @@ func (d downloadingResult) String() string {
 	return sb.String()
 }
 
-func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Duration) *downloaderPB {
+func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime, timeout time.Duration) *downloaderPB {
 	return &downloaderPB{
 		id:          id,
 		apiBP:       baseParams,
 		refreshTime: refreshTime,
+		timeout:     timeout,
 		states:      make(map[string]*fileDownloadingState),
 		p:           mpb.New(mpb.WithWidth(barWidth)),
 	}
@@ -123,8 +125,16 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 	// TODO: factor in:
 	// 1) no-change in downloaded stats for more than `timeoutNoChange`
 	// 2) resp.JobFinished()
+	var elapsed time.Duration
 	for !b.jobFinished() {
 		time.Sleep(b.refreshTime)
+		elapsed += b.refreshTime
+
+		// Check timeout if specified (fixes issue where progress monitoring ignores user-specified timeout)
+		if b.timeout > 0 && elapsed > b.timeout {
+			b.cleanBars()
+			return downloadingResult{}, fmt.Errorf("download timed out after %v", b.timeout)
+		}
 
 		resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 		if err != nil {
@@ -392,7 +402,9 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	// with progress bar
 	if flagIsSet(c, progressFlag) {
 		refreshRate := _refreshRate(c)
-		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
+		// Note: timeout=0 for monitoring existing jobs (server-side timeout still applies)
+		// This is different from pbDownload() which applies user-specified timeout for new downloads
+		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate, 0).run()
 		if err != nil {
 			return err
 		}
