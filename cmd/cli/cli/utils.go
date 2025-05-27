@@ -154,13 +154,13 @@ func getPrefixFromPrimary() string {
 	return scheme + apc.BckProviderSeparator
 }
 
+// _refreshRate returns the refresh interval for monitoring operations.
+// This is a generic utility that only handles the common --refresh flag.
 func _refreshRate(c *cli.Context) time.Duration {
-	refreshRate := refreshRateDefault
 	if flagIsSet(c, refreshFlag) {
-		duration := parseDurationFlag(c, refreshFlag)
-		refreshRate = max(duration, refreshRateMinDur)
+		return max(parseDurationFlag(c, refreshFlag), refreshRateMinDur)
 	}
-	return refreshRate // aka sleep
+	return refreshRateDefault
 }
 
 // Users can pass in a comma-separated list

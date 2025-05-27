@@ -588,8 +588,23 @@ func startDownloadHandler(c *cli.Context) error {
 	return bgDownload(c, id)
 }
 
+// downloadRefreshRate returns the refresh interval for download operations.
+// Checks --refresh flag first, then falls back to --progress-interval if not set.
+// This allows --progress-interval to work for download monitoring operations.
+func downloadRefreshRate(c *cli.Context) time.Duration {
+	// First try the common refresh flag
+	if flagIsSet(c, refreshFlag) {
+		return max(parseDurationFlag(c, refreshFlag), refreshRateMinDur)
+	}
+	// Fall back to download-specific progress-interval flag
+	if flagIsSet(c, dloadProgressFlag) {
+		return max(parseDurationFlag(c, dloadProgressFlag), refreshRateMinDur)
+	}
+	return refreshRateDefault
+}
+
 func pbDownload(c *cli.Context, id string) (err error) {
-	refreshRate := _refreshRate(c)
+	refreshRate := downloadRefreshRate(c)
 	downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 	if err != nil {
 		return err
@@ -1088,7 +1103,7 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 }
 
 func waitDownloadHandler(c *cli.Context, id string) error {
-	refreshRate := _refreshRate(c)
+	refreshRate := downloadRefreshRate(c)
 	if flagIsSet(c, progressFlag) {
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
