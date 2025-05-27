@@ -1,3 +1,12 @@
+---
+layout: post
+title: PYTHON SDK
+permalink: /docs/python-sdk
+redirect_from:
+ - /python_sdk.md/
+ - /docs/python_sdk.md/
+---
+
 AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters. This document contains API documentation
 for the AIStore Python SDK.
 
@@ -108,6 +117,11 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [get\_within\_timeframe](#job.Job.get_within_timeframe)
     * [get\_details](#job.Job.get_details)
     * [get\_total\_time](#job.Job.get_total_time)
+* [retry\_config](#retry_config)
+  * [ColdGetConf](#retry_config.ColdGetConf)
+    * [default](#retry_config.ColdGetConf.default)
+  * [RetryConfig](#retry_config.RetryConfig)
+    * [default](#retry_config.RetryConfig.default)
 * [multiobj.object\_group](#multiobj.object_group)
   * [ObjectGroup](#multiobj.object_group.ObjectGroup)
     * [client](#multiobj.object_group.ObjectGroup.client)
@@ -136,6 +150,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [query\_params](#obj.object.Object.query_params)
     * [name](#obj.object.Object.name)
     * [props](#obj.object.Object.props)
+    * [props\_cached](#obj.object.Object.props_cached)
     * [head](#obj.object.Object.head)
     * [get\_reader](#obj.object.Object.get_reader)
     * [get](#obj.object.Object.get)
@@ -159,6 +174,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [\_\_iter\_\_](#obj.object_reader.ObjectReader.__iter__)
 * [obj.obj\_file.object\_file](#obj.obj_file.object_file)
   * [ObjectFileReader](#obj.obj_file.object_file.ObjectFileReader)
+    * [content\_iterator](#obj.obj_file.object_file.ObjectFileReader.content_iterator)
     * [readable](#obj.obj_file.object_file.ObjectFileReader.readable)
     * [read](#obj.obj_file.object_file.ObjectFileReader.read)
     * [close](#obj.obj_file.object_file.ObjectFileReader.close)
@@ -183,6 +199,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [access\_time](#obj.object_attributes.ObjectAttributes.access_time)
     * [obj\_version](#obj.object_attributes.ObjectAttributes.obj_version)
     * [custom\_metadata](#obj.object_attributes.ObjectAttributes.custom_metadata)
+    * [present](#obj.object_attributes.ObjectAttributes.present)
 
 <a id="authn.authn_client.AuthNClient"></a>
 
@@ -1185,10 +1202,12 @@ Returns bucket summary and information/properties.
 def copy(to_bck: Bucket,
          prefix_filter: str = "",
          prepend: str = "",
+         ext: Optional[Dict[str, str]] = None,
          dry_run: bool = False,
          force: bool = False,
          latest: bool = False,
-         sync: bool = False) -> str
+         sync: bool = False,
+         num_workers: Optional[int] = 0) -> str
 ```
 
 Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -1198,11 +1217,16 @@ Returns job ID that can be used later to check the status of the asynchronous op
 - `to_bck` _Bucket_ - Destination bucket
 - `prefix_filter` _str, optional_ - Only copy objects with names starting with this prefix
 - `prepend` _str, optional_ - Value to prepend to the name of copied objects
+- `ext` _Dict[str, str], optional_ - Dict mapping each extension to the extension that will replace it
+  (e.g. {"jpg": "txt"})
 - `dry_run` _bool, optional_ - Determines if the copy should actually
   happen or not
 - `force` _bool, optional_ - Override existing destination bucket
 - `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
 - `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+- `num_workers` _int, optional_ - Number of concurrent workers for the copy job per target
+  - 0 (default): number of mountpaths
+  - -1: single thread, serial execution
   
 
 **Returns**:
@@ -1367,11 +1391,12 @@ def transform(etl_name: str,
               timeout: str = DEFAULT_ETL_TIMEOUT,
               prefix_filter: str = "",
               prepend: str = "",
-              ext: Dict[str, str] = None,
+              ext: Optional[Dict[str, str]] = None,
               force: bool = False,
               dry_run: bool = False,
               latest: bool = False,
-              sync: bool = False) -> str
+              sync: bool = False,
+              num_workers: Optional[int] = 0) -> str
 ```
 
 Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -1384,12 +1409,15 @@ result to the destination bucket
 - `timeout` _str, optional_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `prefix_filter` _str, optional_ - Only transform objects with names starting with this prefix
 - `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
-- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
-  (i.e. {"jpg": "txt"})
+- `ext` _Dict[str, str], optional_ - Dict mapping each extension to the extension that will replace it
+  (e.g. {"jpg": "txt"})
 - `dry_run` _bool, optional_ - determines if the copy should actually happen or not
 - `force` _bool, optional_ - override existing destination bucket
 - `latest` _bool, optional_ - GET the latest object version from the associated remote bucket
 - `sync` _bool, optional_ - synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source
+- `num_workers` _int, optional_ - Number of concurrent workers for the transformation job per target
+  - 0 (default): number of mountpaths
+  - -1: single thread, serial execution
   
 
 **Returns**:
@@ -2116,9 +2144,8 @@ Start a job and return its ID.
 ### get\_within\_timeframe
 
 ```python
-def get_within_timeframe(
-        start_time: datetime,
-        end_time: Optional[datetime] = None) -> List[JobSnapshot]
+def get_within_timeframe(start_time: datetime,
+                         end_time: Optional[datetime] = None) -> List[JobSnap]
 ```
 
 Retrieves jobs that started after a specified start_time and optionally ended before a specified end_time.
@@ -2143,7 +2170,7 @@ Retrieves jobs that started after a specified start_time and optionally ended be
 ### get\_details
 
 ```python
-def get_details() -> AggregatedJobSnapshots
+def get_details() -> AggregatedJobSnap
 ```
 
 Retrieve detailed job snapshot information across all targets.
@@ -2167,6 +2194,78 @@ returns None to indicate the job is incomplete.
 **Returns**:
 
 - `Optional[timedelta]` - The total duration of the job, or None if incomplete.
+
+Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+
+<a id="retry_config.ColdGetConf"></a>
+
+## Class: ColdGetConf
+
+```python
+@dataclass
+class ColdGetConf()
+```
+
+Configuration class for retrying HEAD requests to objects that are not present in cluster when attempting a cold
+GET.
+
+**Attributes:**
+est_bandwidth_bps (int): Estimated bandwidth in bytes per second from the AIS cluster to backend buckets.
+Used to determine retry intervals for fetching remote objects.
+Raising this will decrease the initial time we expect object fetch to take.
+Defaults to 1 Gbps.
+max_cold_wait (int): Maximum total number of seconds to wait for an object to be present before re-raising a
+ReadTimeoutError to be handled by the top-level RetryConfig.
+Defaults to 3 minutes.
+
+<a id="retry_config.ColdGetConf.default"></a>
+
+### default
+
+```python
+@staticmethod
+def default() -> "ColdGetConf"
+```
+
+Returns the default cold get config options.
+
+<a id="retry_config.RetryConfig"></a>
+
+## Class: RetryConfig
+
+```python
+@dataclass
+class RetryConfig()
+```
+
+Configuration class for managing both HTTP and network retries in AIStore.
+
+AIStore implements two types of retries to ensure reliability and fault tolerance:
+
+1. **HTTP Retry (urllib3.Retry)** - Handles HTTP errors based on status codes (e.g., 429, 500, 502, 503, 504).
+2. **Network Retry (tenacity)** - Recovers from connection failures, timeouts, and unreachable targets.
+
+**Why two types of retries?**
+- AIStore uses **redirects** for GET/PUT operations.
+- If a target node is down, we must retry the request via the proxy instead of the same failing target.
+- `network_retry` ensures that the request is reattempted at the **proxy level**, preventing unnecessary failures.
+
+**Attributes:**
+http_retry (urllib3.Retry): Defines retry behavior for transient HTTP errors.
+network_retry (tenacity.Retrying): Configured `tenacity.Retrying` instance managing retries for network-related
+issues, such as connection failures, timeouts, or unreachable targets.
+cold_get_conf (ColdGetConf): Configuration for retrying COLD GET requests, see ColdGetConf class.
+
+<a id="retry_config.RetryConfig.default"></a>
+
+### default
+
+```python
+@staticmethod
+def default() -> "RetryConfig"
+```
+
+Returns the default retry configuration for AIStore.
 
 <a id="multiobj.object_group.ObjectGroup"></a>
 
@@ -2414,7 +2513,7 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 - `etl_name` _str_ - Name of existing ETL to apply
 - `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
-- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
+- `ext` _Dict[str, str], optional_ - Dict mapping each extension to the extension that will replace it
   (i.e. {"jpg": "txt"})
 - `continue_on_error` _bool, optional_ - Whether to continue if there is an error transforming a single object
 - `dry_run` _bool, optional_ - Skip performing the transform and just log the intended actions
@@ -2633,7 +2732,34 @@ Name of this object.
 def props() -> ObjectProps
 ```
 
-Properties of this object.
+Get the latest properties of the object.
+
+This will make a HEAD request to the AIStore cluster to fetch up-to-date object headers
+and refresh the internal `_props` cache. Use this when you want to ensure you're accessing
+the most recent metadata for the object.
+
+**Returns**:
+
+- `ObjectProps` - The latest object properties from the server.
+
+<a id="obj.object.Object.props_cached"></a>
+
+### props\_cached
+
+```python
+@property
+def props_cached() -> Optional[ObjectProps]
+```
+
+Get the cached object properties (without making a network call).
+
+This is useful when:
+- You want to avoid a network request.
+- You're sure the cached `_props` was already set via a previous call to `head()` or during object construction.
+
+**Returns**:
+
+  ObjectProps or None: Cached object properties, or None if not set.
 
 <a id="obj.object.Object.head"></a>
 
@@ -3084,7 +3210,8 @@ def as_file(buffer_size: Optional[int] = None,
 
 Create a read-only, non-seekable `ObjectFileReader` instance for streaming object data in chunks.
 This file-like object primarily implements the `read()` method to retrieve data sequentially,
-with automatic retry/resumption in case of stream interruptions such as `ChunkedEncodingError`.
+with automatic retry/resumption in case of unexpected stream interruptions (e.g. `ChunkedEncodingError`,
+`ConnectionError`) or timeouts (e.g. `ReadTimeout`).
 
 **Arguments**:
 
@@ -3132,14 +3259,25 @@ When a read is requested, any remaining data from a previously fetched chunk is 
 data is insufficient to satisfy the request, the `read()` method fetches additional chunks from the provided
 `content_iterator` as needed, until the requested size is fulfilled or the end of the stream is reached.
 
-In case of stream interruptions (e.g., `ChunkedEncodingError`), the `read()` method automatically retries and
-resumes fetching data from the last successfully retrieved chunk. The `max_resume` parameter controls how many
-retry attempts are made before an error is raised.
+In case of unexpected stream interruptions (e.g. `ChunkedEncodingError`, `ConnectionError`) or timeouts (e.g.
+`ReadTimeout`), the `read()` method automatically retries and resumes fetching data from the last successfully
+retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
 **Arguments**:
 
 - `content_iterator` _ContentIterator_ - An iterator that can fetch object data from AIS in chunks.
 - `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFileReader instance.
+
+<a id="obj.obj_file.object_file.ObjectFileReader.content_iterator"></a>
+
+### content\_iterator
+
+```python
+@property
+def content_iterator() -> ContentIterator
+```
+
+Return the content iterator.
 
 <a id="obj.obj_file.object_file.ObjectFileReader.readable"></a>
 
@@ -3434,4 +3572,15 @@ def custom_metadata() -> Dict[str, str]
 ```
 
 Dictionary of custom metadata.
+
+<a id="obj.object_attributes.ObjectAttributes.present"></a>
+
+### present
+
+```python
+@property
+def present() -> bool
+```
+
+Whether the object is present/cached.
 
