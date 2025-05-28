@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 
 	"github.com/urfave/cli"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -218,14 +219,19 @@ func etlInitSpecHandler(c *cli.Context) error {
 		return err
 	}
 
-	msg := &etl.InitSpecMsg{}
-	{
-		msg.EtlName = parseStrFlag(c, etlNameFlag)
-		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
-		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
-		msg.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
-		msg.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
-		msg.Spec = spec
+	var (
+		etlSpec  etl.ETLSpecMsg
+		initSpec etl.InitSpecMsg
+		msg      etl.InitMsg
+	)
+
+	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
+		populateCommonFields(c, &etlSpec.InitMsgBase)
+		msg = &etlSpec
+	} else {
+		populateCommonFields(c, &initSpec.InitMsgBase)
+		initSpec.Spec = spec
+		msg = &initSpec
 	}
 
 	if err := msg.Validate(); err != nil {
@@ -368,21 +374,26 @@ func etlPrintDetails(c *cli.Context, id string) error {
 	fmt.Fprintln(c.App.Writer, fblue("COMMUNICATION TYPE: "), msg.CommType())
 	fmt.Fprintln(c.App.Writer, fblue("ARGUMENT TYPE: "), msg.ArgType())
 
-	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
+	switch initMsg := msg.(type) {
+	case *etl.InitCodeMsg:
 		fmt.Fprintln(c.App.Writer, fblue("RUNTIME: "), initMsg.Runtime)
 		fmt.Fprintln(c.App.Writer, fblue("CODE: "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
 		fmt.Fprintln(c.App.Writer, fblue("DEPS: "), string(initMsg.Deps))
 		fmt.Fprintln(c.App.Writer, fblue("CHUNK SIZE: "), initMsg.ChunkSize)
 		return nil
-	}
-	if initMsg, ok := msg.(*etl.InitSpecMsg); ok {
+	case *etl.InitSpecMsg:
 		fmt.Fprintln(c.App.Writer, fblue("SPEC: "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
 		return nil
+	case *etl.ETLSpecMsg:
+		fmt.Fprintln(c.App.Writer, fblue("RUNTIME: "))
+		fmt.Fprintln(c.App.Writer, initMsg.Runtime.Image)
+	default:
+		err = fmt.Errorf("invalid response [%+v, %T]", msg, msg)
+		debug.AssertNoErr(err)
 	}
-	err = fmt.Errorf("invalid response [%+v, %T]", msg, msg)
-	debug.AssertNoErr(err)
+
 	return err
 }
 
@@ -518,4 +529,22 @@ func etlObjectHandler(c *cli.Context) error {
 
 	_, err := api.ETLObject(apiBP, etlArgs, bck, objName, w)
 	return handleETLHTTPError(err, etlName)
+}
+
+func populateCommonFields(c *cli.Context, base *etl.InitMsgBase) {
+	if flagIsSet(c, etlNameFlag) {
+		base.EtlName = parseStrFlag(c, etlNameFlag)
+	}
+	if flagIsSet(c, commTypeFlag) {
+		base.CommTypeX = parseStrFlag(c, commTypeFlag)
+	}
+	if flagIsSet(c, argTypeFlag) {
+		base.ArgTypeX = parseStrFlag(c, argTypeFlag)
+	}
+	if flagIsSet(c, waitPodReadyTimeoutFlag) {
+		base.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
+	}
+	if flagIsSet(c, etlObjectRequestTimeout) {
+		base.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
+	}
 }

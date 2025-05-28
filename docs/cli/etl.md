@@ -54,11 +54,7 @@ Additionally, use `--help` to display any specific command.
 ## Init ETL with a specification file
 
 ```sh
-ais etl init spec --from-file=SPEC_FILE --name=ETL_NAME [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT] [--arg-type=ARGUMENT_TYPE]
-```
-or
-```sh
-ais start etl init
+ais etl init spec --from-file=SPEC_FILE [--name=ETL_NAME] [--comm-type=COMMUNICATION_TYPE] [--arg-type=ARGUMENT_TYPE] [--init-timeout=TIMEOUT] [--obj-timeout=TIMEOUT]
 ```
 
 Initializes an ETL from a Pod YAML specification file. The `--name` parameter assigns a unique name to the ETL. See [ETL name specifications](/docs/etl.md#etl-name-specifications) for valid names.
@@ -66,6 +62,21 @@ Initializes an ETL from a Pod YAML specification file. The `--name` parameter as
 ### Example
 
 Initialize an ETL that computes the MD5 hash of an object.
+
+#### Option 1: ETL Specification File
+
+```sh
+$ cat spec.yaml
+name: transformer-md5
+runtime:
+  image: aistore/transformer_md5:latest
+  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+communication: hpull://
+
+$ ais etl init spec --from-file=spec.yaml
+```
+
+#### Option 2: Pod Specification File
 
 ```sh
 $ cat spec.yaml
@@ -79,8 +90,8 @@ spec:
       image: aistore/transformer_md5:latest
       ports:
         - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+          containerPort: 8000
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
 
 $ ais etl init spec --from-file=spec.yaml --name=transformer-md5 --comm-type=hpull:// --wait-timeout=1m
 transformer-md5
