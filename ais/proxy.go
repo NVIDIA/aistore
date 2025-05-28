@@ -70,10 +70,7 @@ type (
 			mu sync.RWMutex
 			in atomic.Bool
 		}
-		ec struct {
-			last atomic.Int64 // last active EC via apc.HdrActiveEC (mono time)
-			rust int64        // same as above
-		}
+		ec                ecFT
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}
@@ -119,6 +116,8 @@ func (p *proxy) init(config *cmn.Config) {
 	m := newMetasyncer(p)
 	daemon.rg.add(m)
 	p.metasyncer = m
+
+	p.ec.init(p.offEC)
 }
 
 func initPID(config *cmn.Config) string {

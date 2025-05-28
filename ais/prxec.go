@@ -34,90 +34,46 @@ func (p *proxy) httpecpost(w http.ResponseWriter, r *http.Request) {
 	action := apiItems[0]
 	switch action {
 	case apc.ActEcOpen:
-		p._setActiveEC(mono.NanoTime())
+		p.ec.setActive(mono.NanoTime())
 	case apc.ActEcClose:
-		p._setActiveEC(0)
+		p.ec.setActive(0)
 	default:
 		p.writeErr(w, r, errActEc(action))
 	}
 }
 
-//
-// (EC is active) and (is EC active?) via fastKalive
-//
-
-func isActiveEC(hdr http.Header) (ok bool) {
-	_, ok = hdr[apc.HdrActiveEC]
-	return ok
-}
-
 // (target kalive => primary)
-func (p *proxy) _recvActiveEC(hdr http.Header, now int64) {
-	if isActiveEC(hdr) {
-		p._setActiveEC(now)
-		return
-	}
-	// check if time has come to close (easy checks first)
-	tout := cmn.Rom.EcStreams()
-	if p.ec.rust == 0 || tout < 0 || time.Duration(now-p.ec.rust) < tout {
-		return
-	}
-	last := p.ec.last.Load()
-	if last == 0 || time.Duration(now-last) < tout {
-		return
-	}
-
-	// NOTE: go ahead and close EC streams (with one last check inside)
-	p.offEC(last)
-}
-
-func (p *proxy) _setActiveEC(now int64) {
-	p.ec.last.Store(now)
-	p.ec.rust = now
-}
+func (p *proxy) _recvActiveEC(hdr http.Header, now int64) { p.ec.recvKalive(hdr, now) }
 
 // (primary kalive response => non-primary)
-func (p *proxy) _respActiveEC(hdr http.Header, now int64) {
-	tout := cmn.Rom.EcStreams()
-	last := p.ec.last.Load()
-	if last != 0 && time.Duration(now-last) < tout {
-		debug.Assert(tout > 0)
-		hdr.Set(apc.HdrActiveEC, "true")
-	}
-}
+func (p *proxy) _respActiveEC(hdr http.Header, now int64) { p.ec.respKalive(hdr, now) }
 
 //
 // primary action: on | off
 //
 
-const (
-	ecStreamsNack = max(cmn.EcStreamsMin>>1, 3*time.Minute)
-)
-
 func (p *proxy) onEC(bck *meta.Bck) error {
-	if !bck.Props.EC.Enabled || cmn.Rom.EcStreams() < 0 /* cmn.EcStreamsEver */ {
+	if !bck.Props.EC.Enabled || cmn.Rom.EcStreams() < 0 /* cmn.SharedStreamsEver */ {
 		return nil
 	}
 	now := mono.NanoTime()
-	debug.Assert(cmn.Rom.EcStreams() >= cmn.EcStreamsMin, cmn.Rom.EcStreams(), " vs ", cmn.EcStreamsMin)
-	if p.ec.rust != 0 && time.Duration(now-p.ec.rust) < ecStreamsNack {
-		return nil
-	}
+	debug.Assert(cmn.Rom.EcStreams() >= cmn.SharedStreamsMin, cmn.Rom.EcStreams(), " vs ", cmn.SharedStreamsMin)
 	return p._onEC(now)
 }
 
 func (p *proxy) _onEC(now int64) error {
 	last := p.ec.last.Load()
-	if last != 0 && time.Duration(now-last) < ecStreamsNack {
+	if last != 0 && time.Duration(now-last) < cmn.SharedStreamsNack {
 		return nil
 	}
 	err := p._toggleEC(apc.ActEcOpen)
 	if err == nil {
-		p._setActiveEC(mono.NanoTime())
+		p.ec.setActive(mono.NanoTime())
 	}
 	return err
 }
 
+// bcast primary's control
 func (p *proxy) _toggleEC(action string) error {
 	// 1. targets
 	args := allocBcArgs()
@@ -164,7 +120,6 @@ func (p *proxy) offEC(last int64) {
 	if !p.ec.last.CAS(last, 0) {
 		return
 	}
-	p.ec.rust = 0
 
 	err := p._toggleEC(apc.ActEcClose)
 	if err == nil {

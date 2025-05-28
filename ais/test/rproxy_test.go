@@ -194,7 +194,7 @@ retry:
 }
 
 func TestRProxyInvalidURL(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // NOTE: ht:// is now conditionally linked, requires 'ht' build tag
+	t.Skipf("skipping %s: requires 'ht' build tag", t.Name())
 	var (
 		proxyURL   = tools.GetPrimaryURL()
 		baseParams = tools.BaseAPIParams(proxyURL)

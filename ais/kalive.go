@@ -198,10 +198,9 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 	if fast {
 		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false /*ec active*/)
 		if err == nil {
-			// check resp header from primary
-			// (see: _respActiveEC; compare with: _recvActiveEC)
-			if isActiveEC(hdr) {
-				pkr.p._setActiveEC(now)
+			// (shared streams; EC streams)
+			if pkr.p.ec.isActive(hdr) {
+				pkr.p.ec.setActive(now)
 			}
 		}
 		return pid, 0, err

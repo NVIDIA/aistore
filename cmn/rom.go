@@ -31,7 +31,7 @@ var Rom readMostly
 func (rom *readMostly) init() {
 	rom.timeout.cplane = time.Second + time.Millisecond
 	rom.timeout.keepalive = 2*time.Second + time.Millisecond
-	rom.timeout.ecstreams = EcStreamsDflt
+	rom.timeout.ecstreams = SharedStreamsDflt
 }
 
 func (rom *readMostly) Set(cfg *ClusterConfig) {

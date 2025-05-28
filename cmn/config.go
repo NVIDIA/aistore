@@ -297,7 +297,7 @@ type (
 		Startup         cos.Duration `json:"startup_time"`      // primary wait for joins at (primary's) startup; indirectly, cluster startup
 		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout; (2 * Startup) when zero
 		SendFile        cos.Duration `json:"send_file_time"`    // large file or blob and/or slow network
-		// intra-cluster EC streams; default=EcStreamsDflt; never timeout when negative
+		// intra-cluster EC streams; default SharedStreamsDflt; never timeout when negative
 		EcStreams cos.Duration `json:"ec_streams_time,omitempty"`
 		// object metadata timeout; for training apps an approx. duration of 2 (two) epochs
 		ObjectMD cos.Duration `json:"object_md,omitempty"`
@@ -1811,9 +1811,13 @@ func (c *XactConf) Validate() error {
 /////////////////
 
 const (
-	EcStreamsEver = -time.Second
-	EcStreamsDflt = 10 * time.Minute
-	EcStreamsMin  = 5 * time.Minute
+	// TODO:
+	// config bloat vs specificity; consider phasing out `timeout.ec_streams_time` and
+	// using `timeout.shared_streams_time` instead
+	SharedStreamsEver = -time.Second
+	SharedStreamsDflt = 10 * time.Minute
+	SharedStreamsMin  = 5 * time.Minute
+	SharedStreamsNack = max(SharedStreamsMin>>1, 3*time.Minute)
 
 	LcacheEvictMin  = 20 * time.Minute
 	LcacheEvictDflt = 2 * time.Hour
@@ -1847,9 +1851,9 @@ func (c *TimeoutConf) Validate() error {
 		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than 1m)", c.SendFile)
 	}
 	// must be greater than (2 * keepalive.interval*keepalive.factor)
-	if c.EcStreams > 0 && c.EcStreams.D() < EcStreamsMin {
+	if c.EcStreams > 0 && c.EcStreams.D() < SharedStreamsMin {
 		return fmt.Errorf("invalid timeout.ec_streams_time=%s (no timeout: %v; minimum: %s; default: %s)",
-			c.EcStreams, EcStreamsEver, EcStreamsMin, EcStreamsDflt)
+			c.EcStreams, SharedStreamsEver, SharedStreamsMin, SharedStreamsDflt)
 	}
 	if c.ObjectMD != 0 && (c.ObjectMD.D() < LcacheEvictMin || c.ObjectMD.D() > LcacheEvictMax) {
 		return fmt.Errorf("invalid timeout.object_md=%s (expecting 0 (zero) for system default or [%v, %v] range)",
