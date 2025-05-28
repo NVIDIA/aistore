@@ -36,9 +36,9 @@ to a codebase using PyTorch. This document contains API documentation for the AI
 
 For usage examples, please see:
 * [AIS Plugin for PyTorch](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
-* [Jupyter Notebook Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
+* [Jupyter Notebook Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/pytorch/)
 
-![PyTorch Structure](/docs/images/pytorch_structure.webp)
+![PyTorch Structure](/docs/images/pytorch-structure.png)
 
 EOM
 

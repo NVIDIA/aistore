@@ -83,7 +83,7 @@ for data_sample in dataset:
     print(data_sample)  # Each iteration fetches a data sample (object name and byte array)
 ```
 
-For more examples on how to use AISMapDataset and AISIterDataset, see the [Dataset Example Notebook](../../examples/aisio-pytorch/dataset_example.ipynb).
+For more examples on how to use AISMapDataset and AISIterDataset, see the [Dataset Example Notebook](../../examples/pytorch/dataset_example.ipynb).
 
 
 **Creating DataLoader from AISMapDataset**
@@ -126,4 +126,4 @@ for basename, content_dict in shard_reader:
     # Since you know the file extension, we can load the file content in the appropriate way
 ```
 
-See the [ShardReader example notebook](../../examples/aisio-pytorch/shard_reader_example.ipynb) for more examples. Since the shard reader is also an iterable dataset, you can also use it with the `torch.utils.data.DataLoader` class for additional features.
+See the [ShardReader example notebook](../../examples/pytorch/shard_reader_example.ipynb) for more examples. Since the shard reader is also an iterable dataset, you can also use it with the `torch.utils.data.DataLoader` class for additional features.

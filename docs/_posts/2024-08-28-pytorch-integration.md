@@ -120,7 +120,7 @@ class CIFAR10Dataset(AISBaseIterDataset):
             yield from iter(zip(image_tensors, cifar_dict[b"labels"]))
 ```
 
-See our [notebook example](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/cifar10_training_example.ipynb) for a full end-to-end training example with a custom dataset.
+See our [notebook example](https://github.com/NVIDIA/aistore/blob/main/python/examples/pytorch/cifar10_training_example.ipynb) for a full end-to-end training example with a custom dataset.
 
 ## Managing data across sources with prefixes
 
@@ -313,5 +313,5 @@ Furthermore, we want data loading to be quick and easy for data scientists to us
 8. [AIStore Blog](https://aistore.nvidia.com/blog)
 9. [WebDataset Website](https://webdataset.github.io/webdataset/webdataset/) 
 10. [WebDataset Hugging Face](https://huggingface.co/docs/hub/datasets-webdataset )
-11. [Training CIFAR-10 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/cifar10_training_example.ipynb)
-12. [Training ResNet50 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/aisio-pytorch/resnet50_wds_train.ipynb)
+11. [Training CIFAR-10 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/pytorch/cifar10_training_example.ipynb)
+12. [Training ResNet50 with AIStore Notebook](https://github.com/NVIDIA/aistore/blob/main/python/examples/pytorch/resnet50_wds_train.ipynb)

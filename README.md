@@ -111,7 +111,7 @@ PyTorch integration is a growing set of datasets (both iterable and map-style), 
 
 * [Taxonomy of abstractions and API reference](/docs/pytorch.md)
 * [AIS plugin for PyTorch: usage examples](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch/README.md)
-* [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/aisio-pytorch/)
+* [Jupyter notebook examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/pytorch/)
 
 ## AIStore Badge
 
