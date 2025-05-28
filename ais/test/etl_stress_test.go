@@ -170,12 +170,12 @@ def transform(input_bytes):
 			etlSpecName string
 			etlCodeMsg  etl.InitCodeMsg
 		}{
-			{name: "spec-echo-python", ty: etl.Spec, etlSpecName: tetl.Echo},
-			{name: "spec-echo-golang", ty: etl.Spec, etlSpecName: tetl.EchoGolang},
+			{name: "spec-echo-python", ty: etl.SpecType, etlSpecName: tetl.Echo},
+			{name: "spec-echo-golang", ty: etl.SpecType, etlSpecName: tetl.EchoGolang},
 
 			{
 				name: "code-echo-py313",
-				ty:   etl.Code,
+				ty:   etl.CodeType,
 				etlCodeMsg: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py313,
@@ -184,7 +184,7 @@ def transform(input_bytes):
 			},
 			{
 				name: "code-echo-py310",
-				ty:   etl.Code,
+				ty:   etl.CodeType,
 				etlCodeMsg: etl.InitCodeMsg{
 					Code:      []byte(echoPythonTransform),
 					Runtime:   runtime.Py310,
@@ -211,10 +211,10 @@ def transform(input_bytes):
 				requestTimeout = 30 * time.Second
 			)
 			switch test.ty {
-			case etl.Spec:
+			case etl.SpecType:
 				etlName = test.etlSpecName
 				_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull)
-			case etl.Code:
+			case etl.CodeType:
 				etlName = test.name
 				{
 					test.etlCodeMsg.EtlName = etlName

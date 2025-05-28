@@ -104,11 +104,11 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	e.ETLs = make(ETLs, len(jsonMD.ETLs))
 	for k, v := range jsonMD.ETLs {
 		switch v.Type {
-		case Code:
+		case CodeType:
 			e.ETLs[k] = &InitCodeMsg{}
-		case Spec:
+		case SpecType:
 			e.ETLs[k] = &InitSpecMsg{}
-		case ETLSpec:
+		case ETLSpecType:
 			e.ETLs[k] = &ETLSpecMsg{}
 		default:
 			err = fmt.Errorf("invalid InitMsg type %q", v.Type)

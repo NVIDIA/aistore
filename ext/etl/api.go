@@ -30,13 +30,29 @@ const PrefixXactID = "etl-"
 
 const (
 	// init message types
-	Spec    = "spec"     // corresponding to `InitSpecMsg` below
-	Code    = "code"     // corresponding to `InitCodeMsg` below
-	ETLSpec = "etl-spec" // corresponding to `ETLSpecMsg` below
+	SpecType    = "spec"
+	CodeType    = "code"
+	ETLSpecType = "etl-spec"
 
-	// additional environment variables to set in ETL container
-	ArgType   = "ARG_TYPE"
-	DirectPut = "DIRECT_PUT"
+	// common fields
+	Name              = "NAME"
+	CommunicationType = "COMMUNICATION_TYPE"
+	ArgType           = "ARG_TYPE"
+	DirectPut         = "DIRECT_PUT"
+
+	// `InitCodeMsg` fields
+	Spec = "SPEC"
+
+	// `InitCodeMsg` fields
+	Runtime   = "RUNTIME"
+	Code      = "CODE"
+	Deps      = "DEPENDENCIES"
+	ChunkSize = "CHUNK_SIZE"
+
+	// `ETLSpecMsg` fields
+	Image   = "IMAGE"
+	Command = "COMMAND"
+	Env     = "ENV"
 )
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
@@ -217,20 +233,20 @@ func (m *InitMsgBase) Timeouts() (initTimeout, objTimeout cos.Duration) {
 	return m.InitTimeout, m.ObjTimeout
 }
 
-func (*InitCodeMsg) MsgType() string { return Code }
-func (*InitSpecMsg) MsgType() string { return Spec }
-func (*ETLSpecMsg) MsgType() string  { return ETLSpec }
+func (*InitCodeMsg) MsgType() string { return CodeType }
+func (*InitSpecMsg) MsgType() string { return SpecType }
+func (*ETLSpecMsg) MsgType() string  { return ETLSpecType }
 
 func (m *InitCodeMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s-%s], timeout=(%v, %v)", Code, m.Name(), m.CommType(), m.ArgType(), m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s-%s-%s], timeout=(%v, %v)", CodeType, m.Name(), m.CommType(), m.ArgType(), m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", Spec, m.Name(), m.CommType(), m.ArgType(), m.InitTimeout.D(), m.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", SpecType, m.Name(), m.CommType(), m.ArgType(), m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (e *ETLSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", ETLSpec, e.Name(), e.CommType(), e.ArgType(), e.InitTimeout.D(), e.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s-%s], env=%s, timeout=(%v, %v)", ETLSpecType, e.Name(), e.CommType(), e.ArgType(), e.FormatEnv(), e.InitTimeout.D(), e.ObjTimeout.D())
 }
 
 func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
@@ -248,11 +264,11 @@ func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
 		return nil, err
 	}
 
-	_, hasCode := msgInf[Code]
-	_, hasSpec := msgInf[Spec]
+	_, hasCode := msgInf[CodeType]
+	_, hasSpec := msgInf[SpecType]
 
 	if hasCode && hasSpec {
-		return nil, fmt.Errorf("invalid etl.InitMsg: both '%s' and '%s' fields are present", Code, Spec)
+		return nil, fmt.Errorf("invalid etl.InitMsg: both '%s' and '%s' fields are present", CodeType, SpecType)
 	}
 
 	if hasCode {
@@ -476,6 +492,19 @@ func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
 		},
 	}
 	return pod, nil
+}
+
+func (e *ETLSpecMsg) FormatEnv() string {
+	var b strings.Builder
+	b.WriteString("[")
+	for i, env := range e.Runtime.Env {
+		b.WriteString(fmt.Sprintf("{\"%s\":\"%s\"}", env.Name, env.Value))
+		if i < len(e.Runtime.Env)-1 {
+			b.WriteString(", ")
+		}
+	}
+	b.WriteString("]")
+	return b.String()
 }
 
 func (s Stage) String() string {
