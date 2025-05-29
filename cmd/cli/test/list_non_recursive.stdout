@@ -1,0 +1,18 @@
+NAME             SIZE            
+docs/                    
+file1.txt        0B              
+shard-0.tar      2.50KiB         
+shard-1.tar      2.50KiB         
+shard-2.tar      2.50KiB
+NAME             SIZE
+subdir/
+NAME             SIZE            
+shard-0.tar      2.50KiB         
+shard-1.tar      2.50KiB         
+shard-2.tar      2.50KiB
+NAME             SIZE    
+docs/            
+docs/readme.txt  0B
+NAME                     SIZE    
+docs/nested/             
+docs/nested/deep.txt     0B

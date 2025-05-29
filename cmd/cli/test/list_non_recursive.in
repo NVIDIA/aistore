@@ -1,0 +1,20 @@
+ais archive gen-shards "ais://$BUCKET_1/shard-{0..2}.tar" --fcount 1 --fsize 1KB --cleanup // IGNORE
+ais archive gen-shards "ais://$BUCKET_2/subdir/shard-{0..2}.tar" --fcount 1 --fsize 1KB --cleanup // IGNORE
+
+# Add plain content with simple nesting
+ais put /dev/null ais://$BUCKET_1/file1.txt --yes // IGNORE
+ais put /dev/null ais://$BUCKET_1/docs/readme.txt --yes // IGNORE
+ais put /dev/null ais://$BUCKET_1/docs/nested/deep.txt --yes // IGNORE
+
+ais ls --nr ais://$BUCKET_1
+ais ls --nr ais://$BUCKET_2
+
+# Prefix tests - with trailing "/"
+ais ls --nr ais://$BUCKET_1/shard-
+ais ls --nr ais://$BUCKET_1/docs/
+ais ls --nr ais://$BUCKET_1/docs/nested/
+
+
+
+ais bucket rm ais://$BUCKET_1 // IGNORE
+ais bucket rm ais://$BUCKET_2 // IGNORE
