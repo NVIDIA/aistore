@@ -151,8 +151,8 @@ const (
 )
 
 const (
-	ActSharedDmOpen  = "open-shared-streams"
-	ActSharedDmClose = "close-shared-streams"
+	ActDmOpen  = "open-shared-streams"
+	ActDmClose = "close-shared-streams"
 )
 
 const (

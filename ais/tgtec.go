@@ -149,8 +149,13 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		}
 		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hkname, closeEc, postpone)
-	case apc.ActSharedDmOpen, apc.ActSharedDmClose: // TODO -- FIXME: niy
-		t.writeErr(w, r, cmn.NewErrNotImpl(action, ""), http.StatusNotImplemented)
+
+	// TODO -- FIXME: simplified (compare w/ above); refactor as toggle-streams-...
+	case apc.ActDmOpen:
+		t.sdm.Open()
+	case apc.ActDmClose:
+		t.sdm.Close()
+
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}

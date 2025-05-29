@@ -71,6 +71,7 @@ type (
 			in atomic.Bool
 		}
 		ec                ecToggle
+		dm                dmToggle
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}
@@ -117,7 +118,9 @@ func (p *proxy) init(config *cmn.Config) {
 	daemon.rg.add(m)
 	p.metasyncer = m
 
-	p.ec.init(p.offEC)
+	// shared streams
+	p.ec.init()
+	p.dm.init()
 }
 
 func initPID(config *cmn.Config) string {
@@ -1501,7 +1504,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	case apc.ActECEncode:
 		if cmn.Rom.EcStreams() > 0 {
-			if err = p._onEC(mono.NanoTime()); err != nil {
+			if err = p.ec.on(p, p.ec.timeout()); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}

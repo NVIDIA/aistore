@@ -68,6 +68,11 @@ type (
 func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
 	debug.Assert(extra.Config != nil)
 	dm := &DM{config: extra.Config}
+	dm.init(trname, recvCB, owt, extra)
+	return dm
+}
+
+func (dm *DM) init(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) {
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
@@ -88,11 +93,10 @@ func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *D
 	}
 	dm.ack.recv = extra.RecvAck
 	if !dm.useACKs() {
-		return dm
+		return
 	}
 	dm.ack.trname = "ack." + trname
 	dm.ack.client = transport.NewIntraDataClient()
-	return dm
 }
 
 func (dm *DM) useACKs() bool { return dm.ack.recv != nil }

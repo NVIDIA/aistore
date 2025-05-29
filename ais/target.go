@@ -44,6 +44,7 @@ import (
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -70,6 +71,7 @@ type (
 		fsprg    fsprungroup
 		reb      *reb.Reb
 		res      *res.Res
+		sdm      *bundle.SharedDM
 		txns     txns
 		regstate regstate
 	}
@@ -292,8 +294,10 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts) // init transport sub-system; new stream collector
-	daemon.rg.add(sc)
+	sc := transport.Init(ts)   // init transport sub-system
+	daemon.rg.add(sc)          // new stream collector
+	t.sdm = &bundle.SharedDM{} // shared streams
+	t.sdm.Init(config, apc.CompressNever)
 
 	t.fshc = health.NewFSHC(t)
 

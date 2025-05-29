@@ -117,8 +117,9 @@ const (
 	HdrPromoteNamesHash = aisPrefix + "Promote-Names-Hash"
 	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
 
-	// EC
+	// shared streams
 	HdrActiveEC = aisPrefix + "Ec"
+	HdrActiveDM = aisPrefix + "Dm"
 
 	// (advanced use)
 	HdrReadyToJoinClu = aisPrefix + "Ready-Join-Clu"
