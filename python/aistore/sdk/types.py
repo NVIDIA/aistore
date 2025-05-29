@@ -311,45 +311,65 @@ class ETLInfo(BaseModel):  # pylint: disable=too-few-public-methods,unused-varia
     out_bytes: int = 0
 
 
-class ETLDetails(BaseModel):
-    """
-    Represents the API response of queries on single ETL details
-    """
-
-    name: str
-    communication: str
-    init_timeout: Optional[str]
-    obj_timeout: Optional[str]
-    code: Optional[bytes]
-    spec: Optional[str]
-    dependencies: Optional[str]
-    runtime: Optional[str]  # see ext/etl/runtime/all.go
-    chunk_size: int = 0
-    argument: str = ""
-
-    @validator("code")
-    def set_code(cls, code):  # pylint: disable=no-self-argument
-        if code is not None:
-            code = base64.b64decode(code)
-        return code
-
-    @validator("spec")
-    def set_spec(cls, spec):  # pylint: disable=no-self-argument
-        if spec is not None:
-            spec = base64.b64decode(spec)
-        return spec
-
-
 class InitETLArgs(BaseModel):
     """
     Represents the args shared by ETL initialization with code or spec
     """
 
-    etl_name: str
-    communication_type: str
+    name: str
+    comm_type: str
     init_timeout: Optional[str]
     obj_timeout: Optional[str]
     arg_type: str = ""
+    direct_put: bool = False
+
+
+class EnvVar(BaseModel):
+    """
+    Represents an environment variable
+    """
+
+    name: str
+    value: str
+
+    def as_dict(self):
+        return {
+            "name": self.name,
+            "value": self.value,
+        }
+
+
+class ETLRuntimeSpec(BaseModel):
+    """
+    Represents the ETL runtime message structure
+    """
+
+    image: str
+    command: List[str]
+    env_vars: List[EnvVar] = Field(default_factory=list)
+
+
+class ETLSpecMsg(InitETLArgs):
+    """
+    Simplied version for Init Spec ETL args
+    """
+
+    runtime: ETLRuntimeSpec
+
+    def as_dict(self):
+        return {
+            "name": self.name,
+            "communication": f"{self.comm_type}://",
+            "init_timeout": self.init_timeout,
+            "obj_timeout": self.obj_timeout,
+            "argument": self.arg_type,
+            "support_direct_put": self.direct_put,
+            "runtime": {
+                "image": self.runtime.image,
+                "command": self.runtime.command,
+                "env": [ev.as_dict() for ev in self.runtime.env_vars],
+            },
+        }
 
 
 class InitSpecETLArgs(InitETLArgs):
@@ -361,10 +381,10 @@ class InitSpecETLArgs(InitETLArgs):
 
     def as_dict(self):
         return {
-            "name": self.etl_name,
+            "name": self.name,
             "init_timeout": self.init_timeout,
             "obj_timeout": self.obj_timeout,
-            "communication": f"{self.communication_type}://",
+            "communication": f"{self.comm_type}://",
             "spec": self.spec,
             "argument": self.arg_type,
         }
@@ -383,9 +403,9 @@ class InitCodeETLArgs(InitETLArgs):
 
     def as_dict(self):
         dict_rep = {
-            "name": self.etl_name,
+            "name": self.name,
             "runtime": self.runtime,
-            "communication": f"{self.communication_type}://",
+            "communication": f"{self.comm_type}://",
             "init_timeout": self.init_timeout,
             "obj_timeout": self.obj_timeout,
             "funcs": self.functions,
@@ -396,6 +416,34 @@ class InitCodeETLArgs(InitETLArgs):
         if self.chunk_size:
             dict_rep["chunk_size"] = self.chunk_size
         return dict_rep
+
+
+class ETLDetails(BaseModel):
+    """
+    Represents the API response of queries on single ETL details
+    """
+
+    name: str
+    communication: str
+    argument: str = ""
+    init_timeout: Optional[str]
+    obj_timeout: Optional[str]
+    code: Optional[bytes]
+    spec: Optional[bytes]
+    dependencies: Optional[bytes]
+    chunk_size: int = 0
+
+    @validator("code")
+    def set_code(cls, code):  # pylint: disable=no-self-argument
+        if code is not None:
+            code = base64.b64decode(code)
+        return code
+
+    @validator("spec")
+    def set_spec(cls, spec):  # pylint: disable=no-self-argument
+        if spec is not None:
+            spec = base64.b64decode(spec)
+        return spec
 
 
 class PromoteAPIArgs(BaseModel):

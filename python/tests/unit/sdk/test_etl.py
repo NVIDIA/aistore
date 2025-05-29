@@ -29,7 +29,9 @@ from aistore.sdk.utils import convert_to_seconds
 from tests.const import ETL_NAME
 
 
-class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
+class TestEtl(
+    unittest.TestCase
+):  # pylint: disable=unused-variable, too-many-public-methods
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.etl_name = ETL_NAME
@@ -272,3 +274,112 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         for name in invalid_names:
             with self.assertRaises(ValueError):
                 Etl.validate_etl_name(name)
+
+    def test_init_default_params(self):
+        image = "my-image"
+        command = ["run", "me"]
+        expected_action = {
+            "name": self.etl_name,
+            "communication": f"{ETL_COMM_HPUSH}://",
+            "init_timeout": DEFAULT_ETL_TIMEOUT,
+            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
+            "argument": "",
+            "support_direct_put": False,
+            "runtime": {
+                "image": image,
+                "command": command,
+                "env": [],
+            },
+        }
+
+        mock_resp = Mock()
+        mock_resp.text = "job-123"
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.etl.init(image, command)
+        self.assertEqual("job-123", result)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+            json=expected_action,
+        )
+
+    def test_init_with_string_command_and_env_vars(self):
+        image = "img2"
+        cmd_str = "echo hello world"
+        expected_action = {
+            "name": self.etl_name,
+            "communication": f"{ETL_COMM_HPUSH}://",
+            "init_timeout": DEFAULT_ETL_TIMEOUT,
+            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
+            "argument": "",
+            "support_direct_put": False,
+            "runtime": {
+                "image": image,
+                "command": cmd_str.split(),
+                "env": [{"name": "FOO", "value": "BAR"}],
+            },
+        }
+
+        mock_resp = Mock()
+        mock_resp.text = "job-456"
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.etl.init(image, cmd_str, FOO="BAR")
+        self.assertEqual("job-456", result)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=convert_to_seconds(DEFAULT_ETL_TIMEOUT),
+            json=expected_action,
+        )
+
+    def test_init_custom_params(self):
+        image = "img3"
+        command = ["run3"]
+        comm_type = ETL_COMM_HPULL
+        init_t = "10m"
+        obj_t = "30s"
+        arg_t = "url"
+        direct = True
+
+        expected_action = {
+            "name": self.etl_name,
+            "communication": f"{comm_type}://",
+            "init_timeout": init_t,
+            "obj_timeout": obj_t,
+            "argument": arg_t,
+            "support_direct_put": direct,
+            "runtime": {
+                "image": image,
+                "command": command,
+                "env": [{"name": "BAZ", "value": "QUX"}],
+            },
+        }
+
+        mock_resp = Mock()
+        mock_resp.text = "job-789"
+        self.mock_client.request.return_value = mock_resp
+
+        result = self.etl.init(
+            image,
+            command,
+            comm_type=comm_type,
+            init_timeout=init_t,
+            obj_timeout=obj_t,
+            arg_type=arg_t,
+            direct_put=direct,
+            BAZ="QUX",
+        )
+        self.assertEqual("job-789", result)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=convert_to_seconds(init_t),
+            json=expected_action,
+        )
+
+    def test_init_invalid_comm(self):
+        with self.assertRaises(ValueError):
+            self.etl.init("img", ["cmd"], comm_type="not-a-valid-type")

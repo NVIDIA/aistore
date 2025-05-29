@@ -300,6 +300,75 @@ class TestETLOps(unittest.TestCase):
 
         self.assertEqual(2, len(dst_bck.list_all_objects()))
 
+    @pytest.mark.etl
+    def test_etl_init_hello_world(self):
+        etl = self.client.etl(self.etl_name)
+
+        etl.init(
+            image="aistorage/transformer_hello_world:latest",
+            command=[
+                "uvicorn",
+                "fastapi_server:fastapi_app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--workers",
+                "4",
+                "--no-access-log",
+            ],
+        )
+        obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=etl.name))
+            .read_all()
+        )
+        self.assertEqual(
+            obj, b"Hello World!", "ETL initialization with image and command failed"
+        )
+
+    @pytest.mark.etl
+    def test_etl_init_hash_with_args(self):
+        etl = self.client.etl(self.etl_name)
+
+        etl.init(
+            image="aistorage/transformer_hash_with_args:latest",
+            command=[
+                "uvicorn",
+                "fastapi_server:fastapi_app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--workers",
+                "4",
+                "--no-access-log",
+            ],
+            SEED_DEFAULT=500,
+        )
+        obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=etl.name))
+            .read_all()
+        )
+
+        # Function to calculate xxhash
+        def calculate_xxhash(data, seed):
+            hasher = xxhash.xxh64(seed=seed)
+            hasher.update(data)
+            return hasher.hexdigest()
+
+        self.assertEqual(obj.decode(), calculate_xxhash(bytes(self.content), 500))
+
+        # different seed
+        seed = 10000
+        new_obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=etl.name, args=seed))
+            .read_all()
+        )
+        self.assertEqual(new_obj.decode(), calculate_xxhash(bytes(self.content), seed))
+
 
 if __name__ == "__main__":
     unittest.main()

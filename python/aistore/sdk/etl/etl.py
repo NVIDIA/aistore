@@ -5,7 +5,7 @@ import sys
 import re
 
 import base64
-from typing import Callable, List
+from typing import Callable, List, Union
 
 import cloudpickle
 
@@ -28,7 +28,14 @@ from aistore.sdk.etl.etl_const import (
     CODE_TEMPLATE,
 )
 
-from aistore.sdk.types import ETLDetails, InitCodeETLArgs, InitSpecETLArgs
+from aistore.sdk.types import (
+    ETLDetails,
+    InitCodeETLArgs,
+    InitSpecETLArgs,
+    ETLSpecMsg,
+    EnvVar,
+    ETLRuntimeSpec,
+)
 from aistore.sdk.utils import convert_to_seconds
 
 
@@ -97,8 +104,8 @@ class Etl:
 
         value = InitSpecETLArgs(
             spec=spec_encoded,
-            etl_name=self._name,
-            communication_type=communication_type,
+            name=self._name,
+            comm_type=communication_type,
             init_timeout=init_timeout,
             obj_timeout=obj_timeout,
             arg_type=arg_type,
@@ -155,9 +162,9 @@ class Etl:
         }
 
         value = InitCodeETLArgs(
-            etl_name=self._name,
+            name=self._name,
             runtime=runtime,
-            communication_type=communication_type,
+            comm_type=communication_type,
             init_timeout=init_timeout,
             obj_timeout=obj_timeout,
             dependencies=self._encode_dependencies(dependencies),
@@ -175,6 +182,68 @@ class Etl:
             timeout=convert_to_seconds(init_timeout),
             json=value,
         ).text
+
+    def init(
+        self,
+        image: str,
+        command: Union[List[str], str],
+        comm_type: str = DEFAULT_ETL_COMM,
+        init_timeout: str = DEFAULT_ETL_TIMEOUT,
+        obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
+        arg_type: str = "",
+        direct_put: bool = False,
+        **kwargs,
+    ):
+        """
+        Initializes ETL based on the provided image and command.
+        Args:
+            name (str): Name of the ETL
+            image (str): Docker image to use for the ETL
+            command (Union[List[str], str]): Command to run in the container
+            comm_type (str): Communication type of the ETL (options: hpull, hpush, ws)
+            init_timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
+            obj_timeout (str): [optional, default="45s"] Timeout of transforming a single object
+            arg_type (str): The type of argument the runtime will provide the transform function.
+                The default value of "" will provide the raw bytes read from the object.
+            direct_put (bool): Whether to support direct put optimization in bck-to-bck operations.
+            kwargs (dict): Additional keyword arguments to pass to the ETL, will be passed as
+                environment variables to the container
+        Returns:
+            Job ID string associated with this ETL
+        """
+
+        # Validate communication type
+        _validate_comm_type(comm_type, ETL_COMM_SPEC)
+
+        # normalize command
+        if isinstance(command, str):
+            command = command.split()
+
+        # build EnvVar list
+        env_list = [EnvVar(name=k, value=v) for k, v in kwargs.items()]
+
+        # assemble spec
+        spec_msg = ETLSpecMsg(
+            name=self._name,
+            comm_type=comm_type,
+            init_timeout=init_timeout,
+            obj_timeout=obj_timeout,
+            arg_type=arg_type,
+            direct_put=direct_put,
+            runtime=ETLRuntimeSpec(
+                image=image,
+                command=command,
+                env_vars=env_list,
+            ),
+        )
+
+        resp = self._client.request(
+            HTTP_METHOD_PUT,
+            path=URL_PATH_ETL,
+            timeout=convert_to_seconds(init_timeout),
+            json=spec_msg.as_dict(),
+        )
+        return resp.text
 
     def view(self) -> ETLDetails:
         """
