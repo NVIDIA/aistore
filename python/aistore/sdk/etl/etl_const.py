@@ -37,3 +37,17 @@ for mod in {}:
 transform = pickle.loads(base64.b64decode('{}'))
 {}
 """
+
+# Commands for ETL Containers
+
+FASTAPI_CMD = [
+    "uvicorn",
+    "fastapi_server:fastapi_app",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8000",
+    "--workers",
+    "4",
+    "--no-access-log",
+]

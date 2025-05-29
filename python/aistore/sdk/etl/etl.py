@@ -220,8 +220,7 @@ class Etl:
             command = command.split()
 
         # build EnvVar list
-        env_list = [EnvVar(name=k, value=v) for k, v in kwargs.items()]
-
+        env_vars = [EnvVar(name=k, value=v) for k, v in kwargs.items()]
         # assemble spec
         spec_msg = ETLSpecMsg(
             name=self._name,
@@ -233,7 +232,7 @@ class Etl:
             runtime=ETLRuntimeSpec(
                 image=image,
                 command=command,
-                env_vars=env_list,
+                env=env_vars,
             ),
         )
 

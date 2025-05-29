@@ -346,7 +346,7 @@ class ETLRuntimeSpec(BaseModel):
 
     image: str
     command: List[str]
-    env_vars: List[EnvVar] = Field(default_factory=list)
+    env: List[EnvVar] = Field(default_factory=list)
 
 
 class ETLSpecMsg(InitETLArgs):
@@ -367,7 +367,7 @@ class ETLSpecMsg(InitETLArgs):
             "runtime": {
                 "image": self.runtime.image,
                 "command": self.runtime.command,
-                "env": [ev.as_dict() for ev in self.runtime.env_vars],
+                "env": [ev.as_dict() for ev in self.runtime.env],
             },
         }
 
@@ -432,6 +432,7 @@ class ETLDetails(BaseModel):
     spec: Optional[bytes]
     dependencies: Optional[bytes]
     chunk_size: int = 0
+    runtime: Optional[ETLRuntimeSpec]
 
     @validator("code")
     def set_code(cls, code):  # pylint: disable=no-self-argument

@@ -17,7 +17,9 @@ from aistore.sdk.etl.etl_templates import MD5, ECHO, HASH
 from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
+    FASTAPI_CMD,
 )
+from aistore.sdk.types import EnvVar
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import cases, create_and_put_object, random_string, has_targets
 
@@ -195,6 +197,11 @@ class TestETLOps(unittest.TestCase):
         computed_checksum = hashlib.md5(data).hexdigest().encode()
         self.assertEqual(checksum, computed_checksum)
 
+        xor_etl_details = xor_etl.view()
+        self.assertIsNotNone(xor_etl_details)
+        self.assertEqual(xor_etl_details.name, self.etl_name)
+        self.assertIsNotNone(xor_etl_details.code)
+
     @pytest.mark.etl
     def test_etl_with_various_sizes(self):
         obj_sizes = [128, 1024, 1048576]
@@ -267,6 +274,12 @@ class TestETLOps(unittest.TestCase):
         # Ensure hashes are different
         self.assertNotEqual(default_hash, new_hash)
 
+        spec_etl_details = spec_etl.view()
+        self.assertIsNotNone(spec_etl_details)
+        self.assertEqual(spec_etl_details.name, self.etl_name)
+        self.assertIsNotNone(spec_etl_details.spec)
+
+        # Need to add this because of @cases decorator
         try:
             spec_etl.stop()
             spec_etl.delete()
@@ -306,17 +319,7 @@ class TestETLOps(unittest.TestCase):
 
         etl.init(
             image="aistorage/transformer_hello_world:latest",
-            command=[
-                "uvicorn",
-                "fastapi_server:fastapi_app",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000",
-                "--workers",
-                "4",
-                "--no-access-log",
-            ],
+            command=FASTAPI_CMD,
         )
         obj = (
             self.bucket.object(self.obj_name)
@@ -326,6 +329,13 @@ class TestETLOps(unittest.TestCase):
         self.assertEqual(
             obj, b"Hello World!", "ETL initialization with image and command failed"
         )
+        etl_details = etl.view()
+        self.assertIsNotNone(etl_details)
+        self.assertEqual(etl_details.name, self.etl_name)
+        self.assertEqual(
+            etl_details.runtime.image, "aistorage/transformer_hello_world:latest"
+        )
+        self.assertEqual(etl_details.runtime.command, FASTAPI_CMD)
 
     @pytest.mark.etl
     def test_etl_init_hash_with_args(self):
@@ -333,17 +343,7 @@ class TestETLOps(unittest.TestCase):
 
         etl.init(
             image="aistorage/transformer_hash_with_args:latest",
-            command=[
-                "uvicorn",
-                "fastapi_server:fastapi_app",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000",
-                "--workers",
-                "4",
-                "--no-access-log",
-            ],
+            command=FASTAPI_CMD,
             SEED_DEFAULT=500,
         )
         obj = (
@@ -368,6 +368,17 @@ class TestETLOps(unittest.TestCase):
             .read_all()
         )
         self.assertEqual(new_obj.decode(), calculate_xxhash(bytes(self.content), seed))
+
+        etl_details = etl.view()
+        self.assertIsNotNone(etl_details)
+        self.assertEqual(etl_details.name, self.etl_name)
+        self.assertEqual(
+            etl_details.runtime.image, "aistorage/transformer_hash_with_args:latest"
+        )
+        self.assertEqual(etl_details.runtime.command, FASTAPI_CMD)
+        self.assertEqual(
+            etl_details.runtime.env[0], EnvVar(name="SEED_DEFAULT", value="500")
+        )
 
 
 if __name__ == "__main__":

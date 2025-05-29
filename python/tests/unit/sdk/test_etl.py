@@ -305,7 +305,7 @@ class TestEtl(
             json=expected_action,
         )
 
-    def test_init_with_string_command_and_env_vars(self):
+    def test_init_with_string_command_and_env(self):
         image = "img2"
         cmd_str = "echo hello world"
         expected_action = {
