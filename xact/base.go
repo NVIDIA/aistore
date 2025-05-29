@@ -162,8 +162,8 @@ func (xctn *Base) Abort(err error) bool {
 	debug.Assert(perr == nil, xctn.String())
 	debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) // CAS above
 
-	xctn.abort.ch <- err
 	if xctn.abort.closed.CAS(false, true) {
+		xctn.abort.ch <- err
 		close(xctn.abort.ch)
 	}
 
