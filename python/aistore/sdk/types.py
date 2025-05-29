@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 import base64
-from typing import Any, Mapping, List, Optional, Dict
+from typing import Any, Mapping, List, Optional, Dict, Union
 import msgspec
 from pydantic.v1 import BaseModel, Field, validator
 from requests.structures import CaseInsensitiveDict
@@ -432,7 +432,7 @@ class ETLDetails(BaseModel):
     spec: Optional[bytes]
     dependencies: Optional[bytes]
     chunk_size: int = 0
-    runtime: Optional[ETLRuntimeSpec]
+    runtime: Optional[Union[str, ETLRuntimeSpec]]
 
     @validator("code")
     def set_code(cls, code):  # pylint: disable=no-self-argument
