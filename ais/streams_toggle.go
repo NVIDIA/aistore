@@ -18,49 +18,49 @@ import (
 // negative timeout (see `tout` below) => never deactivate
 
 type (
-	featureToggle struct {
+	streamsToggle struct {
 		hdrActive  string               // e.g. apc.HdrActiveEC
 		timeoutFn  func() time.Duration // timeout (configured or default; negative => don't deactivate)
 		deactivate func(last int64)     // broadcast Close()
 		last       atomic.Int64         // mono-time of last positive refresh
 	}
 
-	ecFT struct {
-		featureToggle
+	ecToggle struct {
+		streamsToggle
 	}
 )
 
-func (ft *ecFT) init(deactivate func(last int64)) {
-	ft.hdrActive = apc.HdrActiveEC
-	ft.timeoutFn = cmn.Rom.EcStreams
-	ft.deactivate = deactivate
+func (f *ecToggle) init(deactivate func(last int64)) {
+	f.hdrActive = apc.HdrActiveEC
+	f.timeoutFn = cmn.Rom.EcStreams
+	f.deactivate = deactivate
 }
 
-func (ft *featureToggle) isActive(h http.Header) bool { _, ok := h[ft.hdrActive]; return ok }
-func (ft *featureToggle) setActive(now int64)         { ft.last.Store(now) }
+func (f *streamsToggle) isActive(h http.Header) bool { _, ok := h[f.hdrActive]; return ok }
+func (f *streamsToggle) setActive(now int64)         { f.last.Store(now) }
 
 // target => primary keep-alive
-func (ft *featureToggle) recvKalive(hdr http.Header, now int64) {
-	if _, ok := hdr[ft.hdrActive]; ok {
-		ft.setActive(now)
+func (f *streamsToggle) recvKalive(hdr http.Header, now int64) {
+	if _, ok := hdr[f.hdrActive]; ok {
+		f.setActive(now)
 		return
 	}
-	tout := ft.timeoutFn()
+	tout := f.timeoutFn()
 	if tout < 0 {
 		return
 	}
-	last := ft.last.Load()
+	last := f.last.Load()
 	if last == 0 || time.Duration(now-last) < tout {
 		return
 	}
-	ft.deactivate(last) // extra sanity check lives inside deactivate()
+	f.deactivate(last) // extra sanity check lives inside deactivate()
 }
 
 // primary => target keep-alive
-func (ft *featureToggle) respKalive(hdr http.Header, now int64) {
-	if tout := ft.timeoutFn(); tout > 0 {
-		if last := ft.last.Load(); last != 0 && time.Duration(now-last) < tout {
-			hdr.Set(ft.hdrActive, "true")
+func (f *streamsToggle) respKalive(hdr http.Header, now int64) {
+	if tout := f.timeoutFn(); tout > 0 {
+		if last := f.last.Load(); last != 0 && time.Duration(now-last) < tout {
+			hdr.Set(f.hdrActive, "true")
 		}
 	}
 }

@@ -151,6 +151,11 @@ const (
 )
 
 const (
+	ActSharedDmOpen  = "open-shared-streams"
+	ActSharedDmClose = "close-shared-streams"
+)
+
+const (
 	ActEcOpen    = "open-ec-streams"
 	ActEcClose   = "close-ec-streams"
 	ActEcRecover = "recover" // check and recover missing or corrupted EC metadata and/or slices, if any

@@ -149,6 +149,8 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		}
 		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hkname, closeEc, postpone)
+	case apc.ActSharedDmOpen, apc.ActSharedDmClose: // TODO -- FIXME: niy
+		t.writeErr(w, r, cmn.NewErrNotImpl(action, ""), http.StatusNotImplemented)
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}

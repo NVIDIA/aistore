@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -37,6 +37,8 @@ func (p *proxy) httpecpost(w http.ResponseWriter, r *http.Request) {
 		p.ec.setActive(mono.NanoTime())
 	case apc.ActEcClose:
 		p.ec.setActive(0)
+	case apc.ActSharedDmOpen, apc.ActSharedDmClose: // TODO -- FIXME: niy
+		p.writeErr(w, r, cmn.NewErrNotImpl(action, ""), http.StatusNotImplemented)
 	default:
 		p.writeErr(w, r, errActEc(action))
 	}
@@ -66,7 +68,7 @@ func (p *proxy) _onEC(now int64) error {
 	if last != 0 && time.Duration(now-last) < cmn.SharedStreamsNack {
 		return nil
 	}
-	err := p._toggleEC(apc.ActEcOpen)
+	err := p._toggleSharedStreams(apc.ActEcOpen)
 	if err == nil {
 		p.ec.setActive(mono.NanoTime())
 	}
@@ -74,7 +76,7 @@ func (p *proxy) _onEC(now int64) error {
 }
 
 // bcast primary's control
-func (p *proxy) _toggleEC(action string) error {
+func (p *proxy) _toggleSharedStreams(action string) error {
 	// 1. targets
 	args := allocBcArgs()
 	{
@@ -121,7 +123,7 @@ func (p *proxy) offEC(last int64) {
 		return
 	}
 
-	err := p._toggleEC(apc.ActEcClose)
+	err := p._toggleSharedStreams(apc.ActEcClose)
 	if err == nil {
 		return
 	}

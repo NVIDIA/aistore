@@ -58,7 +58,6 @@ type txnSrv struct {
 
 // verb /v1/txn
 func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
-	var bucket, phase, xid string
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
 		return
@@ -67,17 +66,17 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-
 	xactRecord := xact.Table[msg.Action]
 	onlyPrimary := xactRecord.Metasync
 	if !t.ensureIntraControl(w, r, onlyPrimary) {
 		return
 	}
-
 	apiItems, err := t.parseURL(w, r, apc.URLPathTxn.L, 0, true)
 	if err != nil {
 		return
 	}
+
+	var bucket, phase string
 	switch len(apiItems) {
 	case 1: // Global transaction.
 		phase = apiItems[0]
@@ -102,6 +101,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var xid string
 	switch msg.Action {
 	case apc.ActCreateBck, apc.ActAddRemoteBck:
 		err = t.createBucket(c)

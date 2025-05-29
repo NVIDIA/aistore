@@ -70,7 +70,7 @@ type (
 			mu sync.RWMutex
 			in atomic.Bool
 		}
-		ec                ecFT
+		ec                ecToggle
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}
