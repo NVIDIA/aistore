@@ -71,7 +71,6 @@ type (
 		fsprg    fsprungroup
 		reb      *reb.Reb
 		res      *res.Res
-		sdm      *bundle.SharedDM
 		txns     txns
 		regstate regstate
 	}
@@ -294,10 +293,9 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts)   // init transport sub-system
-	daemon.rg.add(sc)          // new stream collector
-	t.sdm = &bundle.SharedDM{} // shared streams
-	t.sdm.Init(config, apc.CompressNever)
+	sc := transport.Init(ts)                  // init transport sub-system
+	daemon.rg.add(sc)                         // new stream collector
+	bundle.InitSDM(config, apc.CompressNever) // shared streams
 
 	t.fshc = health.NewFSHC(t)
 

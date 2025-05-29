@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
 const (
@@ -131,17 +132,18 @@ func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
 }
 
 func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast bool) (pid string, status int, err error) {
+	t := tkr.t
 	if fast {
 		// additionally
-		interrupted, restarted := tkr.t.interruptedRestarted()
+		interrupted, restarted := t.interruptedRestarted()
 		fast = !interrupted && !restarted
 	}
 	if fast {
 		debug.Assert(ec.ECM != nil)
-		pid, _, err = tkr.t.fastKalive(smap, timeout, ec.ECM.IsActive())
+		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsOpen())
 		return pid, 0, err
 	}
-	return tkr.t.slowKalive(smap, tkr.t, timeout)
+	return t.slowKalive(smap, tkr.t, timeout)
 }
 
 func (tkr *talive) do(config *cmn.Config) (stopped bool) {
@@ -196,11 +198,14 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 	debug.Assert(!smap.isPrimary(pkr.p.si))
 
 	if fast {
-		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false /*ec active*/)
+		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false, false /*shared streams*/)
 		if err == nil {
 			// (shared streams; EC streams)
 			if pkr.p.ec.isActive(hdr) {
 				pkr.p.ec.setActive(now)
+			}
+			if pkr.p.dm.isActive(hdr) {
+				pkr.p.dm.setActive(now)
 			}
 		}
 		return pid, 0, err

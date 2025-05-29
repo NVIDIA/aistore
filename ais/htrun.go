@@ -2042,7 +2042,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, htext hte
 }
 
 // (fast path: nodes => primary)
-func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (string /*pid*/, http.Header, error) {
+func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive, dmActive bool) (string /*pid*/, http.Header, error) {
 	if nlog.Stopping() {
 		return "", http.Header{}, h.errStopping()
 	}
@@ -2056,10 +2056,15 @@ func (h *htrun) fastKalive(smap *smapX, timeout time.Duration, ecActive bool) (s
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: apc.URLPathCluKalive.Join(h.SID())}
 		cargs.timeout = timeout
 	}
-	if ecActive {
+	if ecActive || dmActive {
 		// (target => primary)
 		hdr := make(http.Header, 1)
-		hdr.Set(apc.HdrActiveEC, "true")
+		if ecActive {
+			hdr.Set(apc.HdrActiveEC, "true")
+		}
+		if dmActive {
+			hdr.Set(apc.HdrActiveDM, "true")
+		}
 		cargs.req.Header = hdr
 	}
 

@@ -21,10 +21,9 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
-
-var errCloseStreams = errors.New("EC is currently active, cannot close streams")
 
 func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -144,17 +143,24 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if ec.ECM.IsActive() {
-			t.writeErr(w, r, errCloseStreams)
+			t.writeErr(w, r, errors.New("EC is active, cannot close"))
 			return
 		}
 		nlog.Infoln(t.String(), "hk-postpone", action)
 		hk.Reg(hkname, closeEc, postpone)
 
-	// TODO -- FIXME: simplified (compare w/ above); refactor as toggle-streams-...
 	case apc.ActDmOpen:
-		t.sdm.Open()
+		if err := bundle.SDM.Open(); err != nil {
+			t.writeErr(w, r, err)
+		}
 	case apc.ActDmClose:
-		t.sdm.Close()
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		// TODO: consider delaying via hk (see above)
+		if err := bundle.SDM.Close(); err != nil {
+			t.writeErr(w, r, err)
+		}
 
 	default:
 		t.writeErr(w, r, errActEc(action))
@@ -163,7 +169,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 
 func closeEc(int64) time.Duration {
 	if ec.ECM.IsActive() {
-		nlog.Warningln("hk-cb:", errCloseStreams)
+		nlog.Warningln("hk-cb: cannot close EC streams")
 	} else {
 		ec.ECM.CloseStreams(false /*with refc*/)
 	}
