@@ -4,19 +4,7 @@
  */
 package cos
 
-import (
-	"encoding/json"
-	"strings"
-)
-
-func NewStrSlice(input string) ([]string, error) {
-	var result []string
-	err := json.Unmarshal([]byte(input), &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
+import "strings"
 
 func StringInSlice(s string, arr []string) bool {
 	for _, el := range arr {
