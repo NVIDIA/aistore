@@ -710,6 +710,47 @@ class Bucket(AISSource):
             uuid = resp.uuid
         return obj_list
 
+    def list_archive(
+        self,
+        archive_obj_name: str,
+        include_archive_obj: bool = False,
+        props: str = "",
+        page_size: int = 0,
+    ) -> List[BucketEntry]:
+        """
+        List files contained in an archived object (*.tar, *.zip, *.tgz, etc.).
+
+        This is a convenience wrapper around `list_all_objects` that
+        automatically enables the `ARCH_DIR` list-flag so the cluster opens
+        the shard and returns its directory.
+
+        Args:
+            archive_obj_name (str): Object key of the shard inside this bucket
+                (e.g. `"my-archive.tar"`). Can include a prefix path.
+            include_archive_obj (bool, optional): If `True` the returned
+                list includes the parent archive object itself. When
+                `False` (default) only the entries *inside* the shard are
+                returned.
+            props (str, optional): Comma-separated list of object properties to
+                request. Defaults to `""` (no properties).
+            page_size (int, optional): Same meaning as in
+                `list_all_objects` – how many names per internal page.
+
+        Returns:
+            List[BucketEntry]: Entries representing the shard (optionally) and
+                every file stored inside it.
+        """
+        entries = self.list_all_objects(
+            prefix=archive_obj_name,
+            props=props,
+            page_size=page_size,
+            flags=[ListObjectFlag.ARCH_DIR],
+        )
+
+        if include_archive_obj:
+            return entries
+        return [e for e in entries if e.name != archive_obj_name]
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def transform(
         self,
