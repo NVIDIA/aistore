@@ -323,3 +323,25 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 	}
 	tlog.Logf("## list-objects version-removed:\t%d\n", lcnt)
 }
+
+// rate-limit-frontend-test.sh
+func TestRateLimitFrontendUsingScript(t *testing.T) {
+	cmd := exec.Command("./scripts/rate-limit-frontend-test.sh")
+
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+// rate-limit-backend-test.sh
+func TestRateLimitBackendUsingScript(t *testing.T) {
+	cmd := exec.Command("./scripts/rate-limit-backend-test.sh")
+
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
