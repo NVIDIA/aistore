@@ -8,10 +8,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -35,6 +37,7 @@ type etlBootstrapper struct {
 	secret string
 
 	// runtime
+	k8sClient       k8s.Client
 	xctn            core.Xact
 	pod             *corev1.Pod
 	svc             *corev1.Service
@@ -66,10 +69,17 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 	// 2. No more than a single ETL container with the same target is scheduled on
 	//    the same node at any given point in time.
 	if err = b._setAffinity(); err != nil {
-		return
+		return err
 	}
 	if err = b._setAntiAffinity(); err != nil {
-		return
+		return err
+	}
+
+	if b.msg.ArgType() == ArgTypeFQN {
+		if err = b._setVol(); err != nil {
+			nlog.Errorln(err)
+			return err
+		}
 	}
 
 	b._updPodCommand()
@@ -81,7 +91,36 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("prep pod spec: %s, %+v", b.msg.String(), b.errCtx)
 	}
-	return
+	return err
+}
+
+func (b *etlBootstrapper) _setVol() (err error) {
+	var (
+		targetPodName = os.Getenv(env.AisK8sPod)
+		targetPod     *corev1.Pod
+	)
+
+	if targetPod, err = b.k8sClient.Pod(targetPodName); err != nil {
+		return fmt.Errorf("failed to get target pod %q: %w", targetPodName, err)
+	}
+	debug.Assert(len(targetPod.Spec.Containers) > 0)
+	mounts := make([]corev1.VolumeMount, 0, len(targetPod.Spec.Containers[0].VolumeMounts))
+	for _, vol := range targetPod.Spec.Containers[0].VolumeMounts {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      vol.Name,
+			MountPath: vol.MountPath,
+			ReadOnly:  true, // restrict access from ETL Pods to read-only
+		})
+	}
+
+	debug.Assertf(len(mounts) > 0, "target pod %q has no volume mounts for container %q", targetPodName, targetPod.Spec.Containers[0].Name)
+	debug.Assertf(len(targetPod.Spec.Volumes) > 0, "target pod %q has no volumes with PVCs", targetPodName)
+
+	for i := range b.pod.Spec.Containers {
+		b.pod.Spec.Containers[i].VolumeMounts = mounts
+	}
+	b.pod.Spec.Volumes = targetPod.Spec.Volumes
+	return nil
 }
 
 func (b *etlBootstrapper) createServiceSpec() {
@@ -164,16 +203,12 @@ func (b *etlBootstrapper) call() (int, error) {
 	return 0, nil
 }
 
-func (b *etlBootstrapper) createEntity(entity string) error {
-	client, err := k8s.GetClient()
-	if err != nil {
-		return err
-	}
+func (b *etlBootstrapper) createEntity(entity string) (err error) {
 	switch entity {
 	case k8s.Pod:
-		err = client.Create(b.pod)
+		err = b.k8sClient.Create(b.pod)
 	case k8s.Svc:
-		err = client.Create(b.svc)
+		err = b.k8sClient.Create(b.svc)
 	default:
 		err = fmt.Errorf("invalid K8s entity %q", entity)
 		debug.AssertNoErr(err)
@@ -195,25 +230,21 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	initTimeout, _ := b.msg.Timeouts()
 	interval := cos.ProbingFrequency(initTimeout.D())
-	client, err := k8s.GetClient()
-	if err != nil {
-		return cmn.NewErrETL(b.errCtx, err.Error())
-	}
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("waiting pod %q ready (%+v, %s) initTimeout=%v ival=%v",
 			b.pod.Name, b.msg.String(), b.errCtx, initTimeout, interval)
 	}
 	// wait
-	err = wait.PollUntilContextTimeout(podCtx, interval, initTimeout.D(), false, /*immediate*/
+	err := wait.PollUntilContextTimeout(podCtx, interval, initTimeout.D(), false, /*immediate*/
 		func(context.Context) (ready bool, err error) {
-			return checkPodReady(client, b.pod.Name)
+			return checkPodReady(b.k8sClient, b.pod.Name)
 		},
 	)
 
 	if err == nil {
 		return nil
 	}
-	pod, _ := client.Pod(b.pod.Name)
+	pod, _ := b.k8sClient.Pod(b.pod.Name)
 	if pod == nil {
 		return cmn.NewErrETL(b.errCtx, err.Error())
 	}
@@ -368,11 +399,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 }
 
 func (b *etlBootstrapper) _getHost() (string, error) {
-	client, err := k8s.GetClient()
-	if err != nil {
-		return "", cmn.NewErrETL(b.errCtx, err.Error())
-	}
-	p, err := client.Pod(b.pod.Name)
+	p, err := b.k8sClient.Pod(b.pod.Name)
 	if err != nil {
 		return "", err
 	}
@@ -380,12 +407,7 @@ func (b *etlBootstrapper) _getHost() (string, error) {
 }
 
 func (b *etlBootstrapper) _getPort() (int, error) {
-	client, err := k8s.GetClient()
-	if err != nil {
-		return 0, cmn.NewErrETL(b.errCtx, err.Error())
-	}
-
-	s, err := client.Service(b.svc.Name)
+	s, err := b.k8sClient.Service(b.svc.Name)
 	if err != nil {
 		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}

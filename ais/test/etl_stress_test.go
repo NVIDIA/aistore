@@ -213,7 +213,7 @@ def transform(input_bytes):
 			switch test.ty {
 			case etl.SpecType:
 				etlName = test.etlSpecName
-				_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull)
+				_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull, etl.ArgTypeDefault)
 			case etl.CodeType:
 				etlName = test.name
 				{
@@ -272,7 +272,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 
 	m.puts()
 
-	_ = tetl.InitSpec(t, baseParams, etlName, comm)
+	_ = tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
 	t.Cleanup(func() {
 		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})

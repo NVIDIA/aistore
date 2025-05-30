@@ -51,7 +51,7 @@ func TestETLMultiObj(t *testing.T) {
 		)
 	}
 
-	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType)
+	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType, etl.ArgTypeDefault)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
 	for _, bcktest := range bcktests {

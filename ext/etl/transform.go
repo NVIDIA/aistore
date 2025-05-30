@@ -219,6 +219,12 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcNam
 		boot   = &etlBootstrapper{errCtx: errCtx, config: config, msg: msg, secret: secret}
 	)
 
+	client, err := k8s.GetClient()
+	if err != nil {
+		return podName, svcName, nil, err
+	}
+	boot.k8sClient = client
+
 	debug.Assert(xid != "")
 	// 1. Parse spec template and fill Pod object with necessary fields.
 	if err = boot.createPodSpec(); err != nil {

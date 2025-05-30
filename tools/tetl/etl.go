@@ -141,6 +141,15 @@ var (
 	client = &http.Client{}
 )
 
+var (
+	EchoTransform  = func(r io.Reader) io.Reader { return r }
+	NumpyTransform = func(_ io.Reader) io.Reader { return bytes.NewReader([]byte("\x00\x00\x01\x00\x02\x00\x03\x00")) }
+	MD5Transform   = func(r io.Reader) io.Reader {
+		data, _ := io.ReadAll(r)
+		return bytes.NewReader([]byte(cos.ChecksumB2S(data, cos.ChecksumMD5)))
+	}
+)
+
 func validateETLName(name string) error {
 	if _, ok := links[name]; !ok {
 		return fmt.Errorf("%s is invalid etlName, expected predefined (%s, %s, %s)", name, Echo, Tar2TF, MD5)
@@ -337,8 +346,8 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 	}()
 }
 
-func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string) {
-	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, comm)
+func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string) (xid string) {
+	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, commType)
 	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
 
@@ -348,10 +357,15 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 		msg      etl.InitMsg
 	)
 	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
+		etlSpec.EtlName = etlName
+		etlSpec.CommTypeX = commType
+		etlSpec.ArgTypeX = argType
+		etlSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 		msg = &etlSpec
 	} else {
 		initSpec.EtlName = etlName
-		initSpec.CommTypeX = comm
+		initSpec.CommTypeX = commType
+		initSpec.ArgTypeX = argType
 		initSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 		initSpec.Spec = spec
 		msg = &initSpec
@@ -372,7 +386,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
 
 	tassert.Errorf(t, etlMsg.Name() == etlName, "expected etlName %s, got %s", etlName, etlMsg.Name())
-	tassert.Errorf(t, etlMsg.CommType() == comm, "expected communicator type %s, got %s", comm, etlMsg.CommType())
+	tassert.Errorf(t, etlMsg.CommType() == commType, "expected communicator type %s, got %s", commType, etlMsg.CommType())
 
 	if initSpec, ok := etlMsg.(*etl.InitSpecMsg); ok {
 		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
