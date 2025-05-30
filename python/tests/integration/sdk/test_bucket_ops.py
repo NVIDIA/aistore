@@ -1,26 +1,35 @@
 #
 # Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
+import io
 import random
+import tarfile
 import unittest
-from pathlib import Path
 import warnings
 
+from pathlib import Path
 import pytest
 import requests
 
 from aistore.sdk import ListObjectFlag
-from aistore.sdk.const import UTF_ENCODING, LOREM, DUIS
-from aistore.sdk.dataset.dataset_config import DatasetConfig
+from aistore.sdk.const import (
+    LOREM,
+    DUIS,
+    UTF_ENCODING,
+)
 from aistore.sdk.dataset.data_attribute import DataAttribute
+from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.dataset.label_attribute import LabelAttribute
-from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 from aistore.sdk.enums import FLTPresence
+from aistore.sdk.errors import (
+    AISError,
+    ErrBckNotFound,
+    InvalidBckProvider,
+)
 from aistore.sdk.provider import Provider
-
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
-from tests.utils import random_string, cases, has_targets
+from tests.utils import cases, has_targets, random_string
 from tests.const import (
     OBJECT_COUNT,
     OBJ_CONTENT,
@@ -47,7 +56,7 @@ def _create_files(folder, file_dict):
             file.write(data)
 
 
-# pylint: disable=unused-variable, too-many-public-methods
+# pylint: disable=too-many-public-methods
 class TestBucketOps(ParallelTestBase):
     def _create_put_files_structure(self, top_level_files, lower_level_files):
         _create_files(self.local_test_files, top_level_files)
@@ -558,3 +567,29 @@ class TestBucketOps(ParallelTestBase):
         self.bucket.write_dataset(
             dataset_config, skip_missing=False, pattern="dataset", maxcount=10
         )
+
+    def test_int_list_archive(self):
+        """Upload a tar archive and list its directory via ARCH_DIR flag."""
+        arch_bck = self._create_bucket(prefix="arch-int")
+
+        archive_name = f"{self.obj_prefix}-sample.tar"
+        content_map = {"a.txt": b"alpha", "b.txt": b"beta"}
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tar:
+            for fname, data in content_map.items():
+                info = tarfile.TarInfo(name=fname)
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+
+        # Upload the tar object
+        arch_bck.object(archive_name).get_writer().put_content(buf.getvalue())
+
+        # List without parent
+        children_only = arch_bck.list_archive(archive_name, include_archive_obj=False)
+        self.assertEqual(len(children_only), len(content_map))
+        names_only = {e.name for e in children_only}
+        self.assertSetEqual(names_only, {archive_name + "/" + k for k in content_map})
+
+        # List with parent
+        with_parent = arch_bck.list_archive(archive_name, include_archive_obj=True)
+        self.assertEqual(len(with_parent), len(content_map) + 1)

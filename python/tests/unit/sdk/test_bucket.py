@@ -857,3 +857,115 @@ class TestBucket(unittest.TestCase):
         self.dataset_config.write_shards.assert_called()
         _, kwargs = self.dataset_config.write_shards.call_args
         self.assertTrue(callable(kwargs["post"]))
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    def _list_archive_exec_assert(
+        self,
+        list_1_id,
+        list_1_cont,
+        expected_act_value_1,
+        expected_act_value_2,
+        archive_obj_name,
+        include_archive_obj=False,
+        **kwargs,
+    ):
+        entry_archive = BucketEntry(n=archive_obj_name)
+        entry_1 = BucketEntry(n=f"{archive_obj_name}/file1.txt")
+        entry_2 = BucketEntry(n=f"{archive_obj_name}/file2.txt")
+
+        list_1 = BucketList(
+            UUID=list_1_id,
+            ContinuationToken=list_1_cont,
+            Flags=0,
+            Entries=[entry_archive],
+        )
+        list_2 = BucketList(
+            UUID="456", ContinuationToken="", Flags=0, Entries=[entry_1, entry_2]
+        )
+        self.mock_client.request_deserialize.return_value = BucketList(
+            UUID="empty", ContinuationToken="", Flags=0
+        )
+        self.assertEqual([], self.ais_bck.list_archive(archive_obj_name, **kwargs))
+        self.mock_client.request_deserialize.side_effect = [
+            list_1,
+            list_2,
+            BucketList(UUID="empty", ContinuationToken="", Flags=0),
+        ]
+        result = self.ais_bck.list_archive(
+            archive_obj_name, include_archive_obj=include_archive_obj, **kwargs
+        )
+
+        if include_archive_obj:
+            expected_res = [entry_archive, entry_1, entry_2]
+        else:
+            expected_res = [entry_1, entry_2]
+        self.assertEqual(expected_res, result)
+
+        expected_calls = []
+        for expected_val in (expected_act_value_1, expected_act_value_2):
+            expected_calls.append(
+                call(
+                    HTTP_METHOD_GET,
+                    path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+                    headers={HEADER_ACCEPT: MSGPACK_CONTENT_TYPE},
+                    res_model=BucketList,
+                    json=ActionMsg(action=ACT_LIST, value=expected_val).dict(),
+                    params=self.ais_bck_params,
+                )
+            )
+        for exp in expected_calls:
+            self.assertIn(exp, self.mock_client.request_deserialize.call_args_list)
+
+    def test_list_archive_parametrized(self):
+        test_cases = [
+            {
+                "include_archive_obj": False,
+                "list_1_id": "123",
+                "list_1_cont": "cont",
+                "archive_name": "my-archive.tar",
+                "page_size": 5,
+                "props": "name",
+                "flag_value": "8",
+            },
+            {
+                "include_archive_obj": True,
+                "list_1_id": "789",
+                "list_1_cont": "cont2",
+                "archive_name": "dataset.zip",
+                "page_size": 0,
+                "props": "name,size",
+                "flag_value": "8",
+            },
+        ]
+
+        for case in test_cases:
+            with self.subTest(case=case):
+                expected_act_value_1 = {
+                    "prefix": case["archive_name"],
+                    "pagesize": case["page_size"],
+                    "uuid": "",
+                    "props": case["props"],
+                    "continuation_token": "",
+                    "flags": case["flag_value"],
+                    "target": "",
+                }
+                expected_act_value_2 = {
+                    "prefix": case["archive_name"],
+                    "pagesize": case["page_size"],
+                    "uuid": case["list_1_id"],
+                    "props": case["props"],
+                    "continuation_token": case["list_1_cont"],
+                    "flags": case["flag_value"],
+                    "target": "",
+                }
+
+                self._list_archive_exec_assert(
+                    case["list_1_id"],
+                    case["list_1_cont"],
+                    expected_act_value_1,
+                    expected_act_value_2,
+                    case["archive_name"],
+                    include_archive_obj=case["include_archive_obj"],
+                    props=case["props"],
+                    page_size=case["page_size"],
+                )
