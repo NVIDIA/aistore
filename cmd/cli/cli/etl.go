@@ -370,25 +370,31 @@ func etlPrintDetails(c *cli.Context, id string) error {
 		return V(err)
 	}
 
-	fmt.Fprintln(c.App.Writer, fblue("NAME: "), msg.Name())
-	fmt.Fprintln(c.App.Writer, fblue("COMMUNICATION TYPE: "), msg.CommType())
-	fmt.Fprintln(c.App.Writer, fblue("ARGUMENT TYPE: "), msg.ArgType())
+	fmt.Fprintln(c.App.Writer, fblue(etl.Name+": "), msg.Name())
+	fmt.Fprintln(c.App.Writer, fblue(etl.CommunicationType+": "), msg.CommType())
+	fmt.Fprintln(c.App.Writer, fblue(etl.ArgType+": "), msg.ArgType())
 
 	switch initMsg := msg.(type) {
 	case *etl.InitCodeMsg:
-		fmt.Fprintln(c.App.Writer, fblue("RUNTIME: "), initMsg.Runtime)
-		fmt.Fprintln(c.App.Writer, fblue("CODE: "))
+		fmt.Fprintln(c.App.Writer, fblue(etl.Runtime+": "), initMsg.Runtime)
+		fmt.Fprintln(c.App.Writer, fblue(etl.Code+": "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
-		fmt.Fprintln(c.App.Writer, fblue("DEPS: "), string(initMsg.Deps))
-		fmt.Fprintln(c.App.Writer, fblue("CHUNK SIZE: "), initMsg.ChunkSize)
+		fmt.Fprintln(c.App.Writer, fblue(etl.Deps+": "), string(initMsg.Deps))
+		fmt.Fprintln(c.App.Writer, fblue(etl.ChunkSize+": "), initMsg.ChunkSize)
 		return nil
 	case *etl.InitSpecMsg:
-		fmt.Fprintln(c.App.Writer, fblue("SPEC: "))
+		fmt.Fprintln(c.App.Writer, fblue(etl.Spec+": "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
 		return nil
 	case *etl.ETLSpecMsg:
-		fmt.Fprintln(c.App.Writer, fblue("RUNTIME: "))
-		fmt.Fprintln(c.App.Writer, initMsg.Runtime.Image)
+		fmt.Fprintln(c.App.Writer, fblue(etl.Runtime+": "))
+		fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Image+": "), initMsg.Runtime.Image)
+		if len(initMsg.Runtime.Command) > 0 {
+			fmt.Fprintf(c.App.Writer, indent1+"%s %v\n", fblue(etl.Command+": "), initMsg.Runtime.Command)
+		}
+		if len(initMsg.Runtime.Env) > 0 {
+			fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Env+": "), initMsg.FormatEnv())
+		}
 	default:
 		err = fmt.Errorf("invalid response [%+v, %T]", msg, msg)
 		debug.AssertNoErr(err)
