@@ -713,6 +713,31 @@ var (
 		Usage: "Path to file containing JSON array of object names to download",
 	}
 
+	// HuggingFace flags for download convenience
+	hfModelFlag = cli.StringFlag{
+		Name:  "hf-model",
+		Usage: "HuggingFace model name (e.g., bert-base-uncased)",
+	}
+	hfFileFlag = cli.StringFlag{
+		Name:  "hf-file",
+		Usage: "Specific file to download from HF model/dataset",
+	}
+	hfRevisionFlag = cli.StringFlag{
+		Name:  "hf-revision",
+		Value: "main",
+		Usage: "HuggingFace model revision/branch",
+	}
+	hfRepoTypeFlag = cli.StringFlag{
+		Name:  "hf-repo-type",
+		Value: "model",
+		Usage: "Repository type: 'model' or 'dataset'",
+	}
+	hfAuthFlag = cli.StringFlag{
+		Name:   "hf-auth",
+		Usage:  "HuggingFace authentication token for private repositories",
+		EnvVar: "HF_TOKEN",
+	}
+
 	// sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",

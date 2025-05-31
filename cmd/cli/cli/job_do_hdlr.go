@@ -101,6 +101,12 @@ var (
 			limitBytesPerHourFlag,
 			syncFlag,
 			unitsFlag,
+			// huggingface flags
+			hfModelFlag,
+			hfFileFlag,
+			hfRevisionFlag,
+			hfRepoTypeFlag,
+			hfAuthFlag,
 		},
 		cmdDsort: {
 			dsortSpecFlag,
@@ -443,10 +449,18 @@ func startDownloadHandler(c *cli.Context) error {
 	}
 
 	src, dst := c.Args().Get(0), c.Args().Get(1)
-	source, err := parseDlSource(src)
+
+	// Parse download source (includes HuggingFace flag processing if applicable)
+	source, err := parseDlSource(c, src)
 	if err != nil {
 		return err
 	}
+
+	// TODO: Implement HuggingFace authentication for private repositories
+	// For direct HF URLs or HF flag-generated URLs, authentication is determined by --hf-auth flag
+	// Currently requires API enhancement to pass custom headers through to HTTP requests
+	_ = flagIsSet(c, hfAuthFlag) // This will be used for auth when API supports it
+
 	bck, pathSuffix, err := parseBckObjAux(c, dst)
 	if err != nil {
 		return err
