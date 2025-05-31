@@ -105,6 +105,9 @@ const (
 
 	// advanced usage
 	ActCheckLock = "check-lock"
+
+	// Moss
+	ActGetBatch = "get-batch"
 )
 
 // internal use

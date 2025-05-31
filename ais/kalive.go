@@ -140,7 +140,7 @@ func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast 
 	}
 	if fast {
 		debug.Assert(ec.ECM != nil)
-		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsOpen())
+		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive())
 		return pid, 0, err
 	}
 	return t.slowKalive(smap, tkr.t, timeout)

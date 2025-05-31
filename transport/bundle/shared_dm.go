@@ -39,7 +39,14 @@ func InitSDM(config *cmn.Config, compression string) {
 	SDM.dm.init(SDM.trname(), SDM.recv, cmn.OwtNone, extra)
 }
 
-func (sdm *sharedDM) IsOpen() bool { return sdm.dm.stage.opened.Load() }
+func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
+
+func (sdm *sharedDM) IsActive() (active bool) {
+	sdm.rxmu.Lock()
+	active = len(sdm.rxcbs) > 0
+	sdm.rxmu.Unlock()
+	return
+}
 
 // constant (until and unless we run multiple shared-DMs)
 func (*sharedDM) trname() string { return "shared-dm" }
@@ -50,13 +57,13 @@ func (sdm *sharedDM) _already() {
 
 // called on-demand
 func (sdm *sharedDM) Open() error {
-	if sdm.IsOpen() {
+	if sdm.isOpen() {
 		sdm._already()
 		return nil
 	}
 
 	sdm.ocmu.Lock()
-	if sdm.IsOpen() {
+	if sdm.isOpen() {
 		sdm.ocmu.Unlock()
 		sdm._already()
 		return nil
@@ -81,11 +88,11 @@ func (sdm *sharedDM) Open() error {
 
 // nothing running + 10m inactivity
 func (sdm *sharedDM) Close() error {
-	if !sdm.IsOpen() {
+	if !sdm.isOpen() {
 		return nil
 	}
 	sdm.ocmu.Lock()
-	if !sdm.IsOpen() {
+	if !sdm.isOpen() {
 		sdm.ocmu.Unlock()
 		return nil
 	}
@@ -102,10 +109,11 @@ func (sdm *sharedDM) Close() error {
 
 	if l > 0 {
 		sdm.rxmu.Unlock()
-		debug.Assert(cos.IsValidUUID(xid), xid)
 		sdm.ocmu.Unlock()
+		debug.Assert(cos.IsValidUUID(xid), xid)
 		return fmt.Errorf("cannot close %s: [%s, %d]", sdm.trname(), xid, l)
 	}
+
 	sdm.rxcbs = nil
 	sdm.rxmu.Unlock()
 
@@ -120,7 +128,7 @@ func (sdm *sharedDM) Close() error {
 func (sdm *sharedDM) RegRecv(xid string, cb transport.RecvObj) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
-	if !sdm.IsOpen() {
+	if !sdm.isOpen() {
 		sdm.rxmu.Unlock()
 		sdm.ocmu.Unlock()
 		debug.Assert(false, sdm.trname(), " ", "closed")
@@ -135,7 +143,7 @@ func (sdm *sharedDM) RegRecv(xid string, cb transport.RecvObj) {
 func (sdm *sharedDM) UnregRecv(xid string) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
-	if !sdm.IsOpen() {
+	if !sdm.isOpen() {
 		sdm.rxmu.Unlock()
 		sdm.ocmu.Unlock()
 		debug.Assert(false, sdm.trname(), " ", "closed")
@@ -144,6 +152,11 @@ func (sdm *sharedDM) UnregRecv(xid string) {
 	delete(sdm.rxcbs, xid)
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
+}
+
+// DEBUG
+func (sdm *sharedDM) RecvDEBUG(hdr *transport.ObjHdr, r io.Reader, err error) error {
+	return sdm.recv(hdr, r, err)
 }
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
@@ -156,7 +169,7 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	}
 
 	sdm.rxmu.Lock()
-	if !sdm.IsOpen() {
+	if !sdm.isOpen() {
 		sdm.rxmu.Unlock()
 		return fmt.Errorf("%s is closed, dropping recv [xid: %s, oname: %s]", sdm.trname(), xid, hdr.ObjName)
 	}

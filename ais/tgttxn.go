@@ -101,6 +101,12 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	/* DEBUG
+	if c.bck != nil {
+		_ = xreg.RenewBucketXact(apc.ActGetBatch, c.bck, xreg.Args{UUID: cos.GenUUID()})
+	}
+	*/
+
 	var xid string
 	switch msg.Action {
 	case apc.ActCreateBck, apc.ActAddRemoteBck:

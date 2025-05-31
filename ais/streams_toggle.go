@@ -74,7 +74,7 @@ func (f *streamsToggle) recvKalive(p *proxy, hdr http.Header, now int64, tout ti
 	if last == 0 || time.Duration(now-last) < tout {
 		return
 	}
-	f.off(p, last, tout) // extra sanity check lives inside deactivate()
+	f.off(p, last)
 }
 
 // primary => target keep-alive
@@ -108,7 +108,7 @@ func (f *streamsToggle) on(p *proxy, tout time.Duration) error {
 	return err
 }
 
-func (f *streamsToggle) off(p *proxy, last int64, tout time.Duration) {
+func (f *streamsToggle) off(p *proxy, last int64) {
 	if !f.last.CAS(last, 0) {
 		return
 	}
@@ -121,9 +121,11 @@ func (f *streamsToggle) off(p *proxy, last int64, tout time.Duration) {
 	nlog.WarningDepth(1, err) // benign (see errCloseStreams)
 
 	// undo
-	err = f.on(p, tout)
-	if err != nil {
-		nlog.WarningDepth(1, "nested failure:", f.actOff, "--> undo:", err)
+	errN := p._toggleStreams(f.actOn)
+	if errN != nil {
+		nlog.WarningDepth(1, "nested failure:", f.actOff, "--> undo:", err, errN)
+	} else {
+		f.setActive(mono.NanoTime())
 	}
 }
 

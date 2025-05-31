@@ -268,6 +268,8 @@ var Table = map[string]Descriptor{
 
 	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true},
 
+	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, Idles: true},
+
 	// cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
 }
