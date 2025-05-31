@@ -184,7 +184,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 	}
 
 	for _, test := range parseSourceTests {
-		source, err := parseDlSource(test.input)
+		source, err := parseDlSource(nil, test.input)
 		if err != nil {
 			t.Errorf("unexpected error while parsing source URI %s: %v", test.input, err)
 		}

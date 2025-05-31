@@ -927,8 +927,24 @@ type (
 	}
 )
 
-// Replace protocol (gs://, s3://, az://, oc://) with proper GCP/AWS/Azure/OCI URL
-func parseDlSource(rawURL string) (dlSource, error) {
+func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
+	switch {
+	case c != nil && hasHuggingFaceFlags(c):
+		// Case HF: Handle HuggingFace flags
+		hfURL, err := buildHuggingFaceURL(c)
+		if err != nil {
+			return dlSource{}, err
+		}
+		return parseURLToSource(hfURL)
+
+	default:
+		// Default: Handle regular URL (including direct HF URLs)
+		return parseURLToSource(rawURL)
+	}
+}
+
+// parseURLToSource handles the actual URL parsing logic
+func parseURLToSource(rawURL string) (dlSource, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return dlSource{}, err
