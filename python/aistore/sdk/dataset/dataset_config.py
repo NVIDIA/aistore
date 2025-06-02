@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Generator, Tuple
 from pathlib import Path
 
 from aistore.sdk.dataset.config_attribute import ConfigAttribute
-from aistore.sdk.const import DEFAULT_DATASET_MAX_COUNT
+from aistore.sdk.const import DEFAULT_DATASET_MAX_COUNT, EXT_TAR
 
 
 # pylint: disable=too-few-public-methods,import-outside-toplevel
@@ -51,7 +51,9 @@ class DatasetConfig:
         logger = logging.getLogger(f"{__name__}.write_shards")
         max_shard_items = kwargs.get("maxcount", DEFAULT_DATASET_MAX_COUNT)
         num_digits = len(str(max_shard_items))
-        kwargs["pattern"] = kwargs.get("pattern", "dataset") + f"-%0{num_digits}d.tar"
+        kwargs["pattern"] = (
+            kwargs.get("pattern", "dataset") + f"-%0{num_digits}d{EXT_TAR}"
+        )
         shard_writer = ShardWriter(**kwargs)
 
         dataset = self.generate_dataset(max_shard_items)
