@@ -68,8 +68,7 @@ type (
 	}
 	wrappedResp struct {
 		*http.Response
-		cksumValue string // checksum value of the response
-		n          int64  // number bytes read from `resp.Body`
+		n int64 // number bytes read from `resp.Body`
 	}
 )
 
@@ -311,6 +310,7 @@ func (reqParams *ReqParams) readValidate(resp *http.Response, w io.Writer) (*wra
 	if err := reqParams.checkResp(resp); err != nil {
 		return nil, err
 	}
+	// write _and_ compute client-side checksum
 	n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, cksumType)
 	if err != nil {
 		return nil, err
@@ -325,11 +325,10 @@ func (reqParams *ReqParams) readValidate(resp *http.Response, w io.Writer) (*wra
 		return nil, fmt.Errorf(errNilCksumType, cksumType)
 	}
 
-	// compare
-	wresp.cksumValue = cksum.Value()
+	// compare client-side checksum with the one that cluster has
 	hdrCksumValue := wresp.Header.Get(apc.HdrObjCksumVal)
-	if wresp.cksumValue != hdrCksumValue {
-		return nil, cmn.NewErrInvalidCksum(hdrCksumValue, wresp.cksumValue)
+	if hdrCksumValue != cksum.Val() {
+		return nil, cmn.NewErrInvalidCksum(hdrCksumValue, cksum.Val())
 	}
 	return wresp, nil
 }
