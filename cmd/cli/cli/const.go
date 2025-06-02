@@ -713,24 +713,29 @@ var (
 		Usage: "Path to file containing JSON array of object names to download",
 	}
 
-	// HuggingFace flags for download convenience
+	// HuggingFace flags for downloading convenience
 	hfModelFlag = cli.StringFlag{
-		Name:  "hf-model",
-		Usage: "HuggingFace model name (e.g., bert-base-uncased)",
+		Name: "hf-model",
+		Usage: "HuggingFace model repository name, e.g.:\n" +
+			indent4 + "\t--hf-model bert-base-uncased\n" +
+			indent4 + "\t--hf-model microsoft/DialoGPT-medium\n" +
+			indent4 + "\t--hf-model openai/whisper-large-v2",
+	}
+	hfDatasetFlag = cli.StringFlag{
+		Name: "hf-dataset",
+		Usage: "HuggingFace dataset repository name, e.g.:\n" +
+			indent4 + "\t--hf-dataset squad\n" +
+			indent4 + "\t--hf-dataset glue\n" +
+			indent4 + "\t--hf-dataset lhoestq/demo1",
 	}
 	hfFileFlag = cli.StringFlag{
 		Name:  "hf-file",
-		Usage: "Specific file to download from HF model/dataset",
+		Usage: "Specific file to download from HF repository (optional, downloads entire repository if not specified)",
 	}
 	hfRevisionFlag = cli.StringFlag{
 		Name:  "hf-revision",
 		Value: "main",
-		Usage: "HuggingFace model revision/branch",
-	}
-	hfRepoTypeFlag = cli.StringFlag{
-		Name:  "hf-repo-type",
-		Value: "model",
-		Usage: "Repository type: 'model' or 'dataset'",
+		Usage: "HuggingFace repository revision/branch/tag (default: main)",
 	}
 	hfAuthFlag = cli.StringFlag{
 		Name:   "hf-auth",

@@ -929,8 +929,15 @@ type (
 
 func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 	switch {
-	case c != nil && hasHuggingFaceFlags(c):
-		// Case HF: Handle HuggingFace flags
+	case c != nil && hasHuggingFaceRepoFlags(c):
+		// Case 1: Using HF convenience flags (--hf-model or --hf-dataset)
+		// Example: ais download --hf-model bert-base-uncased --hf-file pytorch_model.bin ais://nnn
+
+		if isHuggingFaceURL(rawURL) {
+			return dlSource{}, fmt.Errorf("cannot use %s or %s flags with direct HuggingFace URL; use flags OR direct URL, not both",
+				qflprn(hfModelFlag), qflprn(hfDatasetFlag))
+		}
+
 		hfURL, err := buildHuggingFaceURL(c)
 		if err != nil {
 			return dlSource{}, err
@@ -938,7 +945,7 @@ func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 		return parseURLToSource(hfURL)
 
 	default:
-		// Default: Handle regular URL (including direct HF URLs)
+		// Direct URL (HuggingFace auth will be applied later in HTTP request handling if needed)
 		return parseURLToSource(rawURL)
 	}
 }
