@@ -12,6 +12,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `ETLRuntimeSpec` class to formalize runtime configuration.
 - Add `etl.init(image, command, …)` for simplified setup using only image and command.
 
+### Changed
+
+- Make usage clear for ObjectReader API in `Object.get` deprecation message.
+- Make usage clear for ObjectWriter API in `Object.put_content`, `Object.put_file`, `Object.append_content`, and `Object.set_custom_props` deprecation messages.
+
 ## [1.14.0] - 2025-05-27
 
 ### Added
