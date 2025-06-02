@@ -6,6 +6,8 @@
 GB = 10**9
 KIB = 2**10
 
+# Archive extensions
+EXT_TAR = ".tar"
 # Standard Header Keys
 HEADER_ACCEPT = "Accept"
 HEADER_USER_AGENT = "User-Agent"

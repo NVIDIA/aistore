@@ -11,6 +11,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Add `ETLRuntimeSpec` class to formalize runtime configuration.
 - Add `etl.init(image, command, …)` for simplified setup using only image and command.
+- Add archive-extension constant (`EXT_TAR`).
 
 ### Changed
 
