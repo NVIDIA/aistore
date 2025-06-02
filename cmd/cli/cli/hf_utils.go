@@ -1,12 +1,13 @@
 // Package cli contains shared logic for AIS command-line tools.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
 import (
-	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/urfave/cli"
 )
@@ -15,76 +16,62 @@ import (
 const (
 	hfBaseURL         = "https://huggingface.co"
 	hfDefaultRevision = "main"
-	hfModelType       = "model"
-	hfDatasetType     = "dataset"
 )
 
-// HuggingFace-specific errors
-var (
-	errHFMissingModel = errors.New("--hf-model is required when using HuggingFace flags")
-	errHFMissingFile  = errors.New("--hf-file is required when using HuggingFace flags")
-	errHFInvalidRepo  = errors.New("--hf-repo-type must be 'model' or 'dataset'")
-)
-
-// hasHuggingFaceFlags checks if any HuggingFace flags are set
-func hasHuggingFaceFlags(c *cli.Context) bool {
-	return flagIsSet(c, hfModelFlag) ||
-		flagIsSet(c, hfFileFlag) ||
-		flagIsSet(c, hfAuthFlag)
-}
-
-// validateHuggingFaceFlags validates HuggingFace flag combinations
-func validateHuggingFaceFlags(c *cli.Context) error {
-	if !hasHuggingFaceFlags(c) {
-		return nil
-	}
-
-	// If any HF flag is set, model and file are required
-	model := parseStrFlag(c, hfModelFlag)
-	if model == "" {
-		return errHFMissingModel
-	}
-
-	file := parseStrFlag(c, hfFileFlag)
-	if file == "" {
-		return errHFMissingFile
-	}
-
-	// Validate repo type
-	repoType := parseStrFlag(c, hfRepoTypeFlag)
-	if repoType != hfModelType && repoType != hfDatasetType {
-		return errHFInvalidRepo
-	}
-
-	return nil
+// only ModelFlag OR DatasetFlag (not both)
+func hasHuggingFaceRepoFlags(c *cli.Context) bool {
+	return flagIsSet(c, hfModelFlag) || flagIsSet(c, hfDatasetFlag)
 }
 
 // buildHuggingFaceURL constructs a HuggingFace download URL from flags
 func buildHuggingFaceURL(c *cli.Context) (string, error) {
-	if err := validateHuggingFaceFlags(c); err != nil {
-		return "", err
+	// Validate flag combinations
+	if flagIsSet(c, hfModelFlag) && flagIsSet(c, hfDatasetFlag) {
+		return "", fmt.Errorf("flags %s and %s are mutually exclusive",
+			qflprn(hfModelFlag), qflprn(hfDatasetFlag))
 	}
 
-	model := parseStrFlag(c, hfModelFlag)
+	// If file or revision flags are used, require a repository flag
+	if (flagIsSet(c, hfFileFlag) || flagIsSet(c, hfRevisionFlag)) && !hasHuggingFaceRepoFlags(c) {
+		return "", fmt.Errorf("flags %s and %s require either %s or %s",
+			qflprn(hfFileFlag), qflprn(hfRevisionFlag), qflprn(hfModelFlag), qflprn(hfDatasetFlag))
+	}
+
+	// Build base URL (models vs datasets have different URL patterns)
+	var baseURL string
+	if flagIsSet(c, hfModelFlag) {
+		repoName := parseStrFlag(c, hfModelFlag)
+		if repoName == "" {
+			return "", fmt.Errorf("%s cannot be empty", qflprn(hfModelFlag))
+		}
+		baseURL = fmt.Sprintf("%s/%s", hfBaseURL, repoName)
+	} else {
+		repoName := parseStrFlag(c, hfDatasetFlag)
+		if repoName == "" {
+			return "", fmt.Errorf("%s cannot be empty", qflprn(hfDatasetFlag))
+		}
+		baseURL = fmt.Sprintf("%s/datasets/%s", hfBaseURL, repoName)
+	}
+
+	// Get optional parameters
 	file := parseStrFlag(c, hfFileFlag)
 	revision := parseStrFlag(c, hfRevisionFlag)
-	repoType := parseStrFlag(c, hfRepoTypeFlag)
-
-	// Use defaults if not provided
 	if revision == "" {
 		revision = hfDefaultRevision
 	}
-	if repoType == "" {
-		repoType = hfModelType
-	}
 
-	// Build URL based on repo type
-	var url string
-	if repoType == hfDatasetType {
-		url = fmt.Sprintf("%s/datasets/%s/resolve/%s/%s", hfBaseURL, model, revision, file)
-	} else {
-		url = fmt.Sprintf("%s/%s/resolve/%s/%s", hfBaseURL, model, revision, file)
+	// Build final URL
+	if file == "" {
+		return fmt.Sprintf("%s/tree/%s", baseURL, revision), nil
 	}
+	return fmt.Sprintf("%s/resolve/%s/%s", baseURL, revision, file), nil
+}
 
-	return url, nil
+// isHuggingFaceURL checks if a URL is a HuggingFace URL
+func isHuggingFaceURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	return strings.HasSuffix(u.Host, "huggingface.co")
 }

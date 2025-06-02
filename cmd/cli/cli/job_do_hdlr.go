@@ -103,9 +103,9 @@ var (
 			unitsFlag,
 			// huggingface flags
 			hfModelFlag,
+			hfDatasetFlag,
 			hfFileFlag,
 			hfRevisionFlag,
-			hfRepoTypeFlag,
 			hfAuthFlag,
 		},
 		cmdDsort: {
