@@ -1,4 +1,3 @@
-
 SHELL := /bin/bash
 PYTHON = python3
 GO = go
@@ -139,3 +138,46 @@ generate-pytorch-docs:
 .PHONY:
 test-pyaisloader:
 	@./pyaisloader/ci-test.sh $(PYAISLOADER_TEST_TYPE)
+
+
+# Coverage targets (unit, integration, combined)
+COV_PKG := aistore
+COV_CONFIG := .coveragerc
+COV_ARGS := --cov=$(COV_PKG) --cov-config=$(COV_CONFIG) --cov-report=term
+
+.PHONY: python_sdk_unit_coverage
+python_sdk_unit_coverage: common_deps
+	@echo "==> Running Python SDK UNIT tests with coverage"
+	@rm -f .coverage.unit
+	@COVERAGE_FILE=.coverage.unit $(PYTEST) -v -n auto tests/unit/sdk \
+		$(COV_ARGS) \
+		--cov-report=xml:coverage.unit.xml \
+		--cov-report=html:htmlcov_unit
+
+.PHONY: python_sdk_integration_coverage
+python_sdk_integration_coverage: common_deps dev_deps botocore_deps
+	@echo "==> Running Python SDK INTEGRATION tests with coverage"
+	@rm -f .coverage.int
+	@# Parallel-friendly subset
+	@COVERAGE_FILE=.coverage.int $(PYTEST) -v -n auto \
+		tests/integration/sdk \
+		tests/integration/pytorch \
+		tests/integration/botocore_patch tests/integration/boto3 \
+		-m "not etl and not authn and not extended and not nonparallel" \
+		--durations=20 \
+		$(COV_ARGS) --cov-append
+	@# Serial subset (non-parallel)
+	@COVERAGE_FILE=.coverage.int $(PYTEST) -v tests/integration/sdk \
+		-m "nonparallel" \
+		--durations=0 \
+		$(COV_ARGS) --cov-append \
+		--cov-report=xml:coverage.int.xml \
+		--cov-report=html:htmlcov_int
+
+.PHONY: python_sdk_coverage
+python_sdk_coverage: python_sdk_unit_coverage python_sdk_integration_coverage
+	@echo "==> Combining unit & integration coverage data"
+	@coverage combine .coverage.unit .coverage.int
+	@coverage html -d htmlcov
+	@coverage xml -o coverage.xml
+	@echo "Overall SDK coverage report: python/htmlcov/index.html
