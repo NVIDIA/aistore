@@ -6,55 +6,63 @@ package apc
 
 import "github.com/NVIDIA/aistore/cmn/cos"
 
-// RESTful URL path: l1/l2/l3
+// -------------------------------------------------------------
+// RESTful URL path: levels l1/l2/l3
+// -------------------------------------------------------------
+
+// API version (l1)
+const Version = "v1"
+
+// API endpoints (l2)
 const (
-	// l1
-	Version = "v1"
-	// l2
-	Buckets   = "buckets"
-	Objects   = "objects"
-	EC        = "ec"
-	Download  = "download"
-	Daemon    = "daemon"
-	Cluster   = "cluster"
-	Tokens    = "tokens"
-	Metasync  = "metasync"
-	Health    = "health"
-	Vote      = "vote"
-	ObjStream = "objstream"
-	MsgStream = "msgstream"
-	Reverse   = "reverse"
-	Xactions  = "xactions"
-	S3        = "s3"
-	Txn       = "txn"      // 2PC
-	Notifs    = "notifs"   // intra-cluster notifications
-	Users     = "users"    // AuthN
-	Clusters  = "clusters" // AuthN
-	Roles     = "roles"    // AuthN
-	IC        = "ic"       // information center
+	Buckets  = "buckets"
+	Objects  = "objects"
+	EC       = "ec"
+	Daemon   = "daemon"
+	Metasync = "metasync"
+	Health   = "health"
+	Vote     = "vote"
+	S3       = "s3"
+	ML       = "ml"
 
-	// l3 ---
+	// extensions
+	Download = "download"
+	Sort     = "sort"
+	ETL      = "etl"
 
+	// proxy only
+	Cluster = "cluster" // primary
+	Tokens  = "tokens"  // auth & access
+	Reverse = "reverse" // as in: reverse proxy
+	IC      = "ic"      // information center
+	Notifs  = "notifs"  // intra-cluster notifications
+
+	// target only
+	ObjStream = "objstream" // transport streams
+	Xactions  = "xactions"  // jobs
+	Txn       = "txn"       // 2PC transactions
+)
+
+// AuthN server endpoints (l2)
+const (
+	Users    = "users"
+	Clusters = "clusters"
+	Roles    = "roles"
+)
+
+// l3 ---
+const (
 	Voteres  = "result"
 	VoteInit = "init"
 	PriStop  = "primary-stopping"
 
 	// (see the corresponding action messages above)
 	Keepalive = "keepalive"
-	AdminJoin = "join-by-admin" // when node is joined by admin ("manual join")
-	SelfJoin  = "autoreg"       // auto-join cluster at startup
+	AdminJoin = "join-by-admin" // when node is added by admin
+	SelfJoin  = "autoreg"       // self-joining cluster at node startup
 
 	// target
 	Mountpaths = "mountpaths"
-
-	// common
-	Init     = "init"
-	Start    = "start"
-	Stop     = "stop"
-	Abort    = "abort"
-	Sort     = "sort"
-	Finished = "finished"
-	Progress = "progress"
 
 	// Prometheus metrics
 	Metrics = "metrics"
@@ -73,7 +81,6 @@ const (
 	LoadX509 = "load-x509"
 
 	// ETL
-	ETL        = "etl"
 	ETLInfo    = "info"
 	ETLList    = UList
 	ETLLogs    = "logs"
@@ -82,6 +89,19 @@ const (
 	ETLStart   = Start
 	ETLHealth  = "health"
 	ETLMetrics = "metrics"
+
+	// ML
+	Moss = "moss"
+)
+
+// common
+const (
+	Init     = "init"
+	Start    = "start"
+	Stop     = "stop"
+	Abort    = "abort"
+	Finished = "finished"
+	Progress = "progress"
 )
 
 // RESTful l3, internal use
@@ -168,6 +188,8 @@ var (
 	URLPathUsers    = urlpath(Version, Users)
 	URLPathClusters = urlpath(Version, Clusters)
 	URLPathRoles    = urlpath(Version, Roles)
+
+	URLPathML = urlpath(Version, ML)
 )
 
 func (u URLPath) Join(words ...string) string {
