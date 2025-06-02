@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -375,6 +378,54 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		Method:   reqParams.BaseParams.Method,
 		URLPath:  reqParams.Path,
 	}
+}
+
+// DoMultipartTwoPart parses a multipart response where:
+// - the first part is JSON unmarshaled into `out`
+// - the second part is copied into `writer`
+func (reqParams *ReqParams) DoMultipartTwoPart(out any, writer io.Writer) (int, error) {
+	debug.AssertNotPstr(out)
+	resp, err := reqParams.do()
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if err := reqParams.checkResp(resp); err != nil {
+		return 0, err
+	}
+
+	ctype := resp.Header.Get(cos.HdrContentType)
+	mediatype, params, err := mime.ParseMediaType(ctype)
+	if err != nil || !strings.HasPrefix(mediatype, MossMultipartPrefix) {
+		return 0, fmt.Errorf("expected multipart response, got %q, err: %w", ctype, err)
+	}
+
+	mr := multipart.NewReader(resp.Body, params[MossBoundaryParam])
+
+	// Part 1: JSON metadata
+	part1, err := mr.NextPart()
+	if err != nil {
+		return 0, fmt.Errorf("missing metadata part: %w", err)
+	}
+	err = jsoniter.NewDecoder(part1).Decode(out)
+	if err != nil {
+		part1.Close()
+		return 0, fmt.Errorf("failed to decode multipart JSON: %w", err)
+	}
+
+	// Part 2: stream (e.g. TAR)
+	part2, err := mr.NextPart()
+	if err != nil {
+		return 0, fmt.Errorf("missing stream part: %v", err)
+	}
+	n, err := io.Copy(writer, part2)
+	part2.Close()
+	if err != nil {
+		return 0, fmt.Errorf("stream copy error: %w", err)
+	}
+
+	return int(n), nil
 }
 
 /////////////
