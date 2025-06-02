@@ -42,8 +42,7 @@ func TestMain(m *testing.M) {
 func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueNameGetter{}
 	ng.Init(objNames, cos.NowRand())
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ng.ObjName()
 	}
 }
@@ -51,8 +50,7 @@ func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 	ng := &namegetter.RandomUniqueIterNameGetter{}
 	ng.Init(objNames, cos.NowRand())
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ng.ObjName()
 	}
 }
@@ -60,8 +58,7 @@ func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
 func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueNameGetter{}
 	ng.Init(objNames, cos.NowRand())
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ng.ObjName()
 	}
 }
@@ -69,8 +66,7 @@ func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
 	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
 	ng.Init(objNames, cos.NowRand())
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		ng.ObjName()
 	}
 }

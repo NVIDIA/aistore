@@ -42,7 +42,7 @@ func BenchmarkHRW(b *testing.B) {
 			for _, hashFunc := range hashFuncs {
 				b.Run(fmt.Sprintf("%s/%d/%d", hashFunc.name, numNodes, nameLen), func(b *testing.B) {
 					var nodeID int
-					for range b.N {
+					for b.Loop() {
 						// Record the result to prevent the compiler
 						// eliminating the function call.
 						nodeID = hashFunc.hashF(fileName, nodes)

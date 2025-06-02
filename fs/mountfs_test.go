@@ -328,8 +328,7 @@ func BenchmarkMakePathFQN(b *testing.B) {
 	)
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		s := mi.MakePathFQN(&bck, fs.ObjectType, objName)
 		cos.Assert(s != "")
 	}

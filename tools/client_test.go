@@ -98,7 +98,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		err := putFile(1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
@@ -107,7 +107,7 @@ func BenchmarkPutFileWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutRandWithHash1M(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		err := putRand(1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
@@ -120,7 +120,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer sgl.Free()
 
-	for range b.N {
+	for b.Loop() {
 		err := putSG(sgl, 1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
@@ -129,7 +129,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutFileNoHash1M(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		err := putFile(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
@@ -138,7 +138,7 @@ func BenchmarkPutFileNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutRandNoHash1M(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		err := putRand(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
@@ -151,7 +151,7 @@ func BenchmarkPutSGNoHash1M(b *testing.B) {
 	sgl := mmsa.NewSGL(cos.MiB)
 	defer sgl.Free()
 
-	for range b.N {
+	for b.Loop() {
 		err := putSG(sgl, 1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)

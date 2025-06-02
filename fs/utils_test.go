@@ -74,8 +74,7 @@ func BenchmarkIsDirEmpty(b *testing.B) {
 			topDirName, _ := tools.PrepareDirTree(b, bench)
 			defer os.RemoveAll(topDirName)
 
-			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				_, empty, err := fs.IsDirEmpty(topDirName)
 				tassert.CheckFatal(b, err)
 				tassert.Errorf(

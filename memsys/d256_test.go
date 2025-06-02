@@ -70,9 +70,8 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 
 	// reset initial conditions & start b-timer
 	rdebug.FreeOSMemory()
-	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		_ = sgl
 	}
@@ -120,9 +119,8 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	// reset initial conditions & start b-timer
 	rdebug.FreeOSMemory()
 	buf := make([]byte, cos.KiB*128)
-	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		for siz := 0; siz < int(objsiz); siz += len(buf) {
 			sgl.Write(buf)
@@ -184,9 +182,7 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 		}
 	}(cha)
 
-	b.ResetTimer() // <==== start
-
-	for range b.N {
+	for b.Loop() {
 		sgl := mem.NewSGL(objsiz, sbufSize)
 		for siz := 0; siz < int(objsiz); siz += l {
 			n, _ := sgl.Write(buf)
@@ -201,7 +197,6 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 		default:
 		}
 	}
-	b.StopTimer() // wo/ defers
 }
 
 // file read to sgl
@@ -252,13 +247,11 @@ func benchFile(b *testing.B, sbufSize int64) {
 		b.Fatal(len(buf), sbufSize)
 	}
 
-	b.ResetTimer() // start timing it
-	for range b.N {
+	for b.Loop() {
 		file.Seek(0, io.SeekStart)
 		n, _ := io.CopyBuffer(io.Discard, file, buf)
 		if n != largefil {
 			b.Fatal(n, largefil)
 		}
 	}
-	b.StopTimer() // wo/ defers
 }

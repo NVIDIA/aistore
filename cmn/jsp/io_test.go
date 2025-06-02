@@ -166,9 +166,8 @@ func BenchmarkEncode(b *testing.B) {
 				body.Free()
 			}()
 			b.ReportAllocs()
-			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				err := jsp.Encode(body, bench.v, bench.opts)
 				tassert.CheckFatal(b, err)
 				body.Reset()
@@ -202,9 +201,8 @@ func BenchmarkDecode(b *testing.B) {
 			sgl.Free()
 
 			b.ReportAllocs()
-			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				var (
 					v testStruct
 					r = io.NopCloser(bytes.NewReader(network))
