@@ -18,35 +18,35 @@ const (
 )
 
 func BenchmarkAccess(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		access(b, one)
 		access(b, two)
 	}
 }
 
 func BenchmarkStat(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		stat(b, one)
 		stat(b, two)
 	}
 }
 
 func BenchmarkLstat(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		lstat(b, one)
 		lstat(b, two)
 	}
 }
 
 func BenchmarkOpen(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		open(b, one)
 		open(b, two)
 	}
 }
 
 func BenchmarkSyscallStat(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		syscallStat(b, one)
 		syscallStat(b, two)
 	}

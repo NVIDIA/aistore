@@ -14,7 +14,7 @@ import (
 )
 
 func BenchmarkActionMsgMarshal(b *testing.B) {
-	for range b.N {
+	for b.Loop() {
 		msg := apc.ActMsg{
 			Name:   "test-name",
 			Action: apc.ActDeleteObjects,

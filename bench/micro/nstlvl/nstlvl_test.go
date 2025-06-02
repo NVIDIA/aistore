@@ -93,7 +93,7 @@ func BenchmarkNestedLevel(b *testing.B) {
 }
 
 func benchNestedLevel(b *testing.B) {
-	for i, j, k := 0, 0, 0; i < b.N; i, j = i+1, j+benchCtx.skipMod {
+	for i, j, k := 0, 0, 0; b.Loop(); i, j = i+1, j+benchCtx.skipMod {
 		if j >= benchCtx.fileCount {
 			k++
 			if k >= benchCtx.skipMod {

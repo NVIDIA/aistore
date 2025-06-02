@@ -145,7 +145,7 @@ func BenchmarkSend(b *testing.B) {
 	}
 	defer c.Close()
 
-	for range b.N {
+	for b.Loop() {
 		c.Send("timer", 1,
 			statsd.Metric{
 				Type:  statsd.Timer,

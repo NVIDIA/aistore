@@ -111,8 +111,7 @@ func BenchmarkObjPut(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				b.StopTimer()
 				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
 				poi := &putOI{
@@ -131,7 +130,6 @@ func BenchmarkObjPut(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
-			b.StopTimer()
 			lom.RemoveMain()
 		})
 	}
@@ -161,8 +159,7 @@ func BenchmarkObjAppend(b *testing.B) {
 			}
 
 			var hdl aoHdl
-			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				b.StopTimer()
 				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
 				aoi := &apndOI{
@@ -185,7 +182,6 @@ func BenchmarkObjAppend(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
-			b.StopTimer()
 			lom.RemoveMain()
 			os.Remove(hdl.workFQN)
 		})
@@ -252,15 +248,13 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				chunked: bench.chunked,
 			}
 
-			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				_, err := goi.getObject()
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
 
-			b.StopTimer()
 			lom.RemoveMain()
 		})
 	}

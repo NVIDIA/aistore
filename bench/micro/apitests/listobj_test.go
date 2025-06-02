@@ -73,8 +73,8 @@ func BenchmarkListObject(b *testing.B) {
 				baseParams = tools.BaseAPIParams(u)
 			)
 			b.ReportAllocs()
-			b.ResetTimer()
-			for range b.N {
+			// b.Loop will handle b.ResetTimer and b.StopTimer
+			for b.Loop() {
 				msg := &apc.LsoMsg{PageSize: int64(test.pageSize)}
 				objs, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 				tassert.CheckFatal(b, err)
@@ -83,7 +83,6 @@ func BenchmarkListObject(b *testing.B) {
 					"expected %d objects got %d", test.objectCnt, len(objs.Entries),
 				)
 			}
-			b.StopTimer() // Otherwise we will include `DestroyBucket`.
 		})
 	}
 }
