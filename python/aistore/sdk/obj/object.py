@@ -312,8 +312,8 @@ class Object:
             requests.ReadTimeout: If the read operation times out.
         """
         warnings.warn(
-            "The 'get' method is deprecated and will be removed in a future release. "
-            "Please use 'get_reader' instead.",
+            "The `Object.get(...)` method is deprecated and will be removed in a future release."
+            "Please replace it with `Object.get_reader()` using the new `ObjectReader` API.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -378,8 +378,8 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         warnings.warn(
-            "The 'put_content' method is deprecated and will be removed in a future release. "
-            "Please use 'ObjectWriter.put_content' instead.",
+            "The `Object.put_content(...)` method is deprecated and will be removed in a future release."
+            "Please replace it with `Object.get_writer().put_content(...)` using the new `ObjectWriter` API.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -402,8 +402,8 @@ class Object:
             ValueError: The path provided is not a valid file
         """
         warnings.warn(
-            "The 'put_file' method is deprecated and will be removed in a future release. "
-            "Please use 'ObjectWriter.put_file' instead.",
+            "The `Object.put_file(...)` method is deprecated and will be removed in a future release."
+            "Please replace it with `Object.get_writer().put_file(...)` using the new `ObjectWriter` API.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -552,8 +552,8 @@ class Object:
             requests.exceptions.HTTPError(404): The object does not exist
         """
         warnings.warn(
-            "The 'append_content' method is deprecated and will be removed in a future release. "
-            "Please use 'ObjectWriter.append_content' instead.",
+            "The `Object.append_content(...)` method is deprecated and will be removed in a future release."
+            "Please replace it with `Object.get_writer().append_content(...)` using the new `ObjectWriter` API.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -572,8 +572,8 @@ class Object:
             replace_existing (bool, optional): Whether to replace existing metadata. Defaults to False.
         """
         warnings.warn(
-            "The 'set_custom_props' method is deprecated and will be removed in a future release. "
-            "Please use 'ObjectWriter.set_custom_props' instead.",
+            "The `Object.set_custom_props(...)` method is deprecated and will be removed in a future release."
+            "Please replace it with `Object.get_writer().set_custom_props(...)` using the new `ObjectWriter` API.",
             DeprecationWarning,
             stacklevel=2,
         )
