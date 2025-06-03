@@ -6,38 +6,51 @@
 package xs
 
 import (
+	"archive/tar"
 	"fmt"
 	"io"
-	"strings"
+	"mime/multipart"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type (
 	mossFactory struct {
 		xreg.RenewBase
-		xctn *xactMoss
+		xctn *XactMoss
 	}
-	xactMoss struct {
+	XactMoss struct {
 		xact.DemandBase
-		recvCount int64
+		hk struct {
+			name string
+			ival time.Duration
+		}
+		recvCount int64 // TODO -- FIXME: rm
 	}
 )
 
 // interface guard
 var (
-	_ core.Xact      = (*xactMoss)(nil)
+	_ core.Xact      = (*XactMoss)(nil)
 	_ xreg.Renewable = (*mossFactory)(nil)
 )
 
@@ -56,47 +69,242 @@ func (*mossFactory) Kind() string     { return apc.ActGetBatch }
 func (p *mossFactory) Get() core.Xact { return p.xctn }
 
 func (*mossFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
-	return xreg.WprKeepAndStartNew, nil
+	return xreg.WprUse, nil
 }
 
-//
-// xactMoss implementation
-//
-
-func newMoss(p *mossFactory) *xactMoss {
-	r := &xactMoss{}
+func newMoss(p *mossFactory) *XactMoss {
+	r := &XactMoss{}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, xact.IdleDefault) // DEBUG
 	return r
 }
 
-func (r *xactMoss) Name() string {
-	return fmt.Sprintf("%s[%s]", r.Kind(), r.ID())
-}
-
-func (r *xactMoss) Run(wg *sync.WaitGroup) {
+func (r *XactMoss) Run(wg *sync.WaitGroup) {
 	nlog.InfoDepth(1, r.Name(), "starting")
-
-	wg.Done()
 
 	if err := bundle.SDM.Open(); err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs)
 		return
 	}
 
+	wg.Done()
+
+	r.hk.name = r.ID() + hk.NameSuffix
+	r.hk.ival = xact.IdleDefault
 	bundle.SDM.RegRecv(r.ID(), r.recv)
-	defer bundle.SDM.UnregRecv(r.ID())
 
-	// DEBUG
-	go r.runTestSimulation()
-
-	for !r.IsAborted() && !r.Finished() {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	nlog.InfoDepth(1, r.Name(), "finished, received", r.recvCount, "objects")
+	// terminate via hk
+	hk.Reg(r.ID()+hk.NameSuffix, r.fini, r.hk.ival)
 }
 
-func (r *xactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+func (r *XactMoss) Abort(err error) bool {
+	if !r.DemandBase.Abort(err) {
+		return false
+	}
+
+	hk.UnregIf(r.hk.name, r.fini)
+	bundle.SDM.UnregRecv(r.ID())
+	r.Finish()
+	return true
+}
+
+func (r *XactMoss) fini(int64) (d time.Duration) {
+	switch {
+	case r.IsAborted() || r.Finished():
+		return hk.UnregInterval
+	case !r.IsIdle():
+		return r.hk.ival
+	default:
+		bundle.SDM.UnregRecv(r.ID())
+		r.Finish()
+		return hk.UnregInterval
+	}
+}
+
+// Do processes the moss request and writes the multipart response
+func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
+	// 1. Validate request
+	if len(req.In) == 0 {
+		return fmt.Errorf("%s: empty object list", r.Name())
+	}
+
+	// 2. Determine output format (default TAR)
+	mime := req.OutputFormat
+	if mime == "" {
+		mime = archive.ExtTar // default to TAR
+	}
+
+	// 3. Prepare response metadata
+	resp := &api.MossResp{
+		Out:  make([]api.MossOut, 0, len(req.In)),
+		UUID: r.ID(),
+	}
+
+	// 4. Create archive writer
+	var (
+		smap = core.T.Sowner().Get()
+		mm   = core.T.PageMM()
+		sgl  = mm.NewSGL(0)
+		opts = archive.Opts{TarFormat: tar.FormatGNU}
+		aw   = archive.NewWriter(mime, sgl, nil /*checksum*/, &opts)
+	)
+
+	// cleanup
+	defer func() {
+		if aw != nil {
+			aw.Fini()
+		}
+		sgl.Free()
+	}()
+
+	// 5. Process each object in order
+	for idx, objIn := range req.In {
+		if err := r.AbortErr(); err != nil {
+			return err
+		}
+
+		debug.Assert(objIn.Length == 0, "range read not implemented yet") // TODO -- FIXME
+
+		out := api.MossOut{
+			ObjName:  objIn.ObjName,
+			Bucket:   objIn.Bucket,
+			Provider: objIn.Provider,
+			Opaque:   string(objIn.Opaque),
+		}
+
+		// Determine bucket (use per-object override if specified)
+		bck := r.Bck()
+		if objIn.Bucket != "" {
+			// Parse bucket override
+			bck = &meta.Bck{Name: objIn.Bucket}
+			if objIn.Provider != "" {
+				bck.Provider = objIn.Provider
+			}
+		}
+		out.Bucket = bck.Name
+		out.Provider = bck.Provider
+
+		// Get object
+		lom := core.AllocLOM(objIn.ObjName)
+		defer core.FreeLOM(lom)
+
+		if err := lom.InitBck(bck.Bucket()); err != nil {
+			if req.ContinueOnErr {
+				out.ErrMsg = err.Error()
+				resp.Out = append(resp.Out, out)
+				continue
+			}
+			return err // TODO -- FIXME: other soft errors?
+		}
+		_, local, err := lom.HrwTarget(smap)
+		if err != nil {
+			return err
+		}
+		if !local {
+			continue
+		}
+
+		if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+			if os.IsNotExist(err) {
+				if req.ContinueOnErr {
+					// Add missing file entry with __404__ prefix
+					missingName := api.MissingFilesDirectory + "/" + bck.Name + "/" + objIn.ObjName
+					oah := cos.SimpleOAH{Size: 0}
+					if err := aw.Write(missingName, oah, nil); err != nil {
+						return err
+					}
+					out.ErrMsg = "not found"
+					out.Size = 0
+					resp.Out = append(resp.Out, out)
+					continue
+				}
+			}
+			return err
+		}
+
+		// Open object for reading
+		fh, err := lom.Open()
+		if err != nil {
+			if req.ContinueOnErr {
+				out.ErrMsg = err.Error()
+				resp.Out = append(resp.Out, out)
+				continue
+			}
+			return err
+		}
+		defer fh.Close()
+
+		// Write to archive
+		nameInArch := bck.Name + "/" + objIn.ObjName
+		if err := aw.Write(nameInArch, lom, fh); err != nil {
+			return err
+		}
+
+		// Update metadata
+		out.Size = lom.Lsize()
+		resp.Out = append(resp.Out, out)
+
+		// Update progress
+		r.ObjsAdd(1, out.Size)
+
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			nlog.Infof("%s: [%d/%d] %s (%s)", r.Name(), idx+1, len(req.In), lom.Cname(), cos.ToSizeIEC(out.Size, 2))
+		}
+	}
+
+	// 6. Finalize archive
+	aw.Fini()
+	aw = nil
+
+	// 7. Write multipart response
+	boundary := cos.GenUUID()
+	mpw := multipart.NewWriter(w)
+	mpw.SetBoundary(boundary)
+
+	defer func() {
+		if mpw != nil {
+			mpw.Close()
+		}
+	}()
+
+	// 8. Set response headers BEFORE writing
+	// This MUST be set before any writes to properly format the header
+	// Format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
+	w.Header().Set(cos.HdrContentType, fmt.Sprintf("%s; %s=\"%s\"",
+		api.MossMultipartPrefix+"mixed", api.MossBoundaryParam, boundary))
+
+	// Part 1: JSON metadata
+	metaPart, err := mpw.CreateFormField(api.MossMetadataField)
+	if err != nil {
+		return err
+	}
+
+	if err := jsoniter.NewEncoder(metaPart).Encode(resp); err != nil {
+		return err
+	}
+
+	// Part 2: Archive
+	archivePart, err := mpw.CreateFormFile(api.MossArchiveField, api.MossArchivePrefix+mime)
+	if err != nil {
+		return err
+	}
+
+	// Copy from SGL to the multipart writer
+	if _, err := io.Copy(archivePart, sgl); err != nil {
+		return err
+	}
+
+	// Ensure all parts are written before closing
+	err = mpw.Close()
+	mpw = nil
+	if err != nil {
+		return err
+	}
+
+	nlog.Infof("%s: completed, %d objects, %s archive", r.Name(), len(resp.Out), mime)
+	return nil
+}
+
+func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
 		nlog.ErrorDepth(1, r.Name(), "recv error:", err)
 		return err
@@ -114,37 +322,7 @@ func (r *xactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) erro
 	return nil
 }
 
-// DEBUG: ==========================================================================
-
-func (r *xactMoss) runTestSimulation() {
-	time.Sleep(100 * time.Millisecond) // Let the registration settle
-
-	for i := range 10 {
-		if r.IsAborted() {
-			break
-		}
-
-		hdr := &transport.ObjHdr{
-			ObjName: fmt.Sprintf("test-obj-%d", i),
-			Opaque:  []byte(r.ID()), // This is the key part - xaction ID routing
-		}
-		reader := strings.NewReader(fmt.Sprintf("test-data-%d-from-moss-xaction", i))
-
-		err := bundle.SDM.RecvDEBUG(hdr, reader, nil)
-		if err != nil {
-			nlog.WarningDepth(1, r.Name(), "test recv failed:", err)
-			r.AddErr(err, 5, cos.SmoduleXs)
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	r.Finish()
-}
-
-// e.o. DEBUG: ==========================================================================
-
-func (r *xactMoss) Snap() (snap *core.Snap) {
+func (r *XactMoss) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 	snap.IdleX = r.IsIdle()

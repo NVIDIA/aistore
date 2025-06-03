@@ -410,6 +410,9 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 	if err != nil {
 		return 0, fmt.Errorf("missing metadata part: %w", err)
 	}
+
+	debug.Assert(part1.FormName() == MossMetadataField, part1.FormName(), " vs ", MossMetadataField, " (see xs/moss)")
+
 	err = jsoniter.NewDecoder(part1).Decode(out)
 	if err != nil {
 		part1.Close()
@@ -422,6 +425,9 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 	if err != nil {
 		return 0, fmt.Errorf("missing stream part: %w", err)
 	}
+
+	debug.Assert(part2.FormName() == MossArchiveField, part2.FormName(), " vs ", MossArchiveField, " (see xs/moss)")
+
 	n, err := io.Copy(writer, part2)
 	part2.Close()
 	if err != nil {

@@ -38,6 +38,10 @@ const (
 const (
 	MossMultipartPrefix = "multipart/" // must match response Content-Type prefix
 	MossBoundaryParam   = "boundary"   // Content-Type param expected by multipart.Reader
+
+	MossMetadataField = "metadata"
+	MossArchiveField  = "archive"
+	MossArchivePrefix = "batch."
 )
 
 type (

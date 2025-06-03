@@ -2331,7 +2331,7 @@ func (h *htrun) uptime2hdr(hdr http.Header) {
 func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(apc.HdrT2TPutterID) != "" }
 
 func isRedirect(q url.Values) (ptime string) {
-	if len(q) == 0 || q.Get(apc.QparamProxyID) == "" {
+	if len(q) == 0 || q.Get(apc.QparamPID) == "" {
 		return
 	}
 	return q.Get(apc.QparamUnixTime)

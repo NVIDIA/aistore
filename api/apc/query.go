@@ -187,7 +187,7 @@ const (
 
 // Internal query params.
 const (
-	QparamProxyID          = "pid" // ID of the redirecting proxy.
+	QparamPID              = "pid" // ID of a redirecting proxy.
 	QparamPrimaryCandidate = "can" // candidate for the primary proxy (voting ID, force URL)
 	QparamPrepare          = "prp" // 2-phase commit where 'true' corresponds to 'begin'; usage: (primary election; set-primary)
 	QparamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
@@ -196,6 +196,8 @@ const (
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	QparamClusterInfo      = "cii" // true: /Health to return `cos.NodeStateInfo` including cluster metadata versions and state flags
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
+
+	QparamTID = "tid" // designated target
 
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
