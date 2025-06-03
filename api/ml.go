@@ -83,7 +83,7 @@ func GetBatch(bp BaseParams, bck cmn.Bck, req *MossReq, w io.Writer) (resp MossR
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.DoMultipartTwoPart(&resp, w)
+	_, err = reqParams.readMultipart(&resp, w)
 	FreeRp(reqParams)
 	qfree(q)
 	return resp, err
