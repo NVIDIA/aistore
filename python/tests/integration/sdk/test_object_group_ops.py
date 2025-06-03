@@ -159,10 +159,11 @@ class TestObjectGroupOps(ParallelTestBase):
         if num_workers is not None:
             copy_kwargs["num_workers"] = num_workers
 
-        copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
+        copy_job_ids = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
             to_bck, **copy_kwargs
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        for job_id in copy_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         self.assertEqual(
             4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
@@ -211,10 +212,11 @@ class TestObjectGroupOps(ParallelTestBase):
         self._copy_and_check_with_latest(self.bucket, to_bck, obj_name, DUIS, True)
 
         # run copy with '--sync' one last time, and make sure the object "disappears"
-        copy_job = self.bucket.objects(obj_names=[obj_name]).copy(
+        copy_job_ids = self.bucket.objects(obj_names=[obj_name]).copy(
             self.bucket, sync=True
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        for job_id in copy_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         with self.assertRaises(AISError):
             self.bucket.object(obj_name).get_reader().read_all()
 
@@ -231,8 +233,9 @@ class TestObjectGroupOps(ParallelTestBase):
         # TODO: add test for multi-obj list --sync once api is ready
         template = self.obj_prefix + "{0..10}" + self.suffix
         obj_group = self.bucket.objects(obj_template=template)
-        copy_job = obj_group.copy(to_bck)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        copy_job_ids = obj_group.copy(to_bck)
+        for job_id in copy_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         self.assertEqual(
             len(to_bck.list_all_objects(prefix=self.obj_prefix)), OBJECT_COUNT
         )
@@ -241,8 +244,11 @@ class TestObjectGroupOps(ParallelTestBase):
         for obj_name in self.obj_names:
             self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
 
-        copy_job = self.bucket.objects(obj_template=template).copy(to_bck, sync=True)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 3)
+        copy_job_ids = self.bucket.objects(obj_template=template).copy(
+            to_bck, sync=True
+        )
+        for job_id in copy_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # NOTE: S3 and similar providers are only *eventually* consistent.
         #       Wrap emptiness assertions in a retry to avoid flakes.
@@ -304,10 +310,11 @@ class TestObjectGroupOps(ParallelTestBase):
     def _copy_and_check_with_latest(
         self, from_bck, to_bck, obj_name, expected, latest_flag
     ):
-        copy_job = from_bck.objects(obj_names=[obj_name]).copy(
+        copy_job_ids = from_bck.objects(obj_names=[obj_name]).copy(
             to_bck, latest=latest_flag
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        for job_id in copy_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
         self.assertEqual(1, len(to_bck.list_all_objects()))
         content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
@@ -332,10 +339,11 @@ class TestObjectGroupOps(ParallelTestBase):
                 src_bck.object(obj_name=name).get_reader().read_all()
             )
 
-        arch_job = src_bck.objects(obj_names=archived_names).archive(
+        arch_job_ids = src_bck.objects(obj_names=archived_names).archive(
             archive_name=arch_name, **kwargs
         )
-        self.client.job(job_id=arch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        for job_id in arch_job_ids:
+            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
 
         # Read the tar archive and assert the object names and contents match
         res_bytes = res_bck.object(arch_name).get_reader().read_all()

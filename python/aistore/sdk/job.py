@@ -367,12 +367,14 @@ class Job:
         for snap in snapshots:
             if snap.id != self._job_id:
                 continue
+            job_found = True
             # If any targets are reporting the job not idle, continue waiting
             if not snap.is_idle:
                 return False
-            job_found = True
+
         if not job_found:
             raise JobInfoNotFound(f"No info found for job {self._job_id}")
+
         logger.info("Job '%s' reached idle state", self._job_id)
         return True
 

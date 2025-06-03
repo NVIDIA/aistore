@@ -16,6 +16,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
+- **BREAKING**: Update ObjectGroup `copy()` and `archive()` methods to return `List[str]` instead of `str` as these operations can return multiple job IDs (perform operations separately on each job ID).
 - Make usage clear for ObjectReader API in `Object.get` deprecation message.
 - Make usage clear for ObjectWriter API in `Object.put_content`, `Object.put_file`, `Object.append_content`, and `Object.set_custom_props` deprecation messages.
 - Add `list_archive` function to Bucket class: helper method to list entries inside an archived object, with the option to include the archive itself.
