@@ -1,9 +1,8 @@
+import sys
 import base64
 import unittest
 from unittest.mock import Mock
 from unittest.mock import patch
-
-import cloudpickle
 
 import aistore
 from aistore.sdk.const import (
@@ -15,17 +14,19 @@ from aistore.sdk.const import (
     UTF_ENCODING,
 )
 from aistore.sdk.etl.etl_const import (
-    CODE_TEMPLATE,
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
-    ETL_COMM_IO,
     DEFAULT_ETL_TIMEOUT,
     DEFAULT_ETL_OBJ_TIMEOUT,
+    PYTHON_RUNTIME_CMD,
 )
 
-from aistore.sdk.etl.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETLDetails
 from aistore.sdk.utils import convert_to_seconds
+from aistore.sdk.etl.etl import Etl, _get_runtime
+from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
+from aistore.sdk.etl.webserver import serialize_class
+
 from tests.const import ETL_NAME
 
 
@@ -93,117 +94,111 @@ class TestEtl(
             json=expected_action,
         )
 
-    def test_init_code_default_runtime(self):
+    def test_default_runtime(self):
         version_to_runtime = {
-            (3, 7): "python3.13v2",
-            (3, 1234): "python3.13v2",
-            (3, 8): "python3.13v2",
-            (3, 10): "python3.10v2",
-            (3, 11): "python3.11v2",
-            (3, 12): "python3.12v2",
-            (3, 13): "python3.13v2",
+            (3, 9): "3.9",
+            (3, 10): "3.10",
+            (3, 11): "3.11",
+            (3, 12): "3.12",
+            (3, 13): "3.13",
         }
+
+        failed_versions = [
+            (3, 8),  # Too old, not supported
+            (3, 14),  # TODO: Not supported yet
+            (4, 0),  # Future version
+        ]
         for version, runtime in version_to_runtime.items():
             with patch.object(aistore.sdk.etl.etl.sys, "version_info") as version_info:
                 version_info.major = version[0]
                 version_info.minor = version[1]
-                self.assertEqual(runtime, _get_default_runtime())
+                self.assertEqual(runtime, _get_runtime())
 
-    def test_init_code_default_params(self):
-        communication_type = ETL_COMM_HPUSH
+        for version in failed_versions:
+            with patch.object(aistore.sdk.etl.etl.sys, "version_info") as version_info:
+                version_info.major = version[0]
+                version_info.minor = version[1]
+                with self.assertRaises(ValueError):
+                    _get_runtime()
 
-        expected_action = {
-            "runtime": _get_default_runtime(),
-            "communication": f"{communication_type}://",
-            "init_timeout": DEFAULT_ETL_TIMEOUT,
-            "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
-            "funcs": {"transform": "transform"},
-            "code": self.encode_fn([], self.transform_fn, communication_type),
-            "dependencies": base64.b64encode(b"cloudpickle>=3.0.0").decode(
-                UTF_ENCODING
-            ),
-            "argument": "",
-        }
-        self.init_code_exec_assert(expected_action)
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_init_etl_class_with_defaults(self):
+        # Define a minimal ETLServer subclass
+        class MyETL(HTTPMultiThreadedServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return data.upper()
 
-    def test_init_code_invalid_comm(self):
-        with self.assertRaises(ValueError):
-            self.etl.init_code(Mock(), communication_type="invalid")
+        # 1) Replace init with a mock before we apply the decorator
+        self.etl.init = Mock(return_value="job-xyz")
 
-    def test_init_code(self):
-        runtime = "python-non-default"
-        communication_type = ETL_COMM_HPULL
-        init_timeout = "6m"
-        obj_timeout = "6m"
-        preimported = ["pytorch"]
-        user_dependencies = ["pytorch"]
-        chunk_size = 123
-        arg_type = "url"
+        # 2) Get the decorator and apply it
+        decorator = self.etl.init_class()
+        returned = decorator(MyETL)
+        self.assertIs(returned, MyETL, "Decorator should return the original class")
 
-        expected_dependencies = user_dependencies.copy()
-        expected_dependencies.append("cloudpickle>=3.0.0")
-        expected_dep_str = base64.b64encode(
-            "\n".join(expected_dependencies).encode(UTF_ENCODING)
-        ).decode(UTF_ENCODING)
+        # 3) Now we can inspect the call_args on the mock
+        _, init_kwargs = self.etl.init.call_args
 
-        expected_action = {
-            "runtime": runtime,
-            "communication": f"{communication_type}://",
-            "init_timeout": init_timeout,
-            "obj_timeout": obj_timeout,
-            "funcs": {"transform": "transform"},
-            "code": self.encode_fn(preimported, self.transform_fn, communication_type),
-            "dependencies": expected_dep_str,
-            "chunk_size": chunk_size,
-            "argument": arg_type,
-        }
-        self.init_code_exec_assert(
-            expected_action,
-            preimported_modules=preimported,
-            dependencies=user_dependencies,
-            runtime=runtime,
-            communication_type=communication_type,
-            init_timeout=init_timeout,
-            obj_timeout=obj_timeout,
-            chunk_size=chunk_size,
-            arg_type=arg_type,
+        # Required fields:
+        self.assertEqual(
+            init_kwargs["image"], f"aistorage/runtime_python:{_get_runtime()}"
         )
+        self.assertEqual(init_kwargs["command"], PYTHON_RUNTIME_CMD)
+        self.assertEqual(init_kwargs["comm_type"], ETL_COMM_HPUSH)
+        self.assertEqual(init_kwargs["init_timeout"], DEFAULT_ETL_TIMEOUT)
+        self.assertEqual(init_kwargs["obj_timeout"], DEFAULT_ETL_OBJ_TIMEOUT)
+        self.assertEqual(init_kwargs["arg_type"], "")
+        self.assertTrue(init_kwargs["direct_put"])
 
-    @staticmethod
-    def transform_fn():
-        print("example action")
+        # The serialized class must match what our util would produce
+        expected_payload = serialize_class(MyETL)
+        self.assertEqual(init_kwargs["ETL_CLASS_PAYLOAD"], expected_payload)
 
-    @staticmethod
-    def encode_fn(preimported_modules, func, comm_type):
-        transform = base64.b64encode(cloudpickle.dumps(func)).decode(UTF_ENCODING)
-        io_comm_context = "transform()" if comm_type == ETL_COMM_IO else ""
-        template = CODE_TEMPLATE.format(
-            preimported_modules, transform, io_comm_context
-        ).encode(UTF_ENCODING)
-        return base64.b64encode(template).decode(UTF_ENCODING)
+        # No dependencies given => empty PACKAGES
+        self.assertEqual(init_kwargs["PACKAGES"], "")
 
-    def init_code_exec_assert(self, expected_action, **kwargs):
-        expected_action["name"] = self.etl_name
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_init_etl_class_with_args(self):
+        class AnotherETL(HTTPMultiThreadedServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return data
 
-        expected_response_text = "response text"
-        mock_response = Mock()
-        mock_response.text = expected_response_text
-        self.mock_client.request.return_value = mock_response
+        # Replace init with a mock before we apply the decorator
+        self.etl.init = Mock(return_value="job-xyz")
 
-        response = self.etl.init_code(transform=self.transform_fn, **kwargs)
-
-        self.assertEqual(expected_response_text, response)
-
-        if "init_timeout" not in kwargs:
-            kwargs["init_timeout"] = DEFAULT_ETL_TIMEOUT
-        req_timeout = convert_to_seconds(kwargs.pop("init_timeout"))
-
-        self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT,
-            path=URL_PATH_ETL,
-            timeout=req_timeout,
-            json=expected_action,
+        decorator = self.etl.init_class(
+            dependencies=["foo", "bar"],
+            comm_type=ETL_COMM_HPULL,
+            init_timeout="2m",
+            obj_timeout="10s",
+            arg_type="fqn",
+            direct_put=True,
+            CUSTOM="value",
         )
+        returned = decorator(AnotherETL)
+        self.assertIs(returned, AnotherETL)
+
+        self.etl.init.assert_called_once()
+        _, init_kwargs = self.etl.init.call_args
+
+        # our customizations:
+        self.assertEqual(init_kwargs["comm_type"], ETL_COMM_HPULL)
+        self.assertEqual(init_kwargs["init_timeout"], "2m")
+        self.assertEqual(init_kwargs["obj_timeout"], "10s")
+        self.assertEqual(init_kwargs["arg_type"], "fqn")
+        self.assertTrue(init_kwargs["direct_put"])
+        self.assertEqual(init_kwargs["CUSTOM"], "value")
+
+        # dependencies should be comma-joined
+        self.assertEqual(init_kwargs["PACKAGES"], "foo,bar")
+
+        expected_payload = serialize_class(AnotherETL)
+        self.assertEqual(init_kwargs["ETL_CLASS_PAYLOAD"], expected_payload)
+
+    def test_decorator_non_subclass_raises(self):
+        decorator = self.etl.init_class()
+        with self.assertRaises(TypeError):
+            decorator(str)  # str is not an ETLServer subclass
 
     def test_view(self):
         mock_response = Mock()
