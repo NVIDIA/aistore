@@ -26,6 +26,7 @@ from aistore.sdk.utils import convert_to_seconds
 from aistore.sdk.etl.etl import Etl, _get_runtime
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver import serialize_class
+from aistore.sdk.errors import AISError
 
 from tests.const import ETL_NAME
 
@@ -378,3 +379,29 @@ class TestEtl(
     def test_init_invalid_comm(self):
         with self.assertRaises(ValueError):
             self.etl.init("img", ["cmd"], comm_type="not-a-valid-type")
+
+    def test_context_manager_calls_stop_and_delete(self):
+        self.etl.stop = Mock()
+        self.etl.delete = Mock()
+
+        with self.etl:
+            pass
+
+        self.etl.stop.assert_called_once()
+        self.etl.delete.assert_called_once()
+
+    def test_context_manager_handles_exception(self):
+        self.etl.stop = Mock()
+        self.etl.delete = Mock(
+            side_effect=AISError(
+                status_code=500, message="Delete failed", req=None, req_url=""
+            )
+        )
+        try:
+            with self.etl:
+                pass
+        except Exception:
+            self.fail("Exception should be suppressed by __exit__")
+
+        self.etl.stop.assert_called_once()
+        self.etl.delete.assert_called_once()

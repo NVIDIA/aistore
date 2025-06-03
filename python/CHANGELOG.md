@@ -12,6 +12,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `etl.init(image, command, …)` for simplified setup using only image and command.
 - Add archive-extension constant (`EXT_TAR`).
 - Add `init_class` method on the Etl client to register and initialize an ETLServer subclass.
+- Add support for ETL context manager.
 
 ### Changed
 
