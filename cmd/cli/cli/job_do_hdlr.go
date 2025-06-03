@@ -45,6 +45,15 @@ const blobDownloadUsage = "Download a large object or multiple objects from remo
 	indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- run 4 concurrent readers to download 2 (listed) blobs\n" +
 	indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor."
 
+const downloadUsage = "Download files and objects from remote sources, e.g.:\n" +
+	indent1 + "\t- 'ais download http://example.com/file.tar ais://bucket/'\t- download from HTTP into AIS bucket;\n" +
+	indent1 + "\t- 'ais download s3://bucket/file.tar ais://local-bucket/'\t- download from S3 into AIS bucket;\n" +
+	indent1 + "\t- 'ais download gs://bucket/file.tar ais://local/ --progress'\t- download from GCS with progress monitoring;\n" +
+	indent1 + "\t- 'ais download s3://bucket ais://local --sync'\t- download and sync entire S3 bucket;\n" +
+	indent1 + "\t- 'ais download \"gs://bucket/file-{001..100}.tar\" ais://local/'\t- download range of files using template;\n" +
+	indent1 + "\t- 'ais download --hf-model bert-base-uncased --hf-file config.json ais://local/'\t- download specific file from HuggingFace model;\n" +
+	indent1 + "\t- 'ais download --hf-dataset squad --hf-file train-v1.1.json ais://local/ --hf-auth'\t- download dataset file with authentication."
+
 const resilverUsage = "Resilver user data on a given target (or all targets in the cluster); entails:\n" +
 	indent1 + "\t- fix data redundancy with respect to bucket configuration;\n" +
 	indent1 + "\t- remove migrated objects and old/obsolete workfiles."
@@ -182,7 +191,7 @@ var (
 			blobDownloadCmd,
 			{
 				Name:      cmdDownload,
-				Usage:     "Download files and objects from remote sources",
+				Usage:     downloadUsage,
 				ArgsUsage: startDownloadArgument,
 				Flags:     sortFlags(startSpecialFlags[cmdDownload]),
 				Action:    startDownloadHandler,
