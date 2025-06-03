@@ -379,10 +379,13 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 }
 
-// DoMultipartTwoPart parses a multipart response where:
-// - the first part is JSON unmarshaled into `out`
-// - the second part is copied into `writer`
-func (reqParams *ReqParams) DoMultipartTwoPart(out any, writer io.Writer) (int, error) {
+// read multipart content, as per:
+// * https://datatracker.ietf.org/doc/html/rfc2046#section-5.1
+// given a single (GetBatch) use case, we currently
+// - always expect two parts, whereby:
+//   - the first part is JSON unmarshaled into `out`
+//   - the second part is written into `writer`
+func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error) {
 	debug.AssertNotPstr(out)
 	resp, err := reqParams.do()
 	if err != nil {
@@ -414,9 +417,10 @@ func (reqParams *ReqParams) DoMultipartTwoPart(out any, writer io.Writer) (int, 
 	}
 
 	// Part 2: stream (e.g. TAR)
+	// always closes the previous part (part1, in this case)
 	part2, err := mr.NextPart()
 	if err != nil {
-		return 0, fmt.Errorf("missing stream part: %v", err)
+		return 0, fmt.Errorf("missing stream part: %w", err)
 	}
 	n, err := io.Copy(writer, part2)
 	part2.Close()
