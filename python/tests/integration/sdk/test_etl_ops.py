@@ -2,11 +2,9 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
+import os
 import hashlib
-import time
 import unittest
-from itertools import cycle
-
 import pytest
 import xxhash
 
@@ -19,11 +17,14 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPULL,
     FASTAPI_CMD,
 )
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.types import EnvVar
+
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import cases, create_and_put_object, random_string, has_targets
 
 
+# pylint: disable=unused-variable
 class TestETLOps(unittest.TestCase):
     def setUp(self) -> None:
         self.client = DEFAULT_TEST_CLIENT
@@ -55,23 +56,107 @@ class TestETLOps(unittest.TestCase):
             # If the ETL was not initialized, it will raise an error
             pass
 
-    @pytest.mark.etl
-    def test_init_code(self):
-        # code
-        def transform(input_bytes):
-            md5 = hashlib.md5()
-            md5.update(input_bytes)
-            return md5.hexdigest().encode()
+    def _calculate_xxhash(self, data, seed):
+        hasher = xxhash.xxh64(seed=seed)
+        hasher.update(data)
+        return hasher.hexdigest()
 
-        code_etl = self.client.etl(self.etl_name)
-        code_etl.init_code(transform=transform)
+    def _calculate_md5(self, data):
+        return hashlib.md5(data).hexdigest().encode()
+
+    @pytest.mark.etl
+    def test_init_etl_class_echo(self):
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class EchoServer(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return data
 
         obj = (
             self.bucket.object(self.obj_name)
-            .get_reader(etl=ETLConfig(name=code_etl.name))
+            .get_reader(etl=ETLConfig(name=self.etl_name))
             .read_all()
         )
-        self.assertEqual(obj, transform(bytes(self.content)))
+        self.assertEqual(obj, bytes(self.content))
+
+    @pytest.mark.etl
+    def test_init_etl_class_md5(self):
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class MD5Server(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return hashlib.md5(data).hexdigest().encode()
+
+        obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=self.etl_name))
+            .read_all()
+        )
+        self.assertEqual(obj, self._calculate_md5(bytes(self.content)))
+
+    @pytest.mark.etl
+    def test_init_etl_class_xxhash_arg_type(self):
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class(
+            comm_type=ETL_COMM_HPULL, dependencies=["xxhash"], SEED_DEFAULT="500"
+        )
+        class XXHash(FastAPIServer):
+            def __init__(self):
+                super().__init__()
+                try:
+                    self.default_seed = int(os.getenv("SEED_DEFAULT", "0"))
+                except ValueError:
+                    self.logger.warning(
+                        "Invalid SEED_DEFAULT='%s', falling back to 0",
+                        os.getenv("SEED_DEFAULT"),
+                    )
+                    self.default_seed = 0
+
+            def transform(
+                self,
+                data: bytes,
+                _path: str,
+                etl_args: str,
+            ) -> bytes:
+                seed = self.default_seed
+                if etl_args:
+                    try:
+                        seed = int(etl_args)
+                    except ValueError:
+                        self.logger.warning(
+                            "Invalid etl_args seed=%r, using default_seed=%d",
+                            etl_args,
+                            self.default_seed,
+                        )
+                hasher = xxhash.xxh64(seed=seed)
+                hasher.update(data)
+                return hasher.hexdigest().encode("ascii")
+
+        default_hashed_obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=self.etl_name))
+            .read_all()
+        )
+        # 500 because of SEED_DEFAULT in the class decorator
+        self.assertEqual(
+            default_hashed_obj,
+            self._calculate_xxhash(bytes(self.content), 500).encode("ascii"),
+        )
+        etl_args_hashed_obj = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=self.etl_name, args="10000"))
+            .read_all()
+        )
+        self.assertEqual(
+            etl_args_hashed_obj,
+            self._calculate_xxhash(bytes(self.content), 10000).encode("ascii"),
+        )
 
     @pytest.mark.etl
     def test_init_spec_md5(self):
@@ -85,9 +170,8 @@ class TestETLOps(unittest.TestCase):
             .get_reader(etl=ETLConfig(name=spec_etl.name))
             .read_all()
         )
-        md5 = hashlib.md5()
-        md5.update(bytes(self.content))
-        self.assertEqual(obj, md5.hexdigest().encode())
+
+        self.assertEqual(obj, self._calculate_md5(bytes(self.content)))
 
         self.assertIsNotNone(spec_etl.view())
 
@@ -151,65 +235,29 @@ class TestETLOps(unittest.TestCase):
                 client=self.client, bck=self.bucket.as_model(), obj_name=obj_name
             )
 
-        # code (hpush)
-        def transform(input_bytes):
-            md5 = hashlib.md5()
-            md5.update(input_bytes)
-            return md5.hexdigest().encode()
-
         md5_hpush_etl = self.client.etl(self.etl_name)
-        md5_hpush_etl.init_code(transform=transform)
 
-        start_time = time.time()
+        @md5_hpush_etl.init_class()
+        class MD5Server(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return hashlib.md5(data).hexdigest().encode()
+
         job_id = self.bucket.transform(
             etl_name=md5_hpush_etl.name, to_bck=Bucket("transformed-etl-hpush")
         )
         self.client.job(job_id).wait()
-        print("Transform bucket using HPUSH took ", time.time() - start_time)
 
         for key, value in content.items():
             transformed_obj_hpush = (
                 self.bucket.object(key)
-                .get_reader(etl=ETLConfig(name=md5_hpush_etl.name))
+                .get_reader(etl=ETLConfig(name=self.etl_name))
                 .read_all()
             )
-            self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
-
-    @pytest.mark.etl
-    def test_etl_api_xor(self):
-        def transform(reader, writer):
-            checksum = hashlib.md5()
-            key = b"AISTORE"
-            for byte in reader:
-                out = bytes([_a ^ _b for _a, _b in zip(byte, cycle(key))])
-                writer.write(out)
-                checksum.update(out)
-            writer.write(checksum.hexdigest().encode())
-
-        xor_etl = self.client.etl(self.etl_name)
-        xor_etl.init_code(transform=transform, chunk_size=32)
-        transformed_obj = (
-            self.bucket.object(self.obj_name)
-            .get_reader(etl=ETLConfig(xor_etl.name))
-            .read_all()
-        )
-        data, checksum = transformed_obj[:-32], transformed_obj[-32:]
-        computed_checksum = hashlib.md5(data).hexdigest().encode()
-        self.assertEqual(checksum, computed_checksum)
-
-        xor_etl_details = xor_etl.view()
-        self.assertIsNotNone(xor_etl_details)
-        self.assertEqual(xor_etl_details.name, self.etl_name)
-        self.assertIsNotNone(xor_etl_details.code)
+            self.assertEqual(self._calculate_md5(bytes(value)), transformed_obj_hpush)
 
     @pytest.mark.etl
     def test_etl_with_various_sizes(self):
         obj_sizes = [128, 1024, 1048576]
-
-        def transform(input_bytes):
-            md5 = hashlib.md5()
-            md5.update(input_bytes)
-            return md5.hexdigest().encode()
 
         for obj_size in obj_sizes:
             obj_name = f"obj-{obj_size}.jpg"
@@ -221,14 +269,18 @@ class TestETLOps(unittest.TestCase):
             )
 
             etl = self.client.etl(self.etl_name)
-            etl.init_code(transform=transform)
+
+            @etl.init_class()
+            class MD5Server(FastAPIServer):
+                def transform(self, data: bytes, *_args) -> bytes:
+                    return hashlib.md5(data).hexdigest().encode()
 
             obj = (
                 self.bucket.object(obj_name)
                 .get_reader(etl=ETLConfig(etl.name))
                 .read_all()
             )
-            self.assertEqual(obj, transform(bytes(content)))
+            self.assertEqual(obj, self._calculate_md5(bytes(content)))
             try:
                 etl.stop()
                 etl.delete()
@@ -290,15 +342,19 @@ class TestETLOps(unittest.TestCase):
     @pytest.mark.etl
     @unittest.skipIf(not has_targets(2), "Test requires more than one target")
     def test_etl_concurrent_workers(self):
-        def transform(input_bytes):
-            md5 = hashlib.md5()
-            md5.update(input_bytes)
-            return md5.hexdigest().encode()
-
         dst_bck = self.client.bucket(random_string()).create()
 
         etl = self.client.etl(self.etl_name)
-        etl.init_code(transform=transform)
+
+        @etl.init_class()
+        class MD5Server(FastAPIServer):
+            def __init__(self):
+                super().__init__()
+                self.md5_hash = hashlib.md5()
+
+            def transform(self, data: bytes, *_args) -> bytes:
+                self.md5_hash.update(data)
+                return self.md5_hash.digest()
 
         num_workers = 10
         job_id = self.bucket.transform(

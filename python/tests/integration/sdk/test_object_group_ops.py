@@ -12,6 +12,7 @@ import pytest
 from aistore.sdk.const import LOREM, DUIS
 from aistore.sdk.provider import Provider
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
+from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from tests.const import (
     MEDIUM_FILE_SIZE,
     OBJECT_COUNT,
@@ -347,6 +348,7 @@ class TestObjectGroupOps(ParallelTestBase):
                 member_names.append(member.name)
             self.assertEqual(set(archived_names), set(member_names))
 
+    # pylint: disable=unused-argument, duplicate-code
     def _transform_objects_test_helper(self, num_workers=None):
         # Define an ETL that hashes the contents of each object
         etl_name = "etl-" + random_string(5)
@@ -357,7 +359,11 @@ class TestObjectGroupOps(ParallelTestBase):
             return md5.hexdigest().encode()
 
         md5_etl = self.client.etl(etl_name)
-        md5_etl.init_code(transform=transform)
+
+        @md5_etl.init_class()
+        class MD5Server(HTTPMultiThreadedServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                return hashlib.md5(data).hexdigest().encode()
 
         to_bck = self._create_bucket()
         new_prefix = PREFIX_NAME

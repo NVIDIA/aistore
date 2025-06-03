@@ -11,12 +11,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `ETLRuntimeSpec` class to formalize runtime configuration.
 - Add `etl.init(image, command, …)` for simplified setup using only image and command.
 - Add archive-extension constant (`EXT_TAR`).
+- Add `init_class` method on the Etl client to register and initialize an ETLServer subclass.
 
 ### Changed
 
 - Make usage clear for ObjectReader API in `Object.get` deprecation message.
 - Make usage clear for ObjectWriter API in `Object.put_content`, `Object.put_file`, `Object.append_content`, and `Object.set_custom_props` deprecation messages.
 - Add `list_archive` function to Bucket class: helper method to list entries inside an archived object, with the option to include the archive itself.
+- Removes ETL `init_code`.
 
 ## [1.14.0] - 2025-05-27
 
