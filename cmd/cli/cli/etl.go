@@ -329,12 +329,20 @@ func etlListHandler(c *cli.Context) (err error) {
 	return
 }
 
-func showETLs(c *cli.Context, etlName string, caption bool) (int, error) {
-	if etlName == "" {
+func showETLs(c *cli.Context, xid string, caption bool) (int, error) {
+	if xid == "" {
 		return etlList(c, caption)
 	}
-
-	return 1, etlPrintDetails(c, etlName) // TODO: extend to show Status and runtime stats
+	list, err := api.ETLList(apiBP)
+	if err != nil {
+		return 0, err
+	}
+	for _, entry := range list {
+		if xid == entry.XactID {
+			return 1, etlPrintDetails(c, entry.Name)
+		}
+	}
+	return 0, fmt.Errorf("ETL with job ID %q not found", xid)
 }
 
 func etlList(c *cli.Context, caption bool) (int, error) {
