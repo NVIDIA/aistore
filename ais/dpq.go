@@ -50,7 +50,7 @@ type dpq struct {
 }
 
 var _except = map[string]bool{
-	apc.QparamProxyID:        false,
+	apc.QparamPID:            false,
 	apc.QparamDontHeadRemote: false,
 
 	// flows that utilize the following query parameters perform conventional r.URL.Query()

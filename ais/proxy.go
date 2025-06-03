@@ -229,6 +229,9 @@ func (p *proxy) Run() error {
 		{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
 		{r: apc.EC, h: p.ecHandler, net: accessNetIntraControl},
 
+		// machine learning
+		{r: apc.ML, h: p.mlHandler, net: accessNetPublic},
+
 		// S3 compatibility
 		{r: "/" + apc.S3, h: p.s3Handler, net: accessNetPublic},
 
@@ -2122,7 +2125,7 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 	if !strings.ContainsAny(r.URL.Path, "%?#") {
 		var (
 			q = url.Values{
-				apc.QparamProxyID:  []string{p.SID()},
+				apc.QparamPID:      []string{p.SID()},
 				apc.QparamUnixTime: []string{cos.UnixNano2S(ts.UnixNano())},
 			}
 		)
@@ -2147,7 +2150,7 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 		host = strings.TrimPrefix(nodeURL, "http://")
 	}
 	q := r.URL.Query()
-	q.Set(apc.QparamProxyID, p.SID())
+	q.Set(apc.QparamPID, p.SID())
 	q.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
 	u := url.URL{
 		Scheme:   scheme,

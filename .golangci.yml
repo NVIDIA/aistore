@@ -74,7 +74,7 @@ linters:
         - name: redefines-builtin-id
         - name: string-of-int
         - name: superfluous-else
-        - name: time-naming
+        # name: time-naming
         - name: var-naming
         - name: var-declaration
         - name: unconditional-recursion

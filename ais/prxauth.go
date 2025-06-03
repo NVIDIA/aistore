@@ -176,7 +176,7 @@ func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		p.delToken(w, r)
 	default:
-		cmn.WriteErr405(w, r, http.MethodDelete)
+		cmn.WriteErr405(w, r, http.MethodPost, http.MethodDelete)
 	}
 }
 

@@ -26,8 +26,8 @@ const (
 	ML       = "ml"
 
 	// extensions
-	Download = "download"
-	Sort     = "sort"
+	Download = "download" // downloader
+	Sort     = "sort"     // dsort
 	ETL      = "etl"
 
 	// proxy only
@@ -96,17 +96,19 @@ const (
 
 // common
 const (
-	Init     = "init"
-	Start    = "start"
-	Stop     = "stop"
-	Abort    = "abort"
+	Init  = "init"
+	Start = "start"
+	Stop  = "stop"
+	Abort = "abort"
+
 	Finished = "finished"
 	Progress = "progress"
 )
 
-// RESTful l3, internal use
+// internal use
 const (
 	SyncSmap = "syncsmap"
+	MossExec = "mossexec"
 )
 
 type URLPath struct {

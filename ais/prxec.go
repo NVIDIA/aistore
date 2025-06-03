@@ -18,7 +18,7 @@ func (p *proxy) ecHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpecpost(w, r)
 	default:
-		cmn.WriteErr405(w, r, http.MethodGet)
+		cmn.WriteErr405(w, r, http.MethodPost)
 	}
 }
 
