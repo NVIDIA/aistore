@@ -34,6 +34,7 @@ from aistore.sdk.types import (
 from aistore.sdk.utils import convert_to_seconds
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.etl.webserver import serialize_class
+from aistore.sdk.errors import AISError
 
 
 def _get_runtime() -> str:
@@ -72,6 +73,16 @@ class Etl:
         self._client = client
         self._name = name
         self.validate_etl_name(name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        try:
+            self.stop()
+            self.delete()
+        except AISError as e:
+            pass
 
     @property
     def name(self) -> str:

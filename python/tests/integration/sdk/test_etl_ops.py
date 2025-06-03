@@ -436,6 +436,28 @@ class TestETLOps(unittest.TestCase):
             etl_details.runtime.env[0], EnvVar(name="SEED_DEFAULT", value="500")
         )
 
+    @pytest.mark.etl
+    def test_etl_context_manager_cleanup(self):
+
+        with self.client.etl(self.etl_name) as etl:
+
+            @etl.init_class()
+            class EchoServer(FastAPIServer):
+                def transform(self, data: bytes, *_args) -> bytes:
+                    return data
+
+            # Read the object through the ETL to ensure it's running
+            obj = (
+                self.bucket.object(self.obj_name)
+                .get_reader(etl=ETLConfig(name=etl.name))
+                .read_all()
+            )
+            self.assertEqual(obj, bytes(self.content))
+
+        # After context exit, view() or read should fail
+        with self.assertRaises(AISError):
+            self.client.etl(self.etl_name).view()
+
 
 if __name__ == "__main__":
     unittest.main()
