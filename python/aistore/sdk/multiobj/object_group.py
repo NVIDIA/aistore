@@ -80,6 +80,19 @@ class ObjectGroup(AISSource):
         """Update the client bound to the bucket used by the ObjectGroup."""
         self.bck.client = client
 
+    def _parse_job_ids(self, response_text: str) -> List[str]:
+        """
+        Parse job ID response that may contain comma-separated UUIDs.
+        Used only for copy and archive operations which can return multiple UUIDs.
+
+        Args:
+            response_text (str): Raw response text
+
+        Returns:
+            List[str]: List of individual job IDs
+        """
+        return response_text.split(",") if response_text else []
+
     def list_urls(
         self, prefix: str = "", etl: Optional[ETLConfig] = None
     ) -> Iterable[str]:
@@ -231,7 +244,7 @@ class ObjectGroup(AISSource):
         latest: bool = False,
         sync: bool = False,
         num_workers: int = None,
-    ):
+    ) -> List[str]:
         """
         Copies a list or range of objects in a bucket
 
@@ -257,7 +270,7 @@ class ObjectGroup(AISSource):
             requests.ReadTimeout: Timed out receiving response from AIStore
 
         Returns:
-            Job ID (as str) that can be used to check the status of the operation
+            List[str]: List of job IDs that can be used to check the status of the operation
 
         """
         if dry_run:
@@ -280,11 +293,13 @@ class ObjectGroup(AISSource):
             num_workers=num_workers,
         ).as_dict()
 
-        return self.bck.make_request(
+        response = self.bck.make_request(
             HTTP_METHOD_POST,
             ACT_COPY_OBJECTS,
             value=value,
-        ).text
+        )
+
+        return self._parse_job_ids(response.text)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments, too-many-locals
     def transform(
@@ -365,7 +380,7 @@ class ObjectGroup(AISSource):
         include_source_name: bool = False,
         allow_append: bool = False,
         continue_on_err: bool = False,
-    ):
+    ) -> List[str]:
         """
         Create or append to an archive
 
@@ -378,7 +393,7 @@ class ObjectGroup(AISSource):
             continue_on_err (bool, optional): Whether to continue if there is an error archiving a single object
 
         Returns:
-            Job ID (as str) that can be used to check the status of the operation
+            List[str]: List of job IDs that can be used to check the status of the operation
 
         """
         val = ArchiveMultiObj(
@@ -390,9 +405,12 @@ class ObjectGroup(AISSource):
             allow_append=allow_append,
             continue_on_err=continue_on_err,
         ).as_dict()
-        return self.bck.make_request(
+
+        response = self.bck.make_request(
             HTTP_METHOD_PUT, ACT_ARCHIVE_OBJECTS, value=val
-        ).text
+        )
+
+        return self._parse_job_ids(response.text)
 
     def list_names(self) -> List[str]:
         """

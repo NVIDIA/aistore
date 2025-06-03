@@ -66,8 +66,9 @@ class TestClusterOps(ParallelTestBase):  # pylint: disable=unused-variable
         bck = self._create_bucket()
         dest_bck = self._create_bucket()
         obj_name = random_string()
-        bck.object(obj_name).get_writer().put_content("any content")
-        idle_job = bck.objects(obj_names=[obj_name]).copy(to_bck=dest_bck)
+        bck.object(obj_name).get_writer().put_content(b"any content")
+        idle_job_ids = bck.objects(obj_names=[obj_name]).copy(to_bck=dest_bck)
+        idle_job = idle_job_ids[0] if idle_job_ids else ""
 
         expected_res = f"{ACT_COPY_OBJECTS}[{idle_job}]"
         self.assertIn(expected_res, self.client.cluster().list_running_jobs())
