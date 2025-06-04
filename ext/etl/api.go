@@ -53,6 +53,10 @@ const (
 	Image   = "IMAGE"
 	Command = "COMMAND"
 	Env     = "ENV"
+
+	// consts for unmarshalling ETL details
+	InitMsgType = "init_msg"
+	ObjErrsType = "obj_errors"
 )
 
 // consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
@@ -185,6 +189,17 @@ type (
 		ObjCount int64  `json:"obj_count"`
 		InBytes  int64  `json:"in_bytes"`
 		OutBytes int64  `json:"out_bytes"`
+	}
+
+	Details struct {
+		InitMsg InitMsg  `json:"init_msg"`
+		ObjErrs []ObjErr `json:"obj_errors,omitempty"`
+	}
+	ObjErrs []ObjErr
+	ObjErr  struct {
+		ObjName string `json:"obj_name"` // object name
+		Message string `json:"msg"`      // error message
+		Ecode   int    `json:"ecode"`    // error code
 	}
 
 	LogsByTarget []Logs
@@ -518,6 +533,10 @@ func (s Stage) String() string {
 	default:
 		return "Unknown"
 	}
+}
+
+func (eo ObjErr) Error() string {
+	return fmt.Sprintf("ETL object %s transform error (%d): %s", eo.ObjName, eo.Ecode, eo.Message)
 }
 
 //////////////

@@ -90,6 +90,9 @@ const (
 	ETLHealth  = "health"
 	ETLMetrics = "metrics"
 
+	// ETL target only
+	ETLDetails = "details"
+
 	// ML
 	Moss = "moss"
 )

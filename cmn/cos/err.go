@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -36,6 +37,7 @@ type (
 	Errs struct {
 		errs []error
 		cnt  int64
+		cap  int
 		mu   sync.Mutex
 	}
 
@@ -107,10 +109,21 @@ func IsNotExist(err error, ecode int) bool {
 	return os.IsNotExist(err) // unwraps for fs.ErrNotExist
 }
 
-// Errs
-// add Unwrap() if need be
+// Errs is a thread-safe collection of errors
 
-const maxErrs = 8
+const defaultMaxErrs = 8
+
+func NewErrs(maxErrs ...int) Errs {
+	capacity := defaultMaxErrs
+	if len(maxErrs) > 0 && maxErrs[0] > 0 {
+		capacity = maxErrs[0]
+	}
+	debug.Assert(capacity > 0)
+	return Errs{
+		errs: make([]error, 0, capacity),
+		cap:  capacity,
+	}
+}
 
 func (e *Errs) Add(err error) {
 	debug.Assert(err != nil)
@@ -122,7 +135,7 @@ func (e *Errs) Add(err error) {
 			return
 		}
 	}
-	if len(e.errs) < maxErrs {
+	if len(e.errs) < e.cap {
 		e.errs = append(e.errs, err)
 		ratomic.StoreInt64(&e.cnt, int64(len(e.errs)))
 	}
@@ -157,6 +170,12 @@ func (e *Errs) Error() string {
 		err = fmt.Errorf("%v (and %d more error%s)", err, cnt-1, Plural(cnt-1))
 	}
 	return err.Error()
+}
+
+func (e *Errs) Unwrap() []error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return slices.Clone(e.errs) // return a copy to avoid mutation
 }
 
 //

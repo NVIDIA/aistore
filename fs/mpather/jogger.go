@@ -216,7 +216,7 @@ func (j *jogger) run() error {
 
 // run selected buckets, one at a time
 func (j *jogger) runSelected() error {
-	var errs cos.Errs
+	errs := cos.NewErrs()
 	for i := range j.opts.Buckets {
 		aborted, err := j.runBck(&j.opts.Buckets[i])
 		if err != nil {
@@ -233,9 +233,9 @@ func (j *jogger) runSelected() error {
 func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 	var (
 		bmd      = core.T.Bowner().Get()
+		errs     = cos.NewErrs()
 		provider *string
 		ns       *cmn.Ns
-		errs     cos.Errs
 	)
 	if qbck.Provider != "" {
 		provider = &qbck.Provider

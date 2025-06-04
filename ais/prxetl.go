@@ -271,6 +271,7 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 	// 3. IC
 	smap := p.owner.smap.get()
 	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
+
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
@@ -337,13 +338,32 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 		return
 	}
 
+	// get init message
 	etlMD := p.owner.etl.get()
 	initMsg := etlMD.get(etlName)
 	if initMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
 	}
-	p.writeJSON(w, r, initMsg, "info-etl")
+
+	// get details (contain errors)
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlName, apc.ETLDetails)}
+	args.timeout = apc.DefaultTimeout
+	args.cresv = cresjGeneric[etl.ObjErrs]{}
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+	errs := make([]etl.ObjErr, 0, len(results))
+	for _, res := range results {
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr(), res.status)
+			freeBcastRes(results)
+			return
+		}
+		errs = append(errs, *res.v.(*etl.ObjErrs)...)
+	}
+	freeBcastRes(results)
+	p.writeJSON(w, r, etl.Details{InitMsg: initMsg, ObjErrs: errs}, "etl-details")
 }
 
 // GET /v1/etl

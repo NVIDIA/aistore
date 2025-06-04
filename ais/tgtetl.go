@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // [METHOD] /v1/etl
@@ -105,6 +107,8 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 		t.logsETL(w, r, apiItems[0])
 	case apc.ETLHealth:
 		t.healthETL(w, r, apiItems[0])
+	case apc.ETLDetails:
+		t.detailsETL(w, r, apiItems[0])
 	case apc.ETLMetrics:
 		k8s.InitMetricsClient()
 		t.metricsETL(w, r, apiItems[0])
@@ -177,7 +181,8 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	}
 
 	// do
-	xetl := comm.Xact()
+	xetl, ok := comm.Xact().(*xs.XactETL)
+	debug.Assertf(ok, "expected ETL xaction type, got %T", comm.Xact())
 	ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
 
 	if err == nil {
@@ -193,7 +198,12 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 		return
 	}
 
-	xetl.AddErr(err)
+	xetl.ObjErrs.Add(&etl.ObjErr{
+		ObjName: lom.ObjName,
+		Message: err.Error(),
+		Ecode:   ecode,
+	})
+
 	t.writeErr(w, r, err, ecode)
 }
 
@@ -217,6 +227,33 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 		return
 	}
 	writeXid(w, health)
+}
+
+// GET /v1/etl/<etl-name>/details
+//
+// Returns ETL errors (if any) for the given ETL xaction.
+func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, etlName string) {
+	comm, err := etl.GetCommunicator(etlName)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	xetl, ok := comm.Xact().(*xs.XactETL)
+	debug.Assertf(ok, "expected ETL xaction type, got %T", comm.Xact())
+	if !xetl.Running() {
+		return
+	}
+
+	errs := xetl.ObjErrs.Unwrap()
+	objErrs := make([]etl.ObjErr, 0, len(errs))
+	for _, e := range errs {
+		var objErr *etl.ObjErr
+		if !errors.As(e, &objErr) {
+			continue
+		}
+		objErrs = append(objErrs, *objErr)
+	}
+	t.writeJSON(w, r, objErrs, "etl-obj-errors")
 }
 
 func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName string) {

@@ -78,6 +78,7 @@ func (xctn *Base) InitBase(id, kind, ctlmsg string, bck *meta.Bck) {
 	xctn.id, xctn.kind = id, kind
 	xctn.ctlmsg = ctlmsg
 
+	xctn.err = cos.NewErrs()
 	xctn.abort.ch = make(chan error, 1)
 	if bck != nil {
 		xctn.bck = *bck
