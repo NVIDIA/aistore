@@ -1251,8 +1251,12 @@ func (h *htrun) targzLogs(severity string) (tempdir, archname string, _ error) {
 
 	e := _targzLogs(aw, logdir, severity, dentries)
 
-	aw.Fini()
+	erc := aw.Fini()
 	wfh.Close()
+
+	if e == nil {
+		e = erc
+	}
 	return tempdir, archname, e
 }
 

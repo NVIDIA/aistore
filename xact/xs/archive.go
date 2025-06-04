@@ -449,12 +449,12 @@ func (r *XactArch) finalize(wi *archwi) {
 }
 
 func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
-	wi.writer.Fini()
+	err = wi.writer.Fini()
 
-	if r.IsAborted() {
+	if r.IsAborted() || err != nil {
 		wi.cleanup()
 		core.FreeLOM(wi.archlom)
-		return 0, nil
+		return 0, err
 	}
 
 	var size int64
