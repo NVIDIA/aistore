@@ -173,7 +173,7 @@ func WriteErrJSON(w http.ResponseWriter, r *http.Request, out any, err error) er
 
 // Copies headers from original request(from client) to
 // a new one(inter-cluster call)
-func copyHeaders(src http.Header, dst *http.Header) {
+func CopyHeaders(src http.Header, dst *http.Header) {
 	for k, values := range src {
 		for _, v := range values {
 			dst.Set(k, v)
