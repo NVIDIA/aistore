@@ -464,6 +464,7 @@ func (t *target) Run() error {
 		go t.goresilver(config, marked.Interrupted)
 	}
 
+	etl.Tinit()
 	dsort.Tinit(db, config)
 	dload.Init(db, &config.Client)
 

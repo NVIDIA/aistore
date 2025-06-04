@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
@@ -40,8 +41,10 @@ type (
 
 var mgr *manager
 
-func init() {
+// called during target initialization
+func Tinit() {
 	mgr = &manager{m: make(map[string]*entity, 4)}
+	xreg.RegNonBckXact(&factory{})
 }
 
 func (r *manager) add(name string, c Communicator) (err error) {

@@ -104,10 +104,7 @@ func (p *tcbFactory) Start() error {
 	r.owt = cmn.OwtCopy
 	if p.kind == apc.ActETLBck {
 		r.owt = cmn.OwtTransform
-		roc, xact, transform, err := etl.GetOfflineTransform(args.Msg.Transform.Name, r)
-		xetl, ok := xact.(*XactETL)
-		debug.Assertf(ok, "expected *etl.XactETL, got %T", xact)
-		r.copier.getROC, r.copier.xetl, r.transform = roc, xetl, transform
+		r.copier.getROC, r.copier.xetl, r.transform, err = etl.GetOfflineTransform(args.Msg.Transform.Name, r)
 		if err != nil {
 			return err
 		}

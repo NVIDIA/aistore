@@ -50,8 +50,8 @@ type (
 		GetPodWatcher() *podWatcher
 		GetSecret() string
 
-		Xact() core.Xact // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
-		CommStats        // only stats for `apc.ActETLInline` inline transform
+		Xact() *XactETL // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
+		CommStats       // only stats for `apc.ActETLInline` inline transform
 
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
@@ -144,7 +144,7 @@ func (c *baseComm) String() string {
 	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommType())
 }
 
-func (c *baseComm) Xact() core.Xact { return c.boot.xctn }
+func (c *baseComm) Xact() *XactETL  { return c.boot.xctn }
 func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
 func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }

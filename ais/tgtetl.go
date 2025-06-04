@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
-	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // [METHOD] /v1/etl
@@ -181,8 +180,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	}
 
 	// do
-	xetl, ok := comm.Xact().(*xs.XactETL)
-	debug.Assertf(ok, "expected ETL xaction type, got %T", comm.Xact())
+	xetl := comm.Xact()
 	ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
 
 	if err == nil {
@@ -238,8 +236,7 @@ func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, etlName stri
 		t.writeErr(w, r, err)
 		return
 	}
-	xetl, ok := comm.Xact().(*xs.XactETL)
-	debug.Assertf(ok, "expected ETL xaction type, got %T", comm.Xact())
+	xetl := comm.Xact()
 	if !xetl.Running() {
 		return
 	}
