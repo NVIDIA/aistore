@@ -398,7 +398,7 @@ func GetInitMsg(etlName string) (InitMsg, error) {
 	return cc.getInitMsg(), nil
 }
 
-func GetOfflineTransform(etlName string, xctn core.Xact) (getROC core.GetROC, xetl core.Xact, session Session, err error) {
+func GetOfflineTransform(etlName string, xctn core.Xact) (getROC core.GetROC, xetl *XactETL, session Session, err error) {
 	cc, err := GetCommunicator(etlName)
 	if err != nil {
 		return nil, nil, nil, err

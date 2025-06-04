@@ -83,7 +83,7 @@ func FreeCOI(a *CoiParams) {
 type (
 	copier struct {
 		r      core.Xact    // root xaction (TCB/TCO)
-		xetl   *XactETL     // corresponding ETL xaction (if any)
+		xetl   *etl.XactETL // corresponding ETL xaction (if any)
 		bp     core.Backend // backend(source bucket)
 		getROC core.GetROC
 		rate   tcrate

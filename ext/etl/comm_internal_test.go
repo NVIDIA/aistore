@@ -135,17 +135,19 @@ var _ = Describe("CommunicatorTest", func() {
 				pod := &corev1.Pod{}
 				pod.SetName("somename")
 
-				xctn := mock.NewXact(apc.ActETLInline)
-				boot := &etlBootstrapper{
-					msg: &InitSpecMsg{
-						InitMsgBase: InitMsgBase{
-							CommTypeX:   commType,
-							InitTimeout: cos.Duration(DefaultInitTimeout),
-						},
+				msg := &InitSpecMsg{
+					InitMsgBase: InitMsgBase{
+						CommTypeX:   commType,
+						InitTimeout: cos.Duration(DefaultInitTimeout),
 					},
+				}
+				xetl := &XactETL{}
+				xetl.InitBase(cos.GenUUID(), apc.ActETLInline, msg.String(), nil)
+				boot := &etlBootstrapper{
+					msg:  msg,
 					pod:  pod,
 					uri:  transformerServer.URL,
-					xctn: xctn,
+					xctn: xetl,
 				}
 				comm = newCommunicator(nil, boot, nil).(httpCommunicator)
 

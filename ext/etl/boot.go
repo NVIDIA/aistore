@@ -38,7 +38,7 @@ type etlBootstrapper struct {
 
 	// runtime
 	k8sClient       k8s.Client
-	xctn            core.Xact
+	xctn            *XactETL
 	pod             *corev1.Pod
 	svc             *corev1.Service
 	uri             string
@@ -258,9 +258,10 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 func (b *etlBootstrapper) setupXaction(xid string) core.Xact {
 	rns := xreg.RenewETL(b.msg, xid)
 	debug.AssertNoErr(rns.Err)
-	b.xctn = rns.Entry.Get()
+	xctn := rns.Entry.Get()
+	b.xctn = xctn.(*XactETL)
 	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
-	return b.xctn
+	return xctn
 }
 
 func (b *etlBootstrapper) _updPodCommand() {

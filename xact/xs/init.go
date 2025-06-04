@@ -20,7 +20,6 @@ func Treg(coi COI) {
 
 	xreg.RegNonBckXact(&resFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
-	xreg.RegNonBckXact(&etlFactory{})
 
 	xreg.RegBckXact(&bmvFactory{})
 
