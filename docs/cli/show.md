@@ -156,11 +156,13 @@ NAME:
    e.g.:
      - show job prefetch-listrange         - show all running prefetch jobs;
      - show job prefetch                   - same as above;
+     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
      - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
      - show job copy-listrange             - show all running multi-object copies;
      - show job copy-objects               - same as above (using display name);
      - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
      - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
      - show job ec                         - show all erasure-coding;
      - show job list                       - show all running list-objects jobs;
      - show job ls                         - same as above;
@@ -185,6 +187,7 @@ OPTIONS:
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
    regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
@@ -244,11 +247,13 @@ NAME:
    e.g.:
      - show job prefetch-listrange         - show all running prefetch jobs;
      - show job prefetch                   - same as above;
+     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
      - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
      - show job copy-listrange             - show all running multi-object copies;
      - show job copy-objects               - same as above (using display name);
      - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
      - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
      - show job ec                         - show all erasure-coding;
      - show job list                       - show all running list-objects jobs;
      - show job ls                         - same as above;
@@ -273,6 +278,7 @@ OPTIONS:
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
    regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
