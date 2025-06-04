@@ -571,7 +571,7 @@ func (t *target) initRecvHandlers() {
 		{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
 
 		// machine learning
-		{r: apc.ML, h: t.mlHandler, net: accessNetPublicData},
+		{r: apc.ML, h: t.mlHandler, net: accessNetPublicControl},
 
 		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
 		{r: "/", h: t.errURL, net: accessNetAll},

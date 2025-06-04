@@ -7,6 +7,7 @@ package xact
 import (
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,17 +33,17 @@ type (
 		SubPending(n int)
 	}
 	DemandBase struct {
-		hkName string
-		idle   struct {
-			ticks cos.StopCh
-			d     atomic.Int64 // duration hk idle
-			last  atomic.Int64 // mono.NanoTime
+		parentCB hk.HKCB
+		ticks    *cos.StopCh
+		hkName   string
+		idle     struct {
+			d    atomic.Int64 // duration hk idle
+			last atomic.Int64 // mono.NanoTime
 		}
 
 		Base
 
 		pending atomic.Int64
-		hkReg   atomic.Bool // mono.NanoTime
 	}
 )
 
@@ -53,21 +54,28 @@ type (
 // NOTE: override `Base.IsIdle`
 func (r *DemandBase) IsIdle() bool {
 	last := r.idle.last.Load()
-	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive(), 2*time.Second)
+	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive()+time.Second, 4*time.Second)
 }
 
-func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time.Duration) {
+func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time.Duration, hkcb ...hk.HKCB) {
 	r.hkName = kind + "/" + uuid
 	if idleDur > 0 {
+		debug.Assert(idleDur >= IdleDefault || kind == apc.ActList, "Warning: ", idleDur, " is mostly expected >= ", IdleDefault, "(default)")
 		r.idle.d.Store(int64(idleDur))
 	} else {
 		r.idle.d.Store(int64(IdleDefault))
 	}
-	r.idle.ticks.Init()
+	if len(hkcb) == 0 {
+		r.ticks = &cos.StopCh{}
+		r.ticks.Init()
+	} else {
+		debug.Assert(len(hkcb) == 1)
+		r.parentCB = hkcb[0]
+		debug.Assert(r.parentCB != nil)
+	}
 	r.InitBase(uuid, kind, ctlmsg, bck)
 
 	r.idle.last.Store(mono.NanoTime())
-	r.hkReg.Store(true)
 	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)
 }
 
@@ -77,27 +85,32 @@ func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d.Store(int64(idleTi
 func (r *DemandBase) hkcb(now int64) time.Duration {
 	last := r.idle.last.Load()
 	idle := r.idle.d.Load()
-	if last != 0 && now-last >= idle { // elapsed since `last`
-		// signal parent xaction to finish and exit (via `IdleTimer` chan)
-		r.idle.ticks.Close()
+	if last != 0 && now-last >= idle {
+		if r.ticks != nil {
+			// signal parent xaction to finish and exit (via `IdleTimer` chan)
+			r.ticks.Close()
+		}
+		if r.parentCB != nil {
+			r.parentCB(now)
+		}
 	}
 	return time.Duration(idle)
 }
 
-func (r *DemandBase) IdleTimer() <-chan struct{} { return r.idle.ticks.Listen() }
-func (r *DemandBase) Pending() (cnt int64)       { return r.pending.Load() }
-func (r *DemandBase) DecPending()                { r.SubPending(1) }
+func (r *DemandBase) IdleTimer() <-chan struct{} {
+	return r.ticks.Listen()
+}
+
+func (r *DemandBase) Pending() (cnt int64) { return r.pending.Load() }
+func (r *DemandBase) DecPending()          { r.SubPending(1) }
 
 func (r *DemandBase) IncPending() {
-	debug.Assert(r.hkReg.Load())
 	r.pending.Inc()
 	r.idle.last.Store(0)
 }
 
 func (r *DemandBase) SubPending(n int) {
-	if n == 0 {
-		return
-	}
+	debug.Assert(n > 0, n)
 	pending := r.pending.Sub(int64(n))
 	debug.Assert(pending >= 0)
 	if pending == 0 {
@@ -107,7 +120,10 @@ func (r *DemandBase) SubPending(n int) {
 
 func (r *DemandBase) Stop() {
 	hk.Unreg(r.hkName + hk.NameSuffix)
-	r.idle.ticks.Close()
+	if r.ticks != nil {
+		r.ticks.Close()
+		r.ticks = nil
+	}
 }
 
 func (r *DemandBase) Abort(err error) (ok bool) {

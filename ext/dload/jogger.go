@@ -136,15 +136,18 @@ func (j *jogger) getTask(jobID string) (task *singleTask) {
 }
 
 func (j *jogger) abortJob(id string) {
-	var task *singleTask
-
+	var (
+		task *singleTask
+		cnt  int
+	)
 	j.mtx.Lock()
 
 	j.q.mu.Lock()
-	cnt := j.q.removeJob(id) // remove from pending
+	cnt = j.q.removeJob(id) // remove from pending
 	j.q.mu.Unlock()
-	j.parent.xdl.SubPending(cnt)
-
+	if cnt > 0 {
+		j.parent.xdl.SubPending(cnt)
+	}
 	if j.task != nil && j.task.jobID() == id {
 		task = j.task
 		// iff the task belongs to the specified job
