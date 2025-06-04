@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
@@ -81,7 +82,8 @@ func FreeCOI(a *CoiParams) {
 
 type (
 	copier struct {
-		r      core.Xact
+		r      core.Xact    // root xaction (TCB/TCO)
+		xetl   *XactETL     // corresponding ETL xaction (if any)
 		bp     core.Backend // backend(source bucket)
 		getROC core.GetROC
 		rate   tcrate
@@ -137,7 +139,13 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 			rgetstats(tc.bp /*from*/, tc.vlabs, res.Lsize, started)
 		}
 	case cos.IsNotExist(res.Err, 0):
-		// do nothing
+		if tc.xetl != nil {
+			tc.xetl.ObjErrs.Add(&etl.ObjErr{
+				ObjName: lom.ObjName,
+				Message: res.Err.Error(),
+				Ecode:   res.Ecode,
+			})
+		}
 	case res.Err == cmn.ErrSkip:
 		// ErrSkip is returned when the object is transmitted through direct put
 		tc.r.OutObjsAdd(1, lom.Lsize())
@@ -147,6 +155,13 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 	default:
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
+		}
+		if tc.xetl != nil {
+			tc.xetl.ObjErrs.Add(&etl.ObjErr{
+				ObjName: lom.ObjName,
+				Message: res.Err.Error(),
+				Ecode:   res.Ecode,
+			})
 		}
 		if contOnErr {
 			tc.r.AddErr(res.Err, 5, cos.SmoduleXs)

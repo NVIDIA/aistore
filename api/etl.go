@@ -5,6 +5,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 type ETLObjArgs struct {
@@ -57,7 +60,7 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 	return
 }
 
-func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
+func ETLGetDetail(params BaseParams, etlName string) (*etl.Details, error) {
 	params.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -76,7 +79,32 @@ func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 	debug.Assert(size < 0 || size == int64(len(b)), size, " != ", len(b))
-	return etl.UnmarshalInitMsg(b)
+
+	var msgInf map[string]json.RawMessage
+	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
+		return nil, err
+	}
+
+	rawMsg, ok := msgInf[etl.InitMsgType]
+	if !ok {
+		return nil, fmt.Errorf("missing field %q in response", etl.InitMsgType)
+	}
+	initMsg, err := etl.UnmarshalInitMsg(rawMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal ETL init message: %w", err)
+	}
+
+	var objErrs []etl.ObjErr
+	if rawErrs, ok := msgInf[etl.ObjErrsType]; ok {
+		if err := jsoniter.Unmarshal(rawErrs, &objErrs); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ETL object errors: %w", err)
+		}
+	}
+
+	return &etl.Details{
+		InitMsg: initMsg,
+		ObjErrs: objErrs,
+	}, nil
 }
 
 func ETLLogs(bp BaseParams, etlName string, targetID ...string) (logs etl.LogsByTarget, err error) {

@@ -115,7 +115,10 @@ func (p *tcoFactory) Start() error {
 
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
-		r.copier.getROC, r.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
+		roc, xact, transform, err := etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
+		xetl, ok := xact.(*XactETL)
+		debug.Assertf(ok, "expected *etl.XactETL, got %T", xact)
+		r.copier.getROC, r.copier.xetl, r.transform = roc, xetl, transform
 		if err != nil {
 			return err
 		}

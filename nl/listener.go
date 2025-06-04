@@ -85,7 +85,7 @@ type (
 			Bck   []*cmn.Bck
 		}
 
-		Errs      cos.Errs      // reported error and count
+		errs      cos.Errs      // reported error and count
 		progress  time.Duration // time interval to monitor the progress
 		addedTime atomic.Int64  // Time when `nl` is added
 
@@ -113,6 +113,7 @@ func NewNLB(uuid, action, cause string, srcs meta.NodeMap, progress time.Duratio
 	nlb := &ListenerBase{
 		Srcs:        srcs,
 		Stats:       NewNodeStats(len(srcs)),
+		errs:        cos.NewErrs(),
 		progress:    progress,
 		lastUpdated: make(map[string]int64, len(srcs)),
 	}
@@ -167,14 +168,14 @@ func (nlb *ListenerBase) Callback(nl Listener, ts int64) {
 	}
 }
 
-func (nlb *ListenerBase) AddErr(err error) { nlb.Errs.Add(err) }
-func (nlb *ListenerBase) ErrCnt() int      { return nlb.Errs.Cnt() }
+func (nlb *ListenerBase) AddErr(err error) { nlb.errs.Add(err) }
+func (nlb *ListenerBase) ErrCnt() int      { return nlb.errs.Cnt() }
 
 func (nlb *ListenerBase) Err() error {
 	if nlb.ErrCnt() == 0 {
 		return nil
 	}
-	return &nlb.Errs
+	return &nlb.errs
 }
 
 func (nlb *ListenerBase) SetStats(daeID string, stats any) {

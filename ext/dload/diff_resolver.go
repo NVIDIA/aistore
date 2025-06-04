@@ -75,6 +75,7 @@ func NewDiffResolver(ctx DiffResolverCtx) *DiffResolver {
 		srcCh:    make(chan *core.LOM, 128),
 		dstCh:    make(chan *DstElement, 128),
 		resultCh: make(chan DiffResolverResult, 128),
+		err:      cos.NewErrs(),
 	}
 }
 

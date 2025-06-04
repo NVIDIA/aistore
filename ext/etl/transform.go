@@ -398,24 +398,24 @@ func GetInitMsg(etlName string) (InitMsg, error) {
 	return cc.getInitMsg(), nil
 }
 
-func GetOfflineTransform(etlName string, xctn core.Xact) (core.GetROC, Session, error) {
+func GetOfflineTransform(etlName string, xctn core.Xact) (getROC core.GetROC, xetl core.Xact, session Session, err error) {
 	cc, err := GetCommunicator(etlName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	switch comm := cc.(type) {
 	case httpCommunicator:
-		return comm.OfflineTransform, nil, nil
+		return comm.OfflineTransform, comm.Xact(), nil, nil
 	case statefulCommunicator:
 		session, err := comm.createSession(xctn, offlineSessionMultiplier)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return session.OfflineTransform, session, nil
+		return session.OfflineTransform, comm.Xact(), session, nil
 	default:
 		debug.Assert(false, "unknown communicator type")
-		return nil, nil, cos.NewErrNotFound(core.T, etlName+" unknown communicator type")
+		return nil, nil, nil, cos.NewErrNotFound(core.T, etlName+" unknown communicator type")
 	}
 }
 

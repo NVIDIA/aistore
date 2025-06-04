@@ -21,19 +21,22 @@ import (
 type (
 	etlFactory struct {
 		xreg.RenewBase
-		xctn *xactETL
+		xctn *XactETL
 	}
 	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
 	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
-	xactETL struct {
-		msg etl.InitMsg
+	XactETL struct {
+		ObjErrs cos.Errs
+		msg     etl.InitMsg
 		xact.Base
 	}
 )
 
+const maxObjErr = 128
+
 // interface guard
 var (
-	_ core.Xact      = (*xactETL)(nil)
+	_ core.Xact      = (*XactETL)(nil)
 	_ xreg.Renewable = (*etlFactory)(nil)
 )
 
@@ -56,17 +59,20 @@ func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 // (tests only)
 
-func newETL(p *etlFactory) *xactETL {
+func newETL(p *etlFactory) *XactETL {
 	msg, ok := p.Args.Custom.(etl.InitMsg)
 	debug.Assert(ok)
-	xctn := &xactETL{msg: msg}
+	xctn := &XactETL{
+		msg:     msg,
+		ObjErrs: cos.NewErrs(maxObjErr),
+	}
 	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)
 	return xctn
 }
 
-func (*xactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (*XactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *xactETL) Snap() (snap *core.Snap) {
+func (r *XactETL) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 

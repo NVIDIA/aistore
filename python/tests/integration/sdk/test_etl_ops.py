@@ -328,8 +328,8 @@ class TestETLOps(unittest.TestCase):
 
         spec_etl_details = spec_etl.view()
         self.assertIsNotNone(spec_etl_details)
-        self.assertEqual(spec_etl_details.name, self.etl_name)
-        self.assertIsNotNone(spec_etl_details.spec)
+        self.assertEqual(spec_etl_details.init_msg.name, self.etl_name)
+        self.assertIsNotNone(spec_etl_details.init_msg.spec)
 
         # Need to add this because of @cases decorator
         try:
@@ -387,11 +387,12 @@ class TestETLOps(unittest.TestCase):
         )
         etl_details = etl.view()
         self.assertIsNotNone(etl_details)
-        self.assertEqual(etl_details.name, self.etl_name)
+        self.assertEqual(etl_details.init_msg.name, self.etl_name)
         self.assertEqual(
-            etl_details.runtime.image, "aistorage/transformer_hello_world:latest"
+            etl_details.init_msg.runtime.image,
+            "aistorage/transformer_hello_world:latest",
         )
-        self.assertEqual(etl_details.runtime.command, FASTAPI_CMD)
+        self.assertEqual(etl_details.init_msg.runtime.command, FASTAPI_CMD)
 
     @pytest.mark.etl
     def test_etl_init_hash_with_args(self):
@@ -427,13 +428,15 @@ class TestETLOps(unittest.TestCase):
 
         etl_details = etl.view()
         self.assertIsNotNone(etl_details)
-        self.assertEqual(etl_details.name, self.etl_name)
+        self.assertEqual(etl_details.init_msg.name, self.etl_name)
         self.assertEqual(
-            etl_details.runtime.image, "aistorage/transformer_hash_with_args:latest"
+            etl_details.init_msg.runtime.image,
+            "aistorage/transformer_hash_with_args:latest",
         )
-        self.assertEqual(etl_details.runtime.command, FASTAPI_CMD)
+        self.assertEqual(etl_details.init_msg.runtime.command, FASTAPI_CMD)
         self.assertEqual(
-            etl_details.runtime.env[0], EnvVar(name="SEED_DEFAULT", value="500")
+            etl_details.init_msg.runtime.env[0],
+            EnvVar(name="SEED_DEFAULT", value="500"),
         )
 
     @pytest.mark.etl

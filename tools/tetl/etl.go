@@ -380,15 +380,15 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)
 	// reread `InitMsg` and compare with the specified
-	etlMsg, err := api.ETLGetInitMsg(bp, etlName)
+	details, err := api.ETLGetDetail(bp, etlName)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
 
-	tassert.Errorf(t, etlMsg.Name() == etlName, "expected etlName %s, got %s", etlName, etlMsg.Name())
-	tassert.Errorf(t, etlMsg.CommType() == commType, "expected communicator type %s, got %s", commType, etlMsg.CommType())
+	tassert.Errorf(t, details.InitMsg.Name() == etlName, "expected etlName %s, got %s", etlName, details.InitMsg.Name())
+	tassert.Errorf(t, details.InitMsg.CommType() == commType, "expected communicator type %s, got %s", commType, details.InitMsg.CommType())
 
-	if initSpec, ok := etlMsg.(*etl.InitSpecMsg); ok {
+	if initSpec, ok := details.InitMsg.(*etl.InitSpecMsg); ok {
 		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
 	}
 
@@ -402,10 +402,10 @@ func InitCode(t *testing.T, bp api.BaseParams, msg *etl.InitCodeMsg) (xid string
 	xid = id
 
 	// reread `InitMsg` and compare with the specified
-	etlMsg, err := api.ETLGetInitMsg(bp, msg.Name())
+	details, err := api.ETLGetDetail(bp, msg.Name())
 	tassert.CheckFatal(t, err)
 
-	initCode := etlMsg.(*etl.InitCodeMsg)
+	initCode := details.InitMsg.(*etl.InitCodeMsg)
 	tassert.Errorf(t, initCode.Name() == msg.Name(), "expected etlName %q != %q", msg.Name(), initCode.Name())
 	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(),
 		"expected communicator type %s != %s", msg.CommType(), initCode.CommType())

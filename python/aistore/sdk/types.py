@@ -418,9 +418,9 @@ class InitCodeETLArgs(InitETLArgs):
         return dict_rep
 
 
-class ETLDetails(BaseModel):
+class ETLInitMsg(BaseModel):
     """
-    Represents the API response of queries on single ETL details
+    Represents the API message structure for initializing an ETL
     """
 
     name: str
@@ -445,6 +445,25 @@ class ETLDetails(BaseModel):
         if spec is not None:
             spec = base64.b64decode(spec)
         return spec
+
+
+class ETLObjError(BaseModel):
+    """
+    Represents an error encountered during ETL processing of an object
+    """
+
+    obj_name: str
+    msg: str
+    ecode: int
+
+
+class ETLDetails(BaseModel):
+    """
+    Represents the API response of queries on single ETL details
+    """
+
+    init_msg: ETLInitMsg
+    obj_errors: Optional[List[ETLObjError]]
 
 
 class PromoteAPIArgs(BaseModel):
