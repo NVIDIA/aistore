@@ -475,3 +475,39 @@ class TestObjectOps(ParallelTestBase):
                 .read_all()
             )
             self.assertEqual(content, expected_content)
+
+    @cases(
+        "%",
+        "%25",
+        "%3D",
+        r"yHvMJM(s\(0hR\3\)",
+        "file.mp3",
+        "audio/raw/file.wav",
+        "file_#@!$%^&*()_+.mp3",
+        "track?name=lofi&v=1",
+        "track%20space.wav",
+        "my audio file .m4a",
+        "你好世界",
+        "-hiddenfile.ogg",
+        ".audio_hidden.wav",
+        "MiXeD_CaSe_Track.WAV",
+        "track=id=1234.mp3",
+    )
+    def test_object_name_encoding(self, obj_name):
+        """
+        Test that object names with special characters are correctly encoded and decoded.
+        """
+        obj = self.bucket.object(obj_name)
+        content = b"Special character test content"
+
+        # Put object with special characters in name
+        obj.get_writer().put_content(content)
+
+        # Get object and verify content
+        fetched_content = obj.get_reader().read_all()
+        self.assertEqual(content, fetched_content)
+
+        # Verify that the object can be listed with its special name
+        listed_objects = self.bucket.list_objects_iter(prefix=obj_name)
+        self.assertIn(obj_name, [o.name for o in listed_objects])
+        obj.delete()
