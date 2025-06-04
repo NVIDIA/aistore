@@ -39,6 +39,7 @@ import (
 // - range read
 // - soft errors other than not-found
 // - out.ErrMsg = "not found"
+// - instead of keeping the resulting (TAR) sgl in memory - transmit it in a streaming fashion (while calling tar.Flush)
 
 type (
 	mossFactory struct {

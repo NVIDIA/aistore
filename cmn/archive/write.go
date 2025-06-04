@@ -37,7 +37,7 @@ type (
 		// Init specific writer
 		Write(nameInArch string, oah cos.OAH, reader io.Reader) error
 		// Close, cleanup
-		Fini()
+		Fini() error
 		// Copy arch, with potential subsequent APPEND
 		Copy(src io.Reader, size ...int64) error
 
@@ -119,10 +119,14 @@ func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 
 // tarWriter
 
+// tar.FormatUnknown lets standard library choose USTAR (most compatible) or PAX (extended features) as needed.
+// Can be overridden via opts.TarFormat if specific format required (e.g., FormatGNU for GNU tar compatibility)
+
 func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tw.baseW.init(w, cksum, opts)
 
-	tw.format = tar.FormatUnknown // default
+	tw.format = tar.FormatUnknown // default: auto-select most compatible format
+
 	if opts != nil {
 		tw.format = opts.TarFormat
 	}
@@ -132,9 +136,10 @@ func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 
-func (tw *tarWriter) Fini() {
-	tw.slab.Free(tw.buf)
-	tw.tw.Close()
+func (tw *tarWriter) Fini() error {
+	defer tw.slab.Free(tw.buf)
+
+	return tw.tw.Close()
 }
 
 func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err error) {
@@ -181,9 +186,14 @@ func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
 }
 
-func (tzw *tgzWriter) Fini() {
-	tzw.tw.Fini()
-	tzw.gzw.Close()
+func (tzw *tgzWriter) Fini() error {
+	// close (and note: tar.close flushes)
+	if err := tzw.tw.Fini(); err != nil {
+		tzw.gzw.Close() // Try to close gzip anyway
+		return err
+	}
+
+	return tzw.gzw.Close()
 }
 
 func (tzw *tgzWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error {
@@ -201,15 +211,16 @@ func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
 }
 
 // zipWriter
+// in re streaming use case, note: ZIP writer doesn't have explicit flush
 
 func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	zw.baseW.init(w, cksum, opts)
 	zw.zw = zip.NewWriter(zw.wmul)
 }
 
-func (zw *zipWriter) Fini() {
-	zw.slab.Free(zw.buf)
-	zw.zw.Close()
+func (zw *zipWriter) Fini() error {
+	defer zw.slab.Free(zw.buf)
+	return zw.zw.Close()
 }
 
 func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error {
@@ -257,9 +268,14 @@ func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	lzw.tw.tw = tar.NewWriter(lzw.lzw)
 }
 
-func (lzw *lz4Writer) Fini() {
-	lzw.tw.Fini()
-	lzw.lzw.Close()
+func (lzw *lz4Writer) Fini() error {
+	// close (and note: tar.close flushes)
+	if err := lzw.tw.Fini(); err != nil {
+		lzw.lzw.Close() // Try to close lz4 anyway
+		return err
+	}
+
+	return lzw.lzw.Close()
 }
 
 func (lzw *lz4Writer) Write(fullname string, oah cos.OAH, reader io.Reader) error {

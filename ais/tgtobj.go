@@ -1876,12 +1876,12 @@ func (a *putA2I) do() (int, error) {
 
 cpap: // copy + append
 	var (
-		err     error
-		wfh     *os.File
-		lmfh    cos.LomReader
-		workFQN string
-		cksum   cos.CksumHashSize
-		aw      archive.Writer
+		err, erc error
+		wfh      *os.File
+		lmfh     cos.LomReader
+		workFQN  string
+		cksum    cos.CksumHashSize
+		aw       archive.Writer
 	)
 	workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
@@ -1895,7 +1895,7 @@ cpap: // copy + append
 		cksum.Init(cos.ChecksumCesXxh)
 		aw = archive.NewWriter(a.mime, wfh, &cksum, nil /*opts*/)
 		err = aw.Write(a.filename, oah, a.r)
-		aw.Fini()
+		erc = aw.Fini()
 	} else {
 		// copy + append
 		lmfh, err = a.lom.Open()
@@ -1909,12 +1909,15 @@ cpap: // copy + append
 		if err == nil {
 			err = aw.Write(a.filename, oah, a.r)
 		}
-		aw.Fini() // in that order
+		erc = aw.Fini() // in that order
 		cos.Close(lmfh)
 	}
 
 	// finalize
 	cos.Close(wfh)
+	if err == nil {
+		err = erc
+	}
 	if err == nil {
 		cksum.Finalize()
 		err = a.finalize(cksum.Size, cksum.Clone(), workFQN)

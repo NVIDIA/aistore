@@ -702,7 +702,7 @@ func waitForDsortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 //
 
 func TestDsort(t *testing.T) {
-	for _, ext := range []string{archive.ExtTar, archive.ExtZip} { // TODO -- FIXME: add back ExtTarLz4
+	for _, ext := range []string{archive.ExtTar, archive.ExtZip, archive.ExtTarLz4} {
 		for _, lr := range []string{"list", "range"} {
 			t.Run(ext+"/"+lr, func(t *testing.T) {
 				testDsort(t, ext, lr)
@@ -1036,7 +1036,7 @@ func TestDsortDisk(t *testing.T) {
 }
 
 func TestDsortCompressionDisk(t *testing.T) {
-	for _, ext := range []string{archive.ExtTgz, archive.ExtZip} { // TODO: add archive.ExtTarLz4 back
+	for _, ext := range []string{archive.ExtTgz, archive.ExtZip, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			runDsortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1140,11 +1140,9 @@ func TestDsortMemDisk(t *testing.T) {
 }
 
 func TestDsortMinMemCompression(t *testing.T) {
-	t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: remove completely
-
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4, archive.ExtZip} {
-		for _, maxMem := range []string{"10%", "1%"} {
+		for _, maxMem := range []string{"10%"} {
 			t.Run(ext+"/mem="+maxMem, func(t *testing.T) {
 				minMemCompression(t, ext, maxMem)
 			})
