@@ -41,6 +41,8 @@ type etlBootstrapper struct {
 	xctn            *XactETL
 	pod             *corev1.Pod
 	svc             *corev1.Service
+	targetPodSpec   *corev1.PodSpec
+	targetPodName   string
 	uri             string
 	originalPodName string
 	podAddr         string
@@ -64,6 +66,14 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 	b.pod.APIVersion = "v1"
 	b.pod.Kind = "Pod"
 
+	// Initialize target pod name from environment
+	b.targetPodName = os.Getenv(env.AisK8sPod)
+
+	// Get target pod spec and cache it
+	if b.targetPodSpec, err = b._getTargetPodSpec(); err != nil {
+		return err
+	}
+
 	// The following combination of Affinity and Anti-Affinity provides for:
 	// 1. The ETL container is always scheduled on the target invoking it.
 	// 2. No more than a single ETL container with the same target is scheduled on
@@ -82,6 +92,10 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 		}
 	}
 
+	if err = b._setImagePullSecrets(); err != nil {
+		return err
+	}
+
 	b._updPodCommand()
 	b._updPodLabels()
 	b._updReady()
@@ -95,17 +109,9 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 }
 
 func (b *etlBootstrapper) _setVol() (err error) {
-	var (
-		targetPodName = os.Getenv(env.AisK8sPod)
-		targetPod     *corev1.Pod
-	)
-
-	if targetPod, err = b.k8sClient.Pod(targetPodName); err != nil {
-		return fmt.Errorf("failed to get target pod %q: %w", targetPodName, err)
-	}
-	debug.Assert(len(targetPod.Spec.Containers) > 0)
-	mounts := make([]corev1.VolumeMount, 0, len(targetPod.Spec.Containers[0].VolumeMounts))
-	for _, vol := range targetPod.Spec.Containers[0].VolumeMounts {
+	debug.Assert(len(b.targetPodSpec.Containers) > 0)
+	mounts := make([]corev1.VolumeMount, 0, len(b.targetPodSpec.Containers[0].VolumeMounts))
+	for _, vol := range b.targetPodSpec.Containers[0].VolumeMounts {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      vol.Name,
 			MountPath: vol.MountPath,
@@ -113,13 +119,21 @@ func (b *etlBootstrapper) _setVol() (err error) {
 		})
 	}
 
-	debug.Assertf(len(mounts) > 0, "target pod %q has no volume mounts for container %q", targetPodName, targetPod.Spec.Containers[0].Name)
-	debug.Assertf(len(targetPod.Spec.Volumes) > 0, "target pod %q has no volumes with PVCs", targetPodName)
+	debug.Assertf(len(mounts) > 0, "target pod %q has no volume mounts for container %q", b.targetPodName, b.targetPodSpec.Containers[0].Name)
+	debug.Assertf(len(b.targetPodSpec.Volumes) > 0, "target pod %q has no volumes with PVCs", b.targetPodName)
 
 	for i := range b.pod.Spec.Containers {
 		b.pod.Spec.Containers[i].VolumeMounts = mounts
 	}
-	b.pod.Spec.Volumes = targetPod.Spec.Volumes
+	b.pod.Spec.Volumes = b.targetPodSpec.Volumes
+	return nil
+}
+
+func (b *etlBootstrapper) _setImagePullSecrets() (err error) {
+	// Inherit imagePullSecrets from target pod spec
+	if len(b.targetPodSpec.ImagePullSecrets) > 0 {
+		b.pod.Spec.ImagePullSecrets = b.targetPodSpec.ImagePullSecrets
+	}
 	return nil
 }
 
@@ -419,4 +433,12 @@ func (b *etlBootstrapper) _getPort() (int, error) {
 		return 0, cmn.NewErrETL(b.errCtx, err.Error())
 	}
 	return port, nil
+}
+
+func (b *etlBootstrapper) _getTargetPodSpec() (*corev1.PodSpec, error) {
+	targetPod, err := b.k8sClient.Pod(b.targetPodName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target pod %q: %w", b.targetPodName, err)
+	}
+	return &targetPod.Spec, nil
 }
