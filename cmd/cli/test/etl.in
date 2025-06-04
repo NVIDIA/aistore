@@ -23,6 +23,8 @@ ais etl stop $ETL_NAME-1
 ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
 ais etl start $ETL_NAME-1
 ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
+ais etl bucket $ETL_NAME-1 ais://$BUCKET_1 ais://$BUCKET_2 --list '$OBJECT_1.txt,$OBJECT_2.txt' // IGNORE
+ais etl show errors $ETL_NAME-1 -H | awk {'print $1'}
 ais etl stop $ETL_NAME-1
 ais etl rm $ETL_NAME-1
 

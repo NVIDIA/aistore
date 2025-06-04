@@ -102,11 +102,20 @@ const (
 		indent1 + "Description:\t{{$value.Metrics.Description}}\n" +
 		"{{end}}"
 
-	transformListHdr  = "NAME\t STAGE\t XACTION\t OBJECTS\n"
-	transformListBody = "{{$value.Name}}\t {{$value.Stage}}\t {{$value.XactID}}\t " +
+	//
+	// ETL
+	//
+
+	ETLListHdr  = "NAME\t STAGE\t XACTION\t OBJECTS\n"
+	ETLListBody = "{{$value.Name}}\t {{$value.Stage}}\t {{$value.XactID}}\t " +
 		"{{if (eq $value.ObjCount 0) }}-{{else}}{{$value.ObjCount}}{{end}}\n"
-	TransformListNoHdrTmpl = "{{ range $value := . }}" + transformListBody + "{{end}}"
-	TransformListTmpl      = transformListHdr + TransformListNoHdrTmpl
+	ETLListNoHdrTmpl = "{{ range $value := . }}" + ETLListBody + "{{end}}"
+	ETLListTmpl      = ETLListHdr + ETLListNoHdrTmpl
+
+	ETLObjErrorsHdr       = "OBJECT\t ECODE\t ERROR\n"
+	ETLObjErrorsBody      = "{{$value.ObjName}}\t {{$value.Ecode}}\t {{$value.Message}}\n"
+	ETLObjErrorsNoHdrTmpl = "{{ range $value := . }}" + ETLObjErrorsBody + "{{end}}"
+	ETLObjErrorsTmpl      = ETLObjErrorsHdr + ETLObjErrorsNoHdrTmpl
 
 	//
 	// BEGIN: xactions as `nodeSnaps` ------------------------------------------------------------------------------
