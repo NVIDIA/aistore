@@ -1,6 +1,7 @@
 import unittest
-from unittest.mock import MagicMock, patch, call
 from pathlib import Path
+from unittest.mock import MagicMock, patch, call
+
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.label_attribute import LabelAttribute
 from aistore.sdk.dataset.dataset_config import DatasetConfig

@@ -6,8 +6,8 @@ import random
 import tarfile
 import unittest
 import warnings
-
 from pathlib import Path
+
 import pytest
 import requests
 
@@ -17,6 +17,8 @@ from aistore.sdk.const import (
     DUIS,
     UTF_ENCODING,
 )
+from aistore.sdk.etl.etl_templates import ECHO
+from aistore.sdk.etl.etl_const import ETL_COMM_HPUSH
 from aistore.sdk.dataset.data_attribute import DataAttribute
 from aistore.sdk.dataset.dataset_config import DatasetConfig
 from aistore.sdk.dataset.label_attribute import LabelAttribute
@@ -568,7 +570,7 @@ class TestBucketOps(ParallelTestBase):
             dataset_config, skip_missing=False, pattern="dataset", maxcount=10
         )
 
-    def test_int_list_archive(self):
+    def test_list_archive(self):
         """Upload a tar archive and list its directory via ARCH_DIR flag."""
         arch_bck = self._create_bucket(prefix="arch-int")
 
@@ -593,3 +595,43 @@ class TestBucketOps(ParallelTestBase):
         # List with parent
         with_parent = arch_bck.list_archive(archive_name, include_archive_obj=True)
         self.assertEqual(len(with_parent), len(content_map) + 1)
+
+    def test_copy_dry_run(self):
+        src_bck = self._create_bucket(prefix="src-copy-dry")
+        dst_bck = self._create_bucket(prefix="dst-copy-dry")
+
+        obj_name = f"{PREFIX_NAME}dry-run-obj"
+        src_bck.object(obj_name).get_writer().put_content(b"dummy")
+
+        job_id = src_bck.copy(to_bck=dst_bck, dry_run=True, num_workers=2)
+
+        self.assertNotEqual(job_id, "")
+
+        self.client.job(job_id).wait(TEST_TIMEOUT)
+
+        self.assertEqual(0, len(dst_bck.list_all_objects()))
+
+    @pytest.mark.etl
+    def test_transform_dry_run(self):
+        src_bck = self._create_bucket(prefix="src-transform-dry")
+        dst_bck = self._create_bucket(prefix="dst-transform-dry")
+
+        obj_name = f"{PREFIX_NAME}dry-run-obj.txt"
+        src_bck.object(obj_name).get_writer().put_content(b"dummy")
+        etl_name = f"etl-dry-{random_string(5)}"
+        etl = self.client.etl(etl_name)
+        echo_template = ECHO.format(communication_type=ETL_COMM_HPUSH)
+        etl.init_spec(template=echo_template)
+        job_id = src_bck.transform(
+            etl_name=etl.name,
+            to_bck=dst_bck,
+            dry_run=True,
+            num_workers=1,
+            prepend="new-",
+            ext={"txt": "bin"},
+        )
+        self.assertNotEqual(job_id, "")
+        self.client.job(job_id).wait(TEST_TIMEOUT)
+        self.assertEqual(0, len(dst_bck.list_all_objects()))
+        etl.stop()
+        etl.delete()

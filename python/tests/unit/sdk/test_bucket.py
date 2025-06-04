@@ -1,7 +1,8 @@
+# pylint: disable=too-many-lines
+from pathlib import Path
+from urllib.parse import quote
 import unittest
 from unittest.mock import Mock, call, patch, MagicMock, mock_open
-from urllib.parse import quote
-
 from requests import PreparedRequest
 from requests.structures import CaseInsensitiveDict
 
@@ -32,8 +33,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
-    HTTP_METHOD_PUT,
     HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
     URL_PATH_BUCKETS,
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
@@ -381,7 +382,9 @@ class TestBucket(unittest.TestCase):
     def test_list_objects_iter(self):
         # Ensure that iterator returned is correct type
         self.assertIsInstance(
-            self.ais_bck.list_objects_iter(PREFIX_NAME, "obj props", 123),
+            self.ais_bck.list_objects_iter(
+                prefix=PREFIX_NAME, props="obj props", page_size=123
+            ),
             ObjectIterator,
         )
 
@@ -616,10 +619,10 @@ class TestBucket(unittest.TestCase):
             mock_open(read_data=b"bytes in the first file").return_value,
             mock_open(read_data=b"bytes in the second file").return_value,
         ]
-        mock_file = mock_open()
-        mock_file.side_effect = file_readers
 
         # Set up mock files
+        mock_file = mock_open()
+        mock_file.side_effect = file_readers
         mock_files = [
             Mock(
                 is_file=Mock(return_value=True),
@@ -969,3 +972,123 @@ class TestBucket(unittest.TestCase):
                     props=case["props"],
                     page_size=case["page_size"],
                 )
+
+    def test_summary_initial_resp_status_error(self):
+        # Mock responses with wrong status code
+        first_response = Mock()
+        first_response.status_code = STATUS_OK  # Wrong status, should be 202
+        first_response.text = "fake-job-id"
+
+        self.mock_client.request.return_value = first_response
+
+        with self.assertRaises(UnexpectedHTTPStatusCode):
+            self.ais_bck.summary()
+
+    # pylint: disable=protected-access
+    def test_get_uploaded_obj_name_helper(self):
+        tmp_dir = Path("dummy_root")
+        file_path = tmp_dir / "sub" / "file.txt"
+
+        name1 = Bucket._get_uploaded_obj_name(
+            file_path, tmp_dir, basename=False, prepend=None
+        )
+        self.assertEqual(name1, "sub/file.txt")
+
+        name2 = Bucket._get_uploaded_obj_name(
+            file_path, tmp_dir, basename=True, prepend=None
+        )
+        self.assertEqual(name2, "file.txt")
+
+        name3 = Bucket._get_uploaded_obj_name(
+            file_path, tmp_dir, basename=True, prepend="P/"
+        )
+        self.assertEqual(name3, "P/file.txt")
+
+    def test_list_objects_iter_pagination(self):
+        entries_page1 = [BucketEntry(n="obj1"), BucketEntry(n="obj2")]
+        entries_page2 = [BucketEntry(n="obj3")]
+        list1 = BucketList(
+            UUID="uid", ContinuationToken="tok", Flags=0, Entries=entries_page1
+        )
+        list2 = BucketList(
+            UUID="uid", ContinuationToken="", Flags=0, Entries=entries_page2
+        )
+
+        self.mock_client.request_deserialize.side_effect = [list1, list2]
+
+        it = self.ais_bck.list_objects_iter(page_size=2)
+        names = [entry.name for entry in it]
+
+        self.assertEqual(names, ["obj1", "obj2", "obj3"])
+        self.assertEqual(self.mock_client.request_deserialize.call_count, 2)
+
+    def test_copy_with_latest_sync_and_workers(self):
+        dst = Bucket(client=self.mock_client, name=f"dst-copy-flags-{BCK_NAME}")
+
+        expected_value = TCBckMsg(
+            ext=None,
+            num_workers=2,
+            copy_msg=CopyBckMsg(
+                prefix="",
+                prepend="",
+                force=False,
+                dry_run=False,
+                latest=True,
+                sync=True,
+            ),
+        ).as_dict()
+
+        self._copy_exec_assert(
+            dst,
+            expected_value,
+            latest=True,
+            sync=True,
+            num_workers=2,
+        )
+
+    def test_write_dataset_post_callback(self):
+        mock_post = Mock()
+        # Call write_dataset with a post callback
+        self.ais_bck.write_dataset(self.dataset_config, post=mock_post)
+        # Verify was called with a wrapped callback
+        self.dataset_config.write_shards.assert_called_once()
+        args, kwargs = self.dataset_config.write_shards.call_args
+        self.assertIn("post", kwargs)
+        self.assertNotEqual(kwargs["post"], mock_post)
+
+    def test_verify_cloud_bucket(self):
+        self.amz_bck.verify_cloud_bucket()
+        with self.assertRaises(InvalidBckProvider):
+            self.ais_bck.verify_cloud_bucket()
+
+    @patch("aistore.sdk.bucket.validate_directory")
+    @patch("pathlib.Path.glob")
+    def test_put_files_dry_run(self, mock_glob, _validate_dir):
+        mock_file = Mock(
+            is_file=Mock(return_value=True),
+            relative_to=Mock(return_value="f.txt"),
+            stat=Mock(return_value=Mock(st_size=1)),
+            name="f.txt",
+        )
+        mock_glob.return_value = [mock_file]
+
+        res = self.ais_bck.put_files("/path", dry_run=True)
+
+        self.assertEqual(res, ["f.txt"])
+        self.mock_client.request.assert_not_called()
+
+    @patch("aistore.sdk.bucket.validate_directory")
+    @patch("logging.getLogger")
+    @cases((True, False), (False, True))
+    def test_put_files_verbose(self, test_case, mock_get_logger, _mock_validate_dir):
+        verbose, expected_disabled = test_case
+
+        mock_logger = Mock()
+        mock_get_logger.return_value = mock_logger
+
+        # Mock an empty directory to avoid file processing
+        with patch("pathlib.Path.glob", return_value=[]):
+            self.ais_bck.put_files("/path", verbose=verbose)
+
+        # Verify logger disabled state matches expectation
+        self.assertEqual(mock_logger.disabled, expected_disabled)
