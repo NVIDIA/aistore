@@ -71,7 +71,7 @@ echo "Configuring frontend rate limiting..."
 
 # Frontend rate limiting controls client-facing requests
 # Use pipeline-compatible settings: maxTokens=32 (Hard-coded max), burst_size=10
-ais bucket props set $bucket rate_limit.frontend.enabled=true rate_limit.frontend.interval=10s rate_limit.frontend.burst_size=10 rate_limit.frontend.max_tokens=32 || exit $?
+ais bucket props set $bucket rate_limit.frontend.enabled=true rate_limit.frontend.interval=10s rate_limit.frontend.burst_size=2 rate_limit.frontend.max_tokens=32 || exit $?
 
 echo "Frontend rate limiting configured:"
 ais bucket props show $bucket rate_limit.frontend
@@ -117,6 +117,7 @@ if [[ $rate_limited_count -gt 0 ]]; then
 else
     echo "No rate limiting detected (no HTTP 429 responses)"
     echo "Note: Using curl to bypass CLI retry logic and detect actual rate limiting"
+    exit 1
 fi
 
 echo

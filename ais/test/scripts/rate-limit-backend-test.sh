@@ -104,24 +104,22 @@ echo "Backend rate limiting configured:"
 ais bucket props show $backend_bucket rate_limit.backend
 
 echo
-echo "Testing backend rate limiting..."
-backend_start=$(date +%s)
-backend_success=0
+echo "Validating configuration was applied correctly..."
 
-# Create objects to test backend rate limiting behavior
-for i in {1..5}; do
-    if echo "backend-test-$i" | ais put - "$backend_bucket/rate-test-backend-$i" 1>/dev/null 2>&1; then
-        ((backend_success++))
-    fi
-done
-
-backend_end=$(date +%s)
-backend_duration=$((backend_end - backend_start))
-
-echo "Backend test: $backend_success/5 objects created in ${backend_duration}s"
-if [[ "$backend_bucket" == ais://* ]]; then
-    echo "For local buckets, backend rate limiting may not be apparent"
+# Configuration validation
+echo "Verifying backend rate limiting settings..."
+if ! ais bucket props show $backend_bucket rate_limit.backend | grep -q "enabled.*true" ||
+   ! ais bucket props show $backend_bucket rate_limit.backend | grep -q "interval.*5s" ||
+   ! ais bucket props show $backend_bucket rate_limit.backend | grep -q "max_tokens.*3" ||
+   ! ais bucket props show $backend_bucket rate_limit.backend | grep -q "num_retries.*2"; then
+    echo "Error: Backend rate limiting configuration validation failed"
+    echo "Expected: enabled=true, interval=5s, max_tokens=3, num_retries=2"
+    ais bucket props show $backend_bucket rate_limit.backend
+    exit 1
 fi
+
+echo "Backend rate limiting configuration successfully validated"
+echo "Note: Backend rate limiting operates between AIS and cloud storage"
 
 echo
 echo "Checking that rate limit settings are properly stored..."
