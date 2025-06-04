@@ -653,8 +653,7 @@ test:long:ishard:
     NUM_PROXY: 1
     NUM_TARGET: 3
   rules:
-    - !reference [.test_k8s, rules]
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
+    - !reference [.default_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
       allow_failure: true
