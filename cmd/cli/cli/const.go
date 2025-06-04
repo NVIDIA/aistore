@@ -186,6 +186,7 @@ const (
 	cmdSpec    = "spec"
 	cmdCode    = "code"
 	cmdDetails = "details"
+	cmdErrors  = "errors"
 
 	// config subcommands
 	cmdCLI        = "cli"

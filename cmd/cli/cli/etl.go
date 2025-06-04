@@ -69,6 +69,9 @@ var (
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
+		commandShow: {
+			noHeaderFlag,
+		},
 		cmdStart:      {},
 		commandRemove: {},
 	}
@@ -79,10 +82,19 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         cmdDetails,
-				Usage:        "Show ETL details",
+				Usage:        "Show ETL specification details",
 				ArgsUsage:    etlNameArgument,
 				Action:       etlShowDetailsHandler,
 				BashComplete: etlIDCompletions,
+				Flags:        sortFlags(etlSubFlags[commandShow]),
+			},
+			{
+				Name:         cmdErrors,
+				Usage:        "Show errors encountered during ETL processing objects",
+				ArgsUsage:    etlNameArgument,
+				Action:       etlShowErrorsHandler,
+				BashComplete: etlIDCompletions,
+				Flags:        sortFlags(etlSubFlags[commandShow]),
 			},
 		},
 	}
@@ -358,10 +370,27 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	if hideHeader {
-		return l, teb.Print(list, teb.TransformListNoHdrTmpl)
+		return l, teb.Print(list, teb.ETLListNoHdrTmpl)
 	}
 
-	return l, teb.Print(list, teb.TransformListTmpl)
+	return l, teb.Print(list, teb.ETLListTmpl)
+}
+
+func etlShowErrorsHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	etlName := c.Args().Get(0)
+	details, err := api.ETLGetDetail(apiBP, etlName)
+	if err != nil {
+		return V(err)
+	}
+
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	if hideHeader {
+		return teb.Print(details.ObjErrs, teb.ETLObjErrorsNoHdrTmpl)
+	}
+	return teb.Print(details.ObjErrs, teb.ETLObjErrorsTmpl)
 }
 
 func etlShowDetailsHandler(c *cli.Context) error {
@@ -373,10 +402,11 @@ func etlShowDetailsHandler(c *cli.Context) error {
 }
 
 func etlPrintDetails(c *cli.Context, id string) error {
-	msg, err := api.ETLGetInitMsg(apiBP, id)
+	details, err := api.ETLGetDetail(apiBP, id)
 	if err != nil {
 		return V(err)
 	}
+	msg := details.InitMsg
 
 	fmt.Fprintln(c.App.Writer, fblue(etl.Name+": "), msg.Name())
 	fmt.Fprintln(c.App.Writer, fblue(etl.CommunicationType+": "), msg.CommType())

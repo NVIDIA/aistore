@@ -184,6 +184,18 @@ Displays details about a specific ETL, including:
 
 ---
 
+## View ETL errors
+
+```sh
+ais etl show errors <ETL_NAME>
+
+OBJECT           ECODE   ERROR
+non-exist-obj    0       stat /ais/nvme9n1/@ais/nnn/%ob/non-exist-obj: no such file or directory
+...
+```
+
+Shows errors encountered during ETL processing of objects.
+
 ## View ETL Logs
 
 ```sh

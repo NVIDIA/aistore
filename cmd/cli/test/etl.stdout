@@ -16,6 +16,7 @@ Hello World!
 COMMUNICATION TYPE:  hpush://
 ARGUMENT TYPE: fqn
 Hello World!
+$OBJECT_2.txt
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 COMMUNICATION TYPE:  hpush://
