@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"path"
 	"regexp"
 	"strings"
@@ -75,11 +76,12 @@ type (
 	}
 
 	Base struct {
-		Description      string  `json:"description"`
-		Bck              cmn.Bck `json:"bucket"`
-		Timeout          string  `json:"timeout"`
-		ProgressInterval string  `json:"progress_interval"`
-		Limits           Limits  `json:"limits"`
+		Description      string      `json:"description"`
+		Bck              cmn.Bck     `json:"bucket"`
+		Timeout          string      `json:"timeout"`
+		ProgressInterval string      `json:"progress_interval"`
+		Limits           Limits      `json:"limits"`
+		Headers          http.Header `json:"headers,omitempty"`
 	}
 
 	SingleObj struct {
