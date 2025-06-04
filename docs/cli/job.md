@@ -191,11 +191,13 @@ NAME:
    e.g.:
      - show job prefetch-listrange         - show all running prefetch jobs;
      - show job prefetch                   - same as above;
+     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
      - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
      - show job copy-listrange             - show all running multi-object copies;
      - show job copy-objects               - same as above (using display name);
      - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
      - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
+     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
      - show job ec                         - show all erasure-coding;
      - show job list                       - show all running list-objects jobs;
      - show job ls                         - same as above;
@@ -220,6 +222,7 @@ OPTIONS:
    --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --regex value     Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   --top value       Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
    --units value     Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
@@ -269,6 +272,41 @@ The output contains a few extra columns:
 - `ERRORS` - the total number of objects EC failed to restore
 - `QUEUE` - the average length of working queue: the average number of objects waiting in the queue when a new EC encode request received. Values close to `0` mean that every object was processed immediately after the request had been received
 - `AVG TIME` - the average total processing time for an object: from the moment the object is put to the working queue and to the moment the last encoded slice is sent to another target
+
+### Examples using `--top` flag
+
+Show 2 most recent list jobs:
+
+```console
+$ ais show job list --top 2
+list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
+ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
+list[q9MIgaNLO] (run options: ais://job-top-test, props:name,size,cached) 
+NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
+ZXzt8081         q9MIgaNLO       list    ais://job-top-test      6               36B     22:29:39        -       Running
+```
+
+Show 1 most recent job of any type:
+
+```console
+$ ais show job --top 1
+list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
+ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
+```
+
+Show 2 most recent list jobs including finished ones:
+
+```console
+$ ais show job list --all --top 2
+list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
+ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
+list[q9MIgaNLO] (run options: ais://job-top-test, props:name,size,cached) 
+NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
+ZXzt8081         q9MIgaNLO       list    ais://job-top-test      6               36B     22:29:39        -       Running
+```
 
 ### Options
 
