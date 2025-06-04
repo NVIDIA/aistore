@@ -28,14 +28,14 @@ const (
 )
 
 type (
-	hkcb func(now int64) time.Duration
+	HKCB func(now int64) time.Duration
 	op   struct {
-		f        hkcb
+		f        HKCB
 		name     string
 		interval time.Duration
 	}
 	timedAction struct {
-		f          hkcb
+		f          HKCB
 		name       string
 		updateTime int64
 	}
@@ -74,7 +74,7 @@ func WaitStarted() {
 	}
 }
 
-func Reg(name string, f hkcb, interval time.Duration) {
+func Reg(name string, f HKCB, interval time.Duration) {
 	debug.Assert(nlog.Stopping() || HK.running.Load())
 	debug.Assert(interval != UnregInterval)
 
@@ -91,7 +91,7 @@ func Unreg(name string) {
 }
 
 // non-presence is fine
-func UnregIf(name string, f hkcb) {
+func UnregIf(name string, f HKCB) {
 	HK.workCh <- op{name: name, f: f, interval: UnregInterval}
 }
 

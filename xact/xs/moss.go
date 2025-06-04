@@ -33,6 +33,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// TODO -- FIXME:
+// - recv()
+// - ctlmsg
+// - range read
+// - soft errors other than not-found
+// - out.ErrMsg = "not found"
+
 type (
 	mossFactory struct {
 		xreg.RenewBase
@@ -40,12 +47,11 @@ type (
 	}
 	XactMoss struct {
 		xact.DemandBase
-		hk struct {
-			name string
-			ival time.Duration
-		}
-		recvCount int64 // TODO -- FIXME: rm
 	}
+)
+
+const (
+	mossIdleTime = xact.IdleDefault
 )
 
 // interface guard
@@ -74,7 +80,7 @@ func (*mossFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{}
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, xact.IdleDefault) // DEBUG
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 	return r
 }
 
@@ -88,12 +94,7 @@ func (r *XactMoss) Run(wg *sync.WaitGroup) {
 
 	wg.Done()
 
-	r.hk.name = r.ID() + hk.NameSuffix
-	r.hk.ival = xact.IdleDefault
 	bundle.SDM.RegRecv(r.ID(), r.recv)
-
-	// terminate via hk
-	hk.Reg(r.ID()+hk.NameSuffix, r.fini, r.hk.ival)
 }
 
 func (r *XactMoss) Abort(err error) bool {
@@ -101,26 +102,30 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	hk.UnregIf(r.hk.name, r.fini)
 	bundle.SDM.UnregRecv(r.ID())
+	r.DemandBase.Stop()
 	r.Finish()
 	return true
 }
 
+// terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(int64) (d time.Duration) {
 	switch {
 	case r.IsAborted() || r.Finished():
 		return hk.UnregInterval
-	case !r.IsIdle():
-		return r.hk.ival
+	case r.Pending() > 0:
+		return mossIdleTime
 	default:
+		nlog.Infoln(r.Name(), "idle expired, finishing")
 		bundle.SDM.UnregRecv(r.ID())
+		r.DemandBase.Stop()
 		r.Finish()
 		return hk.UnregInterval
 	}
 }
 
 // Do processes the moss request and writes the multipart response
+// TODO -- FIXME: split and refactor defer func()
 func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 	// 1. Validate request
 	if len(req.In) == 0 {
@@ -147,6 +152,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 		opts = archive.Opts{TarFormat: tar.FormatGNU}
 		aw   = archive.NewWriter(mime, sgl, nil /*checksum*/, &opts)
 	)
+	r.IncPending()
 
 	// cleanup
 	defer func() {
@@ -154,6 +160,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 			aw.Fini()
 		}
 		sgl.Free()
+		r.DecPending()
 	}()
 
 	// 5. Process each object in order
@@ -162,7 +169,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 			return err
 		}
 
-		debug.Assert(objIn.Length == 0, "range read not implemented yet") // TODO -- FIXME
+		debug.Assert(objIn.Length == 0, "range read not implemented yet")
 
 		out := api.MossOut{
 			ObjName:  objIn.ObjName,
@@ -193,7 +200,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 				resp.Out = append(resp.Out, out)
 				continue
 			}
-			return err // TODO -- FIXME: other soft errors?
+			return err
 		}
 		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
@@ -247,7 +254,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 		r.ObjsAdd(1, out.Size)
 
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infof("%s: [%d/%d] %s (%s)", r.Name(), idx+1, len(req.In), lom.Cname(), cos.ToSizeIEC(out.Size, 2))
+			nlog.Infoln(r.Name(), "archived cnt:", idx+1, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 		}
 	}
 
@@ -300,25 +307,27 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 		return err
 	}
 
-	nlog.Infof("%s: completed, %d objects, %s archive", r.Name(), len(resp.Out), mime)
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(r.Name(), "done: [", len(resp.Out), "objects ->", mime, "archive ]")
+	}
 	return nil
 }
 
 func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
-		nlog.ErrorDepth(1, r.Name(), "recv error:", err)
+		nlog.Errorln(r.Name(), "recv error:", err)
 		return err
 	}
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		nlog.ErrorDepth(1, r.Name(), "failed to read data:", err)
+		nlog.Errorln(r.Name(), "failed to read data:", err)
 		return err
 	}
 
-	r.recvCount++
-	nlog.InfoDepth(1, r.Name(), "received object:", hdr.ObjName, "size:", len(data), "data:", string(data))
-
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(r.Name(), "received:", hdr.Bck.Cname(hdr.ObjName), "size:", len(data))
+	}
 	return nil
 }
 
