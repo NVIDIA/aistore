@@ -5,12 +5,14 @@
 package ais
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
@@ -166,10 +168,23 @@ func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []str
 		return
 	}
 
-	// 3. read and unmarshal MossReq
+	// 3. read, unmarshal, and validate MossReq
 	req := &api.MossReq{}
 	if err := cmn.ReadJSON(w, r, req); err != nil {
 		return
+	}
+	if len(req.In) == 0 {
+		t.writeErr(w, r, errors.New(apc.MossExec+" : empty input"))
+		return
+	}
+	if req.OutputFormat == "" {
+		req.OutputFormat = archive.ExtTar // default
+	} else {
+		req.OutputFormat, err = archive.Mime(req.OutputFormat, "" /*filename*/) // normalize
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
 	}
 
 	// 4. generate target-local xaction ID using BEID mechanism
@@ -187,8 +202,8 @@ func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []str
 	}
 	xctn := rns.Entry.Get()
 
-	// run it
 	if !rns.IsRunning() {
+		// run it
 		xact.GoRunW(xctn)
 	}
 

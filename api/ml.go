@@ -37,7 +37,6 @@ const (
 
 const (
 	MossMultipartPrefix = "multipart/" // must match response Content-Type prefix
-	MossBoundaryParam   = "boundary"   // Content-Type param expected by multipart.Reader
 
 	MossMetadataField = "metadata"
 	MossArchiveField  = "archive"
@@ -65,7 +64,7 @@ type (
 		ObjName  string `json:"objname"`          // same as the corresponding MossIn.ObjName
 		Bucket   string `json:"bucket"`           // ditto
 		Provider string `json:"provider"`         // ditto
-		Opaque   string `json:"opaque,omitempty"` // from the corresponding MossIn; multi-objname logic on the client side
+		Opaque   []byte `json:"opaque,omitempty"` // from the corresponding MossIn; multi-objname logic on the client side
 		ErrMsg   string `json:"err_msg,omitempty"`
 		Size     int64  `json:"size"`
 	}
