@@ -79,7 +79,7 @@ func (u *HreqArgs) ReqDeprecated() (*http.Request, error) {
 		return nil, err
 	}
 	if u.Header != nil {
-		CopyHeaders(u.Header, &req.Header)
+		CopyHeaders(req.Header, u.Header)
 	}
 	return req, nil
 }
@@ -109,7 +109,7 @@ func (u *HreqArgs) Req() (*http.Request, error) {
 	req.Body = rc
 	req.ContentLength = int64(l) // todo: preferably, with BodyR case as well
 	if u.Header != nil {
-		CopyHeaders(u.Header, &req.Header)
+		CopyHeaders(req.Header, u.Header)
 	}
 	return req, nil
 }
