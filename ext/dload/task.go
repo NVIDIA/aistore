@@ -116,8 +116,8 @@ func (task *singleTask) _dlocal(lom *core.LOM, timeout time.Duration) (bool /*er
 		return true, err
 	}
 
-	// Add custom headers from the download job
-	cmn.CopyHeaders(task.job.Headers(), &req.Header)
+	// Add custom headers, if any
+	cmn.CopyHeaders(req.Header, task.job.Headers())
 
 	// Set "User-Agent" header when doing requests to Google Cloud Storage.
 	// This should increase the number of connections to GCS.
