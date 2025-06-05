@@ -860,11 +860,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 
 	// verbose
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		var s string
-		if bck.Props.Mirror.Enabled {
-			s = " (put-mirror)"
-		}
-		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx(), s)
+		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
 	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
