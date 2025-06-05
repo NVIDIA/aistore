@@ -7,7 +7,6 @@ package xs
 
 import (
 	"archive/tar"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -25,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -34,12 +34,15 @@ import (
 )
 
 // TODO -- FIXME:
-// - recv()
+// - recv() and generally, multi-target
 // - ctlmsg
 // - range read
 // - soft errors other than not-found
-// - out.ErrMsg = "not found"
-// - instead of keeping the resulting (TAR) sgl in memory - transmit it in a streaming fashion (while calling tar.Flush)
+// - streaming - instead of keeping the resulting (TAR) sgl in memory (reminder to tar.Flush)
+// - error handling across the board; mossErr{wrapped-err}
+
+// TODO:
+// - write checksum
 
 type (
 	mossFactory struct {
@@ -48,6 +51,17 @@ type (
 	}
 	XactMoss struct {
 		xact.DemandBase
+	}
+)
+
+type (
+	mosswi struct {
+		aw   archive.Writer
+		r    *XactMoss
+		smap *meta.Smap
+		sgl  *memsys.SGL
+		cnt  int
+		size int64
 	}
 )
 
@@ -125,191 +139,93 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 	}
 }
 
-// Do processes the moss request and writes the multipart response
-// TODO -- FIXME: split and refactor defer func()
+// process api.GetBatch request and write multipart response
 func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
-	// 1. Validate request
-	if len(req.In) == 0 {
-		return fmt.Errorf("%s: empty object list", r.Name())
-	}
-
-	// 2. Determine output format (default TAR)
-	mime := req.OutputFormat
-	if mime == "" {
-		mime = archive.ExtTar // default to TAR
-	}
-
-	// 3. Prepare response metadata
-	resp := &api.MossResp{
-		Out:  make([]api.MossOut, 0, len(req.In)),
-		UUID: r.ID(),
-	}
-
-	// 4. Create archive writer
 	var (
-		smap = core.T.Sowner().Get()
+		resp = &api.MossResp{
+			Out:  make([]api.MossOut, 0, len(req.In)),
+			UUID: r.ID(),
+		}
 		mm   = core.T.PageMM()
 		sgl  = mm.NewSGL(0)
-		opts = archive.Opts{TarFormat: tar.FormatGNU}
-		aw   = archive.NewWriter(mime, sgl, nil /*checksum*/, &opts)
+		opts = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format (here and elsewhere)
+		wi   = mosswi{
+			r:    r,
+			smap: core.T.Sowner().Get(),
+			sgl:  sgl,
+			aw:   archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts),
+		}
 	)
 	r.IncPending()
+	defer wi.cleanup()
 
-	// cleanup
-	defer func() {
-		if aw != nil {
-			aw.Fini()
-		}
-		sgl.Free()
-		r.DecPending()
-	}()
-
-	// 5. Process each object in order
-	for idx, objIn := range req.In {
+	for _, in := range req.In {
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
-
-		debug.Assert(objIn.Length == 0, "range read not implemented yet")
-
+		if in.Length != 0 {
+			return cmn.NewErrNotImpl("range read", "moss")
+		}
 		out := api.MossOut{
-			ObjName:  objIn.ObjName,
-			Bucket:   objIn.Bucket,
-			Provider: objIn.Provider,
-			Opaque:   string(objIn.Opaque),
+			ObjName:  in.ObjName,
+			Bucket:   in.Bucket,
+			Provider: in.Provider,
+			Opaque:   in.Opaque,
 		}
-
-		// Determine bucket (use per-object override if specified)
-		bck := r.Bck()
-		if objIn.Bucket != "" {
-			// Parse bucket override
-			bck = &meta.Bck{Name: objIn.Bucket}
-			if objIn.Provider != "" {
-				bck.Provider = objIn.Provider
-			}
-		}
-		out.Bucket = bck.Name
-		out.Provider = bck.Provider
-
-		// Get object
-		lom := core.AllocLOM(objIn.ObjName)
-		defer core.FreeLOM(lom)
-
-		if err := lom.InitBck(bck.Bucket()); err != nil {
-			if req.ContinueOnErr {
-				out.ErrMsg = err.Error()
-				resp.Out = append(resp.Out, out)
-				continue
-			}
-			return err
-		}
-		_, local, err := lom.HrwTarget(smap)
+		// source bucket (per-object) override
+		bck, err := wi.bucket(&in)
 		if err != nil {
 			return err
 		}
-		if !local {
-			continue
-		}
 
-		if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-			if os.IsNotExist(err) {
-				if req.ContinueOnErr {
-					// Add missing file entry with __404__ prefix
-					missingName := api.MissingFilesDirectory + "/" + bck.Name + "/" + objIn.ObjName
-					oah := cos.SimpleOAH{Size: 0}
-					if err := aw.Write(missingName, oah, nil); err != nil {
-						return err
-					}
-					out.ErrMsg = "not found"
-					out.Size = 0
-					resp.Out = append(resp.Out, out)
-					continue
-				}
-			}
-			return err
-		}
+		// note in-archive naming [convention] bucket/object skipping provider, uuid, and/or namespace
+		nameInArch := bck.Name + "/" + in.ObjName
 
-		// Open object for reading
-		fh, err := lom.Open()
+		// write next
+		lom := core.AllocLOM(in.ObjName)
+		err = wi.write(bck, lom, &out, nameInArch, req.ContinueOnErr)
+		core.FreeLOM(lom)
 		if err != nil {
-			if req.ContinueOnErr {
-				out.ErrMsg = err.Error()
-				resp.Out = append(resp.Out, out)
-				continue
-			}
 			return err
 		}
-		defer fh.Close()
-
-		// Write to archive
-		nameInArch := bck.Name + "/" + objIn.ObjName
-		if err := aw.Write(nameInArch, lom, fh); err != nil {
-			return err
-		}
-
-		// Update metadata
-		out.Size = lom.Lsize()
 		resp.Out = append(resp.Out, out)
 
-		// Update progress
-		r.ObjsAdd(1, out.Size)
+		wi.cnt++
+		wi.size += out.Size
 
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln(r.Name(), "archived cnt:", idx+1, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
+			nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 		}
 	}
 
-	// 6. Finalize archive
-	aw.Fini()
-	aw = nil
+	// flush and close aw
+	erc := wi.aw.Fini()
+	wi.aw = nil
+	if erc != nil {
+		return erc
+	}
 
-	// 7. Write multipart response
-	boundary := cos.GenUUID()
+	// write multipart response
+	// note: set response headers BEFORE writing
+	// format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
+	// (see api/client.go for the client-side parsing part)
 	mpw := multipart.NewWriter(w)
-	mpw.SetBoundary(boundary)
+	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
 
-	defer func() {
-		if mpw != nil {
-			mpw.Close()
-		}
-	}()
-
-	// 8. Set response headers BEFORE writing
-	// This MUST be set before any writes to properly format the header
-	// Format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
-	w.Header().Set(cos.HdrContentType, fmt.Sprintf("%s; %s=\"%s\"",
-		api.MossMultipartPrefix+"mixed", api.MossBoundaryParam, boundary))
-
-	// Part 1: JSON metadata
-	metaPart, err := mpw.CreateFormField(api.MossMetadataField)
-	if err != nil {
-		return err
+	written, erw := wi.multipart(mpw, req.OutputFormat, resp)
+	erc = mpw.Close()
+	if erw == nil {
+		erw = erc
+	}
+	if erw != nil {
+		return erw
 	}
 
-	if err := jsoniter.NewEncoder(metaPart).Encode(resp); err != nil {
-		return err
-	}
-
-	// Part 2: Archive
-	archivePart, err := mpw.CreateFormFile(api.MossArchiveField, api.MossArchivePrefix+mime)
-	if err != nil {
-		return err
-	}
-
-	// Copy from SGL to the multipart writer
-	if _, err := io.Copy(archivePart, sgl); err != nil {
-		return err
-	}
-
-	// Ensure all parts are written before closing
-	err = mpw.Close()
-	mpw = nil
-	if err != nil {
-		return err
-	}
+	sgl.Reset()
+	r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Name(), "done: [", len(resp.Out), "objects ->", mime, "archive ]")
+		nlog.Infoln(r.Name(), "done: [ count:", len(resp.Out), "written:", written, "format:", req.OutputFormat, "]")
 	}
 	return nil
 }
@@ -337,4 +253,110 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 	r.ToSnap(snap)
 	snap.IdleX = r.IsIdle()
 	return
+}
+
+////////////
+// mosswi //
+////////////
+
+func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, out *api.MossOut, nameInArch string, contOnErr bool) error {
+	out.Bucket = bck.Name
+	out.Provider = bck.Provider
+
+	if err := lom.InitBck(bck); err != nil {
+		return err
+	}
+	_, local, err := lom.HrwTarget(wi.smap)
+	if err != nil {
+		return err
+	}
+	if !local {
+		return cmn.NewErrNotImpl("multi-target", "moss")
+	}
+
+	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+		if os.IsNotExist(err) && contOnErr {
+			err = wi.addMissing(err, nameInArch, out)
+		}
+		return err
+	}
+
+	fh, err := lom.Open()
+	if err != nil {
+		if contOnErr {
+			err = wi.addMissing(err, nameInArch, out)
+		}
+		return err
+	}
+	defer fh.Close()
+
+	// archive
+	if err := wi.aw.Write(nameInArch, lom, fh); err != nil {
+		return err
+	}
+	out.Size = lom.Lsize()
+
+	return nil
+}
+
+func (wi *mosswi) addMissing(err error, nameInArch string, out *api.MossOut) error {
+	missingName := api.MissingFilesDirectory + "/" + nameInArch
+	oah := cos.SimpleOAH{Size: 0}
+	if err := wi.aw.Write(missingName, oah, nil); err != nil {
+		return err
+	}
+	out.ErrMsg = err.Error()
+	return nil
+}
+
+// per-object override, if specified
+func (wi *mosswi) bucket(in *api.MossIn) (*cmn.Bck, error) {
+	// default
+	bck := wi.r.Bck().Bucket()
+
+	// uname override
+	if in.Uname != "" {
+		b, _, err := meta.ParseUname(in.Uname, false)
+		if err != nil {
+			return nil, err
+		}
+		return b.Bucket(), nil
+	}
+
+	// (bucket, provider) override
+	if in.Bucket != "" {
+		np, err := cmn.NormalizeProvider(in.Provider)
+		if err != nil {
+			return nil, err
+		}
+		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
+	}
+
+	return bck, nil
+}
+
+func (wi *mosswi) multipart(mpw *multipart.Writer, outputFormat string, resp *api.MossResp) (int64, error) {
+	// part 1: JSON
+	part1, err := mpw.CreateFormField(api.MossMetadataField)
+	if err != nil {
+		return 0, err
+	}
+	if err := jsoniter.NewEncoder(part1).Encode(resp); err != nil {
+		return 0, err
+	}
+
+	// part 2: archive
+	part2, err := mpw.CreateFormFile(api.MossArchiveField, api.MossArchivePrefix+outputFormat)
+	if err != nil {
+		return 0, err
+	}
+	return io.Copy(part2, wi.sgl)
+}
+
+func (wi *mosswi) cleanup() {
+	if wi.aw != nil {
+		wi.aw.Fini()
+	}
+	wi.sgl.Free()
+	wi.r.DecPending()
 }

@@ -403,7 +403,7 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 		return 0, fmt.Errorf("expected multipart response, got %q, err: %w", ctype, err)
 	}
 
-	mr := multipart.NewReader(resp.Body, params[MossBoundaryParam])
+	mr := multipart.NewReader(resp.Body, params["boundary"]) // standard MIME header parameter name: "boundary"
 
 	// Part 1: JSON metadata
 	part1, err := mr.NextPart()
