@@ -915,14 +915,8 @@ func newBckFromQuname(query url.Values, required bool) (*meta.Bck, error) {
 		}
 		return nil, nil
 	}
-	bck, objName := cmn.ParseUname(uname)
-	if objName != "" {
-		return nil, fmt.Errorf("bucket %s: not expecting object name (got %q)", bck.String(), objName)
-	}
-	if err := bck.Validate(); err != nil {
-		return nil, err
-	}
-	return meta.CloneBck(&bck), nil
+	bck, _, err := meta.ParseUname(uname, false)
+	return bck, err
 }
 
 func _reMirror(bprops, nprops *cmn.Bprops) bool {

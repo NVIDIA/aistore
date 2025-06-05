@@ -274,23 +274,15 @@ func etlParseObjectReq(r *http.Request) (etlName, secret string, bck *meta.Bck, 
 	}
 	etlName = items[0]
 	secret = items[1]
+
 	// Encoding is done in `transformerPath`.
 	var uname string
 	uname, err = url.PathUnescape(items[2])
 	if err != nil {
 		return
 	}
-	var b cmn.Bck
-	b, objName = cmn.ParseUname(uname)
-	if err = b.Validate(); err != nil {
-		err = fmt.Errorf("%v, uname=%q", err, uname)
-		return
-	}
-	if objName == "" {
-		err = fmt.Errorf("object name is missing (bucket=%s, uname=%q)", b.String(), uname)
-		return
-	}
-	bck = meta.CloneBck(&b)
+
+	bck, objName, err = meta.ParseUname(uname, true /*object name required*/)
 	return
 }
 
