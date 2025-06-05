@@ -648,6 +648,7 @@ class TCBckMsg(BaseModel):
     copy_msg: CopyBckMsg = None
     transform_msg: TransformBckMsg = None
     num_workers: int = None
+    cont_on_err: bool = False
 
     def as_dict(self):
         dict_rep = {}
@@ -655,6 +656,8 @@ class TCBckMsg(BaseModel):
             dict_rep["ext"] = self.ext
         if self.num_workers:
             dict_rep["num-workers"] = self.num_workers
+        if self.cont_on_err:
+            dict_rep["coer"] = self.cont_on_err
         if self.copy_msg:
             for key, val in self.copy_msg.as_dict().items():
                 dict_rep[key] = val

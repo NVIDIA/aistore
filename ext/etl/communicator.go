@@ -185,7 +185,20 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 		}
 		return core.ReadResp{R: nil, OAH: oah, Err: cmn.ErrSkip, Ecode: http.StatusNoContent}
 	default:
-		nlog.Errorln("unexpected ecode from etl:", ecode, oah, err)
+		if ecode >= 400 {
+			if cmn.Rom.FastV(5, cos.SmoduleETL) {
+				nlog.Warningln("unexpected ecode from etl:", ecode, oah, err)
+			}
+			debug.Assert(r != nil)
+			// error from ETL, retrieve the error message from the response body
+			e, err := cos.ReadAll(r)
+			if err != nil {
+				err = fmt.Errorf("failed to read error message from ETL response: %v", err)
+			} else {
+				err = fmt.Errorf("ETL error: %s", e)
+			}
+			return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
+		}
 	}
 	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
 }
@@ -302,6 +315,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 		bufsz = memsys.DefaultBufSize // TODO: track an average
 	}
 	buf, slab := core.T.PageMM().AllocSize(bufsz)
+	w.WriteHeader(resp.Ecode)
 	_, err := io.CopyBuffer(w, resp.R, buf)
 
 	slab.Free(buf)

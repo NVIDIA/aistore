@@ -156,7 +156,7 @@ class TestEtl(
         self.assertEqual(init_kwargs["ETL_CLASS_PAYLOAD"], expected_payload)
 
         # No dependencies given => empty PACKAGES
-        self.assertEqual(init_kwargs["PACKAGES"], "")
+        self.assertNotIn("PACKAGES", init_kwargs)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_init_etl_class_with_args(self):

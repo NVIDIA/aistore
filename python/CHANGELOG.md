@@ -13,6 +13,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add archive-extension constant (`EXT_TAR`).
 - Add `init_class` method on the Etl client to register and initialize an ETLServer subclass.
 - Add support for ETL context manager.
+- Add `cont_on_err` option for bucket transform.
 
 ### Changed
 

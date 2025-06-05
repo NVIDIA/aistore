@@ -142,7 +142,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		if tc.xetl != nil {
 			tc.xetl.ObjErrs.Add(&etl.ObjErr{
 				ObjName: lom.ObjName,
-				Message: res.Err.Error(),
+				Message: lom.Cname() + " not found",
 				Ecode:   res.Ecode,
 			})
 		}
