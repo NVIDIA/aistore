@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // Definitions
@@ -58,7 +59,8 @@ type (
 		In            []MossIn `json:"in"`             // of arbitrary size >= 1
 		OutputFormat  string   `json:"mime,omitempty"` // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
 		ContinueOnErr bool     `json:"coer,omitempty"` // e.g. usage: ignore missing files - include them under __404__/ and keep going
-		// and maybe more TBD tunables ...
+		DontInclBname bool     `json:"nobn"`           // default name-in-archive convention: bucket/objname; this flag can be used _not_ to include the bucket
+		StreamingGet  bool     `json:"strm"`           // stream resulting archive prior to finalizing it in memory
 	}
 	MossOut struct {
 		ObjName  string `json:"objname"`          // same as the corresponding MossIn.ObjName
@@ -90,4 +92,24 @@ func GetBatch(bp BaseParams, bck cmn.Bck, req *MossReq, w io.Writer) (resp MossR
 	FreeRp(reqParams)
 	qfree(q)
 	return resp, err
+}
+
+//
+// helpers
+//
+
+// note in-archive naming [convention] bucket/object skipping provider, uuid, and/or namespace
+func (req *MossReq) NameInRespArch(bck *cmn.Bck, i int) string {
+	in := &req.In[i]
+	switch {
+	case req.DontInclBname:
+		return in.ObjName
+	case in.Uname != "":
+		debug.Assert(false, "Uname must be handled by the caller to produce cmn.Bck (and then call this method with it)")
+		return ""
+	case in.Bucket == "":
+		return bck.Name + "/" + in.ObjName
+	default:
+		return in.Bucket + "/" + in.ObjName
+	}
 }

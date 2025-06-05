@@ -7,6 +7,7 @@ package xs
 
 import (
 	"archive/tar"
+	"bytes"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -35,14 +36,17 @@ import (
 
 // TODO -- FIXME:
 // - recv() and generally, multi-target
+// - read from shards
+// - enable ais/test/moss tests - rm skipf
 // - ctlmsg
-// - range read
 // - soft errors other than not-found
+// - error handling in general and across the board; mossErr{wrapped-err}
 // - streaming - instead of keeping the resulting (TAR) sgl in memory (reminder to tar.Flush)
-// - error handling across the board; mossErr{wrapped-err}
+// - features: DontInclBname and StreamingGet
 
 // TODO:
 // - write checksum
+// - range read
 
 type (
 	mossFactory struct {
@@ -82,7 +86,6 @@ func (*mossFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *mossFactory) Start() error {
 	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
 	p.xctn = newMoss(p)
-	xact.GoRunW(p.xctn)
 	return nil
 }
 
@@ -100,7 +103,7 @@ func newMoss(p *mossFactory) *XactMoss {
 }
 
 func (r *XactMoss) Run(wg *sync.WaitGroup) {
-	nlog.InfoDepth(1, r.Name(), "starting")
+	nlog.Infoln(r.Name(), "starting")
 
 	if err := bundle.SDM.Open(); err != nil {
 		r.AddErr(err, 5, cos.SmoduleXs)
@@ -159,7 +162,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 	r.IncPending()
 	defer wi.cleanup()
 
-	for _, in := range req.In {
+	for i, in := range req.In {
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
@@ -178,8 +181,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 			return err
 		}
 
-		// note in-archive naming [convention] bucket/object skipping provider, uuid, and/or namespace
-		nameInArch := bck.Name + "/" + in.ObjName
+		nameInArch := req.NameInRespArch(bck, i)
 
 		// write next
 		lom := core.AllocLOM(in.ObjName)
@@ -300,9 +302,12 @@ func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, out *api.MossOut, nameInArc
 }
 
 func (wi *mosswi) addMissing(err error, nameInArch string, out *api.MossOut) error {
-	missingName := api.MissingFilesDirectory + "/" + nameInArch
-	oah := cos.SimpleOAH{Size: 0}
-	if err := wi.aw.Write(missingName, oah, nil); err != nil {
+	var (
+		missingName = api.MissingFilesDirectory + "/" + nameInArch
+		oah         = cos.SimpleOAH{Size: 0}
+		emptyReader = bytes.NewReader(nil)
+	)
+	if err := wi.aw.Write(missingName, oah, emptyReader); err != nil {
 		return err
 	}
 	out.ErrMsg = err.Error()

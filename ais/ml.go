@@ -75,10 +75,9 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. generate xid and designate random target
-	xid := cos.GenUUID()
+	// 3. select random "mossexec" target
 	smap := p.owner.smap.get()
-	tsi, errT := smap.HrwTargetTask(xid)
+	tsi, errT := smap.HrwTargetTask(cos.GenTie())
 	if errT != nil {
 		p.writeErr(w, r, errT)
 		return
@@ -111,8 +110,12 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 			args.selected = nodes
 			args.nodeCount = len(nodes)
 		}
-		p.bcastSelected(args)
+		_ = p.bcastSelected(args)
 		freeBcArgs(args)
+
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.Infoln(r.Method, apc.Moss, bck.Cname(""), "bcast", len(args.selected))
+		}
 	}
 
 	// 5. update r.URL.Path (to include apc.MossExec) and redirect

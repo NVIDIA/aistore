@@ -26,11 +26,12 @@ import (
 )
 
 func TestMoss(t *testing.T) {
-	t.Skipf("skipping %s - not implemented yet", t.Name()) // TODO -- FIXME: remove
+	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1}) // TODO -- FIXME: remove and PASS
 	t.Run("plain", testMossPlain)
 	t.Run("missing-plain", testMossMissing)
+
+	t.Skipf("skipping %s - not implemented yet", t.Name()) // TODO -- FIXME: remove and PASS
 	t.Run("tar", testMossTar)
-	// Add more sub-tests here if needed
 }
 
 func testMossPlain(t *testing.T) {
@@ -116,12 +117,13 @@ func testMossPlain(t *testing.T) {
 		foundObjects[name] = size
 
 		if i < len(mossReq.In) {
-			expectedObjName := mossReq.In[i].ObjName
+			expectedObjName := mossReq.NameInRespArch(&bck, i)
+			originalObjName := mossReq.In[i].ObjName
 			tassert.Errorf(t, name == expectedObjName, "expected TAR entry '%s' at index %d, got '%s'", expectedObjName, i, name)
-			if out := findMossOut(resp.Out, expectedObjName); out != nil {
-				tassert.Errorf(t, out.Size == size, "expected size %d for '%s', got %d in TAR", plainObjectNames[expectedObjName], expectedObjName, size)
+			if out := findMossOut(resp.Out, originalObjName); out != nil {
+				tassert.Errorf(t, out.Size == size, "expected size %d for '%s', got %d in TAR", plainObjectNames[originalObjName], originalObjName, size)
 			} else {
-				t.Errorf("api.MossOut for '%s' not found in response", expectedObjName)
+				t.Errorf("api.MossOut for '%s' not found in response", originalObjName)
 			}
 		}
 		tlog.Logfln("Found file in TAR: %s (%d bytes)", name, size)
@@ -227,20 +229,25 @@ func testMossTar(t *testing.T) {
 		tlog.Logfln("\t%2d: entry in response TAR: %s (%d)", i, name, size)
 
 		if i < len(mossReq.In) {
-			expectedFullName := mossReq.In[i].ObjName
-			parts := strings.SplitN(expectedFullName, "/", 2)
+			originalObjName := mossReq.In[i].ObjName
+
+			// For tar-within-tar, we expect the internal file name in the result TAR
+			// The originalObjName is like "archive.tar/file_1.txt",
+			// and we expect just "file_1.txt" in the resulting TAR
+			parts := strings.SplitN(originalObjName, "/", 2)
 			var expectedInternalName string
 			if len(parts) > 1 {
-				expectedInternalName = parts[1]
+				expectedInternalName = parts[1] // Extract "file_1.txt" from "archive.tar/file_1.txt"
 				tassert.Errorf(t, name == expectedInternalName, "expected TAR entry '%s' at index %d, got '%s'", expectedInternalName, i, name)
-				if out := findMossOut(resp.Out, expectedFullName); out != nil {
-					tassert.Errorf(t, out.Size == size, "expected MossOut size %d for TAR-ed file '%s', got %d", out.Size, expectedFullName, size)
-					tassert.Errorf(t, internalFileSizes[expectedInternalName] == int(size), "expected original size %d for TAR-ed file '%s', got %d", internalFileSizes[expectedInternalName], expectedFullName, size)
+
+				if out := findMossOut(resp.Out, originalObjName); out != nil {
+					tassert.Errorf(t, out.Size == size, "expected MossOut size %d for TAR-ed file '%s', got %d", out.Size, originalObjName, size)
+					tassert.Errorf(t, internalFileSizes[expectedInternalName] == int(size), "expected original size %d for TAR-ed file '%s', got %d", internalFileSizes[expectedInternalName], originalObjName, size)
 				} else {
-					t.Errorf("api.MossOut for '%s' not found in response", expectedFullName)
+					t.Errorf("api.MossOut for '%s' not found in response", originalObjName)
 				}
 			} else {
-				t.Errorf("Unexpected full name format: %s", expectedFullName)
+				t.Errorf("Unexpected full name format: %s", originalObjName)
 			}
 		}
 	}
@@ -329,13 +336,19 @@ func testMossMissing(t *testing.T) {
 	}
 
 	expectedNames := make(map[string]struct{}, numExisting+numMissing)
-	for _, name := range mossIn {
-		if strings.HasSuffix(name.ObjName, fake) {
-			expectedNames[filepath.Join(api.MissingFilesDirectory, name.ObjName)] = struct{}{}
+	for i, mossInEntry := range mossIn {
+		objName := mossInEntry.ObjName
+		expectedTarName := mossReq.NameInRespArch(&bck, i)
+
+		if strings.HasSuffix(objName, fake) {
+			// Missing files go under __404__/ directory
+			expectedNames[filepath.Join(api.MissingFilesDirectory, expectedTarName)] = struct{}{}
 		} else {
-			expectedNames[name.ObjName] = struct{}{}
+			// Existing files use the normal naming convention
+			expectedNames[expectedTarName] = struct{}{}
 		}
 	}
+
 	for _, name := range namesInTar {
 		if _, ok := expectedNames[name]; !ok {
 			t.Errorf("unexpected name in TAR: %s", name)
