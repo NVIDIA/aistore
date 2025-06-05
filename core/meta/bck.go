@@ -310,3 +310,21 @@ func (b *Bck) NewBackendRateLim(nat int) *cos.AdaptRateLim {
 	}
 	return arl
 }
+
+// parse and validate
+func ParseUname(uname string, withObjname bool) (*Bck, string, error) {
+	bck, objName := cmn.ParseUname(uname)
+	if err := bck.Validate(); err != nil {
+		return nil, "", err
+	}
+
+	withoutObjname := !withObjname
+	switch {
+	case objName != "" && withoutObjname:
+		return nil, "", fmt.Errorf("parse-uname %q: not expecting object name (got %q)", uname, bck.Cname(objName))
+	case objName == "" && withObjname:
+		return nil, "", fmt.Errorf("parse-uname %q: missing object name in %q", uname, bck.Cname(""))
+	default:
+		return CloneBck(&bck), objName, nil
+	}
+}
