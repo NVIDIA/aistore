@@ -461,6 +461,37 @@ class TestETLOps(unittest.TestCase):
         with self.assertRaises(AISError):
             self.client.etl(self.etl_name).view()
 
+    @pytest.mark.etl
+    def test_etl_with_transform_errors(self):
+        src_bck = self.client.bucket(random_string()).create()
+        for i in range(9):
+            src_bck.object(str(i)).get_writer().put_content(b"hello, world!")
+
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class ETLWithTransformErrors(FastAPIServer):
+            def transform(self, data: bytes, path: str, etl_args: str) -> bytes:
+                if int(path[-1]) > 5:
+                    raise ValueError("Skip processing for objects with path > 5")
+                return data.upper()
+
+        dst_bck = self.client.bucket(random_string()).create()
+
+        job_id = src_bck.transform(
+            etl_name=etl.name,
+            to_bck=dst_bck,
+            cont_on_err=True,  # Allow continuation despite errors
+        )
+        job = self.client.job(job_id)
+        job.wait()
+
+        etl_details = etl.view()
+        self.assertIsNotNone(etl_details.obj_errors)
+        error_names = sorted(e.obj_name for e in etl_details.obj_errors)
+        expected_errors = sorted([f"{i}" for i in range(6, 9)])
+        self.assertEqual(error_names, expected_errors)
+
 
 if __name__ == "__main__":
     unittest.main()

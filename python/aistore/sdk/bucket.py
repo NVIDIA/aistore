@@ -765,6 +765,7 @@ class Bucket(AISSource):
         latest: bool = False,
         sync: bool = False,
         num_workers: Optional[int] = 0,
+        cont_on_err: bool = False,
     ) -> str:
         """
         Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -785,6 +786,7 @@ class Bucket(AISSource):
             num_workers (int, optional): Number of concurrent workers for the transformation job per target
                 - 0 (default): number of mountpaths
                 - -1: single thread, serial execution
+            cont_on_err: (bool): If True, continue processing objects even if some of them fail
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -792,6 +794,7 @@ class Bucket(AISSource):
         value = TCBckMsg(
             ext=ext,
             num_workers=num_workers,
+            cont_on_err=cont_on_err,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
             copy_msg=CopyBckMsg(
                 prefix=prefix_filter,

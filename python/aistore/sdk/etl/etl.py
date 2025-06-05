@@ -251,6 +251,14 @@ class Etl:
 
             # Serialize the class to pass it as an environment variable
             class_payload = serialize_class(cls)
+            env_kwargs = {
+                "ETL_CLASS_PAYLOAD": class_payload,
+            }
+
+            # include PACKAGES if any
+            if dependencies:
+                env_kwargs["PACKAGES"] = ",".join(dependencies)
+            env_kwargs.update(kwargs)
 
             # Call init(), passing our special env-vars
             self.init(
@@ -261,10 +269,7 @@ class Etl:
                 obj_timeout=obj_timeout,
                 arg_type=arg_type,
                 direct_put=direct_put,
-                # these become env vars inside the ETL pod:
-                ETL_CLASS_PAYLOAD=class_payload,
-                PACKAGES=",".join(dependencies),
-                **kwargs,
+                **env_kwargs,
             )
             return cls
 
