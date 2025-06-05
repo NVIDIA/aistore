@@ -189,7 +189,7 @@ func TestParseSourceValidURIs(t *testing.T) {
 			t.Errorf("unexpected error while parsing source URI %s: %v", test.input, err)
 		}
 
-		if source != test.expected {
+		if !reflect.DeepEqual(source, test.expected) {
 			t.Errorf("parseSource(%s) expected: %v, got: %v", test.input, test.expected, source)
 		}
 	}

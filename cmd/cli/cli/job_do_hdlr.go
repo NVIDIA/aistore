@@ -440,35 +440,50 @@ func startDownloadHandler(c *cli.Context) error {
 		progressInterval = parseDurationFlag(c, dloadProgressFlag).String()
 		id               string
 	)
+	hasHFFlags := hasHuggingFaceRepoFlags(c)
+
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if c.NArg() == 1 {
-		return missingArgumentsError(c, "destination")
-	}
-	if c.NArg() > 2 {
-		const q = "For range download, enclose source in quotation marks, e.g.: \"gs://imagenet/train-{00..99}.tgz\""
-		s := fmt.Sprintf("too many arguments - expected 2, got %d.\n%s", len(c.Args()), q)
-		return &errUsage{
-			context:      c,
-			message:      s,
-			helpData:     c.Command,
-			helpTemplate: cli.CommandHelpTemplate,
+
+	// When using HF flags, we expect only 1 argument (destination)
+	// When not using HF flags, we expect 2 arguments (source and destination)
+	if hasHFFlags {
+		if c.NArg() != 1 {
+			if c.NArg() > 1 {
+				return fmt.Errorf("when using HuggingFace flags (--hf-model, --hf-dataset), provide only the destination argument - got %d arguments", c.NArg())
+			}
+			return missingArgumentsError(c, "destination")
+		}
+	} else {
+		if c.NArg() == 1 {
+			return missingArgumentsError(c, "destination")
+		}
+		if c.NArg() > 2 {
+			const q = "For range download, enclose source in quotation marks, e.g.: \"gs://imagenet/train-{00..99}.tgz\""
+			s := fmt.Sprintf("too many arguments - expected 2, got %d.\n%s", len(c.Args()), q)
+			return &errUsage{
+				context:      c,
+				message:      s,
+				helpData:     c.Command,
+				helpTemplate: cli.CommandHelpTemplate,
+			}
 		}
 	}
 
-	src, dst := c.Args().Get(0), c.Args().Get(1)
+	var src, dst string
+	if hasHFFlags {
+		// When using HF flags: only destination argument provided, source comes from flags
+		dst = c.Args().Get(0)
+	} else {
+		src, dst = c.Args().Get(0), c.Args().Get(1)
+	}
 
 	// Parse download source (includes HuggingFace flag processing if applicable)
 	source, err := parseDlSource(c, src)
 	if err != nil {
 		return err
 	}
-
-	// TODO: Implement HuggingFace authentication for private repositories
-	// For direct HF URLs or HF flag-generated URLs, authentication is determined by --hf-auth flag
-	// Currently requires API enhancement to pass custom headers through to HTTP requests
-	_ = flagIsSet(c, hfAuthFlag) // This will be used for auth when API supports it
 
 	bck, pathSuffix, err := parseBckObjAux(c, dst)
 	if err != nil {
@@ -485,6 +500,7 @@ func startDownloadHandler(c *cli.Context) error {
 		Timeout:          timeout,
 		Description:      description,
 		ProgressInterval: progressInterval,
+		Headers:          source.headers,
 		Limits: dload.Limits{
 			Connections:  parseIntFlag(c, limitConnectionsFlag),
 			BytesPerHour: int(limitBPH),

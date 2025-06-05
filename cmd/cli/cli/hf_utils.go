@@ -16,6 +16,8 @@ import (
 const (
 	hfBaseURL         = "https://huggingface.co"
 	hfDefaultRevision = "main"
+	// Special marker to indicate full repository download
+	hfFullRepoMarker = "HF_FULL_REPO_DOWNLOAD"
 )
 
 // only ModelFlag OR DatasetFlag (not both)
@@ -62,7 +64,10 @@ func buildHuggingFaceURL(c *cli.Context) (string, error) {
 
 	// Build final URL
 	if file == "" {
-		return fmt.Sprintf("%s/tree/%s", baseURL, revision), nil
+		// Return special marker to indicate full repository download needed
+		// This will be handled by the download logic to use HuggingFace API
+		// to list and download all files in the repository
+		return hfFullRepoMarker + ":" + baseURL + ":" + revision, nil
 	}
 	return fmt.Sprintf("%s/resolve/%s/%s", baseURL, revision, file), nil
 }

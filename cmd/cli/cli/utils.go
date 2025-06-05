@@ -75,6 +75,16 @@ type (
 		Current string
 		Old     string
 	}
+
+	dlSourceBackend struct {
+		bck    cmn.Bck
+		prefix string
+	}
+	dlSource struct {
+		link    string
+		backend dlSourceBackend
+		headers http.Header // Custom headers for download
+	}
 )
 
 // TODO: unify, use instead of splitting handlers (that each have different flags)
@@ -916,18 +926,11 @@ func dryRunCptn(c *cli.Context) {
 // dlSource //
 //////////////
 
-type (
-	dlSourceBackend struct {
-		bck    cmn.Bck
-		prefix string
-	}
-	dlSource struct {
-		link    string
-		backend dlSourceBackend
-	}
-)
-
 func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
+	var source dlSource
+	var err error
+	var needHFAuth bool // Check if HuggingFace auth should be added (if available)
+
 	switch {
 	case c != nil && hasHuggingFaceRepoFlags(c):
 		// Case 1: Using HF convenience flags (--hf-model or --hf-dataset)
@@ -942,16 +945,38 @@ func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 		if err != nil {
 			return dlSource{}, err
 		}
-		return parseURLToSource(hfURL)
+		source, err = parseURLToSource(hfURL)
+		if err != nil {
+			return dlSource{}, err
+		}
+		needHFAuth = true
 
 	default:
-		// Direct URL (HuggingFace auth will be applied later in HTTP request handling if needed)
-		return parseURLToSource(rawURL)
+		// Direct URL case
+		source, err = parseURLToSource(rawURL)
+		if err != nil {
+			return dlSource{}, err
+		}
+		needHFAuth = isHuggingFaceURL(rawURL) // Only HF-related if direct URL is HF
 	}
+
+	// Add HuggingFace auth header if this is HF-related AND auth is available
+	if needHFAuth {
+		if token := parseStrFlag(c, hfAuthFlag); token != "" {
+			source.headers = http.Header{apc.HdrAuthorization: []string{apc.AuthenticationTypeBearer + " " + token}}
+		}
+	}
+
+	return source, nil
 }
 
 // parseURLToSource handles the actual URL parsing logic
 func parseURLToSource(rawURL string) (dlSource, error) {
+	// Check for HuggingFace full repository download marker
+	if strings.HasPrefix(rawURL, hfFullRepoMarker+":") {
+		return dlSource{}, errors.New("HuggingFace full repository download not yet implemented - please specify --hf-file for individual files")
+	}
+
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return dlSource{}, err
@@ -973,7 +998,7 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 
-		scheme = "https"
+		scheme = apc.DefaultScheme
 		host = gsHost
 		fullPath = path.Join(u.Host, fullPath)
 	case apc.S3Scheme, apc.AWS:
@@ -1009,7 +1034,7 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 		fullPath = path.Join(apc.Version, apc.Objects, fullPath)
 	case "":
 		scheme = apc.DefaultScheme
-	case "https", "http":
+	case apc.DefaultScheme, "http":
 	default:
 		return dlSource{}, fmt.Errorf("invalid scheme: %s", scheme)
 	}
