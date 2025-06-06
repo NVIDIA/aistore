@@ -1020,7 +1020,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 
 func (goi *getOI) txfini() (ecode int, err error) {
 	var (
-		lmfh *os.File
+		lmfh cos.LomReader
 		hrng *htrange
 		fqn  = goi.lom.FQN
 		dpq  = goi.dpq
@@ -1029,7 +1029,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
 	}
 	// open
-	lmfh, err = goi.lom.OpenFile()
+	lmfh, err = goi.lom.Open()
 	if err != nil {
 		if os.IsNotExist(err) {
 			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()
@@ -1067,7 +1067,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	return ecode, err
 }
 
-func (goi *getOI) _txrng(fqn string, lmfh *os.File, whdr http.Header, hrng *htrange) (err error) {
+func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) (err error) {
 	var (
 		r          io.Reader
 		sgl        *memsys.SGL
@@ -1116,7 +1116,7 @@ func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
 }
 
 // in particular, setup reader and writer and set headers
-func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error) {
+func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err error) {
 	// set response header
 	size := goi.lom.Lsize()
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
@@ -1129,7 +1129,7 @@ func (goi *getOI) _txreg(fqn string, lmfh *os.File, whdr http.Header) (err error
 }
 
 // TODO: checksum
-func (goi *getOI) _txarch(fqn string, lmfh *os.File, whdr http.Header) error {
+func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) error {
 	var (
 		ar  archive.Reader
 		dpq = goi.dpq
