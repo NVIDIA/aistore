@@ -186,11 +186,25 @@ Displays details about a specific ETL, including:
 
 ## View ETL errors
 
+Shows errors encountered during ETL processing inline transform objects.
+
 ```sh
 ais etl show errors <ETL_NAME>
 
-OBJECT           ECODE   ERROR
-non-exist-obj    0       stat /ais/nvme9n1/@ais/nnn/%ob/non-exist-obj: no such file or directory
+OBJECT                 ECODE   ERROR
+ais://non-exist-obj    404     object not found
+...
+```
+
+Show errors encountered during a specific offline (bucket-to-bucket) ETL job. The `<your-custom-error>` refers to the exception message raised within your custom transform Python function.
+
+```sh
+ais etl show errors <ETL_NAME> <OFFLINE-TRANSFORM-JOB-ID>
+
+OBJECT                   ECODE   ERROR
+ais://test-src/7         500     ETL error: <your-custom-error>
+ais://test-src/8         500     ETL error: <your-custom-error>
+ais://test-src/6         500     ETL error: <your-custom-error>
 ...
 ```
 
