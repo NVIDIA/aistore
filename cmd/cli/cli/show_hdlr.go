@@ -388,7 +388,10 @@ func showClusterConfig(c *cli.Context, section string) error {
 		if printSectionJSON(c, cluConfig, section) {
 			return nil
 		}
-		usejs = false
+		// Section not found - show helpful error with available sections
+		showSectionNotFoundError(c, section, cluConfig,
+			"Try 'ais config cluster --json' to see all sections, or remove --json flag for table format")
+		return nil
 	}
 
 	if usejs {
@@ -404,6 +407,13 @@ func showClusterConfig(c *cli.Context, section string) error {
 			return V(err)
 		}
 		flat = flattenBackends(backends)
+	}
+
+	// Check if section was found (for non-backend sections)
+	if section != "" && section != "backend" && len(flat) == 0 {
+		showSectionNotFoundError(c, section, cluConfig,
+			"Try 'ais config cluster --json' to see all sections, or remove --json flag for table format")
+		return nil
 	}
 
 	// compare w/ headBckTable using the same generic template for bucket props
@@ -485,7 +495,8 @@ func showNodeConfig(c *cli.Context) error {
 				return teb.Print(&config.LocalConfig, "", opts)
 			}
 			if !printSectionJSON(c, &config.LocalConfig, section) {
-				fmt.Fprintln(c.App.Writer)
+				showSectionNotFoundError(c, section, &config.LocalConfig,
+					"Try 'ais config node [NODE] local --json' to see all sections")
 			}
 			return nil
 		case cfgScopeInherited:
@@ -494,7 +505,8 @@ func showNodeConfig(c *cli.Context) error {
 				return teb.Print(&config.ClusterConfig, "", opts)
 			}
 			if !printSectionJSON(c, &config.ClusterConfig, section) {
-				fmt.Fprintln(c.App.Writer)
+				showSectionNotFoundError(c, section, &config.ClusterConfig,
+					"Try 'ais config node [NODE] inherited --json' to see all sections")
 			}
 			return nil
 		default: // cfgScopeAll

@@ -307,6 +307,15 @@ func showBucketProps(c *cli.Context) error {
 	}
 
 	if flagIsSet(c, jsonFlag) {
+		if section != "" {
+			if printSectionJSON(c, p, section) {
+				return nil
+			}
+			// Section not found - show helpful error
+			showSectionNotFoundError(c, section, p,
+				"Try 'ais bucket props show "+bck.String()+" --json' to see all sections")
+			return nil
+		}
 		opts := teb.Jopts(true)
 		return teb.Print(p, "", opts)
 	}

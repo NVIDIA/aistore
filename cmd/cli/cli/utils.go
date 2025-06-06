@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -662,7 +661,7 @@ func flattenJSON(jstruct any, section string) (flat nvpairList) {
 			flat = append(flat, nvpair{tag, v})
 		}
 		return nil, false
-	})
+	}, cmn.IterOpts{VisitAll: true})
 	return flat
 }
 
@@ -738,76 +737,63 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 	return diff
 }
 
-func printSectionJSON(c *cli.Context, in any, section string) (done bool) {
-	if i := strings.LastIndexByte(section, '.'); i > 0 {
-		section = section[:i]
-	}
-	if done = _printSection(c, in, section); !done {
-		// e.g. keepalivetracker.proxy.name
-		if i := strings.LastIndexByte(section, '.'); i > 0 {
-			section = section[:i]
-			done = _printSection(c, in, section)
-		}
-	}
-	if !done {
-		actionWarn(c, "config section (or section prefix) \""+section+"\" not found.")
-	}
-	return
+// showSectionNotFoundError displays error when a config section is not found
+func showSectionNotFoundError(c *cli.Context, section string, config any, helpCmd string) {
+	availableSections := extractAvailableSections(config)
+	actionWarn(c, fmt.Sprintf("config section %q not found. Available sections: %s",
+		section, strings.Join(availableSections, ", ")))
+	actionNote(c, helpCmd)
 }
 
-// return true if successfully parsed and printed
-func _printSection(c *cli.Context, in any, section string) bool {
-	var (
-		beg       = regexp.MustCompile(`\s+"` + section + `\S*": {`)
-		end       = regexp.MustCompile(`},\n`)
-		nst       = regexp.MustCompile(`\s+"\S+": {`)
-		nonstruct = regexp.MustCompile(`\s+"` + section + `\S*": ".+"[,\n\r]{1}`)
-	)
-	out, err := jsonMarshalIndent(in)
-	if err != nil {
-		return false
-	}
+// extractAvailableSections extracts root-level configuration sections from any config structure
+func extractAvailableSections(config any) []string {
+	var availableSections []string
+	seen := make(map[string]bool)
 
-	from := beg.FindIndex(out)
-	if from == nil {
-		loc := nonstruct.FindIndex(out)
-		if loc == nil {
-			return false
+	cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
+		root := strings.Split(tag, ".")[0]
+		if !seen[root] {
+			availableSections = append(availableSections, root)
+			seen[root] = true
 		}
-		res := out[loc[0] : loc[1]-1]
-		fmt.Fprintln(c.App.Writer, "{"+string(res)+"\n}")
-		return true
-	}
+		return nil, false
+	}, cmn.IterOpts{VisitAll: true})
 
-	to := end.FindIndex(out[from[1]:])
-	if to == nil {
-		return false
-	}
-	res := out[from[0] : from[1]+to[1]-1]
+	sort.Strings(availableSections)
+	return availableSections
+}
 
-	if nst.FindIndex(res[from[1]-from[0]+1:]) != nil {
-		// resort to counting nested structures
-		var cnt, off int
-		res = out[from[0]:]
-		for off = range res {
-			switch res[off] {
-			case '{':
-				cnt++
-			case '}':
-				cnt--
-				if cnt == 0 {
-					res = out[from[0] : from[0]+off+1]
-					goto done
-				}
+func printSectionJSON(c *cli.Context, in any, section string) bool {
+	var result any
+	found := false
+
+	if section == "" {
+		// Show entire config
+		result = in
+		found = true
+	} else {
+		// Find specific section
+		cmn.IterFields(in, func(tag string, field cmn.IterField) (error, bool) {
+			if tag == section {
+				found = true
+				result = field.Value()
+				return nil, true // Stop after finding exact match
 			}
-		}
+			return nil, false
+		}, cmn.IterOpts{VisitAll: true})
+	}
+
+	if !found {
 		return false
 	}
-done:
-	if l := len(res); res[l-1] == ',' {
-		res = res[:l-1]
+
+	data, err := jsonMarshalIndent(result)
+	if err != nil {
+		actionWarn(c, fmt.Sprintf("failed to marshal section %q: %v", section, err))
+		return false
 	}
-	fmt.Fprintln(c.App.Writer, string(res)+"\n")
+
+	fmt.Fprintln(c.App.Writer, string(data))
 	return true
 }
 
