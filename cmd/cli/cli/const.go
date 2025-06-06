@@ -1153,8 +1153,8 @@ var (
 			indent4 + "\t--args=abc\t- send \"etl_args=abc\" as query parameter in the single object transformation request",
 	}
 	fromFileFlag = cli.StringFlag{
-		Name:     "from-file",
-		Usage:    "Absolute path to the file with the spec/code for ETL",
+		Name:     "from-file,f",
+		Usage:    "Absolute path to the file with the spec/code for ETL, or HTTP URL to download the spec from",
 		Required: true,
 	}
 	depsFileFlag = cli.StringFlag{

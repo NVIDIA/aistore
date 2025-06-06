@@ -1,6 +1,7 @@
 Running
 Running
 Running
+Running
 ^*.ais://$BUCKET_1*.created$
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
@@ -17,6 +18,11 @@ COMMUNICATION TYPE:  hpush://
 ARGUMENT TYPE: fqn
 Hello World!
 $OBJECT_2.txt
+^ETL\[etl.*\]stopped$
+^ETL\[etl.*\] successfully deleted$
+COMMUNICATION TYPE:  hpush://
+ARGUMENT TYPE:
+5328b3c272b5aab0
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 COMMUNICATION TYPE:  hpush://
