@@ -25,6 +25,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const etlShowErrorsUsage = "Show ETL job errors.\n" +
+	indent1 + "\t- 'ais etl show errors <ETL_NAME>': display errors for inline object transformation failures.\n" +
+	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
+
 var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
@@ -90,8 +94,8 @@ var (
 			},
 			{
 				Name:         cmdErrors,
-				Usage:        "Show errors encountered during ETL processing objects",
-				ArgsUsage:    etlNameArgument,
+				Usage:        etlShowErrorsUsage,
+				ArgsUsage:    etlNameWithJobIDArgument,
 				Action:       etlShowErrorsHandler,
 				BashComplete: etlIDCompletions,
 				Flags:        sortFlags(etlSubFlags[commandShow]),
@@ -380,8 +384,11 @@ func etlShowErrorsHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	etlName := c.Args().Get(0)
-	details, err := api.ETLGetDetail(apiBP, etlName)
+	var (
+		etlName    = c.Args().Get(0)
+		offlineXid = c.Args().Get(1)
+	)
+	details, err := api.ETLGetDetail(apiBP, etlName, offlineXid)
 	if err != nil {
 		return V(err)
 	}
@@ -402,7 +409,7 @@ func etlShowDetailsHandler(c *cli.Context) error {
 }
 
 func etlPrintDetails(c *cli.Context, id string) error {
-	details, err := api.ETLGetDetail(apiBP, id)
+	details, err := api.ETLGetDetail(apiBP, id, "" /*xid*/)
 	if err != nil {
 		return V(err)
 	}

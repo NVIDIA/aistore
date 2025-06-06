@@ -277,8 +277,9 @@ const (
 	showPerfArgument = "Show performance counters, throughput, latency, disks, used/available capacities (" + tabtab + " specific view)"
 
 	// ETL
-	etlNameArgument     = "ETL_NAME"
-	etlNameListArgument = "ETL_NAME [ETL_NAME ...]"
+	etlNameArgument          = "ETL_NAME"
+	etlNameWithJobIDArgument = "ETL_NAME [JOB_ID]"
+	etlNameListArgument      = "ETL_NAME [ETL_NAME ...]"
 
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
