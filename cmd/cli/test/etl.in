@@ -6,6 +6,10 @@ ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://
 ais etl show | grep $ETL_NAME-2 | awk '{print $2}'
 rm -f hello_world_init_spec.yaml // IGNORE
 
+// Test URL support for --from-file flag (new functionality)
+ais etl init spec --from-file="https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml" --comm-type="hpush://" --name=$ETL_NAME-url // IGNORE
+ais etl show | grep $ETL_NAME-url | awk '{print $2}'
+
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml -o hash_with_args_init_spec.yaml -s // IGNORE
 ais etl init spec --from-file="hash_with_args_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-3 // IGNORE
 ais etl show | grep $ETL_NAME-3 | awk '{print $2}'
@@ -33,6 +37,13 @@ ais etl show details $ETL_NAME-2 | grep "ARGUMENT"
 ais etl object $ETL_NAME-2 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-2
 ais etl rm $ETL_NAME-2
+
+// Test URL-loaded ETL
+ais etl show details $ETL_NAME-url | grep "COMMUNICATION TYPE"
+ais etl show details $ETL_NAME-url | grep "ARGUMENT"
+ais etl object $ETL_NAME-url ais://$BUCKET_1/object_1.txt - --args=url-test
+ais etl stop $ETL_NAME-url
+ais etl rm $ETL_NAME-url
 
 ais etl show details $ETL_NAME-3 | grep "COMMUNICATION TYPE"
 ais etl show details $ETL_NAME-3 | grep "ARGUMENT"

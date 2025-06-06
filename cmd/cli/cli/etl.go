@@ -226,7 +226,7 @@ func etlInitSpecHandler(c *cli.Context) error {
 	if fromFile == "" {
 		return fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
 	}
-	spec, err := os.ReadFile(fromFile)
+	spec, err := readFileOrURL(fromFile)
 	if err != nil {
 		return err
 	}
@@ -286,8 +286,8 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if msg.Code, err = os.ReadFile(fromFile); err != nil {
-		return fmt.Errorf("failed to read %q: %v", fromFile, err)
+	if msg.Code, err = readFileOrURL(fromFile); err != nil {
+		return err
 	}
 
 	depsFile := parseStrFlag(c, depsFileFlag)
