@@ -140,15 +140,14 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		}
 	case cos.IsNotExist(res.Err, 0):
 		if tc.xetl != nil {
-			tc.xetl.ObjErrs.Add(&etl.ObjErr{
-				ObjName: lom.ObjName,
-				Message: lom.Cname() + " not found",
+			tc.xetl.AddObjErr(tc.r.ID(), &etl.ObjErr{
+				ObjName: lom.Cname(),
+				Message: "object not found",
 				Ecode:   res.Ecode,
 			})
 		}
 	case res.Err == cmn.ErrSkip:
 		// ErrSkip is returned when the object is transmitted through direct put
-		tc.r.OutObjsAdd(1, lom.Lsize())
 	case cos.IsErrOOS(res.Err):
 		err = res.Err
 		tc.r.Abort(err)
@@ -157,8 +156,8 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
 		}
 		if tc.xetl != nil {
-			tc.xetl.ObjErrs.Add(&etl.ObjErr{
-				ObjName: lom.ObjName,
+			tc.xetl.AddObjErr(tc.r.ID(), &etl.ObjErr{
+				ObjName: lom.Cname(),
 				Message: res.Err.Error(),
 				Ecode:   res.Ecode,
 			})

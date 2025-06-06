@@ -60,15 +60,19 @@ func ETLList(bp BaseParams) (list []etl.Info, err error) {
 	return
 }
 
-func ETLGetDetail(params BaseParams, etlName string) (*etl.Details, error) {
+func ETLGetDetail(params BaseParams, etlName, xid string) (*etl.Details, error) {
 	params.Method = http.MethodGet
+	q := qalloc()
+	q.Set(apc.QparamUUID, xid)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = params
 		reqParams.Path = apc.URLPathETL.Join(etlName)
+		reqParams.Query = q
 	}
 	r, size, err := reqParams.doReader()
 	FreeRp(reqParams)
+	qfree(q)
 	if err != nil {
 		return nil, err
 	}

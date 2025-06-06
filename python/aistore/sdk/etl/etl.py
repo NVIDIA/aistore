@@ -14,6 +14,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     URL_PATH_ETL,
     UTF_ENCODING,
+    QPARAM_UUID,
 )
 from aistore.sdk.etl.etl_const import (
     ETL_SUPPORTED_PYTHON_VERSIONS,
@@ -275,15 +276,22 @@ class Etl:
 
         return decorator
 
-    def view(self) -> ETLDetails:
+    def view(self, job_id: str = "") -> ETLDetails:
         """
         View ETL details
+
+        Args:
+            job_id (str):
+                Offline Transform job ID of the ETL to view details for. Default to view inline transform details.
 
         Returns:
             ETLDetails: details of the ETL
         """
         resp = self._client.request_deserialize(
-            HTTP_METHOD_GET, path=f"{URL_PATH_ETL}/{self._name}", res_model=ETLDetails
+            HTTP_METHOD_GET,
+            path=f"{URL_PATH_ETL}/{self._name}",
+            params={QPARAM_UUID: job_id},
+            res_model=ETLDetails,
         )
         return resp
 

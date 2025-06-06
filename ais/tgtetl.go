@@ -38,7 +38,9 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.handleETLDelete(w, r)
 	case http.MethodGet:
-		t.handleETLGet(w, r)
+		dpq := dpqAlloc()
+		t.handleETLGet(w, r, dpq)
+		dpqFree(dpq)
 	case http.MethodHead:
 		t.headObjectETL(w, r)
 	default:
@@ -76,9 +78,14 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
+func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 0, true)
 	if err != nil {
+		return
+	}
+
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		t.writeErr(w, r, err)
 		return
 	}
 
@@ -90,7 +97,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 	// /v1/etl/_object/<secret>/<uname>
 	if apiItems[0] == apc.ETLObject {
-		t.getObjectETL(w, r)
+		t.getObjectETL(w, r, dpq)
 		return
 	}
 
@@ -107,7 +114,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLHealth:
 		t.healthETL(w, r, apiItems[0])
 	case apc.ETLDetails:
-		t.detailsETL(w, r, apiItems[0])
+		t.detailsETL(w, r, dpq, apiItems[0])
 	case apc.ETLMetrics:
 		k8s.InitMetricsClient()
 		t.metricsETL(w, r, apiItems[0])
@@ -196,7 +203,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 		return
 	}
 
-	xetl.ObjErrs.Add(&etl.ObjErr{
+	xetl.InlineObjErrs.Add(&etl.ObjErr{
 		ObjName: lom.ObjName,
 		Message: err.Error(),
 		Ecode:   ecode,
@@ -230,18 +237,23 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 // GET /v1/etl/<etl-name>/details
 //
 // Returns ETL errors (if any) for the given ETL xaction.
-func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, etlName string) {
+func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, dpq *dpq, etlName string) {
+	var (
+		offlineXid = dpq.uuid
+		errs       []error
+	)
 	comm, err := etl.GetCommunicator(etlName)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
 	xetl := comm.Xact()
-	if !xetl.Running() {
-		return
+	if offlineXid == "" {
+		errs = xetl.InlineObjErrs.Unwrap()
+	} else {
+		errs = xetl.GetObjErrs(offlineXid)
 	}
 
-	errs := xetl.ObjErrs.Unwrap()
 	objErrs := make([]etl.ObjErr, 0, len(errs))
 	for _, e := range errs {
 		var objErr *etl.ObjErr
@@ -293,7 +305,7 @@ func etlParseObjectReq(r *http.Request) (etlName, secret string, bck *meta.Bck, 
 //
 // NOTE: this is an internal URL with "_object" in its path intended to avoid
 // conflicts with ETL name in `/v1/elt/<etl-name>/...`
-func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
+func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	etlName, secret, bck, objName, err := etlParseObjectReq(r)
 	if err != nil {
 		t.writeErr(w, r, err)
@@ -303,12 +315,7 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	dpq := dpqAlloc()
-	if err := dpq.parse(r.URL.RawQuery); err != nil {
-		dpqFree(dpq)
-		t.writeErr(w, r, err)
-		return
-	}
+
 	lom := core.AllocLOM(objName)
 	lom, err = t.getObject(w, r, dpq, bck, lom)
 	core.FreeLOM(lom)
@@ -316,7 +323,6 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		t._erris(w, r, err, 0, dpq.silent)
 	}
-	dpqFree(dpq)
 }
 
 // PUT /v1/etl/_object/<etl-name>/<secret>/<uname>?uuid=<xid>

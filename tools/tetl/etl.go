@@ -31,18 +31,15 @@ import (
 )
 
 const (
-	EchoETLSpec         = "echo-etl-spec"
-	HashWithArgsETLSpec = "hash-with-args-etl-spec"
-	MD5ETLSpec          = "md5-etl-spec"
-	NonExistImage       = "non-exist-image"
-	InvalidYaml         = "invalid-yaml"
-	Tar2TF              = "tar2tf"
-	Echo                = "transformer-echo"
-	EchoGolang          = "echo-go"
-	MD5                 = "transformer-md5"
-	HashWithArgs        = "hash-with-args"
-	Tar2tfFilters       = "tar2tf-filters"
-	tar2tfFilter        = `
+	NonExistImage = "non-exist-image"
+	InvalidYaml   = "invalid-yaml"
+	Tar2TF        = "tar2tf"
+	Echo          = "transformer-echo"
+	EchoGolang    = "echo-go"
+	MD5           = "transformer-md5"
+	HashWithArgs  = "hash-with-args"
+	Tar2tfFilters = "tar2tf-filters"
+	tar2tfFilter  = `
 {
   "conversions": [
     { "type": "Decode", "ext_name": "png"},
@@ -53,31 +50,6 @@ const (
     { "ext_name": "cls" }
   ]
 }
-`
-)
-
-// ETL specs
-const (
-	echoETLSpec = `
-name: echo-etl-spec
-runtime:
-  image: aistorage/transformer_echo:latest
-  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
-`
-	hashWithArgsETLSpec = `
-name: hash-with-args-etl-spec
-runtime:
-  image: aistorage/transformer_hash_with_args:latest
-  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
-  env:
-    - name: SEED_DEFAULT
-    - value: "0"
-`
-	md5ETLSpec = `
-name: md5-etl-spec
-runtime:
-  image: aistorage/transformer_md5:latest
-  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
 `
 )
 
@@ -122,20 +94,17 @@ spec:
 
 var (
 	links = map[string]string{
-		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml",
-		HashWithArgs:  "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml",
+		MD5:           "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/etl_spec.yaml",
+		HashWithArgs:  "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/etl_spec.yaml",
 		Tar2TF:        "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
 		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
-		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/echo/pod.yaml",
+		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/echo/etl_spec.yaml",
 		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/pod.yaml",
 	}
 
 	testSpecs = map[string]string{
-		NonExistImage:       nonExistImageSpec,
-		InvalidYaml:         invalidYamlSpec,
-		EchoETLSpec:         echoETLSpec,
-		HashWithArgsETLSpec: hashWithArgsETLSpec,
-		MD5ETLSpec:          md5ETLSpec,
+		NonExistImage: nonExistImageSpec,
+		InvalidYaml:   invalidYamlSpec,
 	}
 
 	client = &http.Client{}
@@ -380,7 +349,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)
 	// reread `InitMsg` and compare with the specified
-	details, err := api.ETLGetDetail(bp, etlName)
+	details, err := api.ETLGetDetail(bp, etlName, "")
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
@@ -402,7 +371,7 @@ func InitCode(t *testing.T, bp api.BaseParams, msg *etl.InitCodeMsg) (xid string
 	xid = id
 
 	// reread `InitMsg` and compare with the specified
-	details, err := api.ETLGetDetail(bp, msg.Name())
+	details, err := api.ETLGetDetail(bp, msg.Name(), "")
 	tassert.CheckFatal(t, err)
 
 	initCode := details.InitMsg.(*etl.InitCodeMsg)

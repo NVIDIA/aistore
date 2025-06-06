@@ -340,7 +340,7 @@ func TestETLInline(t *testing.T) {
 
 		tests = []testObjConfig{
 			{transformer: tetl.MD5, comm: etl.Hpush},
-			{transformer: tetl.MD5ETLSpec, comm: etl.Hpush},
+			{transformer: tetl.MD5, comm: etl.Hpull},
 		}
 	)
 
@@ -438,9 +438,7 @@ func TestETLInlineObjWithArgs(t *testing.T) {
 			onlyLong    bool
 		}{
 			{name: "etl-args-hpush", commType: etl.Hpush, transformer: tetl.HashWithArgs},
-			{name: "etl-args-hpush", commType: etl.Hpush, transformer: tetl.HashWithArgsETLSpec},
 			{name: "etl-args-hpull", commType: etl.Hpull, transformer: tetl.HashWithArgs},
-			{name: "etl-args-hpull", commType: etl.Hpull, transformer: tetl.HashWithArgsETLSpec},
 		}
 	)
 
@@ -545,7 +543,6 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true},
 			{transformer: tetl.Echo, comm: etl.Hpull},
 			{transformer: tetl.Echo, comm: etl.Hpush},
-			{transformer: tetl.EchoETLSpec, comm: etl.Hpush},
 		}
 	)
 
@@ -833,8 +830,8 @@ func TestETLFQN(t *testing.T) {
 		}{
 			{transformer: tetl.Echo, commType: etl.Hpush, transform: tetl.EchoTransform},
 			{transformer: tetl.Echo, commType: etl.Hpull, transform: tetl.EchoTransform},
-			{transformer: tetl.MD5ETLSpec, commType: etl.Hpush, transform: tetl.MD5Transform},
-			{transformer: tetl.MD5ETLSpec, commType: etl.Hpull, transform: tetl.MD5Transform},
+			{transformer: tetl.MD5, commType: etl.Hpush, transform: tetl.MD5Transform},
+			{transformer: tetl.MD5, commType: etl.Hpull, transform: tetl.MD5Transform},
 		}
 	)
 

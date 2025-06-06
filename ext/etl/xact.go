@@ -21,16 +21,20 @@ type (
 		xreg.RenewBase
 		xctn *XactETL
 	}
+
 	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
 	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
 	XactETL struct {
-		ObjErrs cos.Errs
-		msg     InitMsg
+		InlineObjErrs cos.Errs
+		msg           InitMsg
 		xact.Base
+
+		offlineObjErrs map[string]*cos.Errs // xid of TCB/TCB => errors encountered during offline transformation
+		m              sync.Mutex           // protects offlineErrs
 	}
 )
 
-const maxObjErr = 128
+const MaxObjErr = 128
 
 // interface guard
 var (
@@ -62,8 +66,9 @@ func newETL(p *factory) *XactETL {
 	msg, ok := p.Args.Custom.(InitMsg)
 	debug.Assert(ok)
 	xctn := &XactETL{
-		msg:     msg,
-		ObjErrs: cos.NewErrs(maxObjErr),
+		msg:            msg,
+		InlineObjErrs:  cos.NewErrs(MaxObjErr),
+		offlineObjErrs: make(map[string]*cos.Errs, 4),
 	}
 	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)
 	return xctn
@@ -77,4 +82,33 @@ func (r *XactETL) Snap() (snap *core.Snap) {
 
 	snap.IdleX = r.IsIdle()
 	return
+}
+
+func (r *XactETL) AddObjErr(xid string, err *ObjErr) {
+	debug.Assert(err != nil)
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	errs, ok := r.offlineObjErrs[xid]
+	if !ok || errs == nil {
+		newErrs := cos.NewErrs(MaxObjErr)
+		r.offlineObjErrs[xid] = &newErrs
+		errs = &newErrs
+	}
+	errs.Add(err)
+}
+
+func (r *XactETL) GetObjErrs(xid string) []error {
+	if xid == "" {
+		return nil
+	}
+
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	errs, ok := r.offlineObjErrs[xid]
+	if !ok || errs == nil {
+		return nil
+	}
+	return errs.Unwrap()
 }
