@@ -8,6 +8,7 @@ package xs
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -41,8 +42,7 @@ import (
 // - ctlmsg
 // - soft errors other than not-found
 // - error handling in general and across the board; mossErr{wrapped-err}
-// - streaming - instead of keeping the resulting (TAR) sgl in memory (reminder to tar.Flush)
-// - features: DontInclBname and StreamingGet
+// - StreamingGet (reminder to tar.Flush)
 
 // TODO:
 // - write checksum
@@ -162,7 +162,8 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 	r.IncPending()
 	defer wi.cleanup()
 
-	for i, in := range req.In {
+	for i := range req.In {
+		in := &req.In[i]
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
@@ -171,12 +172,13 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 		}
 		out := api.MossOut{
 			ObjName:  in.ObjName,
+			ArchPath: in.ArchPath,
 			Bucket:   in.Bucket,
 			Provider: in.Provider,
 			Opaque:   in.Opaque,
 		}
 		// source bucket (per-object) override
-		bck, err := wi.bucket(&in)
+		bck, err := wi.bucket(in)
 		if err != nil {
 			return err
 		}
@@ -185,7 +187,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 
 		// write next
 		lom := core.AllocLOM(in.ObjName)
-		err = wi.write(bck, lom, &out, nameInArch, req.ContinueOnErr)
+		err = wi.write(bck, lom, in, &out, nameInArch, req.ContinueOnErr)
 		core.FreeLOM(lom)
 		if err != nil {
 			return err
@@ -261,7 +263,7 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 // mosswi //
 ////////////
 
-func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, out *api.MossOut, nameInArch string, contOnErr bool) error {
+func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.MossOut, nameInArch string, contOnErr bool) error {
 	out.Bucket = bck.Name
 	out.Provider = bck.Provider
 
@@ -283,21 +285,59 @@ func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, out *api.MossOut, nameInArc
 		return err
 	}
 
-	fh, err := lom.Open()
+	var lmfh cos.LomReader
+	lmfh, err = lom.Open()
 	if err != nil {
-		if contOnErr {
+		if cos.IsNotExist(err, 0) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
 	}
-	defer fh.Close()
 
-	// archive
-	if err := wi.aw.Write(nameInArch, lom, fh); err != nil {
+	switch {
+	case in.ArchPath != "":
+		if in.Length != 0 {
+			cos.Close(lmfh)
+			err := fmt.Errorf("%s: cannot read range from an archived file [%d, %s, %s]", wi.r.Name(), in.Length, lom.Cname(), in.ArchPath)
+			return cmn.NewErrUnsuppErr(err)
+		}
+		err = wi._txarch(lom, lmfh, out, nameInArch, in.ArchPath, contOnErr)
+	default:
+		err = wi._txreg(lom, lmfh, out, nameInArch)
+	}
+
+	cos.Close(lmfh)
+	return err
+}
+
+func (wi *mosswi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch string) error {
+	if err := wi.aw.Write(nameInArch, lom, lmfh); err != nil {
 		return err
 	}
 	out.Size = lom.Lsize()
+	return nil
+}
 
+// (compare w/ goi._txarch)
+func (wi *mosswi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch, archpath string, contOnErr bool) error {
+	nameInArch += "/" + archpath
+
+	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
+	if err != nil {
+		if cos.IsNotExist(err, 0) && contOnErr {
+			return wi.addMissing(err, archpath, out)
+		}
+		return err
+	}
+
+	oah := cos.SimpleOAH{Size: csl.Size()}
+	err = wi.aw.Write(nameInArch, &oah, csl)
+	csl.Close()
+
+	if err != nil {
+		return err
+	}
+	out.Size = oah.Size
 	return nil
 }
 

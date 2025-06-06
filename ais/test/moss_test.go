@@ -29,8 +29,6 @@ func TestMoss(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1}) // TODO -- FIXME: remove and PASS
 	t.Run("plain", testMossPlain)
 	t.Run("missing-plain", testMossMissing)
-
-	t.Skipf("skipping %s - not implemented yet", t.Name()) // TODO -- FIXME: remove and PASS
 	t.Run("tar", testMossTar)
 }
 
@@ -120,7 +118,7 @@ func testMossPlain(t *testing.T) {
 			expectedObjName := mossReq.NameInRespArch(&bck, i)
 			originalObjName := mossReq.In[i].ObjName
 			tassert.Errorf(t, name == expectedObjName, "expected TAR entry '%s' at index %d, got '%s'", expectedObjName, i, name)
-			if out := findMossOut(resp.Out, originalObjName); out != nil {
+			if out := findMossOut(resp.Out, originalObjName, mossReq.In[i].ArchPath); out != nil {
 				tassert.Errorf(t, out.Size == size, "expected size %d for '%s', got %d in TAR", plainObjectNames[originalObjName], originalObjName, size)
 			} else {
 				t.Errorf("api.MossOut for '%s' not found in response", originalObjName)
@@ -135,124 +133,108 @@ func testMossPlain(t *testing.T) {
 func testMossTar(t *testing.T) {
 	tlog.Logfln("Running TestMoss - tar...")
 	const (
-		bucketName    = "moss-tar-bucket"
+		bucketPrefix  = "moss-tar-bucket"
 		tarFileName   = "moss_archive.tar"
-		numFilesInTar = 5
+		numFilesInTar = 100
 		fileSizeInTar = 512
 	)
 	var (
 		proxyURL   = tools.GetPrimaryURL()
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{Name: bucketName + cos.GenTie(), Provider: apc.AIS}
+		bck        = cmn.Bck{Name: bucketPrefix + cos.GenTie(), Provider: apc.AIS}
 		mem        = memsys.PageMM()
 	)
-	tlog.Logfln("Creating bucket %s...", bucketName)
+	tlog.Logfln("Creating bucket %s...", bck.Name)
 	err := api.CreateBucket(baseParams, bck, nil)
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
-		tlog.Logfln("Destroying bucket %s...", bucketName)
+		tlog.Logfln("Destroying bucket %s...", bck.Name)
 		err := api.DestroyBucket(baseParams, bck)
 		tassert.CheckFatal(t, err)
 	})
 
-	// Create a local tar file with random content using tarch and record internal file sizes
-	tlog.Logfln("Creating local tar file %s with %d objects...", tarFileName, numFilesInTar)
+	// Create and upload .tar
 	tarDir := t.TempDir()
 	tarFullPath := filepath.Join(tarDir, tarFileName)
-	tarInternalFileNames := make([]string, numFilesInTar)
-	tarObjectNames := make([]string, numFilesInTar)
-	internalFileSizes := make(map[string]int, numFilesInTar)
-	for i := range tarInternalFileNames {
-		tarInternalFileNames[i] = fmt.Sprintf("file_%d.txt", i)
-		tarObjectNames[i] = fmt.Sprintf("%s/%s", tarFileName, tarInternalFileNames[i])
-		internalFileSizes[tarInternalFileNames[i]] = fileSizeInTar
+	tarInternal := make([]string, numFilesInTar)
+	expectedSizes := make(map[string]int)
+	for i := range tarInternal {
+		tarInternal[i] = fmt.Sprintf("file_%d.txt", i)
+		expectedSizes[tarInternal[i]] = fileSizeInTar
 	}
-
 	err = tarch.CreateArchRandomFiles(
-		tarFullPath,
-		tar.FormatGNU, // You can choose other formats as well
-		".tar",
-		numFilesInTar,
-		fileSizeInTar,
-		false,                // duplication
-		false,                // random dir prefix
-		nil,                  // record extensions
-		tarInternalFileNames, // pregenerated filenames
+		tarFullPath, tar.FormatGNU, ".tar",
+		numFilesInTar, fileSizeInTar,
+		false, false, nil, tarInternal,
 	)
 	tassert.CheckFatal(t, err)
-	tlog.Logfln("Local tar file created: %s", tarFullPath)
 
-	// Put the tar file into the bucket
-	tlog.Logfln("Putting tar file %s into bucket %s...", tarFileName, bucketName)
 	fileReader, err := cos.NewFileHandle(tarFullPath)
 	tassert.CheckFatal(t, err)
 	defer fileReader.Close()
-
-	putArgs := &api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: tarFileName, Reader: fileReader}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: baseParams, Bck: bck, ObjName: tarFileName, Reader: fileReader,
+	})
 	tassert.CheckFatal(t, err)
 
-	// Prepare api.MossReq and call GetBatch with a subset of tar objects
+	// Choose random subset
 	numToGet := rand.IntN(numFilesInTar) + 1
-	rand.Shuffle(len(tarObjectNames), func(i, j int) { tarObjectNames[i], tarObjectNames[j] = tarObjectNames[j], tarObjectNames[i] })
-	subsetTarNames := tarObjectNames[:numToGet]
+	rand.Shuffle(len(tarInternal), func(i, j int) {
+		tarInternal[i], tarInternal[j] = tarInternal[j], tarInternal[i]
+	})
+	subset := tarInternal[:numToGet]
 
-	mossInSlice := make([]api.MossIn, len(subsetTarNames))
-	for i, name := range subsetTarNames {
-		mossInSlice[i] = api.MossIn{ObjName: name}
+	// Prepare request
+	mossIn := make([]api.MossIn, numToGet)
+	for i, fname := range subset {
+		mossIn[i] = api.MossIn{
+			ObjName:  tarFileName,
+			ArchPath: fname,
+		}
 	}
-	mossReq := api.MossReq{In: mossInSlice}
+	mossReq := api.MossReq{
+		In:           mossIn,
+		OnlyObjName:  true, // entry names will be object/archpath
+		StreamingGet: false,
+	}
 
 	sgl := mem.NewSGL(0)
 	defer sgl.Free()
 
 	resp, err := api.GetBatch(baseParams, bck, &mossReq, sgl)
 	tassert.CheckFatal(t, err)
-	tlog.Logfln("GetBatch: xid %q, num %d", resp.UUID, len(resp.Out))
+	tassert.Errorf(t, len(resp.Out) == len(mossIn), "expected %d responses, got %d", len(mossIn), len(resp.Out))
 
-	// Verify api.MossResp
-	tassert.Errorf(t, len(resp.Out) == len(mossReq.In), "expected %d responses, got %d", len(mossReq.In), len(resp.Out))
-
-	// Verify the TAR archive in sgl
+	// Read TAR
 	tr := tar.NewReader(sgl)
-	foundEntries := make(map[string]int64, len(mossReq.In))
+	found := make(map[string]int64)
 	for i := 0; ; i++ {
-		header, err := tr.Next()
+		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		tassert.CheckFatal(t, err)
-		name := header.Name
-		size := header.Size
-		foundEntries[name] = size
 
-		tlog.Logfln("\t%2d: entry in response TAR: %s (%d)", i, name, size)
+		entryName := hdr.Name
+		size := hdr.Size
+		found[entryName] = size
+		tlog.Logfln("\t%2d: entry = %q (%d bytes)", i, entryName, size)
 
-		if i < len(mossReq.In) {
-			originalObjName := mossReq.In[i].ObjName
+		// Expect: object/archpath
+		expected := fmt.Sprintf("%s/%s", tarFileName, subset[i])
+		tassert.Errorf(t, entryName == expected,
+			"expected entry '%s' at index %d, got '%s'", expected, i, entryName)
 
-			// For tar-within-tar, we expect the internal file name in the result TAR
-			// The originalObjName is like "archive.tar/file_1.txt",
-			// and we expect just "file_1.txt" in the resulting TAR
-			parts := strings.SplitN(originalObjName, "/", 2)
-			var expectedInternalName string
-			if len(parts) > 1 {
-				expectedInternalName = parts[1] // Extract "file_1.txt" from "archive.tar/file_1.txt"
-				tassert.Errorf(t, name == expectedInternalName, "expected TAR entry '%s' at index %d, got '%s'", expectedInternalName, i, name)
-
-				if out := findMossOut(resp.Out, originalObjName); out != nil {
-					tassert.Errorf(t, out.Size == size, "expected MossOut size %d for TAR-ed file '%s', got %d", out.Size, originalObjName, size)
-					tassert.Errorf(t, internalFileSizes[expectedInternalName] == int(size), "expected original size %d for TAR-ed file '%s', got %d", internalFileSizes[expectedInternalName], originalObjName, size)
-				} else {
-					t.Errorf("api.MossOut for '%s' not found in response", originalObjName)
-				}
-			} else {
-				t.Errorf("Unexpected full name format: %s", originalObjName)
-			}
+		// tlog.Logf("Matching: objname=%q, archpath=%q\n", tarFileName, subset[i])
+		if out := findMossOut(resp.Out, tarFileName, subset[i]); out != nil {
+			tassert.Errorf(t, out.Size == size, "MossOut size mismatch for '%s': want %d, got %d", expected, size, out.Size)
+			tassert.Errorf(t, expectedSizes[subset[i]] == int(size), "original size mismatch for '%s': want %d, got %d", subset[i], expectedSizes[subset[i]], size)
+		} else {
+			t.Errorf("MossOut missing for '%s'", expected)
 		}
 	}
 
-	tassert.Errorf(t, len(foundEntries) == len(mossReq.In), "expected %d files in TAR, got %d", len(mossReq.In), len(foundEntries))
+	tassert.Errorf(t, len(found) == numToGet, "expected %d files in TAR, found %d", numToGet, len(found))
 }
 
 func testMossMissing(t *testing.T) {
@@ -371,10 +353,11 @@ func testMossMissing(t *testing.T) {
 	}
 }
 
-func findMossOut(outSlice []api.MossOut, objName string) *api.MossOut {
-	for _, out := range outSlice {
-		if out.ObjName == objName {
-			return &out
+func findMossOut(allout []api.MossOut, objname, archpath string) *api.MossOut {
+	for i := range allout {
+		out := &allout[i]
+		if out.ObjName == objname && out.ArchPath == archpath {
+			return out
 		}
 	}
 	return nil

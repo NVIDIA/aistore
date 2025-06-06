@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -208,4 +209,29 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		T.FSHC(err, lom.Mountpath(), wfqn)
 		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
 	}
+}
+
+// extract a single file from a (.tar, .tgz or .tar.gz, .zip, .tar.lz4) shard
+// uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
+func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
+	debug.Assert(archpath != "")
+	mime, err = archive.MimeFile(lmfh, T.ByteMM(), mime, lom.ObjName)
+	if err != nil {
+		return nil, err
+	}
+
+	var ar archive.Reader
+	ar, err = archive.NewReader(mime, lmfh, lom.Lsize())
+	if err != nil {
+		return nil, fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
+	}
+
+	csl, err = ar.ReadOne(archpath)
+	if err != nil {
+		return nil, err
+	}
+	if csl == nil {
+		return nil, cos.NewErrNotFound(T, archpath+" in "+lom.Cname())
+	}
+	return csl, nil
 }
