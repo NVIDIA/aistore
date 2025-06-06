@@ -348,7 +348,11 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 
 	// get details (contain errors)
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.Join(etlName, apc.ETLDetails)}
+	args.req = cmn.HreqArgs{
+		Method: http.MethodGet,
+		Path:   apc.URLPathETL.Join(etlName, apc.ETLDetails),
+		Query:  r.URL.Query(),
+	}
 	args.timeout = apc.DefaultTimeout
 	args.cresv = cresjGeneric[etl.ObjErrs]{}
 	results := p.bcastGroup(args)

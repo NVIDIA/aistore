@@ -486,10 +486,12 @@ class TestETLOps(unittest.TestCase):
         job = self.client.job(job_id)
         job.wait()
 
-        etl_details = etl.view()
+        etl_details = etl.view(job_id=job_id)
         self.assertIsNotNone(etl_details.obj_errors)
         error_names = sorted(e.obj_name for e in etl_details.obj_errors)
-        expected_errors = sorted([f"{i}" for i in range(6, 9)])
+        expected_errors = sorted(
+            [f"{src_bck.provider.value}://{src_bck.name}/{i}" for i in range(6, 9)]
+        )
         self.assertEqual(error_names, expected_errors)
 
 

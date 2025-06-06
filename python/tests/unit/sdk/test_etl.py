@@ -12,6 +12,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_ETL,
     UTF_ENCODING,
+    QPARAM_UUID,
 )
 from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
@@ -204,10 +205,14 @@ class TestEtl(
     def test_view(self):
         mock_response = Mock()
         self.mock_client.request_deserialize.return_value = mock_response
-        response = self.etl.view()
+        job_id = "mock-job-id"
+        response = self.etl.view(job_id=job_id)
         self.assertEqual(mock_response, response)
         self.mock_client.request_deserialize.assert_called_with(
-            HTTP_METHOD_GET, path=f"etl/{ self.etl_name }", res_model=ETLDetails
+            HTTP_METHOD_GET,
+            path=f"etl/{ self.etl_name }",
+            res_model=ETLDetails,
+            params={QPARAM_UUID: job_id},
         )
 
     def test_start(self):
