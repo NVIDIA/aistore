@@ -38,17 +38,7 @@ func (e *errBdir) Error() string {
 // open
 //
 
-// open read-only, return os.File
-func (lom *LOM) OpenFile() (fh *os.File, _ error) {
-	reader, err := lom.Open()
-	if err != nil {
-		return nil, err
-	}
-	fh = reader.(*os.File)
-	return fh, nil
-}
-
-// same as above but return a reader
+// open read-only, return a reader
 func (lom *LOM) Open() (fh cos.LomReader, err error) {
 	fh, err = os.Open(lom.FQN)
 	switch {
