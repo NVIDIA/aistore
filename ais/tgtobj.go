@@ -1131,30 +1131,14 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 // TODO: checksum
 func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) error {
 	var (
-		ar  archive.Reader
 		dpq = goi.dpq
 		lom = goi.lom
 	)
-	mime, err := archive.MimeFile(lmfh, goi.t.smm, dpq.arch.mime, lom.ObjName)
-	if err != nil {
-		return err
-	}
-	ar, err = archive.NewReader(mime, lmfh, lom.Lsize())
-	if err != nil {
-		return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
-	}
-
-	// single
+	// read single
 	if dpq.arch.path != "" {
-		debug.Assert(dpq.arch.mmode == "", dpq.arch.mmode)
-		var csl cos.ReadCloseSizer
-		csl, err = ar.ReadOne(dpq.arch.path)
+		csl, err := lom.NewArchpathReader(lmfh, dpq.arch.path, dpq.arch.mime)
 		if err != nil {
-			goi.isIOErr = true
-			return cmn.NewErrFailedTo(goi.t, "extract "+dpq._archstr()+" from", lom.Cname(), err)
-		}
-		if csl == nil {
-			return cos.NewErrNotFound(goi.t, dpq._archstr()+" in "+lom.Cname())
+			return err
 		}
 		// found
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
@@ -1167,6 +1151,17 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 
 	// multi match; writing & streaming tar =>(directly)=> response writer
 	debug.Assert(dpq.arch.mmode != "")
+	mime, err := archive.MimeFile(lmfh, goi.t.smm, dpq.arch.mime, lom.ObjName)
+	if err != nil {
+		return err
+	}
+
+	var ar archive.Reader
+	ar, err = archive.NewReader(mime, lmfh, lom.Lsize())
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
+	}
+
 	rcb := _newRcb(goi.w)
 	whdr.Set(cos.HdrContentType, cos.ContentTar)
 	err = ar.ReadUntil(rcb, dpq.arch.regx, dpq.arch.mmode)
