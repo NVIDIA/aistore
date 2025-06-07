@@ -1,13 +1,13 @@
 // Package archive provides common low-level utilities for testing archives
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package tarch
 
 import (
 	"archive/tar"
 	"bytes"
-	cryptorand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -54,9 +55,10 @@ func addBufferToArch(aw archive.Writer, path string, l int, buf []byte) error {
 		buf = newBuf(l)
 		defer freeBuf(buf)
 		buf = buf[:l]
-		_, err := cryptorand.Read(buf[:l/3])
-		debug.AssertNoErr(err)
-		copy(buf[2*l/3:], buf)
+		seed := uint64(mono.NanoTime())
+		for i := 0; i < len(buf)-8; i += 8 {
+			binary.BigEndian.PutUint64(buf, seed+uint64(i))
+		}
 	}
 	reader := bytes.NewBuffer(buf)
 	oah := cos.SimpleOAH{Size: int64(l)}
