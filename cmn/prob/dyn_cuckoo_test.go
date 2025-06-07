@@ -19,6 +19,8 @@ import (
 const (
 	testFilterInitSize = 100 * 1000
 	objNameLength      = 5
+	numKeys            = 100_000 // Fixed input size for benchmarking; avoids scaling issues from using b.N as input size.
+	smallFilterSize    = 10    // Used for testing dynamic growth
 )
 
 // Predefined buckets.
@@ -91,106 +93,119 @@ var _ = Describe("Filter", func() {
 
 func BenchmarkInsert(b *testing.B) {
 	b.Run("preallocated", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(uint(numKeys))
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Insert(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Insert(keys[i%len(keys)])
+			i++
 		}
 	})
 
 	b.Run("empty", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(smallFilterSize)
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Insert(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Insert(keys[i%len(keys)])
+			i++
 		}
 	})
 }
 
 func BenchmarkLookup(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
-		for n := range b.N {
-			filter.Insert(keys[n])
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(uint(numKeys))
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Lookup(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Lookup(keys[i%len(keys)])
+			i++
 		}
 	})
 
 	b.Run("multiple filters", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
-		for n := range b.N {
-			filter.Insert(keys[n])
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(smallFilterSize)
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Lookup(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Lookup(keys[i%len(keys)])
+			i++
 		}
 	})
 }
 
 func BenchmarkDelete(b *testing.B) {
 	b.Run("single filter", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
-		for n := range b.N {
-			filter.Insert(keys[n])
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(uint(numKeys))
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Delete(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Delete(keys[i%len(keys)])
+			i++
 		}
 	})
 
 	b.Run("multiple filters", func(b *testing.B) {
-		keys := genKeys(b.N)
+		keys := genKeys(numKeys)
 		filter := prob.NewFilter(10)
-		for n := range b.N {
-			filter.Insert(keys[n])
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Delete(keys[n])
+		i := 0
+		for b.Loop() {
+			filter.Delete(keys[i%len(keys)])
+			i++
 		}
 	})
 }
 
 func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
+	// NOTE: We intentionally use range b.N instead of b.Loop() because the
+	// b.Loop() is not concurrent safe and can lead to race conditions.
 	b.Run("preallocated", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(uint(numKeys))
 
 		b.ResetTimer()
 
 		wg := &sync.WaitGroup{}
 		wg.Add(3)
+
 		go func() {
-			for n := range b.N {
-				filter.Insert(keys[n])
+			for i := range b.N {
+				filter.Insert(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := range b.N {
-				filter.Lookup(keys[n])
+			for i := range b.N {
+				filter.Lookup(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := range b.N {
-				filter.Delete(keys[n])
+			for i := range b.N {
+				filter.Delete(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
@@ -198,28 +213,29 @@ func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
 	})
 
 	b.Run("empty", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
+		keys := genKeys(numKeys)
+		filter := prob.NewFilter(uint(smallFilterSize))
 
 		b.ResetTimer()
 
 		wg := &sync.WaitGroup{}
 		wg.Add(3)
+
 		go func() {
-			for n := range b.N {
-				filter.Insert(keys[n])
+			for i := range b.N {
+				filter.Insert(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := range b.N {
-				filter.Lookup(keys[n])
+			for i := range b.N {
+				filter.Lookup(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
 		go func() {
-			for n := range b.N {
-				filter.Delete(keys[n])
+			for i := range b.N {
+				filter.Delete(keys[i%len(keys)])
 			}
 			wg.Done()
 		}()
