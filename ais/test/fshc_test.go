@@ -542,9 +542,6 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 }
 
 func TestFSAddMountpathRestartNode(t *testing.T) {
-	if true {
-		t.Skipf("skipping %s", t.Name())
-	}
 	var (
 		target *meta.Snode
 
@@ -553,7 +550,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 		smap       = tools.GetClusterMap(t, proxyURL)
 		proxyCnt   = smap.CountProxies()
 		targetCnt  = smap.CountActiveTs()
-		tmpMpath   = "/tmp/testmp"
+		tmpMpath   = t.TempDir()
 	)
 	if targetCnt < 2 {
 		t.Skip("The number of targets must be at least 2")
@@ -564,7 +561,6 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	numMpaths := len(oldMpaths.Available)
 	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have mountpaths", target.StringEx())
 
-	cos.CreateDir(tmpMpath)
 	tlog.Logf("Adding mountpath to %s\n", target.StringEx())
 	err = api.AttachMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
@@ -574,7 +570,6 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	t.Cleanup(func() {
 		api.DetachMountpath(baseParams, target, tmpMpath, true /*dont-resil*/)
 		time.Sleep(2 * time.Second)
-		os.Remove(tmpMpath)
 
 		ensureNumMountpaths(t, target, oldMpaths)
 	})

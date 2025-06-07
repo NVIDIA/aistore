@@ -65,7 +65,7 @@ func serverTCPAddr(u string) (ni meta.NetInfo) {
 }
 
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
-func newPrimary() *proxy {
+func newPrimary(t *testing.T) *proxy {
 	var (
 		p       = &proxy{}
 		tracker = mock.NewStatsTracker()
@@ -80,7 +80,7 @@ func newPrimary() *proxy {
 	p.owner.smap.put(smap)
 
 	config := cmn.GCO.BeginUpdate()
-	config.ConfigDir = "/tmp/ais-tests"
+	config.ConfigDir = t.TempDir()
 	config.Periodic.RetrySyncTime = cos.Duration(time.Millisecond * 100)
 	config.Keepalive.Proxy.Name = "heartbeat"
 	config.Keepalive.Proxy.Interval = cos.Duration(3 * time.Second)
@@ -90,7 +90,7 @@ func newPrimary() *proxy {
 	config.Client.TimeoutLong = cos.Duration(10 * time.Second)
 	config.Cksum.Type = cos.ChecksumOneXxh
 	cmn.GCO.CommitUpdate(config)
-	cmn.GCO.SetInitialGconfPath("/tmp/ais-tests/ais.config")
+	cmn.GCO.SetInitialGconfPath(config.ConfigDir + "/ais.config")
 
 	g.client.data = &http.Client{}
 	g.client.control = &http.Client{}
@@ -222,7 +222,7 @@ func TestMetasyncTransport(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		primary := newPrimary()
+		primary := newPrimary(t)
 		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup
@@ -602,7 +602,7 @@ func TestMetasyncData(t *testing.T) {
 	var (
 		exp      = make(msPayload)
 		expRetry = make(msPayload)
-		primary  = newPrimary()
+		primary  = newPrimary(t)
 		syncer   = testSyncer(primary)
 		ch       = make(chan data, 5)
 		bmd      = newBucketMD()
@@ -681,7 +681,7 @@ func TestMetasyncData(t *testing.T) {
 func TestMetasyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
-		primary := newPrimary()
+		primary := newPrimary(t)
 		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup
@@ -724,7 +724,7 @@ func TestMetasyncMembership(t *testing.T) {
 		wg.Wait()
 	}
 
-	primary := newPrimary()
+	primary := newPrimary(t)
 	syncer := testSyncer(primary)
 
 	var wg sync.WaitGroup
@@ -814,7 +814,7 @@ func TestMetasyncReceive(t *testing.T) {
 			}
 		}
 
-		primary := newPrimary()
+		primary := newPrimary(t)
 		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup

@@ -282,10 +282,10 @@ func (df *dsortFramework) start() {
 }
 
 func (df *dsortFramework) createInputShards() {
-	const tmpDir = "/tmp"
 	var (
-		wg    = cos.NewLimitedWaitGroup(sys.NumCPU(), 0)
-		errCh = make(chan error, df.shardCnt)
+		tmpDir = df.m.t.TempDir()
+		wg     = cos.NewLimitedWaitGroup(sys.NumCPU(), 0)
+		errCh  = make(chan error, df.shardCnt)
 
 		mu = &sync.Mutex{} // to collect inputShards (obj names)
 	)

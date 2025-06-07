@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"testing"
@@ -37,7 +36,8 @@ import (
 //
 
 func TestGetFromArch(t *testing.T) {
-	const tmpDir = "/tmp"
+	tmpDir := t.TempDir() // (with auto-remove)
+
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			m = ioContext{
@@ -153,7 +153,6 @@ func TestGetFromArch(t *testing.T) {
 						reader, err = readers.NewExistingFile(archName, cos.ChecksumNone)
 					}
 					tassert.CheckFatal(t, err)
-					defer os.Remove(archName)
 
 					tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
 					tassert.SelectErr(t, errCh, "put", true)
