@@ -6,7 +6,9 @@ package prob_test
 
 import (
 	"math/rand/v2"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/prob"
@@ -17,8 +19,9 @@ import (
 )
 
 const (
-	testFilterInitSize = 100 * 1000
 	objNameLength      = 5
+	defaultNumKeys     = 10_000_000 // default filter is 10M in size
+	dynamicNumKeys     = 5 * 10_000_000
 )
 
 // Predefined buckets.
@@ -39,7 +42,7 @@ func genKeys(keysNum int) [][]byte {
 }
 
 var _ = Describe("Filter", func() {
-	filter := prob.NewFilter(testFilterInitSize)
+	filter := prob.NewDefaultFilter()
 
 	BeforeEach(func() {
 		filter.Reset()
@@ -53,7 +56,7 @@ var _ = Describe("Filter", func() {
 		})
 
 		It("should lookup the keys in filter with no more than 0.06% failure rate", func() {
-			keys := genKeys(testFilterInitSize * 10)
+			keys := genKeys(defaultNumKeys * 5)
 			total := float64(len(keys))
 			for _, key := range keys {
 				filter.Insert(key)
@@ -90,139 +93,178 @@ var _ = Describe("Filter", func() {
 })
 
 func BenchmarkInsert(b *testing.B) {
-	b.Run("preallocated", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
+	b.Run("default", func(b *testing.B) {
+		keys := genKeys(defaultNumKeys)
+		filter := prob.NewDefaultFilter()
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Insert(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Insert(keys[i%len(keys)])
 		}
 	})
 
-	b.Run("empty", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
+	b.Run("dynamic growth", func(b *testing.B) {
+		keys := genKeys(dynamicNumKeys)
+		filter := prob.NewDefaultFilter()
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Insert(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Insert(keys[i%len(keys)])
 		}
 	})
 }
 
 func BenchmarkLookup(b *testing.B) {
-	b.Run("single filter", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
-		for n := range b.N {
-			filter.Insert(keys[n])
+	b.Run("default", func(b *testing.B) {
+		keys := genKeys(defaultNumKeys)
+		filter := prob.NewDefaultFilter()
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Lookup(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Lookup(keys[i%len(keys)])
 		}
 	})
 
-	b.Run("multiple filters", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
-		for n := range b.N {
-			filter.Insert(keys[n])
+	b.Run("dynamic growth", func(b *testing.B) {
+		keys := genKeys(dynamicNumKeys)
+		filter := prob.NewDefaultFilter()
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Lookup(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Lookup(keys[i%len(keys)])
 		}
 	})
 }
 
 func BenchmarkDelete(b *testing.B) {
-	b.Run("single filter", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
-		for n := range b.N {
-			filter.Insert(keys[n])
+	b.Run("default", func(b *testing.B) {
+		keys := genKeys(defaultNumKeys)
+		filter := prob.NewDefaultFilter()
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Delete(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Delete(keys[i%len(keys)])
 		}
 	})
 
-	b.Run("multiple filters", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
-		for n := range b.N {
-			filter.Insert(keys[n])
+	b.Run("dynamic growth", func(b *testing.B) {
+		keys := genKeys(dynamicNumKeys)
+		filter := prob.NewDefaultFilter()
+
+		for _, k := range keys {
+			filter.Insert(k)
 		}
 
-		b.ResetTimer()
-		for n := range b.N {
-			filter.Delete(keys[n])
+		for i := 0; b.Loop(); i++ {
+			filter.Delete(keys[i%len(keys)])
 		}
 	})
 }
 
-func BenchmarkInsertAndDeleteAndLookupParallel(b *testing.B) {
-	b.Run("preallocated", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(uint(b.N))
+func BenchmarkConcurrentLoad(b *testing.B) {
+	b.Run("default", func(b *testing.B) {
+		// 10% of total keys inserted
+		const insertRatio = 0.1
+
+		// Match RunParallel's default GOMAXPROCS
+		gfnSenders := runtime.NumCPU()
+
+		keys := genKeys(defaultNumKeys)
+		insertKeys := keys[:int(float64(defaultNumKeys)*insertRatio)]
+		filter := prob.NewDefaultFilter()
+
+		var (
+			stopInsert atomic.Bool
+			wg         sync.WaitGroup
+		)
+
+		// Insert GFN keys to simulate background work
+		for i := range gfnSenders {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				start := id * len(insertKeys) / gfnSenders
+				end := start + len(insertKeys)/gfnSenders
+				for !stopInsert.Load() {
+					for j := start; j < end; j++ {
+						filter.Insert(insertKeys[j])
+					}
+				}
+			}(i)
+		}
 
 		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				key := keys[i%len(keys)]
+				if filter.Lookup(key) {
+					filter.Delete(key)
+				}
+				i++
+			}
+		})
+		b.StopTimer()
 
-		wg := &sync.WaitGroup{}
-		wg.Add(3)
-		go func() {
-			for n := range b.N {
-				filter.Insert(keys[n])
-			}
-			wg.Done()
-		}()
-		go func() {
-			for n := range b.N {
-				filter.Lookup(keys[n])
-			}
-			wg.Done()
-		}()
-		go func() {
-			for n := range b.N {
-				filter.Delete(keys[n])
-			}
-			wg.Done()
-		}()
+		stopInsert.Store(true)
 		wg.Wait()
 	})
 
-	b.Run("empty", func(b *testing.B) {
-		keys := genKeys(b.N)
-		filter := prob.NewFilter(10)
+	b.Run("dynamic growth", func(b *testing.B) {
+		// 75% of total keys to force the filter to grow
+		const insertRatio = 0.75
+		gfnSenders := runtime.NumCPU()
+
+		keys := genKeys(dynamicNumKeys)
+		insertKeys := keys[:int(float64(dynamicNumKeys)*insertRatio)]
+		filter := prob.NewDefaultFilter()
+
+		var (
+			stopInsert atomic.Bool
+			wg         sync.WaitGroup
+		)
+
+		// Note: We prepopulate with 10M keys to ensure the filter is already at initial capacity,
+		// forcing dynamic resizing during the benchmark window
+		for i := range defaultNumKeys {
+			filter.Insert(insertKeys[i])
+		}
+
+		for i := range gfnSenders {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				start := id * len(insertKeys) / gfnSenders
+				end := start + len(insertKeys)/gfnSenders
+				for !stopInsert.Load() {
+					for j := start; j < end; j++ {
+						filter.Insert(insertKeys[j])
+					}
+				}
+			}(i)
+		}
 
 		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				key := keys[i%len(keys)]
+				if filter.Lookup(key) {
+					filter.Delete(key)
+				}
+				i++
+			}
+		})
+		b.StopTimer()
 
-		wg := &sync.WaitGroup{}
-		wg.Add(3)
-		go func() {
-			for n := range b.N {
-				filter.Insert(keys[n])
-			}
-			wg.Done()
-		}()
-		go func() {
-			for n := range b.N {
-				filter.Lookup(keys[n])
-			}
-			wg.Done()
-		}()
-		go func() {
-			for n := range b.N {
-				filter.Delete(keys[n])
-			}
-			wg.Done()
-		}()
+		stopInsert.Store(true)
 		wg.Wait()
 	})
 }

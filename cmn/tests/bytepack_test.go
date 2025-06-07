@@ -135,17 +135,33 @@ func TestBytePackStruct(t *testing.T) {
 }
 
 func BenchmarkPackWriteString(b *testing.B) {
-	p := cos.NewPacker(nil, 90*b.N)
+	const (
+		bufSize    = 64 * 1024 // 64KB
+		stringLen  = 80
+		numStrings = 1000
+		entrySize  = cos.SizeofLen + stringLen // 4 + 80 = 84 bytes per WriteString
+	)
 
-	a := make([]string, 0, 1000)
-	for range 1000 {
-		a = append(a, trand.String(80))
+	strs := make([]string, 0, numStrings)
+	for range numStrings {
+		strs = append(strs, trand.String(stringLen))
 	}
 
-	b.ReportAllocs()
-	b.ResetTimer()
+	buf := make([]byte, bufSize)
+	p := cos.NewPacker(buf, bufSize)
+	written := 0
 
-	for i := range b.N {
-		p.WriteString(a[i%len(a)])
+	b.ReportAllocs()
+
+	for i := 0; b.Loop(); i++ {
+		// If buffer is about to overflow, reinitialize
+		if written+entrySize > bufSize {
+			b.StopTimer()
+			p = cos.NewPacker(buf, bufSize)
+			written = 0
+			b.StartTimer()
+		}
+		p.WriteString(strs[i%numStrings])
+		written += entrySize
 	}
 }
