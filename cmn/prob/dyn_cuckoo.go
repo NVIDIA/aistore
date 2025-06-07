@@ -31,7 +31,7 @@ type Filter struct {
 	mtx     sync.RWMutex
 }
 
-func NewFilter(initSize uint) *Filter {
+func newFilter(initSize uint) *Filter {
 	return &Filter{
 		filters: make([]*cuckoo.Filter, 0, 5),
 		size:    initSize,
@@ -39,7 +39,7 @@ func NewFilter(initSize uint) *Filter {
 }
 
 func NewDefaultFilter() *Filter {
-	return NewFilter(filterInitSize)
+	return newFilter(filterInitSize)
 }
 
 func (f *Filter) Lookup(k []byte) bool {
