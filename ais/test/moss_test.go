@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
@@ -28,8 +28,12 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
+// [TODO]
+// - get-batch() to return something other than .tar
+// - streaming
+// - max-targets
+
 type mossConfig struct {
-	name          string
 	archFormat    string // "" for plain objects, or archive.ExtTar, etc.
 	continueOnErr bool   // GetBatch ContinueOnErr flag
 	onlyObjName   bool   // GetBatch OnlyObjName flag
@@ -37,87 +41,60 @@ type mossConfig struct {
 	nested        bool   // subdirs in archives
 }
 
+func (c *mossConfig) name() (s string) {
+	s = "plain"
+	if c.archFormat != "" {
+		s = c.archFormat
+	}
+	if c.continueOnErr {
+		s += "/continue-on-err"
+	}
+	if c.onlyObjName {
+		s += "/only-objname"
+	}
+	if c.withMissing {
+		s += "/with-missing"
+	}
+	if c.nested {
+		s += "/nested"
+	}
+	return s
+}
+
 func TestMoss(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1}) // TODO -- FIXME: remove
 
 	var (
-		numPlainObjs = 500 // scale
-		numArchives  = 20  // archives to create
-		numInArch    = 50  // files per archive
-		fileSize     = 4 * cos.KiB
+		numPlainObjs = 500 // plain objects to create
+		numArchives  = 400 // num shards to create
+		numInArch    = 50  // files per archive (shard)
+		fileSize     = 128 * cos.KiB
 	)
 	if testing.Short() {
 		numPlainObjs = 50
-		numArchives = 3
+		numArchives = 10
 		numInArch = 10
+		fileSize = cos.KiB
 	}
 
 	tests := []mossConfig{
 		// Plain object tests
-		{
-			name:          "plain/continue=false/names=false",
-			archFormat:    "",
-			continueOnErr: false,
-			onlyObjName:   false,
-		},
-		{
-			name:          "plain/continue=true/names=false",
-			archFormat:    "",
-			continueOnErr: true,
-			onlyObjName:   false,
-		},
-		{
-			name:          "plain/continue=true/names=true",
-			archFormat:    "",
-			continueOnErr: true,
-			onlyObjName:   true,
-		},
-		{
-			name:          "plain/continue=true/with-missing",
-			archFormat:    "",
-			continueOnErr: true,
-			onlyObjName:   false,
-			withMissing:   true,
-		},
+		{archFormat: "", continueOnErr: false, onlyObjName: false},
+		{archFormat: "", continueOnErr: true, onlyObjName: false},
+		{archFormat: "", continueOnErr: true, onlyObjName: true},
+		{archFormat: "", continueOnErr: true, onlyObjName: false, withMissing: true},
 
 		// Archive tests
-		{
-			name:          "tar/continue=false/names=false",
-			archFormat:    archive.ExtTar,
-			continueOnErr: false,
-			onlyObjName:   false,
-		},
-		{
-			name:          "tar/continue=true/names=true",
-			archFormat:    archive.ExtTar,
-			continueOnErr: true,
-			onlyObjName:   true,
-		},
-		{
-			name:          "tar/continue=true/nested",
-			archFormat:    archive.ExtTar,
-			continueOnErr: true,
-			onlyObjName:   false,
-			nested:        true,
-		},
-		{
-			name:          "tgz/continue=true/with-missing",
-			archFormat:    archive.ExtTgz,
-			continueOnErr: true,
-			onlyObjName:   false,
-			withMissing:   true,
-		},
-		{
-			name:          "zip/continue=false/nested",
-			archFormat:    archive.ExtZip,
-			continueOnErr: false,
-			onlyObjName:   false,
-			nested:        true,
-		},
+		{archFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false},
+		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true},
+		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, nested: true},
+		{archFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{archFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true},
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name(), func(t *testing.T) {
 			var (
 				bck = cmn.Bck{Name: trand.String(15), Provider: apc.AIS}
 				m   = ioContext{
@@ -131,13 +108,11 @@ func TestMoss(t *testing.T) {
 			)
 
 			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-			m.init(true /*cleanup*/)
+			m.init(false /*cleanup*/)
 
 			if test.archFormat == "" {
-				// Plain objects test
 				testMossPlainObjects(t, &m, &test, numPlainObjs)
 			} else {
-				// Archive test
 				testMossArchives(t, &m, &test, numArchives, numInArch)
 			}
 		})
@@ -148,94 +123,64 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	m.num = numObjs
 	m.puts()
 
-	// Build GetBatch request list (pre-allocate)
-	objNames := make([]string, 0, numObjs)
+	// Build MossIn
+	mossInEntries := make([]api.MossIn, 0, numObjs)
 	for i := range numObjs {
-		objNames = append(objNames, m.objNames[i])
+		mossInEntries = append(mossInEntries, api.MossIn{
+			ObjName: m.objNames[i],
+		})
 	}
 
 	// Inject missing objects if requested
 	if test.withMissing {
-		// Add some non-existent objects every 10th position
-		for i := 9; i < len(objNames); i += 10 {
-			objNames[i] = "missing-" + trand.String(8)
+		originalEntries := mossInEntries
+		mossInEntries = make([]api.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
+
+		for i, entry := range originalEntries {
+			mossInEntries = append(mossInEntries, entry)
+			if i%3 == 0 {
+				mossInEntries = append(mossInEntries, api.MossIn{
+					ObjName: "missing-" + trand.String(8),
+				})
+			}
 		}
 	}
 
-	testGetBatchCore(t, m, objNames, test.continueOnErr, test.onlyObjName, test.withMissing)
+	_testMoss(t, m, mossInEntries, test)
 }
 
 func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives, numInArch int) {
-	const tmpDir = "/tmp"
-
 	// Track actual files created in each archive for accurate retrieval
 	type archiveInfo struct {
 		name      string
 		filePaths []string
 	}
 
-	// Collect all archive info (pre-allocate)
+	// Collect all archive info
 	archives := make([]archiveInfo, 0, numArchives)
 
-	// Create archives similar to archive_test.go pattern
-	errCh := make(chan error, numArchives)
-	wg := cos.NewLimitedWaitGroup(10, 0)
-	archInfoCh := make(chan archiveInfo, numArchives)
-
+	// Create archives
+	var (
+		tmpDir     = t.TempDir() // (with automatic cleanup)
+		errCh      = make(chan error, numArchives)
+		wg         = cos.NewLimitedWaitGroup(10, 0)
+		archInfoCh = make(chan archiveInfo, numArchives)
+	)
 	for i := range numArchives {
 		archName := fmt.Sprintf("archive%02d%s", i, test.archFormat)
 
 		wg.Add(1)
 		go func(archName string) {
-			defer wg.Done()
-
-			// Generate deterministic filenames for archive content
-			randomNames := make([]string, 0, numInArch)
-			for j := range numInArch {
-				name := fmt.Sprintf("file%d.txt", j)
-				if test.nested {
-					// Use deterministic directory assignment
-					dirs := []string{"a", "b", "c", "a/b", "a/c", "b/c"}
-					dir := dirs[j%len(dirs)] // deterministic, not random
-					name = dir + "/" + name
+			randomNames, err := _createMossArch(m, test, tmpDir, archName, numInArch)
+			if err != nil {
+				errCh <- err
+			} else {
+				archInfoCh <- archiveInfo{
+					name:      archName,
+					filePaths: randomNames,
 				}
-				randomNames = append(randomNames, name)
 			}
-
-			// Create archive file
-			archPath := tmpDir + "/" + cos.GenTie() + test.archFormat
-			defer os.Remove(archPath)
-
-			err := tarch.CreateArchRandomFiles(
-				archPath,
-				tar.FormatUnknown, // tar format
-				test.archFormat,   // file extension
-				numInArch,         // file count
-				int(m.fileSize),   // file size
-				false,             // no duplication
-				false,             // no random dir prefix
-				nil,               // no record extensions
-				randomNames,       // pregenerated filenames
-			)
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			// Upload archive to cluster
-			reader, err := readers.NewExistingFile(archPath, cos.ChecksumNone)
-			if err != nil {
-				errCh <- err
-				return
-			}
-
-			tools.Put(m.proxyURL, m.bck, archName, reader, errCh)
-
-			// Send back the archive info with actual file paths
-			archInfoCh <- archiveInfo{
-				name:      archName,
-				filePaths: randomNames,
-			}
+			wg.Done()
 		}(archName)
 	}
 
@@ -248,83 +193,80 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 		archives = append(archives, info)
 	}
 
-	// Build GetBatch request list for archive contents using actual file paths
-	var objNames []string
+	// Build MossIn entries directly for archive contents
+	var mossInEntries []api.MossIn
 	for _, archInfo := range archives {
 		// Add a few files from each archive
 		numToRequest := min(len(archInfo.filePaths), max(numInArch/5, 3))
 		for j := range numToRequest {
-			// Use actual file paths that exist in the archive
-			archPath := archInfo.filePaths[j]
-
-			// Format: "archive.tar?archpath=path/to/file"
-			objName := archInfo.name + "?archpath=" + archPath
-			objNames = append(objNames, objName)
+			mossInEntries = append(mossInEntries, api.MossIn{
+				ObjName:  archInfo.name,
+				ArchPath: archInfo.filePaths[j],
+			})
 		}
 	}
 
 	// Inject missing archive paths if requested
 	if test.withMissing {
-		// Ensure we have SOME valid paths and SOME missing paths
-		validCount := len(objNames)
-		missingCount := max(1, validCount/5) // 20% missing
-
-		// Only replace the last N entries with missing paths
-		for i := validCount - missingCount; i < validCount; i++ {
-			parts := strings.Split(objNames[i], "?archpath=")
-			missingPath := "definitely-missing/" + trand.String(8) + ".txt"
-			objNames[i] = parts[0] + "?archpath=" + missingPath
+		for i := range mossInEntries {
+			if i%3 == 0 {
+				mossInEntries[i].ArchPath = trand.String(8) + ".nonexistent"
+			}
 		}
 	}
 
-	testGetBatchCore(t, m, objNames, test.continueOnErr, test.onlyObjName, test.withMissing)
+	_testMoss(t, m, mossInEntries, test)
 }
 
-func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnErr, onlyObjName, expectErrors bool) {
-	batchSize := len(objNames)
-	if !testing.Short() && batchSize > 100 {
-		// Test with larger batches in non-short mode
-		batchSize = min(batchSize, 200)
-		objNames = objNames[:batchSize]
-	}
-
-	// Concurrency settings
-	numConcurrentCalls := 5 // Multiple concurrent GetBatch calls
-	if testing.Short() {
-		numConcurrentCalls = 2
-	}
-
-	tlog.Logf("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, expectErrors=%t\n",
-		batchSize, numConcurrentCalls, continueOnErr, onlyObjName, expectErrors)
-
-	// Build MossReq with individual MossIn entries
-	var mossInEntries []api.MossIn
-	for _, objName := range objNames {
-		// Handle archive paths: "archive.tar?archpath=path/to/file"
-		parts := strings.Split(objName, "?archpath=")
-		if len(parts) == 2 {
-			// Archive file
-			mossInEntries = append(mossInEntries, api.MossIn{
-				ObjName:  parts[0],
-				ArchPath: parts[1],
-			})
-		} else {
-			// Plain object
-			mossInEntries = append(mossInEntries, api.MossIn{
-				ObjName: objName,
-			})
+func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, numInArch int) ([]string, error) {
+	// Generate filenames for archive content
+	randomNames := make([]string, 0, numInArch)
+	for j := range numInArch {
+		name := fmt.Sprintf("file%d.txt", j)
+		if test.nested {
+			// Use deterministic directory assignment
+			dirs := []string{"a", "b", "c", "a/b", "a/c", "b/c"}
+			dir := dirs[j%len(dirs)] // deterministic, not random
+			name = dir + "/" + name
 		}
+		randomNames = append(randomNames, name)
 	}
 
-	// Prepare MossReq template
-	reqTemplate := &api.MossReq{
-		In:            mossInEntries,
-		ContinueOnErr: continueOnErr,
-		OnlyObjName:   onlyObjName,
-		StreamingGet:  false,
+	// Create archive of a given format
+	archPath := tmpDir + "/" + cos.GenTie() + test.archFormat
+	err := tarch.CreateArchRandomFiles(
+		archPath,
+		tar.FormatUnknown, // tar format
+		test.archFormat,   // file extension
+		numInArch,         // file count
+		int(m.fileSize),   // file size
+		false,             // no duplication
+		false,             // no random dir prefix
+		nil,               // no record extensions
+		randomNames,       // pregenerated filenames
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	// Execute multiple concurrent GetBatch calls
+	// PUT
+	reader, err := readers.NewExistingFile(archPath, cos.ChecksumNone)
+	if err != nil {
+		return nil, err
+	}
+	bp := tools.BaseAPIParams(m.proxyURL)
+	putArgs := api.PutArgs{
+		BaseParams: bp,
+		Bck:        m.bck,
+		ObjName:    archName,
+		Cksum:      reader.Cksum(),
+		Reader:     reader,
+	}
+	_, err = api.PutObject(&putArgs)
+	return randomNames, err
+}
+
+func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mossConfig) {
 	type result struct {
 		resp     api.MossResp
 		err      error
@@ -333,22 +275,40 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 		tarData  []byte
 	}
 
+	// Concurrency settings
+	numConcurrentCalls := 5 // Multiple concurrent GetBatch calls
+	if testing.Short() {
+		numConcurrentCalls = 2
+	}
+
+	tlog.Logf("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t\n",
+		len(mossInEntries), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
+
+	// Prepare MossReq
+	req := &api.MossReq{
+		In:            mossInEntries,
+		ContinueOnErr: test.continueOnErr,
+		OnlyObjName:   test.onlyObjName,
+		StreamingGet:  false,
+	}
+
+	// Execute multiple concurrent GetBatch calls
 	var (
 		results    = make([]result, numConcurrentCalls)
 		wg         sync.WaitGroup
 		baseParams = tools.BaseAPIParams(m.proxyURL)
-		start      = time.Now()
+		start      = mono.NanoTime()
 	)
 	for i := range numConcurrentCalls {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
 			var (
-				callStart = time.Now()
+				callStart = mono.NanoTime()
 				buf       strings.Builder
 			)
-			resp, err := api.GetBatch(baseParams, m.bck, reqTemplate, &buf)
-			callDuration := time.Since(callStart)
+			resp, err := api.GetBatch(baseParams, m.bck, req, &buf)
+			callDuration := mono.Since(callStart)
 
 			tarData := []byte(buf.String())
 			results[idx] = result{
@@ -362,12 +322,15 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 	}
 
 	wg.Wait()
-	totalDuration := time.Since(start)
+	totalDuration := mono.Since(start)
 
 	// Log performance results
-	var successCount, errorCount int
-	var totalTarSize int64
-	var minDuration, maxDuration, sumDuration time.Duration
+	var (
+		successCount, errorCount int
+		totalTarSize             int64
+		minDuration, maxDuration time.Duration
+		sumDuration              time.Duration
+	)
 	minDuration = time.Hour // initialize to large value
 
 	for i, result := range results {
@@ -384,15 +347,15 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 			if result.duration > maxDuration {
 				maxDuration = result.duration
 			}
-			tlog.Logf("  Call %d: SUCCESS in %v, TAR size: %d bytes\n", i, result.duration, result.tarSize)
+			// tlog.Logf("  Call %d: SUCCESS in %v, TAR size: %d bytes\n", i, result.duration, result.tarSize)
 		}
 	}
 
 	avgDuration := sumDuration / time.Duration(successCount)
-	tlog.Logf("GetBatch concurrency results: total=%v, min=%v, max=%v, avg=%v\n",
+	tlog.Logf("GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v\n",
 		totalDuration, minDuration, maxDuration, avgDuration)
-	tlog.Logf("Success: %d/%d calls, Total TAR: %d bytes\n",
-		successCount, numConcurrentCalls, totalTarSize)
+	tlog.Logf("Success: %d/%d calls, Total TAR: %s\n",
+		successCount, numConcurrentCalls, cos.ToSizeIEC(totalTarSize, 2))
 
 	// Validate results - use the first successful result for detailed validation
 	var firstSuccess *result
@@ -404,7 +367,7 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 	}
 
 	switch {
-	case expectErrors && continueOnErr:
+	case test.withMissing && test.continueOnErr:
 		// Should succeed but have some failed entries
 		tassert.Fatalf(t, firstSuccess != nil, "Expected at least one successful call")
 
@@ -420,20 +383,20 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 		tassert.Fatalf(t, objErrorCount > 0, "Expected some object errors but got none")
 		tassert.Fatalf(t, objSuccessCount > 0, "Expected some object successes but got none")
 		tlog.Logf("Object results: %d success, %d errors\n", objSuccessCount, objErrorCount)
-	case expectErrors && !continueOnErr:
+	case test.withMissing && !test.continueOnErr:
 		// Should fail fast on first error
 		tassert.Errorf(t, errorCount > 0, "Expected GetBatch calls to fail but they succeeded")
 	default:
 		// Should succeed completely
 		tassert.Fatalf(t, firstSuccess != nil, "Expected successful calls but all failed")
-		tassert.Fatalf(t, len(firstSuccess.resp.Out) == len(objNames),
-			"Expected %d results, got %d", len(objNames), len(firstSuccess.resp.Out))
+		tassert.Fatalf(t, len(firstSuccess.resp.Out) == len(mossInEntries),
+			"Expected %d results, got %d", len(mossInEntries), len(firstSuccess.resp.Out))
 
 		for i, objResult := range firstSuccess.resp.Out {
 			tassert.Errorf(t, objResult.ErrMsg == "", "Unexpected error for %s: %s",
-				objNames[i], objResult.ErrMsg)
+				mossInEntries[i].ObjName, objResult.ErrMsg)
 
-			if onlyObjName {
+			if test.onlyObjName {
 				tassert.Errorf(t, objResult.ObjName != "", "Missing ObjName in result")
 			}
 
@@ -441,7 +404,7 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 		}
 
 		// Validate TAR contents against MossResp and the contract
-		validateTARContents(t, m, reqTemplate, firstSuccess.resp,
+		validateTARContents(t, m, req, firstSuccess.resp,
 			bytes.NewReader(firstSuccess.tarData), len(firstSuccess.tarData))
 
 		// Validate consistency across concurrent calls
@@ -458,7 +421,7 @@ func testGetBatchCore(t *testing.T, m *ioContext, objNames []string, continueOnE
 }
 
 func validateTARContents(t *testing.T, m *ioContext, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
-	tlog.Logf("Validating TAR contents: %d bytes\n", tarSize)
+	tlog.Logln("Validating TAR contents: " + cos.ToSizeIEC(int64(tarSize), 2))
 
 	// Define TAR entry structure
 	type tarEntry struct {
