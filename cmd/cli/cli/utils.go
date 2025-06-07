@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/cmd/cli/hf"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -922,6 +923,26 @@ func dryRunCptn(c *cli.Context) {
 	fmt.Fprintln(c.App.Writer, dryRunHeader()+" with no modifications to the cluster")
 }
 
+//////////////////////////
+// HuggingFace wrappers //
+//////////////////////////
+
+// hasHuggingFaceRepoFlags checks if HF model or dataset flags are set
+func hasHuggingFaceRepoFlags(c *cli.Context) bool {
+	hasModel := flagIsSet(c, hfModelFlag)
+	hasDataset := flagIsSet(c, hfDatasetFlag)
+	return hf.HasHuggingFaceRepoFlags(hasModel, hasDataset)
+}
+
+// buildHuggingFaceURL extracts CLI flags and calls HF package
+func buildHuggingFaceURL(c *cli.Context) (string, error) {
+	model := parseStrFlag(c, hfModelFlag)
+	dataset := parseStrFlag(c, hfDatasetFlag)
+	file := parseStrFlag(c, hfFileFlag)
+	revision := parseStrFlag(c, hfRevisionFlag)
+	return hf.BuildHuggingFaceURL(model, dataset, file, revision)
+}
+
 //////////////
 // dlSource //
 //////////////
@@ -936,7 +957,7 @@ func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 		// Case 1: Using HF convenience flags (--hf-model or --hf-dataset)
 		// Example: ais download --hf-model bert-base-uncased --hf-file pytorch_model.bin ais://nnn
 
-		if isHuggingFaceURL(rawURL) {
+		if hf.IsHuggingFaceURL(rawURL) {
 			return dlSource{}, fmt.Errorf("cannot use %s or %s flags with direct HuggingFace URL; use flags OR direct URL, not both",
 				qflprn(hfModelFlag), qflprn(hfDatasetFlag))
 		}
@@ -957,7 +978,7 @@ func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 		if err != nil {
 			return dlSource{}, err
 		}
-		needHFAuth = isHuggingFaceURL(rawURL) // Only HF-related if direct URL is HF
+		needHFAuth = hf.IsHuggingFaceURL(rawURL) // Only HF-related if direct URL is HF
 	}
 
 	// Add HuggingFace auth header if this is HF-related AND auth is available
@@ -973,8 +994,9 @@ func parseDlSource(c *cli.Context, rawURL string) (dlSource, error) {
 // parseURLToSource handles the actual URL parsing logic
 func parseURLToSource(rawURL string) (dlSource, error) {
 	// Check for HuggingFace full repository download marker
-	if strings.HasPrefix(rawURL, hfFullRepoMarker+":") {
-		return dlSource{}, errors.New("HuggingFace full repository download not yet implemented - please specify --hf-file for individual files")
+	if strings.HasPrefix(rawURL, hf.HfFullRepoMarker) {
+		// HuggingFace dataset download - pass marker to job handler
+		return dlSource{link: rawURL}, nil
 	}
 
 	u, err := url.Parse(rawURL)

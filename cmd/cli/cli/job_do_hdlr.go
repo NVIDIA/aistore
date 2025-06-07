@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmd/cli/hf"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -432,37 +433,45 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 	return waitJob(c, xargs.Kind, xid, xargs.Bck)
 }
 
-func startDownloadHandler(c *cli.Context) error {
+// downloadRequest holds parsed and validated download arguments
+type downloadRequest struct {
+	source          dlSource
+	destination     cmn.Bck
+	pathSuffix      string
+	objectsListPath string
+	basePayload     dload.Base
+}
+
+// parseDownloadRequest handles argument parsing and validation
+func parseDownloadRequest(c *cli.Context) (*downloadRequest, error) {
 	var (
 		description      = parseStrFlag(c, descJobFlag)
 		timeout          = parseDurationFlag(c, dloadTimeoutFlag).String()
 		objectsListPath  = parseStrFlag(c, objectsListFlag)
 		progressInterval = parseDurationFlag(c, dloadProgressFlag).String()
-		id               string
 	)
 	hasHFFlags := hasHuggingFaceRepoFlags(c)
 
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
+		return nil, missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
-	// When using HF flags, we expect only 1 argument (destination)
-	// When not using HF flags, we expect 2 arguments (source and destination)
+	// Validate argument count based on HF flags
 	if hasHFFlags {
 		if c.NArg() != 1 {
 			if c.NArg() > 1 {
-				return fmt.Errorf("when using HuggingFace flags (--hf-model, --hf-dataset), provide only the destination argument - got %d arguments", c.NArg())
+				return nil, fmt.Errorf("when using HuggingFace flags (--hf-model, --hf-dataset), provide only the destination argument - got %d arguments", c.NArg())
 			}
-			return missingArgumentsError(c, "destination")
+			return nil, missingArgumentsError(c, "destination")
 		}
 	} else {
 		if c.NArg() == 1 {
-			return missingArgumentsError(c, "destination")
+			return nil, missingArgumentsError(c, "destination")
 		}
 		if c.NArg() > 2 {
 			const q = "For range download, enclose source in quotation marks, e.g.: \"gs://imagenet/train-{00..99}.tgz\""
 			s := fmt.Sprintf("too many arguments - expected 2, got %d.\n%s", len(c.Args()), q)
-			return &errUsage{
+			return nil, &errUsage{
 				context:      c,
 				message:      s,
 				helpData:     c.Command,
@@ -471,28 +480,28 @@ func startDownloadHandler(c *cli.Context) error {
 		}
 	}
 
+	// Extract source and destination
 	var src, dst string
 	if hasHFFlags {
-		// When using HF flags: only destination argument provided, source comes from flags
 		dst = c.Args().Get(0)
 	} else {
 		src, dst = c.Args().Get(0), c.Args().Get(1)
 	}
 
-	// Parse download source (includes HuggingFace flag processing if applicable)
+	// Parse download source
 	source, err := parseDlSource(c, src)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	bck, pathSuffix, err := parseBckObjAux(c, dst)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	limitBPH, err := parseSizeFlag(c, limitBytesPerHourFlag)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	basePayload := dload.Base{
@@ -507,109 +516,204 @@ func startDownloadHandler(c *cli.Context) error {
 		},
 	}
 
+	// Check bucket existence
 	if basePayload.Bck.Props, err = api.HeadBucket(apiBP, basePayload.Bck, true /* don't add */); err != nil {
 		if !cmn.IsStatusNotFound(err) {
-			return err
+			return nil, err
 		}
 		warn := fmt.Sprintf("destination bucket %s doesn't exist. Bucket with default properties will be created.",
 			basePayload.Bck.Cname(""))
 		actionWarn(c, warn)
 	}
 
-	// Heuristics to determine the download type.
-	var dlType dload.Type
+	return &downloadRequest{
+		source:          source,
+		destination:     bck,
+		pathSuffix:      pathSuffix,
+		objectsListPath: objectsListPath,
+		basePayload:     basePayload,
+	}, nil
+}
+
+// determineDownloadType uses heuristics to determine the download type
+func determineDownloadType(req *downloadRequest) (dload.Type, error) {
 	switch {
-	case objectsListPath != "":
-		dlType = dload.TypeMulti
-	case strings.Contains(source.link, "{") && strings.Contains(source.link, "}"):
-		dlType = dload.TypeRange
-	case source.backend.bck.IsEmpty():
-		dlType = dload.TypeSingle
+	case strings.HasPrefix(req.source.link, hf.HfFullRepoMarker) || req.objectsListPath != "":
+		return dload.TypeMulti, nil
+	case strings.Contains(req.source.link, "{") && strings.Contains(req.source.link, "}"):
+		return dload.TypeRange, nil
+	case req.source.backend.bck.IsEmpty():
+		return dload.TypeSingle, nil
 	default:
-		backends, err := api.GetConfiguredBackends(apiBP)
+		return determineBackendDownloadType(req)
+	}
+}
+
+// determineBackendDownloadType handles the complex backend download logic
+func determineBackendDownloadType(req *downloadRequest) (dload.Type, error) {
+	backends, err := api.GetConfiguredBackends(apiBP)
+	if err != nil {
+		return "", err
+	}
+
+	switch {
+	case cos.StringInSlice(req.source.backend.bck.Provider, backends):
+		dlType := dload.TypeBackend
+
+		p, err := api.HeadBucket(apiBP, req.basePayload.Bck, false /* don't add */)
 		if err != nil {
-			return err
+			return "", V(err)
 		}
-
-		switch {
-		case cos.StringInSlice(source.backend.bck.Provider, backends):
-			dlType = dload.TypeBackend
-
-			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)
-			if err != nil {
-				return V(err)
-			}
-			if !p.BackendBck.Equal(&source.backend.bck) {
-				warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
-					basePayload.Bck.String(), source.backend.bck.String())
-				actionWarn(c, warn)
-				dlType = dload.TypeSingle
-			}
-		case source.backend.prefix == "":
-			return fmt.Errorf(
-				"cluster is not configured with %q provider: cannot download remote bucket",
-				source.backend.bck.Provider,
-			)
-		default:
-			if source.link == "" {
-				return fmt.Errorf(
-					"cluster is not configured with %q provider: cannot download bucket's objects",
-					source.backend.bck.Provider,
-				)
-			}
-			// If `prefix` is not empty then possibly it is just a single object
-			// which we can download without cloud to be configured (web link).
+		if !p.BackendBck.Equal(&req.source.backend.bck) {
+			warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
+				req.basePayload.Bck.String(), req.source.backend.bck.String())
+			actionWarn(nil, warn)
 			dlType = dload.TypeSingle
 		}
+		return dlType, nil
+	case req.source.backend.prefix == "":
+		return "", fmt.Errorf("cluster is not configured with %q provider: cannot download remote bucket",
+			req.source.backend.bck.Provider)
+	default:
+		if req.source.link == "" {
+			return "", fmt.Errorf("cluster is not configured with %q provider: cannot download bucket's objects",
+				req.source.backend.bck.Provider)
+		}
+		// If `prefix` is not empty then possibly it is just a single object
+		// which we can download without cloud to be configured (web link).
+		return dload.TypeSingle, nil
+	}
+}
+
+// prepareHFDatasetDownload handles HuggingFace dataset downloads
+func prepareHFDatasetDownload(c *cli.Context, req *downloadRequest) (dload.MultiBody, error) {
+	dataset := hf.ExtractDatasetFromHFMarker(req.source.link)
+	if dataset == "" {
+		return dload.MultiBody{}, errors.New("invalid HuggingFace dataset marker format")
 	}
 
+	token := ""
+	if req.source.headers != nil {
+		if auth := req.source.headers.Get(apc.HdrAuthorization); strings.HasPrefix(auth, apc.AuthenticationTypeBearer+" ") {
+			token = strings.TrimPrefix(auth, apc.AuthenticationTypeBearer+" ")
+		}
+	}
+
+	files, err := hf.GetHFDatasetParquetFiles(dataset, token)
+	if err != nil {
+		return dload.MultiBody{}, fmt.Errorf("failed to fetch HuggingFace dataset '%s': %v", dataset, err)
+	}
+
+	actionDone(c, fmt.Sprintf("Found %d parquet files in dataset '%s'", len(files), dataset))
+
+	return dload.MultiBody{
+		Base:           req.basePayload,
+		ObjectsPayload: files,
+	}, nil
+}
+
+// prepareFileBasedDownload handles file-based multi downloads
+func prepareFileBasedDownload(req *downloadRequest) (dload.MultiBody, error) {
+	file, err := os.Open(req.objectsListPath)
+	if err != nil {
+		return dload.MultiBody{}, err
+	}
+	defer file.Close()
+
+	var objects []string
+	if err := jsoniter.NewDecoder(file).Decode(&objects); err != nil {
+		return dload.MultiBody{}, fmt.Errorf("file %q doesn't seem to contain JSON array of strings: %v", req.objectsListPath, err)
+	}
+
+	// For file-based downloads, prepend the base URL
+	for i, object := range objects {
+		objects[i] = req.source.link + "/" + object
+	}
+
+	return dload.MultiBody{
+		Base:           req.basePayload,
+		ObjectsPayload: objects,
+	}, nil
+}
+
+// prepareDownloadPayload creates the appropriate payload for the download type
+func prepareDownloadPayload(c *cli.Context, dlType dload.Type, req *downloadRequest) (any, error) {
 	switch dlType {
 	case dload.TypeSingle:
-		payload := dload.SingleBody{
-			Base: basePayload,
+		return dload.SingleBody{
+			Base: req.basePayload,
 			SingleObj: dload.SingleObj{
-				Link:    source.link,
-				ObjName: pathSuffix, // in this case pathSuffix is a full name of the object
+				Link:    req.source.link,
+				ObjName: req.pathSuffix, // in this case pathSuffix is a full name of the object
 			},
-		}
-		id, err = api.DownloadWithParam(apiBP, dlType, payload)
+		}, nil
+
 	case dload.TypeMulti:
-		var objects []string
-		{
-			file, err := os.Open(objectsListPath)
-			if err != nil {
-				return err
-			}
-			if err := jsoniter.NewDecoder(file).Decode(&objects); err != nil {
-				return fmt.Errorf("file %q doesn't seem to contain JSON array of strings: %v", objectsListPath, err)
-			}
+		if strings.HasPrefix(req.source.link, hf.HfFullRepoMarker) {
+			return prepareHFDatasetDownload(c, req)
 		}
-		for i, object := range objects {
-			objects[i] = source.link + "/" + object
-		}
-		payload := dload.MultiBody{
-			Base:           basePayload,
-			ObjectsPayload: objects,
-		}
-		id, err = api.DownloadWithParam(apiBP, dlType, payload)
+		return prepareFileBasedDownload(req)
+
 	case dload.TypeRange:
-		payload := dload.RangeBody{
-			Base:     basePayload,
-			Subdir:   pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
-			Template: source.link,
-		}
-		id, err = api.DownloadWithParam(apiBP, dlType, payload)
+		return dload.RangeBody{
+			Base:     req.basePayload,
+			Subdir:   req.pathSuffix, // in this case pathSuffix is a subdirectory in which the objects are to be saved
+			Template: req.source.link,
+		}, nil
+
 	case dload.TypeBackend:
-		payload := dload.BackendBody{
-			Base:   basePayload,
+		return dload.BackendBody{
+			Base:   req.basePayload,
 			Sync:   flagIsSet(c, syncFlag),
-			Prefix: source.backend.prefix,
-		}
-		id, err = api.DownloadWithParam(apiBP, dlType, payload)
+			Prefix: req.source.backend.prefix,
+		}, nil
+
 	default:
 		debug.Assert(false)
+		return nil, fmt.Errorf("unsupported download type: %s", dlType)
+	}
+}
+
+// validateDownloadType performs validation for multi-downloads
+func validateMultiDownloadType(dlType dload.Type, req *downloadRequest) error {
+	if dlType != dload.TypeMulti {
+		return nil
 	}
 
+	// Check for ambiguous multi-download (both HF and file list)
+	isHFDataset := strings.HasPrefix(req.source.link, hf.HfFullRepoMarker)
+	hasFileList := req.objectsListPath != ""
+	if isHFDataset && hasFileList {
+		return errors.New("ambiguous multi-download: both HuggingFace dataset and file list specified")
+	}
+	if !isHFDataset && !hasFileList {
+		return errors.New("multi-download type detected but no valid source found (expected HuggingFace dataset or file list)")
+	}
+
+	return nil
+}
+
+func startDownloadHandler(c *cli.Context) error {
+	req, err := parseDownloadRequest(c)
+	if err != nil {
+		return err
+	}
+
+	dlType, err := determineDownloadType(req)
+	if err != nil {
+		return err
+	}
+
+	if err := validateMultiDownloadType(dlType, req); err != nil {
+		return fmt.Errorf("multi-download type validation failed: %v", err)
+	}
+
+	payload, err := prepareDownloadPayload(c, dlType, req)
+	if err != nil {
+		return err
+	}
+
+	id, err := api.DownloadWithParam(apiBP, dlType, payload)
 	if err != nil {
 		return err
 	}
