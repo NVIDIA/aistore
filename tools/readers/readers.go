@@ -1,13 +1,13 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package readers
 
 import (
 	"archive/tar"
 	"bytes"
-	cryptorand "crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -369,6 +369,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash
 		rem     = size
 		buf, s  = memsys.PageMM().Alloc()
 		blkSize = int64(len(buf))
+		seed    = uint64(mono.NanoTime())
 	)
 	defer s.Free(buf)
 
@@ -377,7 +378,10 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
 		n := int(min(blkSize, rem))
-		cryptorand.Read(buf[:n])
+		// Fill buffer with deterministic random data (faster than crypto/rand)
+		for j := 0; j <= len(buf)-8; j += 8 {
+			binary.BigEndian.PutUint64(buf[j:], seed+uint64(j))
+		}
 		m, err := w.Write(buf[:n])
 		if err != nil {
 			return nil, err
