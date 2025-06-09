@@ -42,7 +42,6 @@ import (
 // - ctlmsg
 // - soft errors other than not-found
 // - error handling in general and across the board; mossErr{wrapped-err}
-// - StreamingGet (reminder to tar.Flush)
 
 // TODO:
 // - write checksum
@@ -59,13 +58,20 @@ type (
 )
 
 type (
-	mosswi struct {
+	basewi struct {
 		aw   archive.Writer
 		r    *XactMoss
 		smap *meta.Smap
-		sgl  *memsys.SGL
+		resp *api.MossResp
 		cnt  int
 		size int64
+	}
+	buffwi struct {
+		basewi
+		sgl *memsys.SGL
+	}
+	streamwi struct {
+		basewi
 	}
 )
 
@@ -146,92 +152,36 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 	var (
 		resp = &api.MossResp{
-			Out:  make([]api.MossOut, 0, len(req.In)),
 			UUID: r.ID(),
 		}
-		mm   = core.T.PageMM()
-		sgl  = mm.NewSGL(0)
-		opts = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format (here and elsewhere)
-		wi   = mosswi{
+		opts   = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format (here and elsewhere)
+		basewi = basewi{
 			r:    r,
 			smap: core.T.Sowner().Get(),
-			sgl:  sgl,
-			aw:   archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts),
+			resp: resp,
 		}
 	)
 	r.IncPending()
-	defer wi.cleanup()
+	defer basewi.cleanup()
 
-	for i := range req.In {
-		in := &req.In[i]
-		if err := r.AbortErr(); err != nil {
-			return err
-		}
-		if in.Length != 0 {
-			return cmn.NewErrNotImpl("range read", "moss")
-		}
-		out := api.MossOut{
-			ObjName:  in.ObjName,
-			ArchPath: in.ArchPath,
-			Bucket:   in.Bucket,
-			Provider: in.Provider,
-			Opaque:   in.Opaque,
-		}
-		// source bucket (per-object) override
-		bck, err := wi.bucket(in)
-		if err != nil {
-			return err
-		}
-
-		nameInArch := req.NameInRespArch(bck, i)
-
-		// write next
-		lom := core.AllocLOM(in.ObjName)
-		err = wi.write(bck, lom, in, &out, nameInArch, req.ContinueOnErr)
-		core.FreeLOM(lom)
-		if err != nil {
-			return err
-		}
-		resp.Out = append(resp.Out, out)
-
-		wi.cnt++
-		wi.size += out.Size
-
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
-		}
+	// streaming
+	if req.StreamingGet {
+		wi := streamwi{basewi: basewi}
+		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
+		return wi.do(req, w)
 	}
 
-	// flush and close aw
-	erc := wi.aw.Fini()
-	wi.aw = nil
-	if erc != nil {
-		return erc
-	}
-
-	// write multipart response
-	// note: set response headers BEFORE writing
-	// format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
-	// (see api/client.go for the client-side parsing part)
-	mpw := multipart.NewWriter(w)
-	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
-
-	written, erw := wi.multipart(mpw, req.OutputFormat, resp)
-	erc = mpw.Close()
-	if erw == nil {
-		erw = erc
-	}
-	if erw != nil {
-		return erw
-	}
-
-	sgl.Reset()
-	r.ObjsAdd(wi.cnt, wi.size)
-
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Name(), "done: [ count:", len(resp.Out), "written:", written, "format:", req.OutputFormat, "]")
-	}
-	return nil
+	// buffered
+	var (
+		mm  = core.T.PageMM()
+		sgl = mm.NewSGL(0)
+		wi  = buffwi{basewi: basewi, sgl: sgl}
+	)
+	wi.resp.Out = make([]api.MossOut, 0, len(req.In))
+	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
+	err := wi.do(req, w)
+	sgl.Free()
+	return err
 }
 
 func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
@@ -260,13 +210,81 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 }
 
 ////////////
-// mosswi //
+// basewi //
 ////////////
 
-func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.MossOut, nameInArch string, contOnErr bool) error {
-	out.Bucket = bck.Name
-	out.Provider = bck.Provider
+func (wi *basewi) next(req *api.MossReq, i int) error {
+	in := &req.In[i]
+	if in.Length != 0 {
+		return cmn.NewErrNotImpl("range read", "moss")
+	}
 
+	// source bucket (per-object) override
+	bck, err := wi.bucket(in)
+	if err != nil {
+		return err
+	}
+	nameInArch := req.NameInRespArch(bck, i)
+
+	// write next
+	var (
+		out = api.MossOut{
+			ObjName: in.ObjName, ArchPath: in.ArchPath, Bucket: bck.Name, Provider: bck.Provider,
+			Opaque: in.Opaque,
+		}
+		lom = core.AllocLOM(in.ObjName)
+	)
+	err = wi.write(bck, lom, in, &out, nameInArch, req.ContinueOnErr)
+	core.FreeLOM(lom)
+	if err != nil {
+		return err
+	}
+	if !req.StreamingGet {
+		wi.resp.Out = append(wi.resp.Out, out)
+	}
+	wi.cnt++
+	wi.size += out.Size
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
+	}
+	return nil
+}
+
+func (wi *basewi) cleanup() {
+	if wi.aw != nil {
+		wi.aw.Fini()
+	}
+	wi.r.DecPending()
+}
+
+// per-object override, if specified
+func (wi *basewi) bucket(in *api.MossIn) (*cmn.Bck, error) {
+	// default
+	bck := wi.r.Bck().Bucket()
+
+	// uname override
+	if in.Uname != "" {
+		b, _, err := meta.ParseUname(in.Uname, false)
+		if err != nil {
+			return nil, err
+		}
+		return b.Bucket(), nil
+	}
+
+	// (bucket, provider) override
+	if in.Bucket != "" {
+		np, err := cmn.NormalizeProvider(in.Provider)
+		if err != nil {
+			return nil, err
+		}
+		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
+	}
+
+	return bck, nil
+}
+
+func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.MossOut, nameInArch string, contOnErr bool) error {
 	if err := lom.InitBck(bck); err != nil {
 		return err
 	}
@@ -310,7 +328,7 @@ func (wi *mosswi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.Mo
 	return err
 }
 
-func (wi *mosswi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch string) error {
+func (wi *basewi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch string) error {
 	if err := wi.aw.Write(nameInArch, lom, lmfh); err != nil {
 		return err
 	}
@@ -319,7 +337,7 @@ func (wi *mosswi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, na
 }
 
 // (compare w/ goi._txarch)
-func (wi *mosswi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch, archpath string, contOnErr bool) error {
+func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch, archpath string, contOnErr bool) error {
 	nameInArch += "/" + archpath
 
 	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
@@ -341,7 +359,7 @@ func (wi *mosswi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, n
 	return nil
 }
 
-func (wi *mosswi) addMissing(err error, nameInArch string, out *api.MossOut) error {
+func (wi *basewi) addMissing(err error, nameInArch string, out *api.MossOut) error {
 	var (
 		missingName = api.MissingFilesDirectory + "/" + nameInArch
 		oah         = cos.SimpleOAH{Size: 0}
@@ -354,33 +372,52 @@ func (wi *mosswi) addMissing(err error, nameInArch string, out *api.MossOut) err
 	return nil
 }
 
-// per-object override, if specified
-func (wi *mosswi) bucket(in *api.MossIn) (*cmn.Bck, error) {
-	// default
-	bck := wi.r.Bck().Bucket()
+////////////
+// buffwi //
+////////////
 
-	// uname override
-	if in.Uname != "" {
-		b, _, err := meta.ParseUname(in.Uname, false)
-		if err != nil {
-			return nil, err
+func (wi *buffwi) do(req *api.MossReq, w http.ResponseWriter) error {
+	for i := range req.In {
+		if err := wi.r.AbortErr(); err != nil {
+			return err
 		}
-		return b.Bucket(), nil
+		if err := wi.basewi.next(req, i); err != nil {
+			return err
+		}
 	}
 
-	// (bucket, provider) override
-	if in.Bucket != "" {
-		np, err := cmn.NormalizeProvider(in.Provider)
-		if err != nil {
-			return nil, err
-		}
-		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
+	// flush and close aw
+	erc := wi.aw.Fini()
+	wi.aw = nil
+	if erc != nil {
+		return erc
 	}
 
-	return bck, nil
+	// write multipart response
+	// note: set response headers BEFORE writing
+	// format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
+	// (see api/client.go for the client-side parsing part)
+	mpw := multipart.NewWriter(w)
+	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
+
+	written, erw := wi.multipart(mpw, req.OutputFormat, wi.resp)
+	if err := mpw.Close(); err != nil && erw == nil {
+		erw = err
+	}
+	if erw != nil {
+		return erw
+	}
+
+	wi.sgl.Reset()
+	wi.r.ObjsAdd(wi.cnt, wi.size)
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
+	}
+	return nil
 }
 
-func (wi *mosswi) multipart(mpw *multipart.Writer, outputFormat string, resp *api.MossResp) (int64, error) {
+func (wi *buffwi) multipart(mpw *multipart.Writer, outputFormat string, resp *api.MossResp) (int64, error) {
 	// part 1: JSON
 	part1, err := mpw.CreateFormField(api.MossMetadataField)
 	if err != nil {
@@ -398,10 +435,48 @@ func (wi *mosswi) multipart(mpw *multipart.Writer, outputFormat string, resp *ap
 	return io.Copy(part2, wi.sgl)
 }
 
-func (wi *mosswi) cleanup() {
-	if wi.aw != nil {
-		wi.aw.Fini()
+//////////////
+// streamwi //
+//////////////
+
+func (wi *streamwi) do(req *api.MossReq, w http.ResponseWriter) error {
+	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
+	for i := range req.In {
+		if err := wi.r.AbortErr(); err != nil {
+			return err
+		}
+		if err := wi.basewi.next(req, i); err != nil {
+			return err
+		}
 	}
-	wi.sgl.Free()
-	wi.r.DecPending()
+
+	// flush and close aw
+	erc := wi.aw.Fini()
+	wi.aw = nil
+	if erc != nil {
+		return erc
+	}
+
+	wi.r.ObjsAdd(wi.cnt, wi.size)
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", len(wi.resp.Out), "written:", wi.size, "format:", req.OutputFormat, "]")
+	}
+	return nil
+}
+
+func _ctype(outputFormat string) string {
+	switch outputFormat {
+	case "" /*default*/, archive.ExtTar:
+		return cos.ContentTar // not IANA-registered
+	case archive.ExtTgz, archive.ExtTarGz:
+		return cos.ContentGzip // not registered; widely used for .tar.gz and .tgz
+	case archive.ExtTarLz4:
+		return "application/x-lz4" // not registered but consistent with .lz4; alternative: "application/octet-stream"
+	case archive.ExtZip:
+		return cos.ContentZip // IANA-registered
+	default:
+		debug.Assert(false, outputFormat)
+		return cos.ContentBinary
+	}
 }

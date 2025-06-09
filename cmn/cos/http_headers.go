@@ -13,10 +13,12 @@ const (
 	ContentMsgPack        = "application/msgpack"
 	ContentXML            = "application/xml"
 	ContentBinary         = "application/octet-stream"
+	ContentZip            = "application/zip"
 
 	// not present in IANA registry
 	// mozilla.org has it though, and also https://en.wikipedia.org/wiki/List_of_archive_formats
-	ContentTar = "application/x-tar"
+	ContentTar  = "application/x-tar"
+	ContentGzip = "application/gzip" // widely used for .tar.gz and .tgz
 )
 
 // Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers

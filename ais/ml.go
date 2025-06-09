@@ -212,7 +212,11 @@ func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []str
 
 	xmoss := xctn.(*xs.XactMoss)
 	if err := xmoss.Do(req, w); err != nil {
-		t.writeErr(w, r, err)
+		if req.StreamingGet {
+			nlog.Errorln(err, "<<< (to avoid superfluous response.WriteHeader)")
+		} else {
+			t.writeErr(w, r, err)
+		}
 	}
 }
 
