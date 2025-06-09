@@ -119,6 +119,9 @@ func (p *tcoFactory) Start() error {
 		if err != nil {
 			return err
 		}
+		if r.transform != nil {
+			r.putWOC = r.transform.OfflineWrite
+		}
 	}
 
 	p.xctn = r

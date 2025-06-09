@@ -108,6 +108,9 @@ func (p *tcbFactory) Start() error {
 		if err != nil {
 			return err
 		}
+		if r.transform != nil {
+			r.putWOC = r.transform.OfflineWrite
+		}
 	}
 
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {

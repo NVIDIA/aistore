@@ -138,6 +138,10 @@ type (
 		Size() int64
 	}
 
+	nopWriteCloser struct {
+		io.Writer
+	}
+
 	WriterMulti struct{ writers []io.Writer }
 
 	// WriterOnly is a helper struct to hide `io.ReaderFrom` interface implementation
@@ -168,6 +172,8 @@ var (
 	_ ReadOpenCloser = (*SectionHandle)(nil)
 	_ ReadOpenCloser = (*FileSectionHandle)(nil)
 	_ ReadOpenCloser = (*nopOpener)(nil)
+
+	_ io.WriteCloser = (*nopWriteCloser)(nil)
 )
 
 ///////////////
@@ -190,6 +196,19 @@ func (r *nopReader) Read(b []byte) (int, error) {
 	toRead := min(len(b), left)
 	r.offset += toRead
 	return toRead, nil
+}
+
+////////////////////
+// nopWriteCloser //
+////////////////////
+
+func (*nopWriteCloser) Close() error {
+	return nil
+}
+
+// Helper function
+func NopWriteCloser(w io.Writer) io.WriteCloser {
+	return &nopWriteCloser{Writer: w}
 }
 
 ////////////////

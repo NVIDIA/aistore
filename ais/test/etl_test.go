@@ -481,7 +481,7 @@ func TestETLBucketTransformParallel(t *testing.T) {
 	}{
 		{commType: etl.Hpush},
 		{commType: etl.Hpull},
-		{commType: etl.WebSocket, onlyLong: true}, // TODO -- FIXME: re-enable this test after echo transformer updated
+		{commType: etl.WebSocket},
 	}
 
 	for _, test := range tests {
@@ -540,9 +540,9 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		bcktests = []testBucketConfig{{false, false, false}}
 
 		tests = []testObjConfig{
-			{transformer: tetl.Echo, comm: etl.WebSocket, onlyLong: true},
-			{transformer: tetl.Echo, comm: etl.Hpull},
-			{transformer: tetl.Echo, comm: etl.Hpush},
+			{transformer: tetl.MD5, comm: etl.WebSocket, transform: tetl.MD5Transform},
+			{transformer: tetl.Echo, comm: etl.Hpull, transform: tetl.EchoTransform},
+			{transformer: tetl.MD5, comm: etl.Hpush, transform: tetl.MD5Transform},
 		}
 	)
 
@@ -625,7 +625,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 
 					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
 				}
-				testETLBucket(t, baseParams, etlName, &m, bckTo, time.Minute*3, false, bcktest.evictRemoteSrc)
+				testETLBucket(t, baseParams, etlName, &m, bckTo, time.Minute*3, false, bcktest.evictRemoteSrc, test.transform)
 			})
 		}
 	}
@@ -633,7 +633,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 
 // also responsible for cleanup: ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext, bckTo cmn.Bck, timeout time.Duration,
-	skipByteStats, evictRemoteSrc bool) {
+	skipByteStats, evictRemoteSrc bool, transform transformFunc) {
 	var (
 		xid, kind      string
 		err            error
@@ -694,6 +694,20 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 
 			err = tetl.ListObjectsWithRetry(bp, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
+
+			if transform != nil {
+				objeList, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				for _, en := range objeList.Entries {
+					r1, _, err := api.GetObjectReader(bp, bckFrom, en.Name, &api.GetArgs{})
+					tassert.CheckFatal(t, err)
+					r2, _, err := api.GetObjectReader(bp, bckTo, en.Name, &api.GetArgs{})
+					tassert.CheckFatal(t, err)
+					tassert.Fatalf(t, tools.ReaderEqual(transform(r1), r2), "object content mismatch: %s vs %s", bckFrom.Cname(en.Name), bckTo.Cname(en.Name))
+					tassert.CheckFatal(t, r1.Close())
+					tassert.CheckFatal(t, r2.Close())
+				}
+			}
 
 			checkETLStats(t, xid, m.num, m.fileSize*uint64(m.num), skipByteStats)
 		})
@@ -798,7 +812,7 @@ def transform(input_bytes: bytes) -> bytes:
 				case "etl_bucket":
 					bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
 					testETLBucket(t, baseParams, test.etlName, &m, bckTo, time.Minute,
-						false /*skip checking byte counts*/, false /* remote src evicted */)
+						false /*skip checking byte counts*/, false /* remote src evicted */, nil /*transform*/)
 				default:
 					panic(testType)
 				}
@@ -831,7 +845,7 @@ func TestETLFQN(t *testing.T) {
 			{transformer: tetl.Echo, commType: etl.Hpush, transform: tetl.EchoTransform},
 			{transformer: tetl.Echo, commType: etl.Hpull, transform: tetl.EchoTransform},
 			{transformer: tetl.MD5, commType: etl.Hpush, transform: tetl.MD5Transform},
-			{transformer: tetl.MD5, commType: etl.Hpull, transform: tetl.MD5Transform},
+			{transformer: tetl.MD5, commType: etl.WebSocket, transform: tetl.MD5Transform},
 		}
 	)
 
@@ -853,7 +867,7 @@ func TestETLFQN(t *testing.T) {
 				case "etl_bucket":
 					bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
 					testETLBucket(t, baseParams, test.transformer, &m, bckTo, time.Minute,
-						false /*skip checking byte counts*/, false /* remote src evicted */)
+						false /*skip checking byte counts*/, false /* remote src evicted */, test.transform)
 				default:
 					panic(testType)
 				}

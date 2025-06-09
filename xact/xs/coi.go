@@ -27,6 +27,7 @@ type (
 		Config *cmn.Config
 		BckTo  *meta.Bck
 		core.GetROC
+		core.PutWOC
 		ObjnameTo       string
 		Buf             []byte
 		OWT             cmn.OWT
@@ -86,6 +87,7 @@ type (
 		xetl   *etl.XactETL // corresponding ETL xaction (if any)
 		bp     core.Backend // backend(source bucket)
 		getROC core.GetROC
+		putWOC core.PutWOC
 		rate   tcrate
 		vlabs  map[string]string
 	}
@@ -103,6 +105,7 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, confi
 	a := AllocCOI()
 	{
 		a.GetROC = tc.getROC
+		a.PutWOC = tc.putWOC
 		a.Xact = tc.r
 		a.Config = config
 		a.BckTo = bckTo
@@ -148,6 +151,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		}
 	case res.Err == cmn.ErrSkip:
 		// ErrSkip is returned when the object is transmitted through direct put
+		tc.r.OutObjsAdd(1, res.Lsize) // TODO -- FIXME: update stats with actual size
 	case cos.IsErrOOS(res.Err):
 		err = res.Err
 		tc.r.Abort(err)

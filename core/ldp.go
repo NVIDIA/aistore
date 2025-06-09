@@ -6,6 +6,7 @@ package core
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -42,6 +43,8 @@ type (
 		Local         bool   // true when the destination is local; used by communicator to handle direct put
 	}
 	GetROC func(lom *LOM, latestVer, sync bool, args *GetROCArgs) ReadResp
+
+	PutWOC func(lom *LOM, latestVer, sync bool, woc io.WriteCloser, args *GetROCArgs) (written int64, ecode int, err error)
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {

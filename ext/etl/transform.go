@@ -302,6 +302,7 @@ cleanup:
 		msg.Name(), xid, msg, err))
 	if !mgr.transition(comm.ETLName(), Stopped) {
 		nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to cleanup etl[%s], already in Stopped stage", msg.Name()))
+		return podName, svcName, nil, cmn.NewErrETL(errCtx, err.Error())
 	}
 
 	core.T.Sowner().Listeners().Unreg(comm)
@@ -327,7 +328,7 @@ func Stop(etlName string, errCause error) (err error) {
 	}
 
 	// Abort all running offline ETLs.
-	xreg.AbortKind(errCause, apc.ActETLBck)
+	xreg.AbortKind(errCause, apc.ActETLBck) // TODO: abort only related offline transforms
 
 	comm, stage := mgr.getByName(etlName)
 	if comm == nil {
@@ -412,7 +413,7 @@ func GetOfflineTransform(etlName string, xctn core.Xact) (getROC core.GetROC, xe
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		return session.OfflineTransform, comm.Xact(), session, nil
+		return nil, comm.Xact(), session, nil
 	default:
 		debug.Assert(false, "unknown communicator type")
 		return nil, nil, nil, cos.NewErrNotFound(core.T, etlName+" unknown communicator type")

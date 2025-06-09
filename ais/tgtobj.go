@@ -1530,9 +1530,12 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	gargs := &core.GetROCArgs{Daddr: daddr.String(), Local: local}
 	if !local {
 		var r cos.ReadOpenCloser
-		if coi.GetROC != nil {
+		if coi.PutWOC != nil {
+			_, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, nil, gargs)
+			return xs.CoiRes{Err: err, Ecode: ecode}
+		} else if coi.GetROC != nil {
 			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
-			// skip t2t send if encounter error during GetROC, or returns empty reader (etl delivered case)
+			// skip t2t send if encounter error during GetROC, (etl direct put will return ErrSkip in this case)
 			if resp.Err != nil {
 				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
 			}
@@ -1556,6 +1559,11 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	case coi.isNOP(lom, dst, dm):
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
+		}
+	case coi.PutWOC != nil: // take precedence over GetROC, if any
+		res = coi._writer(t, lom, dst, gargs)
+		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
 	case coi.GetROC != nil:
 		res = coi._reader(t, dm, lom, dst, gargs)
@@ -1620,6 +1628,30 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 	size, err := io.Copy(io.Discard, resp.R)
 	resp.R.Close()
 	return xs.CoiRes{Lsize: size, Err: err}
+}
+
+func (coi *coi) _writer(t *target, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
+	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileTransform)
+	lomWriter, err := dst.CreateWork(workFQN)
+	if err != nil {
+		return xs.CoiRes{Err: err}
+	}
+	size, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, lomWriter, gargs)
+	if err != nil {
+		cos.Close(lomWriter)
+		cos.RemoveFile(workFQN)
+		return xs.CoiRes{Err: err, Ecode: ecode}
+	}
+
+	// finalize
+	dst.SetSize(size)
+	ecode, err = t.FinalizeObj(dst, workFQN, coi.Xact, coi.OWT)
+	if err != nil {
+		cos.RemoveFile(workFQN)
+		return xs.CoiRes{Err: err, Ecode: ecode}
+	}
+	res.Lsize = size
+	return res
 }
 
 // PUT lom => dst

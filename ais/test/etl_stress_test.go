@@ -71,7 +71,7 @@ def transform(input_bytes):
 
 	bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
 	testETLBucket(t, baseParams, msg.Name(), &m, bckTo, time.Duration(etlBucketTimeout),
-		true /* skip byte-count check*/, false /* remote src evicted */)
+		true /* skip byte-count check*/, false /* remote src evicted */, nil /*transform*/)
 }
 
 func TestETLBucketAbort(t *testing.T) {

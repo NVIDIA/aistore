@@ -31,6 +31,7 @@ const (
 	WorkfileRemote       = "remote"         // getting object from neighbor target when rebalancing
 	WorkfileColdget      = "cold"           // object GET: coldget
 	WorkfilePut          = "put"            // object PUT
+	WorkfileTransform    = "transform"      // ETL offline transform
 	WorkfileCopy         = "copy"           // copy object
 	WorkfileAppend       = "append"         // APPEND to object (as file)
 	WorkfileAppendToArch = "append-to-arch" // APPEND to existing archive
