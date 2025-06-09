@@ -562,7 +562,7 @@ print(f"Successfully uploaded {response['ContentLength']} bytes")
 | `Authorization header missing` (s3cmd + AuthN) | Patch `S3.py` to include JWT as shown in [Authentication](#authentication-jwt-tips) |
 | Upload fails with timeout                      | Try with smaller multipart chunks (e.g., `--multipart-chunk-size-mb=5`) |
 | Unable to list large S3 bucket                 | Use [bucket inventory](#s3-bucket-inventory-support) to efficiently list contents |
-| Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch]((https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md)) for redirects |
+| Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch](https://github.com/NVIDIA/aistore/blob/main/python/aistore/botocore_patch/README.md) for redirects |
 
 ---
 
