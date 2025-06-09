@@ -345,8 +345,21 @@ class ETLRuntimeSpec(BaseModel):
     """
 
     image: str
-    command: List[str]
-    env: List[EnvVar] = Field(default_factory=list)
+    command: Optional[List[str]] = None
+    env: Optional[List[EnvVar]] = None
+
+    def as_dict(self):
+        data = {"image": self.image}
+
+        # only include if user passed a command
+        if self.command is not None:
+            data["command"] = self.command
+
+        # only include if user passed env vars
+        if self.env is not None:
+            data["env"] = [ev.as_dict() for ev in self.env]
+
+        return data
 
 
 class ETLSpecMsg(InitETLArgs):
@@ -364,11 +377,7 @@ class ETLSpecMsg(InitETLArgs):
             "obj_timeout": self.obj_timeout,
             "argument": self.arg_type,
             "support_direct_put": self.direct_put,
-            "runtime": {
-                "image": self.runtime.image,
-                "command": self.runtime.command,
-                "env": [ev.as_dict() for ev in self.runtime.env],
-            },
+            "runtime": self.runtime.as_dict(),
         }
 
 

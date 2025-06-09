@@ -138,7 +138,7 @@ class Etl:
     def init(
         self,
         image: str,
-        command: Union[List[str], str],
+        command: Union[List[str], str] = None,
         comm_type: str = DEFAULT_ETL_COMM,
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
@@ -147,33 +147,39 @@ class Etl:
         **kwargs,
     ):
         """
-        Initializes ETL based on the provided image and command.
+        Initializes an ETL based on a container image and optional command/env vars.
 
         Args:
-            image (str): Docker image to use for the ETL.
-            command (Union[List[str], str]): Command to run in the container.
-            comm_type (str): Communication type of the ETL (options: hpull, hpush, ws).
-            init_timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes).
-            obj_timeout (str): [optional, default="45s"] Timeout of transforming a single object.
-            arg_type (str): The type of argument the runtime will provide the transform function.
-                The default value of "" will provide the raw bytes read from the object.
-            direct_put (bool): Whether to support direct put optimization in bck-to-bck operations.
-            kwargs (dict): Additional keyword arguments to pass to the ETL, will be passed as
-                environment variables to the container.
-        Returns:
-            Job ID string associated with this ETL
-        """
+            image (str): Docker image for the ETL.
+            command (Union[List[str], str], optional): Command to run in the container.
+            comm_type (str, optional): Communication type (hpull, hpush, ws).
+            init_timeout (str, optional): ETL job timeout (e.g., "5m").
+            obj_timeout (str, optional): Per-object transform timeout (e.g., "45s").
+            arg_type (str, optional): Type of argument passed to transform (default raw bytes).
+            direct_put (bool, optional): Enable direct-put optimization.
+            **kwargs: Additional key-value pairs → env vars in the ETL container.
 
-        # Validate communication type
+        Returns:
+            str: Job ID for this ETL.
+        """
+        # 1. Validate communication type
         _validate_comm_type(comm_type, ETL_COMM_OPTIONS)
 
-        # normalize command
+        # 2. Normalize command
         if isinstance(command, str):
             command = command.split()
 
-        # build EnvVar list
-        env_vars = [EnvVar(name=k, value=v) for k, v in kwargs.items()]
-        # assemble spec
+        # 3. Build env var list (None if no extras)
+        env_vars = [EnvVar(name=k, value=v) for k, v in kwargs.items()] or None
+
+        # 4. Create the runtime spec (command/env omitted if None)
+        runtime = ETLRuntimeSpec(
+            image=image,
+            command=command,
+            env=env_vars,
+        )
+
+        # 5. Assemble and serialize the init-spec message
         spec_msg = ETLSpecMsg(
             name=self._name,
             comm_type=comm_type,
@@ -181,18 +187,16 @@ class Etl:
             obj_timeout=obj_timeout,
             arg_type=arg_type,
             direct_put=direct_put,
-            runtime=ETLRuntimeSpec(
-                image=image,
-                command=command,
-                env=env_vars,
-            ),
+            runtime=runtime,
         )
+        payload = spec_msg.as_dict()
 
+        # 6. Send the request
         resp = self._client.request(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
             timeout=convert_to_seconds(init_timeout),
-            json=spec_msg.as_dict(),
+            json=payload,
         )
         return resp.text
 

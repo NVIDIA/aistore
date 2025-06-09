@@ -278,7 +278,6 @@ class TestEtl(
 
     def test_init_default_params(self):
         image = "my-image"
-        command = ["run", "me"]
         expected_action = {
             "name": self.etl_name,
             "communication": f"{ETL_COMM_HPUSH}://",
@@ -288,8 +287,6 @@ class TestEtl(
             "support_direct_put": False,
             "runtime": {
                 "image": image,
-                "command": command,
-                "env": [],
             },
         }
 
@@ -297,7 +294,7 @@ class TestEtl(
         mock_resp.text = "job-123"
         self.mock_client.request.return_value = mock_resp
 
-        result = self.etl.init(image, command)
+        result = self.etl.init(image)
         self.assertEqual("job-123", result)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
