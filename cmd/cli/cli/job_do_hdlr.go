@@ -585,11 +585,29 @@ func determineBackendDownloadType(c *cli.Context, req *downloadRequest) (dload.T
 	}
 }
 
-// prepareHFDatasetDownload handles HuggingFace dataset downloads
-func prepareHFDatasetDownload(c *cli.Context, req *downloadRequest) (dload.MultiBody, error) {
-	dataset := hf.ExtractDatasetFromHFMarker(req.source.link)
-	if dataset == "" {
-		return dload.MultiBody{}, errors.New("invalid HuggingFace dataset marker format")
+// prepareHFRepoDownload handles both HuggingFace dataset and model downloads
+func prepareHFRepoDownload(c *cli.Context, req *downloadRequest) (dload.MultiBody, error) {
+	isDataset := strings.Contains(req.source.link, "huggingface.co/datasets/")
+
+	var (
+		identifier string
+		files      cos.StrKVs
+		err        error
+		repoType   string
+	)
+
+	if isDataset {
+		identifier, err = hf.ExtractDatasetFromHFMarker(req.source.link)
+		if err != nil {
+			return dload.MultiBody{}, fmt.Errorf("invalid HuggingFace dataset marker: %v", err)
+		}
+		repoType = "dataset"
+	} else {
+		identifier, err = hf.ExtractModelFromHFMarker(req.source.link)
+		if err != nil {
+			return dload.MultiBody{}, fmt.Errorf("invalid HuggingFace model marker: %v", err)
+		}
+		repoType = "model"
 	}
 
 	token := ""
@@ -599,12 +617,21 @@ func prepareHFDatasetDownload(c *cli.Context, req *downloadRequest) (dload.Multi
 		}
 	}
 
-	files, err := hf.GetHFDatasetParquetFiles(dataset, token)
-	if err != nil {
-		return dload.MultiBody{}, fmt.Errorf("failed to fetch HuggingFace dataset '%s': %v", dataset, err)
+	if isDataset {
+		files, err = hf.GetHFDatasetParquetFiles(identifier, token)
+	} else {
+		files, err = hf.GetHFModelFiles(identifier, token)
 	}
 
-	actionDone(c, fmt.Sprintf("Found %d parquet files in dataset '%s'", len(files), dataset))
+	if err != nil {
+		return dload.MultiBody{}, fmt.Errorf("failed to fetch HuggingFace %s '%s': %v", repoType, identifier, err)
+	}
+
+	if isDataset {
+		actionDone(c, fmt.Sprintf("Found %d parquet files in dataset '%s'", len(files), identifier))
+	} else {
+		actionDone(c, fmt.Sprintf("Found %d files in model '%s'", len(files), identifier))
+	}
 
 	return dload.MultiBody{
 		Base:           req.basePayload,
@@ -650,7 +677,7 @@ func prepareDownloadPayload(c *cli.Context, dlType dload.Type, req *downloadRequ
 
 	case dload.TypeMulti:
 		if strings.HasPrefix(req.source.link, hf.HfFullRepoMarker) {
-			return prepareHFDatasetDownload(c, req)
+			return prepareHFRepoDownload(c, req)
 		}
 		return prepareFileBasedDownload(req)
 
@@ -681,13 +708,13 @@ func validateMultiDownloadType(dlType dload.Type, req *downloadRequest) error {
 	}
 
 	// Check for ambiguous multi-download (both HF and file list)
-	isHFDataset := strings.HasPrefix(req.source.link, hf.HfFullRepoMarker)
+	isHFRepo := strings.HasPrefix(req.source.link, hf.HfFullRepoMarker)
 	hasFileList := req.objectsListPath != ""
-	if isHFDataset && hasFileList {
-		return errors.New("ambiguous multi-download: both HuggingFace dataset and file list specified")
+	if isHFRepo && hasFileList {
+		return errors.New("ambiguous multi-download: both HuggingFace repository and file list specified")
 	}
-	if !isHFDataset && !hasFileList {
-		return errors.New("multi-download type detected but no valid source found (expected HuggingFace dataset or file list)")
+	if !isHFRepo && !hasFileList {
+		return errors.New("multi-download type detected but no valid source found (expected HuggingFace repository or file list)")
 	}
 
 	return nil

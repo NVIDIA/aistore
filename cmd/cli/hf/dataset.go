@@ -6,6 +6,7 @@ package hf
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -93,27 +94,35 @@ func ExtractParquetFiles(data map[string]any) cos.StrKVs {
 }
 
 // ExtractDatasetFromHFMarker parses dataset name from hfFullRepoMarker
-func ExtractDatasetFromHFMarker(marker string) string {
-	// Parse: "https://huggingface.co/datasets/rajpurkar/squad:main"
+func ExtractDatasetFromHFMarker(marker string) (string, error) {
+	// Parse: "HF_FULL_REPO_DOWNLOAD:https://huggingface.co/datasets/rajpurkar/squad:main"
 	parts := strings.Split(marker, ":")
 	if len(parts) < 4 {
-		return ""
+		return "", fmt.Errorf("invalid marker format: expected at least 4 parts, got %d", len(parts))
 	}
 
 	hfURL := strings.Join(parts[1:], ":")
-	if !strings.Contains(hfURL, "/datasets/") {
-		return ""
-	}
 
-	urlParts := strings.Split(hfURL, "/datasets/")
-	if len(urlParts) != 2 {
-		return ""
-	}
+	switch {
+	case !strings.Contains(hfURL, "/datasets/"):
+		return "", errors.New("marker contains model URL, expected dataset URL")
+	case !strings.HasPrefix(hfURL, hfBaseURL):
+		return "", fmt.Errorf("invalid HuggingFace URL: expected prefix %s, got %s", hfBaseURL, hfURL)
+	default:
+		urlParts := strings.Split(hfURL, "/datasets/")
+		if len(urlParts) != 2 {
+			return "", fmt.Errorf("invalid dataset URL format: %s", hfURL)
+		}
 
-	dataset := urlParts[1]
-	if idx := strings.LastIndex(dataset, ":"); idx > 0 {
-		dataset = dataset[:idx]
-	}
+		dataset := urlParts[1]
+		if idx := strings.LastIndex(dataset, ":"); idx > 0 {
+			dataset = dataset[:idx] // Remove revision suffix
+		}
 
-	return dataset
+		if dataset == "" {
+			return "", fmt.Errorf("empty dataset name extracted from URL: %s", hfURL)
+		}
+
+		return dataset, nil
+	}
 }
