@@ -199,7 +199,7 @@ The `init_code` request currently supports three communication types:
 
 ### `hpush://` and `hpull://` communications
 
-In `hpush` or `hpull://` communication types, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush.py)
+In `hpush` or `hpull://` communication types, the user has to define a function that takes bytes as a parameter, processes it and returns bytes.
 
 ```python
 def transform(input_bytes: bytes) -> bytes
@@ -209,9 +209,6 @@ def transform(input_bytes: bytes) -> bytes
 - If the function requires external dependencies, the user can provide an optional dependencies file or specify them in the elt().init() function of the Python SDK.
 - These requirements will be installed on the machine executing the `transform` function and will be available for the function.
 
-> Example: [ETL that uses OpenCV library to convert image files to numpy numerical representation](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_hpush.py)
-
-- You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0). e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush_streaming.py).
 
 ### `io://` communication
 
@@ -223,10 +220,6 @@ def transform() -> None:
     # output_bytes = process(input_bytes)
     sys.stdout.buffer.write(output_bytes)
 ```
-
-e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_io.py)
-
-For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
 
 ### Runtimes
 
@@ -494,4 +487,3 @@ Below are specifications for a valid `ETL_NAME`:
 * For initializing ETLs with AIStore Python SDK, see:
   - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
   - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl)
-  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb)
