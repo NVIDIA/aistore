@@ -38,7 +38,8 @@ const (
 )
 
 type mossConfig struct {
-	archFormat    string // "" for plain objects, or archive.ExtTar, etc.
+	inputFormat   string // AIStore to read (and serialize) plain objects or sharded files ("" defaults to plain)
+	outputFormat  string // AIStore to return result as TAR or any other supported serialization format ("" defaults to TAR)
 	continueOnErr bool   // GetBatch ContinueOnErr flag
 	onlyObjName   bool   // GetBatch OnlyObjName flag
 	withMissing   bool   // inject missing objects
@@ -48,8 +49,8 @@ type mossConfig struct {
 
 func (c *mossConfig) name() (s string) {
 	s = "plain"
-	if c.archFormat != "" {
-		s = c.archFormat
+	if c.inputFormat != "" {
+		s = c.inputFormat
 	}
 	if c.streaming {
 		s += "/streaming"
@@ -65,6 +66,9 @@ func (c *mossConfig) name() (s string) {
 	}
 	if c.nested {
 		s += "/nested"
+	}
+	if c.outputFormat != "" {
+		s += "=>" + c.outputFormat
 	}
 	return s
 }
@@ -87,29 +91,51 @@ func TestMoss(t *testing.T) {
 
 	tests := []mossConfig{
 		// (multi-part w/ out-of-band metadata; read objects) tests
-		{archFormat: "", continueOnErr: false, onlyObjName: false},
-		{archFormat: "", continueOnErr: true, onlyObjName: false},
-		{archFormat: "", continueOnErr: true, onlyObjName: true},
-		{archFormat: "", continueOnErr: true, onlyObjName: false, withMissing: true},
+		{inputFormat: "", continueOnErr: false, onlyObjName: false},
+		{inputFormat: "", continueOnErr: true, onlyObjName: false},
+		{inputFormat: "", continueOnErr: true, onlyObjName: true},
+		{inputFormat: "", continueOnErr: true, onlyObjName: false, withMissing: true},
 
 		// (multi-part w/ out-of-band metadata; read from archives (shards)) tests
-		{archFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false},
-		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true},
-		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true},
-		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, nested: true},
-		{archFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
-		{archFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true},
+		{inputFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, nested: true},
+		{inputFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{inputFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true},
+
+		// (multi-part; read plain objects and format output as something other than TAR)
+		{inputFormat: "", outputFormat: archive.ExtTgz, continueOnErr: false, onlyObjName: false},
+		{inputFormat: "", outputFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{inputFormat: "", outputFormat: archive.ExtZip, continueOnErr: false, onlyObjName: true},
+		{inputFormat: "", outputFormat: archive.ExtTarLz4, continueOnErr: true, onlyObjName: true, withMissing: true},
+
+		// (multi-part; read archived files and format output as specified)
+		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTgz, continueOnErr: false, onlyObjName: false},
+		{inputFormat: archive.ExtTgz, outputFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
+		{inputFormat: archive.ExtTar, outputFormat: archive.ExtZip, continueOnErr: false, onlyObjName: true},
 
 		// (streaming; read objects) tests
-		{archFormat: "", streaming: true},
-		{archFormat: "", continueOnErr: true, withMissing: true, streaming: true},
-		{archFormat: "", continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+		{inputFormat: "", streaming: true},
+		{inputFormat: "", continueOnErr: true, withMissing: true, streaming: true},
+		{inputFormat: "", continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+		{inputFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true},
 
 		// (streaming, read from archives (shards)) tests
-		{archFormat: archive.ExtTar, streaming: true},
-		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true},
-		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
-		{archFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true, streaming: true},
+		{inputFormat: archive.ExtTar, streaming: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+		{inputFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true, streaming: true},
+
+		// (streaming; read plain objects and format output as something other than TAR)
+		{inputFormat: "", outputFormat: archive.ExtTgz, streaming: true},
+		{inputFormat: "", outputFormat: archive.ExtTarLz4, continueOnErr: true, withMissing: true, streaming: true},
+		{inputFormat: "", outputFormat: archive.ExtZip, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+
+		// (streaming; read from shards and format output as ...)
+		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTgz, streaming: true},
+		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTarLz4, continueOnErr: true, withMissing: true, streaming: true},
+		{inputFormat: archive.ExtTarLz4, outputFormat: archive.ExtZip, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
 	}
 
 	for _, test := range tests {
@@ -129,7 +155,7 @@ func TestMoss(t *testing.T) {
 			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 			m.init(false /*cleanup*/)
 
-			if test.archFormat == "" {
+			if test.inputFormat == "" {
 				testMossPlainObjects(t, &m, &test, numPlainObjs)
 			} else {
 				testMossArchives(t, &m, &test, numArchives, numInArch)
@@ -190,7 +216,7 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 		archInfoCh = make(chan archiveInfo, numArchives)
 	)
 	for i := range numArchives {
-		archName := fmt.Sprintf("archive%02d%s", i, test.archFormat)
+		archName := fmt.Sprintf("archive%02d%s", i, test.inputFormat)
 
 		wg.Add(1)
 		go func(archName string) {
@@ -260,11 +286,11 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 	}
 
 	// Create archive (shards) of a given format
-	archPath := tmpDir + "/" + cos.GenTie() + test.archFormat
+	archPath := tmpDir + "/" + cos.GenTie() + test.inputFormat
 	err := tarch.CreateArchRandomFiles(
 		archPath,
 		tar.FormatUnknown, // tar format
-		test.archFormat,   // file extension
+		test.inputFormat,  // file extension
 		numInArch,         // file count
 		int(m.fileSize),   // file size
 		false,             // no duplication
@@ -317,6 +343,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		ContinueOnErr: test.continueOnErr,
 		OnlyObjName:   test.onlyObjName,
 		StreamingGet:  false,
+		OutputFormat:  test.outputFormat,
 	}
 
 	// Execute concurrent GetBatch calls
@@ -432,8 +459,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	}
 
 	// Always validate TAR contents for successful responses
-	validateTarMultipart(t, req, firstSuccess.resp,
-		bytes.NewReader(firstSuccess.tarData), len(firstSuccess.tarData))
+	validateTarMultipartWithArchive(t, req, firstSuccess.resp, bytes.NewReader(firstSuccess.tarData), len(firstSuccess.tarData))
 
 	// Validate consistency across concurrent calls
 	for i := 1; i < len(results); i++ {
@@ -460,109 +486,6 @@ func isMissingFile(mossIn *api.MossIn) bool {
 	return false
 }
 
-// Enhanced TAR validation for multipart
-func validateTarMultipart(t *testing.T, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
-	tlog.Logln("Validating TAR contents: " + cos.ToSizeIEC(int64(tarSize), 2))
-
-	// Parse TAR and collect all entries in order
-	var (
-		tr         = tar.NewReader(tarReader)
-		tarEntries = make([]struct {
-			name string
-			size int64
-			data []byte
-		}, 0, len(req.In))
-	)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		tassert.CheckFatal(t, err)
-		tassert.Errorf(t, hdr.Typeflag == tar.TypeReg, "expecting only regular files, got: (%q, %c)", hdr.Name, hdr.Typeflag)
-
-		// Read file data
-		data, err := io.ReadAll(tr)
-		tassert.CheckFatal(t, err)
-
-		tarEntries = append(tarEntries, struct {
-			name string
-			size int64
-			data []byte
-		}{
-			name: hdr.Name,
-			size: hdr.Size,
-			data: data,
-		})
-	}
-
-	// Contract validation: same number of entries
-	tassert.Fatalf(t, len(tarEntries) == len(resp.Out),
-		"TAR entries (%d) != MossResp entries (%d)", len(tarEntries), len(resp.Out))
-
-	// Contract validation: precise order - validate each position
-	for i := range resp.Out {
-		var (
-			expectedName string
-			mossOut      = &resp.Out[i]
-		)
-		// Calculate expected name based on onlyObjName setting
-		if req.OnlyObjName {
-			// When onlyObjName=true, TAR entries should contain only the object name
-			expectedName = mossOut.ObjName
-			if mossOut.ArchPath != "" {
-				expectedName += "/" + mossOut.ArchPath
-			}
-		} else {
-			// When onlyObjName=false, TAR entries should contain full bucket path
-			expectedName = mossOut.Bucket + "/" + mossOut.ObjName
-			if mossOut.ArchPath != "" {
-				expectedName += "/" + mossOut.ArchPath
-			}
-		}
-
-		// Determine missing status
-		var (
-			mossIn    = &req.In[i]
-			isMissing = isMissingFile(mossIn)
-		)
-		if isMissing {
-			expectedName = api.MissingFilesDirectory + "/" + expectedName
-		}
-
-		actualName := tarEntries[i].name
-
-		// Enforce ordering contract: tarEntries[i] must match req.In[i]
-		tassert.Errorf(t, actualName == expectedName,
-			"Order violation at position %d: expected '%s', got '%s'", i, expectedName, actualName)
-
-		// Additional validation based on file type
-		if isMissing {
-			// Missing files should have zero size in TAR
-			tassert.Errorf(t, tarEntries[i].size == 0,
-				"Missing file should have zero size, got %d for %s", tarEntries[i].size, actualName)
-			// Missing files should have zero content length
-			tassert.Errorf(t, len(tarEntries[i].data) == 0,
-				"Missing file should have zero content, got %d bytes for %s", len(tarEntries[i].data), actualName)
-		} else {
-			// Valid files: validate size contract
-			tassert.Errorf(t, mossOut.Size == tarEntries[i].size,
-				"Size mismatch for %s: MossOut.Size=%d, TAR size=%d",
-				mossOut.ObjName, mossOut.Size, tarEntries[i].size)
-
-			// Validate actual file content length
-			tassert.Errorf(t, len(tarEntries[i].data) == int(tarEntries[i].size),
-				"TAR data length mismatch for %s: expected %d, got %d",
-				mossOut.ObjName, tarEntries[i].size, len(tarEntries[i].data))
-
-			// Size should be positive for valid files
-			tassert.Errorf(t, mossOut.Size > 0, "Expected positive size but got %d", mossOut.Size)
-		}
-	}
-
-	tlog.Logf("TAR validation passed: %d entries, correct order and naming\n", len(tarEntries))
-}
-
 func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []api.MossIn) {
 	type streamResult struct {
 		err      error
@@ -586,6 +509,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 			ContinueOnErr: test.continueOnErr,
 			OnlyObjName:   test.onlyObjName,
 			StreamingGet:  true,
+			OutputFormat:  test.outputFormat,
 		}
 		baseParams = tools.BaseAPIParams(m.proxyURL)
 		results    = make([]streamResult, numConcurrentCalls)
@@ -656,7 +580,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		// Should fail fast on first error
 		tassert.Errorf(t, errorCount > 0, "Expected streaming GetBatch calls to fail but they succeeded")
 	default:
-		// Should succeed - validate first successful result
+		// Should succeed - validate first successful result with ORDER ENFORCEMENT
 		var firstSuccess *streamResult
 		for i := range results {
 			if results[i].err == nil {
@@ -666,28 +590,8 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		}
 		tassert.Fatalf(t, firstSuccess != nil, "Expected at least one successful streaming call")
 
-		// Build expected entries for validation
-		expected := make(map[string]bool, len(mossIn))
-		for i := range mossIn {
-			in := &mossIn[i]
-			expectedName := req.NameInRespArch(&m.bck, i)
-			if in.ArchPath != "" {
-				expectedName += "/" + in.ArchPath
-			}
-			if req.ContinueOnErr {
-				switch {
-				case strings.HasPrefix(in.ObjName, mossMissingPrefix), strings.HasSuffix(in.ArchPath, mossMissingSuffix):
-					expected[api.MissingFilesDirectory+"/"+expectedName] = true
-				default:
-					expected[expectedName] = true
-				}
-			} else {
-				expected[expectedName] = true
-			}
-		}
-
-		// Validate first successful TAR
-		validateTarStreaming(t, expected, bytes.NewReader(firstSuccess.tarData))
+		// NEW: Use positional validation instead of set-based validation
+		validateTarStreamingWithArchive(t, m, req, bytes.NewReader(firstSuccess.tarData))
 
 		// Validate consistency across concurrent calls
 		for i := 1; i < len(results); i++ {
@@ -700,32 +604,212 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	}
 }
 
-func validateTarStreaming(t *testing.T, expected map[string]bool, r io.Reader) {
-	var (
-		tr  = tar.NewReader(r)
-		num = len(expected)
-		cnt int
-	)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		tassert.CheckFatal(t, err)
-		tassert.Errorf(t, hdr.Typeflag == tar.TypeReg, "expecting only regular files, got: (%q, %c)", hdr.Name, hdr.Typeflag)
+//
+// --------------------------------------------
+//
 
-		_, _ = io.Copy(io.Discard, tr)
-		if _, ok := expected[hdr.Name]; ok {
-			delete(expected, hdr.Name)
-			cnt++
-		} else {
-			t.Errorf("missing or mismatched TAR entry: %q", hdr.Name)
-		}
+// Enhanced validation using cmn/archive package for proper format support
+
+// Archive validation callback for collecting TAR entries
+type tarValidationCallback struct {
+	entries []tarEntry
+	req     *api.MossReq
+	resp    *api.MossResp // nil for streaming validation
+	t       *testing.T
+	mode    string // "multipart" or "streaming"
+}
+
+type tarEntry struct {
+	name string
+	size int64
+	data []byte // only populated for multipart validation
+}
+
+// Implement archive.ArchRCB interface
+func (cb *tarValidationCallback) Call(filename string, reader cos.ReadCloseSizer, _ any) (bool, error) {
+	entry := tarEntry{
+		name: filename,
+		size: reader.Size(),
 	}
 
-	if num != cnt {
-		t.Errorf("entry count mismatch: want %d, got %d", num, cnt)
+	// For multipart validation, read the data to validate content
+	if cb.mode == "multipart" {
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			return true, fmt.Errorf("failed to read TAR entry %s: %w", filename, err)
+		}
+		entry.data = data
+
+		// Validate data length matches size
+		if len(data) != int(entry.size) {
+			return true, fmt.Errorf("data length mismatch for %s: expected %d, got %d",
+				filename, entry.size, len(data))
+		}
 	} else {
-		tlog.Logf("Streaming TAR validation passed: %d entries\n", cnt)
+		// For streaming validation, just discard data (we only care about names and order)
+		_, _ = io.Copy(io.Discard, reader)
 	}
+
+	cb.entries = append(cb.entries, entry)
+	return false, nil // continue processing
+}
+
+// Enhanced TAR validation for multipart
+func validateTarMultipartWithArchive(t *testing.T, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
+	tlog.Logln("Validating TAR contents with archive package: " + cos.ToSizeIEC(int64(tarSize), 2))
+
+	// Determine archive format - default to plain TAR if not specified
+	format := req.OutputFormat
+	if format == "" {
+		format = archive.ExtTar
+	}
+
+	// Create archive reader with proper format detection
+	ar, err := archive.NewReader(format, tarReader, int64(tarSize))
+	tassert.CheckFatal(t, err)
+
+	// Create validation callback
+	callback := &tarValidationCallback{
+		entries: make([]tarEntry, 0, len(req.In)),
+		req:     req,
+		resp:    &resp,
+		t:       t,
+		mode:    "multipart",
+	}
+
+	// Process all TAR entries
+	err = ar.ReadUntil(callback, cos.EmptyMatchAll, "")
+	tassert.CheckFatal(t, err)
+
+	// Contract validation: same number of entries
+	tassert.Fatalf(t, len(callback.entries) == len(resp.Out),
+		"TAR entries (%d) != MossResp entries (%d)", len(callback.entries), len(resp.Out))
+
+	// Contract validation: precise order - validate each position
+	for i := range resp.Out {
+		var (
+			expectedName string
+			mossOut      = &resp.Out[i]
+			tarEntry     = &callback.entries[i]
+		)
+
+		// Calculate expected name based on onlyObjName setting
+		if req.OnlyObjName {
+			expectedName = mossOut.ObjName
+			if mossOut.ArchPath != "" {
+				expectedName += "/" + mossOut.ArchPath
+			}
+		} else {
+			expectedName = mossOut.Bucket + "/" + mossOut.ObjName
+			if mossOut.ArchPath != "" {
+				expectedName += "/" + mossOut.ArchPath
+			}
+		}
+
+		// Determine missing status
+		var (
+			mossIn    = &req.In[i]
+			isMissing = isMissingFile(mossIn)
+		)
+		if isMissing {
+			expectedName = api.MissingFilesDirectory + "/" + expectedName
+		}
+
+		// Enforce ordering contract: tarEntries[i] must match req.In[i]
+		tassert.Errorf(t, tarEntry.name == expectedName,
+			"Order violation at position %d: expected '%s', got '%s'", i, expectedName, tarEntry.name)
+
+		// Additional validation based on file type
+		if isMissing {
+			// Missing files should have zero size in TAR
+			tassert.Errorf(t, tarEntry.size == 0,
+				"Missing file should have zero size, got %d for %s", tarEntry.size, tarEntry.name)
+			// Missing files should have zero content length
+			tassert.Errorf(t, len(tarEntry.data) == 0,
+				"Missing file should have zero content, got %d bytes for %s", len(tarEntry.data), tarEntry.name)
+		} else {
+			// Valid files: validate size contract
+			tassert.Errorf(t, mossOut.Size == tarEntry.size,
+				"Size mismatch for %s: MossOut.Size=%d, TAR size=%d",
+				mossOut.ObjName, mossOut.Size, tarEntry.size)
+
+			// Size should be positive for valid files
+			tassert.Errorf(t, mossOut.Size > 0, "Expected positive size but got %d", mossOut.Size)
+		}
+	}
+
+	tlog.Logf("Archive validation passed: %d entries, correct order and naming (format: %s)\n",
+		len(callback.entries), format)
+}
+
+// Enhanced streaming validation
+func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *api.MossReq, tarReader io.Reader) {
+	// Determine archive format
+	format := req.OutputFormat
+	if format == "" {
+		format = archive.ExtTar
+	}
+
+	// Create archive reader - for streaming we need to read all data first to get size
+	tarData, err := io.ReadAll(tarReader)
+	tassert.CheckFatal(t, err)
+
+	ar, err := archive.NewReader(format, bytes.NewReader(tarData), int64(len(tarData)))
+	tassert.CheckFatal(t, err)
+
+	// Create validation callback for streaming (no data reading)
+	callback := &tarValidationCallback{
+		entries: make([]tarEntry, 0, len(req.In)),
+		req:     req,
+		resp:    nil, // streaming has no response metadata
+		t:       t,
+		mode:    "streaming",
+	}
+
+	// Process all TAR entries
+	err = ar.ReadUntil(callback, cos.EmptyMatchAll, "")
+	tassert.CheckFatal(t, err)
+
+	// Build expected entries in order from request (same logic as before)
+	expectedEntries := make([]string, 0, len(req.In))
+	for i := range req.In {
+		var (
+			expectedName string
+			mossIn       = &req.In[i]
+		)
+
+		// Calculate expected name based on onlyObjName setting
+		if req.OnlyObjName {
+			expectedName = mossIn.ObjName
+			if mossIn.ArchPath != "" {
+				expectedName += "/" + mossIn.ArchPath
+			}
+		} else {
+			expectedName = m.bck.Name + "/" + mossIn.ObjName
+			if mossIn.ArchPath != "" {
+				expectedName += "/" + mossIn.ArchPath
+			}
+		}
+
+		// Handle missing files
+		if isMissingFile(mossIn) {
+			expectedName = api.MissingFilesDirectory + "/" + expectedName
+		}
+
+		expectedEntries = append(expectedEntries, expectedName)
+	}
+
+	// Validate count matches expected
+	tassert.Fatalf(t, len(callback.entries) == len(expectedEntries),
+		"TAR entry count mismatch: expected %d, got %d", len(expectedEntries), len(callback.entries))
+
+	// Validate precise positional order
+	for i, expectedName := range expectedEntries {
+		actualName := callback.entries[i].name
+		tassert.Errorf(t, actualName == expectedName,
+			"Streaming order violation at position %d: expected '%s', got '%s'", i, expectedName, actualName)
+	}
+
+	tlog.Logf("Streaming archive validation passed: %d entries, correct order (format: %s)\n",
+		len(callback.entries), format)
 }
