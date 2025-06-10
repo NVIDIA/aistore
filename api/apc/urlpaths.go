@@ -73,16 +73,10 @@ const (
 	FinishedAck = "finished_ack"
 	UList       = "list"
 	Remove      = "remove"
-	Next        = "next"
-	Peek        = "peek"
-	Discard     = "discard"
-	WorkerOwner = "worker" // TODO: it should be removed once get-next-bytes endpoint is ready
 
 	LoadX509 = "load-x509"
 
 	// ETL
-	ETLInfo    = "info"
-	ETLList    = UList
 	ETLLogs    = "logs"
 	ETLObject  = "_object"
 	ETLStop    = Stop

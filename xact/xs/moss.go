@@ -387,10 +387,10 @@ func (wi *buffwi) do(req *api.MossReq, w http.ResponseWriter) error {
 	}
 
 	// flush and close aw
-	erc := wi.aw.Fini()
+	err := wi.aw.Fini()
 	wi.aw = nil
-	if erc != nil {
-		return erc
+	if err != nil {
+		return err
 	}
 
 	// write multipart response
@@ -454,10 +454,10 @@ func (wi *streamwi) do(req *api.MossReq, w http.ResponseWriter) error {
 	}
 
 	// flush and close aw
-	erc := wi.aw.Fini()
+	err := wi.aw.Fini()
 	wi.aw = nil
-	if erc != nil {
-		return erc
+	if err != nil {
+		return err
 	}
 
 	wi.r.ObjsAdd(wi.cnt, wi.size)

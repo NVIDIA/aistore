@@ -158,10 +158,8 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string, size
 		return nil, erc
 	}
 	cksum, err := _save(fqn, WriterOnly{wfh} /*hide ReadFrom*/, reader, buf, cksumType, size)
-	erc = wfh.Close()
-
-	if err == nil && erc != nil {
-		err = fmt.Errorf("failed to close %s: %w", fqn, erc)
+	if erc := wfh.Close(); err == nil && erc != nil {
+		err = erc
 	}
 	if err != nil {
 		os.Remove(fqn) // cleanup

@@ -299,25 +299,15 @@ func _write(tmpDir string, fsize int) error {
 	}
 
 cleanup:
-	erc := wfh.Close()
-	if erc != nil {
-		nlog.Errorln("failed to fclose", fname, erc)
+	if e := wfh.Close(); err == nil && e != nil {
+		err = e
+		nlog.Errorln("failed to fclose", fname, err)
 	}
-	erd := cos.RemoveFile(fname)
-	if erd != nil {
-		nlog.Errorln("failed to remove", fname, erd)
+	if e := cos.RemoveFile(fname); err == nil && e != nil {
+		err = e
+		nlog.Errorln("failed to remove", fname, err)
 	}
-
-	if err == nil && erc == nil && erd == nil {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if erc != nil {
-		return erc
-	}
-	return erd
+	return err
 }
 
 // Look up a random file to read inside `basePath`.

@@ -225,8 +225,7 @@ func (tgr *tgzReader) init(fh io.Reader) (err error) {
 
 func (tgr *tgzReader) ReadUntil(rcb ArchRCB, regex, mmode string) (err error) {
 	err = tgr.tr.ReadUntil(rcb, regex, mmode)
-	erc := tgr.gzr.Close()
-	if err == nil {
+	if erc := tgr.gzr.Close(); err == nil && erc != nil {
 		err = erc
 	}
 	return err

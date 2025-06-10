@@ -1250,13 +1250,11 @@ func (h *htrun) targzLogs(severity string) (tempdir, archname string, _ error) {
 	aw := archive.NewWriter(archive.ExtTarGz, wfh, nil /*checksum*/, nil /*opts*/)
 
 	e := _targzLogs(aw, logdir, severity, dentries)
-
-	erc := aw.Fini()
+	if err := aw.Fini(); err != nil && e == nil {
+		e = err
+	}
 	wfh.Close()
 
-	if e == nil {
-		e = erc
-	}
 	return tempdir, archname, e
 }
 

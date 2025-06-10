@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -201,9 +200,10 @@ func s3put(bck cmn.Bck, objName string, reader cos.ReadOpenCloser) (err error) {
 		Key:    aws.String(objName),
 		Body:   reader,
 	})
-	erc := reader.Close()
-	debug.AssertNoErr(erc)
-	return
+	if erc := reader.Close(); erc != nil && err == nil {
+		err = erc
+	}
+	return err
 }
 
 func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (err error) {
