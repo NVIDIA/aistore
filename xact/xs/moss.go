@@ -343,7 +343,7 @@ func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, n
 	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
 	if err != nil {
 		if cos.IsNotExist(err, 0) && contOnErr {
-			return wi.addMissing(err, archpath, out)
+			return wi.addMissing(err, nameInArch, out)
 		}
 		return err
 	}

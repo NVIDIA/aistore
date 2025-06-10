@@ -28,9 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-// [TODO -- FIXME]
-// - the logic to check missing names, esp. in the streaming case
-
 // [TODO]
 // - get-batch() to return something other than .tar
 // - streaming
@@ -561,8 +558,8 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 			switch {
 			case strings.HasPrefix(in.ObjName, mossMissingPrefix):
 				expected[api.MissingFilesDirectory+"/"+expectedName] = true
-			case strings.HasSuffix(in.ArchPath, mossMissingSuffix): // TODO -- FIXME: revisit
-				expected[api.MissingFilesDirectory+"/"+in.ArchPath] = true
+			case strings.HasSuffix(in.ArchPath, mossMissingSuffix):
+				expected[api.MissingFilesDirectory+"/"+expectedName] = true
 			default:
 				expected[expectedName] = true
 			}
@@ -577,7 +574,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 func validateTarStreaming(t *testing.T, expected map[string]bool, r io.Reader) {
 	var (
 		tr   = tar.NewReader(r)
-		seen = make(map[string]bool, len(expected))
+		seen = make(map[string]bool, len(expected)) // TODO -- FIXME: rm
 	)
 	for {
 		hdr, err := tr.Next()
