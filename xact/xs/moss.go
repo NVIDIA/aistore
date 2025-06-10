@@ -448,6 +448,9 @@ func (wi *streamwi) do(req *api.MossReq, w http.ResponseWriter) error {
 		if err := wi.basewi.next(req, i); err != nil {
 			return err
 		}
+		if err := wi.aw.Flush(); err != nil {
+			return err
+		}
 	}
 
 	// flush and close aw

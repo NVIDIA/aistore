@@ -5,8 +5,10 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -103,7 +105,18 @@ func GetBatch(bp BaseParams, bck cmn.Bck, req *MossReq, w io.Writer) (resp MossR
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
 	}
-	_, err = reqParams.readMultipart(&resp, w)
+	if req.StreamingGet {
+		var wresp *wrappedResp
+		wresp, err = reqParams.doWriter(w)
+		if err == nil {
+			ct := wresp.Header.Get(cos.HdrContentType)
+			if !strings.HasPrefix(ct, "application/") {
+				err = fmt.Errorf("unexpected Content-Type %q", ct)
+			}
+		}
+	} else {
+		_, err = reqParams.readMultipart(&resp, w)
+	}
 	FreeRp(reqParams)
 	qfree(q)
 	return resp, err

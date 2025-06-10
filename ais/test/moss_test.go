@@ -28,10 +28,18 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
+// [TODO -- FIXME]
+// - the logic to check missing names, esp. in the streaming case
+
 // [TODO]
 // - get-batch() to return something other than .tar
 // - streaming
 // - max-targets
+
+const (
+	mossMissingPrefix = "missing-"
+	mossMissingSuffix = ".nonexistent"
+)
 
 type mossConfig struct {
 	archFormat    string // "" for plain objects, or archive.ExtTar, etc.
@@ -39,12 +47,16 @@ type mossConfig struct {
 	onlyObjName   bool   // GetBatch OnlyObjName flag
 	withMissing   bool   // inject missing objects
 	nested        bool   // subdirs in archives
+	streaming     bool   // streaming GET (w/ no out-of-band api.MossResp metadata)
 }
 
 func (c *mossConfig) name() (s string) {
 	s = "plain"
 	if c.archFormat != "" {
 		s = c.archFormat
+	}
+	if c.streaming {
+		s += "/streaming"
 	}
 	if c.continueOnErr {
 		s += "/continue-on-err"
@@ -78,19 +90,28 @@ func TestMoss(t *testing.T) {
 	}
 
 	tests := []mossConfig{
-		// Plain object tests
+		// (out-of-band metadata, read objects) tests
 		{archFormat: "", continueOnErr: false, onlyObjName: false},
 		{archFormat: "", continueOnErr: true, onlyObjName: false},
 		{archFormat: "", continueOnErr: true, onlyObjName: true},
 		{archFormat: "", continueOnErr: true, onlyObjName: false, withMissing: true},
 
-		// Archive tests
+		// (out-of-band metadata, read-from-archives) tests
 		{archFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false},
 		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true},
 		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: true, withMissing: true},
 		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, nested: true},
 		{archFormat: archive.ExtTgz, continueOnErr: true, onlyObjName: false, withMissing: true},
 		{archFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true},
+
+		// (streaming, read objects) tests
+		{archFormat: "", streaming: true},
+		{archFormat: "", continueOnErr: true, withMissing: true, streaming: true},
+
+		// (streaming, read-from-archives) tests
+		{archFormat: archive.ExtTar, streaming: true},
+		{archFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true},
+		{archFormat: archive.ExtZip, continueOnErr: false, onlyObjName: false, nested: true, streaming: true},
 	}
 
 	for _, test := range tests {
@@ -124,29 +145,33 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	m.puts()
 
 	// Build MossIn
-	mossInEntries := make([]api.MossIn, 0, numObjs)
+	mossIn := make([]api.MossIn, 0, numObjs)
 	for i := range numObjs {
-		mossInEntries = append(mossInEntries, api.MossIn{
+		mossIn = append(mossIn, api.MossIn{
 			ObjName: m.objNames[i],
 		})
 	}
 
 	// Inject missing objects if requested
 	if test.withMissing {
-		originalEntries := mossInEntries
-		mossInEntries = make([]api.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
+		originalEntries := mossIn
+		mossIn = make([]api.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
 
 		for i, entry := range originalEntries {
-			mossInEntries = append(mossInEntries, entry)
+			mossIn = append(mossIn, entry)
 			if i%3 == 0 {
-				mossInEntries = append(mossInEntries, api.MossIn{
-					ObjName: "missing-" + trand.String(8),
+				mossIn = append(mossIn, api.MossIn{
+					ObjName: mossMissingPrefix + trand.String(8),
 				})
 			}
 		}
 	}
 
-	_testMoss(t, m, mossInEntries, test)
+	if test.streaming {
+		testMossStreaming(t, m, test, mossIn)
+	} else {
+		testMossReqResp(t, m, test, mossIn)
+	}
 }
 
 func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives, numInArch int) {
@@ -194,12 +219,12 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 	}
 
 	// Build MossIn entries directly for archive contents
-	var mossInEntries []api.MossIn
+	var mossIn []api.MossIn
 	for _, archInfo := range archives {
 		// Add a few files from each archive
 		numToRequest := min(len(archInfo.filePaths), max(numInArch/5, 3))
 		for j := range numToRequest {
-			mossInEntries = append(mossInEntries, api.MossIn{
+			mossIn = append(mossIn, api.MossIn{
 				ObjName:  archInfo.name,
 				ArchPath: archInfo.filePaths[j],
 			})
@@ -208,14 +233,18 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 
 	// Inject missing archive paths if requested
 	if test.withMissing {
-		for i := range mossInEntries {
+		for i := range mossIn {
 			if i%3 == 0 {
-				mossInEntries[i].ArchPath = trand.String(8) + ".nonexistent"
+				mossIn[i].ArchPath = trand.String(8) + mossMissingSuffix
 			}
 		}
 	}
 
-	_testMoss(t, m, mossInEntries, test)
+	if test.streaming {
+		testMossStreaming(t, m, test, mossIn)
+	} else {
+		testMossReqResp(t, m, test, mossIn)
+	}
 }
 
 func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, numInArch int) ([]string, error) {
@@ -266,7 +295,7 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 	return randomNames, err
 }
 
-func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mossConfig) {
+func testMossReqResp(t *testing.T, m *ioContext, test *mossConfig, mossIn []api.MossIn) {
 	type result struct {
 		resp     api.MossResp
 		err      error
@@ -282,11 +311,11 @@ func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mos
 	}
 
 	tlog.Logf("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t\n",
-		len(mossInEntries), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
+		len(mossIn), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
 
 	// Prepare MossReq
 	req := &api.MossReq{
-		In:            mossInEntries,
+		In:            mossIn,
 		ContinueOnErr: test.continueOnErr,
 		OnlyObjName:   test.onlyObjName,
 		StreamingGet:  false,
@@ -389,12 +418,12 @@ func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mos
 	default:
 		// Should succeed completely
 		tassert.Fatalf(t, firstSuccess != nil, "Expected successful calls but all failed")
-		tassert.Fatalf(t, len(firstSuccess.resp.Out) == len(mossInEntries),
-			"Expected %d results, got %d", len(mossInEntries), len(firstSuccess.resp.Out))
+		tassert.Fatalf(t, len(firstSuccess.resp.Out) == len(mossIn),
+			"Expected %d results, got %d", len(mossIn), len(firstSuccess.resp.Out))
 
 		for i, objResult := range firstSuccess.resp.Out {
 			tassert.Errorf(t, objResult.ErrMsg == "", "Unexpected error for %s: %s",
-				mossInEntries[i].ObjName, objResult.ErrMsg)
+				mossIn[i].ObjName, objResult.ErrMsg)
 
 			if test.onlyObjName {
 				tassert.Errorf(t, objResult.ObjName != "", "Missing ObjName in result")
@@ -404,7 +433,7 @@ func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mos
 		}
 
 		// Validate TAR contents against MossResp and the contract
-		validateTARContents(t, m, req, firstSuccess.resp,
+		validateTarStrict(t, m, req, firstSuccess.resp,
 			bytes.NewReader(firstSuccess.tarData), len(firstSuccess.tarData))
 
 		// Validate consistency across concurrent calls
@@ -420,7 +449,7 @@ func _testMoss(t *testing.T, m *ioContext, mossInEntries []api.MossIn, test *mos
 	}
 }
 
-func validateTARContents(t *testing.T, m *ioContext, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
+func validateTarStrict(t *testing.T, m *ioContext, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
 	tlog.Logln("Validating TAR contents: " + cos.ToSizeIEC(int64(tarSize), 2))
 
 	// Define TAR entry structure
@@ -503,4 +532,71 @@ func buildExpectedTARName(bck cmn.Bck, req *api.MossReq, index int) string {
 
 func expectMissingFile(mossOut *api.MossOut) bool {
 	return mossOut.ErrMsg != "" && strings.Contains(mossOut.ErrMsg, "does not exist")
+}
+
+func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []api.MossIn) {
+	var (
+		req = &api.MossReq{
+			In:            mossIn,
+			ContinueOnErr: test.continueOnErr,
+			OnlyObjName:   test.onlyObjName,
+			StreamingGet:  true,
+		}
+		baseParams = tools.BaseAPIParams(m.proxyURL)
+		buf        bytes.Buffer
+	)
+	tlog.Logf("Streaming GetBatch: %d objects\n", len(mossIn))
+
+	_, err := api.GetBatch(baseParams, m.bck, req, &buf)
+	tassert.CheckFatal(t, err)
+
+	expected := make(map[string]bool, len(mossIn))
+	for i := range mossIn {
+		in := &mossIn[i]
+		expectedName := req.NameInRespArch(&m.bck, i)
+		if in.ArchPath != "" {
+			expectedName += "/" + in.ArchPath
+		}
+		if req.ContinueOnErr {
+			switch {
+			case strings.HasPrefix(in.ObjName, mossMissingPrefix):
+				expected[api.MissingFilesDirectory+"/"+expectedName] = true
+			case strings.HasSuffix(in.ArchPath, mossMissingSuffix): // TODO -- FIXME: revisit
+				expected[api.MissingFilesDirectory+"/"+in.ArchPath] = true
+			default:
+				expected[expectedName] = true
+			}
+		} else {
+			expected[expectedName] = true
+		}
+	}
+
+	validateTarStreaming(t, expected, &buf)
+}
+
+func validateTarStreaming(t *testing.T, expected map[string]bool, r io.Reader) {
+	var (
+		tr   = tar.NewReader(r)
+		seen = make(map[string]bool, len(expected))
+	)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		tassert.CheckFatal(t, err)
+		if hdr.Typeflag != tar.TypeReg {
+			continue // skip dirs (and anything other than reg. files)
+		}
+
+		seen[hdr.Name] = true
+		_, _ = io.Copy(io.Discard, tr)
+	}
+
+	for name := range expected {
+		tassert.Errorf(t, seen[name], "missing or mismatched TAR entry: %q", name)
+	}
+
+	tassert.Errorf(t, len(seen) == len(expected), "entry count mismatch: want %d, got %d", len(expected), len(seen))
+	tlog.Logf("Streaming TAR validation passed: %d entries\n", len(seen))
 }

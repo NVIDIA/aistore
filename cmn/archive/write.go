@@ -41,6 +41,8 @@ type (
 		// Copy arch, with potential subsequent APPEND
 		Copy(src io.Reader, size ...int64) error
 
+		Flush() error
+
 		// private
 		init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts)
 	}
@@ -164,6 +166,8 @@ func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
 	return cpTar(src, tw.tw, tw.buf)
 }
 
+func (tw *tarWriter) Flush() error { return tw.tw.Flush() }
+
 // set Uid/Gid bits in TAR header
 // - note: cos.PermRWRR default
 // - not calling standard tar.FileInfoHeader
@@ -210,6 +214,8 @@ func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
 	return err
 }
 
+func (tzw *tgzWriter) Flush() error { return tzw.tw.Flush() }
+
 // zipWriter
 // in re streaming use case, note: ZIP writer doesn't have explicit flush
 
@@ -245,6 +251,8 @@ func (zw *zipWriter) Copy(src io.Reader, size ...int64) error {
 	debug.Assert(ok && len(size) == 1)
 	return cpZip(r, size[0], zw.zw, zw.buf)
 }
+
+func (*zipWriter) Flush() error { return nil }
 
 // lz4Writer
 
@@ -286,3 +294,5 @@ func (lzw *lz4Writer) Copy(src io.Reader, _ ...int64) error {
 	lzr := lz4.NewReader(src)
 	return cpTar(lzr, lzw.tw.tw, lzw.tw.buf)
 }
+
+func (lzw *lz4Writer) Flush() error { return lzw.tw.Flush() }
