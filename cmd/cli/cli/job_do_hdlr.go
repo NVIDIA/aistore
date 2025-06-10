@@ -536,7 +536,7 @@ func parseDownloadRequest(c *cli.Context) (*downloadRequest, error) {
 }
 
 // determineDownloadType uses heuristics to determine the download type
-func determineDownloadType(req *downloadRequest) (dload.Type, error) {
+func determineDownloadType(c *cli.Context, req *downloadRequest) (dload.Type, error) {
 	switch {
 	case strings.HasPrefix(req.source.link, hf.HfFullRepoMarker) || req.objectsListPath != "":
 		return dload.TypeMulti, nil
@@ -545,12 +545,12 @@ func determineDownloadType(req *downloadRequest) (dload.Type, error) {
 	case req.source.backend.bck.IsEmpty():
 		return dload.TypeSingle, nil
 	default:
-		return determineBackendDownloadType(req)
+		return determineBackendDownloadType(c, req)
 	}
 }
 
 // determineBackendDownloadType handles the complex backend download logic
-func determineBackendDownloadType(req *downloadRequest) (dload.Type, error) {
+func determineBackendDownloadType(c *cli.Context, req *downloadRequest) (dload.Type, error) {
 	backends, err := api.GetConfiguredBackends(apiBP)
 	if err != nil {
 		return "", err
@@ -567,7 +567,7 @@ func determineBackendDownloadType(req *downloadRequest) (dload.Type, error) {
 		if !p.BackendBck.Equal(&req.source.backend.bck) {
 			warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
 				req.basePayload.Bck.String(), req.source.backend.bck.String())
-			actionWarn(nil, warn)
+			actionWarn(c, warn)
 			dlType = dload.TypeSingle
 		}
 		return dlType, nil
@@ -699,7 +699,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	dlType, err := determineDownloadType(req)
+	dlType, err := determineDownloadType(c, req)
 	if err != nil {
 		return err
 	}
