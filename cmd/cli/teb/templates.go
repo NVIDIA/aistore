@@ -49,13 +49,16 @@ const (
 		indent1 + "Build:\t{{ ( BuildTimes .Stst) }}\n"
 
 	// Config
-	DaemonConfigTmpl = "{{ if .ClusterConfigDiff }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfigDiff }}" +
+	daemonConfigHdr = "{{ if .ClusterConfigDiff }}PROPERTY\t VALUE\t DEFAULT\n{{end}}" +
+		"{{ if .LocalConfigPairs }}PROPERTY\t VALUE\n{{end}}"
+	daemonConfigBody = "{{ if .ClusterConfigDiff }}{{range $item := .ClusterConfigDiff }}" +
 		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
 		"{{end}}\n{{end}}" +
-		"{{ if .LocalConfigPairs }}PROPERTY\t VALUE\n" +
-		"{{range $item := .LocalConfigPairs }}" +
+		"{{ if .LocalConfigPairs }}{{range $item := .LocalConfigPairs }}" +
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n{{end}}"
+	DaemonConfigTmpl      = daemonConfigHdr + daemonConfigBody
+	DaemonConfigTmplNoHdr = daemonConfigBody
 
 	// generic prop/val (name/val, key/val)
 	propValTmplHdr   = "PROPERTY\t VALUE\n"

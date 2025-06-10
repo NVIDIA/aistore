@@ -533,10 +533,13 @@ func showNodeConfig(c *cli.Context) error {
 	}
 	// show "flat" diff-s
 	if len(data.LocalConfigPairs) == 0 && len(data.ClusterConfigDiff) == 0 {
-		fmt.Fprintf(c.App.Writer, "PROPERTY\t VALUE\n\n")
-		return nil
+		return nil // No data to show
 	}
-	err = teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
+	if flagIsSet(c, noHeaderFlag) {
+		err = teb.Print(data, teb.DaemonConfigTmplNoHdr, teb.Jopts(usejs))
+	} else {
+		err = teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
+	}
 
 	if err == nil && section == "" {
 		msg := fmt.Sprintf("(Tip: to show specific section(s), use 'inherited [SECTION]' or 'all [SECTION]' with or without %s)",
