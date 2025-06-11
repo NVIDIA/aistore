@@ -11,14 +11,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
 
 	"github.com/urfave/cli"
@@ -32,18 +30,6 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
-		cmdCode: {
-			fromFileFlag,
-			depsFileFlag,
-			runtimeFlag,
-			commTypeFlag,
-			funcTransformFlag,
-			argTypeFlag,
-			chunkSizeFlag,
-			waitPodReadyTimeoutFlag,
-			etlObjectRequestTimeout,
-			etlNameFlag,
-		},
 		cmdSpec: {
 			fromFileFlag,
 			commTypeFlag,
@@ -127,20 +113,18 @@ var (
 		Flags:        sortFlags(etlSubFlags[commandRemove]),
 	}
 	initCmdETL = cli.Command{
-		Name:  cmdInit,
-		Usage: "Start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)",
+		Name: cmdInit,
+		Usage: "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
+			indent1 + "\t- 'ais etl init -f <spec-file.yaml>'\t deploy ETL from a local YAML file.\n" +
+			indent1 + "\t- 'ais etl init -f <URL>'\t deploy ETL from a remote YAML file.\n",
+		Action: etlInitSpecHandler,
+		Flags:  sortFlags(etlSubFlags[cmdSpec]),
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdSpec,
 				Usage:  "Start ETL job with YAML Pod specification",
 				Flags:  sortFlags(etlSubFlags[cmdSpec]),
 				Action: etlInitSpecHandler,
-			},
-			{
-				Name:   cmdCode,
-				Usage:  "Start ETL job using the specified transforming function or script",
-				Flags:  sortFlags(etlSubFlags[cmdCode]),
-				Action: etlInitCodeHandler,
 			},
 		},
 	}
@@ -262,75 +246,6 @@ func etlInitSpecHandler(c *cli.Context) error {
 		return err
 	}
 
-	xid, errV := api.ETLInit(apiBP, msg)
-	if errV != nil {
-		return V(errV)
-	}
-
-	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
-	return nil
-}
-
-func etlInitCodeHandler(c *cli.Context) (err error) {
-	var (
-		msg      = &etl.InitCodeMsg{}
-		fromFile = parseStrFlag(c, fromFileFlag)
-	)
-	if fromFile == "" {
-		return fmt.Errorf("flag %s cannot be empty", qflprn(fromFileFlag))
-	}
-
-	msg.EtlName = parseStrFlag(c, etlNameFlag)
-	if msg.Name() != "" {
-		if err := k8s.ValidateEtlName(msg.Name()); err != nil {
-			return err
-		}
-		if err := etlAlreadyExists(msg.Name()); err != nil {
-			return err
-		}
-	}
-
-	if msg.Code, err = readFileOrURL(fromFile); err != nil {
-		return err
-	}
-
-	depsFile := parseStrFlag(c, depsFileFlag)
-	if depsFile != "" {
-		if msg.Deps, err = os.ReadFile(depsFile); err != nil {
-			return fmt.Errorf("failed to read %q: %v", depsFile, err)
-		}
-	}
-
-	msg.Runtime = parseStrFlag(c, runtimeFlag)
-
-	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
-	if !strings.HasSuffix(msg.CommTypeX, etl.CommTypeSeparator) {
-		msg.CommTypeX += etl.CommTypeSeparator
-	}
-	msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
-
-	if flagIsSet(c, chunkSizeFlag) {
-		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)
-		if err != nil {
-			return err
-		}
-	}
-
-	msg.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
-	msg.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
-
-	// funcs
-	msg.Funcs.Transform = parseStrFlag(c, funcTransformFlag)
-
-	// validate
-	if err := msg.Validate(); err != nil {
-		if e, ok := err.(*cmn.ErrETL); ok {
-			err = errors.New(e.Reason)
-		}
-		return err
-	}
-
-	// start
 	xid, errV := api.ETLInit(apiBP, msg)
 	if errV != nil {
 		return V(errV)

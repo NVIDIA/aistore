@@ -184,7 +184,6 @@ const (
 	// ETL subcommands
 	cmdInit    = "init"
 	cmdSpec    = "spec"
-	cmdCode    = "code"
 	cmdDetails = "details"
 	cmdErrors  = "errors"
 
@@ -1158,15 +1157,6 @@ var (
 		Usage:    "Absolute path to the file with the spec/code for ETL, or HTTP URL to download the spec from",
 		Required: true,
 	}
-	depsFileFlag = cli.StringFlag{
-		Name:  "deps-file",
-		Usage: "Absolute path to the file with dependencies that must be installed before running the code",
-	}
-	runtimeFlag = cli.StringFlag{
-		Name:     "runtime",
-		Usage:    "Python version used to run the provided code (currently supported: python3.9v2, python3.10v2, python3.11v2, python3.12v2, python3.13v2)",
-		Required: true,
-	}
 	commTypeFlag = cli.StringFlag{
 		Name: "comm-type",
 		Usage: "Enumerated communication type used between aistore cluster and ETL containers that run custom transformations:\n" +
@@ -1178,11 +1168,6 @@ var (
 			indent4 + "\t For more details, see https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms",
 	}
 
-	funcTransformFlag = cli.StringFlag{
-		Name:  "transform",
-		Value: "transform", // NOTE: default name of the transform() function
-		Usage: "Receives and _transforms_ the payload",
-	}
 	argTypeFlag = cli.StringFlag{
 		Name: "arg-type",
 		Usage: "Specifies _how_ an object to transform gets passed from aistore to ETL container:\n" +
