@@ -27,6 +27,35 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME>': display errors for inline object transformation failures.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
 
+const etlStartUsage = "Start ETL.\n" +
+	indent1 + "\t- 'ais etl start <ETL_NAME>'\t start the specified ETL (transitions from stopped to running state)."
+
+const etlStopUsage = "Stop ETL.\n" +
+	indent1 + "\t- 'ais etl stop <ETL_NAME>'\t\t stop the specified ETL (transitions from running to stopped state).\n" +
+	indent1 + "\t- 'ais etl stop --all'\t\t\t stop all running ETL jobs.\n" +
+	indent1 + "\t- 'ais etl stop <ETL_NAME> <ETL_NAME2>'\t stop multiple ETL jobs by name."
+
+const etlRemoveUsage = "Remove ETL.\n" +
+	indent1 + "\t- 'ais etl rm <ETL_NAME>'\t remove (delete) the specified ETL.\n" +
+	indent1 + "\t  NOTE: If the ETL is in 'running' state, it will be automatically stopped before removal."
+
+const etlShowUsage = "Show ETL(s).\n" +
+	indent1 + "\t- 'ais etl show'\t\t\t list all ETL jobs.\n" +
+	indent1 + "\t- 'ais etl show details <ETL_NAME>'\t show detailed specification for specified ETL.\n" +
+	indent1 + "\t- 'ais etl show errors <ETL_NAME>'\t show transformation errors for specified ETL."
+
+const etlObjectUsage = "Transform an object.\n" +
+	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>'\t transform object and save to file.\n" +
+	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'\t\t transform and output to stdout."
+
+const etlBucketUsage = "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').\n" +
+	indent1 + "\t- 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>'\t\t transform all objects from source to destination bucket.\n" +
+	indent1 + "\t- 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET> --prefix <PREFIX>'\t transform objects with specified prefix."
+
+const etlLogsUsage = "View ETL logs.\n" +
+	indent1 + "\t- 'ais etl view-logs <ETL_NAME>'\t\t show logs from all target nodes for specified ETL.\n" +
+	indent1 + "\t- 'ais etl view-logs <ETL_NAME> <TARGET_ID>'\t show logs from specific target node."
+
 var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
@@ -67,7 +96,7 @@ var (
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
-		Usage:  "Show ETL(s)",
+		Usage:  etlShowUsage,
 		Action: etlListHandler,
 		Subcommands: []cli.Command{
 			{
@@ -90,7 +119,7 @@ var (
 	}
 	stopCmdETL = cli.Command{
 		Name:         cmdStop,
-		Usage:        "Stop ETL",
+		Usage:        etlStopUsage,
 		ArgsUsage:    etlNameListArgument,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
@@ -98,7 +127,7 @@ var (
 	}
 	startCmdETL = cli.Command{
 		Name:         cmdStart,
-		Usage:        "Start ETL",
+		Usage:        etlStartUsage,
 		ArgsUsage:    etlNameArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
@@ -106,7 +135,7 @@ var (
 	}
 	removeCmdETL = cli.Command{
 		Name:         commandRemove,
-		Usage:        "Remove ETL",
+		Usage:        etlRemoveUsage,
 		ArgsUsage:    etlNameArgument,
 		Action:       etlRemoveHandler,
 		BashComplete: etlIDCompletions,
@@ -130,7 +159,7 @@ var (
 	}
 	objCmdETL = cli.Command{
 		Name:         cmdObject,
-		Usage:        "Transform an object",
+		Usage:        etlObjectUsage,
 		ArgsUsage:    etlNameArgument + " " + objectArgument + " OUTPUT",
 		Action:       etlObjectHandler,
 		Flags:        sortFlags(etlSubFlags[cmdObject]),
@@ -138,7 +167,7 @@ var (
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')",
+		Usage:        etlBucketUsage,
 		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        sortFlags(etlSubFlags[cmdBucket]),
@@ -146,7 +175,7 @@ var (
 	}
 	logsCmdETL = cli.Command{
 		Name:         cmdViewLogs,
-		Usage:        "View ETL logs",
+		Usage:        etlLogsUsage,
 		ArgsUsage:    etlNameArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
