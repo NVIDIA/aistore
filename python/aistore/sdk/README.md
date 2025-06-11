@@ -120,7 +120,7 @@ AIStore also supports [ETLs](https://aistore.nvidia.com/docs/etl), short for Ext
 
 > Note: AIS-ETL requires [Kubernetes](https://kubernetes.io/). For more information on deploying AIStore with local Kubernetes, refer [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/kustomize/README.md).
 
-To learn more about working with AIS ETL, check out [examples](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl).
+To learn more about working with AIS ETL, check out [examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
 
 ---
 
