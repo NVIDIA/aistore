@@ -281,7 +281,7 @@ func etlInitSpecHandler(c *cli.Context) error {
 	}
 
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
-	return nil
+	return printETLDetailsFromMsg(c, msg)
 }
 
 func etlListHandler(c *cli.Context) (err error) {
@@ -357,8 +357,10 @@ func etlPrintDetails(c *cli.Context, id string) error {
 	if err != nil {
 		return V(err)
 	}
-	msg := details.InitMsg
+	return printETLDetailsFromMsg(c, details.InitMsg)
+}
 
+func printETLDetailsFromMsg(c *cli.Context, msg etl.InitMsg) error {
 	fmt.Fprintln(c.App.Writer, fblue(etl.Name+": "), msg.Name())
 	fmt.Fprintln(c.App.Writer, fblue(etl.CommunicationType+": "), msg.CommType())
 	fmt.Fprintln(c.App.Writer, fblue(etl.ArgType+": "), msg.ArgType())
@@ -385,11 +387,12 @@ func etlPrintDetails(c *cli.Context, id string) error {
 			fmt.Fprintln(c.App.Writer, indent1+fblue(etl.Env+": "), initMsg.FormatEnv())
 		}
 	default:
-		err = fmt.Errorf("invalid response [%+v, %T]", msg, msg)
+		err := fmt.Errorf("invalid response [%+v, %T]", msg, msg)
 		debug.AssertNoErr(err)
+		return err
 	}
 
-	return err
+	return nil
 }
 
 // TODO: initial, see "download logs"
