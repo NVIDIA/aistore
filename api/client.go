@@ -383,8 +383,8 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 // * https://datatracker.ietf.org/doc/html/rfc2046#section-5.1
 // given a single (GetBatch) use case, we currently
 // - always expect two parts, whereby:
-//   - the first part is JSON unmarshaled into `out`
-//   - the second part is written into `writer`
+//  1. `apc.MossMetaPart` is JSON unmarshaled into `out`
+//  2. `apc.MossDataPart` is written into `writer`
 func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error) {
 	debug.AssertNotPstr(out)
 	resp, err := reqParams.do()
@@ -399,7 +399,7 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 
 	ctype := resp.Header.Get(cos.HdrContentType)
 	mediatype, params, err := mime.ParseMediaType(ctype)
-	if err != nil || !strings.HasPrefix(mediatype, MossMultipartPrefix) {
+	if err != nil || !strings.HasPrefix(mediatype, "multipart/") { // standard MIME multipart prefix per RFC 2046
 		return 0, fmt.Errorf("expected multipart response, got %q, err: %w", ctype, err)
 	}
 
@@ -411,7 +411,7 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 		return 0, fmt.Errorf("missing metadata part: %w", err)
 	}
 
-	debug.Assert(part1.FormName() == MossMetadataField, part1.FormName(), " vs ", MossMetadataField, " (see xs/moss)")
+	debug.Assert(part1.FormName() == apc.MossMetaPart, part1.FormName(), " vs ", apc.MossMetaPart)
 
 	err = jsoniter.NewDecoder(part1).Decode(out)
 	if err != nil {
@@ -426,7 +426,10 @@ func (reqParams *ReqParams) readMultipart(out any, writer io.Writer) (int, error
 		return 0, fmt.Errorf("missing stream part: %w", err)
 	}
 
-	debug.Assert(part2.FormName() == MossArchiveField, part2.FormName(), " vs ", MossArchiveField, " (see xs/moss)")
+	// the part's filename is also available via part2.Header.Get("Content-Disposition")
+	// and may look as follows (e.g.):
+	// form-data; name="archive"; filename="get-batch[YhwQiOpRb]"
+	debug.Assert(part2.FormName() == apc.MossDataPart, part2.FormName(), " vs ", apc.MossDataPart)
 
 	n, err := io.Copy(writer, part2)
 	part2.Close()

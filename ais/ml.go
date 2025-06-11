@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
@@ -172,7 +171,7 @@ func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []str
 	}
 
 	// 3. read, unmarshal, and validate MossReq
-	req := &api.MossReq{}
+	req := &apc.MossReq{}
 	if err := cmn.ReadJSON(w, r, req); err != nil {
 		return
 	}

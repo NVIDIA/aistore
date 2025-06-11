@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
@@ -62,7 +61,7 @@ type (
 		aw   archive.Writer
 		r    *XactMoss
 		smap *meta.Smap
-		resp *api.MossResp
+		resp *apc.MossResp
 		cnt  int
 		size int64
 	}
@@ -149,9 +148,9 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 }
 
 // process api.GetBatch request and write multipart response
-func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
+func (r *XactMoss) Do(req *apc.MossReq, w http.ResponseWriter) error {
 	var (
-		resp = &api.MossResp{
+		resp = &apc.MossResp{
 			UUID: r.ID(),
 		}
 		opts   = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format (here and elsewhere)
@@ -177,7 +176,7 @@ func (r *XactMoss) Do(req *api.MossReq, w http.ResponseWriter) error {
 		sgl = mm.NewSGL(0)
 		wi  = buffwi{basewi: basewi, sgl: sgl}
 	)
-	wi.resp.Out = make([]api.MossOut, 0, len(req.In))
+	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	err := wi.do(req, w)
 	sgl.Free()
@@ -213,7 +212,7 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 // basewi //
 ////////////
 
-func (wi *basewi) next(req *api.MossReq, i int) error {
+func (wi *basewi) next(req *apc.MossReq, i int) error {
 	in := &req.In[i]
 	if in.Length != 0 {
 		return cmn.NewErrNotImpl("range read", "moss")
@@ -224,11 +223,11 @@ func (wi *basewi) next(req *api.MossReq, i int) error {
 	if err != nil {
 		return err
 	}
-	nameInArch := req.NameInRespArch(bck, i)
+	nameInArch := req.NameInRespArch(bck.Name, i)
 
 	// write next
 	var (
-		out = api.MossOut{
+		out = apc.MossOut{
 			ObjName: in.ObjName, ArchPath: in.ArchPath, Bucket: bck.Name, Provider: bck.Provider,
 			Opaque: in.Opaque,
 		}
@@ -259,7 +258,7 @@ func (wi *basewi) cleanup() {
 }
 
 // per-object override, if specified
-func (wi *basewi) bucket(in *api.MossIn) (*cmn.Bck, error) {
+func (wi *basewi) bucket(in *apc.MossIn) (*cmn.Bck, error) {
 	// default
 	bck := wi.r.Bck().Bucket()
 
@@ -284,7 +283,7 @@ func (wi *basewi) bucket(in *api.MossIn) (*cmn.Bck, error) {
 	return bck, nil
 }
 
-func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.MossOut, nameInArch string, contOnErr bool) error {
+func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {
 	if err := lom.InitBck(bck); err != nil {
 		return err
 	}
@@ -328,7 +327,7 @@ func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *api.MossIn, out *api.Mo
 	return err
 }
 
-func (wi *basewi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch string) error {
+func (wi *basewi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, nameInArch string) error {
 	if err := wi.aw.Write(nameInArch, lom, lmfh); err != nil {
 		return err
 	}
@@ -337,7 +336,7 @@ func (wi *basewi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, na
 }
 
 // (compare w/ goi._txarch)
-func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, nameInArch, archpath string, contOnErr bool) error {
+func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, nameInArch, archpath string, contOnErr bool) error {
 	nameInArch += "/" + archpath
 
 	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
@@ -359,9 +358,9 @@ func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *api.MossOut, n
 	return nil
 }
 
-func (wi *basewi) addMissing(err error, nameInArch string, out *api.MossOut) error {
+func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) error {
 	var (
-		missingName = api.MissingFilesDirectory + "/" + nameInArch
+		missingName = apc.MossMissingDir + "/" + nameInArch
 		oah         = cos.SimpleOAH{Size: 0}
 		emptyReader = bytes.NewReader(nil)
 	)
@@ -376,7 +375,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *api.MossOut) err
 // buffwi //
 ////////////
 
-func (wi *buffwi) do(req *api.MossReq, w http.ResponseWriter) error {
+func (wi *buffwi) do(req *apc.MossReq, w http.ResponseWriter) error {
 	for i := range req.In {
 		if err := wi.r.AbortErr(); err != nil {
 			return err
@@ -400,7 +399,7 @@ func (wi *buffwi) do(req *api.MossReq, w http.ResponseWriter) error {
 	mpw := multipart.NewWriter(w)
 	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
 
-	written, erw := wi.multipart(mpw, req.OutputFormat, wi.resp)
+	written, erw := wi.multipart(mpw, wi.resp)
 	if err := mpw.Close(); err != nil && erw == nil {
 		erw = err
 	}
@@ -417,9 +416,9 @@ func (wi *buffwi) do(req *api.MossReq, w http.ResponseWriter) error {
 	return nil
 }
 
-func (wi *buffwi) multipart(mpw *multipart.Writer, outputFormat string, resp *api.MossResp) (int64, error) {
-	// part 1: JSON
-	part1, err := mpw.CreateFormField(api.MossMetadataField)
+func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, error) {
+	// part 1: JSON metadata
+	part1, err := mpw.CreateFormField(apc.MossMetaPart)
 	if err != nil {
 		return 0, err
 	}
@@ -427,8 +426,10 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, outputFormat string, resp *ap
 		return 0, err
 	}
 
-	// part 2: archive
-	part2, err := mpw.CreateFormFile(api.MossArchiveField, api.MossArchivePrefix+outputFormat)
+	// part 2: archive (e.g. TAR) data
+	// the part's filename is available on the client side via part2.Header.Get("Content-Disposition")
+	// otherwise ignored
+	part2, err := mpw.CreateFormFile(apc.MossDataPart, wi.r.Cname())
 	if err != nil {
 		return 0, err
 	}
@@ -439,7 +440,7 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, outputFormat string, resp *ap
 // streamwi //
 //////////////
 
-func (wi *streamwi) do(req *api.MossReq, w http.ResponseWriter) error {
+func (wi *streamwi) do(req *apc.MossReq, w http.ResponseWriter) error {
 	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
 	for i := range req.In {
 		if err := wi.r.AbortErr(); err != nil {

@@ -44,7 +44,7 @@ type mossConfig struct {
 	onlyObjName   bool   // GetBatch OnlyObjName flag
 	withMissing   bool   // inject missing objects
 	nested        bool   // subdirs in archives
-	streaming     bool   // streaming GET (w/ no out-of-band api.MossResp metadata)
+	streaming     bool   // streaming GET (w/ no out-of-band apc.MossResp metadata)
 }
 
 func (c *mossConfig) name() (s string) {
@@ -169,9 +169,9 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	m.puts()
 
 	// Build MossIn
-	mossIn := make([]api.MossIn, 0, numObjs)
+	mossIn := make([]apc.MossIn, 0, numObjs)
 	for i := range numObjs {
-		mossIn = append(mossIn, api.MossIn{
+		mossIn = append(mossIn, apc.MossIn{
 			ObjName: m.objNames[i],
 		})
 	}
@@ -179,12 +179,12 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	// Inject missing objects if requested
 	if test.withMissing {
 		originalEntries := mossIn
-		mossIn = make([]api.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
+		mossIn = make([]apc.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
 
 		for i, entry := range originalEntries {
 			mossIn = append(mossIn, entry)
 			if i%3 == 0 {
-				mossIn = append(mossIn, api.MossIn{
+				mossIn = append(mossIn, apc.MossIn{
 					ObjName: mossMissingPrefix + trand.String(8),
 				})
 			}
@@ -242,13 +242,13 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 		archives = append(archives, info)
 	}
 
-	// Build api.MossIn entries
-	var mossIn []api.MossIn
+	// Build apc.MossIn entries
+	var mossIn []apc.MossIn
 	for _, archInfo := range archives {
 		// Add a few files from each archive
 		numToRequest := min(len(archInfo.filePaths), max(numInArch/5, 3))
 		for j := range numToRequest {
-			mossIn = append(mossIn, api.MossIn{
+			mossIn = append(mossIn, apc.MossIn{
 				ObjName:  archInfo.name,
 				ArchPath: archInfo.filePaths[j],
 			})
@@ -319,9 +319,9 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 	return randomNames, err
 }
 
-func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []api.MossIn) {
+func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []apc.MossIn) {
 	type result struct {
-		resp     api.MossResp
+		resp     apc.MossResp
 		err      error
 		duration time.Duration
 		tarSize  int
@@ -337,8 +337,8 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	tlog.Logf("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t\n",
 		len(mossIn), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
 
-	// Prepare api.MossReq
-	req := &api.MossReq{
+	// Prepare apc.MossReq
+	req := &apc.MossReq{
 		In:            mossIn,
 		ContinueOnErr: test.continueOnErr,
 		OnlyObjName:   test.onlyObjName,
@@ -474,7 +474,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 }
 
 // Helper function to determine if a file is expected to be missing based on request patterns
-func isMissingFile(mossIn *api.MossIn) bool {
+func isMissingFile(mossIn *apc.MossIn) bool {
 	// Missing objects have "missing-" prefix
 	if strings.HasPrefix(mossIn.ObjName, mossMissingPrefix) {
 		return true
@@ -486,7 +486,7 @@ func isMissingFile(mossIn *api.MossIn) bool {
 	return false
 }
 
-func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []api.MossIn) {
+func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []apc.MossIn) {
 	type streamResult struct {
 		err      error
 		duration time.Duration
@@ -504,7 +504,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		len(mossIn), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
 
 	var (
-		req = &api.MossReq{
+		req = &apc.MossReq{
 			In:            mossIn,
 			ContinueOnErr: test.continueOnErr,
 			OnlyObjName:   test.onlyObjName,
@@ -613,8 +613,8 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 // Archive validation callback for collecting TAR entries
 type tarValidationCallback struct {
 	entries []tarEntry
-	req     *api.MossReq
-	resp    *api.MossResp // nil for streaming validation
+	req     *apc.MossReq
+	resp    *apc.MossResp // nil for streaming validation
 	t       *testing.T
 	mode    string // "multipart" or "streaming"
 }
@@ -655,7 +655,7 @@ func (cb *tarValidationCallback) Call(filename string, reader cos.ReadCloseSizer
 }
 
 // Enhanced TAR validation for multipart
-func validateTarMultipartWithArchive(t *testing.T, req *api.MossReq, resp api.MossResp, tarReader io.Reader, tarSize int) {
+func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.MossResp, tarReader io.Reader, tarSize int) {
 	tlog.Logln("Validating TAR contents with archive package: " + cos.ToSizeIEC(int64(tarSize), 2))
 
 	// Determine archive format - default to plain TAR if not specified
@@ -712,7 +712,7 @@ func validateTarMultipartWithArchive(t *testing.T, req *api.MossReq, resp api.Mo
 			isMissing = isMissingFile(mossIn)
 		)
 		if isMissing {
-			expectedName = api.MissingFilesDirectory + "/" + expectedName
+			expectedName = apc.MossMissingDir + "/" + expectedName
 		}
 
 		// Enforce ordering contract: tarEntries[i] must match req.In[i]
@@ -743,7 +743,7 @@ func validateTarMultipartWithArchive(t *testing.T, req *api.MossReq, resp api.Mo
 }
 
 // Enhanced streaming validation
-func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *api.MossReq, tarReader io.Reader) {
+func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *apc.MossReq, tarReader io.Reader) {
 	// Determine archive format
 	format := req.OutputFormat
 	if format == "" {
@@ -793,7 +793,7 @@ func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *api.MossRe
 
 		// Handle missing files
 		if isMissingFile(mossIn) {
-			expectedName = api.MissingFilesDirectory + "/" + expectedName
+			expectedName = apc.MossMissingDir + "/" + expectedName
 		}
 
 		expectedEntries = append(expectedEntries, expectedName)
