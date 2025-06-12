@@ -530,10 +530,15 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
+
+	lom.Lock(false)
+	defer lom.Unlock(false)
+
 	// load mpt xattr and find out the part num's offset & size
 	off, size, status, err := s3.OffsetSorted(lom, partNum)
 	if err != nil {
 		s3.WriteErr(w, r, err, status)
+		return
 	}
 	fh, err := lom.Open()
 	if err != nil {

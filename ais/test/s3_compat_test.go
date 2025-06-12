@@ -8,12 +8,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +29,8 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -488,4 +492,105 @@ func TestS3ObjMetadata(t *testing.T) {
 			tassert.Errorf(t, headOutput.Metadata[strings.ToLower(k)] == v, `Metadata does not match (key: %q, local: %q != remote: %q)`, k, v, headOutput.Metadata[k])
 		}
 	})
+}
+
+// This test specifically targets the rlock implementation in tgts3mpt.go
+// We will create large object (forces multipart storage) + concurrent S3 range requests
+func TestS3MultipartPartOperations(t *testing.T) {
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-mpt-rlock-" + trand.String(6), Provider: apc.AIS}
+		objName  = "mpt-rlock-test.dat"
+		objSize  = int64(200 * cos.MiB) // Large object for multipart storage
+	)
+
+	// Create AIStore bucket
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	reader, err := readers.NewRand(objSize, cos.ChecksumNone)
+	tassert.CheckFatal(t, err)
+
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: tools.BaseAPIParams(proxyURL),
+		Bck:        bck,
+		ObjName:    objName,
+		Reader:     reader,
+	})
+	tassert.CheckFatal(t, err)
+	tlog.Logf("Created large object %s (%d bytes)", objName, objSize)
+
+	// Use S3 client for reading
+	s3Client := s3.New(s3.Options{
+		HTTPClient:   newS3Client(true /*pathStyle*/),
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String(proxyURL),
+		UsePathStyle: true,
+		Credentials:  aws.AnonymousCredentials{},
+	})
+
+	const (
+		numConcurrentReaders   = 8
+		numIterationsPerReader = 3
+	)
+
+	var wg sync.WaitGroup
+	errors := make(chan error, numConcurrentReaders*numIterationsPerReader*2)
+
+	tlog.Logfln("Starting concurrent rlock test on multipart object: %d readers × %d iterations × 2 operations = %d total operations",
+		numConcurrentReaders, numIterationsPerReader, numConcurrentReaders*numIterationsPerReader*2)
+
+	// Test concurrent operations on the large object
+	for readerID := range numConcurrentReaders {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			for iteration := range numIterationsPerReader {
+				// Range requests across different parts of large object
+				startByte := int64(id*25*cos.MiB + iteration*cos.MiB)
+				endByte := startByte + 1023 // 1KB chunks
+
+				getOutput, err := s3Client.GetObject(t.Context(), &s3.GetObjectInput{
+					Bucket: aws.String(bck.Name),
+					Key:    aws.String(objName),
+					Range:  aws.String(fmt.Sprintf("bytes=%d-%d", startByte, endByte)),
+				})
+				if err != nil {
+					errors <- fmt.Errorf("reader %d iteration %d GetObject range failed: %v", id, iteration, err)
+					return
+				}
+
+				data, err := io.ReadAll(getOutput.Body)
+				getOutput.Body.Close()
+				if err != nil {
+					errors <- fmt.Errorf("reader %d iteration %d: failed to read range body: %v", id, iteration, err)
+					return
+				}
+
+				if len(data) != 1024 {
+					errors <- fmt.Errorf("reader %d iteration %d: expected 1024 bytes, got %d", id, iteration, len(data))
+					return
+				}
+
+				// Head requests
+				_, err = s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{
+					Bucket: aws.String(bck.Name),
+					Key:    aws.String(objName),
+				})
+				if err != nil {
+					errors <- fmt.Errorf("reader %d iteration %d HeadObject failed: %v", id, iteration, err)
+					return
+				}
+			}
+		}(readerID)
+	}
+
+	// Wait for all concurrent operations to complete
+	wg.Wait()
+	close(errors)
+
+	// Check for any race condition errors
+	for err := range errors {
+		tassert.CheckFatal(t, err)
+	}
 }
