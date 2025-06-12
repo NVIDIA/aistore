@@ -4,6 +4,7 @@
 *.key
 *.crt
 *.csr
+*.srl
 .*.swp
 
 # OS

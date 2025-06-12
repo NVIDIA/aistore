@@ -293,9 +293,8 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts)                  // init transport sub-system
-	daemon.rg.add(sc)                         // new stream collector
-	bundle.InitSDM(config, apc.CompressNever) // shared streams
+	sc := transport.Init(ts) // init transport sub-system
+	daemon.rg.add(sc)        // new stream collector
 
 	t.fshc = health.NewFSHC(t)
 
@@ -376,6 +375,8 @@ func (t *target) Run() error {
 	t.setusr1()
 
 	core.Tinit(t, config, true /*run hk*/)
+
+	bundle.InitSDM(config, apc.CompressNever) // shared streams; requires certloader when use-https
 
 	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {
