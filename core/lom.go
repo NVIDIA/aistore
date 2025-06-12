@@ -318,7 +318,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 // ValidateDiskChecksum validates if checksum stored in lom's in-memory metadata
 // matches object's content checksum.
 // Use lom.ValidateMetaChecksum() to check lom's checksum vs on-disk metadata.
-func (lom *LOM) ValidateContentChecksum() (err error) {
+func (lom *LOM) ValidateContentChecksum(locked bool) (err error) {
 	var (
 		cksumType = lom.CksumType()
 		cksums    = struct {
@@ -334,7 +334,7 @@ recomp:
 	if !lom.md.Cksum.IsEmpty() {
 		cksumType = lom.md.Cksum.Ty() // takes precedence on the other hand
 	}
-	if cksums.comp, err = lom.ComputeCksum(cksumType); err != nil {
+	if cksums.comp, err = lom.ComputeCksum(cksumType, locked); err != nil {
 		return err
 	}
 	if lom.md.Cksum.IsEmpty() { // store computed
@@ -373,10 +373,10 @@ ex:
 	return err
 }
 
-func (lom *LOM) ComputeSetCksum() (*cos.Cksum, error) {
+func (lom *LOM) ComputeSetCksum(locked bool) (*cos.Cksum, error) {
 	var (
 		cksum          *cos.Cksum
-		cksumHash, err = lom.ComputeCksum(lom.CksumType())
+		cksumHash, err = lom.ComputeCksum(lom.CksumType(), locked)
 	)
 	if err != nil {
 		return nil, err
@@ -388,9 +388,12 @@ func (lom *LOM) ComputeSetCksum() (*cos.Cksum, error) {
 	return cksum, nil
 }
 
-func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, _ error) {
+func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHash, _ error) {
 	if cksumType == cos.ChecksumNone {
 		return nil, nil
+	}
+	if !locked {
+		lom.Lock(false)
 	}
 	lmfh, err := lom.Open()
 	if err != nil {
@@ -399,6 +402,9 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, _ error) {
 	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.
 	_, cksum, err = cos.CopyAndChecksum(io.Discard, lmfh, nil, cksumType)
 	cos.Close(lmfh)
+	if !locked {
+		lom.Unlock(false)
+	}
 	return cksum, err
 }
 

@@ -812,7 +812,7 @@ func (goi *getOI) validateRecover() (coldGet bool, ecode int, err error) {
 validate:
 	err = lom.ValidateMetaChecksum()
 	if err == nil {
-		err = lom.ValidateContentChecksum()
+		err = lom.ValidateContentChecksum(true /*locked*/)
 	}
 	if err == nil {
 		return false, 0, nil

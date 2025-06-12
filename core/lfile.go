@@ -40,7 +40,9 @@ func (e *errBdir) Error() string {
 //
 
 // open read-only, return a reader
+// NOTE: compare with lom.NewDeferROC() or even lom.GetROC()
 func (lom *LOM) Open() (fh cos.LomReader, err error) {
+	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
 	fh, err = os.Open(lom.FQN)
 	switch {
 	case err == nil:

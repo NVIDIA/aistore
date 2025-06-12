@@ -8,7 +8,6 @@ package xs
 import (
 	"archive/tar"
 	"bytes"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -44,7 +43,7 @@ import (
 
 // TODO:
 // - write checksum
-// - range read
+// - range read (and separately, read range archpath)
 
 type (
 	mossFactory struct {
@@ -292,18 +291,24 @@ func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.Mo
 		return err
 	}
 	if !local {
-		return cmn.NewErrNotImpl("multi-target", "moss")
+		return nil // skip
 	}
+	lom.Lock(false)
+	err = wi._write(lom, in, out, nameInArch, contOnErr)
+	lom.Unlock(false)
+	return err
+}
 
-	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
+// (under rlock)
+func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if os.IsNotExist(err) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
 	}
 
-	var lmfh cos.LomReader
-	lmfh, err = lom.Open()
+	lmfh, err := lom.Open()
 	if err != nil {
 		if cos.IsNotExist(err, 0) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
@@ -313,16 +318,10 @@ func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.Mo
 
 	switch {
 	case in.ArchPath != "":
-		if in.Length != 0 {
-			cos.Close(lmfh)
-			err := fmt.Errorf("%s: cannot read range from an archived file [%d, %s, %s]", wi.r.Name(), in.Length, lom.Cname(), in.ArchPath)
-			return cmn.NewErrUnsuppErr(err)
-		}
 		err = wi._txarch(lom, lmfh, out, nameInArch, in.ArchPath, contOnErr)
 	default:
 		err = wi._txreg(lom, lmfh, out, nameInArch)
 	}
-
 	cos.Close(lmfh)
 	return err
 }

@@ -87,7 +87,7 @@ var _ = Describe("Mirror", func() {
 			lom.SetSize(testObjectSize)
 			lom.SetAtimeUnix(time.Now().UnixNano())
 			Expect(lom.Persist()).NotTo(HaveOccurred())
-			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+			Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 			// Make copy
 			lom.Lock(true)
@@ -119,7 +119,7 @@ var _ = Describe("Mirror", func() {
 			// Check reloaded copyLOM
 			copyLOM := newBasicLom(expectedCopyFQN)
 			Expect(copyLOM.Load(false, false)).ShouldNot(HaveOccurred())
-			copyCksum, err := copyLOM.ComputeSetCksum()
+			copyCksum, err := copyLOM.ComputeSetCksum(true)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(copyCksum.Value()).To(Equal(newLOM.Checksum().Value()))
 			Expect(copyLOM.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))

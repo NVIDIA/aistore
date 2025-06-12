@@ -338,7 +338,7 @@ var _ = Describe("LOM", func() {
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
 					lom := NewBasicLom(noneFQN)
-					cksum, err := lom.ComputeSetCksum()
+					cksum, err := lom.ComputeSetCksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).To(BeNil())
 				})
@@ -346,11 +346,11 @@ var _ = Describe("LOM", func() {
 				It("should not compute if not missing", func() {
 					lom := filePut(localFQN, testFileSize)
 					lom.SetCksum(dummyCksm)
-					cksum, err := lom.ComputeSetCksum()
+					cksum, err := lom.ComputeSetCksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).NotTo(BeEquivalentTo(dummyCksm))
 					Expect(cksum.Value()).NotTo(BeEquivalentTo(""))
-					_, err = lom.ComputeSetCksum()
+					_, err = lom.ComputeSetCksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Checksum()).To(BeEquivalentTo(cksum))
 				})
@@ -359,7 +359,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					cksum, err := lom.ComputeSetCksum()
+					cksum, err := lom.ComputeSetCksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, cksumValue := cksum.Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumOneXxh))
@@ -396,7 +396,7 @@ var _ = Describe("LOM", func() {
 					cksumType, _ := fsLOM.Checksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 					lom.UncacheUnless()
 
 					Expect(lom.Checksum()).ToNot(BeNil())
@@ -425,21 +425,21 @@ var _ = Describe("LOM", func() {
 
 					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
 					Expect(persist(lom)).NotTo(HaveOccurred())
-					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).To(HaveOccurred())
 				})
 
 				It("should not accept when object content has changed", func() {
 					lom := filePut(localFQN, testFileSize)
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					Expect(os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 
-					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).To(HaveOccurred())
 				})
 
 				It("should not check object content when recompute false", func() {
 					lom := filePut(localFQN, testFileSize)
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					Expect(os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)).To(BeNil())
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
@@ -447,7 +447,7 @@ var _ = Describe("LOM", func() {
 
 				It("should not accept when xattr has wrong checksum", func() {
 					lom := filePut(localFQN, testFileSize)
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
@@ -480,7 +480,7 @@ var _ = Describe("LOM", func() {
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
 					lom := NewBasicLom(noneFQN)
-					err := lom.ValidateContentChecksum()
+					err := lom.ValidateContentChecksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Checksum()).To(BeNil())
 				})
@@ -496,7 +496,7 @@ var _ = Describe("LOM", func() {
 					cksumType, _ := fsLOM.Checksum().Get()
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 					lom.UncacheUnless()
 
 					Expect(lom.Checksum()).ToNot(BeNil())
@@ -514,25 +514,25 @@ var _ = Describe("LOM", func() {
 				It("should accept when filesystem and memory checksums match", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN)
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
 				It("should accept when both filesystem and memory checksums are nil", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN)
 
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when object content has changed", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := NewBasicLom(localFQN)
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					err := os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
 					Expect(err).ShouldNot(HaveOccurred())
 
-					Expect(lom.ValidateContentChecksum()).To(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).To(HaveOccurred())
 				})
 
 				It("should correctly validate content checksum after the checksum type has changed", func() {
@@ -542,7 +542,7 @@ var _ = Describe("LOM", func() {
 					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
 					lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
 
-					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 			})
 
@@ -562,7 +562,7 @@ var _ = Describe("LOM", func() {
 					lom2 := NewBasicLom(localFQN)
 					Expect(lom1.Persist()).NotTo(HaveOccurred())
 
-					Expect(lom1.ValidateContentChecksum()).NotTo(HaveOccurred())
+					Expect(lom1.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 					Expect(lom1.Persist()).ToNot(HaveOccurred())
 
 					Expect(lom2.Load(false, false)).ToNot(HaveOccurred()) // Calls `FromFS`.
@@ -672,7 +672,7 @@ var _ = Describe("LOM", func() {
 			Expect(err).NotTo(HaveOccurred())
 			err = lom.Load(false, false)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
+			Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 			return
 		}
 
@@ -697,7 +697,8 @@ var _ = Describe("LOM", func() {
 			// Reload copy, to make sure it is fresh
 			dst = NewBasicLom(dst.FQN)
 			Expect(dst.Load(false, true)).NotTo(HaveOccurred())
-			Expect(dst.ValidateContentChecksum()).NotTo(HaveOccurred())
+			lck := dst.IsLocked() > apc.LockNone
+			Expect(dst.ValidateContentChecksum(lck)).NotTo(HaveOccurred())
 			hrwLom.UncacheUnless()
 			return
 		}

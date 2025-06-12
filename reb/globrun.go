@@ -892,7 +892,7 @@ func _getReader(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
 		return
 	}
 	if lom.Checksum() == nil {
-		if _, err = lom.ComputeSetCksum(); err != nil {
+		if _, err = lom.ComputeSetCksum(true); err != nil {
 			lom.Unlock(false)
 			return
 		}

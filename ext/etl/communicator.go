@@ -339,9 +339,9 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return 0, err
 	}
-	_, err := lomLoad(lom, rc.boot.xctn.Kind())
+	ecode, err := lomLoad(lom, rc.boot.xctn.Kind())
 	if err != nil {
-		return 0, err
+		return ecode, err
 	}
 
 	path, query := rc.redirectArgs(lom, latestVer)
@@ -382,9 +382,9 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 		started = mono.NanoTime()
 		clone   = *lom
 	)
-	_, err := lomLoad(&clone, rc.boot.xctn.Kind())
+	ecode, err := lomLoad(&clone, rc.boot.xctn.Kind())
 	if err != nil {
-		return core.ReadResp{Err: err}
+		return core.ReadResp{Err: err, Ecode: ecode}
 	}
 	path, query := rc.redirectArgs(&clone, latestVer)
 
@@ -419,7 +419,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 //
 
 func lomLoad(lom *core.LOM, xKind string) (ecode int, err error) {
-	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
+	if err = lom.Load(false /*cacheIt*/, false /*locked*/); err != nil {
 		if cos.IsNotExist(err, 0) && lom.Bucket().IsRemote() {
 			return core.T.GetCold(context.Background(), lom, xKind, cmn.OwtGetLock)
 		}

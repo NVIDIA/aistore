@@ -184,7 +184,7 @@ var _ = Describe("LOM Xattributes", func() {
 				lom := filePut(cachedFQN, testFileSize)
 				lom.Lock(true)
 				defer lom.Unlock(true)
-				cksumHash, err := lom.ComputeCksum(lom.CksumType())
+				cksumHash, err := lom.ComputeCksum(lom.CksumType(), true)
 				Expect(err).NotTo(HaveOccurred())
 				lom.SetCksum(cksumHash.Clone())
 				lom.SetVersion("first_version")
