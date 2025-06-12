@@ -56,8 +56,8 @@ func addBufferToArch(aw archive.Writer, path string, l int, buf []byte) error {
 		defer freeBuf(buf)
 		buf = buf[:l]
 		seed := uint64(mono.NanoTime())
-		for i := 0; i < len(buf)-8; i += 8 {
-			binary.BigEndian.PutUint64(buf, seed+uint64(i))
+		for i := 0; i < len(buf)-cos.SizeofI64; i += cos.SizeofI64 {
+			binary.BigEndian.PutUint64(buf[i:], seed+uint64(i))
 		}
 	}
 	reader := bytes.NewBuffer(buf)

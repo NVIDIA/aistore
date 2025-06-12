@@ -379,7 +379,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash
 	for i := int64(0); i <= size/blkSize; i++ {
 		n := int(min(blkSize, rem))
 		// Fill buffer with deterministic random data (faster than crypto/rand)
-		for j := 0; j <= len(buf)-8; j += 8 {
+		for j := 0; j <= len(buf)-cos.SizeofI64; j += cos.SizeofI64 {
 			binary.BigEndian.PutUint64(buf[j:], seed+uint64(j))
 		}
 		m, err := w.Write(buf[:n])
