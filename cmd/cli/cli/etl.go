@@ -11,13 +11,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
 	"sigs.k8s.io/yaml"
@@ -299,10 +302,68 @@ func showETLs(c *cli.Context, xid string, caption bool) (int, error) {
 	}
 	for _, entry := range list {
 		if xid == entry.XactID {
+			if caption {
+				showETLJobDetails(c, &entry)
+			}
 			return 1, etlPrintDetails(c, entry.Name)
 		}
 	}
 	return 0, fmt.Errorf("ETL with job ID %q not found", xid)
+}
+
+// showETLJobDetails displays ETL configuration options for a specific ETL job
+func showETLJobDetails(c *cli.Context, etlInfo *etl.Info) {
+	details, err := api.ETLGetDetail(apiBP, etlInfo.Name, "" /*xid*/)
+	if err != nil {
+		jobCptn(c, commandETL, etlInfo.XactID, "" /*ctlmsg*/, false /*onlyActive*/, false /*byTarget*/)
+		return
+	}
+
+	// Extract ETL configuration options
+	options := make([]string, 0, 6)
+
+	msg := details.InitMsg
+	if commType := msg.CommType(); commType != "" {
+		options = append(options, "comm-type: "+commType)
+	}
+	if argType := msg.ArgType(); argType != "" {
+		options = append(options, "arg-type: "+argType)
+	}
+
+	switch initMsg := msg.(type) {
+	case *etl.InitCodeMsg:
+		if initMsg.Runtime != "" {
+			options = append(options, "runtime: "+initMsg.Runtime)
+		}
+		if initMsg.ChunkSize > 0 {
+			options = append(options, "chunk-size: "+cos.ToSizeIEC(initMsg.ChunkSize, 0))
+		}
+	case *etl.ETLSpecMsg:
+		if initMsg.Runtime.Image != "" {
+			options = append(options, "image: "+initMsg.Runtime.Image)
+		}
+	}
+
+	if initTimeout, objTimeout := msg.Timeouts(); initTimeout > 0 || objTimeout > 0 {
+		if initTimeout > 0 {
+			options = append(options, "init-timeout: "+initTimeout.String())
+		}
+		if objTimeout > 0 {
+			options = append(options, "object-timeout: "+objTimeout.String())
+		}
+	}
+
+	// Build the control message from options
+	ctlmsg := strings.Join(options, ", ")
+
+	var xname string
+	if etlInfo.XactID != "" {
+		_, xname = xact.GetKindName(apc.ActETLInline)
+	} else {
+		xname = commandETL
+	}
+
+	jobCptn(c, xname, etlInfo.XactID, ctlmsg, false /*onlyActive*/, false /*byTarget*/)
 }
 
 func etlList(c *cli.Context, caption bool) (int, error) {
