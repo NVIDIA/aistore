@@ -40,6 +40,7 @@ import (
 // - ctlmsg
 // - soft errors other than not-found
 // - error handling in general and across the board; mossErr{wrapped-err}
+// - sentinels
 
 // TODO:
 // - write checksum
@@ -146,8 +147,8 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 	}
 }
 
-// process api.GetBatch request and write multipart response
-func (r *XactMoss) Do(req *apc.MossReq, w http.ResponseWriter) error {
+// handle req; gather other target's data; emit resulting TAR, et. al formats
+func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	var (
 		resp = &apc.MossResp{
 			UUID: r.ID(),
@@ -182,6 +183,58 @@ func (r *XactMoss) Do(req *apc.MossReq, w http.ResponseWriter) error {
 	return err
 }
 
+// send all requested local data => tsi
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) error {
+	r.IncPending()
+	defer r.DecPending()
+
+	for i := range req.In {
+		if err := r.AbortErr(); err != nil {
+			return err
+		}
+		in := &req.In[i]
+		if in.Length != 0 {
+			return cmn.NewErrNotImpl("range read", "moss")
+		}
+		// source bucket (per-object) override
+		bck, err := r._bucket(in)
+		if err != nil {
+			return err
+		}
+		lom := core.LOM{ObjName: in.ObjName}
+
+		// TODO -- FIXME: (dup; impl)
+
+		if err := lom.InitBck(bck); err != nil {
+			return err
+		}
+		_, local, err := lom.HrwTarget(smap)
+		if err != nil {
+			return err
+		}
+		if !local {
+			continue // skip
+		}
+
+		var roc cos.ReadOpenCloser
+		roc, err = lom.NewDeferROC()
+		debug.Assert(err == nil, "add-missing NIY")
+
+		o := transport.AllocSend()
+		hdr := &o.Hdr
+		{
+			hdr.Bck = *bck
+			hdr.ObjName = lom.ObjName
+			hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
+			hdr.Opaque = cos.UnsafeB(r.ID())
+			// TODO -- FIXME: include index `i`
+		}
+		bundle.SDM.Send(o, roc, tsi)
+	}
+
+	return nil
+}
+
 func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
 		nlog.Errorln(r.Name(), "recv error:", err)
@@ -207,6 +260,32 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 	return
 }
 
+// per-object override, if specified
+func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
+	// default
+	bck := r.Bck().Bucket()
+
+	// uname override
+	if in.Uname != "" {
+		b, _, err := meta.ParseUname(in.Uname, false)
+		if err != nil {
+			return nil, err
+		}
+		return b.Bucket(), nil
+	}
+
+	// (bucket, provider) override
+	if in.Bucket != "" {
+		np, err := cmn.NormalizeProvider(in.Provider)
+		if err != nil {
+			return nil, err
+		}
+		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
+	}
+
+	return bck, nil
+}
+
 ////////////
 // basewi //
 ////////////
@@ -218,7 +297,7 @@ func (wi *basewi) next(req *apc.MossReq, i int) error {
 	}
 
 	// source bucket (per-object) override
-	bck, err := wi.bucket(in)
+	bck, err := wi.r._bucket(in)
 	if err != nil {
 		return err
 	}
@@ -254,32 +333,6 @@ func (wi *basewi) cleanup() {
 		wi.aw.Fini()
 	}
 	wi.r.DecPending()
-}
-
-// per-object override, if specified
-func (wi *basewi) bucket(in *apc.MossIn) (*cmn.Bck, error) {
-	// default
-	bck := wi.r.Bck().Bucket()
-
-	// uname override
-	if in.Uname != "" {
-		b, _, err := meta.ParseUname(in.Uname, false)
-		if err != nil {
-			return nil, err
-		}
-		return b.Bucket(), nil
-	}
-
-	// (bucket, provider) override
-	if in.Bucket != "" {
-		np, err := cmn.NormalizeProvider(in.Provider)
-		if err != nil {
-			return nil, err
-		}
-		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
-	}
-
-	return bck, nil
 }
 
 func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {

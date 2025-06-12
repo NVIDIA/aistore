@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -95,7 +96,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		{
 			q.Set(apc.QparamTID, tsi.ID())
 
-			args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathML.S, Query: q, Body: body}
+			args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathML.Join(bucket), Query: q, Body: body}
 			args.smap = smap
 			args.async = true
 
@@ -138,13 +139,69 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		if len(apiItems) > 2 {
+			t.writeErrURL(w, r)
+			return
+		}
+
+		// bucket
+		q := r.URL.Query() // TODO: dpq
+		bucket := apiItems[1]
+		bck, err := newBckFromQ(bucket, q, nil)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+
+		// read, unmarshal, and validate MossReq // TODO: mem-pool
+		var req = &apc.MossReq{}
+		if err := cmn.ReadJSON(w, r, req); err != nil {
+			return
+		}
+		if len(req.In) == 0 {
+			t.writeErr(w, r, errors.New(apc.MossExec+" : empty input"))
+			return
+		}
+		if req.OutputFormat == "" {
+			req.OutputFormat = archive.ExtTar // default
+		} else {
+			f, err := archive.Mime(req.OutputFormat, "" /*filename*/) // normalize
+			if err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+			req.OutputFormat = f
+		}
+
+		// generate target-local xaction ID using BEID mechanism
+		div := uint64(xact.IdleDefault)
+		beid, _, _ := xreg.GenBEID(div, bck.MakeUname(apc.Moss))
+		if beid == "" {
+			beid = cos.GenUUID()
+		}
+
+		// start x-moss
+		rns := xreg.RenewBucketXact(apc.ActGetBatch, bck, xreg.Args{UUID: beid})
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err)
+			return
+		}
+		xctn := rns.Entry.Get()
+		if !rns.IsRunning() {
+			// run it
+			xact.GoRunW(xctn)
+		}
+		xmoss, ok := xctn.(*xs.XactMoss)
+		debug.Assert(ok, xctn.Name())
+
 		switch apiItems[0] {
 		case apc.Moss:
 			// bcast path
-			t.httpmlget(w, r, apiItems)
+			tid := q.Get(apc.QparamTID)
+			t.mossend(w, r, xmoss, req, tid)
 		case apc.MossExec:
 			// redirect path
-			t.mossexec(w, r, apiItems)
+			t.mossasm(w, r, xmoss, req)
 		default:
 			t.writeErrURL(w, r)
 		}
@@ -153,64 +210,9 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /v1/ml/mossexec/bucket-name (redirect from proxy)
-func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	// 1. validate
-	if len(apiItems) > 2 {
-		t.writeErrURL(w, r)
-		return
-	}
-
-	// 2. parse bucket
-	q := r.URL.Query()
-	bucket := apiItems[1]
-	bck, err := newBckFromQ(bucket, q, nil)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
-
-	// 3. read, unmarshal, and validate MossReq
-	req := &apc.MossReq{}
-	if err := cmn.ReadJSON(w, r, req); err != nil {
-		return
-	}
-	if len(req.In) == 0 {
-		t.writeErr(w, r, errors.New(apc.MossExec+" : empty input"))
-		return
-	}
-	if req.OutputFormat == "" {
-		req.OutputFormat = archive.ExtTar // default
-	} else {
-		req.OutputFormat, err = archive.Mime(req.OutputFormat, "" /*filename*/) // normalize
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-	}
-
-	// 4. generate target-local xaction ID using BEID mechanism
-	div := uint64(xact.IdleDefault)
-	beid, _, _ := xreg.GenBEID(div, bck.MakeUname(apc.Moss))
-	if beid == "" {
-		beid = cos.GenUUID()
-	}
-
-	// 5. start moss xaction
-	rns := xreg.RenewBucketXact(apc.ActGetBatch, bck, xreg.Args{UUID: beid})
-	if rns.Err != nil {
-		t.writeErr(w, r, rns.Err)
-		return
-	}
-	xctn := rns.Entry.Get()
-
-	if !rns.IsRunning() {
-		// run it
-		xact.GoRunW(xctn)
-	}
-
-	xmoss := xctn.(*xs.XactMoss)
-	if err := xmoss.Do(req, w); err != nil {
+// GET /v1/ml/mossexec/bucket-name (redirect path)
+func (t *target) mossasm(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq) {
+	if err := xmoss.Assemble(req, w); err != nil {
 		if req.StreamingGet {
 			nlog.Errorln(err, "<<< (to avoid superfluous response.WriteHeader)")
 		} else {
@@ -219,11 +221,15 @@ func (t *target) mossexec(w http.ResponseWriter, r *http.Request, apiItems []str
 	}
 }
 
-// GET /v1/ml/moss/bucket-name (broadcast path - for future multi-target support)
-func (t *target) httpmlget(w http.ResponseWriter, r *http.Request, apiItems []string) {
-	// 1. perform steps 1 through 5 above
-	// 2. traverse; send api.MossOut parts to designated target
-	// 3. return 200 or 204
-
-	t.writeErr(w, r, cmn.NewErrUnsupp("multi-target moss, bucket", apiItems[1]))
+// GET /v1/ml/moss/bucket-name (broadcast path)
+func (t *target) mossend(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, tid string) {
+	smap := t.owner.smap.get()
+	tsi := smap.GetTarget(tid)
+	if tsi == nil {
+		t.writeErr(w, r, &errNodeNotFound{t.si, smap, "failed to mossend", tid})
+		return
+	}
+	if err := xmoss.Send(req, &smap.Smap, tsi); err != nil {
+		t.writeErr(w, r, err)
+	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -154,9 +155,8 @@ func (sdm *sharedDM) UnregRecv(xid string) {
 	sdm.ocmu.Unlock()
 }
 
-// DEBUG
-func (sdm *sharedDM) RecvDEBUG(hdr *transport.ObjHdr, r io.Reader, err error) error {
-	return sdm.recv(hdr, r, err)
+func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error {
+	return sdm.dm.Send(obj, roc, tsi)
 }
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
