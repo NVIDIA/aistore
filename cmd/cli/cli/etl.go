@@ -94,8 +94,10 @@ var (
 		commandShow: {
 			noHeaderFlag,
 		},
-		cmdStart:      {},
-		commandRemove: {},
+		cmdStart: {},
+		commandRemove: {
+			allRunningJobsFlag,
+		},
 	}
 	showCmdETL = cli.Command{
 		Name:   commandShow,
@@ -139,7 +141,7 @@ var (
 	removeCmdETL = cli.Command{
 		Name:         commandRemove,
 		Usage:        etlRemoveUsage,
-		ArgsUsage:    etlNameArgument,
+		ArgsUsage:    optionalETLNameArgument,
 		Action:       etlRemoveHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        sortFlags(etlSubFlags[commandRemove]),
@@ -537,14 +539,43 @@ func etlStartHandler(c *cli.Context) (err error) {
 }
 
 func etlRemoveHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
+	var etlNames []string
+	switch {
+	case flagIsSet(c, allRunningJobsFlag):
+		if c.NArg() > 0 {
+			etlNames = c.Args()[0:]
+			return incorrectUsageMsg(c, "flag %s cannot be used together with %s %v",
+				qflprn(allRunningJobsFlag), etlNameArgument, etlNames)
+		}
+		res, err := api.ETLList(apiBP)
+		if err != nil {
+			return V(err)
+		}
+		if len(res) == 0 {
+			fmt.Fprintln(c.App.Writer, "No ETL jobs found to remove")
+			return nil
+		}
+		for _, etlInfo := range res {
+			etlNames = append(etlNames, etlInfo.Name)
+		}
+	default:
+		if c.NArg() == 0 {
+			cli.ShowCommandHelp(c, c.Command.Name)
+			return nil
+		}
+		etlNames = c.Args()[0:]
 	}
-	etlName := c.Args()[0]
-	if err := api.ETLDelete(apiBP, etlName); err != nil {
-		return V(err)
+	for _, name := range etlNames {
+		msg := fmt.Sprintf("ETL[%s]", name)
+		if err := api.ETLDelete(apiBP, name); err != nil {
+			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
+				actionWarn(c, msg+" not found, nothing to do")
+				continue
+			}
+			return V(err)
+		}
+		actionDone(c, msg+" successfully deleted")
 	}
-	fmt.Fprintf(c.App.Writer, "ETL[%s] successfully deleted\n", etlName)
 	return nil
 }
 

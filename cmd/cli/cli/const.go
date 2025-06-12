@@ -277,6 +277,7 @@ const (
 
 	// ETL
 	etlNameArgument          = "ETL_NAME"
+	optionalETLNameArgument  = "[ETL_NAME]"
 	etlNameWithJobIDArgument = "ETL_NAME [JOB_ID]"
 	etlNameListArgument      = "ETL_NAME [ETL_NAME ...]"
 

@@ -55,3 +55,19 @@ ais etl stop $ETL_NAME-3
 ais etl rm $ETL_NAME-3
 ais etl stop $ETL_NAME-main
 ais etl rm $ETL_NAME-main
+
+// Test etl rm with multiple ETL names
+ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi1 // IGNORE
+ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi2 // IGNORE
+ais etl show | grep $ETL_NAME-multi1 | awk '{print $2}'
+ais etl show | grep $ETL_NAME-multi2 | awk '{print $2}'
+ais etl rm $ETL_NAME-multi1 $ETL_NAME-multi2
+! ais etl show | grep "$ETL_NAME-multi"
+
+// Test etl rm --all
+ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-all1 // IGNORE
+ais etl init spec --from-file="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-all2 // IGNORE
+ais etl show | grep $ETL_NAME-all1 | awk '{print $2}'
+ais etl show | grep $ETL_NAME-all2 | awk '{print $2}'
+ais etl rm --all
+! ais etl show | grep "$ETL_NAME-all"
