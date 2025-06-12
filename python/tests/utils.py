@@ -22,7 +22,7 @@ from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client, Object
 from aistore.sdk.const import UTF_ENCODING
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from tests.const import KB
@@ -55,10 +55,10 @@ class BadContentStream(io.BytesIO):
 
 
 # pylint: disable=too-few-public-methods
-class BadContentIterator(ContentIterator):
+class BadContentIterProvider(ContentIterProvider):
     """
-    Simulates a ContentIterator that streams data in chunks and intermittently raises errors
-    via a `BadContentStream`.
+    Simulates a ContentIterProvider that creates a bad iterator that streams data
+    in chunks and intermittently raises errors via a `BadContentStream`.
 
     Args:
         data (bytes): The data to be streamed in chunks.
@@ -80,7 +80,7 @@ class BadContentIterator(ContentIterator):
         self.error = error
         self.read_position = 0
 
-    def iter(self, offset: int = 0) -> Iterator[bytes]:
+    def create_iter(self, offset: int = 0) -> Iterator[bytes]:
         """Streams data using `BadContentStream`, starting from `offset`."""
         stream = BadContentStream(
             self.data[offset:], fail_on_read=self.fail_on_read, error=self.error

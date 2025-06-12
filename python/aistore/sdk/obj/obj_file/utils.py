@@ -5,7 +5,7 @@
 from sys import maxsize
 from typing import Iterator, Tuple, Optional
 
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.utils import get_logger
 
@@ -28,14 +28,14 @@ def compute_loop_size(size: int) -> int:
 
 
 def get_iterator(
-    content_iterator: ContentIterator, resume_position: int
+    content_provider: ContentIterProvider, resume_position: int
 ) -> Optional[Iterator[bytes]]:
     """
     Create a new iterator from the content iterator starting at the specified byte position.
     Returns None if the object is not cached.
 
     Args:
-        content_iterator (ContentIterator): The content iterator used to read the data.
+        content_provider (ContentIterProvider): The content iterator used to read the data.
         resume_position (int): The byte position from which to resume reading.
 
     Returns:
@@ -43,11 +43,11 @@ def get_iterator(
             None if the object is not cached in the bucket.
     """
     # If remote object is not cached, start over
-    if not content_iterator.client.head().present:
+    if not content_provider.client.head().present:
         return None
     # Otherwise, resume from last known position
     else:
-        return content_iterator.iter(offset=resume_position)
+        return content_provider.create_iter(offset=resume_position)
 
 
 def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
@@ -72,7 +72,7 @@ def increment_resume(resume_total: int, max_resume: int, err: Exception) -> int:
 
 
 def handle_broken_stream(
-    content_iterator: ContentIterator,
+    content_provider: ContentIterProvider,
     resume_position: int,
     resume_total: int,
     max_resume: int,
@@ -83,7 +83,7 @@ def handle_broken_stream(
     and returning a newly instanatiated iterator from the last known position.
 
     Args:
-        content_iterator (ContentIterator): The content iterator used to read the data.
+        content_provider (ContentIterProvider): The content iterator used to read the data.
         resume_position (int): The byte position from which to resume reading.
         resume_total (int): The current number of resume attempts.
         max_resume (int): The maximum number of resume attempts allowed.
@@ -97,7 +97,7 @@ def handle_broken_stream(
         ObjectFileReaderMaxResumeError: If the maximum number of resume attempts is exceeded.
     """
     resume_total = increment_resume(resume_total, max_resume, err)
-    obj_path = content_iterator.client.path
+    obj_path = content_provider.client.path
     logger.warning(
         "Error while reading '%s', retrying %d/%d",
         obj_path,
@@ -107,7 +107,7 @@ def handle_broken_stream(
     )
 
     new_iter = get_iterator(
-        content_iterator=content_iterator, resume_position=resume_position
+        content_provider=content_provider, resume_position=resume_position
     )
 
     return new_iter, resume_total

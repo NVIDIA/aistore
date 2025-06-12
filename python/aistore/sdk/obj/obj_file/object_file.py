@@ -7,7 +7,7 @@ from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from io import BufferedIOBase, BufferedWriter
 from typing import Optional
 from overrides import override
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.utils import get_logger
 from aistore.sdk.obj.obj_file.utils import (
     handle_broken_stream,
@@ -31,27 +31,22 @@ class ObjectFileReader(BufferedIOBase):
     retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
     Args:
-        content_iterator (ContentIterator): An iterator that can fetch object data from AIS in chunks.
+        content_provider (ContentIterProvider): A provider that creates iterators which can fetch object data from AIS in chunks.
         max_resume (int): Maximum number of resumes allowed for an ObjectFileReader instance.
     """
 
-    def __init__(self, content_iterator: ContentIterator, max_resume: int):
-        self._content_iterator = content_iterator
+    def __init__(self, content_provider: ContentIterProvider, max_resume: int):
+        self._content_provider = content_provider
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
         self._reset()
 
     def _reset(self, retain_resumes: bool = False) -> None:
-        self._iterable = self._content_iterator.iter()
+        self._iterable = self._content_provider.create_iter()
         self._remainder = None
         self._resume_position = 0
         self._closed = False
         if not retain_resumes:
             self._resume_total = 0
-
-    @property
-    def content_iterator(self) -> ContentIterator:
-        """Return the content iterator."""
-        return self._content_iterator
 
     @override
     def __enter__(self):
@@ -119,7 +114,7 @@ class ObjectFileReader(BufferedIOBase):
                     # If the stream is broken (e.g. TCP reset, dropped connection, malformed or incomplete chunk)
                     # or there is a timeout, retry with a new iterator from the last known position
                     self._iterable, self._resume_total = handle_broken_stream(
-                        self._content_iterator,
+                        self._content_provider,
                         self._resume_position,
                         self._resume_total,
                         self._max_resume,
@@ -154,7 +149,7 @@ class ObjectFileReader(BufferedIOBase):
                     size -= len(chunk)
 
         except Exception as err:
-            obj_path = self.content_iterator.client.path
+            obj_path = self._content_provider.client.path
             # Handle any unexpected errors, log them with context, close the file, and re-raise
             logger.error(
                 "Error while reading object at '%s': %s. Closing file.",

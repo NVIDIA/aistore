@@ -8,7 +8,7 @@ from aistore.sdk.obj.object_client import ObjectClient
 
 
 # pylint: disable=too-few-public-methods
-class ContentIterator:
+class ContentIterProvider:
     """
     Provide an iterator to open an HTTP response stream and read chunks of object content.
 
@@ -31,7 +31,7 @@ class ContentIterator:
         """
         return self._client
 
-    def iter(self, offset: int = 0) -> Iterator[bytes]:
+    def create_iter(self, offset: int = 0) -> Iterator[bytes]:
         """
         Create an iterator over the object content, applying an optional offset.
 

@@ -7,7 +7,7 @@ from typing import Iterator, Optional
 
 import requests
 
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
@@ -29,7 +29,9 @@ class ObjectReader:
     ):
         self._object_client = object_client
         self._chunk_size = chunk_size
-        self._content_iterator = ContentIterator(self._object_client, self._chunk_size)
+        self._content_provider = ContentIterProvider(
+            self._object_client, self._chunk_size
+        )
         self._attributes = None
 
     def head(self) -> ObjectAttributes:
@@ -118,7 +120,7 @@ class ObjectReader:
                 f"Invalid max_resume (must be a non-negative integer): {max_resume}."
             )
 
-        return ObjectFileReader(self._content_iterator, max_resume=max_resume)
+        return ObjectFileReader(self._content_provider, max_resume=max_resume)
 
     def __iter__(self) -> Iterator[bytes]:
         """
@@ -127,4 +129,4 @@ class ObjectReader:
         Returns:
             Iterator[bytes]: An iterator over each chunk of bytes in the object.
         """
-        return self._content_iterator.iter()
+        return self._content_provider.create_iter()

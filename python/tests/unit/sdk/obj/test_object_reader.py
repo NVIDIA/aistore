@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, Mock
 import requests
 
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.obj.object_attributes import ObjectAttributes
@@ -76,20 +76,20 @@ class TestObjectReader(unittest.TestCase):
         self.assertIsInstance(self.object_reader.attributes, ObjectAttributes)
         mock_attr.assert_called_with(self.response_headers)
 
-    @patch("aistore.sdk.obj.object_reader.ContentIterator")
+    @patch("aistore.sdk.obj.object_reader.ContentIterProvider")
     def test_iter(self, mock_cont_iter_class):
         mock_cont_iter, iterable_bytes = self.setup_mock_iterator(mock_cont_iter_class)
 
         res = iter(self.object_reader)
 
-        mock_cont_iter.iter.assert_called_with()
+        mock_cont_iter.create_iter.assert_called_with()
         self.assertEqual(iterable_bytes, res)
 
     def setup_mock_iterator(self, mock_cont_iter_class):
         # We patch the class, so use it to create a new instance of a mock content iterator
         mock_cont_iter = Mock()
         iterable_bytes = iter(b"test")
-        mock_cont_iter.iter.return_value = iterable_bytes
+        mock_cont_iter.create_iter.return_value = iterable_bytes
         mock_cont_iter_class.return_value = mock_cont_iter
         # Re-create to use the patched ContentIterator in constructor
         self.object_reader = ObjectReader(self.object_client)
@@ -104,7 +104,7 @@ class TestObjectReader(unittest.TestCase):
         # Get the arguments passed to the mock
         args, kwargs = mock_obj_file.call_args
         # For now just check that we provided a content iterator
-        self.assertIsInstance(args[0], ContentIterator)
+        self.assertIsInstance(args[0], ContentIterProvider)
         # Check the max_resume argument
         self.assertEqual(kwargs.get("max_resume"), 5)
 
@@ -118,7 +118,7 @@ class TestObjectReader(unittest.TestCase):
         # Get the arguments passed to the mock
         args, kwargs = mock_obj_file.call_args
         # For now just check that we provided a content iterator
-        self.assertIsInstance(args[0], ContentIterator)
+        self.assertIsInstance(args[0], ContentIterProvider)
         # Check the max_resume argument
         self.assertEqual(kwargs.get("max_resume"), max_resume)
 

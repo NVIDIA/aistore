@@ -2,16 +2,18 @@ import unittest
 from unittest.mock import Mock
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from aistore.sdk.obj.content_iterator import ContentIterator
+from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from tests.utils import cases
 
 byte_chunks = [b"chunk1", b"chunk2", b"chunk3"]
 
 
-class TestContentIterator(unittest.TestCase):
+class TestContentIterProvider(unittest.TestCase):
     def setUp(self):
         self.mock_client = Mock(spec=ObjectClient)
-        self.iterator = ContentIterator(self.mock_client, DEFAULT_CHUNK_SIZE)
+        self.content_provider = ContentIterProvider(
+            self.mock_client, DEFAULT_CHUNK_SIZE
+        )
 
     @cases(None, 1234)
     def test_iter(self, chunk_size):
@@ -20,10 +22,12 @@ class TestContentIterator(unittest.TestCase):
         self.mock_client.get.return_value = mock_stream
 
         if chunk_size:
-            self.iterator = ContentIterator(self.mock_client, chunk_size=chunk_size)
+            self.content_provider = ContentIterProvider(
+                self.mock_client, chunk_size=chunk_size
+            )
 
         offset = 100
-        res = list(self.iterator.iter(offset))
+        res = list(self.content_provider.create_iter(offset))
 
         self.assertEqual(byte_chunks, res)
         self.mock_client.get.assert_called_with(stream=True, offset=offset)
@@ -42,6 +46,6 @@ class TestContentIterator(unittest.TestCase):
         self.mock_client.get.return_value = mock_stream
 
         with self.assertRaises(Exception):
-            list(self.iterator.iter(0))
+            list(self.content_provider.create_iter(0))
 
         mock_stream.close.assert_called_once()
