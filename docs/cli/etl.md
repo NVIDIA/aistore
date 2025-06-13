@@ -10,16 +10,31 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 
 ## Table of Contents
 
-- [Commands](#commands)
-- [Initialize ETL with a specification file](#init-etl-with-spec)
-- [Initialize ETL with code](#init-etl-with-code)
-- [List all ETLs](#list-etls)
-- [View ETL details](#view-etl-details)
-- [View ETL logs](#view-etl-logs)
-- [Stop ETL](#stop-etl)
-- [Start ETL](#start-etl)
-- [Transform an object on-the-fly](#transform-object-on-the-fly-with-given-etl)
-- [Transform an entire bucket](#transform-a-bucket-offline-with-the-given-etl)
+### Getting Started
+
+* [Commands](#commands)
+
+### Initializing an ETL
+
+* [Using a Runtime ETL Specification (Recommended)](#1-using-a-runtime-etl-specification-recommended)
+* [Using a Full Kubernetes Pod Spec (Advanced)](#2-using-a-full-kubernetes-pod-spec-advanced)
+
+### ETL Management
+
+* [Listing ETLs](#listing-etls)
+* [View ETL Details](#view-etl-details)
+* [View ETL Errors](#view-etl-errors)
+* [View ETL Logs](#view-etl-logs)
+
+### ETL Lifecycle Operations
+
+* [Stop ETL](#stop-etl)
+* [Start ETL](#start-etl)
+
+### Data Transformation
+
+* [Inline Transformation](#inline-transformation)
+* [Offline Transformation](#offline-transformation)
 
 ---
 
@@ -36,14 +51,32 @@ USAGE:
    ais etl command [arguments...]  [command options]
 
 COMMANDS:
-   init       Start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)
-   show       Show ETL(s)
-   view-logs  View ETL logs
-   start      Start ETL
-   stop       Stop ETL
-   rm         Remove ETL
-   object     Transform an object
-   bucket     Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix')
+   init  Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).
+         - 'ais etl init -f <spec-file.yaml>'   deploy ETL from a local YAML file.
+         - 'ais etl init -f <URL>'              deploy ETL from a remote YAML file.
+
+   show       Show ETL(s).
+              - 'ais etl show'                          list all ETL jobs.
+              - 'ais etl show details <ETL_NAME>'   show detailed specification for specified ETL.
+              - 'ais etl show errors <ETL_NAME>'    show transformation errors for specified ETL.
+   view-logs  View ETL logs.
+              - 'ais etl view-logs <ETL_NAME>'                 show logs from all target nodes for specified ETL.
+              - 'ais etl view-logs <ETL_NAME> <TARGET_ID>'   show logs from specific target node.
+   start      Start ETL.
+              - 'ais etl start <ETL_NAME>'   start the specified ETL (transitions from stopped to running state).
+   stop       Stop ETL.
+              - 'ais etl stop <ETL_NAME>'                 stop the specified ETL (transitions from running to stopped state).
+              - 'ais etl stop --all'                        stop all running ETL jobs.
+              - 'ais etl stop <ETL_NAME> <ETL_NAME2>'   stop multiple ETL jobs by name.
+   rm         Remove ETL.
+              - 'ais etl rm <ETL_NAME>'   remove (delete) the specified ETL.
+                NOTE: If the ETL is in 'running' state, it will be automatically stopped before removal.
+   object     Transform an object.
+              - 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>'   transform object and save to file.
+              - 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'            transform and output to stdout.
+   bucket     Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').
+              - 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>'                       transform all objects from source to destination bucket.
+              - 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET> --prefix <PREFIX>'   transform objects with specified prefix.
 
 OPTIONS:
    --help, -h  Show help
@@ -51,279 +84,330 @@ OPTIONS:
 
 Additionally, use `--help` to display any specific command.
 
-## Init ETL with a specification file
+## Initializing an ETL
 
-```sh
-ais etl init spec --from-file=SPEC_FILE [--name=ETL_NAME] [--comm-type=COMMUNICATION_TYPE] [--arg-type=ARGUMENT_TYPE] [--init-timeout=TIMEOUT] [--obj-timeout=TIMEOUT]
-```
+AIStore provides two ways to initialize an ETL using the CLI:
 
-Initializes an ETL from a Pod YAML specification file. The `--name` parameter assigns a unique name to the ETL. See [ETL name specifications](/docs/etl.md#etl-name-specifications) for valid names.
+---
 
-### Example
+### 1. **Using a Runtime ETL Specification (Recommended)**
 
-Initialize an ETL that computes the MD5 hash of an object.
+This method uses a YAML file that defines how your ETL should be initialized and run.
 
-#### Option 1: ETL Specification File
+#### Key Fields in the Spec
 
-```sh
-$ cat spec.yaml
-name: transformer-md5
+| Field                | Description                                                                                                                                           | Default      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `name`               | Unique name for the ETL. [See naming rules](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-name-specifications)                          | **Required** |
+| `runtime.image`      | Docker image for the ETL container                                                                                                                    | **Required** |
+| `runtime.command`    | (Optional) Override the container's default `ENTRYPOINT` with custom command and arguments                                                            | `None`       |
+| `communication`      | (Optional) [Communication method](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms) between AIS and the ETL container | `hpush://`   |
+| `argument`           | (Optional) Argument passing method: `""` (default) or `"fqn"` (mounts host filesystem)                                                                | `""`         |
+| `init_timeout`       | (Optional) Max time to wait for ETL to become ready                                                                                                   | `5m`         |
+| `obj_timeout`        | (Optional) Max time to process a single object                                                                                                        | `45s`        |
+| `support_direct_put` | (Optional) Enable [direct put optimization](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#direct-put-optimization) for offline transforms   | `false`      |
+
+#### Sample ETL Spec
+
+```yaml
+name: hello-world-etl
 runtime:
-  image: aistore/transformer_md5:latest
-  command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
-communication: hpull://
+  image: aistorage/transformer_hello_world:latest
+  # Optional: Override the container entrypoint
+  # command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 
-$ ais etl init spec --from-file=spec.yaml
+communication: hpush://
+argument: fqn
+init_timeout: 5m
+obj_timeout: 45s
+support_direct_put: true
 ```
 
-#### Option 2: Pod Specification File
+#### CLI Usage
 
-```sh
-$ cat spec.yaml
+```bash
+# From a local file
+$ ais etl init -f spec.yaml
+
+# From a remote URL
+$ ais etl init -f <URL>
+
+# Override values from the spec
+$ ais etl init -f <URL> \
+  --name=ETL_NAME \
+  --comm-type=COMMUNICATION_TYPE \
+  --arg-type=ARGUMENT_TYPE \
+  --init-timeout=TIMEOUT \
+  --obj-timeout=TIMEOUT
+```
+
+> **Note:** CLI parameters take precedence over the spec file.
+
+---
+
+### 2. **Using a Full Kubernetes Pod Spec (Advanced)**
+
+Use this option if you need full control over the ETL container’s deployment—such as advanced init containers, health checks, or if you're not using the AIS ETL framework.
+
+#### Example Pod Spec
+
+```yaml
+# pod_spec.yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: transformer-md5
+  name: etl-echo
+  annotations:
+    communication_type: "hpush://"
+    wait_timeout: "5m"
 spec:
   containers:
     - name: server
-      image: aistore/transformer_md5:latest
-      ports:
-        - name: default
-          containerPort: 8000
-      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+      image: aistorage/transformer_md5:latest
+      ports: [{ name: default, containerPort: 8000 }]
+      command: ["uvicorn", "fastapi_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"]
+      readinessProbe:
+        httpGet: { path: /health, port: default }
+```
 
-$ ais etl init spec --from-file=spec.yaml --name=transformer-md5 --comm-type=hpull:// --wait-timeout=1m
-transformer-md5
+#### CLI Usage
+
+```bash
+# Initialize ETL from a Pod spec
+$ ais etl init -f pod_spec.yaml --name transformer-md5
 ```
 
 ---
 
-## Init ETL with code
+## Listing ETLs
 
-```sh
-ais etl init code --name=ETL_NAME --from-file=CODE_FILE --runtime=RUNTIME [--chunk-size=NUM_OF_BYTES] [--transform=TRANSFORM_FUNC] [--before=BEFORE_FUNC] [--after=AFTER_FUNC] [--deps-file=DEPS_FILE] [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT] [--arg-type=ARGUMENT_TYPE]
-```
+To view all currently initialized ETLs in the AIStore cluster, use either of the following commands:
 
-This initializes an ETL from a provided `CODE_FILE` that contains:
-
-- `transform(input_bytes)`: The main transformation function.
-- `before(context)`: An optional pre-processing function.
-- `after(context)`: An optional post-processing function.
-
-The `--name` parameter assigns a unique name to the ETL (see [ETL name specifications](/docs/etl.md#etl-name-specifications)).
-
-**Note:**  
-- The default value for `--transform` is `"transform"`.
-- Available runtimes are listed [here](/docs/etl.md#runtimes).
-
-### Example
-
-Initialize an ETL that computes the MD5 hash of an object.
-
-```sh
-$ cat code.py
-import hashlib
-
-def transform(input_bytes):
-    md5 = hashlib.md5()
-    md5.update(input_bytes)
-    return md5.hexdigest().encode()
-
-$ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5 --comm-type hpull
-
-transformer-md5
-```
-
-With `before(context)` and `after(context)` functions using streaming (`CHUNK_SIZE` > 0):
-
-```sh
-$ cat code.py
-import hashlib
-
-def before(context):
-    context["before"] = hashlib.md5()
-    return context
-
-def transform(input_bytes, context):
-    context["before"].update(input_bytes)
-
-def after(context):
-    return context["before"].hexdigest().encode()
-
-$ ais etl init code --name=etl-md5 --from-file=code.py --runtime=python3.11v2 --chunk-size=32768 --before=before --after=after --comm-type hpull
-```
-
----
-
-## List ETLs
-
-```sh
+```bash
 ais etl show
 ```
-or equivalently:
-```sh
+
+or the equivalent:
+
+```bash
 ais job show etl
 ```
-Lists all available ETLs.
+
+This will display all available ETLs along with their current status (`initializing`, `running`, `stopped`, etc.).
 
 ---
 
-## View ETL details
+## View ETL Details
 
-```sh
+To inspect a specific ETL and its configuration, use:
+
+```bash
 ais etl show details <ETL_NAME>
 ```
 
-Displays details about a specific ETL, including:
+This command displays detailed information about the ETL, including:
 
-- **ETL Name**
-- **Communication Type**
-- **Specification or Code**
-- **Argument Type**  
+* **ETL Name**
+* **Communication Type**
+* **Argument Type** (e.g., raw bytes or fully qualified file path)
+* **Runtime Configuration**
+  * Container image
+  * Command
+  * Environment variables
+* **ETL Source** (Pod specfication, if applicable)
 
 ---
 
-## View ETL errors
+## View ETL Errors
 
-Shows errors encountered during ETL processing inline transform objects.
+Use this command to view errors encountered during ETL processing—either during inline transformations or offline (bucket-to-bucket) jobs.
 
-```sh
+### Inline ETL Errors
+
+To list errors from **inline** object transformations:
+
+```bash
 ais etl show errors <ETL_NAME>
-
-OBJECT                 ECODE   ERROR
-ais://non-exist-obj    404     object not found
-...
 ```
 
-Show errors encountered during a specific offline (bucket-to-bucket) ETL job. The `<your-custom-error>` refers to the exception message raised within your custom transform Python function.
+**Example Output:**
 
-```sh
-ais etl show errors <ETL_NAME> <OFFLINE-TRANSFORM-JOB-ID>
+```
+OBJECT                 ECODE   ERROR
+ais://non-exist-obj    404     object not found
+```
 
+---
+
+### Offline ETL (Bucket-to-Bucket) Errors
+
+To list errors from a specific **offline ETL job**, include the job ID:
+
+```bash
+ais etl show errors <ETL_NAME> <OFFLINE-JOB-ID>
+```
+
+**Example Output:**
+
+```
 OBJECT                   ECODE   ERROR
 ais://test-src/7         500     ETL error: <your-custom-error>
 ais://test-src/8         500     ETL error: <your-custom-error>
 ais://test-src/6         500     ETL error: <your-custom-error>
-...
 ```
 
-Shows errors encountered during ETL processing of objects.
+Here, `<your-custom-error>` refers to the error raised from within your custom transform function (e.g., in Python).
+
+---
 
 ## View ETL Logs
 
-```sh
-ais etl view-logs ETL_NAME [TARGET_ID]
+Use the following command to view logs for a specific ETL container:
+
+```bash
+ais etl view-logs <ETL_NAME> [TARGET_ID]
 ```
 
-Outputs logs for the given ETL. An optional `TARGET_ID` can be specified to retrieve logs from a particular target node.
+* `<ETL_NAME>`: Name of the ETL.
+* `[TARGET_ID]` (optional): Retrieve logs from a specific target node. If omitted, logs from all targets will be aggregated.
 
 ---
 
 ## Stop ETL
 
-```sh
-ais etl stop ETL_NAME
+Stops a running ETL and tears down its underlying Kubernetes resources.
+
+```bash
+ais etl stop <ETL_NAME>
 ```
 
-Stops the specified ETL.
+* Frees up system resources without deleting the ETL definition.
+* ETL can be restarted later without reinitialization.
 
+> More info [ETL Pod Lifecycle](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-pod-lifecycle)
 ---
 
 ## Start ETL
 
-```sh
-ais etl start ETL_NAME
+Restarts a previously stopped ETL by recreating its associated containers on each target.
+
+```bash
+ais etl start <ETL_NAME>
 ```
 
-Starts the specified ETL.
+* Useful when resuming work after a manual or error-triggered stop.
+* Retains all original configuration and transformation logic.
+
+> More info [ETL Pod Lifecycle](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-pod-lifecycle)
 
 ---
 
-## Transform an object on-the-fly with a given ETL
+## Inline Transformation
 
-```sh
-ais etl object ETL_NAME BUCKET/OBJECT_NAME OUTPUT
+Use inline transformation to process an object **on-the-fly** with a registered ETL. The transformed output is streamed directly to the client.
+
+```bash
+ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>
 ```
 
 ### Examples
 
-#### Transform object to STDOUT
-Compute the MD5 hash of `shards/shard-0.tar` and print it.
+#### Transform an object and print to STDOUT
 
-```sh
-$ ais etl object transformer-md5 ais://shards/shard-0.tar -
+```bash
+ais etl object transformer-md5 ais://shards/shard-0.tar -
+```
+
+*Output:*
+
+```
 393c6706efb128fbc442d3f7d084a426
 ```
 
-#### Transform object and save to file
-```sh
-$ ais etl object transformer-md5 ais://shards/shard-0.tar output.txt
-$ cat output.txt
+#### Transform an object and save the output to a file
+
+```bash
+ais etl object transformer-md5 ais://shards/shard-0.tar output.txt
+cat output.txt
+```
+
+*Output:*
+
+```
 393c6706efb128fbc442d3f7d084a426
 ```
 
-#### Transform object with arguments
-Compute the hash of `shards/shard-0.tar` with argument as seed.
+#### Transform an object using ETL arguments
 
-**Note:**
+Use runtime arguments for customizable transformations. The argument is passed as a query parameter (`etl_args`) and must be handled by the ETL web server.
 
-- Arguments are currently supported only in the init spec.
-- The provided argument value is passed as the `etl_args` query parameter in the request.
-- The transformer server is responsible for receiving and processing the argument from the `etl_args` query parameter.
+```bash
+ais etl object transformer-hash-with-args ais://shards/shard-0.tar - --args=123
+```
 
-```sh
-# init the `hash-with-args` example transformer
-# see https://github.com/NVIDIA/ais-etl/blob/main/transformers/hash_with_args/pod.yaml
+*Output:*
 
-$ ais etl object transformer-hash-with-args ais://shards/shard-0.tar - --args=123
+```
 4af87d32ee1fb306
 ```
 
+> Learn more: [Inline ETL Transformation](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#inline-etl-transformation)
+
 ---
 
-## Transform a bucket offline with the given ETL
+## Offline Transformation
 
-```sh
-ais etl bucket ETL_NAME SRC_BUCKET DST_BUCKET
+Use offline transformation to process entire buckets or a selected set of objects. The result is saved in a **new destination bucket**.
+
+```bash
+ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>
 ```
-
-Transforms all or selected objects and places them in another bucket.
 
 ### Available Flags
 
-| Flag | Description |
-| --- | --- |
-| `--list` | Comma-separated list of object names (e.g., 'obj1,obj2'). |
-| `--template` | Template for matching object names (e.g., 'obj-{000..100}.tar'). |
-| `--ext` | Mapping for extension transformation (e.g., `{jpg:txt}`). |
-| `--prefix` | Prefix for transformed objects. |
-| `--wait` | Wait for operation to finish. |
-| `--requests-timeout` | Timeout for a single object transformation. |
-| `--dry-run` | Show transformation results without applying changes. |
-| `--num-workers` | Number of concurrent workers. |
+| Flag                 | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| `--list`             | Comma-separated list of object names (`obj1,obj2`).        |
+| `--template`         | Template pattern for object names (`obj-{000..100}.tar`).  |
+| `--ext`              | Extension transformation map (`{jpg:txt}`).                |
+| `--prefix`           | Prefix to apply to output object names.                    |
+| `--wait`             | Block until transformation is complete.                    |
+| `--requests-timeout` | Per-object timeout for transformation.                     |
+| `--dry-run`          | Simulate transformation without modifying cluster state.   |
+| `--num-workers`      | Number of concurrent workers to use during transformation. |
 
 ### Examples
 
 #### Transform an entire bucket
-```sh
-$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket
-$ ais wait xaction <XACTION_ID>
+
+```bash
+ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket
+ais wait xaction <XACTION_ID>
 ```
 
-#### Transform selected objects
-```sh
-$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --template "shard-{10..12}.tar"
+#### Transform a subset of objects using a template
+
+```bash
+ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --template "shard-{10..12}.tar"
 ```
 
-#### Transform bucket with extension mapping
-```sh
-$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{in1:out1, in2:out2}" --prefix="etl-" --wait
+#### Apply extension mapping and add a prefix
+
+```bash
+ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{in1:out1,in2:out2}" --prefix="etl-" --wait
 ```
 
-#### Perform a dry-run
-```sh
-$ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --dry-run --wait
+#### Perform a dry-run to preview changes
+
+```bash
+ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --dry-run --wait
+```
+
+*Output:*
+
+```
 [DRY RUN] No modifications on the cluster
 2 objects (20MiB) would have been put into bucket ais://dst_bucket
 ```
+
+> Learn more: [Offline ETL Transformation](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#offline-etl-transformation)

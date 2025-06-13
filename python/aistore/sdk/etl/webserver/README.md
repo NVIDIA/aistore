@@ -86,19 +86,19 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
     apiVersion: v1
     kind: Pod
     metadata:
-    name: etl-echo
-    annotations:
-      communication_type: "hpush://"
-      wait_timeout: "5m"
+      name: etl-echo
+      annotations:
+        communication_type: "hpush://"
+        wait_timeout: "5m"
     spec:
-    containers:
-      - name: server
-        image: <myrepo>/echo-etl:latest
-        ports: [{ name: default, containerPort: 8000 }]
-        command: ["uvicorn", "echo_server.py:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"],
-        readinessProbe:
-          httpGet: { path: /health, port: default }
-    ```
+      containers:
+        - name: server
+          image: <myrepo>/echo-etl:latest
+          ports: [{ name: default, containerPort: 8000 }]
+          command: ["uvicorn", "echo_server:fastapi_app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info", "--ws-max-size", "17179869184", "--ws-ping-interval", "0", "--ws-ping-timeout", "86400"]
+          readinessProbe:
+            httpGet: { path: /health, port: default }
+      ```
 
 4. **Initialize & run**
 
