@@ -374,8 +374,10 @@ func (s *Stream) errCmpl(err error) {
 func (s *Stream) drain(err error) {
 	for {
 		select {
-		case obj := <-s.workCh:
-			s.doCmpl(obj, err)
+		case obj, ok := <-s.workCh:
+			if ok {
+				s.doCmpl(obj, err)
+			}
 		default:
 			return
 		}

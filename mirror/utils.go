@@ -75,14 +75,3 @@ func addCopies(lom *core.LOM, copies int, buf []byte) (size int64, err error) {
 	}
 	return
 }
-
-func drainWorkCh(workCh chan core.LIF) (n int) {
-	for {
-		select {
-		case <-workCh:
-			n++
-		default:
-			return
-		}
-	}
-}

@@ -205,7 +205,7 @@ func (r *XactPut) waitPending() {
 func (r *XactPut) stop() (err error) {
 	r.DemandBase.Stop()
 	n := r.wkg.Stop()
-	if nn := drainWorkCh(r.workCh); nn > 0 {
+	if nn := core.DrainLIF(r.workCh); nn > 0 {
 		n += nn
 	}
 	if n > 0 {

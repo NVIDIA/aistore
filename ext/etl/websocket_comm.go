@@ -405,11 +405,14 @@ func (task *transformTask) done(err error) error {
 	return err
 }
 
+// Non-blocking drain of a work channel (see also "func.*drain")
 func drainTaskCh(workCh chan *transformTask) {
 	for {
 		select {
-		case task := <-workCh:
-			task.done(nil)
+		case task, ok := <-workCh:
+			if ok {
+				task.done(nil)
+			}
 		default:
 			return
 		}

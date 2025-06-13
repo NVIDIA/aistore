@@ -137,20 +137,9 @@ func (w *worker) do() error {
 }
 
 func (w *worker) abort() int {
-	n := drainWorkCh(w.workCh)
+	n := core.DrainLIF(w.workCh)
 	w.stopCh.Close()
 	return n
 }
 
 func (w *worker) String() string { return fmt.Sprintf("worker %q", w.mi.Path) }
-
-func drainWorkCh(workCh chan core.LIF) (n int) {
-	for {
-		select {
-		case <-workCh:
-			n++
-		default:
-			return
-		}
-	}
-}

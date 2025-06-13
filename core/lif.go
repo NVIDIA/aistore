@@ -85,3 +85,17 @@ func (lif *LIF) Unlock(exclusive bool) {
 	nlc := lif.getLocker()
 	nlc.Unlock(lif.uname, exclusive)
 }
+
+// non-blocking drain LIF workCh
+func DrainLIF(workCh chan LIF) (n int) {
+	for {
+		select {
+		case _, ok := <-workCh:
+			if ok {
+				n++
+			}
+		default:
+			return n
+		}
+	}
+}
