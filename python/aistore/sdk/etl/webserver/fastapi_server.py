@@ -27,6 +27,7 @@ from aistore.sdk.const import (
     ETL_WS_FQN,
     ETL_WS_PATH,
     ETL_WS_DESTINATION_ADDR,
+    HEADER_DIRECT_PUT_LENGTH,
     QPARAM_ETL_ARGS,
 )
 
@@ -99,7 +100,7 @@ class FastAPIServer(ETLServer):
                                 direct_put_url, transformed
                             )
                             if response:
-                                await websocket.send_text("direct put success")
+                                await websocket.send_text(str(len(transformed)))
                                 continue
                         except Exception as e:
                             self.logger.warning("Direct put failed: %s", e)
@@ -157,7 +158,7 @@ class FastAPIServer(ETLServer):
                 if response:
                     return Response(
                         status_code=STATUS_NO_CONTENT,
-                        headers={HEADER_CONTENT_LENGTH: "0"},
+                        headers={HEADER_DIRECT_PUT_LENGTH: str(len(transformed))},
                     )
 
             return self._build_response(transformed, self.get_mime_type())

@@ -10,7 +10,12 @@ from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.utils import compose_etl_direct_put_url
-from aistore.sdk.const import HEADER_NODE_URL, STATUS_NO_CONTENT, QPARAM_ETL_ARGS
+from aistore.sdk.const import (
+    HEADER_NODE_URL,
+    STATUS_NO_CONTENT,
+    QPARAM_ETL_ARGS,
+    HEADER_DIRECT_PUT_LENGTH,
+)
 
 
 class FlaskServer(ETLServer):
@@ -110,7 +115,10 @@ class FlaskServer(ETLServer):
             url = compose_etl_direct_put_url(direct_put_url, self.host_target)
             resp = requests.put(url, data, timeout=None)
             if resp.status_code == 200:
-                return Response(status=STATUS_NO_CONTENT)
+                return Response(
+                    status=STATUS_NO_CONTENT,
+                    headers={HEADER_DIRECT_PUT_LENGTH: str(len(data))},
+                )
 
             error = resp.text()
             self.logger.error(

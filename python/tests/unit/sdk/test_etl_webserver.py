@@ -7,7 +7,13 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi.testclient import TestClient
 from flask.testing import FlaskClient
 
-from aistore.sdk.const import HEADER_NODE_URL, ETL_WS_FQN, ETL_WS_DESTINATION_ADDR
+from aistore.sdk.const import (
+    HEADER_NODE_URL,
+    ETL_WS_FQN,
+    ETL_WS_DESTINATION_ADDR,
+    HEADER_DIRECT_PUT_LENGTH,
+    HEADER_CONTENT_LENGTH,
+)
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
@@ -143,6 +149,9 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.do_GET()
         mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
         handler.send_response.assert_called_with(204)
+        handler.send_header.assert_called_with(
+            HEADER_DIRECT_PUT_LENGTH, str(len(b"transformed"))
+        )
         self.assertEqual(handler.wfile.getvalue(), b"")
 
         # Simulate direct put fail (500)
@@ -152,6 +161,9 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.do_GET()
         mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
         handler.send_response.assert_called_with(200)
+        handler.send_header.assert_called_with(
+            HEADER_CONTENT_LENGTH, str(len(b"transformed"))
+        )
         self.assertEqual(handler.wfile.getvalue(), b"transformed")
 
     @patch("requests.put")
@@ -167,6 +179,9 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.do_PUT()
         mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
         handler.send_response.assert_called_with(204)
+        handler.send_header.assert_called_with(
+            HEADER_DIRECT_PUT_LENGTH, str(len(b"transformed"))
+        )
         self.assertEqual(handler.wfile.getvalue(), b"")
 
         # Simulate direct put fail (500)
@@ -176,6 +191,9 @@ class TestRequestHandlerHelpers(unittest.TestCase):
         handler.do_PUT()
         mock_put.assert_called_with(direct_put_url, b"transformed", timeout=None)
         handler.send_response.assert_called_with(200)
+        handler.send_header.assert_called_with(
+            HEADER_CONTENT_LENGTH, str(len(b"transformed"))
+        )
         self.assertEqual(handler.wfile.getvalue(), b"transformed")
 
 
@@ -261,6 +279,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         self.etl_server.arg_type = ""
         path = "test/object"
         input_content = b"input data"
+        transformed_content = self.etl_server.transform(input_content, path, "")
 
         # Mock the direct delivery response (simulate 200 OK)
         mock_response_success = AsyncMock()
@@ -273,6 +292,10 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertEqual(response.content, b"")  # No content returned
+        self.assertEqual(
+            response.headers.get(HEADER_DIRECT_PUT_LENGTH),
+            str(len(transformed_content)),
+        )
         self.etl_server.client.put.assert_awaited_once()
 
         # Mock the direct delivery response (simulate 500 FAIL)
@@ -286,8 +309,11 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.content, input_content[::-1]
+            response.content, transformed_content
         )  # Original content returned
+        self.assertEqual(
+            response.headers.get(HEADER_CONTENT_LENGTH), str(len(transformed_content))
+        )
         self.etl_server.client.put.assert_awaited_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
@@ -311,7 +337,9 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                 )
                 websocket.send_bytes(input_data)
                 result = websocket.receive_text()
-                self.assertEqual(result, "direct put success")
+                self.assertEqual(
+                    result, str(len(input_data))
+                )  # Expecting length of input data as ACK
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
@@ -355,6 +383,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         original_content = b"original data"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
         self.etl_server.arg_type = "fqn"  # Use fqn
+        transformed_content = self.etl_server.transform(original_content, fqn, "")
         # Mock the direct put response (simulate 200 OK)
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
             mock_resp = AsyncMock()
@@ -375,13 +404,15 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                         mode="binary",
                     )
                     result = websocket.receive_text()
-                    self.assertEqual(result, "direct put success")
+                    self.assertEqual(
+                        result, str(len(transformed_content))
+                    )  # Expecting length of original content as ACK
 
                 get_fqn_mock.assert_called_once_with(fqn)
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, data=original_content[::-1]
+                direct_put_url, data=transformed_content
             )
 
         # Mock the direct put response (simulate 500 FAIL) => return transformed object
@@ -404,13 +435,13 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                         mode="binary",
                     )
                     result = websocket.receive_bytes()
-                    self.assertEqual(result, original_content[::-1])
+                    self.assertEqual(result, transformed_content)
 
                 get_fqn_mock.assert_called_once_with(fqn)
 
             mock_client.put.assert_awaited_once()
             mock_client.put.assert_called_once_with(
-                direct_put_url, data=original_content[::-1]
+                direct_put_url, data=transformed_content
             )
 
         # Mock the empty direct put url (don't need direct put on this object) => return transformed object
@@ -429,7 +460,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                         mode="binary",
                     )
                     result = websocket.receive_bytes()
-                    self.assertEqual(result, original_content[::-1])
+                    self.assertEqual(result, transformed_content)
 
                 get_fqn_mock.assert_called_once_with(fqn)
             mock_client.put.assert_not_called()
@@ -474,6 +505,7 @@ class TestFlaskServer(unittest.TestCase):
         self.etl_server.arg_type = ""
         path = "test/object"
         input_content = b"input data"
+        transformed_content = self.etl_server.transform(input_content, path, "")
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
 
         with patch("aistore.sdk.etl.webserver.flask_server.requests.put") as mock_put:
@@ -482,6 +514,10 @@ class TestFlaskServer(unittest.TestCase):
             response = self.client.put(f"/{path}", data=input_content, headers=headers)
 
             self.assertEqual(response.status_code, 204)
+            self.assertEqual(
+                response.headers.get(HEADER_DIRECT_PUT_LENGTH),
+                str(len(transformed_content)),
+            )
             self.assertEqual(response.data, b"")  # No content returned
 
         with patch("aistore.sdk.etl.webserver.flask_server.requests.put") as mock_put:
@@ -491,10 +527,12 @@ class TestFlaskServer(unittest.TestCase):
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(
-                response.data, b"flask: " + input_content
+                response.data, transformed_content
             )  # Original content returned
-            assert "Content-Length" in response.headers
-            assert int(response.headers["Content-Length"]) == len(response.data)
+            self.assertIn(HEADER_CONTENT_LENGTH, response.headers)
+            self.assertEqual(
+                response.headers[HEADER_CONTENT_LENGTH], str(len(transformed_content))
+            )
 
 
 class TestBaseEnforcement(unittest.TestCase):

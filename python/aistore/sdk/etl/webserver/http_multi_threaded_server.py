@@ -18,6 +18,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     HEADER_CONTENT_TYPE,
     HEADER_NODE_URL,
+    HEADER_DIRECT_PUT_LENGTH,
     STATUS_OK,
     STATUS_NO_CONTENT,
     QPARAM_ETL_ARGS,
@@ -57,11 +58,18 @@ class HTTPMultiThreadedServer(ETLServer):
         Forwards GET/PUT requests to the AIS target and applies transformation logic.
         """
 
-        def _set_headers(self, status_code: int = STATUS_OK, length: int = 0):
+        def _set_headers(
+            self,
+            status_code: int = STATUS_OK,
+            length: int = 0,
+            direct_put_length: int = 0,
+        ):
             self.send_response(status_code)
             mime_type = self.server.etl_server.get_mime_type()
             self.send_header(HEADER_CONTENT_TYPE, mime_type)
             self.send_header(HEADER_CONTENT_LENGTH, str(length))
+            if direct_put_length != 0:
+                self.send_header(HEADER_DIRECT_PUT_LENGTH, str(direct_put_length))
             self.end_headers()
 
         def log_request(self, code="-", size="-"):
@@ -159,7 +167,11 @@ class HTTPMultiThreadedServer(ETLServer):
                 if direct_put_url:
                     success = self._direct_put(direct_put_url, transformed)
                     if success:
-                        self._set_headers(status_code=STATUS_NO_CONTENT, length=0)
+                        self._set_headers(
+                            status_code=STATUS_NO_CONTENT,
+                            length=0,
+                            direct_put_length=len(transformed),
+                        )
                         return
 
                 self._set_headers(length=len(transformed))
@@ -203,7 +215,11 @@ class HTTPMultiThreadedServer(ETLServer):
                 if direct_put_url:
                     success = self._direct_put(direct_put_url, transformed)
                     if success:
-                        self._set_headers(status_code=STATUS_NO_CONTENT, length=0)
+                        self._set_headers(
+                            status_code=STATUS_NO_CONTENT,
+                            length=0,
+                            direct_put_length=len(transformed),
+                        )
                         return
 
                 self._set_headers(length=len(transformed))

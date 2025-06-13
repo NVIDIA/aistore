@@ -24,6 +24,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `list_archive` function to Bucket class: helper method to list entries inside an archived object, with the option to include the archive itself.
 - Removes ETL `init_code`.
 - Extend `ETLDetails` type with a list of `ETLObjError`.
+- Return transformed object size in direct put response for ETL Webservers.
 
 ## [1.14.0] - 2025-05-27
 

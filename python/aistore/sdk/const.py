@@ -42,7 +42,8 @@ HEADER_NODE_URL = HEADER_PREFIX + "node-url"
 HEADER_OBJECT_BLOB_DOWNLOAD = HEADER_PREFIX + "blob-download"
 HEADER_OBJECT_BLOB_CHUNK_SIZE = HEADER_PREFIX + "blob-chunk"
 HEADER_OBJECT_BLOB_WORKERS = HEADER_PREFIX + "blob-workers"
-HEADER_OBJECT_APPEND_HANDLE = "ais-append-handle"
+HEADER_OBJECT_APPEND_HANDLE = HEADER_PREFIX + "append-handle"
+HEADER_DIRECT_PUT_LENGTH = HEADER_PREFIX + "direct-put-length"
 # Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
 HEADER_RANGE = "Range"
 # AuthN Headers
