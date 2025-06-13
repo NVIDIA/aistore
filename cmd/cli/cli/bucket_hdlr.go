@@ -164,6 +164,7 @@ var (
 		commandRemove: {
 			ignoreErrorFlag,
 			yesFlag,
+			rmAllBucketsFlag,
 		},
 		commandCopy: {
 			listFlag,
@@ -288,8 +289,8 @@ var (
 			bucketCmdRename,
 			{
 				Name:      commandRemove,
-				Usage:     "Remove ais buckets",
-				ArgsUsage: bucketsArgument,
+				Usage:     "Remove AIS buckets; use '--all' to remove all AIS buckets, '--yes' to skip confirmation",
+				ArgsUsage: "BUCKET [BUCKET...] | --all",
 				Flags:     sortFlags(bucketCmdsFlags[commandRemove]),
 				Action:    removeBucketHandler,
 				BashComplete: bucketCompletions(bcmplop{
@@ -354,18 +355,104 @@ func mvBucketHandler(c *cli.Context) error {
 }
 
 func removeBucketHandler(c *cli.Context) error {
+	if flagIsSet(c, rmAllBucketsFlag) {
+		return removeAllBuckets(c)
+	}
+	return removeSpecificBuckets(c)
+}
+
+func removeAllBuckets(c *cli.Context) error {
+	if c.NArg() > 0 {
+		return incorrectUsageMsg(c, "cannot specify bucket name(s) with --all flag")
+	}
+
+	// Only AIS buckets can be removed
+	qbck := cmn.QueryBcks{Provider: apc.AIS}
+	bcks, err := api.ListBuckets(apiBP, qbck, apc.FltExists)
+	if err != nil {
+		return V(err)
+	}
+
+	if len(bcks) == 0 {
+		fmt.Fprintln(c.App.Writer, "No AIS buckets to remove")
+		return nil
+	}
+
+	// --yes flag is ignored for safety reasons
+	if flagIsSet(c, yesFlag) {
+		actionWarn(c, "The --yes flag is ignored when removing all buckets for safety reasons")
+	}
+
+	// Always require phrase confirmation for --all operations, even with --yes flag
+	if !_confirmRemoval(c, bcks) {
+		fmt.Fprintln(c.App.Writer, "Operation canceled")
+		return nil
+	}
+
+	return _destroyAllBuckets(c, bcks)
+}
+
+func removeSpecificBuckets(c *cli.Context) error {
 	buckets, err := bucketsFromArgsOrEnv(c)
 	if err != nil {
 		return err
 	}
+
 	bck, err := destroyBuckets(c, buckets)
 	if err == nil {
 		return nil
 	}
+
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.TypeCode == "ErrUnsupp" {
 		return fmt.Errorf("%v\n(Tip: did you want to evict '%s' from aistore?)", err, bck.Cname(""))
 	}
 	return err
+}
+
+func _confirmRemoval(c *cli.Context, bcks cmn.Bcks) bool {
+	// Show bucket list
+	fmt.Fprintf(c.App.Writer, "Found %d AIS bucket(s) to remove:\n", len(bcks))
+
+	for _, bck := range bcks {
+		fmt.Fprintf(c.App.Writer, "  - %s\n", bck.Cname(""))
+	}
+
+	// Require exact phrase confirmation - safety layer
+	actionWarn(c, "This will PERMANENTLY DELETE all listed buckets and their data - operation cannot be undone")
+
+	const confirmPhrase = "DELETE ALL BUCKETS"
+	response := readValue(c, fmt.Sprintf("\nType '%s' to confirm", confirmPhrase))
+
+	return strings.TrimSpace(response) == confirmPhrase
+}
+
+// destroyBucket contains the core logic for destroying a single bucket
+func destroyBucket(c *cli.Context, bck cmn.Bck) error {
+	err := api.DestroyBucket(apiBP, bck)
+	if err == nil {
+		fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.Cname(""))
+		return nil
+	}
+	if cmn.IsStatusNotFound(err) {
+		err := &errDoesNotExist{what: "bucket", name: bck.Cname("")}
+		if !flagIsSet(c, ignoreErrorFlag) {
+			return err
+		}
+		fmt.Fprintln(c.App.ErrWriter, err)
+		return nil
+	}
+	return err
+}
+
+// _destroyAllBuckets removes all buckets without individual confirmations
+func _destroyAllBuckets(c *cli.Context, buckets []cmn.Bck) error {
+	for i := range buckets {
+		bck := buckets[i]
+		if err := destroyBucket(c, bck); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func resetPropsHandler(c *cli.Context) error {

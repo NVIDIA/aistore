@@ -404,6 +404,7 @@ var (
 	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "Include all running jobs"}
 	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "Include all finished jobs"}
 	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "Remove all objects (use with extreme caution!)"}
+	rmAllBucketsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "Remove all AIS buckets from the cluster (use with extreme caution - cannot be undone)"}
 	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "Download all logs"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{

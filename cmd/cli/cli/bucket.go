@@ -58,20 +58,9 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (cmn.Bck, error) {
 			}
 		}
 
-		err := api.DestroyBucket(apiBP, bck)
-		if err == nil {
-			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.Cname(""))
-			continue
+		if err := destroyBucket(c, bck); err != nil {
+			return bck, err
 		}
-		if cmn.IsStatusNotFound(err) {
-			err := &errDoesNotExist{what: "bucket", name: bck.Cname("")}
-			if !flagIsSet(c, ignoreErrorFlag) {
-				return bck, err
-			}
-			fmt.Fprintln(c.App.ErrWriter, err)
-			continue
-		}
-		return bck, err
 	}
 	return cmn.Bck{}, nil
 }
