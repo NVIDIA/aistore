@@ -80,8 +80,14 @@ echo
 echo "Testing rate limiting enforcement..."
 echo "Making rapid requests (should trigger rate limiting)..."
 
-# Hardcoded proxy URL (localhost:8080)
-proxy_url="http://127.0.0.1:8080"
+if [[ -n "${AIS_ENDPOINT}" ]]; then
+    proxy_url="${AIS_ENDPOINT}"
+elif [[ "${AIS_USE_HTTPS}" == "true" ]]; then
+    proxy_url="https://127.0.0.1:8080"
+else
+    proxy_url="http://127.0.0.1:8080"
+fi
+
 echo "Using AIS proxy: $proxy_url"
 
 # Extract bucket name from ais://bucket format
@@ -93,7 +99,7 @@ rate_limited_count=0
 
 for i in {1..15}; do
     # Use curl to PUT directly to AIS API without retry logic
-    response=$(curl -s -w "%{http_code}" -o /dev/null \
+    response=$(curl -s -w "%{http_code}" -o /dev/null --insecure \
         -X PUT "$proxy_url/v1/objects/$bucket_name/rate-test-$i" \
         -d "test-content-$i")
     
