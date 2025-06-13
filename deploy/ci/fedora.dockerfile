@@ -15,6 +15,7 @@ RUN dnf -y update && \
        git \
        lsof \
        make \
+       openssl \
        podman-docker \
        procps-ng \
        python3-pip \
