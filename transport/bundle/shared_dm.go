@@ -8,6 +8,7 @@ package bundle
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,6 +20,10 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
+
+// TODO -- FIXME:
+// - rm '|' and parsing; add demux []byte to transport header
+const Sepa = "|"
 
 // [TODO]
 // - Close() vs usage (when len(rxcbs) > 0); provide xctn.onFinished() => UnregRecv
@@ -163,7 +168,14 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO(xid-demux): remove '|' parsing; use cos.UnsafeS(hdr.Opaque) as is and don't change the latter
 	xid := string(hdr.Opaque)
+	if i := strings.Index(xid, Sepa); i > 0 {
+		xid = xid[:i]
+		hdr.Opaque = hdr.Opaque[i+1:]
+	}
+
 	if err := xact.CheckValidUUID(xid); err != nil {
 		return fmt.Errorf("%s: %v", sdm.trname(), err)
 	}

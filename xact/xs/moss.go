@@ -7,11 +7,11 @@ package xs
 
 import (
 	"archive/tar"
-	"bytes"
+	"encoding/binary"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,8 +51,22 @@ type (
 		xreg.RenewBase
 		xctn *XactMoss
 	}
+	mossInRecv struct {
+		name      string
+		sgl       *memsys.SGL
+		isMissing bool
+	}
+	mossWorkItem interface {
+		flushMaybe() error
+	}
 	XactMoss struct {
 		xact.DemandBase
+		mm *memsys.MMSA
+		wi mossWorkItem // NOTE: one per
+		// runtime
+		recvd    []mossInRecv
+		nextRecv int
+		mu       sync.Mutex
 	}
 )
 
@@ -90,7 +104,9 @@ func (*mossFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *mossFactory) Start() error {
 	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
-	p.xctn = newMoss(p)
+	req, ok := p.Args.Custom.(*apc.MossReq)
+	debug.Assert(ok)
+	p.xctn = newMoss(p, req)
 	return nil
 }
 
@@ -101,9 +117,12 @@ func (*mossFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func newMoss(p *mossFactory) *XactMoss {
-	r := &XactMoss{}
+func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
+	r := &XactMoss{mm: memsys.PageMM()}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
+
+	// NOTE: recv() readiness - preallocate all required empty slots
+	r.recvd = make([]mossInRecv, len(req.In))
 	return r
 }
 
@@ -167,15 +186,16 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	if req.StreamingGet {
 		wi := streamwi{basewi: basewi}
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
+		r.wi = &wi
 		return wi.do(req, w)
 	}
 
 	// buffered
 	var (
-		mm  = core.T.PageMM()
-		sgl = mm.NewSGL(0)
+		sgl = r.mm.NewSGL(0)
 		wi  = buffwi{basewi: basewi, sgl: sgl}
 	)
+	r.wi = &wi
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	err := wi.do(req, w)
@@ -199,40 +219,61 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) erro
 		// source bucket (per-object) override
 		bck, err := r._bucket(in)
 		if err != nil {
+			r.Abort(err)
 			return err
 		}
 		lom := core.LOM{ObjName: in.ObjName}
 
-		// TODO -- FIXME: (dup; impl)
+		// TODO -- FIXME: (dup; impl; pool)
 
 		if err := lom.InitBck(bck); err != nil {
 			return err
 		}
 		_, local, err := lom.HrwTarget(smap)
 		if err != nil {
+			r.Abort(err)
 			return err
 		}
 		if !local {
 			continue // skip
 		}
 
-		var roc cos.ReadOpenCloser
-		roc, err = lom.NewDeferROC()
-		debug.Assert(err == nil, "add-missing NIY")
+		nameInArch := req.NameInRespArch(bck.Name, i)
+
+		roc, err := lom.NewDeferROC()
+		if err != nil {
+			if !req.ContinueOnErr || !cos.IsNotExist(err, 0) {
+				r.Abort(err)
+				return err
+			}
+			nameInArch = apc.MossMissingDir + "/" + nameInArch
+			roc = nopROC{}
+		}
 
 		o := transport.AllocSend()
 		hdr := &o.Hdr
 		{
 			hdr.Bck = *bck
-			hdr.ObjName = lom.ObjName
+			hdr.ObjName = nameInArch
 			hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-			hdr.Opaque = cos.UnsafeB(r.ID())
-			// TODO -- FIXME: include index `i`
+			hdr.Opaque = r.opaque(i)
 		}
 		bundle.SDM.Send(o, roc, tsi)
 	}
 
 	return nil
+}
+
+// TODO(xid-demux): remove; see transport/bundle/shared_dm
+func (r *XactMoss) opaque(i int) (b []byte) {
+	var (
+		xid = r.ID()
+		l   = len(xid)
+	)
+	b = make([]byte, l+cos.SizeofI32)
+	copy(b, xid)
+	binary.BigEndian.PutUint32(b[l:], uint32(i))
+	return b
 }
 
 func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
@@ -241,15 +282,37 @@ func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) erro
 		return err
 	}
 
-	data, err := io.ReadAll(reader)
+	sgl := r.mm.NewSGL(0) // TODO -- FIXME: free upon abort/cleanup
+	_, err = io.Copy(sgl, reader)
 	if err != nil {
+		sgl.Free()
 		nlog.Errorln(r.Name(), "failed to read data:", err)
 		return err
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Name(), "received:", hdr.Bck.Cname(hdr.ObjName), "size:", len(data))
+	debug.Assert(len(hdr.Opaque) == cos.SizeofI32)
+	index := int(binary.BigEndian.Uint32(hdr.Opaque))
+
+	name := hdr.ObjName
+	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/")
+
+	r.mu.Lock()
+	r.recvd[index] = mossInRecv{
+		name:      name,
+		sgl:       sgl,
+		isMissing: isMissing,
 	}
+	r.mu.Unlock()
+
+	if err := r.wi.flushMaybe(); err != nil {
+		r.Abort(err)
+		return err
+	}
+
+	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		nlog.Infof("%s: received[%d] %q (%dB)", r.Name(), index, hdr.ObjName, sgl.Len())
+	}
+
 	return nil
 }
 
@@ -355,7 +418,7 @@ func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.Mo
 // (under rlock)
 func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if os.IsNotExist(err) && contOnErr {
+		if cos.IsNotExist(err, 0) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
@@ -414,9 +477,9 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	var (
 		missingName = apc.MossMissingDir + "/" + nameInArch
 		oah         = cos.SimpleOAH{Size: 0}
-		emptyReader = bytes.NewReader(nil)
+		roc         = nopROC{}
 	)
-	if err := wi.aw.Write(missingName, oah, emptyReader); err != nil {
+	if err := wi.aw.Write(missingName, oah, roc); err != nil {
 		return err
 	}
 	out.ErrMsg = err.Error()
@@ -488,6 +551,11 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 	return io.Copy(part2, wi.sgl)
 }
 
+func (*buffwi) flushMaybe() error {
+	debug.Assert(false, "not implemented yet") // TODO -- FIXME
+	return nil
+}
+
 //////////////
 // streamwi //
 //////////////
@@ -536,3 +604,52 @@ func _ctype(outputFormat string) string {
 		return cos.ContentBinary
 	}
 }
+
+func (wi *streamwi) flushMaybe() (err error) {
+	r := wi.r
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for r.nextRecv < len(r.recvd) {
+		entry := r.recvd[r.nextRecv]
+		if entry.sgl == nil && !entry.isMissing {
+			break // haven't received this one yet — stop
+		}
+
+		if entry.isMissing {
+			err = wi.aw.Write(entry.name, cos.SimpleOAH{Size: 0}, nopROC{})
+		} else {
+			oah := cos.SimpleOAH{Size: entry.sgl.Len()}
+			err = wi.aw.Write(entry.name, oah, entry.sgl)
+		}
+		if err != nil {
+			r.Abort(err)
+			return err
+		}
+
+		// GC to release memory
+		r.recvd[r.nextRecv] = mossInRecv{}
+		r.nextRecv++
+
+		wi.cnt++
+		wi.size += entry.sgl.Len()
+		entry.sgl.Free()
+	}
+
+	return nil
+}
+
+////////////
+// nopROC //
+////////////
+
+type nopROC struct{}
+
+// interface guard
+var (
+	_ cos.ReadOpenCloser = (*nopROC)(nil)
+)
+
+func (nopROC) Read([]byte) (int, error)          { return 0, io.EOF }
+func (nopROC) Open() (cos.ReadOpenCloser, error) { return &nopROC{}, nil }
+func (nopROC) Close() error                      { return nil }

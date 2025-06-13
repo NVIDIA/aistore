@@ -181,7 +181,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// start x-moss
-		rns := xreg.RenewBucketXact(apc.ActGetBatch, bck, xreg.Args{UUID: beid})
+		rns := xreg.RenewBucketXact(apc.ActGetBatch, bck, xreg.Args{UUID: beid, Custom: req})
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return
