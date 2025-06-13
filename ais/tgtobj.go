@@ -1632,13 +1632,12 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 
 func (coi *coi) _writer(t *target, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
 	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileTransform)
-	lomWriter, err := dst.CreateWork(workFQN)
+	lomWriter, err := dst.CreateWork(workFQN) // closed in the `coi.PutWOC` call
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
 	size, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, lomWriter, gargs)
 	if err != nil {
-		cos.Close(lomWriter)
 		cos.RemoveFile(workFQN)
 		return xs.CoiRes{Err: err, Ecode: ecode}
 	}

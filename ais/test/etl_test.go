@@ -695,7 +695,8 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 			err = tetl.ListObjectsWithRetry(bp, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
 
-			if transform != nil {
+			// only verify object content in long test mode (takes long time to complete)
+			if !testing.Short() && transform != nil {
 				objeList, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				for _, en := range objeList.Entries {

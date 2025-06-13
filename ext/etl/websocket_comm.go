@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -76,21 +78,23 @@ type (
 
 	webSocketComm struct {
 		baseComm
-		commCtx         context.Context
-		inlineSession   Session
-		offlineSessions map[string]Session
-		commCtxCancel   context.CancelFunc
-		m               sync.Mutex
+		commCtx       context.Context
+		sessions      map[string]Session // includes inlineSession
+		inlineSession Session
+		commCtxCancel context.CancelFunc
+		m             sync.Mutex
 	}
 
 	wsSession struct {
 		msg              InitMsg
-		txctn            core.Xact
+		txctn            core.Xact // tcb/tcobjs xaction that uses this session to perform transformatio
 		sessionCtx       context.Context
 		workCh           chan *transformTask
 		sessionCtxCancel context.CancelFunc
 		connections      []*wsConnCtx
 		chanFull         cos.ChanFull
+		fincb            func() // callback to self-remove this session from the communicator' session list
+		finished         atomic.Bool
 	}
 
 	wsConnCtx struct {
@@ -111,6 +115,8 @@ type (
 		written int64
 		err     error
 		rwpair
+
+		txctn core.Xact // reference to the TCB/TCO job that created this task
 	}
 
 	rwpair struct {
@@ -168,6 +174,11 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 		msg:         ws.boot.msg,
 		workCh:      make(chan *transformTask, wockChSize),
 		connections: make([]*wsConnCtx, 0, connPerSession),
+		fincb: func() {
+			ws.m.Lock()
+			delete(ws.sessions, xctn.ID())
+			ws.m.Unlock()
+		},
 	}
 	wss.sessionCtx, wss.sessionCtxCancel = context.WithCancel(ws.commCtx)
 
@@ -177,6 +188,7 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 			return nil, fmt.Errorf("%s: failed to dial %s: %w", xctn.Name(), ws.boot.uri, err)
 		}
 		resp.Body.Close()
+		debug.IncCounter(xctn.ID() + "-conn") // connection count for the session
 
 		conn.SetReadLimit(maxMsgSize)
 
@@ -200,20 +212,18 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 	}
 
 	ws.m.Lock()
-	ws.offlineSessions[xctn.ID()] = wss
+	ws.sessions[xctn.ID()] = wss
 	ws.m.Unlock()
 	return wss, nil
 }
 
 func (ws *webSocketComm) Stop() {
-	for _, session := range ws.offlineSessions {
+	// inlineSession is stored in ws.sessions
+	for _, session := range ws.sessions {
 		session.Finish(cmn.ErrXactUserAbort)
 	}
-	ws.offlineSessions = nil
-	if ws.inlineSession != nil {
-		ws.inlineSession.Finish(cmn.ErrXactUserAbort)
-		ws.inlineSession = nil
-	}
+	ws.sessions = nil
+
 	ws.commCtxCancel()
 	ws.baseComm.Stop()
 }
@@ -223,26 +233,10 @@ func (ws *webSocketComm) Stop() {
 ///////////////
 
 func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error) {
-	var (
-		task = &transformTask{}
-		r    io.ReadCloser
-	)
-	task.ctrlmsg.Path = lom.ObjName
-	switch wss.msg.ArgType() {
-	case ArgTypeDefault, ArgTypeURL:
-		srcResp := lom.GetROC(latestVer, sync)
-		if srcResp.Err != nil {
-			return 0, 0, srcResp.Err
-		}
-		r = srcResp.R
-	case ArgTypeFQN:
-		if ecode, err := lomLoad(lom, wss.txctn.Kind()); err != nil {
-			return 0, ecode, err
-		}
-		task.ctrlmsg.FQN = url.PathEscape(lom.FQN)
+	task, ecode, err := wss.createTask(lom, latestVer, sync, woc)
+	if err != nil {
+		return 0, ecode, err
 	}
-
-	task.rwpair = rwpair{r, woc}
 
 	if gargs != nil {
 		task.ctrlmsg.Targs = gargs.TransformArgs
@@ -258,7 +252,11 @@ func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.Writ
 	l, c := len(wss.workCh), cap(wss.workCh)
 	wss.chanFull.Check(l, c)
 
-	// wait for the task to finish
+	// Ensure `task.done()` is called exactly once after `wss.createTask()` succeeds to unblock `task.wg.Wait()`
+	// Cases for calling `task.done()`:
+	// 1. Task completes successfully (direct put or local copy) => call with `nil` error
+	// 2. Task fails (e.g., network or I/O error) => call with the error
+	// 3. Task is drained during session finish => call with the given `errCause` on abort
 	task.wg.Add(1)
 	wss.workCh <- task
 	task.wg.Wait()
@@ -266,32 +264,71 @@ func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.Writ
 	return task.written, 0, task.err
 }
 
+func (wss *wsSession) createTask(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser) (*transformTask, int, error) {
+	task := &transformTask{txctn: wss.txctn}
+
+	task.w = woc
+	task.ctrlmsg.Path = lom.ObjName
+	switch wss.msg.ArgType() {
+	case ArgTypeDefault, ArgTypeURL:
+		srcResp := lom.GetROC(latestVer, sync)
+		if srcResp.Err != nil {
+			cos.Close(woc)
+			return nil, 0, srcResp.Err
+		}
+		task.r = srcResp.R
+	case ArgTypeFQN:
+		if ecode, err := lomLoad(lom, wss.txctn.Kind()); err != nil {
+			cos.Close(woc)
+			return nil, ecode, err
+		}
+		task.ctrlmsg.FQN = url.PathEscape(lom.FQN)
+	}
+
+	debug.IncCounter(task.txctn.ID() + "-task") // count for tasks in this session
+
+	return task, 0, nil
+}
+
 func (wss *wsSession) OfflineWrite(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error) {
 	return wss.transform(lom, latestVer, sync, woc, gargs)
 }
 
 func (wss *wsSession) Finish(errCause error) error {
+	// Note: Finish can be called from communicator's `Stop()` or TCB/TCO's finish/abort
+	if !wss.finished.CAS(false, true) {
+		return nil
+	}
+
+	wss.fincb() // self-remove from the communicator's session list
 	wss.sessionCtxCancel()
 	for _, wsConn := range wss.connections {
 		wsConn.finish(errCause)
 	}
-	drainTaskCh(wss.workCh)
+	drainTaskCh(wss.workCh, errCause)
+	debug.AssertCounterEquals(wss.txctn.ID()+"-task", 0) // all tasks should be done
+	debug.AssertCounterEquals(wss.txctn.ID()+"-conn", 0) // all connections should be closed
 	return nil
+}
+
+func (wss *wsSession) String() string {
+	return "[" + wss.msg.Name() + "]-" + wss.txctn.ID()
 }
 
 ///////////////
 // wsConnCtx //
 ///////////////
 
-func (wctx *wsConnCtx) finish(errCause error) error {
+func (wctx *wsConnCtx) finish(errCause error) {
 	if errCause != nil {
 		wctx.txctn.Abort(errCause)
 	}
+	wctx.conn.Close()
+	debug.DecCounter(wctx.txctn.ID() + "-conn")
 	if err := wctx.eg.Wait(); err != nil {
 		nlog.Errorf("error shutting down webSocketComm goroutines: %v", err)
 	}
-	drainTaskCh(wctx.transformCh)
-	return wctx.conn.Close()
+	drainTaskCh(wctx.transformCh, errCause)
 }
 
 func (wctx *wsConnCtx) writeLoop() (err error) {
@@ -363,7 +400,8 @@ func (wctx *wsConnCtx) readLoop() (err error) {
 			if err != nil {
 				// Handle benign errors that occur when the connection is closed by the ETL server
 				// These errors indicate normal closure or server shutdown and should exit the read loop without reporting the error
-				if cos.IsRetriableConnErr(err) || websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseServiceRestart) ||
+					cos.IsRetriableConnErr(err) || strings.Contains(err.Error(), "use of closed network connection") { // common errors
 					return nil
 				}
 				// For other errors, log and propagate them as they indicate unexpected issues during message reading
@@ -402,17 +440,19 @@ func (task *transformTask) done(err error) error {
 		cos.Close(task.w)
 	}
 	task.err = err
+	debug.DecCounter(task.txctn.ID() + "-task") // decrement task count for the session
 	return err
 }
 
-// Non-blocking drain of a work channel (see also "func.*drain")
-func drainTaskCh(workCh chan *transformTask) {
+// Non-blocking drain of work channel; see also transport/sendobj.go
+func drainTaskCh(workCh chan *transformTask, err error) {
 	for {
 		select {
 		case task, ok := <-workCh:
-			if ok {
-				task.done(nil)
+			if !ok {
+				return
 			}
+			task.done(err)
 		default:
 			return
 		}

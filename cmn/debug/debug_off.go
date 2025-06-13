@@ -32,3 +32,7 @@ func AssertRWMutexRLocked(_ *sync.RWMutex) {}
 func Handlers() map[string]http.HandlerFunc {
 	return nil
 }
+
+func IncCounter(_ string)                   {}
+func DecCounter(_ string)                   {}
+func AssertCounterEquals(_ string, _ int64) {}

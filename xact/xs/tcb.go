@@ -351,6 +351,11 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.prune.wait()
 	}
 
+	// finish the ETL session, if any
+	if r.transform != nil {
+		r.transform.Finish(nil)
+	}
+
 	r.sntl.cleanup()
 	r.Finish()
 

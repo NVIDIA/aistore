@@ -2,7 +2,7 @@
 
 // Package provides debug utilities
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package debug
 
@@ -139,5 +139,46 @@ func Handlers() map[string]http.HandlerFunc {
 		"/debug/pprof/heap":         pprof.Handler("heap").ServeHTTP,
 		"/debug/pprof/goroutine":    pprof.Handler("goroutine").ServeHTTP,
 		"/debug/pprof/threadcreate": pprof.Handler("threadcreate").ServeHTTP,
+	}
+}
+
+type counter struct {
+	name  string
+	value int64
+}
+
+var counterMu sync.Mutex
+var counters = make(map[string]*counter)
+
+func IncCounter(name string) {
+	counterMu.Lock()
+	c, ok := counters[name]
+	if !ok {
+		c = &counter{name: name}
+		counters[name] = c
+	}
+	c.value++
+	counterMu.Unlock()
+}
+
+func DecCounter(name string) {
+	counterMu.Lock()
+	c, ok := counters[name]
+	if !ok {
+		c = &counter{name: name}
+		counters[name] = c
+	}
+	c.value--
+	counterMu.Unlock()
+}
+
+func AssertCounterEquals(name string, expected int64) {
+	counterMu.Lock()
+	defer counterMu.Unlock()
+	c, ok := counters[name]
+	if !ok {
+		Assertf(expected == 0, "debug.counter[%s] not increased or decresed before", name)
+	} else {
+		Assertf(c.value == expected, "debug.counter[%s] expected=%d, got=%d", name, expected, c.value)
 	}
 }

@@ -113,6 +113,9 @@ func (p *tcoFactory) Start() error {
 	r.pend.m = make(map[string]*tcowi, burst)
 	r.owt = cmn.OwtCopy
 
+	p.xctn = r
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault)
+
 	if p.kind == apc.ActETLObjects {
 		r.owt = cmn.OwtTransform
 		r.copier.getROC, r.copier.xetl, r.transform, err = etl.GetOfflineTransform(p.args.Msg.Transform.Name, r)
@@ -123,9 +126,6 @@ func (p *tcoFactory) Start() error {
 			r.putWOC = r.transform.OfflineWrite
 		}
 	}
-
-	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg via SetCtlMsg later*/, p.Bck, xact.IdleDefault)
 
 	smap := core.T.Sowner().Get()
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
@@ -332,6 +332,11 @@ outer:
 				r.sntl.bcast(r.ID(), r.p.dm, err)
 			}
 		}
+	}
+
+	// finish the ETL session, if any
+	if r.transform != nil {
+		r.transform.Finish(nil)
 	}
 
 	r.fin(true /*unreg Rx*/) // TODO: compare w/ tcb quiescing
