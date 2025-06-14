@@ -363,7 +363,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
-		reader, errO := lom.NewHandle()
+		reader, errO := lom.NewHandle(false /*loaded*/)
 		if errO != nil {
 			return errO
 		}

@@ -898,7 +898,7 @@ func _getReader(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
 		}
 	}
 	debug.Assert(lom.Checksum() != nil, lom.String())
-	return lom.NewDeferROC()
+	return lom.NewDeferROC(true /*loaded*/)
 }
 
 func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {

@@ -71,8 +71,8 @@ func (r *deferROC) Close() (err error) {
 
 // is called under rlock; unlocks on fail
 // NOTE: compare w/ lom.Open() returning cos.LomReader
-func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
-	lh, err := lom.NewHandle()
+func (lom *LOM) NewDeferROC(loaded bool) (cos.ReadOpenCloser, error) {
+	lh, err := lom.NewHandle(loaded)
 	if err == nil {
 		return &deferROC{lh, lom.LIF()}, nil
 	}
@@ -107,7 +107,7 @@ func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 			}
 		}
 
-		resp.R, resp.Err = lom.NewDeferROC() // keeping lock, reading local
+		resp.R, resp.Err = lom.NewDeferROC(true) // keeping lock, reading local
 		resp.OAH = lom
 		return resp
 	}

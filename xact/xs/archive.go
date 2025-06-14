@@ -664,7 +664,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	}
 
 	lom.Lock(false)
-	lh, err := lom.NewHandle()
+	lh, err := lom.NewHandle(false /*loaded*/)
 	if err != nil {
 		lom.Unlock(false)
 		wi.r.AddErr(err, 5, cos.SmoduleXs)

@@ -129,7 +129,7 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 	)
 	if lom != nil {
 		defer core.FreeLOM(lom)
-		roc, errReader = lom.NewDeferROC() // + unlock
+		roc, errReader = lom.NewDeferROC(true /*loaded*/) // + unlock
 	} else {
 		roc, errReader = cos.NewFileHandle(fqn)
 	}

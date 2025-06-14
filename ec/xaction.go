@@ -134,7 +134,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (cos
 		return nil, err
 	}
 	lom.Lock(false)
-	reader, err := lom.NewDeferROC()
+	reader, err := lom.NewDeferROC(false /*loaded*/)
 	if err != nil {
 		return nil, err
 	}

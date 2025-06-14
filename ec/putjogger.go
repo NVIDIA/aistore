@@ -308,7 +308,7 @@ func (*putJogger) newCtx(lom *core.LOM, md *Metadata) (ctx *encodeCtx, err error
 	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
 	debug.Assert(ctx.padSize >= 0)
 
-	ctx.lh, err = lom.NewHandle()
+	ctx.lh, err = lom.NewHandle(false /*loaded*/)
 	return ctx, err
 }
 

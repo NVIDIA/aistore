@@ -55,10 +55,12 @@ var (
 	_ cos.LomReaderOpener = (*LomHandle)(nil)
 )
 
-func (lom *LOM) NewHandle() (*LomHandle, error) {
+func (lom *LOM) NewHandle(loaded bool) (*LomHandle, error) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
-	if err := lom.Load(false /*cache it*/, true); err != nil {
-		return nil, err
+	if !loaded {
+		if err := lom.Load(false /*cache it*/, true); err != nil {
+			return nil, err
+		}
 	}
 	fh, err := lom.Open()
 	if err != nil {
@@ -67,7 +69,7 @@ func (lom *LOM) NewHandle() (*LomHandle, error) {
 	return &LomHandle{LomReader: fh, lom: lom}, nil
 }
 
-func (lh *LomHandle) Open() (cos.ReadOpenCloser, error) { return lh.lom.NewHandle() }
+func (lh *LomHandle) Open() (cos.ReadOpenCloser, error) { return lh.lom.NewHandle(true) }
 
 //
 // LOM (open, close, remove) -------------------------------

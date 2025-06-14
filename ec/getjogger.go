@@ -186,7 +186,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	case *memsys.SGL:
 		srcReader = memsys.NewReader(r)
 	case *core.LomHandle:
-		srcReader, err = ctx.lom.NewHandle()
+		srcReader, err = ctx.lom.NewHandle(true /*loaded*/)
 	default:
 		debug.FailTypeCast(reader)
 		err = fmt.Errorf("unsupported reader type: %T", reader)
@@ -345,7 +345,7 @@ loop: //nolint:gocritic // keeping label for readability
 	}
 
 	ctx.lom.Lock(false)
-	reader, err := ctx.lom.NewHandle()
+	reader, err := ctx.lom.NewHandle(false)
 	if err != nil {
 		ctx.lom.Unlock(false)
 		return err

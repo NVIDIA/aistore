@@ -240,7 +240,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) erro
 
 		nameInArch := req.NameInRespArch(bck.Name, i)
 		lom.Lock(false)
-		roc, err := lom.NewDeferROC()
+		roc, err := lom.NewDeferROC(false /*loaded*/)
 		if err != nil {
 			if !req.ContinueOnErr || !cos.IsNotExist(err, 0) {
 				r.Abort(err)

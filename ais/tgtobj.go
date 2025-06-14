@@ -1778,7 +1778,11 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 	if sargs.reader == nil {
 		// migrate/replicate in-cluster lom
 		lom.Lock(false)
-		reader, err := lom.NewDeferROC()
+		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+			lom.Unlock(false)
+			return xs.CoiRes{}
+		}
+		reader, err := lom.NewDeferROC(true /*loaded*/)
 		if err != nil {
 			return xs.CoiRes{Err: err}
 		}
