@@ -23,6 +23,10 @@ const (
 	_apndFlags = os.O_APPEND | os.O_WRONLY
 )
 
+/////////////
+// errBdir //
+/////////////
+
 type errBdir struct {
 	err   error
 	cname string
@@ -35,12 +39,43 @@ func (e *errBdir) Error() string {
 	return fmt.Sprintf("%s: missing bdir [%v]", e.cname, e.err)
 }
 
+///////////////
+// LomHandle //
+///////////////
+
+type (
+	LomHandle struct {
+		cos.LomReader
+		lom *LOM
+	}
+)
+
+// interface guard
+var (
+	_ cos.LomReaderOpener = (*LomHandle)(nil)
+)
+
+func (lom *LOM) NewHandle() (*LomHandle, error) {
+	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
+	if err := lom.Load(false /*cache it*/, true); err != nil {
+		return nil, err
+	}
+	fh, err := lom.Open()
+	if err != nil {
+		return nil, err
+	}
+	return &LomHandle{LomReader: fh, lom: lom}, nil
+}
+
+func (lh *LomHandle) Open() (cos.ReadOpenCloser, error) { return lh.lom.NewHandle() }
+
 //
-// open
+// LOM (open, close, remove) -------------------------------
 //
 
 // open read-only, return a reader
-// NOTE: compare with lom.NewDeferROC() or even lom.GetROC()
+// see also: lom.NewDeferROC()
+// see also: lom.GetROC()
 func (lom *LOM) Open() (fh cos.LomReader, err error) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
 	fh, err = os.Open(lom.FQN)

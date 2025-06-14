@@ -234,6 +234,8 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		// append case (above)
 		if lmfh != nil {
 			err = wi.writer.Copy(lmfh, wi.archlom.Lsize())
+			cos.Close(lmfh)
+			wi.archlom.Unlock(false)
 			if err != nil {
 				wi.writer.Fini()
 				wi.cleanup()
@@ -582,9 +584,14 @@ func (j *jogger) do(archtask *archtask) {
 // archwi //
 ////////////
 
+// returns one of:
+// 1. (TAR opened for append, lmfh nil, and archlom not locked)
+// 2. (lmfh and archlom locked)
+// 3. error
 func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	msg := wi.msg
 	if msg.Mime == archive.ExtTar {
+		// (special)
 		err = wi.openTarForAppend()
 		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail XactArch.Begin*/ {
 			return nil, err
@@ -594,11 +601,14 @@ func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	// <extra copy>
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
 	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
+	wi.archlom.Lock(false)
 	lmfh, err = wi.archlom.Open()
 	if err != nil {
+		wi.archlom.Unlock(false)
 		return nil, err
 	}
 	if wi.wfh, err = wi.archlom.CreateWork(wi.fqn); err != nil {
+		wi.archlom.Unlock(false)
 		cos.Close(lmfh)
 		lmfh = nil
 	}
@@ -653,24 +663,29 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		}
 	}
 
-	fh, err := cos.NewFileHandle(lom.FQN)
+	lom.Lock(false)
+	lh, err := lom.NewHandle()
 	if err != nil {
+		lom.Unlock(false)
 		wi.r.AddErr(err, 5, cos.SmoduleXs)
 		return
 	}
 	if core.T.SID() != wi.tsi.ID() {
-		wi.r.doSend(lom, wi, fh)
+		wi.r.doSend(lom, wi, lh)
+		lom.Unlock(false)
 		return
 	}
 	// see Begin
 	if wi.wfh == nil {
+		lom.Unlock(false)
 		// NOTE: unexpected and unlikely - aborting
 		err = fmt.Errorf("%s: destination %q does not exist (not open)", wi.r.Name(), wi.fqn)
 		wi.r.Abort(err)
 		return
 	}
-	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh /*reader*/)
-	cos.Close(fh)
+	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, lh /*reader*/)
+	cos.Close(lh)
+	lom.Unlock(false)
 	if err == nil {
 		wi.cnt.Inc()
 	} else {

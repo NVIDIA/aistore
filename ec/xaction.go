@@ -133,11 +133,8 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (cos
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		nlog.Warningln(err)
-		return nil, err
-	}
-	reader, err := cos.NewFileHandle(lom.FQN)
+	lom.Lock(false)
+	reader, err := lom.NewDeferROC()
 	if err != nil {
 		return nil, err
 	}

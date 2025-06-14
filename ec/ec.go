@@ -358,7 +358,7 @@ func freeObject(r any) {
 		if handle != nil {
 			handle.Free()
 		}
-	case *cos.FileHandle:
+	case *core.LomHandle:
 		if handle != nil {
 			// few slices share the same handle, on error all release everything
 			_ = handle.Close()

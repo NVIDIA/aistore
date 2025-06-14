@@ -984,10 +984,11 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		return false
 	}
 	defer cancel()
-	defer cmn.HreqFree(req)
 
 	resp, err := g.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
+	cmn.HreqFree(req)
+
 	if err != nil {
 		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
 		return false
@@ -1004,6 +1005,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		poi.owt = cmn.OwtRebalance
 		poi.workFQN = workFQN
 		poi.atime = lom.ObjAttrs().Atime
+		debug.Assert(poi.atime != 0, lom.Cname(), " ", lom.ObjAttrs().String())
 		poi.cksumToUse = cksumToUse
 	}
 	ecode, erp := poi.putObject()
@@ -1776,10 +1778,6 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 	if sargs.reader == nil {
 		// migrate/replicate in-cluster lom
 		lom.Lock(false)
-		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			lom.Unlock(false)
-			return xs.CoiRes{}
-		}
 		reader, err := lom.NewDeferROC()
 		if err != nil {
 			return xs.CoiRes{Err: err}

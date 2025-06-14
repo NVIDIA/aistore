@@ -157,18 +157,18 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	}
 	coi := (*coi)(coiParams)
 
-	// TODO: given we already have the lom, the following fstat might not be necessary
+	// not opening LOM here - opening params.SrcFQN source (to be promoted)
 	fh, err := cos.NewFileHandle(lom.FQN)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, err
 		}
-		return 0, cmn.NewErrFailedTo(t, "open", lom.Cname(), err)
+		return 0, cmn.NewErrFailedTo(t, "open", params.SrcFQN, err)
 	}
 	fi, err := fh.Stat()
 	if err != nil {
 		fh.Close()
-		return 0, cmn.NewErrFailedTo(t, "fstat", lom.Cname(), err)
+		return 0, cmn.NewErrFailedTo(t, "fstat", params.SrcFQN, err)
 	}
 
 	res := coi.send(t, nil /*DM*/, lom, fh, tsi)

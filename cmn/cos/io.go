@@ -60,14 +60,6 @@ type (
 		io.Reader
 		io.ReaderAt
 	}
-	LomReader interface {
-		io.ReadCloser
-		io.ReaderAt
-	}
-	LomWriter interface {
-		io.WriteCloser
-		Sync() error
-	}
 )
 
 // readers: implementations
@@ -80,10 +72,6 @@ type (
 	nopReader struct {
 		size   int
 		offset int
-	}
-	deferRCS struct {
-		ReadCloseSizer
-		cb func()
 	}
 	ReaderArgs struct {
 		R       io.Reader
@@ -157,6 +145,22 @@ type (
 	}
 	Buffer struct {
 		b *bytes.Buffer
+	}
+)
+
+// core.LOM: reader and writer
+type (
+	LomReader interface {
+		io.ReadCloser
+		io.ReaderAt
+	}
+	LomReaderOpener interface {
+		LomReader
+		Open() (ReadOpenCloser, error)
+	}
+	LomWriter interface {
+		io.WriteCloser
+		Sync() error
 	}
 )
 
@@ -248,23 +252,6 @@ func (f *FileHandle) OpenDup() (ROCS, error)        { return NewFileHandle(f.fqn
 
 func NewSizedReader(r io.Reader, size int64) ReadSizer { return &sizedReader{r, size} }
 func (f *sizedReader) Size() int64                     { return f.size }
-
-//////////////
-// deferRCS //
-//////////////
-
-func NewDeferRCS(r ReadCloseSizer, cb func()) ReadCloseSizer {
-	if cb == nil {
-		return r
-	}
-	return &deferRCS{r, cb}
-}
-
-func (r *deferRCS) Close() (err error) {
-	err = r.ReadCloseSizer.Close()
-	r.cb()
-	return
-}
 
 ////////////////////
 // ReaderWithArgs //

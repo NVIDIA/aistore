@@ -77,7 +77,7 @@ func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
 	ctx := allocRestoreCtx()
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/, c.parent.config)
 	ctx.lom = lom
-	err = lom.Load(true /*cache it*/, false /*locked*/)
+	err = lom.Load(false /*cache it*/, false /*locked*/)
 	if os.IsNotExist(err) {
 		err = nil
 	}
@@ -185,8 +185,8 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	switch r := reader.(type) {
 	case *memsys.SGL:
 		srcReader = memsys.NewReader(r)
-	case *cos.FileHandle:
-		srcReader, err = cos.NewFileHandle(ctx.lom.FQN)
+	case *core.LomHandle:
+		srcReader, err = ctx.lom.NewHandle()
 	default:
 		debug.FailTypeCast(reader)
 		err = fmt.Errorf("unsupported reader type: %T", reader)
@@ -344,11 +344,14 @@ loop: //nolint:gocritic // keeping label for readability
 		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 	}
 
-	reader, err := cos.NewFileHandle(ctx.lom.FQN)
+	ctx.lom.Lock(false)
+	reader, err := ctx.lom.NewHandle()
 	if err != nil {
+		ctx.lom.Unlock(false)
 		return err
 	}
 	err = c.copyMissingReplicas(ctx, reader)
+	ctx.lom.Unlock(false)
 	if err != nil {
 		freeObject(reader)
 	}

@@ -33,7 +33,7 @@ type (
 	encodeCtx struct {
 		lom          *core.LOM        // replica
 		md           *Metadata        //
-		fh           *cos.FileHandle  // file handle for the replica
+		lh           *core.LomHandle  // lom handle for the replica
 		sliceSize    int64            // calculated slice size
 		padSize      int64            // zero tail of the last object's data slice
 		dataSlices   int              // the number of data slices
@@ -76,7 +76,7 @@ func allocCtx() (ctx *encodeCtx) {
 }
 
 func (ctx *encodeCtx) freeReplica() {
-	freeObject(ctx.fh)
+	freeObject(ctx.lh)
 }
 
 ///////////////
@@ -231,6 +231,10 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 		return fmt.Errorf("%v: given EC config (d=%d, p=%d), %d targets required to encode %s (have %d, %s)",
 			cmn.ErrNotEnoughTargets, ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
 	}
+	targets, err := smap.HrwTargetList(lom.UnamePtr(), reqTargets)
+	if err != nil {
+		return err
+	}
 
 	var (
 		ctMeta                = core.NewCTFromLOM(lom, fs.ECMetaType)
@@ -252,13 +256,11 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 
 	c.parent.LomAdd(lom)
 
+	lom.Lock(false)
 	ctx, err := c.newCtx(lom, md)
 	defer c.freeCtx(ctx)
 	if err != nil {
-		return err
-	}
-	targets, err := smap.HrwTargetList(ctx.lom.UnamePtr(), reqTargets)
-	if err != nil {
+		lom.Unlock(false)
 		return err
 	}
 	ctx.targets = targets[1:]
@@ -276,6 +278,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	} else {
 		err = c.splitAndDistribute(ctx)
 	}
+	lom.Unlock(false)
 	if err != nil {
 		return err
 	}
@@ -305,7 +308,7 @@ func (*putJogger) newCtx(lom *core.LOM, md *Metadata) (ctx *encodeCtx, err error
 	ctx.padSize = ctx.sliceSize*int64(ctx.dataSlices) - ctx.lom.Lsize()
 	debug.Assert(ctx.padSize >= 0)
 
-	ctx.fh, err = cos.NewFileHandle(lom.FQN)
+	ctx.lh, err = lom.NewHandle()
 	return ctx, err
 }
 
@@ -359,7 +362,7 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 
 	// broadcast the replica to the targets
 	src := &dataSource{
-		reader:   ctx.fh,
+		reader:   ctx.lh,
 		size:     ctx.lom.Lsize(),
 		metadata: ctx.md,
 		reqType:  reqPut,
@@ -412,13 +415,13 @@ func initializeSlices(ctx *encodeCtx) (err error) {
 			offset     = int64(i) * ctx.sliceSize
 		)
 		if sizeLeft < ctx.sliceSize {
-			reader = cos.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
-			cksmReader = cos.NewSectionHandle(ctx.fh, offset, sizeLeft, ctx.padSize)
+			reader = cos.NewSectionHandle(ctx.lh, offset, sizeLeft, ctx.padSize)
+			cksmReader = cos.NewSectionHandle(ctx.lh, offset, sizeLeft, ctx.padSize)
 		} else {
-			reader = cos.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
-			cksmReader = cos.NewSectionHandle(ctx.fh, offset, ctx.sliceSize, 0)
+			reader = cos.NewSectionHandle(ctx.lh, offset, ctx.sliceSize, 0)
+			cksmReader = cos.NewSectionHandle(ctx.lh, offset, ctx.sliceSize, 0)
 		}
-		ctx.slices[i] = &slice{obj: ctx.fh, reader: reader}
+		ctx.slices[i] = &slice{obj: ctx.lh, reader: reader}
 		cksmReaders[i] = cksmReader
 		sizeLeft -= ctx.sliceSize
 	}
@@ -542,7 +545,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 		return err
 	}
 
-	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.fh}
+	dataSlice := &slice{refCnt: *atomic.NewInt32(int32(ctx.dataSlices)), obj: ctx.lh}
 	// If the slice is data one - no immediate cleanup is required because this
 	// slice is just a section reader of the entire file.
 	var copyErr error

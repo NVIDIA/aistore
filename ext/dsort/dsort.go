@@ -355,7 +355,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		return errH
 	}
 
-	// If the newly created shard belongs on a different target
+	// If the newly created shard belongs to a different target
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
@@ -363,18 +363,12 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
-		// Need to make sure that the object is still there.
-		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			return err
-		}
-
-		if lom.Lsize() <= 0 {
-			goto exit
-		}
-
-		file, errO := cos.NewFileHandle(lom.FQN)
+		reader, errO := lom.NewHandle()
 		if errO != nil {
 			return errO
+		}
+		if lom.Lsize() <= 0 {
+			goto exit
 		}
 
 		o := transport.AllocSend()
@@ -392,7 +386,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 			streamWg.Done()
 		}
 		streamWg.Add(1)
-		if err := m.streams.shards.Send(o, file, si); err != nil {
+		if err := m.streams.shards.Send(o, reader, si); err != nil {
 			return err
 		}
 		streamWg.Wait()

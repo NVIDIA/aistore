@@ -72,9 +72,9 @@ func (r *deferROC) Close() (err error) {
 // is called under rlock; unlocks on fail
 // NOTE: compare w/ lom.Open() returning cos.LomReader
 func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
-	fh, err := cos.NewFileHandle(lom.FQN)
+	lh, err := lom.NewHandle()
 	if err == nil {
-		return &deferROC{fh, lom.LIF()}, nil
+		return &deferROC{lh, lom.LIF()}, nil
 	}
 	lom.Unlock(false)
 	return nil, cmn.NewErrFailedTo(T, "open", lom.Cname(), err)

@@ -239,7 +239,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) erro
 		}
 
 		nameInArch := req.NameInRespArch(bck.Name, i)
-
+		lom.Lock(false)
 		roc, err := lom.NewDeferROC()
 		if err != nil {
 			if !req.ContinueOnErr || !cos.IsNotExist(err, 0) {
