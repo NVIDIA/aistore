@@ -37,11 +37,11 @@ Here's the current list, grouped by category.
 
 | build tag | comment |
 | --- | --- |
-| `nethttp`| Use [net/http](https://pkg.go.dev/net/http) for intra-cluster transport (the default is [fasthttp](github.com/valyala/fasthttp)) |
+| `nethttp`| Use [net/http](https://pkg.go.dev/net/http) for intra-cluster transport (the default is [fasthttp](https://github.com/valyala/fasthttp)) |
 
 ## fs.Walk from the standard library
 
 | build tag | comment |
 | --- | --- |
-| `stdlibwalk`| Instead of [godirwalk](github.com/karrick/godirwalk) use `filepath.WalkDir` from the standard library |
+| `stdlibwalk`| Instead of [godirwalk](https://github.com/karrick/godirwalk) use `filepath.WalkDir` from the standard library |
 
