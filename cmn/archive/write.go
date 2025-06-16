@@ -185,8 +185,10 @@ func SetTarHeader(hdr any) {
 // tgzWriter
 
 func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
+	var err error
 	tzw.tw.baseW.init(w, cksum, opts)
-	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
+	tzw.gzw, err = gzip.NewWriterLevel(tzw.tw.wmul, gzip.BestSpeed)
+	debug.AssertNoErr(err)
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
 }
 
