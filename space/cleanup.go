@@ -519,7 +519,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 	} else {
 		// misplaced object
-		lom = lom.CloneMD(lom.FQN)
+		lom = lom.Clone()
 		j.misplaced.loms = append(j.misplaced.loms, lom)
 	}
 }

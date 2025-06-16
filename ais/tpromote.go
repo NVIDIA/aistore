@@ -99,7 +99,7 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 		if params.Cksum != nil {
 			lom.SetCksum(params.Cksum) // already computed somewhere else, use it
 		} else {
-			clone := lom.CloneMD(params.SrcFQN)
+			clone := lom.CloneTo(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(lom.CksumType(), false); err != nil {
 				core.FreeLOM(clone)
 				return 0, 0, err

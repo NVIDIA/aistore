@@ -137,25 +137,25 @@ func GetUploadMetadata(id string) (metadata map[string]string) {
 
 // remove all temp files and delete from the map
 // if completed (i.e., not aborted): store xattr
-func CleanupUpload(id, fqn string, aborted bool) (exists bool) {
+func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
+	debug.Assert(lom != nil)
 	mu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
 		mu.Unlock()
-		nlog.Warningf("fqn %s, id %s", fqn, id)
 		return false
 	}
 	delete(ups, id)
 	mu.Unlock()
 
 	if !aborted {
-		if err := storeMptXattr(fqn, mpt); err != nil {
-			nlog.Warningln("failed to xattr [", fqn, id, err, "]")
+		if err := storeMptXattr(lom, mpt); err != nil {
+			nlog.Warningln("failed to xattr [", id, lom.Cname(), err, "]")
 		}
 	}
 	for _, part := range mpt.parts {
 		if err := cos.RemoveFile(part.FQN); err != nil {
-			nlog.Errorln("failed to remove part [", fqn, id, err, "]")
+			nlog.Errorln("failed to remove part [", id, part.FQN, lom.Cname(), err, "]")
 		}
 	}
 	return true
@@ -197,7 +197,7 @@ func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int
 	mpt, ok := ups[id]
 	if !ok {
 		ecode = http.StatusNotFound
-		mpt, err = loadMptXattr(lom.FQN)
+		mpt, err = loadMptXattr(lom)
 		if err != nil || mpt == nil {
 			mu.RUnlock()
 			return nil, ecode, err

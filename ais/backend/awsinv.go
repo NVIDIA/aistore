@@ -174,7 +174,7 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 	}
 
 	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
-		nlog.Infoln(core.T.String(), "checking", ctx.Lom.String(), ctx.Lom.FQN, ctx.Lom.HrwFQN)
+		nlog.Infoln(core.T.String(), "checking", ctx.Lom.String())
 	}
 	abs := _sinceAbs(mtime, latest)
 	if abs < time.Second {
@@ -248,7 +248,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	if err == nil {
 		lom := ctx.Lom
 		if err = lom.RenameFinalize(wfqn); err == nil {
-			if err = os.Chtimes(lom.FQN, csv.mtime, csv.mtime); err == nil {
+			if err = lom.Chtimes(csv.mtime, csv.mtime); err == nil {
 				nlog.Infoln("new", invTag+":", lom.Cname(), ctx.Schema)
 
 				lom.SetSize(ctx.Size)

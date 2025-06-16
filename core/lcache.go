@@ -414,14 +414,14 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 	lom.md = *md
 
 	buf := lom.pack()
-	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+	if err = lom.SetXattr(buf); err != nil {
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		for copyFQN := range lom.md.copies {
 			if copyFQN == lom.FQN {
 				continue
 			}
-			if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
+			if err = fs.SetXattr(copyFQN, xattrLOM, buf); err != nil {
 				tstats.Inc(LcacheErrCount)
 				nlog.Errorln("set-xattr [", copyFQN, err, "]")
 				break

@@ -203,7 +203,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 }
 
 func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
-	src := lom.CloneMD(fqn)
+	src := lom.CloneTo(fqn)
 	defer FreeLOM(src)
 	if err = src.InitFQN(fqn, lom.Bucket()); err != nil {
 		return
@@ -212,8 +212,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 		return
 	}
 	// restore at default location
-	dst, err = src.Copy2FQN(lom.FQN, buf)
-	return
+	return src.Copy2FQN(lom.FQN, buf)
 }
 
 // increment the object's num copies by (well) copying the former
@@ -262,7 +261,7 @@ add:
 // recommended for copying between different buckets (compare with lom.Copy() above)
 // NOTE: `lom` source must be w-locked
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
-	dst = lom.CloneMD(dstFQN)
+	dst = lom.CloneTo(dstFQN)
 	if err = dst.InitFQN(dstFQN, nil); err == nil {
 		err = lom.copy2fqn(dst, buf)
 	}
@@ -440,4 +439,17 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, fixHrw bool) {
 	}
 	mi = lom.LeastUtilNoCopy() // NOTE: nil when not enough mountpaths
 	return mi, false
+}
+
+func (lom *LOM) MirrorPaths() []string {
+	if !lom.HasCopies() {
+		return []string{lom.mi.Path}
+	}
+	lom.Lock(false)
+	paths := make([]string, 0, len(lom.md.copies))
+	for _, mi := range lom.md.copies {
+		paths = append(paths, mi.Path)
+	}
+	lom.Unlock(false)
+	return paths
 }

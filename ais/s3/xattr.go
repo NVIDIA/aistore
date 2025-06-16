@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 const mptXattrID = "user.ais.s3-multipart"
@@ -21,7 +20,7 @@ const iniCapParts = 8
 
 func OffsetSorted(lom *core.LOM, partNum int32) (off, size int64, status int, err error) {
 	var mpt *mpt
-	if mpt, err = loadMptXattr(lom.FQN); err != nil {
+	if mpt, err = loadMptXattr(lom); err != nil {
 		return
 	}
 	if mpt == nil {
@@ -32,8 +31,8 @@ func OffsetSorted(lom *core.LOM, partNum int32) (off, size int64, status int, er
 	return
 }
 
-func loadMptXattr(fqn string) (out *mpt, err error) {
-	b, err := fs.GetXattr(fqn, mptXattrID)
+func loadMptXattr(lom *core.LOM) (out *mpt, err error) {
+	b, err := lom.GetXattrN(mptXattrID)
 	if err == nil {
 		out = &mpt{}
 		err = out.unpack(b)
@@ -45,12 +44,12 @@ func loadMptXattr(fqn string) (out *mpt, err error) {
 	return
 }
 
-func storeMptXattr(fqn string, mpt *mpt) (err error) {
+func storeMptXattr(lom *core.LOM, mpt *mpt) (err error) {
 	sort.Slice(mpt.parts, func(i, j int) bool {
 		return mpt.parts[i].Num < mpt.parts[j].Num
 	})
 	b := mpt.pack()
-	return fs.SetXattr(fqn, mptXattrID, b)
+	return lom.SetXattrN(mptXattrID, b)
 }
 
 /////////

@@ -51,7 +51,7 @@ const mdCksumTyXXHash = 1
 
 // on-disk xattr names
 const (
-	XattrLOM   = "user.ais.lom"
+	xattrLOM   = "user.ais.lom"
 	xattrChunk = "user.ais.chunk"
 )
 
@@ -148,7 +148,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		mdSize    = g.maxLmeta.Load()
 		buf, slab = g.smm.AllocSize(mdSize)
 	)
-	b, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
+	b, err = lom.GetXattr(buf)
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
@@ -157,7 +157,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
 		buf, slab = g.smm.AllocSize(xattrMaxSize)
-		b, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
+		b, err = lom.GetXattr(buf)
 		if err != nil {
 			slab.Free(buf)
 			return whingeLmeta(lom.Cname(), err)
@@ -197,7 +197,7 @@ func (lom *LOM) PersistMain() (err error) {
 	}
 	// write-immediate (default)
 	buf := lom.pack()
-	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+	if err = lom.SetXattr(buf); err != nil {
 		lom.UncacheDel()
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
@@ -225,7 +225,7 @@ func (lom *LOM) Persist() (err error) {
 	}
 
 	buf := lom.pack()
-	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
+	if err = lom.SetXattr(buf); err != nil {
 		lom.UncacheDel()
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
@@ -248,7 +248,7 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 		if copyFQN == lom.FQN {
 			continue
 		}
-		if err = fs.SetXattr(copyFQN, XattrLOM, buf); err != nil {
+		if err = fs.SetXattr(copyFQN, xattrLOM, buf); err != nil {
 			break
 		}
 	}

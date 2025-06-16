@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -16,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 const (
@@ -250,6 +252,10 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 	}
 }
 
+//
+// archive
+//
+
 // extract a single file from a (.tar, .tgz or .tar.gz, .zip, .tar.lz4) shard
 // uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
 func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
@@ -274,3 +280,13 @@ func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (cs
 	}
 	return csl, nil
 }
+
+//
+// other FQN access
+//
+
+func (lom *LOM) Chtimes(atime, mtime time.Time) (err error) { return os.Chtimes(lom.FQN, atime, mtime) }
+func (lom *LOM) GetXattr(buf []byte) ([]byte, error)        { return fs.GetXattrBuf(lom.FQN, xattrLOM, buf) }
+func (lom *LOM) GetXattrN(name string) ([]byte, error)      { return fs.GetXattr(lom.FQN, name) }
+func (lom *LOM) SetXattr(data []byte) error                 { return fs.SetXattr(lom.FQN, xattrLOM, data) }
+func (lom *LOM) SetXattrN(name string, data []byte) error   { return fs.SetXattr(lom.FQN, name, data) }

@@ -256,7 +256,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 	objName := s3.ObjName(items)
-	lom := &core.LOM{ObjName: objName}
+	lom := &core.LOM{ObjName: objName} // TODO: use core.AllocLOM()
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -375,7 +375,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	freePOI(poi)
 
 	// .6 cleanup parts - unconditionally
-	exists := s3.CleanupUpload(uploadID, lom.FQN, false /*aborted*/)
+	exists := s3.CleanupUpload(uploadID, lom, false /*aborted*/)
 	debug.Assert(exists)
 
 	if errF != nil {
@@ -453,7 +453,7 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 		}
 	}
 
-	exists := s3.CleanupUpload(uploadID, "", true /*aborted*/)
+	exists := s3.CleanupUpload(uploadID, lom, true /*aborted*/)
 	if !exists {
 		err := fmt.Errorf("upload %q does not exist", uploadID)
 		s3.WriteErr(w, r, err, http.StatusNotFound)

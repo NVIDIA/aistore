@@ -1772,7 +1772,7 @@ func (coi *coi) send(t *target, dm *bundle.DM, lom *core.LOM, reader cos.ReadOpe
 func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes) {
 	if sargs.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
-		lom = lom.CloneMD(lom.FQN)
+		lom = lom.Clone()
 	}
 
 	if sargs.reader == nil {
