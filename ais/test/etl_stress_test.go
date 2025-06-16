@@ -12,9 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
-	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
@@ -22,57 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
-
-const etlBucketTimeout = cos.Duration(3 * time.Minute)
-
-func TestETLConnectionError(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
-
-	// ETL should survive occasional failures and successfully transform all objects.
-	const timeoutFunc = `
-import random, requests, hashlib
-
-failures = {}
-
-def transform(input_bytes):
-	md5 = hashlib.md5(input_bytes).hexdigest()
-	failures_cnt = failures.get(md5, 0)
-	# Fail at most 2 times, otherwise ETL will be stopped.
-	if random.randint(0,50) == 0 and failures_cnt < 2:
-		failures[md5] = failures_cnt + 1
-		raise requests.exceptions.ConnectionError("fake connection error")
-
-	return input_bytes
-`
-
-	m := ioContext{
-		t:        t,
-		num:      10_000,
-		fileSize: cos.KiB,
-		bck:      cmn.Bck{Name: "etl_build_connection_err", Provider: apc.AIS},
-	}
-
-	tlog.Logln("Preparing source bucket")
-	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
-
-	m.init(true /*cleanup*/)
-	m.puts()
-
-	msg := etl.InitCodeMsg{
-		InitMsgBase: etl.InitMsgBase{EtlName: "etl-build-conn-err", InitTimeout: etlBucketTimeout},
-		Code:        []byte(timeoutFunc),
-		Runtime:     runtime.Py39,
-		ChunkSize:   0,
-	}
-	msg.Funcs.Transform = "transform"
-
-	_ = tetl.InitCode(t, baseParams, &msg)
-
-	bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
-	testETLBucket(t, baseParams, msg.Name(), &m, bckTo, time.Duration(etlBucketTimeout),
-		true /* skip byte-count check*/, false /* remote src evicted */, nil /*transform*/)
-}
 
 func TestETLBucketAbort(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
@@ -147,11 +94,6 @@ func TestETLBigBucket(t *testing.T) {
 	// The test takes a lot of time if it's run against a single target deployment.
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true, MinTargets: 2})
 
-	const echoPythonTransform = `
-def transform(input_bytes):
-	return input_bytes
-`
-
 	var (
 		bckFrom = cmn.Bck{Provider: apc.AIS, Name: "etlbig"}
 		bckTo   = cmn.Bck{Provider: apc.AIS, Name: "etlbigout-" + trand.String(5)}
@@ -166,31 +108,10 @@ def transform(input_bytes):
 
 		tests = []struct {
 			name        string
-			ty          string
 			etlSpecName string
-			etlCodeMsg  etl.InitCodeMsg
 		}{
-			{name: "spec-echo-python", ty: etl.SpecType, etlSpecName: tetl.Echo},
-			{name: "spec-echo-golang", ty: etl.SpecType, etlSpecName: tetl.EchoGolang},
-
-			{
-				name: "code-echo-py313",
-				ty:   etl.CodeType,
-				etlCodeMsg: etl.InitCodeMsg{
-					Code:      []byte(echoPythonTransform),
-					Runtime:   runtime.Py313,
-					ChunkSize: 0,
-				},
-			},
-			{
-				name: "code-echo-py310",
-				ty:   etl.CodeType,
-				etlCodeMsg: etl.InitCodeMsg{
-					Code:      []byte(echoPythonTransform),
-					Runtime:   runtime.Py310,
-					ChunkSize: 0,
-				},
-			},
+			{name: "spec-echo-python", etlSpecName: tetl.Echo},
+			{name: "spec-echo-golang", etlSpecName: tetl.EchoGolang},
 		}
 	)
 
@@ -210,21 +131,7 @@ def transform(input_bytes):
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
-			switch test.ty {
-			case etl.SpecType:
-				etlName = test.etlSpecName
-				_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpull, etl.ArgTypeDefault)
-			case etl.CodeType:
-				etlName = test.name
-				{
-					test.etlCodeMsg.EtlName = etlName
-					test.etlCodeMsg.InitTimeout = etlBucketTimeout
-					test.etlCodeMsg.Funcs.Transform = "transform"
-				}
-				_ = tetl.InitCode(t, baseParams, &test.etlCodeMsg)
-			default:
-				debug.Assert(false, test.ty)
-			}
+			_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
 			t.Cleanup(func() {
 				tetl.StopAndDeleteETL(t, baseParams, etlName)
 				tetl.WaitForContainersStopped(t, baseParams)

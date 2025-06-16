@@ -332,18 +332,8 @@ func showETLJobDetails(c *cli.Context, etlInfo *etl.Info) {
 		options = append(options, "arg-type: "+argType)
 	}
 
-	switch initMsg := msg.(type) {
-	case *etl.InitCodeMsg:
-		if initMsg.Runtime != "" {
-			options = append(options, "runtime: "+initMsg.Runtime)
-		}
-		if initMsg.ChunkSize > 0 {
-			options = append(options, "chunk-size: "+cos.ToSizeIEC(initMsg.ChunkSize, 0))
-		}
-	case *etl.ETLSpecMsg:
-		if initMsg.Runtime.Image != "" {
-			options = append(options, "image: "+initMsg.Runtime.Image)
-		}
+	if initMsg, ok := msg.(*etl.ETLSpecMsg); ok {
+		options = append(options, "image: "+initMsg.Runtime.Image)
 	}
 
 	if initTimeout, objTimeout := msg.Timeouts(); initTimeout > 0 || objTimeout > 0 {
@@ -429,13 +419,6 @@ func printETLDetailsFromMsg(c *cli.Context, msg etl.InitMsg) error {
 	fmt.Fprintln(c.App.Writer, fblue(etl.ArgType+": "), msg.ArgType())
 
 	switch initMsg := msg.(type) {
-	case *etl.InitCodeMsg:
-		fmt.Fprintln(c.App.Writer, fblue(etl.Runtime+": "), initMsg.Runtime)
-		fmt.Fprintln(c.App.Writer, fblue(etl.Code+": "))
-		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
-		fmt.Fprintln(c.App.Writer, fblue(etl.Deps+": "), string(initMsg.Deps))
-		fmt.Fprintln(c.App.Writer, fblue(etl.ChunkSize+": "), initMsg.ChunkSize)
-		return nil
 	case *etl.InitSpecMsg:
 		fmt.Fprintln(c.App.Writer, fblue(etl.Spec+": "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))

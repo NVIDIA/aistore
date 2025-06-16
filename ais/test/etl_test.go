@@ -7,7 +7,6 @@ package integration_test
 import (
 	"bytes"
 	cryptorand "crypto/rand"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -31,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
-	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -43,6 +41,7 @@ import (
 
 	"github.com/NVIDIA/go-tfdata/tfdata/core"
 	onexxh "github.com/OneOfOne/xxhash"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -715,113 +714,6 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 	}
 }
 
-func TestETLInitCode(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
-
-	const (
-		md5 = `
-import hashlib
-
-def transform(input_bytes):
-    md5 = hashlib.md5()
-    md5.update(input_bytes)
-    return md5.hexdigest().encode()
-`
-		echo = `
-def transform(reader, w):
-    for chunk in reader:
-        w.write(chunk)
-`
-
-		md5IO = `
-import hashlib
-import sys
-
-md5 = hashlib.md5()
-chunk = sys.stdin.buffer.read()
-md5.update(chunk)
-sys.stdout.buffer.write(md5.hexdigest().encode())
-`
-
-		numpy = `
-import numpy as np
-
-def transform(input_bytes: bytes) -> bytes:
-    x = np.array([[0, 1], [2, 3]], dtype='<u2')
-    return x.tobytes()
-`
-		numpyDeps = `numpy==1.24.2`
-	)
-
-	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-
-		m = ioContext{
-			t:         t,
-			num:       10,
-			fileSize:  512,
-			fixedSize: true,
-			bck:       cmn.Bck{Name: "etl_build", Provider: apc.AIS},
-		}
-
-		tests = []struct {
-			etlName   string
-			code      string
-			deps      string
-			runtime   string
-			commType  string
-			chunkSize int64
-			transform transformFunc
-		}{
-			{etlName: "simple-py39", code: md5, deps: "", runtime: runtime.Py39, transform: tetl.MD5Transform},
-			{etlName: "simple-py39-stream", code: echo, deps: "", runtime: runtime.Py39, transform: tetl.EchoTransform, chunkSize: 64},
-			{etlName: "with-deps-py311", code: numpy, deps: numpyDeps, runtime: runtime.Py311, transform: tetl.NumpyTransform},
-			{etlName: "simple-py310-io", code: md5IO, deps: "", runtime: runtime.Py310, commType: etl.HpushStdin, transform: tetl.MD5Transform},
-		}
-	)
-
-	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
-
-	m.init(true /*cleanup*/)
-
-	m.puts()
-
-	for _, testType := range []string{"etl_object", "etl_bucket"} {
-		for _, test := range tests {
-			t.Run(testType+"__"+test.etlName, func(t *testing.T) {
-				msg := etl.InitCodeMsg{
-					InitMsgBase: etl.InitMsgBase{
-						EtlName:     test.etlName,
-						CommTypeX:   test.commType,
-						InitTimeout: etlBucketTimeout,
-					},
-					Code:      []byte(test.code),
-					Deps:      []byte(test.deps),
-					Runtime:   test.runtime,
-					ChunkSize: test.chunkSize,
-				}
-				msg.Funcs.Transform = "transform"
-
-				_ = tetl.InitCode(t, baseParams, &msg)
-
-				switch testType {
-				case "etl_object":
-					t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
-					testETLObject(t, test.etlName, "", "", "", test.transform, tools.FilesEqual)
-				case "etl_bucket":
-					bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
-					testETLBucket(t, baseParams, test.etlName, &m, bckTo, time.Minute,
-						false /*skip checking byte counts*/, false /* remote src evicted */, nil /*transform*/)
-				default:
-					panic(testType)
-				}
-			})
-		}
-	}
-}
-
 func TestETLFQN(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
@@ -1135,7 +1027,7 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 	}
 }
 
-func TestETLPodInitCodeFailure(t *testing.T) {
+func TestETLPodInitClassFailure(t *testing.T) {
 	var (
 		proxyURL           = tools.RandomProxyURL(t)
 		baseParams         = tools.BaseAPIParams(proxyURL)
@@ -1148,135 +1040,53 @@ func TestETLPodInitCodeFailure(t *testing.T) {
 	if !testing.Short() {
 		failureTestTimeout = cos.Duration(time.Minute * 3)
 	}
+
 	const (
-		invalidFuncBody = `
-def transform(input_bytes):
+		classPayload        = "ETL_CLASS_PAYLOAD"
+		packages            = "PACKAGES"
+		py310               = "aistorage/runtime_python:3.10"
+		py311               = "aistorage/runtime_python:3.11"
+		invalidClassPayload = `
 	invalid_code_function_body...
-`
-		echo = `
-def transform(input_bytes):
-	return input_bytes
-`
-		invalidModuleImport = `
-import torch
-def transform(input_bytes):
-	return input_bytes
-`
-		undefinedTransformFunc = `
-def not_transform_func(input_bytes):
-	return input_bytes
-`
-		invalidDeps = `numpy==invalid.version.number`
+	`
 	)
 
 	tests := []struct {
 		etlName      string
-		code         string
 		deps         string
+		code         string
 		runtime      string
 		commType     string
 		onlyLong     bool
 		expectedErrs []string
 	}{
-		{etlName: "invalid-dependency", code: echo, deps: invalidDeps, runtime: runtime.Py310, onlyLong: true, expectedErrs: []string{"No matching distribution found for numpy==invalid.version.number"}},
-		{etlName: "invalid-module-import", code: invalidModuleImport, deps: "", runtime: runtime.Py311, onlyLong: true, expectedErrs: []string{"ModuleNotFoundError"}},
-		{etlName: "invalid-transform-function-body", code: invalidFuncBody, deps: "", runtime: runtime.Py310, onlyLong: true, expectedErrs: []string{"SyntaxError", "invalid_code_function_body..."}},
-		{etlName: "undefined-transform-function", code: undefinedTransformFunc, deps: "", runtime: runtime.Py312, onlyLong: true, expectedErrs: []string{"module 'function' has no attribute 'transform'"}},
+		{etlName: "invalid-class-payload", deps: "", code: invalidClassPayload, runtime: py311, expectedErrs: []string{"Failed to decode ETL class payload"}},
+		{etlName: "empty-class-payload", deps: "", code: "", runtime: py311, expectedErrs: []string{"ETL_CLASS_PAYLOAD is not set"}},
 	}
 	for _, test := range tests {
 		t.Run(test.etlName, func(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
-			msg := etl.InitCodeMsg{
+			msg := etl.ETLSpecMsg{
 				InitMsgBase: etl.InitMsgBase{
 					EtlName:     test.etlName,
 					CommTypeX:   test.commType,
 					InitTimeout: failureTestTimeout,
 				},
-				Code:    []byte(test.code),
-				Deps:    []byte(test.deps),
-				Runtime: test.runtime,
+				Runtime: etl.RuntimeSpec{
+					Image:   test.runtime,
+					Command: []string{"python", "bootstrap.py"},
+					Env: []corev1.EnvVar{
+						{Name: packages, Value: test.deps},
+						{Name: classPayload, Value: test.code},
+					},
+				},
 			}
-			msg.Funcs.Transform = "transform"
 
 			_, err := api.ETLInit(baseParams, &msg)
+			tlog.Logfln(err.Error())
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
 
 			testETLAllErrors(t, err, test.expectedErrs...)
-		})
-	}
-}
-
-func TestETLPodRuntimeFailure(t *testing.T) {
-	var (
-		proxyURL    = tools.RandomProxyURL(t)
-		baseParams  = tools.BaseAPIParams(proxyURL)
-		bck         = cmn.Bck{Provider: apc.AIS, Name: "etl-test-runtime-failure"}
-		exitCode    = "204"
-		xactTimeout = time.Minute
-	)
-
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
-
-	const failureTransformFunc = `
-def transform(input_bytes):
-	import sys
-	import os
-	print("Transform Runtime Error", file=sys.stderr)
-	os._exit(<EXIT_CODE>)
-	return input_bytes
-`
-	tests := []struct {
-		etlName      string
-		runtime      string
-		expectedErrs []string
-	}{
-		{etlName: "init-code-py311-hpush", runtime: runtime.Py311, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
-		{etlName: "init-code-py312-hpush", runtime: runtime.Py312, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
-		{etlName: "init-code-py313-hpush", runtime: runtime.Py313, expectedErrs: []string{"Transform Runtime Error", "exitCode: " + exitCode}},
-	}
-
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-	objName := trand.String(5)
-	tlog.Logln("PUT object " + objName)
-	reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
-	tassert.CheckFatal(t, err)
-
-	_, err = api.PutObject(&api.PutArgs{
-		BaseParams: baseParams,
-		Bck:        bck,
-		ObjName:    objName,
-		Reader:     reader,
-	})
-	tassert.CheckFatal(t, err)
-
-	for _, test := range tests {
-		t.Run(test.etlName, func(t *testing.T) {
-			msg := etl.InitCodeMsg{
-				InitMsgBase: etl.InitMsgBase{
-					EtlName:     test.etlName,
-					CommTypeX:   etl.Hpush, // TODO: enable runtime error retrieval for hpull in inline transform calls
-					InitTimeout: etlBucketTimeout,
-				},
-				Code:    []byte(strings.Replace(failureTransformFunc, "<EXIT_CODE>", exitCode, 1)),
-				Runtime: test.runtime,
-			}
-			msg.Funcs.Transform = "transform"
-
-			xid := tetl.InitCode(t, baseParams, &msg)
-			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.etlName) })
-
-			bf := bytes.NewBuffer(nil)
-			tlog.Logf("Use ETL[%s] to read transformed object\n", test.etlName)
-			_, err = api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: test.etlName}, bck, objName, bf)
-			io.ReadAll(bf)
-			testETLAllErrors(t, err, test.expectedErrs...)
-
-			tlog.Logf("Get ETL[%s] abort error message from xid %s\n", test.etlName, xid)
-			xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLInline, Timeout: xactTimeout}
-			if status, err := api.WaitForXactionIC(baseParams, &xargs); err != nil {
-				testETLAllErrors(t, errors.New(status.ErrMsg), test.expectedErrs...)
-			}
 		})
 	}
 }

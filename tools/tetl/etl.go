@@ -364,27 +364,6 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 	return
 }
 
-func InitCode(t *testing.T, bp api.BaseParams, msg *etl.InitCodeMsg) (xid string) {
-	id, err := api.ETLInit(bp, msg)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, cos.IsValidUUID(id), "expected valid xaction ID, got %q", xid)
-	xid = id
-
-	// reread `InitMsg` and compare with the specified
-	details, err := api.ETLGetDetail(bp, msg.Name(), "")
-	tassert.CheckFatal(t, err)
-
-	initCode := details.InitMsg.(*etl.InitCodeMsg)
-	tassert.Errorf(t, initCode.Name() == msg.Name(), "expected etlName %q != %q", msg.Name(), initCode.Name())
-	tassert.Errorf(t, msg.CommType() == "" || initCode.CommType() == msg.CommType(),
-		"expected communicator type %s != %s", msg.CommType(), initCode.CommType())
-	tassert.Errorf(t, msg.Runtime == initCode.Runtime, "expected runtime %s != %s", msg.Runtime, initCode.Runtime)
-	tassert.Errorf(t, bytes.Equal(msg.Code, initCode.Code), "ETL codes differ")
-	tassert.Errorf(t, bytes.Equal(msg.Deps, initCode.Deps), "ETL dependencies differ")
-
-	return
-}
-
 func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg) string {
 	xid, err := api.ETLBucket(bp, bckFrom, bckTo, msg)
 	tassert.CheckFatal(t, err)

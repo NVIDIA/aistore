@@ -104,8 +104,7 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	e.ETLs = make(ETLs, len(jsonMD.ETLs))
 	for k, v := range jsonMD.ETLs {
 		switch v.Type {
-		case CodeType:
-			e.ETLs[k] = &InitCodeMsg{}
+		case CodeType: // do nothing
 		case SpecType:
 			e.ETLs[k] = &InitSpecMsg{}
 		case ETLSpecType:

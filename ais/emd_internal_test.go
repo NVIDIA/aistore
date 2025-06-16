@@ -21,12 +21,14 @@ import (
 
 func TestEtlMDDeepCopy(t *testing.T) {
 	etlMD := newEtlMD()
-	etlMD.Add(&etl.InitCodeMsg{
+	etlMD.Add(&etl.ETLSpecMsg{
 		InitMsgBase: etl.InitMsgBase{
-			EtlName:   "init-code",
+			EtlName:   "test-spec",
 			CommTypeX: etl.Hpush,
 		},
-		Code: []byte("print('hello')"),
+		Runtime: etl.RuntimeSpec{
+			Image: "test-image",
+		},
 	})
 	clone := etlMD.clone()
 	s1 := string(cos.MustMarshal(etlMD))
@@ -68,12 +70,14 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 			for i := range 5 {
 				var msg etl.InitMsg
 				if initType == etl.CodeType {
-					msg = &etl.InitCodeMsg{
+					msg = &etl.ETLSpecMsg{
 						InitMsgBase: etl.InitMsgBase{
-							EtlName:   fmt.Sprintf("init-code-%d", i),
+							EtlName:   "test-spec",
 							CommTypeX: etl.Hpush,
 						},
-						Code: []byte(fmt.Sprintf("print('hello-%d')", i)),
+						Runtime: etl.RuntimeSpec{
+							Image: "test-image",
+						},
 					}
 				} else {
 					msg = &etl.InitSpecMsg{
@@ -126,12 +130,14 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 								Signature: signature,
 							}
 							clone := etlMD.clone()
-							msg := &etl.InitCodeMsg{
+							msg := &etl.ETLSpecMsg{
 								InitMsgBase: etl.InitMsgBase{
-									EtlName:   "init-code-" + cos.GenTie(),
+									EtlName:   "test-spec",
 									CommTypeX: etl.Hpush,
 								},
-								Code: []byte("print('hello')"),
+								Runtime: etl.RuntimeSpec{
+									Image: "test-image",
+								},
 							}
 
 							// Add bucket and save.

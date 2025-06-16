@@ -7,7 +7,6 @@ package etl
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -140,7 +139,7 @@ func (e *Aborter) ListenSmapChanged() {
 	}()
 }
 
-// (common for both `InitCode`, `InitSpec`, and `ETLSpec` flows)
+// (common for both `InitSpec` and `ETLSpec` flows)
 func Init(msg InitMsg, xid, secret string) (core.Xact, error) {
 	config := cmn.GCO.Get()
 	podName, svcName, xctn, err := start(msg, xid, secret, config)
@@ -152,39 +151,6 @@ func Init(msg InitMsg, xid, secret string) (core.Xact, error) {
 		nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", msg.Name(), msg, podName, svcName)
 	}
 	return xctn, nil
-}
-
-// generate (from => to) replacements for podspec.yaml
-func fromToPairs(msg *InitCodeMsg) (ftp []string) {
-	var (
-		chunk string
-		flags string
-		name  = msg.Name()
-	)
-	ftp = make([]string, 0, 16)
-	ftp = append(ftp, "<NAME>", name, "<COMM_TYPE>", msg.CommTypeX, "<ARG_TYPE>", msg.ArgTypeX)
-
-	// chunk == 0 means no chunks (and no streaming) - ie.,
-	// reading the entire payload in memory and then transforming in one shot
-	if msg.ChunkSize > 0 {
-		chunk = "\"" + strconv.FormatInt(msg.ChunkSize, 10) + "\""
-	}
-	ftp = append(ftp, "<CHUNK_SIZE>", chunk)
-
-	if msg.Flags > 0 {
-		flags = "\"" + strconv.FormatInt(msg.Flags, 10) + "\""
-	}
-	ftp = append(ftp, "<FLAGS>", flags, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
-
-	switch msg.CommTypeX {
-	case Hpush, Hpull:
-		ftp = append(ftp, "<COMMAND>", "['sh', '-c', 'python /server.py']")
-	case HpushStdin:
-		ftp = append(ftp, "<COMMAND>", "['python /code/code.py']")
-	default:
-		debug.Assert(false, msg.CommTypeX)
-	}
-	return
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all

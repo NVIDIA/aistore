@@ -689,7 +689,7 @@ test:short:python-etl:
     - make python_etl_tests
 
 
-#  e.g. RE: "ETLBucket|ETLConnectionError|ETLInitCode" (or any other regex to select tests)
+#  e.g. RE: "ETLBucket|ETLFQN" (or any other regex to select tests)
 test:short:assorted:k8s:
   extends: .test_k8s_short_template
   timeout: 35m

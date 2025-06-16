@@ -5,7 +5,6 @@
 package etl
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -15,10 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/ext/etl/runtime"
 
 	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
@@ -40,14 +37,8 @@ const (
 	ArgType           = "ARG_TYPE"
 	DirectPut         = "DIRECT_PUT"
 
-	// `InitCodeMsg` fields
+	// `InitSpecMsg` fields
 	Spec = "SPEC"
-
-	// `InitCodeMsg` fields
-	Runtime   = "RUNTIME"
-	Code      = "CODE"
-	Deps      = "DEPENDENCIES"
-	ChunkSize = "CHUNK_SIZE"
 
 	// `ETLSpecMsg` fields
 	Image   = "IMAGE"
@@ -149,29 +140,6 @@ type (
 		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
 	}
 
-	// ========================================================================================
-	// InitCodeMsg carries the name of the transforming function;
-	// the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called
-	// by the `Runtime` container (see etl/runtime/all.go for all supported pre-built runtimes);
-	// ChunkSize:
-	//     0 (zero) - read the entire payload in memory and then transform it in one shot;
-	//     > 0      - use chunk-size buffering and transform incrementally, one chunk at a time
-	// Flags:
-	//     bitwise flags: (streaming | debug | strict | ...) future enhancements
-	// =========================================================================================
-	InitCodeMsg struct {
-		Runtime string `json:"runtime"`
-		Funcs   struct {
-			Transform string `json:"transform"`
-		}
-		Code []byte `json:"code"` // cannot be omitted
-
-		Deps []byte `json:"dependencies"`
-		InitMsgBase
-		ChunkSize int64 `json:"chunk_size"`
-		Flags     int64 `json:"flags"`
-	}
-
 	WebsocketCtrlMsg struct {
 		Daddr string `json:"dst_addr,omitempty"`
 		Targs string `json:"etl_args,omitempty"`
@@ -233,7 +201,6 @@ var (
 
 // interface guard
 var (
-	_ InitMsg = (*InitCodeMsg)(nil)
 	_ InitMsg = (*InitSpecMsg)(nil)
 	_ InitMsg = (*ETLSpecMsg)(nil)
 )
@@ -248,13 +215,8 @@ func (m *InitMsgBase) Timeouts() (initTimeout, objTimeout cos.Duration) {
 	return m.InitTimeout, m.ObjTimeout
 }
 
-func (*InitCodeMsg) MsgType() string { return CodeType }
 func (*InitSpecMsg) MsgType() string { return SpecType }
 func (*ETLSpecMsg) MsgType() string  { return ETLSpecType }
-
-func (m *InitCodeMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s-%s], timeout=(%v, %v)", CodeType, m.Name(), m.CommType(), m.ArgType(), m.Runtime, m.InitTimeout.D(), m.ObjTimeout.D())
-}
 
 func (m *InitSpecMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", SpecType, m.Name(), m.CommType(), m.ArgType(), m.InitTimeout.D(), m.ObjTimeout.D())
@@ -264,42 +226,25 @@ func (e *ETLSpecMsg) String() string {
 	return fmt.Sprintf("init-%s[%s-%s-%s], env=%s, timeout=(%v, %v)", ETLSpecType, e.Name(), e.CommType(), e.ArgType(), e.FormatEnv(), e.InitTimeout.D(), e.ObjTimeout.D())
 }
 
-func UnmarshalInitMsg(b []byte) (msg InitMsg, err error) {
+func UnmarshalInitMsg(b []byte) (InitMsg, error) {
 	// try parsing it as ETLSpecMsg first
 	var etlSpec ETLSpecMsg
-	if err = jsoniter.Unmarshal(b, &etlSpec); err == nil {
+	if err := jsoniter.Unmarshal(b, &etlSpec); err == nil {
 		if etlSpec.Validate() == nil {
 			return &etlSpec, nil
 		}
 	}
 
-	// if fail, try parsing it as InitSpecMsg or InitCodeMsg
-	var msgInf map[string]json.RawMessage
-	if err = jsoniter.Unmarshal(b, &msgInf); err != nil {
-		return nil, err
+	// if fail, try parsing it as InitSpecMsg
+	var podSpec InitSpecMsg
+	if err := jsoniter.Unmarshal(b, &podSpec); err == nil {
+		return &podSpec, err
 	}
 
-	_, hasCode := msgInf[CodeType]
-	_, hasSpec := msgInf[SpecType]
-
-	if hasCode && hasSpec {
-		return nil, fmt.Errorf("invalid etl.InitMsg: both '%s' and '%s' fields are present", CodeType, SpecType)
-	}
-
-	if hasCode {
-		msg = &InitCodeMsg{}
-		err = jsoniter.Unmarshal(b, msg)
-		return msg, err
-	}
-	if hasSpec {
-		msg = &InitSpecMsg{}
-		err = jsoniter.Unmarshal(b, msg)
-		return msg, err
-	}
-	return nil, fmt.Errorf("invalid etl.InitMsg: %+v", msgInf)
+	return nil, fmt.Errorf("invalid etl.InitMsg: %+v", podSpec)
 }
 
-func (m *InitMsgBase) validate(detail string) error {
+func (m *InitMsgBase) Validate(detail string) error {
 	const ferr = "%v [%s]"
 
 	if err := k8s.ValidateEtlName(m.EtlName); err != nil {
@@ -365,31 +310,6 @@ func (m *InitMsgBase) validate(detail string) error {
 	return nil
 }
 
-func (m *InitCodeMsg) Validate() error {
-	if err := m.InitMsgBase.validate(m.String()); err != nil {
-		return err
-	}
-
-	if len(m.Code) == 0 {
-		return fmt.Errorf("source code is empty (%q)", m.Runtime)
-	}
-	if m.Runtime == "" {
-		return fmt.Errorf("runtime is not specified (comm-type %q)", m.CommTypeX)
-	}
-	if _, ok := runtime.Get(m.Runtime); !ok {
-		return fmt.Errorf("unsupported runtime %q (supported: %v)", m.Runtime, runtime.GetNames())
-	}
-
-	if m.Funcs.Transform == "" {
-		return fmt.Errorf("transform function cannot be empty (comm-type %q, funcs %+v)", m.CommTypeX, m.Funcs)
-	}
-	if m.ChunkSize < 0 || m.ChunkSize > cos.MiB {
-		return fmt.Errorf("chunk-size %d is invalid, expecting 0 <= chunk-size <= MiB (%q, comm-type %q)",
-			m.ChunkSize, m.CommTypeX, m.Runtime)
-	}
-	return nil
-}
-
 func (m *InitSpecMsg) Validate() error {
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 
@@ -435,7 +355,7 @@ func (m *InitSpecMsg) Validate() error {
 		}
 	}
 
-	return m.InitMsgBase.validate(m.String())
+	return m.InitMsgBase.Validate(m.String())
 }
 
 func (e *ETLSpecMsg) Validate() error {
@@ -443,7 +363,7 @@ func (e *ETLSpecMsg) Validate() error {
 	if e.Runtime.Image == "" {
 		return cmn.NewErrETLf(errCtx, "runtime.image must be specified")
 	}
-	return e.InitMsgBase.validate(e.String())
+	return e.InitMsgBase.Validate(e.String())
 }
 
 // ParsePodSpec parses `m.Spec` into a Kubernetes Pod object.
@@ -458,28 +378,6 @@ func (m *InitSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
 		return nil, errors.New("expected pod spec, got: " + kind)
 	}
 	return pod, nil
-}
-
-func (m *InitCodeMsg) ParsePodSpec() (*corev1.Pod, error) {
-	var (
-		ftp      = fromToPairs(m)
-		replacer = strings.NewReplacer(ftp...)
-	)
-	r, exists := runtime.Get(m.Runtime)
-	debug.Assert(exists, m.Runtime) // must've been checked by proxy
-
-	podSpec := replacer.Replace(r.PodSpec())
-
-	m.Env = append(m.Env,
-		corev1.EnvVar{Name: r.CodeEnvName(), Value: string(m.Code)},
-		corev1.EnvVar{Name: r.DepsEnvName(), Value: string(m.Deps)},
-	)
-
-	msg := &InitSpecMsg{
-		Spec:        cos.UnsafeB(podSpec),
-		InitMsgBase: m.InitMsgBase,
-	}
-	return msg.ParsePodSpec()
 }
 
 func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {

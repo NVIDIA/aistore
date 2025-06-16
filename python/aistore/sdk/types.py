@@ -399,34 +399,6 @@ class InitSpecETLArgs(InitETLArgs):
         }
 
 
-class InitCodeETLArgs(InitETLArgs):
-    """
-    Represents the set of args the sdk will pass to AIStore when making a request to initialize an ETL with code
-    """
-
-    runtime: str
-    dependencies: str
-    functions: Dict[str, str]
-    code: str
-    chunk_size: int = None
-
-    def as_dict(self):
-        dict_rep = {
-            "name": self.name,
-            "runtime": self.runtime,
-            "communication": f"{self.comm_type}://",
-            "init_timeout": self.init_timeout,
-            "obj_timeout": self.obj_timeout,
-            "funcs": self.functions,
-            "code": self.code,
-            "dependencies": self.dependencies,
-            "argument": self.arg_type,
-        }
-        if self.chunk_size:
-            dict_rep["chunk_size"] = self.chunk_size
-        return dict_rep
-
-
 class ETLInitMsg(BaseModel):
     """
     Represents the API message structure for initializing an ETL

@@ -402,6 +402,8 @@ func (b *etlBootstrapper) _setPodEnv() {
 				Value: v.Value,
 			})
 		}
+		// Reference: https://kubernetes.io/docs/tasks/debug/debug-application/determine-reason-pod-failure/#customizing-the-termination-message
+		containers[idx].TerminationMessagePolicy = "FallbackToLogsOnError"
 	}
 	for idx := range b.pod.Spec.InitContainers {
 		for _, v := range b.msg.GetEnv() {
@@ -410,6 +412,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 				Value: v.Value,
 			})
 		}
+		b.pod.Spec.InitContainers[idx].TerminationMessagePolicy = "FallbackToLogsOnError"
 	}
 }
 
