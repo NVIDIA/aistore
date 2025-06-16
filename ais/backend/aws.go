@@ -33,6 +33,8 @@ import (
 	"github.com/NVIDIA/aistore/tracing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/ratelimit"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -874,11 +876,18 @@ func _cid(profile, region, endpoint string) string {
 
 // loadConfig create config using default creds from ~/.aws/credentials and environment variables.
 func loadConfig(endpoint, profile string) (aws.Config, error) {
+	// Disable SDK rate limiting to rely on configured backend.rate_limit
+	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
+		o.RateLimiter = ratelimit.None
+	})
 	// NOTE: The AWS SDK for Go v2, uses lower case header maps by default.
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithHTTPClient(tracing.NewTraceableClient(cmn.NewClient(cmn.TransportArgs{}))),
 		config.WithSharedConfigProfile(profile),
+		config.WithRetryer(func() aws.Retryer {
+			return retryConfig
+		}),
 	)
 	if err != nil {
 		return cfg, err
