@@ -1,3 +1,6 @@
+ais ls
+ais ls --all
+
 ais archive gen-shards "ais://$BUCKET_1/tmp/shard-{0..4}.tar" --fcount 1 --fsize 1KB --tform GNU --num-workers 1 --cleanup // IGNORE
 ais ls ais://$BUCKET_1
 ais ls ais://$BUCKET_1/
