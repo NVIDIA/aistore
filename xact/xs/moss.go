@@ -8,6 +8,7 @@ package xs
 import (
 	"archive/tar"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -32,6 +33,21 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+/*
+client → proxy → designated-target (TD)
+                   │
+                   ├── basewi.next()      ← local HRW entries
+                   │
+                   ├── shared-dm.recvd[i] = ...     ← entries from remote targets via recv()
+                   │
+                   └── stream TAR         ← in-order via flushMaybe()
+
+other-targets (T1..Tn)
+    └── Send(req, smap, TD)
+           └── for i where HRW(i) == self:
+                    shared-dm.Send(obj_i, hdr.Opaque = TD.UUID + i) → TD
+*/
 
 // TODO -- FIXME:
 // - recv() and generally, multi-target
@@ -94,8 +110,9 @@ const (
 
 // interface guard
 var (
-	_ core.Xact      = (*XactMoss)(nil)
-	_ xreg.Renewable = (*mossFactory)(nil)
+	_ xreg.Renewable     = (*mossFactory)(nil)
+	_ core.Xact          = (*XactMoss)(nil)
+	_ transport.Receiver = (*XactMoss)(nil)
 )
 
 func (*mossFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
@@ -122,21 +139,28 @@ func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
 	// NOTE: recv() readiness - preallocate all required empty slots
-	r.recvd = make([]mossInRecv, len(req.In))
+	smap := core.T.Sowner().Get()
+	if nat := smap.CountActiveTs(); nat > 1 {
+		r.recvd = make([]mossInRecv, len(req.In)) // usingSharedDM
+	}
 	return r
 }
 
 func (r *XactMoss) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name(), "starting")
 
-	if err := bundle.SDM.Open(); err != nil {
-		r.AddErr(err, 5, cos.SmoduleXs)
-		return
+	if r.usingSharedDM() {
+		if err := bundle.SDM.Open(); err != nil {
+			r.AddErr(err, 5, cos.SmoduleXs)
+			return
+		}
 	}
 
 	wg.Done()
 
-	bundle.SDM.RegRecv(r.ID(), r.recv)
+	if r.usingSharedDM() {
+		bundle.SDM.RegRecv(r)
+	}
 }
 
 func (r *XactMoss) Abort(err error) bool {
@@ -144,10 +168,30 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	bundle.SDM.UnregRecv(r.ID())
+	if r.usingSharedDM() {
+		bundle.SDM.UnregRecv(r.ID())
+	}
 	r.DemandBase.Stop()
+	r.cleanup()
 	r.Finish()
 	return true
+}
+
+func (r *XactMoss) cleanup() {
+	if r.recvd == nil {
+		return
+	}
+	r.mu.Lock()
+	for i := range r.recvd {
+		entry := &r.recvd[i]
+		if entry.sgl != nil {
+			entry.sgl.Free()
+			entry.sgl = nil
+		}
+	}
+	clear(r.recvd)
+	r.recvd = nil
+	r.mu.Unlock()
 }
 
 // terminate via (<-- xact.Demand <-- hk)
@@ -159,8 +203,11 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 		return mossIdleTime
 	default:
 		nlog.Infoln(r.Name(), "idle expired, finishing")
-		bundle.SDM.UnregRecv(r.ID())
+		if r.usingSharedDM() {
+			bundle.SDM.UnregRecv(r.ID())
+		}
 		r.DemandBase.Stop()
+		r.cleanup()
 		r.Finish()
 		return hk.UnregInterval
 	}
@@ -276,29 +323,42 @@ func (r *XactMoss) opaque(i int) (b []byte) {
 	return b
 }
 
-func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+// as transport.Receiver
+// note that hdr.ObjName is `nameInArch` resulting from  `req.NameInRespArch()` that takes into account `req.OnlyObjName = (true|false)`
+func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
 		nlog.Errorln(r.Name(), "recv error:", err)
 		return err
 	}
 
-	sgl := r.mm.NewSGL(0) // TODO -- FIXME: free upon abort/cleanup
-	_, err = io.Copy(sgl, reader)
-	if err != nil {
-		sgl.Free()
-		nlog.Errorln(r.Name(), "failed to read data:", err)
+	debug.Assert(len(hdr.Opaque) == cos.SizeofI32)
+	index := int(binary.BigEndian.Uint32(hdr.Opaque))
+	if index < 0 || index >= len(r.recvd) {
+		err = fmt.Errorf("out-of-bounds index %d (recv'd len=%d)", index, len(r.recvd))
+		debug.AssertNoErr(err)
 		return err
 	}
 
-	debug.Assert(len(hdr.Opaque) == cos.SizeofI32)
-	index := int(binary.BigEndian.Uint32(hdr.Opaque))
+	var (
+		written int64
+		sgl     = r.mm.NewSGL(0)
+	)
+	written, err = io.Copy(sgl, reader)
+	if err != nil {
+		sgl.Free()
+		err = fmt.Errorf("failed to receive %s: %w", hdr.ObjName, err)
+		nlog.Warningln(err)
+		return err
+	}
+	debug.Assert(written == sgl.Len(), written, " vs ", sgl.Len())
 
-	name := hdr.ObjName
-	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/")
+	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/") // TODO -- FIXME: must be a better way
 
 	r.mu.Lock()
+	entry := &r.recvd[index]
+	debug.Assertf(entry.sgl == nil && entry.name == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.name)
 	r.recvd[index] = mossInRecv{
-		name:      name,
+		name:      hdr.ObjName,
 		sgl:       sgl,
 		isMissing: isMissing,
 	}
@@ -312,7 +372,6 @@ func (r *XactMoss) recv(hdr *transport.ObjHdr, reader io.Reader, err error) erro
 	if cmn.Rom.FastV(4, cos.SmoduleXs) {
 		nlog.Infof("%s: received[%d] %q (%dB)", r.Name(), index, hdr.ObjName, sgl.Len())
 	}
-
 	return nil
 }
 
@@ -348,6 +407,8 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 
 	return bck, nil
 }
+
+func (r *XactMoss) usingSharedDM() bool { return r.recvd != nil }
 
 ////////////
 // basewi //
@@ -551,6 +612,7 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 	return io.Copy(part2, wi.sgl)
 }
 
+// drains recvd[] in strict input order
 func (*buffwi) flushMaybe() error {
 	debug.Assert(false, "not implemented yet") // TODO -- FIXME
 	return nil
@@ -605,13 +667,14 @@ func _ctype(outputFormat string) string {
 	}
 }
 
+// drains recvd[] in strict input order
 func (wi *streamwi) flushMaybe() (err error) {
 	r := wi.r
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for r.nextRecv < len(r.recvd) {
-		entry := r.recvd[r.nextRecv]
+		entry := &r.recvd[r.nextRecv]
 		if entry.sgl == nil && !entry.isMissing {
 			break // haven't received this one yet — stop
 		}
@@ -634,6 +697,7 @@ func (wi *streamwi) flushMaybe() (err error) {
 		wi.cnt++
 		wi.size += entry.sgl.Len()
 		entry.sgl.Free()
+		entry.sgl = nil
 	}
 
 	return nil

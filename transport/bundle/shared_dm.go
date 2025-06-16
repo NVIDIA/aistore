@@ -26,14 +26,14 @@ import (
 const Sepa = "|"
 
 // [TODO]
-// - Close() vs usage (when len(rxcbs) > 0); provide xctn.onFinished() => UnregRecv
+// - Close() vs usage (when len(receivers) > 0); provide xctn.onFinished() => UnregRecv
 // - limitation: hdr.Opaque is exclusively reserved xaction ID
 
 type sharedDM struct {
-	dm    DM
-	rxcbs map[string]transport.RecvObj
-	ocmu  sync.Mutex
-	rxmu  sync.Mutex
+	dm        DM
+	receivers map[string]transport.Receiver
+	ocmu      sync.Mutex
+	rxmu      sync.Mutex
 }
 
 // global
@@ -49,7 +49,7 @@ func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
 
 func (sdm *sharedDM) IsActive() (active bool) {
 	sdm.rxmu.Lock()
-	active = len(sdm.rxcbs) > 0
+	active = len(sdm.receivers) > 0
 	sdm.rxmu.Unlock()
 	return
 }
@@ -76,7 +76,7 @@ func (sdm *sharedDM) Open() error {
 	}
 
 	sdm.rxmu.Lock()
-	sdm.rxcbs = make(map[string]transport.RecvObj, 4)
+	sdm.receivers = make(map[string]transport.Receiver, 4)
 	sdm.rxmu.Unlock()
 
 	if err := sdm.dm.RegRecv(); err != nil {
@@ -108,10 +108,10 @@ func (sdm *sharedDM) Close() error {
 		l   int
 	)
 	sdm.rxmu.Lock()
-	for xid = range sdm.rxcbs {
+	for xid = range sdm.receivers {
 		break
 	}
-	l = len(sdm.rxcbs)
+	l = len(sdm.receivers)
 
 	if l > 0 {
 		sdm.rxmu.Unlock()
@@ -120,7 +120,7 @@ func (sdm *sharedDM) Close() error {
 		return fmt.Errorf("cannot close %s: [%s, %d]", sdm.trname(), xid, l)
 	}
 
-	sdm.rxcbs = nil
+	sdm.receivers = nil
 	sdm.rxmu.Unlock()
 
 	sdm.dm.Close(nil)
@@ -131,7 +131,7 @@ func (sdm *sharedDM) Close() error {
 	return nil
 }
 
-func (sdm *sharedDM) RegRecv(xid string, cb transport.RecvObj) {
+func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
 	if !sdm.isOpen() {
@@ -140,8 +140,8 @@ func (sdm *sharedDM) RegRecv(xid string, cb transport.RecvObj) {
 		debug.Assert(false, sdm.trname(), " ", "closed")
 		return
 	}
-	debug.Assert(sdm.rxcbs[xid] == nil)
-	sdm.rxcbs[xid] = cb
+	debug.Assert(sdm.receivers[rx.ID()] == nil, "duplicate registration for xid ", rx.ID())
+	sdm.receivers[rx.ID()] = rx
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
 }
@@ -155,7 +155,7 @@ func (sdm *sharedDM) UnregRecv(xid string) {
 		debug.Assert(false, sdm.trname(), " ", "closed")
 		return
 	}
-	delete(sdm.rxcbs, xid)
+	delete(sdm.receivers, xid)
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
 }
@@ -185,11 +185,16 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 		sdm.rxmu.Unlock()
 		return fmt.Errorf("%s is closed, dropping recv [xid: %s, oname: %s]", sdm.trname(), xid, hdr.ObjName)
 	}
-	cb, ok := sdm.rxcbs[xid]
+	rx, ok := sdm.receivers[xid]
 	sdm.rxmu.Unlock()
 
 	if !ok {
 		return fmt.Errorf("%s: xid %s not found, dropping recv [oname: %s]", sdm.trname(), xid, hdr.ObjName)
 	}
-	return cb(hdr, r, nil)
+	if rx.ID() != xid {
+		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, rx.ID())
+		debug.AssertNoErr(err)
+		return err
+	}
+	return rx.RecvObj(hdr, r, nil)
 }

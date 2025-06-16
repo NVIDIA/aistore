@@ -102,6 +102,13 @@ type (
 	RecvMsg func(msg Msg, err error) error
 )
 
+type (
+	Receiver interface {
+		ID() string
+		RecvObj(hdr *ObjHdr, objReader io.Reader, err error) error // Rx callback above
+	}
+)
+
 ///////////////////
 // object stream //
 ///////////////////
