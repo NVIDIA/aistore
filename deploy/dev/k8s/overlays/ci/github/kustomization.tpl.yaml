@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ais
+
+resources:
+- ../../../base
+
+secretGenerator:
+- name: regcred
+  type: kubernetes.io/dockerconfigjson
+  literals:
+  - .dockerconfigjson={"auths":{"https://index.docker.io/v1/":{"username":"${DOCKERHUB_USERNAME}","password":"${DOCKERHUB_TOKEN}"}}}
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+patches:
+- patch: |
+    - op: add
+      path: /imagePullSecrets
+      value:
+        - name: regcred
+  target:
+    kind: ServiceAccount
+    name: ais

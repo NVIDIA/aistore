@@ -1,0 +1,62 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ais
+
+resources:
+- ../../base
+
+configMapGenerator:
+- name: ais-cluster-config-override
+  behavior: replace
+  files:
+    - ais_cluster_override_cloud.json
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+secretGenerator:
+- name: gcp-credentials
+  files:
+    - creds.json=<GOOGLE_APPLICATION_CREDENTIALS>
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+- name: aws-credentials
+  literals:
+    - AWS_DEFAULT_REGION=<AWS_DEFAULT_REGION>
+    - AWS_ACCESS_KEY_ID=<AWS_ACCESS_KEY_ID>
+    - AWS_SECRET_ACCESS_KEY=<AWS_SECRET_ACCESS_KEY>
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+patches:
+- patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom/-
+      value:
+        secretRef:
+          name: aws-credentials
+          optional: true
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /tmp/gcp/creds.json
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: gcp-credentials
+        mountPath: /tmp/gcp
+        readOnly: true
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: gcp-credentials
+        secret:
+          secretName: gcp-credentials
+          optional: true
+  target:
+    kind: StatefulSet
+    name: ais-target 

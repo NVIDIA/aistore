@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ais-target
+  labels:
+    app: ais
+    type: target
+  annotations:
+    kapp.k14s.io/change-group: "setup"
+spec:
+  clusterIP: None
+  selector:
+    type: target
+  ports:
+    - name: public
+      port: 9090
+    - name: control
+      port: 9080
+    - name: data
+      port: 10080

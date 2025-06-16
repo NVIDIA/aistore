@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ais-proxy
+  labels:
+    type: proxy
+  annotations:
+    kapp.k14s.io/change-group: "proxy"
+    kapp.k14s.io/change-rule: "upsert after upserting setup"
+spec:
+  replicas: 1
+  serviceName: ais-proxy
+  selector:
+    matchLabels:
+      type: proxy
+  template:
+    metadata:
+      labels:
+        type: proxy
+    spec:
+      serviceAccountName: ais
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - ais
+                  - key: type
+                    operator: In
+                    values:
+                      - proxy
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: aisinit
+          image: aistorage/ais-init
+          command: ["aisinit"]
+          args:
+            - "-role=proxy"
+            - "-local_config_template=/config/ais_local_template.json"
+            - "-output_local_config=/etc/ais/ais_local.json"
+            - "-cluster_config_override=/config/ais_cluster_override.json"
+            - "-output_cluster_config=/etc/ais/ais.json"
+          env:
+            - name: MY_SERVICE
+              value: ais-proxy
+            - name: MY_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_NS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: AIS_PUBLIC_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - name: ais-cluster-config-override
+              mountPath: /config/ais_cluster_override.json
+              subPath: ais_cluster_override.json
+            - name: ais-local-config-template
+              mountPath: /config/ais_local_template.json
+              subPath: ais_local_template.json
+            - name: ais-config
+              mountPath: /etc/ais
+      containers:
+        - name: aisnode
+          image: aistorage/aisnode
+          command: ["aisnode"]
+          args:
+            - "-config=/etc/ais/ais.json"
+            - "-local_config=/etc/ais/ais_local.json"
+            - "-role=proxy"
+            - "-ntargets=1"
+          ports:
+            - containerPort: 8080
+              hostPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/health?readiness=true
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 10
+            failureThreshold: 5
+            periodSeconds: 5
+          env:
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: ais-config
+              mountPath: /etc/ais
+            - name: ais-logs
+              mountPath: /ais/log
+      volumes:
+        - name: ais-cluster-config-override
+          configMap:
+            name: ais-cluster-config-override
+        - name: ais-local-config-template
+          configMap:
+            name: ais-proxy-local-config-template
+        - name: ais-config
+          emptyDir: {}
+        - name: ais-logs
+          hostPath:
+            path: /ais/log
+            type: DirectoryOrCreate

@@ -577,9 +577,9 @@ To quickly set up AIStore (with AWS and GCP backends) in a [Google Colab](https:
 
 ### Kubernetes Playground
 
-For our development and testing, we use a local Kubernetes setup (e.g. [Minikube](https://minikube.sigs.k8s.io/docs/start/), [KinD](https://kind.sigs.k8s.io/)), further documented [here](/deploy/dev/k8s/kustomize/README.md), to run the Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/docs/etl.md), for example - can be developed rather efficiently.
+For our development and testing, we use a local Kubernetes setup (e.g. [Minikube](https://minikube.sigs.k8s.io/docs/start/), [KinD](https://kind.sigs.k8s.io/)), further documented [here](/deploy/dev/k8s/README.md), to run the Kubernetes cluster on a single development machine. There's a distinct advantage that AIStore extensions that require Kubernetes - such as [Extract-Transform-Load](/docs/etl.md), for example - can be developed rather efficiently.
 
-* [AIStore on Local K8s](/deploy/dev/k8s/kustomize/README.md)
+* [AIStore on Local K8s](/deploy/dev/k8s/README.md)
 
 ### Setting Up HTTPS Locally
 

@@ -1,0 +1,121 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ais
+
+resources:
+- ../../../base
+
+images:
+- name: aistorage/aisnode
+  newName: ${AISNODE_IMAGE}
+  newTag: ${CI_COMMIT_SHORT_SHA}
+- name: aistorage/ais-init
+  newName: ${AISINIT_IMAGE}
+  newTag: ${CI_COMMIT_SHORT_SHA}
+
+configMapGenerator:  
+- name: ais-cluster-config-override
+  behavior: replace
+  files:
+    - ais_cluster_override.json
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+secretGenerator:
+- name: aws-credentials
+  literals:
+  - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+  - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+  - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+- name: gcp-credentials
+  files:
+  - creds.json=${GOOGLE_APPLICATION_CREDENTIALS}
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+- name: oci-credentials
+  literals:
+  - OCI_TENANCY_OCID=${OCI_TENANCY_OCID}
+  - OCI_USER_OCID=${OCI_USER_OCID}
+  - OCI_REGION=${OCI_REGION}
+  - OCI_FINGERPRINT=${OCI_FINGERPRINT}
+  - OCI_COMPARTMENT_OCID=${OCI_COMPARTMENT_OCID}
+  files:
+  - OCI_PRIVATE_KEY=${ORACLE_PRIVATE_KEY}
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+- name: regcred
+  type: kubernetes.io/dockerconfigjson
+  literals:
+  - .dockerconfigjson={"auths":{"https://index.docker.io/v1/":{"username":"${DOCKERHUB_USERNAME}","password":"${DOCKERHUB_TOKEN}"}}}
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+patches:
+- patch: |
+    - op: add
+      path: /imagePullSecrets
+      value:
+        - name: regcred
+  target:
+    kind: ServiceAccount
+    name: ais
+
+- patch: |
+    - op: replace
+      path: /spec/replicas
+      value: ${NUM_PROXY}
+  target:
+    kind: StatefulSet
+    name: ais-proxy
+
+- patch: |
+    - op: replace
+      path: /spec/replicas
+      value: ${NUM_TARGET}
+  target:
+    kind: StatefulSet
+    name: ais-target
+
+- patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom
+      value: []
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom/-
+      value:
+        secretRef:
+          name: aws-credentials
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom/-
+      value:
+        secretRef:
+          name: oci-credentials  
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /tmp/gcp/creds.json
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: gcp-credentials
+        mountPath: /tmp/gcp
+        readOnly: true
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: gcp-credentials
+        secret:
+          secretName: gcp-credentials
+          optional: true
+  target:
+    kind: StatefulSet
+    name: ais-target 

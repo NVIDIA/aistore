@@ -26,7 +26,7 @@ jobs:
 
       - name: Run AIStore in KinD
         run: |
-          cd $GITHUB_WORKSPACE/deploy/dev/k8s/kustomize
+          cd $GITHUB_WORKSPACE/deploy/dev/k8s
           make github-ci
 
       - name: Setup Python ${{ matrix.python-version }}
@@ -37,6 +37,6 @@ jobs:
       - name: Python ETL Tests
         run: |
           cd $GITHUB_WORKSPACE/python/
-          source $GITHUB_WORKSPACE/deploy/dev/k8s/kustomize/utils/export_endpoint.sh
+          source $GITHUB_WORKSPACE/deploy/dev/k8s/export_endpoint.sh
           make python_etl_tests
 

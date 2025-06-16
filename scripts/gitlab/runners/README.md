@@ -4,7 +4,7 @@ For setting up Kubernetes runners with persistent AIStore on Minikube:
 
 - Run `sudo ./setup.sh [--data-root <path>]` to install required dependencies and set up the environment.
 - Run `./start_runner.sh [--nodes <number>] [--token <runner_token>] [--data-root <path>] [--concurrency <runner-concurrency>] [--tunnel <true|false>]` to start the Minikube cluster and register the GitLab runner (if a token is provided).
-- Go to `{AISTORE_ROOT}/deploy/dev/k8s/kustomize` and deploy AIStore (e.g. `make minimal`).
+- Go to `{AISTORE_ROOT}/deploy/dev/k8s` and deploy AIStore (e.g. `make minimal`).
 
 #### Notes
 

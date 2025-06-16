@@ -56,10 +56,10 @@ It supports both **inline transformations** (real-time processing via GET reques
 To begin using ETLs in AIStore, you'll need to deploy AIStore on a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
 
 1. **AIStore Development with Local Kubernetes**:
-   - Folder: [deploy/dev/k8s/kustomize](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize)
+   - Folder: [deploy/dev/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s)
    - Intended for: AIStore development using local Kubernetes.
-   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize).
-   - Documentation: [README](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s/kustomize)
+   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s).
+   - Documentation: [README](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s)
 
 2. **Production Deployment with Kubernetes**:
    - Folder: [deploy/prod/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/k8s)

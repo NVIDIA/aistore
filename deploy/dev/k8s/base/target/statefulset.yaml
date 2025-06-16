@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ais-target
+  labels:
+    type: target
+  annotations:
+    kapp.k14s.io/change-rule: "upsert after upserting proxy"
+spec:
+  replicas: 1
+  podManagementPolicy: Parallel
+  serviceName: ais-target
+  selector:
+    matchLabels:
+      type: target
+  template:
+    metadata:
+      labels:
+        type: target
+    spec:
+      serviceAccountName: ais
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - ais
+                  - key: type
+                    operator: In
+                    values:
+                      - target
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: aisinit
+          image: aistorage/ais-init
+          command: ["aisinit"]
+          args:
+            - "-role=target"
+            - "-local_config_template=/config/ais_local_template.json"
+            - "-output_local_config=/etc/ais/ais_local.json"
+            - "-cluster_config_override=/config/ais_cluster_override.json"
+            - "-output_cluster_config=/etc/ais/ais.json"
+          env:
+            - name: MY_SERVICE
+              value: ais-target
+            - name: MY_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_NS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: AIS_PUBLIC_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - name: ais-cluster-config-override
+              mountPath: /config/ais_cluster_override.json
+              subPath: ais_cluster_override.json
+            - name: ais-local-config-template
+              mountPath: /config/ais_local_template.json
+              subPath: ais_local_template.json
+            - name: ais-config
+              mountPath: /etc/ais
+      containers:
+        - name: aisnode
+          image: aistorage/aisnode
+          command: ["aisnode"]
+          args:
+            - "-config=/etc/ais/ais.json"
+            - "-local_config=/etc/ais/ais_local.json"
+            - "-role=target"
+          ports:
+            - containerPort: 9090
+              hostPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/health?readiness=true
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 10
+            failureThreshold: 5
+            periodSeconds: 5
+          securityContext:
+            privileged: true
+          env:
+            - name: K8S_NS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MY_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: ais-config
+              mountPath: /etc/ais
+            - name: ais-fs
+              mountPath: /mnt/data/ais
+            - name: ais-logs
+              mountPath: /ais/log
+      volumes:
+        - name: ais-cluster-config-override
+          configMap:
+            name: ais-cluster-config-override
+        - name: ais-local-config-template
+          configMap:
+            name: ais-target-local-config-template
+        - name: ais-config
+          emptyDir: {}
+        - name: ais-fs
+          hostPath:
+            path: /mnt/data/ais
+            type: DirectoryOrCreate
+        - name: ais-logs
+          hostPath:
+            path: /ais/log
+            type: DirectoryOrCreate

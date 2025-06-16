@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ais
+
+resources:
+- ../../../base
+- certs.yaml
+- https://github.com/cert-manager/cert-manager/releases/download/v1.18.1/cert-manager.yaml
+
+configMapGenerator:
+- name: ais-cluster-config-override
+  behavior: replace
+  files:
+    - ais_cluster_override.json
+  options:
+    annotations:
+      kapp.k14s.io/change-group: "setup"
+
+patches:
+- patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: ais-tls-certs
+        mountPath: /var/certs
+        readOnly: true
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: ais-tls-certs
+        secret:
+          secretName: ais-tls-certs
+    - op: replace
+      path: /spec/template/spec/containers/0/livenessProbe/httpGet/scheme
+      value: HTTPS
+    - op: replace
+      path: /spec/template/spec/containers/0/readinessProbe/httpGet/scheme
+      value: HTTPS
+  target:
+    kind: StatefulSet
+    name: ais-proxy
+
+- patch: |
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: ais-tls-certs
+        mountPath: /var/certs
+        readOnly: true
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: ais-tls-certs
+        secret:
+          secretName: ais-tls-certs
+    - op: replace
+      path: /spec/template/spec/containers/0/livenessProbe/httpGet/scheme
+      value: HTTPS
+    - op: replace
+      path: /spec/template/spec/containers/0/readinessProbe/httpGet/scheme
+      value: HTTPS
+  target:
+    kind: StatefulSet
+    name: ais-target

@@ -118,7 +118,7 @@ The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTP
 
 AIStore also supports [ETLs](https://aistore.nvidia.com/docs/etl), short for Extract-Transform-Load. ETLs with AIS are beneficial given that the transformations occur *locally*, which largely contributes to the linear scalability of AIS.
 
-> Note: AIS-ETL requires [Kubernetes](https://kubernetes.io/). For more information on deploying AIStore with local Kubernetes, refer [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/kustomize/README.md).
+> Note: AIS-ETL requires [Kubernetes](https://kubernetes.io/). For more information on deploying AIStore with local Kubernetes, refer [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md).
 
 To learn more about working with AIS ETL, check out [examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
 

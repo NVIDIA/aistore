@@ -616,8 +616,8 @@ test:long:ishard:
   variables:
     BUCKET: "gs://ais-ci-kube"
     TESTS_DIR: "ais/test"
-    AISNODE_IMAGE: "$CI_REGISTRY_IMAGE/aisnode:$CI_COMMIT_SHORT_SHA"
-    AISINIT_IMAGE: "$CI_REGISTRY_IMAGE/ais-init:$CI_COMMIT_SHORT_SHA"
+    AISNODE_IMAGE: "$CI_REGISTRY_IMAGE/aisnode"
+    AISINIT_IMAGE: "$CI_REGISTRY_IMAGE/ais-init"
     FS_CNT: 6
     RE: "TestETL|TestConfig|TestMountpath"
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
@@ -625,13 +625,13 @@ test:long:ishard:
     - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
   before_script:
-    - cd deploy/dev/k8s/kustomize
-    - ./utils/generate_kind_config.sh > kind_config.yml
+    - cd deploy/dev/k8s
+    - ./utils/ci/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
     - make gitlab-ci
-    - source ./utils/export_endpoint.sh
-    - cd ../../../..
+    - source ./export_endpoint.sh
+    - cd ../../..
     - make cli
   after_script:
     - mkdir $CI_PROJECT_DIR/logs
@@ -750,13 +750,13 @@ test:long:k8s:all:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
     - make aisloader
-    - cd deploy/dev/k8s/kustomize
-    - ./utils/generate_kind_config.sh > kind_config.yml
+    - cd deploy/dev/k8s
+    - ./utils/ci/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
     - kubectl cluster-info  # wait for k8s
     - make gitlab-ci
-    - source ./utils/export_endpoint.sh
-    - cd ../../../..
+    - source ./export_endpoint.sh
+    - cd ../../..
     # Make sure that metrics collection is enabled.
     - git clone https://github.com/prometheus-operator/kube-prometheus.git
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
