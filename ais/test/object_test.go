@@ -440,6 +440,14 @@ func TestSameBucketName(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	// Verify both objects are cached locally before deletion
+	for _, objName := range files {
+		exists := tools.CheckObjIsPresent(proxyURL, bckRemote, objName)
+		if !exists {
+			t.Fatalf("Object %s should be cached locally after prefetch", objName)
+		}
+	}
+
 	// delete one obj from remote, and check evictions (below)
 	err = api.DeleteObject(baseParams, bckRemote, fileName1)
 	tassert.CheckFatal(t, err)
@@ -448,10 +456,32 @@ func TestSameBucketName(t *testing.T) {
 	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files}}
 	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
+
+	// Wait for xaction to complete
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	status, err := api.WaitForXactionIC(baseParams, &args)
+	err = api.WaitForXactionNode(baseParams, &args, xactSnapNotRunning)
 	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, status.ErrMsg != "", "expecting errors when not finding listed objects")
+
+	// Query the xaction snaps directly to get errors
+	snaps, err := api.QueryXactionSnaps(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	// Extract error from snapshots
+	var statusErr string
+	for _, snapList := range snaps {
+		for _, snap := range snapList {
+			if snap.Err != "" {
+				statusErr = snap.Err
+				break
+			}
+		}
+		if statusErr != "" {
+			break
+		}
+	}
+
+	tlog.Logf("Received expected evict status error: %s\n", statusErr)
+	tassert.Errorf(t, statusErr != "", "expecting errors when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
 	evdRangeMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: objRange}}
