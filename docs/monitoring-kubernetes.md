@@ -299,7 +299,7 @@ Focus on Kubernetes infrastructure:
 - Pod restarts and health status
 - Node resource utilization
 
-![AIStore Kubernetes Dashboard](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/images/k8s-metrics.png)
+![AIStore Kubernetes Dashboard](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/images/grafana.png)
 
 ### 3. Combined Operational Dashboard
 
@@ -347,25 +347,25 @@ spec:
   - name: ais.kubernetes.rules
     rules:
     - alert: AIStorePodRestartingFrequently
-      expr: rate(kube_pod_container_status_restarts_total{namespace="ais-namespace"}[15m]) > 0.2
+      expr: {% raw %}rate(kube_pod_container_status_restarts_total{namespace="ais-namespace"}[15m]) > 0.2{% endraw %}
       for: 5m
       labels:
         severity: warning
       annotations:
         summary: "AIStore pod restarting frequently"
-        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+        description: "Pod {% raw %}{{ $labels.pod }}{% endraw %} in namespace {% raw %}{{ $labels.namespace }}{% endraw %} is restarting frequently"
 
     - alert: AIStoreVolumeNearlyFull
-      expr: kubelet_volume_stats_available_bytes{namespace="ais-namespace"} / kubelet_volume_stats_capacity_bytes{namespace="ais-namespace"} < 0.1
+      expr: {% raw %}kubelet_volume_stats_available_bytes{namespace="ais-namespace"} / kubelet_volume_stats_capacity_bytes{namespace="ais-namespace"} < 0.1{% endraw %}
       for: 5m
       labels:
         severity: warning
       annotations:
         summary: "AIStore volume nearly full"
-        description: "Volume {{ $labels.persistentvolumeclaim }} is at {{ $value | humanizePercentage }} capacity"
+        description: "Volume {% raw %}{{ $labels.persistentvolumeclaim }}{% endraw %} is at {% raw %}{{ $value | humanizePercentage }}{% endraw %} capacity"
 
     - alert: AIStoreHighNetworkTraffic
-      expr: sum(rate(container_network_transmit_bytes_total{namespace="ais-namespace"}[5m])) > 1e9
+      expr: {% raw %}sum(rate(container_network_transmit_bytes_total{namespace="ais-namespace"}[5m])) > 1e9{% endraw %}
       for: 10m
       labels:
         severity: warning
@@ -374,22 +374,22 @@ spec:
         description: "Network traffic exceeds 1GB/s for 10 minutes"
 
     - alert: AIStorePodNotReady
-      expr: sum by(namespace, pod) (kube_pod_status_phase{namespace="ais-namespace", phase=~"Pending|Unknown|Failed"}) > 0
+      expr: {% raw %}sum by(namespace, pod) (kube_pod_status_phase{namespace="ais-namespace", phase=~"Pending|Unknown|Failed"}) > 0{% endraw %}
       for: 10m
       labels:
         severity: critical
       annotations:
         summary: "AIStore pod not ready"
-        description: "Pod {{ $labels.pod }} is in {{ $labels.phase }} state for more than 10 minutes"
+        description: "Pod {% raw %}{{ $labels.pod }}{% endraw %} is in {% raw %}{{ $labels.phase }}{% endraw %} state for more than 10 minutes"
 
     - alert: AIStoreNodeHighLoad
-      expr: node_load5{instance=~".*"} / on(instance) count by(instance) (node_cpu_seconds_total{mode="system"}) > 3
+      expr: {% raw %}node_load5{instance=~".*"} / on(instance) count by(instance) (node_cpu_seconds_total{mode="system"}) > 3{% endraw %}
       for: 10m
       labels:
         severity: warning
       annotations:
         summary: "High node load affecting AIStore"
-        description: "Node {{ $labels.instance }} has a high load average, which may affect AIStore performance"
+        description: "Node {% raw %}{{ $labels.instance }}{% endraw %} has a high load average, which may affect AIStore performance"
 ```
 
 ### Alert Routing
@@ -541,12 +541,12 @@ data:
 
 For Loki:
 ```
-{namespace="ais-namespace"} |= "error" | json | level="error"
+{% raw %}{namespace="ais-namespace"} |= "error" | json | level="error"{% endraw %}
 ```
 
 For Elasticsearch:
 ```
-kubernetes.namespace:"ais-namespace" AND message:error AND level:error
+{% raw %}kubernetes.namespace:"ais-namespace" AND message:error AND level:error{% endraw %}
 ```
 
 ## Operational Best Practices
