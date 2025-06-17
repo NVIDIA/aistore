@@ -71,15 +71,13 @@ type (
 		sgl       *memsys.SGL
 		isMissing bool
 	}
-	mossWorkItem interface {
-		flushMaybe() error
-	}
 	XactMoss struct {
 		xact.DemandBase
 		mm *memsys.MMSA
-		wi mossWorkItem // NOTE: one per x-moss
+		wi *basewi // NOTE: one per x-moss
 		// Rx
 		recv struct {
+			ch   chan int
 			m    []mossInRecv
 			next int
 			mtx  sync.Mutex
@@ -89,12 +87,13 @@ type (
 
 type (
 	basewi struct {
-		aw   archive.Writer
-		r    *XactMoss
-		smap *meta.Smap
-		resp *apc.MossResp
-		cnt  int
-		size int64
+		aw        archive.Writer
+		r         *XactMoss
+		smap      *meta.Smap
+		resp      *apc.MossResp
+		size      int64
+		cnt       int
+		streaming bool
 	}
 	buffwi struct {
 		basewi
@@ -143,6 +142,7 @@ func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
 	smap := core.T.Sowner().Get()
 	if nat := smap.CountActiveTs(); nat > 1 {
 		r.recv.m = make([]mossInRecv, len(req.In)) // receiving() true
+		r.recv.ch = make(chan int, len(req.In))
 	}
 	return r
 }
@@ -234,8 +234,9 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	// streaming
 	if req.StreamingGet {
 		wi := streamwi{basewi: basewi}
+		wi.streaming = true
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
-		r.wi = &wi
+		r.wi = &wi.basewi
 		return wi.asm(req, w)
 	}
 
@@ -244,7 +245,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 		sgl = r.mm.NewSGL(0)
 		wi  = buffwi{basewi: basewi, sgl: sgl}
 	)
-	r.wi = &wi
+	r.wi = &wi.basewi
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	err := wi.asm(req, w)
@@ -358,17 +359,38 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		sgl:       sgl,
 		isMissing: isMissing,
 	}
+
+	err = r.wi.flushMaybe()
 	r.recv.mtx.Unlock()
 
-	if err := r.wi.flushMaybe(); err != nil {
+	if err != nil {
 		r.Abort(err)
 		return err
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+	r.recv.ch <- index
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: received[%d] %q (%dB)", r.Name(), index, hdr.ObjName, sgl.Len())
 	}
 	return nil
+}
+
+// TODO -- FIXME: add timeout; periodic log
+func (r *XactMoss) waitRx(index int) error {
+	for {
+		select {
+		case i, ok := <-r.recv.ch:
+			if !ok {
+				return errStopped
+			}
+			if i == index {
+				return nil
+			}
+		case <-r.ChanAbort():
+			return errStopped
+		}
+	}
 }
 
 func (r *XactMoss) Snap() (snap *core.Snap) {
@@ -425,21 +447,31 @@ func (r *XactMoss) receiving() bool { return r.recv.m != nil }
 // basewi //
 ////////////
 
-func (wi *basewi) next(req *apc.MossReq, i int) error {
-	in := &req.In[i]
+func (wi *basewi) next(req *apc.MossReq, i int) (int, error) {
+	var (
+		r  = wi.r
+		in = &req.In[i]
+	)
 	if err := _assertNoRange(in); err != nil {
-		return err
+		return 0, err
 	}
 
-	lom, local, err := wi.r._lom(in, wi.smap)
+	lom, local, err := r._lom(in, wi.smap)
 	if err != nil {
-		return err
+		return 0, err
 	}
+
 	if !local {
-		if wi.r.receiving() {
-			debug.Assert(false, "receiving NIY") // TODO -- FIXME
+		if !r.receiving() {
+			return 0, errors.New("unexpected non-local " + lom.Cname() + " when _not_ receiving")
 		}
-		return errors.New("unexpected non-local " + lom.Cname() + " when not receiving")
+		if err := r.waitRx(i); err != nil {
+			return 0, err
+		}
+		r.recv.mtx.Lock()
+		j := r.recv.next // TODO: atomic
+		r.recv.mtx.Unlock()
+		return j, nil
 	}
 
 	bck := lom.Bck()
@@ -450,9 +482,13 @@ func (wi *basewi) next(req *apc.MossReq, i int) error {
 	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
 	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if !req.StreamingGet {
+	if req.StreamingGet {
+		if err := wi.aw.Flush(); err != nil {
+			return 0, err
+		}
+	} else {
 		wi.resp.Out = append(wi.resp.Out, out)
 	}
 	wi.cnt++
@@ -461,7 +497,7 @@ func (wi *basewi) next(req *apc.MossReq, i int) error {
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
-	return nil
+	return i + 1, nil
 }
 
 func (wi *basewi) cleanup() {
@@ -549,20 +585,77 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
+func (wi *basewi) asm(req *apc.MossReq) error {
+	var (
+		r = wi.r
+		l = len(req.In)
+	)
+	for i := 0; i < l; {
+		if err := r.AbortErr(); err != nil {
+			return err
+		}
+		j, err := wi.next(req, i)
+		if err != nil {
+			r.Abort(err)
+			return err
+		}
+		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
+		i = j
+	}
+	return nil
+}
+
+// drains recv.m[] in strict input order
+// is called under `recv.mtx` lock
+func (wi *basewi) flushMaybe() (err error) {
+	r := wi.r
+	for r.recv.next < len(r.recv.m) {
+		entry := &r.recv.m[r.recv.next]
+		if entry.sgl == nil && !entry.isMissing {
+			break // haven't received this one yet — stop
+		}
+
+		var size int64
+		if entry.isMissing {
+			err = wi.aw.Write(entry.name, cos.SimpleOAH{Size: 0}, nopROC{})
+		} else {
+			size = entry.sgl.Len()
+			oah := cos.SimpleOAH{Size: size}
+			err = wi.aw.Write(entry.name, oah, entry.sgl) // --> http.ResponseWriter
+		}
+		if err != nil {
+			return err
+		}
+		if !wi.streaming {
+			out := apc.MossOut{ObjName: entry.name}
+			if entry.isMissing {
+				out.ErrMsg = "moss: missing object (recv)" // TODO: specific err
+			} else {
+				out.Size = size
+			}
+			wi.resp.Out = append(wi.resp.Out, out)
+		}
+
+		// GC to release memory
+		entry.sgl.Free()
+		entry.sgl = nil
+		r.recv.m[r.recv.next] = mossInRecv{}
+		r.recv.next++
+
+		wi.cnt++
+		wi.size += size
+	}
+
+	return nil
+}
+
 ////////////
 // buffwi //
 ////////////
 
 func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
-	r := wi.r
-	for i := range req.In {
-		if err := r.AbortErr(); err != nil {
-			return err
-		}
-		if err := wi.basewi.next(req, i); err != nil {
-			r.Abort(err)
-			return err
-		}
+	if err := wi.basewi.asm(req); err != nil {
+		return err
 	}
 
 	// flush and close aw
@@ -588,10 +681,10 @@ func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	}
 
 	wi.sgl.Reset()
-	r.ObjsAdd(wi.cnt, wi.size)
+	wi.r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
+		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
 	}
 	return nil
 }
@@ -616,31 +709,14 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 	return io.Copy(part2, wi.sgl)
 }
 
-// drains recvd[] in strict input order
-func (*buffwi) flushMaybe() error {
-	debug.Assert(false, "not implemented yet") // TODO -- FIXME
-	return nil
-}
-
 //////////////
 // streamwi //
 //////////////
 
 func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
-	r := wi.r
 	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
-	for i := range req.In {
-		if err := r.AbortErr(); err != nil {
-			return err
-		}
-		if err := wi.basewi.next(req, i); err != nil {
-			r.Abort(err)
-			return err
-		}
-		if err := wi.aw.Flush(); err != nil {
-			r.Abort(err)
-			return err
-		}
+	if err := wi.basewi.asm(req); err != nil {
+		return err
 	}
 
 	// flush and close aw
@@ -672,41 +748,6 @@ func _ctype(outputFormat string) string {
 		debug.Assert(false, outputFormat)
 		return cos.ContentBinary
 	}
-}
-
-// drains recv.m[] in strict input order
-func (wi *streamwi) flushMaybe() (err error) {
-	r := wi.r
-	r.recv.mtx.Lock()
-	defer r.recv.mtx.Unlock()
-
-	for r.recv.next < len(r.recv.m) {
-		entry := &r.recv.m[r.recv.next]
-		if entry.sgl == nil && !entry.isMissing {
-			break // haven't received this one yet — stop
-		}
-
-		if entry.isMissing {
-			err = wi.aw.Write(entry.name, cos.SimpleOAH{Size: 0}, nopROC{})
-		} else {
-			oah := cos.SimpleOAH{Size: entry.sgl.Len()}
-			err = wi.aw.Write(entry.name, oah, entry.sgl) // --> http.ResponseWriter
-		}
-		if err != nil {
-			return err
-		}
-
-		// GC to release memory
-		r.recv.m[r.recv.next] = mossInRecv{}
-		r.recv.next++
-
-		wi.cnt++
-		wi.size += entry.sgl.Len()
-		entry.sgl.Free()
-		entry.sgl = nil
-	}
-
-	return nil
 }
 
 func _assertNoRange(in *apc.MossIn) (err error) {
