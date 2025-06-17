@@ -82,10 +82,9 @@ type (
 
 // in-archive naming [convention]:
 // bucket/object skipping provider, uuid, and/or namespace
-func (req *MossReq) NameInRespArch(bucket string, i int) string {
-	in := &req.In[i]
+func (in *MossIn) NameInRespArch(bucket string, onlyObjName bool) string {
 	switch {
-	case req.OnlyObjName:
+	case onlyObjName:
 		return in.ObjName
 	case in.Uname != "":
 		debug.Assert(false, "Uname must be handled by the caller to produce cmn.Bck (and then call this method with it)")

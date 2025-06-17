@@ -8,6 +8,7 @@ package xs
 import (
 	"archive/tar"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -39,7 +40,7 @@ client → proxy → designated-target (TD)
                    │
                    ├── basewi.next()      ← local HRW entries
                    │
-                   ├── shared-dm.recvd[i] = ...     ← entries from remote targets via recv()
+                   ├── shared-dm.recvd[i] = ...     ← entries from other targets via recv()
                    │
                    └── stream TAR         ← in-order via flushMaybe()
 
@@ -50,17 +51,15 @@ other-targets (T1..Tn)
 */
 
 // TODO -- FIXME:
-// - recv() and generally, multi-target
-// - read from shards
-// - enable ais/test/moss tests - rm skipf
 // - ctlmsg
 // - soft errors other than not-found
 // - error handling in general and across the board; mossErr{wrapped-err}
-// - sentinels
+// - stopping sentinels
 
 // TODO:
+// - two cleanup()s
 // - write checksum
-// - range read (and separately, read range archpath)
+// - range read (_assertNoRange; and separately, read range archpath)
 
 type (
 	mossFactory struct {
@@ -78,11 +77,13 @@ type (
 	XactMoss struct {
 		xact.DemandBase
 		mm *memsys.MMSA
-		wi mossWorkItem // NOTE: one per
-		// runtime
-		recvd    []mossInRecv
-		nextRecv int
-		mu       sync.Mutex
+		wi mossWorkItem // NOTE: one per x-moss
+		// Rx
+		recv struct {
+			m    []mossInRecv
+			next int
+			mtx  sync.Mutex
+		}
 	}
 )
 
@@ -138,10 +139,10 @@ func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
 	r := &XactMoss{mm: memsys.PageMM()}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
-	// NOTE: recv() readiness - preallocate all required empty slots
+	// Rx readiness - preallocate all empty slots
 	smap := core.T.Sowner().Get()
 	if nat := smap.CountActiveTs(); nat > 1 {
-		r.recvd = make([]mossInRecv, len(req.In)) // usingSharedDM
+		r.recv.m = make([]mossInRecv, len(req.In)) // receiving() true
 	}
 	return r
 }
@@ -149,7 +150,7 @@ func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
 func (r *XactMoss) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name(), "starting")
 
-	if r.usingSharedDM() {
+	if r.receiving() {
 		if err := bundle.SDM.Open(); err != nil {
 			r.AddErr(err, 5, cos.SmoduleXs)
 			return
@@ -158,7 +159,7 @@ func (r *XactMoss) Run(wg *sync.WaitGroup) {
 
 	wg.Done()
 
-	if r.usingSharedDM() {
+	if r.receiving() {
 		bundle.SDM.RegRecv(r)
 	}
 }
@@ -168,7 +169,7 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	if r.usingSharedDM() {
+	if r.receiving() {
 		bundle.SDM.UnregRecv(r.ID())
 	}
 	r.DemandBase.Stop()
@@ -178,20 +179,21 @@ func (r *XactMoss) Abort(err error) bool {
 }
 
 func (r *XactMoss) cleanup() {
-	if r.recvd == nil {
+	if r.recv.m == nil {
+		debug.Assert(!r.receiving())
 		return
 	}
-	r.mu.Lock()
-	for i := range r.recvd {
-		entry := &r.recvd[i]
+	r.recv.mtx.Lock()
+	for i := range r.recv.m {
+		entry := &r.recv.m[i]
 		if entry.sgl != nil {
 			entry.sgl.Free()
 			entry.sgl = nil
 		}
 	}
-	clear(r.recvd)
-	r.recvd = nil
-	r.mu.Unlock()
+	clear(r.recv.m)
+	r.recv.m = nil
+	r.recv.mtx.Unlock()
 }
 
 // terminate via (<-- xact.Demand <-- hk)
@@ -203,7 +205,7 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 		return mossIdleTime
 	default:
 		nlog.Infoln(r.Name(), "idle expired, finishing")
-		if r.usingSharedDM() {
+		if r.receiving() {
 			bundle.SDM.UnregRecv(r.ID())
 		}
 		r.DemandBase.Stop()
@@ -234,7 +236,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 		wi := streamwi{basewi: basewi}
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
 		r.wi = &wi
-		return wi.do(req, w)
+		return wi.asm(req, w)
 	}
 
 	// buffered
@@ -245,69 +247,63 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	r.wi = &wi
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
-	err := wi.do(req, w)
+	err := wi.asm(req, w)
 	sgl.Free()
 	return err
 }
 
 // send all requested local data => tsi
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) error {
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) (err error) {
 	r.IncPending()
-	defer r.DecPending()
 
 	for i := range req.In {
-		if err := r.AbortErr(); err != nil {
-			return err
-		}
-		in := &req.In[i]
-		if in.Length != 0 {
-			return cmn.NewErrNotImpl("range read", "moss")
-		}
-		// source bucket (per-object) override
-		bck, err := r._bucket(in)
+		err = r._send(req, smap, tsi, i)
 		if err != nil {
 			r.Abort(err)
-			return err
+			break
 		}
-		lom := core.LOM{ObjName: in.ObjName}
-
-		// TODO -- FIXME: (dup; impl; pool)
-
-		if err := lom.InitBck(bck); err != nil {
-			return err
-		}
-		_, local, err := lom.HrwTarget(smap)
-		if err != nil {
-			r.Abort(err)
-			return err
-		}
-		if !local {
-			continue // skip
-		}
-
-		nameInArch := req.NameInRespArch(bck.Name, i)
-		lom.Lock(false)
-		roc, err := lom.NewDeferROC(false /*loaded*/)
-		if err != nil {
-			if !req.ContinueOnErr || !cos.IsNotExist(err, 0) {
-				r.Abort(err)
-				return err
-			}
-			nameInArch = apc.MossMissingDir + "/" + nameInArch
-			roc = nopROC{}
-		}
-
-		o := transport.AllocSend()
-		hdr := &o.Hdr
-		{
-			hdr.Bck = *bck
-			hdr.ObjName = nameInArch
-			hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-			hdr.Opaque = r.opaque(i)
-		}
-		bundle.SDM.Send(o, roc, tsi)
 	}
 
+	r.DecPending()
+	return err
+}
+
+func (r *XactMoss) _send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, i int) error {
+	in := &req.In[i]
+	if err := _assertNoRange(in); err != nil {
+		return err
+	}
+
+	lom, local, err := r._lom(in, smap)
+	if err != nil {
+		return err
+	}
+	if !local {
+		return nil // skip
+	}
+
+	bck := lom.Bck()
+	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
+
+	lom.Lock(false)
+	roc, err := lom.NewDeferROC(false /*loaded*/)
+	if err != nil {
+		if !req.ContinueOnErr || !cos.IsNotExist(err, 0) {
+			return err
+		}
+		nameInArch = apc.MossMissingDir + "/" + nameInArch
+		roc = nopROC{}
+	}
+
+	o := transport.AllocSend()
+	hdr := &o.Hdr
+	{
+		hdr.Bck = *lom.Bucket()
+		hdr.ObjName = nameInArch
+		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
+		hdr.Opaque = r.opaque(i)
+	}
+	bundle.SDM.Send(o, roc, tsi)
 	return nil
 }
 
@@ -324,17 +320,17 @@ func (r *XactMoss) opaque(i int) (b []byte) {
 }
 
 // as transport.Receiver
-// note that hdr.ObjName is `nameInArch` resulting from  `req.NameInRespArch()` that takes into account `req.OnlyObjName = (true|false)`
+// note that received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
-		nlog.Errorln(r.Name(), "recv error:", err)
+		r.Abort(err)
 		return err
 	}
 
 	debug.Assert(len(hdr.Opaque) == cos.SizeofI32)
 	index := int(binary.BigEndian.Uint32(hdr.Opaque))
-	if index < 0 || index >= len(r.recvd) {
-		err = fmt.Errorf("out-of-bounds index %d (recv'd len=%d)", index, len(r.recvd))
+	if index < 0 || index >= len(r.recv.m) {
+		err = fmt.Errorf("out-of-bounds index %d (recv'd len=%d)", index, len(r.recv.m))
 		debug.AssertNoErr(err)
 		return err
 	}
@@ -354,15 +350,15 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 
 	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/") // TODO -- FIXME: must be a better way
 
-	r.mu.Lock()
-	entry := &r.recvd[index]
+	r.recv.mtx.Lock()
+	entry := &r.recv.m[index]
 	debug.Assertf(entry.sgl == nil && entry.name == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.name)
-	r.recvd[index] = mossInRecv{
+	r.recv.m[index] = mossInRecv{
 		name:      hdr.ObjName,
 		sgl:       sgl,
 		isMissing: isMissing,
 	}
-	r.mu.Unlock()
+	r.recv.mtx.Unlock()
 
 	if err := r.wi.flushMaybe(); err != nil {
 		r.Abort(err)
@@ -379,6 +375,21 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.ToSnap(snap)
 	snap.IdleX = r.IsIdle()
+	return
+}
+
+func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, local bool, err error) {
+	bck, err := r._bucket(in)
+	if err != nil {
+		return nil, false, err
+	}
+
+	lom = &core.LOM{ObjName: in.ObjName}
+	if err := lom.InitBck(bck); err != nil {
+		return nil, false, err
+	}
+
+	_, local, err = lom.HrwTarget(smap)
 	return
 }
 
@@ -408,7 +419,7 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 	return bck, nil
 }
 
-func (r *XactMoss) usingSharedDM() bool { return r.recvd != nil }
+func (r *XactMoss) receiving() bool { return r.recv.m != nil }
 
 ////////////
 // basewi //
@@ -416,27 +427,28 @@ func (r *XactMoss) usingSharedDM() bool { return r.recvd != nil }
 
 func (wi *basewi) next(req *apc.MossReq, i int) error {
 	in := &req.In[i]
-	if in.Length != 0 {
-		return cmn.NewErrNotImpl("range read", "moss")
+	if err := _assertNoRange(in); err != nil {
+		return err
 	}
 
-	// source bucket (per-object) override
-	bck, err := wi.r._bucket(in)
+	lom, local, err := wi.r._lom(in, wi.smap)
 	if err != nil {
 		return err
 	}
-	nameInArch := req.NameInRespArch(bck.Name, i)
-
-	// write next
-	var (
-		out = apc.MossOut{
-			ObjName: in.ObjName, ArchPath: in.ArchPath, Bucket: bck.Name, Provider: bck.Provider,
-			Opaque: in.Opaque,
+	if !local {
+		if wi.r.receiving() {
+			debug.Assert(false, "receiving NIY") // TODO -- FIXME
 		}
-		lom = core.AllocLOM(in.ObjName)
-	)
-	err = wi.write(bck, lom, in, &out, nameInArch, req.ContinueOnErr)
-	core.FreeLOM(lom)
+		return errors.New("unexpected non-local " + lom.Cname() + " when not receiving")
+	}
+
+	bck := lom.Bck()
+	out := apc.MossOut{
+		ObjName: in.ObjName, ArchPath: in.ArchPath, Bucket: bck.Name, Provider: bck.Provider,
+		Opaque: in.Opaque,
+	}
+	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
+	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
 	if err != nil {
 		return err
 	}
@@ -459,25 +471,15 @@ func (wi *basewi) cleanup() {
 	wi.r.DecPending()
 }
 
-func (wi *basewi) write(bck *cmn.Bck, lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {
-	if err := lom.InitBck(bck); err != nil {
-		return err
-	}
-	_, local, err := lom.HrwTarget(wi.smap)
-	if err != nil {
-		return err
-	}
-	if !local {
-		return nil // skip
-	}
+func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
 	lom.Lock(false)
-	err = wi._write(lom, in, out, nameInArch, contOnErr)
+	err := wi._write(lom, archpath, out, nameInArch, contOnErr)
 	lom.Unlock(false)
 	return err
 }
 
 // (under rlock)
-func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string, contOnErr bool) error {
+func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err, 0) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
@@ -494,8 +496,8 @@ func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameIn
 	}
 
 	switch {
-	case in.ArchPath != "":
-		err = wi._txarch(lom, lmfh, out, nameInArch, in.ArchPath, contOnErr)
+	case archpath != "":
+		err = wi._txarch(lom, lmfh, out, nameInArch, archpath, contOnErr)
 	default:
 		err = wi._txreg(lom, lmfh, out, nameInArch)
 	}
@@ -551,12 +553,14 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 // buffwi //
 ////////////
 
-func (wi *buffwi) do(req *apc.MossReq, w http.ResponseWriter) error {
+func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
+	r := wi.r
 	for i := range req.In {
-		if err := wi.r.AbortErr(); err != nil {
+		if err := r.AbortErr(); err != nil {
 			return err
 		}
 		if err := wi.basewi.next(req, i); err != nil {
+			r.Abort(err)
 			return err
 		}
 	}
@@ -584,10 +588,10 @@ func (wi *buffwi) do(req *apc.MossReq, w http.ResponseWriter) error {
 	}
 
 	wi.sgl.Reset()
-	wi.r.ObjsAdd(wi.cnt, wi.size)
+	r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
+		nlog.Infoln(r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
 	}
 	return nil
 }
@@ -622,16 +626,19 @@ func (*buffwi) flushMaybe() error {
 // streamwi //
 //////////////
 
-func (wi *streamwi) do(req *apc.MossReq, w http.ResponseWriter) error {
+func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
+	r := wi.r
 	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
 	for i := range req.In {
-		if err := wi.r.AbortErr(); err != nil {
+		if err := r.AbortErr(); err != nil {
 			return err
 		}
 		if err := wi.basewi.next(req, i); err != nil {
+			r.Abort(err)
 			return err
 		}
 		if err := wi.aw.Flush(); err != nil {
+			r.Abort(err)
 			return err
 		}
 	}
@@ -667,14 +674,14 @@ func _ctype(outputFormat string) string {
 	}
 }
 
-// drains recvd[] in strict input order
+// drains recv.m[] in strict input order
 func (wi *streamwi) flushMaybe() (err error) {
 	r := wi.r
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.recv.mtx.Lock()
+	defer r.recv.mtx.Unlock()
 
-	for r.nextRecv < len(r.recvd) {
-		entry := &r.recvd[r.nextRecv]
+	for r.recv.next < len(r.recv.m) {
+		entry := &r.recv.m[r.recv.next]
 		if entry.sgl == nil && !entry.isMissing {
 			break // haven't received this one yet — stop
 		}
@@ -683,16 +690,15 @@ func (wi *streamwi) flushMaybe() (err error) {
 			err = wi.aw.Write(entry.name, cos.SimpleOAH{Size: 0}, nopROC{})
 		} else {
 			oah := cos.SimpleOAH{Size: entry.sgl.Len()}
-			err = wi.aw.Write(entry.name, oah, entry.sgl)
+			err = wi.aw.Write(entry.name, oah, entry.sgl) // --> http.ResponseWriter
 		}
 		if err != nil {
-			r.Abort(err)
 			return err
 		}
 
 		// GC to release memory
-		r.recvd[r.nextRecv] = mossInRecv{}
-		r.nextRecv++
+		r.recv.m[r.recv.next] = mossInRecv{}
+		r.recv.next++
 
 		wi.cnt++
 		wi.size += entry.sgl.Len()
@@ -701,6 +707,13 @@ func (wi *streamwi) flushMaybe() (err error) {
 	}
 
 	return nil
+}
+
+func _assertNoRange(in *apc.MossIn) (err error) {
+	if in.Length != 0 {
+		err = cmn.NewErrNotImpl("range read", "moss")
+	}
+	return
 }
 
 ////////////
