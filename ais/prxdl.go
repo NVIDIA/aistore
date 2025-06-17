@@ -2,6 +2,8 @@
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
+
+//go:generate go run ../tools/gendocs/
 package ais
 
 import (
@@ -22,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// Download operations: start, monitor, and manage download jobs
 // [METHOD] /v1/download
 func (p *proxy) dloadHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStarted() {
@@ -38,9 +41,10 @@ func (p *proxy) dloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// httpDownloadAdmin is meant for aborting, removing and getting status updates for downloads.
-// GET /v1/download?id=...
-// DELETE /v1/download/{abort, remove}?id=...
+// +gen:endpoint GET /v1/download
+// +gen:endpoint DELETE /v1/download/abort
+// +gen:endpoint DELETE /v1/download/remove
+// Get download status/list or abort/remove download jobs
 func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 	if !p.ClusterStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -79,7 +83,8 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/download
+// +gen:endpoint POST /v1/download
+// Start a new download job to fetch external data into AIStore buckets
 func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathDownload.L, 0, false); err != nil {
 		return

@@ -13,6 +13,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install OpenAPI Generator CLI
+        run: |
+          mkdir -p ~/bin/openapitools
+          curl -L https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > ~/bin/openapitools/openapi-generator-cli
+          chmod +x ~/bin/openapitools/openapi-generator-cli
+          echo "$HOME/bin/openapitools" >> $GITHUB_PATH
+
+      - name: Generate API Documentation
+        run: |
+          cd tools/gendocs
+          go run main.go param.go
+          cd ../..
+          make restful-api-doc
+          openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
+          cp docs-generated/README.md docs/api-documentation.md
+          cp -r docs-generated/Apis docs/
+
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.1.3

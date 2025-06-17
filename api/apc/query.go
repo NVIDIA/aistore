@@ -10,8 +10,8 @@ const (
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 
-	QparamUUID  = "uuid"  // xaction
-	QparamJobID = "jobid" // job
+	QparamUUID  = "uuid"  // Transaction/xaction UUID identifier
+	QparamJobID = "jobid" // Job identifier
 
 	// etl
 	QparamETLName          = "etl_name"
@@ -26,19 +26,19 @@ const (
 	QparamNewCustom = "set-new-custom"
 
 	// Main bucket query params.
-	QparamProvider  = "provider" // aka backend provider or, simply, backend
-	QparamNamespace = "namespace"
+	QparamProvider  = "provider"  // Backend provider type (ais, s3, gcp, azure, etc.)
+	QparamNamespace = "namespace" // Namespace for remote buckets and cross-cluster operations
 
 	// e.g., usage: copy bucket, copy object
-	QparamBckTo = "bck_to"
-	QparamObjTo = "object_to"
+	QparamBckTo = "bck_to"    // Destination bucket for copy/move operations
+	QparamObjTo = "object_to" // Destination object name for copy/move operations
 
 	// Do not add remote bucket to cluster's BMD e.g. when checking existence
 	// via api.HeadBucket
 	// By default, when existence of a remote buckets is confirmed the bucket's
 	// metadata gets automatically (and transactionally) added to the cluster's BMD.
 	// This query parameter can be used to override the default behavior.
-	QparamDontAddRemote = "dont_add_remote_bck_md"
+	QparamDontAddRemote = "dont_add_remote_bck_md" // Don't add remote bucket to cluster BMD
 
 	// Add remote bucket to BMD _unconditionally_ and without executing HEAD request
 	// (to check access and load the bucket's properties)
@@ -48,27 +48,27 @@ const (
 	// - `LsDontHeadRemote`
 	// - docs/bucket.md
 	// - docs/cli/aws_profile_endpoint.md
-	QparamDontHeadRemote = "dont_head_remote_bck"
+	QparamDontHeadRemote = "dont_head_remote_bck" // Add remote bucket without HEAD request validation
 
 	// When evicting, keep remote bucket in BMD (i.e., evict data only)
-	QparamKeepRemote = "keep_bck_md"
+	QparamKeepRemote = "keep_bck_md" // Keep bucket metadata when evicting remote bucket data
 
 	// (api.GetBucketInfo)
 	// NOTE: non-empty value indicates api.GetBucketInfo; "true" value further requires "with remote obj-s"
-	QparamBinfoWithOrWithoutRemote = "bsumm_remote"
+	QparamBinfoWithOrWithoutRemote = "bsumm_remote" // Include remote objects in bucket summary/info
 
 	// "presence" in a given cluster shall not be confused with "existence" (possibly, remote).
 	// See also:
 	// - Flt* enum below
 	// - ListObjsMsg flags, docs/providers.md (for terminology)
-	QparamFltPresence = "presence"
+	QparamFltPresence = "presence" // Filter bucket/object by presence state (FltExists, FltPresent, etc.)
 
 	// APPEND(object) operation - QparamAppendType enum below
-	QparamAppendType   = "append_type"
-	QparamAppendHandle = "append_handle"
+	QparamAppendType   = "append_type"   // Type of append operation (append, flush)
+	QparamAppendHandle = "append_handle" // Handle for ongoing append operations
 
 	// HTTP bucket support.
-	QparamOrigURL = "original_url"
+	QparamOrigURL = "original_url" // Original URL for HTTP bucket objects
 
 	// Get logs
 	QparamLogSev  = "severity" // see { LogInfo, ...} enum
@@ -120,12 +120,12 @@ const (
 	// used to overcome certain restrictions, e.g.:
 	// - shutdown the primary and the entire cluster
 	// - attach invalid mountpath
-	QparamForce = "frc"
+	QparamForce = "frc" // Force operation to override restrictions
 
 	// same as `Versioning.ValidateWarmGet` (cluster config and bucket props)
 	// - usage: GET and (copy|transform) x (bucket|multi-object) operations
 	// - implies remote backend
-	QparamLatestVer = "latest-ver"
+	QparamLatestVer = "latest-ver" // Get latest version of objects from remote backend
 
 	// in addition to the latest-ver (above), also entails removing remotely
 	// deleted objects
@@ -136,7 +136,7 @@ const (
 
 	// when true, skip nlog.Error and friends
 	// (to opt-out logging too many messages and/or benign warnings)
-	QparamSilent = "sln"
+	QparamSilent = "sln" // Suppress error logging and warnings
 
 	// (see api.AttachMountpath vs. LocalConfig.FSP)
 	QparamMpathLabel = "mountpath_label"

@@ -2,6 +2,8 @@
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
+
+//go:generate go run ../tools/gendocs/
 package ais
 
 import (
@@ -20,6 +22,7 @@ import (
 )
 
 // [METHOD] /v1/etl
+// ETL handler router - dispatches to specific HTTP method handlers
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -47,7 +50,11 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /v1/etl
+// +gen:endpoint GET /v1/etl/{etl-name}
+// +gen:endpoint GET /v1/etl/{etl-name}/logs
+// +gen:endpoint GET /v1/etl/{etl-name}/health
+// +gen:endpoint GET /v1/etl/{etl-name}/metrics
+// List ETL jobs or get information, logs, health, and metrics for specific ETL jobs
 func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 0, true)
 	if err != nil {
@@ -84,14 +91,10 @@ func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /v1/etl
-// Validate and start a new ETL instance:
-//   - validate user-provided code/pod specification.
-//   - broadcast `etl.InitMsg` to all targets.
-//   - (as usual) if any target fails to start ETL stop it on all (targets).
-//     otherwise:
-//   - add the new ETL instance (represented by the user-specified `etl.InitMsg`) to cluster MD
-//   - return ETL UUID to the user.
+// +gen:endpoint PUT /v1/etl
+// Create and initialize a new ETL job to transform data during transfers.
+// Request body: etl.InitMsg (JSON)
+// Returns: ETL UUID on success.
 func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
 		return
@@ -133,8 +136,9 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
-// start/stop ETL pods
+// +gen:endpoint POST /v1/etl/{etl-name}/start
+// +gen:endpoint POST /v1/etl/{etl-name}/stop
+// Start or stop ETL jobs by name
 func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 2, true)
 	if err != nil {
@@ -174,7 +178,8 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE /v1/etl/<etl-name>
+// +gen:endpoint DELETE /v1/etl/{etl-name}
+// Delete and remove an ETL job by name
 func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 1, true)
 	if err != nil {
@@ -270,6 +275,7 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	}
 }
 
+// Get detailed information about a specific ETL job
 // GET /v1/etl/<etl-name>
 func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := k8s.ValidateEtlName(etlName); err != nil {
@@ -309,6 +315,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 	p.writeJSON(w, r, etl.Details{InitMsg: initMsg, ObjErrs: errs}, "etl-details")
 }
 
+// List all ETL jobs in the cluster
 // GET /v1/etl
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	args := allocBcArgs()
@@ -365,6 +372,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, list, "list-etl")
 }
 
+// Get logs from ETL job execution
 // GET /v1/etl/<etl-name>/logs[/<target_id>]
 func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, apiItems ...string) {
 	var (
@@ -414,6 +422,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 	p.writeJSON(w, r, logs, "logs-etl")
 }
 
+// Get health status of ETL job
 // GET /v1/etl/<etl-name>/health
 func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -441,6 +450,7 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-etl")
 }
 
+// Get CPU and memory metrics for ETL job
 // GET /v1/etl/<etl-name>/metrics
 func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 	var (

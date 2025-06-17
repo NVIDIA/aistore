@@ -2,6 +2,8 @@
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
+
+//go:generate go run ../tools/gendocs/
 package ais
 
 import (
@@ -591,7 +593,8 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /v1/buckets[/bucket-name]
+// +gen:endpoint GET /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// List buckets or list objects within a bucket
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
 		msg     *apc.ActMsg
@@ -710,7 +713,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 }
 
-// GET /v1/objects/bucket-name/object-name
+// +gen:endpoint GET /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamOrigURL=string,apc.QparamLatestVer=bool]
+// Retrieve the object content with the given uname
 func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	// 1. request
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
@@ -775,7 +779,8 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	p.statsT.IncBck(stats.GetCount, bck.Bucket())
 }
 
-// PUT /v1/objects/bucket-name/object-name
+// +gen:endpoint PUT /v1/objects/bucket-name/object-name[apc.QparamAppendType=string,apc.QparamAppendHandle=string]
+// Create a new object with the given uname
 func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		nodeID string
@@ -877,7 +882,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	p.statsT.IncWith(scnt, vlabs)
 }
 
-// DELETE /v1/objects/bucket-name/object-name
+// +gen:endpoint DELETE /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// Delete an object with the given uname
 func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	bckArgs := allocBctx()
 	{
@@ -919,7 +925,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
 }
 
-// DELETE { action } /v1/buckets
+// +gen:endpoint DELETE /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamKeepRemote=bool]
+// Delete a bucket or delete/evict objects within a bucket
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	// 1. request
 	if err := p.parseReq(w, r, apireq); err != nil {
@@ -1013,7 +1020,8 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	}
 }
 
-// PUT /v1/metasync
+// +gen:endpoint PUT /v1/metasync
+// Internal metadata synchronization between cluster nodes
 // (compare with p.recvCluMeta and t.metasyncHandlerPut)
 func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -1106,7 +1114,8 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 	}
 }
 
-// GET /v1/health
+// +gen:endpoint GET /v1/health[apc.QparamPrimaryReadyReb=bool,apc.QparamClusterInfo=bool,apc.QparamAskPrimary=bool]
+// Get cluster and node health status
 func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -1193,7 +1202,8 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// PUT { action } /v1/buckets/bucket-name
+// +gen:endpoint PUT /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// Perform actions on a bucket (like archiving)
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg           *apc.ActMsg
@@ -1255,7 +1265,8 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST { action } /v1/buckets[/bucket-name]
+// +gen:endpoint POST /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool]
+// Create buckets or perform bucket operations (copy, move, etc.)
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
 	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 1, true)
@@ -1554,7 +1565,6 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 	return bckTo, ecode, nil
 }
 
-// POST { apc.ActCreateBck } /v1/buckets/bucket-name
 func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *meta.Bck) {
 	var (
 		remoteHdr http.Header
@@ -1665,7 +1675,8 @@ func crerrStatus(err error) (ecode int) {
 	return
 }
 
-// POST { action } /v1/objects/bucket-name[/object-name]
+// +gen:endpoint POST /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// Perform actions on objects (rename, promote, blob download, check lock)
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := p.readActionMsg(w, r)
 	if err != nil {
@@ -1777,7 +1788,8 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 	return nil
 }
 
-// HEAD /v1/buckets/bucket-name[/prefix]
+// +gen:endpoint HEAD /v1/buckets/bucket-name/prefix[apc.QparamFltPresence=string,apc.QparamBinfoWithOrWithoutRemote=string,apc.QparamDontAddRemote=bool]
+// Get bucket metadata and properties
 // with additional preparsing step to support api.GetBucketInfo prefix
 // (e.g. 'ais ls ais://nnn --summary --prefix=aaa/bbb')
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
@@ -1907,7 +1919,8 @@ func toHdr(w http.ResponseWriter, bck *meta.Bck, info *cmn.BsummResult, status i
 	}
 }
 
-// PATCH /v1/buckets/bucket-name
+// +gen:endpoint PATCH /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// Update bucket properties and settings
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		err           error
@@ -1974,7 +1987,8 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 }
 
-// HEAD /v1/objects/bucket-name/object-name
+// +gen:endpoint HEAD /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamSilent=bool]
+// Get object metadata and properties
 func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	bckArgs := allocBctx()
 	{
@@ -2007,7 +2021,8 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-// PATCH /v1/objects/bucket-name/object-name
+// +gen:endpoint PATCH /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// Update object metadata and custom properties
 func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	bckArgs := allocBctx()
@@ -2356,6 +2371,9 @@ func (p *proxy) bmodPostMv(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
+// +gen:endpoint GET /v1/daemon[apc.QparamWhat=string]
+// Retrieve various cluster and node information based on the 'what' query parameter.
+// Supports multiple types: BMD (bucket metadata), NodeStatsAndStatus, SysInfo, Smap (cluster map), and more.
 // (compare w/ httpcluget)
 func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -2431,6 +2449,8 @@ func (p *proxy) readyToJoinClu(smap *smapX) error {
 	return p.pready(smap, true)
 }
 
+// +gen:endpoint PUT /v1/daemon[apc.QparamForce=bool]
+// Configure daemon settings and perform daemon operations
 func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {
@@ -2550,6 +2570,8 @@ func (p *proxy) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []s
 	}
 }
 
+// +gen:endpoint POST /v1/daemon[apc.QparamPrimaryCandidate=string,apc.QparamPrepare=bool]
+// Admin operations like joining cluster or forcing primary selection
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {

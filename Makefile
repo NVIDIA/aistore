@@ -180,6 +180,7 @@ endif
 clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
 	@"$(DEPLOY_DIR)/clean.sh"
+	@rm -rf .docs
 	@echo "done."
 
 #
@@ -332,3 +333,57 @@ help:
 		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
 		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
+
+.PHONY: restful-api-doc
+
+## Generate RESTful API documentation using swagger
+restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
+	@echo "Generating swagger annotations from code comments..."
+	@GOROOT="" go generate ./...
+	@echo "Installing swag if not present..."
+	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@latest
+	@echo "Generating OpenAPI specification..."
+	@mkdir -p .docs
+	@swag init --generalInfo tools/gendocs/annotations.go --output .docs
+	@echo "Cleaning up generated annotations file..."
+	@GOROOT="" go run ./tools/gendocs -cleanup
+	@echo "$(cyan)Documentation generated successfully!$(term-reset)"
+	@echo "$(cyan)Generated files:$(term-reset)"
+	@echo "  .docs/swagger.json  - OpenAPI JSON specification"
+	@echo "  .docs/swagger.yaml  - OpenAPI YAML specification"
+	@echo "  .docs/docs.go       - Go documentation file"
+	@echo ""
+	@echo "$(cyan)To test the documentation:$(term-reset)"
+	@echo "  1. Copy the content of .docs/swagger.json"
+	@echo "  2. Paste it into https://editor.swagger.io/"
+	@echo "  3. View the rendered API documentation"
+
+
+.PHONY: api-docs-website
+
+## Generate API documentation for the website with custom template
+api-docs-website: restful-api-doc ## Generate complete API documentation for Jekyll website
+	@echo "$(cyan)Generating website API documentation...$(term-reset)"
+	@echo "Checking OpenAPI Generator CLI availability..."
+	@if ! command -v openapi-generator-cli >/dev/null 2>&1; then \
+		echo "$(red)Error: openapi-generator-cli not found in PATH$(term-reset)"; \
+		echo "$(cyan)Please install it using the bash launcher script:$(term-reset)"; \
+		echo "  mkdir -p ~/bin/openapitools"; \
+		echo "  curl https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > ~/bin/openapitools/openapi-generator-cli"; \
+		echo "  chmod u+x ~/bin/openapitools/openapi-generator-cli"; \
+		echo "  export PATH=\$$PATH:~/bin/openapitools"; \
+		exit 1; \
+	fi
+	@echo "Generating markdown documentation with custom template..."
+	@openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
+	@echo "Copying generated documentation to website location..."
+	@cp docs-generated/README.md docs/api-documentation.md
+	@cp -r docs-generated/Apis docs/
+	@echo "Adding Jekyll front matter..."
+	@./scripts/website-preprocess.sh
+	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"
+	@echo "$(cyan)Updated files:$(term-reset)"
+	@echo "  docs/api-documentation.md - Website API documentation"
+	@echo "  docs-generated/README.md - Generated documentation"
+	@echo ""
+	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"

@@ -16,6 +16,7 @@ redirect_from:
 - [CLI: reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
 - [Technical Blog](https://aistore.nvidia.com/blog)
 - [How to deploy AIStore (useful links)](https://github.com/NVIDIA/aistore/blob/main/deploy/README.md)
+- [API Documentation](/docs/api-documentation)
 
 ## API and SDKs
 
