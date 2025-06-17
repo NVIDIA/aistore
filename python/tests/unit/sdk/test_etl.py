@@ -19,7 +19,6 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPULL,
     DEFAULT_ETL_TIMEOUT,
     DEFAULT_ETL_OBJ_TIMEOUT,
-    PYTHON_RUNTIME_CMD,
 )
 
 from aistore.sdk.types import ETLDetails
@@ -145,7 +144,6 @@ class TestEtl(
         self.assertEqual(
             init_kwargs["image"], f"aistorage/runtime_python:{_get_runtime()}"
         )
-        self.assertEqual(init_kwargs["command"], PYTHON_RUNTIME_CMD)
         self.assertEqual(init_kwargs["comm_type"], ETL_COMM_HPUSH)
         self.assertEqual(init_kwargs["init_timeout"], DEFAULT_ETL_TIMEOUT)
         self.assertEqual(init_kwargs["obj_timeout"], DEFAULT_ETL_OBJ_TIMEOUT)

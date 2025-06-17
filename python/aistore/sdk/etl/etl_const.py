@@ -34,5 +34,3 @@ FASTAPI_CMD = [
     "4",
     "--no-access-log",
 ]
-
-PYTHON_RUNTIME_CMD = ["python", "bootstrap.py"]

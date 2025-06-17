@@ -22,7 +22,6 @@ from aistore.sdk.etl.etl_const import (
     DEFAULT_ETL_TIMEOUT,
     DEFAULT_ETL_OBJ_TIMEOUT,
     ETL_COMM_OPTIONS,
-    PYTHON_RUNTIME_CMD,
 )
 
 from aistore.sdk.types import (
@@ -268,7 +267,6 @@ class Etl:
             # Call init(), passing our special env-vars
             self.init(
                 image=f"aistorage/runtime_python:{_get_runtime()}",
-                command=PYTHON_RUNTIME_CMD,
                 comm_type=comm_type,
                 init_timeout=init_timeout,
                 obj_timeout=obj_timeout,
