@@ -3,6 +3,7 @@
 #
 
 import os
+import subprocess
 import hashlib
 import unittest
 import pytest
@@ -493,6 +494,87 @@ class TestETLOps(unittest.TestCase):
             [f"{src_bck.provider.value}://{src_bck.name}/{i}" for i in range(6, 9)]
         )
         self.assertEqual(error_names, expected_errors)
+
+    def _register_crypto_server(self, etl, os_packages=None):
+        """
+        Helper that registers and returns a CryptoServer ETL for encrypt/decrypt via openssl.
+        """
+        decorator_kwargs = {}
+        if os_packages is not None:
+            decorator_kwargs["os_packages"] = os_packages
+
+        @etl.init_class(**decorator_kwargs)
+        class CryptoServer(FastAPIServer):
+            """
+            ETL Webserver that encrypts/decrypts each object on the fly
+            using AES-256-CBC via the `openssl` CLI.
+            """
+
+            def transform(self, data: bytes, path: str, etl_args: str) -> bytes:
+                if etl_args not in ("encrypt", "decrypt"):
+                    raise ValueError("Mode must be 'encrypt' or 'decrypt'")
+
+                cmd = [
+                    "openssl",
+                    "enc",
+                    "-aes-256-cbc",
+                    "-salt",
+                    "-pbkdf2",
+                    "-iter",
+                    "100000",
+                    "-pass",
+                    "pass:12345",
+                ]
+                if etl_args == "encrypt":
+                    cmd.append("-base64")
+                else:
+                    cmd.extend(["-d", "-base64"])
+
+                proc = subprocess.run(
+                    cmd,
+                    input=data,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=True,
+                )
+                return proc.stdout
+
+        return CryptoServer
+
+    @pytest.mark.etl
+    def test_etl_with_os_packages(self):
+        etl = self.client.etl(self.etl_name)
+        self._register_crypto_server(etl, os_packages=["openssl"])
+        # Read the object through the ETL to ensure it's running
+        encrypted_text = (
+            self.bucket.object(self.obj_name)
+            .get_reader(etl=ETLConfig(name=etl.name, args="encrypt"))
+            .read_all()
+        )
+        self.assertIsNotNone(encrypted_text)
+        self.assertNotEqual(encrypted_text, bytes(self.content))
+
+        self.bucket.object("encrypted-" + self.obj_name).get_writer().put_content(
+            encrypted_text
+        )
+
+        decypted_text = (
+            self.bucket.object("encrypted-" + self.obj_name)
+            .get_reader(etl=ETLConfig(name=etl.name, args="decrypt"))
+            .read_all()
+        )
+        self.assertEqual(decypted_text, bytes(self.content))
+
+    @pytest.mark.etl
+    def test_etl_with_missing_os_packages(self):
+        etl = self.client.etl(self.etl_name)
+        self._register_crypto_server(etl)
+
+        with self.assertRaises(AISError):
+            # Read the object through the ETL to ensure it's running
+            self.bucket.object(self.obj_name).get_reader(
+                etl=ETLConfig(name=etl.name, args="encrypt")
+            ).read_all()
 
 
 if __name__ == "__main__":

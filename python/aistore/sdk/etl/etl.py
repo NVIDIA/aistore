@@ -144,7 +144,7 @@ class Etl:
         arg_type: str = "",
         direct_put: bool = False,
         **kwargs,
-    ):
+    ) -> str:
         """
         Initializes an ETL based on a container image and optional command/env vars.
 
@@ -203,6 +203,7 @@ class Etl:
         self,
         *,
         dependencies: List[str] = None,
+        os_packages: List[str] = None,
         comm_type: str = DEFAULT_ETL_COMM,
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
@@ -225,6 +226,10 @@ class Etl:
             dependencies (List[str], optional):
                 A list of extra PyPI package names to install inside the ETL pod
                 before running your server. Defaults to no extra packages.
+            os_packages (List[str], optional):
+                Names of Linux packages to install inside the ETL container before the server starts.
+                These must be available as Debian-based system packages installable via the `apt` package manager.
+                (e.g. `libsndfile-dev`, `ffmpeg`). Defaults to no extra system packages.
             comm_type (str, optional):
                 How AIS should talk to your ETL pod. Set to `"hpush://"` or `"hpull://"`
                 (and is forwarded into the `init(...)` call). Defaults to `"hpush://"`.
@@ -247,6 +252,7 @@ class Etl:
                 processes (default: 4).
         """
         dependencies = dependencies or []
+        os_packages = os_packages or []
 
         def decorator(cls: Type[ETLServer]) -> Type[ETLServer]:
             # Check if the class is a subclass of ETLServer
@@ -262,6 +268,11 @@ class Etl:
             # include PACKAGES if any
             if dependencies:
                 env_kwargs["PACKAGES"] = ",".join(dependencies)
+
+            # include OS_PACKAGES if any
+            if os_packages:
+                env_kwargs["OS_PACKAGES"] = ",".join(os_packages)
+
             env_kwargs.update(kwargs)
 
             # Call init(), passing our special env-vars
