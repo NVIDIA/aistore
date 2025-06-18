@@ -283,10 +283,10 @@ func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, sma
 	// (rgetstats)
 	if bck := args.BckFrom; bck.IsRemote() {
 		r.bp = core.T.Backend(bck)
-		r.vlabs = map[string]string{
-			stats.VlabBucket: bck.Cname(""),
-			stats.VlabXkind:  r.Kind(),
-		}
+	}
+	r.vlabs = map[string]string{
+		stats.VlabBucket: args.BckFrom.Cname(""),
+		stats.VlabXkind:  r.Kind(),
 	}
 
 	p.xctn = r

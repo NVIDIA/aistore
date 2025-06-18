@@ -17,12 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -56,7 +54,11 @@ type (
 		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error)
+		//  - Returns:
+		//    - size: the size of transformed object
+		//    - ecode: error code
+		//    - err: error encountered during transformation
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error)
 	}
 
 	// httpCommunicator manages stateless communication to ETL pod through HTTP requests
@@ -203,7 +205,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 	return core.ReadResp{R: r, OAH: oah, Err: err, Ecode: ecode}
 }
 
-func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration, started int64) (r cos.ReadCloseSizer, ecode int, err error) {
+func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Duration) (r cos.ReadCloseSizer, ecode int, err error) {
 	if timeout == 0 {
 		timeout = DefaultObjTimeout
 	}
@@ -221,16 +223,11 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 		return nil, ecode, err
 	}
 
-	return cos.NewReaderWithArgs(cos.ReaderArgs{
-		R:    rtyr.resp.Body,
-		Size: rtyr.resp.ContentLength,
-		DeferCb: func() {
-			cancel()
-			st := core.T.StatsUpdater()
-			st.Inc(stats.ETLOfflineCount)
-			st.Add(stats.ETLOfflineLatencyTotal, int64(mono.Since(started)))
-		},
-	}), rtyr.resp.StatusCode, nil
+	return &cos.ReaderWithArgs{
+		R:       rtyr.resp.Body,
+		Rsize:   rtyr.resp.ContentLength,
+		DeferCb: cancel,
+	}, rtyr.resp.StatusCode, nil
 }
 
 //////////////
@@ -245,9 +242,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		path    string
 		getBody getBodyFunc
 
-		started = mono.NanoTime()
-		oah     = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
-		query   = make(url.Values, 2)
+		oah   = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
+		query = make(url.Values, 2)
 	)
 
 	switch pc.boot.msg.ArgType() {
@@ -293,7 +289,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 
 	// note: `Content-Length` header is set during `retryer.call()` below
 	_, objTimeout := pc.boot.msg.Timeouts()
-	r, ecode, err := doWithTimeout(reqArgs, getBody, objTimeout.D(), started)
+	r, ecode, err := doWithTimeout(reqArgs, getBody, objTimeout.D())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -301,10 +297,10 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
 	resp := pc.doRequest(lom, targs, latestVer, false, nil)
 	if resp.Err != nil {
-		return resp.Ecode, resp.Err
+		return 0, resp.Ecode, resp.Err
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err)
@@ -316,11 +312,11 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 	}
 	buf, slab := core.T.PageMM().AllocSize(bufsz)
 	w.WriteHeader(resp.Ecode)
-	_, err := io.CopyBuffer(w, resp.R, buf)
+	n, err := cos.CopyBuffer(w, resp.R, buf)
 
 	slab.Free(buf)
 	resp.R.Close()
-	return 0, err
+	return n, 0, err
 }
 
 func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
@@ -335,13 +331,13 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs 
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
 	if err := rc.boot.xctn.AbortErr(); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	ecode, err := lomLoad(lom, rc.boot.xctn.Kind())
+	ecode, err = lomLoad(lom, rc.boot.xctn.Kind())
 	if err != nil {
-		return ecode, err
+		return 0, ecode, err
 	}
 
 	path, query := rc.redirectArgs(lom, latestVer)
@@ -354,7 +350,7 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
 	}
-	return 0, nil
+	return cos.ContentLengthUnknown, 0, nil // TODO: stats inline transform size for hpull
 }
 
 // TODO: support `sync` option as well
@@ -378,10 +374,7 @@ func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string
 }
 
 func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs *core.GetROCArgs) core.ReadResp {
-	var (
-		started = mono.NanoTime()
-		clone   = *lom
-	)
+	clone := *lom
 	ecode, err := lomLoad(&clone, rc.boot.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
@@ -402,7 +395,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 	}
 
 	_, objTimeout := rc.boot.msg.Timeouts()
-	r, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D(), started)
+	r, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}

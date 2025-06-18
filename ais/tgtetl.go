@@ -15,12 +15,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -172,6 +174,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 }
 
 func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
+	started := mono.NanoTime()
 	comm, errN := etl.GetCommunicator(dpq.etl.name)
 	if errN != nil {
 		switch {
@@ -188,11 +191,19 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 
 	// do
 	xetl := comm.Xact()
-	ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
+	size, ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
 
 	if err == nil {
-		xetl.ObjsAdd(1, lom.Lsize(true)) // _special_ as the transformed size could be `cos.ContentLengthUnknown` at this point
-		return                           // ok
+		if size >= 0 {
+			tstats := core.T.StatsUpdater()
+			tstats.IncWith(stats.ETLInlineCount, xetl.Vlabs)
+			tstats.AddWith(
+				cos.NamedVal64{Name: stats.ETLInlineLatencyTotal, Value: mono.SinceNano(started), VarLabs: xetl.Vlabs},
+				cos.NamedVal64{Name: stats.ETLInlineSize, Value: size, VarLabs: xetl.Vlabs},
+			)
+			xetl.ObjsAdd(1, size)
+		}
+		return // ok
 	}
 
 	// NOTE:

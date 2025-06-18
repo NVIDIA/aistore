@@ -154,13 +154,12 @@ func (ws *webSocketComm) SetupConnection() (err error) {
 	return err
 }
 
-func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int, error) {
+func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int64, int, error) {
 	// use pre-established inline sessions to serve inline transform requests
-	_, ecode, err := ws.inlineSession.transform(lom, latestVer, false /*sync*/, cos.NopWriteCloser(w), &core.GetROCArgs{
+	return ws.inlineSession.transform(lom, latestVer, false /*sync*/, cos.NopWriteCloser(w), &core.GetROCArgs{
 		TransformArgs: targs,
 		Local:         true, // inline transform is always local
 	})
-	return ecode, err
 }
 
 func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session, error) {

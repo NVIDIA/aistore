@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
@@ -123,11 +124,7 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, confi
 }
 
 func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
-	var started int64
-	if tc.bp != nil {
-		started = mono.NanoTime()
-	}
-
+	started := mono.NanoTime()
 	res := gcoi.CopyObject(lom, dm, a)
 	contOnErr := a.ContinueOnError
 	FreeCOI(a)
@@ -136,6 +133,14 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 	case res.Err == nil:
 		debug.Assert(res.Lsize != cos.ContentLengthUnknown)
 		tc.r.ObjsAdd(1, res.Lsize)
+
+		tstats := core.T.StatsUpdater()
+		tstats.IncWith(stats.ETLOfflineCount, tc.vlabs)
+		tstats.AddWith(
+			cos.NamedVal64{Name: stats.ETLOfflineLatencyTotal, Value: mono.SinceNano(started), VarLabs: tc.vlabs},
+			cos.NamedVal64{Name: stats.ETLOfflineSize, Value: res.Lsize, VarLabs: tc.vlabs},
+		)
+
 		if res.RGET {
 			// RGET stats (compare with ais/tgtimpl namesake)
 			debug.Assert(tc.bp != nil)

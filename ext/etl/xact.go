@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -26,6 +27,7 @@ type (
 	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
 	XactETL struct {
 		InlineObjErrs cos.Errs
+		Vlabs         map[string]string
 		msg           InitMsg
 		xact.Base
 
@@ -69,6 +71,10 @@ func newETL(p *factory) *XactETL {
 		msg:            msg,
 		InlineObjErrs:  cos.NewErrs(MaxObjErr),
 		offlineObjErrs: make(map[string]*cos.Errs, 4),
+		Vlabs: map[string]string{
+			stats.VlabXkind:  p.Kind(),
+			stats.VlabBucket: "",
+		},
 	}
 	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)
 	return xctn

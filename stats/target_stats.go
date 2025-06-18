@@ -85,8 +85,12 @@ const (
 	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
 	// ETL
+	ETLInlineCount         = "etl.inline.n"
+	ETLInlineLatencyTotal  = "etl.inline.ns.total"
+	ETLInlineSize          = "etl.inline.size"
 	ETLOfflineCount        = "etl.offline.n"
 	ETLOfflineLatencyTotal = "etl.offline.ns.total"
+	ETLOfflineSize         = "etl.offline.size"
 
 	// Downloader
 	DloadSize = "dl.size"
@@ -504,15 +508,43 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		},
 	)
 
-	// ETL
+	// ETL inline
+	r.reg(snode, ETLInlineCount, KindCounter,
+		&Extra{
+			Help:    "Total number of ETL inline transform requests",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, ETLInlineLatencyTotal, KindTotal,
+		&Extra{
+			Help:    "Total accumulated latency of ETL inline transform requests (nanoseconds)",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, ETLInlineSize, KindSize,
+		&Extra{
+			Help:    "ETL Inline Transformation: total cumulative size (bytes)",
+			VarLabs: BckXlabs,
+		},
+	)
+
+	// ETL offline
 	r.reg(snode, ETLOfflineCount, KindCounter,
 		&Extra{
-			Help: "Total number of requests to ETL made by offline transform jobs",
+			Help:    "Total number of requests to ETL made by offline transform jobs",
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, ETLOfflineLatencyTotal, KindTotal,
 		&Extra{
-			Help: "Total accumulated latency of requests to ETL made by offline transform jobs (nanoseconds)",
+			Help:    "Total accumulated latency of requests to ETL made by offline transform jobs (nanoseconds)",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, ETLOfflineSize, KindSize,
+		&Extra{
+			Help:    "ETL Offline Transformation: total cumulative size (bytes)",
+			VarLabs: BckXlabs,
 		},
 	)
 

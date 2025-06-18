@@ -163,10 +163,10 @@ func (p *tcoFactory) Start() error {
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
 		r.bp = core.T.Backend(bck)
-		r.vlabs = map[string]string{
-			stats.VlabBucket: bck.Cname(""),
-			stats.VlabXkind:  r.Kind(),
-		}
+	}
+	r.vlabs = map[string]string{
+		stats.VlabBucket: r.args.BckFrom.Cname(""),
+		stats.VlabXkind:  r.Kind(),
 	}
 
 	xact.GoRunW(r)

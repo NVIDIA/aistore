@@ -73,14 +73,11 @@ type (
 		size   int
 		offset int
 	}
-	ReaderArgs struct {
+	ReaderWithArgs struct {
 		R       io.Reader
 		ReadCb  func(int, error)
 		DeferCb func()
-		Size    int64
-	}
-	ReaderWithArgs struct {
-		args ReaderArgs
+		Rsize   int64
 	}
 	nopOpener struct{ io.ReadCloser }
 )
@@ -257,16 +254,12 @@ func (f *sizedReader) Size() int64                     { return f.size }
 // ReaderWithArgs //
 ////////////////////
 
-func NewReaderWithArgs(args ReaderArgs) *ReaderWithArgs {
-	return &ReaderWithArgs{args: args}
-}
-
-func (r *ReaderWithArgs) Size() int64 { return r.args.Size }
+func (r *ReaderWithArgs) Size() int64 { return r.Rsize }
 
 func (r *ReaderWithArgs) Read(p []byte) (n int, err error) {
-	n, err = r.args.R.Read(p)
-	if r.args.ReadCb != nil {
-		r.args.ReadCb(n, err)
+	n, err = r.R.Read(p)
+	if r.ReadCb != nil {
+		r.ReadCb(n, err)
 	}
 	return n, err
 }
@@ -274,11 +267,11 @@ func (r *ReaderWithArgs) Read(p []byte) (n int, err error) {
 func (*ReaderWithArgs) Open() (ReadOpenCloser, error) { panic("not supported") }
 
 func (r *ReaderWithArgs) Close() (err error) {
-	if rc, ok := r.args.R.(io.ReadCloser); ok {
+	if rc, ok := r.R.(io.ReadCloser); ok {
 		err = rc.Close()
 	}
-	if r.args.DeferCb != nil {
-		r.args.DeferCb()
+	if r.DeferCb != nil {
+		r.DeferCb()
 	}
 	return err
 }

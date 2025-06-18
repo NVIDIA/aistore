@@ -41,6 +41,7 @@ const (
 	Spec = "SPEC"
 
 	// `ETLSpecMsg` fields
+	Runtime = "RUNTIME"
 	Image   = "IMAGE"
 	Command = "COMMAND"
 	Env     = "ENV"
