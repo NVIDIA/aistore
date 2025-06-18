@@ -55,14 +55,19 @@ class FlaskServer(ETLServer):
                     return resp
 
             return Response(response=transformed, content_type=self.get_mime_type())
-        except FileNotFoundError:
-            self.logger.error("File not found: %s", path)
+        except FileNotFoundError as exc:
+            fs_path = exc.filename or path
+            self.logger.error(
+                "Error processing object %r: file not found at %r",
+                path,
+                fs_path,
+            )
             return (
                 jsonify(
                     {
-                        "error": f"Local file not found: {path}. This typically indicates the container was not \
-                        started with the correct volume mounts. Please verify your pod or container configuration \
-                        includes the necessary mount paths."
+                        "error": (
+                            f"Error processing object {path!r}: file not found at {fs_path!r}. "
+                        )
                     }
                 ),
                 404,

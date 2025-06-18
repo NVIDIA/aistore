@@ -164,13 +164,16 @@ class FastAPIServer(ETLServer):
             return self._build_response(transformed, self.get_mime_type())
 
         except FileNotFoundError as exc:
-            self.logger.error("File not found: %s", path)
+            fs_path = exc.filename or path
+            self.logger.error(
+                "Error processing object %r: file not found at %r",
+                path,
+                fs_path,
+            )
             raise HTTPException(
                 404,
                 detail=(
-                    f"Local file not found: {path}. "
-                    "This typically indicates the ETL container was not started with the correct volume mounts."
-                    "Please verify your ETL specification includes the necessary mount paths."
+                    f"Error processing object {path!r}: file not found at {fs_path!r}."
                 ),
             ) from exc
         except httpx.HTTPStatusError as e:

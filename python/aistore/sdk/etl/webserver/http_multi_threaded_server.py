@@ -177,10 +177,19 @@ class HTTPMultiThreadedServer(ETLServer):
                 self._set_headers(length=len(transformed))
                 self.wfile.write(transformed)
 
-            except FileNotFoundError:
-                logger.error("File not found: %s", raw_path)
-                self.send_error(404, f"Local file not found: {raw_path}")
-
+            except FileNotFoundError as exc:
+                fs_path = exc.filename or raw_path
+                logger.error(
+                    "Error processing request for %r: file not found at %r",
+                    raw_path,
+                    fs_path,
+                )
+                self.send_error(
+                    404,
+                    (
+                        f"Error processing object {raw_path!r}: file not found at {fs_path!r}. "
+                    ),
+                )
             except requests.RequestException as e:
                 logger.error("Request to AIS target failed: %s", str(e))
                 self.send_error(500, f"Error contacting AIS target: {e}")
