@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	objNameLength      = 5
-	defaultNumKeys     = 10_000_000 // default filter is 10M in size
-	dynamicNumKeys     = 5 * 10_000_000
+	objNameLength  = 5
+	defaultNumKeys = 10_000_000 // default filter is 10M in size
+	dynamicNumKeys = 5 * 10_000_000
 )
 
 // Predefined buckets.

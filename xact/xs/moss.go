@@ -42,7 +42,7 @@ client → proxy → designated-target (TD)
                    │
                    ├── shared-dm.recvd[i] = ...     ← entries from other targets via recv()
                    │
-                   └── stream TAR         ← in-order via flushMaybe()
+                   └── stream TAR         ← in-order via flushRx()
 
 other-targets (T1..Tn)
     └── Send(req, smap, TD)
@@ -74,7 +74,6 @@ type (
 	XactMoss struct {
 		xact.DemandBase
 		mm *memsys.MMSA
-		wi *basewi // NOTE: one per x-moss
 		// Rx
 		recv struct {
 			ch   chan int
@@ -87,13 +86,12 @@ type (
 
 type (
 	basewi struct {
-		aw        archive.Writer
-		r         *XactMoss
-		smap      *meta.Smap
-		resp      *apc.MossResp
-		size      int64
-		cnt       int
-		streaming bool
+		aw   archive.Writer
+		r    *XactMoss
+		smap *meta.Smap
+		resp *apc.MossResp
+		size int64
+		cnt  int
 	}
 	buffwi struct {
 		basewi
@@ -234,9 +232,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	// streaming
 	if req.StreamingGet {
 		wi := streamwi{basewi: basewi}
-		wi.streaming = true
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
-		r.wi = &wi.basewi
 		return wi.asm(req, w)
 	}
 
@@ -245,7 +241,6 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 		sgl = r.mm.NewSGL(0)
 		wi  = buffwi{basewi: basewi, sgl: sgl}
 	)
-	r.wi = &wi.basewi
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	err := wi.asm(req, w)
@@ -360,13 +355,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		isMissing: isMissing,
 	}
 
-	err = r.wi.flushMaybe()
 	r.recv.mtx.Unlock()
-
-	if err != nil {
-		r.Abort(err)
-		return err
-	}
 
 	r.recv.ch <- index
 
@@ -376,19 +365,13 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	return nil
 }
 
-// TODO -- FIXME: add timeout; periodic log
-func (r *XactMoss) waitRx(index int) error {
+func (r *XactMoss) waitRx() {
 	for {
 		select {
-		case i, ok := <-r.recv.ch:
-			if !ok {
-				return errStopped
-			}
-			if i == index {
-				return nil
-			}
+		case <-r.recv.ch:
+			break
 		case <-r.ChanAbort():
-			return errStopped
+			break
 		}
 	}
 }
@@ -447,7 +430,7 @@ func (r *XactMoss) receiving() bool { return r.recv.m != nil }
 // basewi //
 ////////////
 
-func (wi *basewi) next(req *apc.MossReq, i int) (int, error) {
+func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	var (
 		r  = wi.r
 		in = &req.In[i]
@@ -465,13 +448,21 @@ func (wi *basewi) next(req *apc.MossReq, i int) (int, error) {
 		if !r.receiving() {
 			return 0, errors.New("unexpected non-local " + lom.Cname() + " when _not_ receiving")
 		}
-		if err := r.waitRx(i); err != nil {
+		r.waitRx()
+	wait:
+		r.recv.mtx.Lock()
+		r.recv.next = i
+		err := wi.flushRx(streaming)
+		j := r.recv.next
+		r.recv.mtx.Unlock()
+
+		if err != nil {
 			return 0, err
 		}
-		r.recv.mtx.Lock()
-		j := r.recv.next // TODO: atomic
-		r.recv.mtx.Unlock()
-		return j, nil
+		if j > i {
+			return j, nil
+		}
+		goto wait
 	}
 
 	bck := lom.Bck()
@@ -585,7 +576,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
-func (wi *basewi) asm(req *apc.MossReq) error {
+func (wi *basewi) asm(req *apc.MossReq, streaming bool) error {
 	var (
 		r = wi.r
 		l = len(req.In)
@@ -594,7 +585,7 @@ func (wi *basewi) asm(req *apc.MossReq) error {
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
-		j, err := wi.next(req, i)
+		j, err := wi.next(req, i, streaming)
 		if err != nil {
 			r.Abort(err)
 			return err
@@ -607,7 +598,7 @@ func (wi *basewi) asm(req *apc.MossReq) error {
 
 // drains recv.m[] in strict input order
 // is called under `recv.mtx` lock
-func (wi *basewi) flushMaybe() (err error) {
+func (wi *basewi) flushRx(streaming bool) (err error) {
 	r := wi.r
 	for r.recv.next < len(r.recv.m) {
 		entry := &r.recv.m[r.recv.next]
@@ -626,7 +617,7 @@ func (wi *basewi) flushMaybe() (err error) {
 		if err != nil {
 			return err
 		}
-		if !wi.streaming {
+		if !streaming {
 			out := apc.MossOut{ObjName: entry.name}
 			if entry.isMissing {
 				out.ErrMsg = "moss: missing object (recv)" // TODO: specific err
@@ -654,7 +645,7 @@ func (wi *basewi) flushMaybe() (err error) {
 ////////////
 
 func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
-	if err := wi.basewi.asm(req); err != nil {
+	if err := wi.basewi.asm(req, false); err != nil {
 		return err
 	}
 
@@ -715,7 +706,7 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 
 func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
-	if err := wi.basewi.asm(req); err != nil {
+	if err := wi.basewi.asm(req, true); err != nil {
 		return err
 	}
 
