@@ -43,7 +43,7 @@ const (
 
 var (
 	sid  *shortid.Shortid
-	rtie atomic.Uint32
+	rtie atomic.Uint64
 )
 
 func InitShortID(seed uint64) {
@@ -55,6 +55,7 @@ func InitShortID(seed uint64) {
 //
 
 // compare with xreg.GenBEID
+// (see also: bench/micro/uuid/genid_test.go)
 func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
@@ -174,10 +175,20 @@ func CheckAlphaPlus(s, tag string) error {
 }
 
 // 3-letter tie breaker (fast)
+// (see also: bench/micro/uuid/genid_test.go)
 func GenTie() string {
 	tie := rtie.Add(1)
-	b0 := uuidABC[tie&0x3f]
-	b1 := uuidABC[-tie&0x3f]
-	b2 := uuidABC[(tie>>2)&0x3f]
-	return string([]byte{b0, b1, b2})
+	tie *= 0x9e3779b97f4a7c15 // golden ratio multiplier (bit spread)
+
+	b := [3]byte{
+		uuidABC[tie&0x3f],
+		uuidABC[(tie>>6)&0x3f],
+		uuidABC[(tie>>12)&0x3f],
+	}
+	return UnsafeS(b[:])
+}
+
+// yet another unique ID (compare w/ GenUUID and GenBEID)
+func GenYAID(sid string) string {
+	return sid + GenTie()
 }
