@@ -6,6 +6,7 @@ package syncmap_test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -22,14 +23,16 @@ func BenchmarkSyncMap(b *testing.B) {
 		m.Store(i, new(int64))
 	}
 
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			j := int(mono.NanoTime() & (mapSize - 1)) // = mapSize -1
-			for i := j; i < j+mapSize; i++ {
-				v, ok := m.Load(i)
+			for i := range mapSize {
+				k := (j + i) & (mapSize - 1)
+				v, ok := m.Load(k)
 				if ok {
 					val := v.(*int64)
-					*val++
+					atomic.AddInt64(val, 1)
 				}
 			}
 		}
@@ -43,15 +46,17 @@ func BenchmarkRegMap(b *testing.B) {
 	}
 	lock := &sync.RWMutex{}
 
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			j := int(mono.NanoTime() & (mapSize - 1)) // = mapSize -1
-			for i := j; i < j+mapSize; i++ {
+			for i := range mapSize {
+				k := (j + i) & (mapSize - 1)
 				lock.RLock()
-				val, ok := m[i]
+				val, ok := m[k]
 				lock.RUnlock()
 				if ok {
-					*val++
+					atomic.AddInt64(val, 1)
 				}
 			}
 		}

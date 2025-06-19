@@ -15,12 +15,12 @@ func BenchmarkGenID(b *testing.B) {
 	cos.InitShortID(uint64(time.Now().UnixNano()))
 
 	b.Run("GenUUID", func(b *testing.B) {
-		for i := 0; b.Loop(); i++ {
+		for b.Loop() {
 			cos.GenUUID()
 		}
 	})
 	b.Run("GenTie", func(b *testing.B) {
-		for i := 0; b.Loop(); i++ {
+		for b.Loop() {
 			cos.GenTie()
 		}
 	})
