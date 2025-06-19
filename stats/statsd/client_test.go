@@ -173,6 +173,7 @@ func BenchmarkSendParallel(b *testing.B) {
 	}
 	defer c.Close()
 
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			c.Send("timer", 1,
