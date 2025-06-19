@@ -66,39 +66,45 @@ type (
 		xreg.RenewBase
 		xctn *XactMoss
 	}
-	mossInRecv struct {
+)
+
+type (
+	rxdata struct {
 		name      string
 		sgl       *memsys.SGL
 		isMissing bool
 	}
-	XactMoss struct {
-		xact.DemandBase
-		mm *memsys.MMSA
-		// Rx
-		recv struct {
-			ch   chan int
-			m    []mossInRecv
-			next int
-			mtx  sync.Mutex
-		}
-	}
-)
-
-type (
 	basewi struct {
 		aw   archive.Writer
 		r    *XactMoss
 		smap *meta.Smap
 		resp *apc.MossResp
+		sgl  *memsys.SGL // multipart (buffered) only
+		wid  string      // work item ID
 		size int64
 		cnt  int
+		// Rx
+		recv struct {
+			ch   chan int
+			m    []rxdata
+			next int
+			mtx  *sync.Mutex
+		}
 	}
 	buffwi struct {
 		basewi
-		sgl *memsys.SGL
 	}
 	streamwi struct {
 		basewi
+	}
+)
+
+type (
+	XactMoss struct {
+		xact.DemandBase
+		mm      *memsys.MMSA
+		pending map[string]*basewi
+		pmtx    sync.RWMutex // TODO: optimize
 	}
 )
 
@@ -121,7 +127,10 @@ func (p *mossFactory) Start() error {
 	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
 	req, ok := p.Args.Custom.(*apc.MossReq)
 	debug.Assert(ok)
-	p.xctn = newMoss(p, req)
+
+	_ = req // TODO: validate?
+
+	p.xctn = newMoss(p)
 	return nil
 }
 
@@ -132,34 +141,29 @@ func (*mossFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-func newMoss(p *mossFactory, req *apc.MossReq) *XactMoss {
-	r := &XactMoss{mm: memsys.PageMM()}
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
-
-	// Rx readiness - preallocate all empty slots
-	smap := core.T.Sowner().Get()
-	if nat := smap.CountActiveTs(); nat > 1 {
-		r.recv.m = make([]mossInRecv, len(req.In)) // receiving() true
-		r.recv.ch = make(chan int, len(req.In))
+func newMoss(p *mossFactory) *XactMoss {
+	r := &XactMoss{
+		mm:      memsys.PageMM(),
+		pending: make(map[string]*basewi, 64), // TODO: initial
 	}
+	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 	return r
 }
 
 func (r *XactMoss) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name(), "starting")
 
-	if r.receiving() {
+	// Check if we'll be receiving (any targets other than self)
+	smap := core.T.Sowner().Get()
+	if nat := smap.CountActiveTs(); nat > 1 {
 		if err := bundle.SDM.Open(); err != nil {
 			r.AddErr(err, 5, cos.SmoduleXs)
 			return
 		}
+		bundle.SDM.RegRecv(r)
 	}
 
 	wg.Done()
-
-	if r.receiving() {
-		bundle.SDM.RegRecv(r)
-	}
 }
 
 func (r *XactMoss) Abort(err error) bool {
@@ -167,31 +171,23 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	if r.receiving() {
+	// Cleanup all pending work items
+	r.pmtx.Lock()
+	for _, wi := range r.pending {
+		wi.cleanup()
+	}
+	clear(r.pending)
+	r.pmtx.Unlock()
+
+	// Unregister from transport if needed
+	smap := core.T.Sowner().Get()
+	if nat := smap.CountActiveTs(); nat > 1 {
 		bundle.SDM.UnregRecv(r.ID())
 	}
+
 	r.DemandBase.Stop()
-	r.cleanup()
 	r.Finish()
 	return true
-}
-
-func (r *XactMoss) cleanup() {
-	if r.recv.m == nil {
-		debug.Assert(!r.receiving())
-		return
-	}
-	r.recv.mtx.Lock()
-	for i := range r.recv.m {
-		entry := &r.recv.m[i]
-		if entry.sgl != nil {
-			entry.sgl.Free()
-			entry.sgl = nil
-		}
-	}
-	clear(r.recv.m)
-	r.recv.m = nil
-	r.recv.mtx.Unlock()
 }
 
 // terminate via (<-- xact.Demand <-- hk)
@@ -203,29 +199,60 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 		return mossIdleTime
 	default:
 		nlog.Infoln(r.Name(), "idle expired, finishing")
-		if r.receiving() {
+
+		// Cleanup all pending work items
+		r.pmtx.Lock()
+		for _, wi := range r.pending {
+			wi.cleanup()
+		}
+		clear(r.pending)
+		r.pmtx.Unlock()
+
+		// Unregister from transport if needed
+		smap := core.T.Sowner().Get()
+		if nat := smap.CountActiveTs(); nat > 1 {
 			bundle.SDM.UnregRecv(r.ID())
 		}
+
 		r.DemandBase.Stop()
-		r.cleanup()
 		r.Finish()
 		return hk.UnregInterval
 	}
 }
 
 // handle req; gather other target's data; emit resulting TAR, et. al formats
-func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
+func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	var (
-		resp = &apc.MossResp{
-			UUID: r.ID(),
-		}
-		opts   = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format (here and elsewhere)
+		resp   = &apc.MossResp{UUID: r.ID()}
+		opts   = archive.Opts{TarFormat: tar.FormatUnknown} // default tar format
 		basewi = basewi{
 			r:    r,
 			smap: core.T.Sowner().Get(),
 			resp: resp,
+			wid:  wid,
 		}
 	)
+
+	// initialize Rx state iff there are senders
+	smap := basewi.smap
+	if nat := smap.CountActiveTs(); nat > 1 {
+		basewi.recv.m = make([]rxdata, len(req.In))
+		basewi.recv.ch = make(chan int, len(req.In))
+		basewi.recv.mtx = &sync.Mutex{}
+
+		r.pmtx.Lock()
+
+		if _, ok := r.pending[wid]; ok {
+			r.pmtx.Unlock()
+			err := fmt.Errorf("%s: work item %q already exists", r.Name(), wid)
+			debug.AssertNoErr(err)
+			return err // TODO: sentinels
+		}
+
+		r.pending[wid] = &basewi
+		r.pmtx.Unlock()
+	}
+
 	r.IncPending()
 	defer basewi.cleanup()
 
@@ -239,8 +266,9 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 	// buffered
 	var (
 		sgl = r.mm.NewSGL(0)
-		wi  = buffwi{basewi: basewi, sgl: sgl}
+		wi  = buffwi{basewi: basewi}
 	)
+	wi.sgl = sgl
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	err := wi.asm(req, w)
@@ -249,11 +277,11 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter) error {
 }
 
 // send all requested local data => tsi
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) (err error) {
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid string) (err error) {
 	r.IncPending()
 
 	for i := range req.In {
-		err = r._send(req, smap, tsi, i)
+		err = r._send(req, smap, tsi, wid, i)
 		if err != nil {
 			r.Abort(err)
 			break
@@ -264,7 +292,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode) (err
 	return err
 }
 
-func (r *XactMoss) _send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, i int) error {
+func (r *XactMoss) _send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid string, i int) error {
 	in := &req.In[i]
 	if err := _assertNoRange(in); err != nil {
 		return err
@@ -297,25 +325,81 @@ func (r *XactMoss) _send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, i i
 		hdr.Bck = *lom.Bucket()
 		hdr.ObjName = nameInArch
 		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-		hdr.Opaque = r.opaque(i)
+		hdr.Opaque = r._makeOpaque(i, wid)
 	}
 	bundle.SDM.Send(o, roc, tsi)
 	return nil
 }
 
-// TODO(xid-demux): remove; see transport/bundle/shared_dm
-func (r *XactMoss) opaque(i int) (b []byte) {
+// layout:
+// [ --- xid lstring --- | --- wid lstring --- | --- index uint32 --- ]
+// (where lstring is length-prefixed string)
+func (r *XactMoss) _makeOpaque(index int, wid string) (b []byte) {
 	var (
-		xid = r.ID()
-		l   = len(xid)
+		xid    = r.ID()
+		lx, lw = len(xid), len(wid)
+		off    int
 	)
-	b = make([]byte, l+cos.SizeofI32)
-	copy(b, xid)
-	binary.BigEndian.PutUint32(b[l:], uint32(i))
+	// TODO -- FIXME: use T.ByteMM(); consider cos/bytepack
+	b = make([]byte, cos.SizeofI16+lx+cos.SizeofI16+lw+cos.SizeofI32)
+
+	binary.BigEndian.PutUint16(b, uint16(lx))
+	off += cos.SizeofI16
+	copy(b[off:], xid)
+	off += lx
+	binary.BigEndian.PutUint16(b, uint16(lw))
+	off += cos.SizeofI16
+	copy(b[off:], wid)
+	off += lw
+	binary.BigEndian.PutUint32(b[off:], uint32(index))
 	return b
 }
 
-// as transport.Receiver
+// see layout above
+func (r *XactMoss) _parseOpaque(opaque []byte) (wid string, index int, _ error) {
+	var (
+		off int
+		lo  = len(opaque)
+	)
+	if lo < cos.SizeofI16+cos.SizeofI16+cos.SizeofI32 {
+		return "", 0, fmt.Errorf("%s: opaque data too short: %d bytes", r.Name(), lo)
+	}
+
+	// xid
+	lx := int(binary.BigEndian.Uint16(opaque))
+	off += cos.SizeofI16
+	if off+lx > lo {
+		return "", 0, fmt.Errorf("%s: invalid xaction ID length: %d", r.Name(), lx)
+	}
+	xid := string(opaque[off : off+lx])
+	if xid != r.ID() {
+		return "", 0, fmt.Errorf("%s: xaction routing mismatch: %q vs %q", r.Name(), xid, r.ID())
+	}
+	off += lx
+
+	// wid
+	if off+cos.SizeofI16 > lo {
+		return "", 0, fmt.Errorf("%s: opaque data truncated at WID: %d", r.Name(), lo)
+	}
+	lw := int(binary.BigEndian.Uint16(opaque[off:]))
+	off += cos.SizeofI16
+	if off+lw > lo {
+		return "", 0, fmt.Errorf("invalid WID length: %d", lw)
+	}
+	wid = string(opaque[off : off+lw])
+	off += lw
+
+	// index
+	if off+cos.SizeofI32 > lo {
+		return "", 0, fmt.Errorf("%s: opaque data truncated at MossIn index: [%d, %s]", r.Name(), lo, wid)
+	}
+	index = int(binary.BigEndian.Uint32(opaque[off:]))
+
+	debug.Assert(lo == off+cos.SizeofI32, lo, " vs ", off+cos.SizeofI32)
+	return wid, index, nil
+}
+
+// demux -> wi.recv()
 // note that received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
@@ -323,57 +407,24 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		return err
 	}
 
-	debug.Assert(len(hdr.Opaque) == cos.SizeofI32)
-	index := int(binary.BigEndian.Uint32(hdr.Opaque))
-	if index < 0 || index >= len(r.recv.m) {
-		err = fmt.Errorf("out-of-bounds index %d (recv'd len=%d)", index, len(r.recv.m))
-		debug.AssertNoErr(err)
+	wid, index, err := r._parseOpaque(hdr.Opaque)
+	if err != nil {
+		r.Abort(err)
 		return err
 	}
 
-	var (
-		written int64
-		sgl     = r.mm.NewSGL(0)
-	)
-	written, err = io.Copy(sgl, reader)
-	if err != nil {
-		sgl.Free()
-		err = fmt.Errorf("failed to receive %s: %w", hdr.ObjName, err)
+	// find work item
+	r.pmtx.RLock()
+	wi := r.pending[wid]
+	r.pmtx.RUnlock()
+
+	if wi == nil {
+		err = fmt.Errorf("WID %q not found", wid)
 		nlog.Warningln(err)
 		return err
 	}
-	debug.Assert(written == sgl.Len(), written, " vs ", sgl.Len())
 
-	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/") // TODO -- FIXME: must be a better way
-
-	r.recv.mtx.Lock()
-	entry := &r.recv.m[index]
-	debug.Assertf(entry.sgl == nil && entry.name == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.name)
-	r.recv.m[index] = mossInRecv{
-		name:      hdr.ObjName,
-		sgl:       sgl,
-		isMissing: isMissing,
-	}
-
-	r.recv.mtx.Unlock()
-
-	r.recv.ch <- index
-
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infof("%s: received[%d] %q (%dB)", r.Name(), index, hdr.ObjName, sgl.Len())
-	}
-	return nil
-}
-
-func (r *XactMoss) waitRx() {
-	for {
-		select {
-		case <-r.recv.ch:
-			break
-		case <-r.ChanAbort():
-			break
-		}
-	}
+	return wi.recvObj(index, hdr, reader)
 }
 
 func (r *XactMoss) Snap() (snap *core.Snap) {
@@ -422,13 +473,93 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 	}
 
 	return bck, nil
-}
-
-func (r *XactMoss) receiving() bool { return r.recv.m != nil }
-
-////////////
+} ////////////
 // basewi //
 ////////////
+
+func (wi *basewi) receiving() bool { return wi.recv.m != nil }
+
+func (wi *basewi) cleanup() {
+	r := wi.r
+	if wi.aw != nil {
+		wi.aw.Fini()
+	}
+
+	if wi.recv.m != nil {
+		r.pmtx.Lock()
+		delete(r.pending, wi.wid)
+		r.pmtx.Unlock()
+
+		wi.recv.mtx.Lock()
+		for i := range wi.recv.m {
+			entry := &wi.recv.m[i]
+			if entry.sgl != nil {
+				entry.sgl.Free()
+				entry.sgl = nil
+			}
+		}
+		clear(wi.recv.m)
+		wi.recv.m = nil
+		wi.recv.mtx.Unlock()
+	}
+
+	r.DecPending()
+}
+
+// handle receive for this work item
+func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader) error {
+	if index < 0 || index >= len(wi.recv.m) {
+		err := fmt.Errorf("%s: out-of-bounds index %d (recv'd len=%d, wid=%s)",
+			wi.r.Name(), index, len(wi.recv.m), wi.wid)
+		debug.AssertNoErr(err)
+		return err
+	}
+
+	var (
+		written int64
+		sgl     = wi.r.mm.NewSGL(0)
+	)
+	written, err := io.Copy(sgl, reader)
+	if err != nil {
+		sgl.Free()
+		err = fmt.Errorf("failed to receive %s: %w", hdr.ObjName, err)
+		nlog.Warningln(err)
+		return err
+	}
+	debug.Assert(written == sgl.Len(), written, " vs ", sgl.Len())
+
+	isMissing := strings.HasPrefix(hdr.ObjName, apc.MossMissingDir+"/")
+
+	wi.recv.mtx.Lock()
+	entry := &wi.recv.m[index]
+	debug.Assertf(entry.sgl == nil && entry.name == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.name)
+	wi.recv.m[index] = rxdata{
+		name:      hdr.ObjName,
+		sgl:       sgl,
+		isMissing: isMissing,
+	}
+	wi.recv.mtx.Unlock()
+
+	wi.recv.ch <- index
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infof("%s: received[%d] %q (%dB)", wi.r.Name(), index, hdr.ObjName, sgl.Len())
+	}
+	return nil
+}
+
+// Wait for any object to be received
+func (wi *basewi) waitRx() error {
+	select {
+	case _, ok := <-wi.recv.ch:
+		if !ok {
+			return errStopped
+		}
+		return nil
+	case <-wi.r.ChanAbort():
+		return errStopped
+	}
+}
 
 func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	var (
@@ -445,24 +576,31 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	}
 
 	if !local {
-		if !r.receiving() {
+		if !wi.receiving() {
 			return 0, errors.New("unexpected non-local " + lom.Cname() + " when _not_ receiving")
 		}
-		r.waitRx()
+
+		// Wait for any received object, then try to flush
 	wait:
-		r.recv.mtx.Lock()
-		r.recv.next = i
+		if err := wi.waitRx(); err != nil {
+			return 0, err
+		}
+
+		wi.recv.mtx.Lock()
+		if wi.recv.next < i {
+			wi.recv.next = i
+		}
 		err := wi.flushRx(streaming)
-		j := r.recv.next
-		r.recv.mtx.Unlock()
+		j := wi.recv.next
+		wi.recv.mtx.Unlock()
 
 		if err != nil {
 			return 0, err
 		}
-		if j > i {
-			return j, nil
+		if j <= i {
+			goto wait // Object i not yet received/processed
 		}
-		goto wait
+		return j, nil
 	}
 
 	bck := lom.Bck()
@@ -473,11 +611,16 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
 	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
 	if err != nil {
+		if req.StreamingGet {
+			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+			err = cmn.ErrGetTxBenign
+		}
 		return 0, err
 	}
 	if req.StreamingGet {
 		if err := wi.aw.Flush(); err != nil {
-			return 0, err
+			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+			return 0, cmn.ErrGetTxBenign
 		}
 	} else {
 		wi.resp.Out = append(wi.resp.Out, out)
@@ -489,13 +632,6 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
 	return i + 1, nil
-}
-
-func (wi *basewi) cleanup() {
-	if wi.aw != nil {
-		wi.aw.Fini()
-	}
-	wi.r.DecPending()
 }
 
 func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
@@ -599,9 +735,8 @@ func (wi *basewi) asm(req *apc.MossReq, streaming bool) error {
 // drains recv.m[] in strict input order
 // is called under `recv.mtx` lock
 func (wi *basewi) flushRx(streaming bool) (err error) {
-	r := wi.r
-	for r.recv.next < len(r.recv.m) {
-		entry := &r.recv.m[r.recv.next]
+	for wi.recv.next < len(wi.recv.m) {
+		entry := &wi.recv.m[wi.recv.next]
 		if entry.sgl == nil && !entry.isMissing {
 			break // haven't received this one yet — stop
 		}
@@ -628,10 +763,12 @@ func (wi *basewi) flushRx(streaming bool) (err error) {
 		}
 
 		// GC to release memory
-		entry.sgl.Free()
-		entry.sgl = nil
-		r.recv.m[r.recv.next] = mossInRecv{}
-		r.recv.next++
+		if entry.sgl != nil {
+			entry.sgl.Free()
+			entry.sgl = nil
+		}
+		wi.recv.m[wi.recv.next] = rxdata{}
+		wi.recv.next++
 
 		wi.cnt++
 		wi.size += size
@@ -657,9 +794,6 @@ func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	}
 
 	// write multipart response
-	// note: set response headers BEFORE writing
-	// format: multipart/mixed; boundary="<boundary>" as per standard lib's mime.ParseMediaType()
-	// (see api/client.go for the client-side parsing part)
 	mpw := multipart.NewWriter(w)
 	w.Header().Set(cos.HdrContentType, "multipart/mixed; boundary="+mpw.Boundary())
 
@@ -691,13 +825,16 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 	}
 
 	// part 2: archive (e.g. TAR) data
-	// the part's filename is available on the client side via part2.Header.Get("Content-Disposition")
-	// otherwise ignored
 	part2, err := mpw.CreateFormFile(apc.MossDataPart, wi.r.Cname())
 	if err != nil {
 		return 0, err
 	}
-	return io.Copy(part2, wi.sgl)
+	written, err := io.Copy(part2, wi.sgl)
+	if err != nil {
+		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+		return 0, cmn.ErrGetTxBenign
+	}
+	return written, nil
 }
 
 //////////////
@@ -714,13 +851,14 @@ func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	err := wi.aw.Fini()
 	wi.aw = nil
 	if err != nil {
-		return err
+		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+		return cmn.ErrGetTxBenign
 	}
 
 	wi.r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", len(wi.resp.Out), "written:", wi.size, "format:", req.OutputFormat, "]")
+		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", req.OutputFormat, "]")
 	}
 	return nil
 }

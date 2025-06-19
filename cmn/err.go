@@ -272,6 +272,8 @@ var (
 	ErrXactRenewAbort   = errors.New("renewal abort")
 	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop
 	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
+
+	ErrGetTxBenign = errors.New("Warning: failed to transmit GET response") //nolint:staticcheck // making an exception for Warning
 )
 
 // ErrFailedTo

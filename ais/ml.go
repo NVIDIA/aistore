@@ -53,8 +53,10 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. bucket
-	q := r.URL.Query()
-	bucket := apiItems[1]
+	var (
+		q      = r.URL.Query()
+		bucket = apiItems[1]
+	)
 	bckArgs := allocBctx()
 	{
 		bckArgs.p = p
@@ -76,8 +78,10 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. select random "mossexec" target
-	smap := p.owner.smap.get()
-	tsi, errT := smap.HrwTargetTask(cos.GenTie())
+	var (
+		smap      = p.owner.smap.get()
+		tsi, errT = smap.HrwTargetTask(cos.GenTie())
+	)
 	if errT != nil {
 		p.writeErr(w, r, errT)
 		return
@@ -91,12 +95,14 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. bcast to all targets except the designated one
+
+	wid := cos.GenYAID(p.SID())
 	if nat := smap.CountActiveTs(); nat > 1 {
 		args := allocBcArgs()
 		{
 			q.Set(apc.QparamTID, tsi.ID())
 
-			args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathML.Join(bucket), Query: q, Body: body}
+			args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathML.Join(bucket, wid), Query: q, Body: body}
 			args.smap = smap
 			args.async = true
 
@@ -119,7 +125,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 5. update r.URL.Path (to include apc.MossExec) and redirect
-	r.URL.Path = cos.JoinWords(apc.Version, apc.ML, apc.MossExec, bucket)
+	r.URL.Path = cos.JoinWords(apc.Version, apc.ML, apc.MossExec, bucket, wid)
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
@@ -135,26 +141,31 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		apiItems, err := t.parseURL(w, r, apc.URLPathML.L, 2, true)
-		if err != nil {
+		apiItems, e := t.parseURL(w, r, apc.URLPathML.L, 2, true)
+		if e != nil {
 			return
 		}
-		if len(apiItems) > 2 {
+		if len(apiItems) > 3 {
 			t.writeErrURL(w, r)
 			return
 		}
 
 		// bucket
-		q := r.URL.Query() // TODO: dpq
-		bucket := apiItems[1]
-		bck, err := newBckFromQ(bucket, q, nil)
+		var (
+			q        = r.URL.Query() // TODO: dpq
+			bucket   = apiItems[1]
+			wid      = apiItems[2]
+			bck, err = newBckFromQ(bucket, q, nil)
+		)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
 
-		// read, unmarshal, and validate MossReq // TODO: mem-pool
-		var req = &apc.MossReq{}
+		// req: read, unmarshal, and validate // TODO: mem-pool
+		var (
+			req = &apc.MossReq{}
+		)
 		if err := cmn.ReadJSON(w, r, req); err != nil {
 			return
 		}
@@ -173,9 +184,11 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			req.OutputFormat = f
 		}
 
-		// generate target-local xaction ID using BEID mechanism
-		div := uint64(xact.IdleDefault)
-		beid, _, _ := xreg.GenBEID(div, bck.MakeUname(apc.Moss))
+		// xid: generate target-local cluster-unique BEID
+		var (
+			div        = uint64(xact.IdleDefault)
+			beid, _, _ = xreg.GenBEID(div, bck.MakeUname(apc.Moss))
+		)
 		if beid == "" {
 			beid = cos.GenUUID()
 		}
@@ -198,10 +211,10 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		case apc.Moss:
 			// bcast path
 			tid := q.Get(apc.QparamTID)
-			t.mossend(w, r, xmoss, req, tid)
+			t.mossend(w, r, xmoss, req, tid, wid)
 		case apc.MossExec:
 			// redirect path
-			t.mossasm(w, r, xmoss, req)
+			t.mossasm(w, r, xmoss, req, wid)
 		default:
 			t.writeErrURL(w, r)
 		}
@@ -211,10 +224,12 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/ml/mossexec/bucket-name (redirect path)
-func (t *target) mossasm(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq) {
-	if err := xmoss.Assemble(req, w); err != nil {
-		if req.StreamingGet {
-			nlog.Errorln(err, "<<< (to avoid superfluous response.WriteHeader)")
+func (t *target) mossasm(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, wid string) {
+	if err := xmoss.Assemble(req, w, wid); err != nil {
+		if err == cmn.ErrGetTxBenign {
+			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				nlog.Warningln(err)
+			}
 		} else {
 			t.writeErr(w, r, err)
 		}
@@ -222,14 +237,14 @@ func (t *target) mossasm(w http.ResponseWriter, r *http.Request, xmoss *xs.XactM
 }
 
 // GET /v1/ml/moss/bucket-name (broadcast path)
-func (t *target) mossend(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, tid string) {
+func (t *target) mossend(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, tid, wid string) {
 	smap := t.owner.smap.get()
 	tsi := smap.GetTarget(tid)
 	if tsi == nil {
 		t.writeErr(w, r, &errNodeNotFound{t.si, smap, "failed to mossend", tid})
 		return
 	}
-	if err := xmoss.Send(req, &smap.Smap, tsi); err != nil {
+	if err := xmoss.Send(req, &smap.Smap, tsi, wid); err != nil {
 		t.writeErr(w, r, err)
 	}
 }

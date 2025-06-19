@@ -1188,7 +1188,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	if err != nil || written != size {
 		errTx = goi._txerr(err, fqn /*lbget*/, written, size)
 	}
-	if errTx != nil && errTx != errGetTxBenign {
+	if errTx != nil && errTx != cmn.ErrGetTxBenign {
 		debug.Assert(isErrGetTxSevere(errTx), errTx)
 		lom.UncacheDel()
 		return errTx
@@ -1230,7 +1230,7 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		return errTx
 	}
 
-	// [failure to transmit] return errGetTxBenign and keep the object
+	// [failure to transmit] return cmn.ErrGetTxBenign and keep the object
 	switch {
 	case cos.IsRetriableConnErr(err):
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
@@ -1241,7 +1241,7 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		nlog.ErrorDepth(1, act, cname, "err:", err)
 	}
 
-	return errGetTxBenign
+	return cmn.ErrGetTxBenign
 }
 
 func (goi *getOI) stats(written int64) {
@@ -1346,10 +1346,6 @@ func isErrGetTxSevere(err error) bool {
 func newErrGetTxSevere(err error, lom *core.LOM, tag string) error {
 	return &errGetTxSevere{fmt.Sprintf("failed to finalize GET response: %s %s [%v]", tag, lom.Cname(), err)}
 }
-
-var (
-	errGetTxBenign = errors.New("Warning: failed to transmit GET response") //nolint:staticcheck // making an exception for Warning
-)
 
 //
 // APPEND a file or multiple files:

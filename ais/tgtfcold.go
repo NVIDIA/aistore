@@ -40,7 +40,7 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		goi.lom.Unlock(true)
 		nlog.InfoDepth(1, ftcg, "(load)", lom, err) // (unlikely)
-		return errGetTxBenign
+		return cmn.ErrGetTxBenign
 	}
 	debug.Assert(lom.Lsize() == fullSize)
 	goi.lom.Unlock(true)
@@ -133,7 +133,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 
 	if err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
-		return errGetTxBenign
+		return cmn.ErrGetTxBenign
 	}
 	if written != res.Size {
 		errTx := goi._txerr(nil, lom.FQN, written, res.Size)
