@@ -78,3 +78,22 @@ func MaxLoad() (load float64) {
 	}
 	return max(avg.One, avg.Five)
 }
+
+func MaxLoad2() (load float64, isExtreme bool) {
+	var (
+		ncpu     = NumCPU()
+		fcpu     = float64(ncpu)
+		oocpu    = max(fcpu*ExtremeLoad/100, 1)
+		avg, err = LoadAverage()
+	)
+	if err != nil {
+		nlog.ErrorDepth(1, err) // unlikely
+		return 100, true
+	}
+	load = max(avg.One, avg.Five)
+	if load < oocpu {
+		return load, false
+	}
+	load2 := max(avg.Fifteen, avg.Five)
+	return load, load2 >= oocpu
+}

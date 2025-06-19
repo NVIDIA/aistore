@@ -558,8 +558,8 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags, cos.NodeStateFlags) {
 	const tag = "CPU utilization:"
 	var (
-		load = sys.MaxLoad()
-		ncpu = sys.NumCPU()
+		load, isExtreme = sys.MaxLoad2()
+		ncpu            = sys.NumCPU()
 	)
 	// 1. normal
 	if load < float64(ncpu>>1) { // 50%
@@ -570,11 +570,7 @@ func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags
 		return set, clr
 	}
 	// 2. extreme
-	var (
-		fcpu  = float64(ncpu)
-		oocpu = max(fcpu*sys.ExtremeLoad/100, 1)
-	)
-	if load >= oocpu {
+	if isExtreme {
 		if !flags.IsSet(cos.OOCPU) {
 			set |= cos.OOCPU
 			clr |= cos.LowCPU
@@ -583,8 +579,8 @@ func _load(sname string, flags, set, clr cos.NodeStateFlags) (cos.NodeStateFlags
 		return set, clr
 	}
 	// 3. high
-	highcpu := fcpu * sys.HighLoad / 100
-	if load >= highcpu {
+	highcpu := ncpu * sys.HighLoad / 100
+	if load > float64(highcpu) {
 		clr |= cos.OOCPU
 		if !flags.IsSet(cos.LowCPU) {
 			set |= cos.LowCPU
