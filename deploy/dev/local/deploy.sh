@@ -23,13 +23,13 @@
 if ! command -v go &> /dev/null; then
   echo "Go (toolchain) is not installed"
   echo "Use https://go.dev/dl to install the required (as per go.mod) version of Go"
-  echo "See https://aiatscale.org/docs/getting-started for step-by-step instruction"
+  echo "See https://aistore.nvidia.com/docs/getting_started for step-by-step instruction"
   exit 1
 fi
 
 if [[ -z $GOPATH ]]; then
   echo "Warning: GOPATH variable is not defined, using home directory ${HOME}"
-  echo "(Tip: see https://aiatscale.org/docs/getting-started for step-by-step instruction)"
+  echo "(Tip: see https://aistore.nvidia.com/docs/getting_started for step-by-step instruction)"
   echo ""
   if [ ! -d "${HOME}/go/pkg" ]; then
     echo "${HOME}/go/pkg does not exist (deploying the very first time and from scratch?)"
