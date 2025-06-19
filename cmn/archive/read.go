@@ -270,7 +270,14 @@ func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
 			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
 
-		if !matcher.do(f.FileHeader.Name) {
+		// Sanitize the file path to prevent directory traversal
+		cleanName := filepath.Clean(f.FileHeader.Name)
+		if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
+			nlog.Warningf("Skipping potentially unsafe file path: %s", f.FileHeader.Name)
+			continue
+		}
+
+		if !matcher.do(cleanName) {
 			continue
 		}
 
@@ -280,7 +287,7 @@ func (zr *zipReader) ReadUntil(rcb ArchRCB, regex, mmode string) error {
 			return err
 		}
 		csf.file = r
-		if stop, e := rcb.Call(f.FileHeader.Name, csf, &f.FileHeader); stop || e != nil {
+		if stop, e := rcb.Call(cleanName, csf, &f.FileHeader); stop || e != nil {
 			return e
 		}
 	}
@@ -297,7 +304,14 @@ func (zr *zipReader) ReadOne(filename string) (reader cos.ReadCloseSizer, err er
 		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
 			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
 
-		if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
+		// Sanitize the file path to prevent directory traversal
+		cleanName := filepath.Clean(f.FileHeader.Name)
+		if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
+			nlog.Warningf("Skipping potentially unsafe file path: %s", f.FileHeader.Name)
+			continue
+		}
+
+		if cleanName == filename || namesEq(cleanName, filename) {
 			csf := &cslFile{size: finfo.Size()}
 			csf.file, err = f.Open()
 			return csf, err
