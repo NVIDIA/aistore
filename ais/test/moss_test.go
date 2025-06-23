@@ -73,6 +73,26 @@ func (c *mossConfig) name() (s string) {
 	return s
 }
 
+// [NOTE]
+// Compressed archives may vary slightly in size when identical requests are processed
+// by different AIS targets due to compression: timing, buffer states, and metadata differences.
+// Allow 1% tolerance for compressed TAR formats while requiring exact equality for the rest.
+func equalSize(outputFormat string, size1, size2 int) bool {
+	switch outputFormat {
+	case archive.ExtTgz, archive.ExtTarGz, archive.ExtTarLz4:
+		if size1 == size2 {
+			return true
+		}
+		d := size1 - size2
+		if d < 0 {
+			d = -d
+		}
+		return d*100 < min(size1, size2)
+	default:
+		return size1 == size2
+	}
+}
+
 func TestMoss(t *testing.T) {
 	var (
 		numPlainObjs = 500 // plain objects to create
@@ -138,14 +158,6 @@ func TestMoss(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
-			// TODO -- FIXME: remove when fixed multi-node
-			if test.outputFormat != "" && test.outputFormat != archive.ExtTar && test.outputFormat != archive.ExtZip {
-				smap := tools.GetClusterMap(t, tools.GetPrimaryURL())
-				if nt := smap.CountTargets(); nt > 1 {
-					t.Skipf("skipping %s: still need to fix multi-node (t=%d) for output format %q", test.name(), nt, test.outputFormat)
-				}
-			}
-
 			var (
 				bck = cmn.Bck{Name: trand.String(15), Provider: apc.AIS}
 				m   = ioContext{
@@ -471,7 +483,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		if results[i].err == nil {
 			tassert.Errorf(t, len(results[i].resp.Out) == len(firstSuccess.resp.Out),
 				"Inconsistent result count between concurrent calls")
-			tassert.Errorf(t, results[i].tarSize == firstSuccess.tarSize,
+			tassert.Errorf(t, equalSize(test.outputFormat, firstSuccess.tarSize, results[i].tarSize),
 				"Inconsistent TAR size between concurrent calls: %d vs %d",
 				results[i].tarSize, firstSuccess.tarSize)
 		}
@@ -598,7 +610,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		// Validate consistency across concurrent calls
 		for i := 1; i < len(results); i++ {
 			if results[i].err == nil {
-				tassert.Errorf(t, results[i].tarSize == firstSuccess.tarSize,
+				tassert.Errorf(t, equalSize(test.outputFormat, firstSuccess.tarSize, results[i].tarSize),
 					"Inconsistent TAR size between concurrent streaming calls: %d vs %d",
 					results[i].tarSize, firstSuccess.tarSize)
 			}

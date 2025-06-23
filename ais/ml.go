@@ -221,6 +221,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		if designated {
 			debug.Assert(xid == "noxid", xid) // placeholder
 			xid = cos.GenUUID()
+
 			rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: true /*designated*/})
 			if rns.Err != nil {
 				t.writeErr(w, r, rns.Err)
@@ -230,21 +231,19 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			debug.Assert(ctx.nat > 1, "not expecting POST -> non-DT when single-node")
 			debug.Assert(cos.IsValidUUID(xid), xid)
-			xctn = xreg.GetActiveXact(ctx.xid)
-			if xctn == nil {
-				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-					nlog.Infoln(t.String(), "Sender: x-moss", xid, "not found")
-				}
-				rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: false /*designated*/})
-				if rns.Err != nil {
-					t.writeErr(w, r, rns.Err)
-					return
-				}
-				xctn = rns.Entry.Get()
-				debug.Assert(xid == xctn.ID(), t.String(), " Sender: expecting x-moss ID ", xid, " got ", xctn.ID()) // TODO -- FIXME: force xreg
-				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-					nlog.Infoln(t.String(), "Sender: x-moss renewed", xctn.Name())
-				}
+
+			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				nlog.Infoln(t.String(), "Sender: x-moss", xid, "not found")
+			}
+			rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: false /*designated*/})
+			if rns.Err != nil {
+				t.writeErr(w, r, rns.Err)
+				return
+			}
+			xctn = rns.Entry.Get()
+			debug.Assert(xid == xctn.ID(), t.String(), " Sender: expecting x-moss ID given by DT: ", xid, " got ", xctn.ID())
+			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				nlog.Infoln(t.String(), "Sender: x-moss renewed", xctn.Name())
 			}
 		}
 

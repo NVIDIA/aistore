@@ -181,12 +181,8 @@ func (r *XactMoss) Abort(err error) bool {
 	clear(r.pending)
 	r.pmtx.Unlock()
 
-	smap := core.T.Sowner().Get()
-	if nat := smap.CountActiveTs(); nat > 1 { // TODO: smap.CountActiveTs duplicated (use state)
-		bundle.SDM.UnregRecv(r.ID())
-	}
-
 	r.DemandBase.Stop()
+	bundle.SDM.UnregRecv(r.ID())
 	r.Finish()
 	return true
 }
@@ -215,7 +211,8 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 			bundle.SDM.UnregRecv(r.ID())
 		}
 
-		r.DemandBase.Stop()
+		r.DemandBase.Stop() // NOTE: stops timer and calls Unreg
+		bundle.SDM.UnregRecv(r.ID())
 		r.Finish()
 		return hk.UnregInterval
 	}
@@ -253,18 +250,18 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 // (phase 3)
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	r.pmtx.Lock()
-	basewi, ok := r.pending[wid]
+	wi, ok := r.pending[wid]
 	r.pmtx.Unlock()
 	if !ok {
 		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
 		debug.AssertNoErr(err)
 		return err // TODO: sentinels
 	}
-	debug.Assert(wid == basewi.wid)
+	debug.Assert(wid == wi.wid)
 
 	r.IncPending()
-	err := r.asm(req, w, basewi)
-	basewi.cleanup()
+	err := r.asm(req, w, wi)
+	wi.cleanup()
 	r.DecPending()
 
 	return err
@@ -654,6 +651,7 @@ func (wi *basewi) waitRx() error {
 			return errStopped
 		}
 		return nil
+		// TODO -- FIXME: sentinels, to prevent a hang: case <- (remote aborted?)
 	case <-wi.r.ChanAbort():
 		return errStopped
 	}
@@ -710,14 +708,14 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
 	if err != nil {
 		if req.StreamingGet {
-			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, err, "]")
 			err = cmn.ErrGetTxBenign
 		}
 		return 0, err
 	}
 	if req.StreamingGet {
 		if err := wi.aw.Flush(); err != nil {
-			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, err, "]")
 			return 0, cmn.ErrGetTxBenign
 		}
 	} else {
@@ -853,6 +851,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 		if entry.isEmpty() {
 			return nil
 		}
+
 		wi.recv.mtx.Unlock() //--------------
 
 		isMissing := strings.HasPrefix(entry.oname, apc.MossMissingDir+"/") // TODO -- FIXME: must be a better way
@@ -863,8 +862,14 @@ func (wi *basewi) flushRx(streaming bool) error {
 			oah := cos.SimpleOAH{Size: size}
 			err = wi.aw.Write(entry.oname, oah, entry.sgl)
 		}
-
+		if err == nil && streaming {
+			if erf := wi.aw.Flush(); erf != nil {
+				nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, erf, "]")
+				err = cmn.ErrGetTxBenign
+			}
+		}
 		wi.recv.mtx.Lock() //--------------
+
 		if err != nil {
 			return err
 		}
