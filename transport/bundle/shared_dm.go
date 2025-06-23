@@ -38,6 +38,12 @@ var SDM sharedDM
 // called upon target startup
 func InitSDM(config *cmn.Config, compression string) {
 	extra := Extra{Config: config, Compression: compression}
+
+	// NOTE:
+	// - see bundle.go for Streams.Resync()
+	// - and note that cmn/archive/read returns cos.ReadCloseSizer (not Opener)
+	debug.Assert(extra.Multiplier == 0 || extra.Multiplier == 1, "cannot have many-to-one connections: cannot reopen archived files")
+
 	SDM.dm.init(SDM.trname(), SDM.recv, cmn.OwtNone, extra)
 }
 
@@ -53,26 +59,20 @@ func (sdm *sharedDM) IsActive() (active bool) {
 // constant (until and unless we run multiple shared-DMs)
 func (*sharedDM) trname() string { return "shared-dm" }
 
-func (sdm *sharedDM) _already() {
-	nlog.WarningDepth(2, core.T.String(), sdm.trname(), "is already open")
-}
-
 // called on-demand
 func (sdm *sharedDM) Open() error {
 	if sdm.isOpen() {
-		sdm._already()
 		return nil
 	}
 
 	sdm.ocmu.Lock()
 	if sdm.isOpen() {
 		sdm.ocmu.Unlock()
-		sdm._already()
 		return nil
 	}
 
 	sdm.rxmu.Lock()
-	sdm.receivers = make(map[string]transport.Receiver, 4)
+	sdm.receivers = make(map[string]transport.Receiver, 4) // TODO: initial
 	sdm.rxmu.Unlock()
 
 	if err := sdm.dm.RegRecv(); err != nil {
@@ -136,7 +136,6 @@ func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
 		debug.Assert(false, sdm.trname(), " ", "closed")
 		return
 	}
-	debug.Assert(sdm.receivers[rx.ID()] == nil, "duplicate registration for xid ", rx.ID())
 	sdm.receivers[rx.ID()] = rx
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
@@ -156,8 +155,8 @@ func (sdm *sharedDM) UnregRecv(xid string) {
 	sdm.ocmu.Unlock()
 }
 
-func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error {
-	return sdm.dm.Send(obj, roc, tsi)
+func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctn core.Xact) error {
+	return sdm.dm.Send(obj, roc, tsi, xctn)
 }
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
@@ -180,7 +179,8 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 
 	xid := string(opaque[cos.SizeofI16 : cos.SizeofI16+lx])
 	if err := xact.CheckValidUUID(xid); err != nil {
-		return fmt.Errorf("%s: %v", sdm.trname(), err)
+		err = fmt.Errorf("%s: %v [%d, %q]", sdm.trname(), err, lx, xid)
+		return err
 	}
 	// TODO -- FIXME: e.o. remove xid demux ==================
 

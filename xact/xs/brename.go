@@ -67,7 +67,7 @@ func (p *bmvFactory) Start() error {
 }
 
 func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	if p.phase == apc.ActBegin {
+	if p.phase == apc.Begin2PC {
 		if !prevEntry.Get().Finished() {
 			err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress",
 				p.Kind(), p.cargs.BckFrom, p.cargs.BckTo)
@@ -77,8 +77,8 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 	}
 	prev := prevEntry.(*bmvFactory)
 	bckEq := prev.cargs.BckTo.Equal(p.cargs.BckTo, false /*sameID*/, false /* same backend */)
-	if prev.phase == apc.ActBegin && p.phase == apc.ActCommit && bckEq {
-		prev.phase = apc.ActCommit // transition
+	if prev.phase == apc.Begin2PC && p.phase == apc.Commit2PC && bckEq {
+		prev.phase = apc.Commit2PC // transition
 		wpr = xreg.WprUse
 		return
 	}

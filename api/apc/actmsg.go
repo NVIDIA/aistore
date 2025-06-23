@@ -139,15 +139,6 @@ const (
 	ActTransient = "transient" // transient - in-memory only
 )
 
-// xaction 2-phase commit and related control (compare w/ QparamPrepare)
-const (
-	ActBegin  = "begin"
-	ActCommit = "commit"
-	ActAbort  = "abort"
-
-	ActQuery = "query"
-)
-
 const (
 	NodeMaintenance  = "maintenance"
 	NodeDecommission = "decommission"

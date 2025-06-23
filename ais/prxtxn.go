@@ -72,7 +72,7 @@ func (c *txnCln) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitms
 }
 
 func (c *txnCln) begin(what fmt.Stringer) (err error) {
-	results := c.bcast(apc.ActBegin, c.timeout.netw)
+	results := c.bcast(apc.Begin2PC, c.timeout.netw)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
@@ -88,7 +88,7 @@ func (c *txnCln) begin(what fmt.Stringer) (err error) {
 // that can be run concurrently - comma-separated list of UUIDs
 func (c *txnCln) commit(what fmt.Stringer, timeout time.Duration) (xid string, all []string, err error) {
 	same4all := true
-	results := c.bcast(apc.ActCommit, timeout)
+	results := c.bcast(apc.Commit2PC, timeout)
 
 	for _, res := range results {
 		if res.err != nil {
@@ -134,7 +134,7 @@ func (c *txnCln) cmtTout(waitmsync bool) time.Duration {
 
 func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResults) {
 	c.req.Path = cos.JoinWords(c.path, phase)
-	if phase != apc.ActAbort {
+	if phase != apc.Abort2PC {
 		now := time.Now()
 		c.req.Query.Set(apc.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))
 	}
@@ -157,7 +157,7 @@ func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResult
 
 func (c *txnCln) bcastAbort(what fmt.Stringer, err error) {
 	nlog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
-	results := c.bcast(apc.ActAbort, 0)
+	results := c.bcast(apc.Abort2PC, 0)
 	freeBcastRes(results)
 }
 
@@ -986,7 +986,7 @@ func prmBegin(c *txnCln, bck *meta.Bck, singleT bool) (num int64, allAgree bool,
 	var cksumVal, totalN string
 	allAgree = !singleT
 
-	results := c.bcast(apc.ActBegin, c.timeout.netw)
+	results := c.bcast(apc.Begin2PC, c.timeout.netw)
 	for i, res := range results {
 		if res.err != nil {
 			err = res.toErr()

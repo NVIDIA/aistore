@@ -1820,7 +1820,7 @@ func (p *proxy) actBackend(w http.ResponseWriter, r *http.Request, tag string, u
 		return
 	}
 	// (two-phase commit)
-	for _, phase := range []string{apc.ActBegin, apc.ActCommit} {
+	for _, phase := range []string{apc.Begin2PC, apc.Commit2PC} {
 		var (
 			path string
 			args = allocBcArgs()

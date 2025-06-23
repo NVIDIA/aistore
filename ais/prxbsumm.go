@@ -56,7 +56,7 @@ func (p *proxy) bsummNew(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (err error)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.ActBegin), // compare w/ txn
+		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.Begin2PC), // compare w/ txn
 		Query:  q,
 		Body:   cos.MustMarshal(actMsgExt),
 	}
@@ -91,7 +91,7 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 	)
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
-		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.ActQuery),
+		Path:   apc.URLPathBuckets.Join(qbck.Name, apc.Query2PC),
 		Body:   cos.MustMarshal(actMsgExt),
 	}
 	args.smap = p.owner.smap.get()

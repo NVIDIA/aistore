@@ -285,7 +285,7 @@ func (t *target) daeputItems(w http.ResponseWriter, r *http.Request, apiItems []
 			t.writeErrf(w, r, "expecting cloud storage provider (have %q)", provider)
 			return
 		}
-		if phase != apc.ActBegin && phase != apc.ActCommit {
+		if phase != apc.Begin2PC && phase != apc.Commit2PC {
 			t.writeErrf(w, r, "expecting 'begin' or 'commit' phase (have %q)", phase)
 			return
 		}
@@ -314,7 +314,7 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider,
 	switch {
 	case bp != nil:
 		t.writeErrf(w, r, "backend %q is already enabled, nothing to do", provider)
-	case phase == apc.ActBegin:
+	case phase == apc.Begin2PC:
 		nlog.Infof("ready to enable backend %q", provider)
 	default:
 		var err error
@@ -357,7 +357,7 @@ func (t *target) disableBackend(w http.ResponseWriter, r *http.Request, provider
 	switch {
 	case bp == nil:
 		t.writeErrf(w, r, "backend %q is already disabled, nothing to do", provider)
-	case phase == apc.ActBegin:
+	case phase == apc.Begin2PC:
 		nlog.Infof("ready to disable backend %q", provider)
 	default:
 		// NOTE: not locking bp := t.Backend()

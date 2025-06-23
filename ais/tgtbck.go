@@ -125,7 +125,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		} else {
 			bucket, phase = apiItems[0], apiItems[1]
 		}
-		if phase != apc.ActBegin && phase != apc.ActQuery {
+		if phase != apc.Begin2PC && phase != apc.Query2PC {
 			t.writeErrURL(w, r)
 			return
 		}
@@ -299,7 +299,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 }
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
-	if phase == apc.ActBegin {
+	if phase == apc.Begin2PC {
 		rns := xreg.RenewBckSummary(bck, msg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError, Silent)
@@ -309,7 +309,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 		return
 	}
 
-	debug.Assert(phase == apc.ActQuery, phase)
+	debug.Assert(phase == apc.Query2PC, phase)
 	xctn, err := xreg.GetXact(msg.UUID) // vs. hk.OldAgeX removal
 	if err != nil {
 		t.writeErr(w, r, err, http.StatusInternalServerError)

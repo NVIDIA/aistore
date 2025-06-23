@@ -267,10 +267,14 @@ func (dm *DM) Abort() {
 	nlog.Warningln("dm.abort", dm.String())
 }
 
-func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {
+func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctns ...core.Xact) (err error) { // TODO -- FIXME: separate
 	err = dm.data.streams.Send(obj, roc, tsi)
 	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
-		dm.xctn.OutObjsAdd(1, obj.Size())
+		xctn := dm.xctn
+		if len(xctns) > 0 {
+			xctn = xctns[0]
+		}
+		xctn.OutObjsAdd(1, obj.Size())
 	}
 	return
 }
@@ -303,6 +307,11 @@ func (dm *DM) quicb(time.Duration /*total*/) core.QuiRes {
 }
 
 func (dm *DM) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+	// DEBUG -- TODO -- FIXME
+	if dm.data.trname == SDM.trname() {
+		return dm.data.recv(hdr, reader, err)
+	}
+
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}

@@ -74,8 +74,6 @@ func (c *mossConfig) name() (s string) {
 }
 
 func TestMoss(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{MaxTargets: 1}) // TODO -- FIXME: remove
-
 	var (
 		numPlainObjs = 500 // plain objects to create
 		numArchives  = 400 // num shards to create
@@ -140,6 +138,14 @@ func TestMoss(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
+			// TODO -- FIXME: remove when fixed multi-node
+			if test.outputFormat != "" && test.outputFormat != archive.ExtTar && test.outputFormat != archive.ExtZip {
+				smap := tools.GetClusterMap(t, tools.GetPrimaryURL())
+				if nt := smap.CountTargets(); nt > 1 {
+					t.Skipf("skipping %s: still need to fix multi-node (t=%d) for output format %q", test.name(), nt, test.outputFormat)
+				}
+			}
+
 			var (
 				bck = cmn.Bck{Name: trand.String(15), Provider: apc.AIS}
 				m   = ioContext{
@@ -263,7 +269,6 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 			}
 		}
 	}
-
 	if test.streaming {
 		testMossStreaming(t, m, test, mossIn)
 	} else {
@@ -480,10 +485,7 @@ func isMissingFile(mossIn *apc.MossIn) bool {
 		return true
 	}
 	// Missing archive paths have ".nonexistent" suffix
-	if mossIn.ArchPath != "" && strings.HasSuffix(mossIn.ArchPath, mossMissingSuffix) {
-		return true
-	}
-	return false
+	return mossIn.ArchPath != "" && strings.HasSuffix(mossIn.ArchPath, mossMissingSuffix)
 }
 
 func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []apc.MossIn) {
@@ -692,6 +694,7 @@ func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.Mo
 			mossOut      = &resp.Out[i]
 			tarEntry     = &callback.entries[i]
 		)
+		// tlog.Logf("DEBUG: mossOut.Bucket = %q, ObjName = %q\n", mossOut.Bucket, mossOut.ObjName)
 
 		// Calculate expected name based on onlyObjName setting
 		if req.OnlyObjName {

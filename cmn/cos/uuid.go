@@ -190,5 +190,16 @@ func GenTie() string {
 
 // yet another unique ID (compare w/ GenUUID and GenBEID)
 func GenYAID(sid string) string {
-	return sid + GenTie()
+	var (
+		l = len(sid)
+		b = make([]byte, l+4)
+	)
+	copy(b, sid)
+	tie := rtie.Add(1)
+	tie *= 0x9e3779b97f4a7c15 // ditto
+	b[l] = '-'
+	b[l+1] = uuidABC[tie&0x3f]
+	b[l+2] = uuidABC[(tie>>6)&0x3f]
+	b[l+3] = uuidABC[(tie>>12)&0x3f]
+	return UnsafeS(b)
 }

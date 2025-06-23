@@ -92,8 +92,8 @@ func (p *encFactory) Get() core.Xact { return p.xctn }
 
 func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*encFactory)
-	if prev.phase == apc.ActBegin && p.phase == apc.ActCommit {
-		prev.phase = apc.ActCommit // transition
+	if prev.phase == apc.Begin2PC && p.phase == apc.Commit2PC {
+		prev.phase = apc.Commit2PC // transition
 		wpr = xreg.WprUse
 		return
 	}

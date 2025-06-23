@@ -411,6 +411,7 @@ func (sb *Streams) Resync() {
 		}
 		delete(nbundle, id)
 	}
+
 	sb.streams.Store(&nbundle)
 	sb.smap = smap
 }

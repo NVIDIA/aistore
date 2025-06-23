@@ -56,7 +56,6 @@ type (
 )
 
 type (
-	// compare with `deferROC` from cmn/cos/io.go
 	deferROC struct {
 		cos.ReadOpenCloser
 		lif LIF

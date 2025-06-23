@@ -34,7 +34,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const actTxnCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
+const actTxnCleanup = "cleanup" // in addition to (apc.Begin2PC, ...)
 
 // context structure to gather all (or most) of the relevant state in one place
 // (compare with txnCln)
@@ -88,7 +88,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch phase {
-	case apc.ActBegin, apc.ActAbort, apc.ActCommit:
+	case apc.Begin2PC, apc.Abort2PC, apc.Commit2PC:
 	default:
 		debug.Assert(false, phase)
 		t.writeErrAct(w, r, phase+" (expecting begin|abort|commit)")
@@ -189,7 +189,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) createBucket(c *txnSrv) error {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		txn := newTxnCreateBucket(c)
 		if err := t.txns.begin(txn); err != nil {
 			return err
@@ -204,9 +204,9 @@ func (t *target) createBucket(c *txnSrv) error {
 				return err
 			}
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := t._commitCreateDestroy(c); err != nil {
 			return err
 		}
@@ -242,7 +242,7 @@ func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 
 func (t *target) makeNCopies(c *txnSrv) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -262,9 +262,9 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 		if err := t.txns.begin(txn, nlp); err != nil {
 			return "", err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -325,7 +325,7 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *actMsgExt) (curCopies, 
 
 func (t *target) setBprops(c *txnSrv) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -344,9 +344,9 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if err := t.txns.begin(txn, nlp); err != nil {
 			return "", err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -379,7 +379,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			xreg.DoAbort(flt, errors.New("re-ec"))
 
 			// checkAndRecover always false (compare w/ ecEncode below)
-			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit, false /*check & recover missing/corrupted*/)
+			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.Commit2PC, false /*check & recover missing/corrupted*/)
 			if rns.Err != nil {
 				return "", rns.Err
 			}
@@ -431,7 +431,7 @@ func (t *target) validateNprops(bck *meta.Bck, msg *actMsgExt) (nprops *cmn.Bpro
 
 func (t *target) renameBucket(c *txnSrv) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -452,9 +452,9 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 		if err := t.txns.begin(txn, nlpFrom, nlpTo); err != nil {
 			return "", err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -467,7 +467,7 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 		if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		rns := xreg.RenewBckRename(txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.ActCommit)
+		rns := xreg.RenewBckRename(txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.Commit2PC)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err // must not happen at commit time
@@ -523,7 +523,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 // common for both bucket copy and bucket transform - does the heavy lifting
 func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		var (
 			bckTo   = c.bckTo
 			bckFrom = c.bck // from
@@ -554,9 +554,9 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error)
 		if err := t._tcbBegin(c, msg, disableDM); err != nil {
 			return "", err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -572,16 +572,16 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error)
 				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 			}
 		} else {
-			t.txns.term(c.uuid, apc.ActCommit)
+			t.txns.term(c.uuid, apc.Commit2PC)
 		}
 
 		custom := txnTcb.xtcb.Args()
-		if custom.Phase != apc.ActBegin {
+		if custom.Phase != apc.Begin2PC {
 			err = fmt.Errorf("%s: %s is already running", t, txnTcb) // never here
 			nlog.Errorln(err)
 			return "", err
 		}
-		custom.Phase = apc.ActCommit
+		custom.Phase = apc.Commit2PC
 		rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			if !cmn.IsErrXactUsePrev(rns.Err) {
@@ -617,7 +617,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) error {
 		}
 	}
 	custom := &xreg.TCBArgs{
-		Phase:     apc.ActBegin,
+		Phase:     apc.Begin2PC,
 		BckFrom:   bckFrom,
 		BckTo:     bckTo,
 		Msg:       msg,
@@ -650,7 +650,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, disableDM bool) error {
 // - xid: xaction ID (will have "tco-" prefix)
 func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string, _ error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		var (
 			bckTo   = c.bckTo
 			bckFrom = c.bck // from
@@ -695,7 +695,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 			return xid, err
 		}
 		xtco.BeginMsg(msg)
-	case apc.ActAbort:
+	case apc.Abort2PC:
 		txn, err := t.txns.find(c.uuid)
 		if err == nil {
 			txnTco := txn.(*txnTCObjs)
@@ -704,9 +704,9 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 				xid = xtco.ID()
 				xtco.Abort(nil)
 			}
-			t.txns.term(c.uuid, apc.ActAbort)
+			t.txns.term(c.uuid, apc.Abort2PC)
 		}
-	case apc.ActCommit:
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return xid, err
 		}
@@ -727,7 +727,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		txnTco.xtco.ContMsg(txnTco.msg)
 		xid = txnTco.xtco.ID()
 		if !done {
-			t.txns.term(c.uuid, apc.ActCommit)
+			t.txns.term(c.uuid, apc.Commit2PC)
 		}
 	}
 	return xid, nil
@@ -739,7 +739,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 
 func (t *target) ecEncode(c *txnSrv) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -759,9 +759,9 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 		if err := t.txns.begin(txn, nlp); err != nil {
 			return "", err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -774,7 +774,7 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
 		checkAndRecover := c.msg.Name == apc.ActEcRecover
-		rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit, checkAndRecover /*missing/corrupted slices, etc.*/)
+		rns := xreg.RenewECEncode(c.bck, c.uuid, apc.Commit2PC, checkAndRecover /*missing/corrupted slices, etc.*/)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
@@ -803,7 +803,7 @@ func (t *target) validateECEncode(bck *meta.Bck, msg *actMsgExt) error {
 func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) {
 	var xid string
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		var (
 			bckTo   = c.bckTo
 			bckFrom = c.bck
@@ -857,7 +857,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		if err := t.txns.begin(txn); err != nil {
 			return xid, err
 		}
-	case apc.ActAbort:
+	case apc.Abort2PC:
 		txn, err := t.txns.find(c.uuid)
 		if err == nil {
 			txnArch := txn.(*txnArchMultiObj)
@@ -866,9 +866,9 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 				xid = xarch.ID()
 				xarch.Abort(nil)
 			}
-			t.txns.term(c.uuid, apc.ActAbort)
+			t.txns.term(c.uuid, apc.Abort2PC)
 		}
-	case apc.ActCommit:
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return xid, err
 		}
@@ -879,7 +879,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		txnArch := txn.(*txnArchMultiObj)
 		txnArch.xarch.DoMsg(txnArch.msg)
 		xid = txnArch.xarch.ID()
-		t.txns.term(c.uuid, apc.ActCommit)
+		t.txns.term(c.uuid, apc.Commit2PC)
 	}
 	return xid, nil
 }
@@ -890,7 +890,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 
 func (t *target) beginRm(c *txnSrv) error {
 	var opts apc.ActValRmNode
-	if c.phase != apc.ActBegin {
+	if c.phase != apc.Begin2PC {
 		return fmt.Errorf("%s: expecting begin phase, got %q", t, c.phase)
 	}
 	if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
@@ -905,7 +905,7 @@ func (t *target) beginRm(c *txnSrv) error {
 
 func (t *target) destroyBucket(c *txnSrv) error {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryLock(c.timeout.netw / 2) {
 			return cmn.NewErrBusy("bucket", c.bck.Cname(""))
@@ -915,9 +915,9 @@ func (t *target) destroyBucket(c *txnSrv) error {
 		if err := t.txns.begin(txn, nlp); err != nil {
 			return err
 		}
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := t._commitCreateDestroy(c); err != nil {
 			return err
 		}
@@ -927,7 +927,7 @@ func (t *target) destroyBucket(c *txnSrv) error {
 
 func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	switch c.phase {
-	case apc.ActBegin:
+	case apc.Begin2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -971,9 +971,9 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		}
 		hdr.Set(apc.HdrPromoteNamesHash, cksumVal)
 		hdr.Set(apc.HdrPromoteNamesNum, strconv.Itoa(totalN))
-	case apc.ActAbort:
-		t.txns.term(c.uuid, apc.ActAbort)
-	case apc.ActCommit:
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
@@ -983,7 +983,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		}
 		txnPrm, ok := txn.(*txnPromote)
 		debug.Assert(ok)
-		defer t.txns.term(c.uuid, apc.ActCommit)
+		defer t.txns.term(c.uuid, apc.Commit2PC)
 
 		if txnPrm.totalN == 0 {
 			nlog.Infof("%s: nothing to do (%s)", t, txnPrm)
@@ -1121,7 +1121,7 @@ func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	}
 
 	// latency = (network) +- (clock drift)
-	if c.phase == apc.ActBegin {
+	if c.phase == apc.Begin2PC {
 		if ptime := query.Get(apc.QparamUnixTime); ptime != "" {
 			now := time.Now().UnixNano()
 			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrCallerIsPrimary))

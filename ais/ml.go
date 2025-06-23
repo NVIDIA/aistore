@@ -6,7 +6,9 @@ package ais
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -15,7 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -24,9 +28,16 @@ import (
 // - t.httpmlget
 // - use parseReq and dpq
 
+// -----------------------------------------------------------------------
+// Control Flow (where DT: designated target, senders: all the rest)
 //
-// proxy -----------------------------------------------------------------
-//
+// phase 1 (POST): Client → Proxy → DT
+//   DT: PrepRx(receiving=true) → SDM.RegRecv() → Return XID
+// phase 2 (POST): Proxy → Senders
+//   Senders: PrepRx(receiving=false) → SDM.Open() → Send() to DT
+// phase 3 (GET): Client → DT (redirected)
+//   DT: Assemble() → Use pre-existing basewi state
+// -----------------------------------------------------------------------
 
 func (p *proxy) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -37,25 +48,31 @@ func (p *proxy) mlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func tmosspath(bucket, xid, wid string, nat int) string {
+	s := strconv.Itoa(nat)
+	return apc.URLPathML.Join(apc.Moss, bucket, xid, wid, s)
+}
+
 // GET /v1/ml/moss/bucket-name
 func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
-	// 1. parse/validate
-	apiItems, err := p.parseURL(w, r, apc.URLPathML.L, 2, true)
+	// parse/validate
+	items, err := p.parseURL(w, r, apc.URLPathML.L, 2, true)
 	if err != nil {
 		return
 	}
 	if err := p.checkAccess(w, r, nil, apc.AceGET); err != nil {
 		return
 	}
-	if len(apiItems) > 2 || apiItems[0] != apc.Moss {
+	// TODO: make /bucket-name optional - choose any from the apc.MossReq
+	if len(items) > 2 || items[0] != apc.Moss {
 		p.writeErrURL(w, r)
 		return
 	}
 
-	// 2. bucket
+	// bucket
 	var (
 		q      = r.URL.Query()
-		bucket = apiItems[1]
+		bucket = items[1]
 	)
 	bckArgs := allocBctx()
 	{
@@ -77,9 +94,10 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. select random "mossexec" target
+	// DT
 	var (
 		smap      = p.owner.smap.get()
+		nat       = smap.CountActiveTs()
 		tsi, errT = smap.HrwTargetTask(cos.GenTie())
 	)
 	if errT != nil {
@@ -87,45 +105,68 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// read api.MossReq but not unmarshal it
-	body, errB := cmn.ReadBytes(r)
+	body, errB := cmn.ReadBytes(r) // read api.MossReq but not unmarshal it
 	if errB != nil {
 		p.writeErr(w, r, errB)
 		return
 	}
 
-	// 4. bcast to all targets except the designated one
+	q.Set(apc.QparamTID, tsi.ID())
 
-	wid := cos.GenYAID(p.SID())
-	if nat := smap.CountActiveTs(); nat > 1 {
+	// phase 1: call DT
+	var (
+		wid  = cos.GenYAID(p.SID())
+		xid  = "noxid" // placeholder
+		hreq = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Path:   tmosspath(bucket, xid, wid, nat),
+			Query:  q,
+			Body:   body,
+		}
+	)
+	cargs := allocCargs()
+	{
+		cargs.si = tsi
+		cargs.req = hreq
+	}
+	res := p.call(cargs, smap)
+	xid = res.header.Get(apc.HdrXactionID)
+	freeCargs(cargs)
+	freeCR(res)
+	if err := res.err; err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	debug.Assert(cos.IsValidUUID(xid), xid)
+
+	hreq.Path = tmosspath(bucket, xid, wid, nat)
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		nlog.Infoln(p.String(), apc.Moss, "DT", tsi.String(), "xid", xid, "wid", wid, "[", hreq.Path, hreq.Method, "]")
+	}
+	// phase 2: bcast all except DT
+	if nat > 1 {
 		args := allocBcArgs()
 		{
-			q.Set(apc.QparamTID, tsi.ID())
-
-			args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathML.Join(bucket, wid), Query: q, Body: body}
+			args.req = hreq
 			args.smap = smap
+			args.network = cmn.NetIntraControl
 			args.async = true
-
-			// Build selected nodes list excluding designated target
-			nodes := args.selected[:0]
-			for _, si := range smap.Tmap {
-				if si.ID() != tsi.ID() && !si.InMaintOrDecomm() {
-					nodes = append(nodes, si)
-				}
+		}
+		nodes := args.selected[:0]
+		for _, si := range smap.Tmap {
+			if si.ID() != tsi.ID() && !si.InMaintOrDecomm() {
+				nodes = append(nodes, si)
 			}
-			args.selected = nodes
-			args.nodeCount = len(nodes)
 		}
-		_ = p.bcastSelected(args)
-		freeBcArgs(args)
+		args.selected = nodes
+		args.nodeCount = len(nodes)
 
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-			nlog.Infoln(r.Method, apc.Moss, bck.Cname(""), "bcast", len(args.selected))
-		}
+		_ = p.bcastSelected(args) // async
+		freeBcArgs(args)
 	}
 
-	// 5. update r.URL.Path (to include apc.MossExec) and redirect
-	r.URL.Path = cos.JoinWords(apc.Version, apc.ML, apc.MossExec, bucket, wid)
+	// phase 3: redirect GET => DT
+	r.URL.Path = hreq.Path
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
@@ -138,113 +179,177 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 // target ---------------------------------------------------------------------------------
 //
 
+type mossCtx struct {
+	req *apc.MossReq
+	bck *meta.Bck
+	tid string
+	xid string
+	wid string
+	nat int
+}
+
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodGet:
-		apiItems, e := t.parseURL(w, r, apc.URLPathML.L, 2, true)
-		if e != nil {
-			return
-		}
-		if len(apiItems) > 3 {
-			t.writeErrURL(w, r)
+	case http.MethodPost:
+		// phase 1: DT to initialize Rx (see `designated`)
+		// phase 2: senders to open SDM and start sending
+		ctx, err := t.mossparse(w, r)
+		if err != nil {
 			return
 		}
 
-		// bucket
 		var (
-			q        = r.URL.Query() // TODO: dpq
-			bucket   = apiItems[1]
-			wid      = apiItems[2]
-			bck, err = newBckFromQ(bucket, q, nil)
+			smap = t.owner.smap.get()
+			nat  = smap.CountActiveTs()
 		)
-		if err != nil {
+		if nat != ctx.nat {
+			t.writeErrf(w, r, "moss: expecting %d targets, have %d", nat, ctx.nat)
+			return
+		}
+		tsi := smap.GetTarget(ctx.tid)
+		if tsi == nil {
+			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "moss", ctx.tid}) // TODO: unify errs
+			return
+		}
+
+		// renew or find x-moss
+		var (
+			xctn       core.Xact
+			xid        = ctx.xid
+			designated = ctx.tid == t.SID()
+		)
+		if designated {
+			debug.Assert(xid == "noxid", xid) // placeholder
+			xid = cos.GenUUID()
+			rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: true /*designated*/})
+			if rns.Err != nil {
+				t.writeErr(w, r, rns.Err)
+				return
+			}
+			xctn = rns.Entry.Get()
+		} else {
+			debug.Assert(ctx.nat > 1, "not expecting POST -> non-DT when single-node")
+			debug.Assert(cos.IsValidUUID(xid), xid)
+			xctn = xreg.GetActiveXact(ctx.xid)
+			if xctn == nil {
+				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+					nlog.Infoln(t.String(), "Sender: x-moss", xid, "not found")
+				}
+				rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: false /*designated*/})
+				if rns.Err != nil {
+					t.writeErr(w, r, rns.Err)
+					return
+				}
+				xctn = rns.Entry.Get()
+				debug.Assert(xid == xctn.ID(), t.String(), " Sender: expecting x-moss ID ", xid, " got ", xctn.ID()) // TODO -- FIXME: force xreg
+				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+					nlog.Infoln(t.String(), "Sender: x-moss renewed", xctn.Name())
+				}
+			}
+		}
+
+		xmoss, ok := xctn.(*xs.XactMoss)
+		debug.Assert(ok, xctn.Name())
+
+		if err := bundle.SDM.Open(); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
-
-		// req: read, unmarshal, and validate // TODO: mem-pool
-		var (
-			req = &apc.MossReq{}
-		)
-		if err := cmn.ReadJSON(w, r, req); err != nil {
-			return
-		}
-		if len(req.In) == 0 {
-			t.writeErr(w, r, errors.New(apc.MossExec+" : empty input"))
-			return
-		}
-		if req.OutputFormat == "" {
-			req.OutputFormat = archive.ExtTar // default
+		if designated {
+			err = xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1)
 		} else {
-			f, err := archive.Mime(req.OutputFormat, "" /*filename*/) // normalize
-			if err != nil {
-				t.writeErr(w, r, err)
-				return
-			}
-			req.OutputFormat = f
+			err = xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid)
 		}
-
-		// xid: generate target-local cluster-unique BEID
-		var (
-			div        = uint64(xact.IdleDefault)
-			beid, _, _ = xreg.GenBEID(div, bck.MakeUname(apc.Moss))
-		)
-		if beid == "" {
-			beid = cos.GenUUID()
-		}
-
-		// start x-moss
-		rns := xreg.RenewBucketXact(apc.ActGetBatch, bck, xreg.Args{UUID: beid, Custom: req})
-		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err)
+		if err != nil {
+			t.writeErr(w, r, err) // TODO -- FIXME: abort-all
 			return
 		}
-		xctn := rns.Entry.Get()
-		if !rns.IsRunning() {
-			// run it
-			xact.GoRunW(xctn)
+		w.Header().Set(apc.HdrXactionID, xmoss.ID())
+
+	case http.MethodGet:
+		ctx, err := t.mossparse(w, r)
+		if err != nil {
+			return
+		}
+
+		debug.Assert(cos.IsValidUUID(ctx.xid), ctx.xid)
+		xctn := xreg.GetActiveXact(ctx.xid)
+		if xctn == nil {
+			err := fmt.Errorf("%s: x-moss %q must be active", t, ctx.xid)
+			debug.AssertNoErr(err)
+			t.writeErr(w, r, err) // TODO -- FIXME: abort-all
+			return
 		}
 		xmoss, ok := xctn.(*xs.XactMoss)
 		debug.Assert(ok, xctn.Name())
 
-		switch apiItems[0] {
-		case apc.Moss:
-			// bcast path
-			tid := q.Get(apc.QparamTID)
-			t.mossend(w, r, xmoss, req, tid, wid)
-		case apc.MossExec:
-			// redirect path
-			t.mossasm(w, r, xmoss, req, wid)
-		default:
-			t.writeErrURL(w, r)
+		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
+			if err == cmn.ErrGetTxBenign {
+				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+					nlog.Warningln(err)
+				}
+			} else {
+				t.writeErr(w, r, err)
+			}
 		}
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet)
 	}
 }
 
-// GET /v1/ml/mossexec/bucket-name (redirect path)
-func (t *target) mossasm(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, wid string) {
-	if err := xmoss.Assemble(req, w, wid); err != nil {
-		if err == cmn.ErrGetTxBenign {
-			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-				nlog.Warningln(err)
-			}
-		} else {
-			t.writeErr(w, r, err)
-		}
+// parse tmosspath()
+func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx, err error) {
+	var items []string
+	if items, err = t.parseURL(w, r, apc.URLPathML.L, 4, true); err != nil {
+		return ctx, err
 	}
-}
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		nlog.Infoln(t.String(), "mossparse", r.Method, "items", items)
+	}
+	if len(items) > 5 {
+		t.writeErrURL(w, r)
+		return ctx, err
+	}
+	debug.Assert(items[0] == apc.Moss, items[0])
 
-// GET /v1/ml/moss/bucket-name (broadcast path)
-func (t *target) mossend(w http.ResponseWriter, r *http.Request, xmoss *xs.XactMoss, req *apc.MossReq, tid, wid string) {
-	smap := t.owner.smap.get()
-	tsi := smap.GetTarget(tid)
-	if tsi == nil {
-		t.writeErr(w, r, &errNodeNotFound{t.si, smap, "failed to mossend", tid})
-		return
+	bucket := items[1]
+	ctx.xid = items[2]
+	ctx.wid = items[3]
+	ctx.nat, err = strconv.Atoi(items[4])
+	if err != nil {
+		t.writeErrURL(w, r)
+		return ctx, err
 	}
-	if err := xmoss.Send(req, &smap.Smap, tsi, wid); err != nil {
+	debug.Assert(ctx.nat > 0 && ctx.nat < 10_000, ctx.nat)
+
+	q := r.URL.Query() // TODO: dpq
+	ctx.tid = q.Get(apc.QparamTID)
+	ctx.bck, err = newBckFromQ(bucket, q, nil)
+	if err != nil {
 		t.writeErr(w, r, err)
+		return ctx, err
 	}
+
+	ctx.req = &apc.MossReq{}
+	if err := cmn.ReadJSON(w, r, ctx.req); err != nil {
+		return ctx, err
+	}
+	if len(ctx.req.In) == 0 {
+		t.writeErr(w, r, errors.New(apc.Moss+": empty input")) // TODO: unify errs
+		return ctx, err
+	}
+	if ctx.req.OutputFormat == "" {
+		ctx.req.OutputFormat = archive.ExtTar // default
+	} else {
+		f, err := archive.Mime(ctx.req.OutputFormat, "" /*filename*/) // normalize
+		if err != nil {
+			t.writeErr(w, r, err)
+			return ctx, err
+		}
+		ctx.req.OutputFormat = f
+	}
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		nlog.Infof("%s: %+v, %s", t, ctx, meta.Tname(ctx.tid))
+	}
+	return ctx, nil
 }

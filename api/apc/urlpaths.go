@@ -102,11 +102,16 @@ const (
 	Progress = "progress"
 )
 
-// internal use
+// 2PC
 const (
-	SyncSmap = "syncsmap"
-	MossExec = "mossexec"
+	Begin2PC  = "begin"
+	Commit2PC = "commit"
+	Abort2PC  = Abort
+
+	Query2PC = "query"
 )
+
+const SyncSmap = "syncsmap" // obsolete (keeping it)
 
 type URLPath struct {
 	S string

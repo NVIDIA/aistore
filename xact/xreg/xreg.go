@@ -158,6 +158,23 @@ outer:
 	return xctn, nil
 }
 
+func GetActiveXact(uuid string) (xctn core.Xact) {
+	e := &dreg.entries
+	e.mtx.RLock()
+	xctn = e.getActiveXact(uuid)
+	e.mtx.RUnlock()
+	return
+}
+
+func (e *entries) getActiveXact(uuid string) core.Xact {
+	for _, entry := range e.active {
+		if x := entry.Get(); x.ID() == uuid {
+			return x
+		}
+	}
+	return nil
+}
+
 func GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	dreg.entries.getAllRunning(inout, periodic)
 }
@@ -533,7 +550,10 @@ func usePrev(xprev core.Xact, nentry Renewable, flt Flt) bool {
 	//
 	// on-demand
 	//
-	if pdtor.Scope != xact.ScopeB {
+	if nkind == apc.ActGetBatch { // NOTE: want full control via WhenPrevIsRunning
+		return false
+	}
+	if pdtor.Scope != xact.ScopeB { // TODO: too loose, too broad
 		return true
 	}
 	bck := flt.Bck
