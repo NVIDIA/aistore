@@ -13,6 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -67,6 +69,13 @@ type (
 	}
 
 	NopLocker struct{}
+)
+
+type (
+	// Commonly known as "sharded mutex"
+	SharMutex16 struct {
+		m [16]sync.Mutex
+	}
 )
 
 // interface guard
@@ -301,3 +310,16 @@ func (u *ChanFull) Check(l, c int) bool {
 }
 
 func (u *ChanFull) Load() int64 { return u.Int64.Load() }
+
+/////////////////
+// SharMutex16 //
+/////////////////
+
+func (shar *SharMutex16) Lock(i int)   { shar.m[i].Lock() }
+func (shar *SharMutex16) Unlock(i int) { shar.m[i].Unlock() }
+func (shar *SharMutex16) Len() int     { return cap(shar.m) }
+
+func (shar *SharMutex16) Index(id string) int {
+	hash := onexxh.Checksum64S(UnsafeB(id), MLCG32)
+	return int(hash & uint64(cap(shar.m)-1))
+}

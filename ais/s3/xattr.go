@@ -16,8 +16,6 @@ import (
 
 const mptXattrID = "user.ais.s3-multipart"
 
-const iniCapParts = 8
-
 func OffsetSorted(lom *core.LOM, partNum int32) (off, size int64, status int, err error) {
 	var mpt *mpt
 	if mpt, err = loadMptXattr(lom); err != nil {

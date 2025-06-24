@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -19,6 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/core"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+)
+
+const (
+	iniCapUploads = 8
+	iniCapParts   = 4
 )
 
 // NOTE: xattr stores only the (*) marked attributes
@@ -40,15 +44,16 @@ type (
 )
 
 var (
-	ups uploads
-	mu  sync.RWMutex
+	ups  uploads
+	shar cos.SharMutex16
 )
 
-// Start miltipart upload
+// Start multipart upload
 func InitUpload(id, bckName, objName string, metadata map[string]string) {
-	mu.Lock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	if ups == nil {
-		ups = make(uploads, 8)
+		ups = make(uploads, iniCapUploads)
 	}
 	ups[id] = &mpt{
 		bckName:  bckName,
@@ -57,28 +62,30 @@ func InitUpload(id, bckName, objName string, metadata map[string]string) {
 		ctime:    time.Now(),
 		metadata: metadata,
 	}
-	mu.Unlock()
+	shar.Unlock(lockidx)
 }
 
 // Add part to an active upload.
 // Some clients may omit size and md5. Only partNum is must-have.
 // md5 and fqn is filled by a target after successful saving the data to a workfile.
 func AddPart(id string, npart *MptPart) (err error) {
-	mu.Lock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found (%s, %d)", id, npart.FQN, npart.Num)
 	} else {
 		mpt.parts = append(mpt.parts, npart)
 	}
-	mu.Unlock()
+	shar.Unlock(lockidx)
 	return
 }
 
 // TODO: compare non-zero sizes (note: s3cmd sends 0) and part.ETag as well, if specified
 func CheckParts(id string, parts []types.CompletedPart) ([]*MptPart, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
+	defer shar.Unlock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
@@ -112,7 +119,8 @@ func ParsePartNum(s string) (int32, error) {
 // Return a sum of upload part sizes.
 // Used on upload completion to calculate the final size of the object.
 func ObjSize(id string) (size int64, err error) {
-	mu.RLock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found", id)
@@ -121,13 +129,14 @@ func ObjSize(id string) (size int64, err error) {
 			size += part.Size
 		}
 	}
-	mu.RUnlock()
+	shar.Unlock(lockidx)
 	return
 }
 
 func GetUploadMetadata(id string) (metadata map[string]string) {
-	mu.RLock()
-	defer mu.RUnlock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
+	defer shar.Unlock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
 		return nil
@@ -139,14 +148,15 @@ func GetUploadMetadata(id string) (metadata map[string]string) {
 // if completed (i.e., not aborted): store xattr
 func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
 	debug.Assert(lom != nil)
-	mu.Lock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
-		mu.Unlock()
+		shar.Unlock(lockidx)
 		return false
 	}
 	delete(ups, id)
-	mu.Unlock()
+	shar.Unlock(lockidx)
 
 	if !aborted {
 		if err := storeMptXattr(lom, mpt); err != nil {
@@ -161,45 +171,72 @@ func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
 	return true
 }
 
-func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploadsResult) {
-	mu.RLock()
+func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult {
 	results := make([]UploadInfoResult, 0, len(ups))
-	for id, mpt := range ups {
-		results = append(results, UploadInfoResult{Key: mpt.objName, UploadID: id, Initiated: mpt.ctime})
-	}
-	mu.RUnlock()
 
-	sort.Slice(results, func(i int, j int) bool {
+	// lock all (notice performance trade-off)
+	for i := range shar.Len() {
+		shar.Lock(i)
+	}
+	// filter by bucket
+	for id, mpt := range ups {
+		if bckName == "" || mpt.bckName == bckName {
+			results = append(results, UploadInfoResult{
+				Key:       mpt.objName,
+				UploadID:  id,
+				Initiated: mpt.ctime,
+			})
+		}
+	}
+	for i := range shar.Len() {
+		shar.Unlock(i)
+	}
+
+	// sort by (object name, initiation time)
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Key != results[j].Key {
+			return results[i].Key < results[j].Key
+		}
 		return results[i].Initiated.Before(results[j].Initiated)
 	})
 
+	// paginate with idMarker if specified
 	var from int
 	if idMarker != "" {
-		// truncate
 		for i, res := range results {
 			if res.UploadID == idMarker {
 				from = i + 1
 				break
 			}
-			copy(results, results[from:])
-			results = results[:len(results)-from]
+		}
+		if from > 0 {
+			results = results[from:]
 		}
 	}
+
+	// apply maxUploads limit
+	var truncated bool
 	if maxUploads > 0 && len(results) > maxUploads {
 		results = results[:maxUploads]
+		truncated = true
 	}
-	result = &ListMptUploadsResult{Bucket: bckName, Uploads: results, IsTruncated: from > 0}
-	return
+
+	return &ListMptUploadsResult{
+		Bucket:      bckName,
+		Uploads:     results,
+		IsTruncated: truncated,
+	}
 }
 
 func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int, err error) {
-	mu.RLock()
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	mpt, ok := ups[id]
 	if !ok {
 		ecode = http.StatusNotFound
 		mpt, err = loadMptXattr(lom)
 		if err != nil || mpt == nil {
-			mu.RUnlock()
+			shar.Unlock(lockidx)
 			return nil, ecode, err
 		}
 		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
@@ -212,6 +249,6 @@ func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int
 			PartNumber: apc.Ptr(part.Num),
 		})
 	}
-	mu.RUnlock()
+	shar.Unlock(lockidx)
 	return parts, ecode, err
 }
