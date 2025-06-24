@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -388,7 +389,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 		})
 		if b.msg.ArgType() == ArgTypeFQN {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
-				Name:  ArgType,
+				Name:  strings.ToUpper(ArgType), // transformers expect upper case `ARG_TYPE` env var
 				Value: ArgTypeFQN,
 			})
 		}

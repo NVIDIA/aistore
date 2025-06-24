@@ -9,6 +9,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"gopkg.in/yaml.v3"
 )
 
 // is used in cmn/config; is known to cmn/iter-fields parser
@@ -39,4 +40,13 @@ func (d *Duration) UnmarshalJSON(b []byte) (err error) {
 	dur, err = time.ParseDuration(val)
 	*d = Duration(dur)
 	return
+}
+
+func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
+	parsed, err := time.ParseDuration(node.Value)
+	if err != nil {
+		return err
+	}
+	*d = Duration(parsed)
+	return nil
 }

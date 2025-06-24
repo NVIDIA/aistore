@@ -32,19 +32,19 @@ const (
 	ETLSpecType = "etl-spec"
 
 	// common fields
-	Name              = "NAME"
-	CommunicationType = "COMMUNICATION_TYPE"
-	ArgType           = "ARG_TYPE"
-	DirectPut         = "DIRECT_PUT"
+	Name              = "name"
+	CommunicationType = "communication_type"
+	ArgType           = "arg_type"
+	DirectPut         = "direct_put"
 
 	// `InitSpecMsg` fields
-	Spec = "SPEC"
+	Spec = "spec"
 
 	// `ETLSpecMsg` fields
-	Runtime = "RUNTIME"
-	Image   = "IMAGE"
-	Command = "COMMAND"
-	Env     = "ENV"
+	Runtime = "runtime"
+	Image   = "image"
+	Command = "command"
+	Env     = "env"
 
 	// consts for unmarshalling ETL details
 	InitMsgType = "init_msg"
@@ -125,14 +125,14 @@ type (
 		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
 	}
 	InitSpecMsg struct {
-		Spec []byte `json:"spec"`
-		InitMsgBase
+		Spec        []byte `json:"spec"`
+		InitMsgBase `yaml:",inline"`
 	}
 
 	// ETLSpecMsg is a YAML representation of the ETL pod spec.
 	ETLSpecMsg struct {
-		InitMsgBase             // included all optional fields from InitMsgBase
-		Runtime     RuntimeSpec `json:"runtime" yaml:"runtime"`
+		InitMsgBase `yaml:",inline"` // included all optional fields from InitMsgBase
+		Runtime     RuntimeSpec      `json:"runtime" yaml:"runtime"`
 	}
 
 	RuntimeSpec struct {
