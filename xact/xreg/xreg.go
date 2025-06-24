@@ -597,6 +597,7 @@ func (r *registry) renewLocked(entry Renewable, flt Flt) (rns RenewRes) {
 	if err = entry.Start(); err != nil {
 		return RenewRes{Err: err}
 	}
+
 	r.entries.add(entry)
 	return RenewRes{Entry: entry}
 }

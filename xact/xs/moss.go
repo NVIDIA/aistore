@@ -138,9 +138,6 @@ func (p *mossFactory) Start() error {
 	return nil
 }
 
-func (*mossFactory) Kind() string     { return apc.ActGetBatch }
-func (p *mossFactory) Get() core.Xact { return p.xctn }
-
 // NOTE: since x-moss is a multi-bucket job not differentiating prev.Bucket() vs p.Bucket()
 func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	if prev.UUID() == p.UUID() {
@@ -151,9 +148,6 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 			nlog.Infoln(core.T.String(), "DT prev:", prev.UUID(), "curr:", p.UUID(), "- using prev...")
 		}
 		return xreg.WprUse, nil
-	}
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(core.T.String(), "Sender prev:", prev.UUID(), "curr:", p.UUID(), "- starting new...")
 	}
 	return xreg.WprKeepAndStartNew, nil
 }
@@ -508,6 +502,9 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	}
 	return wi.recvObj(index, hdr, reader)
 }
+
+func (*mossFactory) Kind() string     { return apc.ActGetBatch }
+func (p *mossFactory) Get() core.Xact { return p.xctn }
 
 func (r *XactMoss) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}

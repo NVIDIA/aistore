@@ -222,7 +222,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			debug.Assert(xid == "noxid", xid) // placeholder
 			xid = cos.GenUUID()
 
-			rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: true /*designated*/})
+			rns := xreg.RenewGetBatch(ctx.bck, xid, true /*designated*/)
 			if rns.Err != nil {
 				t.writeErr(w, r, rns.Err)
 				return
@@ -232,13 +232,13 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			debug.Assert(ctx.nat > 1, "not expecting POST -> non-DT when single-node")
 			debug.Assert(cos.IsValidUUID(xid), xid)
 
-			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-				nlog.Infoln(t.String(), "Sender: x-moss", xid, "not found")
-			}
-			rns := xreg.RenewBucketXact(apc.ActGetBatch, ctx.bck, xreg.Args{UUID: xid, Custom: false /*designated*/})
+			rns := xreg.RenewGetBatch(ctx.bck, xid, false /*designated*/)
 			if rns.Err != nil {
 				t.writeErr(w, r, rns.Err)
 				return
+			}
+			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				nlog.Infoln(t.String(), "Sender: x-moss", xid, "running:", rns.IsRunning())
 			}
 			xctn = rns.Entry.Get()
 			debug.Assert(xid == xctn.ID(), t.String(), " Sender: expecting x-moss ID given by DT: ", xid, " got ", xctn.ID())
@@ -348,7 +348,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 		ctx.req.OutputFormat = f
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s: %+v, %s", t, ctx, meta.Tname(ctx.tid))
+		nlog.Infoln(t.String(), "mossparse", "ctx [", ctx.bck.String(), ctx.tid, ctx.xid, ctx.wid, "]")
 	}
 	return ctx, nil
 }
