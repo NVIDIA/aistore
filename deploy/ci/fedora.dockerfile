@@ -26,6 +26,7 @@ RUN dnf -y update && \
        tar \
        uuid \
        which \
+       yq \
     && dnf clean all
 
 # Install Go
@@ -46,6 +47,11 @@ RUN python3 --version \
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
     && chmod +x kubectl \
     && mv kubectl /usr/local/bin/kubectl
+
+# Install kapp
+RUN curl -LO "https://github.com/carvel-dev/kapp/releases/latest/download/kapp-linux-amd64" \
+    && chmod +x kapp-linux-amd64 \
+    && mv kapp-linux-amd64 /usr/local/bin/kapp
 
 # Configure Podman
 RUN sed -i \
