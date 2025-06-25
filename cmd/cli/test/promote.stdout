@@ -25,7 +25,7 @@ two/discard      7B
 13.txt
 14.txt
 15.txt
-NAME     SIZE
+^No objects in ais://\w+$
 ^recursively promoted.*/tmp/prm.*=>.*ais://$BUCKET.*$
 
 subdir/11.txt

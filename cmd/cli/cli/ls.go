@@ -514,8 +514,12 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	if err != nil {
 		return lsoErr(msg, err)
 	}
-	if len(lst.Entries) == 0 && !printEmpty {
-		return fmt.Errorf("%s/%s not found", bck.Cname(""), msg.Prefix)
+	if len(lst.Entries) == 0 {
+		if !printEmpty {
+			return fmt.Errorf("%s not found", bck.Cname(msg.Prefix))
+		}
+		fmt.Fprintln(c.App.Writer, "No objects in "+bck.Cname(""))
+		return nil
 	}
 	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now, 0, /*npage*/
 		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
