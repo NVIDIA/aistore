@@ -143,7 +143,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(p.String(), apc.Moss, "DT", tsi.String(), "xid", xid, "wid", wid, "[", hreq.Path, hreq.Method, "]")
 	}
-	// phase 2: bcast all except DT
+	// phase 2: async broadcast -> all except DT
 	if nat > 1 {
 		args := allocBcArgs()
 		{
@@ -165,7 +165,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		freeBcArgs(args)
 	}
 
-	// phase 3: redirect GET => DT
+	// phase 3: redirect user's GET => DT
 	r.URL.Path = hreq.Path
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
@@ -212,13 +212,14 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// renew or find x-moss
+		// renew x-moss or find/reuse existing one
 		var (
 			xctn       core.Xact
 			xid        = ctx.xid
 			designated = ctx.tid == t.SID()
 		)
 		if designated {
+			// phase 1.
 			debug.Assert(xid == "noxid", xid) // placeholder
 			xid = cos.GenUUID()
 
@@ -229,6 +230,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			xctn = rns.Entry.Get()
 		} else {
+			// phase 2.
 			debug.Assert(ctx.nat > 1, "not expecting POST -> non-DT when single-node")
 			debug.Assert(cos.IsValidUUID(xid), xid)
 

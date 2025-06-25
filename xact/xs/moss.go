@@ -74,6 +74,7 @@ type (
 		bucket string
 		oname  string
 		sgl    *memsys.SGL
+		local  bool
 	}
 	basewi struct {
 		aw   archive.Writer
@@ -111,6 +112,8 @@ type (
 
 const (
 	mossIdleTime = xact.IdleDefault
+
+	iniCapPending = 64
 )
 
 // interface guard
@@ -138,7 +141,6 @@ func (p *mossFactory) Start() error {
 	return nil
 }
 
-// NOTE: since x-moss is a multi-bucket job not differentiating prev.Bucket() vs p.Bucket()
 func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	if prev.UUID() == p.UUID() {
 		return xreg.WprUse, nil
@@ -155,7 +157,7 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
 		mm:      memsys.PageMM(),
-		pending: make(map[string]*basewi, 64), // TODO: initial
+		pending: make(map[string]*basewi, iniCapPending),
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 	return r
@@ -317,6 +319,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 			nameInArch = in.NameInRespArch(lom.Bck().Name, req.OnlyObjName)
 		)
 		lom.Lock(false)
+
 		if in.ArchPath == "" {
 			r._sendreg(tsi, lom, nameInArch, opaque)
 		} else {
@@ -327,6 +330,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
 	}
+
 	r.DecPending()
 	return err
 }
@@ -420,7 +424,7 @@ func (r *XactMoss) _makeOpaque(index int, wid string) (b []byte) {
 	copy(b[off:], xid)
 	off += lx
 
-	binary.BigEndian.PutUint16(b[off:], uint16(lw)) // NOTE: fix
+	binary.BigEndian.PutUint16(b[off:], uint16(lw))
 	off += cos.SizeofI16
 	copy(b[off:], wid)
 	off += lw
@@ -642,15 +646,36 @@ add:
 
 // wait for _any_ receive (out of order or in)
 func (wi *basewi) waitRx() error {
-	select {
-	case _, ok := <-wi.recv.ch:
-		if !ok {
+	ticker := time.NewTicker(time.Second) // TODO -- FIXME: expo-backoff or else
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if cmn.Rom.FastV(5, cos.SmoduleXs) {
+				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid)
+			}
+
+			wi.recv.mtx.Lock()
+			i := wi.recv.next
+			entry := &wi.recv.m[i]
+			wi.recv.mtx.Unlock()
+
+			if cmn.Rom.FastV(5, cos.SmoduleXs) {
+				nlog.Infoln("\t\t>>>>> next:", i, entry.oname, entry.local)
+			}
+			if entry.isLocal() || !entry.isEmpty() {
+				return nil
+			}
+		case _, ok := <-wi.recv.ch:
+			if !ok {
+				return errStopped
+			}
+			return nil
+			// TODO -- FIXME: sentinels, to prevent a hang: case <- (remote aborted?)
+		case <-wi.r.ChanAbort():
 			return errStopped
 		}
-		return nil
-		// TODO -- FIXME: sentinels, to prevent a hang: case <- (remote aborted?)
-	case <-wi.r.ChanAbort():
-		return errStopped
 	}
 }
 
@@ -675,14 +700,13 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 			return 0, err
 		}
 
-		// TODO -- FIXME: timeout
+		// TODO -- FIXME: [resilience] timeout must trigger a "pointed" retry (re-send)
 	wait:
 		if err := wi.waitRx(); err != nil {
 			return 0, err
 		}
 
 		wi.recv.mtx.Lock()
-		debug.Assert(wi.recv.next == i, wi.recv.next, " vs ", i)
 		err := wi.flushRx(streaming)
 		j := wi.recv.next
 		wi.recv.mtx.Unlock()
@@ -725,7 +749,9 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
 	wi.recv.mtx.Lock()
-	wi.recv.next = i + 1
+	entry := &wi.recv.m[i]
+	entry.local = true
+	wi.recv.next = max(wi.recv.next, i+1)
 	wi.recv.mtx.Unlock()
 	return i + 1, nil
 }
@@ -831,9 +857,8 @@ func (wi *basewi) asm(req *apc.MossReq, streaming bool) error {
 // drains recv.m[] in strict input order
 // is called under `recv.mtx` lock
 
-func (entry *rxdata) isEmpty() bool {
-	return entry.oname == ""
-}
+func (entry *rxdata) isLocal() bool { return entry.local }
+func (entry *rxdata) isEmpty() bool { return entry.oname == "" }
 
 func (wi *basewi) flushRx(streaming bool) error {
 	for {
@@ -843,8 +868,12 @@ func (wi *basewi) flushRx(streaming bool) error {
 		var (
 			err   error
 			size  int64
-			entry = wi.recv.m[wi.recv.next]
+			entry = &wi.recv.m[wi.recv.next]
 		)
+		if entry.isLocal() {
+			wi.recv.next++
+			continue
+		}
 		if entry.isEmpty() {
 			return nil
 		}
@@ -887,14 +916,12 @@ func (wi *basewi) flushRx(streaming bool) error {
 			wi.resp.Out = append(wi.resp.Out, apc.MossOut{Bucket: entry.bucket, ObjName: oname, Size: size, ErrMsg: emsg})
 		}
 
-		// cleanup entry
+		// this sgl is done - can free it early (see related wi.cleanup())
 		if entry.sgl != nil {
 			entry.sgl.Free()
 			entry.sgl = nil
 		}
-
-		wi.recv.m[wi.recv.next] = rxdata{} // clear
-		wi.recv.next++
+		wi.recv.next++ // this "hole" is done
 
 		wi.cnt++
 		wi.size += size
