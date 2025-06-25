@@ -52,11 +52,13 @@ var (
 
 // Start multipart upload
 func InitUpload(id, bckName, objName string, metadata map[string]string) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	// just once
 	once.Do(func() {
 		ups = make(uploads, iniCapUploads)
 	})
+
+	lockidx := shar.Index(id)
+	shar.Lock(lockidx)
 	ups[id] = &mpt{
 		bckName:  bckName,
 		objName:  objName,
