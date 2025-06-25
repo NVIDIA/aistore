@@ -1083,7 +1083,7 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 func (e *errInvalidNVpair) Error() string { return fmt.Sprintf("invalid key=value pair %q", e.notpair) }
 
 // readFileOrURL reads content from either a local file path or HTTP URL
-func readFileOrURL(source string) ([]byte, error) {
+func readFileOrURL(source string) (io.ReadCloser, error) {
 	if isWebURL(source) {
 		// Download from HTTP URL
 		resp, err := http.Get(source)
@@ -1096,17 +1096,9 @@ func readFileOrURL(source string) ([]byte, error) {
 			return nil, fmt.Errorf("HTTP %d error downloading from %q", resp.StatusCode, source)
 		}
 
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response from %q: %v", source, err)
-		}
-		return data, nil
+		return resp.Body, nil
 	}
 
 	// Read from local file
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file %q: %v", source, err)
-	}
-	return data, nil
+	return os.Open(source)
 }

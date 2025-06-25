@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -23,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 const etlShowErrorsUsage = "Show ETL job errors.\n" +
@@ -68,7 +69,6 @@ var (
 			argTypeFlag,
 			waitPodReadyTimeoutFlag,
 			etlObjectRequestTimeout,
-			etlNameFlag,
 		},
 		cmdStop: {
 			allRunningJobsFlag,
@@ -248,41 +248,81 @@ func etlInitSpecHandler(c *cli.Context) error {
 	if fromFile == "" {
 		return fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
 	}
-	spec, err := readFileOrURL(fromFile)
+	reader, err := readFileOrURL(fromFile)
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 
+	decoder := yaml.NewDecoder(reader)
+	first := true
+	for {
+		var node yaml.Node // decode one YAML document for each iteration
+		if err := decoder.Decode(&node); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to decode YAML: %w", err)
+		}
+
+		if !first {
+			fmt.Fprintln(c.App.Writer, separatorLine)
+		}
+
+		if err := processSpecNode(c, &node); err != nil {
+			fmt.Fprintf(c.App.ErrWriter, "Skipping document: %v\n", err)
+			continue
+		}
+
+		first = false
+	}
+	return nil
+}
+
+func processSpecNode(c *cli.Context, node *yaml.Node) error {
 	var (
-		etlSpec  etl.ETLSpecMsg
-		initSpec etl.InitSpecMsg
-		msg      etl.InitMsg
+		specInf map[string]any
+		msg     etl.InitMsg
 	)
 
-	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
-		populateCommonFields(c, &etlSpec.InitMsgBase)
+	if err := node.Decode(&specInf); err != nil {
+		return err
+	}
+
+	switch {
+	case specInf[etl.Runtime] != nil: // ETL runtime spec
+		var etlSpec etl.ETLSpecMsg
+		if err := node.Decode(&etlSpec); err != nil {
+			return err
+		}
+		if err := populateCommonFields(c, &etlSpec); err != nil {
+			return fmt.Errorf("populate fields (ETLSpecMsg): %w", err)
+		}
 		msg = &etlSpec
-	} else {
-		populateCommonFields(c, &initSpec.InitMsgBase)
-		initSpec.Spec = spec
+	case specInf[etl.Spec] != nil: // full Kubernetes Pod spec
+		var initSpec etl.InitSpecMsg
+		raw, err := yaml.Marshal(node)
+		if err != nil {
+			return fmt.Errorf("marshal to raw bytes: %w", err)
+		}
+		initSpec.Spec = raw
+		if err := populateCommonFields(c, &initSpec); err != nil {
+			return fmt.Errorf("populate fields (InitSpecMsg): %w", err)
+		}
 		msg = &initSpec
+	default:
+		return errors.New("unknown document (missing 'runtime' or 'spec')")
 	}
 
 	if err := msg.Validate(); err != nil {
-		if e, ok := err.(*cmn.ErrETL); ok {
-			err = errors.New(e.Reason)
-		}
-		return err
+		return fmt.Errorf("validation failed: %w", err)
 	}
-
-	// msg.ID is `metadata.name` from podSpec
 	if err := etlAlreadyExists(msg.Name()); err != nil {
-		return err
+		return fmt.Errorf("duplicate ETL name %q: %w", msg.Name(), err)
 	}
-
-	xid, errV := api.ETLInit(apiBP, msg)
-	if errV != nil {
-		return V(errV)
+	xid, err := api.ETLInit(apiBP, msg)
+	if err != nil {
+		return fmt.Errorf("ETL init failed: %w", err)
 	}
 
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
@@ -604,7 +644,42 @@ func etlObjectHandler(c *cli.Context) error {
 	return handleETLHTTPError(err, etlName)
 }
 
-func populateCommonFields(c *cli.Context, base *etl.InitMsgBase) {
+// populate `EtlName` and then call `_populate()`
+func populateCommonFields(c *cli.Context, initMsg etl.InitMsg) error {
+	switch msg := initMsg.(type) {
+	case *etl.ETLSpecMsg: // ETL runtime spec
+		_populate(c, &msg.InitMsgBase)
+	case *etl.InitSpecMsg: // full Kubernetes Pod spec
+		pod, err := msg.ParsePodSpec()
+		if err != nil {
+			return err
+		}
+		if pod.ObjectMeta.Name != "" && msg.Name() == "" {
+			msg.EtlName = pod.ObjectMeta.Name
+		}
+		if pod.ObjectMeta.Annotations[etl.CommTypeAnnotation] != "" && msg.CommType() == "" {
+			msg.CommTypeX = pod.ObjectMeta.Annotations[etl.CommTypeAnnotation]
+		}
+		if pod.ObjectMeta.Annotations[etl.SupportDirectPutAnnotation] != "" {
+			msg.SupportDirectPut, err = cos.ParseBool(pod.ObjectMeta.Annotations[etl.SupportDirectPutAnnotation])
+			if err != nil {
+				return err
+			}
+		}
+		if pod.ObjectMeta.Annotations[etl.WaitTimeoutAnnotation] != "" {
+			t, err := time.ParseDuration(pod.ObjectMeta.Annotations[etl.WaitTimeoutAnnotation])
+			if err != nil {
+				return err
+			}
+			msg.InitTimeout = cos.Duration(t)
+		}
+		_populate(c, &msg.InitMsgBase)
+	}
+	return nil
+}
+
+// populates `commTypeFlag`, `argTypeFlag`, `waitPodReadyTimeoutFlag`, `etlObjectRequestTimeout`
+func _populate(c *cli.Context, base *etl.InitMsgBase) {
 	if flagIsSet(c, etlNameFlag) {
 		base.EtlName = parseStrFlag(c, etlNameFlag)
 	}

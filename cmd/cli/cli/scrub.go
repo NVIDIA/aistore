@@ -184,7 +184,7 @@ func scrubHandler(c *cli.Context) (err error) {
 	// elapsed
 	if !flagIsSet(c, noFooterFlag) {
 		elapsed := teb.FormatDuration(mono.Since(now))
-		fmt.Fprintln(c.App.Writer, "---")
+		fmt.Fprintln(c.App.Writer, separatorLine)
 		if ctx.numBcks > 1 {
 			total := cos.FormatBigI64(ctx.total.Load())
 			fmt.Fprintln(c.App.Writer, "Total:", total, "names in", elapsed)

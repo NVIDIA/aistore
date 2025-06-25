@@ -257,6 +257,8 @@ const (
 	indent4 = "            " // repeat(indent1, 4)
 )
 
+const separatorLine = "---"
+
 const (
 	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4" // namely, archive.FileExtensions
 	archExts    = "(" + archFormats + ")"
