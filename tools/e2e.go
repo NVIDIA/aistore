@@ -13,13 +13,11 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -32,8 +30,6 @@ type E2EFramework struct {
 	Dir  string
 	Vars map[string]string // Custom variables passed to input and output files.
 }
-
-var onceK8s sync.Once
 
 func (f *E2EFramework) RunE2ETest(fileName string) {
 	var (
@@ -136,6 +132,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 				config, err := getClusterConfig()
 				cos.AssertNoErr(err)
 				if !config.TestingEnv() {
+					tlog.Logfln("SKIPPING %q: requires local deployment", fileName)
 					ginkgo.Skip("requires local deployment")
 					return
 				}
@@ -147,21 +144,29 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 				if config, err := getClusterConfig(); err == nil && config.Auth.Enabled {
 					continue
 				}
+				tlog.Logfln("SKIPPING %q: AuthN not enabled", fileName)
 				ginkgo.Skip("AuthN not enabled - skipping")
 				return
 			case "k8s":
-				onceK8s.Do(k8s.Init)
-				if k8s.IsK8s() {
-					continue
+				// Skip if we can't verify or aren't on a Kubernetes cluster
+				status, err := isClusterK8s()
+				if err != nil {
+					tlog.Logfln("SKIPPING %q: cannot determine cluster type: %v", fileName, err)
+					ginkgo.Skip(fmt.Sprintf("cannot determine cluster type: %v", err))
 				}
-				ginkgo.Skip("not running in K8s - skipping")
-				return
+				if !status {
+					tlog.Logfln("SKIPPING %q: requires Kubernetes deployment", fileName)
+					ginkgo.Skip("requires Kubernetes deployment")
+				}
+				// Otherwise, we’re on K8s – run the test step
+				continue
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}
 		case strings.HasPrefix(scmd, "// SKIP"):
 			message := strings.TrimSpace(strings.TrimPrefix(scmd, "// SKIP"))
 			message = strings.Trim(message, `"`)
+			tlog.Logfln("SKIPPING %q: %s", fileName, message)
 			ginkgo.Skip(message)
 			return
 		}
