@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -46,15 +47,16 @@ type (
 var (
 	ups  uploads
 	shar cos.SharMutex16
+	once sync.Once
 )
 
 // Start multipart upload
 func InitUpload(id, bckName, objName string, metadata map[string]string) {
 	lockidx := shar.Index(id)
 	shar.Lock(lockidx)
-	if ups == nil {
+	once.Do(func() {
 		ups = make(uploads, iniCapUploads)
-	}
+	})
 	ups[id] = &mpt{
 		bckName:  bckName,
 		objName:  objName,
