@@ -656,15 +656,25 @@ func (wi *basewi) waitRx() error {
 				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid)
 			}
 
+			var (
+				entry     *rxdata
+				i         int
+				entryDone bool
+			)
 			wi.recv.mtx.Lock()
-			i := wi.recv.next
-			entry := &wi.recv.m[i]
+			i = wi.recv.next
+			if i < len(wi.recv.m) {
+				entry = &wi.recv.m[i]
+				entryDone = entry.isLocal() || !entry.isEmpty()
+			} else {
+				entryDone = true
+			}
 			wi.recv.mtx.Unlock()
 
-			if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			if entry != nil && cmn.Rom.FastV(5, cos.SmoduleXs) {
 				nlog.Infoln("\t\t>>>>> next:", i, entry.oname, entry.local)
 			}
-			if entry.isLocal() || !entry.isEmpty() {
+			if entryDone {
 				return nil
 			}
 		case _, ok := <-wi.recv.ch:
@@ -751,7 +761,7 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	wi.recv.mtx.Lock()
 	entry := &wi.recv.m[i]
 	entry.local = true
-	wi.recv.next = max(wi.recv.next, i+1)
+	debug.Assert(wi.recv.next <= i, wi.recv.next, " vs ", i) // must be contiguous
 	wi.recv.mtx.Unlock()
 	return i + 1, nil
 }
@@ -861,10 +871,7 @@ func (entry *rxdata) isLocal() bool { return entry.local }
 func (entry *rxdata) isEmpty() bool { return entry.oname == "" }
 
 func (wi *basewi) flushRx(streaming bool) error {
-	for {
-		if wi.recv.next >= len(wi.recv.m) {
-			return nil
-		}
+	for l := len(wi.recv.m); wi.recv.next < l; {
 		var (
 			err   error
 			size  int64
@@ -926,6 +933,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 		wi.cnt++
 		wi.size += size
 	}
+	return nil
 }
 
 ////////////
