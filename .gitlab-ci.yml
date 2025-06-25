@@ -392,7 +392,7 @@ test:short:authn:
     - ais auth logout
 
 test:short:https:
-  <<: *test_short_optional_def
+  <<: *test_short_def
   variables:
     AIS_USE_HTTPS: "true"
     AIS_SKIP_VERIFY_CRT: "true"
@@ -404,6 +404,12 @@ test:short:https:
     - openssl req -x509 -out $AIS_SERVER_CRT -keyout $AIS_SERVER_KEY -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -extensions EXT -config <( printf "[dn]\nCN=localhost\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:localhost\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --https
     - make test-short
+  rules:
+    - !reference [.test_short_template, rules]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*https.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS !~ /.*https.*/'
+      when: manual
+      allow_failure: true
 
 test:short:s3rproxy:
   <<: *test_short_skip_scheduled_def
