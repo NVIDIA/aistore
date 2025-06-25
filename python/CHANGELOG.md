@@ -16,6 +16,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `cont_on_err` option for bucket transform.
 - Add `job_id` option to `Etl.view()` method.
 - Add support for OS packages in `init_class`.
+- Add `MultipartDecoder` class to allow for the parsing of multipart HTTP responses.
 
 ### Changed
 
