@@ -160,6 +160,14 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 				}
 				// Otherwise, we’re on K8s – run the test step
 				continue
+			case "remais":
+				// Skip if no remote AIS clusters are attached
+				if RemoteCluster.UUID == "" {
+					tlog.Logfln("SKIPPING %q: no remote AIS clusters attached", fileName)
+					ginkgo.Skip("no remote AIS clusters attached")
+					return
+				}
+				continue
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}

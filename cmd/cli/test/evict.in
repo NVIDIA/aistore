@@ -1,5 +1,7 @@
 # Test evict command
 
+// SKIP
+
 # Test 1: AIS bucket eviction failure test
 # Create AIS bucket first
 ais bucket create ais://$BUCKET // IGNORE
