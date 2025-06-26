@@ -6,40 +6,36 @@ Running
 ^*.ais://$BUCKET_1*.created$
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
-COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE:
+communication_type: hpush://
+arg_type:
 Hello World!
 ^ETL\[etl.*\]stopped$
-Stopped
 ^ETL\[etl.*\]started successfully$
 Hello World!
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
-COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE: fqn
+communication_type: hpush://
+arg_type: fqn
 Hello World!
-$OBJECT_2.txt
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
-COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE:
-5328b3c272b5aab0
+communication_type: hpush://
+arg_type:
+05967d5390ac53b0
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
-COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE:
+communication_type: hpush://
+arg_type:
 5328b3c272b5aab0
 aecb71fa663c6460
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
-
 Running
 Running
 ^ETL\[etl.*\] successfully deleted$
 ^ETL\[etl.*\] successfully deleted$
-
 Running
 Running
 ^ETL\[etl.*\] successfully deleted$

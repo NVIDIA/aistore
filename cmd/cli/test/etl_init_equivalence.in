@@ -1,25 +1,25 @@
 // RUN k8s
-// Test that 'ais etl init' is equivalent to 'ais etl init spec'
+# Test that 'ais etl init' is equivalent to 'ais etl init spec'
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o hello_world_spec.yaml -s // IGNORE
 
-// Create ETL using 'ais etl init spec' (explicit)
+# Create ETL using 'ais etl init spec' (explicit)
 ais etl init spec --from-file="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-explicit // IGNORE
 
-// Create ETL using 'ais etl init' (implicit spec, new functionality)
+# Create ETL using 'ais etl init' (implicit spec, new functionality)
 ais etl init --from-file="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-implicit // IGNORE
 
-// Verify both ETLs are running
+# Verify both ETLs are running
 ais etl show | grep $ETL_NAME-explicit | awk '{print $2}'
 ais etl show | grep $ETL_NAME-implicit | awk '{print $2}'
 
-// Show details for both ETLs to verify they have identical properties
-ais etl show details $ETL_NAME-explicit | grep "COMMUNICATION TYPE"
-ais etl show details $ETL_NAME-implicit | grep "COMMUNICATION TYPE" 
+# Show details for both ETLs to verify they have identical properties
+ais etl show details $ETL_NAME-explicit | grep -m1 "communication_type"
+ais etl show details $ETL_NAME-implicit | grep -m1 "communication_type"
 
-ais etl show details $ETL_NAME-explicit | grep "ARGUMENT"
-ais etl show details $ETL_NAME-implicit | grep "ARGUMENT"
+ais etl show details $ETL_NAME-explicit | grep -m1 "arg_type"
+ais etl show details $ETL_NAME-implicit | grep -m1 "arg_type"
 
-// Clean up
+# Clean up
 ais etl stop $ETL_NAME-explicit // IGNORE
 ais etl rm $ETL_NAME-explicit // IGNORE
 ais etl stop $ETL_NAME-implicit // IGNORE  

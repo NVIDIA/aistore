@@ -1076,7 +1076,6 @@ func readFileOrURL(source string) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to download from %q: %v", source, err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("HTTP %d error downloading from %q", resp.StatusCode, source)

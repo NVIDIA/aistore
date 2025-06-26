@@ -1,6 +1,6 @@
 Running
 Running
-COMMUNICATION TYPE:  hpush://
-COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE:
-ARGUMENT TYPE:
+communication_type: hpush://
+communication_type: hpush://
+arg_type:
+arg_type:

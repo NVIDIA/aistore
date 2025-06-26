@@ -65,6 +65,7 @@ var (
 	etlSubFlags = map[string][]cli.Flag{
 		cmdSpec: {
 			fromFileFlag,
+			etlNameFlag,
 			commTypeFlag,
 			argTypeFlag,
 			waitPodReadyTimeoutFlag,
