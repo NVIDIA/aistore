@@ -490,6 +490,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) (
 	return erm
 }
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if err != nil {
 		return err
@@ -599,6 +600,7 @@ func (wi *basewi) cleanup() {
 }
 
 // handle receive for this work item
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader) (err error) {
 	if index < 0 || index >= len(wi.recv.m) {
 		err := fmt.Errorf("%s: out-of-bounds index %d (recv'd len=%d, wid=%s)",
@@ -738,16 +740,11 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
 	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
 	if err != nil {
-		if req.StreamingGet {
-			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, err, "]")
-			err = cmn.ErrGetTxBenign
-		}
 		return 0, err
 	}
 	if req.StreamingGet {
 		if err := wi.aw.Flush(); err != nil {
-			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, err, "]")
-			return 0, cmn.ErrGetTxBenign
+			return 0, err
 		}
 	} else {
 		wi.resp.Out = append(wi.resp.Out, out)
@@ -896,10 +893,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 			err = wi.aw.Write(entry.oname, oah, entry.sgl)
 		}
 		if err == nil && streaming {
-			if erf := wi.aw.Flush(); erf != nil {
-				nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", wi.wid, erf, "]")
-				err = cmn.ErrGetTxBenign
-			}
+			err = wi.aw.Flush()
 		}
 		wi.recv.mtx.Lock() //--------------
 
@@ -961,7 +955,8 @@ func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 		erw = err
 	}
 	if erw != nil {
-		return erw
+		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", erw, "]")
+		return cmn.ErrGetTxBenign
 	}
 
 	wi.sgl.Reset()
@@ -988,12 +983,7 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 	if err != nil {
 		return 0, err
 	}
-	written, err := io.Copy(part2, wi.sgl)
-	if err != nil {
-		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
-		return 0, cmn.ErrGetTxBenign
-	}
-	return written, nil
+	return io.Copy(part2, wi.sgl)
 }
 
 //////////////
@@ -1003,7 +993,8 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
 	if err := wi.basewi.asm(req, true); err != nil {
-		return err
+		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+		return cmn.ErrGetTxBenign
 	}
 
 	// flush and close aw

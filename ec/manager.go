@@ -164,6 +164,7 @@ func _renewXact(bck *meta.Bck, kind string) (core.Xact, error) {
 }
 
 // A function to process command requests from other targets
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.FreeRecv(objReader)
 	if err != nil {
@@ -207,6 +208,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {

@@ -493,6 +493,7 @@ func (ds *dsorterMem) sentCallback(_ *transport.ObjHdr, rc io.ReadCloser, x any,
 func (*dsorterMem) postExtraction() {}
 
 // implements receiver i/f
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (ds *dsorterMem) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
@@ -520,6 +521,7 @@ func (ds *dsorterMem) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err er
 	return nil
 }
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (ds *dsorterMem) recvResp(hdr *transport.ObjHdr, object io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {

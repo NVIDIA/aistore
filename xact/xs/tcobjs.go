@@ -373,6 +373,7 @@ ex:
 	return err
 }
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {

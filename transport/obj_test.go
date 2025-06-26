@@ -141,8 +141,8 @@ func Example_headers() {
 	stream.Fin()
 
 	// Output:
-	// Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{231B, v"1", xxhash2[h1], map[]} (70)
-	// Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{213B, v"222222222222222222222222", xxhash2[h2], map[xx:11 yy:22]} (111)
+	// Bck:s3://@uuid#namespace/abc ObjName:X SID: Opaque:[] ObjAttrs:{231B, v"1", xxhash2[h1], map[]} (72)
+	// Bck:ais://abracadabra ObjName:p/q/s SID: Opaque:[49 50 51] ObjAttrs:{213B, v"222222222222222222222222", xxhash2[h2], map[xx:11 yy:22]} (113)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {

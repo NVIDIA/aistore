@@ -282,6 +282,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		if errCb := h.recv(&obj.hdr, obj, err); errCb != nil {
 			err = errCb
 		}
+		debug.DeadBeefSmall(it.hbuf[:hlen])
 		// stats
 		if err == nil {
 			it.stats.incNum()                   // 1. this stream stats

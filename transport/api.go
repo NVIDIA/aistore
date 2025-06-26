@@ -45,6 +45,18 @@ const (
 
 const sizeofh = int(unsafe.Sizeof(Obj{}))
 
+// ObjHdr represents the transport header passed to recv callbacks.
+//
+// NOTE: ObjHdr and all of its fields (especially []byte fields like Opaque and Demux)
+// alias a temporary buffer (`it.hbuf`) reused on the next iteration of RxAnyStream.
+// Therefore:
+//
+//   • DO NOT retain ObjHdr or its fields beyond the recv() call
+//   • DO NOT pass ObjHdr to goroutines
+//   • DO NOT store ObjHdr in long-lived structures
+//
+// Correct usage: consume ObjHdr synchronously and inline inside the recv() callback.
+
 type (
 	// advanced usage: additional stream control
 	Extra struct {
@@ -67,6 +79,7 @@ type (
 		Bck      cmn.Bck
 		ObjName  string
 		SID      string       // sender node ID
+		Demux    string       // for shared data mover(s), to demux on the receive side
 		Opaque   []byte       // custom control (optional)
 		ObjAttrs cmn.ObjAttrs // attributes/metadata of the object that's being transmitted
 		Opcode   int          // (see reserved range above)

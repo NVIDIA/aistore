@@ -718,6 +718,7 @@ func (r *LsoXact) Snap() (snap *core.Snap) {
 // streaming receive: remote pages
 //
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)))
 

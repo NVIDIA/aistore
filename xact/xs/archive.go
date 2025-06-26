@@ -372,6 +372,7 @@ func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	r.p.dm.Send(o, fh, wi.tsi)
 }
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
 		r.AddErr(err, 5, cos.SmoduleXs)

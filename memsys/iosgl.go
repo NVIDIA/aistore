@@ -376,7 +376,7 @@ func (z *SGL) Free() {
 		size := cap(buf)
 		debug.Assert(int64(size) == s.Size())
 		b := buf[:size] // always freeing original (fixed buffer) size
-		deadbeef(b)
+		debug.DeadBeefLarge(b)
 		s.put = append(s.put, b)
 	}
 	s.muput.Unlock()

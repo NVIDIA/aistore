@@ -400,6 +400,7 @@ func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.O
 }
 
 // implements receiver i/f
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (ds *dsorterGeneral) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
@@ -495,6 +496,7 @@ func (ds *dsorterGeneral) postExtraction() {
 	ds.mw.stopWatchingReserved()
 }
 
+// (note: ObjHdr and its fields must be consumed synchronously)
 func (ds *dsorterGeneral) recvResp(hdr *transport.ObjHdr, object io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
