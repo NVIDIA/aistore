@@ -1,15 +1,113 @@
-# Test evict command - error handling for non-remote buckets
-# Evict only works on remote buckets (s3://, gs://, etc.)
+# Test evict command
 
-# Test 1: Attempt to evict from AIS bucket (should fail)
+# Test 1: AIS bucket eviction failure test
+# Create AIS bucket first
 ais bucket create ais://$BUCKET // IGNORE
-echo "test1" > /tmp/$RANDOM_1.txt
-ais put /tmp/$RANDOM_1.txt ais://$BUCKET/obj1.txt // IGNORE
-ais evict ais://$BUCKET/obj1.txt // FAIL "evicting objects from AIS buckets"
 
-# Test 2: Attempt to evict entire AIS bucket (should fail)
-ais evict ais://$BUCKET // FAIL "evicting objects from AIS buckets"
+# Setup test objects in AIS bucket
+echo "obj1 content" | ais object put - ais://$BUCKET/obj1.txt // IGNORE
+echo "obj2 content" | ais object put - ais://$BUCKET/obj2.txt // IGNORE
 
-# Cleanup
-rm -f /tmp/$RANDOM_1.txt // IGNORE
-ais bucket rm ais://$BUCKET -y // IGNORE 
+# Try to evict from AIS bucket - this should fail
+ais evict ais://$BUCKET --list "obj1.txt,obj2.txt" // FAIL "evicting objects from AIS buckets"
+
+# Clean up AIS bucket
+ais bucket rm --yes ais://$BUCKET // IGNORE
+
+# Test 2: Remote AIS bucket eviction tests
+# Create bucket on remote cluster (remais)
+ais bucket create ais://@remais/$BUCKET // IGNORE
+
+# Setup test objects in remote AIS bucket
+echo "obj1 content" | ais object put - ais://@remais/$BUCKET/obj1.txt // IGNORE
+echo "obj2 content" | ais object put - ais://@remais/$BUCKET/obj2.txt // IGNORE
+echo "prefix content" | ais object put - ais://@remais/$BUCKET/test_prefix_1.txt // IGNORE
+echo "prefix content" | ais object put - ais://@remais/$BUCKET/test_prefix_2.txt // IGNORE
+echo "template content" | ais object put - ais://@remais/$BUCKET/template_001.txt // IGNORE
+echo "template content" | ais object put - ais://@remais/$BUCKET/template_002.txt // IGNORE
+echo "single content" | ais object put - ais://@remais/$BUCKET/single_obj.txt // IGNORE
+echo "keepmd content" | ais object put - ais://@remais/$BUCKET/keepmd_test.txt // IGNORE
+echo "dryrun content" | ais object put - ais://@remais/$BUCKET/dryrun_test.txt // IGNORE
+echo "nested content" | ais object put - ais://@remais/$BUCKET/nested/deep/file.txt // IGNORE
+echo "nonrecursive content" | ais object put - ais://@remais/$BUCKET/nonrec/file.txt // IGNORE
+echo "deeper content" | ais object put - ais://@remais/$BUCKET/nonrec/deep/file.txt // IGNORE
+
+# Verify objects are cached before eviction
+ais ls ais://@remais/$BUCKET --cached | grep "^obj1.txt" | awk '{print $1}'
+ais ls ais://@remais/$BUCKET --cached | grep "^obj2.txt" | awk '{print $1}'
+
+# Evict specific objects using --list flag
+ais evict ais://@remais/$BUCKET --list "obj1.txt,obj2.txt"
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify objects are no longer cached
+ais ls ais://@remais/$BUCKET --cached | grep "^obj1.txt" // FAIL
+ais ls ais://@remais/$BUCKET --cached | grep "^obj2.txt" // FAIL
+
+# Test explicit --prefix flag
+ais evict ais://@remais/$BUCKET --prefix test_prefix_
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify prefix objects are no longer cached
+ais ls ais://@remais/$BUCKET --cached | grep "^test_prefix_1.txt" // FAIL
+ais ls ais://@remais/$BUCKET --cached | grep "^test_prefix_2.txt" // FAIL
+
+# Test single object eviction with --keep-md flag
+ais evict ais://@remais/$BUCKET/keepmd_test.txt --keep-md
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify object is no longer cached but bucket metadata preserved
+ais ls ais://@remais/$BUCKET --cached | grep "^keepmd_test.txt" // FAIL
+
+# Test single object eviction
+ais evict ais://@remais/$BUCKET/single_obj.txt
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify single object is no longer cached
+ais ls ais://@remais/$BUCKET --cached | grep "^single_obj.txt" // FAIL
+
+# Test template-based eviction with brace expansion
+ais evict ais://@remais/$BUCKET --template "template_{001..002}.txt"
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify template objects are no longer cached
+ais ls ais://@remais/$BUCKET --cached | grep "^template_001.txt" // FAIL
+ais ls ais://@remais/$BUCKET --cached | grep "^template_002.txt" // FAIL
+
+# Test non-recursive prefix eviction
+ais evict ais://@remais/$BUCKET/nonrec/ --nr
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify non-recursive: direct file evicted but deeper file remains
+ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/file.txt" // FAIL
+ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/deep/file.txt" | awk '{print $1}'
+
+# Test nested/embedded prefix eviction (recursive by default)
+ais evict ais://@remais/$BUCKET --prefix nested/
+
+# Wait for eviction job to complete
+ais wait job evict-objects // IGNORE
+
+# Verify nested object is no longer cached
+ais ls ais://@remais/$BUCKET --cached | grep "^nested/deep/file.txt" // FAIL
+
+# Test dry-run
+ais evict ais://@remais/$BUCKET/dryrun_test.txt --dry-run
+
+# Verify dry-run didn't actually evict the object
+ais ls ais://@remais/$BUCKET --cached | grep "^dryrun_test.txt" | awk '{print $1}'
+
+# Clean up remote bucket
+ais bucket rm --yes ais://@remais/$BUCKET // IGNORE

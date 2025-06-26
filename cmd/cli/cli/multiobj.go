@@ -198,18 +198,17 @@ func _evictOne(c *cli.Context, shift int) error {
 		}
 	}
 
-	// Special case: evict entire bucket when no object/prefix specified
-	if objNameOrTmpl == "" {
-		return evictBucket(c, bck)
-	}
-
 	oltp, err := dopOLTP(c, bck, objNameOrTmpl)
 	if err != nil {
 		return err
 	}
 
-	// Convert objName to list when there's no list or template (same pattern as prefetch)
+	// Choose between bucket and object eviction; if no flags and no object specified, evict whole bucket
 	if oltp.list == "" && oltp.tmpl == "" {
+		if objNameOrTmpl == "" {
+			return evictBucket(c, bck)
+		}
+		// Treat objName as a single-object list
 		oltp.list = oltp.objName
 	}
 
@@ -521,6 +520,14 @@ func (lr *lrCtx) dry(c *cli.Context, fileList []string, pt *cos.ParsedTemplate) 
 			dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+lr.bck.Cname("")+"/%s\n", fileList)
 		return
 	}
+
+	// Handle simple prefix different from template pattern
+	if lr.tmplObjs != "" && len(pt.Ranges) == 0 {
+		fmt.Fprintf(c.App.Writer, "[DRY RUN] %s objects with prefix %q from %s\n",
+			strings.ToUpper(c.Command.Name), lr.tmplObjs, lr.bck.Cname(""))
+		return
+	}
+
 	objs := pt.ToSlice(dryRunExamplesCnt)
 	limitedLineWriter(c.App.Writer,
 		dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+lr.bck.Cname("")+"/%s", objs)

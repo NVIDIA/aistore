@@ -1,0 +1,13 @@
+obj1.txt
+obj2.txt
+^evict-objects\[.*\]: \[obj1\.txt obj2\.txt\] evict from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^evict-objects\[.*\]: evict "test_prefix_" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^evict-objects\[.*\]: \[keepmd_test\.txt\] evict from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^evict-objects\[.*\]: \[single_obj\.txt\] evict from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^evict-objects\[.*\]: evict "template_{001\.\.002}\.txt" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^evict-objects\[.*\]: evict "nonrec/" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^nonrec/deep/file\.txt$
+^evict-objects\[.*\]: evict "nested/" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^\[DRY RUN\] with no modifications to the cluster$
+^EVICT ais://@remais/.*$
+dryrun_test.txt

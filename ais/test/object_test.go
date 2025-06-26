@@ -1046,6 +1046,7 @@ func TestEvictRemoteBucket(t *testing.T) {
 	t.Run("Cloud/KeepMD", func(t *testing.T) { testEvictRemoteBucket(t, cliBck, true) })
 	t.Run("Cloud/DeleteMD", func(t *testing.T) { testEvictRemoteBucket(t, cliBck, false) })
 	t.Run("RemoteAIS", testEvictRemoteAISBucket)
+	t.Run("MultiObject", testEvictMultiObject)
 }
 
 func testEvictRemoteAISBucket(t *testing.T) {
@@ -1114,6 +1115,151 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	} else {
 		tassert.Fatalf(t, !bProps.Mirror.Enabled, "test property not reset")
 	}
+}
+
+func testEvictMultiObject(t *testing.T) {
+	var (
+		bck = cliBck
+		m   = ioContext{
+			t:        t,
+			bck:      bck,
+			num:      0, // Manual object creation
+			fileSize: cos.KiB,
+		}
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	m.initAndSaveState(true /*cleanup*/)
+
+	t.Cleanup(func() {
+		m.del()
+	})
+
+	// Different eviction scenarios
+	testObjects := map[string][]byte{
+		"obj1.txt":             []byte("obj1 content"),
+		"obj2.txt":             []byte("obj2 content"),
+		"test_prefix_1.txt":    []byte("prefix content 1"),
+		"test_prefix_2.txt":    []byte("prefix content 2"),
+		"single_obj.txt":       []byte("single content"),
+		"template_001.txt":     []byte("template content 1"),
+		"template_002.txt":     []byte("template content 2"),
+		"keepmd_test.txt":      []byte("keepmd content"),
+		"nonrec/file.txt":      []byte("nonrecursive content"),
+		"nonrec/deep/file.txt": []byte("deeper content"),
+		"nested/deep/file.txt": []byte("nested content"),
+	}
+
+	// PUT all test objects
+	for objName, content := range testObjects {
+		putArgs := api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			ObjName:    objName,
+			Reader:     readers.NewBytes(content),
+		}
+		_, err := api.PutObject(&putArgs)
+		tassert.CheckFatal(t, err)
+	}
+
+	for objName := range testObjects {
+		exists := tools.CheckObjIsPresent(proxyURL, bck, objName)
+		tassert.Fatalf(t, exists, "object should be cached: %s", objName)
+	}
+
+	// Evict specific objects using list
+	tlog.Logf("Testing evict with object list...")
+	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{"obj1.txt", "obj2.txt"}}}
+	evictListID, err := api.EvictMultiObj(baseParams, bck, evdListMsg)
+	tassert.CheckFatal(t, err)
+	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	for _, objName := range []string{"obj1.txt", "obj2.txt"} {
+		exists := tools.CheckObjIsPresent(proxyURL, bck, objName)
+		tassert.Errorf(t, !exists, "object should be evicted: %s", objName)
+	}
+
+	// Evict with prefix (template without ranges)
+	tlog.Logf("Testing evict with prefix...")
+	evdPrefixMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "test_prefix_"}}
+	evictPrefixID, err := api.EvictMultiObj(baseParams, bck, evdPrefixMsg)
+	tassert.CheckFatal(t, err)
+	args = xact.ArgsMsg{ID: evictPrefixID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	for _, objName := range []string{"test_prefix_1.txt", "test_prefix_2.txt"} {
+		exists := tools.CheckObjIsPresent(proxyURL, bck, objName)
+		tassert.Errorf(t, !exists, "object should be evicted: %s", objName)
+	}
+
+	// Single object eviction with --keep-md (equivalent)
+	tlog.Logf("Testing single object evict...")
+	evdSingleMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{"keepmd_test.txt"}}}
+	evictSingleID, err := api.EvictMultiObj(baseParams, bck, evdSingleMsg)
+	tassert.CheckFatal(t, err)
+	args = xact.ArgsMsg{ID: evictSingleID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	exists := tools.CheckObjIsPresent(proxyURL, bck, "keepmd_test.txt")
+	tassert.Errorf(t, !exists, "object should be evicted: keepmd_test.txt")
+
+	// Template-based eviction with brace expansion
+	tlog.Logf("Testing evict with template...")
+	evdTemplateMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "template_{001..002}.txt"}}
+	evictTemplateID, err := api.EvictMultiObj(baseParams, bck, evdTemplateMsg)
+	tassert.CheckFatal(t, err)
+	args = xact.ArgsMsg{ID: evictTemplateID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	for _, objName := range []string{"template_001.txt", "template_002.txt"} {
+		exists := tools.CheckObjIsPresent(proxyURL, bck, objName)
+		tassert.Errorf(t, !exists, "object should be evicted: %s", objName)
+	}
+
+	// Non-recursive prefix eviction
+	tlog.Logf("Testing non-recursive evict...")
+	evdNonRecMsg := &apc.EvdMsg{
+		ListRange: apc.ListRange{Template: "nonrec/"},
+		NonRecurs: true,
+	}
+	evictNonRecID, err := api.EvictMultiObj(baseParams, bck, evdNonRecMsg)
+	tassert.CheckFatal(t, err)
+	args = xact.ArgsMsg{ID: evictNonRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	exists = tools.CheckObjIsPresent(proxyURL, bck, "nonrec/file.txt")
+	tassert.Errorf(t, !exists, "direct file should be evicted: nonrec/file.txt")
+	exists = tools.CheckObjIsPresent(proxyURL, bck, "nonrec/deep/file.txt")
+	tassert.Fatalf(t, exists, "deeper file should remain cached: nonrec/deep/file.txt")
+
+	// Recursive prefix eviction (default behavior)
+	tlog.Logf("Testing recursive evict...")
+	evdRecMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "nested/"}}
+	evictRecID, err := api.EvictMultiObj(baseParams, bck, evdRecMsg)
+	tassert.CheckFatal(t, err)
+	args = xact.ArgsMsg{ID: evictRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	exists = tools.CheckObjIsPresent(proxyURL, bck, "nested/deep/file.txt")
+	tassert.Errorf(t, !exists, "nested object should be evicted: nested/deep/file.txt")
+
+	// Verify remaining objects still exist
+	remainingObjects := []string{"single_obj.txt", "nonrec/deep/file.txt"}
+	for _, objName := range remainingObjects {
+		exists := tools.CheckObjIsPresent(proxyURL, bck, objName)
+		tassert.Fatalf(t, exists, "object should still be cached: %s", objName)
+	}
+
+	tlog.Logf("Multi-object eviction test completed successfully")
 }
 
 func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, objName, fqn string,
