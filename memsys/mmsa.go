@@ -261,8 +261,7 @@ func (r *MMSA) AllocSize(size int64) (buf []byte, slab *Slab) {
 }
 
 func (r *MMSA) Alloc() (buf []byte, slab *Slab) {
-	size := r.defBufSize
-	_, slab = r.SelectMemAndSlab(size)
+	_, slab = r.SelectMemAndSlab(r.defBufSize)
 	buf = slab.Alloc()
 	return
 }

@@ -104,7 +104,8 @@ type (
 type (
 	XactMoss struct {
 		xact.DemandBase
-		mm      *memsys.MMSA
+		gmm     *memsys.MMSA
+		smm     *memsys.MMSA
 		pending map[string]*basewi
 		pmtx    sync.RWMutex // TODO: optimize
 	}
@@ -156,7 +157,8 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
-		mm:      memsys.PageMM(),
+		gmm:     memsys.PageMM(),
+		smm:     memsys.ByteMM(),
 		pending: make(map[string]*basewi, iniCapPending),
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
@@ -279,7 +281,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 
 	// buffered
 	var (
-		sgl = r.mm.NewSGL(0)
+		sgl = r.gmm.NewSGL(0)
 		wi  = buffwi{basewi: basewi}
 	)
 	wi.sgl = sgl
@@ -315,7 +317,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 		}
 
 		var (
-			opaque     = r._makeOpaque(i, wid)
+			opaque     = r.packOpaque(i, wid)
 			nameInArch = in.NameInRespArch(lom.Bck().Name, req.OnlyObjName)
 		)
 		lom.Lock(false)
@@ -350,13 +352,20 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, nameInArch string, o
 		hdr.Bck.Copy(lom.Bucket())
 		hdr.ObjName = nameInArch
 		hdr.ObjAttrs.CopyFrom(oah, true /*skip cksum*/)
+		hdr.Demux = r.ID()
 		hdr.Opaque = opaque
 	}
 
-	// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
-
+	o.Callback, o.CmplArg = r.regSent, opaque
 	err = bundle.SDM.Send(o, roc, tsi, r)
 	debug.AssertNoErr(err) // DEBUG -- TODO -- FIXME: unify abort-all
+}
+
+// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
+func (r *XactMoss) regSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
+	opaque, ok := arg.([]byte)
+	debug.Assert(ok)
+	r.smm.Free(opaque)
 }
 
 // TODO -- FIXME: this method cannot return errors - must always send, possibly zero-size + error message
@@ -387,42 +396,45 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, nameInArch, archpat
 		hdr.Bck.Copy(lom.Bucket())
 		hdr.ObjName = nameInArch
 		hdr.ObjAttrs.Size = oah.Size
+		hdr.Demux = r.ID()
 		hdr.Opaque = opaque
 	}
 	o.Callback = r.archSent
-	o.CmplArg = lom
-
-	// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
+	o.CmplArg = &struct {
+		lom *core.LOM
+		buf []byte
+	}{lom, opaque}
 
 	err = bundle.SDM.Send(o, roc, tsi, r)
 	debug.AssertNoErr(err) // DEBUG is legal
 	return err
 }
 
-func (*XactMoss) archSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
-	lom, ok := arg.(*core.LOM)
+// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
+func (r *XactMoss) archSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
+	ctx, ok := arg.(*struct {
+		lom *core.LOM
+		buf []byte
+	})
 	debug.Assert(ok)
-	debug.Assert(lom.IsLocked() == apc.LockRead)
-	lom.Unlock(false)
+	debug.Assert(ctx.lom.IsLocked() == apc.LockRead)
+	ctx.lom.Unlock(false)
+	r.smm.Free(ctx.buf)
 }
 
-// layout:
-// [ --- xid lstring --- | --- wid lstring --- | --- index uint32 --- ]
-// (where lstring is length-prefixed string)
-func (r *XactMoss) _makeOpaque(index int, wid string) (b []byte) {
+// layout: [ --- wid lstring --- | --- index uint32 --- ],
+// where lstring is a length-prefixed string
+func (r *XactMoss) packOpaque(index int, wid string) []byte {
 	var (
-		xid = r.ID()
-		lx  = len(xid)
-		lw  = len(wid)
 		off int
+		lw  = len(wid)
 	)
-	// TODO -- FIXME: use T.ByteMM(); consider cos/bytepack
-	b = make([]byte, cos.SizeofI16+lx+cos.SizeofI16+lw+cos.SizeofI32)
-
-	binary.BigEndian.PutUint16(b, uint16(lx))
-	off += cos.SizeofI16
-	copy(b[off:], xid)
-	off += lx
+	// round up to the nearest multiple
+	ln := cos.SizeofI16 + lw + cos.SizeofI32
+	lr := (ln + memsys.SmallSlabIncStep - 1) / memsys.SmallSlabIncStep * memsys.SmallSlabIncStep
+	slab, err := r.smm.GetSlab(int64(lr))
+	debug.AssertNoErr(err)
+	b := slab.Alloc()
 
 	binary.BigEndian.PutUint16(b[off:], uint16(lw))
 	off += cos.SizeofI16
@@ -430,32 +442,20 @@ func (r *XactMoss) _makeOpaque(index int, wid string) (b []byte) {
 	off += lw
 	binary.BigEndian.PutUint32(b[off:], uint32(index))
 	off += cos.SizeofI32
-	debug.Assert(off == len(b), off, " vs ", len(b))
+	debug.Assert(off == ln, off, " vs ", len(b))
 
-	return b
+	return b[:off]
 }
 
-// see layout above
-func (r *XactMoss) _parseOpaque(opaque []byte) (wid string, index int, _ error) {
+// layout above
+func (r *XactMoss) unpackOpaque(opaque []byte) (wid string, index int, _ error) {
 	var (
 		off int
 		lo  = len(opaque)
 	)
-	if lo < cos.SizeofI16+cos.SizeofI16+cos.SizeofI32 {
+	if lo < cos.SizeofI16+cos.SizeofI32 {
 		return "", 0, fmt.Errorf("%s: opaque data too short: %d bytes", r.Name(), lo)
 	}
-
-	// xid
-	lx := int(binary.BigEndian.Uint16(opaque))
-	off += cos.SizeofI16
-	if off+lx > lo {
-		return "", 0, fmt.Errorf("%s: invalid xaction ID length: %d", r.Name(), lx)
-	}
-	xid := string(opaque[off : off+lx])
-	if xid != r.ID() {
-		return "", 0, fmt.Errorf("%s: xaction routing mismatch: %q vs %q", r.Name(), xid, r.ID())
-	}
-	off += lx
 
 	// wid
 	if off+cos.SizeofI16 > lo {
@@ -495,7 +495,7 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	if err != nil {
 		return err
 	}
-	wid, index, err := r._parseOpaque(hdr.Opaque)
+	wid, index, err := r.unpackOpaque(hdr.Opaque)
 	if err != nil {
 		return err
 	}
@@ -617,7 +617,7 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader) (e
 		goto add
 	}
 
-	sgl = wi.r.mm.NewSGL(0)
+	sgl = wi.r.gmm.NewSGL(0)
 	size, err = io.Copy(sgl, reader)
 	if err != nil {
 		sgl.Free()

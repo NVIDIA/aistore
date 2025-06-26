@@ -6,7 +6,6 @@
 package bundle
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -165,26 +164,11 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
 		return err
 	}
-
-	// TODO -- FIXME: remove xid demux =======================
-	var (
-		opaque = hdr.Opaque
-		lo     = len(opaque)
-	)
-	if lo < cos.SizeofI16+2 {
-		return fmt.Errorf("%s: opaque data too short: %d bytes", sdm.trname(), lo)
-	}
-	lx := int(binary.BigEndian.Uint16(opaque))
-	if cos.SizeofI16+lx > lo {
-		return fmt.Errorf("%s: invalid xaction ID length: %d", sdm.trname(), lx)
-	}
-
-	xid := string(opaque[cos.SizeofI16 : cos.SizeofI16+lx])
+	xid := hdr.Demux
 	if err := xact.CheckValidUUID(xid); err != nil {
-		err = fmt.Errorf("%s: %v [%d, %q]", sdm.trname(), err, lx, xid)
+		err = fmt.Errorf("%s: %w", sdm.trname(), err)
 		return err
 	}
-	// TODO -- FIXME: e.o. remove xid demux ==================
 
 	sdm.rxmu.Lock()
 	if !sdm.isOpen() {
