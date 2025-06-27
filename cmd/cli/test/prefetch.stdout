@@ -1,0 +1,21 @@
+^prefetch-objects\[.*\]: \[obj1\.txt obj2\.txt\] prefetch from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^prefetch-objects\[.*\]: prefetch "test_prefix_" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^prefetch-objects\[.*\]: \[single_obj\.txt\] prefetch from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^prefetch-objects\[.*\]: prefetch "template_{001\.\.002}\.txt" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+obj1.txt
+obj2.txt
+single_obj.txt
+template_001.txt
+template_002.txt
+test_prefix_1.txt
+test_prefix_2.txt
+^prefetch-objects\[.*\]: \[latest_test\.txt\] prefetch from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^prefetch-objects\[.*\]: \[workers_test\.txt\] prefetch from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+^prefetch-objects\[.*\]: prefetch "nonrec/" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+latest_test.txt
+workers_test.txt
+nonrec/file.txt
+^prefetch-objects\[.*\]: prefetch "nested/" from ais://@remais/.*\. To monitor the progress, run 'ais show job .*'$
+nested/deep/file.txt
+^\[DRY RUN\] with no modifications to the cluster$
+^PREFETCH ais://@remais/.*$ 

@@ -1,0 +1,95 @@
+# Test prefetch command
+
+// RUN remais
+
+# Test 1: AIS bucket prefetch failure test
+# Create AIS bucket first
+ais bucket create ais://$BUCKET // IGNORE
+
+# Setup test objects in AIS bucket
+echo "obj1 content" | ais object put - ais://$BUCKET/obj1.txt // IGNORE
+echo "obj2 content" | ais object put - ais://$BUCKET/obj2.txt // IGNORE
+
+# Try to prefetch from AIS bucket - this should fail
+ais prefetch ais://$BUCKET --list "obj1.txt,obj2.txt" // FAIL "expecting remote bucket"
+
+# Clean up AIS bucket
+ais bucket rm --yes ais://$BUCKET // IGNORE
+
+# Test 2: Remote AIS bucket prefetch tests
+# Create bucket on remote cluster (remais)
+ais bucket create ais://@remais/$BUCKET // IGNORE
+
+# Setup test objects in remote AIS bucket
+echo "obj1 content" | ais object put - ais://@remais/$BUCKET/obj1.txt // IGNORE
+echo "obj2 content" | ais object put - ais://@remais/$BUCKET/obj2.txt // IGNORE
+echo "prefix content" | ais object put - ais://@remais/$BUCKET/test_prefix_1.txt // IGNORE
+echo "prefix content" | ais object put - ais://@remais/$BUCKET/test_prefix_2.txt // IGNORE
+echo "template content" | ais object put - ais://@remais/$BUCKET/template_001.txt // IGNORE
+echo "template content" | ais object put - ais://@remais/$BUCKET/template_002.txt // IGNORE
+echo "single content" | ais object put - ais://@remais/$BUCKET/single_obj.txt // IGNORE
+echo "latest content" | ais object put - ais://@remais/$BUCKET/latest_test.txt // IGNORE
+echo "workers content" | ais object put - ais://@remais/$BUCKET/workers_test.txt // IGNORE
+echo "nested content" | ais object put - ais://@remais/$BUCKET/nested/deep/file.txt // IGNORE
+echo "nonrecursive content" | ais object put - ais://@remais/$BUCKET/nonrec/file.txt // IGNORE
+echo "deeper content" | ais object put - ais://@remais/$BUCKET/nonrec/deep/file.txt // IGNORE
+echo "dryrun content" | ais object put - ais://@remais/$BUCKET/dryrun_test.txt // IGNORE
+
+# Evict all objects first to test prefetch
+ais evict ais://@remais/$BUCKET --keep-md // IGNORE
+ais wait job evict-objects // IGNORE
+
+# Verify objects are not cached before prefetch
+ais ls ais://@remais/$BUCKET --cached | grep -E "^(obj1|obj2)\.txt" // FAIL
+
+# Batch 1: Test basic prefetch operations
+# Prefetch specific objects using --list flag
+ais prefetch ais://@remais/$BUCKET --list "obj1.txt,obj2.txt"
+# Test explicit --prefix flag
+ais prefetch ais://@remais/$BUCKET --prefix test_prefix_
+# Test single object prefetch
+ais prefetch ais://@remais/$BUCKET/single_obj.txt
+# Test template-based prefetch with brace expansion
+ais prefetch ais://@remais/$BUCKET --template "template_{001..002}.txt"
+
+# Wait for all batch 1 prefetch jobs to complete
+ais wait job prefetch-objects // IGNORE
+
+# Verify batch 1 objects are now cached
+ais ls ais://@remais/$BUCKET --cached | grep -E "^(obj1|obj2|test_prefix_1|test_prefix_2|single_obj|template_001|template_002)\.txt" | awk '{print $1}' | sort
+
+# Batch 2: Test advanced prefetch options
+# Test prefetch with --latest flag
+ais prefetch ais://@remais/$BUCKET/latest_test.txt --latest
+# Test prefetch with --num-workers flag
+ais prefetch ais://@remais/$BUCKET/workers_test.txt --num-workers 4
+# Test non-recursive prefix prefetch
+ais prefetch ais://@remais/$BUCKET/nonrec/ --nr
+
+# Wait for all batch 2 prefetch jobs to complete
+ais wait job prefetch-objects // IGNORE
+
+# Verify batch 2 objects are cached
+ais ls ais://@remais/$BUCKET --cached | grep -E "^(latest_test|workers_test)\.txt" | awk '{print $1}' | sort
+# Verify non-recursive: direct file prefetched but deeper file not prefetched
+ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/file.txt" | awk '{print $1}'
+ais ls ais://@remais/$BUCKET --cached | grep "^nonrec/deep/file.txt" // FAIL
+
+# Batch 3: Test nested prefetch
+# Test nested/embedded prefix prefetch (recursive by default)
+ais prefetch ais://@remais/$BUCKET --prefix nested/
+
+# Wait for nested prefetch job to complete
+ais wait job prefetch-objects // IGNORE
+
+# Verify nested object is now cached
+ais ls ais://@remais/$BUCKET --cached | grep "^nested/deep/file.txt" | awk '{print $1}'
+
+# Test dry-run
+ais prefetch ais://@remais/$BUCKET/dryrun_test.txt --dry-run
+
+# Verify dry-run didn't actually prefetch the object
+ais ls ais://@remais/$BUCKET --cached | grep "^dryrun_test.txt" // FAIL
+
+# Clean up remote bucket
+ais bucket rm --yes ais://@remais/$BUCKET // IGNORE 
