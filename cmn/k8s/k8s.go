@@ -124,3 +124,5 @@ func _short(err error) string {
 func (ps *PodStatus) String() string {
 	return fmt.Sprintf("container: %s, state: %s, reason: %s, message: %s, exitCode: %d", ps.CtrName, ps.State, ps.Reason, ps.Message, ps.ExitCode)
 }
+
+func (ps PodStatus) Error() string { return ps.String() }

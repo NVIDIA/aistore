@@ -146,7 +146,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 			debug.Assert(tc.bp != nil)
 			rgetstats(tc.bp /*from*/, tc.vlabs, res.Lsize, started)
 		}
-	case cos.IsNotExist(res.Err, 0):
+	case cos.IsNotExist(res.Err, res.Ecode):
 		if tc.xetl != nil {
 			tc.xetl.AddObjErr(tc.r.ID(), &etl.ObjErr{
 				ObjName: lom.Cname(),

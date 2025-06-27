@@ -6,6 +6,7 @@ package etl
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -55,13 +56,13 @@ func (pw *podWatcher) processEvents() {
 			if !ok {
 				continue
 			}
-			if exitCode := pw._process(pod); exitCode != 0 {
+			if err := pw._process(pod); err != nil {
 				// pw.boot.xctn is not yet assigned in init error
 				if pw.boot == nil || pw.boot.xctn == nil {
 					return
 				}
 				pw.boot.errCtx.PodStatus = pw.GetPodStatus()
-				if pw.boot.xctn.Abort(cmn.NewErrETL(pw.boot.errCtx, ctrTerminated)) {
+				if pw.boot.xctn.Abort(cmn.NewErrETL(pw.boot.errCtx, err.Error())) {
 					// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
 					// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
 					pw.boot.xctn.Finish()
@@ -78,14 +79,14 @@ func (pw *podWatcher) processEvents() {
 
 // _process analyzes the pod's container states and updates the pod watcher.
 // Returns the ExitCode if any container terminated unexpectedly; otherwise, returns 0.
-func (pw *podWatcher) _process(pod *corev1.Pod) int32 {
+func (pw *podWatcher) _process(pod *corev1.Pod) error {
 	// Init container state changes:
 	// - watch only one problematic state: `pip install` command in init container terminates with non-zero exit code
 	for i := range pod.Status.InitContainerStatuses {
 		ics := &pod.Status.InitContainerStatuses[i]
 		if ics.State.Terminated != nil && ics.State.Terminated.ExitCode != 0 {
 			pw.setPodStatus(ctrTerminated, ics.Name, ics.State.Terminated.Reason, ics.State.Terminated.Message, ics.State.Terminated.ExitCode)
-			return ics.State.Terminated.ExitCode
+			return pw.GetPodStatus()
 		}
 	}
 
@@ -103,7 +104,7 @@ func (pw *podWatcher) _process(pod *corev1.Pod) int32 {
 		case cs.State.Terminated != nil:
 			pw.setPodStatus(ctrTerminated, cs.Name, cs.State.Terminated.Reason, cs.State.Terminated.Message, cs.State.Terminated.ExitCode)
 			if cs.State.Terminated.ExitCode != 0 {
-				return cs.State.Terminated.ExitCode
+				return pw.GetPodStatus()
 			}
 		}
 	}
@@ -111,10 +112,12 @@ func (pw *podWatcher) _process(pod *corev1.Pod) int32 {
 	// We don't expect any of these to happen, as ETL containers are supposed to constantly
 	// listen to upcoming requests and never terminate, until manually stopped/deleted
 	if pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded {
-		nlog.Errorf("ETL Pod %s is in problematic phase: %s (expecting either %s or %s phase)\n",
+		err := fmt.Errorf("ETL Pod %s is in problematic phase: %s (expecting either %s or %s phase)",
 			pod.Name, pod.Status.Phase, corev1.PodPending, corev1.PodRunning)
+		nlog.Errorln(err, pw.GetPodStatus())
+		return err
 	}
-	return 0
+	return nil
 }
 
 func (pw *podWatcher) start() error {
@@ -155,7 +158,7 @@ func (pw *podWatcher) stop(wait bool) {
 	// Process remaining events
 	for event := range pw.watcher.ResultChan() {
 		if pod, ok := event.Object.(*corev1.Pod); ok {
-			if exitCode := pw._process(pod); exitCode != 0 {
+			if err := pw._process(pod); err != nil {
 				break
 			}
 		}

@@ -154,7 +154,9 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	xetl := comm.Xact()
 	size, ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
 
-	if err == nil {
+	// error handling
+	switch {
+	case err == nil:
 		if size >= 0 {
 			tstats := core.T.StatsUpdater()
 			tstats.IncWith(stats.ETLInlineCount, xetl.Vlabs)
@@ -164,24 +166,21 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 			)
 			xetl.ObjsAdd(1, size)
 		}
-		return // ok
+	case cos.IsNotExist(err, ecode):
+		xetl.InlineObjErrs.Add(&etl.ObjErr{
+			ObjName: lom.Cname(),
+			Message: "object not found",
+			Ecode:   ecode,
+		})
+		t.writeErr(w, r, err, ecode)
+	default:
+		xetl.InlineObjErrs.Add(&etl.ObjErr{
+			ObjName: lom.Cname(),
+			Message: err.Error(),
+			Ecode:   ecode,
+		})
+		t.writeErr(w, r, err, ecode)
 	}
-
-	// NOTE:
-	// - poll for a while here for a possible abort error (e.g., pod runtime error)
-	// - and notice hardcoded timeout
-	if abortErr := xetl.AbortedAfter(etl.DefaultAbortTimeout); abortErr != nil {
-		t.writeErr(w, r, abortErr, ecode)
-		return
-	}
-
-	xetl.InlineObjErrs.Add(&etl.ObjErr{
-		ObjName: lom.ObjName,
-		Message: err.Error(),
-		Ecode:   ecode,
-	})
-
-	t.writeErr(w, r, err, ecode)
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {

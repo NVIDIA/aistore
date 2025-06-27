@@ -58,6 +58,10 @@ func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "get ETL") {
+		return
+	}
+
 	if len(apiItems) == 0 {
 		p.listETL(w, r)
 		return
@@ -141,6 +145,10 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.forwardCP(w, r, nil, "post ETL") {
+		return
+	}
+
 	etlName := apiItems[0]
 	if err := k8s.ValidateEtlName(etlName); err != nil {
 		p.writeErr(w, r, err)
@@ -207,6 +215,7 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 		pre:     p._deleteETLPre,
 		final:   p._syncEtlMDFinal,
 		etlName: etlName,
+		wait:    true,
 	}
 	if _, err := p.owner.etl.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
