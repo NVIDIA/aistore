@@ -198,16 +198,20 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 	reqParams.setRequestOptParams(req)
 	SetAuxHeaders(req, &reqParams.BaseParams)
 
-	rr := reqResp{client: reqParams.BaseParams.Client, req: req}
-	_, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
-		Call:      rr.call,
-		Verbosity: cmn.RetryLogOff,
-		SoftErr:   httpMaxRetries,
-		Sleep:     httpRetrySleep,
-		BackOff:   true,
-		IsClient:  true,
-	})
+	var (
+		rr   = reqResp{client: reqParams.BaseParams.Client, req: req}
+		args = &cmn.RetryArgs{
+			Call:      rr.call,
+			Verbosity: cmn.RetryLogOff,
+			SoftErr:   httpMaxRetries,
+			Sleep:     httpRetrySleep,
+			BackOff:   true,
+			IsClient:  true,
+		}
+	)
+	_, err = args.Do()
 	resp = rr.resp
+
 	if err == nil {
 		return resp, nil
 	}

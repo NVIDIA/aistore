@@ -194,17 +194,16 @@ func InitCluster(proxyURL string, clusterType ClusterType) (err error) {
 	return initPmap()
 }
 
-func initProxyURL() (err error) {
-	// Discover if ais proxy is ready to accept requests.
-	var ecode int
-	ecode, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+func initProxyURL() error {
+	args := &cmn.RetryArgs{
 		Call:     func() (int, error) { return 0, GetProxyReadiness(proxyURLReadOnly) },
 		SoftErr:  5,
 		HardErr:  5,
 		Sleep:    5 * time.Second,
 		Action:   "reach AIS at " + proxyURLReadOnly,
 		IsClient: true,
-	})
+	}
+	ecode, err := args.Do()
 	if err != nil {
 		err = errors.New("AIS is unreachable at " + proxyURLReadOnly)
 		if ecode != 0 {
@@ -215,20 +214,20 @@ func initProxyURL() (err error) {
 
 	if testClusterType == ClusterTypeK8s {
 		// For kubernetes cluster, we use LoadBalancer service to expose the proxies.
-		// `proxyURLReadOnly` will point to LoadBalancer service, and we need not get primary URL.
-		return
+		// `proxyURLReadOnly` will point to LoadBalancer service.
+		return nil
 	}
 
 	// Primary proxy can change if proxy tests are run and
 	// no new cluster is re-deployed before each test.
-	// Finds who is the current primary proxy.
+	// Find the current primary.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
 		err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
 		return err
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetPublic)
-	return
+	return nil
 }
 
 func initPmap() error {

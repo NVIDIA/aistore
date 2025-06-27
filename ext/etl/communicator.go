@@ -212,12 +212,13 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 
 	rtyr := &retryer{client: core.T.DataClient(), reqArgs: reqArgs, ctx: ctx, getBody: getBody}
-	ecode, err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
+	args := &cmn.RetryArgs{
 		Call:      rtyr.call,
 		SoftErr:   10,
 		Verbosity: cmn.RetryLogVerbose,
 		Sleep:     max(cmn.Rom.MaxKeepalive(), time.Second*5),
-	})
+	}
+	ecode, err = args.Do()
 	if err != nil {
 		cancel()
 		return nil, ecode, err

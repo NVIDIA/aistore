@@ -23,30 +23,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	RetryLogVerbose = iota
-	RetryLogQuiet
-	RetryLogOff
-)
-
-type (
-	RetryArgs struct {
-		Call    func() (int, error)
-		IsFatal func(error) bool
-
-		Action string
-		Caller string
-
-		SoftErr int // How many retires on ConnectionRefused or ConnectionReset error.
-		HardErr int // How many retries on any other error.
-		Sleep   time.Duration
-
-		Verbosity int  // Determine the verbosity level.
-		BackOff   bool // If requests should be retried less and less often.
-		IsClient  bool // true: client (e.g. dev tools, etc.)
-	}
-)
-
 // PrependProtocol prepends protocol in URL in case it is missing.
 // By default it adds `http://` to the URL.
 func PrependProtocol(url string, protocol ...string) string {
@@ -179,68 +155,6 @@ func CopyHeaders(dst, src http.Header) {
 			dst.Set(k, v)
 		}
 	}
-}
-
-func NetworkCallWithRetry(args *RetryArgs) (ecode int, err error) {
-	var (
-		hardErrCnt, softErrCnt, iter int
-		lastErr                      error
-		callerStr                    string
-		sleep                        = args.Sleep
-	)
-	if args.Sleep == 0 {
-		if args.IsClient {
-			args.Sleep = time.Second / 2
-		} else {
-			args.Sleep = Rom.CplaneOperation() / 4
-		}
-	}
-	if args.Caller != "" {
-		callerStr = args.Caller + ": "
-	}
-	if args.Action == "" {
-		args.Action = "call"
-	}
-	for iter = 1; ; iter++ {
-		if ecode, err = args.Call(); err == nil {
-			if args.Verbosity == RetryLogVerbose && (hardErrCnt > 0 || softErrCnt > 0) {
-				nlog.Warningf("%s successful %s after (soft/hard errors: %d/%d, last: %v)",
-					callerStr, args.Action, softErrCnt, hardErrCnt, lastErr)
-			}
-			return 0, nil
-		}
-		lastErr = err
-
-		// handle
-		if args.IsFatal != nil && args.IsFatal(err) {
-			return ecode, err
-		}
-		if args.Verbosity == RetryLogVerbose {
-			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, ecode)
-		}
-		if cos.IsRetriableConnErr(err) {
-			softErrCnt++
-		} else {
-			hardErrCnt++
-		}
-		if args.BackOff && iter > 1 {
-			if args.IsClient {
-				sleep = min(sleep+(args.Sleep/2), 4*time.Second)
-			} else {
-				sleep = min(sleep+(args.Sleep/2), Rom.MaxKeepalive())
-			}
-		}
-		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {
-			break
-		}
-		time.Sleep(sleep)
-	}
-	// Quiet: print once the summary (Verbose: no need)
-	if args.Verbosity == RetryLogQuiet {
-		nlog.Errorf("%sfailed to %s (soft/hard errors: %d/%d, last: %v)",
-			callerStr, args.Action, softErrCnt, hardErrCnt, err)
-	}
-	return ecode, err
 }
 
 func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
