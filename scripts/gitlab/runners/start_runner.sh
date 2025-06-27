@@ -132,7 +132,7 @@ minikube addons enable volumesnapshots
 minikube addons enable csi-hostpath-driver
 
 # Install local path provisioner to allow dynamic local storage for state (used by k8s operator tests)
-kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner${LPP_VERSION}/deploy/local-path-storage.yaml
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/${LPP_VERSION}/deploy/local-path-storage.yaml
 
 # Apply modified coredns config to allow for faster DNS updates
 # Useful for tests where we create and destroy new services rapidly
