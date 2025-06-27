@@ -838,7 +838,7 @@ func TestETLStopAndRestartETL(t *testing.T) {
 	tlog.Logf("stopping ETL[%s]\n", etlName)
 	err := api.ETLStop(baseParams, etlName)
 	tassert.CheckFatal(t, err)
-	tetl.ETLCheckStage(t, baseParams, etlName, etl.Stopped)
+	tetl.ETLCheckStage(t, baseParams, etlName, etl.Aborted)
 
 	// 3. Start ETL and verify it is in running state
 	tlog.Logf("restarting ETL[%s]\n", etlName)

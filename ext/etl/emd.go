@@ -12,12 +12,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
-	ETLs map[string]InitMsg
+	ETLEntity struct {
+		InitMsg InitMsg `json:"init_msg"`
+		Stage   Stage   `json:"stage"`
+	}
+	ETLs map[string]ETLEntity
 
 	// ETL metadata
 	MD struct {
@@ -52,19 +57,19 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg) {
+func (e *MD) Add(msg InitMsg, stage Stage) {
 	if msg == nil {
 		return
 	}
-	e.ETLs[msg.Name()] = msg
+	e.ETLs[msg.Name()] = ETLEntity{msg, stage}
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
-func (e *MD) Get(id string) (msg InitMsg, present bool) {
+func (e *MD) Get(id string) (en ETLEntity, present bool) {
 	if e == nil {
-		return nil, false
+		return ETLEntity{}, false
 	}
-	msg, present = e.ETLs[id]
+	en, present = e.ETLs[id]
 	return
 }
 
@@ -90,7 +95,7 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 		Ext:     e.Ext,
 	}
 	for k, v := range e.ETLs {
-		jsonMD.ETLs[k] = jsonETL{v.MsgType(), cos.MustMarshal(v)}
+		jsonMD.ETLs[k] = jsonETL{v.InitMsg.MsgType(), cos.MustMarshal(v)}
 	}
 	return jsoniter.Marshal(jsonMD)
 }
@@ -98,25 +103,33 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 func (e *MD) UnmarshalJSON(data []byte) (err error) {
 	jsonMD := &jsonMD{}
 	if err = jsoniter.Unmarshal(data, jsonMD); err != nil {
-		return
+		return err
 	}
 	e.Version, e.Ext = jsonMD.Version, jsonMD.Ext
 	e.ETLs = make(ETLs, len(jsonMD.ETLs))
 	for k, v := range jsonMD.ETLs {
+		en := ETLEntity{}
 		switch v.Type {
 		case CodeType: // do nothing
 		case SpecType:
-			e.ETLs[k] = &InitSpecMsg{}
+			en.InitMsg = &InitSpecMsg{}
 		case ETLSpecType:
-			e.ETLs[k] = &ETLSpecMsg{}
+			en.InitMsg = &ETLSpecMsg{}
 		default:
 			err = fmt.Errorf("invalid InitMsg type %q", v.Type)
 			debug.AssertNoErr(err)
-			return
+			return err
 		}
-		if err = jsoniter.Unmarshal(v.Msg, e.ETLs[k]); err != nil {
-			break
+		err = jsoniter.Unmarshal(v.Msg, &en)
+		if err != nil || en.InitMsg == nil {
+			nlog.Warningln("failed to unmarshal etlMD:", err)
+			continue
 		}
+		if err = en.InitMsg.Validate(); err != nil {
+			nlog.Warningln("invalid etlMD entry:", en, v.Msg)
+			continue
+		}
+		e.ETLs[k] = en
 	}
-	return
+	return err
 }

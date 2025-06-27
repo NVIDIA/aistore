@@ -347,7 +347,7 @@ If a transformation exceeds this duration, the operation will be terminated and 
 
 ## ETL Pod Lifecycle
 
-ETL follows a structured lifecycle to enhance observability. The lifecycle consists of three stages: `Initializing`, `Running`, and `Stopped`. This design prevents ETL from consuming resources when not in use while maintaining visibility into failures.
+ETL follows a structured lifecycle to enhance observability. The lifecycle consists of three stages: `Initializing`, `Running`, and `Aborted`. This design prevents ETL from consuming resources when not in use while maintaining visibility into failures.
 
 ### Lifecycle Stages & Transitions
 
@@ -359,7 +359,7 @@ ETL follows a structured lifecycle to enhance observability. The lifecycle consi
  Error | | User Restarts               |
        v |                             |
 +--------------+      Runtime Error    |
-|   Stopped    |  <--------------------+
+|   Aborted    |  <--------------------+
 +--------------+       User Stops
         |
         | User Deletes
@@ -370,13 +370,13 @@ ETL follows a structured lifecycle to enhance observability. The lifecycle consi
 #### 1. `Initializing` Stage
 The ETL enters this stage when created via an [Init](#api-reference) requests. The system provisions the required Kubernetes resources, including pods and services.
 - **Success**: Transitions to `Running` stage.
-- **Failure (Pod Initialization Error/Timeout)**: Transitions to `Stopped` stage.
+- **Failure (Pod Initialization Error/Timeout)**: Transitions to `Aborted` stage.
 #### 2. `Running` Stage
-The ETL is actively processing requests and remains in this stage unless stopped manually or due to an error.
-- **User Sends [Stop ETL](#api-reference)**: Transitions to `Stopped` stage with error message `user abort`.
-- **Runtime Error**: Transitions to `Stopped` stage.
-#### 3. `Stopped` Stage
-The ETL is inactive but retains metadata, allowing for future restarts. Upon entering the Stopped state, AIStore automatically cleans up all associated Kubernetes resources (pods, services) across all targets.
+The ETL is actively processing requests and remains in this stage unless Aborted manually or due to an error.
+- **User Sends [Stop ETL](#api-reference)**: Transitions to `Aborted` stage with error message `user abort`.
+- **Runtime Error**: Transitions to `Aborted` stage.
+#### 3. `Aborted` Stage
+The ETL is inactive but retains metadata, allowing for future restarts. Upon entering the Aborted state, AIStore automatically cleans up all associated Kubernetes resources (pods, services) across all targets.
 - **User Sends [Restart ETL](#api-reference)**: Transitions to `Initializing` stage.
 - **User Sends [Delete ETL](#api-reference)**: Permanently removes the ETL instance and its metadata from AIStore.
 

@@ -13,10 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -34,11 +32,9 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodPut:
-		t.handleETLPut(w, r)
-	case http.MethodPost:
-		t.handleETLPost(w, r)
+		t.handleETLPut(w, r) // TODO: move to proxy (control plane operation)
 	case http.MethodDelete:
-		t.handleETLDelete(w, r)
+		t.handleETLDelete(w, r) // TODO: move to proxy (control plane operation)
 	case http.MethodGet:
 		dpq := dpqAlloc()
 		t.handleETLGet(w, r, dpq)
@@ -125,25 +121,6 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request, dpq *dpq) 
 	}
 }
 
-// POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
-//
-// Handles starting/stopping ETL pods
-func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 2, true)
-	if err != nil {
-		return
-	}
-	switch op := apiItems[1]; op {
-	case apc.ETLStop:
-		t.stopETL(w, r, apiItems[0])
-	case apc.ETLStart:
-		t.startETL(w, r)
-	default:
-		debug.Assert(false, "invalid operation: "+op)
-		t.writeErrAct(w, r, "invalid operation: "+op)
-	}
-}
-
 // DELETE /v1/etl/<etl-name>
 //
 // Handles deleting ETL pods
@@ -153,22 +130,6 @@ func (t *target) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := etl.Delete(apiItems[0]); err != nil {
-		t.writeErr(w, r, err)
-	}
-}
-
-func (t *target) startETL(w http.ResponseWriter, r *http.Request) {
-	if err := t.initETLFromMsg(r); err != nil {
-		t.writeErr(w, r, err)
-	}
-}
-
-func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	if err := etl.Stop(etlName, cmn.ErrXactUserAbort); err != nil {
-		if cos.IsErrNotFound(err) {
-			nlog.Infof("ETL %q doesn't exist on target\n", etlName)
-			return
-		}
 		t.writeErr(w, r, err)
 	}
 }

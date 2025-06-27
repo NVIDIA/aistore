@@ -19,10 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
-
-// TODO: support start/stop/list using `xid`
 
 // [METHOD] /v1/etl
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +100,7 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: introduce 2PC and move all these parsing/validation logics to the begin phase
 	b, err := cos.ReadAll(r.Body)
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -120,16 +120,14 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 
 	// must be new
 	etlMD := p.owner.etl.get()
-	if msg := etlMD.get(initMsg.Name()); msg != nil {
+	if msg, _ := etlMD.get(initMsg.Name()); msg != nil {
 		p.writeErrStatusf(w, r, http.StatusConflict, "%s: etl job %s already exists", p, initMsg.Name())
 		return
 	}
 
-	// start initialization and add to cluster MD
-	if err := p.initETL(w, r, initMsg); err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
+	// TODO: introduce 2PC and move the following calls to the commit phase
+	p.startETL(w, r, initMsg)
+
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infoln(p.String() + ": " + initMsg.String())
 	}
@@ -142,13 +140,16 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
 	etlName := apiItems[0]
 	if err := k8s.ValidateEtlName(etlName); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+
+	// must exist
 	etlMD := p.owner.etl.get()
-	etlMsg := etlMD.get(etlName)
+	etlMsg, stage := etlMD.get(etlName)
 	if etlMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
@@ -156,8 +157,16 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 
 	switch op := apiItems[1]; op {
 	case apc.ETLStop:
+		if stage != etl.Running {
+			p.writeErrAct(w, r, "can't stop "+etlMsg.Cname()+" during "+stage.String()+" stage")
+			return
+		}
 		p.stopETL(w, r, etlMsg)
 	case apc.ETLStart:
+		if stage != etl.Aborted {
+			p.writeErrAct(w, r, "can't start "+etlMsg.Cname()+" during "+stage.String()+" stage")
+			return
+		}
 		p.startETL(w, r, etlMsg)
 	default:
 		debug.Assert(false, "invalid operation: "+op)
@@ -182,22 +191,16 @@ func (p *proxy) httpetldel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. broadcast stop to all targets
-	argsTerm := allocBcArgs()
-	argsTerm.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathETL.Join(etlName)}
-	argsTerm.timeout = apc.LongTimeout
-	results := p.bcastGroup(argsTerm)
-	freeBcArgs(argsTerm)
-	defer freeBcastRes(results)
-
-	for _, res := range results {
-		// ignore not found error, as the ETL might be manually stopped before
-		if res.err == nil || res.status == http.StatusNotFound {
-			continue
-		}
-		p.writeErr(w, r, res.toErr(), res.status)
+	// must exist
+	etlMD := p.owner.etl.get()
+	etlMsg, _ := etlMD.get(etlName)
+	if etlMsg == nil {
+		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
 	}
+
+	// 1. broadcast stop to all targets
+	p.stopETL(w, r, etlMsg)
 
 	// 2. if successfully stopped, remove from etlMD
 	ctx := &etlMDModifier{
@@ -218,8 +221,35 @@ func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	return
 }
 
-// broadcast (init ETL) request to all targets
-func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) error {
+func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
+	// 1. update etlMD to initializing stage
+	ctx := &etlMDModifier{
+		pre:   _addETLPre,
+		final: p._syncEtlMDFinal,
+		msg:   msg,
+		stage: etl.Initializing,
+		wait:  true,
+	}
+	if _, err := p.owner.etl.modify(ctx); err != nil {
+		p.writeErr(w, r, err)
+	}
+
+	// 2. start to initialize across all targets
+	if err := p._initETL(w, r, msg); err != nil {
+		// if fails, update etlMD to aborted
+		p.writeErr(w, r, err)
+		return
+	}
+
+	// 3. update etlMD to Running stage
+	ctx.stage = etl.Running
+	if _, err := p.owner.etl.modify(ctx); err != nil {
+		p.writeErr(w, r, err)
+	}
+}
+
+// broadcast init ETL request to all targets and register IC (no etlMD updates involved)
+func (p *proxy) _initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) error {
 	var (
 		err    error
 		args   = allocBcArgs()
@@ -227,16 +257,7 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		secret = cos.CryptoRandS(10)
 	)
 
-	// 1. add to etlMD
-	ctx := &etlMDModifier{
-		pre:   _addETLPre,
-		final: p._syncEtlMDFinal,
-		msg:   msg,
-		wait:  true,
-	}
-	p.owner.etl.modify(ctx)
-
-	// 2. broadcast the init request
+	// 1. broadcast the init request
 	{
 		args.req = cmn.HreqArgs{
 			Method: http.MethodPut,
@@ -263,64 +284,28 @@ func (p *proxy) initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		// At least one target failed. Terminate all.
 		// (Termination calls may succeed for the targets that already succeeded in starting ETL,
 		//  or fail otherwise - ignore the failures).
-		p.stopETL(w, r, msg)
+		p.stopETL(w, r, msg) // also remove this ETL instance from etlManager
 		nlog.Errorln(err)
 		return err
 	}
 
-	// 3. IC
+	// 2. IC
 	smap := p.owner.smap.get()
 	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
+	ef := &_etlFinalizer{p, msg}
+	nl.F = ef.cb
 
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	// 4. init calls succeeded - return running xaction
+	// 3. init calls succeeded - return running xaction
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 	w.Write(cos.UnsafeB(xid))
 	return nil
 }
 
-func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
-	var (
-		err    error
-		args   = allocBcArgs()
-		xid    = etl.PrefixXactID + cos.GenUUID()
-		secret = cos.CryptoRandS(10)
-	)
-	{
-		args.req = cmn.HreqArgs{
-			Method: http.MethodPost,
-			Path:   r.URL.Path,
-			Body:   cos.MustMarshal(msg),
-			Query: url.Values{
-				apc.QparamUUID:      []string{xid},
-				apc.QparamETLSecret: []string{secret},
-			},
-		}
-		args.timeout = apc.LongTimeout
-	}
-	results := p.bcastGroup(args)
-	freeBcArgs(args)
-	for _, res := range results {
-		if res.err != nil {
-			p.writeErr(w, r, res.toErr(), res.status)
-			err = res.toErr()
-			nlog.Errorln(err)
-			break
-		}
-	}
-	freeBcastRes(results)
-
-	if err != nil {
-		// At least one target failed. Terminate all.
-		p.stopETL(w, r, msg)
-		return
-	}
-}
-
 func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
-	clone.add(ctx.msg)
+	clone.add(ctx.msg, ctx.stage)
 	return
 }
 
@@ -340,7 +325,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 
 	// get init message
 	etlMD := p.owner.etl.get()
-	initMsg := etlMD.get(etlName)
+	initMsg, _ := etlMD.get(etlName)
 	if initMsg == nil {
 		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
@@ -401,16 +386,30 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 			current, exists := etls[another.Name]
 			if exists {
 				if !reflect.DeepEqual(*current, another) {
+					nlog.Errorf("targets return different etl.InfoList. %v v.s. %v", *current, another)
 					etls[another.Name].Stage = etl.Unknown.String()
 				}
 				continue
 			}
 
 			etls[another.Name] = &another
-			if _, tracked := etlMD.ETLs[another.Name]; !tracked {
+			// ETLs present in `infoList` but not in `etlMD`: considered unknown (proxy notification abort might not be processed yet)
+			if _, inMD := etlMD.ETLs[another.Name]; !inMD {
 				nlog.Errorf("unexpected etl instance %q returned from targets (not tracked by etlMD)\n", another.Name)
 				etls[another.Name].Stage = etl.Unknown.String()
 			}
+		}
+	}
+
+	for _, en := range etlMD.ETLs {
+		if _, ok := etls[en.InitMsg.Name()]; ok {
+			etls[en.InitMsg.Name()].Stage = en.Stage.String()
+			continue
+		}
+
+		etls[en.InitMsg.Name()] = &etl.Info{
+			Name:  en.InitMsg.Name(),
+			Stage: en.Stage.String(),
 		}
 	}
 
@@ -526,7 +525,7 @@ func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 // POST /v1/etl/<etl-name>/stop
 func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) {
 	args := allocBcArgs()
-	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathETL.Join(msg.Name(), apc.ETLStop)}
+	args.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathETL.Join(msg.Name())}
 	args.timeout = apc.LongTimeout
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
@@ -539,6 +538,17 @@ func (p *proxy) stopETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg)
 		break
 	}
 	freeBcastRes(results)
+
+	ctx := &etlMDModifier{
+		pre:   _addETLPre,
+		final: p._syncEtlMDFinal,
+		msg:   msg,
+		stage: etl.Aborted,
+		wait:  true,
+	}
+	if _, err := p.owner.etl.modify(ctx); err != nil {
+		p.writeErr(w, r, err)
+	}
 }
 
 func (p *proxy) etlExists(etlName string) error {
@@ -553,4 +563,27 @@ func (p *proxy) etlExists(etlName string) error {
 		return fmt.Errorf("ETL %s doesn't exist", etlName)
 	}
 	return nil
+}
+
+///////////////////
+// _etlFinalizer //
+//////////////////
+
+type _etlFinalizer struct {
+	p   *proxy
+	msg etl.InitMsg
+}
+
+// NOTE: to update etlMD on xaction abort
+func (ef *_etlFinalizer) cb(nl nl.Listener) {
+	nlog.Infoln("ETL finalizer triggered with error:", nl.Err())
+	// TODO: record nl.Err() and show on listETL call
+
+	ctx := &etlMDModifier{
+		pre:   _addETLPre,
+		final: ef.p._syncEtlMDFinal,
+		msg:   ef.msg,
+		stage: etl.Aborted,
+	}
+	ef.p.owner.etl.modify(ctx)
 }

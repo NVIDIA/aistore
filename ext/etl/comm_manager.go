@@ -26,24 +26,17 @@ type (
 	//     2. Start (or renew) xaction
 	//     3. Create Kubernetes resources (pod/service)
 	// - `Running`: All resources are active, handling inline and offline transform requests via the communicator.
-	// - `Stopped`: Kubernetes resources (pod/service) are cleaned up, but the communicator,
-	//   pod watcher, and xaction remain available. This allows the ETL to be restarted by
-	//   reusing these components during the initialization process.
-	entity struct {
-		comm  Communicator // TODO: decouple xaction and pod watcher from Communicator.
-		stage Stage
-	}
+	// - `Stopped`: Kubernetes resources (pod/service) are cleaned up.
 	manager struct {
-		m   map[string]*entity
+		m   map[string]Communicator
 		mtx sync.RWMutex
 	}
 )
 
 var mgr *manager
 
-// called during target initialization
 func Tinit() {
-	mgr = &manager{m: make(map[string]*entity, 4)}
+	mgr = &manager{m: make(map[string]Communicator, 4)}
 	xreg.RegNonBckXact(&factory{})
 }
 
@@ -52,47 +45,32 @@ func (r *manager) add(name string, c Communicator) (err error) {
 	if _, ok := r.m[name]; ok {
 		err = fmt.Errorf("etl[%s] already exists", name)
 	} else {
-		r.m[name] = &entity{c, Initializing}
+		r.m[name] = c
 	}
 	r.mtx.Unlock()
-	return
+	return err
 }
 
-// transition return false if the entry does not exist or is already in the given stage
-func (r *manager) transition(name string, stage Stage) (updated bool) {
-	r.mtx.Lock()
-	defer r.mtx.Unlock()
-
-	entry, exists := r.m[name]
-	if !exists || entry.stage == stage {
-		return false
-	}
-
-	entry.stage = stage
-	r.m[name] = entry
-	return true
-}
-
-func (r *manager) getByName(name string) (c Communicator, stage Stage) {
+func (r *manager) getByName(name string) Communicator {
 	r.mtx.RLock()
-	if en, exists := r.m[name]; exists {
-		c = en.comm
-		stage = en.stage
+	defer r.mtx.RUnlock()
+
+	if comm, exists := r.m[name]; exists {
+		return comm
 	}
-	r.mtx.RUnlock()
-	return c, stage
+	return r.m[name]
 }
 
-func (r *manager) getByXid(xid string) (c Communicator, stage Stage) {
+func (r *manager) getByXid(xid string) Communicator {
 	r.mtx.RLock()
-	for _, en := range r.m {
-		if en.comm.Xact().ID() == xid {
-			c = en.comm
-			stage = en.stage
+	defer r.mtx.RUnlock()
+
+	for _, comm := range r.m {
+		if comm.Xact().ID() == xid {
+			return comm
 		}
 	}
-	r.mtx.RUnlock()
-	return c, stage
+	return nil
 }
 
 func (r *manager) del(name string) (exists bool) {
@@ -108,14 +86,14 @@ func (r *manager) del(name string) (exists bool) {
 func (r *manager) list() []Info {
 	r.mtx.RLock()
 	etls := make([]Info, 0, len(r.m))
-	for name, en := range r.m {
+	for name, comm := range r.m {
 		etls = append(etls, Info{
 			Name:     name,
-			Stage:    en.stage.String(),
-			XactID:   en.comm.Xact().ID(),
-			ObjCount: en.comm.ObjCount(),
-			InBytes:  en.comm.InBytes(),
-			OutBytes: en.comm.OutBytes(),
+			Stage:    Running.String(), // must be in the running stage as long as the target's comm manager includes it in the list
+			XactID:   comm.Xact().ID(),
+			ObjCount: comm.ObjCount(),
+			InBytes:  comm.InBytes(),
+			OutBytes: comm.OutBytes(),
 		})
 	}
 	r.mtx.RUnlock()
@@ -126,11 +104,11 @@ func ValidateSecret(etlName, secret string) error {
 	mgr.mtx.RLock()
 	defer mgr.mtx.RUnlock()
 
-	en, ok := mgr.m[etlName]
+	comm, ok := mgr.m[etlName]
 	if !ok {
 		return cos.NewErrNotFound(core.T, "etl not found"+etlName)
 	}
-	if en.comm.GetSecret() == secret {
+	if comm.GetSecret() == secret {
 		return nil
 	}
 

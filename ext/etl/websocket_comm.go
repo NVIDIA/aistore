@@ -142,9 +142,9 @@ const (
 	offlineSessionMultiplier = 4
 )
 
-// SetupConnection establishes a test connection to the ETL pod's websocket endpoint.
+// setupConnection establishes a test connection to the ETL pod's websocket endpoint.
 // Close immediately if the connection is successful (only for verifying connectivity).
-func (ws *webSocketComm) SetupConnection() (err error) {
+func (ws *webSocketComm) setupConnection() (err error) {
 	if err := ws.boot.setupConnection("ws://"); err != nil {
 		return err
 	}
@@ -216,15 +216,17 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 	return wss, nil
 }
 
-func (ws *webSocketComm) Stop() {
+func (ws *webSocketComm) stop() error {
+	if err := ws.baseComm.stop(); err != nil {
+		return err
+	}
 	// inlineSession is stored in ws.sessions
 	for _, session := range ws.sessions {
 		session.Finish(cmn.ErrXactUserAbort)
 	}
 	ws.sessions = nil
-
 	ws.commCtxCancel()
-	ws.baseComm.Stop()
+	return nil
 }
 
 ///////////////

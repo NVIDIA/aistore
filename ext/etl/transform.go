@@ -7,7 +7,6 @@ package etl
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -179,8 +178,6 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
 	var (
 		comm   Communicator
-		pw     *podWatcher
-		stage  Stage
 		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
 		boot   = &etlBootstrapper{errCtx: errCtx, config: config, msg: msg, secret: secret}
 	)
@@ -199,33 +196,8 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcNam
 	boot.createServiceSpec()
 	podName, svcName = boot.pod.GetName(), boot.svc.GetName()
 
-	// 2. Attempt to restart or start fresh
-	comm, stage = mgr.getByName(msg.Name())
-	if stage == Running { // do nothing if already in Running stage
-		return podName, svcName, nil, nil
-	}
-
-	if comm != nil {
-		// Restart case: reuse communicator and pod watcher
-		debug.Assert(comm.Xact().Finished(), "xaction should be finished on previous stop")
-		comm.Restart(boot) // Note: pod's uri might change after restart, need to update the bootstrapper
-		pw = comm.GetPodWatcher()
-	} else {
-		// Fresh start
-		pw = newPodWatcher(podName, boot)
-		comm = newCommunicator(newAborter(msg.Name()), boot, pw)
-
-		if comm == nil {
-			return podName, svcName, nil, err
-		}
-		if err := mgr.add(msg.Name(), comm); err != nil {
-			return podName, svcName, nil, err
-		}
-	}
-
-	debug.Assert(comm != nil && pw != nil)
-	xctn = boot.setupXaction(xid)
-	if err := pw.start(); err != nil {
+	// 2. Create communicator
+	if comm, err = boot.initComm(msg.Name(), podName, xid); err != nil {
 		return podName, svcName, nil, err
 	}
 	core.T.Sowner().Listeners().Reg(comm)
@@ -244,92 +216,63 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcNam
 	}
 
 	// 5. Waiting for pod's readiness
-	if err = boot.waitPodReady(pw.podCtx); err != nil {
+	if err = boot.waitPodReady(comm.GetPodWatcher().podCtx); err != nil {
 		goto cleanup
 	}
 
-	if err = comm.SetupConnection(); err != nil {
-		goto cleanup
-	}
-
-	// 6. Transition to the Running stage if everything succeeds
-	if !mgr.transition(msg.Name(), Running) {
-		err = fmt.Errorf("etl[%s] fail to transition to Running stage", msg.Name())
+	if err = comm.setupConnection(); err != nil {
 		goto cleanup
 	}
 
 	nlog.Infof("pod %q is running, %+v, %s", podName, msg, boot.errCtx)
 
-	return podName, svcName, xctn, nil
+	return podName, svcName, boot.xctn, nil
 
-cleanup:
-	errCtx.PodStatus = pw.GetPodStatus()
-	nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to start etl[%s] with xid %s, msg %s, err %v - cleaning up..",
-		msg.Name(), xid, msg, err))
-	if !mgr.transition(comm.ETLName(), Stopped) {
-		nlog.Warningln(cmn.NewErrETLf(errCtx, "failed to cleanup etl[%s], already in Stopped stage", msg.Name()))
-		return podName, svcName, nil, cmn.NewErrETL(errCtx, err.Error())
-	}
-
-	core.T.Sowner().Listeners().Unreg(comm)
-	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
-		nlog.Errorln(errV)
-	}
-	comm.Stop()
-	return podName, svcName, nil, cmn.NewErrETL(errCtx, err.Error())
+cleanup: // initialization failed
+	Stop(msg.Name(), err)
+	boot.errCtx.PodStatus = comm.GetPodWatcher().GetPodStatus()
+	return podName, svcName, nil, cmn.NewErrETL(boot.errCtx, err.Error())
 }
 
 func StopByXid(xid string, errCause error) error {
-	comm, _ := mgr.getByXid(xid)
+	comm := mgr.getByXid(xid)
 	if comm == nil {
 		return cos.NewErrNotFound(core.T, "etl with xid "+xid+" not found")
 	}
 	return Stop(comm.ETLName(), errCause)
 }
 
+// three cases to call Stop()
+// 1. user's DELETE requests
+// 2. initialization failed
+// 3. xaction abort (StopByXid)
 func Stop(etlName string, errCause error) (err error) {
-	errCtx := &cmn.ETLErrCtx{
-		TID:     core.T.SID(),
-		ETLName: etlName,
-	}
-
-	// Abort all running offline ETLs.
-	xreg.AbortKind(errCause, apc.ActETLBck) // TODO: abort only related offline transforms
-
-	comm, stage := mgr.getByName(etlName)
+	comm := mgr.getByName(etlName)
 	if comm == nil {
 		return cos.NewErrNotFound(core.T, etlName+" not found")
 	}
 
-	// Do nothing if the ETL is already stopped.
-	if stage == Stopped {
-		return nil
-	}
-
-	mgr.transition(etlName, Stopped)
-
-	errCtx.PodName, errCtx.SvcName = comm.PodName(), comm.SvcName()
-	if err := cleanupEntities(errCtx, comm.PodName(), comm.SvcName()); err != nil {
+	// Note: comm.stop() is protected by atomic bool, run only once
+	if err := comm.stop(); err != nil {
 		return err
 	}
-
-	// Unregister and stop
+	mgr.del(etlName)
 	core.T.Sowner().Listeners().Unreg(comm)
-	comm.Stop()
 
-	return nil
+	// Abort all running offline ETLs.
+	xreg.AbortKind(errCause, apc.ActETLBck) // TODO: abort only related offline transforms
+
+	errCtx := &cmn.ETLErrCtx{
+		PodName:   comm.PodName(),
+		SvcName:   comm.SvcName(),
+		PodStatus: comm.GetPodWatcher().GetPodStatus(),
+		ETLName:   etlName,
+		TID:       core.T.SID(),
+	}
+	return cleanupEntities(errCtx, comm.PodName(), comm.SvcName())
 }
 
-func Delete(etlName string) error {
-	if err := Stop(etlName, cmn.ErrXactUserAbort); err != nil {
-		return err
-	}
-	// Remove etl entity
-	if !mgr.del(etlName) {
-		return cos.NewErrNotFound(core.T, etlName+" not found")
-	}
-	return nil
-}
+func Delete(etlName string) error { return Stop(etlName, cmn.ErrXactUserAbort) }
 
 // StopAll terminates all running ETLs.
 func StopAll() {
@@ -346,13 +289,9 @@ func StopAll() {
 // GetCommunicator retrieves the Communicator from registry by etl name
 // Returns an error if not found or not in the Running stage.
 func GetCommunicator(etlName string) (Communicator, error) {
-	comm, stage := mgr.getByName(etlName)
+	comm := mgr.getByName(etlName)
 	if comm == nil {
 		return nil, cos.NewErrNotFound(core.T, etlName)
-	}
-
-	if stage != Running {
-		return comm, cos.NewErrNotFound(core.T, etlName+" not in Running stage")
 	}
 	return comm, nil
 }
@@ -502,26 +441,4 @@ func deleteEntity(errCtx *cmn.ETLErrCtx, entityType, entityName string) error {
 		return cmn.NewErrETL(errCtx, err.Error())
 	}
 	return nil
-}
-
-func podConditionsToString(conditions []corev1.PodCondition) string {
-	parts := make([]string, 0, len(conditions))
-	for i := range conditions {
-		parts = append(parts, podConditionToString(&conditions[i]))
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
-}
-
-func podConditionToString(cond *corev1.PodCondition) string {
-	parts := []string{
-		fmt.Sprintf("type: %q", cond.Type),
-		fmt.Sprintf("status: %q", cond.Status),
-	}
-	if cond.Reason != "" {
-		parts = append(parts, fmt.Sprintf("reason: %q", cond.Reason))
-	}
-	if cond.Message != "" {
-		parts = append(parts, fmt.Sprintf("msg: %q", cond.Message))
-	}
-	return "{" + strings.Join(parts, ", ") + "}"
 }

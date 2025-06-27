@@ -74,7 +74,7 @@ const (
 	Unknown Stage = iota
 	Initializing
 	Running
-	Stopped
+	Aborted
 )
 
 // enum communication types (`commTypes`)
@@ -103,6 +103,7 @@ const (
 type (
 	InitMsg interface {
 		Name() string
+		Cname() string
 		MsgType() string // Code or Spec
 		CommType() string
 		ArgType() string
@@ -209,6 +210,7 @@ var (
 func (m *InitMsgBase) CommType() string  { return m.CommTypeX }
 func (m *InitMsgBase) ArgType() string   { return m.ArgTypeX }
 func (m *InitMsgBase) Name() string      { return m.EtlName }
+func (m *InitMsgBase) Cname() string     { return "ETL[" + m.EtlName + "]" }
 func (m *InitMsgBase) IsDirectPut() bool { return m.SupportDirectPut }
 
 func (m *InitMsgBase) GetEnv() []corev1.EnvVar { return m.Env }
@@ -427,8 +429,8 @@ func (s Stage) String() string {
 		return "Initializing"
 	case Running:
 		return "Running"
-	case Stopped:
-		return "Stopped"
+	case Aborted:
+		return "Aborted"
 	default:
 		return "Unknown"
 	}

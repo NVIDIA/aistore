@@ -48,6 +48,7 @@ type (
 		final func(ctx *etlMDModifier, clone *etlMD)
 
 		msg     etl.InitMsg
+		stage   etl.Stage
 		etlName string
 		wait    bool
 	}
@@ -105,13 +106,16 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
-func (e *etlMD) add(spec etl.InitMsg) {
-	e.Add(spec)
+func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage) {
+	e.Add(msg, stage)
 	e.Version++
 }
 
-func (e *etlMD) get(id string) (msg etl.InitMsg) {
-	return e.ETLs[id]
+func (e *etlMD) get(id string) (msg etl.InitMsg, stage etl.Stage) {
+	if en, ok := e.ETLs[id]; ok {
+		return en.InitMsg, en.Stage
+	}
+	return nil, etl.Unknown
 }
 
 func (e *etlMD) del(id string) (exists bool) {

@@ -253,33 +253,45 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 			b.pod.Name, b.msg.String(), b.errCtx, initTimeout, interval)
 	}
 	// wait
-	err := wait.PollUntilContextTimeout(podCtx, interval, initTimeout.D(), false, /*immediate*/
+	return wait.PollUntilContextTimeout(podCtx, interval, initTimeout.D(), false, /*immediate*/
 		func(context.Context) (ready bool, err error) {
 			return checkPodReady(b.k8sClient, b.pod.Name)
 		},
 	)
-
-	if err == nil {
-		return nil
-	}
-	pod, _ := b.k8sClient.Pod(b.pod.Name)
-	if pod == nil {
-		return cmn.NewErrETL(b.errCtx, err.Error())
-	}
-	err = cmn.NewErrETLf(b.errCtx,
-		`%v (pod phase: %q, pod conditions: %s`,
-		err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
-	)
-	return err
 }
 
-func (b *etlBootstrapper) setupXaction(xid string) core.Xact {
+func (b *etlBootstrapper) initComm(etlName, podName, xid string) (comm Communicator, err error) {
+	if comm = mgr.getByName(etlName); comm != nil {
+		return nil, cos.NewErrAlreadyExists(core.T, etlName)
+	}
+	pw := newPodWatcher(podName, b)
+	if comm, err = newCommunicator(newAborter(etlName), b, pw); err != nil {
+		return nil, err
+	}
+
+	if err := mgr.add(etlName, comm); err != nil {
+		return nil, err
+	}
+
+	if err = b.setupXaction(xid); err != nil {
+		return nil, err
+	}
+
+	if err := pw.start(); err != nil {
+		return nil, err
+	}
+	return comm, nil
+}
+
+func (b *etlBootstrapper) setupXaction(xid string) error {
 	rns := xreg.RenewETL(b.msg, xid)
-	debug.AssertNoErr(rns.Err)
+	if rns.Err != nil {
+		return rns.Err
+	}
 	xctn := rns.Entry.Get()
 	b.xctn = xctn.(*XactETL)
 	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
-	return xctn
+	return nil
 }
 
 func (b *etlBootstrapper) _updPodCommand() {

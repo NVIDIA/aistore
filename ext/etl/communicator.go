@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -42,9 +43,8 @@ type (
 
 		String() string
 
-		SetupConnection() error
-		Stop()
-		Restart(boot *etlBootstrapper)
+		setupConnection() error
+		stop() error
 		GetPodWatcher() *podWatcher
 		GetSecret() string
 
@@ -78,6 +78,7 @@ type (
 		listener meta.Slistener
 		boot     *etlBootstrapper
 		pw       *podWatcher
+		stopped  atomic.Bool
 	}
 	pushComm struct {
 		baseComm
@@ -110,7 +111,7 @@ var (
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) Communicator {
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) (Communicator, error) {
 	switch boot.msg.CommType() {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
@@ -118,20 +119,20 @@ func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatc
 		if boot.msg.CommType() == HpushStdin { // io://
 			pc.command = boot.originalCommand
 		}
-		return pc
+		return pc, nil
 	case Hpull:
 		rc := &redirectComm{}
 		rc.listener, rc.boot, rc.pw = listener, boot, pw
-		return rc
+		return rc, nil
 	case WebSocket:
 		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
 		ws.commCtx, ws.commCtxCancel = context.WithCancel(context.Background())
 		ws.listener, ws.boot, ws.pw = listener, boot, pw
-		return ws
+		return ws, nil
 	}
 
 	debug.Assert(false, "unknown comm-type '"+boot.msg.CommType()+"'")
-	return nil
+	return nil, fmt.Errorf("unknown comm-type %s", boot.msg.CommType())
 }
 
 func (c *baseComm) ETLName() string { return c.boot.msg.Name() }
@@ -153,17 +154,13 @@ func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
 func (c *baseComm) GetPodWatcher() *podWatcher { return c.pw }
 func (c *baseComm) GetSecret() string          { return c.boot.secret }
-func (c *baseComm) SetupConnection() error     { return c.boot.setupConnection("http://") }
+func (c *baseComm) setupConnection() error     { return c.boot.setupConnection("http://") }
 
-func (c *baseComm) Restart(updBoot *etlBootstrapper) {
-	c.boot.uri = updBoot.uri
-	if updBoot.secret != "" {
-		c.boot.secret = updBoot.secret
+func (c *baseComm) stop() error {
+	if !c.stopped.CAS(false, true) {
+		return fmt.Errorf("%s already stopped", c.boot.msg.Cname())
 	}
-	c.pw.boot = updBoot
-}
 
-func (c *baseComm) Stop() {
 	// Note: xctn might have already been aborted and finished by pod watcher
 	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {
 		c.boot.xctn.Finish()
@@ -171,6 +168,8 @@ func (c *baseComm) Stop() {
 	if c.pw != nil {
 		c.pw.stop(true)
 	}
+
+	return nil
 }
 
 func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) core.ReadResp {

@@ -29,7 +29,7 @@ func TestEtlMDDeepCopy(t *testing.T) {
 		Runtime: etl.RuntimeSpec{
 			Image: "test-image",
 		},
-	})
+	}, etl.Initializing)
 	clone := etlMD.clone()
 	s1 := string(cos.MustMarshal(etlMD))
 	s2 := string(cos.MustMarshal(clone))
@@ -88,7 +88,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 						Spec: []byte(fmt.Sprintf("test spec - %d", i)),
 					}
 				}
-				etlMD.Add(msg)
+				etlMD.Add(msg, etl.Running)
 			}
 		}
 	})
@@ -141,7 +141,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							}
 
 							// Add bucket and save.
-							clone.Add(msg)
+							clone.Add(msg, etl.Running)
 							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 

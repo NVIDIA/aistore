@@ -149,7 +149,9 @@ var _ = Describe("CommunicatorTest", func() {
 					uri:  transformerServer.URL,
 					xctn: xetl,
 				}
-				comm = newCommunicator(nil, boot, nil).(httpCommunicator)
+				c, err := newCommunicator(nil, boot, nil)
+				Expect(err).NotTo(HaveOccurred())
+				comm = c.(httpCommunicator)
 
 				switch testType {
 				case "inline":

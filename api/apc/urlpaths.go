@@ -79,10 +79,12 @@ const (
 	// ETL
 	ETLLogs    = "logs"
 	ETLObject  = "_object"
-	ETLStop    = Stop
-	ETLStart   = Start
 	ETLHealth  = "health"
 	ETLMetrics = "metrics"
+
+	// ETL proxy only
+	ETLStart = Start
+	ETLStop  = Stop
 
 	// ETL target only
 	ETLDetails = "details"
