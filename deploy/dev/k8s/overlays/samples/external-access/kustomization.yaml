@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ais
+
+resources:
+- ../../../base
+- proxy/lb.yaml
+- target/lb.yaml
+
+patches:
+- patch: |
+    - op: add
+      path: /spec/template/spec/initContainers/0/env/-
+      value:
+        name: ENABLE_EXTERNAL_ACCESS
+        value: "true"
+  target:
+    kind: StatefulSet
+    name: ais-proxy
+
+- patch: |
+    - op: add
+      path: /spec/template/spec/initContainers/0/env/-
+      value:
+        name: ENABLE_EXTERNAL_ACCESS
+        value: "true"
+  target:
+    kind: StatefulSet
+    name: ais-target 

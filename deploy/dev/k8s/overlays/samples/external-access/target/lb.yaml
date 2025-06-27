@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ais-target-0
+  labels:
+    app: ais
+    type: target
+  annotations:
+    kapp.k14s.io/change-group: "setup"
+spec:
+  type: LoadBalancer
+  selector:
+    type: target
+    statefulset.kubernetes.io/pod-name: ais-target-0
+  ports:
+    - name: public
+      port: 9090
+    - name: control
+      port: 9080
+    - name: data
+      port: 10080 

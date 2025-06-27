@@ -11,7 +11,7 @@ minimal:
 	./utils/deploy.sh base
 
 # Sample overlay targets
-.PHONY: https cloud multi-node local-dev
+.PHONY: https cloud multi-node local-dev external-access
 https:
 	./utils/deploy.sh overlays/samples/https
 
@@ -24,6 +24,9 @@ multi-node:
 local-dev:
 	./utils/local-development/build_and_load.sh
 	./utils/deploy.sh overlays/samples/local-dev
+
+external-access:
+	./utils/deploy.sh overlays/samples/external-access
 
 # Cleanup target
 .PHONY: cleanup

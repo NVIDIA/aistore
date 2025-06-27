@@ -20,6 +20,8 @@ This setup requires Linux. Before proceeding, ensure the following dependencies 
 
 > **Note:** All Makefile targets work with Minikube. For Minikube, set `CLUSTER_TYPE=minikube`.
 
+> **Note:** For macOS/Windows, see the [external access](#external-access) section below.
+
 ### Create K8s Cluster
 
 Create a local Kubernetes cluster:
@@ -197,6 +199,18 @@ $ make local-dev
 ```
 
 The target first builds and loads the local images with the `local-development` tag, then deploys using the local development overlay.
+
+#### External Access
+
+The external access overlay demonstrates load balancer access for virtualized environments where direct cluster access is not possible (e.g. Docker Desktop). It creates a shared `ais-proxy-lb` LoadBalancer for all proxies and individual LoadBalancers `ais-target-*` for each target.
+
+Run [`cloud-provider-kind`](https://github.com/kubernetes-sigs/cloud-provider-kind) in the background to provide external IPs, then deploy:
+
+```bash
+$ make external-access
+```
+
+> **Note:** For Minikube, run [`minikube tunnel`](https://minikube.sigs.k8s.io/docs/commands/tunnel/) in the background instead.
 
 ## References
 
