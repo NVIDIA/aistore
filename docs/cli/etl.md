@@ -177,6 +177,31 @@ spec:
 $ ais etl init -f pod_spec.yaml --name transformer-md5
 ```
 
+### Additional Notes
+
+* You can define **multiple ETLs in a single YAML file** by separating them with the standard YAML document separator `---`.
+
+  **Example:**
+
+  ```yaml
+  name: hello-world-etl
+  runtime:
+    image: aistorage/transformer_hello_world:latest
+  ---
+  name: md5-etl
+  runtime:
+    image: aistorage/transformer_md5:latest
+  ```
+
+* You may override fields in the spec using CLI flags such as `--name`, `--comm-type`, `--arg-type`, etc.
+
+  **However**, if your YAML file contains multiple ETL definitions, override flags **cannot** be used and will result in an error.
+
+  In such cases, you should either:
+
+  * Remove the override flags and apply the full multi-ETL spec as-is, or
+  * Split the YAML file into individual files and initialize each ETL separately:
+
 ---
 
 ## Listing ETLs

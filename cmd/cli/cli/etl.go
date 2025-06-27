@@ -151,13 +151,16 @@ var (
 		Name: cmdInit,
 		Usage: "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
 			indent1 + "\t- 'ais etl init -f <spec-file.yaml>'\t deploy ETL from a local YAML file.\n" +
-			indent1 + "\t- 'ais etl init -f <URL>'\t deploy ETL from a remote YAML file.\n",
+			indent1 + "\t- 'ais etl init -f <URL>'\t deploy ETL from a remote YAML file.\n" +
+			"\nAdditional Info:\n" +
+			indent1 + "- You may define multiple ETLs in a single spec file using YAML document separators ('---').\n" +
+			indent1 + "- CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.\n",
 		Action: etlInitSpecHandler,
 		Flags:  sortFlags(etlSubFlags[cmdSpec]),
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdSpec,
-				Usage:  "Start ETL job with YAML Pod specification",
+				Usage:  "Start an ETL job using a YAML Pod specification (equivalent to 'ais etl init -f <spec-file.yaml|URL>')",
 				Flags:  sortFlags(etlSubFlags[cmdSpec]),
 				Action: etlInitSpecHandler,
 			},
