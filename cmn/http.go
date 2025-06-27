@@ -23,6 +23,33 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// RFC 3986 defines a set of reserved characters that have special meaning
+// within a URI (Uniform Resource Identifier). These include delimiters
+// for different URI components (like '?' for query, '#' for fragment)
+// and sub-delimiters. Additionally, certain characters like space ' '
+// are "unsafe" and must be percent-encoded when appearing in URI components
+// like the path.
+//
+// This function checks for the presence of such special/unsafe characters
+// in a given path string. Its primary use case is to determine if a URL path
+// (which usually contains bucket/object names) can be safely concatenated
+// into a new URL, or if it requires robust URL parsing and re-encoding
+// via `net/url.URL` to ensure correctness (e.g., proper percent-encoding
+// of spaces, ampersands, etc. for the target URL).
+//
+// The characters checked:
+// - '%': Indicates percent-encoding (e.g., %20 for space) or a literal percent sign.
+// - '?': Query string delimiter.
+// - '#': Fragment identifier delimiter.
+// - ' ': Space (unsafe, must be %20 encoded).
+// - '+': Often used for space in x-www-form-urlencoded, or literal plus.
+// Not checking:
+// - '&': See '?' above
+// - '=': Ditto
+func HasSpecialSymbols(path string) bool {
+	return strings.ContainsAny(path, "%?# +")
+}
+
 // PrependProtocol prepends protocol in URL in case it is missing.
 // By default it adds `http://` to the URL.
 func PrependProtocol(url string, protocol ...string) string {

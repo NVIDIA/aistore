@@ -2118,7 +2118,7 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIn
 		}
 	}
 	// fast path
-	if !strings.ContainsAny(r.URL.Path, "%?#") {
+	if !cmn.HasSpecialSymbols(r.URL.Path) {
 		var (
 			q = url.Values{
 				apc.QparamPID:      []string{p.SID()},

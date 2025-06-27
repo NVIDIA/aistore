@@ -31,6 +31,8 @@ import (
 //	(I) `ais cp from to --prefix abc" is the same as (II) `ais cp from to --template abc"
 //
 // Also, note [CONVENTIONS] below.
+//
+//	(III) TODO: `ais cp from-bucket/from-object to-bucket[/to-object]` is not supported yet
 func copyBucketHandler(c *cli.Context) (err error) {
 	var (
 		bckFrom, bckTo cmn.Bck

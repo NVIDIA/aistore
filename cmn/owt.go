@@ -34,10 +34,6 @@ const (
 	OwtGet             // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock // (used for maximum parallelism when prefetching)
 	//
-	// when remote-src == dst
-	//
-	OwtCopySameBucket
-	//
 	// None of the above
 	//
 	OwtNone

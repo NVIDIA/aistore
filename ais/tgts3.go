@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +105,20 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
 	src := r.Header.Get(cos.S3HdrObjSrc)
+
+	// [HACK]
+	// it appears, 'x-amz-copy-source' header gets double-escaped upon http redirect
+	// (s3cmd and aws clients, both)
+	srcUnescaped, err := url.QueryUnescape(src)
+	if err != nil {
+		nlog.Errorf("Warning: failed to unescape '%s=%s' header: %v", cos.S3HdrObjSrc, src, err)
+	} else if src != srcUnescaped {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+			nlog.Infoln("Warning: header", cos.S3HdrObjSrc, "is double-escaped - unescaping from", src, "to", srcUnescaped)
+		}
+		src = srcUnescaped
+	}
+
 	src = strings.Trim(src, "/") // in AWS examples the path starts with "/"
 	parts := strings.SplitN(src, "/", 2)
 	if len(parts) < 2 {

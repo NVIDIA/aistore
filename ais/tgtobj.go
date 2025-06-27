@@ -569,7 +569,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 
 func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
-	case cmn.OwtRebalance, cmn.OwtCopy, cmn.OwtCopySameBucket:
+	case cmn.OwtRebalance, cmn.OwtCopy:
 		v = c.ValidateObjMove
 	case cmn.OwtPut:
 		v = true
@@ -1662,8 +1662,6 @@ func (coi *coi) _writer(t *target, lom, dst *core.LOM, gargs *core.GetROCArgs) (
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-//
-//nolint:dupword // intentional
 func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
 	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
 	if resp.Err != nil {
@@ -1689,11 +1687,6 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *cor
 		// preserve src metadata when copying (vs. transforming)
 		dst.CopyVersion(lom)
 		dst.SetCustomMD(lom.GetCustomMD())
-
-		// [special] when src == dst (`ais cp s3://data s3://data --all`)
-		if backend := lom.Bck().RemoteBck(); backend != nil && backend.Equal(coi.BckTo.Bucket()) {
-			poi.owt = cmn.OwtCopySameBucket
-		}
 	}
 
 	ecode, err := poi.putObject()
