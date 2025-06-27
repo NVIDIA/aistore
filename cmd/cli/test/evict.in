@@ -1,6 +1,6 @@
 # Test evict command
 
-// SKIP
+// RUN remais
 
 # Test 1: AIS bucket eviction failure test
 # Create AIS bucket first
