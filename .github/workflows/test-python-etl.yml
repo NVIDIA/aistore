@@ -24,6 +24,12 @@ jobs:
       - name: Create KinD K8s Cluster
         uses: helm/kind-action@v1
 
+      - name: Install kapp
+        run: |
+          curl -LO "https://github.com/carvel-dev/kapp/releases/latest/download/kapp-linux-amd64"
+          chmod +x kapp-linux-amd64
+          sudo mv kapp-linux-amd64 /usr/local/bin/kapp
+
       - name: Run AIStore in KinD
         run: |
           cd $GITHUB_WORKSPACE/deploy/dev/k8s
