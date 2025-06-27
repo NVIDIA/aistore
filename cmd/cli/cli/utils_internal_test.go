@@ -464,3 +464,83 @@ func TestParseBckObjectURI(t *testing.T) {
 		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q, obj_name: %q)", test.uri, bck.String(), objName)
 	}
 }
+
+func TestFlattenJSONNoStructEntries(t *testing.T) {
+	// Test ensures struct containers don't show up in config display
+
+	type LogConf struct {
+		Level   int    `json:"level"`
+		MaxSize string `json:"max_size"`
+	}
+
+	type TestConfig struct {
+		Log LogConf `json:"log"`
+	}
+
+	config := TestConfig{
+		Log: LogConf{Level: 5, MaxSize: "4MiB"},
+	}
+
+	// Test ais config cluster log.level 5
+	result := flattenJSON(config, "log")
+
+	resultMap := make(map[string]string)
+	for _, nv := range result {
+		resultMap[nv.Name] = nv.Value
+	}
+
+	// Should contain leaf fields
+	tassert.Fatalf(t, resultMap["log.level"] == "5", "Expected log.level=5, got %q", resultMap["log.level"])
+	tassert.Fatalf(t, resultMap["log.max_size"] == "4MiB", "Expected log.max_size=4MiB, got %q", resultMap["log.max_size"])
+
+	// Should NOT contain the struct entry
+	if structValue, found := resultMap["log"]; found {
+		t.Errorf("REGRESSION: Found unwanted struct entry 'log' with value: %q", structValue)
+	}
+
+	// Should have exactly 2 entries
+	if len(resultMap) != 2 {
+		t.Errorf("Expected exactly 2 entries, got %d: %v", len(resultMap), resultMap)
+	}
+}
+
+func TestFlattenJSONSectionFiltering(t *testing.T) {
+	// Test that section filtering works correctly
+
+	type TestConfig struct {
+		Log struct {
+			Level int `json:"level"`
+		} `json:"log"`
+		Mirror struct {
+			Enabled bool `json:"enabled"`
+		} `json:"mirror"`
+	}
+
+	config := TestConfig{}
+	config.Log.Level = 3
+	config.Mirror.Enabled = true
+
+	// Test log section only
+	logResult := flattenJSON(config, "log")
+	logMap := make(map[string]string)
+	for _, nv := range logResult {
+		logMap[nv.Name] = nv.Value
+	}
+
+	// Should only have log fields
+	tassert.Fatalf(t, logMap["log.level"] == "3", "Expected log.level=3, got %q", logMap["log.level"])
+	if _, found := logMap["mirror.enabled"]; found {
+		t.Errorf("Found mirror field in log section: %v", logMap)
+	}
+
+	// Test entire config
+	allResult := flattenJSON(config, "")
+	allMap := make(map[string]string)
+	for _, nv := range allResult {
+		allMap[nv.Name] = nv.Value
+	}
+
+	// Should have both sections
+	tassert.Fatalf(t, allMap["log.level"] == "3", "Expected log.level=3 in full config")
+	tassert.Fatalf(t, allMap["mirror.enabled"] == "true", "Expected mirror.enabled=true in full config")
+}

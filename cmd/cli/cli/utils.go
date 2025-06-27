@@ -661,7 +661,7 @@ func flattenJSON(jstruct any, section string) (flat nvpairList) {
 			flat = append(flat, nvpair{tag, v})
 		}
 		return nil, false
-	}, cmn.IterOpts{VisitAll: true})
+	})
 	return flat
 }
 
@@ -781,6 +781,11 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 			}
 			return nil, false
 		}, cmn.IterOpts{VisitAll: true})
+
+		// Wrap the result with the section name as the root key
+		if found {
+			result = map[string]any{section: result}
+		}
 	}
 
 	if !found {
