@@ -319,6 +319,18 @@ func (shar *SharMutex16) Lock(i int)   { shar.m[i].Lock() }
 func (shar *SharMutex16) Unlock(i int) { shar.m[i].Unlock() }
 func (shar *SharMutex16) Len() int     { return cap(shar.m) }
 
+func (shar *SharMutex16) LockAll() {
+	for i := range shar.m {
+		shar.m[i].Lock()
+	}
+}
+
+func (shar *SharMutex16) UnlockAll() {
+	for i := range shar.m {
+		shar.m[i].Unlock()
+	}
+}
+
 func (shar *SharMutex16) Index(id string) int {
 	hash := onexxh.Checksum64S(UnsafeB(id), MLCG32)
 	return int(hash & uint64(cap(shar.m)-1))

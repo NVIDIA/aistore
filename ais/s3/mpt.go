@@ -179,9 +179,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 	results := make([]UploadInfoResult, 0, len(ups))
 
 	// lock all (notice performance trade-off)
-	for i := range shar.Len() {
-		shar.Lock(i)
-	}
+	shar.LockAll()
 	// filter by bucket
 	for id, mpt := range ups {
 		if bckName == "" || mpt.bckName == bckName {
@@ -192,9 +190,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 			})
 		}
 	}
-	for i := range shar.Len() {
-		shar.Unlock(i)
-	}
+	shar.UnlockAll()
 
 	// sort by (object name, initiation time)
 	sort.Slice(results, func(i, j int) bool {
