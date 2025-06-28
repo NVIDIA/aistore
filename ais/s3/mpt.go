@@ -45,9 +45,9 @@ type (
 )
 
 var (
-	ups  uploads
-	shar cos.SharMutex16
-	once sync.Once
+	ups   uploads
+	upsMu sync.RWMutex
+	once  sync.Once
 )
 
 // Start multipart upload
@@ -57,8 +57,7 @@ func InitUpload(id, bckName, objName string, metadata map[string]string) {
 		ups = make(uploads, iniCapUploads)
 	})
 
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	upsMu.Lock()
 	ups[id] = &mpt{
 		bckName:  bckName,
 		objName:  objName,
@@ -66,30 +65,28 @@ func InitUpload(id, bckName, objName string, metadata map[string]string) {
 		ctime:    time.Now(),
 		metadata: metadata,
 	}
-	shar.Unlock(lockidx)
+	upsMu.Unlock()
 }
 
 // Add part to an active upload.
 // Some clients may omit size and md5. Only partNum is must-have.
 // md5 and fqn is filled by a target after successful saving the data to a workfile.
 func AddPart(id string, npart *MptPart) (err error) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	upsMu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found (%s, %d)", id, npart.FQN, npart.Num)
 	} else {
 		mpt.parts = append(mpt.parts, npart)
 	}
-	shar.Unlock(lockidx)
+	upsMu.Unlock()
 	return
 }
 
 // TODO: compare non-zero sizes (note: s3cmd sends 0) and part.ETag as well, if specified
 func CheckParts(id string, parts []types.CompletedPart) ([]*MptPart, error) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
-	defer shar.Unlock(lockidx)
+	upsMu.RLock()
+	defer upsMu.RUnlock()
 	mpt, ok := ups[id]
 	if !ok {
 		return nil, fmt.Errorf("upload %q not found", id)
@@ -123,8 +120,7 @@ func ParsePartNum(s string) (int32, error) {
 // Return a sum of upload part sizes.
 // Used on upload completion to calculate the final size of the object.
 func ObjSize(id string) (size int64, err error) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	upsMu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
 		err = fmt.Errorf("upload %q not found", id)
@@ -133,14 +129,13 @@ func ObjSize(id string) (size int64, err error) {
 			size += part.Size
 		}
 	}
-	shar.Unlock(lockidx)
+	upsMu.RUnlock()
 	return
 }
 
 func GetUploadMetadata(id string) (metadata map[string]string) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
-	defer shar.Unlock(lockidx)
+	upsMu.RLock()
+	defer upsMu.RUnlock()
 	mpt, ok := ups[id]
 	if !ok {
 		return nil
@@ -152,15 +147,14 @@ func GetUploadMetadata(id string) (metadata map[string]string) {
 // if completed (i.e., not aborted): store xattr
 func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
 	debug.Assert(lom != nil)
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	upsMu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
-		shar.Unlock(lockidx)
+		upsMu.Unlock()
 		return false
 	}
 	delete(ups, id)
-	shar.Unlock(lockidx)
+	upsMu.Unlock()
 
 	if !aborted {
 		if err := storeMptXattr(lom, mpt); err != nil {
@@ -179,7 +173,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 	results := make([]UploadInfoResult, 0, len(ups))
 
 	// lock all (notice performance trade-off)
-	shar.LockAll()
+	upsMu.RLock()
 	// filter by bucket
 	for id, mpt := range ups {
 		if bckName == "" || mpt.bckName == bckName {
@@ -190,7 +184,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 			})
 		}
 	}
-	shar.UnlockAll()
+	upsMu.RUnlock()
 
 	// sort by (object name, initiation time)
 	sort.Slice(results, func(i, j int) bool {
@@ -229,14 +223,13 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 }
 
 func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int, err error) {
-	lockidx := shar.Index(id)
-	shar.Lock(lockidx)
+	upsMu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
 		ecode = http.StatusNotFound
 		mpt, err = loadMptXattr(lom)
 		if err != nil || mpt == nil {
-			shar.Unlock(lockidx)
+			upsMu.RUnlock()
 			return nil, ecode, err
 		}
 		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
@@ -249,6 +242,6 @@ func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int
 			PartNumber: apc.Ptr(part.Num),
 		})
 	}
-	shar.Unlock(lockidx)
+	upsMu.RUnlock()
 	return parts, ecode, err
 }
