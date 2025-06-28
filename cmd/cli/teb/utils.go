@@ -54,6 +54,7 @@ type (
 		Version   string // when all equal
 		BuildTime string // ditto
 		NumDisks  int
+		Backend   string // configured backend providers
 	}
 	ListBucketsHelper struct {
 		XactID string
@@ -271,10 +272,18 @@ func fmtDaemonID(id string, smap *meta.Smap, daeStatus string) (snamePlus string
 }
 
 func fmtAlerts(flags cos.NodeStateFlags) (s string) {
+	if flags.IsOK() {
+		return "ok"
+	}
+
 	s = flags.String()
 	if flags.IsRed() {
 		return fred(s)
 	}
+	if flags.IsWarn() {
+		return fcyan(s)
+	}
+
 	return s
 }
 

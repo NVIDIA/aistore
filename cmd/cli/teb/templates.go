@@ -32,7 +32,6 @@ const (
 
 	//
 	// Cluster
-	// TODO: consider showing `err.io.get.n` counters - generally, all metrics that are stats.IsIOErrMetric()
 	//
 	indent1 = "   "
 
@@ -41,6 +40,7 @@ const (
 		indent1 + "Capacity:\t{{.Capacity}}\n" +
 		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
 		indent1 + "Software:\t{{FormatCluSoft .Version .BuildTime}}\n" +
+		indent1 + "Backend:\t{{.Backend}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Stst) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Stst) }}\n" +
 		indent1 + "Rebalance:\t{{FormatRebalance .Stst .CluConfig}}\n" +

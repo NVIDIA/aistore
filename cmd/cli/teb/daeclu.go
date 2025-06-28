@@ -74,6 +74,7 @@ func (h *StatsAndStatusHelper) MakeTabP(smap *meta.Smap, units string) *Table {
 				unknownVal,
 				unknownVal,
 				unknownVal,
+				unknownVal,
 				ds.K8sPodName,
 				nstatus,
 				ds.Version,
@@ -175,6 +176,7 @@ func (h *StatsAndStatusHelper) MakeTabT(smap *meta.Smap, units string) *Table {
 			nid, nstatus := fmtStatusSID(ds.Snode.ID(), smap, ds.Status)
 			row := []string{
 				nid,
+				unknownVal,
 				unknownVal,
 				unknownVal,
 				unknownVal,
