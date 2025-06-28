@@ -85,7 +85,7 @@ func (b *Bck) Backend() *Bck { backend := (*cmn.Bck)(b).Backend(); return (*Bck)
 
 func (b *Bck) AddUnameToQuery(q url.Values, uparam string) url.Values {
 	bck := (*cmn.Bck)(b)
-	return bck.AddUnameToQuery(q, uparam)
+	return bck.AddUnameToQuery(q, uparam, "")
 }
 
 func (b *Bck) String() string {

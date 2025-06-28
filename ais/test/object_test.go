@@ -305,6 +305,62 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
+func TestCopyObject(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bckFrom    = cmn.Bck{
+			Name:     "obj-cp-from-" + trand.String(5),
+			Provider: apc.AIS,
+		}
+		bckTo = cmn.Bck{
+			Name:     "obj-cp-to-" + trand.String(5),
+			Provider: apc.AIS,
+		}
+		objFrom = "test-from-obj"
+		objTo   = "test-to-obj"
+		data    = []byte("this is test data for copy object")
+	)
+
+	// Create bucket and PUT source object
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+	putArgs := api.PutArgs{
+		BaseParams: baseParams,
+		Bck:        bckFrom,
+		ObjName:    objFrom,
+		Reader:     readers.NewBytes(data),
+	}
+	_, err := api.PutObject(&putArgs)
+	tassert.CheckFatal(t, err)
+
+	err = api.CopyObject(baseParams, &api.CopyArgs{
+		FromBck:     bckFrom,
+		FromObjName: objFrom,
+		ToBck:       bckTo,
+		ToObjName:   objTo,
+		ETLName:     "",
+	})
+	tassert.CheckFatal(t, err)
+
+	// GET destination object to validate content
+	writer := bytes.NewBuffer(nil)
+	getArgs := api.GetArgs{Writer: writer}
+	_, err = api.GetObject(baseParams, bckTo, objTo, &getArgs)
+	tassert.CheckFatal(t, err)
+
+	// Compare content
+	tassert.Errorf(t, bytes.Equal(writer.Bytes(), data), "copied object content mismatch: expected %q, got %q",
+		string(data), writer.String())
+
+	// HEAD both source and destination to ensure existence
+	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+	_, err = api.HeadObject(baseParams, bckFrom, objFrom, hargs)
+	tassert.CheckFatal(t, err)
+	_, err = api.HeadObject(baseParams, bckTo, objTo, hargs)
+	tassert.CheckFatal(t, err)
+}
+
 func TestSameBucketName(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)

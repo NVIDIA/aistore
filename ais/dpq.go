@@ -40,6 +40,7 @@ type dpq struct {
 	owt         string // object write transaction { OwtPut, ... }
 	fltPresence string // QparamFltPresence
 	binfo       string // bucket info, with or without requirement to summarize remote obj-s
+	objto       string // uname of the destination object
 
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
 	isGFN         bool // QparamIsGFNRequest
@@ -118,6 +119,11 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamNamespace:
 			var err error
 			if dpq.bck.namespace, err = url.QueryUnescape(value); err != nil {
+				return err
+			}
+		case apc.QparamObjTo:
+			var err error
+			if dpq.objto, err = url.QueryUnescape(value); err != nil {
 				return err
 			}
 		case apc.QparamSkipVC:

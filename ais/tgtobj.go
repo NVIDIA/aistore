@@ -1540,7 +1540,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			coi.OAH = resp.OAH
 			r = resp.R
 		}
-		return coi.send(t, dm, lom, r, tsi)
+		return coi.send(t, dm, lom, r, tsi) // lom is the source of reader if no reader specified
 	}
 
 	// dst is this target

@@ -481,11 +481,11 @@ func (b *Bck) AddToQuery(query url.Values) url.Values {
 	return query
 }
 
-func (b *Bck) AddUnameToQuery(query url.Values, uparam string) url.Values {
+func (b *Bck) AddUnameToQuery(query url.Values, uparam, objName string) url.Values {
 	if query == nil {
 		query = make(url.Values)
 	}
-	uname := b.MakeUname("")
+	uname := b.MakeUname(objName)
 	query.Set(uparam, cos.UnsafeS(uname))
 	return query
 }

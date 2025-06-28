@@ -842,6 +842,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		p.writeErr(w, r, err)
 		return
 	}
+
 	if nodeID == "" {
 		tsi, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 		if err != nil {

@@ -29,8 +29,9 @@ const (
 	QparamProvider  = "provider" // aka backend provider or, simply, backend
 	QparamNamespace = "namespace"
 
-	// e.g., usage: copy bucket
+	// e.g., usage: copy bucket, copy object
 	QparamBckTo = "bck_to"
+	QparamObjTo = "object_to"
 
 	// Do not add remote bucket to cluster's BMD e.g. when checking existence
 	// via api.HeadBucket

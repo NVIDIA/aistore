@@ -225,7 +225,7 @@ func tcb(bp BaseParams, bckFrom, bckTo cmn.Bck, jbody []byte, fltPresence ...int
 	}
 	q := qalloc()
 	bckFrom.SetQuery(q)
-	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
+	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo, "" /*objName*/)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -254,7 +254,7 @@ func RenameBucket(bp BaseParams, bckFrom, bckTo cmn.Bck) (xid string, err error)
 	}
 	q := qalloc()
 	bckFrom.SetQuery(q)
-	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
+	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo, "" /*objName*/)
 
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()

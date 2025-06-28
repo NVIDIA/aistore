@@ -129,6 +129,17 @@ type (
 	}
 )
 
+// Copy and Transform Object APIs
+type (
+	CopyArgs struct {
+		FromBck     cmn.Bck
+		FromObjName string
+		ToBck       cmn.Bck
+		ToObjName   string // if empty, defaults to SrcObjName
+		ETLName     string // optional, for transformation
+	}
+)
+
 // GET(object) =========================================================================================
 //
 // If GetArgs.Writer is specified GetObject will use it to write the response body;
@@ -321,6 +332,36 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 		oah.wrespHeader = resp.Header
 	}
 	return
+}
+
+// Copy an object from source bucket/object to destination bucket[/object].
+// This is a synchronous, blocking operation.
+// If ToObjName is empty, uses FromObjName as the destination.
+func CopyObject(bp BaseParams, args *CopyArgs) error {
+	var (
+		q         = qalloc()
+		toObjName = cos.Left(args.ToObjName, args.FromObjName)
+	)
+	args.FromBck.SetQuery(q)
+	args.ToBck.AddUnameToQuery(q, apc.QparamObjTo, toObjName)
+
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(args.FromBck.Name, args.FromObjName)
+		reqParams.Query = q
+	}
+	err := reqParams.DoRequest()
+
+	FreeRp(reqParams)
+	qfree(q)
+	return err
+}
+
+// TODO -- FIXME: not implemented yet
+func TransformObject(_ BaseParams, args *CopyArgs) error {
+	return cmn.NewErrNotImpl("transform-object", args.FromBck.Cname(args.FromObjName))
 }
 
 // HEAD(object)  ==============================================================================================

@@ -891,7 +891,7 @@ func (t *target) _erris(w http.ResponseWriter, r *http.Request, err error, code 
 }
 
 // PUT /v1/objects/bucket-name/object-name; does:
-// 1) append object 2) append to archive 3) PUT
+// 1) append object 2) append to archive 3) PUT 4) single object copy
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *core.LOM) {
 	var (
 		config  = cmn.GCO.Get()
@@ -931,6 +931,31 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		ecode  int
 	)
 	switch {
+	case apireq.dpq.objto != "": // apc.QparamObjTo
+		var (
+			bck     *meta.Bck
+			objName string
+		)
+
+		bck, objName, err = meta.ParseUname(apireq.dpq.objto, true /*object name required*/)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+
+		coiParams := xs.AllocCOI()
+		{
+			coiParams.BckTo = bck
+			coiParams.OWT = cmn.OwtCopy
+			coiParams.Config = config
+			coiParams.ObjnameTo = objName
+			coiParams.OAH = lom
+		}
+		coi := (*coi)(coiParams)
+
+		res := coi.do(t, nil, lom) // lom is locked/unlocked during the call
+		err, ecode = res.Err, res.Ecode
+		xs.FreeCOI(coiParams)
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
