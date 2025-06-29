@@ -106,7 +106,6 @@ func showJobsHandler(c *cli.Context) error {
 			cnt    int
 		)
 		allnames := xact.ListDisplayNames(false /*only-startable*/)
-		sort.Strings(allnames)
 		for _, xname := range allnames {
 			if !strings.HasPrefix(xname, prefix) { // filter
 				continue
@@ -165,7 +164,6 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		err error
 	)
 	names := xact.ListDisplayNames(false /*only-startable*/)
-	sort.Strings(names)
 	for _, name = range names {
 		l, errV := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
 		if errV != nil {

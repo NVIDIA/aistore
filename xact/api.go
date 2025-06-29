@@ -347,14 +347,17 @@ func ListDisplayNames(onlyStartable bool) (names []string) {
 		if onlyStartable && !dtor.Startable {
 			continue
 		}
+		var name string
 		if dtor.DisplayName != "" {
-			names = append(names, dtor.DisplayName)
+			name = dtor.DisplayName
 		} else {
-			names = append(names, kind)
+			name = kind
 		}
+		debug.Assert(!cos.StringInSlice(name, names))
+		names = append(names, name)
 	}
 	sort.Strings(names)
-	return
+	return names
 }
 
 func IsSameScope(kindOrName string, scs ...int) bool {

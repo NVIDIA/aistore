@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -942,7 +941,6 @@ func stopJobHandler(c *cli.Context) error {
 			cnt    int
 		)
 		names := xact.ListDisplayNames(false /*only-startable*/)
-		sort.Strings(names)
 		for _, name = range names {
 			if !strings.HasPrefix(name, prefix) { // filter
 				continue
