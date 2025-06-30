@@ -1,0 +1,28 @@
+---
+- name: Re-deploy AIStore on GitLab Runner
+  hosts: all
+  vars:
+    dockerhub_username: "{{ lookup('env', 'DOCKERHUB_USERNAME') }}"
+    dockerhub_token: "{{ lookup('env', 'DOCKERHUB_TOKEN') }}"
+    
+  tasks:
+    - name: Clone/Update AIStore repository
+      git:
+        repo: https://github.com/NVIDIA/aistore.git
+        dest: "{{ ansible_env.HOME }}/aistore"
+        force: yes
+        version: main
+
+    - name: Clean up existing cluster
+      shell: make cleanup
+      args:
+        chdir: "{{ ansible_env.HOME }}/aistore/deploy/dev/k8s"
+      ignore_errors: yes
+
+    - name: Deploy cluster
+      shell: make github-ci
+      args:
+        chdir: "{{ ansible_env.HOME }}/aistore/deploy/dev/k8s"
+      environment:
+        DOCKERHUB_USERNAME: "{{ dockerhub_username }}"
+        DOCKERHUB_TOKEN: "{{ dockerhub_token }}" 

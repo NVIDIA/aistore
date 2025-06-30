@@ -24,3 +24,7 @@ For setting up Kubernetes runners with persistent AIStore on Minikube:
 - **`--data-root <absolute_path>`:** Base directory under which GitLab Runner stores its builds and cache (`<absolute_path>/gitlab-runner`).
 - **`--concurrency <number>`:**  Sets runner concurrency in `/etc/gitlab-runner/config.toml` before registering (default: `1`).
 - **`--tunnel <true|false>`:** Start `minikube tunnel` in the background (default: `false`).
+
+## Re-deploying AIStore
+
+For re-deploying AIStore clusters on existing runners, see [`ansible/README.md`](ansible/README.md).
