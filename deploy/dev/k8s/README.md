@@ -132,13 +132,19 @@ $ make multi-node
 
 #### HTTPS
 
-The HTTPS overlay enables TLS using [cert-manager](https://cert-manager.io/) with a self-signed certificate issuer for development:
+The HTTPS sample overlay enables TLS using [cert-manager](https://cert-manager.io/) with a proper CA certificate chain.
+
+First, install `cert-manager` in your cluster if not already installed:
+
+```bash
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.1/cert-manager.yaml
+```
+
+Then, deploy AIStore with HTTPS enabled:
 
 ```bash
 $ make https
 ```
-
-> **Note:** This overlay includes [`cert-manager`](https://github.com/cert-manager/cert-manager) installation in the K8s cluster. If deploying on an existing cluster and it is already installed, you may want to remove it as a resource from `overlays/samples/https/kustomization.yaml`.
 
 When HTTPs is enabled, the AIStore CLI and Python SDK will require a valid certificate to connect to the AIStore cluster.
 

@@ -6,8 +6,8 @@ set -e
 
 echo "Building AIStore images for local development..."
 
-make -C "../../../prod/k8s/aisnode_container" IMAGE_TAG=local-development build
-make -C "../../../prod/k8s/aisinit_container" IMAGE_TAG=local-development build
+make -C "../../prod/k8s/aisnode_container" IMAGE_TAG=local-development build
+make -C "../../prod/k8s/aisinit_container" IMAGE_TAG=local-development build
 
 echo "Loading images into $CLUSTER_TYPE cluster '$CLUSTER_NAME'..."
 

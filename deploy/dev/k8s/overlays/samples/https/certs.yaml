@@ -10,6 +10,30 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: ais-root-ca
+  annotations:
+    kapp.k14s.io/change-group: "setup"
+spec:
+  secretName: ais-root-ca-secret
+  isCA: true
+  commonName: "ais-root-ca"
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: ais-ca-issuer
+  annotations:
+    kapp.k14s.io/change-group: "setup"
+spec:
+  ca:
+    secretName: ais-root-ca-secret
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: self-signed-cert
   annotations:
     kapp.k14s.io/change-group: "setup"
@@ -18,5 +42,5 @@ spec:
   dnsNames:
     - aistore-sample-proxy
   issuerRef:
-    name: selfsigned-issuer
-    kind: ClusterIssuer
+    name: ais-ca-issuer
+    kind: Issuer

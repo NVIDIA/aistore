@@ -6,7 +6,6 @@ namespace: ais
 resources:
 - ../../../base
 - certs.yaml
-- https://github.com/cert-manager/cert-manager/releases/download/v1.18.1/cert-manager.yaml
 
 configMapGenerator:
 - name: ais-cluster-config-override
