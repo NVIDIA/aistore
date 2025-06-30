@@ -6,6 +6,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -191,7 +192,7 @@ func (reqParams *ReqParams) do() (resp *http.Response, err error) {
 		reqBody = bytes.NewBuffer(reqParams.Body)
 	}
 	urlPath := reqParams.BaseParams.URL + reqParams.Path
-	req, errR := http.NewRequest(reqParams.BaseParams.Method, urlPath, reqBody)
+	req, errR := http.NewRequestWithContext(context.Background(), reqParams.BaseParams.Method, urlPath, reqBody)
 	if errR != nil {
 		return nil, fmt.Errorf("failed to create http request: %w", errR)
 	}

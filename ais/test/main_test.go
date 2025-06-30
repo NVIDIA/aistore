@@ -147,7 +147,7 @@ func TestInvalidHTTPMethod(t *testing.T) {
 	bp := tools.BaseAPIParams()
 	proxyURL := tools.RandomProxyURL(t)
 
-	req, err := http.NewRequest("TEST", proxyURL, http.NoBody)
+	req, err := http.NewRequest("TEST", proxyURL, http.NoBody) //nolint:noctx // no context
 	tassert.CheckFatal(t, err)
 	tassert.DoAndCheckResp(t, bp.Client, req, http.StatusBadRequest)
 }

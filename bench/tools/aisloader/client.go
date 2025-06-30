@@ -417,7 +417,7 @@ func getConfig(proxyURL string) (httpLatencies, error) {
 	tctx := newTraceCtx(proxyURL)
 
 	url := proxyURL + apc.URLPathDae.S
-	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	req.URL.RawQuery = api.GetWhatRawQuery(apc.WhatNodeConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 

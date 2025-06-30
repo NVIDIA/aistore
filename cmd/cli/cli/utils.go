@@ -1077,7 +1077,7 @@ func (e *errInvalidNVpair) Error() string { return fmt.Sprintf("invalid key=valu
 func readFileOrURL(source string) (io.ReadCloser, error) {
 	if isWebURL(source) {
 		// Download from HTTP URL
-		resp, err := http.Get(source)
+		resp, err := http.Get(source) //nolint:noctx // want to use http.NewRequest and default client
 		if err != nil {
 			return nil, fmt.Errorf("failed to download from %q: %v", source, err)
 		}

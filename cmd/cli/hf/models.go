@@ -5,6 +5,7 @@
 package hf
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,7 +35,7 @@ func GetHFModelFiles(model, token string) (cos.StrKVs, error) {
 	url := hfBaseURL + hfModelsAPIPath + "/" + model
 
 	client := &http.Client{Timeout: hfAPITimeout}
-	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

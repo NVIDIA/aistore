@@ -606,7 +606,7 @@ func (m *Manager) parseEKMFile() (shard.ExternalKeyMap, error) {
 		return nil, fmt.Errorf(fmtErrOrderURL, m.Pars.EKMFileURL, err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, m.Pars.EKMFileURL, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, m.Pars.EKMFileURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

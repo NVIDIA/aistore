@@ -6,6 +6,7 @@ package ec
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -387,7 +388,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	query := url.Values{}
 	query = bck.AddToQuery(query)
 	url := si.URL(cmn.NetIntraControl) + path
-	rq, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	rq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

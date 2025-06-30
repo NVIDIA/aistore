@@ -32,6 +32,7 @@ linters:
     - misspell
     - nakedret
     - nilnesserr
+    - noctx
     - nolintlint
     - perfsprint
     - prealloc

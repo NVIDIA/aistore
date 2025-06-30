@@ -6,6 +6,7 @@ package tetl
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -139,7 +140,14 @@ func GetTransformYaml(etlName string) ([]byte, error) {
 		action = "get transform yaml for ETL[" + etlName + "]"
 		args   = &cmn.RetryArgs{
 			Call: func() (_ int, err error) {
-				resp, err = client.Get(links[etlName]) //nolint:bodyclose // see defer close below
+				req, e := http.NewRequestWithContext(context.Background(), http.MethodGet, links[etlName], http.NoBody)
+				if e != nil {
+					return 0, err
+				}
+				resp, err = client.Do(req) //nolint:bodyclose // see defer close below
+				if resp != nil {
+					return resp.StatusCode, err
+				}
 				return 0, err
 			},
 			Action:   action,

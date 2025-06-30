@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -114,7 +115,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 	}
 	// while cos.IsRetriableConnErr()
 	for i := 1; i <= retries; i++ {
-		req, nerr := http.NewRequest(method, url, bytes.NewBuffer(injson))
+		req, nerr := http.NewRequestWithContext(context.Background(), method, url, bytes.NewBuffer(injson))
 		if nerr != nil {
 			return nerr
 		}

@@ -5,6 +5,7 @@
 package hf
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +28,7 @@ func GetHFDatasetParquetFiles(dataset, token string) (cos.StrKVs, error) {
 	url := hfAPIBaseURL + "/" + dataset + hfParquetSuffix
 
 	client := &http.Client{Timeout: hfAPITimeout}
-	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

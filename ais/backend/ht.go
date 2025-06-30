@@ -64,7 +64,7 @@ func (htbp *htbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 	}
 
 	// Contact the original URL - as long as we can make connection we assume it's good.
-	resp, err := htbp.client(origURL).Head(origURL)
+	resp, err := htbp.client(origURL).Head(origURL) //nolint:noctx // can wait
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
@@ -122,7 +122,7 @@ func (htbp *htbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] original_url: %q", origURL)
 	}
-	resp, err := htbp.client(origURL).Head(origURL)
+	resp, err := htbp.client(origURL).Head(origURL) //nolint:noctx // can wait
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
@@ -177,7 +177,7 @@ func (htbp *htbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		nlog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
-	req, res.Err = http.NewRequest(http.MethodGet, origURL, http.NoBody)
+	req, res.Err = http.NewRequestWithContext(context.Background(), http.MethodGet, origURL, http.NoBody)
 	if err != nil {
 		res.ErrCode = http.StatusInternalServerError
 		return res

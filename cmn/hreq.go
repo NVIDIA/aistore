@@ -74,7 +74,7 @@ func (u *HreqArgs) ReqDeprecated() (*http.Request, error) {
 	if r == nil && u.Body != nil {
 		r = cos.NewByteReader(u.Body)
 	}
-	req, err := http.NewRequest(u.Method, u.URL(), r)
+	req, err := http.NewRequestWithContext(context.Background(), u.Method, u.URL(), r)
 	if err != nil {
 		return nil, err
 	}

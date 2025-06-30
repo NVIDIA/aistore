@@ -5,6 +5,7 @@
 package webserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 )
@@ -148,22 +150,29 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		objReader io.ReadCloser
-		err       error
 	)
 	switch base.argType {
 	case etl.ArgTypeDefault, etl.ArgTypeURL:
-		resp, err := wrapHTTPError(base.client.Get(fmt.Sprintf("%s/%s", base.aisTargetURL, p))) //nolint:bodyclose // is closed from objReader
+		u := base.aisTargetURL + "/" + p
+		req, e := http.NewRequestWithContext(context.Background(), http.MethodGet, u, http.NoBody)
+		if e != nil {
+			debug.AssertNoErr(e)
+			cmn.WriteErr(w, r, e)
+			return
+		}
+		resp, err := wrapHTTPError(base.client.Do(req)) //nolint:bodyclose // is closed from objReader
 		if err != nil {
-			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from AIStore failed", err))
+			cmn.WriteErr(w, r, fmt.Errorf("GET from AIStore failed: %v", err))
 			return
 		}
 		objReader = resp.Body
 	case etl.ArgTypeFQN:
-		objReader, err = base.getFQNReader(r.URL.Path)
+		reader, err := base.getFQNReader(r.URL.Path)
 		if err != nil {
-			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from FQN failed", err))
+			cmn.WriteErr(w, r, fmt.Errorf("GET(FQN) failed: %v", err))
 			return
 		}
+		objReader = reader
 	default:
 		cmn.WriteErrMsg(w, r, "invalid arg_type: "+base.argType)
 	}
@@ -280,7 +289,7 @@ func (base *etlServerBase) handleDirectPut(directPutURL string, r io.ReadCloser)
 	parsedHost.Path = path.Join(parsedHost.Path, parsedTarget.Path)
 	parsedHost.RawQuery = parsedTarget.RawQuery
 
-	req, err := http.NewRequest(http.MethodPut, parsedHost.String(), r)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, parsedHost.String(), r)
 	if err != nil {
 		r.Close()
 		return err
