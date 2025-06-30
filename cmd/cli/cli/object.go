@@ -133,6 +133,23 @@ func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, tri
 	return verbFobjs(c, wop, allFobjs, bck, ndir, recurs)
 }
 
+func copyObject(c *cli.Context, bckFrom cmn.Bck, objFrom string, bckTo cmn.Bck, objTo string) error {
+	var etlName string
+	if flagIsSet(c, etlNameFlag) {
+		etlName = parseStrFlag(c, etlNameFlag)
+		if findETL(etlName, "" /*xid*/) == nil {
+			return fmt.Errorf("ETL[%s] does not exist", etlName)
+		}
+	}
+	return api.CopyObject(apiBP, &api.CopyArgs{
+		FromBck:     bckFrom,
+		FromObjName: objFrom,
+		ToBck:       bckTo,
+		ToObjName:   objTo,
+		ETLName:     etlName,
+	})
+}
+
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {
 	const verb = "Compose"
 	var (

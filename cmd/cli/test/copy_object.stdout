@@ -1,0 +1,9 @@
+"ais://$BUCKET_1" created
+"ais://$BUCKET_2" created
+^PUT.*=> ais://$BUCKET_1/object_1.txt$
+
+0123456789
+^COPY ais://$BUCKET_1/object_1.txt => ais://$BUCKET_2/object_1.txt$
+0123456789
+^COPY ais://$BUCKET_1/object_1.txt => ais://$BUCKET_2/object_2.txt$
+0123456789
