@@ -1769,7 +1769,7 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 		lom.Lock(false)
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
-			return xs.CoiRes{}
+			return xs.CoiRes{Err: err}
 		}
 		reader, err := lom.NewDeferROC(true /*loaded*/)
 		if err != nil {

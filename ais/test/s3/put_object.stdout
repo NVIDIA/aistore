@@ -16,4 +16,7 @@ s3://$BUCKET$OBJECT (object):
    x-amz-meta-ais-cksum-val: 3749f52bb326ae96782b42dc0a97b4c1
 0123456789
 Loremipsumdolorsitamet,consecteturadipiscingelit.
+Bucket 's3://$BUCKET-2/' created
+Loremipsumdolorsitamet,consecteturadipiscingelit.
+Bucket 's3://$BUCKET-2/' removed
 Bucket 's3://$BUCKET/' removed

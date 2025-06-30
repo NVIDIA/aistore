@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const fmtErrBckObj = "invalid %s request: expecting bucket and object (names) in the URL, have %v"
@@ -103,6 +102,9 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 
 // Copy object (maybe from another bucket)
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
+// Note:
+// S3 copy object API use the "destination" bucket in the URL path, but AIStore target use "source" bucket
+// we need this extra `copyObjS3` handler at target to address the translation
 func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
 	src := r.Header.Get(cos.S3HdrObjSrc)
 
@@ -148,10 +150,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		}
 		return
 	}
-	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		s3.WriteErr(w, r, err, 0)
-		return
-	}
+
 	// dst
 	bckTo, ecode, err := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
@@ -159,23 +158,14 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 
-	coiParams := xs.AllocCOI()
-	{
-		coiParams.Config = config
-		coiParams.BckTo = bckTo
-		coiParams.ObjnameTo = s3.ObjName(items)
-		coiParams.OWT = cmn.OwtCopy
-	}
-	coi := (*coi)(coiParams)
-	res := coi.do(t, nil /*DM*/, lom)
-	xs.FreeCOI(coiParams)
-
-	if res.Err != nil {
-		if res.Err == cmn.ErrSkip {
+	// NOTE: lom will be safely loaded, locked, unlocked during the call
+	ecode, err = t.copyObject(lom, bckTo, s3.ObjName(items), config)
+	if err != nil {
+		if err == cmn.ErrSkip {
 			name := lom.Cname()
 			s3.WriteErr(w, r, cos.NewErrNotFound(t, name), http.StatusNotFound)
 		} else {
-			s3.WriteErr(w, r, res.Err, 0)
+			s3.WriteErr(w, r, err, ecode)
 		}
 		return
 	}

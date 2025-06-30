@@ -942,20 +942,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			t.writeErr(w, r, err)
 			return
 		}
-
-		coiParams := xs.AllocCOI()
-		{
-			coiParams.BckTo = bck
-			coiParams.OWT = cmn.OwtCopy
-			coiParams.Config = config
-			coiParams.ObjnameTo = objName
-			coiParams.OAH = lom
-		}
-		coi := (*coi)(coiParams)
-
-		res := coi.do(t, nil, lom) // lom is locked/unlocked during the call
-		err, ecode = res.Err, res.Ecode
-		xs.FreeCOI(coiParams)
+		ecode, err = t.copyObject(lom, bck, objName, config) // lom is locked/unlocked during the call
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1432,6 +1419,22 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 		}
 	}
 	return code, err
+}
+
+func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, config *cmn.Config) (int, error) {
+	coiParams := xs.AllocCOI()
+	{
+		coiParams.BckTo = bck
+		coiParams.OWT = cmn.OwtCopy
+		coiParams.Config = config
+		coiParams.ObjnameTo = objName
+		coiParams.OAH = lom
+	}
+	coi := (*coi)(coiParams)
+
+	res := coi.do(t, nil, lom)
+	xs.FreeCOI(coiParams)
+	return res.Ecode, res.Err
 }
 
 // NOTE: s3 will return err=nil with OK status to indicate (not deleting) non-existing object (see also aws.go)
