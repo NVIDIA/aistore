@@ -134,7 +134,7 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, lsflags uint
 			numWorkers += 2
 		}
 	}
-	numWorkers, err := throttleNwp(r.parent.Name(), numWorkers)
+	numWorkers, err := throttleNwp(r.parent.Name(), numWorkers, l)
 	if err != nil {
 		return err
 	}

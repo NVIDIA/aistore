@@ -131,7 +131,7 @@ func (p *tcbFactory) Start() error {
 	if msg.NumWorkers > 0 {
 		// tune-up the specified number of workers
 		l := fs.NumAvail()
-		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, l))
+		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, l), l)
 		if err != nil {
 			return err
 		}

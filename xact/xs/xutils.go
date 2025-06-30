@@ -8,6 +8,7 @@ package xs
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -82,19 +83,19 @@ const (
 )
 
 // strict rules
-func throttleNwp(xname string, n int) (int, error) {
+func throttleNwp(xname string, n, l int) (int, error) {
 	// 1. alert 'too many gorutines'
 	tstats := core.T.StatsUpdater()
 	flags := cos.NodeStateFlags(tstats.Get(cos.NodeAlerts))
 	if flags.IsSet(cos.NumGoroutines) {
-		nlog.Warningln(xname, "too many gorutines")
-		return nwpNone, nil
+		nlog.Warningln(xname, "too many gorutines:", runtime.NumGoroutine(), "[ num-cpu:", sys.NumCPU(), "]")
+		n = min(n, l)
 	}
 
 	// 2. number of available cores(*)
 	n = min(sys.MaxParallelism()+4, n)
 
-	// 3. factor in memory pressure
+	// 3. factor-in memory pressure
 	var (
 		mm       = core.T.PageMM()
 		pressure = mm.Pressure()
@@ -104,8 +105,11 @@ func throttleNwp(xname string, n int) (int, error) {
 		oom.FreeToOS(true)
 		return 0, errors.New(xname + ": extreme memory pressure - not starting")
 	case memsys.PressureHigh:
-		n = min(nwpMin+1, n)
 		nlog.Warningln(xname, "high memory pressure detected...")
+		if flags.IsSet(cos.NumGoroutines) {
+			return nwpNone, nil
+		}
+		n = min(nwpMin+1, n)
 	}
 
 	// 4. finally, take into account load averages
@@ -115,6 +119,9 @@ func throttleNwp(xname string, n int) (int, error) {
 	)
 	if load >= float64(highLoad) {
 		nlog.Warningln(xname, "high load [", load, highLoad, "]")
+		if flags.IsSet(cos.NumGoroutines) {
+			return nwpNone, nil
+		}
 		n = min(nwpMin, n)
 	}
 
