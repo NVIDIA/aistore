@@ -247,6 +247,38 @@ func findETL(etlName, xid string) *etl.Info {
 	return nil
 }
 
+// checkOverrideFlags checks if any override flags are set when multiple ETL documents are present
+func checkOverrideFlags(c *cli.Context, nodes []*yaml.Node) error {
+	// If there are multiple docs, disallow any override flags
+	if len(nodes) > 1 {
+		overrideFlags := []struct {
+			name string
+			set  bool
+		}{
+			{etlNameFlag.GetName(), flagIsSet(c, etlNameFlag)},
+			{commTypeFlag.GetName(), flagIsSet(c, commTypeFlag)},
+			{argTypeFlag.GetName(), flagIsSet(c, argTypeFlag)},
+			{waitPodReadyTimeoutFlag.GetName(), flagIsSet(c, waitPodReadyTimeoutFlag)},
+			{etlObjectRequestTimeout.GetName(), flagIsSet(c, etlObjectRequestTimeout)},
+		}
+
+		var used []string
+		for _, f := range overrideFlags {
+			if f.set {
+				used = append(used, "--"+f.name)
+			}
+		}
+
+		if len(used) > 0 {
+			return fmt.Errorf(
+				"cannot use override flags %v with a multi-ETL file; remove these flags or split into separate files",
+				used,
+			)
+		}
+	}
+	return nil
+}
+
 func etlInitSpecHandler(c *cli.Context) error {
 	fromFile := parseStrFlag(c, fromFileFlag)
 	if fromFile == "" {
@@ -258,26 +290,39 @@ func etlInitSpecHandler(c *cli.Context) error {
 	}
 	defer reader.Close()
 
+	// Read all YAML docs into memory
 	decoder := yaml.NewDecoder(reader)
-	first := true
+	nodes := make([]*yaml.Node, 0, 4)
 	for {
-		var node yaml.Node // decode one YAML document for each iteration
-		if err := decoder.Decode(&node); err != nil {
+		node := &yaml.Node{}
+		if err := decoder.Decode(node); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return fmt.Errorf("failed to decode YAML: %w", err)
 		}
+		nodes = append(nodes, node)
+	}
 
+	if len(nodes) == 0 {
+		return errors.New("empty YAML spec")
+	}
+
+	// Check if any override flags are set when multiple ETL documents are present
+	if err := checkOverrideFlags(c, nodes); err != nil {
+		return err
+	}
+
+	// Now process each document
+	first := true
+	for _, node := range nodes {
 		if !first {
 			fmt.Fprintln(c.App.Writer, separatorLine)
 		}
-
-		if err := processSpecNode(c, &node); err != nil {
+		if err := processSpecNode(c, node); err != nil {
 			fmt.Fprintf(c.App.ErrWriter, "Skipping document: %v\n", err)
 			continue
 		}
-
 		first = false
 	}
 	return nil

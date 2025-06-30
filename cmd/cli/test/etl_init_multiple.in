@@ -1,0 +1,8 @@
+// RUN k8s
+# Test multiple ETL initialization in a single spec file
+ais etl rm --all // IGNORE
+echo -e "name: test-etl1\nruntime:\n    image: aistorage/transformer_hello_world:latest\n---\nname: test-etl2\nruntime:\n    image: aistorage/transformer_hello_world:latest" > etl-config.yaml // IGNORE
+ais etl init -f etl-config.yaml --name test-etl1 2>&1 || true
+ais etl init -f etl-config.yaml // IGNORE
+ais etl show | grep Running | wc -l
+rm -f etl-config.yaml // IGNORE
