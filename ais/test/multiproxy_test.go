@@ -133,7 +133,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "restore", smap.Version, proxyCount, 0)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
-		t.Fatalf("Previous primary proxy did not rejoin the cluster")
+		t.Fatal("Previous primary proxy did not rejoin the cluster")
 	}
 	checkSmaps(t, newPrimaryURL)
 
@@ -309,7 +309,7 @@ func proxyCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Pmap[secondNode.ID()]; !ok {
-		t.Fatalf("Non-primary proxy did not rejoin the cluster.")
+		t.Fatal("Non-primary proxy did not rejoin the cluster.")
 	}
 }
 

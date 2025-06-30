@@ -472,7 +472,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 
 	err = api.EnableMountpath(baseParams, selectedTarget, selectedMpath+"some_text")
 	if err == nil {
-		t.Errorf("Enabling non-existing mountpath should return error")
+		t.Error("Enabling non-existing mountpath should return error")
 	} else {
 		status := api.HTTPStatus(err)
 		if status != http.StatusNotFound {
@@ -592,7 +592,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 		proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Tmap[target.ID()]; !ok {
-		t.Fatalf("Removed target didn't rejoin")
+		t.Fatal("Removed target didn't rejoin")
 	}
 	tlog.Logf("Wait for rebalance\n")
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}

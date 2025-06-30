@@ -1680,7 +1680,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
 	if err == nil {
-		t.Fatalf("Expected SetBucketProps error, but got none.")
+		t.Fatal("Expected SetBucketProps error, but got none.")
 	}
 
 	status := api.HTTPStatus(err)
@@ -1705,7 +1705,7 @@ func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 
 	_, err = api.SetBucketProps(baseParams, bck, bucketProps)
 	if err == nil {
-		t.Fatalf("Expected SetBucketProps error, but got none.")
+		t.Fatal("Expected SetBucketProps error, but got none.")
 	}
 
 	status := api.HTTPStatus(err)

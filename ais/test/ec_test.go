@@ -393,7 +393,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 			}
 
 			if mainObjPath == "" {
-				t.Errorf("Full copy is not found")
+				t.Error("Full copy is not found")
 				return
 			}
 
@@ -661,7 +661,7 @@ func createECObject(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objNam
 
 	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
 	if mainObjPath == "" {
-		t.Errorf("Full copy is not found")
+		t.Error("Full copy is not found")
 	}
 }
 
@@ -700,7 +700,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
 	if mainObjPath == "" {
-		t.Errorf("Full copy is not found")
+		t.Error("Full copy is not found")
 		return
 	}
 
@@ -1540,7 +1540,7 @@ func TestECXattrs(t *testing.T) {
 
 		ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
 		if mainObjPath == "" {
-			t.Fatalf("Full copy is not found")
+			t.Fatal("Full copy is not found")
 		}
 
 		tlog.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
@@ -1768,7 +1768,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 
 		ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
 		if mainObjPath == "" {
-			t.Errorf("Full copy is not found")
+			t.Error("Full copy is not found")
 			return
 		}
 		t.Logf("Object %s EC in %v", objName, time.Since(start))
@@ -2016,7 +2016,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
 		ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
 		if mainObjPath == "" {
-			t.Errorf("Full copy is not found")
+			t.Error("Full copy is not found")
 			return
 		}
 	}
@@ -2664,7 +2664,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tlog.Logf("%d objects in %s after rebalance\n",
 		len(resECNew.Entries), bckEC.String())
 	if len(resECNew.Entries) != len(resECOld.Entries) {
-		t.Errorf("The number of objects before and after rebalance mismatches")
+		t.Error("The number of objects before and after rebalance mismatches")
 	}
 
 	tlog.Logln("Test object readability after rebalance")

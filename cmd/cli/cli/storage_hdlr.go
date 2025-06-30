@@ -255,7 +255,7 @@ func cleanupStorageHandler(c *cli.Context) error {
 		if xid != "" {
 			actionX(c, &xargs, "")
 		} else {
-			fmt.Fprintf(c.App.Writer, "Started storage cleanup\n")
+			fmt.Fprintln(c.App.Writer, "Started storage cleanup")
 		}
 		return nil
 	}

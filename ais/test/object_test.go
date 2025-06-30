@@ -769,7 +769,7 @@ func TestHeadNonexistentBucket(t *testing.T) {
 
 	_, err = api.HeadBucket(baseParams, bck, true /* don't add */)
 	if err == nil {
-		t.Fatalf("Expected an error, but go no errors.")
+		t.Fatal("Expected an error, but go no errors.")
 	}
 
 	status := api.HTTPStatus(err)
@@ -1759,7 +1759,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 
 		_, err := api.PutObject(&putArgs)
 		if err == nil {
-			t.Errorf("Bad checksum provided by the user, Expected an error")
+			t.Error("Bad checksum provided by the user, Expected an error")
 		}
 
 		_, err = api.HeadObject(baseParams, bck, fileName, api.HeadArgs{FltPresence: apc.FltExists})

@@ -46,7 +46,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		Reader:     reader,
 	}
 	if _, err := api.PutObject(&putArgs); err == nil {
-		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
+		t.Error("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }
 
@@ -58,6 +58,6 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 	}
 	tlog.Logf("Decommission invalid node %s (expecting to fail)\n", val.DaemonID)
 	if _, err := api.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
-		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
+		t.Error("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

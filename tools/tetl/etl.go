@@ -353,7 +353,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 
 	xid, err = api.ETLInit(bp, msg)
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.TypeCode == "ErrUnsupp" && msg.CommType() == etl.WebSocket {
-		t.Skipf("skipping, WebSocket only work with direct put supported transformers")
+		t.Skip("skipping, WebSocket only work with direct put supported transformers")
 	}
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)

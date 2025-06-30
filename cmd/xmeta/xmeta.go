@@ -153,7 +153,7 @@ func detectFormat(in string) (f func() error, what string) {
 		for k := range m {
 			fmt.Printf("%s, ", k)
 		}
-		fmt.Printf(")\n")
+		fmt.Print(")\n")
 		os.Exit(1)
 	}
 	f, what = e.format, e.what

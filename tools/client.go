@@ -686,7 +686,7 @@ func SetRemAisConfig(t *testing.T, nvs cos.StrKVs) {
 
 func CheckErrIsNotFound(t *testing.T, err error) {
 	if err == nil {
-		t.Fatalf("expected error")
+		t.Fatal("expected error")
 		return
 	}
 	herr, ok := err.(*cmn.ErrHTTP)

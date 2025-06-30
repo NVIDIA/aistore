@@ -583,7 +583,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	ensureNoDisabledMountpaths(t, selectedTarget, mpList)
 
 	if len(mpList.Available) < 2 {
-		t.Fatalf("Must have at least 2 mountpaths")
+		t.Fatal("Must have at least 2 mountpaths")
 	}
 
 	// Disable mountpaths temporarily
@@ -670,7 +670,7 @@ func TestGetDuringResilver(t *testing.T) {
 	ensureNoDisabledMountpaths(t, target, mpList)
 
 	if len(mpList.Available) < 2 {
-		t.Fatalf("Must have at least 2 mountpaths")
+		t.Fatal("Must have at least 2 mountpaths")
 	}
 
 	// select up to 2 mountpath
@@ -1864,7 +1864,7 @@ func TestICRebalance(t *testing.T) {
 	smap, err = tools.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Pmap[psi.ID()]; !ok {
-		t.Fatalf("Previous primary proxy did not rejoin the cluster")
+		t.Fatal("Previous primary proxy did not rejoin the cluster")
 	}
 	checkSmaps(t, m.proxyURL)
 
@@ -1936,7 +1936,7 @@ func TestICDecommission(t *testing.T) {
 	smap, err = tools.WaitForClusterState(m.proxyURL, "restore", smap.Version, proxyCnt, 0)
 	tassert.CheckFatal(t, err)
 	if _, ok := smap.Pmap[psi.ID()]; !ok {
-		t.Fatalf("Previous primary proxy did not rejoin the cluster")
+		t.Fatal("Previous primary proxy did not rejoin the cluster")
 	}
 	checkSmaps(t, m.proxyURL)
 

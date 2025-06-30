@@ -437,7 +437,7 @@ func TestBackendMPUploadDownload(t *testing.T) {
 	)
 
 	if bucket == "" {
-		t.Skipf("BUCKET ENV missing... skipping...")
+		t.Skip("BUCKET ENV missing... skipping...")
 	}
 
 	globals = &testBackendMPGlobalsStruct{}
@@ -453,42 +453,42 @@ func TestBackendMPUploadDownload(t *testing.T) {
 
 	nonMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_NON_MP"), "")
 	if (err != nil) || (nonMPFileSize <= 0) {
-		t.Skipf("OCI_TEST_FILE_SIZE_NON_MP ENV missing or invalid... skipping...")
+		t.Skip("OCI_TEST_FILE_SIZE_NON_MP ENV missing or invalid... skipping...")
 	}
 	smallMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_SMALL_MP"), "")
 	if (err != nil) || (smallMPFileSize <= 0) {
-		t.Skipf("OCI_TEST_FILE_SIZE_SMALL_MP ENV missing or invalid... skipping...")
+		t.Skip("OCI_TEST_FILE_SIZE_SMALL_MP ENV missing or invalid... skipping...")
 	}
 	bigMPFileSize, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_SIZE_BIG_MP"), "")
 	if (err != nil) || (bigMPFileSize <= 0) {
-		t.Skipf("OCI_TEST_FILE_SIZE_BIG_MP ENV missing or invalid... skipping...")
+		t.Skip("OCI_TEST_FILE_SIZE_BIG_MP ENV missing or invalid... skipping...")
 	}
 
 	totalFiles, err = cos.ParseSize(os.Getenv("OCI_TEST_FILES_TOTAL"), "")
 	if (err != nil) || (totalFiles <= 0) {
-		t.Skipf("OCI_TEST_FILES_TOTAL ENV missing or invalid... skipping...")
+		t.Skip("OCI_TEST_FILES_TOTAL ENV missing or invalid... skipping...")
 	}
 	parallelFiles, err = cos.ParseSize(os.Getenv("OCI_TEST_FILES_PARALLEL"), "")
 	if (err != nil) || (parallelFiles <= 0) {
-		t.Skipf("OCI_TEST_FILES_PARALLEL ENV missing or invalid... skipping...")
+		t.Skip("OCI_TEST_FILES_PARALLEL ENV missing or invalid... skipping...")
 	}
 
 	globals.putObjectRetryLimit, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_PUT_RETRY_LIMIT"), "")
 	if (err != nil) || (globals.putObjectRetryLimit < 0) {
-		t.Skipf("OCI_TEST_FILE_PUT_RETRY_LIMIT ENV missing or invallid... skipping...")
+		t.Skip("OCI_TEST_FILE_PUT_RETRY_LIMIT ENV missing or invallid... skipping...")
 	}
 	putObjectRetryDelayMS, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_PUT_RETRY_DELAY"), "")
 	if (err != nil) || (putObjectRetryDelayMS < 0) {
-		t.Skipf("OCI_TEST_FILE_PUT_RETRY_DELAY ENV missing or invallid... skipping...")
+		t.Skip("OCI_TEST_FILE_PUT_RETRY_DELAY ENV missing or invallid... skipping...")
 	}
 	globals.putObjectRetryDelay = time.Duration(putObjectRetryDelayMS) * time.Millisecond
 	globals.getObjectRetryLimit, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_GET_RETRY_LIMIT"), "")
 	if (err != nil) || (globals.getObjectRetryLimit < 0) {
-		t.Skipf("OCI_TEST_FILE_GET_RETRY_LIMIT ENV missing or invallid... skipping...")
+		t.Skip("OCI_TEST_FILE_GET_RETRY_LIMIT ENV missing or invallid... skipping...")
 	}
 	getObjectRetryDelayMS, err = cos.ParseSize(os.Getenv("OCI_TEST_FILE_GET_RETRY_DELAY"), "")
 	if (err != nil) || (getObjectRetryDelayMS < 0) {
-		t.Skipf("OCI_TEST_FILE_GET_RETRY_DELAY ENV missing or invallid... skipping...")
+		t.Skip("OCI_TEST_FILE_GET_RETRY_DELAY ENV missing or invallid... skipping...")
 	}
 	globals.getObjectRetryDelay = time.Duration(getObjectRetryDelayMS) * time.Millisecond
 

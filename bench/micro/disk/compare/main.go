@@ -40,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 	if len(outputBytes) == 0 {
-		fmt.Fprintf(os.Stderr, "Failed to lsblk - no disks?\n")
+		fmt.Fprint(os.Stderr, "Failed to lsblk - no disks?\n")
 		os.Exit(1)
 	}
 	disks := lsblkOutput2disks(outputBytes)

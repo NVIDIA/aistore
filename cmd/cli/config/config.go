@@ -221,7 +221,7 @@ func Load(args []string, reset string) (*Config, error) {
 		path := filepath.Join(ConfigDir, fname.CliConfig)
 		if cos.StringInSlice(reset, args) {
 			fmt.Fprintf(os.Stderr, "CLI config at %s: %v\n", path, err)
-			fmt.Fprintf(os.Stderr, "Resetting config to system defaults...\t")
+			fmt.Fprint(os.Stderr, "Resetting config to system defaults...\t")
 			time.Sleep(time.Second)
 			if err = Save(&defaultConfig); err != nil {
 				return nil, err // (unlikely)

@@ -695,7 +695,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 				return err
 			}
 
-			fmt.Fprintf(c.App.Writer, "\n")
+			fmt.Fprintln(c.App.Writer)
 			return printCondensedStats(c, id, units, false)
 		}
 		return printCondensedStats(c, id, units, true)

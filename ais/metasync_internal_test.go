@@ -325,7 +325,7 @@ func syncOnceWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 	wg := syncer.sync(revsPair{smap, msg})
 	wg.Wait()
 	if len(ch) != len(servers) {
-		t.Fatalf("sync call wait returned before sync is completed")
+		t.Fatal("sync call wait returned before sync is completed")
 	}
 
 	return []transportData{
@@ -354,7 +354,7 @@ func syncOnceNoWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transpo
 	msg := primary.newAmsgStr("", nil)
 	syncer.sync(revsPair{smap, msg})
 	if len(ch) == len(servers) {
-		t.Fatalf("sync call no wait returned after sync is completed")
+		t.Fatal("sync call no wait returned after sync is completed")
 	}
 
 	return []transportData{

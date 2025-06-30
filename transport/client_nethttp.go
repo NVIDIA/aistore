@@ -8,6 +8,7 @@
 package transport
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -45,7 +46,7 @@ func NewIntraDataClient() (client *http.Client) {
 }
 
 func (s *streamBase) doPlain(body io.Reader) error {
-	req, err := http.NewRequest(http.MethodPut, s.dstURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, s.dstURL, body)
 	if err != nil {
 		return err
 	}
@@ -53,7 +54,7 @@ func (s *streamBase) doPlain(body io.Reader) error {
 }
 
 func (s *streamBase) doCmpr(body io.Reader) error {
-	req, err := http.NewRequest(http.MethodPut, s.dstURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, s.dstURL, body)
 	if err != nil {
 		return err
 	}

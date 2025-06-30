@@ -1,5 +1,14 @@
 version: "2"
 
+# run  `golangci-lint run --config .golangci.yml` to check changes
+
+issues:
+  # maximum number of issues to print per linter (0 means unlimited)
+  max-issues-per-linter: 0
+
+  # maximum number of issues with the same text to print
+  max-same-issues: 0
+
 linters:
   default: standard  ## TODO: 'none|standard|all'; enable
   disable:
@@ -76,15 +85,18 @@ linters:
         - name: string-of-int
         - name: superfluous-else
         # name: time-naming
+        - name: time-date
         - name: var-naming
         - name: var-declaration
         - name: unconditional-recursion
         - name: unexported-naming
         - name: unexported-return
+        - name: unnecessary-format
         - name: unnecessary-stmt
         - name: unreachable-code
         - name: unused-parameter
         - name: unused-receiver
+        - name: use-fmt-print
         - name: waitgroup-by-value
 
     errcheck:

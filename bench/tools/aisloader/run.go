@@ -705,7 +705,7 @@ func _init(p *params) (err error) {
 
 	if p.skipList {
 		if p.fileList != "" {
-			fmt.Printf("Warning: '-skiplist' is redundant (implied) when '-filelist' is specified")
+			fmt.Println("Warning: '-skiplist' is redundant (implied) when '-filelist' is specified")
 		} else if p.putPct != 100 {
 			return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
 		}
@@ -948,21 +948,21 @@ func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
 func printArguments(set *flag.FlagSet) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', 0)
 
-	fmt.Fprintf(w, "==== COMMAND LINE ARGUMENTS ====\n")
-	fmt.Fprintf(w, "=========== DEFAULTS ===========\n")
+	fmt.Fprint(w, "==== COMMAND LINE ARGUMENTS ====\n")
+	fmt.Fprint(w, "=========== DEFAULTS ===========\n")
 	set.VisitAll(func(f *flag.Flag) {
 		if f.Value.String() == f.DefValue {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
-	fmt.Fprintf(w, "============ CUSTOM ============\n")
+	fmt.Fprint(w, "============ CUSTOM ============\n")
 	set.VisitAll(func(f *flag.Flag) {
 		if f.Value.String() != f.DefValue {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
 	fmt.Fprintf(w, "HTTP trace:\t%v\n", runParams.traceHTTP)
-	fmt.Fprintf(w, "=================================\n\n")
+	fmt.Fprint(w, "=================================\n\n")
 	w.Flush()
 }
 

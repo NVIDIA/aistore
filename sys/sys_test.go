@@ -71,7 +71,7 @@ func TestMemoryStats(t *testing.T) {
 		"Container's memory total is greater than the host one.\nOS: %+v\nContainer: %+v", memHost, memCont)
 	if memHost.SwapTotal == 0 && memHost.SwapFree == 0 {
 		// Not an error(e.g, Jenkins VM has swap off) - just a warning
-		t.Logf("Either swap is off or failed to read its stats")
+		t.Log("Either swap is off or failed to read its stats")
 	}
 }
 

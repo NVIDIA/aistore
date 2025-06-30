@@ -940,7 +940,7 @@ func TestETLMetrics(t *testing.T) {
 	for {
 		now := time.Now()
 		if now.After(deadline) {
-			t.Skipf("Warning: timeout waiting for successful metrics response, metrics server might be unavailable")
+			t.Skip("Warning: timeout waiting for successful metrics response, metrics server might be unavailable")
 		}
 
 		metrics, err = api.ETLMetrics(baseParams, etlName)

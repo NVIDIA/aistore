@@ -60,6 +60,7 @@ EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
 # This script is used by Makefile to run commands.
 source ${SCRIPTS_DIR}/utils.sh
 
+## NOTE: try `... run --fix` to auto-fix
 case $1 in
 lint)
   echo "Running lint..." >&2

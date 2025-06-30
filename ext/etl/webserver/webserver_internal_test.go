@@ -39,7 +39,7 @@ func (*EchoServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, e
 func TestInvalidETLServer(t *testing.T) {
 	err := Run(nil, "0.0.0.0", 8080)
 	if err == nil {
-		t.Fatalf("invalid ETL Server should return an error")
+		t.Fatal("invalid ETL Server should return an error")
 	}
 }
 

@@ -591,7 +591,7 @@ func TestIshardEKM(t *testing.T) {
 	_, err := generateNestedStructure(baseParams, cfg.SrcBck, numRecords, "", extensions, int64(fileSize), false, false)
 	tassert.CheckFatal(t, err)
 
-	fmt.Printf("building and configuring EKM as JSON string")
+	fmt.Println("building and configuring EKM as JSON string")
 	var builder strings.Builder
 	builder.WriteString("{")
 	for i, letter := range "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" {

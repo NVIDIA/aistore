@@ -39,11 +39,11 @@ func TestRateLim(t *testing.T) {
 				}
 			}
 			if rl.TryAcquire() {
-				t.Errorf("Acquired token when tokens should've been exhausted")
+				t.Error("Acquired token when tokens should've been exhausted")
 			}
 			time.Sleep(sleep)
 			if !rl.TryAcquire() {
-				t.Errorf("Failed to acquire token after replenishment")
+				t.Error("Failed to acquire token after replenishment")
 			}
 		})
 	}
