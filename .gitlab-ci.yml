@@ -107,7 +107,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 35m
+  timeout: 40m
   rules:
   <<: *gather_logs_def
   <<: *default_test_rules
