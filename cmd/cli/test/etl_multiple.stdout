@@ -1,0 +1,9 @@
+Error: cannot use override flags [--name] with a multi-ETL file; remove these flags or split into separate files
+2
+Incorrect 'ais etl stop' usage: flag '--from-file' cannot be used together with ETL_NAME [test-etl-3].
+ETL[test-etl1] stopped
+ETL[test-etl2] stopped
+Incorrect 'ais etl rm' usage: flag '--from-file' cannot be used together with ETL_NAME [test-etl-3].
+ETL[test-etl1] successfully deleted
+ETL[test-etl2] successfully deleted
+0
