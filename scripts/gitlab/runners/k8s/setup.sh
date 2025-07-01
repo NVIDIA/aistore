@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script installs Docker and GitLab Runner if not already installed.
+# This script installs Docker, Minikube, kubectl, and GitLab Runner if not already installed.
 
 # Must be run as root or with sudo
 
@@ -10,10 +10,9 @@ SCRIPTS_DIR=$(dirname "$(realpath -s $"0")")
 TMP_DOWNLOAD="$SCRIPTS_DIR/tmp_download"
 DATA_ROOT=""
 RUNNER_VERSION="18.1.1-1"
-REGISTRY_PORT=5000
+KUBECTL_VERSION="v1.33.0"
 
-# Source shared utilities
-source "$SCRIPTS_DIR/utils.sh"
+source "$SCRIPTS_DIR/../utils.sh"
 
 # Create the directory if it doesn't already exist
 if [ ! -d "$TMP_DOWNLOAD" ]; then
@@ -47,10 +46,34 @@ if [[ -n "$DATA_ROOT" ]]; then
   [[ "$DATA_ROOT" == /* ]] || { echo "Error: --data-root must be absolute."; exit 1; }
 fi
 
+install_minikube() {
+  echo "Installing Minikube..."
+  curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+  install minikube /usr/local/bin/minikube
+  mkdir -p /var/local/minikube
+  chmod 777 /var/local/minikube
+}
+
+install_kubectl() {
+  echo "Installing kubectl $KUBECTL_VERSION..."
+  curl -Lo kubectl https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl
+  install -o root -g root -m0755 kubectl /usr/local/bin/kubectl
+}
+
 # Install Docker
 if ! command -v docker &>/dev/null; then
   [[ -n "$DATA_ROOT" ]] && configure_docker_root_dir
   install_docker
+fi
+
+# Install Minikube
+if ! command -v minikube &>/dev/null; then
+  install_minikube
+fi
+
+# Install kubectl
+if ! command -v kubectl &>/dev/null; then
+  install_kubectl
 fi
 
 # Install GitLab Runner
@@ -61,9 +84,6 @@ fi
 
 configure_inotify_limits
 
-# Set up pull-through registry cache
-setup_registry
-
 # Cleanup
 cd "$SCRIPTS_DIR"
-rm -rf "$TMP_DOWNLOAD" 
+rm -rf "$TMP_DOWNLOAD"
