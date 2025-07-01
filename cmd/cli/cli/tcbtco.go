@@ -285,15 +285,8 @@ func etlBucketHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	etlName := c.Args().Get(0)
-	bckFrom, bckTo, objFrom, objTo, err := parseFromToURIs(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true, true /*optional src, dst oname*/)
+	bckFrom, bckTo, objFrom, _, err := parseFromToURIs(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true, false /*optional src, dst oname*/)
 
-	if objTo != "" {
-		// TODO -- FIXME: implement
-		err := fmt.Errorf("transform source (%s) to an object (?) with a different destination name (%s) is not support yet",
-			bckFrom.Cname(objFrom), bckTo.Cname(objTo))
-		debug.AssertNoErr(err)
-		return err
-	}
 	if err != nil {
 		return err
 	}
