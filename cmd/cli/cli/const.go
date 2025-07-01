@@ -282,6 +282,7 @@ const (
 	optionalETLNameArgument  = "[ETL_NAME]"
 	etlNameWithJobIDArgument = "ETL_NAME [JOB_ID]"
 	etlNameListArgument      = "ETL_NAME [ETL_NAME ...]"
+	etlNameOrSelectorArgs    = "[ETL_NAME ...] [--all] [-f <file-or-url>]"
 
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"

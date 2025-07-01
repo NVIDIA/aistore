@@ -34,14 +34,20 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 const etlStartUsage = "Start ETL.\n" +
 	indent1 + "\t- 'ais etl start <ETL_NAME>'\t start the specified ETL (transitions from stopped to running state)."
 
-const etlStopUsage = "Stop ETL.\n" +
+const etlStopUsage = "Stop ETL. Also aborts related offline jobs and can be used to terminate ETLs stuck in 'initializing' state.\n" +
 	indent1 + "\t- 'ais etl stop <ETL_NAME>'\t\t stop the specified ETL (transitions from running to stopped state).\n" +
-	indent1 + "\t- 'ais etl stop --all'\t\t\t stop all running ETL jobs.\n" +
-	indent1 + "\t- 'ais etl stop <ETL_NAME> <ETL_NAME2>'\t stop multiple ETL jobs by name."
+	indent1 + "\t- 'ais etl stop <ETL_NAME> <ETL_NAME2>'\t\t stop multiple ETL jobs by name.\n" +
+	indent1 + "\t- 'ais etl stop --all'\t\t stop all running ETL jobs.\n" +
+	indent1 + "\t- 'ais etl init -f <spec-file.yaml>'\t\t stop ETL jobs defined in a local YAML file.\n" +
+	indent1 + "\t- 'ais etl init -f <URL>'\t\t stop ETL jobs defined in a remote YAML file."
 
 const etlRemoveUsage = "Remove ETL.\n" +
-	indent1 + "\t- 'ais etl rm <ETL_NAME>'\t remove (delete) the specified ETL.\n" +
-	indent1 + "\t  NOTE: If the ETL is in 'running' state, it will be automatically stopped before removal."
+	indent1 + "\t- 'ais etl rm <ETL_NAME>'\t\t\t remove (delete) the specified ETL.\n" +
+	indent1 + "\t- 'ais etl rm <ETL_NAME> <ETL_NAME2>'\t\t\t remove multiple ETL jobs by name.\n" +
+	indent1 + "\t- 'ais etl rm --all'\t\t\t remove all ETL jobs.\n" +
+	indent1 + "\t- 'ais etl rm -f <spec-file.yaml>'\t\t\t remove ETL jobs defined in a local YAML file.\n" +
+	indent1 + "\t- 'ais etl rm -f <URL>'\t\t\t remove ETL jobs defined in a remote YAML file.\n" +
+	indent1 + "\t  NOTE: If an ETL is in 'running' state, it will be stopped automatically before removal."
 
 const etlShowUsage = "Show ETL(s).\n" +
 	indent1 + "\t- 'ais etl show'\t\t\t list all ETL jobs.\n" +
@@ -72,6 +78,7 @@ var (
 			etlObjectRequestTimeout,
 		},
 		cmdStop: {
+			fromFileFlag,
 			allRunningJobsFlag,
 		},
 		cmdObject: {
@@ -97,6 +104,7 @@ var (
 		},
 		cmdStart: {},
 		commandRemove: {
+			fromFileFlag,
 			allRunningJobsFlag,
 		},
 	}
@@ -126,7 +134,7 @@ var (
 	stopCmdETL = cli.Command{
 		Name:         cmdStop,
 		Usage:        etlStopUsage,
-		ArgsUsage:    etlNameListArgument,
+		ArgsUsage:    etlNameOrSelectorArgs,
 		Action:       etlStopHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        sortFlags(etlSubFlags[cmdStop]),
@@ -142,7 +150,7 @@ var (
 	removeCmdETL = cli.Command{
 		Name:         commandRemove,
 		Usage:        etlRemoveUsage,
-		ArgsUsage:    optionalETLNameArgument,
+		ArgsUsage:    etlNameOrSelectorArgs,
 		Action:       etlRemoveHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        sortFlags(etlSubFlags[commandRemove]),
@@ -328,53 +336,68 @@ func etlInitSpecHandler(c *cli.Context) error {
 	return nil
 }
 
-func processSpecNode(c *cli.Context, node *yaml.Node) error {
-	var (
-		specInf map[string]any
-		msg     etl.InitMsg
-	)
-
+// parseSpecNode only decodes into the correct InitMsg type.
+func parseSpecNode(node *yaml.Node) (etl.InitMsg, error) {
+	specInf := make(map[string]any)
 	if err := node.Decode(&specInf); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to decode spec metadata: %w", err)
 	}
 
-	switch {
-	case specInf[etl.Runtime] != nil: // ETL runtime spec
-		var etlSpec etl.ETLSpecMsg
-		if err := node.Decode(&etlSpec); err != nil {
-			return err
+	// ETL runtime spec
+	if specInf[etl.Runtime] != nil {
+		var msg etl.ETLSpecMsg
+		if err := node.Decode(&msg); err != nil {
+			return nil, fmt.Errorf("failed to decode ETLSpecMsg: %w", err)
 		}
-		if err := populateCommonFields(c, &etlSpec); err != nil {
-			return fmt.Errorf("populate fields (ETLSpecMsg): %w", err)
-		}
-		msg = &etlSpec
-	case specInf[etl.Spec] != nil: // full Kubernetes Pod spec
+		return &msg, nil
+	}
+
+	// Full Kubernetes Pod spec
+	if specInf[etl.Spec] != nil {
 		var initSpec etl.InitSpecMsg
 		raw, err := yaml.Marshal(node)
 		if err != nil {
-			return fmt.Errorf("marshal to raw bytes: %w", err)
+			return nil, fmt.Errorf("marshal to raw bytes: %w", err)
 		}
 		initSpec.Spec = raw
-		if err := populateCommonFields(c, &initSpec); err != nil {
-			return fmt.Errorf("populate fields (InitSpecMsg): %w", err)
-		}
-		msg = &initSpec
-	default:
-		return errors.New("unknown document (missing 'runtime' or 'spec')")
+		return &initSpec, nil
 	}
 
+	return nil, errors.New("unknown document (missing '" + etl.Runtime + "' or '" + etl.Spec + "')")
+}
+
+// processSpecNode now handles common-fields population right after parsing,
+// then validation, duplicate checks, and the actual init call.
+func processSpecNode(c *cli.Context, node *yaml.Node) error {
+	// 1) Decode into the proper InitMsg
+	msg, err := parseSpecNode(node)
+	if err != nil {
+		return fmt.Errorf("parse spec node: %w", err)
+	}
+
+	// 2) Populate CLI flags / common fields
+	if err := populateCommonFields(c, msg); err != nil {
+		return fmt.Errorf("populate common fields: %w", err)
+	}
+
+	// 3) Validation
 	if err := msg.Validate(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
-	if err := etlAlreadyExists(msg.Name()); err != nil {
-		return fmt.Errorf("duplicate ETL name %q: %w", msg.Name(), err)
+
+	// 4) Duplicate‐name guard
+	name := msg.Name()
+	if err := etlAlreadyExists(name); err != nil {
+		return fmt.Errorf("duplicate ETL name %q: %w", name, err)
 	}
+
+	// 5) Perform ETL init
 	xid, err := api.ETLInit(apiBP, msg)
 	if err != nil {
 		return fmt.Errorf("ETL init failed: %w", err)
 	}
 
-	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", name, xid)
 	return printETLDetailsFromMsg(c, msg)
 }
 
@@ -565,6 +588,11 @@ func stopETLs(c *cli.Context, name string) (err error) {
 	switch {
 	case name != "":
 		etlNames = append(etlNames, name)
+	case flagIsSet(c, fromFileFlag):
+		etlNames, err = getETLNamesFromFile(c)
+		if err != nil {
+			return err
+		}
 	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
 			etlNames = c.Args()[0:]
@@ -610,9 +638,50 @@ func etlStartHandler(c *cli.Context) (err error) {
 	return nil
 }
 
+// getETLNamesFromFile reads ETL names from a YAML file or URL.
+func getETLNamesFromFile(c *cli.Context) ([]string, error) {
+	etlNames := make([]string, 0, 4)
+	if c.NArg() > 0 {
+		etlNames = c.Args()[0:]
+		return nil, incorrectUsageMsg(c, "flag %s cannot be used together with %s %v",
+			qflprn(fromFileFlag), etlNameArgument, etlNames)
+	}
+	fromFile := parseStrFlag(c, fromFileFlag)
+	if fromFile == "" {
+		return nil, fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
+	}
+	reader, err := readFileOrURL(fromFile)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	decoder := yaml.NewDecoder(reader)
+	for {
+		node := &yaml.Node{}
+		if err := decoder.Decode(node); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to decode YAML: %w", err)
+		}
+		msg, err := parseSpecNode(node)
+		if err != nil {
+			return nil, err
+		}
+		etlNames = append(etlNames, msg.Name())
+	}
+	return etlNames, nil
+}
+
 func etlRemoveHandler(c *cli.Context) (err error) {
 	var etlNames []string
 	switch {
+	case flagIsSet(c, fromFileFlag):
+		etlNames, err = getETLNamesFromFile(c)
+		if err != nil {
+			return err
+		}
 	case flagIsSet(c, allRunningJobsFlag):
 		if c.NArg() > 0 {
 			etlNames = c.Args()[0:]
