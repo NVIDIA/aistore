@@ -89,3 +89,5 @@ func AppendStrings(sb *strings.Builder /*in-out*/, prefix string, sepa byte, ite
 		sb.WriteString(s)
 	}
 }
+
+func StrDup(s string) string { return string([]byte(s)) }

@@ -262,7 +262,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			err = xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid)
 		}
 		if err != nil {
-			t.writeErr(w, r, err) // TODO -- FIXME: abort-all
+			t.writeErr(w, r, err)
 			return
 		}
 		w.Header().Set(apc.HdrXactionID, xmoss.ID())

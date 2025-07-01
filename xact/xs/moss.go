@@ -50,15 +50,22 @@ other-targets (T1..Tn)
 */
 
 // TODO -- FIXME:
+// - MossOut.Opaque
+// - DT: sentinels
 // - ctlmsg
 // - soft errors other than not-found
 // - error handling in general and across the board; mossErr{wrapped-err}
-// - stopping sentinels
 
 // TODO:
 // - two cleanup()s
 // - write checksum
 // - range read (_assertNoRange; and separately, read range archpath)
+
+// tunables
+const (
+	iniwait = time.Second
+	maxwait = time.Minute
+)
 
 type (
 	mossFactory struct {
@@ -69,13 +76,12 @@ type (
 )
 
 type (
-	rxdata struct {
-		bucket     string
-		oname      string
-		nameInArch string
+	rxentry struct {
 		sgl        *memsys.SGL
+		mopaque    *mossOpaque
+		bucket     string
+		nameInArch string
 		local      bool
-		missing    bool
 	}
 	basewi struct {
 		aw   archive.Writer
@@ -89,7 +95,7 @@ type (
 		// Rx
 		recv struct {
 			ch   chan int
-			m    []rxdata
+			m    []rxentry
 			next int
 			mtx  *sync.Mutex
 		}
@@ -228,7 +234,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		resp   = &apc.MossResp{UUID: r.ID()}
 		basewi = basewi{r: r, smap: smap, resp: resp, wid: wid}
 	)
-	basewi.recv.m = make([]rxdata, len(req.In))
+	basewi.recv.m = make([]rxentry, len(req.In))
 	basewi.recv.ch = make(chan int, len(req.In)<<1) // NOTE: extra cap
 	basewi.recv.mtx = &sync.Mutex{}
 
@@ -309,8 +315,9 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 		}
 		lom, local, err := r._lom(in, smap)
 		if err != nil {
-			// TODO -- FIXME: this method cannot return errors - must always send or abort-all
-			nlog.Errorln(r.Name(), core.T.String(), "FATAL >>>>>>>>>>>>>>>>> err:", err) // DEBUG
+			if r.Abort(err) {
+				r._sendabrt(tsi, wid, err)
+			}
 			return err
 		}
 		if !local {
@@ -323,9 +330,15 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 		lom.Lock(false)
 
 		if in.ArchPath == "" {
-			r._sendreg(tsi, lom, wid, nameInArch, i)
+			err = r._sendreg(tsi, lom, wid, nameInArch, i)
 		} else {
-			r._sendarch(tsi, lom, wid, nameInArch, in.ArchPath, i)
+			err = r._sendarch(tsi, lom, wid, nameInArch, in.ArchPath, i)
+		}
+		if err != nil {
+			if r.Abort(err) {
+				r._sendabrt(tsi, wid, err)
+			}
+			return err
 		}
 	}
 
@@ -337,25 +350,45 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 	return err
 }
 
-// TODO -- FIXME: this method cannot return errors - must always send, possibly zero-size + error message
-func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, index int) {
+func (r *XactMoss) _sendabrt(tsi *meta.Snode, wid string, err error) {
+	mopaque := &mossOpaque{
+		WID:     wid,
+		Emsg:    err.Error(),
+		Aborted: true,
+	}
+	opaque := r.packOpaque(mopaque)
+	o := transport.AllocSend()
+	hdr := &o.Hdr
+	{
+		hdr.Demux = r.ID()
+		hdr.Opaque = opaque
+	}
+
+	o.Callback, o.CmplArg = r.regSent, opaque
+	if err := bundle.SDM.Send(o, nil, tsi, r); err != nil {
+		nlog.Errorln(r.Name(), "failed sending abort:", err, "[", wid, "]")
+	}
+}
+
+func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, index int) error {
 	var (
 		oah      = lom.ObjAttrs()
 		roc, err = lom.NewDeferROC(false /*loaded*/)
 	)
-	opaqueData := &mossOpaque{
-		WID:     wid,
-		OName:   lom.ObjName,
-		Index:   int32(index),
-		Missing: err != nil,
+	mopaque := &mossOpaque{
+		WID:   wid,
+		Oname: lom.ObjName,
+		Index: int32(index),
 	}
 	if err != nil {
+		mopaque.Missing = true
+		mopaque.Emsg = err.Error()
 		nameInArch = apc.MossMissingDir + "/" + nameInArch
 		oah = &cmn.ObjAttrs{}
 		roc = nil
 	}
 
-	opaque := r.packOpaque(opaqueData)
+	opaque := r.packOpaque(mopaque)
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -367,8 +400,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	}
 
 	o.Callback, o.CmplArg = r.regSent, opaque
-	err = bundle.SDM.Send(o, roc, tsi, r)
-	debug.AssertNoErr(err) // DEBUG -- TODO -- FIXME: unify abort-all
+	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
 // TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
@@ -378,28 +410,28 @@ func (r *XactMoss) regSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ erro
 	r.smm.Free(opaque)
 }
 
-// TODO -- FIXME: this method cannot return errors - must always send, possibly zero-size + error message
 func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, archpath string, index int) error {
 	var (
 		roc     cos.ReadOpenCloser
 		oah     cos.SimpleOAH
 		lh, err = lom.NewHandle(false /*loaded*/)
 	)
-	opaqueData := &mossOpaque{
-		WID:     wid,
-		OName:   lom.ObjName + "/" + archpath,
-		Index:   int32(index),
-		Missing: err != nil,
+	mopaque := &mossOpaque{
+		WID:   wid,
+		Oname: lom.ObjName + "/" + archpath,
+		Index: int32(index),
 	}
-
 	nameInArch += "/" + archpath
 	if err != nil {
+		mopaque.Missing = true
+		mopaque.Emsg = err.Error()
 		nameInArch = apc.MossMissingDir + "/" + nameInArch
 	} else {
 		csl, err := lom.NewArchpathReader(lh, archpath, "" /*mime*/)
 		if err != nil {
 			nameInArch = apc.MossMissingDir + "/" + nameInArch
-			opaqueData.Missing = true
+			mopaque.Missing = true
+			mopaque.Emsg = err.Error()
 		} else {
 			// csl is cos.ReadCloseSizer; see transport/bundle/shared_dm for InitSDM
 			roc = cos.NopOpener(csl)
@@ -407,7 +439,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		}
 	}
 
-	opaque := r.packOpaque(opaqueData)
+	opaque := r.packOpaque(mopaque)
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{
@@ -423,9 +455,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		buf []byte
 	}{lom, opaque}
 
-	err = bundle.SDM.Send(o, roc, tsi, r)
-	debug.AssertNoErr(err) // DEBUG is legal
-	return err
+	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
 // TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
@@ -478,17 +508,22 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	if err != nil {
 		return err
 	}
-	opaqueData, err := r.unpackOpaque(hdr.Opaque)
+	mopaque, err := r.unpackOpaque(hdr.Opaque)
 	if err != nil {
 		return err
 	}
+	if mopaque.Aborted {
+		err := fmt.Errorf("%s: %s aborted [%s]", r.Name(), meta.Tname(hdr.SID), mopaque.Emsg)
+		r.Abort(err)
+		return err
+	}
 	r.pmtx.RLock()
-	wi := r.pending[opaqueData.WID]
+	wi := r.pending[mopaque.WID]
 	r.pmtx.RUnlock()
 	if wi == nil {
-		return fmt.Errorf("WID %q not found", opaqueData.WID)
+		return fmt.Errorf("WID %q not found", mopaque.WID)
 	}
-	return wi.recvObj(int(opaqueData.Index), hdr, reader, opaqueData.OName, opaqueData.Missing)
+	return wi.recvObj(int(mopaque.Index), hdr, reader, mopaque)
 }
 
 func (*mossFactory) Kind() string     { return apc.ActGetBatch }
@@ -584,7 +619,7 @@ func (wi *basewi) cleanup() {
 
 // handle receive for this work item
 // (note: ObjHdr and its fields must be consumed synchronously)
-func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, oname string, missing bool) (err error) {
+func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mopaque *mossOpaque) (err error) {
 	if index < 0 || index >= len(wi.recv.m) {
 		err := fmt.Errorf("%s: out-of-bounds index %d (recv'd len=%d, wid=%s)",
 			wi.r.Name(), index, len(wi.recv.m), wi.wid)
@@ -613,13 +648,12 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, on
 add:
 	wi.recv.mtx.Lock()
 	entry := &wi.recv.m[index]
-	debug.Assertf(entry.sgl == nil && entry.nameInArch == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.nameInArch)
-	wi.recv.m[index] = rxdata{
-		bucket:     hdr.Bck.Name,
-		oname:      oname,
-		nameInArch: hdr.ObjName,
+	debug.Assertf(entry.sgl == nil && entry.nameInArch == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.nameInArch) // TODO -- FIXME: + abort
+	wi.recv.m[index] = rxentry{
 		sgl:        sgl,
-		missing:    missing,
+		bucket:     cos.StrDup(hdr.Bck.Name),
+		nameInArch: cos.StrDup(hdr.ObjName),
+		mopaque:    mopaque,
 	}
 	wi.recv.mtx.Unlock()
 
@@ -632,19 +666,21 @@ add:
 }
 
 // wait for _any_ receive (out of order or in)
-func (wi *basewi) waitRx() error {
-	ticker := time.NewTicker(time.Second) // TODO -- FIXME: expo-backoff or else
-	defer ticker.Stop()
-
+func (wi *basewi) waitRx(sleep time.Duration) error {
+	var (
+		total time.Duration
+		timer = time.NewTimer(sleep)
+	)
+	defer timer.Stop()
 	for {
 		select {
-		case <-ticker.C:
+		case <-timer.C:
+			total += sleep
 			if cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid)
+				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid, total)
 			}
-
 			var (
-				entry     *rxdata
+				entry     *rxentry
 				i         int
 				entryDone bool
 			)
@@ -658,18 +694,31 @@ func (wi *basewi) waitRx() error {
 			}
 			wi.recv.mtx.Unlock()
 
-			if entry != nil && cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Infoln("\t\t>>>>> next:", i, entry.nameInArch, entry.local)
+			if cmn.Rom.FastV(5, cos.SmoduleXs) {
+				if entry != nil {
+					nlog.Infoln("\t\t>>>>> next:", wi.wid, i, entry.nameInArch, entry.local)
+				} else {
+					nlog.Infoln("\t\t>>>>> done:", wi.wid, i, len(wi.recv.m), entryDone)
+				}
 			}
 			if entryDone {
 				return nil
 			}
+			if total > maxwait {
+				return fmt.Errorf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
+					wi.r.Name(), i, core.T.String(), wi.wid, total)
+			}
+			if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
+				sleep = min(sleep<<1, maxwait>>3)
+			}
+			timer.Reset(sleep)
+
 		case _, ok := <-wi.recv.ch:
 			if !ok {
 				return errStopped
 			}
 			return nil
-			// TODO -- FIXME: sentinels, to prevent a hang: case <- (remote aborted?)
+
 		case <-wi.r.ChanAbort():
 			return errStopped
 		}
@@ -699,13 +748,15 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 
 		// TODO -- FIXME: [resilience] timeout must trigger a "pointed" retry (re-send)
 	wait:
-		if err := wi.waitRx(); err != nil {
+		err := wi.waitRx(iniwait)
+		if err != nil {
 			return 0, err
 		}
 
+		var j int
 		wi.recv.mtx.Lock()
-		err := wi.flushRx(streaming)
-		j := wi.recv.next
+		err = wi.flushRx(streaming)
+		j = wi.recv.next
 		wi.recv.mtx.Unlock()
 
 		if err != nil {
@@ -849,8 +900,8 @@ func (wi *basewi) asm(req *apc.MossReq, streaming bool) error {
 // drains recv.m[] in strict input order
 // is called under `recv.mtx` lock
 
-func (entry *rxdata) isLocal() bool { return entry.local }
-func (entry *rxdata) isEmpty() bool { return entry.nameInArch == "" }
+func (entry *rxentry) isLocal() bool { return entry.local }
+func (entry *rxentry) isEmpty() bool { return entry.nameInArch == "" }
 
 func (wi *basewi) flushRx(streaming bool) error {
 	for l := len(wi.recv.m); wi.recv.next < l; {
@@ -869,7 +920,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 
 		wi.recv.mtx.Unlock() //--------------
 
-		if entry.missing {
+		if entry.mopaque.Missing {
 			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
 		} else {
@@ -887,11 +938,13 @@ func (wi *basewi) flushRx(streaming bool) error {
 		}
 
 		if !streaming {
-			var emsg string
-			if entry.missing {
-				emsg = entry.oname + " does not exist" // TODO: pack error message as well
+			out := apc.MossOut{
+				Bucket:  entry.bucket,
+				ObjName: entry.mopaque.Oname,
+				Size:    size,
+				ErrMsg:  entry.mopaque.Emsg,
 			}
-			wi.resp.Out = append(wi.resp.Out, apc.MossOut{Bucket: entry.bucket, ObjName: entry.oname, Size: size, ErrMsg: emsg})
+			wi.resp.Out = append(wi.resp.Out, out)
 		}
 
 		// this sgl is done - can free it early (see related wi.cleanup())
@@ -1034,9 +1087,11 @@ func (nopROC) Close() error                      { return nil }
 
 type mossOpaque struct {
 	WID     string
-	OName   string
+	Oname   string
+	Emsg    string
 	Index   int32
 	Missing bool
+	Aborted bool
 }
 
 // interface guard
@@ -1047,22 +1102,25 @@ var (
 
 func (o *mossOpaque) Pack(packer *cos.BytePack) {
 	packer.WriteString(o.WID)
-	packer.WriteString(o.OName)
+	packer.WriteString(o.Oname)
+	packer.WriteString(o.Emsg)
 	packer.WriteInt32(o.Index)
 	packer.WriteBool(o.Missing)
+	packer.WriteBool(o.Aborted)
 }
 
 func (o *mossOpaque) PackedSize() int {
-	return cos.PackedStrLen(o.WID) + cos.PackedStrLen(o.OName) + cos.SizeofI32 + 1
+	return cos.PackedStrLen(o.WID) + cos.PackedStrLen(o.Oname) + cos.PackedStrLen(o.Emsg) + cos.SizeofI32 + 2
 }
 
-// Implement cos.Unpacker interface
-func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) error {
-	var err error
+func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if o.WID, err = unpacker.ReadString(); err != nil {
 		return err
 	}
-	if o.OName, err = unpacker.ReadString(); err != nil {
+	if o.Oname, err = unpacker.ReadString(); err != nil {
+		return err
+	}
+	if o.Emsg, err = unpacker.ReadString(); err != nil {
 		return err
 	}
 	if o.Index, err = unpacker.ReadInt32(); err != nil {
@@ -1071,5 +1129,6 @@ func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) error {
 	if o.Missing, err = unpacker.ReadBool(); err != nil {
 		return err
 	}
-	return nil
+	o.Aborted, err = unpacker.ReadBool()
+	return err
 }
