@@ -32,11 +32,11 @@ import (
 //
 // Also, note [CONVENTIONS] below.
 //
-//	(III) TODO: `ais cp from-bucket/from-object to-bucket[/to-object]` is not supported yet
+//	(III) `ais cp from-bucket/from-object to-bucket[/to-object]`
 func copyBucketHandler(c *cli.Context) (err error) {
 	var (
 		bckFrom, bckTo cmn.Bck
-		objFrom        string
+		objFrom, objTo string
 	)
 	switch {
 	case c.NArg() == 0:
@@ -44,7 +44,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	case c.NArg() == 1:
 		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
 	default:
-		bckFrom, bckTo, objFrom, err = parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/, true /*optionalSrcObjname*/)
+		bckFrom, bckTo, objFrom, objTo, err = parseFromToURIs(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/, true, true /*optional src, dst oname*/)
 	}
 	if err != nil {
 		return err
@@ -65,6 +65,13 @@ func copyBucketHandler(c *cli.Context) (err error) {
 			return incorrectUsageMsg(c, "missing destination bucket%s", hint)
 		}
 		bckTo = bckFrom
+	}
+
+	if objTo != "" {
+		if objFrom == "" {
+			return fmt.Errorf("missing source object name: cannot copy from bucket (%s) to object (%s)", bckFrom.Cname(""), bckTo.Cname(objTo))
+		}
+		return copyObject(c, bckFrom, objFrom, bckTo, objTo)
 	}
 
 	// NOTE: copyAllObjsFlag forces 'x-list' to list the remote one, and vice versa
@@ -106,20 +113,28 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 		return err
 	}
 
+	//
+	// (0) single object (see related: lsObjVsPref)
+	//
+	if oltp.objName != "" {
+		debug.Assertf(oltp.list == "" && oltp.tmpl == "", "%+v", oltp)
+		return copyObject(c, bckFrom, oltp.objName, bckTo, "")
+	}
+
 	// bck-to exists?
 	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
 			return err
 		}
 		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
-			bckTo.String(), bckFrom.String())
+			bckTo.Cname(""), bckFrom.Cname(""))
 		actionWarn(c, warn)
 	}
 
 	dryRun := flagIsSet(c, copyDryRunFlag)
 
 	//
-	// either (1) copy/transform bucket (x-tcb)
+	// (1) copy/transform bucket (x-tcb)
 	//
 	if oltp.objName == "" && oltp.list == "" && oltp.tmpl == "" {
 		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
@@ -138,7 +153,7 @@ func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo
 	}
 
 	//
-	// or (2) multi-object x-tco
+	// (2) multi-object x-tco
 	//
 	if oltp.list == "" && oltp.tmpl == "" {
 		oltp.list = oltp.objName // (compare with `_prefetchOne`)
@@ -270,7 +285,15 @@ func etlBucketHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	etlName := c.Args().Get(0)
-	bckFrom, bckTo, objFrom, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true /*optionalSrcObjname*/)
+	bckFrom, bckTo, objFrom, objTo, err := parseFromToURIs(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true, true /*optional src, dst oname*/)
+
+	if objTo != "" {
+		// TODO -- FIXME: implement
+		err := fmt.Errorf("transform source (%s) to an object (?) with a different destination name (%s) is not support yet",
+			bckFrom.Cname(objFrom), bckTo.Cname(objTo))
+		debug.AssertNoErr(err)
+		return err
+	}
 	if err != nil {
 		return err
 	}

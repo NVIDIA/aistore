@@ -80,8 +80,6 @@ const concatUsage = "Append a file, a directory, or multiple files and/or direct
 const setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 	indent1 + "mykey1=value1 mykey2=value2 OR (same) '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
-// TODO: `ais cp from-bucket/from-object to-bucket[/to-object]` is not supported yet
-
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: append(

@@ -344,7 +344,7 @@ func createBucketHandler(c *cli.Context) error {
 }
 
 func mvBucketHandler(c *cli.Context) error {
-	bckFrom, bckTo, _, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/, false /*optionalSrcObjname*/)
+	bckFrom, bckTo, _, _, err := parseFromToURIs(c, bucketArgument, bucketNewArgument, 0 /*shift*/, false, false /*optional src, dst oname*/)
 	if err != nil {
 		return err
 	}

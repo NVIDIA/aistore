@@ -18,20 +18,21 @@ import (
 )
 
 // Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
-func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalSrcObjname bool) (bckFrom, bckTo cmn.Bck, objFrom string,
+// Optionally, return `objFrom` and/or `objTo`
+func parseFromToURIs(c *cli.Context, bckFromArg, bckToArg string, shift int, optSrcOname, optDstOname bool) (bckFrom, bckTo cmn.Bck, objFrom, objTo string,
 	err error) {
 	if c.NArg() == shift {
 		err = missingArgumentsError(c, bckFromArg, bckToArg)
-		return cmn.Bck{}, cmn.Bck{}, "", err
+		return cmn.Bck{}, cmn.Bck{}, "", "", err
 	}
 	if c.NArg() == shift+1 {
 		err = missingArgumentsError(c, bckToArg)
-		return cmn.Bck{}, cmn.Bck{}, "", err
+		return cmn.Bck{}, cmn.Bck{}, "", "", err
 	}
 
 	// src
 	var uri string
-	if optionalSrcObjname {
+	if optSrcOname {
 		uri = c.Args().Get(shift)
 		bckFrom, objFrom, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
 	} else {
@@ -44,22 +45,26 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
 		}
-		return cmn.Bck{}, cmn.Bck{}, "", err
+		return cmn.Bck{}, cmn.Bck{}, "", "", err
 	}
 
 	// dst
 	uri = c.Args().Get(shift + 1)
-	bckTo, err = parseBckURI(c, uri, true)
+	if optDstOname {
+		bckTo, objTo, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
+	} else {
+		bckTo, err = parseBckURI(c, uri, true)
+	}
 	if err != nil {
 		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
 			err = errV
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
 		}
-		return cmn.Bck{}, cmn.Bck{}, "", err
+		return cmn.Bck{}, cmn.Bck{}, "", "", err
 	}
 
-	return bckFrom, bckTo, objFrom, err
+	return bckFrom, bckTo, objFrom, objTo, err
 }
 
 func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
