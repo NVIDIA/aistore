@@ -9,10 +9,10 @@ resources:
 images:
 - name: aistorage/aisnode
   newName: ${AISNODE_IMAGE}
-  newTag: ${CI_COMMIT_SHORT_SHA}
+  newTag: "${CI_COMMIT_SHORT_SHA}"
 - name: aistorage/ais-init
   newName: ${AISINIT_IMAGE}
-  newTag: ${CI_COMMIT_SHORT_SHA}
+  newTag: "${CI_COMMIT_SHORT_SHA}"
 
 configMapGenerator:  
 - name: ais-cluster-config-override
