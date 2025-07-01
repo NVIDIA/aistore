@@ -178,7 +178,12 @@ func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {
 	// finally, list remote ais buckets, if any
 	qbck = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
 	cnt := listBckTable(c, qbck, nbcks, lsb)
-	if cnt > 0 || total == 0 {
+	total += cnt
+
+	if total == 0 {
+		// No buckets were actually displayed to users - show tip instead of blank line
+		_lsTip(c, cmn.QueryBcks{})
+	} else if cnt > 0 {
 		fmt.Fprintln(c.App.Writer)
 	}
 	return nil

@@ -106,9 +106,10 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 		}
 		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: &info})
 	}
-	if footer.nb == 0 {
+	if footer.nb == 0 || footer.nbp == 0 || len(data) == 0 {
 		return 0
 	}
+
 	if hideHeader {
 		teb.Print(data, teb.ListBucketsBodyNoSummary)
 	} else {
@@ -196,11 +197,13 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		if elapsed := time.Duration(now - prev); elapsed < maxwait && i < len(bcks)-1 {
 			continue
 		}
-		// print
-		if hideHeader {
-			teb.Print(data, teb.ListBucketsSummBody, opts)
-		} else {
-			teb.Print(data, teb.ListBucketsSummTmpl, opts)
+		// print only if there's data to display and at least one present bucket
+		if len(data) > 0 && footer.nbp > 0 {
+			if hideHeader {
+				teb.Print(data, teb.ListBucketsSummBody, opts)
+			} else {
+				teb.Print(data, teb.ListBucketsSummTmpl, opts)
+			}
 		}
 		data = data[:0]
 		prev = now
