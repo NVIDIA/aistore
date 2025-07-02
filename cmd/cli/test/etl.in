@@ -48,8 +48,17 @@ ais etl rm $ETL_NAME-url
 
 ais etl show $ETL_NAME-3 | grep -m1 "communication_type"
 ais etl show $ETL_NAME-3 | grep -m1 "arg_type"
+
+
+# Test etl object cp (copy with transformation)
+ais bucket create ais://$BUCKET_2 // IGNORE
+ais etl object $ETL_NAME-3 cp ais://$BUCKET_1/object_1.txt ais://$BUCKET_2/transformed_object.txt
+ais etl object $ETL_NAME-3 cp ais://$BUCKET_1/object_1.txt ais://$BUCKET_2
+ais bucket rm ais://$BUCKET_2 --yes // IGNORE
+
 ais etl object $ETL_NAME-3 ais://$BUCKET_1/object_1.txt - --args=123
 ais etl object $ETL_NAME-3 ais://$BUCKET_1/object_1.txt - --args=456
+
 ais etl stop $ETL_NAME-3
 ais etl rm $ETL_NAME-3
 ais etl stop $ETL_NAME-main
