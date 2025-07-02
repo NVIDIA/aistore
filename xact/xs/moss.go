@@ -665,7 +665,7 @@ add:
 	return nil
 }
 
-func (wi *basewi) waitFlushRx(i int, streaming bool) (int, error) {
+func (wi *basewi) waitFlushRx(i int) (int, error) {
 	for {
 		err := wi.waitAnyRx(iniwait)
 		if err != nil {
@@ -674,7 +674,7 @@ func (wi *basewi) waitFlushRx(i int, streaming bool) (int, error) {
 
 		var j int
 		wi.recv.mtx.Lock()
-		err = wi.flushRx(streaming)
+		err = wi.flushRx()
 		j = wi.recv.next
 		wi.recv.mtx.Unlock()
 
@@ -752,7 +752,7 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 	}
 }
 
-func (wi *basewi) next(i int, streaming bool) (int, error) {
+func (wi *basewi) next(i int) (int, error) {
 	var (
 		r  = wi.r
 		in = &wi.req.In[i]
@@ -773,7 +773,7 @@ func (wi *basewi) next(i int, streaming bool) (int, error) {
 			return 0, err
 		}
 
-		return wi.waitFlushRx(i, streaming)
+		return wi.waitFlushRx(i)
 	}
 
 	bck := lom.Bck()
@@ -888,7 +888,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
-func (wi *basewi) asm(streaming bool) error {
+func (wi *basewi) asm() error {
 	var (
 		r = wi.r
 		l = len(wi.req.In)
@@ -897,7 +897,7 @@ func (wi *basewi) asm(streaming bool) error {
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
-		j, err := wi.next(i, streaming)
+		j, err := wi.next(i)
 		if err != nil {
 			r.Abort(err)
 			return err
@@ -914,7 +914,7 @@ func (wi *basewi) asm(streaming bool) error {
 func (entry *rxentry) isLocal() bool { return entry.local }
 func (entry *rxentry) isEmpty() bool { return entry.nameInArch == "" }
 
-func (wi *basewi) flushRx(streaming bool) error {
+func (wi *basewi) flushRx() error {
 	for l := len(wi.recv.m); wi.recv.next < l; {
 		var (
 			err   error
@@ -946,7 +946,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 			oah := cos.SimpleOAH{Size: size}
 			err = wi.aw.Write(entry.nameInArch, oah, entry.sgl)
 		}
-		if err == nil && streaming {
+		if err == nil && wi.req.StreamingGet {
 			err = wi.aw.Flush()
 		}
 		wi.recv.mtx.Lock() //--------------
@@ -955,7 +955,7 @@ func (wi *basewi) flushRx(streaming bool) error {
 			return err
 		}
 
-		if !streaming {
+		if !wi.req.StreamingGet {
 			out := apc.MossOut{
 				Bucket:   entry.bucket,
 				Provider: in.Provider, // (just copying)
@@ -985,7 +985,8 @@ func (wi *basewi) flushRx(streaming bool) error {
 ////////////
 
 func (wi *buffwi) asm(w http.ResponseWriter) error {
-	if err := wi.basewi.asm(false); err != nil {
+	debug.Assert(!wi.req.StreamingGet)
+	if err := wi.basewi.asm(); err != nil {
 		return err
 	}
 
@@ -1041,8 +1042,9 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 //////////////
 
 func (wi *streamwi) asm(w http.ResponseWriter) error {
+	debug.Assert(wi.req.StreamingGet)
 	w.Header().Set(cos.HdrContentType, _ctype(wi.req.OutputFormat))
-	if err := wi.basewi.asm(true); err != nil {
+	if err := wi.basewi.asm(); err != nil {
 		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
 		return cmn.ErrGetTxBenign
 	}
