@@ -336,14 +336,18 @@ func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
 // Depends on available free memory and size of an object to process
 func useDisk(objSize int64, config *cmn.Config) bool {
 	if config.EC.DiskOnly {
+		nlog.Infoln("config: using disk")
 		return true
 	}
 	memPressure := g.pmm.Pressure()
 	switch memPressure {
 	case memsys.OOM, memsys.PressureExtreme:
+		nlog.Warningln("using disk")
 		return true
 	case memsys.PressureHigh:
-		return objSize > objSizeHighMem
+		use := objSize > objSizeHighMem
+		nlog.Infoln("use disk:", use, "[", objSize, objSizeHighMem, "]")
+		return use
 	default:
 		return false
 	}

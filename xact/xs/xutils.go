@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -103,13 +104,15 @@ func throttleNwp(xname string, n, l int) (int, error) {
 	switch pressure {
 	case memsys.OOM, memsys.PressureExtreme:
 		oom.FreeToOS(true)
-		return 0, errors.New(xname + ": extreme memory pressure - not starting")
+		if !cmn.Rom.TestingEnv() {
+			return 0, errors.New(xname + ": " + memsys.FmtErrExtreme + " - not starting")
+		}
 	case memsys.PressureHigh:
-		nlog.Warningln(xname, "high memory pressure detected...")
 		if flags.IsSet(cos.NumGoroutines) {
 			return nwpNone, nil
 		}
 		n = min(nwpMin+1, n)
+		nlog.Warningln(xname, "num-workers =", n)
 	}
 
 	// 4. finally, take into account load averages

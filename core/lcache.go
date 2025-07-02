@@ -288,18 +288,15 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 }
 
 func (lchk *lchk) mempDropAll() bool /*dropped*/ {
-	p := g.pmm.Pressure()
-	switch p {
-	case memsys.OOM, memsys.PressureExtreme:
-		nlog.ErrorDepth(1, "oom [", p, "] - dropping all caches")
+	if p := g.pmm.Pressure(); p >= memsys.PressureExtreme {
+		nlog.WarningDepth(1, "dropping all caches")
 		LcacheClear()
 		lchk.last = time.Now()
 
 		oom.FreeToOS(true)
 		return true
-	case memsys.PressureHigh:
-		nlog.Warningln("high memory pressure")
 	}
+
 	return false
 }
 

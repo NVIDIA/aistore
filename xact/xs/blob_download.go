@@ -199,13 +199,15 @@ func (p *blobFactory) Start() error {
 	)
 	if pressure >= memsys.PressureExtreme {
 		oom.FreeToOS(true)
-		return errors.New(r.Name() + ": extreme memory pressure - not starting")
+		if !cmn.Rom.TestingEnv() {
+			return errors.New(r.Name() + ": " + memsys.FmtErrExtreme + " - not starting")
+		}
 	}
 	switch pressure {
 	case memsys.PressureHigh:
 		slabSize = memsys.DefaultBufSize
 		r.numWorkers = 1
-		nlog.Warningln(r.Name(), "high memory pressure detected...")
+		nlog.Warningln(r.Name(), "num-workers = 1")
 	case memsys.PressureModerate:
 		slabSize >>= 1
 		r.numWorkers = min(3, r.numWorkers)

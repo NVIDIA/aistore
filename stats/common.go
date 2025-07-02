@@ -529,14 +529,14 @@ func (r *runner) _memload(mm *memsys.MMSA, set, clr cos.NodeStateFlags) {
 		if !flags.IsSet(cos.OOM) {
 			set |= cos.OOM
 			clr |= cos.LowMemory
-			nlog.Errorln(r.node.String(), mm.Str(&r.mem))
+			nlog.Warningln(r.node.String(), mm.Name, "alert: oom")
 		}
 		oom.FreeToOS(true)
 	case pressure >= memsys.PressureHigh:
 		clr |= cos.OOM
 		if !flags.IsSet(cos.LowMemory) {
 			set |= cos.LowMemory
-			nlog.Warningln(mm.Str(&r.mem))
+			nlog.Warningln(r.node.String(), mm.Name, "alert: low memory")
 		}
 	default:
 		if flags.IsAnySet(cos.LowMemory | cos.OOM) {

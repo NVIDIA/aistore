@@ -185,7 +185,7 @@ func (r *MMSA) Str(mem *sys.MemStat) string {
 	sb.WriteString("[(")
 	mem.Str(&sb)
 	sb.WriteString("), ")
-	r.pressure2S(&sb, mem)
+	r._p2s(&sb, mem)
 	sb.WriteString(", ")
 	sb.WriteString(r.info)
 	sb.WriteString("]")

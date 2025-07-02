@@ -37,9 +37,9 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 		if spec.MinSize == 0 {
 			spec.MinSize = sizeToGC // using default
 		}
-		pressure := r.Pressure()
-		if pressure >= PressureModerate {
-			r.freeMemToOS(spec.MinSize, pressure, spec.ToOS /* force */)
+		p := r.Pressure()
+		if p >= PressureModerate {
+			r.freeMemToOS(spec.MinSize, p, spec.ToOS /* force */)
 		}
 	}
 }
@@ -57,25 +57,25 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 		return max(r.TimeIval, time.Minute)
 	}
 	r.updSwap(&r.mem)
-	pressure := r.Pressure(&r.mem)
+	p := r.Pressure(&r.mem)
 
 	// memory is enough: update idle times and free idle slabs, unless out of cpu
-	if pressure == PressureLow {
+	if p == PressureLow {
 		var (
 			load     = sys.MaxLoad()
 			highLoad = sys.HighLoadWM()
 		)
 		// too busy and not too "pressured"
 		if load >= float64(highLoad) {
-			return r.hkIval(pressure)
+			return r.hkIval(p)
 		}
 		r.refreshStats(now)
 		r.optDepth.Store(optDepth)
 		if freed := r.freeIdle(); freed > 0 {
 			r.toGC.Add(freed)
-			r.freeMemToOS(sizeToGC, pressure)
+			r.freeMemToOS(sizeToGC, p)
 		}
-		return r.hkIval(pressure)
+		return r.hkIval(p)
 	}
 
 	// calibrate and mem-free accordingly
@@ -83,7 +83,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 		mingc = sizeToGC // minimum accumulated size that triggers GC
 		depth int        // => current ring depth tbd
 	)
-	switch pressure {
+	switch p {
 	case OOM, PressureExtreme:
 		r.optDepth.Store(minDepth)
 		depth = minDepth
@@ -105,8 +105,8 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 	}
 
 	// 6. GC and free mem to OS
-	r.freeMemToOS(mingc, pressure)
-	return r.hkIval(pressure)
+	r.freeMemToOS(mingc, p)
+	return r.hkIval(p)
 }
 
 func (r *MMSA) hkIval(pressure int) time.Duration {
