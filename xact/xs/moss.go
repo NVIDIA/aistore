@@ -7,7 +7,6 @@ package xs
 
 import (
 	"archive/tar"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -99,6 +99,8 @@ type (
 			next int
 			mtx  *sync.Mutex
 		}
+		clean atomic.Bool
+		awfin atomic.Bool
 	}
 	buffwi struct {
 		*basewi
@@ -113,8 +115,10 @@ type (
 		xact.DemandBase
 		gmm     *memsys.MMSA
 		smm     *memsys.MMSA
-		pending map[string]*basewi
-		pmtx    sync.RWMutex // TODO: optimize
+		pending struct {
+			m   map[string]*basewi
+			mtx sync.RWMutex // TODO: optimize
+		}
 	}
 )
 
@@ -164,11 +168,12 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
-		gmm:     memsys.PageMM(),
-		smm:     memsys.ByteMM(),
-		pending: make(map[string]*basewi, iniCapPending),
+		gmm: memsys.PageMM(),
+		smm: memsys.ByteMM(),
 	}
+	r.pending.m = make(map[string]*basewi, iniCapPending)
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
+
 	return r
 }
 
@@ -179,12 +184,12 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	r.pmtx.Lock()
-	for _, wi := range r.pending {
+	r.pending.mtx.Lock()
+	for _, wi := range r.pending.m {
 		wi.cleanup()
 	}
-	clear(r.pending)
-	r.pmtx.Unlock()
+	clear(r.pending.m)
+	r.pending.mtx.Unlock()
 
 	r.DemandBase.Stop()
 	bundle.SDM.UnregRecv(r.ID())
@@ -200,53 +205,45 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
-		nlog.Infoln(r.Name(), "idle expired, finishing")
+		nlog.Infoln(r.Name(), "idle expired - finishing")
 
 		// Cleanup all pending work items
-		r.pmtx.Lock()
-		for _, wi := range r.pending {
+		r.pending.mtx.Lock()
+		for _, wi := range r.pending.m {
 			wi.cleanup()
 		}
-		clear(r.pending)
-		r.pmtx.Unlock()
+		clear(r.pending.m)
+		r.pending.mtx.Unlock()
 
-		// Unregister from transport if needed
-		smap := core.T.Sowner().Get()
-		if nat := smap.CountActiveTs(); nat > 1 {
-			bundle.SDM.UnregRecv(r.ID())
-		}
-
-		r.DemandBase.Stop() // NOTE: stops timer and calls Unreg
 		bundle.SDM.UnregRecv(r.ID())
 		r.Finish()
 		return hk.UnregInterval
 	}
 }
 
-// TODO -- FIXME: cleanup basewi if failed after PrepRx but prior to Assemble
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving bool) error {
+	var (
+		resp = &apc.MossResp{UUID: r.ID()}
+		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
+	)
 	if receiving {
 		bundle.SDM.RegRecv(r)
+		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
+		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap (TODO: revisit)
+		wi.recv.mtx = &sync.Mutex{}
 	}
 
-	var (
-		resp   = &apc.MossResp{UUID: r.ID()}
-		basewi = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
-	)
-	basewi.recv.m = make([]rxentry, len(req.In))    // preallocate
-	basewi.recv.ch = make(chan int, len(req.In)<<1) // extra cap (TODO: revisit)
-	basewi.recv.mtx = &sync.Mutex{}
-
-	r.pmtx.Lock()
-	if _, ok := r.pending[wid]; ok {
-		r.pmtx.Unlock()
-		err := fmt.Errorf("%s: work item %q already exists", r.Name(), wid)
+	r.pending.mtx.Lock()
+	if _, ok := r.pending.m[wid]; ok {
+		r.pending.mtx.Unlock()
+		err := fmt.Errorf("%s: work item %q already exists (duplicate prep-rx?)", r.Name(), wid)
 		debug.AssertNoErr(err)
 		return err
 	}
-	r.pending[wid] = &basewi
-	r.pmtx.Unlock()
+	wi.awfin.Store(true)
+	r.pending.m[wid] = &wi
+	r.pending.mtx.Unlock()
 
 	return nil
 }
@@ -254,9 +251,9 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 // gather other requested data (local and remote); emit resulting archive
 // (phase 3)
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
-	r.pmtx.Lock()
-	wi, ok := r.pending[wid]
-	r.pmtx.Unlock()
+	r.pending.mtx.Lock()
+	wi, ok := r.pending.m[wid]
+	r.pending.mtx.Unlock()
 	if !ok {
 		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
 		debug.AssertNoErr(err)
@@ -279,6 +276,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	if req.StreamingGet {
 		wi := streamwi{basewi: basewi}
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
+		wi.awfin.Store(false)
 		err := wi.asm(w)
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln(r.Name(), core.T.String(), "done streaming Assemble", basewi.wid, "err", err)
@@ -294,6 +292,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	wi.sgl = sgl
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
+	wi.awfin.Store(false)
 	err := wi.asm(w)
 	sgl.Free()
 
@@ -517,12 +516,13 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 		r.Abort(err)
 		return err
 	}
-	r.pmtx.RLock()
-	wi := r.pending[mopaque.WID]
-	r.pmtx.RUnlock()
+	r.pending.mtx.RLock()
+	wi := r.pending.m[mopaque.WID]
+	r.pending.mtx.RUnlock()
 	if wi == nil {
 		return fmt.Errorf("WID %q not found", mopaque.WID)
 	}
+	debug.Assert(wi.receiving())
 	return wi.recvObj(int(mopaque.Index), hdr, reader, mopaque)
 }
 
@@ -582,8 +582,11 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
 func (wi *basewi) cleanup() {
+	if !wi.clean.CAS(false, true) {
+		return
+	}
 	r := wi.r
-	if wi.aw != nil {
+	if wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
 		wi.aw = nil
 		if err != nil {
@@ -592,13 +595,13 @@ func (wi *basewi) cleanup() {
 			}
 		}
 	}
-	if wi.recv.m == nil {
+	if !wi.receiving() {
 		return
 	}
 
-	r.pmtx.Lock()
-	delete(r.pending, wi.wid)
-	r.pmtx.Unlock()
+	r.pending.mtx.Lock()
+	delete(r.pending.m, wi.wid)
+	r.pending.mtx.Unlock()
 
 	wi.recv.mtx.Lock()
 	for i := range wi.recv.m {
@@ -768,7 +771,7 @@ func (wi *basewi) next(i int) (int, error) {
 
 	if !local {
 		if !wi.receiving() {
-			err := errors.New(core.T.String() + " unexpected non-local " + lom.Cname() + " when _not_ receiving")
+			err := fmt.Errorf("%s: unexpected non-local %s when _not_ receiving [%s, %s]", wi.r.Name(), lom.Cname(), wi.wid, wi.smap)
 			debug.AssertNoErr(err)
 			return 0, err
 		}
@@ -802,11 +805,13 @@ func (wi *basewi) next(i int) (int, error) {
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
-	wi.recv.mtx.Lock()
-	entry := &wi.recv.m[i]
-	entry.local = true
-	debug.Assert(wi.recv.next <= i, wi.recv.next, " vs ", i) // must be contiguous
-	wi.recv.mtx.Unlock()
+	if wi.receiving() {
+		wi.recv.mtx.Lock()
+		entry := &wi.recv.m[i]
+		entry.local = true
+		debug.Assert(wi.recv.next <= i, wi.recv.next, " vs ", i) // must be contiguous
+		wi.recv.mtx.Unlock()
+	}
 	return i + 1, nil
 }
 
@@ -991,10 +996,12 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	}
 
 	// flush and close aw
-	err := wi.aw.Fini()
-	wi.aw = nil
-	if err != nil {
-		return err
+	if wi.awfin.CAS(false, true) {
+		err := wi.aw.Fini()
+		wi.aw = nil
+		if err != nil {
+			return err
+		}
 	}
 
 	// write multipart response
@@ -1050,11 +1057,13 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 	}
 
 	// flush and close aw
-	err := wi.aw.Fini()
-	wi.aw = nil
-	if err != nil {
-		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
-		return cmn.ErrGetTxBenign
+	if wi.awfin.CAS(false, true) {
+		err := wi.aw.Fini()
+		wi.aw = nil
+		if err != nil {
+			nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
+			return cmn.ErrGetTxBenign
+		}
 	}
 
 	wi.r.ObjsAdd(wi.cnt, wi.size)

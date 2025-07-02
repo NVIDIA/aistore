@@ -148,7 +148,6 @@ func (sdm *sharedDM) UnregRecv(xid string) {
 	if !sdm.isOpen() {
 		sdm.rxmu.Unlock()
 		sdm.ocmu.Unlock()
-		debug.Assert(false, sdm.trname(), " ", "closed")
 		return
 	}
 	delete(sdm.receivers, xid)
