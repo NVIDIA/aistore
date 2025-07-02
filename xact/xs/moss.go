@@ -50,7 +50,6 @@ other-targets (T1..Tn)
 */
 
 // TODO -- FIXME:
-// - MossOut.Opaque
 // - DT: sentinels
 // - ctlmsg
 // - soft errors other than not-found
@@ -87,6 +86,7 @@ type (
 		aw   archive.Writer
 		r    *XactMoss
 		smap *meta.Smap
+		req  *apc.MossReq
 		resp *apc.MossResp
 		sgl  *memsys.SGL // multipart (buffered) only
 		wid  string      // work item ID
@@ -232,10 +232,10 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 	var (
 		resp   = &apc.MossResp{UUID: r.ID()}
-		basewi = basewi{r: r, smap: smap, resp: resp, wid: wid}
+		basewi = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
-	basewi.recv.m = make([]rxentry, len(req.In))
-	basewi.recv.ch = make(chan int, len(req.In)<<1) // NOTE: extra cap
+	basewi.recv.m = make([]rxentry, len(req.In))    // preallocate
+	basewi.recv.ch = make(chan int, len(req.In)<<1) // extra cap (TODO: revisit)
 	basewi.recv.mtx = &sync.Mutex{}
 
 	r.pmtx.Lock()
@@ -279,7 +279,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	if req.StreamingGet {
 		wi := streamwi{basewi: basewi}
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
-		err := wi.asm(req, w)
+		err := wi.asm(w)
 		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln(r.Name(), core.T.String(), "done streaming Assemble", basewi.wid, "err", err)
 		}
@@ -294,7 +294,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	wi.sgl = sgl
 	wi.resp.Out = make([]apc.MossOut, 0, len(req.In))
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
-	err := wi.asm(req, w)
+	err := wi.asm(w)
 	sgl.Free()
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
@@ -665,49 +665,76 @@ add:
 	return nil
 }
 
-// wait for _any_ receive (out of order or in)
-func (wi *basewi) waitRx(sleep time.Duration) error {
+func (wi *basewi) waitFlushRx(i int, streaming bool) (int, error) {
+	for {
+		err := wi.waitAnyRx(iniwait)
+		if err != nil {
+			return 0, err
+		}
+
+		var j int
+		wi.recv.mtx.Lock()
+		err = wi.flushRx(streaming)
+		j = wi.recv.next
+		wi.recv.mtx.Unlock()
+
+		if err != nil {
+			return 0, err
+		}
+		if j <= i {
+			continue // hole `i` remains
+		}
+		return j, nil
+	}
+}
+
+func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 	var (
 		total time.Duration
+		l     = len(wi.recv.m)
 		timer = time.NewTimer(sleep)
 	)
 	defer timer.Stop()
 	for {
 		select {
 		case <-timer.C:
+			var (
+				entry     *rxentry
+				index     int
+				entryDone bool
+			)
 			total += sleep
 			if cmn.Rom.FastV(5, cos.SmoduleXs) {
 				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid, total)
 			}
-			var (
-				entry     *rxentry
-				i         int
-				entryDone bool
-			)
-			wi.recv.mtx.Lock()
-			i = wi.recv.next
-			if i < len(wi.recv.m) {
-				entry = &wi.recv.m[i]
+
+			wi.recv.mtx.Lock() // -----------
+			index = wi.recv.next
+			if index < l {
+				entry = &wi.recv.m[index]
 				entryDone = entry.isLocal() || !entry.isEmpty()
 			} else {
 				entryDone = true
 			}
-			wi.recv.mtx.Unlock()
+			wi.recv.mtx.Unlock() // -----------
 
 			if cmn.Rom.FastV(5, cos.SmoduleXs) {
 				if entry != nil {
-					nlog.Infoln("\t\t>>>>> next:", wi.wid, i, entry.nameInArch, entry.local)
+					nlog.Infoln("\t\t>>>>> next:", wi.wid, index, entry.nameInArch, entry.local)
 				} else {
-					nlog.Infoln("\t\t>>>>> done:", wi.wid, i, len(wi.recv.m), entryDone)
+					nlog.Infoln("\t\t>>>>> done:", wi.wid, index, len(wi.recv.m), entryDone)
 				}
 			}
 			if entryDone {
 				return nil
 			}
+
+			// TODO -- FIXME: [resilience] timeout must trigger a "pointed" retry (re-send)
 			if total > maxwait {
 				return fmt.Errorf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
-					wi.r.Name(), i, core.T.String(), wi.wid, total)
+					wi.r.Name(), index, core.T.String(), wi.wid, total)
 			}
+
 			if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
 				sleep = min(sleep<<1, maxwait>>3)
 			}
@@ -725,10 +752,10 @@ func (wi *basewi) waitRx(sleep time.Duration) error {
 	}
 }
 
-func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
+func (wi *basewi) next(i int, streaming bool) (int, error) {
 	var (
 		r  = wi.r
-		in = &req.In[i]
+		in = &wi.req.In[i]
 	)
 	if err := _assertNoRange(in); err != nil {
 		return 0, err
@@ -746,39 +773,23 @@ func (wi *basewi) next(req *apc.MossReq, i int, streaming bool) (int, error) {
 			return 0, err
 		}
 
-		// TODO -- FIXME: [resilience] timeout must trigger a "pointed" retry (re-send)
-	wait:
-		err := wi.waitRx(iniwait)
-		if err != nil {
-			return 0, err
-		}
-
-		var j int
-		wi.recv.mtx.Lock()
-		err = wi.flushRx(streaming)
-		j = wi.recv.next
-		wi.recv.mtx.Unlock()
-
-		if err != nil {
-			return 0, err
-		}
-		if j <= i {
-			goto wait // hole `i` remains
-		}
-		return j, nil
+		return wi.waitFlushRx(i, streaming)
 	}
 
 	bck := lom.Bck()
 	out := apc.MossOut{
-		ObjName: in.ObjName, ArchPath: in.ArchPath, Bucket: bck.Name, Provider: bck.Provider,
-		Opaque: in.Opaque,
+		Bucket:   bck.Name,
+		Provider: bck.Provider,
+		ObjName:  in.ObjName,
+		ArchPath: in.ArchPath,
+		Opaque:   in.Opaque,
 	}
-	nameInArch := in.NameInRespArch(bck.Name, req.OnlyObjName)
-	err = wi.write(lom, in.ArchPath, &out, nameInArch, req.ContinueOnErr)
+	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
+	err = wi.write(lom, in.ArchPath, &out, nameInArch, wi.req.ContinueOnErr)
 	if err != nil {
 		return 0, err
 	}
-	if req.StreamingGet {
+	if wi.req.StreamingGet {
 		if err := wi.aw.Flush(); err != nil {
 			return 0, err
 		}
@@ -877,16 +888,16 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
-func (wi *basewi) asm(req *apc.MossReq, streaming bool) error {
+func (wi *basewi) asm(streaming bool) error {
 	var (
 		r = wi.r
-		l = len(req.In)
+		l = len(wi.req.In)
 	)
 	for i := 0; i < l; {
 		if err := r.AbortErr(); err != nil {
 			return err
 		}
-		j, err := wi.next(req, i, streaming)
+		j, err := wi.next(i, streaming)
 		if err != nil {
 			r.Abort(err)
 			return err
@@ -908,22 +919,29 @@ func (wi *basewi) flushRx(streaming bool) error {
 		var (
 			err   error
 			size  int64
-			entry = &wi.recv.m[wi.recv.next]
+			index = wi.recv.next
+			entry = &wi.recv.m[index]
+			in    = &wi.req.In[index]
 		)
 		if entry.isLocal() {
 			wi.recv.next++
 			continue
 		}
 		if entry.isEmpty() {
+			debug.Assert(entry.mopaque == nil)
 			return nil
 		}
 
 		wi.recv.mtx.Unlock() //--------------
 
-		if entry.mopaque.Missing {
+		switch {
+		case entry.mopaque.Aborted:
+			debug.Assert(false, entry.mopaque.Emsg) // cannot be here - see r._recvObj
+		case entry.mopaque.Missing:
 			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
-		} else {
+		default:
+			debug.Assert(entry.mopaque.Emsg == "", entry.mopaque.Emsg)
 			size = entry.sgl.Len()
 			oah := cos.SimpleOAH{Size: size}
 			err = wi.aw.Write(entry.nameInArch, oah, entry.sgl)
@@ -939,10 +957,12 @@ func (wi *basewi) flushRx(streaming bool) error {
 
 		if !streaming {
 			out := apc.MossOut{
-				Bucket:  entry.bucket,
-				ObjName: entry.mopaque.Oname,
-				Size:    size,
-				ErrMsg:  entry.mopaque.Emsg,
+				Bucket:   entry.bucket,
+				Provider: in.Provider, // (just copying)
+				ObjName:  entry.mopaque.Oname,
+				Size:     size,
+				Opaque:   in.Opaque, // (see API definition)
+				ErrMsg:   entry.mopaque.Emsg,
 			}
 			wi.resp.Out = append(wi.resp.Out, out)
 		}
@@ -964,8 +984,8 @@ func (wi *basewi) flushRx(streaming bool) error {
 // buffwi //
 ////////////
 
-func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
-	if err := wi.basewi.asm(req, false); err != nil {
+func (wi *buffwi) asm(w http.ResponseWriter) error {
+	if err := wi.basewi.asm(false); err != nil {
 		return err
 	}
 
@@ -993,7 +1013,7 @@ func (wi *buffwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	wi.r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", req.OutputFormat, "]")
+		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
 	}
 	return nil
 }
@@ -1020,9 +1040,9 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 // streamwi //
 //////////////
 
-func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
-	w.Header().Set(cos.HdrContentType, _ctype(req.OutputFormat))
-	if err := wi.basewi.asm(req, true); err != nil {
+func (wi *streamwi) asm(w http.ResponseWriter) error {
+	w.Header().Set(cos.HdrContentType, _ctype(wi.req.OutputFormat))
+	if err := wi.basewi.asm(true); err != nil {
 		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
 		return cmn.ErrGetTxBenign
 	}
@@ -1038,7 +1058,7 @@ func (wi *streamwi) asm(req *apc.MossReq, w http.ResponseWriter) error {
 	wi.r.ObjsAdd(wi.cnt, wi.size)
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", req.OutputFormat, "]")
+		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", wi.req.OutputFormat, "]")
 	}
 	return nil
 }
