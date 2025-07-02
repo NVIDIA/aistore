@@ -191,6 +191,7 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	for i := range numObjs {
 		mossIn = append(mossIn, apc.MossIn{
 			ObjName: m.objNames[i],
+			Opaque:  []byte(cos.GenTie()),
 		})
 	}
 
@@ -269,6 +270,7 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 			mossIn = append(mossIn, apc.MossIn{
 				ObjName:  archInfo.name,
 				ArchPath: archInfo.filePaths[j],
+				Opaque:   []byte(cos.GenTie()),
 			})
 		}
 	}
@@ -751,6 +753,11 @@ func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.Mo
 			// Size should be positive for valid files
 			tassert.Errorf(t, mossOut.Size > 0, "Expected positive size but got %d", mossOut.Size)
 		}
+
+		// Opaque must be identical
+		tassert.Errorf(t, bytes.Equal(mossOut.Opaque, mossIn.Opaque),
+			"Opaque mismatch for %s: MossOut.Opaque=%s, MossIn.Opaque=%s",
+			mossOut.ObjName, cos.BHead(mossOut.Opaque), cos.BHead(mossIn.Opaque))
 	}
 
 	tlog.Logf("Archive validation passed: %d entries, correct order and naming (format: %s)\n",

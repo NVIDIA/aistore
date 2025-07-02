@@ -961,7 +961,7 @@ func (wi *basewi) flushRx() error {
 				Provider: in.Provider, // (just copying)
 				ObjName:  entry.mopaque.Oname,
 				Size:     size,
-				Opaque:   in.Opaque, // (see API definition)
+				Opaque:   in.Opaque, // as is (see apc/ml definition)
 				ErrMsg:   entry.mopaque.Emsg,
 			}
 			wi.resp.Out = append(wi.resp.Out, out)
@@ -1104,7 +1104,7 @@ func (nopROC) Open() (cos.ReadOpenCloser, error) { return &nopROC{}, nil }
 func (nopROC) Close() error                      { return nil }
 
 // //////////////
-// mossOpaque //
+// mossOpaque (not to confuse with apc.MossIn/Out Opaque)
 // //////////////
 
 type mossOpaque struct {
