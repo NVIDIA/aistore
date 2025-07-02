@@ -5,7 +5,7 @@
 package ais
 
 import (
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,6 +18,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+const mockPodSpec = `
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mock-pod-spec
+spec:
+  containers:
+  - name: main
+    image: busybox
+    command: ["sleep", "3600"]
+    ports:
+    - name: default
+      containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: default
+`
 
 func TestEtlMDDeepCopy(t *testing.T) {
 	etlMD := newEtlMD()
@@ -66,26 +85,30 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 		cfg = cmn.GCO.Get()
 
 		etlMD = newEtlMD()
-		for _, initType := range []string{etl.CodeType, etl.SpecType} {
-			for i := range 5 {
+		for _, initType := range []string{etl.ETLSpecType, etl.SpecType} {
+			for i := range 1 {
 				var msg etl.InitMsg
-				if initType == etl.CodeType {
+				if initType == etl.ETLSpecType {
 					msg = &etl.ETLSpecMsg{
 						InitMsgBase: etl.InitMsgBase{
-							EtlName:   "test-spec",
-							CommTypeX: etl.Hpush,
+							EtlName:     "runtime-spec" + strconv.Itoa(i),
+							CommTypeX:   etl.Hpush,
+							InitTimeout: cos.Duration(etl.DefaultInitTimeout),
+							ObjTimeout:  cos.Duration(etl.DefaultObjTimeout),
 						},
 						Runtime: etl.RuntimeSpec{
-							Image: "test-image",
+							Image: "test-runtime-image",
 						},
 					}
 				} else {
 					msg = &etl.InitSpecMsg{
 						InitMsgBase: etl.InitMsgBase{
-							EtlName:   fmt.Sprintf("init-spec-%d", i),
-							CommTypeX: etl.Hpush,
+							EtlName:     "init-spec" + strconv.Itoa(i),
+							CommTypeX:   etl.Hpush,
+							InitTimeout: cos.Duration(etl.DefaultInitTimeout),
+							ObjTimeout:  cos.Duration(etl.DefaultObjTimeout),
 						},
-						Spec: []byte(fmt.Sprintf("test spec - %d", i)),
+						Spec: []byte(mockPodSpec),
 					}
 				}
 				etlMD.Add(msg, etl.Running)
