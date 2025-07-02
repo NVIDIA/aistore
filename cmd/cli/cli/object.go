@@ -141,12 +141,23 @@ func copyObject(c *cli.Context, bckFrom cmn.Bck, objFrom string, bckTo cmn.Bck, 
 			return fmt.Errorf("ETL[%s] does not exist", etlName)
 		}
 	}
+	if etlName != "" {
+		// Use TransformObject when ETL is specified
+		return api.TransformObject(apiBP, &api.TransformArgs{
+			CopyArgs: api.CopyArgs{
+				FromBck:     bckFrom,
+				FromObjName: objFrom,
+				ToBck:       bckTo,
+				ToObjName:   objTo,
+			},
+			ETLName: etlName,
+		})
+	}
 	return api.CopyObject(apiBP, &api.CopyArgs{
 		FromBck:     bckFrom,
 		FromObjName: objFrom,
 		ToBck:       bckTo,
 		ToObjName:   objTo,
-		ETLName:     etlName,
 	})
 }
 

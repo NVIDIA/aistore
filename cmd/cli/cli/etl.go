@@ -56,7 +56,8 @@ const etlShowUsage = "Show ETL(s).\n" +
 
 const etlObjectUsage = "Transform an object.\n" +
 	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>'\t transform object and save to file.\n" +
-	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'\t\t transform and output to stdout."
+	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'\t\t transform and output to stdout.\n" +
+	indent1 + "\t- 'ais etl object cp <ETL_NAME> <SRC_BUCKET/OBJECT> <DST_BUCKET[/OBJECT]>'\t transform and copy to another bucket."
 
 const etlBucketUsage = "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').\n" +
 	indent1 + "\t- 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>'\t\t transform all objects from source to destination bucket.\n" +
@@ -175,6 +176,15 @@ var (
 		Action:       etlObjectHandler,
 		Flags:        sortFlags(etlSubFlags[cmdObject]),
 		BashComplete: etlIDCompletions,
+		Subcommands: []cli.Command{
+			{
+				Name:         commandCopy,
+				Usage:        "Transform and copy an object to another bucket.\n" + indent1 + "\t- 'ais etl object cp <ETL_NAME> <SRC_BUCKET/OBJECT> <DST_BUCKET[/OBJECT]>'",
+				ArgsUsage:    etlNameArgument + " " + objectArgument + " " + bucketDstArgument + "[/OBJECT]",
+				Action:       etlObjectCopyHandler,
+				BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1),
+			},
+		},
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
@@ -182,7 +192,7 @@ var (
 		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        sortFlags(etlSubFlags[cmdBucket]),
-		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1),
 	}
 	logsCmdETL = cli.Command{
 		Name:         cmdViewLogs,
@@ -762,6 +772,59 @@ func etlObjectHandler(c *cli.Context) error {
 
 	_, err := api.ETLObject(apiBP, etlArgs, bck, objName, w)
 	return handleETLHTTPError(err, etlName)
+}
+
+func etlObjectCopyHandler(c *cli.Context) error {
+	if c.NArg() < 3 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+
+	var (
+		etlName = c.Args().Get(0)
+		srcURI  = c.Args().Get(1)
+		dstURI  = c.Args().Get(2)
+	)
+
+	// Parse source bucket and object
+	srcBck, srcObjName, errV := parseBckObjURI(c, srcURI, false)
+	if errV != nil {
+		return errV
+	}
+
+	// Parse destination bucket and object
+	dstBck, dstObjName, errV := parseBckObjURI(c, dstURI, true)
+	if errV != nil {
+		dstBck, errV = parseBckURI(c, dstURI, false)
+		if errV != nil {
+			return errV
+		}
+		// If no destination object name is provided, use the source object name
+		dstObjName = ""
+	}
+
+	// Call the transform API
+	err := api.TransformObject(apiBP, &api.TransformArgs{
+		CopyArgs: api.CopyArgs{
+			FromBck:     srcBck,
+			FromObjName: srcObjName,
+			ToBck:       dstBck,
+			ToObjName:   dstObjName,
+		},
+		ETLName: etlName,
+	})
+
+	if err != nil {
+		return handleETLHTTPError(err, etlName)
+	}
+
+	var dstFullName string
+	if dstObjName != "" {
+		dstFullName = dstBck.Cname(dstObjName)
+	} else {
+		dstFullName = dstBck.Cname(srcObjName)
+	}
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: %s => %s\n", etlName, srcBck.Cname(srcObjName), dstFullName)
+	return nil
 }
 
 // populate `EtlName` and then call `_populate()`

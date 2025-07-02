@@ -496,7 +496,8 @@ mloop:
 	}
 }
 
-func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstBckIdx, bucketsCnt int) cli.BashCompleteFunc {
+func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstBckIdx int) cli.BashCompleteFunc {
+	const bucketsCnt = 2 // always expect 2 buckets
 	return func(c *cli.Context) {
 		if c.NArg() < firstBckIdx || c.NArg() >= firstBckIdx+bucketsCnt {
 			// suggest different if before bucket completion

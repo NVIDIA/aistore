@@ -36,8 +36,13 @@ Usage examples:
 // ais cp
 //
 //nolint:dupword // intentional
-const copyBucketUsage = "Copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),\n" +
+const copyBucketUsage = "Copy entire bucket, selected objects, or a single object (to select, use '--list', '--template', or '--prefix'),\n" +
 	indent1 + "\te.g.:\n" +
+	indent1 + "\tsingle object examples:\n" +
+	indent1 + "\t- 'ais cp ais://src/obj1.tar ais://dst'\t- copy single object to the destination bucket with the same name;\n" +
+	indent1 + "\t- 'ais cp ais://src/obj1.tar ais://dst/obj2.tar'\t- copy single object with a new name;\n" +
+	indent1 + "\t- 'ais cp s3://src/img.jpg ais://dst/'\t- copy single Cloud object to AIS bucket;\n" +
+	indent1 + "\tbucket to bucket examples:\n" +
 	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy Cloud bucket that may _not_ be present in cluster (and create destination if doesn't exist);\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all --num-workers 16'\t- same as above employing 16 concurrent workers;\n" +
@@ -247,7 +252,7 @@ var (
 		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
 		Flags:        sortFlags(bucketCmdsFlags[commandCopy]),
 		Action:       copyBucketHandler,
-		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0),
 	}
 	bucketCmdRename = cli.Command{
 		Name:         commandRename,
@@ -255,7 +260,7 @@ var (
 		ArgsUsage:    bucketArgument + " " + bucketNewArgument,
 		Flags:        sortFlags(bucketCmdsFlags[commandRename]),
 		Action:       mvBucketHandler,
-		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
+		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0),
 	}
 	bucketCmdSetProps = cli.Command{
 		Name:      cmdSetBprops,
