@@ -1488,7 +1488,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 			return 0, err, false
 		}
 		if !delFromBackend {
-			return http.StatusNotFound, err, false
+			return http.StatusNotFound, cos.NewErrNotFound(t, lom.Cname()), false
 		}
 	} else {
 		delFromAIS = true
