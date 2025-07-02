@@ -20,6 +20,7 @@ from aistore.sdk.utils import parse_url
 from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
 from aistore.sdk.retry_config import RetryConfig
+from aistore.sdk.get_batch.batch_loader import BatchLoader
 
 
 class Client:
@@ -172,6 +173,17 @@ class Client:
             dSort object created
         """
         return Dsort(client=self._request_client, dsort_id=dsort_id)
+
+    def batch_loader(self):
+        """
+        Factory constructor for BatchLoader object.
+        Contains APIs related to AIStore GetBatch operations.
+        Does not make any HTTP requests, only creates BatchLoader.
+
+        Returns:
+            BatchLoader: The BatchLoader created
+        """
+        return BatchLoader(self._request_client)
 
     def fetch_object_by_url(self, url: str) -> Object:
         """

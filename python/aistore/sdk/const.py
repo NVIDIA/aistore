@@ -8,6 +8,11 @@ KIB = 2**10
 
 # Archive extensions
 EXT_TAR = ".tar"
+EXT_TGZ = ".tgz"
+EXT_TARGZ = ".tar.gz"
+EXT_TARLZ4 = ".tar.lz4"
+EXT_ZIP = ".zip"
+
 # Standard Header Keys
 HEADER_ACCEPT = "Accept"
 HEADER_USER_AGENT = "User-Agent"
@@ -101,6 +106,7 @@ URL_PATH_AUTHN_USERS = "users"
 URL_PATH_AUTHN_CLUSTERS = "clusters"
 URL_PATH_AUTHN_ROLES = "roles"
 URL_PATH_AUTHN_TOKENS = "tokens"
+URL_PATH_GB = "ml/moss"
 
 # HTTP Methods
 HTTP_METHOD_GET = "get"
@@ -210,3 +216,31 @@ CHANNEL_COUNT_MASK = ((1 << CHANNEL_COUNT_BITS) - 1) << CHANNEL_COUNT_SHIFT
 MULTIPART_MARKER = b"--"
 WIN_LINE_END = b"\r\n\r\n"
 UNIX_LINE_END = b"\n\n"
+
+# BatchLoader constants
+MISSING_DATA_PREFIX = "__404__"
+
+# GetBatch (GB) API Constants (see api/ml.go and api/apc/ml.go)
+
+# MossIn/MossOut Constants
+GB_OBJNAME = "objname"
+GB_BCK = "bucket"
+GB_PROVIDER = "provider"
+GB_UNAME = "uname"
+GB_ARCHPATH = "archpath"
+GB_START = "start"
+GB_LENGTH = "length"
+GB_OPAQUE = "opaque"
+GB_ERR_MSG = "err_msg"
+GB_SIZE = "size"
+
+# MossReq Constants
+GB_IN = "in"
+GB_OUTPUT_FMT = "mime"
+GB_CONTINUE_ERR = "coer"
+GB_ONLY_OBJ_NAME = "onob"
+GB_STRM_GET = "strm"
+
+# MossResp structs
+GB_OUT = "out"
+GB_UUID = "uuid"

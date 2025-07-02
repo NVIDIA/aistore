@@ -24,3 +24,5 @@ from aistore.sdk.dataset.data_shard import DataShard
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.retry_config import ColdGetConf
 from aistore.sdk.retry_config import RetryConfig
+from aistore.sdk.get_batch.batch_request import BatchRequest
+from aistore.sdk.get_batch.batch_response import BatchResponseItem
