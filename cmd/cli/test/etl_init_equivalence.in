@@ -12,12 +12,12 @@ ais etl init --from-file="hello_world_spec.yaml" --comm-type="hpush://" --name=$
 ais etl show | grep $ETL_NAME-explicit | awk '{print $2}'
 ais etl show | grep $ETL_NAME-implicit | awk '{print $2}'
 
-# Show details for both ETLs to verify they have identical properties
-ais etl show details $ETL_NAME-explicit | grep -m1 "communication_type"
-ais etl show details $ETL_NAME-implicit | grep -m1 "communication_type"
+# Show specification for both ETLs to verify they have identical properties
+ais etl show $ETL_NAME-explicit | grep -m1 "communication_type"
+ais etl show $ETL_NAME-implicit | grep -m1 "communication_type"
 
-ais etl show details $ETL_NAME-explicit | grep -m1 "arg_type"
-ais etl show details $ETL_NAME-implicit | grep -m1 "arg_type"
+ais etl show $ETL_NAME-explicit | grep -m1 "arg_type"
+ais etl show $ETL_NAME-implicit | grep -m1 "arg_type"
 
 # Clean up
 ais etl stop $ETL_NAME-explicit // IGNORE

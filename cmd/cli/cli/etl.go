@@ -51,7 +51,7 @@ const etlRemoveUsage = "Remove ETL.\n" +
 
 const etlShowUsage = "Show ETL(s).\n" +
 	indent1 + "\t- 'ais etl show'\t\t\t list all ETL jobs.\n" +
-	indent1 + "\t- 'ais etl show details <ETL_NAME>'\t show detailed specification for specified ETL.\n" +
+	indent1 + "\t- 'ais etl show <ETL_NAME> [<ETL_NAME> ...]'\t show detailed specification for specified ETL jobs.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME>'\t show transformation errors for specified ETL."
 
 const etlObjectUsage = "Transform an object.\n" +
@@ -109,18 +109,12 @@ var (
 		},
 	}
 	showCmdETL = cli.Command{
-		Name:   commandShow,
-		Usage:  etlShowUsage,
-		Action: etlListHandler,
+		Name:         commandShow,
+		Usage:        etlShowUsage,
+		Action:       etlListHandler,
+		ArgsUsage:    etlNameListArgument,
+		BashComplete: etlIDCompletions,
 		Subcommands: []cli.Command{
-			{
-				Name:         cmdDetails,
-				Usage:        "Show ETL specification details",
-				ArgsUsage:    etlNameArgument,
-				Action:       etlShowDetailsHandler,
-				BashComplete: etlIDCompletions,
-				Flags:        sortFlags(etlSubFlags[commandShow]),
-			},
 			{
 				Name:         cmdErrors,
 				Usage:        etlShowErrorsUsage,
@@ -402,8 +396,24 @@ func processSpecNode(c *cli.Context, node *yaml.Node) error {
 }
 
 func etlListHandler(c *cli.Context) (err error) {
-	_, err = etlList(c, false)
-	return
+	if c.NArg() == 0 {
+		_, err = etlList(c, false)
+		return err
+	}
+
+	etlNames := c.Args()[0:]
+	first := true
+	for _, name := range etlNames {
+		if !first {
+			fmt.Fprintln(c.App.Writer, separatorLine)
+		}
+		err = etlPrintDetails(c, name)
+		if err != nil {
+			fmt.Fprintln(c.App.ErrWriter, err)
+		}
+		first = false
+	}
+	return nil
 }
 
 func showETLs(c *cli.Context, xid string, caption bool) (int, error) {
@@ -507,14 +517,6 @@ func etlShowErrorsHandler(c *cli.Context) error {
 		return teb.Print(details.ObjErrs, teb.ETLObjErrorsNoHdrTmpl)
 	}
 	return teb.Print(details.ObjErrs, teb.ETLObjErrorsTmpl)
-}
-
-func etlShowDetailsHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-	id := c.Args().Get(0)
-	return etlPrintDetails(c, id)
 }
 
 func etlPrintDetails(c *cli.Context, id string) error {

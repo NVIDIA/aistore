@@ -84,6 +84,7 @@ var (
 			showCmdJob,
 			showCmdLog,
 			showTLS,
+			makeAlias(showCmdETL, "", true, commandETL), // alias for `ais etl show`
 		},
 	}
 

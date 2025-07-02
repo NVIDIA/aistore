@@ -57,7 +57,7 @@ COMMANDS:
 
    show       Show ETL(s).
               - 'ais etl show'                          list all ETL jobs.
-              - 'ais etl show details <ETL_NAME>'   show detailed specification for specified ETL.
+              - 'ais etl show <ETL_NAME> [<ETL_NAME> ...]'   show detailed specification for specified ETL jobs.
               - 'ais etl show errors <ETL_NAME>'    show transformation errors for specified ETL.
    view-logs  View ETL logs.
               - 'ais etl view-logs <ETL_NAME>'                 show logs from all target nodes for specified ETL.
@@ -222,24 +222,26 @@ This will display all available ETLs along with their current status (`initializ
 
 ---
 
-## View ETL Details
+## View ETL Specification
 
-To inspect a specific ETL and its configuration, use:
+To view detailed information about one or more ETL jobs and their configuration, use:
 
 ```bash
-ais etl show details <ETL_NAME>
+ais etl show <ETL_NAME> [<ETL_NAME> ...]
 ```
 
-This command displays detailed information about the ETL, including:
+This command displays detailed attributes of each ETL, including:
 
 * **ETL Name**
 * **Communication Type**
-* **Argument Type** (e.g., raw bytes or fully qualified file path)
+* **Argument Type** (e.g., "" or "fqn"(fully qualified path))
 * **Runtime Configuration**
   * Container image
   * Command
   * Environment variables
-* **ETL Source** (Pod specfication, if applicable)
+* **ETL Source** (Full Pod specification, if applicable)
+
+> **Note:** You can also use the alias `ais show etl <ETL_NAME> [<ETL_NAME> ...]` for the same functionality.
 
 ---
 
