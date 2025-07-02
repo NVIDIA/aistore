@@ -1304,6 +1304,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
+	nlog.Infoln("Num Goroutines:", runtime.NumGoroutine())
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
 		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Warningln("[health]", t.String(), "standing by...")

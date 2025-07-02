@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1108,6 +1109,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 
 // GET /v1/health
 func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
+	nlog.Infoln("Num Goroutines:", runtime.NumGoroutine())
 	if !p.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
