@@ -847,6 +847,63 @@ func TestETLStopAndRestartETL(t *testing.T) {
 	tetl.ETLCheckStage(t, baseParams, etlName, etl.Running)
 }
 
+func TestETLCopyTransformSingleObj(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+
+		bckFrom = cmn.Bck{
+			Name:     "obj-cp-transform-from-" + trand.String(5),
+			Provider: apc.AIS,
+		}
+		bckTo = cmn.Bck{
+			Name:     "obj-cp-transform-to-" + trand.String(5),
+			Provider: apc.AIS,
+		}
+		objFrom       = trand.String(10)
+		objTo         = trand.String(10)
+		transformer   = tetl.MD5
+		transformFunc = tetl.MD5Transform
+		comm          = etl.Hpush
+		content       = []byte("This is a test object for ETL transformation. It will be transformed to MD5 checksum.")
+	)
+	_ = tetl.InitSpec(t, baseParams, transformer, comm, etl.ArgTypeDefault)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
+
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+	tlog.Logln("PUT object")
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: baseParams,
+		Bck:        bckFrom,
+		ObjName:    objFrom,
+		Reader:     readers.NewBytes(content),
+	})
+	tassert.CheckFatal(t, err)
+
+	// transform the object
+	err = api.TransformObject(baseParams, &api.TransformArgs{
+		CopyArgs: api.CopyArgs{
+			FromBck:     bckFrom,
+			FromObjName: objFrom,
+			ToBck:       bckTo,
+			ToObjName:   objTo,
+		},
+		ETLName: transformer,
+	})
+	tassert.CheckFatal(t, err)
+
+	tlog.Logln("GET transformed object")
+	r, _, err := api.GetObjectReader(baseParams, bckTo, objTo, &api.GetArgs{})
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatal(t, tools.ReaderEqual(transformFunc(readers.NewBytes(content)), r), "expected transformed object to match the MD5 checksum")
+}
+
 func TestETLMultipleTransformersAtATime(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)

@@ -1,5 +1,10 @@
+# This test file focuses solely on listing local bucket functionality. 
+# It evicts all remote buckets to ensure consistent behavior during the tests.
+ais evict gs: || true // IGNORE
+ais evict aws: || true // IGNORE
+ais evict az: || true // IGNORE
+ais evict oc: || true // IGNORE
 ais ls
-ais ls --all
 
 ais archive gen-shards "ais://$BUCKET_1/tmp/shard-{0..4}.tar" --fcount 1 --fsize 1KB --tform GNU --num-workers 1 --cleanup // IGNORE
 ais ls ais://$BUCKET_1

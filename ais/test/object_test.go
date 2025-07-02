@@ -339,7 +339,6 @@ func TestCopyObject(t *testing.T) {
 		FromObjName: objFrom,
 		ToBck:       bckTo,
 		ToObjName:   objTo,
-		ETLName:     "",
 	})
 	tassert.CheckFatal(t, err)
 

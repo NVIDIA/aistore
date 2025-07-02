@@ -935,6 +935,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		var (
 			bck     *meta.Bck
 			objName string
+			etlName = apireq.dpq.etl.name // apc.QparamETLName
 		)
 
 		bck, objName, err = meta.ParseUname(apireq.dpq.objto, true /*object name required*/)
@@ -942,7 +943,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			t.writeErr(w, r, err)
 			return
 		}
-		ecode, err = t.copyObject(lom, bck, objName, config) // lom is locked/unlocked during the call
+		ecode, err = t.copyObject(lom, bck, objName, etlName, config) // lom is locked/unlocked during the call
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1421,7 +1422,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	return code, err
 }
 
-func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, config *cmn.Config) (int, error) {
+func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName string, config *cmn.Config) (ecode int, err error) {
 	coiParams := xs.AllocCOI()
 	{
 		coiParams.BckTo = bck
@@ -1430,10 +1431,39 @@ func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, config
 		coiParams.ObjnameTo = objName
 		coiParams.OAH = lom
 	}
-	coi := (*coi)(coiParams)
 
+	var xetl *etl.XactETL
+	if etlName != "" {
+		coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(etlName, nil /*xaction*/)
+		if err != nil {
+			xs.FreeCOI(coiParams)
+			return 0, err
+		}
+	}
+
+	coi := (*coi)(coiParams)
 	res := coi.do(t, nil, lom)
 	xs.FreeCOI(coiParams)
+
+	// stats and error handling
+	if xetl != nil {
+		switch {
+		case res.Err == nil:
+			xetl.ObjsAdd(1, res.Lsize)
+		case res.Err == cmn.ErrSkip:
+			// ErrSkip is returned when the object is arrived through direct put
+			xetl.OutObjsAdd(1, res.Lsize)
+		case cos.IsNotExist(res.Err, res.Ecode):
+			xetl.InlineObjErrs.Add(&etl.ObjErr{
+				ObjName: lom.Cname(),
+				Message: "object not found",
+				Ecode:   res.Ecode,
+			})
+		default:
+			xetl.InlineObjErrs.Add(res.Err)
+		}
+	}
+
 	return res.Ecode, res.Err
 }
 

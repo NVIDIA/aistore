@@ -789,6 +789,12 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	if apireq.dpq.etl.name != "" { // apc.QparamEtlName
+		if err := p.etlExists(apireq.dpq.etl.name); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+	}
 	appendTyProvided := apireq.dpq.apnd.ty != "" // apc.QparamAppendType
 	if appendTyProvided {
 		verb = "APPEND"

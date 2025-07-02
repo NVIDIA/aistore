@@ -135,8 +135,11 @@ type (
 		FromBck     cmn.Bck
 		FromObjName string
 		ToBck       cmn.Bck
-		ToObjName   string // if empty, defaults to SrcObjName
-		ETLName     string // optional, for transformation
+		ToObjName   string // if empty, defaults to FromObjName
+	}
+	TransformArgs struct {
+		CopyArgs
+		ETLName string
 	}
 )
 
@@ -334,16 +337,16 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 	return
 }
 
-// Copy an object from source bucket/object to destination bucket[/object].
-// This is a synchronous, blocking operation.
-// If ToObjName is empty, uses FromObjName as the destination.
-func CopyObject(bp BaseParams, args *CopyArgs) error {
+func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName string) error {
 	var (
 		q         = qalloc()
 		toObjName = cos.Left(args.ToObjName, args.FromObjName)
 	)
 	args.FromBck.SetQuery(q)
 	args.ToBck.AddUnameToQuery(q, apc.QparamObjTo, toObjName)
+	if etlName != "" {
+		q.Add(apc.QparamETLName, etlName)
+	}
 
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
@@ -359,9 +362,16 @@ func CopyObject(bp BaseParams, args *CopyArgs) error {
 	return err
 }
 
-// TODO -- FIXME: not implemented yet
-func TransformObject(_ BaseParams, args *CopyArgs) error {
-	return cmn.NewErrNotImpl("transform-object", args.FromBck.Cname(args.FromObjName))
+// Copy an object from source bucket/object to destination bucket[/object].
+// This is a synchronous, blocking operation.
+// If ToObjName is empty, uses FromObjName as the destination.
+func CopyObject(bp BaseParams, args *CopyArgs) error {
+	return copyOrTransformObject(bp, args, "")
+}
+
+// Same as CopyObject, but with an ETL transformation
+func TransformObject(bp BaseParams, args *TransformArgs) error {
+	return copyOrTransformObject(bp, &args.CopyArgs, args.ETLName)
 }
 
 // HEAD(object)  ==============================================================================================
