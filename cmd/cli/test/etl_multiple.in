@@ -7,6 +7,9 @@ ais etl init -f etl-config.yaml // IGNORE
 ais etl show | grep Running | wc -l
 ais etl stop -f etl-config.yaml test-etl-3 2>&1 | head -n 1
 ais etl stop -f etl-config.yaml
+ais etl start -f etl-config.yaml
+ais etl stop test-etl1
+ais etl start -f etl-config.yaml 2>&1 
 ais etl rm -f etl-config.yaml test-etl-3 2>&1 | head -n 1
 ais etl rm -f etl-config.yaml
 ais etl show | wc -l

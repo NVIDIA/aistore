@@ -32,7 +32,10 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
 
 const etlStartUsage = "Start ETL.\n" +
-	indent1 + "\t- 'ais etl start <ETL_NAME>'\t start the specified ETL (transitions from stopped to running state)."
+	indent1 + "\t- 'ais etl start <ETL_NAME>'\t start the specified ETL (transitions from stopped to running state).\n" +
+	indent1 + "\t- 'ais etl start <ETL_NAME> <ETL_NAME2>'\t\t start multiple ETL jobs by name.\n" +
+	indent1 + "\t- 'ais etl start -f <spec-file.yaml>'\t\t start ETL jobs defined in a local YAML file.\n" +
+	indent1 + "\t- 'ais etl start -f <URL>'\t\t start ETL jobs defined in a remote YAML file."
 
 const etlStopUsage = "Stop ETL. Also aborts related offline jobs and can be used to terminate ETLs stuck in 'initializing' state.\n" +
 	indent1 + "\t- 'ais etl stop <ETL_NAME>'\t\t stop the specified ETL (transitions from running to stopped state).\n" +
@@ -103,7 +106,9 @@ var (
 		commandShow: {
 			noHeaderFlag,
 		},
-		cmdStart: {},
+		cmdStart: {
+			fromFileFlag,
+		},
 		commandRemove: {
 			fromFileFlag,
 			allRunningJobsFlag,
@@ -137,7 +142,7 @@ var (
 	startCmdETL = cli.Command{
 		Name:         cmdStart,
 		Usage:        etlStartUsage,
-		ArgsUsage:    etlNameArgument,
+		ArgsUsage:    etlNameListArgument,
 		Action:       etlStartHandler,
 		BashComplete: etlIDCompletions,
 		Flags:        sortFlags(etlSubFlags[cmdStart]),
@@ -629,15 +634,33 @@ func stopETLs(c *cli.Context, name string) (err error) {
 	return nil
 }
 
-func etlStartHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
+func etlStartHandler(c *cli.Context) error {
+	var (
+		etlNames []string
+		err      error
+	)
+
+	switch {
+	case flagIsSet(c, fromFileFlag):
+		etlNames, err = getETLNamesFromFile(c)
+		if err != nil {
+			return err
+		}
+		if len(etlNames) == 0 {
+			return fmt.Errorf("no ETL names found in the file provided via %s", qflprn(fromFileFlag))
+		}
+	case c.NArg() == 0:
 		return missingArgumentsError(c, c.Command.ArgsUsage)
+	default:
+		etlNames = c.Args()[0:]
 	}
-	etlName := c.Args()[0]
-	if err := api.ETLStart(apiBP, etlName); err != nil {
-		return V(err)
+	for _, name := range etlNames {
+		if err := api.ETLStart(apiBP, name); err != nil {
+			fmt.Fprintln(c.App.ErrWriter, err)
+			continue
+		}
+		fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", name)
 	}
-	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlName)
 	return nil
 }
 
