@@ -49,3 +49,15 @@ class TestContentIterProvider(unittest.TestCase):
             list(self.content_provider.create_iter(0))
 
         mock_stream.close.assert_called_once()
+
+    def test_iter_close_triggers_cleanup(self):
+        """Test that calling close() on iterator closes the underlying stream."""
+        mock_stream = Mock()
+        mock_stream.iter_content.return_value = iter([b"chunk1", b"chunk2"])
+        self.mock_client.get.return_value = mock_stream
+
+        iterator = self.content_provider.create_iter()
+        next(iterator)
+        iterator.close()
+
+        mock_stream.close.assert_called_once()

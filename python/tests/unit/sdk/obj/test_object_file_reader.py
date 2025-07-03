@@ -17,9 +17,12 @@ class TestObjectFileReader(unittest.TestCase):
 
     def setUp(self):
         self.content_provider_mock = Mock()
-        self.content_provider_mock.create_iter.return_value = iter(
-            [b"chunk1", b"chunk2", b"chunk3"]
+        self.mock_generator = Mock()
+        self.mock_generator.__next__ = Mock(
+            side_effect=[b"chunk1", b"chunk2", b"chunk3", StopIteration()]
         )
+        self.mock_generator.close = Mock()
+        self.content_provider_mock.create_iter.return_value = self.mock_generator
         self.object_file = ObjectFileReader(
             content_provider=self.content_provider_mock,
             max_resume=3,
@@ -34,18 +37,25 @@ class TestObjectFileReader(unittest.TestCase):
         self.assertEqual(self.object_file._resume_total, 0)
         self.assertIsNone(self.object_file._remainder)
         self.assertFalse(self.object_file._closed)
-
-        # Verify that iter() is called
-        self.content_provider_mock.create_iter.assert_called_once_with()
+        self.assertIsNotNone(self.object_file._content_iter)
 
         # Verify ObjectFileReader extends IOBase
         self.assertIsInstance(self.object_file, IOBase)
 
     def test_close(self):
-        """Test that ObjectFileReader closes correctly and raises an error if closed again."""
+        """Test that ObjectFileReader closes correctly."""
+        # Read some data to initialize the generator
+        self.object_file.read(4)
+
+        # Verify file is not closed initially
         self.assertFalse(self.object_file._closed)
+
+        # Close the file
         self.object_file.close()
+
+        # Verify file is closed and stream is closed
         self.assertTrue(self.object_file._closed)
+        self.mock_generator.close.assert_called_once()
 
     def test_readable(self):
         """Test that ObjectFileReader is readable when not closed and unreadable when closed."""
@@ -122,7 +132,7 @@ class TestObjectFileReader(unittest.TestCase):
         self.assertEqual(str(context.exception), "I/O operation on closed file.")
 
     def test_context_manager(self):
-        """Test that ObjectFileReader functions as a context manager and resets state."""
+        """Test that ObjectFileReader can be used with context manager, resets state, and closes stream."""
         # Modify the object's state to simulate previous use
         self.object_file._resume_position = 10
         self.object_file._closed = True
@@ -134,8 +144,12 @@ class TestObjectFileReader(unittest.TestCase):
             self.assertEqual(self.object_file._resume_position, 0)
             self.assertIsNone(self.object_file._remainder)
 
-        # After context, file should be closed
+            # Read some data to initialize the generator
+            obj_file.read(4)
+
+        # After context, file should be closed and stream should be closed
         self.assertTrue(self.object_file._closed)
+        self.mock_generator.close.assert_called_once()
 
 
 class TestObjectFileReaderResume(unittest.TestCase):

@@ -2,7 +2,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import Iterator
+from typing import Generator
 
 from aistore.sdk.obj.object_client import ObjectClient
 
@@ -31,7 +31,7 @@ class ContentIterProvider:
         """
         return self._client
 
-    def create_iter(self, offset: int = 0) -> Iterator[bytes]:
+    def create_iter(self, offset: int = 0) -> Generator[bytes, None, None]:
         """
         Create an iterator over the object content, applying an optional offset.
 
@@ -40,7 +40,7 @@ class ContentIterProvider:
                                     is applied.
 
         Returns:
-            Iterator[bytes]: An iterator over chunks of the object's content.
+            Generator[bytes, None, None]: An iterator over chunks of the object's content.
         """
         stream = self._client.get(stream=True, offset=offset)
         try:

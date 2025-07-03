@@ -6,7 +6,7 @@ from sys import maxsize as sys_maxsize
 from requests.exceptions import ChunkedEncodingError, ConnectionError, ReadTimeout
 from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from io import BufferedIOBase, BufferedWriter
-from typing import Optional, Iterator
+from typing import Optional, Generator
 from overrides import override
 from aistore.sdk.obj.content_iter_provider import ContentIterProvider
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
@@ -166,8 +166,12 @@ class ObjectFileReader(BufferedIOBase):
     def close(self) -> None:
         """Close the file."""
         self._closed = True
+        if self._content_iter:
+            self._content_iter.close()
 
-    def _handle_broken_stream(self, err: Exception) -> Optional[Iterator[bytes]]:
+    def _handle_broken_stream(
+        self, err: Exception
+    ) -> Optional[Generator[bytes, None, None]]:
         """
         Handle the broken stream/iterator by incrementing the resume count, logging a warning,
         and returning a newly instantiated iterator from the last known position.
@@ -176,7 +180,7 @@ class ObjectFileReader(BufferedIOBase):
             err (Exception): The error that caused the resume attempt.
 
         Returns:
-            Optional[Iterator[bytes]]: The new iterator. None if the object is not cached.
+            Optional[Generator[bytes, None, None]]: The new generator. None if the object is not cached.
 
         Raises:
             ObjectFileReaderMaxResumeError: If the maximum number of resume attempts is exceeded.

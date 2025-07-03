@@ -3,7 +3,7 @@
 #
 
 from io import BufferedIOBase
-from typing import Iterator, Optional
+from typing import Optional, Generator
 
 import requests
 
@@ -122,11 +122,11 @@ class ObjectReader:
 
         return ObjectFileReader(self._content_provider, max_resume=max_resume)
 
-    def __iter__(self) -> Iterator[bytes]:
+    def __iter__(self) -> Generator[bytes, None, None]:
         """
         Make a request to get a stream from the provided object and yield chunks of the stream content.
 
         Returns:
-            Iterator[bytes]: An iterator over each chunk of bytes in the object.
+            Generator[bytes, None, None]: An iterator over each chunk of bytes in the object.
         """
         return self._content_provider.create_iter()

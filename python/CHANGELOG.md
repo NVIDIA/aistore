@@ -30,6 +30,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Removes ETL `init_code`.
 - Extend `ETLDetails` type with a list of `ETLObjError`.
 - Return transformed object size in direct put response for ETL Webservers.
+- Update `ObjectReader.__iter__()` to return `Generator[bytes, None, None]`.
+- Update `ObjectFileReader.close()` to call `generator.close()` to properly close underlying HTTP streams.
 
 ## [1.14.0] - 2025-05-27
 
