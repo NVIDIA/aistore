@@ -33,6 +33,10 @@ jobs:
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/share/boost
 
+      - name: Configure system
+        run: |
+          sudo sysctl -w vm.swappiness=10
+
       - name: Run AIStore
         run: |
           export GOPATH="$(go env GOPATH)"

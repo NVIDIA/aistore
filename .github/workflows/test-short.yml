@@ -24,6 +24,10 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - name: Configure system
+        run: |
+          sudo sysctl -w vm.swappiness=10
+
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
