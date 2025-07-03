@@ -1420,17 +1420,22 @@ func (c *NetConf) Validate() (err error) {
 }
 
 const (
+	// see also: DefaultMaxIdle* in cmn/client
 	dfltMaxIdleConns   = 4096
 	dfltMaxIdlePerHost = 128
-	dfltMaxIdleTimeout = 90 * time.Second
+
+	// see also:
+	// - `listen` in ais/htcommon
+	// - `DefaultIdleConnTimeout` in cmn/client
+	DfltMaxIdleTimeout = 20 * time.Second
 )
 
 func (c *HTTPConf) Validate() error {
 	if c.ServerNameTLS != "" {
 		return fmt.Errorf("invalid domain_tls %q: expecting empty (domain names/SANs should be set in X.509 cert)", c.ServerNameTLS)
 	}
-	if d := c.IdleConnTimeout.D(); d < 0 || d > dfltMaxIdleTimeout {
-		return fmt.Errorf("invalid idle_conn_time %v (expecting range [0 - %v])", d, dfltMaxIdleTimeout)
+	if d := c.IdleConnTimeout.D(); d < 0 || d > DfltMaxIdleTimeout {
+		return fmt.Errorf("invalid idle_conn_time %v (expecting range [0 - %v])", d, DfltMaxIdleTimeout)
 	}
 	if n := c.MaxIdleConns; n < 0 || n > dfltMaxIdleConns {
 		return fmt.Errorf("invalid idle_conns %d (expecting range [0 - %d])", n, dfltMaxIdleConns)

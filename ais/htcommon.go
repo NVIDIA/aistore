@@ -546,6 +546,10 @@ func _copy(destination io.WriteCloser, source io.ReadCloser) {
 	destination.Close()
 }
 
+const (
+	dfltIdleTimeout = cmn.DfltMaxIdleTimeout
+)
+
 func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config) error {
 	server.Lock()
 	server.s = &http.Server{
@@ -553,6 +557,7 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 		Handler:           server.muxers,
 		ErrorLog:          logger,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
+		IdleTimeout:       dfltIdleTimeout,
 	}
 	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
 		server.s.ReadHeaderTimeout = timeout
