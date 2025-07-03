@@ -128,7 +128,7 @@ cat > $AIS_CONF_FILE <<EOL
 			"client_auth_tls":    ${AIS_CLIENT_AUTH_TLS:-0},
 			"idle_conn_time":     "6s",
 			"idle_conns_per_host":32,
-			"idle_conns":         0,
+			"idle_conns":         256,
 			"write_buffer_size":  ${HTTP_WRITE_BUFFER_SIZE:-0},
 			"read_buffer_size":   ${HTTP_READ_BUFFER_SIZE:-0},
 			"chunked_transfer":   ${AIS_HTTP_CHUNKED_TRANSFER:-true},
