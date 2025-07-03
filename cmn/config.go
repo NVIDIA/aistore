@@ -1419,14 +1419,14 @@ func (c *NetConf) Validate() (err error) {
 	return nil
 }
 
+// see also:
+// - docs/idle_connections.md
+// - DefaultMaxIdle* in cmn/client
+// - `listen` in ais/htcommon
 const (
-	// see also: DefaultMaxIdle* in cmn/client
 	dfltMaxIdleConns   = 4096
 	dfltMaxIdlePerHost = 128
 
-	// see also:
-	// - `listen` in ais/htcommon
-	// - `DefaultIdleConnTimeout` in cmn/client
 	DfltMaxIdleTimeout = 20 * time.Second
 )
 

@@ -33,6 +33,8 @@ const (
 // - WriteBufferSize:       4KB
 // - ReadBufferSize:        4KB
 //
+// See also: docs/idle_connections.md
+//
 // Following are the defaults we use instead:
 const (
 	DefaultMaxIdleConns        = 0               // unlimited (in re: `http.errTooManyIdle`)
