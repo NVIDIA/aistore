@@ -595,6 +595,7 @@ func readValue(c *cli.Context, prompt string) string {
 func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 	var err error
 	prompt += " [Y/N]"
+
 	if len(warning) != 0 {
 		actionWarn(c, warning[0])
 	}

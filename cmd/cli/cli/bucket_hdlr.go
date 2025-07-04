@@ -136,12 +136,15 @@ const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
 	indent1 + "\t- evict gs://abc\t- evict entire bucket from aistore: remove all \"cached\" gs://abc objects _and_ bucket metadata;\n" +
 	indent1 + "\t- evict gs://abc --keep-md\t- same as above but keep bucket metadata;\n" +
 	indent1 + "\t- evict gs:\t- evict all GCP buckets from the cluster;\n" +
+	indent1 + "\t- evict --all\t- evict all remote buckets from the cluster (prompts for confirmation);\n" +
+	indent1 + "\t- evict --all --keep-md\t- evict all remote buckets but keep their metadata (prompts for confirmation);\n" +
 	indent1 + "\t- evict gs://abc --prefix images/\t- evict all gs://abc objects from the virtual subdirectory \"images\";\n" +
 	indent1 + "\t- evict gs://abc/images/\t- same as above;\n" +
 	indent1 + "\t- evict gs://abc/images/ --nr\t- same as above, but do not recurse into virtual subdirs;\n" +
 	indent1 + "\t- evict gs://abc --template images/\t- same as above;\n" +
 	indent1 + "\t- evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"\t- evict the matching range (prefix + brace expansion);\n" +
-	indent1 + "\t- evict \"gs://abc/shard-{0000..9999}.tar.lz4\"\t- same as above (notice BUCKET/TEMPLATE argument in quotes)"
+	indent1 + "\t- evict \"gs://abc/shard-{0000..9999}.tar.lz4\"\t- same as above (notice BUCKET/TEMPLATE argument in quotes)\n" +
+	indent1 + "\tNOTE: When evicting multiple buckets, --yes flag is ignored for safety reasons."
 
 // flags
 var (
@@ -226,6 +229,8 @@ var (
 			verboseFlag,   // NIY
 			nonverboseFlag,
 			dontHeadRemoteFlag,
+			evictAllBucketsFlag,
+			yesFlag,
 		),
 		cmdSetBprops: {
 			forceFlag,
@@ -262,7 +267,7 @@ var (
 	bucketObjCmdEvict = cli.Command{
 		Name:         commandEvict,
 		Usage:        evictUsage,
-		ArgsUsage:    bucketObjectOrTemplateMultiArg,
+		ArgsUsage:    "BUCKET[/OBJECT_NAME or /TEMPLATE] [BUCKET[/OBJECT_NAME or /TEMPLATE] ...] | --all",
 		Flags:        sortFlags(bucketCmdsFlags[commandEvict]),
 		Action:       evictHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),

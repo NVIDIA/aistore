@@ -414,6 +414,7 @@ var (
 	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "Remove all objects (use with extreme caution!)"}
 	rmAllBucketsFlag    = cli.BoolFlag{Name: scopeAll, Usage: "Remove all AIS buckets from the cluster (use with extreme caution - cannot be undone)"}
 	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "Download all logs"}
+	evictAllBucketsFlag = cli.BoolFlag{Name: scopeAll, Usage: "Evict all remote buckets from the cluster (use with extreme caution)"}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
