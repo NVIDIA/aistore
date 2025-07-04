@@ -231,8 +231,8 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			xctn = rns.Entry.Get()
 		} else {
 			// phase 2.
-			debug.Assert(ctx.nat > 1, "not expecting POST -> non-DT when single-node")
 			debug.Assert(cos.IsValidUUID(xid), xid)
+			debug.Assert(nat > 1, "not expecting POST -> non-DT when single-node ", nat) // (ctx.nat checked above)
 
 			rns := xreg.RenewGetBatch(ctx.bck, xid, false /*designated*/)
 			if rns.Err != nil {
@@ -257,11 +257,15 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if designated {
-			err = xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1)
+			err = xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1 /*receiving*/)
 		} else {
 			err = xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid)
+			if err != nil {
+				xmoss.BcastAbort(err)
+			}
 		}
 		if err != nil {
+			xmoss.Abort(err)
 			t.writeErr(w, r, err)
 			return
 		}
@@ -285,6 +289,8 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(ok, xctn.Name())
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
+			xmoss.BcastAbort(err)
+			xmoss.Abort(err)
 			if err == cmn.ErrGetTxBenign {
 				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 					nlog.Warningln(err)

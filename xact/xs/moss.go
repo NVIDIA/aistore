@@ -49,16 +49,20 @@ other-targets (T1..Tn)
                     shared-dm.Send(obj_i, hdr.Opaque = TD.UUID + i) → TD
 */
 
-// TODO -- FIXME:
-// - DT: sentinels
-// - ctlmsg
-// - soft errors other than not-found
-// - error handling in general and across the board; mossErr{wrapped-err}
+// Shared-DM registration lifecycle: xaction registers once with shared-dm transport
+// when first work item needs receiving (PrepRx w/ receiving=true), then
+// unregisters once at xaction end (Abort/fini). No per-work-item ref-counting
+// needed since UnregRecv is permissive no-op when not registered.
 
 // TODO:
-// - two cleanup()s
-// - write checksum
-// - range read (_assertNoRange; and separately, read range archpath)
+// - test: inject/simulate random aborts
+// - ctlmsg
+// - soft errors other than not-found; unified error formatting
+// - optimize:
+//   * rw mutex
+//   * mem-pool (basewi, apc.MossReq, apc.MossResp)
+// - range read (can wait)
+// - finer grained abort: one work item (can wait)
 
 // tunables
 const (
@@ -117,8 +121,9 @@ type (
 		smm     *memsys.MMSA
 		pending struct {
 			m   map[string]*basewi
-			mtx sync.RWMutex // TODO: optimize
+			mtx sync.RWMutex
 		}
+		activeWG sync.WaitGroup
 	}
 )
 
@@ -179,10 +184,36 @@ func newMoss(p *mossFactory) *XactMoss {
 
 func (*XactMoss) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+func (r *XactMoss) IncPending() {
+	r.DemandBase.IncPending()
+	r.activeWG.Add(1)
+}
+
+func (r *XactMoss) DecPending() {
+	r.DemandBase.DecPending()
+	r.activeWG.Done()
+}
+
+func (r *XactMoss) BcastAbort(err error) {
+	if isErrRecvAbort(err) {
+		return
+	}
+	o := transport.AllocSend()
+	o.Hdr.Opcode = opAbort
+	o.Hdr.ObjName = err.Error()
+	e := bundle.SDM.Bcast(o, nil /*roc*/) // receive via sntl.rxAbort
+	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		nlog.Infoln(r.Name(), core.T.String(), "bcast abort [", err, e, "]")
+	}
+}
+
 func (r *XactMoss) Abort(err error) bool {
 	if !r.DemandBase.Abort(err) {
 		return false
 	}
+
+	// make sure all asm() and Send() exited
+	r.activeWG.Wait()
 
 	r.pending.mtx.Lock()
 	for _, wi := range r.pending.m {
@@ -192,8 +223,10 @@ func (r *XactMoss) Abort(err error) bool {
 	r.pending.mtx.Unlock()
 
 	r.DemandBase.Stop()
+
+	// see "Shared-DM registration lifecycle" note above
 	bundle.SDM.UnregRecv(r.ID())
-	r.Finish()
+
 	return true
 }
 
@@ -215,6 +248,7 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 		clear(r.pending.m)
 		r.pending.mtx.Unlock()
 
+		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.UnregRecv(r.ID())
 		r.Finish()
 		return hk.UnregInterval
@@ -228,9 +262,12 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
 	if receiving {
+		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.RegRecv(r)
+
+		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
-		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap (TODO: revisit)
+		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
 		wi.recv.mtx = &sync.Mutex{}
 	}
 
@@ -263,8 +300,9 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 
 	r.IncPending()
 	err := r.asm(req, w, wi)
-	wi.cleanup()
 	r.DecPending()
+
+	wi.cleanup()
 
 	return err
 }
@@ -304,19 +342,25 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 
 // send all requested local data => DT (tsi)
 // (phase 2)
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid string) (err error) {
+
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid string) error {
+	// to receive opAbort
+	bundle.SDM.RegRecv(r)
+
+	// send all
 	r.IncPending()
+	defer r.DecPending()
 
 	for i := range req.In {
+		if r.IsAborted() || r.Finished() {
+			return nil
+		}
 		in := &req.In[i]
 		if err := _assertNoRange(in); err != nil {
 			return err
 		}
 		lom, local, err := r._lom(in, smap)
 		if err != nil {
-			if r.Abort(err) {
-				r._sendabrt(tsi, wid, err)
-			}
 			return err
 		}
 		if !local {
@@ -334,9 +378,6 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 			err = r._sendarch(tsi, lom, wid, nameInArch, in.ArchPath, i)
 		}
 		if err != nil {
-			if r.Abort(err) {
-				r._sendabrt(tsi, wid, err)
-			}
 			return err
 		}
 	}
@@ -344,29 +385,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
 	}
-
-	r.DecPending()
-	return err
-}
-
-func (r *XactMoss) _sendabrt(tsi *meta.Snode, wid string, err error) {
-	mopaque := &mossOpaque{
-		WID:     wid,
-		Emsg:    err.Error(),
-		Aborted: true,
-	}
-	opaque := r.packOpaque(mopaque)
-	o := transport.AllocSend()
-	hdr := &o.Hdr
-	{
-		hdr.Demux = r.ID()
-		hdr.Opaque = opaque
-	}
-
-	o.Callback, o.CmplArg = r.regSent, opaque
-	if err := bundle.SDM.Send(o, nil, tsi, r); err != nil {
-		nlog.Errorln(r.Name(), "failed sending abort:", err, "[", wid, "]")
-	}
+	return nil
 }
 
 func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch string, index int) error {
@@ -492,14 +511,32 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 }
 
 // demux -> wi.recv()
-// note that received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
-func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) (erm error) {
-	erm = r._recvObj(hdr, reader, err)
-	if erm != nil {
-		nlog.Errorln(r.Name(), core.T.String(), "RecvObj:", erm)
+// note convention: received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
+func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+	if err != nil {
+		nlog.Errorln(err)
+		return err
+	}
+
+	// control
+	if hdr.Opcode != 0 {
+		switch hdr.Opcode {
+		case opAbort:
+			sntl := &sentinel{r: r}
+			sntl.rxAbort(hdr)
+			return nil
+		default:
+			return abortOpcode(r, hdr.Opcode)
+		}
+	}
+
+	// data
+	if err := r._recvObj(hdr, reader, err); err != nil {
+		nlog.Errorln(r.Name(), core.T.String(), "RecvObj:", err)
+		r.BcastAbort(err)
 		r.Abort(err)
 	}
-	return erm
+	return nil
 }
 
 // (note: ObjHdr and its fields must be consumed synchronously)
@@ -509,11 +546,6 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	}
 	mopaque, err := r.unpackOpaque(hdr.Opaque)
 	if err != nil {
-		return err
-	}
-	if mopaque.Aborted {
-		err := fmt.Errorf("%s: %s aborted [%s]", r.Name(), meta.Tname(hdr.SID), mopaque.Emsg)
-		r.Abort(err)
 		return err
 	}
 	r.pending.mtx.RLock()
@@ -894,17 +926,13 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 }
 
 func (wi *basewi) asm() error {
-	var (
-		r = wi.r
-		l = len(wi.req.In)
-	)
+	l := len(wi.req.In)
 	for i := 0; i < l; {
-		if err := r.AbortErr(); err != nil {
-			return err
+		if wi.r.IsAborted() || wi.r.Finished() {
+			return nil
 		}
 		j, err := wi.next(i)
 		if err != nil {
-			r.Abort(err)
 			return err
 		}
 		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
@@ -940,8 +968,6 @@ func (wi *basewi) flushRx() error {
 		wi.recv.mtx.Unlock() //--------------
 
 		switch {
-		case entry.mopaque.Aborted:
-			debug.Assert(false, entry.mopaque.Emsg) // cannot be here - see r._recvObj
 		case entry.mopaque.Missing:
 			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
@@ -1122,7 +1148,6 @@ type mossOpaque struct {
 	Emsg    string
 	Index   int32
 	Missing bool
-	Aborted bool
 }
 
 // interface guard
@@ -1137,11 +1162,10 @@ func (o *mossOpaque) Pack(packer *cos.BytePack) {
 	packer.WriteString(o.Emsg)
 	packer.WriteInt32(o.Index)
 	packer.WriteBool(o.Missing)
-	packer.WriteBool(o.Aborted)
 }
 
 func (o *mossOpaque) PackedSize() int {
-	return cos.PackedStrLen(o.WID) + cos.PackedStrLen(o.Oname) + cos.PackedStrLen(o.Emsg) + cos.SizeofI32 + 2
+	return cos.PackedStrLen(o.WID) + cos.PackedStrLen(o.Oname) + cos.PackedStrLen(o.Emsg) + cos.SizeofI32 + 1
 }
 
 func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
@@ -1157,9 +1181,6 @@ func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if o.Index, err = unpacker.ReadInt32(); err != nil {
 		return err
 	}
-	if o.Missing, err = unpacker.ReadBool(); err != nil {
-		return err
-	}
-	o.Aborted, err = unpacker.ReadBool()
+	o.Missing, err = unpacker.ReadBool()
 	return err
 }

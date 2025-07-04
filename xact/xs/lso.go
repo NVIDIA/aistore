@@ -725,7 +725,7 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	if hdr.Opcode == opAbort {
 		// TODO: consider r.Abort(err); today it'll idle for a while
 		// see:  streamingX.sendTerm
-		err = errors.New(hdr.ObjName)
+		err = newErrRecvAbort(r, hdr)
 	}
 	if err != nil && !cos.IsEOF(err) {
 		nlog.Errorln(core.T.String(), r.String(), len(r.remtCh), err)

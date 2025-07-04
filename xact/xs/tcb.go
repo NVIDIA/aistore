@@ -332,8 +332,9 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	if r.dm != nil {
-		r.sntl.bcast("", r.dm, r.AbortErr()) // broadcast: done | abort
-		if !r.IsAborted() {
+		abortErr := r.AbortErr()
+		r.sntl.bcast("", r.dm, abortErr) // broadcast: done | abort
+		if abortErr == nil {             // done
 			r.sntl.initLast(mono.NanoTime())
 			qui := r.Base.Quiesce(r.qival(), r.qcb) // when done: wait for others
 			if qui == core.QuiAborted {

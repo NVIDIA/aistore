@@ -328,7 +328,7 @@ outer:
 	}
 	if r.p.dm != nil {
 		if err := r.AbortErr(); err != nil {
-			if _, ok := err.(*recvAbortErr); !ok {
+			if !isErrRecvAbort(err) {
 				r.sntl.bcast(r.ID(), r.p.dm, err)
 			}
 		}

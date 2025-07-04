@@ -159,6 +159,10 @@ func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.
 	return sdm.dm.Send(obj, roc, tsi, xctn)
 }
 
+func (sdm *sharedDM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
+	return sdm.dm.Bcast(obj, roc)
+}
+
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
 		return err

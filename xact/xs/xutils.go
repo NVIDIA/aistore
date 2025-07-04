@@ -22,7 +22,20 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transport"
 )
+
+var (
+	errRecvAbort = errors.New("remote target abort") // to avoid duplicated broadcast
+)
+
+func newErrRecvAbort(r core.Xact, hdr *transport.ObjHdr) error {
+	return fmt.Errorf("%s: %w [%s: %s]", r.Name(), errRecvAbort, meta.Tname(hdr.SID), hdr.ObjName /*emsg*/)
+}
+
+func isErrRecvAbort(err error) bool {
+	return errors.Is(err, errRecvAbort)
+}
 
 func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
 	tstats := core.T.StatsUpdater()
@@ -137,13 +150,3 @@ func abortOpcode(r core.Xact, opcode int) error {
 	r.Abort(err)
 	return err
 }
-
-//
-// recvAbortErr - to avoid duplicated broadcast
-//
-
-type recvAbortErr struct {
-	err error
-}
-
-func (e *recvAbortErr) Error() string { return e.err.Error() }
