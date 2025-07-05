@@ -58,9 +58,7 @@ other-targets (T1..Tn)
 // - test: inject/simulate random aborts
 // - ctlmsg
 // - soft errors other than not-found; unified error formatting
-// - optimize:
-//   * rw mutex
-//   * mem-pool (basewi, apc.MossReq, apc.MossResp)
+// - mem-pool: basewi; apc.MossReq; apc.MossResp
 // - range read (can wait)
 // - finer grained abort: one work item (can wait)
 
@@ -117,20 +115,15 @@ type (
 type (
 	XactMoss struct {
 		xact.DemandBase
-		gmm     *memsys.MMSA
-		smm     *memsys.MMSA
-		pending struct {
-			m   map[string]*basewi
-			mtx sync.RWMutex
-		}
+		gmm      *memsys.MMSA
+		smm      *memsys.MMSA
+		pending  sync.Map // [wid => *basewi]
 		activeWG sync.WaitGroup
 	}
 )
 
 const (
 	mossIdleTime = xact.IdleDefault
-
-	iniCapPending = 64
 )
 
 // interface guard
@@ -176,7 +169,6 @@ func newMoss(p *mossFactory) *XactMoss {
 		gmm: memsys.PageMM(),
 		smm: memsys.ByteMM(),
 	}
-	r.pending.m = make(map[string]*basewi, iniCapPending)
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
 	return r
@@ -215,18 +207,21 @@ func (r *XactMoss) Abort(err error) bool {
 	// make sure all asm() and Send() exited
 	r.activeWG.Wait()
 
-	r.pending.mtx.Lock()
-	for _, wi := range r.pending.m {
-		wi.cleanup()
-	}
-	clear(r.pending.m)
-	r.pending.mtx.Unlock()
+	r.pending.Range(r.cleanup)
 
 	r.DemandBase.Stop()
 
 	// see "Shared-DM registration lifecycle" note above
 	bundle.SDM.UnregRecv(r.ID())
 
+	return true
+}
+
+// a callback to cleanup all pending work items
+func (r *XactMoss) cleanup(key, value any) bool {
+	wi := value.(*basewi)
+	wi.cleanup()
+	r.pending.Delete(key)
 	return true
 }
 
@@ -240,13 +235,7 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 	default:
 		nlog.Infoln(r.Name(), "idle expired - finishing")
 
-		// Cleanup all pending work items
-		r.pending.mtx.Lock()
-		for _, wi := range r.pending.m {
-			wi.cleanup()
-		}
-		clear(r.pending.m)
-		r.pending.mtx.Unlock()
+		r.pending.Range(r.cleanup)
 
 		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.UnregRecv(r.ID())
@@ -271,16 +260,13 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi.recv.mtx = &sync.Mutex{}
 	}
 
-	r.pending.mtx.Lock()
-	if _, ok := r.pending.m[wid]; ok {
-		r.pending.mtx.Unlock()
+	if _, loaded := r.pending.Load(wid); loaded {
 		err := fmt.Errorf("%s: work item %q already exists (duplicate prep-rx?)", r.Name(), wid)
 		debug.AssertNoErr(err)
 		return err
 	}
+	r.pending.Store(wid, &wi)
 	wi.awfin.Store(true)
-	r.pending.m[wid] = &wi
-	r.pending.mtx.Unlock()
 
 	return nil
 }
@@ -288,14 +274,13 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 // gather other requested data (local and remote); emit resulting archive
 // (phase 3)
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
-	r.pending.mtx.Lock()
-	wi, ok := r.pending.m[wid]
-	r.pending.mtx.Unlock()
-	if !ok {
+	a, loaded := r.pending.Load(wid)
+	if !loaded {
 		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
 		debug.AssertNoErr(err)
-		return err // TODO: sentinels
+		return err
 	}
+	wi := a.(*basewi)
 	debug.Assert(wid == wi.wid)
 
 	r.IncPending()
@@ -548,12 +533,13 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	if err != nil {
 		return err
 	}
-	r.pending.mtx.RLock()
-	wi := r.pending.m[mopaque.WID]
-	r.pending.mtx.RUnlock()
-	if wi == nil {
-		return fmt.Errorf("WID %q not found", mopaque.WID)
+	a, loaded := r.pending.Load(mopaque.WID)
+	if !loaded {
+		return fmt.Errorf("work item %q not found", mopaque.WID)
 	}
+	wi := a.(*basewi)
+
+	debug.Assert(mopaque.WID == wi.wid)
 	debug.Assert(wi.receiving())
 	return wi.recvObj(int(mopaque.Index), hdr, reader, mopaque)
 }
@@ -630,10 +616,6 @@ func (wi *basewi) cleanup() {
 	if !wi.receiving() {
 		return
 	}
-
-	r.pending.mtx.Lock()
-	delete(r.pending.m, wi.wid)
-	r.pending.mtx.Unlock()
 
 	wi.recv.mtx.Lock()
 	for i := range wi.recv.m {
