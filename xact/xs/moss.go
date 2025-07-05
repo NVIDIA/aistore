@@ -260,12 +260,11 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi.recv.mtx = &sync.Mutex{}
 	}
 
-	if _, loaded := r.pending.Load(wid); loaded {
+	if _, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
 		err := fmt.Errorf("%s: work item %q already exists (duplicate prep-rx?)", r.Name(), wid)
 		debug.AssertNoErr(err)
 		return err
 	}
-	r.pending.Store(wid, &wi)
 	wi.awfin.Store(true)
 
 	return nil

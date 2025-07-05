@@ -6,7 +6,6 @@
 package memsys
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 
@@ -80,9 +79,6 @@ const (
 	fmtErrHigh    = "high memory pressure"
 )
 
-func (r *MMSA) _extreme() error { return errors.New(FmtErrExtreme + r.String()) }
-func (r *MMSA) _high() error    { return errors.New(fmtErrHigh + r.String()) }
-
 var memPressureText = map[int]string{
 	PressureLow:      "low",
 	PressureModerate: "moderate",
@@ -129,16 +125,13 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) int {
 	ncrit := r.swap.crit.Load()
 	switch {
 	case ncrit > 2:
-		err := r._extreme()
-		nlog.ErrorDepth(1, err)
+		nlog.ErrorDepth(1, FmtErrExtreme, "[ ncrit", ncrit, "]")
 		return OOM
 	case ncrit > 1 || mem.ActualFree <= r.MinFree:
-		err := r._extreme()
-		nlog.ErrorDepth(1, err)
+		nlog.ErrorDepth(1, FmtErrExtreme, "[ ncrit", ncrit, "actual", mem.ActualFree, "min", r.MinFree, "]")
 		return PressureExtreme
 	case ncrit > 0:
-		err := r._high()
-		nlog.WarningDepth(1, err)
+		nlog.WarningDepth(1, fmtErrHigh, "[ ncrit", ncrit, "]")
 		return PressureHigh
 	case free <= r.MinFree:
 		return PressureHigh
