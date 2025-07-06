@@ -36,14 +36,15 @@ Usage examples:
 // ais cp
 //
 //nolint:dupword // intentional
-const copyBucketUsage = "Copy entire bucket, selected objects, or a single object (to select, use '--list', '--template', or '--prefix'),\n" +
+const copyBucketObjUsage = "Copy entire bucket, selected objects, or a single object (to select, use '--list', '--template', or '--prefix'),\n" +
 	indent1 + "\te.g.:\n" +
 	indent1 + "\tsingle object examples:\n" +
 	indent1 + "\t- 'ais cp ais://src/obj1.tar ais://dst'\t- copy single object to the destination bucket with the same name;\n" +
-	indent1 + "\t- 'ais cp ais://src/obj1.tar ais://dst/obj2.tar'\t- copy single object with a new name;\n" +
+	indent1 + "\t- 'ais cp ais://src/obj1.tar gs://dst/obj2.tar'\t- copy single object with a new name;\n" +
+	indent1 + "\t- 'ais cp ais://src/obj1.tar gs://dst/hi%2?5ahs --encode-obj'\t- same as above with object-name encoding (to handle special symbols);\n" +
 	indent1 + "\t- 'ais cp s3://src/img.jpg ais://dst/'\t- copy single Cloud object to AIS bucket;\n" +
 	indent1 + "\tbucket to bucket examples:\n" +
-	indent1 + "\t- 'ais cp gs://webdaset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
+	indent1 + "\t- 'ais cp gs://webdataset-coco ais://dst'\t- copy entire Cloud bucket;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all'\t- copy Cloud bucket that may _not_ be present in cluster (and create destination if doesn't exist);\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all --num-workers 16'\t- same as above employing 16 concurrent workers;\n" +
 	indent1 + "\t- 'ais cp s3://abc ais://nnn --all --num-workers 16 --prefix dir/subdir/'\t- same as above, but limit copying to a given virtual subdirectory;\n" +
@@ -189,6 +190,9 @@ var (
 			syncFlag,
 			nonRecursFlag, // (embedded prefix dopOLTP)
 			nonverboseFlag,
+			// TODO: currently, single-object only
+			etlNameFlag,
+			encodeObjnameFlag,
 		},
 		commandRename: {
 			waitFlag,
@@ -246,9 +250,9 @@ var (
 		Action:       evictHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
 	}
-	bucketCmdCopy = cli.Command{
+	bucketObjCmdCopy = cli.Command{
 		Name:         commandCopy,
-		Usage:        copyBucketUsage,
+		Usage:        copyBucketObjUsage,
 		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
 		Flags:        sortFlags(bucketCmdsFlags[commandCopy]),
 		Action:       copyBucketHandler,
@@ -282,6 +286,7 @@ var (
 			scrubCmd,
 			bucketCmdLRU,
 			bucketObjCmdEvict,
+			objectCmdPrefetch,
 			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
 			{
 				Name:      commandCreate,
@@ -290,7 +295,7 @@ var (
 				Flags:     sortFlags(bucketCmdsFlags[commandCreate]),
 				Action:    createBucketHandler,
 			},
-			bucketCmdCopy,
+			bucketObjCmdCopy,
 			bucketCmdRename,
 			{
 				Name:      commandRemove,

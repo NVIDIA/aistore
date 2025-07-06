@@ -133,13 +133,20 @@ func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, tri
 	return verbFobjs(c, wop, allFobjs, bck, ndir, recurs)
 }
 
-func copyObject(_ *cli.Context, bckFrom cmn.Bck, objFrom string, bckTo cmn.Bck, objTo string) error {
-	return api.CopyObject(apiBP, &api.CopyArgs{
+func copyObject(c *cli.Context, bckFrom cmn.Bck, objFrom string, bckTo cmn.Bck, objTo string) (err error) {
+	err = api.CopyObject(apiBP, &api.CopyArgs{
 		FromBck:     bckFrom,
 		FromObjName: objFrom,
 		ToBck:       bckTo,
 		ToObjName:   objTo,
 	})
+	if err == nil {
+		if objTo == "" {
+			objTo = objFrom
+		}
+		actionDone(c, fmt.Sprintf("COPY %s => %s", bckFrom.Cname(objFrom), bckTo.Cname(objTo)))
+	}
+	return
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {

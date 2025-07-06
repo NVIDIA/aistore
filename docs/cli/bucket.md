@@ -736,7 +736,7 @@ $ ais cp --help
 NAME:
    ais cp - (alias for "bucket cp") Copy entire bucket or selected objects (to select, use '--list', '--template', or '--prefix'),
      e.g.:
-     - 'ais cp gs://webdaset-coco ais://dst'                                    - copy entire Cloud bucket;
+     - 'ais cp gs://webdataset-coco ais://dst'                                  - copy entire Cloud bucket;
      - 'ais cp s3://abc ais://nnn --all'                                        - copy Cloud bucket that may _not_ be present in cluster (and create destination if doesn't exist);
      - 'ais cp s3://abc ais://nnn --all --num-workers 16'                       - same as above employing 16 concurrent workers;
      - 'ais cp s3://abc ais://nnn --all --num-workers 16 --prefix dir/subdir/'  - same as above, but limit copying to a given virtual subdirectory;

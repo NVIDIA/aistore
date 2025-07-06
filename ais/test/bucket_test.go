@@ -138,7 +138,7 @@ func TestListBuckets(t *testing.T) {
 			_, err := api.HeadBucket(baseParams, pbck, false /* don't add */)
 			if err != nil {
 				// TODO: extend api.HeadBucket to return status as well(?)
-				if _, ok := err.(*cmn.ErrHTTP); ok && strings.Contains(err.Error(), "does not exist") {
+				if _, ok := err.(*cmn.ErrHTTP); ok && cos.IsErrNotFound(err) {
 					tlog.Logf("Warning: cannot HEAD(%s): not permitted(?)\n", pbck.String())
 					continue
 				}

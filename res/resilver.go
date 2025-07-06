@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -305,7 +304,7 @@ redo:
 
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
-			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
+			if !os.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
 				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
 				jg.xres.AddErr(errV, 0)
 			}
@@ -356,7 +355,7 @@ redo:
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			err = cmn.NewErrAborted(xname, "", errV)
 			jg.xres.Abort(err)
-		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
+		} else if !os.IsNotExist(err) && !cos.IsErrNotFound(err) {
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
 			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)

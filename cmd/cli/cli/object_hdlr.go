@@ -6,7 +6,6 @@ package cli
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,10 +68,6 @@ const objRmUsage = "Remove object or selected objects from the specified bucket,
 	indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
 	indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice BUCKET/TEMPLATE argument in quotes)"
 
-const objCopyUsage = "Copy an object to the specified bucket, e.g.:\n" +
-	indent1 + "\t- 'cp ais://nnn/aaa ais://dst'\tcopies ais://nnn/aaa to the destination bucket with the same object name (ais://dst/aaa);\n" +
-	indent1 + "\t- 'cp ais://nnn/aaa ais://dst/bbb'\tcopies ais://nnn/aaa to the destination bucket with the specified object name (ais://dst/bbb)"
-
 const concatUsage = "Append a file, a directory, or multiple files and/or directories\n" +
 	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
 	indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory."
@@ -127,10 +122,6 @@ var (
 			verboseFlag, // client side
 			silentFlag,  // server side
 			dontHeadRemoteFlag,
-			encodeObjnameFlag,
-		},
-		commandCopy: {
-			etlNameFlag,
 			encodeObjnameFlag,
 		},
 		commandPut: append(
@@ -240,14 +231,6 @@ var (
 		BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 	}
 
-	objectCmdCopy = cli.Command{
-		Name:         commandCopy,
-		Usage:        objCopyUsage,
-		Flags:        sortFlags(objectCmdsFlags[commandCopy]),
-		Action:       copyHandler,
-		BashComplete: bucketCompletions(bcmplop{separator: true}),
-	}
-
 	objectCmd = cli.Command{
 		Name:  commandObject,
 		Usage: "PUT, GET, list, rename, remove, and other operations on objects",
@@ -256,7 +239,7 @@ var (
 			bucketsObjectsCmdList,
 			objectCmdPut,
 			objectCmdPromote,
-			objectCmdCopy,
+			bucketObjCmdCopy,
 			objectCmdConcat,
 			objectCmdSetCustom,
 			objectCmdRemove,
@@ -457,31 +440,6 @@ func putStdin(c *cli.Context, a *putargs) error {
 	}
 	actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", a.dst.bck.Cname(a.dst.oname)))
 	return nil
-}
-
-func copyHandler(c *cli.Context) (err error) {
-	var (
-		bckFrom, bckTo cmn.Bck
-		objFrom, objTo string
-	)
-	if c.NArg() < 2 {
-		return missingArgumentsError(c, c.Command.Usage)
-	}
-	if bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), false /*emptyObjnameOK*/); err != nil {
-		return err
-	}
-	if bckTo, objTo, err = parseBckObjURI(c, c.Args().Get(1), true /*emptyObjnameOK*/); err != nil {
-		return err
-	}
-	if objTo == "" {
-		objTo = objFrom
-	}
-	if flagIsSet(c, encodeObjnameFlag) {
-		objFrom = url.PathEscape(objFrom)
-		objTo = url.PathEscape(objTo)
-	}
-	actionDone(c, fmt.Sprintf("COPY %s => %s", bckFrom.Cname(objFrom), bckTo.Cname(objTo)))
-	return copyObject(c, bckFrom, objFrom, bckTo, objTo)
 }
 
 func concatHandler(c *cli.Context) (err error) {

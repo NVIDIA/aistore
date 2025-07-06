@@ -80,7 +80,7 @@ func (e *ErrNotFound) Error() string {
 
 func IsErrNotFound(err error) bool {
 	_, ok := err.(*ErrNotFound)
-	return ok
+	return ok || strings.Contains(err.Error(), "does not exist")
 }
 
 // ErrAlreadyExists
@@ -103,10 +103,13 @@ func (e *ErrAlreadyExists) Error() string {
 
 // NOTE: compare with cmn.IsErrObjNought() that also includes lmeta-not-found et al.
 func IsNotExist(err error, ecode int) bool {
-	if ecode == http.StatusNotFound || IsErrNotFound(err) {
+	if ecode == http.StatusNotFound {
 		return true
 	}
-	return os.IsNotExist(err) // unwraps for fs.ErrNotExist
+	if err == nil {
+		return false
+	}
+	return IsErrNotFound(err) || os.IsNotExist(err) /*unwraps for fs.ErrNotExist*/
 }
 
 // Errs is a thread-safe collection of errors

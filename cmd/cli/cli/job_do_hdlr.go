@@ -341,7 +341,7 @@ outer:
 	}
 
 	// and in addition:
-	cmd := bucketCmdCopy
+	cmd := bucketObjCmdCopy
 	cmd.Name, _ = xact.GetKindName(apc.ActCopyBck)
 	cmds = append(cmds, cmd)
 

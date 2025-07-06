@@ -71,7 +71,13 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		if objFrom == "" {
 			return fmt.Errorf("missing source object name: cannot copy from bucket (%s) to object (%s)", bckFrom.Cname(""), bckTo.Cname(objTo))
 		}
-		return copyObject(c, bckFrom, objFrom, bckTo, objTo)
+		err := copyObject(c, bckFrom, objFrom, bckTo, objTo)
+		if err != nil {
+			if cos.IsErrNotFound(err) && strings.Contains(err.Error(), bckFrom.Cname(objFrom)) {
+				err = fmt.Errorf("source object %q not found (did you mean to copy multiple objects with prefix %q?)", bckFrom.Cname(objFrom), objFrom)
+			}
+		}
+		return err
 	}
 
 	// NOTE: copyAllObjsFlag forces 'x-list' to list the remote one, and vice versa

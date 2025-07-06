@@ -21,6 +21,10 @@ import (
 
 // NOTE: for built-in aliases, see `DefaultAliasConfig` (cmd/cli/config/config.go)
 
+//
+// see also: actionIsHandler
+//
+
 const (
 	aliasForPrefix = "(alias for "
 	aliasForRegex  = `\s+\(alias for ".+"\)`

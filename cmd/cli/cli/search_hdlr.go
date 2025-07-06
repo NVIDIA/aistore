@@ -157,6 +157,10 @@ func findCmdMatching(pattern string) []string {
 	return result
 }
 
+//
+// see also: actionIsHandler
+//
+
 func searchCmdHdlr(c *cli.Context) (err error) {
 	var commands []string
 	if !flagIsSet(c, regexFlag) && c.NArg() == 0 {
