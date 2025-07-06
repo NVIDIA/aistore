@@ -23,6 +23,26 @@ import (
 	"github.com/urfave/cli"
 )
 
+// --------------------- Multi-object Rule of Convenience -----------------------------
+//
+// For user convenience, operations that can work on multiple objects
+// (prefixes, ranges, entire buckets)
+// should be discoverable from both bucket and object namespaces.
+//
+// Implementation pattern:
+// 1. Define the command in its primary namespace (usually bucket for multi-object ops)
+// 2. Copy cli.Command or - better - use makeAlias() to expose it in the secondary namespace
+// 3. Ensure help text is context-agnostic (avoid hardcoded command names in examples)
+//
+// Examples:
+// - cp: bucket-primary, available in object via bucketObjCmdCopy
+// - prefetch: object-primary, available in bucket via objectCmdPrefetch
+// - evict: shared as bucketObjCmdEvict in both namespaces
+// - archive: archive-primary, aliased in both bucket and object
+//
+// Motivation: help users to easily discover functionality.
+// ---------------------                                  -----------------------------
+
 const examplesBckSetProps = `
 Usage examples:
 - ais bucket props set BUCKET checksum.type=xxhash
@@ -296,6 +316,7 @@ var (
 				Action:    createBucketHandler,
 			},
 			bucketObjCmdCopy,
+			makeAlias(archBucketCmd, "ais archive bucket", false, commandArch),
 			bucketCmdRename,
 			{
 				Name:      commandRemove,

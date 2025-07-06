@@ -21,6 +21,7 @@ import (
 )
 
 // in this file: operations on objects
+// see also bucket_hdlr.go for "Multi-object Rule of Convenience"
 
 // (compare with  archGetUsage)
 const objGetUsage = "Get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
@@ -240,6 +241,7 @@ var (
 			objectCmdPut,
 			objectCmdPromote,
 			bucketObjCmdCopy,
+			makeAlias(archBucketCmd, "ais archive bucket", false, commandArch),
 			objectCmdConcat,
 			objectCmdSetCustom,
 			objectCmdRemove,
