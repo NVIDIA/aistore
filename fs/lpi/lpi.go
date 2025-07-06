@@ -63,7 +63,7 @@ func New(root, prefix string, smap *meta.Smap) (*Iter, error) {
 	debug.Assert(!cos.IsLastB(root, filepath.Separator), root)
 	finfo, err := os.Stat(root)
 	if err != nil {
-		return nil, fmt.Errorf("root fstat: %v", err)
+		return nil, fmt.Errorf("root fstat: %w", err)
 	}
 	if !finfo.IsDir() {
 		return nil, fmt.Errorf("root is not a directory: %s", root)
@@ -107,7 +107,7 @@ func (lpi *Iter) Next(msg Msg, out Page) error {
 		ErrorCallback: lpi.ErrorCallback,
 	})
 	if err != nil && err != errStop {
-		return fmt.Errorf("error gowalk-ing: %v", err)
+		return fmt.Errorf("error gowalk-ing: %w", err)
 	}
 
 	return nil

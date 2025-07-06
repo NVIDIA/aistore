@@ -3117,7 +3117,7 @@ func (p *proxy) Stop(err error) {
 	if err == nil {
 		nlog.Infoln(s)
 	} else {
-		nlog.Warningf("%s: %v", s, err)
+		nlog.Warningln(s, "[", err, "]")
 	}
 	xreg.AbortAll(errors.New("p-stop"))
 

@@ -274,7 +274,7 @@ func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 		err = jsoniter.NewDecoder(resp.Body).Decode(out)
 	}
 	if err != nil {
-		err = fmt.Errorf("unexpected: failed to decode response: %v -> %T", err, out)
+		err = fmt.Errorf("unexpected: failed to decode response: %w -> %T", err, out)
 	}
 	return
 }

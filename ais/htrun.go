@@ -1960,7 +1960,7 @@ func (h *htrun) join(htext htext, contactURLs ...string) (*callResult, error) {
 
 	smap := h.owner.smap.get()
 	if err := smap.validate(); err != nil {
-		return res, fmt.Errorf("%s: invalid Smap, err: %v", h.si, err)
+		return res, fmt.Errorf("%s: %v", h.si, err)
 	}
 
 	// Failed to join cluster using config, try getting primary URL using existing smap.
@@ -2279,7 +2279,7 @@ func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	if callerSver != smap.vstr && callerSver != "" {
 		callerVer, err := strconv.ParseInt(callerSver, 10, 64)
 		if err != nil { // (unlikely)
-			e := fmt.Errorf("%s: invalid caller's Smap ver [%s, %q, %v], %s", h, callerName, callerSver, err, smap)
+			e := fmt.Errorf("%s: invalid caller's Smap ver [%s, %q, %w], %s", h, callerName, callerSver, err, smap)
 			nlog.Errorln(e)
 			return e
 		}

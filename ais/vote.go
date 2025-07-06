@@ -673,7 +673,8 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	smap := h.owner.smap.get()
 	nextPrimaryProxy, err := smap.HrwProxy(currPrimaryID)
 	if err != nil {
-		return false, fmt.Errorf("error executing HRW: %v", err)
+		nlog.Errorln(err)
+		return false, err
 	}
 
 	vote := nextPrimaryProxy.ID() == daemonID

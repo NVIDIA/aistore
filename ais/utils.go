@@ -276,7 +276,7 @@ func _parseCIDR(name, name2 string) (*net.IPNet, error) {
 	}
 	_, network, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid '%s=%s': %v", name, cidr, err)
+		return nil, fmt.Errorf("invalid '%s=%s': %w", name, cidr, err)
 	}
 	return network, nil
 }

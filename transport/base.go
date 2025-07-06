@@ -307,7 +307,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// termination is caused by anything other than Fin()
 	// (reasonStopped is, effectively, abort via Stop() - totally legit)
 	if reason != reasonStopped {
-		errExt := fmt.Errorf("%s[term-reason: %s, err: %v]", s, reason, err)
+		errExt := fmt.Errorf("%s[term-reason: %s, err: %w]", s, reason, err)
 		nlog.Errorln(errExt)
 		// NOTE: abort grandparent xaction
 		if s.xctn != nil {

@@ -163,7 +163,7 @@ func (h *hdlExtra) stats(r *http.Request, trname string) (rxStats, uint64, strin
 
 	sessID, err := strconv.ParseInt(sid, 10, 64)
 	if err != nil || sessID == 0 {
-		err = fmt.Errorf("%s[:%q]: invalid session ID, err %v", h.trname, sid, err)
+		err = fmt.Errorf("%s[:%q]: invalid session ID, err %w", h.trname, sid, err)
 		cos.AssertNoErr(err)
 	}
 

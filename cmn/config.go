@@ -1044,7 +1044,7 @@ func (c *BackendConf) Validate() (err error) {
 		case apc.AIS:
 			var aisConf BackendConfAIS
 			if err := jsoniter.Unmarshal(b, &aisConf); err != nil {
-				return fmt.Errorf("invalid cloud specification: %v", err)
+				return fmt.Errorf("invalid cloud specification: %w", err)
 			}
 			for alias, urls := range aisConf {
 				if len(urls) == 0 {
@@ -1526,16 +1526,16 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) error {
 
 	// Parse ports
 	if _, err := ValidatePort(c.Port); err != nil {
-		return fmt.Errorf("invalid %s port: %v", NetPublic, err)
+		return fmt.Errorf("invalid %s port: %w", NetPublic, err)
 	}
 	if c.PortIntraControl != 0 {
 		if _, err := ValidatePort(c.PortIntraControl); err != nil {
-			return fmt.Errorf("invalid %s port: %v", NetIntraControl, err)
+			return fmt.Errorf("invalid %s port: %w", NetIntraControl, err)
 		}
 	}
 	if c.PortIntraData != 0 {
 		if _, err := ValidatePort(c.PortIntraData); err != nil {
-			return fmt.Errorf("invalid %s port: %v", NetIntraData, err)
+			return fmt.Errorf("invalid %s port: %w", NetIntraData, err)
 		}
 	}
 

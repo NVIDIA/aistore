@@ -138,11 +138,11 @@ func ReadBytes(r *http.Request) (b []byte, err error) {
 
 	b, e = cos.ReadAllN(r.Body, r.ContentLength)
 	if e != nil {
-		err = fmt.Errorf("failed to read %s request, err: %v", r.Method, e)
+		err = fmt.Errorf("failed to read %s request, err: %w", r.Method, e)
 		if e == io.EOF {
 			trailer := r.Trailer.Get("Error")
 			if trailer != "" {
-				err = fmt.Errorf("failed to read %s request, err: %v, trailer: %s", r.Method, e, trailer)
+				err = fmt.Errorf("failed to read %s request, err: %w, trailer: %s", r.Method, e, trailer)
 			}
 		}
 	}

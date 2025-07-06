@@ -672,7 +672,7 @@ func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	prepare, err := cos.ParseBool(q.Get(apc.QparamPrepare))
 	if err != nil {
-		err := fmt.Errorf("failed to parse %q query: %v", apc.QparamPrepare, err)
+		err := fmt.Errorf("failed to parse %q query: %w", apc.QparamPrepare, err)
 		h.writeErr(w, r, err)
 		return
 	}
@@ -714,7 +714,7 @@ func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actM
 		tout   = cmn.Rom.CplaneOperation()
 	)
 	if _, code, err := h.reqHealth(npsi, tout, nil, nsmap /* -> header */, true /*retry pub-addr*/); err != nil {
-		err = fmt.Errorf("%s failed to req-health %s, err: %v(%d)", tag, npname, err, code)
+		err = fmt.Errorf("%s failed to req-health %s, err: %w(%d)", tag, npname, err, code)
 		h.writeErr(w, r, err)
 		return
 	}
@@ -739,7 +739,7 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 	// update cluMeta in mem (= destination, brute force)
 	nconfig := &ncm.Config.ClusterConfig
 	if err := cmn.GCO.Update(nconfig); err != nil {
-		err = fmt.Errorf("%s failed to update config %s: %v", tag, nconfig.String(), err)
+		err = fmt.Errorf("%s failed to update config %s: %w", tag, nconfig.String(), err)
 		debug.AssertNoErr(err)
 		h.writeErr(w, r, err)
 		return

@@ -164,6 +164,10 @@ func (t *target) initBackends() {
 // - remote (e.g. cloud) backends  w/ empty stubs unless populated via build tags
 // - enabled/disabled via config.Backend
 func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
+	const (
+		fmtErrUnknown = "%s: unknown backend provider %q"
+		fmtErrFailed  = "%s: failed to initialize [%s] backend, err: %w"
+	)
 	var (
 		enabled   []string
 		disabled  []string
@@ -189,7 +193,7 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 		case apc.AIS:
 			continue
 		default:
-			return fmt.Errorf("unknown backend provider %q", provider)
+			return fmt.Errorf(fmtErrUnknown, t, provider)
 		}
 		t.bps[provider] = bp
 
@@ -202,13 +206,13 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 		case err != nil && configured:
 			if !cmn.IsErrInitMissingBackend(err) {
 				// as is
-				return fmt.Errorf("%s: failed to initialize [%s] backend, err: %v", t, provider, err)
+				return fmt.Errorf(fmtErrFailed, t, provider, err)
 			}
 			notlinked = append(notlinked, provider)
 		case err != nil && !configured:
 			_, ok := err.(*cmn.ErrInitBackend) // error type to indicate a _mock_ backend
 			if !ok {
-				return fmt.Errorf("%s: failed to initialize [%s] backend, err: %v", t, provider, err)
+				return fmt.Errorf(fmtErrFailed, t, provider, err)
 			}
 		}
 	}

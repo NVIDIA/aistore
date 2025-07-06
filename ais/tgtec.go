@@ -104,7 +104,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := lom.InitBck(bck.Bucket()); err != nil {
 			core.FreeLOM(lom)
-			err := fmt.Errorf("%s: %v", t, err)
+			err := fmt.Errorf("%s: %w", t, err)
 			t.writeErr(w, r, err)
 			return
 		}

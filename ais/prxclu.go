@@ -2025,7 +2025,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := p.checkIntraCall(r.Header, false /*from primary*/); err != nil {
-		err = fmt.Errorf("%v (action %q)", err, apc.ActSelfRemove)
+		err = fmt.Errorf("%w (action %q)", err, apc.ActSelfRemove)
 		p.writeErr(w, r, err)
 		return
 	}

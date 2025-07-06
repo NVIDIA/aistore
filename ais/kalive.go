@@ -631,7 +631,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			if nlog.Stopping() {
 				return true
 			}
-			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", sname, pname, err, status)
+			err = fmt.Errorf("%s: unexpected response from %s: %w(%d)", sname, pname, err, status)
 			debug.AssertNoErr(err)
 			nlog.Warningln(err)
 		case sig := <-k.controlCh:

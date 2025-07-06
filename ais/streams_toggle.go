@@ -146,7 +146,7 @@ func (p *proxy) _toggleStreams(action string) error {
 	for _, res := range results {
 		if res.err != nil {
 			freeBcArgs(args)
-			err := fmt.Errorf("%s: %s failed to %s: %v", p, res.si.StringEx(), action, res.err)
+			err := fmt.Errorf("%s: %s failed to %s: %w", p, res.si.StringEx(), action, res.err)
 			return err
 		}
 	}
