@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 
 	"github.com/urfave/cli"
@@ -37,7 +38,7 @@ type mkaliasOpts struct {
 	aliasFor string
 	addFlags []cli.Flag
 	delFlags []cli.Flag
-	replace  map[string]string
+	replace  cos.StrKVs
 }
 
 func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
@@ -88,7 +89,7 @@ func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 }
 
 // make targeted replacements in help text of the aliased command
-func _updAliasedHelp(cmd *cli.Command, replace map[string]string) {
+func _updAliasedHelp(cmd *cli.Command, replace cos.StrKVs) {
 	for oldPath, newPath := range replace {
 		cmd.Usage = strings.ReplaceAll(cmd.Usage, oldPath, newPath)
 	}

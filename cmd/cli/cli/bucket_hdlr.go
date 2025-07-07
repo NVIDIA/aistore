@@ -316,7 +316,7 @@ var (
 			makeAlias(&archBucketCmd, &mkaliasOpts{
 				newName:  commandArch,
 				aliasFor: "ais archive bucket",
-				replace:  map[string]string{"ais archive bucket": "ais bucket archive"},
+				replace:  cos.StrKVs{"ais archive bucket": "ais bucket archive"},
 			}),
 			bucketCmdRename,
 			{
