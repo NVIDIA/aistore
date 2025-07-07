@@ -66,7 +66,7 @@ var (
 			showThroughput,
 			showLatency,
 			showCmdMpathCapacity,
-			makeAlias(&showCmdDisk, cmdShowDisk, "", nil, nil),
+			makeAlias(&showCmdDisk, &mkaliasOpts{newName: cmdShowDisk}),
 		},
 	}
 	showCounters = cli.Command{

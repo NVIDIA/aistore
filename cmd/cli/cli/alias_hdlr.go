@@ -85,7 +85,7 @@ func (a *acli) initAliases() (aliasCmds []cli.Command) {
 		cmd := a.resolveCmd(orig)
 
 		if cmd != nil {
-			aliasCmds = append(aliasCmds, makeAlias(cmd, alias /*new name*/, orig, nil, nil))
+			aliasCmds = append(aliasCmds, makeAlias(cmd, &mkaliasOpts{newName: alias, aliasFor: orig}))
 		}
 	}
 	return

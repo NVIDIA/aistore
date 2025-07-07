@@ -242,18 +242,23 @@ var (
 			objectCmdPromote,
 
 			// for usage guidelines, see [make_alias.md](https://github.com/NVIDIA/aistore/blob/main/cmd/cli/cli/make_alias.md)
-			makeAlias(&bucketObjCmdCopy, "", "",
-				[]cli.Flag{encodeObjnameFlag}, /*add*/
-				[]cli.Flag{listFlag, templateFlag, numWorkersFlag, copyPrependFlag, progressFlag, refreshFlag, verbObjPrefixFlag, waitFlag, waitJobXactFinishedFlag, continueOnErrorFlag}),
-			makeAliasWithHelpUpdate(&archBucketCmd, commandArch, "ais archive bucket", nil, nil,
-				map[string]string{"ais archive bucket": "ais object archive"}),
+			makeAlias(&bucketObjCmdCopy, &mkaliasOpts{
+				addFlags: []cli.Flag{encodeObjnameFlag},
+				delFlags: []cli.Flag{listFlag, templateFlag, numWorkersFlag, copyPrependFlag, progressFlag,
+					refreshFlag, verbObjPrefixFlag, waitFlag, waitJobXactFinishedFlag, continueOnErrorFlag},
+			}),
+			makeAlias(&archBucketCmd, &mkaliasOpts{
+				newName:  commandArch,
+				aliasFor: "ais archive bucket",
+				replace:  map[string]string{"ais archive bucket": "ais object archive"},
+			}),
 
 			objectCmdConcat,
 			objectCmdSetCustom,
 			objectCmdRemove,
 			objectCmdPrefetch,
 			bucketObjCmdEvict,
-			makeAlias(&showCmdObject, commandShow, "", nil, nil),
+			makeAlias(&showCmdObject, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:         commandRename,
 				Usage:        "Move (rename) object",

@@ -83,7 +83,7 @@ var (
 		jobStopSub,
 		jobWaitSub,
 		jobRemoveSub,
-		makeAlias(&showCmdJob, commandShow, "", nil, nil), // alias for `ais show`
+		makeAlias(&showCmdJob, &mkaliasOpts{newName: commandShow}),
 	}
 )
 

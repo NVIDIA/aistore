@@ -72,7 +72,7 @@ var (
 		Name:  commandShow,
 		Usage: "Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself",
 		Subcommands: []cli.Command{
-			makeAlias(&authCmdShow, commandAuth, "", nil, nil),
+			makeAlias(&authCmdShow, &mkaliasOpts{newName: commandAuth}),
 			showCmdObject,
 			showCmdBucket,
 			showCmdCluster,
@@ -84,7 +84,7 @@ var (
 			showCmdJob,
 			showCmdLog,
 			showTLS,
-			makeAlias(&showCmdETL, commandETL, "", nil, nil),
+			makeAlias(&showCmdETL, &mkaliasOpts{newName: commandETL}),
 		},
 	}
 
@@ -140,7 +140,7 @@ var (
 				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
 			},
-			makeAlias(&showCmdPerformance, cmdShowStats, cliName+" "+commandShow+" "+commandPerf, nil, nil),
+			makeAlias(&showCmdPerformance, &mkaliasOpts{newName: cmdShowStats, aliasFor: cliName + " " + commandShow + " " + commandPerf}),
 		},
 	}
 	showCmdBucket = cli.Command{

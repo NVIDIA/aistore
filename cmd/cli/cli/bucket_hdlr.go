@@ -304,7 +304,7 @@ var (
 			bucketCmdLRU,
 			bucketObjCmdEvict,
 			objectCmdPrefetch,
-			makeAlias(&showCmdBucket, commandShow, "", nil, nil), // alias for `ais show`
+			makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:      commandCreate,
 				Usage:     "Create ais buckets",
@@ -313,8 +313,11 @@ var (
 				Action:    createBucketHandler,
 			},
 			bucketObjCmdCopy,
-			makeAliasWithHelpUpdate(&archBucketCmd, commandArch, "ais archive bucket", nil, nil,
-				map[string]string{"ais archive bucket": "ais bucket archive"}),
+			makeAlias(&archBucketCmd, &mkaliasOpts{
+				newName:  commandArch,
+				aliasFor: "ais archive bucket",
+				replace:  map[string]string{"ais archive bucket": "ais bucket archive"},
+			}),
 			bucketCmdRename,
 			{
 				Name:      commandRemove,
@@ -342,7 +345,7 @@ var (
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
-					makeAlias(&showCmdBucket, commandShow, "", nil, nil),
+					makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 				},
 			},
 		},

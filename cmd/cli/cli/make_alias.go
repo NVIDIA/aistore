@@ -32,13 +32,21 @@ import (
 //
 // [NOTE] for `makeAlias usage guidelines, please refer to [make_alias.md](https://github.com/NVIDIA/aistore/blob/main/cmd/cli/cli/make_alias.md)
 
-func makeAlias(cmd *cli.Command, newName, aliasFor string, addFlags, delFlags []cli.Flag) cli.Command {
+type mkaliasOpts struct {
+	newName  string
+	aliasFor string
+	addFlags []cli.Flag
+	delFlags []cli.Flag
+	replace  map[string]string
+}
+
+func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 	aliasCmd := *cmd
-	if newName != "" {
-		aliasCmd.Name = newName
+	if opts.newName != "" {
+		aliasCmd.Name = opts.newName
 	}
-	if aliasFor != "" {
-		aliasCmd.Usage = fmt.Sprintf(aliasForPrefix+"%q) %s", aliasFor, cmd.Usage)
+	if opts.aliasFor != "" {
+		aliasCmd.Usage = fmt.Sprintf(aliasForPrefix+"%q) %s", opts.aliasFor, cmd.Usage)
 	}
 
 	// help is already added to the original
@@ -49,45 +57,43 @@ func makeAlias(cmd *cli.Command, newName, aliasFor string, addFlags, delFlags []
 		aliasSub := make([]cli.Command, len(cmd.Subcommands))
 		for i := range cmd.Subcommands {
 			subCmdCopy := &cmd.Subcommands[i]
-			aliasSub[i] = makeAlias(subCmdCopy, "", "", nil, nil)
+			aliasSub[i] = makeAlias(subCmdCopy, &mkaliasOpts{})
 		}
 		aliasCmd.Subcommands = aliasSub
 	}
 
 	// flag management: deep copy original flags and add/remove as needed
-	if len(addFlags) > 0 || len(delFlags) > 0 {
+	if len(opts.addFlags) > 0 || len(opts.delFlags) > 0 {
 		var nflags []cli.Flag
 		if cmd.Flags != nil {
 			nflags = make([]cli.Flag, len(cmd.Flags))
-			if len(delFlags) > 0 {
-				nflags = rmFlags(cmd.Flags, delFlags...)
+			if len(opts.delFlags) > 0 {
+				nflags = rmFlags(cmd.Flags, opts.delFlags...)
 			} else {
 				copy(nflags, cmd.Flags)
 			}
 		} else {
-			debug.Assert(len(delFlags) == 0, "no flags to remove")
+			debug.Assert(len(opts.delFlags) == 0, "no flags to remove")
 		}
-		nflags = append(nflags, addFlags...)
+		nflags = append(nflags, opts.addFlags...)
 		aliasCmd.Flags = sortFlags(nflags)
 	}
 
-	return aliasCmd
-}
+	// help text management
+	if opts.replace != nil {
+		_updAliasedHelp(&aliasCmd, opts.replace)
+	}
 
-func makeAliasWithHelpUpdate(cmd *cli.Command, newName, aliasFor string, addFlags, delFlags []cli.Flag, helpPathMap map[string]string) cli.Command {
-	aliasCmd := makeAlias(cmd, newName, aliasFor, addFlags, delFlags)
-	debug.Assert(helpPathMap != nil)
-	updateHelpTextPaths(&aliasCmd, helpPathMap)
 	return aliasCmd
 }
 
 // make targeted replacements in help text of the aliased command
-func updateHelpTextPaths(cmd *cli.Command, pathMap map[string]string) {
-	for oldPath, newPath := range pathMap {
+func _updAliasedHelp(cmd *cli.Command, replace map[string]string) {
+	for oldPath, newPath := range replace {
 		cmd.Usage = strings.ReplaceAll(cmd.Usage, oldPath, newPath)
 	}
 	// Recursively update subcommands
 	for i := range cmd.Subcommands {
-		updateHelpTextPaths(&cmd.Subcommands[i], pathMap)
+		_updAliasedHelp(&cmd.Subcommands[i], replace)
 	}
 }
