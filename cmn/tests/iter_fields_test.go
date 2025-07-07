@@ -359,12 +359,73 @@ var _ = Describe("IterFields", func() {
 				"foo.bar": 2,
 			}),
 		)
-
-		DescribeTable("should error on update",
+	})
+	Describe("MergeConfigToSet", func() {
+		DescribeTable("should successfully merge",
 			func(orig *cmn.ConfigToSet, merge *cmn.ConfigToSet, expected *cmn.ConfigToSet) {
 				orig.Merge(merge)
 				Expect(orig).To(Equal(expected))
 			},
+			Entry("both configs with different empty maps",
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.AWS: map[string]any{},
+						},
+					},
+				},
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.GCP: map[string]any{},
+						},
+					},
+				},
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.AWS: map[string]any{},
+							apc.GCP: map[string]any{},
+						},
+					},
+				}),
+
+			Entry("both configs with maps of nested structs",
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.AWS: map[string]any{
+								"aws-entry": Foo{},
+							},
+							"original-entry": struct{}{},
+						},
+					},
+				},
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.AWS: map[string]any{
+								"aws-entry":    bar{},
+								"second-entry": struct{}{},
+							},
+							apc.GCP: map[string]any{},
+						},
+					},
+				},
+				// Override AWS struct, keep original entry, and add new GCP entry
+				&cmn.ConfigToSet{
+					Backend: &cmn.BackendConf{
+						Conf: map[string]any{
+							apc.AWS: map[string]any{
+								"aws-entry":    bar{},
+								"second-entry": struct{}{},
+							},
+							"original-entry": struct{}{},
+							apc.GCP:          map[string]any{},
+						},
+					},
+				}),
+
 			Entry("override configuration", &cmn.ConfigToSet{
 				Mirror: &cmn.MirrorConfToSet{
 					Enabled: apc.Ptr(true),

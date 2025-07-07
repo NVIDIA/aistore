@@ -301,30 +301,56 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
 }
 
 func mergeProps(src, dst any) {
-	var (
-		srcVal = reflect.ValueOf(src).Elem()
-		dstVal = reflect.ValueOf(dst).Elem()
-	)
-
+	srcVal := getElem(src)
+	dstVal := getElem(dst)
 	for i := range srcVal.NumField() {
 		var (
-			srcValField = srcVal.Field(i)
-			dstValField = dstVal.FieldByName(srcVal.Type().Field(i).Name)
+			srcField = srcVal.Field(i)
+			dstField = dstVal.FieldByName(srcVal.Type().Field(i).Name)
 		)
 
-		if srcValField.IsNil() {
+		if srcField.IsNil() {
 			continue
 		}
 
-		if dstValField.IsNil() ||
-			(srcValField.Elem().Kind() != reflect.Struct && srcValField.Elem().Kind() != reflect.Invalid) {
-			dstValField.Set(srcValField)
+		// Special case to handle maps
+		if srcField.Kind() == reflect.Map && dstField.Kind() == reflect.Map {
+			if !srcField.IsNil() {
+				// Addr().Interface() allows us to modify the original dst, Interface() only makes a copy
+				mergeMaps(srcField.Interface(), dstField.Addr().Interface())
+			}
+			continue
+		}
+
+		if dstField.IsNil() ||
+			(srcField.Elem().Kind() != reflect.Struct && srcField.Elem().Kind() != reflect.Invalid) {
+			dstField.Set(srcField)
 			continue
 		}
 
 		// Recurse into struct
-		mergeProps(srcValField.Interface(), dstValField.Interface())
+		mergeProps(srcField.Interface(), dstField.Interface())
 	}
+}
+
+func mergeMaps(src, dst any) {
+	srcMap := getElem(src)
+	dstMap := getElem(dst)
+	if srcMap.Kind() != reflect.Map || dstMap.Kind() != reflect.Map {
+		return
+	}
+	for _, key := range srcMap.MapKeys() {
+		srcVal := srcMap.MapIndex(key)
+		dstMap.SetMapIndex(key, srcVal)
+	}
+}
+
+func getElem(a any) reflect.Value {
+	val := reflect.ValueOf(a)
+	if val.Kind() == reflect.Ptr {
+		return val.Elem()
+	}
+	return val
 }
 
 ///////////
