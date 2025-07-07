@@ -36,10 +36,10 @@ import (
 
 const archBucketUsage = "Archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
 	indent1 + archExts + "-formatted object (a.k.a. \"shard\"):\n" +
-	indent1 + "\t- 'ais://src gs://dst/a.tar.lz4 --template \"trunk-{001..997}\"'\t- archive (prefix+range) matching objects from ais://src;\n" +
-	indent1 + "\t- '\"ais://src/trunk-{001..997}\" gs://dst/a.tar.lz4'\t- same as above (notice double quotes);\n" +
-	indent1 + "\t- '\"ais://src/trunk-{998..999}\" gs://dst/a.tar.lz4 --append-or-put'\t- add two more objects to an existing shard;\n" +
-	indent1 + "\t- 's3://src/trunk-00 ais://dst/b.tar'\t- archive \"trunk-00\" prefixed objects from an s3 bucket as a given TAR destination"
+	indent1 + "\t- 'ais archive bucket ais://src gs://dst/a.tar.lz4 --template \"trunk-{001..997}\"'\t- archive (prefix+range) matching objects from ais://src;\n" +
+	indent1 + "\t- 'ais archive bucket \"ais://src/trunk-{001..997}\" gs://dst/a.tar.lz4'\t- same as above (notice double quotes);\n" +
+	indent1 + "\t- 'ais archive bucket \"ais://src/trunk-{998..999}\" gs://dst/a.tar.lz4 --append-or-put'\t- add two more objects to an existing shard;\n" +
+	indent1 + "\t- 'ais archive bucket s3://src/trunk-00 ais://dst/b.tar'\t- archive \"trunk-00\" prefixed objects from an s3 bucket as a given TAR destination"
 
 const archPutUsage = "Archive a file, a directory, or multiple files and/or directories as\n" +
 	indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +

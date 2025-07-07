@@ -55,7 +55,7 @@ var (
 	))
 
 	// `show performance` command
-	showCmdPeformance = cli.Command{
+	showCmdPerformance = cli.Command{
 		Name:      commandPerf,
 		Usage:     showPerfArgument,
 		ArgsUsage: optionalTargetIDArgument,
@@ -66,7 +66,7 @@ var (
 			showThroughput,
 			showLatency,
 			showCmdMpathCapacity,
-			makeAlias(showCmdDisk, "", true /*silent*/, cmdShowDisk),
+			makeAlias(&showCmdDisk, cmdShowDisk, "", nil, nil),
 		},
 	}
 	showCounters = cli.Command{

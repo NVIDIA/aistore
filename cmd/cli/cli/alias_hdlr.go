@@ -85,7 +85,7 @@ func (a *acli) initAliases() (aliasCmds []cli.Command) {
 		cmd := a.resolveCmd(orig)
 
 		if cmd != nil {
-			aliasCmds = append(aliasCmds, makeAlias(*cmd, orig, false, alias))
+			aliasCmds = append(aliasCmds, makeAlias(cmd, alias /*new name*/, orig, nil, nil))
 		}
 	}
 	return
@@ -128,33 +128,6 @@ func (a *acli) resolveCmd(command string) *cli.Command {
 		}
 	}
 	return currCmd
-}
-
-// makeAlias returns a copy of cmd with some changes:
-// 1. command name is changed if provided.
-// 2. category set to "ALIASES" if specified.
-// 3. "alias for" message added to usage if not a silent alias.
-//
-//nolint:gocritic // need cmd copy, ignoring hugeParam
-func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...string) cli.Command {
-	if len(newName) != 0 {
-		cmd.Name = newName[0]
-	}
-	if !silentAlias {
-		cmd.Usage = fmt.Sprintf(aliasForPrefix+"%q) %s", aliasFor, cmd.Usage)
-	}
-
-	// help is already added to the original, remove from cmd and all cmds
-	cmd.HideHelp = true
-	if len(cmd.Subcommands) != 0 {
-		aliasSub := make([]cli.Command, len(cmd.Subcommands))
-		for i := range cmd.Subcommands {
-			aliasSub[i] = makeAlias(cmd.Subcommands[i], "", true)
-		}
-		cmd.Subcommands = aliasSub
-	}
-
-	return cmd
 }
 
 func resetAliasHandler(c *cli.Context) (err error) {

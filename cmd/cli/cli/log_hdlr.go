@@ -80,7 +80,7 @@ var (
 		Name:  commandLog,
 		Usage: "View ais node's log in real time; download the current log; download all logs (history)",
 		Subcommands: []cli.Command{
-			makeAlias(showCmdLog, "", true, commandShow),
+			makeAlias(&showCmdLog, commandShow, "", nil, nil),
 			getCmdLog,
 		},
 	}

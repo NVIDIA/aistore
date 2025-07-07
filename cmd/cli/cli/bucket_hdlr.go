@@ -210,9 +210,6 @@ var (
 			syncFlag,
 			nonRecursFlag, // (embedded prefix dopOLTP)
 			nonverboseFlag,
-			// TODO: currently, single-object only
-			etlNameFlag,
-			encodeObjnameFlag,
 		},
 		commandRename: {
 			waitFlag,
@@ -307,7 +304,7 @@ var (
 			bucketCmdLRU,
 			bucketObjCmdEvict,
 			objectCmdPrefetch,
-			makeAlias(showCmdBucket, "", true, commandShow), // alias for `ais show`
+			makeAlias(&showCmdBucket, commandShow, "", nil, nil), // alias for `ais show`
 			{
 				Name:      commandCreate,
 				Usage:     "Create ais buckets",
@@ -316,7 +313,8 @@ var (
 				Action:    createBucketHandler,
 			},
 			bucketObjCmdCopy,
-			makeAlias(archBucketCmd, "ais archive bucket", false, commandArch),
+			makeAliasWithHelpUpdate(&archBucketCmd, commandArch, "ais archive bucket", nil, nil,
+				map[string]string{"ais archive bucket": "ais bucket archive"}),
 			bucketCmdRename,
 			{
 				Name:      commandRemove,
@@ -344,7 +342,7 @@ var (
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
-					makeAlias(showCmdBucket, "", true, commandShow),
+					makeAlias(&showCmdBucket, commandShow, "", nil, nil),
 				},
 			},
 		},

@@ -44,7 +44,7 @@ var (
 		Name:  commandTLS,
 		Usage: "Load or reload (an updated) TLS certificate; display information about currently deployed certificates",
 		Subcommands: []cli.Command{
-			makeAlias(showTLS, "", true, commandShow),
+			makeAlias(&showTLS, commandShow, "", nil, nil),
 			loadTLS,
 			validateTLS,
 		},

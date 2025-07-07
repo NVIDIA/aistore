@@ -74,7 +74,7 @@ var (
 		Name:  commandConfig,
 		Usage: "configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)",
 		Subcommands: []cli.Command{
-			makeAlias(showCmdConfig, "", true, commandShow), // alias for `ais show`
+			makeAlias(&showCmdConfig, commandShow, "", nil, nil),
 			{
 				Name:         cmdCluster,
 				Usage:        "Configure AIS cluster",

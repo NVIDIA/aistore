@@ -240,14 +240,20 @@ var (
 			bucketsObjectsCmdList,
 			objectCmdPut,
 			objectCmdPromote,
-			bucketObjCmdCopy,
-			makeAlias(archBucketCmd, "ais archive bucket", false, commandArch),
+
+			// for usage guidelines, see [make_alias.md](https://github.com/NVIDIA/aistore/blob/main/cmd/cli/cli/make_alias.md)
+			makeAlias(&bucketObjCmdCopy, "", "",
+				[]cli.Flag{encodeObjnameFlag}, /*add*/
+				[]cli.Flag{listFlag, templateFlag, numWorkersFlag, copyPrependFlag, progressFlag, refreshFlag, verbObjPrefixFlag, waitFlag, waitJobXactFinishedFlag, continueOnErrorFlag}),
+			makeAliasWithHelpUpdate(&archBucketCmd, commandArch, "ais archive bucket", nil, nil,
+				map[string]string{"ais archive bucket": "ais object archive"}),
+
 			objectCmdConcat,
 			objectCmdSetCustom,
 			objectCmdRemove,
 			objectCmdPrefetch,
 			bucketObjCmdEvict,
-			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
+			makeAlias(&showCmdObject, commandShow, "", nil, nil),
 			{
 				Name:         commandRename,
 				Usage:        "Move (rename) object",

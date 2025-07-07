@@ -239,7 +239,7 @@ func (a *acli) setupCommands(emptyCmdline bool) {
 		archCmd,
 		logCmd,
 		tlsCmd,
-		showCmdPeformance,
+		showCmdPerformance,
 		remClusterCmd,
 		a.getAliasCmd(),
 	}

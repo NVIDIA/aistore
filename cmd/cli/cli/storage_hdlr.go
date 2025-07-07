@@ -66,7 +66,7 @@ var (
 		Usage:  "Show and attach/detach target mountpaths",
 		Action: showMpathHandler,
 		Subcommands: []cli.Command{
-			makeAlias(showCmdMpath, "", true, commandShow), // alias for `ais show`
+			makeAlias(&showCmdMpath, commandShow, "", nil, nil),
 			{
 				Name:         cmdMpathAttach,
 				Usage:        "Attach mountpath to a given target node",
@@ -206,7 +206,7 @@ var (
 		Name:  commandStorage,
 		Usage: "Monitor and manage clustered storage",
 		Subcommands: []cli.Command{
-			makeAlias(showCmdStorage, "", true, commandShow), // alias for `ais show`
+			makeAlias(&showCmdStorage, commandShow, "", nil, nil),
 			showCmdStgSummary,
 			scrubCmd,
 			mpathCmd,
