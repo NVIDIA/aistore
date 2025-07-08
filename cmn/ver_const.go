@@ -39,7 +39,7 @@ const (
 	MetaverBMD   = 2 // BMD (bucket metadata) --/--
 	MetaverRMD   = 1 // Rebalance MD (jsp)
 	MetaverVMD   = 2 // Volume MD (jsp)
-	MetaverEtlMD = 1 // ETL MD (jsp)
+	MetaverEtlMD = 2 // ETL MD (jsp)
 
 	MetaverConfig      = 4 // Global Configuration (jsp)
 	MetaverAuthNConfig = 1 // Authn config (jsp) // ditto

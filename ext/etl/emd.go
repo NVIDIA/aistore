@@ -133,11 +133,16 @@ func (e *MD) UnmarshalJSON(data []byte) (err error) {
 		}
 		err = jsoniter.Unmarshal(v.Msg, &en)
 		if err != nil || en.InitMsg == nil {
-			nlog.Warningln("failed to unmarshal etlMD:", err)
+			// NOTE; version 3.30 introduces new ETL MD format - a breaking change
+			// TODO -- FIXME: this is a workaround for incompatible etlMD formats
+			nlog.Errorln("failed to unmarshal etlMD (ignoring, proceeding anyway), err:", err, "type:", v.Type, "msg:", v.Msg)
+			err = nil
 			continue
 		}
 		if err = en.InitMsg.Validate(); err != nil {
-			nlog.Warningln("invalid etlMD entry:", en, v.Msg)
+			// TODO -- FIXME: this is a workaround for incompatible etlMD formats
+			nlog.Errorln("failed to validate etlMD entry (ignoring, proceeding anyway), err:", err, "type:", v.Type, "msg:", v.Msg)
+			err = nil
 			continue
 		}
 		e.ETLs[k] = en
