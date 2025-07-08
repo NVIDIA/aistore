@@ -129,10 +129,12 @@ class TestBatchLoader(unittest.TestCase):
             }
         ).encode()
         tar_data = self._create_test_tar()
-        mock_parts = [
-            ({"Content-Type": "application/json"}, json_part),
-            ({"Content-Type": "application/octet-stream"}, tar_data),
-        ]
+        mock_parts = iter(
+            [
+                ({"Content-Type": "application/json"}, json_part),
+                ({"Content-Type": "application/octet-stream"}, tar_data),
+            ]
+        )
 
         mock_decoder = Mock(spec=MultipartDecoder)
         mock_decoder.decode_multipart.return_value = mock_parts

@@ -129,7 +129,6 @@ class BatchLoader:
         if batch_request.streaming:
             # Streaming mode: process response as stream
             data_stream = response.raw
-
             batch_response = None
         else:
 
@@ -138,15 +137,18 @@ class BatchLoader:
                 return response.raw
 
             # Non-streaming mode: expect multipart response
-            parts = list(decoder.decode_multipart(response))
+            try:
+                parts_iter = decoder.decode_multipart(response)
 
-            # Get metadata json (part 1)
-            resp = parts[0][1].decode(decoder.encoding)
+                # Get metadata json (part 1)
+                batch_response = BatchResponse.from_json(
+                    next(parts_iter)[1].decode(decoder.encoding)
+                )
 
-            batch_response = BatchResponse.from_json(resp)
-
-            # Load archive (part 2) into memory buffer for non-streaming mode
-            data_stream = BytesIO(parts[1][1])
+                # Load archive (part 2) into memory buffer for non-streaming mode
+                data_stream = BytesIO(next(parts_iter)[1])
+            finally:
+                response.close()
 
         if extractor:
             return extractor.extract(data_stream, batch_request, batch_response)
