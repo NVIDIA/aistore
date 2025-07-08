@@ -191,7 +191,6 @@ class TestBatchLoaderIntegration(ParallelTestBase):
         for batch_resp, _ in results:
             self.assertTrue(batch_resp.is_missing)
 
-    @unittest.skip("Not working on 6 target/proxy/mntpath deployment")
     def test_batch_loader_with_opaque_data(self):
         """Test BatchLoader with opaque data in requests."""
         # Put test data into bucket
