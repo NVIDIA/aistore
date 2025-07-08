@@ -32,43 +32,63 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
 
 const etlStartUsage = "Start ETL.\n" +
-	indent1 + "\t- 'ais etl start <ETL_NAME>'\t start the specified ETL (transitions from stopped to running state).\n" +
-	indent1 + "\t- 'ais etl start <ETL_NAME> <ETL_NAME2>'\t\t start multiple ETL jobs by name.\n" +
-	indent1 + "\t- 'ais etl start -f <spec-file.yaml>'\t\t start ETL jobs defined in a local YAML file.\n" +
-	indent1 + "\t- 'ais etl start -f <URL>'\t\t start ETL jobs defined in a remote YAML file."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl start my-etl'\t\t start the specified ETL (transitions from stopped to running state);\n" +
+	indent1 + "\t- 'ais etl start my-etl another-etl'\t\t start multiple ETL jobs by name;\n" +
+	indent1 + "\t- 'ais etl start -f spec.yaml'\t\t start ETL jobs defined in a local YAML file;\n" +
+	indent1 + "\t- 'ais etl start -f https://example.com/etl.yaml'\t start ETL jobs defined in a remote YAML file;\n" +
+	indent1 + "\t- 'ais etl start -f multi-etl.yaml'\t\t start all ETL jobs defined in a multi-ETL file."
 
 const etlStopUsage = "Stop ETL. Also aborts related offline jobs and can be used to terminate ETLs stuck in 'initializing' state.\n" +
-	indent1 + "\t- 'ais etl stop <ETL_NAME>'\t\t stop the specified ETL (transitions from running to stopped state).\n" +
-	indent1 + "\t- 'ais etl stop <ETL_NAME> <ETL_NAME2>'\t\t stop multiple ETL jobs by name.\n" +
-	indent1 + "\t- 'ais etl stop --all'\t\t stop all running ETL jobs.\n" +
-	indent1 + "\t- 'ais etl init -f <spec-file.yaml>'\t\t stop ETL jobs defined in a local YAML file.\n" +
-	indent1 + "\t- 'ais etl init -f <URL>'\t\t stop ETL jobs defined in a remote YAML file."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl stop my-etl'\t\t stop the specified ETL (transitions from running to stopped state);\n" +
+	indent1 + "\t- 'ais etl stop my-etl another-etl'\t\t stop multiple ETL jobs by name;\n" +
+	indent1 + "\t- 'ais etl stop --all'\t\t stop all running ETL jobs;\n" +
+	indent1 + "\t- 'ais etl stop -f spec.yaml'\t\t stop ETL jobs defined in a local YAML file;\n" +
+	indent1 + "\t- 'ais etl stop -f https://example.com/etl.yaml'\t stop ETL jobs defined in a remote YAML file;\n" +
+	indent1 + "\t- 'ais etl stop stuck-etl'\t\t terminate ETL that is stuck in 'initializing' state."
 
 const etlRemoveUsage = "Remove ETL.\n" +
-	indent1 + "\t- 'ais etl rm <ETL_NAME>'\t\t\t remove (delete) the specified ETL.\n" +
-	indent1 + "\t- 'ais etl rm <ETL_NAME> <ETL_NAME2>'\t\t\t remove multiple ETL jobs by name.\n" +
-	indent1 + "\t- 'ais etl rm --all'\t\t\t remove all ETL jobs.\n" +
-	indent1 + "\t- 'ais etl rm -f <spec-file.yaml>'\t\t\t remove ETL jobs defined in a local YAML file.\n" +
-	indent1 + "\t- 'ais etl rm -f <URL>'\t\t\t remove ETL jobs defined in a remote YAML file.\n" +
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl rm my-etl'\t\t\t remove (delete) the specified ETL;\n" +
+	indent1 + "\t- 'ais etl rm my-etl another-etl'\t\t\t remove multiple ETL jobs by name;\n" +
+	indent1 + "\t- 'ais etl rm --all'\t\t\t remove all ETL jobs;\n" +
+	indent1 + "\t- 'ais etl rm -f spec.yaml'\t\t\t remove ETL jobs defined in a local YAML file;\n" +
+	indent1 + "\t- 'ais etl rm -f https://example.com/etl.yaml'\t remove ETL jobs defined in a remote YAML file;\n" +
+	indent1 + "\t- 'ais etl rm running-etl'\t\t\t remove ETL that is currently running (will be stopped first).\n" +
 	indent1 + "\t  NOTE: If an ETL is in 'running' state, it will be stopped automatically before removal."
 
 const etlShowUsage = "Show ETL(s).\n" +
-	indent1 + "\t- 'ais etl show'\t\t\t list all ETL jobs.\n" +
-	indent1 + "\t- 'ais etl show <ETL_NAME> [<ETL_NAME> ...]'\t show detailed specification for specified ETL jobs.\n" +
-	indent1 + "\t- 'ais etl show errors <ETL_NAME>'\t show transformation errors for specified ETL."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl show'\t\t\t list all ETL jobs with their status and details;\n" +
+	indent1 + "\t- 'ais etl show my-etl'\t\t show detailed specification for a specific ETL job;\n" +
+	indent1 + "\t- 'ais etl show my-etl another-etl'\t show detailed specifications for multiple ETL jobs;\n" +
+	indent1 + "\t- 'ais etl show errors my-etl'\t\t show transformation errors for inline object transformations;\n" +
+	indent1 + "\t- 'ais etl show errors my-etl job-123'\t show errors for a specific offline (bucket-to-bucket) transform job"
 
 const etlObjectUsage = "Transform an object.\n" +
-	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>'\t transform object and save to file.\n" +
-	indent1 + "\t- 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'\t\t transform and output to stdout.\n" +
-	indent1 + "\t- 'ais etl object <ETL_NAME> cp <SRC_BUCKET/OBJECT> <DST_BUCKET[/OBJECT]>'\t transform and copy to another bucket."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl object my-etl ais://src/image.jpg /tmp/output.jpg'\t transform object and save to file;\n" +
+	indent1 + "\t- 'ais etl object my-etl ais://src/data.json -'\t\t transform and output to stdout;\n" +
+	indent1 + "\t- 'ais etl object my-etl ais://src/doc.pdf /dev/null'\t\t transform and discard output;\n" +
+	indent1 + "\t- 'ais etl object my-etl cp ais://src/image.jpg ais://dst/'\t transform and copy to another bucket;\n" +
+	indent1 + "\t- 'ais etl object my-etl ais://src/data.xml output.json --args \"format=json\"'\t transform with custom arguments."
 
 const etlBucketUsage = "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').\n" +
-	indent1 + "\t- 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>'\t\t transform all objects from source to destination bucket.\n" +
-	indent1 + "\t- 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET> --prefix <PREFIX>'\t transform objects with specified prefix."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst'\t\t transform all objects from source to destination bucket;\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --prefix images/'\t transform objects with prefix 'images/';\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --template \"shard-{0001..0999}.tar\"'\t transform objects matching the template;\n" +
+	indent1 + "\t- 'ais etl bucket my-etl s3://remote-src ais://dst --all'\t transform all objects including non-cached ones;\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --dry-run'\t preview transformation without executing;\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --num-workers 8'\t use 8 concurrent workers for transformation;\n" +
+	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --prepend processed/'\t add prefix to transformed object names."
 
 const etlLogsUsage = "View ETL logs.\n" +
-	indent1 + "\t- 'ais etl view-logs <ETL_NAME>'\t\t show logs from all target nodes for specified ETL.\n" +
-	indent1 + "\t- 'ais etl view-logs <ETL_NAME> <TARGET_ID>'\t show logs from specific target node."
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl view-logs my-etl'\t\t show logs from all target nodes for the specified ETL;\n" +
+	indent1 + "\t- 'ais etl view-logs my-etl target-001'\t show logs from a specific target node;\n" +
+	indent1 + "\t- 'ais etl view-logs data-converter target-002'\t view logs from target-002 for data-converter ETL."
 
 var (
 	// flags
@@ -158,9 +178,14 @@ var (
 	initCmdETL = cli.Command{
 		Name: cmdInit,
 		Usage: "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
-			indent1 + "\t- 'ais etl init -f <spec-file.yaml>'\t deploy ETL from a local YAML file.\n" +
-			indent1 + "\t- 'ais etl init -f <URL>'\t deploy ETL from a remote YAML file.\n" +
-			"\nAdditional Info:\n" +
+			indent1 + "Examples:\n" +
+			indent1 + "\t- 'ais etl init -f my-etl.yaml'\t\t deploy ETL from a local YAML file;\n" +
+			indent1 + "\t- 'ais etl init -f https://example.com/etl.yaml'\t deploy ETL from a remote YAML file;\n" +
+			indent1 + "\t- 'ais etl init -f multi-etl.yaml'\t\t deploy multiple ETLs from a single file (separated by '---');\n" +
+			indent1 + "\t- 'ais etl init -f spec.yaml --name my-custom-etl'\t override ETL name from command line;\n" +
+			indent1 + "\t- 'ais etl init -f spec.yaml --comm-type hpull'\t override communication type;\n" +
+			indent1 + "\t- 'ais etl init -f spec.yaml --object-timeout 30s'\t set custom object transformation timeout.\n" +
+			indent1 + "\nAdditional Info:\n" +
 			indent1 + "- You may define multiple ETLs in a single spec file using YAML document separators ('---').\n" +
 			indent1 + "- CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.\n",
 		Action: etlInitSpecHandler,

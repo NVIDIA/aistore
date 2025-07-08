@@ -318,6 +318,11 @@ var (
 				aliasFor: "ais archive bucket",
 				replace:  cos.StrKVs{"ais archive bucket": "ais bucket archive"},
 			}),
+			makeAlias(&bckCmdETL, &mkaliasOpts{
+				newName:  commandETL,
+				aliasFor: "ais etl bucket",
+				replace:  cos.StrKVs{"ais etl bucket": "ais bucket etl"},
+			}),
 			bucketCmdRename,
 			{
 				Name:      commandRemove,

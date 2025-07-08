@@ -252,6 +252,11 @@ var (
 				aliasFor: "ais archive bucket",
 				replace:  cos.StrKVs{"ais archive bucket": "ais object archive"},
 			}),
+			makeAlias(&objCmdETL, &mkaliasOpts{
+				newName:  commandETL,
+				aliasFor: "ais etl object",
+				replace:  cos.StrKVs{"ais etl object": "ais object etl"},
+			}),
 
 			objectCmdConcat,
 			objectCmdSetCustom,

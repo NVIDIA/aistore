@@ -90,10 +90,24 @@ func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 
 // make targeted replacements in help text of the aliased command
 func _updAliasedHelp(cmd *cli.Command, replace cos.StrKVs) {
-	for oldPath, newPath := range replace {
-		cmd.Usage = strings.ReplaceAll(cmd.Usage, oldPath, newPath)
+	usage := cmd.Usage
+	offset := 0
+
+	if strings.HasPrefix(usage, aliasForPrefix) {
+		if end := strings.Index(usage, ") "); end != -1 {
+			offset = end + 2
+		}
 	}
-	// Recursively update subcommands
+
+	prefix := usage[:offset]
+	suffix := usage[offset:]
+
+	for old, new := range replace {
+		suffix = strings.ReplaceAll(suffix, old, new)
+	}
+
+	cmd.Usage = prefix + suffix
+
 	for i := range cmd.Subcommands {
 		_updAliasedHelp(&cmd.Subcommands[i], replace)
 	}
