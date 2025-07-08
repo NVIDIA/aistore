@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/volume"
 
@@ -75,6 +76,9 @@ Examples:
 	# LOM (readonly, no format auto-detection):
 	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -f lom                   - extract LOM to STDOUT
 	xmeta -x -in=/data/@ais/abc/%ob/img001.tar -out=/tmp/lom.txt -f lom - extract LOM to /tmp/lom.txt
+	# EMD (ETL Metadata):
+	xmeta -x -in=~/.ais0/.ais.emd                     - extract EMD to STDOUT
+	xmeta -x -in=~/.ais0/.ais.emd -out=/tmp/emd.txt   - extract EMD to /tmp/emd.txt
 `
 )
 
@@ -90,6 +94,7 @@ var m = map[string]struct {
 	"vmd":  {extractVMD, formatVMD, "VMD"},
 	"mt":   {extractECMeta, formatECMeta, "EC Metadata"},
 	"lom":  {extractLOM, formatLOM, "LOM"},
+	"emd":  {extractEMD, formatEMD, "ETL Metadata"},
 }
 
 // "extract*" routines expect AIS-formatted (smap, bmd, rmd, etc.)
@@ -99,6 +104,7 @@ func extractBMD() error    { return extractMeta(&meta.BMD{}) }
 func extractRMD() error    { return extractMeta(&meta.RMD{}) }
 func extractConfig() error { return extractMeta(&cmn.ClusterConfig{}) }
 func extractVMD() error    { return extractMeta(&volume.VMD{}) }
+func extractEMD() error    { return extractMeta(&etl.MD{}) }
 
 // "format*" routines require output filename
 
@@ -107,6 +113,7 @@ func formatBMD() error    { return formatMeta(&meta.BMD{}) }
 func formatRMD() error    { return formatMeta(&meta.RMD{}) }
 func formatConfig() error { return formatMeta(&cmn.ClusterConfig{}) }
 func formatVMD() error    { return formatMeta(&volume.VMD{}) }
+func formatEMD() error    { return formatMeta(&etl.MD{}) }
 func formatLOM() error    { return errors.New("saving LOM is unsupported") }
 
 func main() {
