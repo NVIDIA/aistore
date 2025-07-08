@@ -3,10 +3,10 @@
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o hello_world_spec.yaml -s // IGNORE
 
 # Create ETL using 'ais etl init spec' (explicit)
-ais etl init spec --from-file="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-explicit // IGNORE
+ais etl init spec --spec="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-explicit // IGNORE
 
 # Create ETL using 'ais etl init' (implicit spec, new functionality)
-ais etl init --from-file="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-implicit // IGNORE
+ais etl init --spec="hello_world_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-implicit // IGNORE
 
 # Verify both ETLs are running
 ais etl show | grep $ETL_NAME-explicit | awk '{print $2}'
@@ -22,6 +22,6 @@ ais etl show $ETL_NAME-implicit | grep -m1 "arg_type"
 # Clean up
 ais etl stop $ETL_NAME-explicit // IGNORE
 ais etl rm $ETL_NAME-explicit // IGNORE
-ais etl stop $ETL_NAME-implicit // IGNORE  
+ais etl stop $ETL_NAME-implicit // IGNORE
 ais etl rm $ETL_NAME-implicit // IGNORE
-rm -f hello_world_spec.yaml // IGNORE 
+rm -f hello_world_spec.yaml // IGNORE

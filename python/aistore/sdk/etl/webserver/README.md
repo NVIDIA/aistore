@@ -103,7 +103,7 @@ For anything beyond the most basic transformation logic, the SDK webserver appro
 4. **Initialize & run**
 
     ```bash
-    ais etl init spec --name my-echo --from-file init_spec.yaml
+    ais etl init spec --name my-echo --spec init_spec.yaml
     ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
     ```
 

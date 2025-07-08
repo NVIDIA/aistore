@@ -94,7 +94,7 @@ PyYAML==5.4.1
 
 Now we can build the ETL:
 ```console
-$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3.11v2 --comm-type="io://"
+$ ais etl init code --spec=code.py --deps-file=deps.txt --runtime=python3.11v2 --comm-type="io://"
 f90r81wR0
 $ ais etl object f90r81wR0 imagenet/imagenet-train-000999.tar preprocessed-train.tar
 $ tar -tvf preprocessed-train.tar | head -n 6

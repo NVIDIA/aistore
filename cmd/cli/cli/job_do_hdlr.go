@@ -118,7 +118,7 @@ var (
 			hfAuthFlag,
 		},
 		cmdDsort: {
-			dsortSpecFlag,
+			specFlag,
 			verboseFlag,
 		},
 		commandPrefetch: append(

@@ -43,7 +43,7 @@ There are three ways of approaching this problem:
 
     Once we have the `transform` function defined, we can use CLI to build and initialize ETL:
     ```console
-    $ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5 --comm-type hpull
+    $ ais etl init code --spec=code.py --runtime=python3.11v2 --name=transformer-md5 --comm-type hpull
     transformer-md5
     ```
 
@@ -63,7 +63,7 @@ There are three ways of approaching this problem:
 
    We can now use the CLI to build and initialize ETL with `io://` communicator type:
    ```console
-   $ ais etl init code --from-file=code.py --runtime=python3.11v2 --comm-type="io://" --name="compute-md5"
+   $ ais etl init code --spec=code.py --runtime=python3.11v2 --comm-type="io://" --name="compute-md5"
    compute-md5
    ```
 
@@ -169,7 +169,7 @@ There are three ways of approaching this problem:
 
     Once we have our `spec.yaml`, we can initialize ETL with CLI:
     ```console
-    $ ais etl init spec --from-file=spec.yaml --name=transformer-md5 --comm-type="hpush://"
+    $ ais etl init spec --spec=spec.yaml --name=transformer-md5 --comm-type="hpush://"
     transformer-md5
     ```
 

@@ -794,9 +794,11 @@ var (
 		Usage: "TAR file format selection (one of \"" + dfltTform + "\", \"USTAR\", \"PAX\", or \"GNU\")",
 	}
 
+	// (ETL, dSort, get-batch) spec
+	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
+
 	// dsort
-	dsortLogFlag  = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
-	dsortSpecFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "Path to JSON or YAML job specification"}
+	dsortLogFlag = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
 
 	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",
@@ -1155,10 +1157,6 @@ var (
 		Name: "args",
 		Usage: "Additional arguments applying to transform a single object;\n" +
 			indent4 + "\t--args=abc\t- send \"etl_args=abc\" as query parameter in the single object transformation request",
-	}
-	fromFileFlag = cli.StringFlag{
-		Name:  "from-file,f",
-		Usage: "Absolute path to the file with the spec/code for ETL, or HTTP URL to download the spec from",
 	}
 	commTypeFlag = cli.StringFlag{
 		Name: "comm-type",

@@ -56,7 +56,7 @@ USAGE:
    ais dsort [JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET] [command options]
 
 OPTIONS:
-   --file value, -f value  path to JSON or YAML job specification
+   --spec value, -f value  path to JSON or YAML request specification
    --verbose, -v           verbose
    --help, -h              show help
 ```
@@ -115,7 +115,7 @@ Upon creation, `JOB_ID` of the job is returned - it can then be used to abort it
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
-| `--file, -f` | `string` | Path to file containing JSON or YAML job specification. Providing `-` will result in reading from STDIN | `""` |
+| `--spec, -f` | `string` | Path to JSON or YAML specification. Providing `-` will result in reading from STDIN | `""` |
 
 The following table describes JSON/YAML keys which can be used in the specification.
 

@@ -118,7 +118,7 @@ func startDsortHandler(c *cli.Context) error {
 		spec           dsort.RequestSpec
 	)
 	// parse command line
-	specPath = parseStrFlag(c, dsortSpecFlag)
+	specPath = parseStrFlag(c, specFlag)
 	if c.NArg() == 0 && specPath == "" {
 		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
 			c.Command.ArgsUsage, qflprn(cli.HelpFlag))

@@ -227,7 +227,7 @@ support_direct_put: true     # Enable zero-copy bucket-to-bucket optimization (d
 Initialize the ETL:
 
 ```bash
-ais etl init --from-file etl_spec.yaml
+ais etl init --spec etl_spec.yaml
 ```
 
 ---
@@ -463,7 +463,7 @@ metadata:
 When initializing ETL from spec/code, a valid and unique user-defined `ETL_NAME` should be assigned using the `--name` CLI parameter as shown below.
 
 ```console
-$ ais etl init --name=etl-md5 --from-file=spec.yaml --comm-type hpull
+$ ais etl init --name=etl-md5 --spec=spec.yaml --comm-type hpull
 ```
 
 Below are specifications for a valid `ETL_NAME`:

@@ -74,7 +74,7 @@ var (
 	// flags
 	etlSubFlags = map[string][]cli.Flag{
 		cmdSpec: {
-			fromFileFlag,
+			specFlag,
 			etlNameFlag,
 			commTypeFlag,
 			argTypeFlag,
@@ -82,7 +82,7 @@ var (
 			etlObjectRequestTimeout,
 		},
 		cmdStop: {
-			fromFileFlag,
+			specFlag,
 			allRunningJobsFlag,
 		},
 		cmdObject: {
@@ -107,10 +107,10 @@ var (
 			noHeaderFlag,
 		},
 		cmdStart: {
-			fromFileFlag,
+			specFlag,
 		},
 		commandRemove: {
-			fromFileFlag,
+			specFlag,
 			allRunningJobsFlag,
 		},
 	}
@@ -288,9 +288,9 @@ func checkOverrideFlags(c *cli.Context, nodes []*yaml.Node) error {
 }
 
 func etlInitSpecHandler(c *cli.Context) error {
-	fromFile := parseStrFlag(c, fromFileFlag)
+	fromFile := parseStrFlag(c, specFlag)
 	if fromFile == "" {
-		return fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
+		return fmt.Errorf("flag %s must be specified", qflprn(specFlag))
 	}
 	reader, err := readFileOrURL(fromFile)
 	if err != nil {
@@ -596,7 +596,7 @@ func stopETLs(c *cli.Context, name string) (err error) {
 	switch {
 	case name != "":
 		etlNames = append(etlNames, name)
-	case flagIsSet(c, fromFileFlag):
+	case flagIsSet(c, specFlag):
 		etlNames, err = getETLNamesFromFile(c)
 		if err != nil {
 			return err
@@ -641,13 +641,13 @@ func etlStartHandler(c *cli.Context) error {
 	)
 
 	switch {
-	case flagIsSet(c, fromFileFlag):
+	case flagIsSet(c, specFlag):
 		etlNames, err = getETLNamesFromFile(c)
 		if err != nil {
 			return err
 		}
 		if len(etlNames) == 0 {
-			return fmt.Errorf("no ETL names found in the file provided via %s", qflprn(fromFileFlag))
+			return fmt.Errorf("no ETL names found in the file provided via %s", qflprn(specFlag))
 		}
 	case c.NArg() == 0:
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -670,11 +670,11 @@ func getETLNamesFromFile(c *cli.Context) ([]string, error) {
 	if c.NArg() > 0 {
 		etlNames = c.Args()[0:]
 		return nil, incorrectUsageMsg(c, "flag %s cannot be used together with %s %v",
-			qflprn(fromFileFlag), etlNameArgument, etlNames)
+			qflprn(specFlag), etlNameArgument, etlNames)
 	}
-	fromFile := parseStrFlag(c, fromFileFlag)
+	fromFile := parseStrFlag(c, specFlag)
 	if fromFile == "" {
-		return nil, fmt.Errorf("flag %s must be specified", qflprn(fromFileFlag))
+		return nil, fmt.Errorf("flag %s must be specified", qflprn(specFlag))
 	}
 	reader, err := readFileOrURL(fromFile)
 	if err != nil {
@@ -703,7 +703,7 @@ func getETLNamesFromFile(c *cli.Context) ([]string, error) {
 func etlRemoveHandler(c *cli.Context) (err error) {
 	var etlNames []string
 	switch {
-	case flagIsSet(c, fromFileFlag):
+	case flagIsSet(c, specFlag):
 		etlNames, err = getETLNamesFromFile(c)
 		if err != nil {
 			return err
