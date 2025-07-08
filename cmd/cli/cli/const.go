@@ -303,7 +303,7 @@ const (
 	bucketDstArgument       = "DST_BUCKET"
 	bucketNewArgument       = "NEW_BUCKET"
 
-	dsortSpecArgument = "[JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]"
+	dsortSpecArgument = "[SRC_BUCKET] [DST_BUCKET] --spec [JSON_SPECIFICATION|YAML_SPECIFICATION|-]"
 
 	// Objects
 	objectArgument          = "BUCKET/OBJECT_NAME"

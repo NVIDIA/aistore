@@ -6,13 +6,10 @@
 package cli
 
 import (
-	"bytes"
 	jsonStd "encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -26,15 +23,13 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
-	"gopkg.in/yaml.v3"
 )
 
 const (
-	dsortExampleJ = `$ ais start dsort '{
+	dsortExampleJ = `$ ais start dsort --spec '{
 			"input_extension": ".tar",
 			"input_bck": {"name": "dsort-testing"},
 			"input_format": {"template": "shard-{0..9}"},
@@ -111,69 +106,32 @@ var phasesOrdered = [...]string{
 
 func startDsortHandler(c *cli.Context) error {
 	var (
-		specPath       string
-		specBytes      []byte
-		shift          int
 		srcbck, dstbck cmn.Bck
 		spec           dsort.RequestSpec
 	)
-	// parse command line
-	specPath = parseStrFlag(c, specFlag)
-	if c.NArg() == 0 && specPath == "" {
-		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
-			c.Command.ArgsUsage, qflprn(cli.HelpFlag))
+
+	// Load spec (required)
+	specBytes, err := loadSpec(c)
+	if err != nil {
+		return err
 	}
-	if specPath == "" {
-		// spec is inline
-		specBytes = []byte(c.Args().Get(0))
-		shift = 1
+	if err := parseSpec(specBytes, &spec); err != nil {
+		return err
 	}
-	if c.NArg() > shift {
-		var err error
-		srcbck, err = parseBckURI(c, c.Args().Get(shift), true)
+
+	// Parse command line: source and destination buckets
+	if c.NArg() > 0 {
+		srcbck, err = parseBckURI(c, c.Args().Get(0), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse source bucket: %v\n(see %s for details)",
 				err, qflprn(cli.HelpFlag))
 		}
 	}
-	if c.NArg() > shift+1 {
-		var err error
-		dstbck, err = parseBckURI(c, c.Args().Get(shift+1), true)
+	if c.NArg() > 1 {
+		dstbck, err = parseBckURI(c, c.Args().Get(1), true)
 		if err != nil {
 			return fmt.Errorf("failed to parse destination bucket: %v\n(see %s for details)",
 				err, qflprn(cli.HelpFlag))
-		}
-	}
-
-	// load spec from file or standard input
-	if specPath != "" {
-		var r io.Reader
-		if specPath == fileStdIO {
-			r = os.Stdin
-		} else {
-			f, err := os.Open(specPath)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			r = f
-		}
-
-		var b bytes.Buffer
-		// Read at most 1MB so we don't blow up when reading don't know what
-		if _, errV := io.CopyN(&b, r, cos.MiB); errV == nil {
-			return errors.New("file too big")
-		} else if errV != io.EOF {
-			return errV
-		}
-		specBytes = b.Bytes()
-	}
-	if errj := jsoniter.Unmarshal(specBytes, &spec); errj != nil {
-		if erry := yaml.Unmarshal(specBytes, &spec); erry != nil {
-			return fmt.Errorf(
-				"failed to determine the type of the job specification, errs: (%v, %v)",
-				errj, erry,
-			)
 		}
 	}
 

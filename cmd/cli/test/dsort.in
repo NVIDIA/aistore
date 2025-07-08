@@ -1,8 +1,8 @@
-ais job start dsort // FAIL "missing "[json"
-ais job start dsort '{}' -f "path" // FAIL "failed to parse"
+ais job start dsort // FAIL "flag '--spec'"
+ais job start dsort '{}' -f "path" // FAIL "no such file"
 
 ais job start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
-ais job start dsort '{input_extension: .tar' // FAIL "failed to determine the type of the job specification"
+ais job start dsort -f '{input_extension: .tar' // FAIL "failed to determine the type"
 
 ais bucket create ais://$BUCKET_1 // IGNORE
 
@@ -10,7 +10,7 @@ ais bucket create ais://$BUCKET_1 // IGNORE
 echo '{"input_extension": ".tar","input_bck": {name: "$BUCKET_1"},"input_format": {"template": "shard-{0..9}"},"output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"}}' > /tmp/dsort.json
 ais job start dsort -f /tmp/dsort.json // IGNORE
 rm -f /tmp/dsort.json
-ais job start dsort '{"input_extension": ".tar","input_bck": {name: "$BUCKET_1"},"input_format": {"template": "shard-{0..9}"},"output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"}}' // SAVE_RESULT
+ais job start dsort -f '{"input_extension": ".tar","input_bck": {name: "$BUCKET_1"},"input_format": {"template": "shard-{0..9}"},"output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"}}' // SAVE_RESULT
 ais wait $RESULT
 
 # YAML

@@ -401,7 +401,7 @@ OPTIONS:
 
 ## Distributed Sort
 
-`ais start dsort` or `ais start dsort`
+`ais start dsort`
 
 Run [dSort](/docs/dsort.md).
 [Further reference for this command can be found here.](dsort.md)
