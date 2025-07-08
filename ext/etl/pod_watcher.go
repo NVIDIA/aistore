@@ -11,8 +11,10 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -30,7 +32,7 @@ const (
 type podWatcher struct {
 	watcher         watch.Interface
 	podCtx          context.Context
-	boot            *etlBootstrapper
+	xetl            core.Xact
 	recentPodStatus *k8s.PodStatus
 	podCtxCancel    context.CancelFunc
 	stopCh          *cos.StopCh
@@ -38,16 +40,17 @@ type podWatcher struct {
 	psMutex         sync.Mutex
 }
 
-func newPodWatcher(podName string, boot *etlBootstrapper) (pw *podWatcher) {
+func newPodWatcher(podName string, xetl core.Xact) (pw *podWatcher) {
 	pw = &podWatcher{
 		podName:         podName,
-		boot:            boot,
+		xetl:            xetl,
 		recentPodStatus: &k8s.PodStatus{},
 	}
 	return pw
 }
 
 func (pw *podWatcher) processEvents() {
+	debug.Assert(pw.xetl != nil, "xact must be initialized before starting the pod watcher")
 	defer pw.podCtxCancel()
 	for {
 		select {
@@ -57,21 +60,16 @@ func (pw *podWatcher) processEvents() {
 				continue
 			}
 			if err := pw._process(pod); err != nil {
-				// pw.boot.xctn is not yet assigned in init error
-				if pw.boot == nil || pw.boot.xctn == nil {
-					return
-				}
-				pw.boot.errCtx.PodStatus = pw.GetPodStatus()
-				if pw.boot.xctn.Abort(cmn.NewErrETL(pw.boot.errCtx, err.Error())) {
+				if pw.xetl.Abort(cmn.NewErrETL(&cmn.ETLErrCtx{PodName: pw.podName, PodStatus: pw.GetPodStatus()}, err.Error())) {
 					// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
 					// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
-					pw.boot.xctn.Finish()
+					pw.xetl.Finish()
 				}
 				return
 			}
 		case <-pw.stopCh.Listen():
 			return
-		case <-pw.boot.xctn.ChanAbort():
+		case <-pw.xetl.ChanAbort():
 			return
 		}
 	}

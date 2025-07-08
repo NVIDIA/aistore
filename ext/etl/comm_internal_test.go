@@ -24,7 +24,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("CommunicatorTest", func() {
@@ -132,9 +131,6 @@ var _ = Describe("CommunicatorTest", func() {
 	for _, testType := range []string{"inline", "offline"} {
 		for _, commType := range tests {
 			It("should perform "+testType+" transformation "+commType, func() {
-				pod := &corev1.Pod{}
-				pod.SetName("somename")
-
 				msg := &InitSpecMsg{
 					InitMsgBase: InitMsgBase{
 						CommTypeX:   commType,
@@ -142,16 +138,19 @@ var _ = Describe("CommunicatorTest", func() {
 					},
 				}
 				xetl := &XactETL{}
-				xetl.InitBase(cos.GenUUID(), apc.ActETLInline, msg.String(), nil)
-				boot := &etlBootstrapper{
-					msg:  msg,
-					pod:  pod,
-					uri:  transformerServer.URL,
-					xctn: xetl,
+				xid := cos.GenUUID()
+				xetl.InitBase(xid, apc.ActETLInline, msg.String(), nil)
+
+				switch msg.CommType() {
+				case Hpush, HpushStdin:
+					pc := &pushComm{}
+					pc.msg, pc.podURI, pc.xctn = msg, transformerServer.URL, xetl
+					comm = pc
+				case Hpull:
+					rc := &redirectComm{}
+					rc.msg, rc.podURI, rc.xctn = msg, transformerServer.URL, xetl
+					comm = rc
 				}
-				c, err := newCommunicator(nil, boot, nil)
-				Expect(err).NotTo(HaveOccurred())
-				comm = c.(httpCommunicator)
 
 				switch testType {
 				case "inline":

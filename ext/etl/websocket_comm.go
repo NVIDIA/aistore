@@ -144,14 +144,14 @@ const (
 
 // setupConnection establishes a test connection to the ETL pod's websocket endpoint.
 // Close immediately if the connection is successful (only for verifying connectivity).
-func (ws *webSocketComm) setupConnection() (err error) {
-	if err := ws.boot.setupConnection("ws://"); err != nil {
-		return err
+func (ws *webSocketComm) setupConnection(_, podAddr string) (ecode int, err error) {
+	if ecode, err := ws.baseComm.setupConnection("ws://", podAddr); err != nil {
+		return ecode, err
 	}
-	ws.boot.uri += "/ws" // TODO: make this endpoint configurable
+	ws.podURI += "/ws" // TODO: make this endpoint configurable
 
-	ws.inlineSession, err = ws.createSession(ws.boot.xctn, inlineSessionMultiplier)
-	return err
+	ws.inlineSession, err = ws.createSession(ws.xctn, inlineSessionMultiplier)
+	return 0, err
 }
 
 func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int64, int, error) {
@@ -167,10 +167,10 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 		return nil, cos.NewErrNotFound(core.T, "invalid xact parameter")
 	}
 
-	connPerSession := ws.boot.config.TCB.SbundleMult * multiplier // TODO: add specific ETL config on this
+	connPerSession := ws.config.TCB.SbundleMult * multiplier // TODO: add specific ETL config on this
 	wss := &wsSession{
 		txctn:       xctn,
-		msg:         ws.boot.msg,
+		msg:         ws.msg,
 		workCh:      make(chan *transformTask, wockChSize),
 		connections: make([]*wsConnCtx, 0, connPerSession),
 		fincb: func() {
@@ -182,9 +182,9 @@ func (ws *webSocketComm) createSession(xctn core.Xact, multiplier int) (Session,
 	wss.sessionCtx, wss.sessionCtxCancel = context.WithCancel(ws.commCtx)
 
 	for i := range connPerSession {
-		conn, resp, err := websocket.DefaultDialer.Dial(ws.boot.uri, nil)
+		conn, resp, err := websocket.DefaultDialer.Dial(ws.podURI, nil)
 		if err != nil {
-			return nil, fmt.Errorf("%s: failed to dial %s: %w", xctn.Name(), ws.boot.uri, err)
+			return nil, fmt.Errorf("%s: failed to dial %s: %w", xctn.Name(), ws.podURI, err)
 		}
 		resp.Body.Close()
 		debug.IncCounter(xctn.ID() + "-conn") // connection count for the session

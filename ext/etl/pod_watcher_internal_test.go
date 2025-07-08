@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/hk"
@@ -39,8 +38,7 @@ var _ = Describe("ETLPodWatcherTest", func() {
 		// simulate the pw.start() procedure with a mocked watcher to avoid real K8s API get involved
 		xetl := &XactETL{}
 		xetl.InitBase(cos.GenUUID(), apc.ActETLInline, "", nil)
-		boot := &etlBootstrapper{xctn: xetl, errCtx: &cmn.ETLErrCtx{}}
-		pw = newPodWatcher("test-pod", boot)
+		pw = newPodWatcher("test-pod", xetl)
 		mockWatcher = newMockWatcher()
 		pw.watcher = mockWatcher
 		pw.stopCh = cos.NewStopCh()

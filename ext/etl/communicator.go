@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,8 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 type (
@@ -32,22 +33,16 @@ type (
 	}
 
 	// Communicator is responsible for managing communications with local ETL pod.
-	// It listens to cluster membership changes and terminates ETL pod, if need be.
 	Communicator interface {
-		meta.Slistener
-
 		ETLName() string
-		PodName() string
-		SvcName() string
 		getInitMsg() InitMsg
 
 		String() string
 
-		setupConnection() error
+		setupConnection(schema, podAddr string) (ecode int, err error)
+		setupXaction(xid string) error
 		stop() error
-		GetPodWatcher() *podWatcher
 		GetSecret() string
-
 		Xact() *XactETL // underlying `apc.ActETLInline` xaction (see xact/xs/etl.go)
 		CommStats       // only stats for `apc.ActETLInline` inline transform
 
@@ -75,10 +70,13 @@ type (
 	}
 
 	baseComm struct {
-		listener meta.Slistener
-		boot     *etlBootstrapper
-		pw       *podWatcher
-		stopped  atomic.Bool
+		msg     InitMsg
+		config  *cmn.Config
+		xctn    *XactETL
+		secret  string
+		podAddr string
+		podURI  string
+		stopped atomic.Bool
 	}
 	pushComm struct {
 		baseComm
@@ -111,62 +109,100 @@ var (
 // baseComm //
 //////////////
 
-func newCommunicator(listener meta.Slistener, boot *etlBootstrapper, pw *podWatcher) (Communicator, error) {
-	switch boot.msg.CommType() {
+func newCommunicator(msg InitMsg, secret string, config *cmn.Config) (Communicator, error) {
+	switch msg.CommType() {
 	case Hpush, HpushStdin:
 		pc := &pushComm{}
-		pc.listener, pc.boot, pc.pw = listener, boot, pw
-		if boot.msg.CommType() == HpushStdin { // io://
-			pc.command = boot.originalCommand
-		}
+		pc.msg, pc.secret, pc.config = msg, secret, config
 		return pc, nil
 	case Hpull:
 		rc := &redirectComm{}
-		rc.listener, rc.boot, rc.pw = listener, boot, pw
+		rc.msg, rc.secret, rc.config = msg, secret, config
 		return rc, nil
 	case WebSocket:
 		ws := &webSocketComm{sessions: make(map[string]Session, 4)}
+		ws.msg, ws.secret, ws.config = msg, secret, config
 		ws.commCtx, ws.commCtxCancel = context.WithCancel(context.Background())
-		ws.listener, ws.boot, ws.pw = listener, boot, pw
 		return ws, nil
 	}
 
-	debug.Assert(false, "unknown comm-type '"+boot.msg.CommType()+"'")
-	return nil, fmt.Errorf("unknown comm-type %s", boot.msg.CommType())
+	debug.Assert(false, "unknown comm-type '"+msg.CommType()+"'")
+	return nil, fmt.Errorf("unknown comm-type %s", msg.CommType())
 }
 
-func (c *baseComm) ETLName() string { return c.boot.msg.Name() }
-func (c *baseComm) PodName() string { return c.boot.pod.Name }
-func (c *baseComm) SvcName() string { return c.boot.pod.Name /*same as pod name*/ }
+func (c *baseComm) ETLName() string     { return c.msg.Name() }
+func (c *baseComm) getInitMsg() InitMsg { return c.msg }
+func (c *baseComm) String() string      { return fmt.Sprintf("[%s]-%s", c.xctn.ID(), c.msg.CommType()) }
+func (c *baseComm) Xact() *XactETL      { return c.xctn }
+func (c *baseComm) ObjCount() int64     { return c.xctn.Objs() }
+func (c *baseComm) InBytes() int64      { return c.xctn.InBytes() }
+func (c *baseComm) OutBytes() int64     { return c.xctn.OutBytes() }
+func (c *baseComm) GetSecret() string   { return c.secret }
 
-func (c *baseComm) getInitMsg() InitMsg { return c.boot.msg }
-
-func (c *baseComm) ListenSmapChanged() { c.listener.ListenSmapChanged() }
-
-func (c *baseComm) String() string {
-	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommType())
+func (c *baseComm) setupXaction(xid string) error {
+	rns := xreg.RenewETL(c.msg, xid)
+	if rns.Err != nil {
+		return rns.Err
+	}
+	xctn := rns.Entry.Get()
+	c.xctn = xctn.(*XactETL)
+	debug.Assertf(c.xctn.ID() == xid, "%s vs %s", c.xctn.ID(), xid)
+	return nil
 }
 
-func (c *baseComm) Xact() *XactETL  { return c.boot.xctn }
-func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
-func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
-func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
+func (c *baseComm) setupConnection(schema, podAddr string) (ecode int, err error) {
+	// the pod must be reachable via its tcp addr
+	c.podAddr = podAddr
+	if ecode, err = c.dial(); err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleETL) {
+			nlog.Warningf("%s: failed to dial %s", c.msg.Cname(), c.podAddr)
+		}
+		return ecode, err
+	}
 
-func (c *baseComm) GetPodWatcher() *podWatcher { return c.pw }
-func (c *baseComm) GetSecret() string          { return c.boot.secret }
-func (c *baseComm) setupConnection() error     { return c.boot.setupConnection("http://") }
+	c.podURI = schema + c.podAddr
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("%s: setup connection to %s", c.msg.Cname(), c.podURI)
+	}
+	return 0, nil
+}
+
+func (c *baseComm) dial() (int, error) {
+	var (
+		action = "dial POD at " + c.podAddr
+		args   = &cmn.RetryArgs{
+			Call:      c.call,
+			SoftErr:   10,
+			HardErr:   2,
+			Sleep:     3 * time.Second,
+			Verbosity: cmn.RetryLogOff,
+			Action:    action,
+		}
+	)
+	ecode, err := args.Do()
+	if err != nil {
+		return ecode, fmt.Errorf("failed to wait for ETL Service/Pod at %q to respond: %v", c.podAddr, err)
+	}
+	return 0, nil
+}
+
+func (c *baseComm) call() (int, error) {
+	conn, err := net.DialTimeout("tcp", c.podAddr, cmn.Rom.MaxKeepalive())
+	if err != nil {
+		return 0, err
+	}
+	cos.Close(conn)
+	return 0, nil
+}
 
 func (c *baseComm) stop() error {
 	if !c.stopped.CAS(false, true) {
-		return fmt.Errorf("%s already stopped", c.boot.msg.Cname())
+		return fmt.Errorf("%s already stopped", c.msg.Cname())
 	}
 
 	// Note: xctn might have already been aborted and finished by pod watcher
-	if !c.boot.xctn.Finished() && !c.boot.xctn.IsAborted() {
-		c.boot.xctn.Finish()
-	}
-	if c.pw != nil {
-		c.pw.stop(true)
+	if !c.xctn.Finished() && !c.xctn.IsAborted() {
+		c.xctn.Finish()
 	}
 
 	return nil
@@ -246,7 +282,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		query = make(url.Values, 2)
 	)
 
-	switch pc.boot.msg.ArgType() {
+	switch pc.msg.ArgType() {
 	case ArgTypeDefault, ArgTypeURL:
 		// [TODO] to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
@@ -255,14 +291,14 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		path = lom.Bck().Name + "/" + lom.ObjName
 		getBody = func() core.ReadResp { return lom.GetROC(latestVer, sync) }
 	case ArgTypeFQN:
-		if ecode, err := lomLoad(lom, pc.boot.xctn.Kind()); err != nil {
+		if ecode, err := lomLoad(lom, pc.xctn.Kind()); err != nil {
 			return core.ReadResp{Err: err, Ecode: ecode}
 		}
 
 		// body = http.NoBody
 		path = url.PathEscape(lom.FQN)
 	default:
-		e := fmt.Errorf("%s: unexpected argument type %q", pc.boot.msg, pc.boot.msg.ArgType())
+		e := fmt.Errorf("%s: unexpected argument type %q", pc.msg, pc.msg.ArgType())
 		debug.AssertNoErr(e) // is validated at construction time
 		nlog.Errorln(e)
 	}
@@ -277,18 +313,18 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 
 	reqArgs := &cmn.HreqArgs{
 		Method: http.MethodPut,
-		Base:   pc.boot.uri,
+		Base:   pc.podURI,
 		Path:   path,
 		Header: http.Header{},
 		Query:  query,
 	}
 
-	if pc.boot.msg.IsDirectPut() && gargs != nil && !gargs.Local {
+	if pc.msg.IsDirectPut() && gargs != nil && !gargs.Local {
 		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
-	_, objTimeout := pc.boot.msg.Timeouts()
+	_, objTimeout := pc.msg.Timeouts()
 	r, ecode, err := doWithTimeout(reqArgs, getBody, objTimeout.D())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
@@ -332,10 +368,10 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs 
 //////////////////
 
 func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
-	if err := rc.boot.xctn.AbortErr(); err != nil {
+	if err := rc.xctn.AbortErr(); err != nil {
 		return 0, 0, err
 	}
-	ecode, err = lomLoad(lom, rc.boot.xctn.Kind())
+	ecode, err = lomLoad(lom, rc.xctn.Kind())
 	if err != nil {
 		return 0, ecode, err
 	}
@@ -344,7 +380,7 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if targs != "" {
 		query.Set(apc.QparamETLTransformArgs, targs)
 	}
-	url := cos.JoinQuery(cos.JoinPath(rc.boot.uri, path), query)
+	url := cos.JoinQuery(cos.JoinPath(rc.podURI, path), query)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
@@ -356,13 +392,13 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 // TODO: support `sync` option as well
 func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string, query url.Values) {
 	query = make(url.Values)
-	switch rc.boot.msg.ArgType() {
+	switch rc.msg.ArgType() {
 	case ArgTypeDefault, ArgTypeURL:
 		path = url.PathEscape(lom.Uname())
 	case ArgTypeFQN:
 		path = url.PathEscape(lom.FQN)
 	default:
-		err := fmt.Errorf("%s: unexpected argument type %q", rc.boot.msg, rc.boot.msg.ArgType())
+		err := fmt.Errorf("%s: unexpected argument type %q", rc.msg, rc.msg.ArgType())
 		debug.AssertNoErr(err)
 		nlog.Errorln(err)
 	}
@@ -375,7 +411,7 @@ func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string
 
 func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs *core.GetROCArgs) core.ReadResp {
 	clone := *lom
-	ecode, err := lomLoad(&clone, rc.boot.xctn.Kind())
+	ecode, err := lomLoad(&clone, rc.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
@@ -383,18 +419,18 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 
 	reqArgs := &cmn.HreqArgs{
 		Method: http.MethodGet,
-		Base:   rc.boot.uri,
+		Base:   rc.podURI,
 		Path:   path,
 		BodyR:  http.NoBody,
 		Header: http.Header{},
 		Query:  query,
 	}
 
-	if rc.boot.msg.IsDirectPut() && gargs != nil && !gargs.Local {
+	if rc.msg.IsDirectPut() && gargs != nil && !gargs.Local {
 		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
 	}
 
-	_, objTimeout := rc.boot.msg.Timeouts()
+	_, objTimeout := rc.msg.Timeouts()
 	r, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}

@@ -18,6 +18,17 @@ import (
 )
 
 type (
+	// ETLEntity represents an ETL instance managed by an individual target.
+	// - Created and added to the manager before entering the `Initializing` stage.
+	// - Removed only after the user explicitly deletes it from the `Aborted` stage.
+	//
+	// Expected state transitions:
+	// - `Initializing`: Set up resources in the following order:
+	//     1. Create (or reuse) communicator and pod watcher
+	//     2. Start (or renew) xaction
+	//     3. Create Kubernetes resources (pod/service)
+	// - `Running`: All resources are active, handling inline and offline transform requests via the communicator.
+	// - `Aborted`: Kubernetes resources (pod/service) are cleaned up.
 	ETLEntity struct {
 		InitMsg InitMsg `json:"init_msg"`
 		Stage   Stage   `json:"stage"`

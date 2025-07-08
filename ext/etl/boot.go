@@ -7,11 +7,9 @@ package etl
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -21,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/xact/xreg"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +27,7 @@ import (
 
 const appLabel = "app"
 
+// etlBootstrapper is responsible for bootstrapping Kubernetes resources (pod/svc/volume) for the ETL
 type etlBootstrapper struct {
 	// construction
 	errCtx *cmn.ETLErrCtx
@@ -39,14 +37,12 @@ type etlBootstrapper struct {
 
 	// runtime
 	k8sClient       k8s.Client
-	xctn            *XactETL
+	pw              *podWatcher
 	pod             *corev1.Pod
 	svc             *corev1.Service
 	targetPodSpec   *corev1.PodSpec
 	targetPodName   string
-	uri             string
 	originalPodName string
-	podAddr         string
 	originalCommand []string
 }
 
@@ -162,63 +158,23 @@ func (b *etlBootstrapper) createServiceSpec() {
 	b.errCtx.SvcName = b.svc.Name
 }
 
-func (b *etlBootstrapper) setupConnection(schema string) (err error) {
+func (b *etlBootstrapper) getPodAddr() (string, error) {
 	// Retrieve host IP of the pod.
-	var hostIP string
+	var (
+		hostIP string
+		err    error
+	)
 	if hostIP, err = b._getHost(); err != nil {
-		return err
+		return "", err
 	}
 
 	// Retrieve assigned port by the service.
 	var nodePort int
 	if nodePort, err = b._getPort(); err != nil {
-		return err
+		return "", err
 	}
 
-	// the pod must be reachable via its tcp addr
-	var ecode int
-	b.podAddr = hostIP + ":" + strconv.Itoa(nodePort)
-	if ecode, err = b.dial(); err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleETL) {
-			nlog.Warningf("%s: failed to dial %s [%+v, %s]", b.msg, b.podAddr, b.errCtx, b.uri)
-		}
-		return cmn.NewErrETL(b.errCtx, err.Error(), ecode)
-	}
-
-	b.uri = schema + b.podAddr
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("%s: setup connection to %s [%+v]", b.msg, b.uri, b.errCtx)
-	}
-	return nil
-}
-
-// TODO -- FIXME: hardcoded (time, error counts) tunables
-func (b *etlBootstrapper) dial() (int, error) {
-	var (
-		action = "dial POD " + b.pod.Name + " at " + b.podAddr
-		args   = &cmn.RetryArgs{
-			Call:      b.call,
-			SoftErr:   10,
-			HardErr:   2,
-			Sleep:     3 * time.Second,
-			Verbosity: cmn.RetryLogOff,
-			Action:    action,
-		}
-	)
-	ecode, err := args.Do()
-	if err != nil {
-		return ecode, fmt.Errorf("failed to wait for ETL Service/Pod %q to respond: %v", b.pod.Name, err)
-	}
-	return 0, nil
-}
-
-func (b *etlBootstrapper) call() (int, error) {
-	conn, err := net.DialTimeout("tcp", b.podAddr, cmn.Rom.MaxKeepalive())
-	if err != nil {
-		return 0, err
-	}
-	cos.Close(conn)
-	return 0, nil
+	return hostIP + ":" + strconv.Itoa(nodePort), nil
 }
 
 func (b *etlBootstrapper) createEntity(entity string) (err error) {
@@ -260,38 +216,23 @@ func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	)
 }
 
-func (b *etlBootstrapper) initComm(etlName, podName, xid string) (comm Communicator, err error) {
-	if comm = mgr.getByName(etlName); comm != nil {
-		return nil, cos.NewErrAlreadyExists(core.T, etlName)
+func initComm(msg InitMsg, xid, secret string, boot *etlBootstrapper) (comm Communicator, err error) {
+	if comm, _ = mgr.getByName(msg.Name()); comm != nil {
+		return nil, cos.NewErrAlreadyExists(core.T, msg.Name())
 	}
-	pw := newPodWatcher(podName, b)
-	if comm, err = newCommunicator(newAborter(etlName), b, pw); err != nil {
+	if comm, err = newCommunicator(msg, secret, cmn.GCO.Get()); err != nil {
 		return nil, err
 	}
 
-	if err := mgr.add(etlName, comm); err != nil {
+	if err = mgr.add(msg.Name(), comm, boot); err != nil {
 		return nil, err
 	}
 
-	if err = b.setupXaction(xid); err != nil {
+	if err = comm.setupXaction(xid); err != nil {
 		return nil, err
 	}
 
-	if err := pw.start(); err != nil {
-		return nil, err
-	}
 	return comm, nil
-}
-
-func (b *etlBootstrapper) setupXaction(xid string) error {
-	rns := xreg.RenewETL(b.msg, xid)
-	if rns.Err != nil {
-		return rns.Err
-	}
-	xctn := rns.Entry.Get()
-	b.xctn = xctn.(*XactETL)
-	debug.Assertf(b.xctn.ID() == xid, "%s vs %s", b.xctn.ID(), xid)
-	return nil
 }
 
 func (b *etlBootstrapper) _updPodCommand() {
