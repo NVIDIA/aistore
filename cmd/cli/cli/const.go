@@ -68,9 +68,15 @@ const (
 	commandRemove    = "rm"
 	commandRename    = "mv"
 	commandSet       = "set"
-	commandStart     = apc.ActXactStart
-	commandStop      = apc.ActXactStop
-	commandWait      = "wait"
+
+	// ml
+	commandML       = "ml"
+	commandGetBatch = "get-batch"
+
+	// jobs
+	commandStart = apc.ActXactStart
+	commandStop  = apc.ActXactStop
+	commandWait  = "wait"
 
 	cmdSmap   = apc.WhatSmap
 	cmdBMD    = apc.WhatBMD
@@ -295,6 +301,8 @@ const (
 	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
 
 	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
+
+	getBatchSpecArgument = "[BUCKET[/NAME_or_TEMPLATE] ...] DST_ARCHIVE --spec [JSON_SPECIFICATION|YAML_SPECIFICATION]"
 
 	bucketEmbeddedPrefixArg = "[BUCKET[/PREFIX]]"
 
@@ -794,7 +802,7 @@ var (
 		Usage: "TAR file format selection (one of \"" + dfltTform + "\", \"USTAR\", \"PAX\", or \"GNU\")",
 	}
 
-	// (ETL, dSort, get-batch) spec
+	// (ETL, dSort, get-batch) specificaton
 	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
 
 	// dsort
@@ -1260,5 +1268,10 @@ var (
 	encodeObjnameFlag = cli.BoolFlag{
 		Name:  "encode-objname",
 		Usage: "Encode object names that contain special symbols (; : ' \" < > / \\ | ? #) that may otherwise break shell parsing or URL interpretation",
+	}
+
+	streamingGetFlag = cli.BoolFlag{
+		Name:  "streaming",
+		Usage: "stream resulting archive prior to finalizing it in memory",
 	}
 )

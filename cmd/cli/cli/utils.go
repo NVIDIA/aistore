@@ -1073,8 +1073,7 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 
 func (e *errInvalidNVpair) Error() string { return fmt.Sprintf("invalid key=value pair %q", e.notpair) }
 
-// readFileOrURL reads content from either a local file path or HTTP URL
-func readFileOrURL(source string) (io.ReadCloser, error) {
+func openFileOrURL(source string) (io.ReadCloser, error) {
 	if isWebURL(source) {
 		// Download from HTTP URL
 		resp, err := http.Get(source) //nolint:noctx // want to use http.NewRequest and default client

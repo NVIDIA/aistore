@@ -241,6 +241,7 @@ func (a *acli) setupCommands(emptyCmdline bool) {
 		tlsCmd,
 		showCmdPerformance,
 		remClusterCmd,
+		mlCmd,
 		a.getAliasCmd(),
 	}
 

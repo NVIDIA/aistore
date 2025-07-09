@@ -292,7 +292,7 @@ func etlInitSpecHandler(c *cli.Context) error {
 	if fromFile == "" {
 		return fmt.Errorf("flag %s must be specified", qflprn(specFlag))
 	}
-	reader, err := readFileOrURL(fromFile)
+	reader, err := openFileOrURL(fromFile)
 	if err != nil {
 		return err
 	}
@@ -676,7 +676,7 @@ func getETLNamesFromFile(c *cli.Context) ([]string, error) {
 	if fromFile == "" {
 		return nil, fmt.Errorf("flag %s must be specified", qflprn(specFlag))
 	}
-	reader, err := readFileOrURL(fromFile)
+	reader, err := openFileOrURL(fromFile)
 	if err != nil {
 		return nil, err
 	}
