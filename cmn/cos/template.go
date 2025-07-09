@@ -19,9 +19,13 @@ const (
 	EmptyMatchAll    = ""
 )
 
+const (
+	maxTemplateExpansion = 10_000_000 // see Expand()
+)
+
 func MatchAll(template string) bool { return template == EmptyMatchAll || template == WildcardMatchAll }
 
-// Supported syntax includes 3 standalone variations, 3 alternative formats:
+// Supported range syntax includes 3 standalone variations, 3 alternative formats:
 // 1. bash (or shell) brace expansion:
 //    * `prefix-{0..100}-suffix`
 //    * `prefix-{00001..00010..2}-gap-{001..100..2}-suffix`
@@ -31,9 +35,8 @@ func MatchAll(template string) bool { return template == EmptyMatchAll || templa
 // 3. fmt style:
 //    * `prefix-%06d-suffix`
 // In all cases, prefix and/or suffix are optional.
-//
-// NOTE: if none of the above applies, `NewParsedTemplate()` simply returns
-//       `ParsedTemplate{Prefix = original template string}` with nil Ranges
+
+// NOTE: see extended comment below documenting NewParsedTemplate
 
 type (
 	TemplateRange struct {
@@ -82,6 +85,38 @@ func (e *errTemplateInvalid) Error() string { return e.msg }
 // ParsedTemplate //
 ////////////////////
 
+// NewParsedTemplate parses a user-supplied template string and returns a
+// ParsedTemplate ready for iteration or expansion.
+//
+// Supported syntax (see file-level comment for full grammar) includes:
+//   • brace ranges       – `{0001..1000}`, `{a..z}`, `{A..Z}`
+//   • ‘at’ ranges        – `@0001`, `@1`, `@A`
+//   • sprintf directives – `%05d`, `%x`, etc.
+//
+// Special-case behavior:
+//
+//   • **Empty match-all** (`""` or `"*"`).
+//     Returns `ErrEmptyTemplate` so the caller can decide whether that means
+//     "entire bucket", "whole namespace", or an error.
+//
+//   • **Prefix-only** (no ranges, e.g. `"logs/2025/07/"`).
+//     Returns `(pt, nil)` where `pt.Ranges == nil` and therefore
+//     `pt.IsPrefixOnly() == true`.  This is *not* an error because many
+//     callers legitimately want prefix search; NOTE:
+//     code that *requires* at least one range should explicitly call `pt.CheckIsRange()`
+//
+//   • **Range templates**.
+//     Valid range syntax returns `(pt, nil)` with `pt.Ranges` populated.
+//
+// The function does **not** expand the template.  Call `pt.Expand()` (or
+// `pt.InitIter()` + `pt.Next()`) to enumerate concrete object names.  Expansion
+// is capped (`maxTemplateExpansion`) to prevent runaway memory use.
+//
+// Example:
+//     pt, err := cos.NewParsedTemplate("img_{0001..0100}.jpg")
+//     if err != nil { ... }
+//     names, _ := pt.Expand()   // → 100 concrete names
+
 func NewParsedTemplate(template string) (pt ParsedTemplate, err error) {
 	if MatchAll(template) {
 		return pt, ErrEmptyTemplate
@@ -100,8 +135,18 @@ func NewParsedTemplate(template string) (pt ParsedTemplate, err error) {
 		return pt, err
 	}
 
-	// "pure" prefix w/ no ranges
+	// IsPrefixOnly()
 	return ParsedTemplate{Prefix: TrimPrefix(template)}, nil
+}
+
+func (pt *ParsedTemplate) IsRange() bool      { return len(pt.Ranges) > 0 }
+func (pt *ParsedTemplate) IsPrefixOnly() bool { return len(pt.Ranges) == 0 }
+
+func (pt *ParsedTemplate) CheckIsRange() (err error) {
+	if len(pt.Ranges) == 0 {
+		err = fmt.Errorf("prefix-only template not supported (prefix: %q)", pt.Prefix)
+	}
+	return
 }
 
 func (pt *ParsedTemplate) Clone() *ParsedTemplate {
@@ -121,21 +166,34 @@ func (pt *ParsedTemplate) Count() int64 {
 	return count
 }
 
-// maxLen specifies maximum objects to be returned
-func (pt *ParsedTemplate) ToSlice(maxLen ...int) []string {
-	var i, n int
-	if len(maxLen) > 0 && maxLen[0] >= 0 {
-		n = maxLen[0]
+func (pt *ParsedTemplate) Expand(limit ...int) ([]string, error) {
+	const (
+		fmterr = "parsed-template: too large to expand (%d vs %d max)"
+	)
+	var n int
+	if len(limit) > 0 && limit[0] >= 0 {
+		n = limit[0]
 	} else {
-		n = int(pt.Count())
+		cnt := pt.Count()
+		if cnt > math.MaxInt32 {
+			return nil, fmt.Errorf(fmterr, cnt, maxTemplateExpansion)
+		}
+		n = int(cnt)
 	}
-	objs := make([]string, 0, n)
+	if n > maxTemplateExpansion {
+		return nil, fmt.Errorf(fmterr, n, maxTemplateExpansion)
+	}
+
+	var (
+		i    int
+		objs = make([]string, 0, n)
+	)
 	pt.InitIter()
 	for objName, hasNext := pt.Next(); hasNext && i < n; objName, hasNext = pt.Next() {
 		objs = append(objs, objName)
 		i++
 	}
-	return objs
+	return objs, nil
 }
 
 func (pt *ParsedTemplate) InitIter() {

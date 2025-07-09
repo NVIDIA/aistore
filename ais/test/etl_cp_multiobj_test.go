@@ -138,15 +138,18 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	tassert.CheckFatal(t, err)
 
 	var (
-		xid        string
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-
-		lst            = pt.ToSlice()
-		objCnt         = len(lst)
+		xid            string
+		proxyURL       = tools.RandomProxyURL(t)
+		baseParams     = tools.BaseAPIParams(proxyURL)
+		lst            []string
 		requestTimeout = 30 * time.Second
 		tcomsg         = cmn.TCOMsg{ToBck: bckTo}
 	)
+
+	lst, err = pt.Expand()
+	tassert.CheckFatal(t, err)
+	objCnt := len(lst)
+
 	tcomsg.Transform.Name = etlName
 	tcomsg.Transform.Timeout = cos.Duration(requestTimeout)
 

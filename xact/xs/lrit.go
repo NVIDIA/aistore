@@ -176,12 +176,13 @@ func (r *lrit) _inipr(msg *apc.ListRange) error {
 		nlog.Errorln(err)
 		return err
 	}
-	if len(pt.Ranges) != 0 {
+	if pt.IsRange() {
 		r.pt = &pt
 		r.lrp = lrpRange
 		return nil
 	}
 pref:
+	debug.Assert(pt.IsPrefixOnly())
 	r.prefix = pt.Prefix
 	r.lrp = lrpPrefix
 	return nil

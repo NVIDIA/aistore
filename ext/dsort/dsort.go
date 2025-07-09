@@ -185,7 +185,7 @@ func (m *Manager) extractLocalShards() (err error) {
 	// compare with xact/xs/multiobj.go
 	group, ctx := errgroup.WithContext(context.Background())
 	switch {
-	case m.Pars.Pit.isRange():
+	case m.Pars.Pit.Template.IsRange():
 		err = m.iterRange(ctx, group)
 	case m.Pars.Pit.isList():
 		err = m.iterList(ctx, group)
@@ -708,8 +708,8 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 		if err != nil {
 			return nil, err
 		}
-		if len(tmpl.Ranges) == 0 {
-			return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)", shardNameFmt)
+		if err := tmpl.CheckIsRange(); err != nil {
+			return nil, err
 		}
 		shardTemplates[shardNameFmt] = &tmpl
 		shardTemplates[shardNameFmt].InitIter()

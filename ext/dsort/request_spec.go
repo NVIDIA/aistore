@@ -283,9 +283,8 @@ func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err erro
 	if pot.Template, err = cos.NewParsedTemplate(strings.TrimSpace(outputFormat)); err != nil {
 		return
 	}
-	if len(pot.Template.Ranges) == 0 {
-		return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)",
-			outputFormat)
+	if err := pot.Template.CheckIsRange(); err != nil {
+		return nil, err
 	}
 	return
 }
@@ -306,7 +305,7 @@ func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err 
 		// empty template => empty prefix (match any)
 		err = nil
 		pit.Prefix = cos.EmptyMatchAll
-	} else if err == nil && len(pit.Template.Ranges) == 0 {
+	} else if err == nil && pit.Template.IsPrefixOnly() {
 		// prefix only
 		pit.Prefix = pit.Template.Prefix
 	}
@@ -314,5 +313,4 @@ func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err 
 }
 
 func (pit *parsedInputTemplate) isList() bool   { return len(pit.ObjNames) > 0 }
-func (pit *parsedInputTemplate) isRange() bool  { return len(pit.Template.Ranges) > 0 }
-func (pit *parsedInputTemplate) isPrefix() bool { return !pit.isList() && !pit.isRange() }
+func (pit *parsedInputTemplate) isPrefix() bool { return !pit.isList() && !pit.Template.IsRange() }
