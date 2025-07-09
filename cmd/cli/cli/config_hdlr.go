@@ -72,7 +72,7 @@ updated via CLI. To update local config, lookup it's location, edit the file
 var (
 	configCmd = cli.Command{
 		Name:  commandConfig,
-		Usage: "configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)",
+		Usage: "Configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)",
 		Subcommands: []cli.Command{
 			makeAlias(&showCmdConfig, &mkaliasOpts{newName: commandShow}),
 			{

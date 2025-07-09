@@ -9,7 +9,7 @@ import "github.com/urfave/cli"
 
 var remClusterCmd = cli.Command{
 	Name:  cmdShowRemoteAIS,
-	Usage: "show attached AIS clusters",
+	Usage: "Show attached AIS clusters",
 	Subcommands: []cli.Command{
 		makeAlias(&showCmdRemoteAIS, &mkaliasOpts{newName: commandShow}),
 	},

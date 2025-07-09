@@ -10,7 +10,7 @@ In brief:
 ```console
 $ ais config --help
 NAME:
-   ais config - configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
+   ais config - Configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
 
 USAGE:
    ais config command [arguments...] [command options]

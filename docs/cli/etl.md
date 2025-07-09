@@ -30,6 +30,7 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 
 * [Stop ETL](#stop-etl)
 * [Start ETL](#start-etl)
+* [Delete (RM) ETL](#remove-delete-etl)
 
 ### Data Transformation
 
@@ -43,40 +44,85 @@ For background on AIS-ETL, getting started, working examples, and tutorials, ple
 Top-level ETL commands include `init`, `stop`, `show`, and more:
 
 ```console
-$ ais etl --help
+$ ais etl -h
 NAME:
-   ais etl - Execute custom transformations on objects
+   ais etl - Manage and execute custom ETL (Extract, Transform, Load) jobs
 
 USAGE:
    ais etl command [arguments...]  [command options]
 
 COMMANDS:
    init  Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).
-         - 'ais etl init -f <spec-file.yaml>'   deploy ETL from a local YAML file.
-         - 'ais etl init -f <URL>'              deploy ETL from a remote YAML file.
+   Examples:
+     - 'ais etl init -f my-etl.yaml'                      deploy ETL from a local YAML file;
+     - 'ais etl init -f https://example.com/etl.yaml'     deploy ETL from a remote YAML file;
+     - 'ais etl init -f multi-etl.yaml'                   deploy multiple ETLs from a single file (separated by '---');
+     - 'ais etl init -f spec.yaml --name my-custom-etl'   override ETL name from command line;
+     - 'ais etl init -f spec.yaml --comm-type hpull'      override communication type;
+     - 'ais etl init -f spec.yaml --object-timeout 30s'   set custom object transformation timeout.
+     - 'ais etl init --spec <file|URL>'                   deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
+   
+Additional Info:
+   - You may define multiple ETLs in a single spec file using YAML document separators ('---').
+   - CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.
 
-   show       Show ETL(s).
-              - 'ais etl show'                          list all ETL jobs.
-              - 'ais etl show <ETL_NAME> [<ETL_NAME> ...]'   show detailed specification for specified ETL jobs.
-              - 'ais etl show errors <ETL_NAME>'    show transformation errors for specified ETL.
+   show  Show ETL(s).
+   Examples:
+              - 'ais etl show'                             list all ETL jobs with their status and details;
+              - 'ais etl show my-etl'                      show detailed specification for a specific ETL job;
+              - 'ais etl show my-etl another-etl'          show detailed specifications for multiple ETL jobs;
+              - 'ais etl show errors my-etl'               show transformation errors for inline object transformations;
+              - 'ais etl show errors my-etl job-123'       show errors for a specific offline (bucket-to-bucket) transform job.
    view-logs  View ETL logs.
-              - 'ais etl view-logs <ETL_NAME>'                 show logs from all target nodes for specified ETL.
-              - 'ais etl view-logs <ETL_NAME> <TARGET_ID>'   show logs from specific target node.
-   start      Start ETL.
-              - 'ais etl start <ETL_NAME>'   start the specified ETL (transitions from stopped to running state).
-   stop       Stop ETL.
-              - 'ais etl stop <ETL_NAME>'                 stop the specified ETL (transitions from running to stopped state).
-              - 'ais etl stop --all'                        stop all running ETL jobs.
-              - 'ais etl stop <ETL_NAME> <ETL_NAME2>'   stop multiple ETL jobs by name.
-   rm         Remove ETL.
-              - 'ais etl rm <ETL_NAME>'   remove (delete) the specified ETL.
-                NOTE: If the ETL is in 'running' state, it will be automatically stopped before removal.
-   object     Transform an object.
-              - 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> <OUTPUT>'   transform object and save to file.
-              - 'ais etl object <ETL_NAME> <BUCKET/OBJECT_NAME> -'            transform and output to stdout.
-   bucket     Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').
-              - 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>'                       transform all objects from source to destination bucket.
-              - 'ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET> --prefix <PREFIX>'   transform objects with specified prefix.
+   Examples:
+          - 'ais etl view-logs my-etl'                      show logs from all target nodes for the specified ETL;
+          - 'ais etl view-logs my-etl target-001'           show logs from a specific target node;
+          - 'ais etl view-logs data-converter target-002'   view logs from target-002 for data-converter ETL.
+   start  Start ETL.
+   Examples:
+     - 'ais etl start my-etl'                            start the specified ETL (transitions from stopped to running state);
+     - 'ais etl start my-etl another-etl'                start multiple ETL jobs by name;
+     - 'ais etl start -f spec.yaml'                      start ETL jobs defined in a local YAML file;
+     - 'ais etl start -f https://example.com/etl.yaml'   start ETL jobs defined in a remote YAML file;
+     - 'ais etl start -f multi-etl.yaml'                 start all ETL jobs defined in a multi-ETL file;
+     - 'ais etl start --spec <file|URL>'                 start ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
+
+   stop  Stop ETL. Also aborts related offline jobs and can be used to terminate ETLs stuck in 'initializing' state.
+   Examples:
+     - 'ais etl stop my-etl'                              stop the specified ETL (transitions from running to stopped state);
+     - 'ais etl stop my-etl another-etl'                  stop multiple ETL jobs by name;
+     - 'ais etl stop --all'                               stop all running ETL jobs;
+     - 'ais etl stop -f spec.yaml'                        stop ETL jobs defined in a local YAML file;
+     - 'ais etl stop -f https://example.com/etl.yaml'     stop ETL jobs defined in a remote YAML file;
+     - 'ais etl stop stuck-etl'                           terminate ETL that is stuck in 'initializing' state;
+     - 'ais etl stop --spec <file|URL>'                   stop ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
+
+   rm  Remove ETL.
+   Examples:
+           - 'ais etl rm my-etl'                              remove (delete) the specified ETL;
+           - 'ais etl rm my-etl another-etl'                  remove multiple ETL jobs by name;
+           - 'ais etl rm --all'                               remove all ETL jobs;
+           - 'ais etl rm -f spec.yaml'                        remove ETL jobs defined in a local YAML file;
+           - 'ais etl rm -f https://example.com/etl.yaml'     remove ETL jobs defined in a remote YAML file;
+           - 'ais etl rm running-etl'q                        remove ETL that is currently running (will be stopped first).
+           - 'ais etl rm --spec <file|URL>'                   remove ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
+             NOTE: If an ETL is in 'running' state, it will be stopped automatically before removal.
+   object  Transform an object.
+   Examples:
+           - 'ais etl object my-etl ais://src/image.jpg /tmp/output.jpg'                   transform object and save to file;
+           - 'ais etl object my-etl ais://src/data.json -'                                 transform and output to stdout;
+           - 'ais etl object my-etl ais://src/doc.pdf /dev/null'                           transform and discard output;
+           - 'ais etl object my-etl cp ais://src/image.jpg ais://dst/'                     transform and copy to another bucket;
+           - 'ais etl object my-etl ais://src/data.xml output.json --args "format=json"'   transform with custom arguments.
+   bucket  Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').
+   Examples:
+     - 'ais etl bucket my-etl ais://src ais://dst'                                       transform all objects from source to destination bucket;
+     - 'ais etl bucket my-etl ais://src ais://dst --prefix images/'                      transform objects with prefix 'images/';
+     - 'ais etl bucket my-etl ais://src ais://dst --template "shard-{0001..0999}.tar"'   transform objects matching the template;
+     - 'ais etl bucket my-etl s3://remote-src ais://dst --all'                           transform all objects including non-cached ones;
+     - 'ais etl bucket my-etl ais://src ais://dst --dry-run'                             preview transformation without executing;
+     - 'ais etl bucket my-etl ais://src ais://dst --num-workers 8'                       use 8 concurrent workers for transformation;
+     - 'ais etl bucket my-etl ais://src ais://dst --prepend processed/'                  add prefix to transformed object names.
 
 OPTIONS:
    --help, -h  Show help
@@ -305,11 +351,20 @@ ais etl view-logs <ETL_NAME> [TARGET_ID]
 Stops a running ETL and tears down its underlying Kubernetes resources.
 
 ```bash
-ais etl stop <ETL_NAME>
+ais etl stop <ETL_NAME> [<ETL_NAME> ...]
 ```
 
 * Frees up system resources without deleting the ETL definition.
 * ETL can be restarted later without reinitialization.
+
+You can also stop ETLs from a specification file:
+
+```bash
+ais etl stop -f <spec-file.yaml>   # Local file with one or more ETL specs
+ais etl stop -f <URL>              # Remote spec file over HTTP(S)
+```
+
+* Supports multi-ETL YAML files separated by `---`.
 
 > More info [ETL Pod Lifecycle](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-pod-lifecycle)
 ---
@@ -319,11 +374,44 @@ ais etl stop <ETL_NAME>
 Restarts a previously stopped ETL by recreating its associated containers on each target.
 
 ```bash
-ais etl start <ETL_NAME>
+ais etl start <ETL_NAME> [<ETL_NAME> ...]
 ```
 
 * Useful when resuming work after a manual or error-triggered stop.
 * Retains all original configuration and transformation logic.
+
+You can also start ETLs from a specification file:
+
+```bash
+ais etl start -f <spec-file.yaml>   # Local file with one or more ETL specs
+ais etl start -f <URL>              # Remote spec file over HTTP(S)
+```
+
+* Supports multi-ETL YAML files separated by `---`.
+
+> More info [ETL Pod Lifecycle](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-pod-lifecycle)
+
+---
+
+## Remove (Delete) ETL
+
+Remove (delete) ETL jobs.
+
+```bash
+ais etl rm <ETL_NAME> [<ETL_NAME> ...]
+```
+
+* Useful when resuming work after a manual or error-triggered stop.
+* Retains all original configuration and transformation logic.
+
+You can also remove ETLs from a specification file:
+
+```bash
+ais etl rm -f <spec-file.yaml>   # Local file with one or more ETL specs
+ais etl rm -f <URL>              # Remote spec file over HTTP(S)
+```
+
+* Supports multi-ETL YAML files separated by `---`.
 
 > More info [ETL Pod Lifecycle](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#etl-pod-lifecycle)
 

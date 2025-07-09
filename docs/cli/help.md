@@ -56,54 +56,49 @@ NAME:
    ais - AIS CLI: command-line management utility for AIStore
 
 USAGE:
-   ais [global options] command [arguments...] [command options]
+   ais [global options] [arguments...]  command [command options]  
 
 VERSION:
-   1.1.950525a50
+   1.18.605c658ff
 
-DESCRIPTION:
+TAB completions (Bash and Zsh):
    If <TAB-TAB> completion doesn't work:
    * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
    * run 'cmd/cli/autocomplete/install.sh'
    To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/main/scripts/install_from_binaries.sh
 
 COMMANDS:
-   bucket          create/destroy buckets, list bucket's contents, show existing buckets and their properties
-   object          put, get, list, rename, remove, and other operations on objects
-   cluster         monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
-   config          configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
-   etl             execute custom transformations on objects
-   job             monitor, query, start/stop and manage jobs and eXtended actions (xactions)
-   auth            add/remove/show users, manage user roles, manage access to AIS clusters
-   show            show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself
-   help            show a list of commands; show help for a given command
-   advanced        special commands intended for development and advanced usage
-   storage         monitor and manage clustered storage
-   archive         Create multi-object archive, append files to an existing archive
-   log             show log
-   performance     show performance counters, throughput, latency and more (press <TAB-TAB> to select specific view)
-   remote-cluster  show attached AIS clusters
-   alias           manage top-level aliases
-   put             (alias for "object put") PUT or APPEND one file or one directory, or multiple files and/or directories.
-                   - use optional shell filename pattern (wildcard) to match/select sources;
-                   - request '--compute-checksum' to facilitate end-to-end protection;
-                   - progress bar via '--progress' to show runtime execution (uploaded files count and size);
-                   - when writing directly from standard input use Ctrl-D to terminate;
-                   - use '--archpath' to APPEND to an existing tar-formatted object.
-   start           (alias for "job start") run batch job
-   stop            (alias for "job stop") terminate a single batch job or multiple jobs (press <TAB-TAB> to select, '--help' for options)
-   wait            (alias for "job wait") wait for a specific batch job to complete (press <TAB-TAB> to select, '--help' for options)
-   cp              (alias for "bucket cp") copy entire bucket or selected objects (to select, use '--list' or '--template')
-   create          (alias for "bucket create") create ais buckets
-   get             (alias for "object get") get an object, an archived file, or a range of bytes from the above, and in addition:
-                   - write the content locally with destination options including: filename, directory, STDOUT ('-');
-                   - use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).
-   ls              (alias for "bucket ls") list buckets, objects in buckets, and files in objects formatted as archives
-   search          search ais commands
+   bucket          Create and destroy buckets, list bucket's content, show existing buckets and their properties
+   object          PUT, GET, list, rename, remove, and other operations on objects
+   cluster         Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
+   config          Configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
+   etl             Manage and execute custom ETL (Extract, Transform, Load) jobs
+   job             Monitor, query, start/stop and manage jobs and eXtended actions (xactions)
+   auth            Add/remove/show users, manage user roles, manage access to AIS clusters
+   show            Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself
+   help            Show a list of commands; show help for a given command
+   advanced        Special commands intended for development and advanced usage
+   storage         Monitor and manage clustered storage
+   archive         Archive multiple objects from a given bucket; archive local files and directories; list archived content
+   log             View ais node's log in real time; download the current log; download all logs (history)
+   tls             Load or reload (an updated) TLS certificate; display information about currently deployed certificates
+   performance     Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
+   remote-cluster  Show attached AIS clusters
+   ml              Machine learning operations: batch dataset operations, and ML-specific workflows
+   alias           Manage top-level aliases
+   kubectl         Show Kubernetes pods and services
 
 GLOBAL OPTIONS:
-   --help, -h     show help
+   --help, -h     Show help
    --version, -v  print the version
+
+ALIASES:
+   cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict'; 
+   ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start'; 
+   blob-download => 'job start blob-download'; download => 'job start download'; 
+   dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait'; 
+   get => 'object get'; prefetch => 'object prefetch'; put => 'object put'; 
+   rmo => 'object rm'; space-cleanup => 'storage cleanup'; scrub => 'storage validate'
 ```
 
 
