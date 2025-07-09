@@ -366,7 +366,7 @@ func putApndArchHandler(c *cli.Context) error {
 		// a) csv of files and/or directories (names) from the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
 		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.archpath /*append pref*/, incl)
-	case a.pt != nil && len(a.pt.Ranges) > 0:
+	case a.pt != nil && a.pt.IsRange():
 		// a) range from the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www.zip
 		// b) from '--template'
 		var trimPrefix string

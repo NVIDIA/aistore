@@ -56,7 +56,7 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 		if err != nil && err != cos.ErrEmptyTemplate { // NOTE same as above: empty => entire bucket
 			return err
 		}
-		if len(pt.Ranges) > 0 {
+		if pt.IsRange() {
 			numObjs = pt.Count()
 		} else {
 			isPrefix = true
@@ -156,8 +156,8 @@ func runTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName 
 //
 
 func evictHandler(c *cli.Context) error {
-	if flagIsSet(c, verboseFlag) && flagIsSet(c, nonverboseFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(verboseFlag), qflprn(nonverboseFlag))
+	if err := errMutuallyExclusive(c, verboseFlag, nonverboseFlag); err != nil {
+		return err
 	}
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
@@ -278,8 +278,8 @@ func evictMultipleBuckets(c *cli.Context, qbck cmn.QueryBcks) error {
 }
 
 func rmHandler(c *cli.Context) error {
-	if flagIsSet(c, verboseFlag) && flagIsSet(c, nonverboseFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(verboseFlag), qflprn(nonverboseFlag))
+	if err := errMutuallyExclusive(c, verboseFlag, nonverboseFlag); err != nil {
+		return err
 	}
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -462,7 +462,7 @@ func (lr *lrCtx) do(c *cli.Context) error {
 		_, xname = xact.GetKindName(kind)
 		text = fmt.Sprintf("%s: %s %s from %s", xact.Cname(xname, xid), s, action, lr.bck.Cname(""))
 	} else {
-		if lr.tmplObjs != "" && !emptyTemplate && len(pt.Ranges) != 0 {
+		if lr.tmplObjs != "" && !emptyTemplate && pt.IsRange() {
 			num = pt.Count()
 		}
 		_, xname = xact.GetKindName(kind)
@@ -522,13 +522,18 @@ func (lr *lrCtx) dry(c *cli.Context, fileList []string, pt *cos.ParsedTemplate) 
 	}
 
 	// Handle simple prefix different from template pattern
-	if lr.tmplObjs != "" && len(pt.Ranges) == 0 {
+	if lr.tmplObjs != "" && pt.IsPrefixOnly() {
 		fmt.Fprintf(c.App.Writer, "[DRY RUN] %s objects with prefix %q from %s\n",
 			strings.ToUpper(c.Command.Name), lr.tmplObjs, lr.bck.Cname(""))
 		return
 	}
 
-	objs := pt.ToSlice(dryRunExamplesCnt)
+	objs, err := pt.Expand(dryRunExamplesCnt)
+	if err != nil {
+		debug.AssertNoErr(err)
+		fmt.Fprintln(c.App.ErrWriter, err)
+		return
+	}
 	limitedLineWriter(c.App.Writer,
 		dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+lr.bck.Cname("")+"/%s", objs)
 	if pt.Count() > dryRunExamplesCnt {

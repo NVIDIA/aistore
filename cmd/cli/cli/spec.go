@@ -27,15 +27,15 @@ const (
 
 // load a specification from the '--spec' flag
 // return raw bytes for further decoding
-func loadSpec(c *cli.Context) ([]byte, error) {
+func loadSpec(c *cli.Context) ([]byte, string /*ext*/, error) {
 	if !flagIsSet(c, specFlag) {
-		return nil, fmt.Errorf("flag %s must be specified", qflprn(specFlag))
+		return nil, "", fmt.Errorf("flag %s must be specified", qflprn(specFlag))
 	}
 	specArg := parseStrFlag(c, specFlag)
 
 	// if it's inline JSON/YAML
 	if isInlineSpec(specArg) {
-		return []byte(specArg), nil
+		return []byte(specArg), "", nil
 	}
 
 	var r io.Reader
@@ -44,7 +44,7 @@ func loadSpec(c *cli.Context) ([]byte, error) {
 	} else {
 		f, err := os.Open(specArg)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		defer f.Close()
 		r = f
@@ -59,23 +59,31 @@ func loadSpec(c *cli.Context) ([]byte, error) {
 	_, err = io.CopyN(&b, r, maxSpecSize)
 	if err == nil {
 		// from standard lib: "On return, written == n if and only if err == nil."
-		return nil, fmt.Errorf("spec file too big (max %s)", teb.FmtSize(maxSpecSize, "", 0))
+		return nil, "", fmt.Errorf("spec file too big (max %s)", teb.FmtSize(maxSpecSize, "", 0))
 	}
 	if err != io.EOF {
-		return nil, err
+		return nil, "", err
 	}
-	return b.Bytes(), nil
+	return b.Bytes(), cos.Ext(specArg), nil
 }
 
 // parse JSON or YAML bytes into the provided spec structure
 // JSON first w/ fall back to YAML
-func parseSpec(specBytes []byte, spec any) error {
-	if errj := jsoniter.Unmarshal(specBytes, spec); errj != nil {
+func parseSpec(ext string, specBytes []byte, spec any) error {
+	if ext != "" {
+		ext = strings.ToLower(ext)
+	}
+	if ext == ".json" || ext == ".jsonc" || ext == ".js" {
+		if errj := jsoniter.Unmarshal(specBytes, spec); errj != nil {
+			if erry := yaml.Unmarshal(specBytes, spec); erry != nil {
+				return fmt.Errorf("failed to parse %s file, errs: (%v, %v)", specFlag, errj, erry)
+			}
+		}
+	} else {
 		if erry := yaml.Unmarshal(specBytes, spec); erry != nil {
-			return fmt.Errorf(
-				"failed to determine the type of the specification, errs: (%v, %v)",
-				errj, erry,
-			)
+			if errj := jsoniter.Unmarshal(specBytes, spec); errj != nil {
+				return fmt.Errorf("failed to parse %s file, errs: (%v, %v)", specFlag, erry, errj)
+			}
 		}
 	}
 	return nil

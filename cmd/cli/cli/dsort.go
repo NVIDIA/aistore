@@ -111,11 +111,11 @@ func startDsortHandler(c *cli.Context) error {
 	)
 
 	// Load spec (required)
-	specBytes, err := loadSpec(c)
+	specBytes, ext, err := loadSpec(c)
 	if err != nil {
 		return err
 	}
-	if err := parseSpec(specBytes, &spec); err != nil {
+	if err := parseSpec(ext, specBytes, &spec); err != nil {
 		return err
 	}
 

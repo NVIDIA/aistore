@@ -63,13 +63,11 @@ func getHandler(c *cli.Context) error {
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return fmt.Errorf("%s and %s must be both present (or not)", qflprn(lengthFlag), qflprn(offsetFlag))
 	}
-	if flagIsSet(c, latestVerFlag) {
-		if flagIsSet(c, headObjPresentFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(latestVerFlag), qflprn(headObjPresentFlag))
-		}
-		if flagIsSet(c, getObjCachedFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(latestVerFlag), qflprn(getObjCachedFlag))
-		}
+	if err := errMutuallyExclusive(c, latestVerFlag, headObjPresentFlag); err != nil {
+		return err
+	}
+	if err := errMutuallyExclusive(c, latestVerFlag, getObjCachedFlag); err != nil {
+		return err
 	}
 
 	// source

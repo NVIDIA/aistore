@@ -5,8 +5,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -35,7 +37,7 @@ const getBatchUsage = "Get multiple objects and/or archived files from different
 	indent1 + "\tExamples - one-liners:\n" +
 	indent1 + "\t- 'ais ml get-batch ais://dataset --list \"audio1.wav, audio2.wav\" training.tar'\t- specific objects as TAR;\n" +
 	indent1 + "\t- 'ais ml get-batch ais://models --template \"checkpoint-{001..100}.pth\" model-v2.tgz'\t- range as compressed TAR;\n" +
-	indent1 + "\t- 'ais ml get-batch ais://data/shard.tar/file.wav dataset.zip'\t- extract file from archived shard;\n" +
+	indent1 + "\t- 'ais ml get-batch ais://data/shard.tar/file.wav dataset.zip'\t- extract single file from archived shard and return as ZIP;\n" +
 	indent1 + "\t- 'ais ml get-batch training.tar --spec batch.json'\t- JSON spec with cross-bucket objects;\n" +
 	indent1 + "\t- 'ais ml get-batch dataset.tar.lz4 --spec batch.yaml --streaming'\t- YAML spec with streaming mode;\n" +
 	indent1 + "\tExample inline spec:" + mlspec +
@@ -48,10 +50,11 @@ var (
 			listFlag,
 			templateFlag,
 			verbObjPrefixFlag,
-			inclSrcBucketNameFlag,
+			omitSrcBucketNameFlag,
 			continueOnErrorFlag,
 			streamingGetFlag,
 			nonverboseFlag,
+			yesFlag,
 		},
 	}
 
@@ -83,17 +86,19 @@ func getBatchHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, specFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(listFlag), flprn(specFlag)))
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
+		return err
 	}
-
-	// bucket [+list]
-	var names []string
+	// bucket [+list|template]
+	var (
+		names []string
+	)
 	bck, objNameOrTmpl, err := parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
-
 	if flagIsSet(c, listFlag) && err != nil {
-		return fmt.Errorf("option %s requires bucket in the command line [err: %v]", flprn(listFlag), err)
+		return fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(listFlag), err)
+	}
+	if flagIsSet(c, templateFlag) && err != nil {
+		return fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(templateFlag), err)
 	}
 
 	if err == nil {
@@ -102,24 +107,36 @@ func getBatchHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		if oltp.list == "" {
+		switch {
+		case oltp.tmpl != "":
+			pt, err := cos.NewParsedTemplate(oltp.tmpl)
+			if err != nil {
+				return err
+			}
+			if err := pt.CheckIsRange(); err != nil {
+				return err
+			}
+			if names, err = pt.Expand(); err != nil {
+				return err
+			}
+		case oltp.list == "":
 			if objNameOrTmpl != "" {
 				names = []string{objNameOrTmpl}
 			}
-		} else {
+		default:
 			names = splitCsv(oltp.list)
 		}
 	}
 
 	if len(names) == 0 && !flagIsSet(c, specFlag) {
-		return fmt.Errorf("with no %s option expecting object and/or archived filenames in the command line", flprn(specFlag))
+		return fmt.Errorf("with no %s option expecting object and/or archived filenames in the command line", qflprn(specFlag))
 	}
 
 	// output
 	outFile = c.Args().Get(shift)
 	var (
 		discard      = discardOutput(outFile)
-		outputFormat = archive.ExtTar
+		outputFormat = archive.ExtTar // (gets immediately overridden via archive.Strict; potential future extension-less usage)
 		w            io.Writer
 	)
 	if discard {
@@ -129,7 +146,17 @@ func getBatchHandler(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		// TODO -- FIXME: check existence; create parent dir(s); etc.
+		if finfo, err := os.Stat(outFile); err == nil {
+			if finfo.IsDir() {
+				return fmt.Errorf("destination %q is a directory", outFile)
+			}
+			if !flagIsSet(c, yesFlag) {
+				warn := fmt.Sprintf("destination %q already exists", outFile)
+				if !confirm(c, "Proceed to overwrite?", warn) {
+					return nil
+				}
+			}
+		}
 		wfh, err := cos.CreateFile(outFile)
 		if err != nil {
 			return err
@@ -140,31 +167,54 @@ func getBatchHandler(c *cli.Context) error {
 
 	// spec
 	if flagIsSet(c, specFlag) {
-		specBytes, err := loadSpec(c)
+		specBytes, ext, err := loadSpec(c)
 		if err != nil {
 			return err
 		}
-		if err := parseSpec(specBytes, &req); err != nil {
+		if err := parseSpec(ext, specBytes, &req); err != nil {
 			return err
 		}
 	}
 
-	// TODO -- FIXME: redundant vs spec: m.b. duplicating or conflicting
+	if req.OutputFormat != "" && outputFormat != "" && req.OutputFormat != outputFormat {
+		if !flagIsSet(c, nonverboseFlag) {
+			warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
+				outputFormat, qflprn(specFlag), req.OutputFormat)
+			actionWarn(c, warn)
+		}
+	}
 	req.OutputFormat = outputFormat
+
+	// NOTE: no real way to check these assorted overrides; common expectation, though,
+	// is for command line to take precedence
 	req.ContinueOnErr = flagIsSet(c, continueOnErrorFlag)
 	req.StreamingGet = flagIsSet(c, streamingGetFlag)
-	req.OnlyObjName = !flagIsSet(c, inclSrcBucketNameFlag)
+	req.OnlyObjName = flagIsSet(c, omitSrcBucketNameFlag)
 
-	{
-		req.In = make([]apc.MossIn, 0, len(names))
+	if len(names) > 0 {
+		if len(req.In) == 0 {
+			req.In = make([]apc.MossIn, 0, len(names))
+		} else {
+			warn := fmt.Sprintf("adding %d command-line defined name%s to the %d spec-defined",
+				len(names), cos.Plural(len(names)), len(req.In))
+			actionWarn(c, warn)
+		}
 		for _, o := range names {
-			in := apc.MossIn{ObjName: o}
+			in := apc.MossIn{
+				ObjName: o,
+				// no need to insert command-line bck -
+				// the latter is passed as the default bucket in api.GetBatch
+			}
 			if oname, archpath := splitPrefixShardBoundary(o); archpath != "" {
 				in.ObjName = oname
 				in.ArchPath = archpath
 			}
 			req.In = append(req.In, in)
 		}
+	}
+
+	if len(req.In) == 0 {
+		return errors.New("empty get-batch request")
 	}
 
 	// do

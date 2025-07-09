@@ -705,7 +705,7 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 		if err != nil && err != cos.ErrEmptyTemplate { // NOTE: empty template => entire bucket
 			return nil, "", err
 		}
-		if len(pt.Ranges) == 0 {
+		if pt.IsPrefixOnly() {
 			prefix, pt.Prefix = pt.Prefix, "" // NOTE: when template is a "pure" prefix
 		} else {
 			matchingObjectNames := make(cos.StrSet)

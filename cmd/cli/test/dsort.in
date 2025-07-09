@@ -2,7 +2,7 @@ ais job start dsort // FAIL "flag '--spec'"
 ais job start dsort '{}' -f "path" // FAIL "no such file"
 
 ais job start dsort -f /path/to/file.json // FAIL "open /path/to/file.json: no such file or directory"
-ais job start dsort -f '{input_extension: .tar' // FAIL "failed to determine the type"
+ais job start dsort -f '{input_extension: .tar' // FAIL "failed to parse"
 
 ais bucket create ais://$BUCKET_1 // IGNORE
 

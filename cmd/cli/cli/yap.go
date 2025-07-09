@@ -88,8 +88,8 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+	if err := errMutuallyExclusive(c, listFlag, templateFlag); err != nil {
+		return err
 	}
 	if flagIsSet(c, progressFlag) || flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		// check connectivity (since '--progress' steals STDOUT with multi-object producing
@@ -215,20 +215,9 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 		}
 	}
 
-	//
-	// parse a.rsrc
-	//
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(listFlag), flprn(templateFlag)))
-	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, verbObjPrefixFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(listFlag), flprn(verbObjPrefixFlag)))
-	}
-	if flagIsSet(c, templateFlag) && flagIsSet(c, verbObjPrefixFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(templateFlag), flprn(verbObjPrefixFlag)))
+	// validate
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, verbObjPrefixFlag); err != nil {
+		return err
 	}
 
 	// source bucket[/obj-or-range]

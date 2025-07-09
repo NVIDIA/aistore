@@ -1098,6 +1098,10 @@ var (
 		Name:  "include-src-bck",
 		Usage: "Prefix the names of archived files with the source bucket name",
 	}
+	omitSrcBucketNameFlag = cli.BoolFlag{
+		Name:  "omit-src-bck",
+		Usage: "When set, strip source bucket names from paths inside the archive (ie., use object names only)",
+	}
 
 	archSrcDirNameFlag = cli.BoolFlag{
 		Name:  "include-src-dir",

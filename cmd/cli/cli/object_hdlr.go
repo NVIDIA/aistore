@@ -371,7 +371,7 @@ func putHandler(c *cli.Context) error {
 		// a) csv of files and/or directories (names) embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
 		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.dst.oname /*virt subdir*/, incl)
-	case a.pt != nil && len(a.pt.Ranges) > 0:
+	case a.pt != nil && a.pt.IsRange():
 		if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("matching '%s'", a.src.tmpl)); !ok {
 			return nil
 		}

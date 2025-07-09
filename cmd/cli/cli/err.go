@@ -294,6 +294,19 @@ func incorrectUsageMsg(c *cli.Context, fmtMsg string, args ...any) *errUsage {
 	return _errUsage(c, fmt.Sprintf(fmtMsg, args...))
 }
 
+func errMutuallyExclusive(c *cli.Context, flags ...cli.Flag) error {
+	for i := range flags {
+		fli := flags[i]
+		for j := i + 1; j < len(flags); j++ {
+			flj := flags[j]
+			if flagIsSet(c, fli) && flagIsSet(c, flj) {
+				return incorrectUsageMsg(c, errFmtExclusive, qflprn(fli), qflprn(flj))
+			}
+		}
+	}
+	return nil
+}
+
 func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
 	var msg string
 	if len(missingArgs) == 1 && !strings.Contains(missingArgs[0], " ") {
