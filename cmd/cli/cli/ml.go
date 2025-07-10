@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -40,8 +41,10 @@ const getBatchUsage = "Get multiple objects and/or archived files from different
 	indent1 + "\t- 'ais ml get-batch ais://data/shard.tar/file.wav dataset.zip'\t- extract single file from archived shard and return as ZIP;\n" +
 	indent1 + "\t- 'ais ml get-batch training.tar --spec batch.json'\t- JSON spec with cross-bucket objects;\n" +
 	indent1 + "\t- 'ais ml get-batch dataset.tar.lz4 --spec batch.yaml --streaming'\t- YAML spec with streaming mode;\n" +
-	indent1 + "\tExample inline spec:" + mlspec +
-	indent1 + "\tSee https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go for complete JSON/YAML specification reference."
+	indent1 + "\t- 'ais ml get-batch --cuts cuts.jsonl.gz --sample-rate 16000 out.tar'\t- Lhotse manifest → TAR archive;\n" +
+	indent1 + "\tExample inline JSON/YAML spec (non-Lhotse):" + mlspec +
+	indent1 + "\tFor Lhotse, provide a *.jsonl or *.jsonl.gz manifest via --cuts; each line is a single-cut JSON object.\n" +
+	indent1 + "\tSee [API](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go) for complete reference and most recent updates."
 
 var (
 	mlFlags = map[string][]cli.Flag{
@@ -55,6 +58,9 @@ var (
 			streamingGetFlag,
 			nonverboseFlag,
 			yesFlag,
+			// Lhotse
+			lhotseCutsFlag,
+			sampleRateFlag,
 		},
 	}
 
@@ -79,14 +85,19 @@ var (
 
 func getBatchHandler(c *cli.Context) error {
 	var (
-		req     apc.MossReq
-		shift   int
-		outFile string
+		req   apc.MossReq
+		shift int
 	)
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
+		return err
+	}
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, lhotseCutsFlag); err != nil {
+		return err
+	}
+	if err := errMutuallyExclusive(c, specFlag, lhotseCutsFlag); err != nil {
 		return err
 	}
 	// bucket [+list|template]
@@ -128,44 +139,12 @@ func getBatchHandler(c *cli.Context) error {
 		}
 	}
 
-	if len(names) == 0 && !flagIsSet(c, specFlag) {
-		return fmt.Errorf("with no %s option expecting object and/or archived filenames in the command line", qflprn(specFlag))
+	if len(names) == 0 && !flagIsSet(c, specFlag) && !flagIsSet(c, lhotseCutsFlag) {
+		return fmt.Errorf("with no (%s, %s) options expecting object names and/or archived filenames in the command line",
+			qflprn(specFlag), qflprn(lhotseCutsFlag))
 	}
 
-	// output
-	outFile = c.Args().Get(shift)
-	var (
-		discard      = discardOutput(outFile)
-		outputFormat = archive.ExtTar // (gets immediately overridden via archive.Strict; potential future extension-less usage)
-		w            io.Writer
-	)
-	if discard {
-		w = io.Discard
-	} else {
-		outputFormat, err = archive.Strict("", cos.Ext(outFile))
-		if err != nil {
-			return err
-		}
-		if finfo, err := os.Stat(outFile); err == nil {
-			if finfo.IsDir() {
-				return fmt.Errorf("destination %q is a directory", outFile)
-			}
-			if !flagIsSet(c, yesFlag) {
-				warn := fmt.Sprintf("destination %q already exists", outFile)
-				if !confirm(c, "Proceed to overwrite?", warn) {
-					return nil
-				}
-			}
-		}
-		wfh, err := cos.CreateFile(outFile)
-		if err != nil {
-			return err
-		}
-		defer wfh.Close()
-		w = wfh
-	}
-
-	// spec
+	// native spec
 	if flagIsSet(c, specFlag) {
 		specBytes, ext, err := loadSpec(c)
 		if err != nil {
@@ -175,7 +154,24 @@ func getBatchHandler(c *cli.Context) error {
 			return err
 		}
 	}
+	// lhotse spec
+	if flagIsSet(c, lhotseCutsFlag) {
+		ins, err := loadAndParseLhotse(c)
+		if err != nil {
+			return err
+		}
+		req.In = ins
+	}
 
+	// output format
+	var (
+		outputFormat string // TODO: potential extension-less usage; can wait
+		outFile      = c.Args().Get(shift)
+	)
+	outputFormat, err = archive.Strict("", cos.Ext(outFile))
+	if err != nil {
+		return err
+	}
 	if req.OutputFormat != "" && outputFormat != "" && req.OutputFormat != outputFormat {
 		if !flagIsSet(c, nonverboseFlag) {
 			warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
@@ -217,8 +213,50 @@ func getBatchHandler(c *cli.Context) error {
 		return errors.New("empty get-batch request")
 	}
 
+	// TODO -- FIXME: temp workaround for ais/ml not supporting empty bck yet
+	if bck.IsEmpty() {
+		for i := range req.In {
+			in := &req.In[i]
+			if in.Bucket != "" && in.Provider != "" {
+				bck = cmn.Bck{Name: in.Bucket, Provider: in.Provider}
+				break
+			}
+		}
+	}
+
+	// output
+	var (
+		discard = discardOutput(outFile)
+		wfh     *os.File
+		w       io.Writer
+	)
+	if discard {
+		w = io.Discard
+	} else {
+		if finfo, err := os.Stat(outFile); err == nil {
+			if finfo.IsDir() {
+				return fmt.Errorf("destination %q is a directory", outFile)
+			}
+			if !flagIsSet(c, yesFlag) {
+				warn := fmt.Sprintf("destination %q already exists", outFile)
+				if !confirm(c, "Proceed to overwrite?", warn) {
+					return nil
+				}
+			}
+		}
+		wfh, err = cos.CreateFile(outFile)
+		if err != nil {
+			return err
+		}
+		w = wfh
+	}
+
 	// do
 	resp, err := api.GetBatch(apiBP, bck, &req, w)
+
+	if wfh != nil {
+		wfh.Close()
+	}
 	if err == nil {
 		debug.Assert(req.StreamingGet || len(resp.Out) == len(req.In))
 
@@ -231,6 +269,12 @@ func getBatchHandler(c *cli.Context) error {
 			}
 			actionDone(c, msg)
 		}
+		return nil
+	}
+
+	// cleanup
+	if wfh != nil {
+		cos.RemoveFile(outFile)
 	}
 	return err
 }

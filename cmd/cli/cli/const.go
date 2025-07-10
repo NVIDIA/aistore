@@ -805,7 +805,16 @@ var (
 	// (ETL, dSort, get-batch) specificaton
 	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
 
-	// dsort
+	// Lhotse
+	lhotseCutsFlag = cli.StringFlag{
+		Name:  "cuts",
+		Usage: "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
+	}
+	sampleRateFlag = cli.IntFlag{
+		Name:  "sample-rate",
+		Usage: "audio sample-rate (Hz); used to convert seconds to byte offsets",
+	}
+
 	dsortLogFlag = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
 
 	cleanupFlag = cli.BoolFlag{

@@ -56,7 +56,7 @@ func tmosspath(bucket, xid, wid string, nat int) string {
 // GET /v1/ml/moss/bucket-name
 func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	// parse/validate
-	items, err := p.parseURL(w, r, apc.URLPathML.L, 2, true)
+	items, err := p.parseURL(w, r, apc.URLPathML.L, 2, true) // TODO -- FIXME: bucket-name must be optional
 	if err != nil {
 		return
 	}

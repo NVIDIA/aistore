@@ -284,10 +284,9 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 
 	r.IncPending()
 	err := r.asm(req, w, wi)
-	r.DecPending()
-
 	wi.cleanup()
 
+	r.DecPending()
 	return err
 }
 
@@ -316,7 +315,6 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	wi.aw = archive.NewWriter(req.OutputFormat, sgl, nil /*checksum*/, &opts)
 	wi.awfin.Store(false)
 	err := wi.asm(w)
-	sgl.Free()
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "done multipart Assemble", basewi.wid, "err", err)
@@ -614,6 +612,11 @@ func (wi *basewi) cleanup() {
 	}
 	if !wi.receiving() {
 		return
+	}
+	if !wi.req.StreamingGet { // buffered
+		debug.Assert(wi.sgl != nil)
+		wi.sgl.Free()
+		wi.sgl = nil
 	}
 
 	wi.recv.mtx.Lock()
