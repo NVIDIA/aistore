@@ -201,7 +201,7 @@ class BatchObjectRequest(BaseModel):
 
     def dict(self, *_args, **_kwargs) -> Dict:
         """Override Pydantic dict to use aliases and exclude default fields from request."""
-        return super().dict(by_alias=True)
+        return super().dict(by_alias=True, exclude_defaults=True)
 
     class Config:
         allow_population_by_field_name = True
