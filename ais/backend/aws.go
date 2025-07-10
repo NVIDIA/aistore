@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -880,10 +881,14 @@ func loadConfig(endpoint, profile string) (aws.Config, error) {
 	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
 		o.RateLimiter = ratelimit.None
 	})
+	confFiles, credFiles := getS3ConfFiles()
+	nlog.Infoln("Loading config for profile:", profile, "config files:", confFiles, "credential files:", credFiles)
 	// NOTE: The AWS SDK for Go v2, uses lower case header maps by default.
 	cfg, err := config.LoadDefaultConfig(
 		context.Background(),
 		config.WithHTTPClient(tracing.NewTraceableClient(cmn.NewClient(cmn.TransportArgs{}))),
+		config.WithSharedConfigFiles(confFiles),
+		config.WithSharedCredentialsFiles(credFiles),
 		config.WithSharedConfigProfile(profile),
 		config.WithRetryer(func() aws.Retryer {
 			return retryConfig
@@ -896,6 +901,37 @@ func loadConfig(endpoint, profile string) (aws.Config, error) {
 		cfg.BaseEndpoint = aws.String(endpoint)
 	}
 	return cfg, nil
+}
+
+func getS3ConfFiles() (confFiles, credFiles []string) {
+	const (
+		s3ConfigDir     = "AIS_S3_CONFIG_DIR"
+		s3ConfIndicator = "conf"
+		s3CredIndicator = "cred"
+	)
+	s3Dir := os.Getenv(s3ConfigDir)
+	if s3Dir == "" {
+		return
+	}
+	entries, err := os.ReadDir(s3Dir)
+	if err != nil {
+		nlog.Warningln("Failed to read S3 configuration directory:", s3Dir, "err:", err)
+		return
+	}
+	confFiles = make([]string, 0, len(entries))
+	credFiles = make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.Contains(entry.Name(), s3ConfIndicator) {
+			confFiles = append(confFiles, filepath.Join(s3Dir, entry.Name()))
+		}
+		if strings.Contains(entry.Name(), s3CredIndicator) {
+			credFiles = append(credFiles, filepath.Join(s3Dir, entry.Name()))
+		}
+	}
+	return
 }
 
 func getBucketVersioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {

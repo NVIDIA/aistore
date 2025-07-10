@@ -155,24 +155,24 @@ See related:
 
 **NOTE:** for the most recent updates, please refer to the [source](https://github.com/NVIDIA/aistore/blob/main/api/env/aws.go).
 
-| name | comment |
-| ---- | ------- |
-| `S3_ENDPOINT` | global S3 endpoint to be used instead of `s3.amazonaws.com` |
-| `AWS_REGION` | default bucket region; can be set to override the global default 'us-east-1' location |
-| `AWS_PROFILE` | global AWS profile with alternative (as far as the [default]) credentials and/or AWS region |
-
+| name | comment                                                                                                   |
+| ---- |-----------------------------------------------------------------------------------------------------------|
+| `S3_ENDPOINT` | global S3 endpoint to be used instead of `s3.amazonaws.com`                                               |
+| `AWS_REGION` | default bucket region; can be set to override the global default 'us-east-1' location                     |
+| `AWS_PROFILE` | global AWS profile with alternative (as far as the [default]) credentials and/or AWS region               |
+| `AIS_S3_CONFIG_DIR` | directory containing any number of AWS `config` and `credentials` files to be loaded by the AIS S3 client |
 ## Package: backend
 
 AIS natively supports 3 (three) [Cloud storages](/docs/providers.md).
 
 The corresponding environment "belongs" to the internal [backend](https://github.com/NVIDIA/aistore/tree/main/ais/backend) package and includes:
 
-| name | comment |
-| ---- | ------- |
-| `S3_ENDPOINT`, `AWS_PROFILE`, and `AWS_REGION`| see previous section |
-| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` | GCP account with permissions to access Google Cloud Storage buckets |
-| `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` | Azure account with  permissions to access Blob Storage containers |
-| `AIS_AZURE_URL` | Azure endpoint, e.g. `http://<account_name>.blob.core.windows.net` |
+| name                                                                                                            | comment |
+|-----------------------------------------------------------------------------------------------------------------| ------- |
+| `S3_ENDPOINT`, `AWS_PROFILE`, `AWS_REGION`, `AIS_S3_CONFIG_DIR`                                                 | see previous section |
+| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`                                                        | GCP account with permissions to access Google Cloud Storage buckets |
+| `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`                                                                    | Azure account with  permissions to access Blob Storage containers |
+| `AIS_AZURE_URL`                                                                                                 | Azure endpoint, e.g. `http://<account_name>.blob.core.windows.net` |
 | `OCI_TENANCY_OCID`, `OCI_USER_OCID`, `OCI_REGION`, `OCI_FINGERPRINT`, `OCI_PRIVATE_KEY`, `OCI_COMPARTMENT_OCID` | OCI account with permissions to access Object Storage buckets and compartments |
 
 Notice in the table above that the variables `S3_ENDPOINT` and `AWS_PROFILE` are designated as _global_: cluster-wide.
