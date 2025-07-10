@@ -586,11 +586,19 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 		if err != nil {
 			return nil, err
 		}
-		bck = &cmn.Bck{Name: in.Bucket, Provider: np}
+		return &cmn.Bck{Name: in.Bucket, Provider: np}, nil
 	}
 
+	if bck == nil {
+		if in.ArchPath == "" {
+			return nil, fmt.Errorf("%s: missing bucket specification for object %q", r.Name(), in.ObjName)
+		}
+		return nil, fmt.Errorf("%s: missing bucket specification for archived file %s/%s", r.Name(), in.ObjName, in.ArchPath)
+	}
 	return bck, nil
-} ////////////
+}
+
+////////////
 // basewi //
 ////////////
 

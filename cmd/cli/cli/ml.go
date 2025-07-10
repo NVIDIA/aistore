@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -211,17 +210,6 @@ func getBatchHandler(c *cli.Context) error {
 
 	if len(req.In) == 0 {
 		return errors.New("empty get-batch request")
-	}
-
-	// TODO -- FIXME: temp workaround for ais/ml not supporting empty bck yet
-	if bck.IsEmpty() {
-		for i := range req.In {
-			in := &req.In[i]
-			if in.Bucket != "" && in.Provider != "" {
-				bck = cmn.Bck{Name: in.Bucket, Provider: in.Provider}
-				break
-			}
-		}
 	}
 
 	// output

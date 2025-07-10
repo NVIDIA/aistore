@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -48,50 +49,57 @@ func (p *proxy) mlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+const (
+	tmosspathNumItems = 5
+)
+
 func tmosspath(bucket, xid, wid string, nat int) string {
 	s := strconv.Itoa(nat)
+	// when parsed will contain tmosspathNumItems = 5 if bucket name provided
+	// otherwise 4 items
 	return apc.URLPathML.Join(apc.Moss, bucket, xid, wid, s)
 }
 
 // GET /v1/ml/moss/bucket-name
 func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	// parse/validate
-	items, err := p.parseURL(w, r, apc.URLPathML.L, 2, true) // TODO -- FIXME: bucket-name must be optional
+	items, err := p.parseURL(w, r, apc.URLPathML.L, 1, true)
 	if err != nil {
 		return
 	}
 	if err := p.checkAccess(w, r, nil, apc.AceGET); err != nil {
 		return
 	}
-	// TODO: make /bucket-name optional - choose any from the apc.MossReq
 	if len(items) > 2 || items[0] != apc.Moss {
 		p.writeErrURL(w, r)
 		return
 	}
 
-	// bucket
 	var (
-		q      = r.URL.Query()
-		bucket = items[1]
+		q      url.Values
+		bucket string
 	)
-	bckArgs := allocBctx()
-	{
-		bckArgs.p = p
-		bckArgs.w = w
-		bckArgs.r = r
-		bckArgs.query = q
-		bckArgs.perms = apc.AceGET
-		bckArgs.createAIS = false
-	}
-	bckArgs.bck, err = newBckFromQ(bucket, q, nil)
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	bck, errN := bckArgs.initAndTry()
-	freeBctx(bckArgs)
-	if errN != nil {
-		return
+	if len(items) == 2 {
+		bucket = items[1]
+		q = r.URL.Query()
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.query = q
+			bckArgs.perms = apc.AceGET
+			bckArgs.createAIS = false
+		}
+		if bckArgs.bck, err = newBckFromQ(bucket, q, nil); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		_, err := bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
+			return
+		}
 	}
 
 	// DT
@@ -111,7 +119,11 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q.Set(apc.QparamTID, tsi.ID())
+	if q == nil {
+		q = url.Values{apc.QparamTID: []string{tsi.ID()}}
+	} else {
+		q.Set(apc.QparamTID, tsi.ID())
+	}
 
 	// phase 1: call DT
 	var (
@@ -170,7 +182,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln(r.Method, apc.Moss, bck.Cname(""), "=> redirect to", tsi.String(), "at", redirectURL)
+		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
@@ -306,23 +318,35 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 // parse tmosspath()
 func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx, err error) {
-	var items []string
+	var (
+		items []string
+	)
 	if items, err = t.parseURL(w, r, apc.URLPathML.L, 4, true); err != nil {
 		return ctx, err
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(t.String(), "mossparse", r.Method, "items", items)
 	}
-	if len(items) > 5 {
+	if len(items) > tmosspathNumItems {
 		t.writeErrURL(w, r)
 		return ctx, err
 	}
 	debug.Assert(items[0] == apc.Moss, items[0])
 
-	bucket := items[1]
-	ctx.xid = items[2]
-	ctx.wid = items[3]
-	ctx.nat, err = strconv.Atoi(items[4])
+	// tmosspathNumItems = 5 items with bucket via api.GetBatch(), 4 otherwise
+	var (
+		bucket string
+		shift  = 1
+	)
+	if len(items) == tmosspathNumItems {
+		bucket = items[shift]
+		shift++
+	}
+	ctx.xid = items[shift]
+	shift++
+	ctx.wid = items[shift]
+	shift++
+	ctx.nat, err = strconv.Atoi(items[shift])
 	if err != nil {
 		t.writeErrURL(w, r)
 		return ctx, err
@@ -331,10 +355,12 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 
 	q := r.URL.Query() // TODO: dpq
 	ctx.tid = q.Get(apc.QparamTID)
-	ctx.bck, err = newBckFromQ(bucket, q, nil)
-	if err != nil {
-		t.writeErr(w, r, err)
-		return ctx, err
+	if bucket != "" {
+		ctx.bck, err = newBckFromQ(bucket, q, nil)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return ctx, err
+		}
 	}
 
 	ctx.req = &apc.MossReq{}

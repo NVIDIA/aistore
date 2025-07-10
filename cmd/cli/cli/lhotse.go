@@ -70,15 +70,19 @@ func loadAndParseLhotse(c *cli.Context) ([]apc.MossIn, error) {
 		r = gzr
 	}
 
-	sc := bufio.NewScanner(r)
-	buf := make([]byte, 0, lhotseIniBufSize)
+	var (
+		lineNum int
+		ins     = make([]apc.MossIn, 0, lhotseNumEntries)
+		sc      = bufio.NewScanner(r)
+		buf     = make([]byte, 0, lhotseIniBufSize) // TODO -- FIXME: consider memsys.SGL and its NextLine() method
+	)
 	sc.Buffer(buf, lhotseMaxBufSize)
 
-	ins := make([]apc.MossIn, 0, lhotseNumEntries)
 	for sc.Scan() {
+		lineNum++
 		var cut LhotseCut
 		if err := json.Unmarshal(sc.Bytes(), &cut); err != nil {
-			return nil, fmt.Errorf("bad cut json: %w", err)
+			return nil, fmt.Errorf("bad cut json at line %d: %w", lineNum, err)
 		}
 		in, err := cut.toMossIn(c)
 		if err != nil {
@@ -110,10 +114,25 @@ func (cut *LhotseCut) toMossIn(c *cli.Context) (in *apc.MossIn, err error) {
 	if !flagIsSet(c, sampleRateFlag) {
 		return
 	}
-	rate := float64(parseIntFlag(c, sampleRateFlag)) // TODO: validate; return err
-	in.Start = int64(cut.Start * rate)
-	in.Length = int64(cut.Duration * rate)
+	rate := int64(parseIntFlag(c, sampleRateFlag))
+	if err := validateSampleRate(rate); err != nil {
+		return nil, err
+	}
+	in.Start = int64(cut.Start) * rate
+	in.Length = int64(cut.Duration) * rate
 	return
+}
+
+// minor sanity check
+func validateSampleRate(rate int64) error {
+	const a, b = 1000, 384000
+	if rate <= 0 {
+		return fmt.Errorf("sample rate must be positive, got %d", rate)
+	}
+	if rate < a || rate > b {
+		return fmt.Errorf("sample rate %d Hz is outside reasonable range [%d, %d]", rate, a, b)
+	}
+	return nil
 }
 
 // resolve Lhotse source URI across the three layouts

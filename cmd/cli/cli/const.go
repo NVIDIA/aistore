@@ -812,7 +812,7 @@ var (
 	}
 	sampleRateFlag = cli.IntFlag{
 		Name:  "sample-rate",
-		Usage: "audio sample-rate (Hz); used to convert seconds to byte offsets",
+		Usage: "audio sample-rate (Hz); used to convert sample offsets (in seconds) to byte offsets",
 	}
 
 	dsortLogFlag = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}

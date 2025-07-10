@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -48,12 +49,12 @@ import (
 
 func GetBatch(bp BaseParams, bck cmn.Bck, req *apc.MossReq, w io.Writer) (resp apc.MossResp, err error) {
 	bp.Method = http.MethodGet
-	q := qalloc()
-	bck.SetQuery(q)
+
+	q, path := _optionalBucket(&bck)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathML.Join(apc.Moss, bck.Name)
+		reqParams.Path = path
 		reqParams.Body = cos.MustMarshal(req)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
@@ -71,6 +72,19 @@ func GetBatch(bp BaseParams, bck cmn.Bck, req *apc.MossReq, w io.Writer) (resp a
 		_, err = reqParams.readMultipart(&resp, w)
 	}
 	FreeRp(reqParams)
-	qfree(q)
+	if q != nil {
+		qfree(q)
+	}
 	return resp, err
+}
+
+func _optionalBucket(bck *cmn.Bck) (q url.Values, path string) {
+	if bck.IsEmpty() {
+		path = apc.URLPathML.Join(apc.Moss)
+		return
+	}
+	q = qalloc()
+	bck.SetQuery(q)
+	path = apc.URLPathML.Join(apc.Moss, bck.Name)
+	return
 }
