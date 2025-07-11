@@ -1,19 +1,18 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
 	"fmt"
-	"os"
-
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type NodeStateFlags BitFlags
 
 const NodeAlerts = "state.flags"
+
+const noAlerts = "ok"
 
 const (
 	VoteInProgress       = NodeStateFlags(1 << iota) // warning
@@ -24,10 +23,10 @@ const (
 	Resilvering                                      // warning
 	ResilverInterrupted                              // warning
 	NodeRestarted                                    // warning (powercycle, crash)
-	OOS                                              // out of space; red alert (see IsRed below)
+	OOS                                              // node out of space; red alert (see IsRed below)
 	OOM                                              // out of memory; red alert
 	MaintenanceMode                                  // warning
-	LowCapacity                                      // (used > high); warning: OOS possible soon..
+	LowCapacity                                      // node (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
 	DiskFault                                        // red
 	NoMountpaths                                     // red: (reserved, not used)
@@ -38,17 +37,19 @@ const (
 	KeepAliveErrors                                  // warning (new keep-alive errors during the last 5m)
 	OOCPU                                            // out of CPU; red
 	LowCPU                                           // warning
+	DiskOOS                                          // disk out of space
+	DiskLowCapacity                                  // warning
 )
 
 func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
 
 func (f NodeStateFlags) IsRed() bool {
-	return f.IsAnySet(OOS | OOM | OOCPU | DiskFault | NoMountpaths | NumGoroutines | CertificateExpired)
+	return f.IsAnySet(OOS | OOM | OOCPU | DiskFault | NoMountpaths | NumGoroutines | CertificateExpired | DiskOOS)
 }
 
 func (f NodeStateFlags) IsWarn() bool {
 	return f.IsAnySet(Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
-		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire)
+		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire | DiskLowCapacity)
 }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
@@ -65,24 +66,39 @@ func (f NodeStateFlags) Clear(flags NodeStateFlags) NodeStateFlags {
 	return NodeStateFlags(BitFlags(f).Clear(BitFlags(flags)))
 }
 
+// NOTE: call it only with complete (non-masked) flags
 func (f NodeStateFlags) String() string {
 	if f.IsOK() {
-		return "ok"
+		return noAlerts
 	}
 
 	sb := make([]string, 0, 4)
-	if f&VoteInProgress == VoteInProgress {
-		sb = append(sb, "vote-in-progress")
-	}
 	if f&ClusterStarted == 0 {
-		// NOTE not set when:
+		// not set when:
 		// - primary:         cluster-started
 		// - all other nodes: joined-cluster
-		// See also: IsOK() above
+		// see also IsOK() above
 		sb = append(sb, "cluster-not-started-yet")
 	}
 	if f&NodeStarted == 0 {
 		sb = append(sb, "node-not-started-yet")
+	}
+
+	return f._str(sb)
+}
+
+// use it with masked (partial) bits
+func (f NodeStateFlags) Str() string {
+	if f == 0 {
+		return noAlerts
+	}
+	sb := make([]string, 0, 4)
+	return f._str(sb)
+}
+
+func (f NodeStateFlags) _str(sb []string) string {
+	if f&VoteInProgress == VoteInProgress {
+		sb = append(sb, "vote-in-progress")
 	}
 	if f&Rebalancing == Rebalancing {
 		sb = append(sb, "rebalancing")
@@ -100,7 +116,7 @@ func (f NodeStateFlags) String() string {
 		sb = append(sb, "restarted")
 	}
 	if f&OOS == OOS {
-		sb = append(sb, "OOS")
+		sb = append(sb, "OOS") // node
 	}
 	if f&OOM == OOM {
 		sb = append(sb, "OOM")
@@ -109,7 +125,7 @@ func (f NodeStateFlags) String() string {
 		sb = append(sb, "in-maintenance-mode")
 	}
 	if f&LowCapacity == LowCapacity {
-		sb = append(sb, "low-usable-capacity")
+		sb = append(sb, "low-usable-capacity") // node
 	}
 	if f&LowMemory == LowMemory {
 		sb = append(sb, "low-memory")
@@ -141,15 +157,15 @@ func (f NodeStateFlags) String() string {
 	if f&LowCPU == LowCPU {
 		sb = append(sb, "low-cpu")
 	}
+	if f&DiskOOS == DiskOOS {
+		sb = append(sb, "disk-OOS") // disk
+	}
+	if f&DiskLowCapacity == DiskLowCapacity {
+		sb = append(sb, "disk-low-capacity") // disk
+	}
 
 	l := len(sb)
 	switch l {
-	case 0:
-		v := int64(f)
-		err := fmt.Errorf("node state alerts: unknown flag %x (%b)", v, v)
-		fmt.Fprintln(os.Stderr, err)
-		debug.Assert(false, err)
-		return "-" // (teb.unknownVal)
 	case 1:
 		return sb[0]
 	default:

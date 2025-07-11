@@ -66,13 +66,26 @@ func InitCDF(tcdf *Tcdf) {
 	}
 }
 
-func (tcdf *Tcdf) HasAlerts() bool {
+func alert2flag(alert string) cos.NodeStateFlags {
+	switch alert {
+	case DiskOOS:
+		return cos.DiskOOS
+	case DiskHighWM:
+		return cos.DiskLowCapacity
+	case DiskFault:
+		return cos.DiskFault
+	default:
+		return 0
+	}
+}
+
+func (tcdf *Tcdf) Alerts() (flags cos.NodeStateFlags) {
 	for _, cdf := range tcdf.Mountpaths {
 		if alert, _ := HasAlert(cdf.Disks); alert != "" {
-			return true
+			flags |= alert2flag(alert)
 		}
 	}
-	return false
+	return
 }
 
 // [convention] <DISK-NAME>[(<alert>)]
@@ -100,7 +113,7 @@ func (cdf *CDF) _alert(a string) {
 	for i, d := range cdf.Disks {
 		disks[i] = d
 		if !strings.Contains(d, a) {
-			disks[i] = d + a
+			disks[i] = d + a // <DISK NAME>[(alert)]
 		}
 	}
 	cdf.Disks = disks

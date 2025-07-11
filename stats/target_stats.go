@@ -638,7 +638,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
 	// 1. disk stats
-	refreshCap := r.Tcdf.HasAlerts()
+	refreshCap := r.Tcdf.Alerts() != 0
 	fs.DiskStats(r.disk.stats, nil /*fs.TcdfExt*/, config, refreshCap)
 
 	s := r.core
@@ -723,13 +723,13 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 	}
 
 	var (
-		pcs       = &cs
-		hasAlerts bool
+		diskAlerts cos.NodeStateFlags
+		pcs        = &cs
 	)
 	if !updated {
 		pcs = nil // to possibly force refresh via t.OOS
 	} else {
-		hasAlerts = r.Tcdf.HasAlerts()
+		diskAlerts = r.Tcdf.Alerts()
 	}
 
 	// target to run x-space
@@ -741,22 +741,20 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 		r.t.OOS(pcs, config, &r.Tcdf)
 	}
 
-	//
-	// (periodically | on error | verbose): log mountpath cap and state
-	//
-	if now >= r.cs.last+dlftCapLogInterval || errCap != nil || hasAlerts || verbose {
+	// log (periodically | on error | verbose) mountpath cap and state
+	if now >= r.cs.last+dlftCapLogInterval || errCap != nil || diskAlerts != 0 || verbose {
 		r.logCapacity(now)
 	}
 
-	// and more
+	// currently set (and visible via Prometheus/Grafana)
 	flags := r.nodeStateFlags()
-	if hasAlerts || flags.IsRed() {
+
+	// log warning
+	if diskAlerts != 0 || flags.IsRed() {
 		r.lines = append(r.lines, "Warning: state alerts:", flags.String())
-	} else if flags.IsSet(cos.DiskFault) && updated {
-		clr |= cos.DiskFault
 	}
 
-	// cap alert
+	// set/clear node cap alerts
 	switch {
 	case cs.IsOOS():
 		set = cos.OOS
@@ -766,6 +764,18 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 	default:
 		clr = cos.OOS | cos.LowCapacity
 	}
+
+	// set/clear disk alerts
+	if updated {
+		const diskMask = cos.DiskOOS | cos.DiskLowCapacity
+		cur := flags & diskMask      // previous advertised disk bits
+		upd := diskAlerts & diskMask // freshly detected
+		if cur != upd {
+			set |= (^cur) & upd
+			clr |= cur & (^upd)
+		}
+	}
+
 	return set, clr
 }
 

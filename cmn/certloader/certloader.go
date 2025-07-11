@@ -99,7 +99,7 @@ func Props() (out cos.StrKVs) {
 	if flags.IsAnySet(cos.CertificateInvalid | cos.CertificateExpired) {
 		out = make(cos.StrKVs, 1)
 		flags &= (cos.CertificateInvalid | cos.CertificateExpired)
-		out["error"] = flags.String()
+		out["error"] = flags.Str()
 		return out
 	}
 	xcert := gcl.xcert.Load()
@@ -118,7 +118,7 @@ func Props() (out cos.StrKVs) {
 		out["valid"] += " to " + fmtTime(leaf.NotAfter)
 
 		if flags.IsSet(cos.CertWillSoonExpire) {
-			out["warning"] = cos.CertWillSoonExpire.String()
+			out["warning"] = cos.CertWillSoonExpire.Str()
 		}
 	}
 
