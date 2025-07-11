@@ -332,7 +332,9 @@ func confirmAllBucketsEviction(c *cli.Context, buckets []cmn.Bck) bool {
 
 	keepMD := flagIsSet(c, keepMDFlag)
 	if !keepMD {
-		actionWarn(c, "This will remove all cached data AND bucket metadata from the cluster")
+		prompt := "This will remove all cached data AND bucket metadata from the cluster"
+		warning := "Bucket metadata will be permanently lost"
+		return confirmWithPhrase(c, "EVICT", prompt, warning)
 	}
 	return confirm(c, "Continue?")
 }

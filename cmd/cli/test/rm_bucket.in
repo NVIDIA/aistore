@@ -10,7 +10,7 @@ ais rmb ais://$BUCKET_1 ais://$BUCKET_2
 # Test the --all feature: remove all AIS buckets
 ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
-echo "DELETE ALL BUCKETS" | ais rmb --all --yes
+echo "DELETE" | ais rmb --all --yes
 
 # Test when no AIS buckets exist
 ais rmb --all --yes

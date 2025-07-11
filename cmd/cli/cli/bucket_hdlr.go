@@ -427,7 +427,6 @@ func removeAllBuckets(c *cli.Context) error {
 
 	// Always require phrase confirmation for --all operations, even with --yes flag
 	if !_confirmRemoval(c, bcks) {
-		fmt.Fprintln(c.App.Writer, "Operation canceled")
 		return nil
 	}
 
@@ -459,13 +458,9 @@ func _confirmRemoval(c *cli.Context, bcks cmn.Bcks) bool {
 		fmt.Fprintf(c.App.Writer, "  - %s\n", bck.Cname(""))
 	}
 
-	// Require exact phrase confirmation - safety layer
-	actionWarn(c, "This will PERMANENTLY DELETE all listed buckets and their data - operation cannot be undone")
-
-	const confirmPhrase = "DELETE ALL BUCKETS"
-	response := readValue(c, fmt.Sprintf("\nType '%s' to confirm", confirmPhrase))
-
-	return strings.TrimSpace(response) == confirmPhrase
+	warning := "This action cannot be undone"
+	prompt := "This operation will PERMANENTLY DELETE all listed buckets and their data"
+	return confirmWithPhrase(c, "DELETE", prompt, warning)
 }
 
 // destroyBucket contains the core logic for destroying a single bucket

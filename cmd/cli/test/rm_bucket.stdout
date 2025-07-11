@@ -9,8 +9,7 @@
 Found 2 AIS bucket(s) to remove:
   - ais://$BUCKET_1
   - ais://$BUCKET_2
-
-Type 'DELETE ALL BUCKETS' to confirm: "ais://$BUCKET_1" destroyed
+Type 'DELETE' to confirm (or 'N' to cancel): "ais://$BUCKET_1" destroyed
 "ais://$BUCKET_2" destroyed
 No AIS buckets to remove
 "ais://$BUCKET_1" created
@@ -18,5 +17,4 @@ No AIS buckets to remove
 Found 2 AIS bucket(s) to remove:
   - ais://$BUCKET_1
   - ais://$BUCKET_2
-
-Type 'DELETE ALL BUCKETS' to confirm: Operation canceled
+Type 'DELETE' to confirm (or 'N' to cancel): Type 'DELETE' to confirm (or 'N' to cancel): Operation canceled.

@@ -596,20 +596,42 @@ func readValue(c *cli.Context, prompt string) string {
 	return strings.TrimSuffix(line, "\n")
 }
 
-func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
-	var err error
-	prompt += " [Y/N]"
-
-	if len(warning) != 0 {
-		actionWarn(c, warning[0])
+func showWarnings(c *cli.Context, warnings []string) {
+	for _, w := range warnings {
+		actionWarn(c, w)
 	}
+}
+
+func confirm(c *cli.Context, prompt string, warnings ...string) bool {
+	showWarnings(c, warnings)
+	inputPrompt := prompt + " [Y/N]"
+
 	for {
-		response := strings.ToLower(readValue(c, prompt))
-		if ok, err = cos.ParseBool(response); err != nil {
-			fmt.Println("Invalid input! Choose 'Y' for 'Yes' or 'N' for 'No'")
-			continue
+		userInput := readValue(c, inputPrompt)
+		if ok, err := cos.ParseBool(strings.ToLower(userInput)); err == nil {
+			if !ok {
+				fmt.Println("Operation canceled.")
+			}
+			return ok
 		}
-		return
+		fmt.Fprintln(c.App.ErrWriter, "Invalid input! Choose 'Y' for 'Yes' or 'N' for 'No'")
+	}
+}
+
+func confirmWithPhrase(c *cli.Context, phrase string, warnings ...string) bool {
+	showWarnings(c, warnings)
+	inputPrompt := fmt.Sprintf("Type '%s' to confirm (or 'N' to cancel)", phrase)
+
+	for {
+		userInput := strings.TrimSpace(readValue(c, inputPrompt))
+		if userInput == phrase {
+			return true
+		}
+		if ok, err := cos.ParseBool(strings.ToLower(userInput)); err == nil && !ok {
+			fmt.Println("Operation canceled.")
+			return false
+		}
+		fmt.Fprintf(c.App.ErrWriter, "Invalid input! Type '%s' to confirm or 'N' to cancel\n", phrase)
 	}
 }
 
