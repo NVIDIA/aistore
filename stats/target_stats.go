@@ -712,7 +712,10 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 }
 
 func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr cos.NodeStateFlags) {
-	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.Tcdf)
+	// currently set (and visible via Prometheus/Grafana)
+	flags := r.nodeStateFlags()
+
+	cs, updated, err, errCap := fs.CapPeriodic(now, config, &r.Tcdf, flags)
 	if err != nil {
 		nlog.Errorln(err)
 		debug.Assert(!updated && errCap == nil, updated, " ", errCap)
@@ -735,19 +738,18 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 	// target to run x-space
 	if errCap != nil {
 		r.t.OOS(pcs, config, &r.Tcdf)
+		flags = r.nodeStateFlags()
 	} else if cs.PctMax > int32(config.Space.CleanupWM) { // remove deleted, other cleanup
 		debug.Assert(!cs.IsOOS(), cs.String())
 		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
 		r.t.OOS(pcs, config, &r.Tcdf)
+		flags = r.nodeStateFlags()
 	}
 
 	// log (periodically | on error | verbose) mountpath cap and state
 	if now >= r.cs.last+dlftCapLogInterval || errCap != nil || diskAlerts != 0 || verbose {
 		r.logCapacity(now)
 	}
-
-	// currently set (and visible via Prometheus/Grafana)
-	flags := r.nodeStateFlags()
 
 	// log warning
 	if diskAlerts != 0 || flags.IsRed() {
@@ -765,8 +767,9 @@ func (r *Trunner) _cap(config *cmn.Config, now int64, verbose bool) (set, clr co
 		clr = cos.OOS | cos.LowCapacity
 	}
 
-	// set/clear disk alerts
+	// set/clear disk cap alerts
 	if updated {
+		// disk capacity alerts only; DiskFault is raised by the FSHC (tgtfshc)
 		const diskMask = cos.DiskOOS | cos.DiskLowCapacity
 		cur := flags & diskMask      // previous advertised disk bits
 		upd := diskAlerts & diskMask // freshly detected

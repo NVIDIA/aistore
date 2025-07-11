@@ -1339,8 +1339,11 @@ func _either(cdf1, cdf2 *CDF) {
 func ExpireCapCache() { mfs.csExpires.Store(0) } // upon any change in config.space
 
 // called only and exclusively by `stats.Trunner` providing `config.Periodic.StatsTime` tick
-func CapPeriodic(now int64, config *cmn.Config, tcdf *Tcdf) (cs CapStatus, updated bool, err, errCap error) {
-	if now < mfs.csExpires.Load() {
+func CapPeriodic(now int64, config *cmn.Config, tcdf *Tcdf, flags cos.NodeStateFlags) (cs CapStatus, updated bool, err, errCap error) {
+	const (
+		mask = cos.DiskFault | cos.DiskOOS | cos.DiskLowCapacity | cos.OOS | cos.LowCapacity
+	)
+	if (flags&mask) == 0 && now < mfs.csExpires.Load() {
 		cs = Cap()
 		return
 	}
