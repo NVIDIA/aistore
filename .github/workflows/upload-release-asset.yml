@@ -1,0 +1,51 @@
+name: Upload GitHub Release Asset
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to upload the asset to'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build and Upload CLI Release Assets
+    strategy:
+      matrix:
+        go-version: ['1.24.x']
+        os: [
+          ubuntu-latest,  # for linux builds
+          macos-latest,   # for macOS arm64 builds
+          # macos-13,     # for macOS amd64 builds
+        ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Build Binaries on ${{ matrix.os }}
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          make authn
+          make cli
+          make aisloader
+      
+      - name: Upload Release Asset
+        env:
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          RUNNER_NAME: ${{ runner.name }}
+          RUNNER_OS: ${{ matrix.os }}
+        run: |
+          export GOPATH="$(go env GOPATH)"
+          chmod +x scripts/github_release.sh
+          ./scripts/github_release.sh

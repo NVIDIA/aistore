@@ -94,19 +94,30 @@ if [ ! -w "$dstdir" ]; then
   exit 1
 fi
 
+
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+case "$arch" in
+  x86_64) arch="amd64" ;;
+  arm64|aarch64) arch="arm64" ;;
+  *) echo "Unsupported architecture: $arch"; exit 1 ;;
+esac
+
+echo "Detected OS: $os, Architecture: $arch"
+
 echo "Installing aisloader => $dstdir/aisloader"
 case ${release} in
   latest|"")
-    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/aisloader-linux-amd64.tar.gz
-    tar -xzvf aisloader-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/aisloader-${os}-${arch}.tar.gz
+    tar -xzvf aisloader-${os}-${arch}.tar.gz
     ;;
   v1.3.15|3.13)
-    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/aisloader-linux-amd64.tar.gz
-    tar -xzvf aisloader-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/aisloader-${os}-${arch}.tar.gz
+    tar -xzvf aisloader-${os}-${arch}.tar.gz
     ;;
   *)
-    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64.tar.gz
-    tar -xzvf aisloader-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-${os}-${arch}.tar.gz
+    tar -xzvf aisloader-${os}-${arch}.tar.gz
     ;;
 esac
 $SUDO mv ./aisloader $dstdir/.
@@ -114,16 +125,16 @@ $SUDO mv ./aisloader $dstdir/.
 echo "Installing CLI => $dstdir/ais"
 case ${release} in
   latest|"")
-    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/ais-linux-amd64.tar.gz
-    tar -xzvf ais-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/ais-${os}-${arch}.tar.gz
+    tar -xzvf ais-${os}-${arch}.tar.gz
     ;;
   v1.3.15|3.13)
-    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/ais-linux-amd64.tar.gz
-    tar -xzvf ais-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/ais-${os}-${arch}.tar.gz
+    tar -xzvf ais-${os}-${arch}.tar.gz
     ;;
   *)
-    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64.tar.gz
-    tar -xzvf ais-linux-amd64.tar.gz
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/$release/ais-${os}-${arch}.tar.gz
+    tar -xzvf ais-${os}-${arch}.tar.gz
     ;;
 esac
 $SUDO mv ./ais $dstdir/.

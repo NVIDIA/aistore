@@ -20,7 +20,7 @@ Once a new AIS release is posted, run the following command:
 
 Command
 ```console
-$ GITHUB_OAUTH_TOKEN=<oauth token> GITHUB_RELEASE_TAG=<release tag> ./github_release.sh
+$ GITHUB_OWNER="NVIDIA" GITHUB_REPO="aistore" GITHUB_OAUTH_TOKEN=<oauth token> GITHUB_RELEASE_TAG=<release tag> ./github_release.sh
 ```
 
 > This will require [GITHUB_OAUTH_TOKEN](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) and, again, the corresponding [GITHUB_RELEASE_TAG](https://git-scm.com/book/en/v2/Git-Basics-Tagging).
