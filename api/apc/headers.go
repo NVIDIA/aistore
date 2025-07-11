@@ -117,6 +117,9 @@ const (
 	HdrPromoteNamesHash = aisPrefix + "Promote-Names-Hash"
 	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
 
+	// ETL
+	HdrETLPodInfo = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
+
 	// shared streams
 	HdrActiveEC = aisPrefix + "Ec"
 	HdrActiveDM = aisPrefix + "Dm"

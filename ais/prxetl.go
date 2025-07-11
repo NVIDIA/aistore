@@ -7,10 +7,7 @@ package ais
 import (
 	"fmt"
 	"net/http"
-	"net/url"
-	"reflect"
 	"sort"
-	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/xact"
 )
 
 // [METHOD] /v1/etl
@@ -243,79 +239,32 @@ func (p *proxy) startETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg
 		p.writeErr(w, r, err)
 	}
 
-	// 2. start to initialize across all targets
-	if err := p._initETL(w, r, msg); err != nil {
-		// if fails, update etlMD to aborted
+	// 2. start 2PC - initialize across all targets
+	var (
+		xid    = etl.PrefixXactID + cos.GenUUID()
+		secret = cos.CryptoRandS(10)
+	)
+	rxid, podMap, err := p.etlInitTxn(msg, xid, secret)
+	if err != nil { // if transaction fails, put etlMD to Aborted stage
+		ctx.stage = etl.Aborted
+		p.owner.etl.modify(ctx)
 		p.writeErr(w, r, err)
 		return
 	}
 
 	// 3. update etlMD to Running stage
 	ctx.stage = etl.Running
+	ctx.podMap = podMap
 	if _, err := p.owner.etl.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
+
+	// 4. init calls succeeded - return running xaction ID
+	writeXid(w, rxid)
 }
 
-// broadcast init ETL request to all targets and register IC (no etlMD updates involved)
-func (p *proxy) _initETL(w http.ResponseWriter, r *http.Request, msg etl.InitMsg) error {
-	var (
-		err    error
-		args   = allocBcArgs()
-		xid    = etl.PrefixXactID + cos.GenUUID()
-		secret = cos.CryptoRandS(10)
-	)
-
-	// 1. broadcast the init request
-	{
-		args.req = cmn.HreqArgs{
-			Method: http.MethodPut,
-			Path:   apc.URLPathETL.S,
-			Body:   cos.MustMarshal(msg),
-			Query: url.Values{
-				apc.QparamUUID:      []string{xid},
-				apc.QparamETLSecret: []string{secret},
-			},
-		}
-		args.timeout = apc.LongTimeout
-	}
-	results := p.bcastGroup(args)
-	freeBcArgs(args)
-	for _, res := range results {
-		if res.err == nil {
-			continue
-		}
-		err = res.toErr()
-	}
-	freeBcastRes(results)
-
-	if err != nil {
-		// At least one target failed. Terminate all.
-		// (Termination calls may succeed for the targets that already succeeded in starting ETL,
-		//  or fail otherwise - ignore the failures).
-		p.stopETL(w, r, msg) // also remove this ETL instance from etlManager
-		nlog.Errorln(err)
-		return err
-	}
-
-	// 2. IC
-	smap := p.owner.smap.get()
-	nl := xact.NewXactNL(xid, apc.ActETLInline, &smap.Smap, nil)
-	ef := &_etlFinalizer{p, msg}
-	nl.F = ef.cb
-
-	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{nl: nl, smap: smap})
-
-	// 3. init calls succeeded - return running xaction
-	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
-	w.Write(cos.UnsafeB(xid))
-	return nil
-}
-
-func _addETLPre(ctx *etlMDModifier, clone *etlMD) (_ error) {
-	clone.add(ctx.msg, ctx.stage)
-	return
+func _addETLPre(ctx *etlMDModifier, clone *etlMD) error {
+	return clone.add(ctx.msg, ctx.stage, ctx.podMap)
 }
 
 func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
@@ -392,15 +341,6 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, another := range *infoList {
-			current, exists := etls[another.Name]
-			if exists {
-				if !reflect.DeepEqual(*current, another) {
-					nlog.Errorf("targets return different etl.InfoList. %v v.s. %v", *current, another)
-					etls[another.Name].Stage = etl.Unknown.String()
-				}
-				continue
-			}
-
 			etls[another.Name] = &another
 			// ETLs present in `infoList` but not in `etlMD`: considered unknown (proxy notification abort might not be processed yet)
 			if _, inMD := etlMD.ETLs[another.Name]; !inMD {
@@ -587,6 +527,11 @@ type _etlFinalizer struct {
 func (ef *_etlFinalizer) cb(nl nl.Listener) {
 	nlog.Infoln("ETL finalizer triggered with error:", nl.Err())
 	// TODO: record nl.Err() and show on listETL call
+
+	etlMD := ef.p.owner.etl.get()
+	if _, ok := etlMD.ETLs[ef.msg.Name()]; !ok {
+		return
+	}
 
 	ctx := &etlMDModifier{
 		pre:   _addETLPre,

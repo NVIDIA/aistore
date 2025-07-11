@@ -48,7 +48,7 @@ func TestEtlMDDeepCopy(t *testing.T) {
 		Runtime: etl.RuntimeSpec{
 			Image: "test-image",
 		},
-	}, etl.Initializing)
+	}, etl.Initializing, nil)
 	clone := etlMD.clone()
 	s1 := string(cos.MustMarshal(etlMD))
 	s2 := string(cos.MustMarshal(clone))
@@ -111,7 +111,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 						Spec: []byte(mockPodSpec),
 					}
 				}
-				etlMD.Add(msg, etl.Running)
+				etlMD.Add(msg, etl.Running, make(etl.PodMap, 4)) // Running stage expects no-nil pod map
 			}
 		}
 	})
@@ -164,7 +164,7 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							}
 
 							// Add bucket and save.
-							clone.Add(msg, etl.Running)
+							clone.Add(msg, etl.Running, make(etl.PodMap, 4)) // Running stage expects no-nil pod map
 							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 

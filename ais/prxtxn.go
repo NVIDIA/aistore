@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 
@@ -1219,4 +1220,64 @@ func (r *_tcbfin) cb(nl nl.Listener) {
 
 	// NOTE: when (tcb aborted) && (destination bucket did not exist prior)
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
+}
+
+//////////////////////////
+// ETL Init Transaction //
+//////////////////////////
+
+// etlInitTxn is an atomic transaction that initializes ETL pods on the nodes and connect them with of all participant targets
+// etlMD and stages won't be updated in this call (caller's responsibility)
+func (p *proxy) etlInitTxn(initMsg etl.InitMsg, xid, secret string) (string, etl.PodMap, error) {
+	// 1. initialize transaction client
+	c := &txnCln{p: p, uuid: xid, smap: p.owner.smap.get()}
+	c.init(&apc.ActMsg{Action: apc.ActETLInline, Value: initMsg, Name: secret}, nil, cmn.GCO.Get(), false)
+
+	// 2. begin - broadcast initMsg, xid, secret to targets and collect their pod info
+	podMap, err := etlTxnBegin(c, initMsg)
+	if err != nil {
+		c.bcastAbort(initMsg, err)
+		return "", nil, err
+	}
+
+	// 3. IC
+	smap := p.owner.smap.get()
+	nl := xact.NewXactNL(c.uuid, apc.ActETLInline, &smap.Smap, nil)
+	ef := &_etlFinalizer{p, initMsg} // TODO: add pod watcher to etlFinilazer
+	nl.F = ef.cb
+
+	nl.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{nl: nl, smap: smap})
+
+	// 4. commit
+	rxid, _, errV := c.commit(initMsg, c.cmtTout(false))
+	debug.Assertf(rxid == xid, "committed %q vs proposed %q", rxid, xid)
+	if errV != nil {
+		c.bcastAbort(initMsg, errV)
+		return "", nil, errV
+	}
+
+	return rxid, podMap, err
+}
+
+// begin phase customized to collect pod info from nodes
+func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) {
+	initTimeout, _ := initMsg.Timeouts()
+	results := c.bcast(apc.Begin2PC, initTimeout.D()+c.timeout.netw) // Broadcast initMsg with init timeout + network timeout (wait for initialization error propagation from target)
+	podMap = make(etl.PodMap, len(results))
+	for _, res := range results {
+		podInfo := etl.PodInfo{}
+		if res.err != nil {
+			err = res.toErr()
+			break
+		}
+		debug.Assert(c.uuid == res.header.Get(apc.HdrXactionID), "expected xid", c.uuid, "got", res.header.Get(apc.HdrXactionID))
+		cos.MustMarshalFromString(res.header.Get(apc.HdrETLPodInfo), &podInfo)
+		podMap[res.si.ID()] = podInfo
+	}
+	freeBcastRes(results)
+	if err != nil {
+		return nil, err
+	}
+	return podMap, nil
 }

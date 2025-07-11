@@ -148,6 +148,14 @@ type (
 		FQN   string `json:"fqn,omitempty"`
 		Path  string `json:"path,omitempty"`
 	}
+
+	// used by 2PC initialization
+	PodMap  map[string]PodInfo // target ID to ETL pod info
+	PodInfo struct {
+		URI     string `json:"uri"`      // ETL pod URI
+		PodName string `json:"pod_name"` // ETL pod name
+		SvcName string `json:"svc_name"` // ETL service name
+	}
 )
 
 type (

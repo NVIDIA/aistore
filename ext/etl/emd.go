@@ -32,6 +32,7 @@ type (
 	ETLEntity struct {
 		InitMsg InitMsg `json:"init_msg"`
 		Stage   Stage   `json:"stage"`
+		PodMap  PodMap  `json:"pod_map"`
 	}
 	ETLs map[string]ETLEntity
 
@@ -68,11 +69,11 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg, stage Stage) {
+func (e *MD) Add(msg InitMsg, stage Stage, podMap PodMap) {
 	if msg == nil {
 		return
 	}
-	e.ETLs[msg.Name()] = ETLEntity{msg, stage}
+	e.ETLs[msg.Name()] = ETLEntity{msg, stage, podMap}
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 

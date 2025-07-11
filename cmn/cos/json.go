@@ -39,6 +39,11 @@ func MustMarshalToString(v any) string {
 	return s
 }
 
+func MustMarshalFromString(str string, v any) {
+	err := JSON.UnmarshalFromString(str, v)
+	debug.AssertNoErr(err)
+}
+
 // MustMarshal marshals v and panics if error occurs.
 func MustMarshal(v any) []byte {
 	b, err := JSON.Marshal(v)

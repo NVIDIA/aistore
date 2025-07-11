@@ -80,17 +80,17 @@ const (
 //   containers with the same name.
 
 // (common for both `InitSpec` and `ETLSpec` flows)
-func Init(msg InitMsg, xid, secret string) (core.Xact, error) {
+func Init(msg InitMsg, xid, secret string) (core.Xact, PodInfo, error) {
 	config := cmn.GCO.Get()
-	podName, svcName, xctn, err := start(msg, xid, secret, config)
+	podInfo, xctn, err := start(msg, xid, secret, config)
 	if err != nil {
-		return nil, err
+		return nil, podInfo, err
 	}
 
 	if cmn.Rom.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("started etl[%s], msg %s, pod %s, svc %s", msg.Name(), msg, podName, svcName)
+		nlog.Infof("started etl[%s], msg %s, podInfo %v", msg.Name(), msg, podInfo)
 	}
-	return xctn, nil
+	return xctn, podInfo, nil
 }
 
 // cleanupEntities removes provided entities. It tries its best to remove all
@@ -116,7 +116,7 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcName string, xctn core.Xact, err error) {
+func start(msg InitMsg, xid, secret string, config *cmn.Config) (podInfo PodInfo, xctn core.Xact, err error) {
 	var (
 		comm    Communicator
 		podAddr string
@@ -131,21 +131,20 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcNam
 
 	client, err := k8s.GetClient()
 	if err != nil {
-		return podName, svcName, nil, err
+		return podInfo, nil, err
 	}
 	boot.k8sClient = client
 
 	debug.Assert(xid != "")
 	// 1. Parse spec template and fill Pod object with necessary fields.
 	if err = boot.createPodSpec(); err != nil {
-		return podName, svcName, nil, err
+		return podInfo, nil, err
 	}
 	boot.createServiceSpec()
-	podName, svcName = boot.pod.GetName(), boot.svc.GetName()
 
 	// 2. Create communicator
 	if comm, err = initComm(msg, xid, secret, boot); err != nil {
-		return podName, svcName, nil, err
+		return podInfo, nil, err
 	}
 
 	// 3. Cleanup previously started entities, if any.
@@ -179,14 +178,15 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podName, svcNam
 		goto cleanup
 	}
 
-	nlog.Infof("pod %q is running, %+v, %s", podName, msg, boot.errCtx)
+	nlog.Infof("pod %q is running, %+v, %s", boot.pod.GetName(), msg, boot.errCtx)
+	podInfo.PodName, podInfo.SvcName, podInfo.URI = boot.pod.GetName(), boot.svc.GetName(), podAddr
 
-	return podName, svcName, comm.Xact(), nil
+	return podInfo, comm.Xact(), nil
 
 cleanup: // initialization failed
 	Stop(msg.Name(), err)
 	boot.errCtx.PodStatus = boot.pw.GetPodStatus()
-	return podName, svcName, nil, cmn.NewErrETL(boot.errCtx, err.Error())
+	return podInfo, nil, cmn.NewErrETL(boot.errCtx, err.Error())
 }
 
 func StopByXid(xid string, errCause error) error {
@@ -200,7 +200,7 @@ func StopByXid(xid string, errCause error) error {
 // three cases to call Stop()
 // 1. user's DELETE requests
 // 2. initialization failed
-// 3. xaction abort (StopByXid)
+// 3. transaction/xaction abort (StopByXid)
 func Stop(etlName string, errCause error) (err error) {
 	comm, boot := mgr.getByName(etlName)
 	if comm == nil {

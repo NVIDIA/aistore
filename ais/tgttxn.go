@@ -162,6 +162,9 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActPromote:
 		hdr := w.Header()
 		xid, err = t.promote(c, hdr)
+	case apc.ActETLInline:
+		hdr := w.Header()
+		xid, err = t.initETL(c, hdr)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -1090,6 +1093,60 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 		}
 	}
 	return nil
+}
+
+/////////
+// ETL //
+/////////
+
+func (t *target) initETL(c *txnSrv, hdr http.Header) (string, error) {
+	var (
+		initMsg etl.InitMsg
+		comm    etl.Communicator
+		xid     string
+		err     error
+	)
+
+	if initMsg, err = etl.UnmarshalInitMsg(cos.MustMarshal(c.msg.Value)); err != nil {
+		return "", err
+	}
+
+	debug.Assert(initMsg != nil)
+
+	switch c.phase {
+	case apc.Begin2PC:
+		txn := newTxnETLInit(c, initMsg)
+		if err := t.txns.begin(txn); err != nil {
+			return "", err
+		}
+
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return "", err
+		}
+
+		xetl, podInfo, err := etl.Init(initMsg, c.uuid, c.msg.Name /*secret*/)
+		if err != nil {
+			return "", err
+		}
+		c.addNotif(xetl) // setup proxy notification for aborting on runtime error (captured by pod watcher)
+
+		hdr.Set(apc.HdrETLPodInfo, cos.MustMarshalToString(podInfo)) // respond with the pod info
+
+		return xetl.ID(), err
+	case apc.Commit2PC:
+		comm, err = etl.GetCommunicator(initMsg.Name())
+		if err != nil {
+			return "", err
+		}
+
+		xid = comm.Xact().ID()
+		t.txns.term(c.uuid, apc.Commit2PC)
+	case apc.Abort2PC:
+		t.txns.term(c.uuid, apc.Abort2PC)
+	}
+
+	return xid, nil
 }
 
 func isDisableDM(msg *apc.TCBMsg) (bool, error) {

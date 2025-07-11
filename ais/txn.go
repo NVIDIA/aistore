@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -136,6 +137,10 @@ type (
 		totalN int
 		fshare bool
 	}
+	txnETLInit struct {
+		msg etl.InitMsg
+		txnBase
+	}
 )
 
 // interface guard
@@ -149,6 +154,7 @@ var (
 	_ txn = (*txnTCObjs)(nil)
 	_ txn = (*txnECEncode)(nil)
 	_ txn = (*txnPromote)(nil)
+	_ txn = (*txnETLInit)(nil)
 )
 
 //////////////////
@@ -494,7 +500,7 @@ func (txn *txnBckBase) String() string {
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }
 
-func (txn *txnBckBase) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (found bool, errDone error) {
+func (txn *txnBase) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (found bool, errDone error) {
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}
@@ -504,7 +510,7 @@ func (txn *txnBckBase) commitAfter(caller string, msg *actMsgExt, err error, arg
 		debug.Assert(bmd.version() >= txn.bmdVer)
 	})
 	if txnErr := txn.err.Swap(&txnError{err: err}); txnErr != nil {
-		errDone = fmt.Errorf("%s: already done with err=%v (%v)", txn, txnErr.err, err)
+		errDone = fmt.Errorf("%s: already done with err=%v (%v)", txn.uuid(), txnErr.err, err)
 		txn.err.Store(txnErr)
 	}
 	return
@@ -650,3 +656,24 @@ func (txn *txnPromote) String() (s string) {
 	txn.xctn = txn.xprm
 	return fmt.Sprintf("%s-src(%s)-N(%d)-fshare(%t)", txn.txnBckBase.String(), txn.dirFQN, txn.totalN, txn.fshare)
 }
+
+////////////////
+// txnETLInit //
+////////////////
+
+func newTxnETLInit(c *txnSrv, msg etl.InitMsg) (txn *txnETLInit) {
+	txn = &txnETLInit{msg: msg}
+	txn.fillFromCtx(c)
+	return
+}
+
+func (txn *txnETLInit) abort(err error) {
+	nlog.Infof("transaction %s aborted for %s, err: %v\n", txn.String(), txn.msg.Cname(), err)
+	etl.StopByXid(txn.uuid(), err) // only stop the ETL created from this transaction
+}
+
+func (txn *txnETLInit) String() string { return txn.msg.String() }
+
+// no-op: no bucket/resources needs to be locked for initializing ETL
+func (*txnETLInit) set(_ []core.NLP) {}
+func (*txnETLInit) unlock()          {}

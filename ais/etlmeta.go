@@ -49,6 +49,7 @@ type (
 
 		msg     etl.InitMsg
 		stage   etl.Stage
+		podMap  etl.PodMap
 		etlName string
 		wait    bool
 	}
@@ -106,9 +107,16 @@ func (e *etlMD) clone() *etlMD {
 	return dst
 }
 
-func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage) {
-	e.Add(msg, stage)
+func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage, podMap etl.PodMap) error {
+	if stage == etl.Running && podMap == nil {
+		return fmt.Errorf("podMap must be provided for stage %s", stage)
+	}
+	if stage != etl.Running && podMap != nil {
+		return fmt.Errorf("podMap must not be provided for stage %s", stage)
+	}
+	e.Add(msg, stage, podMap)
 	e.Version++
+	return nil
 }
 
 func (e *etlMD) get(id string) (msg etl.InitMsg, stage etl.Stage) {

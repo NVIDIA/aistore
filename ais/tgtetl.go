@@ -19,9 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 )
 
 // [METHOD] /v1/etl
@@ -58,14 +56,6 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		t.writeErr(w, r, err, http.StatusInsufficientStorage)
-		return
-	}
-
-	// /v1/etl
-	if len(apiItems) == 0 {
-		if err := t.initETLFromMsg(r); err != nil {
-			t.writeErr(w, r, err)
-		}
 		return
 	}
 
@@ -362,34 +352,4 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		// always silent (compare w/ httpobjhead)
 		t.writeErr(w, r, err, ecode, Silent)
 	}
-}
-
-func (t *target) initETLFromMsg(r *http.Request) error {
-	var xetl core.Xact
-	b, err := cos.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
-	r.Body.Close()
-
-	initMsg, err := etl.UnmarshalInitMsg(b)
-	if err != nil {
-		return err
-	}
-	xid := r.URL.Query().Get(apc.QparamUUID)
-	secret := r.URL.Query().Get(apc.QparamETLSecret)
-	xetl, err = etl.Init(initMsg, xid, secret)
-
-	if err != nil {
-		return err
-	}
-
-	// setup proxy notification on abort
-	notif := &xact.NotifXact{
-		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
-		Xact: xetl,
-	}
-	xetl.AddNotif(notif)
-
-	return err
 }
