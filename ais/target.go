@@ -947,6 +947,16 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			t.writeErr(w, r, err)
 			return
 		}
+		if err := bck.Init(t.owner.bmd); err != nil {
+			if cmn.IsErrRemoteBckNotFound(err) {
+				t.BMDVersionFixup(r)
+				err = bck.Init(t.owner.bmd)
+			}
+			if err != nil {
+				t.writeErr(w, r, err)
+				return
+			}
+		}
 		ecode, err = t.copyObject(lom, bck, objName, etlName, config) // lom is locked/unlocked during the call
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)

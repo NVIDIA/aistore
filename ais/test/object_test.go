@@ -358,6 +358,23 @@ func TestCopyObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	_, err = api.HeadObject(baseParams, bckTo, objTo, hargs)
 	tassert.CheckFatal(t, err)
+
+	// Attempt to copy to a nonexistent bucket
+	bckNonexistent := cmn.Bck{
+		Name:     "nonexistent-bucket-" + trand.String(5),
+		Provider: apc.AIS,
+	}
+	err = api.CopyObject(baseParams, &api.CopyArgs{
+		FromBck:     bckFrom,
+		FromObjName: objFrom,
+		ToBck:       bckNonexistent,
+		ToObjName:   objTo,
+	})
+	tassert.Errorf(t, err != nil, "expected error when copying to nonexistent bucket")
+	if err != nil {
+		status := api.HTTPStatus(err)
+		tassert.Errorf(t, status == http.StatusNotFound, "expected status %d, got %d", http.StatusNotFound, status)
+	}
 }
 
 func TestSameBucketName(t *testing.T) {
