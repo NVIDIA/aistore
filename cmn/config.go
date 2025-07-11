@@ -491,7 +491,7 @@ type (
 		CertKey       string `json:"server_key"`    // HTTPS: X.509 key
 		ServerNameTLS string `json:"domain_tls"`    // #6410
 		ClientCA      string `json:"client_ca_tls"` // #6410
-		// added v3.26
+		// clients "idle" config: intra-cluster and backend
 		IdleConnTimeout     cos.Duration `json:"idle_conn_time"`
 		MaxIdleConnsPerHost int          `json:"idle_conns_per_host"`
 		MaxIdleConns        int          `json:"idle_conns"`
@@ -1427,7 +1427,7 @@ const (
 	dfltMaxIdleConns   = 4096
 	dfltMaxIdlePerHost = 128
 
-	DfltMaxIdleTimeout = 20 * time.Second
+	DfltMaxIdleTimeout = 30 * time.Second
 )
 
 func (c *HTTPConf) Validate() error {
