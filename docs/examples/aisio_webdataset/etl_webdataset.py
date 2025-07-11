@@ -6,6 +6,7 @@ import webdataset as wds
 from PIL import Image
 from aistore.sdk import Client
 from aistore.sdk.etl import ETLConfig
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from torch.utils.data import IterableDataset
 from torch.utils.data.dataset import T_co
 
@@ -19,60 +20,60 @@ def show_image(image_data):
         image.show()
 
 
-def wd_etl(object_url):
-    def img_to_bytes(img):
-        buf = io.BytesIO()
-        img = img.convert("RGB")
-        img.save(buf, format="JPEG")
-        return buf.getvalue()
+class WebDatasetETL(FastAPIServer):
+    def transform(self, _data: bytes, path: str, _etl_args: str) -> bytes:
+        """
+        Transform WebDataset shards using torchvision preprocessing.
+        """
+        def img_to_bytes(img):
+            buf = io.BytesIO()
+            img = img.convert("RGB")
+            img.save(buf, format="JPEG")
+            return buf.getvalue()
 
-    def process_trimap(trimap_bytes):
-        image = Image.open(io.BytesIO(trimap_bytes))
-        preprocessing = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.CenterCrop(350),
-                torchvision.transforms.Lambda(img_to_bytes)
-            ]
-        )
-        return preprocessing(image)
+        def process_trimap(trimap_bytes):
+            image = Image.open(io.BytesIO(trimap_bytes))
+            preprocessing = torchvision.transforms.Compose(
+                [
+                    torchvision.transforms.CenterCrop(350),
+                    torchvision.transforms.Lambda(img_to_bytes)
+                ]
+            )
+            return preprocessing(image)
 
-    def process_image(image_bytes):
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        preprocessing = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.CenterCrop(350),
-                torchvision.transforms.ToTensor(),
-                # Means and stds from ImageNet
-                torchvision.transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),
-                torchvision.transforms.ToPILImage(),
-                torchvision.transforms.Lambda(img_to_bytes),
-            ]
-        )
-        return preprocessing(image)
+        def process_image(image_bytes):
+            image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            preprocessing = torchvision.transforms.Compose(
+                [
+                    torchvision.transforms.CenterCrop(350),
+                    torchvision.transforms.ToTensor(),
+                    # Means and stds from ImageNet
+                    torchvision.transforms.Normalize(
+                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                    ),
+                    torchvision.transforms.ToPILImage(),
+                    torchvision.transforms.Lambda(img_to_bytes),
+                ]
+            )
+            return preprocessing(image)
 
-    # Initialize a WD object from the AIS URL
-    dataset = wds.WebDataset(object_url)
-    # Map the files for each individual sample to the appropriate processing function
-    processed_shard = dataset.map_dict(**{"image.jpg": process_image, "trimap.png": process_trimap})
+        object_url = path
+        # Initialize a WD object from the AIS URL
+        dataset = wds.WebDataset(object_url)
+        # Map the files for each individual sample to the appropriate processing function
+        processed_shard = dataset.map_dict(**{"image.jpg": process_image, "trimap.png": process_trimap})
 
-    # Write the output to a memory buffer and return the value
-    buffer = io.BytesIO()
-    with wds.TarWriter(fileobj=buffer) as dst:
-        for sample in processed_shard:
-            dst.write(sample)
-    return buffer.getvalue()
+        # Write the output to a memory buffer and return the value
+        buffer = io.BytesIO()
+        with wds.TarWriter(fileobj=buffer) as dst:
+            for sample in processed_shard:
+                dst.write(sample)
+        return buffer.getvalue()
 
 
 def create_wd_etl(client):
-    client.etl(etl_name).init_code(
-        transform=wd_etl,
-        preimported_modules=["torch"],
-        dependencies=["webdataset", "pillow", "torch", "torchvision"],
-        communication_type="hpull",
-        transform_url=True
-    )
+    etl = client.etl(etl_name)
+    etl.init_class(dependencies=["webdataset", "pillow", "torch", "torchvision"])(WebDatasetETL)
 
 
 class LocalTarDataset(IterableDataset):

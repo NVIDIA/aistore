@@ -6,6 +6,8 @@ author: Aaron Wilson
 categories: aistore etl pytorch python
 ---
 
+> **Note:** This blog post references `init_code` which has been removed and replaced with `init_class`. For the most up-to-date ETL initialization methods, please refer to the [init_class documentation](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#using-init_class-python-sdk-only).
+
 With recent updates to the Python SDK, it's easier than ever to load data into AIS, transform it, and use it for training with PyTorch. In this post, we'll demonstrate how to do that with a small dataset of images.
 
 In a previous series of posts, we transformed the ImageNet dataset using a mixture of CLI and SDK commands. For background, you can view these posts below, but note that much of the syntax is out of date:

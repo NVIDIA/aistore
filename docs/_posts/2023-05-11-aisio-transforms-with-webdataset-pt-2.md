@@ -6,6 +6,8 @@ author: Aaron Wilson
 categories: aistore etl pytorch python webdataset
 ---
 
+> **Note:** This blog post references `init_code` which has been removed and replaced with `init_class`. For the most up-to-date ETL initialization methods, please refer to the [init_class documentation](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#using-init_class-python-sdk-only).
+
 In the [previous post](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1) we converted a dataset to the WebDataset format and stored it in a bucket in AIStore. 
 
 This post will demonstrate AIStore's ability to efficiently apply custom transformations to the dataset on the storage cluster. We'll do this using [AIS ETL](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md).

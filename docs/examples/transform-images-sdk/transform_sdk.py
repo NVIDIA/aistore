@@ -5,34 +5,42 @@ from PIL import Image
 from torchvision import transforms
 import torch
 
-from aistore.pytorch import AISDataset
+from aistore.pytorch import AISIterDataset
 from aistore.sdk import Client
 from aistore.sdk.multiobj import ObjectRange
+from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
+from aistore.sdk.etl import ETLConfig
 
 AISTORE_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://192.168.49.2:8080")
 client = Client(AISTORE_ENDPOINT)
 bucket_name = "images"
 
 
-def etl():
-    def img_to_bytes(img):
-        buf = io.BytesIO()
-        img = img.convert('RGB')
-        img.save(buf, format='JPEG')
-        return buf.getvalue()
+class ImageTransformETL(FastAPIServer):
+    def transform(self, data: bytes, _path: str, _etl_args: str) -> bytes:
+        """Transform image data using torchvision transforms"""
+        def img_to_bytes(img):
+            buf = io.BytesIO()
+            img = img.convert('RGB')
+            img.save(buf, format='JPEG')
+            return buf.getvalue()
 
-    input_bytes = sys.stdin.buffer.read()
-    image = Image.open(io.BytesIO(input_bytes)).convert('RGB')
-    preprocessing = transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.ToPILImage(),
-        transforms.Lambda(img_to_bytes),
-    ])
-    processed_bytes = preprocessing(image)
-    sys.stdout.buffer.write(processed_bytes)
+        image = Image.open(io.BytesIO(data)).convert('RGB')
+        
+        preprocessing = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.ToPILImage(),
+            transforms.Lambda(img_to_bytes),
+        ])
+        
+        processed_bytes = preprocessing(image)
+        return processed_bytes
+
+
+
 
 
 def show_image(image_data):
@@ -51,10 +59,7 @@ def load_data():
 
 def create_etl(etl_name):
     image_etl = client.etl(etl_name)
-    image_etl.init_code(
-                           transform=etl,
-                           dependencies=["torchvision"],
-                           communication_type="io")
+    image_etl.init_class(dependencies=["torchvision"])(ImageTransformETL)
     return image_etl
 
 
@@ -64,7 +69,7 @@ def show_etl(etl):
 
 
 def get_with_etl(etl):
-    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get_reader(etl_name=etl.name).read_all()
+    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get_reader(etl=ETLConfig(name=etl.name)).read_all()
     show_image(transformed_data)
 
 
@@ -72,7 +77,7 @@ def etl_bucket(etl):
     dest_bucket = client.bucket("transformed-images").create()
     transform_job = client.bucket(bucket_name).transform(etl_name=etl.name, to_bck=dest_bucket)
     client.job(transform_job).wait()
-    print(entry.name for entry in dest_bucket.list_all_objects())
+    print([entry.name for entry in dest_bucket.list_all_objects()])
 
 
 def etl_group(etl):
@@ -87,8 +92,8 @@ def etl_group(etl):
 
 def create_dataloader():
     # Construct a dataset and dataloader to read data from the transformed bucket
-    dataset = AISDataset(AISTORE_ENDPOINT, "ais://transformed-images")
-    train_loader = torch.utils.data.DataLoader(dataset, shuffle=True)
+    dataset = AISIterDataset(AISTORE_ENDPOINT, "ais://transformed-images")
+    train_loader = torch.utils.data.DataLoader(dataset)
     return train_loader
 
 
