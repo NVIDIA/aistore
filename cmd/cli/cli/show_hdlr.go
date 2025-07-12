@@ -140,7 +140,10 @@ var (
 				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
 			},
-			makeAlias(&showCmdPerformance, &mkaliasOpts{newName: cmdShowStats, aliasFor: cliName + " " + commandShow + " " + commandPerf}),
+			makeAlias(&showCmdPerformance, &mkaliasOpts{
+				newName:  cmdShowStats,
+				aliasFor: joinCommandWords(commandShow, commandPerf),
+			}),
 		},
 	}
 	showCmdBucket = cli.Command{

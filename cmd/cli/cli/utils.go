@@ -87,6 +87,10 @@ type (
 	}
 )
 
+func joinCommandWords(subcommands ...string) string {
+	return strings.Join(subcommands, " ")
+}
+
 // TODO: unify, use instead of splitting handlers (that each have different flags)
 // reflection possibly can be used but requires way too many lines
 func actionIsHandler(action any, handler func(c *cli.Context) error) bool {

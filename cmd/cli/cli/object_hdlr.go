@@ -249,13 +249,13 @@ var (
 			}),
 			makeAlias(&archBucketCmd, &mkaliasOpts{
 				newName:  commandArch,
-				aliasFor: "ais archive bucket",
-				replace:  cos.StrKVs{"ais archive bucket": "ais object archive"},
+				aliasFor: joinCommandWords(commandArch, commandBucket),
+				replace:  cos.StrKVs{joinCommandWords(commandArch, commandBucket): joinCommandWords(commandObject, commandArch)},
 			}),
 			makeAlias(&objCmdETL, &mkaliasOpts{
 				newName:  commandETL,
-				aliasFor: "ais etl object",
-				replace:  cos.StrKVs{"ais etl object": "ais object etl"},
+				aliasFor: joinCommandWords(commandETL, commandObject),
+				replace:  cos.StrKVs{joinCommandWords(commandETL, commandObject): joinCommandWords(commandObject, commandETL)},
 			}),
 
 			objectCmdConcat,

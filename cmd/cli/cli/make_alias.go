@@ -39,6 +39,7 @@ type mkaliasOpts struct {
 	addFlags []cli.Flag
 	delFlags []cli.Flag
 	replace  cos.StrKVs
+	usage    string
 }
 
 func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
@@ -81,7 +82,10 @@ func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 	}
 
 	// help text management
-	if opts.replace != nil {
+	if opts.usage != "" {
+		debug.Assert(opts.replace == nil)
+		aliasCmd.Usage = opts.usage
+	} else if opts.replace != nil {
 		_updAliasedHelp(&aliasCmd, opts.replace)
 	}
 

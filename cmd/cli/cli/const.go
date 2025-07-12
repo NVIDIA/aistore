@@ -69,9 +69,10 @@ const (
 	commandRename    = "mv"
 	commandSet       = "set"
 
-	// ml
-	commandML       = "ml"
-	commandGetBatch = "get-batch"
+	// ml namespace and subcommands
+	commandML         = "ml"
+	cmdGetBatch       = "get-batch"
+	cmdLhotseGetBatch = "lhotse-get-batch"
 
 	// jobs
 	commandStart = apc.ActXactStart
@@ -808,8 +809,9 @@ var (
 
 	// Lhotse
 	lhotseCutsFlag = cli.StringFlag{
-		Name:  "cuts",
-		Usage: "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
+		Name:     "cuts",
+		Usage:    "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
+		Required: true,
 	}
 	sampleRateFlag = cli.IntFlag{
 		Name:  "sample-rate",

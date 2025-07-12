@@ -320,13 +320,13 @@ var (
 			bucketObjCmdCopy,
 			makeAlias(&archBucketCmd, &mkaliasOpts{
 				newName:  commandArch,
-				aliasFor: "ais archive bucket",
-				replace:  cos.StrKVs{"ais archive bucket": "ais bucket archive"},
+				aliasFor: joinCommandWords(commandArch, commandBucket),
+				replace:  cos.StrKVs{joinCommandWords(commandArch, commandBucket): joinCommandWords(commandBucket, commandArch)},
 			}),
 			makeAlias(&bckCmdETL, &mkaliasOpts{
 				newName:  commandETL,
-				aliasFor: "ais etl bucket",
-				replace:  cos.StrKVs{"ais etl bucket": "ais bucket etl"},
+				aliasFor: joinCommandWords(commandETL, commandBucket),
+				replace:  cos.StrKVs{joinCommandWords(commandETL, commandBucket): joinCommandWords(commandBucket, commandETL)},
 			}),
 			bucketCmdRename,
 			{
