@@ -9,7 +9,6 @@ from io import BufferedWriter
 from pathlib import Path
 from typing import Dict, Optional
 import os
-from json import dumps as json_dumps
 from urllib.parse import quote
 
 from requests import Response
@@ -28,8 +27,10 @@ from aistore.sdk.const import (
     QPARAM_ETL_NAME,
     QPARAM_ETL_ARGS,
     QPARAM_LATEST,
+    QPARAM_OBJ_TO,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
     URL_PATH_OBJECTS,
     HEADER_RANGE,
     ACT_BLOB_DOWNLOAD,
@@ -62,6 +63,7 @@ class BucketDetails:
     path: str
 
 
+# pylint: disable=too-many-public-methods
 class Object:
     """
     Provides methods for interacting with an object in AIS.
@@ -106,6 +108,16 @@ class Object:
     def name(self) -> str:
         """Name of this object."""
         return self._name
+
+    @property
+    def uname(self) -> str:
+        """
+        Unified name (uname) of this object, which combines the bucket path and object name.
+
+        Returns:
+            str: The unified name in the format bucket_path/object_name
+        """
+        return os.path.join(self._bck_details.path, self.name)
 
     @property
     def props(self) -> ObjectProps:
@@ -226,12 +238,7 @@ class Object:
 
         # ETL Configuration
         if etl:
-            params[QPARAM_ETL_NAME] = etl.name
-            params[QPARAM_ETL_ARGS] = (
-                json_dumps(etl.args, separators=(",", ":"))
-                if isinstance(etl.args, dict)
-                else etl.args
-            )
+            etl.update_qparams(params)
 
         # Latest Object Version
         if latest:
@@ -262,7 +269,7 @@ class Object:
             params=params,
             headers=headers,
             byte_range=byte_range_tuple,
-            uname=os.path.join(self._bck_details.path, self.name) if direct else None,
+            uname=self.uname if direct else None,
         )
 
         obj_reader = ObjectReader(object_client=obj_client, chunk_size=chunk_size)
@@ -488,6 +495,48 @@ class Object:
             HTTP_METHOD_DELETE,
             path=self._object_path,
             params=self.query_params,
+        )
+
+    def copy(self, to_obj: "Object", etl: Optional[ETLConfig] = None) -> Response:
+        """
+        Copy this object to another object (which specifies the destination bucket and name),
+        optionally with ETL transformation.
+
+        Args:
+            to_obj (Object): Destination object specifying both the target bucket and object name
+            etl (ETLConfig, optional): ETL configuration for transforming the object during copy
+
+        Returns:
+            Response: The response from the copy operation
+
+        Raises:
+            requests.RequestException: "There's an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            requests.exceptions.HTTPError: Service unavailable
+
+        """
+        # Create query parameters for the destination
+        query_params = self.query_params.copy()
+
+        # Use uname for destination bucket+object
+        query_params[QPARAM_OBJ_TO] = to_obj.uname
+
+        # Add ETL configuration if provided
+        if etl:
+            if etl.args:
+                warnings.warn(
+                    "etl_args is still WIP, currently only supports etlName",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            etl.update_qparams(query_params)
+
+        return self._client.request(
+            HTTP_METHOD_PUT,
+            path=self._object_path,
+            params=query_params,
         )
 
     def blob_download(

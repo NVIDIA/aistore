@@ -5,10 +5,14 @@ import random
 import unittest
 import io
 import tarfile
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import pytest
 
 from aistore.sdk.blob_download_config import BlobDownloadConfig
+from aistore.sdk.etl import ETLConfig
+from aistore.sdk.errors import AISError
 from aistore.sdk.const import (
     AIS_CUSTOM_MD,
     AIS_VERSION,
@@ -31,6 +35,7 @@ from tests.utils import (
     create_archive,
     string_to_dict,
     has_targets,
+    random_string,
 )
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
 
@@ -511,3 +516,133 @@ class TestObjectOps(ParallelTestBase):
         listed_objects = self.bucket.list_objects_iter(prefix=obj_name)
         self.assertIn(obj_name, [o.name for o in listed_objects])
         obj.delete()
+
+    def test_copy_object_same_name(self):
+        """Test copying an object to another bucket with the same name."""
+        dest_bucket = self._create_bucket(prefix="copy-dest-bucket")
+        source_obj, content = self._create_object_with_content()
+
+        dest_obj = dest_bucket.object(source_obj.name)
+        response = source_obj.copy(dest_obj)
+        self.assertEqual(response.status_code, 200)
+
+        copied_content = dest_obj.get_reader().read_all()
+        self.assertEqual(content, copied_content)
+
+        source_content = source_obj.get_reader().read_all()
+        self.assertEqual(content, source_content)
+
+    def test_copy_object_different_name(self):
+        """Test copying an object to another bucket with a different name."""
+        dest_bucket = self._create_bucket(prefix="copy-dest-bucket")
+        source_obj, content = self._create_object_with_content()
+
+        new_name = f"copied-{source_obj.name}"
+        dest_obj = dest_bucket.object(new_name)
+        response = source_obj.copy(dest_obj)
+        self.assertEqual(response.status_code, 200)
+
+        copied_content = dest_obj.get_reader().read_all()
+        self.assertEqual(content, copied_content)
+
+        original_name_objs = list(dest_bucket.list_objects_iter(prefix=source_obj.name))
+        original_name_matches = [
+            obj for obj in original_name_objs if obj.name == source_obj.name
+        ]
+        self.assertEqual(len(original_name_matches), 0)
+
+    def test_copy_object_same_bucket(self):
+        """Test copying an object within the same bucket with a different name."""
+        source_obj, content = self._create_object_with_content()
+
+        new_name = f"copy-of-{source_obj.name}"
+        dest_obj = self.bucket.object(new_name)
+        response = source_obj.copy(dest_obj)
+        self.assertEqual(response.status_code, 200)
+
+        copied_content = dest_obj.get_reader().read_all()
+        self.assertEqual(content, copied_content)
+
+        source_content = source_obj.get_reader().read_all()
+        self.assertEqual(content, source_content)
+
+        all_objects = list(self.bucket.list_objects_iter())
+        object_names = [obj.name for obj in all_objects]
+        self.assertIn(source_obj.name, object_names)
+        self.assertIn(new_name, object_names)
+
+    def test_copy_multiple_objects_sequence(self):
+        """Test copying multiple objects in sequence to verify no conflicts."""
+        dest_bucket = self._create_bucket(prefix="copy-multi-dest")
+        objects = self._put_objects(3)
+
+        # Copy all objects
+        for obj_name, content in objects.items():
+            source_obj = self.bucket.object(obj_name)
+            dest_obj = dest_bucket.object(obj_name)
+            response = source_obj.copy(dest_obj)
+            self.assertEqual(response.status_code, 200)
+
+        # Verify all objects were copied correctly
+        for obj_name, expected_content in objects.items():
+            copied_obj = dest_bucket.object(obj_name)
+            copied_content = copied_obj.get_reader().read_all()
+            self.assertEqual(expected_content, copied_content)
+
+        # Verify destination bucket has correct number of objects
+        dest_objects = list(dest_bucket.list_objects_iter())
+        self.assertEqual(len(dest_objects), len(objects))
+
+    @pytest.mark.etl
+    def test_copy_object_with_etl(self):
+        """Test copying an object with ETL transformation."""
+        dest_bucket = self._create_bucket(prefix="copy-etl-dest")
+        source_obj, content = self._create_object_with_content()
+
+        # Create ETL for MD5 transformation
+        etl_name = "etl-copy-test"
+        etl = self.client.etl(etl_name)
+
+        try:
+            etl.init(image="aistorage/transformer_md5:latest")
+
+            # Copy with ETL transformation
+            dest_obj = dest_bucket.object(source_obj.name)
+            etl_config = ETLConfig(name=etl_name)
+            response = source_obj.copy(dest_obj, etl=etl_config)
+            self.assertEqual(response.status_code, 200)
+
+            # Verify the copied object has the transformed content (MD5 hash)
+            copied_obj = dest_bucket.object(source_obj.name)
+            copied_content = copied_obj.get_reader().read_all()
+            expected_md5 = hashlib.md5(content).hexdigest().encode()
+            self.assertEqual(copied_content, expected_md5)
+
+            # Verify original object is unchanged
+            original_content = source_obj.get_reader().read_all()
+            self.assertEqual(original_content, content)
+
+        finally:
+            try:  # pylint: disable=duplicate-code
+                etl.stop()
+                etl.delete()
+            except AISError:
+                pass
+
+    def test_copy_object_to_nonexistent_bucket(self):
+        """Test copying an object to a non-existent bucket raises an error."""
+        source_obj, _ = self._create_object_with_content()
+
+        # Use a random bucket name to avoid conflicts
+        bucket_name = f"nonexistent-bucket-{random_string(8)}"
+        nonexistent_bucket = self.client.bucket(bucket_name)
+
+        dest_obj = nonexistent_bucket.object("test-object")
+
+        # Copy should raise an error
+        with self.assertRaises(AISError) as context:
+            source_obj.copy(dest_obj)
+
+        # Verify error content from response body
+        self.assertIn("bucket", context.exception.message.lower())
+        self.assertIn("does not exist", context.exception.message.lower())

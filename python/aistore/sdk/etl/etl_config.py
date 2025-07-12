@@ -3,6 +3,8 @@
 #
 from dataclasses import dataclass
 from typing import Dict, Optional, Union
+from json import dumps as json_dumps
+from aistore.sdk.const import QPARAM_ETL_NAME, QPARAM_ETL_ARGS
 
 
 @dataclass
@@ -27,3 +29,19 @@ class ETLConfig:
 
     name: str
     args: Optional[Union[str, Dict]] = None
+
+    def update_qparams(self, params: Dict[str, str]) -> None:
+        """
+        Apply ETL configuration to query parameters.
+
+        Args:
+            params (Dict[str, str]): Query parameters dict to modify
+        """
+        params[QPARAM_ETL_NAME] = self.name
+        if self.args:
+            etl_args = (
+                json_dumps(self.args, separators=(",", ":"))
+                if isinstance(self.args, dict)
+                else self.args
+            )
+            params[QPARAM_ETL_ARGS] = etl_args
