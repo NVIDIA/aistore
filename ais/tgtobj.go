@@ -1098,13 +1098,21 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 	// set response header
 	goi.setwhdr(whdr, cksum, size)
 
-	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
+	buf, slab := goi.t.gmm.AllocSize(_txsize(size))
 	err = goi.transmit(r, buf, fqn, size)
 	slab.Free(buf)
 	if sgl != nil {
 		sgl.Free()
 	}
 	return err
+}
+
+// buffer sizing for range and arch reads (compare w/ txreg)
+func _txsize(size int64) int64 {
+	if size >= 256*cos.KiB {
+		return memsys.MaxPageSlabSize
+	}
+	return min(size, memsys.DefaultBuf2Size)
 }
 
 func (goi *getOI) setwhdr(whdr http.Header, cksum *cos.Cksum, size int64) {
@@ -1124,7 +1132,7 @@ func (goi *getOI) _txreg(fqn string, lmfh cos.LomReader, whdr http.Header) (err 
 	goi.setwhdr(whdr, goi.lom.Checksum(), size)
 
 	// Tx
-	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.DefaultBuf2Size))
+	buf, slab := goi.t.gmm.AllocSize(min(size, memsys.MaxPageSlabSize))
 	err = goi.transmit(lmfh, buf, fqn, size)
 	slab.Free(buf)
 	return err
@@ -1144,7 +1152,7 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 		}
 		// found
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
-		buf, slab := goi.t.gmm.AllocSize(min(csl.Size(), memsys.DefaultBuf2Size))
+		buf, slab := goi.t.gmm.AllocSize(_txsize(csl.Size()))
 		err = goi.transmit(csl, buf, fqn, csl.Size())
 		slab.Free(buf)
 		csl.Close()

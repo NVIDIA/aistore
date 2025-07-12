@@ -114,7 +114,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 
 	var (
 		written   int64
-		buf, slab = t.gmm.AllocSize(min(res.Size, memsys.DefaultBuf2Size))
+		buf, slab = t.gmm.AllocSize(_txsize(res.Size))
 		cksum     = cos.NewCksumHash(lom.CksumConf().Type)
 		mw        = cos.NewWriterMulti(goi.w, lmfh, cksum.H)
 		whdr      = goi.w.Header()
