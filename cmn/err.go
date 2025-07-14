@@ -733,7 +733,7 @@ func AsErrAborted(err error) (errAborted *ErrAborted) {
 	if errAborted, ok = err.(*ErrAborted); ok {
 		return
 	}
-	wrapped := &ErrAborted{}
+	var wrapped *ErrAborted
 	if errors.As(err, &wrapped) {
 		errAborted = wrapped
 	}
@@ -864,7 +864,7 @@ func IsErrWarning(err error) bool {
 	if _, ok := err.(*ErrWarning); ok {
 		return true
 	}
-	wrapped := &ErrWarning{}
+	var wrapped *ErrWarning
 	return errors.As(err, &wrapped)
 }
 

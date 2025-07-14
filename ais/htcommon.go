@@ -268,7 +268,7 @@ func isErrDowngrade(err error) bool {
 	if _, ok := err.(*errDowngrade); ok {
 		return true
 	}
-	erd := &errDowngrade{}
+	var erd *errDowngrade
 	return errors.As(err, &erd)
 }
 
