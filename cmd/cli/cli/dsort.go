@@ -105,8 +105,9 @@ var phasesOrdered = [...]string{
 
 func startDsortHandler(c *cli.Context) error {
 	var (
-		srcbck, dstbck cmn.Bck
-		spec           dsort.RequestSpec
+		srcbck cmn.Bck
+		dstbck cmn.Bck
+		spec   dsort.RequestSpec
 	)
 
 	// Load spec (required)
@@ -122,15 +123,13 @@ func startDsortHandler(c *cli.Context) error {
 	if c.NArg() > 0 {
 		srcbck, err = parseBckURI(c, c.Args().Get(0), true)
 		if err != nil {
-			return fmt.Errorf("failed to parse source bucket: %v\n(see %s for details)",
-				err, qflprn(cli.HelpFlag))
+			return fmt.Errorf("failed to parse source bucket: %v", err)
 		}
 	}
 	if c.NArg() > 1 {
 		dstbck, err = parseBckURI(c, c.Args().Get(1), true)
 		if err != nil {
-			return fmt.Errorf("failed to parse destination bucket: %v\n(see %s for details)",
-				err, qflprn(cli.HelpFlag))
+			return fmt.Errorf("failed to parse destination bucket: %v", err)
 		}
 	}
 

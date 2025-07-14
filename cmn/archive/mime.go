@@ -31,6 +31,12 @@ const (
 	ExtTarLz4 = ".tar.lz4"
 )
 
+// compression formats - not necessarily compressed TAR
+const (
+	ExtGz  = ".gz"
+	ExtLz4 = ".lz4"
+)
+
 const (
 	sizeDetectMime = 512
 )
@@ -166,8 +172,8 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 	return
 }
 
-func _detect(file cos.LomReader, archname, mime string, buf []byte) (string, int, error) {
-	n, err := file.Read(buf)
+func _detect(lh cos.LomReader, archname, mime string, buf []byte) (string, int, error) {
+	n, err := lh.Read(buf)
 	if err != nil {
 		return "", 0, err
 	}
@@ -190,9 +196,34 @@ func _detect(file cos.LomReader, archname, mime string, buf []byte) (string, int
 			return magic.mime, n, nil
 		}
 	}
-	return "", n, fmt.Errorf("failed to detect supported file signatures in %q", archname)
+	return "", n, fmt.Errorf("unrecognized or unsupported file format: %q", archname)
 }
 
+// inspect the first bytes of r and return a compression
+// extension (ExtGz, ExtLz4);
+// an empty `ext` indicates plain-text (or rather: no compression)
+func DetectCompression(r io.ReaderAt) (string, error) {
+	// keep a bit of head-room
+	const hdrSize = 64
+
+	var hdr [hdrSize]byte
+	n, err := r.ReadAt(hdr[:], 0)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	if n >= magicGzip.offset+len(magicGzip.sig) &&
+		bytes.HasPrefix(hdr[magicGzip.offset:], magicGzip.sig) {
+		return ExtGz, nil
+	}
+	if n >= magicLz4.offset+len(magicLz4.sig) &&
+		bytes.HasPrefix(hdr[magicLz4.offset:], magicLz4.sig) {
+		return ExtLz4, nil
+	}
+	// plain-text or unknown
+	return "", nil
+}
+
+// (currently, dsort only usage)
 func EqExt(ext1, ext2 string) bool {
 	switch {
 	case ext1 == ext2:

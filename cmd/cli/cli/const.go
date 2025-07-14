@@ -805,18 +805,8 @@ var (
 	}
 
 	// (ETL, dSort, get-batch) specificaton
+	// see also: lhotseManifestFlag
 	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
-
-	// Lhotse
-	lhotseCutsFlag = cli.StringFlag{
-		Name:     "cuts",
-		Usage:    "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
-		Required: true,
-	}
-	sampleRateFlag = cli.IntFlag{
-		Name:  "sample-rate",
-		Usage: "audio sample-rate (Hz); used to convert sample offsets (in seconds) to byte offsets",
-	}
 
 	dsortLogFlag = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
 
@@ -855,7 +845,7 @@ var (
 			indent4 + "\tor, when listing files and/or directories:\n" +
 			indent4 + "\t--list \"/home/docs, /home/abc/1.tar, /home/abc/1.jpeg\"",
 	}
-	templateFlag = cli.StringFlag{
+	templateFlag = cli.StringFlag{ // see also: outputTemplateFlag
 		Name: "template",
 		Usage: "Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges\n" +
 			"\t(with optional steps and gaps), e.g.:\n" +
@@ -1289,5 +1279,26 @@ var (
 	streamingGetFlag = cli.BoolFlag{
 		Name:  "streaming",
 		Usage: "stream resulting archive prior to finalizing it in memory",
+	}
+
+	//
+	// Lhotse
+	//
+	lhotseManifestFlag = cli.StringFlag{ // see also: specFlag
+		Name:     "cuts",
+		Usage:    "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
+		Required: true,
+	}
+	sampleRateFlag = cli.IntFlag{
+		Name:  "sample-rate",
+		Usage: "audio sample-rate (Hz); used to convert sample offsets (in seconds) to byte offsets",
+	}
+	batchSizeFlag = cli.IntFlag{
+		Name:  "batch-size",
+		Usage: "number of cuts per output file",
+	}
+	outputTemplateFlag = cli.StringFlag{ // see also: (input) templateFlag
+		Name:  "output-template",
+		Usage: "template for multiple output files (e.g. 'batch-{001..999}.tar')",
 	}
 )

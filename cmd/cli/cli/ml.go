@@ -83,7 +83,7 @@ var (
 			mlCmdGetBatch,
 			makeAlias(&mlCmdGetBatch, &mkaliasOpts{
 				newName:  cmdLhotseGetBatch,
-				addFlags: []cli.Flag{lhotseCutsFlag, sampleRateFlag},
+				addFlags: []cli.Flag{lhotseManifestFlag, sampleRateFlag, batchSizeFlag, outputTemplateFlag},
 				usage:    lhotseGetBatchUsage,
 			}),
 		},
@@ -92,9 +92,11 @@ var (
 
 type (
 	mossReqParseCtx struct {
-		req     apc.MossReq
-		outFile string
-		bck     cmn.Bck
+		req       apc.MossReq
+		outFile   string
+		bck       cmn.Bck
+		pt        *cos.ParsedTemplate // valid when batchSize > 0
+		batchSize int
 	}
 )
 
@@ -109,10 +111,10 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
 		return nil, err
 	}
-	if err := errMutuallyExclusive(c, listFlag, templateFlag, lhotseCutsFlag); err != nil {
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, lhotseManifestFlag); err != nil {
 		return nil, err
 	}
-	if err := errMutuallyExclusive(c, specFlag, lhotseCutsFlag); err != nil {
+	if err := errMutuallyExclusive(c, specFlag, lhotseManifestFlag); err != nil {
 		return nil, err
 	}
 
@@ -155,9 +157,9 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 		}
 	}
 
-	if len(names) == 0 && !flagIsSet(c, specFlag) && !flagIsSet(c, lhotseCutsFlag) {
+	if len(names) == 0 && !flagIsSet(c, specFlag) && !flagIsSet(c, lhotseManifestFlag) {
 		return nil, fmt.Errorf("with no (%s, %s) options expecting object names and/or archived filenames in the command line",
-			qflprn(specFlag), qflprn(lhotseCutsFlag))
+			qflprn(specFlag), qflprn(lhotseManifestFlag))
 	}
 
 	// native spec
@@ -169,14 +171,6 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 		if err := parseSpec(ext, specBytes, &req); err != nil {
 			return nil, err
 		}
-	}
-	// lhotse spec
-	if flagIsSet(c, lhotseCutsFlag) {
-		ins, err := loadAndParseLhotse(c)
-		if err != nil {
-			return nil, err
-		}
-		req.In = ins
 	}
 
 	// output format
@@ -202,6 +196,26 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 	req.ContinueOnErr = flagIsSet(c, continueOnErrorFlag)
 	req.StreamingGet = flagIsSet(c, streamingGetFlag)
 	req.OnlyObjName = flagIsSet(c, omitSrcBucketNameFlag)
+
+	var (
+		ctx = mossReqParseCtx{outFile: outFile, bck: bck}
+	)
+	// lhotse spec
+	if flagIsSet(c, lhotseManifestFlag) {
+		ctx.batchSize, ctx.pt, err = parseLhotseBatchFlags(c)
+		if err != nil {
+			return nil, err
+		}
+		if ctx.batchSize > 0 {
+			// note: early return to generate multiple apc.MossReq requests and batches
+			return &ctx, nil
+		}
+		ins, err := loadAndParseLhotse(c)
+		if err != nil {
+			return nil, err
+		}
+		req.In = ins
+	}
 
 	if len(names) > 0 {
 		if len(req.In) == 0 {
@@ -229,17 +243,19 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 		return nil, errors.New("empty get-batch request")
 	}
 
-	return &mossReqParseCtx{
-		req:     req,
-		outFile: outFile,
-		bck:     bck,
-	}, nil
+	ctx.req = req
+	return &ctx, nil
 }
 
 func getBatchHandler(c *cli.Context) error {
 	ctx, err := buildMossReq(c)
 	if err != nil {
 		return err
+	}
+
+	if ctx.batchSize > 0 {
+		debug.Assert(flagIsSet(c, lhotseManifestFlag), "native (non-lhotse) batching not implemented yet")
+		return lhotseMultiBatch(c, ctx)
 	}
 	outFile, bck := ctx.outFile, ctx.bck
 

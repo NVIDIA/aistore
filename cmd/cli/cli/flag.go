@@ -232,3 +232,25 @@ func sortFlags(fls []cli.Flag) []cli.Flag {
 	sort.Slice(fls, func(i, j int) bool { return fls[i].GetName() < fls[j].GetName() })
 	return fls
 }
+
+func parseLhotseBatchFlags(c *cli.Context) (batchSize int, pt *cos.ParsedTemplate, _ error) {
+	batchSize = parseIntFlag(c, batchSizeFlag)
+	if batchSize <= 0 {
+		return 0, nil, nil // manifest => single TAR
+	}
+
+	template := parseStrFlag(c, outputTemplateFlag)
+	if template == "" {
+		return 0, nil, fmt.Errorf("%s must be set when %s > 0", qflprn(outputTemplateFlag), qflprn(batchSizeFlag))
+	}
+
+	tmpl, err := cos.NewParsedTemplate(template)
+	if err != nil {
+		return 0, nil, err
+	}
+	pt = &tmpl
+	if err := pt.CheckIsRange(); err != nil {
+		return 0, nil, err
+	}
+	return batchSize, pt, nil
+}
