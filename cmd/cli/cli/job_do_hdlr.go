@@ -549,7 +549,14 @@ type (
 
 	// HFDownloadJobDef handles HuggingFace repository downloads
 	HFDownloadJobDef struct {
-		payload dload.MultiBody
+		payload   dload.MultiBody
+		hfContext *hfDownloadContext
+	}
+
+	hfDownloadContext struct {
+		files   cos.StrKVs
+		token   string
+		context *cli.Context
 	}
 
 	// MultiDownloadJobDef handles file-list downloads
@@ -576,6 +583,53 @@ func startJob(apiBP api.BaseParams, dloadType dload.Type, payload any) ([]string
 	return []string{id}, nil
 }
 
+// applyHFBatching splits files into batches based on blob threshold
+func applyHFBatching(fileInfos []hf.FileInfo, blobThreshold int64, basePayload *dload.Base) []JobDefinition {
+	// Separate files by size
+	var smallFiles, largeFiles []hf.FileInfo
+
+	for _, info := range fileInfos {
+		if info.Size != nil && *info.Size >= blobThreshold {
+			largeFiles = append(largeFiles, info)
+		} else {
+			smallFiles = append(smallFiles, info)
+		}
+	}
+
+	jobs := make([]JobDefinition, 0, len(largeFiles)+1) // Pre-allocate for large files + potential multi-job
+
+	if len(smallFiles) > 0 {
+		smallFileURLs := make(cos.StrKVs, len(smallFiles))
+		for _, info := range smallFiles {
+			smallFileURLs[hf.ExtractFileName(info.URL)] = info.URL
+		}
+
+		job := &MultiDownloadJobDef{
+			payload: dload.MultiBody{
+				Base:           *basePayload,
+				ObjectsPayload: smallFileURLs,
+			},
+		}
+		jobs = append(jobs, job)
+	}
+
+	// Create individual jobs for large files
+	for _, info := range largeFiles {
+		job := &SingleDownloadJobDef{
+			payload: dload.SingleBody{
+				Base: *basePayload,
+				SingleObj: dload.SingleObj{
+					Link:    info.URL,
+					ObjName: hf.ExtractFileName(info.URL),
+				},
+			},
+		}
+		jobs = append(jobs, job)
+	}
+
+	return jobs
+}
+
 func (j *SingleDownloadJobDef) Start(apiBP api.BaseParams) ([]string, error) {
 	return startJob(apiBP, dload.TypeSingle, j.payload)
 }
@@ -589,22 +643,37 @@ func (j *BackendDownloadJobDef) Start(apiBP api.BaseParams) ([]string, error) {
 	return startJob(apiBP, dload.TypeBackend, j.payload)
 }
 
-// HFDownloadJobDef custom Start method to handle Batch Downloads
+// Start starts a HuggingFace Download job and the associated blob download jobs if requested
 func (j *HFDownloadJobDef) Start(apiBP api.BaseParams) ([]string, error) {
-	id, err := api.DownloadWithParam(apiBP, dload.TypeMulti, j.payload)
+	blobThreshold, err := parseSizeFlag(j.hfContext.context, blobThresholdFlag)
 	if err != nil {
 		return nil, err
 	}
-	var allJobIDs []string
-	// HF download job is primary
-	if id != "" {
-		allJobIDs = append(allJobIDs, id)
+
+	if blobThreshold == 0 {
+		return startJob(apiBP, dload.TypeMulti, j.payload)
 	}
-	// Attach blob download jobs to the end
-	if strings.HasPrefix(j.payload.Base.Description, "hf-batch-jobs:") {
-		jobIDsStr := strings.TrimPrefix(j.payload.Base.Description, "hf-batch-jobs:")
-		blobJobIDs := strings.Split(jobIDsStr, ",")
-		allJobIDs = append(allJobIDs, blobJobIDs...)
+
+	fileInfos, err := hf.GetFileSizes(j.hfContext.files, j.hfContext.token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file sizes: %v", err)
+	}
+
+	// Apply batching logic
+	jobs := applyHFBatching(fileInfos, blobThreshold, &j.payload.Base)
+
+	if len(jobs) == 1 {
+		return jobs[0].Start(apiBP)
+	}
+
+	// Start multiple jobs
+	var allJobIDs []string
+	for _, job := range jobs {
+		jobIDs, err := job.Start(apiBP)
+		if err != nil {
+			return allJobIDs, err
+		}
+		allJobIDs = append(allJobIDs, jobIDs...)
 	}
 	return allJobIDs, nil
 }
@@ -672,6 +741,11 @@ func newHFDownloadJobDef(c *cli.Context, req *downloadRequest) (*HFDownloadJobDe
 		payload: dload.MultiBody{
 			Base:           req.basePayload,
 			ObjectsPayload: files,
+		},
+		hfContext: &hfDownloadContext{
+			files:   files,
+			token:   token,
+			context: c,
 		},
 	}, nil
 }
@@ -788,19 +862,27 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	// For display purposes, show the primary job ID (first one)
-	primaryJobID := allJobIDs[0]
-	fmt.Fprintf(c.App.Writer, "Started download job %s\n", primaryJobID)
+	// Display message for any multi-job scenario with blob threshold
+	if len(allJobIDs) > 1 {
+		blobThreshold, _ := parseSizeFlag(c, blobThresholdFlag)
+		if blobThreshold > 0 {
+			individualJobs := len(allJobIDs) - 1
+			if individualJobs > 0 {
+				fmt.Fprintf(c.App.Writer, "Created %d individual jobs for files >= %s\n", individualJobs, cos.ToSizeIEC(blobThreshold, 0))
+			}
+		}
+	}
+	fmt.Fprintf(c.App.Writer, "Started download job %s\n", allJobIDs[0])
 
 	if flagIsSet(c, progressFlag) {
 		return pbDownload(c, allJobIDs)
 	}
 
 	if flagIsSet(c, waitFlag) || flagIsSet(c, waitJobXactFinishedFlag) {
-		return wtDownload(c, primaryJobID)
+		return wtDownload(c, allJobIDs[0])
 	}
 
-	return bgDownload(c, primaryJobID)
+	return bgDownload(c, allJobIDs[0])
 }
 
 // downloadRefreshRate returns the refresh interval for download operations.
