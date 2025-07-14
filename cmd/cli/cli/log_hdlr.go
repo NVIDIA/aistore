@@ -156,7 +156,7 @@ func _getAllClusterLogs(c *cli.Context, sev, outFile string) error {
 	if err != nil {
 		return err
 	}
-	if outFile == fileStdIO {
+	if outFile == stdInOut {
 		return errors.New("cannot download archived logs to standard output")
 	}
 	if outFile != "" {
@@ -206,9 +206,9 @@ func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, outFile, sname strin
 		confirmed         bool
 	)
 	switch outFile {
-	case fileStdIO:
+	case stdInOut:
 		return errors.New("cannot download all node's .tar.gz log archives to standard output")
-	case "":
+	case "": // create temp dir
 		tempdir = filepath.Join(os.TempDir(), "aislogs")
 		if err := cos.CreateDir(tempdir); err != nil {
 			return fmt.Errorf("failed to create temp dir %s: %v", tempdir, err)
@@ -234,22 +234,28 @@ func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, outFile, sname strin
 	}
 
 	args := api.GetLogInput{Severity: sev, All: true}
-	if !discardOutput(outFile) {
-		file, err := os.Create(outFile)
-		if err != nil {
-			return fmt.Errorf("failed to create destination %s: %v", outFile, err)
-		}
-		defer file.Close()
 
-		args.Writer = file
-		fmt.Fprintf(c.App.Writer, "Downloading %s%s logs as %s\n", sname, s, outFile)
+	w, wfh, err := createDstFile(c, outFile, false /*allow stdout*/)
+	if err != nil {
+		if err == errUserCancel {
+			return nil
+		}
+		return err
+	}
+	args.Writer = w
+
+	if !discardOutput(outFile) {
+		fmt.Fprintf(c.App.Writer, "Downloading %s%s logs => %s\n", sname, s, outFile)
 	} else {
 		fmt.Fprintf(c.App.Writer, "Downloading (and discarding) %s%s logs\n", sname, s)
-		args.Writer = io.Discard
 	}
 
 	// call api
-	_, err := api.GetDaemonLog(apiBP, node, args)
+	_, err = api.GetDaemonLog(apiBP, node, args)
+	if wfh != nil {
+		cos.Close(wfh)
+		// NOTE: consider deleting
+	}
 	return V(err)
 }
 
@@ -304,7 +310,7 @@ func _currentLog(c *cli.Context) error {
 		writer   = io.Writer(os.Stdout) // default
 		args     = api.GetLogInput{Severity: sev, Offset: getLongRunOffset(c)}
 	)
-	if outFile != fileStdIO && outFile != "" /* empty => standard output */ {
+	if outFile != stdInOut && outFile != "" /* empty => standard output */ {
 		var confirmed bool
 		outFile, confirmed = _logDestName(c, node, outFile)
 		if !confirmed {

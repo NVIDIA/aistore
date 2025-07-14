@@ -9,9 +9,9 @@ ais object get ais://$BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL ""ais://$BUCKE
 ais object get aws://$BUCKET_1/object_1.txt $OBJECT_1.txt // FAIL
 
 # Positive Testing
-ais object get ais://$BUCKET_1/object_1.txt $OBJECT_1.txt
+ais object get ais://$BUCKET_1/object_1.txt $OBJECT_1.txt --yes
 $PRINT_SIZE $OBJECT_1.txt
-ais object get ais://$BUCKET_1/object_1.txt $OBJECT_2.txt
+ais object get ais://$BUCKET_1/object_1.txt $OBJECT_2.txt --yes
 $PRINT_SIZE $OBJECT_2.txt
 rm -f $OBJECT_*
 

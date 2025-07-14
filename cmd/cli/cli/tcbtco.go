@@ -373,17 +373,3 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	fmt.Fprintf(c.App.Writer, "ETL byte stats:\t transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
 	return nil
 }
-
-func handleETLHTTPError(err error, etlName string) error {
-	if err == nil {
-		return nil
-	}
-	if herr, ok := err.(*cmn.ErrHTTP); ok {
-		// TODO: How to find out if it's transformation not found, and not object not found?
-		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
-			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
-				etlName, commandETL, cmdInit)
-		}
-	}
-	return V(err)
-}

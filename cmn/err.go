@@ -1095,10 +1095,10 @@ func Str2HTTPErr(msg string) *ErrHTTP {
 	return nil
 }
 
-func Err2HTTPErr(err error) *ErrHTTP {
+func UnwrapErrHTTP(err error) *ErrHTTP {
 	e, ok := err.(*ErrHTTP)
 	if !ok {
-		e = &ErrHTTP{}
+		var e *ErrHTTP
 		if !errors.As(err, &e) {
 			return nil
 		}

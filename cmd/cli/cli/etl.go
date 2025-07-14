@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -804,22 +803,23 @@ func etlObjectHandler(c *cli.Context) error {
 		etlArgs.TransformArgs = transformArgs
 	}
 
-	var w io.Writer
-	switch {
-	case outputDest == "-":
-		w = os.Stdout
-	case discardOutput(outputDest):
-		w = io.Discard
-	default:
-		f, err := os.Create(outputDest)
-		if err != nil {
-			return err
+	w, wfh, err := createDstFile(c, outputDest, true /*allow stdout*/)
+	if err != nil {
+		if err == errUserCancel {
+			return nil
 		}
-		w = f
-		defer f.Close()
+		return err
 	}
 
-	_, err := api.ETLObject(apiBP, etlArgs, bck, objName, w)
+	_, err = api.ETLObject(apiBP, etlArgs, bck, objName, w)
+	if wfh != nil {
+		cos.Close(wfh)
+		if err != nil {
+			if e := cos.RemoveFile(outputDest); e != nil {
+				actionWarn(c, fmt.Sprintf("failed to delete %s: %v", outputDest, e))
+			}
+		}
+	}
 	return handleETLHTTPError(err, etlName)
 }
 
@@ -907,4 +907,18 @@ func _populate(c *cli.Context, base *etl.InitMsgBase) {
 	if flagIsSet(c, etlObjectRequestTimeout) {
 		base.ObjTimeout = cos.Duration(parseDurationFlag(c, etlObjectRequestTimeout))
 	}
+}
+
+func handleETLHTTPError(err error, etlName string) error {
+	if err == nil {
+		return nil
+	}
+	if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		// TODO: How to find out if it's transformation not found, and not object not found?
+		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
+			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
+				etlName, commandETL, cmdInit)
+		}
+	}
+	return V(err)
 }

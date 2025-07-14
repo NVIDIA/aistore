@@ -187,7 +187,7 @@ func (task *singleTask) downloadLocal(lom *core.LOM) (err error) {
 		if errors.Is(err, context.DeadlineExceeded) {
 			nlog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying", task, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
-		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
+		} else if herr := cmn.UnwrapErrHTTP(err); herr != nil {
 			nlog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", task, i, retryCnt, err, herr.Status)
 			if _, exists := terminalStatuses[herr.Status]; exists {
 				return err // nothing we can do

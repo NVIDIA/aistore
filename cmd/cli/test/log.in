@@ -1,7 +1,7 @@
 mkdir -p /tmp/aislogs
 ais log get $RANDOM_TARGET /tmp/aislogs
 ais log get $RANDOM_TARGET /tmp/aislogs --all
-ais log get $RANDOM_TARGET /tmp/aislogs --severity e
+ais log get $RANDOM_TARGET /tmp/aislogs --severity e --yes
 ais cluster download-logs - // FAIL
 ais cluster download-logs /tmp/aislogs // IGNORE
 rm -rf /tmp/aislogs

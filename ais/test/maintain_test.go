@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -501,7 +501,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 				tlog.Logf("%v\n", status)
 				break
 			}
-			if herr := cmn.Err2HTTPErr(err); herr != nil {
+			if herr := cmn.UnwrapErrHTTP(err); herr != nil {
 				tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
 			}
 			time.Sleep(time.Second)
@@ -611,7 +611,7 @@ func TestShutdownListObjects(t *testing.T) {
 				tlog.Logf("%v\n", status)
 				break
 			}
-			herr := cmn.Err2HTTPErr(err)
+			herr := cmn.UnwrapErrHTTP(err)
 			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
 			time.Sleep(time.Second)
 		}

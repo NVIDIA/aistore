@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
@@ -665,12 +664,18 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	rate := _refreshRate(c)
 	if logging {
-		file, err := cos.CreateFile(c.String(dsortLogFlag.Name))
+		logFname := parseStrFlag(c, dsortLogFlag)
+		ww, wfh, err := createDstFile(c, logFname, true /*allow stdout*/)
 		if err != nil {
+			if err == errUserCancel {
+				return nil
+			}
 			return err
 		}
-		w = file
-		defer file.Close()
+		w = ww
+		if wfh != nil {
+			defer wfh.Close()
+		}
 	}
 
 	var (

@@ -340,7 +340,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		if err == nil {
 			continue
 		}
-		herr := cmn.Err2HTTPErr(err)
+		herr := cmn.UnwrapErrHTTP(err)
 		tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v (bucket %q)", err, test.bck.String())
 		if test.exists {
 			tassert.Fatalf(t, strings.Contains(herr.Message, "already exists"),
@@ -892,7 +892,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 				len(lst.Entries), m.num/2,
 			)
 		case err != nil:
-			herr := cmn.Err2HTTPErr(err)
+			herr := cmn.UnwrapErrHTTP(err)
 			tlog.Logf("Error is expected here, got %q\n", herr)
 		default:
 			tassert.Errorf(t, false, "expected an error, got nil")

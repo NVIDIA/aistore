@@ -16,6 +16,10 @@ import (
 	"github.com/urfave/cli"
 )
 
+const (
+	stdInOut = "-" // STDIN (for `ais put`), STDOUT (for `ais put`)
+)
+
 type rocCb struct {
 	roc           cos.ROCS
 	cb            func(int, error)
@@ -67,30 +71,44 @@ func (r *rocCb) Seek(offset int64, whence int) (int64, error) {
 }
 
 //
-// TODO -- FIXME: reuse across CLI, remove duplication
+// handle destination path
 //
 
-func openOutFile(c *cli.Context, outFile string) (w io.Writer, wfh *os.File, err error) {
-	discard := discardOutput(outFile)
-	if discard {
-		w = io.Discard
-	} else {
-		if finfo, err := os.Stat(outFile); err == nil {
-			if finfo.IsDir() {
-				return nil, nil, fmt.Errorf("destination %q is a directory", outFile)
-			}
-			if !flagIsSet(c, yesFlag) {
-				warn := fmt.Sprintf("destination %q already exists", outFile)
-				if !confirm(c, "Proceed to overwrite?", warn) {
-					return nil, nil, nil
-				}
-			}
+func discardOutput(outf string) bool {
+	return outf == "/dev/null" || outf == "dev/null" || outf == "dev/nil"
+}
+
+// notice returned "variability":
+// - (error | errUserCancel)
+// - (io.Discard | os.Stdout | wfh)
+func createDstFile(c *cli.Context, outf string, allowStdout bool) (w io.Writer, wfh *os.File, err error) {
+	discard := discardOutput(outf)
+	switch {
+	case discard:
+		return io.Discard, nil, nil
+	case outf == stdInOut:
+		if !allowStdout {
+			return nil, nil, incorrectUsageMsg(c, "destination STDOUT is not permitted for this operation")
 		}
-		wfh, err = cos.CreateFile(outFile)
-		if err != nil {
-			return nil, nil, err
-		}
-		w = wfh
+		return os.Stdout, nil, nil
 	}
+
+	if finfo, err := os.Stat(outf); err == nil {
+		if finfo.IsDir() {
+			return nil, nil, fmt.Errorf("destination %q is a directory", outf)
+		}
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("destination %q already exists", outf)
+			if !confirm(c, "Proceed to overwrite?", warn) {
+				return nil, nil, errUserCancel
+			}
+		}
+	}
+	wfh, err = cos.CreateFile(outf)
+	if err != nil {
+		return nil, nil, err
+	}
+	w = wfh
+
 	return w, wfh, nil
 }

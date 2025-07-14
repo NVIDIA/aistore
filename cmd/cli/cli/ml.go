@@ -244,8 +244,11 @@ func getBatchHandler(c *cli.Context) error {
 	outFile, bck := ctx.outFile, ctx.bck
 
 	// output
-	w, wfh, err := openOutFile(c, outFile)
+	w, wfh, err := createDstFile(c, outFile, false /*allow stdout*/)
 	if err != nil {
+		if err == errUserCancel {
+			return nil
+		}
 		return err
 	}
 

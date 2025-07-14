@@ -157,8 +157,8 @@ func (cpr *cprCtx) do(c *cli.Context) {
 		)
 		xs, cms, err := queryXactions(&xargs, true /*summarize*/)
 		if err != nil {
-			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-				time.Sleep(refreshRateMinDur)
+			if herr := cmn.UnwrapErrHTTP(err); herr != nil && herr.Status == http.StatusNotFound {
+				briefPause(refreshRateMinDur / time.Second)
 				continue
 			}
 			rerr = fmt.Errorf("%s failed: %v", cpr.loghdr, err)

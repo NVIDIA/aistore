@@ -39,7 +39,7 @@ func loadSpec(c *cli.Context) ([]byte, string /*ext*/, error) {
 	}
 
 	var r io.Reader
-	if specArg == fileStdIO {
+	if specArg == stdInOut {
 		r = os.Stdin
 	} else {
 		f, err := os.Open(specArg)
@@ -90,7 +90,7 @@ func parseSpec(ext string, specBytes []byte, spec any) error {
 }
 
 func isInlineSpec(arg string) bool {
-	if arg == fileStdIO {
+	if arg == stdInOut {
 		return false
 	}
 

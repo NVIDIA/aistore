@@ -29,10 +29,6 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
-const (
-	fileStdIO = "-" // STDIN (for `ais put`), STDOUT (for `ais put`)
-)
-
 const extractVia = "--extract(*)"
 
 type qparamArch struct {
@@ -53,7 +49,7 @@ func catHandler(c *cli.Context) error {
 		return err
 	}
 	a := qparamArch{archpath: parseStrFlag(c, archpathGetFlag)}
-	return getObject(c, bck, objName, fileStdIO, a, true /*quiet*/, false /*extract*/)
+	return getObject(c, bck, objName, stdInOut, a, true /*quiet*/, false /*extract*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -228,7 +224,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	// can't do many to one
 	l := len(lst.Entries)
 	if l > 1 {
-		if outFile != "" && outFile != fileStdIO && !discardOutput(outFile) {
+		if outFile != "" && outFile != stdInOut && !discardOutput(outFile) {
 			finfo, errEx := os.Stat(outFile)
 			// destination directory must exist
 			if errEx != nil || !finfo.IsDir() {
@@ -255,7 +251,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	switch {
 	case discardOutput(outFile):
 		discard = " (and discard)"
-	case outFile == fileStdIO:
+	case outFile == stdInOut:
 		out = " to standard output"
 	default:
 		out = outFile
@@ -362,7 +358,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 	if shardName != "" {
 		objName = shardName
 		a.archpath = strings.TrimPrefix(entry.Name, shardName+"/")
-		if outFile != fileStdIO && !discardOutput(outFile) {
+		if outFile != stdInOut && !discardOutput(outFile) {
 			// when getting multiple files retain the full archpath
 			// (compare w/ filepath.Base usage otherwise)
 			outFile = filepath.Join(outFile, a.archpath)
@@ -390,7 +386,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 
 // get one (main function)
 func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArch, quiet, extract bool) error {
-	if outFile == fileStdIO && extract {
+	if outFile == stdInOut && extract {
 		return errors.New("cannot extract archived files to standard output - " + NIY)
 	}
 	if discardOutput(outFile) && extract {
@@ -428,7 +424,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		} else {
 			outFile = filepath.Base(objName)
 		}
-	} else if outFile != fileStdIO && !discardOutput(outFile) {
+	} else if outFile != stdInOut && !discardOutput(outFile) {
 		finfo, errEx := os.Stat(outFile)
 		if errEx == nil {
 			if !finfo.IsDir() && extract {
@@ -487,23 +483,23 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 
 	var getArgs api.GetArgs
 	switch {
-	case outFile == fileStdIO:
+	case outFile == stdInOut:
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		quiet = true
 	case discardOutput(outFile):
 		getArgs = api.GetArgs{Writer: io.Discard, Header: hdr}
 	default:
-		var file *os.File
-		if file, err = os.Create(outFile); err != nil {
+		wfh, err := os.Create(outFile)
+		if err != nil {
 			return err
 		}
 		defer func() {
-			file.Close()
+			cos.Close(wfh)
 			if err != nil {
 				os.Remove(outFile)
 			}
 		}()
-		getArgs = api.GetArgs{Writer: file, Header: hdr}
+		getArgs = api.GetArgs{Writer: wfh, Header: hdr}
 	}
 
 	// finally: http query and API call
@@ -558,7 +554,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 	switch {
 	case discardOutput(outFile):
 		discard = " and discard"
-	case outFile == fileStdIO:
+	case outFile == stdInOut:
 		out = " to standard output"
 	case extract:
 		out = " to " + outFile
@@ -731,9 +727,4 @@ func (ex *extractor) _write(filename string, size int64, wfh *os.File, reader io
 			filename, ex.shardName, n, size)
 	}
 	return false, nil
-}
-
-// discard
-func discardOutput(outf string) bool {
-	return outf == "/dev/null" || outf == "dev/null" || outf == "dev/nil"
 }
