@@ -69,11 +69,15 @@ var (
 ////////
 
 func (e *MD) Init(l int) { e.ETLs = make(ETLs, l) }
-func (e *MD) Add(msg InitMsg, stage Stage, podMap PodMap) {
+func (e *MD) Add(msg InitMsg, stage Stage, podMap PodMap) error {
 	if msg == nil {
-		return
+		return nil
+	}
+	if _, ok := e.ETLs[msg.Name()]; !ok && stage == Aborted {
+		return fmt.Errorf("cannot add %s to stage %s: not exists", msg.Cname(), stage)
 	}
 	e.ETLs[msg.Name()] = ETLEntity{msg, stage, podMap}
+	return nil
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }
 
@@ -83,14 +87,6 @@ func (e *MD) Get(id string) (en ETLEntity, present bool) {
 	}
 	en, present = e.ETLs[id]
 	return
-}
-
-func (e *MD) Del(id string) (deleted bool) {
-	if _, present := e.ETLs[id]; !present {
-		return
-	}
-	delete(e.ETLs, id)
-	return true
 }
 
 func (e *MD) String() string {

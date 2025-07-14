@@ -114,7 +114,9 @@ func (e *etlMD) add(msg etl.InitMsg, stage etl.Stage, podMap etl.PodMap) error {
 	if stage != etl.Running && podMap != nil {
 		return fmt.Errorf("podMap must not be provided for stage %s", stage)
 	}
-	e.Add(msg, stage, podMap)
+	if err := e.Add(msg, stage, podMap); err != nil {
+		return err
+	}
 	e.Version++
 	return nil
 }
@@ -129,6 +131,7 @@ func (e *etlMD) get(id string) (msg etl.InitMsg, stage etl.Stage) {
 func (e *etlMD) del(id string) (exists bool) {
 	_, exists = e.ETLs[id]
 	delete(e.ETLs, id)
+	e.Version++
 	return
 }
 

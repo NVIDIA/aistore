@@ -163,8 +163,9 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 								},
 							}
 
-							// Add bucket and save.
-							clone.Add(msg, etl.Running, make(etl.PodMap, 4)) // Running stage expects no-nil pod map
+							// Add and save.
+							preVersion := clone.version()
+							clone.add(msg, etl.Running, make(etl.PodMap, 4)) // Running stage expects no-nil pod map
 							err := jsp.Save(testpath, clone, opts, nil)
 							Expect(err).NotTo(HaveOccurred())
 
@@ -173,8 +174,24 @@ var _ = Describe("EtlMD marshal and unmarshal", func() {
 							_, err = jsp.Load(testpath, loaded, opts)
 							Expect(err).NotTo(HaveOccurred())
 							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))
+							Expect(loaded.Version - 1).To(BeEquivalentTo(preVersion)) // Version should be incremented
 							_, present := loaded.Get(msg.Name())
 							Expect(present).To(BeTrue())
+
+							// Delete and save.
+							preVersion = clone.version()
+							clone.del(msg.Name())
+							err = jsp.Save(testpath, clone, opts, nil)
+							Expect(err).NotTo(HaveOccurred())
+
+							// Load elsewhere and check.
+							loaded = newEtlMD()
+							_, err = jsp.Load(testpath, loaded, opts)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(loaded.Version).To(BeEquivalentTo(clone.Version))
+							Expect(loaded.Version - 1).To(BeEquivalentTo(preVersion)) // Version should be incremented
+							_, present = loaded.Get(msg.Name())
+							Expect(present).To(BeFalse())
 						}
 					}
 				}

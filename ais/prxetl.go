@@ -161,10 +161,6 @@ func (p *proxy) httpetlpost(w http.ResponseWriter, r *http.Request) {
 
 	switch op := apiItems[1]; op {
 	case apc.ETLStop:
-		if stage != etl.Running {
-			p.writeErrAct(w, r, "can't stop "+etlMsg.Cname()+" during "+stage.String()+" stage")
-			return
-		}
 		p.stopETL(w, r, etlMsg)
 	case apc.ETLStart:
 		if stage != etl.Aborted {
@@ -538,6 +534,10 @@ func (ef *_etlFinalizer) cb(nl nl.Listener) {
 		final: ef.p._syncEtlMDFinal,
 		msg:   ef.msg,
 		stage: etl.Aborted,
+		wait:  true,
 	}
-	ef.p.owner.etl.modify(ctx)
+	_, err := ef.p.owner.etl.modify(ctx)
+	if err != nil {
+		nlog.Errorf("failed to update etlMD for %s: %v", ef.msg.Name(), err)
+	}
 }
