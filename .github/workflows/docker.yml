@@ -1,6 +1,8 @@
 name: Container Images
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       build_util_image:
@@ -73,24 +75,24 @@ jobs:
           popd
 
       - name: Build and push `aisnode` image
-        if: ${{ inputs.build_aisnode_image }}
+        if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}" make -e all
           popd
 
       - name: Build and push `ais-init` image
-        if: ${{ inputs.build_aisinit_image }}
+        if: ${{ inputs.build_aisinit_image || github.event_name == 'push' }}
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisinit_container
-          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
+          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}" make -e all
           popd
 
       - name: Build and push `aisnode` image with tracing support
-        if: ${{ inputs.build_aisnode_image }}
+        if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
+          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
           popd
 
       - name: Build and push `cluster-minimal` image
