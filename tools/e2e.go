@@ -266,6 +266,13 @@ func destroyMatchingBuckets(subName string) (err error) {
 		return err
 	}
 
+	if RemoteCluster.UUID != "" {
+		remoteBcks, errR := api.ListBuckets(bp, cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}, apc.FltExists)
+		if errR == nil {
+			bcks = append(bcks, remoteBcks...)
+		}
+	}
+
 	for _, bck := range bcks {
 		if !strings.Contains(bck.Name, subName) {
 			continue

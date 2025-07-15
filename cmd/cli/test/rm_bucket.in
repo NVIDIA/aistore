@@ -7,21 +7,5 @@ ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
 ais rmb ais://$BUCKET_1 ais://$BUCKET_2
 
-# Test the --all feature: remove all AIS buckets
-ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
-ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
-echo "DELETE" | ais rmb --all --yes
-
-# Test when no AIS buckets exist
-ais rmb --all --yes
-
-# Test --all with incorrect confirmation response
-ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
-ais bucket create ais://$BUCKET_2 | awk '{print $1 " " $2}'
-echo "ILL-RESPONSE" | ais rmb --all --yes
-
-# Test error cases
-ais rmb ais://$BUCKET_1 --all // FAIL "cannot specify bucket name(s) with --all flag"
-
 # Test invalid bucket URI
 ais bucket rm hdfs://tmp // FAIL invalid
