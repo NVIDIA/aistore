@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.15.0] - 2025-07-15
+
 ### Added
 
 - Add `ETLRuntimeSpec` class to formalize runtime configuration.
