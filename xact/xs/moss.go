@@ -192,6 +192,7 @@ func (r *XactMoss) BcastAbort(err error) {
 	}
 	o := transport.AllocSend()
 	o.Hdr.Opcode = opAbort
+	o.Hdr.Demux = r.ID()
 	o.Hdr.ObjName = err.Error()
 	e := bundle.SDM.Bcast(o, nil /*roc*/) // receive via sntl.rxAbort
 	if cmn.Rom.FastV(4, cos.SmoduleXs) {
@@ -276,7 +277,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
 		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
-		debug.AssertNoErr(err)
+		nlog.Errorln(core.T.String(), err)
 		return err
 	}
 	wi := a.(*basewi)
@@ -621,8 +622,7 @@ func (wi *basewi) cleanup() {
 	if !wi.receiving() {
 		return
 	}
-	if !wi.req.StreamingGet { // buffered
-		debug.Assert(wi.sgl != nil)
+	if !wi.req.StreamingGet && wi.sgl != nil { // wi.sgl nil upon early term (e.g. invalid bucket)
 		wi.sgl.Free()
 		wi.sgl = nil
 	}
