@@ -73,9 +73,10 @@ const archGetUsage = "Get a shard and extract its content; get an archived file;
 	indent4 + "\t- ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode=prefix - 333.tar with all subdir/* files --/--"
 
 const genShardsUsage = "Generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
-	indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
-	indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
-	indent4 + "\t(notice quotation marks in both cases)"
+	indent1 + "\t- gen-shards 'ais://mmm/shard-{001..999}.tar' -\twrite 999 random shards (default sizes) to ais://mmm\n" +
+	indent1 + "\t- gen-shards 'ais://mmm/shard-{001..999}.tar' --fcount 10 --output-template 'audio-file-{01..10}.wav' -\t10 archived files per shard (and note templated (deterministic) naming)\n" +
+	indent1 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" -\twrite 10 random gzipped tarfiles to Cloud bucket\n" +
+	indent1 + "\t(notice quotation marks in all cases)"
 
 var (
 	// flags
@@ -114,6 +115,7 @@ var (
 			fcountFlag,
 			fextsFlag,
 			tformFlag,
+			outputTemplateForGenShards,
 		},
 	}
 
@@ -501,6 +503,19 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
+	// validate output naming template if provided
+	outFnameTemplate := parseStrFlag(c, outputTemplateForGenShards)
+	if outFnameTemplate != "" {
+		innerPt, err := cos.NewParsedTemplate(outFnameTemplate)
+		if err != nil {
+			return err
+		}
+		if n := innerPt.Count(); n < int64(fileCnt) {
+			return fmt.Errorf("invalid %s option: requested %d files per shard, but the template only provides for %d names",
+				qflprn(outputTemplateForGenShards), fileCnt, n)
+		}
+	}
+
 	fileExts := []string{dfltFext}
 	if flagIsSet(c, fextsFlag) {
 		s := parseStrFlag(c, fextsFlag)
@@ -580,7 +595,7 @@ loop:
 				sgl := mm.NewSGL(fileSize * int64(fileCnt))
 				defer sgl.Free()
 
-				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, int(fileSize), fileExts, format); err != nil {
+				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, int(fileSize), fileExts, format, outFnameTemplate); err != nil {
 					return err
 				}
 				putArgs := api.PutArgs{
@@ -604,22 +619,56 @@ loop:
 	return nil
 }
 
-func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string, format tar.Format) (err error) {
+func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string, format tar.Format, outFnameTemplate string) error {
 	var (
+		pt     *cos.ParsedTemplate
 		prefix = make([]byte, 10)
 		width  = len(strconv.Itoa(fileCnt))
 		oah    = cos.SimpleOAH{Size: int64(fileSize), Atime: time.Now().UnixNano()}
 		opts   = archive.Opts{CB: archive.SetTarHeader, TarFormat: format, Serialize: false}
 		writer = archive.NewWriter(shardExt, w, nil /*cksum*/, &opts)
 	)
-	for idx := start; idx < end && err == nil; idx++ {
-		cryptorand.Read(prefix)
 
-		for _, fext := range fileExts {
-			name := fmt.Sprintf("%s-%0*d"+fext, hex.EncodeToString(prefix), width, idx)
-			err = writer.Write(name, oah, io.LimitReader(cryptorand.Reader, int64(fileSize)))
+	// output naming template if provided
+	if outFnameTemplate != "" {
+		tmpl, err := cos.NewParsedTemplate(outFnameTemplate)
+		if err != nil {
+			debug.AssertNoErr(err) // validated above
+			return err
+		}
+		pt = &tmpl
+		pt.InitIter()
+	}
+
+	for idx := start; idx < end; idx++ {
+		if pt == nil {
+			cryptorand.Read(prefix)
+		}
+
+		for extIdx, fext := range fileExts {
+			var name string
+
+			if pt != nil {
+				// templated naming
+				templateName, hasNext := pt.Next()
+				if !hasNext {
+					err := fmt.Errorf("template %s exhausted at file %d (in shard starting at %d)",
+						qflprn(outputTemplateForGenShards), idx*len(fileExts)+extIdx, start)
+					debug.AssertNoErr(err) // validated above
+					return err
+				}
+				name = templateName
+			} else {
+				// random naming
+				name = fmt.Sprintf("%s-%0*d"+fext, hex.EncodeToString(prefix), width, idx)
+			}
+
+			if err := writer.Write(name, oah, io.LimitReader(cryptorand.Reader, int64(fileSize))); err != nil {
+				writer.Fini()
+				return err
+			}
 		}
 	}
-	writer.Fini()
-	return
+
+	return writer.Fini()
 }

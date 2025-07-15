@@ -1301,4 +1301,9 @@ var (
 		Name:  "output-template",
 		Usage: "template for multiple output files (e.g. 'batch-{001..999}.tar')",
 	}
+
+	outputTemplateForGenShards = cli.StringFlag{
+		Name:  outputTemplateFlag.Name,
+		Usage: "template for file names inside each shard (e.g. 'audio-{01..10}.wav')",
+	}
 )
