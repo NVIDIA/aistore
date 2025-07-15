@@ -423,6 +423,8 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		}
 	}
 
+	tassert.Fatalf(t, successCount > 0, "Expected at least some GetBatch calls to succeed (multipart mode)")
+
 	avgDuration := sumDuration / time.Duration(successCount)
 	tlog.Logf("GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v\n",
 		totalDuration, minDuration, maxDuration, avgDuration)
@@ -584,7 +586,9 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		}
 	}
 
+	tassert.Fatalf(t, successCount > 0, "Expected at least some GetBatch calls to succeed (streaming mode)")
 	avgDuration := sumDuration / time.Duration(successCount)
+
 	tlog.Logf("Streaming GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v\n",
 		totalDuration, minDuration, maxDuration, avgDuration)
 	tlog.Logf("Streaming Success: %d/%d calls, Total TAR: %s\n",
