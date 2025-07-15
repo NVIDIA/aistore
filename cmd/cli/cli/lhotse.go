@@ -174,18 +174,23 @@ func (cut *lhotseCut) toMossIn(c *cli.Context) (in *apc.MossIn, err error) {
 	if err != nil {
 		return
 	}
+	if oname, archpath := splitArchivePath(in.ObjName); archpath != "" {
+		in.ObjName = oname
+		in.ArchPath = archpath
+	}
 	in.Bucket, in.Provider = bck.Name, bck.Provider
 
 	if !flagIsSet(c, sampleRateFlag) {
 		return
 	}
+
 	rate := int64(parseIntFlag(c, sampleRateFlag))
 	if err := validateSampleRate(rate); err != nil {
 		return nil, err
 	}
 	in.Start = int64(cut.Start) * rate
 	in.Length = int64(cut.Duration) * rate
-	return
+	return in, nil
 }
 
 // minor sanity check

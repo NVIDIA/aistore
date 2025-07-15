@@ -178,7 +178,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 	)
 	if flagIsSet(c, listArchFlag) && prefix != "" {
 		// when prefix crosses shard boundary
-		if external, internal := splitPrefixShardBoundary(prefix); internal != "" {
+		if external, internal := splitArchivePath(prefix); internal != "" {
 			prefix = external
 			debug.Assert(prefix != origPrefix)
 			lstFilter._add(func(obj *cmn.LsoEnt) bool {
@@ -393,7 +393,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 		return errors.New("cannot extract and discard archived files - " + NIY)
 	}
 	if flagIsSet(c, listArchFlag) && a.archpath == "" {
-		if external, internal := splitPrefixShardBoundary(objName); internal != "" {
+		if external, internal := splitArchivePath(objName); internal != "" {
 			objName, a.archpath = external, internal
 		}
 	}

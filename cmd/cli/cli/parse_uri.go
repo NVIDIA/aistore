@@ -168,7 +168,7 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 			} else {
 				msg = "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
 			}
-			return bck, objName, cannotExecuteError(c, err, msg)
+			return cmn.Bck{}, "", cannotExecuteError(c, err, msg)
 		}
 	}
 
@@ -183,7 +183,10 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 	} else if objName == "" && !emptyObjnameOK {
 		err = incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
-	return bck, objName, err
+	if err != nil {
+		return cmn.Bck{}, "", err
+	}
+	return bck, objName, nil
 }
 
 //

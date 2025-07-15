@@ -34,12 +34,13 @@ import (
 // [NOTE] for `makeAlias usage guidelines, please refer to [make_alias.md](https://github.com/NVIDIA/aistore/blob/main/cmd/cli/cli/make_alias.md)
 
 type mkaliasOpts struct {
-	newName  string
-	aliasFor string
-	addFlags []cli.Flag
-	delFlags []cli.Flag
-	replace  cos.StrKVs
-	usage    string
+	newName   string
+	aliasFor  string
+	addFlags  []cli.Flag
+	delFlags  []cli.Flag
+	replace   cos.StrKVs
+	usage     string
+	argsUsage string
 }
 
 func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
@@ -87,6 +88,9 @@ func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 		aliasCmd.Usage = opts.usage
 	} else if opts.replace != nil {
 		_updAliasedHelp(&aliasCmd, opts.replace)
+	}
+	if opts.argsUsage != "" {
+		aliasCmd.ArgsUsage = opts.argsUsage
 	}
 
 	return aliasCmd

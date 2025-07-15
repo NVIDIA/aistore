@@ -303,7 +303,9 @@ const (
 
 	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
 
-	getBatchSpecArgument = "[BUCKET[/NAME_or_TEMPLATE] ...] DST_ARCHIVE --spec [JSON_SPECIFICATION|YAML_SPECIFICATION]"
+	// Lhotse: DST_ARCHIVE is optional when using --output-template (multi-batch mode)
+	getBatchSpecArgument       = "[BUCKET[/NAME_or_TEMPLATE] ...] DST_ARCHIVE --spec [JSON_SPECIFICATION|YAML_SPECIFICATION]"
+	getBatchLhotseSpecArgument = "[BUCKET[/NAME_or_TEMPLATE] ...] [DST_ARCHIVE] --spec [JSON_SPECIFICATION|YAML_SPECIFICATION]"
 
 	bucketEmbeddedPrefixArg = "[BUCKET[/PREFIX]]"
 

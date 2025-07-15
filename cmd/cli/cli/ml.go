@@ -82,9 +82,10 @@ var (
 		Subcommands: []cli.Command{
 			mlCmdGetBatch,
 			makeAlias(&mlCmdGetBatch, &mkaliasOpts{
-				newName:  cmdLhotseGetBatch,
-				addFlags: []cli.Flag{lhotseManifestFlag, sampleRateFlag, batchSizeFlag, outputTemplateFlag},
-				usage:    lhotseGetBatchUsage,
+				newName:   cmdLhotseGetBatch,
+				addFlags:  []cli.Flag{lhotseManifestFlag, sampleRateFlag, batchSizeFlag, outputTemplateFlag},
+				usage:     lhotseGetBatchUsage,
+				argsUsage: getBatchLhotseSpecArgument,
 			}),
 		},
 	}
@@ -100,14 +101,12 @@ type (
 	}
 )
 
+// TODO -- FIXME: refactor - split in parts
 func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 	var (
 		req   apc.MossReq
 		shift int
 	)
-	if c.NArg() < 1 {
-		return nil, missingArgumentsError(c, c.Command.ArgsUsage)
-	}
 	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
 		return nil, err
 	}
@@ -173,23 +172,28 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 		}
 	}
 
-	// output format
 	var (
-		outputFormat string // TODO: potential extension-less usage; can wait
-		outFile      = c.Args().Get(shift)
+		outputFormat string
+		outFile      string
 	)
-	outputFormat, err = archive.Strict("", cos.Ext(outFile))
-	if err != nil {
-		return nil, err
-	}
-	if req.OutputFormat != "" && outputFormat != "" && req.OutputFormat != outputFormat {
-		if !flagIsSet(c, nonverboseFlag) {
-			warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
-				outputFormat, qflprn(specFlag), req.OutputFormat)
-			actionWarn(c, warn)
+	// given (batchSizeFlag and outputTemplateFlag)
+	// outFile can be computed from the latter
+	// (currently, lhotse only)
+	if c.NArg() > shift {
+		outFile = c.Args().Get(shift)
+		outputFormat, err = archive.Strict("", cos.Ext(outFile))
+		if err != nil {
+			return nil, err
 		}
+		if req.OutputFormat != "" && outputFormat != "" && req.OutputFormat != outputFormat {
+			if !flagIsSet(c, nonverboseFlag) {
+				warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
+					outputFormat, qflprn(specFlag), req.OutputFormat)
+				actionWarn(c, warn)
+			}
+		}
+		req.OutputFormat = outputFormat
 	}
-	req.OutputFormat = outputFormat
 
 	// NOTE: no real way to check these assorted overrides; common expectation, though,
 	// is for command line to take precedence
@@ -210,11 +214,18 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 			// note: early return to generate multiple apc.MossReq requests and batches
 			return &ctx, nil
 		}
+
+		if outFile == "" {
+			return nil, missingArgumentsError(c, c.Command.ArgsUsage)
+		}
+
 		ins, err := loadAndParseLhotse(c)
 		if err != nil {
 			return nil, err
 		}
 		req.In = ins
+	} else if outFile == "" {
+		return nil, missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 
 	if len(names) > 0 {
@@ -231,7 +242,7 @@ func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
 				// no need to insert command-line bck -
 				// the latter is passed as the default bucket in api.GetBatch
 			}
-			if oname, archpath := splitPrefixShardBoundary(o); archpath != "" {
+			if oname, archpath := splitArchivePath(o); archpath != "" {
 				in.ObjName = oname
 				in.ArchPath = archpath
 			}

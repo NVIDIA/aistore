@@ -345,3 +345,14 @@ func TestRateLimitBackendUsingScript(t *testing.T) {
 	}
 	tassert.CheckFatal(t, err)
 }
+
+// as in: `ais ml lhotse-get-batch`
+func TestLhotseManifestBatch(t *testing.T) {
+	cmd := exec.Command("./scripts/lhotse_test_suite.sh")
+
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
