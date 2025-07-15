@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
@@ -36,9 +37,8 @@ var _ = Describe("ETLPodWatcherTest", func() {
 
 	BeforeEach(func() {
 		// simulate the pw.start() procedure with a mocked watcher to avoid real K8s API get involved
-		xetl := &XactETL{}
-		xetl.InitBase(cos.GenUUID(), apc.ActETLInline, "", nil)
-		pw = newPodWatcher("test-pod", xetl)
+		xctn := mock.NewXact(apc.ActETLInline)
+		pw = newPodWatcher("test-pod", xctn)
 		mockWatcher = newMockWatcher()
 		pw.watcher = mockWatcher
 		pw.stopCh = cos.NewStopCh()

@@ -33,6 +33,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Return transformed object size in direct put response for ETL Webservers.
 - Update `ObjectReader.__iter__()` to return `Generator[bytes, None, None]`.
 - Update `ObjectFileReader.close()` to call `generator.close()` to properly close underlying HTTP streams.
+- Rename `Cluster.list_running_etls()` method to `Cluster.list_etls()`, introducing an optional `stage` argument for filtering ETLs by lifecycle stage.
+- Rename ETL `Stopped` stage to `Aborted` for improved clarity.
 
 ## [1.14.0] - 2025-05-27
 

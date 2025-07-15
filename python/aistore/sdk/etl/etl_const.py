@@ -14,7 +14,7 @@ ETL_COMM_WS = "ws"
 # ETL lifecycle stages (see docs/etl.md#etl-pod-lifecycle)
 ETL_STAGE_INIT = "Initializing"
 ETL_STAGE_RUNNING = "Running"
-ETL_STAGE_STOPPED = "Stopped"
+ETL_STAGE_ABORTED = "Aborted"
 
 ETL_COMM_OPTIONS = [ETL_COMM_HPUSH, ETL_COMM_HPULL, ETL_COMM_WS]
 

@@ -51,7 +51,6 @@ func newPodWatcher(podName string, xetl core.Xact) (pw *podWatcher) {
 
 func (pw *podWatcher) processEvents() {
 	debug.Assert(pw.xetl != nil, "xact must be initialized before starting the pod watcher")
-	defer pw.podCtxCancel()
 	for {
 		select {
 		case event := <-pw.watcher.ResultChan():
@@ -60,16 +59,16 @@ func (pw *podWatcher) processEvents() {
 				continue
 			}
 			if err := pw._process(pod); err != nil {
-				if pw.xetl.Abort(cmn.NewErrETL(&cmn.ETLErrCtx{PodName: pw.podName, PodStatus: pw.GetPodStatus()}, err.Error())) {
-					// After Finish() call succeed, proxy will be notified and broadcast to call etl.Stop()
-					// on all targets (including the current one) with the `abortErr`. No need to call Stop() again here.
-					pw.xetl.Finish()
-				}
+				pw.podCtxCancel()
+				errCtx := &cmn.ETLErrCtx{PodName: pw.podName, PodStatus: pw.GetPodStatus()}
+				pw.xetl.Abort(cmn.NewErrETL(errCtx, err.Error()))
 				return
 			}
 		case <-pw.stopCh.Listen():
+			pw.podCtxCancel()
 			return
 		case <-pw.xetl.ChanAbort():
+			pw.podCtxCancel()
 			return
 		}
 	}
@@ -90,7 +89,7 @@ func (pw *podWatcher) _process(pod *corev1.Pod) error {
 
 	// Main container state changes:
 	// - Waiting & Running: Record state changes with detailed reason in pod watcher and continue to watch
-	// - Terminated with non-zero exit code: Terminates the pod watcher goroutine, cancel context to cleans up, and reports the error immediately
+	// - Terminated: Terminates the pod watcher goroutine, cancel context to cleans up, and reports the error immediately
 	for i := range pod.Status.ContainerStatuses {
 		cs := &pod.Status.ContainerStatuses[i]
 
@@ -101,9 +100,7 @@ func (pw *podWatcher) _process(pod *corev1.Pod) error {
 			pw.setPodStatus(ctrRunning, cs.Name, "Running", cs.State.Running.String(), 0)
 		case cs.State.Terminated != nil:
 			pw.setPodStatus(ctrTerminated, cs.Name, cs.State.Terminated.Reason, cs.State.Terminated.Message, cs.State.Terminated.ExitCode)
-			if cs.State.Terminated.ExitCode != 0 {
-				return pw.GetPodStatus()
-			}
+			return pw.GetPodStatus()
 		}
 	}
 

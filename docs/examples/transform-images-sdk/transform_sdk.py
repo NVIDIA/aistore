@@ -64,7 +64,7 @@ def create_etl(etl_name):
 
 
 def show_etl(etl):
-    print(client.cluster().list_running_etls())
+    print(client.cluster().list_etls())
     print(etl.view())
 
 

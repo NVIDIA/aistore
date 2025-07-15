@@ -229,8 +229,8 @@ func headETLLogs(etlLogs etl.Logs, maxLen int) string {
 	return str
 }
 
-func WaitForContainersStopped(t *testing.T, bp api.BaseParams) {
-	tlog.Logln("Waiting for ETL containers to stop...")
+func WaitForETLAborted(t *testing.T, bp api.BaseParams) {
+	tlog.Logln("Waiting for all ETLs to abort...")
 	var (
 		etls         etl.InfoList
 		stopDeadline = time.Now().Add(20 * time.Second)
@@ -241,14 +241,25 @@ func WaitForContainersStopped(t *testing.T, bp api.BaseParams) {
 	for {
 		etls, err = api.ETLList(bp)
 		tassert.CheckFatal(t, err)
-		if len(etls) == 0 {
-			tlog.Logln("ETL containers stopped successfully")
+
+		allAborted := true
+		for _, info := range etls {
+			if info.Stage != etl.Aborted.String() {
+				allAborted = false
+				break
+			}
+		}
+
+		if allAborted {
+			tlog.Logln("All ETL containers aborted successfully")
 			return
 		}
+
 		if time.Now().After(stopDeadline) {
 			break
 		}
-		tlog.Logf("ETLs %+v still running, waiting %s... \n", etls, interval)
+
+		tlog.Logf("ETLs %+v not fully aborted, waiting %s...\n", etls, interval)
 		time.Sleep(interval)
 	}
 
@@ -420,7 +431,9 @@ func ETLCheckStage(t *testing.T, params api.BaseParams, etlName string, stage et
 func CheckNoRunningETLContainers(t *testing.T, params api.BaseParams) {
 	etls, err := api.ETLList(params)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, len(etls) == 0, "Expected no ETL running, got %+v", etls)
+	for _, info := range etls {
+		tassert.Fatalf(t, info.Stage == etl.Aborted.String(), "expected no running ETL containers, got %s in stage %s", info.Name, info.Stage)
+	}
 }
 
 func SpecToInitMsg(spec []byte /*yaml*/) (*etl.InitSpecMsg, error) {

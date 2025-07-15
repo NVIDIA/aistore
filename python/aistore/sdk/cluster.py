@@ -146,19 +146,23 @@ class Cluster:
             params={QPARAM_WHAT: WHAT_ALL_RUNNING_STATUS},
         )
 
-    def list_running_etls(self) -> List[ETLInfo]:
+    def list_etls(self, stages: Optional[List[str]] = None) -> List[ETLInfo]:
         """
-        Lists all running ETLs.
+        Lists ETLs filtered by their stages.
 
-        Note: Does not list ETLs that have been stopped or deleted.
+        Args:
+            stages (List[str], optional): List of stages to filter ETLs by. Defaults to ["running"].
 
         Returns:
-            List[ETLInfo]: A list of details on running ETLs
+            List[ETLInfo]: A list of details on ETLs matching the specified stages
         """
+        if stages is None:
+            stages = [ETL_STAGE_RUNNING]
+
         res = self._client.request_deserialize(
             HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]
         )
-        return [info for info in res if info.stage == ETL_STAGE_RUNNING]
+        return [info for info in res if info.stage in stages]
 
     def is_ready(self) -> bool:
         """

@@ -1233,21 +1233,21 @@ func (p *proxy) etlInitTxn(initMsg etl.InitMsg, xid, secret string) (string, etl
 	c := &txnCln{p: p, uuid: xid, smap: p.owner.smap.get()}
 	c.init(&apc.ActMsg{Action: apc.ActETLInline, Value: initMsg, Name: secret}, nil, cmn.GCO.Get(), false)
 
-	// 2. begin - broadcast initMsg, xid, secret to targets and collect their pod info
-	podMap, err := etlTxnBegin(c, initMsg)
-	if err != nil {
-		c.bcastAbort(initMsg, err)
-		return "", nil, err
-	}
-
-	// 3. IC
+	// 2. IC
 	smap := p.owner.smap.get()
 	nl := xact.NewXactNL(c.uuid, apc.ActETLInline, &smap.Smap, nil)
 	ef := &_etlFinalizer{p, initMsg} // TODO: add pod watcher to etlFinilazer
 	nl.F = ef.cb
 
 	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{nl: nl, smap: smap})
+	p.ic.registerEqual(regIC{nl: nl, smap: smap, query: c.req.Query})
+
+	// 3. begin - broadcast initMsg, xid, secret to targets and collect their pod info
+	podMap, err := etlTxnBegin(c, initMsg)
+	if err != nil {
+		c.bcastAbort(initMsg, err)
+		return "", nil, err
+	}
 
 	// 4. commit
 	rxid, _, errV := c.commit(initMsg, c.cmtTout(false))

@@ -261,8 +261,8 @@ func AbortByNewReb(err error) { dreg.abort(&abortArgs{err: err, newreb: true}) }
 func DoAbort(flt Flt, err error) {
 	switch {
 	case flt.ID != "":
-		xctn, err := dreg.getXact(flt.ID)
-		if xctn == nil || err != nil {
+		xctn, errV := dreg.getXact(flt.ID)
+		if xctn == nil || errV != nil {
 			return
 		}
 		debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind, "wrong xaction kind: %s vs %q", xctn.Cname(), flt.Kind)

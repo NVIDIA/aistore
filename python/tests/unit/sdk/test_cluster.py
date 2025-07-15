@@ -22,7 +22,7 @@ from aistore.sdk.const import (
     URL_PATH_REVERSE,
     WHAT_NODE_STATS_AND_STATUS,
 )
-from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING, ETL_STAGE_STOPPED
+from aistore.sdk.etl.etl_const import ETL_STAGE_RUNNING, ETL_STAGE_ABORTED
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     Smap,
@@ -172,10 +172,10 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_list_running_etls(self):
         mock_running_etl = Mock(stage=ETL_STAGE_RUNNING)
-        mock_stopped_etl = Mock(stage=ETL_STAGE_STOPPED)
-        mock_response = [mock_running_etl, mock_stopped_etl]
+        mock_aborted_etl = Mock(stage=ETL_STAGE_ABORTED)
+        mock_response = [mock_running_etl, mock_aborted_etl]
         self.mock_client.request_deserialize.return_value = mock_response
-        response = self.cluster.list_running_etls()
+        response = self.cluster.list_etls()
         self.assertEqual([mock_running_etl], response)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]

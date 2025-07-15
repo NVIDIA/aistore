@@ -197,7 +197,7 @@ func (c *baseComm) call() (int, error) {
 
 func (c *baseComm) stop() error {
 	if !c.stopped.CAS(false, true) {
-		return fmt.Errorf("%s already stopped", c.msg.Cname())
+		return nil // already stopped. do nothing
 	}
 
 	// Note: xctn might have already been aborted and finished by pod watcher

@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
@@ -170,12 +169,6 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		}
 		flt := xreg.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
 		xreg.DoAbort(flt, err)
-
-		if xargs.Kind == apc.ActETLInline {
-			if err := etl.StopByXid(xargs.ID, err); err != nil {
-				t.writeErrf(w, r, "%v: %s", err, xargs.String())
-			}
-		}
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}

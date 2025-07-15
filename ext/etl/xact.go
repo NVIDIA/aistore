@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -81,6 +82,15 @@ func newETL(p *factory) *XactETL {
 }
 
 func (*XactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
+
+func (r *XactETL) Abort(err error) (aborted bool) {
+	aborted = r.Base.Abort(err)
+	r.Base.Finish() // trigger proxy notification to abort on other targets
+	if err := Stop(r.msg.Name(), err); err != nil {
+		nlog.Errorln("ETL xaction aborted:", err)
+	}
+	return aborted
+}
 
 func (r *XactETL) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}

@@ -53,41 +53,34 @@ func TestETLTargetDown(t *testing.T) {
 
 	m := &ioContext{
 		t:         t,
-		num:       10000,
+		num:       100_000,
 		fileSize:  512,
 		fixedSize: true,
 	}
 	if testing.Short() {
-		m.num /= 100
-	} else {
-		// TODO: otherwise, error executing LSOF command
-		t.Skipf("skipping %s long test (kill-node vs maintenance vs ETL)", t.Name())
+		m.num /= 10
 	}
 	m.initAndSaveState(true /*cleanup*/)
 	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
-	targetNode, _ := m.smap.GetRandTarget()
-	tlog.Logf("Killing %s\n", targetNode.StringEx())
-	tcmd, err := tools.KillNode(targetNode) // TODO: alternatively, m.startMaintenanceNoRebalance()
-	tassert.CheckFatal(t, err)
+	_, removedTarget := tools.RmTargetSkipRebWait(t, proxyURL, m.smap)
 
 	t.Cleanup(func() {
 		time.Sleep(4 * time.Second)
-		tools.RestoreNode(tcmd, false, "target")
+		var rebID string
+		rebID, _ = tools.RestoreTarget(t, proxyURL, removedTarget)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 		m.waitAndCheckCluState()
-
-		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, _ = api.WaitForXactionIC(baseParams, &args)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
 
-	err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
+	err := tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
 	tassert.CheckFatal(t, err)
-	tetl.WaitForContainersStopped(t, baseParams)
+	tetl.WaitForETLAborted(t, baseParams)
 }
 
 func TestETLBigBucket(t *testing.T) {
@@ -134,7 +127,7 @@ func TestETLBigBucket(t *testing.T) {
 			_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
 			t.Cleanup(func() {
 				tetl.StopAndDeleteETL(t, baseParams, etlName)
-				tetl.WaitForContainersStopped(t, baseParams)
+				tetl.WaitForETLAborted(t, baseParams)
 			})
 
 			tlog.Logf("Start offline ETL[%s]\n", etlName)

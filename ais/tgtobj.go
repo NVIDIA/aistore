@@ -1676,6 +1676,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *cor
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}
 	poi := allocPOI()
+	defer freePOI(poi)
 	{
 		poi.t = t
 		poi.lom = dst
@@ -1698,11 +1699,10 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *cor
 	}
 
 	ecode, err := poi.putObject()
-	res.Lsize = poi.lom.Lsize()
-	freePOI(poi)
 	if err != nil {
 		return xs.CoiRes{Ecode: ecode, Err: err}
 	}
+	res.Lsize = poi.lom.Lsize()
 
 	return res
 }

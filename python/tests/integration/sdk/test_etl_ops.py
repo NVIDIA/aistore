@@ -4,10 +4,13 @@
 
 import os
 import subprocess
+import signal
 import hashlib
 import unittest
 import pytest
 import xxhash
+
+from requests.exceptions import ConnectionError as RequestConnectionError
 
 from aistore.sdk import Bucket
 from aistore.sdk.etl import ETLConfig
@@ -17,12 +20,19 @@ from aistore.sdk.etl.etl_const import (
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
     FASTAPI_CMD,
+    ETL_STAGE_ABORTED,
 )
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.types import EnvVar
 
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
-from tests.utils import cases, create_and_put_object, random_string, has_targets
+from tests.utils import (
+    cases,
+    create_and_put_object,
+    random_string,
+    has_targets,
+    assert_with_retries,
+)
 
 
 # pylint: disable=unused-variable
@@ -575,6 +585,32 @@ class TestETLOps(unittest.TestCase):
             self.bucket.object(self.obj_name).get_reader(
                 etl=ETLConfig(name=etl.name, args="encrypt")
             ).read_all()
+
+    @pytest.mark.etl
+    def test_etl_pod_runtime_failure(self):
+        etl = self.client.etl(self.etl_name)
+
+        @etl.init_class()
+        class PodFailureServer(FastAPIServer):
+            def transform(self, data: bytes, *_args) -> bytes:
+                os.kill(1, signal.SIGTERM)  # Intentionally terminate the pod
+
+        # Attempt to read the object through the ETL, which should cause the pod to terminate
+        with self.assertRaises(
+            RequestConnectionError
+        ):  # RequestConnectionError should be raised after client exceeds the max retries
+            self.bucket.object(self.obj_name).get_reader(
+                etl=ETLConfig(name=etl.name)
+            ).read_all()
+
+        # Assert that the ETL has reached the abort stage
+        # Needs to wait and retry for a while for the proxy notification to propagate
+        def assertion_fn():
+            ls = self.client.cluster().list_etls(stages=[ETL_STAGE_ABORTED])
+            self.assertEqual(len(ls), 1, "Expected one ETL in aborted state")
+            self.assertEqual(ls[0].id, self.etl_name, "ETL name does not match")
+
+        assert_with_retries(assertion_fn)
 
 
 if __name__ == "__main__":
