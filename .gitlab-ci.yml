@@ -668,10 +668,10 @@ test:short:k8s:
   extends: .test_k8s_short_template
   timeout: 1h
   rules:
-    - !reference [.test_k8s_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
       when: manual
       allow_failure: true
+    - !reference [.test_k8s_short_template, rules]
   variables:
     RE: "TestETL|TestConfig|TestMountpath"
   script:
