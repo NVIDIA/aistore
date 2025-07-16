@@ -40,10 +40,13 @@ type (
 		cap  int
 		mu   sync.Mutex
 	}
+)
 
-	// background:
-	// - normally, keeping objects under their original names
-	// - FNTL excepted (see core/lom)
+// os.Rename error
+
+const ErrENOTDIR = "destination contains an object in its path"
+
+type (
 	ErrMv struct {
 		// - type 1: mv readme aaa/bbb, where destination aaa/bbb[/ccc/...] is a virtual directory
 		// - type 2 (a.k.a. ENOTDIR): mv readme aaa/bbb/ccc, where destination aaa/bbb is (or contains) a file
@@ -294,10 +297,14 @@ func IsErrMv(err error) bool {
 	return ok
 }
 
+// to satisfy errors.Is()
+func (e *ErrMv) Is(target error) bool {
+	return e.ty == 2 && target == syscall.ENOTDIR
+}
+
 func (e *ErrMv) Error() string {
 	if e.ty == 2 {
-		// with underlying `ENOTDIR`
-		return "destination contains an object in its path"
+		return ErrENOTDIR
 	}
 	return "destination exists and is a virtual directory"
 }

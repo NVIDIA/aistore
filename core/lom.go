@@ -579,9 +579,10 @@ func (lom *LOM) FromFS() error {
 		// instead of *fs.PathError type
 		return cos.NewErrNotFound(T, lom.Cname())
 
-	case strings.Contains(err.Error(), "not a directory") && cos.IsPathErr(err):
-		// e.g. err "stat .../aaa/111: not a directory" when there's existing ".../aaa" object
-		return fmt.Errorf("%w (object in the path?)", err)
+	case cos.IsErrNotDir(err) && cos.IsPathErr(err):
+		nlog.Warningln(cos.ErrENOTDIR, lom.Cname(), "[", err, "]")
+		return cos.NewErrNotFound(T, lom.Cname())
+
 	case cos.IsErrFntl(err):
 		lom.md.lid = lomBID(lom.Bprops().BID)
 		lom.md.lid = lom.md.lid.setlmfl(lmflFntl)

@@ -5,9 +5,12 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -215,7 +219,64 @@ func (lom *LOM) RenameMainTo(wfqn string) error {
 }
 
 func (lom *LOM) RenameToMain(wfqn string) error {
-	return cos.Rename(wfqn, lom.FQN)
+	err := cos.Rename(wfqn, lom.FQN)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, syscall.ENOTDIR) && lom.Bck().IsRemote() {
+		debug.Assert(cos.IsErrMv(err), err)
+		fdir := filepath.Dir(lom.FQN)
+		found, errV := lom._enotdir(fdir, err)
+		if errV == nil {
+			// recovered - retry just once
+			err = cos.Rename(wfqn, lom.FQN)
+			if err == nil {
+				nlog.Infoln("self heal ok")
+			} else {
+				nlog.Warningln("self heal fail:", err)
+			}
+			return err
+		}
+		if found && !cos.IsNotExist(errV) {
+			T.FSHC(errV, lom.Mountpath(), "")
+		}
+	}
+	return err
+}
+
+// recover from ENOTDIR (above)
+// TODO [observability]: add stats counter
+func (lom *LOM) _enotdir(path string, e error) (bool, error) {
+	const (
+		prefix = ".enotdir."
+	)
+	orig := path
+	bdir := lom.mi.MakePathBck(lom.Bucket())
+	for strings.HasPrefix(path, bdir) {
+		if finfo, err := os.Stat(path); err == nil && !finfo.IsDir() {
+			// the culprit
+			if !finfo.Mode().IsRegular() {
+				nlog.Errorf("unexpected filesystem entity in the %q path: %s", orig, finfo.Mode().String())
+				return true, os.Remove(path)
+			}
+			// move it to trash
+			nlog.Warningln("self-heal: moving", path, "to trash [", lom.Cname(), e, "]")
+
+			flat := prefix + strings.ReplaceAll(path, "/", "_")
+			name := filepath.Join(prefix+strconv.FormatInt(mono.NanoTime(), 32), flat)
+			fqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, name)
+			if err := cos.Rename(path, fqn); err != nil {
+				nlog.Warningln("failed to rename:", err)
+				return true, err
+			}
+			if err := lom.mi.MoveToDeleted(filepath.Dir(fqn)); err != nil {
+				nlog.Warningln("failed to move-del:", err)
+				return true, err
+			}
+		}
+		path = filepath.Dir(path)
+	}
+	return false, nil
 }
 
 func (lom *LOM) RenameFinalize(wfqn string) error {
