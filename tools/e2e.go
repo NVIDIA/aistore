@@ -168,6 +168,14 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					return
 				}
 				continue
+			case "clean-cluster":
+				// Skip if there are pre-existing buckets in the cluster
+				if hasExistingBuckets() {
+					tlog.Logfln("SKIPPING %q: cluster has pre-existing buckets", fileName)
+					ginkgo.Skip("cluster has pre-existing buckets")
+					return
+				}
+				continue
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
 			}
@@ -305,6 +313,26 @@ func readContent(r io.Reader, ignoreEmpty bool) []string {
 	}
 	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
 	return lines
+}
+
+// hasExistingBuckets checks if there are any existing AIS or remote AIS buckets in the cluster
+func hasExistingBuckets() bool {
+	proxyURL := GetPrimaryURL()
+	bp := BaseAPIParams(proxyURL)
+
+	// Check for AIS buckets
+	aisBcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
+	if err == nil && len(aisBcks) > 0 {
+		return true
+	}
+
+	// Check for remote AIS buckets
+	remaisBcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}, apc.FltExists)
+	if err == nil && len(remaisBcks) > 0 {
+		return true
+	}
+
+	return false
 }
 
 func isLineRegex(msg string) bool {
