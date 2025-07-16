@@ -6,7 +6,10 @@ import unittest
 from unittest.mock import Mock, patch
 import requests
 
-from aistore.sdk.multipart_decoder import MultipartDecoder
+from aistore.sdk.get_batch.multipart_decoder import (
+    MultipartDecoder,
+    MultipartDecodeError,
+)
 
 
 # pylint: disable=too-many-public-methods
@@ -99,7 +102,7 @@ class TestMultipartDecoder(unittest.TestCase):
         result = self.decoder._parse_part(part_content)
         self.assertIsNone(result)
 
-    def test_parse_multipart_content_single_part(self):
+    def test_parse_content_single_part(self):
         """Test parsing multipart content with single part."""
         boundary = "boundary123"
         content = (
@@ -110,13 +113,13 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(self.decoder._parse_multipart_content(boundary, content))
+        parts = list(self.decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]
         self.assertEqual(data, b"value1")
         self.assertEqual(headers, b'\r\nContent-Disposition: form-data; name="field1"')
 
-    def test_parse_multipart_content_multiple_parts(self):
+    def test_parse_content_multiple_parts(self):
         """Test parsing multipart content with multiple parts."""
         boundary = "boundary123"
         content = (
@@ -130,7 +133,7 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(self.decoder._parse_multipart_content(boundary, content))
+        parts = list(self.decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 2)
         headers1, data1 = parts[0]
         headers2, data2 = parts[1]
@@ -139,7 +142,7 @@ class TestMultipartDecoder(unittest.TestCase):
         self.assertEqual(headers1, b'\r\nContent-Disposition: form-data; name="field1"')
         self.assertEqual(headers2, b'\r\nContent-Disposition: form-data; name="field2"')
 
-    def test_parse_multipart_content_with_file(self):
+    def test_parse_content_with_file(self):
         """Test parsing multipart content with file upload."""
         boundary = "boundary123"
         file_content = b"binary file content here"
@@ -151,7 +154,7 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(self.decoder._parse_multipart_content(boundary, content))
+        parts = list(self.decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]
         self.assertEqual(data, file_content + b"\r\n")
@@ -178,7 +181,7 @@ class TestMultipartDecoder(unittest.TestCase):
             b"--boundary123--"
         )
 
-        parts = list(self.decoder.decode_multipart(mock_response))
+        parts = list(self.decoder.decode(mock_response))
         self.assertEqual(len(parts), 2)
         headers1, data1 = parts[0]
         headers2, data2 = parts[1]
@@ -187,13 +190,13 @@ class TestMultipartDecoder(unittest.TestCase):
         self.assertEqual(headers1, b'\r\nContent-Disposition: form-data; name="field1"')
         self.assertEqual(headers2, b'\r\nContent-Disposition: form-data; name="field2"')
 
-    def test_decode_multipart_not_multipart_content_type(self):
+    def test_decode_not_multipart_content_type(self):
         """Test decoding failure when response is not multipart."""
         mock_response = Mock()
         mock_response.headers = {"Content-Type": "application/json"}
 
-        with self.assertRaises(ValueError) as context:
-            list(self.decoder.decode_multipart(mock_response))
+        with self.assertRaises(MultipartDecodeError) as context:
+            list(self.decoder.decode(mock_response))
         self.assertIn("not of multipart content type", str(context.exception))
 
     def test_decode_multipart_missing_content_type(self):
@@ -201,11 +204,11 @@ class TestMultipartDecoder(unittest.TestCase):
         mock_response = Mock()
         mock_response.headers = {}
 
-        with self.assertRaises(ValueError) as context:
-            list(self.decoder.decode_multipart(mock_response))
+        with self.assertRaises(MultipartDecodeError) as context:
+            list(self.decoder.decode(mock_response))
         self.assertIn("not of multipart content type", str(context.exception))
 
-    def test_parse_multipart_content_empty_parts(self):
+    def test_parse_content_empty_parts(self):
         """Test parsing multipart content with empty parts."""
         boundary = "boundary123"
         content = (
@@ -217,13 +220,13 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(self.decoder._parse_multipart_content(boundary, content))
+        parts = list(self.decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]
         self.assertEqual(data, b"value1\r\n")
         self.assertEqual(headers, b'\r\nContent-Disposition: form-data; name="field1"')
 
-    def test_parse_multipart_content_with_preamble(self):
+    def test_parse_content_with_preamble(self):
         """Test parsing multipart content with preamble text."""
         boundary = "boundary123"
         content = (
@@ -235,7 +238,7 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(self.decoder._parse_multipart_content(boundary, content))
+        parts = list(self.decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]
         self.assertEqual(data, b"value1\r\n")
@@ -253,7 +256,7 @@ class TestMultipartDecoder(unittest.TestCase):
         )
 
         # pylint: disable=protected-access
-        parts = list(decoder._parse_multipart_content(boundary, content))
+        parts = list(decoder._parse_content(content, boundary))
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]
         self.assertEqual(data, b"value1\r\n")
@@ -281,7 +284,7 @@ class TestMultipartDecoder(unittest.TestCase):
             b"------WebKitFormBoundary7MA4YWxkTrZu0gW--"
         )
 
-        parts = list(self.decoder.decode_multipart(mock_response))
+        parts = list(self.decoder.decode(mock_response))
 
         self.assertEqual(len(parts), 3)
         headers1, data1 = parts[0]
@@ -325,7 +328,7 @@ class TestMultipartDecoder(unittest.TestCase):
             b"--aistore-batch-boundary--"
         )
 
-        parts = list(self.decoder.decode_multipart(mock_response))
+        parts = list(self.decoder.decode(mock_response))
 
         self.assertEqual(len(parts), 2)
         headers1, data1 = parts[0]
@@ -354,7 +357,7 @@ class TestMultipartDecoder(unittest.TestCase):
 
         # Simulate making a request and parsing response
         response = requests.get("NOT REAL URL", timeout=10)
-        parts = list(self.decoder.decode_multipart(response))
+        parts = list(self.decoder.decode(response))
 
         self.assertEqual(len(parts), 1)
         headers, data = parts[0]

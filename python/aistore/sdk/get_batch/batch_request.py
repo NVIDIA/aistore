@@ -32,9 +32,9 @@ class BatchRequest:
     """
     Represents a batch request for retrieving or processing multiple objects from an AIStore cluster.
 
-    A `BatchRequest` allows you to specify a set of objects (optionally including archive members, metadata, or byte ranges)
-    and configure how the batch operation should behave. This class is used to build up the request before
-    sending it to the cluster via the `BatchLoader` class.
+    A `BatchRequest` allows you to specify a set of objects (optionally including archive members,
+    metadata, or byte ranges) and configure how the batch operation should behave. This class is
+    used to build up the request before sending it to the cluster via the `BatchLoader` class.
 
     Args:
         output_format (str, optional): Format for the batch response output. Determines how the
@@ -75,6 +75,7 @@ class BatchRequest:
         self.only_obj_name = only_obj_name
         self.streaming = streaming
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def add_object_request(
         self,
         obj: Object,
@@ -203,5 +204,10 @@ class BatchObjectRequest(BaseModel):
         """Override Pydantic dict to use aliases and exclude default fields from request."""
         return super().dict(by_alias=True, exclude_defaults=True)
 
+    # pylint: disable=too-few-public-methods
     class Config:
+        """
+        BaseModel.Config field setting.
+        """
+
         allow_population_by_field_name = True

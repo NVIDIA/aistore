@@ -23,6 +23,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add `BatchLoader`, `BatchRequest`, and `BatchResponseItem` classes for new GetBatch AIStore API.
 - Add `ArchiveStreamExtractor` for extraction of archive contents streamed from GetBatch calls.
 - Added new internal `BatchObjectRequest` and `BatchResponse` classes to represent metadata.
+- Add new `parse_as_stream` field for `MultipartDecoder` allowing for on-the-fly decoding.
 
 ### Changed
 

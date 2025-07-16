@@ -12,7 +12,7 @@ from aistore.sdk.get_batch.batch_response import (
 )
 from aistore.sdk.get_batch.batch_request import BatchRequest
 from aistore.sdk.get_batch.archive_stream_extractor import ArchiveStreamExtractor
-from aistore.sdk.multipart_decoder import MultipartDecoder
+from aistore.sdk.get_batch.multipart_decoder import MultipartDecoder
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     JSON_CONTENT_TYPE,
@@ -26,6 +26,7 @@ from aistore.sdk.utils import get_logger
 logger = get_logger(__name__)
 
 
+# pylint: disable=too-few-public-methods
 class BatchLoader:
     """
     A high-performance batch data loader for retrieving multiple objects from AIStore clusters.
@@ -33,6 +34,8 @@ class BatchLoader:
     BatchLoader enables efficient downloading and processing of data stored across multiple
     objects, archives, buckets, and providers within an AIStore cluster. It supports both
     streaming and non-streaming modes as well as automatic archive extraction.
+
+    Note that the `BatchLoader` is in development, not fully tested, and subject to change.
     """
 
     def __init__(self, request_client: RequestClient):
@@ -48,7 +51,7 @@ class BatchLoader:
         self,
         batch_request: BatchRequest,
         extractor: Optional[ArchiveStreamExtractor] = ArchiveStreamExtractor(),
-        decoder: Optional[MultipartDecoder] = MultipartDecoder(),
+        decoder: Optional[MultipartDecoder] = MultipartDecoder(parse_as_stream=False),
     ) -> Union[
         Generator[Tuple[BatchResponseItem, bytes], None, None], Union[BytesIO, Any]
     ]:
@@ -87,7 +90,8 @@ class BatchLoader:
                     └── Binary file contents (Archive)
 
         If the decoder is set to None, then this function returns the raw multipart response
-        from the batch request.
+        from the batch request. Note that the decoder `parse_as_stream` functionality is in
+        development, not fully tested, and subject to change.
 
         Args:
             batch_request (BatchRequest): Batch request detailing which objects to load
@@ -126,6 +130,8 @@ class BatchLoader:
             json=batch_request.to_dict(),
         )
 
+        data_stream = None
+
         if batch_request.streaming:
             # Streaming mode: process response as stream
             data_stream = response.raw
@@ -138,17 +144,29 @@ class BatchLoader:
 
             # Non-streaming mode: expect multipart response
             try:
-                parts_iter = decoder.decode_multipart(response)
+                parts_iter = decoder.decode(response)
 
-                # Get metadata json (part 1)
-                batch_response = BatchResponse.from_json(
-                    next(parts_iter)[1].decode(decoder.encoding)
-                )
+                if decoder.parse_as_stream:
+                    # Get metadata json (part 1)
+                    metadata_str = next(parts_iter)[1].read().decode(decoder.encoding)
+                    batch_response = BatchResponse.from_json(metadata_str)
 
-                # Load archive (part 2) into memory buffer for non-streaming mode
-                data_stream = BytesIO(next(parts_iter)[1])
+                    # Load archive (part 2) as file-like iterator
+                    data_stream = next(parts_iter)[1]
+                else:
+                    # Get metadata json (part 1)
+                    batch_response = BatchResponse.from_json(
+                        next(parts_iter)[1].decode(decoder.encoding)
+                    )
+
+                    # Load archive (part 2) into memory buffer for non-streaming mode
+                    data_stream = BytesIO(next(parts_iter)[1])
             finally:
-                response.close()
+                # Need to close in load into memory case
+                if not decoder.parse_as_stream:
+                    response.close()
+                # Otherwise, either response will close when iterator is exhausted
+                # or manually closed by user
 
         if extractor:
             return extractor.extract(data_stream, batch_request, batch_response)

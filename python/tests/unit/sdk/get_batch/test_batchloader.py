@@ -8,7 +8,7 @@ from io import BytesIO
 import tarfile
 import json
 
-from aistore.sdk.multipart_decoder import MultipartDecoder
+from aistore.sdk.get_batch.multipart_decoder import MultipartDecoder
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.get_batch.batch_loader import BatchLoader
 from aistore.sdk.get_batch.batch_request import BatchRequest
@@ -88,7 +88,7 @@ class TestBatchLoader(unittest.TestCase):
         )
 
         # Verify mock calls
-        mock_decoder.decode_multipart.assert_not_called()
+        mock_decoder.decode.assert_not_called()
         self.mock_request_client.request.assert_called_once()
         mock_extractor.extract.assert_called_once()
         mock_extractor.extract.assert_called_with(ANY, self.sample_req, None)
@@ -137,8 +137,9 @@ class TestBatchLoader(unittest.TestCase):
         )
 
         mock_decoder = Mock(spec=MultipartDecoder)
-        mock_decoder.decode_multipart.return_value = mock_parts
+        mock_decoder.decode.return_value = mock_parts
         mock_decoder.encoding = "utf-8"
+        mock_decoder.parse_as_stream = False
 
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
         mock_extractor.extract.return_value = iter(

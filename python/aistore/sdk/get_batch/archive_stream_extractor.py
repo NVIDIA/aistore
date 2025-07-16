@@ -59,7 +59,7 @@ class ArchiveStreamExtractor:
 
         # Default is tar output fmt so cannot enter this state
         raise ValueError(
-            "Unsupported output format type %s" % batch_request.output_format
+            f"Unsupported output format type {batch_request.output_format}"
         )
 
     @staticmethod

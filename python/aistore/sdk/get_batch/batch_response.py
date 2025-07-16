@@ -68,7 +68,12 @@ class BatchResponseItem(BaseModel):
     # Deviation from Go API, handle empty file
     is_missing: bool = Field(default=False)
 
+    # pylint: disable=too-few-public-methods
     class Config:
+        """
+        BaseModel.Config field setting.
+        """
+
         allow_population_by_field_name = True
 
     @classmethod
