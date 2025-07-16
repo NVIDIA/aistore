@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -2115,7 +2114,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// form (in accordance with the associated ClusterConfig.JspOpts()).
 	globalFpath := filepath.Join(config.ConfigDir, fname.GlobalConfig)
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
 				cos.Errorf("ERROR: "+FmtErrBackwardCompat+"\n", err)
 			}
@@ -2175,7 +2174,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 func handleOverrideConfig(config *Config) error {
 	overrideConfig, err := loadOverrideConfig(config.ConfigDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			err = config.Validate() // always validate
 		}
 		return err

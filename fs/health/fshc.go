@@ -1,6 +1,6 @@
 // Package health is a basic mountpath health monitor.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package health
 
@@ -196,7 +196,7 @@ func _rw(mi *fs.Mountpath, fqn string, numFiles, fsize int) (rerrs, werrs int) {
 		nlog.Infoln("1. read one failed fqn:", fqn)
 		if finfo, err := os.Stat(fqn); err == nil && !finfo.IsDir() {
 			numReads++
-			if err := _read(fqn); err != nil && !os.IsNotExist(err) {
+			if err := _read(fqn); err != nil && !cos.IsNotExist(err) {
 				nlog.Errorln(fqn+":", err)
 				if cos.IsIOError(err) {
 					rerrs++

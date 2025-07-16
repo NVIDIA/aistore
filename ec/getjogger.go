@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -78,7 +77,7 @@ func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
 	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/, c.parent.config)
 	ctx.lom = lom
 	err = lom.Load(false /*cache it*/, false /*locked*/)
-	if os.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		err = nil
 	}
 	return ctx, err

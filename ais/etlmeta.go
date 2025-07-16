@@ -6,7 +6,6 @@ package ais
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 	ratomic "sync/atomic"
@@ -174,7 +173,7 @@ func (eo *etlMDOwnerPrx) init() {
 	etlMD := newEtlMD()
 	_, err := jsp.LoadMeta(eo.fpath, etlMD)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorf("failed to load %s from %s, err: %v", etlMD, eo.fpath, err)
 		} else {
 			nlog.Infof("%s does not exist at %s - initializing", etlMD, eo.fpath)
@@ -312,7 +311,7 @@ func loadEtlMDFromMpath(mpath *fs.Mountpath, path string) (etlMD *etlMD) {
 	if err == nil {
 		return etlMD
 	}
-	if !os.IsNotExist(err) {
+	if !cos.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant etlMDs stored.
 		nlog.Errorf("failed to load %s from %s: %v", etlMD, fpath, err)
 	}

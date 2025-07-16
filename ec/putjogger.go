@@ -331,7 +331,7 @@ func (c *putJogger) cleanup(lom *core.LOM) error {
 	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 	md, err := LoadMetadata(ctMeta.FQN())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			// Metafile does not exist = nothing to clean up
 			err = nil
 		}

@@ -7,7 +7,6 @@ package ais
 import (
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -96,7 +95,7 @@ func (co *configOwner) get() (clone *globalConfig, err error) {
 	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {
 		return clone, nil
 	}
-	if os.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		err = nil
 	} else {
 		nlog.Errorf("failed to load global config from %s: %v", co.globalFpath, err)

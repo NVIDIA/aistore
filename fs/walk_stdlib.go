@@ -55,7 +55,7 @@ func (stdlib) walk(fqns []string, opts *WalkOpts) error {
 	}
 	for _, fqn := range fqns {
 		err1 := filepath.WalkDir(fqn, walkFn)
-		if err1 == nil || os.IsNotExist(err1) {
+		if err1 == nil || cos.IsNotExist(err1) {
 			continue
 		}
 		if cmn.IsErrMpathNotFound(err1) {
@@ -83,7 +83,7 @@ func (stdlib) mpathChildren(opts *WalkOpts) (children []string, err error) {
 	// sorting is not needed.
 	entries, err := os.ReadDir(fqn)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			err = nil
 		}
 		return

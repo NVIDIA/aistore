@@ -774,7 +774,7 @@ func getTokenFilePath(c *cli.Context) (string, error) {
 		tokenFilePath = filepath.Join(config.ConfigDir, fname.Token)
 	}
 	if err := cos.Stat(tokenFilePath); err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			return "", fmt.Errorf("failed to access token file %q: %v", tokenFilePath, err)
 		}
 		if createErr := cos.CreateDir(filepath.Dir(tokenFilePath)); createErr != nil {

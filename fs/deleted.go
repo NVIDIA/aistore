@@ -40,7 +40,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 	delroot := mi.DeletedRoot()
 	dentries, err := os.ReadDir(delroot)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			cos.CreateDir(delroot)
 			err = nil
 		}
@@ -57,7 +57,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 		if err = os.RemoveAll(fqn); err == nil {
 			continue
 		}
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorf("%s: failed to remove %q from 'deleted', err %v", who, fqn, err)
 			if rerr == nil {
 				rerr = err
@@ -72,7 +72,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 // 2. Synchronously renames old folder to temporary directory
 func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 	if errN := cos.Stat(dir); errN != nil {
-		if os.IsNotExist(errN) {
+		if cos.IsNotExist(errN) {
 			errN = nil
 		}
 		return errN
@@ -179,7 +179,7 @@ func deworld(allmpi []MPI) (rerr error) {
 	for _, mpi := range allmpi {
 		for _, mi := range mpi {
 			if err := os.RemoveAll(mi.Path); err != nil {
-				debug.Assert(!os.IsNotExist(err))
+				debug.Assert(!cos.IsNotExist(err))
 				// retry ENOTEMPTY in place
 				if errors.Is(err, syscall.ENOTEMPTY) {
 					time.Sleep(desleep)
@@ -202,7 +202,7 @@ func RemoveAll(dir string) (err error) {
 		if err == nil {
 			break
 		}
-		debug.Assert(!os.IsNotExist(err), err)
+		debug.Assert(!cos.IsNotExist(err), err)
 		nlog.ErrorDepth(1, err)
 		if !errors.Is(err, syscall.ENOTEMPTY) {
 			break

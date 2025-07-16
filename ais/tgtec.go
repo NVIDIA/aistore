@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -62,7 +61,7 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 	}
 	md, err := ec.ObjectMetadata(bck, objName)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err, http.StatusInternalServerError, Silent)

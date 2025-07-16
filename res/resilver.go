@@ -213,7 +213,7 @@ func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (str
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
 	// the metafile has gone
-	if err := cos.Stat(src); os.IsNotExist(err) {
+	if err := cos.Stat(src); cos.IsNotExist(err) {
 		return "", "", nil
 	}
 	dst := dstMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
@@ -221,7 +221,7 @@ func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (str
 	if err == nil {
 		return src, dst, nil
 	}
-	if os.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		err = nil
 	}
 	return "", "", err
@@ -304,7 +304,7 @@ redo:
 
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
-			if !os.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
+			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
 				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
 				jg.xres.AddErr(errV, 0)
 			}
@@ -355,7 +355,7 @@ redo:
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			err = cmn.NewErrAborted(xname, "", errV)
 			jg.xres.Abort(err)
-		} else if !os.IsNotExist(err) && !cos.IsErrNotFound(err) {
+		} else if !cos.IsNotExist(err) && !cos.IsErrNotFound(err) {
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
 			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)

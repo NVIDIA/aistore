@@ -317,12 +317,12 @@ func (poi *putOI) loghdr() string {
 
 func (poi *putOI) finalize() (ecode int, err error) {
 	if ecode, err = poi.fini(); err != nil {
-		if err1 := cos.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
+		if err1 := cos.Stat(poi.workFQN); err1 == nil || !cos.IsNotExist(err1) {
 			// cleanup: rm work-fqn
 			if err1 == nil {
 				err1 = err
 			}
-			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil && !os.IsNotExist(err2) {
+			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil && !cos.IsNotExist(err2) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
@@ -562,7 +562,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 			nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
 		}
 	}
-	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil && !os.IsNotExist(nerr) {
+	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil && !cos.IsNotExist(nerr) {
 		nlog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
 	}
 }
@@ -609,7 +609,7 @@ do: // retry uplock or ec-recovery, the latter only once
 
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
-		cold = cos.IsNotExist(err, 0)
+		cold = cos.IsNotExist(err)
 		if !cold {
 			goi.isIOErr = true
 			return http.StatusInternalServerError, err
@@ -1033,7 +1033,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	// open
 	lmfh, err = goi.lom.Open()
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()
 			ecode = http.StatusNotFound
 			goi.retry = goi.lom.ECEnabled()
@@ -1568,12 +1568,12 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		}
 	case coi.PutWOC != nil: // take precedence over GetROC, if any
 		res = coi._writer(t, lom, dst, gargs)
-		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err) {
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
 	case coi.GetROC != nil:
 		res = coi._reader(t, dm, lom, dst, gargs)
-		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err, 0) {
+		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err) {
 			// to keep not-found
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
@@ -1709,7 +1709,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *cor
 
 func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiRes) {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cos.IsNotExist(err, 0) {
+		if !cos.IsNotExist(err) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)
 		}
 		return xs.CoiRes{Err: err}

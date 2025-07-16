@@ -6,7 +6,6 @@ package ais
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 	ratomic "sync/atomic"
@@ -126,7 +125,7 @@ func (r *rmdOwner) load() {
 		r.put(rmd)
 		return
 	}
-	if !os.IsNotExist(err) {
+	if !cos.IsNotExist(err) {
 		nlog.Errorln("failed to load RMD:", err)
 		nlog.Infoln("Warning: make sure to properly decommission previously deployed clusters, proceeding anyway...")
 	}

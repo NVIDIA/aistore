@@ -1329,7 +1329,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cos.IsNotExist(err, 0) {
+		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErr(w, r, err)
@@ -1376,7 +1376,7 @@ func (t *target) putApndArch(r *http.Request, lom *core.LOM, started int64, dpq 
 		put:      false, // below
 	}
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			return http.StatusInternalServerError, err
 		}
 		if flags == apc.ArchAppend {
@@ -1491,7 +1491,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	delFromBackend = lom.Bck().IsRemote() && !evict
 	err := lom.Load(false /*cache it*/, true /*locked*/)
 	if err != nil {
-		if !cos.IsNotExist(err, 0) {
+		if !cos.IsNotExist(err) {
 			if cmn.IsErrObjNought(err) {
 				// cleanup in place
 				if errNested := lom.RemoveMain(); errNested != nil {
@@ -1516,7 +1516,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 		size := lom.Lsize()
 		aisErr = lom.RemoveObj()
 		if aisErr != nil {
-			if !os.IsNotExist(aisErr) {
+			if !cos.IsNotExist(aisErr) {
 				if backendErr != nil {
 					// (unlikely)
 					nlog.Errorf("double-failure to delete %s: ais err %v, backend err %v(%d)",

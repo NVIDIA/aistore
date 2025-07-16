@@ -8,7 +8,6 @@ package volume
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -317,7 +316,7 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 		err = v.load(mpath)
 	)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			return nil, false, nil
 		}
 		return nil, false, &fs.ErrStorageIntegrity{

@@ -200,7 +200,7 @@ func isClusterLocal() (isLocal bool, err error) {
 	}
 	fileData, err = os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			err = nil
 		}
 		return

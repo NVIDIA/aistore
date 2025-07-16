@@ -130,7 +130,7 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 	}
 
 	if err != nil {
-		if cos.IsNotExist(err, 0) {
+		if cos.IsNotExist(err) {
 			return nil
 		}
 		if cos.IsErrOOS(err) {

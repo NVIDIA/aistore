@@ -129,7 +129,7 @@ func (*XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.Remove(fqnMeta); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(fqnMeta); err != nil && !cos.IsNotExist(err) {
 			return fmt.Errorf("error removing %s %q: %w", tp, fqnMeta, err)
 		}
 	}

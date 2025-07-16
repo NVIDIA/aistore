@@ -634,7 +634,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-				if cos.IsNotExist(err, 0) {
+				if cos.IsNotExist(err) {
 					if cmn.Rom.FastV(5, cos.SmoduleReb) {
 						nlog.Infoln(loghdr, lom.Cname(), "not found")
 					}

@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -393,8 +393,10 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 
 	tstats := T.StatsUpdater()
 	if err = lom.flushAtime(atime); err != nil {
-		tstats.Inc(LcacheErrCount)
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
+		if !cos.IsNotExist(err) {
+			tstats.Inc(LcacheErrCount)
+			T.FSHC(err, lom.Mountpath(), lom.FQN)
+		}
 		return
 	}
 

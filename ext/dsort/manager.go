@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -653,7 +652,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	if err = lom.InitBck(&hdr.Bck); err == nil {
 		err = lom.Load(false /*cache it*/, false /*locked*/)
 	}
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !cos.IsNotExist(err) {
 		m.abort(err)
 		return err
 	}

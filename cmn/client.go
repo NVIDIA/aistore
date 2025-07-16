@@ -146,7 +146,7 @@ func NewTLS(sargs TLSArgs, intra bool) (tlsConf *tls.Config, err error) {
 		return tlsConf, nil
 	}
 
-	if os.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		hint = "\n(hint: check the two filenames for existence/accessibility)"
 	}
 	return nil, fmt.Errorf("client tls: failed to load public/private key pair: (%q, %q)%s", sargs.Certificate, sargs.Key, hint)

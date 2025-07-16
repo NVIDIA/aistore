@@ -273,7 +273,7 @@ var _ = Describe("LOM", func() {
 				err := lom.InitFQN(localFQN, nil)
 				Expect(err).NotTo(HaveOccurred())
 				err = lom.Load(false, false)
-				Expect(cos.IsNotExist(err, 0)).To(BeTrue())
+				Expect(cos.IsNotExist(err)).To(BeTrue())
 			})
 
 			It("should find out that object exists", func() {
@@ -1039,7 +1039,7 @@ var _ = Describe("LOM", func() {
 			err := lomLocal.InitBck(&cmn.Bck{Name: sameBucketName, Provider: apc.AIS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false, false)
-			Expect(cos.IsNotExist(err, 0)).To(BeTrue())
+			Expect(cos.IsNotExist(err)).To(BeTrue())
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			uname := lomLocal.Bck().MakeUname(testObject)
 			Expect(lomLocal.Uname()).To(Equal(cos.UnsafeS(uname)))
@@ -1052,7 +1052,7 @@ var _ = Describe("LOM", func() {
 			err = lomCloud.InitBck(&cmn.Bck{Name: sameBucketName, Provider: apc.AWS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomCloud.Load(false, false)
-			Expect(cos.IsNotExist(err, 0)).To(BeTrue())
+			Expect(cos.IsNotExist(err)).To(BeTrue())
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 
 			uname = lomCloud.Bck().MakeUname(testObject)

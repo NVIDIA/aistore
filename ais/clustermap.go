@@ -7,7 +7,6 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -517,7 +516,7 @@ func newSmapOwner(config *cmn.Config) *smapOwner {
 func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
 	_, err = jsp.LoadMeta(r.fpath, smap)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			return false, nil
 		}
 		return false, err

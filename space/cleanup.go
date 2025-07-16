@@ -449,7 +449,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
 		_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			if !cos.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
 				j.ini.Xaction.AddErr(err)
 				core.T.FSHC(err, lom.Mountpath(), lom.FQN)
@@ -534,7 +534,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cos.IsNotExist(err, 0) {
+		if !cos.IsNotExist(err) {
 			j.ini.Xaction.AddErr(err)
 		}
 		return

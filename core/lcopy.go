@@ -1,12 +1,11 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -151,7 +150,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 			break
 		}
 		lom.delCopyMd(copyFQN)
-		if err1 := cos.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
+		if err1 := cos.Stat(copyFQN); err1 != nil && !cos.IsNotExist(err1) {
 			mi, _, err2 := fs.FQN2Mpath(copyFQN)
 			if err2 != nil {
 				nlog.Errorln("nested err:", err2, "fqn:", copyFQN)
@@ -241,7 +240,7 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 		return err
 	}
 	if err := cos.Rename(workFQN, copyFQN); err != nil {
-		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !cos.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
 		return err
@@ -300,7 +299,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	}
 
 	if err = cos.Rename(workFQN, dstFQN); err != nil {
-		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !os.IsNotExist(errRemove) {
+		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !cos.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}
 		return err

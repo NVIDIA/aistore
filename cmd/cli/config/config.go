@@ -197,7 +197,7 @@ func Load(args []string, reset string) (*Config, error) {
 		resetAndExit bool
 	)
 	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, cfg); err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			if !cos.StringInSlice(reset, args) {
 				path := filepath.Join(ConfigDir, fname.CliConfig)
 				return nil, fmt.Errorf("failed to load CLI config %q: %v\n\n%s", path, err, tipReset)

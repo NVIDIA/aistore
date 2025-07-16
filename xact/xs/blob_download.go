@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -424,7 +423,7 @@ fin:
 
 			r.ObjsAdd(1, 0)
 		} else {
-			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !os.IsNotExist(errRemove) {
+			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !cos.IsNotExist(errRemove) {
 				nlog.Errorln("nested err:", errRemove)
 			}
 			if err != cmn.ErrXactUserAbort {

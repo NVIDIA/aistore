@@ -162,7 +162,7 @@ func initPID(config *cmn.Config) string {
 func readProxyID(config *cmn.Config) (pid string) {
 	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
 		pid = string(b)
-	} else if !os.IsNotExist(err) {
+	} else if !cos.IsNotExist(err) {
 		nlog.Errorln(err)
 	}
 	return pid

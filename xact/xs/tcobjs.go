@@ -455,7 +455,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 	a.LatestVer, a.Sync = wi.msg.LatestVer, wi.msg.Sync
 
 	err := r.copier.do(a, lom, r.p.dm)
-	if cos.IsNotExist(err, 0) && lrit.lrp == lrpList {
+	if cos.IsNotExist(err) && lrit.lrp == lrpList {
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}
 }

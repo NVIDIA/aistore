@@ -849,7 +849,7 @@ func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameIn
 // (under rlock)
 func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if cos.IsNotExist(err, 0) && contOnErr {
+		if cos.IsNotExist(err) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
@@ -857,7 +857,7 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 
 	lmfh, err := lom.Open()
 	if err != nil {
-		if cos.IsNotExist(err, 0) && contOnErr {
+		if cos.IsNotExist(err) && contOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
@@ -887,7 +887,7 @@ func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, n
 
 	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
 	if err != nil {
-		if cos.IsNotExist(err, 0) && contOnErr {
+		if cos.IsNotExist(err) && contOnErr {
 			return wi.addMissing(err, nameInArch, out)
 		}
 		return err

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/textproto"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -293,7 +292,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 func (bo *bmdOwnerPrx) init() (prev bool) {
 	bmd, err := _loadBMD(bo.fpath)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
 		} else {
 			nlog.Infof("%s does not exist at %s - initializing", bmd, bo.fpath)
@@ -466,7 +465,7 @@ func loadBMDFromMpath(mpath *fs.Mountpath, path string) (bmd *bucketMD) {
 	if err == nil {
 		return bmd
 	}
-	if !os.IsNotExist(err) {
+	if !cos.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant bmds stored.
 		nlog.Errorf("failed to load %s from %s, err: %v", bmd, fpath, err)
 	}

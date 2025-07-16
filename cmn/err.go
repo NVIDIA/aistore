@@ -1066,7 +1066,7 @@ func IsErrBucketNought(err error) bool {
 
 // lom.Load
 func IsErrObjNought(err error) bool {
-	return cos.IsNotExist(err, 0) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+	return cos.IsNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)

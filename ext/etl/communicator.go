@@ -449,7 +449,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 
 func lomLoad(lom *core.LOM, xKind string) (ecode int, err error) {
 	if err = lom.Load(false /*cacheIt*/, false /*locked*/); err != nil {
-		if cos.IsNotExist(err, 0) && lom.Bucket().IsRemote() {
+		if cos.IsNotExist(err) && lom.Bucket().IsRemote() {
 			return core.T.GetCold(context.Background(), lom, xKind, cmn.OwtGetLock)
 		}
 	}

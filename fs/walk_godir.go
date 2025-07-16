@@ -8,10 +8,10 @@ package fs
 
 import (
 	"context"
-	"os"
 	"sort"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 
@@ -62,7 +62,7 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 	}
 	for _, fqn := range fqns {
 		err1 := godirwalk.Walk(fqn, gOpts)
-		if err1 == nil || os.IsNotExist(err1) {
+		if err1 == nil || cos.IsNotExist(err1) {
 			continue
 		}
 		if cmn.IsErrMpathNotFound(err1) {
@@ -95,7 +95,7 @@ func (godir) mpathChildren(opts *WalkOpts) (children []string, err error) {
 	children, err = godirwalk.ReadDirnames(fqn, scratch)
 	slab.Free(scratch)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			err = nil
 		}
 		return

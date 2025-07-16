@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -168,7 +167,7 @@ func cleanupOldInventory(cloudBck *cmn.Bck, svc *s3.Client, lsV2resp *s3.ListObj
 func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 	size, _, mtime, err := ctx.Lom.Fstat(false /*get-atime*/)
 	if err != nil {
-		debug.Assert(os.IsNotExist(err), err)
+		debug.Assert(cos.IsNotExist(err), err)
 		nlog.Infoln(invTag, "does not exist, getting a new one for the timestamp:", latest)
 		return time.Time{}, false
 	}
@@ -265,7 +264,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	}
 
 	// otherwise
-	if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
+	if nerr := cos.RemoveFile(wfqn); nerr != nil && !cos.IsNotExist(nerr) {
 		nlog.Errorf("get-inv (%v), nested fail to remove (%v)", err, nerr)
 	}
 	if abrt := xblob.AbortErr(); abrt != nil {

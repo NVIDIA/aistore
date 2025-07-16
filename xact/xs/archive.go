@@ -640,7 +640,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		if !cos.IsNotExist(err, 0) {
+		if !cos.IsNotExist(err) {
 			wi.r.AddErr(err, 5, cos.SmoduleXs)
 			return
 		}

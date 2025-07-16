@@ -174,7 +174,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 
 	cos.Close(partFh)
 	if err != nil {
-		if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
+		if nerr := cos.RemoveFile(wfqn); nerr != nil && !cos.IsNotExist(nerr) {
 			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
 		}
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
@@ -329,7 +329,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		errA = fmt.Errorf("upload %q %q: expected full size=%d, got %d", uploadID, lom.Cname(), size, written)
 	}
 	if errA != nil {
-		if nerr := cos.RemoveFile(wfqn); nerr != nil && !os.IsNotExist(nerr) {
+		if nerr := cos.RemoveFile(wfqn); nerr != nil && !cos.IsNotExist(nerr) {
 			nlog.Errorf(fmtNested, t, errA, "remove", wfqn, nerr)
 		}
 		s3.WriteMptErr(w, r, errA, 0, lom, uploadID)

@@ -925,7 +925,7 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 		finfos, err = os.ReadDir(fromPath)
 	)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
 		}
 		return
@@ -948,7 +948,7 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())
 			)
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
-			if err != nil && os.IsNotExist(err) {
+			if err != nil && cos.IsNotExist(err) {
 				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
 				mfs.hc.FSHC(err, mi, "")
 				ok = false

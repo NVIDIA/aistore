@@ -307,7 +307,7 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	}
 	md, err := ec.LoadMetadata(ctMeta.FQN())
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			err = nil
 		}
 		return err

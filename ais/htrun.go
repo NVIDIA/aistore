@@ -1188,7 +1188,7 @@ func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Val
 	fh, err := os.Open(log)
 	if err != nil {
 		ecode := http.StatusInternalServerError
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			ecode = http.StatusNotFound
 		}
 		h.writeErr(w, r, err, ecode)
@@ -1274,7 +1274,7 @@ func _targzLogs(aw archive.Writer, logdir, severity string, dentries []os.DirEnt
 
 		rfh, errO := os.Open(fullPath)
 		if errO != nil {
-			if os.IsNotExist(errO) {
+			if cos.IsNotExist(errO) {
 				continue
 			}
 			return fmt.Errorf("open-log %s: %w", fullPath, errO)
@@ -1350,7 +1350,7 @@ func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, ecode in
 
 func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
-	if cos.IsNotExist(err, 0) {
+	if cos.IsNotExist(err) {
 		h.writeErrMsg(w, r, err.Error(), http.StatusNotFound)
 	} else {
 		h.writeErrMsg(w, r, err.Error())

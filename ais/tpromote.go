@@ -88,7 +88,7 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 		// avoid extra copy: use the source as `workFQN`
 		fi, err := os.Stat(params.SrcFQN)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if cos.IsNotExist(err) {
 				err = nil
 			}
 			return -1, 0, err
@@ -160,7 +160,7 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 	// not opening LOM here - opening params.SrcFQN source (to be promoted)
 	fh, err := cos.NewFileHandle(lom.FQN)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cos.IsNotExist(err) {
 			return 0, err
 		}
 		return 0, cmn.NewErrFailedTo(t, "open", params.SrcFQN, err)

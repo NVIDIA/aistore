@@ -229,7 +229,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 				return tsi, nil
 			}
 		}
-		if err != nil && cos.IsNotExist(err, 0) {
+		if err != nil && cos.IsNotExist(err) {
 			return tsi, nil
 		}
 		if err != nil {
@@ -253,7 +253,7 @@ func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
 		return nil, err
 	}
 	locMD, err := ec.LoadMetadata(mdCT.FQN())
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && cos.IsNotExist(err) {
 		err = nil
 	}
 	return locMD, err

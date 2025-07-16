@@ -35,7 +35,7 @@ type errBdir struct {
 }
 
 func (e *errBdir) Error() string {
-	if os.IsNotExist(e.err) {
+	if cos.IsNotExist(e.err) {
 		return e.cname + ": missing bdir (bucket exists?)"
 	}
 	return fmt.Sprintf("%s: missing bdir [%v]", e.cname, e.err)
@@ -86,7 +86,7 @@ func (lom *LOM) Open() (fh cos.LomReader, err error) {
 	switch {
 	case err == nil:
 		return fh, nil
-	case os.IsNotExist(err):
+	case cos.IsNotExist(err):
 		if e := lom._checkBdir(); e != nil {
 			err = e
 		}
@@ -138,7 +138,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 			lom.PopFntl(saved)
 		}
 		return fh, err
-	case !os.IsNotExist(err):
+	case !cos.IsNotExist(err):
 		T.FSHC(err, lom.Mountpath(), "")
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 	})
 	err = lom.RemoveMain()
 	for copyFQN := range lom.md.copies {
-		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) && err == nil {
+		if erc := cos.RemoveFile(copyFQN); erc != nil && !cos.IsNotExist(erc) && err == nil {
 			err = erc
 		}
 	}

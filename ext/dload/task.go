@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -71,7 +70,7 @@ func (task *singleTask) download(lom *core.LOM) {
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
 	}
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !cos.IsNotExist(err) {
 		task.markFailed(internalErrorMsg)
 		return
 	}

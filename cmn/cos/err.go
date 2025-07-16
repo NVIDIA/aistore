@@ -79,8 +79,10 @@ func (e *ErrNotFound) Error() string {
 }
 
 func IsErrNotFound(err error) bool {
-	_, ok := err.(*ErrNotFound)
-	return ok || strings.Contains(err.Error(), "does not exist")
+	if _, ok := err.(*ErrNotFound); ok {
+		return true
+	}
+	return err != nil && strings.Contains(err.Error(), "does not exist")
 }
 
 // ErrAlreadyExists
@@ -101,13 +103,9 @@ func (e *ErrAlreadyExists) Error() string {
 // gen-purpose not-finding-anything: objects, directories, xactions, nodes, ...
 //
 
-// NOTE: compare with cmn.IsErrObjNought() that also includes lmeta-not-found et al.
-func IsNotExist(err error, ecode int) bool {
-	if ecode == http.StatusNotFound {
+func IsNotExist(err error, ecode ...int) bool {
+	if len(ecode) > 0 && ecode[0] == http.StatusNotFound {
 		return true
-	}
-	if err == nil {
-		return false
 	}
 	return IsErrNotFound(err) || os.IsNotExist(err) /*unwraps for fs.ErrNotExist*/
 }

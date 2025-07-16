@@ -166,7 +166,7 @@ func _getAllClusterLogs(c *cli.Context, sev, outFile string) error {
 			if !finfo.IsDir() {
 				return fmt.Errorf("path %q exists but is not a directory; a directory is required to download individual log archives", outFile)
 			}
-		case !os.IsNotExist(err):
+		case !cos.IsNotExist(err):
 			return err
 		case !flagIsSet(c, yesFlag):
 			warn := fmt.Sprintf("create directory %q", outFile)

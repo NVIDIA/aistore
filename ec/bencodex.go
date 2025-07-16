@@ -246,7 +246,7 @@ func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 	if err == nil && !md.IsCopy {
 		return nil
 	}
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !cos.IsNotExist(err) {
 		nlog.Warningln("failed to fstat", mdFQN, "err:", err)
 		if errDel := os.Remove(mdFQN); errDel != nil {
 			nlog.Warningln("nested err: failed to delete broken metafile:", errDel)
