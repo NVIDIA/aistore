@@ -224,7 +224,7 @@ func (lom *LOM) RenameToMain(wfqn string) error {
 		return nil
 	}
 	if errors.Is(err, syscall.ENOTDIR) && lom.Bck().IsRemote() {
-		debug.Assert(cos.IsErrMv(err), err)
+		debug.Assert(cos.IsErrMv(err), err) // cos.Rename() returned cos.ErrMv of the type 2
 		fdir := filepath.Dir(lom.FQN)
 		found, errV := lom._enotdir(fdir, err)
 		if errV == nil {

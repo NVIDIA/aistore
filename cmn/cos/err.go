@@ -42,26 +42,6 @@ type (
 	}
 )
 
-// os.Rename error
-
-const ErrENOTDIR = "destination contains an object in its path"
-
-type (
-	ErrMv struct {
-		// - type 1: mv readme aaa/bbb, where destination aaa/bbb[/ccc/...] is a virtual directory
-		// - type 2 (a.k.a. ENOTDIR): mv readme aaa/bbb/ccc, where destination aaa/bbb is (or contains) a file
-		ty int
-	}
-)
-
-var (
-	ErrQuantityUsage   = errors.New("invalid quantity, format should be '81%' or '1GB'")
-	ErrQuantityPercent = errors.New("percent must be in the range (0, 100)")
-	ErrQuantityBytes   = errors.New("value (bytes) must be non-negative")
-
-	errQuantityNonNegative = errors.New("quantity should not be negative")
-)
-
 var errBufferUnderrun = errors.New("buffer underrun")
 
 // ErrNotFound
@@ -213,10 +193,6 @@ func IsErrFntl(err error) bool {
 	return strings.Contains(err.Error(), "too long") && errors.Is(err, syscall.ENAMETOOLONG)
 }
 
-func IsErrNotDir(err error) bool {
-	return strings.Contains(err.Error(), "directory") && errors.Is(err, syscall.ENOTDIR)
-}
-
 // likely out of socket descriptors
 func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)
@@ -280,6 +256,23 @@ func Err2ClientURLErr(err error) (uerr *url.Error) {
 func IsErrClientURLTimeout(err error) bool {
 	uerr := Err2ClientURLErr(err)
 	return uerr != nil && uerr.Timeout()
+}
+
+//
+// ErrMv and related bits
+//
+
+const ErrENOTDIR = "destination contains an object in its path"
+
+type ErrMv struct {
+	// - type 1: mv readme aaa/bbb, where destination aaa/bbb[/ccc/...] is a virtual directory
+	// - type 2 (a.k.a. ENOTDIR): mv readme aaa/bbb/ccc, where destination aaa/bbb is (or contains) a file
+	// - see also: ErrMv.Is() below
+	ty int
+}
+
+func IsErrNotDir(err error) bool {
+	return errors.Is(err, syscall.ENOTDIR)
 }
 
 func checkMvErr(err error, dst string) error {

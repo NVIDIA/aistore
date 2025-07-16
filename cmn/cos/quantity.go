@@ -5,6 +5,7 @@
 package cos
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -21,6 +22,14 @@ type (
 		Type  string
 		Value uint64
 	}
+)
+
+var (
+	ErrQuantityUsage   = errors.New("invalid quantity, format should be '81%' or '1GB'")
+	ErrQuantityPercent = errors.New("percent must be in the range (0, 100)")
+	ErrQuantityBytes   = errors.New("value (bytes) must be non-negative")
+
+	errQuantityNonNegative = errors.New("quantity should not be negative")
 )
 
 ///////////////////
