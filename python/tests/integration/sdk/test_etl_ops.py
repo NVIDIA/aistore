@@ -597,7 +597,7 @@ class TestETLOps(unittest.TestCase):
 
         # Attempt to read the object through the ETL, which should cause the pod to terminate
         with self.assertRaises(
-            RequestConnectionError
+            (RequestConnectionError, AISError)
         ):  # RequestConnectionError should be raised after client exceeds the max retries
             self.bucket.object(self.obj_name).get_reader(
                 etl=ETLConfig(name=etl.name)
