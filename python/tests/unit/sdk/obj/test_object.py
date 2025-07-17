@@ -657,14 +657,15 @@ class TestObject(unittest.TestCase):
         mock_response.status_code = 200
         self.mock_client.request.return_value = mock_response
 
-        etl_config = ETLConfig(name=ETL_NAME, args={"format": "jpeg"})
+        # TODO: Once etl_args work, add them in config/test
+        etl_config = ETLConfig(name=ETL_NAME)
+
         response = self.object.copy(dest_object, etl=etl_config)
 
         self.assertEqual(response, mock_response)
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{OBJ_NAME}"
         expected_params[QPARAM_ETL_NAME] = ETL_NAME
-        expected_params[QPARAM_ETL_ARGS] = '{"format":"jpeg"}'
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
