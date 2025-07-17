@@ -4,7 +4,12 @@
  */
 package apc
 
-import "github.com/NVIDIA/aistore/cmn/debug"
+import (
+	"encoding/json"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+)
 
 // Definitions
 // ===========
@@ -94,4 +99,23 @@ func (in *MossIn) NameInRespArch(bucket string, onlyObjName bool) string {
 	default:
 		return in.Bucket + "/" + in.ObjName
 	}
+}
+
+// validate ArchPath and ObjName
+func (in *MossIn) UnmarshalJSON(data []byte) error {
+	type alias MossIn
+	var tmp = (*alias)(in)
+	if err := json.Unmarshal(data, tmp); err != nil {
+		return err
+	}
+
+	if err := cos.ValidateOname(in.ObjName); err != nil {
+		return err
+	}
+	if in.ArchPath != "" {
+		if err := cos.ValidateArchpath(in.ArchPath); err != nil {
+			return err
+		}
+	}
+	return nil
 }

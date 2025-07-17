@@ -203,6 +203,9 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 	switch key {
 	case apc.QparamArchpath:
 		dpq.arch.path, err = url.QueryUnescape(val)
+		if err == nil && dpq.arch.path != "" {
+			err = cos.ValidateArchpath(dpq.arch.path)
+		}
 	case apc.QparamArchmime:
 		dpq.arch.mime, err = url.QueryUnescape(val)
 	case apc.QparamArchregx:

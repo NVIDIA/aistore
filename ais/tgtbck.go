@@ -407,7 +407,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		}
 		// NOTE: validate object names - each name individually
 		for _, name := range evdMsg.ObjNames {
-			if err := cmn.ValidateOname(name); err != nil {
+			if err := cos.ValidateOname(name); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}

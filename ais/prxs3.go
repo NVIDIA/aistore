@@ -233,7 +233,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 		return
 	}
 	objName := s3.ObjName(parts)
-	if err := cmn.ValidOname(objName); err != nil {
+	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -509,7 +509,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidOname(objName); err != nil {
+	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -548,7 +548,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidOname(objName); err != nil {
+	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -630,7 +630,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidOname(objName); err != nil {
+	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -662,7 +662,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	objName := s3.ObjName(items)
-	if err := cmn.ValidOname(objName); err != nil {
+	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}

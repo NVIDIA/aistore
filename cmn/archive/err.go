@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -16,11 +16,10 @@ const TarBlockSize = 512 // Size of each block in a tar stream
 
 const fmtErrTooShort = "%s file is too short, should have at least %d size"
 
-// assorted errors
 type (
-	ErrUnknownMime struct{ detail string }
+	errUnknownMime struct{ detail string }
 
-	ErrUnknownFileExt struct {
+	errUnknownFileExt struct {
 		filename string
 		detail   string
 	}
@@ -28,20 +27,19 @@ type (
 
 var ErrTarIsEmpty = errors.New("tar is empty")
 
-func NewErrUnknownMime(d string) *ErrUnknownMime { return &ErrUnknownMime{d} }
-func (e *ErrUnknownMime) Error() string          { return "unknown mime type \"" + e.detail + "\"" }
+func newErrUnknownMime(d string) error  { return &errUnknownMime{d} }
+func (e *errUnknownMime) Error() string { return "unknown mime type \"" + e.detail + "\"" }
 
 func IsErrUnknownMime(err error) bool {
-	_, ok := err.(*ErrUnknownMime)
+	_, ok := err.(*errUnknownMime)
 	return ok
 }
 
-func NewErrUnknownFileExt(filename, detail string) (e *ErrUnknownFileExt) {
-	e = &ErrUnknownFileExt{filename: filename, detail: detail}
-	return
+func newErrUnknownFileExt(filename, detail string) error {
+	return &errUnknownFileExt{filename: filename, detail: detail}
 }
 
-func (e *ErrUnknownFileExt) Error() (s string) {
+func (e *errUnknownFileExt) Error() (s string) {
 	s = fmt.Sprintf("unknown filename extension (%q, %q)", e.filename, cos.Ext(e.filename))
 	if e.detail != "" {
 		s += " - " + e.detail
@@ -50,6 +48,6 @@ func (e *ErrUnknownFileExt) Error() (s string) {
 }
 
 func IsErrUnknownFileExt(err error) bool {
-	_, ok := err.(*ErrUnknownFileExt)
+	_, ok := err.(*errUnknownFileExt)
 	return ok
 }

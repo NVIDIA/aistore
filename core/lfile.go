@@ -321,6 +321,9 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 // uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
 func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
 	debug.Assert(archpath != "")
+	if err := cos.ValidateArchpath(archpath); err != nil {
+		return nil, err
+	}
 	mime, err = archive.MimeFile(lmfh, T.ByteMM(), mime, lom.ObjName)
 	if err != nil {
 		return nil, err

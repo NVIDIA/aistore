@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -39,6 +40,19 @@ type (
 		cnt  int64
 		cap  int
 		mu   sync.Mutex
+	}
+)
+
+type (
+	errInvalidObjName struct {
+		name string
+	}
+	errInvalidPrefix struct {
+		tag    string
+		prefix string
+	}
+	errInvalidArchpath struct {
+		path string
 	}
 )
 
@@ -301,3 +315,60 @@ func (e *ErrMv) Error() string {
 	}
 	return "destination exists and is a virtual directory"
 }
+
+// errInvalidObjName, errInvalidPrefix
+
+const (
+	inv1 = "../"
+	inv2 = "~/"
+)
+
+func ValidateOname(name string) error {
+	if name == "" {
+		return &errInvalidObjName{name}
+	}
+	return ValidOname(name)
+}
+
+func ValidOname(name string) error {
+	if IsLastB(name, filepath.Separator) {
+		return &errInvalidObjName{name}
+	}
+	if strings.IndexByte(name, inv1[0]) < 0 && strings.IndexByte(name, inv2[0]) < 0 { // most of the time
+		return nil
+	}
+	if strings.Contains(name, inv1) || strings.Contains(name, inv2) {
+		return &errInvalidObjName{name}
+	}
+	return nil
+}
+
+func (e *errInvalidObjName) Error() string {
+	return fmt.Sprintf("invalid object name %q", e.name)
+}
+
+func ValidatePrefix(tag, prefix string) error {
+	if prefix == "" {
+		return nil
+	}
+	if strings.IndexByte(prefix, inv1[0]) < 0 && strings.IndexByte(prefix, inv2[0]) < 0 { // ditto
+		return nil
+	}
+	if strings.Contains(prefix, inv1) || strings.Contains(prefix, inv2) {
+		return &errInvalidPrefix{tag, prefix}
+	}
+	return nil
+}
+
+func (e *errInvalidPrefix) Error() string {
+	return fmt.Sprintf("%s: invalid prefix %q", e.tag, e.prefix)
+}
+
+func ValidateArchpath(path string) error {
+	if ValidOname(path) != nil {
+		return &errInvalidArchpath{path}
+	}
+	return nil
+}
+
+func (e *errInvalidArchpath) Error() string { return "invalid archpath \"" + e.path + "\"" }

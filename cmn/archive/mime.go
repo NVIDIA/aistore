@@ -104,7 +104,7 @@ func normalize(mime string) (string, error) {
 			}
 		}
 	}
-	return "", NewErrUnknownMime(mime)
+	return "", newErrUnknownMime(mime)
 }
 
 // by filename extension
@@ -114,7 +114,7 @@ func byExt(filename string) (string, error) {
 			return ext, nil
 		}
 	}
-	return "", NewErrUnknownFileExt(filename, "")
+	return "", newErrUnknownFileExt(filename, "")
 }
 
 // NOTE convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
@@ -124,7 +124,7 @@ func MimeFile(file cos.LomReader, smm *memsys.MMSA, mime, archname string) (m st
 		return
 	}
 	if smm == nil {
-		err = NewErrUnknownFileExt(archname, "not reading file magic")
+		err = newErrUnknownFileExt(archname, "not reading file magic")
 		return
 	}
 	// by magic
@@ -158,7 +158,7 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 		return
 	}
 	if smm == nil {
-		err = NewErrUnknownFileExt(archname, "not reading file magic")
+		err = newErrUnknownFileExt(archname, "not reading file magic")
 		return
 	}
 	fh, err := os.Open(archname)
@@ -180,15 +180,15 @@ func _detect(lh cos.LomReader, archname, mime string, buf []byte) (string, int, 
 	switch mime {
 	case ExtTar:
 		if n < sizeDetectMime {
-			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTar, sizeDetectMime))
+			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTar, sizeDetectMime))
 		}
 	case ExtTarGz:
 		if l := magicGzip.offset + len(magicGzip.sig) + 4; n < l {
-			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
 		}
 	case ExtTarLz4:
 		if l := magicLz4.offset + len(magicLz4.sig) + 4; n < l {
-			return "", n, NewErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
 		}
 	}
 	for _, magic := range allMagics {
