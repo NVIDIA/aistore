@@ -23,7 +23,7 @@ require (
 	github.com/lufia/iostat v1.2.1
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
-	github.com/oracle/oci-go-sdk/v65 v65.94.0
+	github.com/oracle/oci-go-sdk/v65 v65.95.2
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
