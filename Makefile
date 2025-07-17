@@ -341,7 +341,7 @@ restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
 	@echo "Generating swagger annotations from code comments..."
 	@GOROOT="" go generate ./...
 	@echo "Installing swag if not present..."
-	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@latest
+	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@v1.16.4
 	@echo "Generating OpenAPI specification..."
 	@mkdir -p .docs
 	@swag init --generalInfo tools/gendocs/annotations.go --output .docs

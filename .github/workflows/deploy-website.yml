@@ -30,6 +30,8 @@ jobs:
           curl -L https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > ~/bin/openapitools/openapi-generator-cli
           chmod +x ~/bin/openapitools/openapi-generator-cli
           echo "$HOME/bin/openapitools" >> $GITHUB_PATH
+        env:
+          OPENAPI_GENERATOR_VERSION: 7.14.0
 
       - name: Generate API Documentation
         run: |
