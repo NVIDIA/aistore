@@ -74,6 +74,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [list\_objects](#bucket.Bucket.list_objects)
     * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
     * [list\_all\_objects](#bucket.Bucket.list_all_objects)
+    * [list\_archive](#bucket.Bucket.list_archive)
     * [transform](#bucket.Bucket.transform)
     * [put\_files](#bucket.Bucket.put_files)
     * [object](#bucket.Bucket.object)
@@ -90,6 +91,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [job](#client.Client.job)
     * [etl](#client.Client.etl)
     * [dsort](#client.Client.dsort)
+    * [batch\_loader](#client.Client.batch_loader)
     * [fetch\_object\_by\_url](#client.Client.fetch_object_by_url)
     * [get\_object\_from\_url](#client.Client.get_object_from_url)
 * [cluster](#cluster)
@@ -100,7 +102,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [list\_buckets](#cluster.Cluster.list_buckets)
     * [list\_jobs\_status](#cluster.Cluster.list_jobs_status)
     * [list\_running\_jobs](#cluster.Cluster.list_running_jobs)
-    * [list\_running\_etls](#cluster.Cluster.list_running_etls)
+    * [list\_etls](#cluster.Cluster.list_etls)
     * [is\_ready](#cluster.Cluster.is_ready)
     * [get\_performance](#cluster.Cluster.get_performance)
     * [get\_uuid](#cluster.Cluster.get_uuid)
@@ -149,6 +151,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [bucket\_provider](#obj.object.Object.bucket_provider)
     * [query\_params](#obj.object.Object.query_params)
     * [name](#obj.object.Object.name)
+    * [uname](#obj.object.Object.uname)
     * [props](#obj.object.Object.props)
     * [props\_cached](#obj.object.Object.props_cached)
     * [head](#obj.object.Object.head)
@@ -161,6 +164,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [get\_writer](#obj.object.Object.get_writer)
     * [promote](#obj.object.Object.promote)
     * [delete](#obj.object.Object.delete)
+    * [copy](#obj.object.Object.copy)
     * [blob\_download](#obj.object.Object.blob_download)
     * [append\_content](#obj.object.Object.append_content)
     * [set\_custom\_props](#obj.object.Object.set_custom_props)
@@ -174,7 +178,6 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [\_\_iter\_\_](#obj.object_reader.ObjectReader.__iter__)
 * [obj.obj\_file.object\_file](#obj.obj_file.object_file)
   * [ObjectFileReader](#obj.obj_file.object_file.ObjectFileReader)
-    * [content\_iterator](#obj.obj_file.object_file.ObjectFileReader.content_iterator)
     * [readable](#obj.obj_file.object_file.ObjectFileReader.readable)
     * [read](#obj.obj_file.object_file.ObjectFileReader.read)
     * [close](#obj.obj_file.object_file.ObjectFileReader.close)
@@ -1381,6 +1384,42 @@ Returns a list of all objects in bucket
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ReadTimeout` - Timed out receiving response from AIStore
 
+<a id="bucket.Bucket.list_archive"></a>
+
+### list\_archive
+
+```python
+def list_archive(archive_obj_name: str,
+                 include_archive_obj: bool = False,
+                 props: str = "",
+                 page_size: int = 0) -> List[BucketEntry]
+```
+
+List files contained in an archived object (*.tar, *.zip, *.tgz, etc.).
+
+This is a convenience wrapper around `list_all_objects` that
+automatically enables the `ARCH_DIR` list-flag so the cluster opens
+the shard and returns its directory.
+
+**Arguments**:
+
+- `archive_obj_name` _str_ - Object key of the shard inside this bucket
+  (e.g. `"my-archive.tar"`). Can include a prefix path.
+- `include_archive_obj` _bool, optional_ - If `True` the returned
+  list includes the parent archive object itself. When
+  `False` (default) only the entries *inside* the shard are
+  returned.
+- `props` _str, optional_ - Comma-separated list of object properties to
+  request. Defaults to `""` (no properties).
+- `page_size` _int, optional_ - Same meaning as in
+  `list_all_objects` – how many names per internal page.
+  
+
+**Returns**:
+
+- `List[BucketEntry]` - Entries representing the shard (optionally) and
+  every file stored inside it.
+
 <a id="bucket.Bucket.transform"></a>
 
 ### transform
@@ -1396,7 +1435,8 @@ def transform(etl_name: str,
               dry_run: bool = False,
               latest: bool = False,
               sync: bool = False,
-              num_workers: Optional[int] = 0) -> str
+              num_workers: Optional[int] = 0,
+              cont_on_err: bool = False) -> str
 ```
 
 Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -1418,6 +1458,7 @@ result to the destination bucket
 - `num_workers` _int, optional_ - Number of concurrent workers for the transformation job per target
   - 0 (default): number of mountpaths
   - -1: single thread, serial execution
+- `cont_on_err` - (bool): If True, continue processing objects even if some of them fail
   
 
 **Returns**:
@@ -1721,6 +1762,22 @@ Does not make any HTTP request, only instantiates a dSort object.
 
   dSort object created
 
+<a id="client.Client.batch_loader"></a>
+
+### batch\_loader
+
+```python
+def batch_loader()
+```
+
+Factory constructor for BatchLoader object.
+Contains APIs related to AIStore GetBatch operations.
+Does not make any HTTP requests, only creates BatchLoader.
+
+**Returns**:
+
+- `BatchLoader` - The BatchLoader created
+
 <a id="client.Client.fetch_object_by_url"></a>
 
 ### fetch\_object\_by\_url
@@ -1891,21 +1948,24 @@ List the currently running jobs on the cluster
 
   List of jobs in the format job_kind[job_id]
 
-<a id="cluster.Cluster.list_running_etls"></a>
+<a id="cluster.Cluster.list_etls"></a>
 
-### list\_running\_etls
+### list\_etls
 
 ```python
-def list_running_etls() -> List[ETLInfo]
+def list_etls(stages: Optional[List[str]] = None) -> List[ETLInfo]
 ```
 
-Lists all running ETLs.
+Lists ETLs filtered by their stages.
 
-Note: Does not list ETLs that have been stopped or deleted.
+**Arguments**:
+
+- `stages` _List[str], optional_ - List of stages to filter ETLs by. Defaults to ["running"].
+  
 
 **Returns**:
 
-- `List[ETLInfo]` - A list of details on running ETLs
+- `List[ETLInfo]` - A list of details on ETLs matching the specified stages
 
 <a id="cluster.Cluster.is_ready"></a>
 
@@ -2453,7 +2513,7 @@ def copy(to_bck: "Bucket",
          force: bool = False,
          latest: bool = False,
          sync: bool = False,
-         num_workers: int = None)
+         num_workers: int = None) -> List[str]
 ```
 
 Copies a list or range of objects in a bucket
@@ -2485,7 +2545,7 @@ Copies a list or range of objects in a bucket
 
 **Returns**:
 
-  Job ID (as str) that can be used to check the status of the operation
+- `List[str]` - List of job IDs that can be used to check the status of the operation
 
 <a id="multiobj.object_group.ObjectGroup.transform"></a>
 
@@ -2550,7 +2610,7 @@ def archive(archive_name: str,
             to_bck: "Bucket" = None,
             include_source_name: bool = False,
             allow_append: bool = False,
-            continue_on_err: bool = False)
+            continue_on_err: bool = False) -> List[str]
 ```
 
 Create or append to an archive
@@ -2567,7 +2627,7 @@ Create or append to an archive
 
 **Returns**:
 
-  Job ID (as str) that can be used to check the status of the operation
+- `List[str]` - List of job IDs that can be used to check the status of the operation
 
 <a id="multiobj.object_group.ObjectGroup.list_names"></a>
 
@@ -2722,6 +2782,21 @@ def name() -> str
 ```
 
 Name of this object.
+
+<a id="obj.object.Object.uname"></a>
+
+### uname
+
+```python
+@property
+def uname() -> str
+```
+
+Unified name (uname) of this object, which combines the bucket path and object name.
+
+**Returns**:
+
+- `str` - The unified name in the format bucket_path/object_name
 
 <a id="obj.object.Object.props"></a>
 
@@ -3039,6 +3114,36 @@ Delete an object from a bucket.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exceptions.HTTPError(404)` - The object does not exist
 
+<a id="obj.object.Object.copy"></a>
+
+### copy
+
+```python
+def copy(to_obj: "Object", etl: Optional[ETLConfig] = None) -> Response
+```
+
+Copy this object to another object (which specifies the destination bucket and name),
+optionally with ETL transformation.
+
+**Arguments**:
+
+- `to_obj` _Object_ - Destination object specifying both the target bucket and object name
+- `etl` _ETLConfig, optional_ - ETL configuration for transforming the object during copy
+  
+
+**Returns**:
+
+- `Response` - The response from the copy operation
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There's an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+
 <a id="obj.object.Object.blob_download"></a>
 
 ### blob\_download
@@ -3235,14 +3340,14 @@ with automatic retry/resumption in case of unexpected stream interruptions (e.g.
 ### \_\_iter\_\_
 
 ```python
-def __iter__() -> Iterator[bytes]
+def __iter__() -> Generator[bytes, None, None]
 ```
 
 Make a request to get a stream from the provided object and yield chunks of the stream content.
 
 **Returns**:
 
-- `Iterator[bytes]` - An iterator over each chunk of bytes in the object.
+  Generator[bytes, None, None]: An iterator over each chunk of bytes in the object.
 
 <a id="obj.obj_file.object_file.ObjectFileReader"></a>
 
@@ -3257,7 +3362,7 @@ reading a fixed size of data and reading until the end of file (EOF).
 
 When a read is requested, any remaining data from a previously fetched chunk is returned first. If the remaining
 data is insufficient to satisfy the request, the `read()` method fetches additional chunks from the provided
-`content_iterator` as needed, until the requested size is fulfilled or the end of the stream is reached.
+iterator as needed, until the requested size is fulfilled or the end of the stream is reached.
 
 In case of unexpected stream interruptions (e.g. `ChunkedEncodingError`, `ConnectionError`) or timeouts (e.g.
 `ReadTimeout`), the `read()` method automatically retries and resumes fetching data from the last successfully
@@ -3265,19 +3370,8 @@ retrieved chunk. The `max_resume` parameter controls how many retry attempts are
 
 **Arguments**:
 
-- `content_iterator` _ContentIterator_ - An iterator that can fetch object data from AIS in chunks.
+- `content_provider` _ContentIterProvider_ - A provider that creates iterators which can fetch object data from AIS in chunks.
 - `max_resume` _int_ - Maximum number of resumes allowed for an ObjectFileReader instance.
-
-<a id="obj.obj_file.object_file.ObjectFileReader.content_iterator"></a>
-
-### content\_iterator
-
-```python
-@property
-def content_iterator() -> ContentIterator
-```
-
-Return the content iterator.
 
 <a id="obj.obj_file.object_file.ObjectFileReader.readable"></a>
 
