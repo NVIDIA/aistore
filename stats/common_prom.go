@@ -24,7 +24,7 @@ import (
 
 type (
 	statsValue struct {
-		iadd       iadd
+		iprom      iprom
 		kind       string // enum { KindCounter, ..., KindSpecial }
 		Value      int64  `json:"v,string"`
 		numSamples int64  // (average latency over stats_time)
@@ -219,30 +219,30 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 		opts := prometheus.CounterOpts{Namespace: "ais", Subsystem: snode.Type(), Name: metricName, Help: help, ConstLabels: constLabs}
 		if len(extra.VarLabs) > 0 {
 			metric := prometheus.NewCounterVec(opts, extra.VarLabs)
-			v.iadd = counterVec{metric}
+			v.iprom = counterVec{metric}
 			promRegistry.MustRegister(metric)
 		} else {
 			metric := prometheus.NewCounter(opts)
-			v.iadd = counter{metric}
+			v.iprom = counter{metric}
 			promRegistry.MustRegister(metric)
 		}
 
 	case KindLatency:
 		// computed over 'periodic.stats_time'; used for logs; hidden from prometheus (v3.26)
-		v.iadd = latency{}
+		v.iprom = latency{}
 	case KindThroughput:
 		// ditto (v3.26)
-		v.iadd = throughput{}
+		v.iprom = throughput{}
 
 	default:
 		opts := prometheus.GaugeOpts{Namespace: "ais", Subsystem: snode.Type(), Name: metricName, Help: help, ConstLabels: constLabs}
 		if len(extra.VarLabs) > 0 {
 			metric := prometheus.NewGaugeVec(opts, extra.VarLabs)
-			v.iadd = gaugeVec{metric}
+			v.iprom = gaugeVec{metric}
 			promRegistry.MustRegister(metric)
 		} else {
 			metric := prometheus.NewGauge(opts)
-			v.iadd = gauge{metric}
+			v.iprom = gauge{metric}
 			promRegistry.MustRegister(metric)
 		}
 	}

@@ -273,7 +273,7 @@ This alerting system provides comprehensive visibility into the operational stat
 
 ## StatsD Alternative
 
-> **Important**: StatsD support is deprecated and will likely be removed by the end of 2025. New deployments should use the native Prometheus integration described above.
+> **Important**: StatsD is deprecated. All support for StatsD will be **completely removed** by Fall 2025.
 
 ### StatsD Exporter for Prometheus
 

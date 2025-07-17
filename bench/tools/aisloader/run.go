@@ -553,10 +553,13 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.readerType, "readertype", readers.TypeSG,
 		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s | %s", readers.TypeSG, readers.TypeFile, readers.TypeRand, readers.TypeTar))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
-	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
+
+	// see also: docs/monitoring-overview.md
+	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname (NOTE: deprecated)")
+	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port (NOTE: deprecated)")
+	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running (NOTE: deprecated)")
+
 	f.StringVar(&p.tokenFile, "tokenfile", "", "authentication token (FQN)") // see also: AIS_AUTHN_TOKEN_FILE
-	f.IntVar(&p.statsdPort, "statsdport", 8125, "StatsD UDP port")
-	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running")
 	f.IntVar(&p.batchSize, "batchsize", 100, "batch size to list and delete")
 	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
 	f.Int64Var(&p.seed, "seed", 0, "random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")

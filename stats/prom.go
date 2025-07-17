@@ -18,7 +18,7 @@ import (
 )
 
 type (
-	iadd interface {
+	iprom interface {
 		inc(parent *statsValue)
 		incWith(parent *statsValue, nv cos.NamedVal64)
 		add(parent *statsValue, val int64)
@@ -37,13 +37,13 @@ type (
 
 // interface guard
 var (
-	_ iadd = (*latency)(nil)
-	_ iadd = (*throughput)(nil)
+	_ iprom = (*latency)(nil)
+	_ iprom = (*throughput)(nil)
 
-	_ iadd = (*counter)(nil)
-	_ iadd = (*counterVec)(nil)
-	_ iadd = (*gauge)(nil)
-	_ iadd = (*gaugeVec)(nil)
+	_ iprom = (*counter)(nil)
+	_ iprom = (*counterVec)(nil)
+	_ iprom = (*gauge)(nil)
+	_ iprom = (*gaugeVec)(nil)
 )
 
 //
@@ -135,7 +135,7 @@ func (v gaugeVec) addWith(parent *statsValue, nv cos.NamedVal64) {
 	v.With(nv.VarLabs).Add(float64(nv.Value))
 }
 
-// illegal
+// illegal; TODO: simplify and reduce once (deprecated) StatsD is removed
 
 func (counter) incWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
 func (counter) addWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
@@ -157,42 +157,42 @@ func (s *coreStats) add(name string, val int64) {
 	v, ok := s.Tracker[name]
 	debug.Assertf(ok, "invalid metric name %q", name)
 
-	v.iadd.add(v, val)
+	v.iprom.add(v, val)
 }
 
 func (s *coreStats) inc(name string) {
 	v, ok := s.Tracker[name]
 	debug.Assertf(ok, "invalid metric name %q", name)
 
-	v.iadd.inc(v)
+	v.iprom.inc(v)
 }
 
 func (s *coreStats) set(name string, val int64) {
 	v, ok := s.Tracker[name]
 	debug.Assertf(ok, "invalid metric name %q", name)
 
-	v.iadd.set(v, val)
+	v.iprom.set(v, val)
 }
 
 func (s *coreStats) addWith(nv cos.NamedVal64) {
 	v, ok := s.Tracker[nv.Name]
 	debug.Assertf(ok, "invalid metric name %q", nv.Name)
 
-	v.iadd.addWith(v, nv)
+	v.iprom.addWith(v, nv)
 }
 
 func (s *coreStats) incWith(nv cos.NamedVal64) {
 	v, ok := s.Tracker[nv.Name]
 	debug.Assertf(ok, "invalid metric name %q", nv.Name)
 
-	v.iadd.incWith(v, nv)
+	v.iprom.incWith(v, nv)
 }
 
 func (s *coreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
 
-	vprom, ok := v.iadd.(gauge)
+	vprom, ok := v.iprom.(gauge)
 	debug.Assert(ok, Uptime)
 
 	vprom.Set(d.Seconds())

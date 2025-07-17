@@ -64,6 +64,11 @@ func initProm(*meta.Snode) {}
 func (s *coreStats) statsdDisabled() bool { return s.statsdC == nil }
 
 func (s *coreStats) initStarted(snode *meta.Snode) {
+	//
+	// NOTE: deprecation notice
+	//
+	nlog.Warningln("StatsD is deprecated and will be completely removed by Fall 2025.")
+
 	var (
 		port  = 8125  // StatsD default port, see https://github.com/etsy/statsd
 		probe = false // test-probe StatsD server at init time

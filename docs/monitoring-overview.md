@@ -16,7 +16,7 @@ AIS provides multiple _layers_ of observability:
 ├─────────────────────────────────┤
 │       Collection Layer          │
 │  ┌───────────┐    ┌───────────┐ │
-│  │ Prometheus│    │  StatsD*  │ │
+│  │ Prometheus│    │  StatsD** │ │
 │  │           │    │           │ │
 │  └───────────┘    └───────────┘ │
 ├─────────────────────────────────┤
@@ -34,11 +34,11 @@ AIS provides multiple _layers_ of observability:
 └─────────────────────────────────┘
 ```
 
-> `(*)` StatsD support will _likely_ be removed in late 2025.
-
 ## Transition from StatsD to Prometheus
 
-AIS began with StatsD for metrics collection but has evolved to primarily use Prometheus. Key points about this transition:
+AIS began with StatsD for metrics collection but has evolved to primarily use Prometheus.
+
+> `(**)` StatsD is now deprecated. All support for StatsD will be **completely removed** by Fall 2025.
 
 - **Prometheus** (and Grafana) is now the recommended monitoring system
 - All new metric implementations use Prometheus exclusively
