@@ -22,18 +22,18 @@ func NewAWS(core.TargetPut, stats.Tracker, bool) (core.Backend, error) {
 	return nil, &cmn.ErrInitBackend{Provider: apc.AWS}
 }
 
-func StartMpt(*core.LOM, *http.Request, url.Values) (string, int, error) {
+func StartMptAWS(*core.LOM, *http.Request, url.Values) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("start-mpt", mock)
 }
 
-func PutMptPart(*core.LOM, io.ReadCloser, *http.Request, url.Values, string, int64, int32) (string, int, error) {
+func PutMptPartAWS(*core.LOM, io.ReadCloser, *http.Request, url.Values, string, int64, int32) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("put-mpt-part", mock)
 }
 
-func CompleteMpt(*core.LOM, *http.Request, url.Values, string, []byte, *s3types.CompleteMptUpload) (string, string, int, error) {
+func CompleteMptAWS(*core.LOM, *http.Request, url.Values, string, []byte, *s3types.CompleteMptUpload) (string, string, int, error) {
 	return "", "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-part", mock)
 }
 
-func AbortMpt(*core.LOM, *http.Request, url.Values, string) (int, error) {
+func AbortMptAWS(*core.LOM, *http.Request, url.Values, string) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("abort-mpt", mock)
 }

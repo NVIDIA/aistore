@@ -33,7 +33,7 @@ func decodeXML[T any](body []byte) (result T, _ error) {
 	return result, nil
 }
 
-func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecode int, _ error) {
+func StartMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecode int, _ error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, oq)
 		resp, err := pts.Do(core.T.DataClient())
@@ -76,7 +76,7 @@ func StartMpt(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecod
 	return id, ecode, err
 }
 
-func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (string, int, error) {
+func PutMptPartAWS(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (string, int, error) {
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned
@@ -120,7 +120,7 @@ func PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Value
 	return etag, 0, nil
 }
 
-func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte,
+func CompleteMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte,
 	parts *aiss3.CompleteMptUpload) (version, etag string, _ int, _ error) {
 	h := cmn.BackendHelpers.Amazon
 
@@ -172,7 +172,7 @@ func CompleteMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID stri
 	return version, etag, 0, nil
 }
 
-func AbortMpt(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {
+func AbortMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
 		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oq)
 		resp, err := pts.Do(core.T.DataClient())

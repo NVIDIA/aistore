@@ -65,14 +65,22 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if bck.IsRemoteS3() {
+	switch {
+	case bck.IsRemoteS3():
 		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
-		uploadID, ecode, err = backend.StartMpt(lom, r, q)
+		uploadID, ecode, err = backend.StartMptAWS(lom, r, q)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
 			return
 		}
-	} else {
+	case bck.IsRemoteOCI():
+		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
+		uploadID, ecode, err = backend.StartMptOCI(t.Backend(lom.Bck()), lom, r, q)
+		if err != nil {
+			s3.WriteErr(w, r, err, ecode)
+			return
+		}
+	default:
 		uploadID = cos.GenUUID()
 	}
 
@@ -145,7 +153,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
 		cksumSHA     = &cos.CksumHash{}
 		cksumMD5     = &cos.CksumHash{}
-		remote       = bck.IsRemoteS3()
+		remote       = bck.IsRemoteS3() || bck.IsRemoteOCI()
 	)
 	if checkPartSHA {
 		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
@@ -168,7 +176,12 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		size = r.ContentLength
 		debug.Assert(size > 0, "mpt upload: expecting positive content-length")
 		remoteStart := mono.NanoTime()
-		etag, ecode, err = backend.PutMptPart(lom, tr, r, q, uploadID, size, partNum)
+		if bck.IsRemoteS3() {
+			etag, ecode, err = backend.PutMptPartAWS(lom, tr, r, q, uploadID, size, partNum)
+		} else {
+			debug.Assert(bck.IsRemoteOCI())
+			etag, ecode, err = backend.PutMptPartOCI(t.Backend(lom.Bck()), lom, tr, r, q, uploadID, size, partNum)
+		}
 		remotePutLatency = mono.SinceNano(remoteStart)
 	}
 
@@ -272,16 +285,27 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		version string
 		etag    string
 		started = time.Now()
-		remote  = bck.IsRemoteS3()
+		remote  = bck.IsRemoteS3() || bck.IsRemoteOCI()
 	)
 	if remote {
-		v, e, ecode, err := backend.CompleteMpt(lom, r, q, uploadID, body, partList)
-		if err != nil {
-			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-			return
+		if bck.IsRemoteS3() {
+			v, e, ecode, err := backend.CompleteMptAWS(lom, r, q, uploadID, body, partList)
+			if err != nil {
+				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
+				return
+			}
+			version = v
+			etag = e
+		} else {
+			debug.Assert(bck.IsRemoteOCI())
+			v, e, ecode, err := backend.CompleteMptOCI(t.Backend(lom.Bck()), lom, r, q, uploadID, body, partList)
+			if err != nil {
+				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
+				return
+			}
+			version = v
+			etag = e
 		}
-		version = v
-		etag = e
 	}
 
 	// append parts and finalize locally
@@ -446,7 +470,13 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	if bck.IsRemoteS3() {
-		ecode, err := backend.AbortMpt(lom, r, q, uploadID)
+		ecode, err := backend.AbortMptAWS(lom, r, q, uploadID)
+		if err != nil {
+			s3.WriteErr(w, r, err, ecode)
+			return
+		}
+	} else if bck.IsRemoteOCI() {
+		ecode, err := backend.AbortMptOCI(t.Backend(lom.Bck()), lom, r, q, uploadID)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)
 			return

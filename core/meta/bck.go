@@ -73,6 +73,14 @@ func (b *Bck) IsRemoteS3() bool {
 	return backend != nil && backend.Provider == apc.AWS
 }
 
+func (b *Bck) IsRemoteOCI() bool {
+	if b.Provider == apc.OCI {
+		return true
+	}
+	backend := b.Backend()
+	return backend != nil && backend.Provider == apc.OCI
+}
+
 // TODO: mem-pool
 func (b *Bck) NewQuery() (q url.Values) {
 	q = make(url.Values, 4)
