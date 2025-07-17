@@ -96,7 +96,13 @@ func (s *coreStats) initStarted(snode *meta.Snode) {
 // compare w/ prometheus
 func (s *coreStats) addWith(nv cos.NamedVal64) { s.add(nv.Name, nv.Value) }
 
-func (s *coreStats) inc(name string)           { s.add(name, 1) }    // (for the sake of Prometheus optimization)
+func (s *coreStats) inc(name string) { s.add(name, 1) } // (for the sake of Prometheus optimization)
+func (s *coreStats) set(name string, nval int64) {
+	v, ok := s.Tracker[name]
+	debug.Assertf(ok, "invalid metric name %q", name)
+	ratomic.StoreInt64(&v.Value, nval)
+}
+
 func (s *coreStats) incWith(nv cos.NamedVal64) { s.add(nv.Name, 1) } // ditto
 
 func (s *coreStats) add(name string, val int64) {

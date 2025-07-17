@@ -356,14 +356,14 @@ func (r *runner) SetFlag(name string, set cos.NodeStateFlags) {
 	v := r.core.Tracker[name]
 	oval := ratomic.LoadInt64(&v.Value)
 	nval := oval | int64(set)
-	ratomic.StoreInt64(&v.Value, nval)
+	r.core.set(name, nval)
 }
 
 func (r *runner) ClrFlag(name string, clr cos.NodeStateFlags) {
 	v := r.core.Tracker[name]
 	oval := ratomic.LoadInt64(&v.Value)
 	nval := oval &^ int64(clr)
-	ratomic.StoreInt64(&v.Value, nval)
+	r.core.set(name, nval)
 }
 
 func (r *runner) SetClrFlag(name string, set, clr cos.NodeStateFlags) {
@@ -374,7 +374,7 @@ func (r *runner) SetClrFlag(name string, set, clr cos.NodeStateFlags) {
 		return
 	}
 	nval &^= int64(clr)
-	ratomic.StoreInt64(&v.Value, nval)
+	r.core.set(name, nval)
 }
 
 func (r *runner) Name() string { return r.name }

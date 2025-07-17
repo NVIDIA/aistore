@@ -649,15 +649,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 			nlog.Warningln("missing:", n)
 			continue
 		}
-		v.Value = stats.RBps
-		v = s.Tracker[r.nameRavg(disk)]
-		v.Value = stats.Ravg
-		v = s.Tracker[r.nameWbps(disk)]
-		v.Value = stats.WBps
-		v = s.Tracker[r.nameWavg(disk)]
-		v.Value = stats.Wavg
-		v = s.Tracker[r.nameUtil(disk)]
-		v.Value = stats.Util
+		s.set(n, stats.RBps)
+		s.set(r.nameRavg(disk), stats.Ravg)
+		s.set(r.nameWbps(disk), stats.WBps)
+		s.set(r.nameWavg(disk), stats.Wavg)
+		s.set(r.nameUtil(disk), stats.Util)
 	}
 
 	// 2 copy stats, reset latencies, send via StatsD if configured

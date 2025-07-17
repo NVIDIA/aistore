@@ -23,6 +23,7 @@ type (
 		incWith(parent *statsValue, nv cos.NamedVal64)
 		add(parent *statsValue, val int64)
 		addWith(parent *statsValue, nv cos.NamedVal64)
+		set(parent *statsValue, val int64)
 	}
 
 	latency    struct{}
@@ -120,6 +121,11 @@ func (v gauge) add(parent *statsValue, val int64) {
 	v.Add(float64(val))
 }
 
+func (v gauge) set(parent *statsValue, val int64) {
+	ratomic.StoreInt64(&parent.Value, val)
+	v.Set(float64(val))
+}
+
 func (v gaugeVec) incWith(parent *statsValue, nv cos.NamedVal64) {
 	ratomic.AddInt64(&parent.Value, 1)
 	v.With(nv.VarLabs).Inc()
@@ -133,12 +139,17 @@ func (v gaugeVec) addWith(parent *statsValue, nv cos.NamedVal64) {
 
 func (counter) incWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
 func (counter) addWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
+func (counter) set(*statsValue, int64)              { debug.Assert(false) }
 func (counterVec) inc(*statsValue)                  { debug.Assert(false) }
 func (counterVec) add(*statsValue, int64)           { debug.Assert(false) }
+func (counterVec) set(*statsValue, int64)           { debug.Assert(false) }
 func (gauge) incWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
 func (gauge) addWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
 func (gaugeVec) inc(*statsValue)                    { debug.Assert(false) }
 func (gaugeVec) add(*statsValue, int64)             { debug.Assert(false) }
+func (gaugeVec) set(*statsValue, int64)             { debug.Assert(false) }
+func (latency) set(*statsValue, int64)              { debug.Assert(false) }
+func (throughput) set(*statsValue, int64)           { debug.Assert(false) }
 
 // coreStats
 
@@ -154,6 +165,13 @@ func (s *coreStats) inc(name string) {
 	debug.Assertf(ok, "invalid metric name %q", name)
 
 	v.iadd.inc(v)
+}
+
+func (s *coreStats) set(name string, val int64) {
+	v, ok := s.Tracker[name]
+	debug.Assertf(ok, "invalid metric name %q", name)
+
+	v.iadd.set(v, val)
 }
 
 func (s *coreStats) addWith(nv cos.NamedVal64) {
