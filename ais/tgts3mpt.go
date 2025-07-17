@@ -74,7 +74,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 			return
 		}
 	case bck.IsRemoteOCI():
-		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
+		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header) // TODO -- FIXME: must be cmn.BackendHelpers.OCI
 		uploadID, ecode, err = backend.StartMptOCI(t.Backend(lom.Bck()), lom, r, q)
 		if err != nil {
 			s3.WriteErr(w, r, err, ecode)

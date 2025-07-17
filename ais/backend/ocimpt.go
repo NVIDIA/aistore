@@ -14,14 +14,46 @@ import (
 	"net/url"
 
 	s3types "github.com/NVIDIA/aistore/ais/s3"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
 )
 
+// StartMptOCI initiates multipart upload for OCI backend via S3 API compatibility.
+//
+// Background
+// ==========
+// AIStore provides a unified backend abstraction where all operations route through
+// t.Backend(bck) to get the appropriate backend implementation (AWS, OCI, GCP, etc.).
+// Regular S3 operations (PUT/GET/LIST) work with any backend through this
+// abstraction, but multipart uploads are currently not universal (yet).
+//
+// This source enables S3 clients (boto3, s3cmd, aws cli, etc.) to perform multipart uploads
+// against OCI backend without code changes, providing a migration path from
+// AWS S3 to OCI and multi-cloud compatibility.
+//
+// S3 Client App → S3 API calls → AIStore /v1/s3 endpoint → OCI backend
+//
+// Stateful backend instance
+// =========================
+//
+// Unlike AWS S3 MPU which can create sessions on-demand, OCI requires
+// a pre-configured backend instance containing stateful components:
+// - namespace (OCI-specific namespace identifier)
+// - configurationProvider (authentication setup)
+// - client (_single_ instance shared across all oc:// buckets
+//        expensive to create (DNS, auth handshake)))
+// - compartmentOCID and various MPU settings
+//
+// The backend parameter is guaranteed to be *ocibp by the call path
+// routing logic (see ais/tgts3mpt)
+
 func StartMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Values) (string, int, error) {
+	bp, ok := bpif.(*ocibp)
+	debug.Assert(ok)
+
 	var (
-		bp                           = bpif.(*ocibp)
 		cloudBck                     = lom.Bck().RemoteBck()
 		createMultipartUploadRequest = ocios.CreateMultipartUploadRequest{
 			NamespaceName: &bp.namespace,

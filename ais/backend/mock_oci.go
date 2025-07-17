@@ -19,7 +19,7 @@ import (
 )
 
 func NewOCI(core.TargetPut, stats.Tracker, bool) (core.Backend, error) {
-	return nil, &cmn.ErrInitBackend{Provider: apc.GCP}
+	return nil, &cmn.ErrInitBackend{Provider: apc.OCI}
 }
 
 func StartMptOCI(core.Backend, *core.LOM, *http.Request, url.Values) (string, int, error) {
@@ -31,7 +31,7 @@ func PutMptPartOCI(core.Backend, *core.LOM, io.ReadCloser, *http.Request, url.Va
 }
 
 func CompleteMptOCI(core.Backend, *core.LOM, *http.Request, url.Values, string, []byte, *s3types.CompleteMptUpload) (string, string, int, error) {
-	return "", "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-part", mock)
+	return "", "", http.StatusBadRequest, cmn.NewErrUnsupp("complete-mpt", mock)
 }
 
 func AbortMptOCI(core.Backend, *core.LOM, *http.Request, url.Values, string) (int, error) {
