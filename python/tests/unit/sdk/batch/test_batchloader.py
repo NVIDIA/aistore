@@ -2,8 +2,9 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
+
 import unittest
-from unittest.mock import Mock, ANY
+from unittest.mock import Mock, ANY, patch
 from io import BytesIO
 import tarfile
 import json
@@ -37,6 +38,7 @@ class TestBatchLoader(unittest.TestCase):
     """
     Unit tests for BatchLoader class.
 
+
     Tests cover initialization and batch requests with different fields.
     """
 
@@ -52,14 +54,16 @@ class TestBatchLoader(unittest.TestCase):
         """Test get_batch with None or empty request raises ValueError."""
         with self.assertRaises(ValueError) as context:
             list(self.batch_loader.get_batch(None))
-        self.assertIn("Empty or missing BatchRequest", str(context.exception))
+        self.assertIn("Batch request must not be empty", str(context.exception))
 
         empty_req = BatchRequest()
         with self.assertRaises(ValueError) as context:
             list(self.batch_loader.get_batch(empty_req))
-        self.assertIn("Empty or missing BatchRequest", str(context.exception))
+        self.assertIn("Batch request must not be empty", str(context.exception))
 
-    def test_get_batch_streaming(self):
+    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
+    @patch("aistore.sdk.batch.batch_loader.MultipartDecoder")
+    def test_get_batch_streaming(self, mock_decoder_class, mock_extractor_class):
         """Test BatchLoader get_batch in streaming mode."""
         mock_response = Mock()
         mock_response.raw = BytesIO(self._create_test_tar())
@@ -72,6 +76,7 @@ class TestBatchLoader(unittest.TestCase):
             "size": 1,
         }
 
+        # Configure mock instances
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
         mock_extractor.extract.return_value = iter(
             [
@@ -79,19 +84,18 @@ class TestBatchLoader(unittest.TestCase):
                 (BatchResponseItem(**obj_req), b"file content 2"),
             ]
         )
-        mock_decoder = Mock(spec=MultipartDecoder)
+        mock_extractor_class.return_value = mock_extractor
 
-        result = list(
-            self.batch_loader.get_batch(
-                self.sample_req, extractor=mock_extractor, decoder=mock_decoder
-            )
-        )
+        mock_decoder = Mock(spec=MultipartDecoder)
+        mock_decoder_class.return_value = mock_decoder
+
+        result = list(self.batch_loader.get_batch(self.sample_req))
 
         # Verify mock calls
         mock_decoder.decode.assert_not_called()
         self.mock_request_client.request.assert_called_once()
         mock_extractor.extract.assert_called_once()
-        mock_extractor.extract.assert_called_with(ANY, self.sample_req, None)
+        mock_extractor.extract.assert_called_with(ANY, ANY, self.sample_req, None)
 
         self.assertEqual(len(result), 2)
         result_dict = result[0][0].dict(by_alias=True)
@@ -101,7 +105,9 @@ class TestBatchLoader(unittest.TestCase):
         self.assertEqual(result[0][1], b"file content 1")
         self.assertEqual(result[1][1], b"file content 2")
 
-    def test_get_batch_non_streaming(self):
+    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
+    @patch("aistore.sdk.batch.batch_loader.MultipartDecoder")
+    def test_get_batch_non_streaming(self, mock_decoder_class, mock_extractor_class):
         """Test BatchLoader get_batch in non-streaming mode."""
         batch_request = self.sample_req
         batch_request.streaming = False
@@ -136,10 +142,12 @@ class TestBatchLoader(unittest.TestCase):
             ]
         )
 
+        # Configure mock instances
         mock_decoder = Mock(spec=MultipartDecoder)
         mock_decoder.decode.return_value = mock_parts
         mock_decoder.encoding = "utf-8"
         mock_decoder.parse_as_stream = False
+        mock_decoder_class.return_value = mock_decoder
 
         mock_extractor = Mock(spec=ArchiveStreamExtractor)
         mock_extractor.extract.return_value = iter(
@@ -148,13 +156,10 @@ class TestBatchLoader(unittest.TestCase):
                 (BatchResponseItem(**obj_req), b""),
             ]
         )
+        mock_extractor_class.return_value = mock_extractor
 
         # Execute get_batch
-        result = list(
-            self.batch_loader.get_batch(
-                batch_request, decoder=mock_decoder, extractor=mock_extractor
-            )
-        )
+        result = list(self.batch_loader.get_batch(batch_request))
 
         mock_extractor.extract.assert_called()
 
@@ -170,17 +175,19 @@ class TestBatchLoader(unittest.TestCase):
         mock_response.raw = BytesIO(b"raw tar data")
         self.mock_request_client.request.return_value = mock_response
 
-        result = self.batch_loader.get_batch(self.sample_req, None)
+        result = self.batch_loader.get_batch(self.sample_req, return_raw=True)
 
         # Should return raw stream, not decoded content
         self.assertIsNotNone(result)
         self.assertIsInstance(result, BytesIO)
 
-    def test_get_batch_extractor(self):
+    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
+    def test_get_batch_extractor(self, mock_extractor_class):
         """Test BatchLoader with extractor."""
         mock_response = Mock()
         mock_response.raw = BytesIO(b"raw tar data")
         self.mock_request_client.request.return_value = mock_response
+
         mock_extractor = Mock()
         mock_extractor.extract.return_value = iter(
             [
@@ -188,10 +195,11 @@ class TestBatchLoader(unittest.TestCase):
                 (BatchResponseItem.from_batch_request(self.sample_req, 1), b""),
             ]
         )
+        mock_extractor_class.return_value = mock_extractor
 
-        result = list(self.batch_loader.get_batch(self.sample_req, mock_extractor))
+        result = list(self.batch_loader.get_batch(self.sample_req))
 
-        # Should return raw stream, not decoded content
+        # Should return decoded content from extractor
         self.assertIsNotNone(result)
         self.assertEqual(
             result[0], (BatchResponseItem.from_batch_request(self.sample_req, 0), b"")

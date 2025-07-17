@@ -6,6 +6,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+- **BREAKING**: `BatchLoader.get_batch()` no longer takes `extractor` and `decoder` args. Instead, use `return_raw` and `decode_as_stream`.
+
 ## [1.15.0] - 2025-07-15
 
 ### Added

@@ -37,6 +37,9 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         self.batch_request.add_object_request(test_obj1)
         self.batch_request.add_object_request(test_obj2)
 
+        # Create mock response
+        self.mock_response = Mock()
+
     @patch("tarfile.open")
     def test_successful_extraction(self, mock_tar_open):
         """Test successful file extraction from tar stream."""
@@ -56,9 +59,11 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         mock_tar_file.__iter__.return_value = [mock_tarinfo]
         mock_tar_file.extractfile.return_value.__enter__.return_value = mock_file
 
-        # Execute
+        # Execute with correct parameter order
         result = list(
-            self.extractor.extract(BytesIO(b"tar data"), self.batch_request, None)
+            self.extractor.extract(
+                self.mock_response, BytesIO(b"tar data"), self.batch_request, None
+            )
         )
 
         # Verify
@@ -90,9 +95,11 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         mock_tar_file.__iter__.return_value = [dir_tarinfo, file_tarinfo]
         mock_tar_file.extractfile.return_value.__enter__.return_value = mock_file
 
-        # Execute
+        # Execute with correct parameter order
         result = list(
-            self.extractor.extract(BytesIO(b"tar data"), self.batch_request, None)
+            self.extractor.extract(
+                self.mock_response, BytesIO(b"tar data"), self.batch_request, None
+            )
         )
 
         # Should only process the file, not the directory
@@ -117,9 +124,11 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         mock_tar_file.__iter__.return_value = [mock_tarinfo]
         mock_tar_file.extractfile.return_value.__enter__.return_value = mock_file
 
-        # Execute
+        # Execute with correct parameter order
         response_item, _ = list(
-            self.extractor.extract(BytesIO(b"tar data"), self.batch_request, None)
+            self.extractor.extract(
+                self.mock_response, BytesIO(b"tar data"), self.batch_request, None
+            )
         )[0]
 
         # Verify missing flag is set
@@ -142,9 +151,10 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         mock_tar_file.__iter__.return_value = [mock_tarinfo]
         mock_tar_file.extractfile.side_effect = tarfile.TarError("Extraction failed")
 
-        # Execute with continue_on_err=True
+        # Execute with continue_on_err=True and correct parameter order
         result = list(
             self.extractor.extract(
+                self.mock_response,
                 BytesIO(b"tar data"),
                 self.batch_request,  # continue_on_err=True by default
                 None,
@@ -184,11 +194,14 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         mock_tar_file.__iter__.return_value = [mock_tarinfo]
         mock_tar_file.extractfile.side_effect = tarfile.TarError("Extraction failed")
 
-        # Should raise exception
+        # Should raise exception with correct parameter order
         with self.assertRaises(RuntimeError):
             list(
                 self.extractor.extract(
-                    BytesIO(b"tar data"), batch_request_no_continue, None
+                    self.mock_response,
+                    BytesIO(b"tar data"),
+                    batch_request_no_continue,
+                    None,
                 )
             )
 
@@ -198,7 +211,11 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         batch_request_zip = BatchRequest(output_format=".zip")
 
         with self.assertRaises(ValueError) as context:
-            list(self.extractor.extract(BytesIO(b"data"), batch_request_zip, None))
+            list(
+                self.extractor.extract(
+                    self.mock_response, BytesIO(b"data"), batch_request_zip, None
+                )
+            )
 
         self.assertIn("Unsupported output format type .zip", str(context.exception))
 

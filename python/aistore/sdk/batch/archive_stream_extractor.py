@@ -5,6 +5,7 @@
 import tarfile
 from typing import Generator, Tuple, Union, Any, Optional
 from io import BytesIO
+from requests import Response
 
 from aistore.sdk.batch.batch_response import (
     BatchResponse,
@@ -31,6 +32,7 @@ class ArchiveStreamExtractor:
 
     def extract(
         self,
+        response: Response,
         data_stream: Union[BytesIO, Any],
         batch_request: BatchRequest,
         batch_response: Optional[BatchResponse] = None,
@@ -41,6 +43,7 @@ class ArchiveStreamExtractor:
         Sequentially streams the archive to avoid memory-intensive buffering.
 
         Args:
+            response (Response): HTTP response object containing connection for stream
             data_stream (Union[BytesIO, Any]): Tar archive data stream or bytes
             batch_request (BatchRequest): Request that fetched the tar
             batch_response (Optional[BatchResponse]): Provided if request is not streaming
@@ -53,9 +56,15 @@ class ArchiveStreamExtractor:
         """
         # Decode based on output fmt type
         if self.supports_format(batch_request.output_format):
-            return ArchiveStreamExtractor._extract_tar_stream(
+            yield from ArchiveStreamExtractor._extract_tar_stream(
                 data_stream, batch_request, batch_response
             )
+            # Once we are done getting back all the data, close connection
+            response.close()
+            return
+
+        # If we don't support format, close connection anyway
+        response.close()
 
         # Default is tar output fmt so cannot enter this state
         raise ValueError(

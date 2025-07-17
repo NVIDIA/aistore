@@ -215,12 +215,12 @@ class TestBatchLoaderIntegration(ParallelTestBase):
     def test_batch_loader_error_handling(self):
         """Test BatchLoader error handling with invalid requests."""
         # Test with None request
-        with self.assertRaisesRegex(ValueError, "Empty or missing BatchRequest"):
+        with self.assertRaisesRegex(ValueError, "Batch request must not be empty"):
             list(self.loader.get_batch(None))
 
         # Test with empty request
         empty_req = BatchRequest()
-        with self.assertRaisesRegex(ValueError, "Empty or missing BatchRequest"):
+        with self.assertRaisesRegex(ValueError, "Batch request must not be empty"):
             list(self.loader.get_batch(empty_req))
 
     def test_batch_loader_decoder(self):
@@ -250,7 +250,7 @@ class TestBatchLoaderIntegration(ParallelTestBase):
         batch_req.add_object_request(obj)
 
         # Load data with no extractor
-        result = self.loader.get_batch(batch_req, None)
+        result = self.loader.get_batch(batch_req, return_raw=True)
         # When decode_output=False, should return raw stream
         self.assertTrue(hasattr(result, "read") or isinstance(result, bytes))
 

@@ -2,7 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from typing import Optional, Generator, Tuple, Union, Any
+from typing import Generator, Tuple, Union, Any
 from io import BytesIO
 
 from aistore.sdk.request_client import RequestClient
@@ -50,8 +50,8 @@ class BatchLoader:
     def get_batch(
         self,
         batch_request: BatchRequest,
-        extractor: Optional[ArchiveStreamExtractor] = ArchiveStreamExtractor(),
-        decoder: Optional[MultipartDecoder] = MultipartDecoder(parse_as_stream=False),
+        return_raw: bool = False,
+        decode_as_stream: bool = False,
     ) -> Union[
         Generator[Tuple[BatchResponseItem, bytes], None, None], Union[BytesIO, Any]
     ]:
@@ -61,12 +61,6 @@ class BatchLoader:
         If an extractor is provided, then this function returns a generator. Generators include
         3 types: the yield type, send type, and return type. We don't send or return, so the
         values are None, None. `ArchiveStreamExtractor` is provided by default.
-
-        If the extractor is set to None, then this function returns the raw archive stream
-        from the batch request.
-
-        For the decoder, `MultipartDecoder` is provided by default. If BatchRequest.streaming = False,
-        then the cluster will return a multipart response with the below format:
 
             GetBatch Response (Multipart HTTP Response)
             ├── HTTP Headers
@@ -89,18 +83,15 @@ class BatchLoader:
                 └── Content:
                     └── Binary file contents (Archive)
 
-        If the decoder is set to None, then this function returns the raw multipart response
-        from the batch request. Note that the decoder `parse_as_stream` functionality is in
-        development, not fully tested, and subject to change.
-
         Args:
             batch_request (BatchRequest): Batch request detailing which objects to load
                 and how to load them.
-            extractor (Optional[ArchiveStreamExtractor]): Extractor that handles file
-                stream response. If None, raw stream is returned.
-            decoder (Optional[MultipartDecoder]): Decoder that handles parsing the
-                multipart response into body parts. If None and streaming is False,
-                raw multipart response is returned.
+            return_raw (bool): If True, then raw HTTPResponse stream containing batch contents
+                is returned. Else, stream is decoded/extracted and batch items are yielded.
+                Defaults to False.
+            decode_as_stream (bool): If True and `BatchRequest.streaming=False`, then
+                the corresponding multipart response is decoded on the fly rather than loaded
+                into memory. Defaults to False.
 
         Yields:
             Tuple[BatchResponseItem, bytes]: Object name and corresponding data in bytes
@@ -113,7 +104,7 @@ class BatchLoader:
             ValueError: If BatchRequest is None or empty
         """
         if not batch_request or batch_request.is_empty():
-            raise ValueError("Empty or missing BatchRequest")
+            raise ValueError("Batch request must not be empty")
 
         # Extract bucket name from the first request item
         # If this item is not present, then request will fail anyway
@@ -130,45 +121,38 @@ class BatchLoader:
             json=batch_request.to_dict(),
         )
 
-        data_stream = None
+        # Returns raw batch stream, user must close
+        if return_raw:
+            return response.raw
+
+        extractor = ArchiveStreamExtractor()
 
         if batch_request.streaming:
             # Streaming mode: process response as stream
-            data_stream = response.raw
-            batch_response = None
-        else:
+            # Streaming mode does not yield response metadata, pass None
+            # We will close response after extracting in extractor
+            return extractor.extract(response, response.raw, batch_request, None)
 
-            # If decoder is None, then return raw multipart response
-            if not decoder:
-                return response.raw
+        # Non-streaming mode: expect multipart response
+        try:
+            decoder = MultipartDecoder(parse_as_stream=decode_as_stream)
 
-            # Non-streaming mode: expect multipart response
-            try:
-                parts_iter = decoder.decode(response)
+            parts_iter = decoder.decode(response)
 
-                if decoder.parse_as_stream:
-                    # Get metadata json (part 1)
-                    metadata_str = next(parts_iter)[1].read().decode(decoder.encoding)
-                    batch_response = BatchResponse.from_json(metadata_str)
+            # Get metadata json (part 1)
+            batch_response = BatchResponse.from_json(
+                next(parts_iter)[1].decode(decoder.encoding)
+            )
 
-                    # Load archive (part 2) as file-like iterator
-                    data_stream = next(parts_iter)[1]
-                else:
-                    # Get metadata json (part 1)
-                    batch_response = BatchResponse.from_json(
-                        next(parts_iter)[1].decode(decoder.encoding)
-                    )
+            # Load archive (part 2) into memory buffer for non-streaming mode
+            data_stream = BytesIO(next(parts_iter)[1])
+        except Exception as e:
+            # Log that we failed to decode
+            logger.error("Failed to decode multipart batch response: %s", str(e))
 
-                    # Load archive (part 2) into memory buffer for non-streaming mode
-                    data_stream = BytesIO(next(parts_iter)[1])
-            finally:
-                # Need to close in load into memory case
-                if not decoder.parse_as_stream:
-                    response.close()
-                # Otherwise, either response will close when iterator is exhausted
-                # or manually closed by user
+            # We can close connection if we fail at point
+            response.close()
+            raise e
 
-        if extractor:
-            return extractor.extract(data_stream, batch_request, batch_response)
-
-        return data_stream
+        # # Else, we'll close after extracting in the extractor
+        return extractor.extract(response, data_stream, batch_request, batch_response)
