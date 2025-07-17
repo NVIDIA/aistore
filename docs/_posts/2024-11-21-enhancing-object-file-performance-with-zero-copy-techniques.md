@@ -76,6 +76,6 @@ Looking ahead, we aim to further enhance `ObjectFile` with parallelized read-ahe
     - [Source](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/obj/obj_file/object_file.py)
     - [Docs](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md#obj.obj_file.object_file.ObjectFile)
     - [Demo](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/resilient-streaming-object-file.ipynb)
-- [Benchmark Script](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/object_file/obj-read-benchmark.py)
+- [Benchmark Script](https://github.com/NVIDIA/aistore/blob/main/python/tests/perf/object_file/obj-read-benchmark.py)
 - [Python MemoryView Documentation](https://docs.python.org/3/c-api/memoryview.html)
 - [Python `io.BufferedIOBase` Documentation](https://docs.python.org/3/library/io.html#io.BufferedIOBase)
