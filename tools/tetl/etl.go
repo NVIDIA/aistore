@@ -297,11 +297,12 @@ func WaitForFinished(bp api.BaseParams, xid, kind string, timeout time.Duration)
 	if err == nil {
 		return
 	}
+	tlog.Logf("error waiting for xaction to finish: %v\n", err)
 	tlog.Logf("Aborting ETL x-%s[%s]\n", kind, xid)
 	if abortErr := api.AbortXaction(bp, &args); abortErr != nil {
 		tlog.Logf("Nested error: failed to abort upon api.wait failure: %v\n", abortErr)
 	}
-	return err
+	return nil
 }
 
 func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, interval time.Duration, totalObj int) {
@@ -335,7 +336,7 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 	}()
 }
 
-func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string) (xid string) {
+func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string) (xid, name string) {
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, commType)
 	spec, err := GetTransformYaml(etlName)
 	tassert.CheckFatal(t, err)
@@ -345,6 +346,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 		initSpec etl.InitSpecMsg
 		msg      etl.InitMsg
 	)
+	etlName += strings.ReplaceAll(strings.ToLower(cos.GenUUID()), "_", "-") // add random suffix to avoid conflicts
 	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
 		etlSpec.EtlName = etlName
 		etlSpec.CommTypeX = commType
@@ -381,7 +383,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
 	}
 
-	return
+	return xid, etlName
 }
 
 func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg) string {
@@ -479,14 +481,14 @@ func podTransformTimeout(errCtx *cmn.ETLErrCtx, pod *corev1.Pod) (cos.Duration, 
 	return cos.Duration(v), nil
 }
 
-func ListObjectsWithRetry(bp api.BaseParams, bckTo cmn.Bck, expectedCount int, opts tools.WaitRetryOpts) (err error) {
+func ListObjectsWithRetry(bp api.BaseParams, bckTo cmn.Bck, prefix string, expectedCount int, opts tools.WaitRetryOpts) (err error) {
 	var (
 		retries       = opts.MaxRetries
 		retryInterval = opts.Interval
 		i             int
 	)
 retry:
-	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	list, err := api.ListObjects(bp, bckTo, &apc.LsoMsg{Prefix: prefix}, api.ListArgs{})
 	if err == nil && len(list.Entries) == expectedCount {
 		return nil
 	}

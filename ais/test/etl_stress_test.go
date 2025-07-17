@@ -120,11 +120,11 @@ func TestETLBigBucket(t *testing.T) {
 			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (
 				err            error
-				etlName        string
+				etlName        = test.etlSpecName
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
-			_ = tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
+			_, etlName = tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
 			t.Cleanup(func() {
 				tetl.StopAndDeleteETL(t, baseParams, etlName)
 				tetl.WaitForETLAborted(t, baseParams)
@@ -152,7 +152,7 @@ func TestETLBigBucket(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
 
-			err = tetl.ListObjectsWithRetry(baseParams, bckTo, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
+			err = tetl.ListObjectsWithRetry(baseParams, bckTo, "" /*prefix*/, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
 		})
 	}
@@ -172,7 +172,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 
 	m.puts()
 
-	_ = tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
+	_, etlName = tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
 	t.Cleanup(func() {
 		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})

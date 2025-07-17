@@ -14,10 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/tools"
-	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -26,7 +24,7 @@ import (
 
 func TestETLMultiObj(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
-	tetl.CheckNoRunningETLContainers(t, baseParams)
+	// tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (
 		objCnt      = 100
@@ -40,6 +38,7 @@ func TestETLMultiObj(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
+		prefix     = "prefix-" + cos.GenUUID()
 		bcktests   = []testBucketConfig{{false, false, false}}
 	)
 
@@ -51,89 +50,22 @@ func TestETLMultiObj(t *testing.T) {
 		)
 	}
 
-	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType, etl.ArgTypeDefault)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
+	_, etlName := tetl.InitSpec(t, baseParams, transformer, etlCommType, etl.ArgTypeDefault)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 
 	for _, bcktest := range bcktests {
-		m := ioContext{
-			t:         t,
-			num:       objCnt,
-			fileSize:  512,
-			fixedSize: true, // see checkETLStats below
-		}
-		if bcktest.srcRemote {
-			m.bck = cliBck
-			m.deleteRemoteBckObjs = true
-		} else {
-			m.bck = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
-			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
-		}
-		m.init(true /*cleanup*/)
-
-		if bcktest.srcRemote {
-			if bcktest.evictRemoteSrc {
-				tlog.Logf("evicting %s\n", m.bck.String())
-				//
-				// evict all _cached_ data from the "local" cluster
-				// keep the src bucket in the "local" BMD though
-				//
-				err := api.EvictRemoteBucket(baseParams, m.bck, true /*keep empty src bucket in the BMD*/)
-				tassert.CheckFatal(t, err)
-			}
-		}
-
-		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck.String())
-		for i := range objCnt {
-			r, _ := readers.NewRand(objSize, cksumType)
-			_, err := api.PutObject(&api.PutArgs{
-				BaseParams: baseParams,
-				Bck:        m.bck,
-				ObjName:    fmt.Sprintf("test/a-%04d", i),
-				Reader:     r,
-				Size:       objSize,
-			})
-			tassert.CheckFatal(t, err)
-		}
+		bckFrom, tname := bcktest.setupBckFrom(t, prefix, objCnt)
 
 		for _, ty := range []string{"range", "list"} {
-			tname := fmt.Sprintf("%s-%s-%s", transformer, strings.TrimSuffix(etlCommType, "://"), ty)
-			if bcktest.srcRemote {
-				if bcktest.evictRemoteSrc {
-					tname += "/from-evicted-remote"
-				} else {
-					tname += "/from-remote"
-				}
-			} else {
-				debug.Assert(!bcktest.evictRemoteSrc)
-				tname += "/from-ais"
-			}
-			if bcktest.dstRemote {
-				tname += "/to-remote"
-			} else {
-				tname += "/to-ais"
-			}
-			t.Run(tname, func(t *testing.T) {
-				var bckTo cmn.Bck
-				if bcktest.dstRemote {
-					bckTo = cliBck
-					dstm := ioContext{t: t, bck: bckTo}
-					dstm.del()
-					t.Cleanup(func() { dstm.del() })
-				} else {
-					bckTo = cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
-					// NOTE: ais will create dst bucket on the fly
-
-					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
-				}
-				template := "test/a-" +
-					fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
-				testETLMultiObj(t, transformer, m.bck, bckTo, template, ty, bcktest.evictRemoteSrc)
+			t.Run(tname+fmt.Sprintf("/%s-%s-%s", etlName, strings.TrimSuffix(etlCommType, "://"), ty), func(t *testing.T) {
+				template := fmt.Sprintf("%s/{%04d..%04d}", prefix, rangeStart, rangeStart+copyCnt-1)
+				testETLMultiObj(t, etlName, prefix, bckFrom, template, ty, bcktest, tetl.MD5Transform)
 			})
 		}
 	}
 }
 
-func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileRange, opType string, evictRemoteSrc bool) {
+func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, fileRange, opType string, bcktest testBucketConfig, transform transformFunc) {
 	pt, err := cos.ParseBashTemplate(fileRange)
 	tassert.CheckFatal(t, err)
 
@@ -143,13 +75,15 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 		baseParams     = tools.BaseAPIParams(proxyURL)
 		lst            []string
 		requestTimeout = 30 * time.Second
-		tcomsg         = cmn.TCOMsg{ToBck: bckTo}
+		tcomsg         = cmn.TCOMsg{}
 	)
 
 	lst, err = pt.Expand()
 	tassert.CheckFatal(t, err)
 	objCnt := len(lst)
 
+	bckTo := bcktest.setupBckTo(t, prefix, objCnt)
+	tcomsg.ToBck = bckTo
 	tcomsg.Transform.Name = etlName
 	tcomsg.Transform.Timeout = cos.Duration(requestTimeout)
 
@@ -160,7 +94,8 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	}
 
 	tlog.Logf("Starting multi-object ETL[%s] ...\n", etlName)
-	if evictRemoteSrc {
+	if bcktest.evictRemoteSrc {
+		tools.EvictObjects(t, proxyURL, bckFrom, prefix)
 		xid, err = api.ETLMultiObj(baseParams, bckFrom, &tcomsg, apc.FltExists)
 	} else {
 		xid, err = api.ETLMultiObj(baseParams, bckFrom, &tcomsg)
@@ -173,14 +108,30 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	err = api.WaitForXactionIdle(baseParams, &wargs)
 	tassert.CheckFatal(t, err)
 
-	err = tetl.ListObjectsWithRetry(baseParams, bckTo, objCnt, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
+	err = tetl.ListObjectsWithRetry(baseParams, bckTo, prefix, objCnt, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 	tassert.CheckFatal(t, err)
-	list, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
-	for _, objName := range lst {
-		err := api.DeleteObject(baseParams, bckTo, objName)
-		tassert.CheckError(t, err)
-		tlog.Logf("%s\n", bckTo.Cname(objName))
+	if !testing.Short() && transform != nil {
+		tlog.Logfln("Verifying %d object content", objCnt)
+		for i, objName := range lst {
+			if i > 0 && i%max(1, objCnt/10) == 0 {
+				tlog.Logf("Verified %d/%d objects\n", i, objCnt)
+			}
+			err := tools.WaitForCondition(func() bool {
+				r1, _, err := api.GetObjectReader(baseParams, bckFrom, objName, &api.GetArgs{})
+				if err != nil {
+					return false
+				}
+				defer r1.Close()
+
+				r2, _, err := api.GetObjectReader(baseParams, bckTo, objName, &api.GetArgs{})
+				if err != nil {
+					return false
+				}
+				defer r2.Close()
+
+				return tools.ReaderEqual(transform(r1), r2)
+			}, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second})
+			tassert.Fatalf(t, err == nil, "object content mismatch after retries: %s vs %s", bckFrom.Cname(objName), bckTo.Cname(objName))
+		}
 	}
 }

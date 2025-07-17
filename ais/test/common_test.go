@@ -438,13 +438,14 @@ func (m *ioContext) del(opts ...int) {
 	// delete
 	toRemove := lst.Entries
 	if toRemoveCnt >= 0 {
-		toRemove = toRemove[:toRemoveCnt]
+		n := min(toRemoveCnt, len(toRemove))
+		toRemove = toRemove[:n]
 	}
 	l := len(toRemove)
 	if l == 0 {
 		return
 	}
-	tlog.Logf("deleting %d object%s from %s\n", l, cos.Plural(l), m.bck.Cname(""))
+	tlog.Logf("deleting %d object%s from %s\n", l, cos.Plural(l), m.bck.Cname(lsmsg.Prefix))
 	var (
 		errCnt atomic.Int64
 		wg     = cos.NewLimitedWaitGroup(16, l)
