@@ -8,12 +8,12 @@ from io import BytesIO
 import tarfile
 import json
 
-from aistore.sdk.get_batch.multipart_decoder import MultipartDecoder
+from aistore.sdk.batch.multipart_decoder import MultipartDecoder
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.get_batch.batch_loader import BatchLoader
-from aistore.sdk.get_batch.batch_request import BatchRequest
-from aistore.sdk.get_batch.batch_response import BatchResponseItem
-from aistore.sdk.get_batch.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.batch_loader import BatchLoader
+from aistore.sdk.batch.batch_request import BatchRequest
+from aistore.sdk.batch.batch_response import BatchResponseItem
+from aistore.sdk.batch.archive_stream_extractor import ArchiveStreamExtractor
 
 
 SAMPLE_JSON = {

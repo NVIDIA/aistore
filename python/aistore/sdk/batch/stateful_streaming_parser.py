@@ -6,10 +6,10 @@ from typing import Optional, Iterator, Tuple
 
 from aistore.sdk.const import WIN_LINE_END, UNIX_LINE_END
 from aistore.sdk.utils import get_logger
-from aistore.sdk.get_batch.sliding_window_buffer import SlidingWindowBuffer
-from aistore.sdk.get_batch.buffered_content_reader import BufferedContentReader
-from aistore.sdk.get_batch.multipart_boundary_detector import MultipartBoundaryDetector
-from aistore.sdk.get_batch.body_stream_iterator import BodyStreamIterator
+from aistore.sdk.batch.sliding_window_buffer import SlidingWindowBuffer
+from aistore.sdk.batch.buffered_content_reader import BufferedContentReader
+from aistore.sdk.batch.multipart_boundary_detector import MultipartBoundaryDetector
+from aistore.sdk.batch.body_stream_iterator import BodyStreamIterator
 
 logger = get_logger(__name__)
 

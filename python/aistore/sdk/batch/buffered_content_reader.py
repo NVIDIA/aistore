@@ -4,7 +4,7 @@
 
 from typing import Iterator, Optional
 
-from aistore.sdk.get_batch.sliding_window_buffer import SlidingWindowBuffer
+from aistore.sdk.batch.sliding_window_buffer import SlidingWindowBuffer
 from aistore.sdk.const import WHITESPACE_CHARS, UNIX_LINE_END, WIN_LINE_END
 
 

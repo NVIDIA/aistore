@@ -20,7 +20,7 @@ from aistore.sdk.utils import parse_url
 from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
 from aistore.sdk.retry_config import RetryConfig
-from aistore.sdk.get_batch.batch_loader import BatchLoader
+from aistore.sdk.batch.batch_loader import BatchLoader
 
 
 class Client:

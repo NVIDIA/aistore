@@ -2,7 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from aistore.sdk.get_batch.buffered_content_reader import BufferedContentReader
+from aistore.sdk.batch.buffered_content_reader import BufferedContentReader
 
 
 class MultipartBoundaryDetector:

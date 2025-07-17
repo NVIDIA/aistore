@@ -6,11 +6,11 @@ import tarfile
 from typing import Generator, Tuple, Union, Any, Optional
 from io import BytesIO
 
-from aistore.sdk.get_batch.batch_response import (
+from aistore.sdk.batch.batch_response import (
     BatchResponse,
     BatchResponseItem,
 )
-from aistore.sdk.get_batch.batch_request import BatchRequest
+from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk.const import MISSING_DATA_PREFIX, EXT_TARGZ, EXT_TGZ, EXT_TAR
 from aistore.sdk.utils import get_logger
 

@@ -10,7 +10,7 @@ from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.integration import REMOTE_SET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
-from aistore.sdk.get_batch.batch_request import BatchRequest
+from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk.errors import ErrBckNotFound
 
 

@@ -6,13 +6,13 @@ from typing import Optional, Generator, Tuple, Union, Any
 from io import BytesIO
 
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.get_batch.batch_response import (
+from aistore.sdk.batch.batch_response import (
     BatchResponse,
     BatchResponseItem,
 )
-from aistore.sdk.get_batch.batch_request import BatchRequest
-from aistore.sdk.get_batch.archive_stream_extractor import ArchiveStreamExtractor
-from aistore.sdk.get_batch.multipart_decoder import MultipartDecoder
+from aistore.sdk.batch.batch_request import BatchRequest
+from aistore.sdk.batch.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.multipart_decoder import MultipartDecoder
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     JSON_CONTENT_TYPE,

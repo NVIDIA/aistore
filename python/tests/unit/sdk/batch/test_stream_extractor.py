@@ -7,9 +7,9 @@ from unittest.mock import Mock, patch, MagicMock
 from io import BytesIO
 import tarfile
 
-from aistore.sdk.get_batch.archive_stream_extractor import ArchiveStreamExtractor
-from aistore.sdk.get_batch.batch_request import BatchRequest
-from aistore.sdk.get_batch.batch_response import BatchResponseItem
+from aistore.sdk.batch.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.batch_request import BatchRequest
+from aistore.sdk.batch.batch_response import BatchResponseItem
 
 
 class TestArchiveStreamExtractor(unittest.TestCase):
@@ -126,7 +126,7 @@ class TestArchiveStreamExtractor(unittest.TestCase):
         self.assertTrue(response_item.is_missing)
 
     @patch("tarfile.open")
-    @patch("aistore.sdk.get_batch.archive_stream_extractor.logger")
+    @patch("aistore.sdk.batch.archive_stream_extractor.logger")
     def test_continue_on_error(self, mock_logger, mock_tar_open):
         """Test extraction continues on error when continue_on_err=True."""
         # Setup mock tarfile

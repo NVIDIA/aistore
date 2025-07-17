@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 import requests
 
-from aistore.sdk.get_batch.multipart_decoder import (
+from aistore.sdk.batch.multipart_decoder import (
     MultipartDecoder,
     MultipartDecodeError,
 )

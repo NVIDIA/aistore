@@ -19,7 +19,7 @@ from aistore.sdk.const import (
     GB_OUT,
     GB_UUID,
 )
-from aistore.sdk.get_batch.batch_request import BatchRequest
+from aistore.sdk.batch.batch_request import BatchRequest
 
 
 # See api/apc/ml.go for the Go Moss API

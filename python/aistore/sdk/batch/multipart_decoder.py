@@ -16,8 +16,8 @@ from aistore.sdk.const import (
     DEFAULT_MAX_BUFFER_SIZE,
     HTTP_BOUNDARY_REGEX,
 )
-from aistore.sdk.get_batch.stateful_streaming_parser import StatefulStreamingParser
-from aistore.sdk.get_batch.errors import MultipartDecodeError
+from aistore.sdk.batch.stateful_streaming_parser import StatefulStreamingParser
+from aistore.sdk.batch.errors import MultipartDecodeError
 
 
 logger = get_logger(__name__)

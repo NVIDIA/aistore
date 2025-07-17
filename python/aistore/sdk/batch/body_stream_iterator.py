@@ -7,8 +7,8 @@ from io import BufferedIOBase
 from overrides import override
 
 from aistore.sdk.const import WIN_LINE_END, UNIX_LINE_END, WHITESPACE_CHARS
-from aistore.sdk.get_batch.buffered_content_reader import BufferedContentReader
-from aistore.sdk.get_batch.multipart_boundary_detector import MultipartBoundaryDetector
+from aistore.sdk.batch.buffered_content_reader import BufferedContentReader
+from aistore.sdk.batch.multipart_boundary_detector import MultipartBoundaryDetector
 
 
 class BodyStreamIterator(Iterator, BufferedIOBase):
