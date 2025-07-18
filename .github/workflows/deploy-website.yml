@@ -30,8 +30,6 @@ jobs:
           curl -L https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > ~/bin/openapitools/openapi-generator-cli
           chmod +x ~/bin/openapitools/openapi-generator-cli
           echo "$HOME/bin/openapitools" >> $GITHUB_PATH
-        env:
-          OPENAPI_GENERATOR_VERSION: 7.14.0
 
       - name: Generate API Documentation
         run: |
@@ -39,7 +37,7 @@ jobs:
           go run main.go param.go
           cd ../..
           make restful-api-doc
-          openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
+          OPENAPI_GENERATOR_VERSION=7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
           cp docs-generated/README.md docs/api-documentation.md
           cp -r docs-generated/Apis docs/
 
