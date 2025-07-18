@@ -91,176 +91,29 @@ var (
 	}
 )
 
-type (
-	mossReqParseCtx struct {
-		req       apc.MossReq
-		outFile   string
-		bck       cmn.Bck
-		pt        *cos.ParsedTemplate // valid when batchSize > 0
-		batchSize int
-	}
-)
+type mossReqCtx struct {
+	// get-batch API
+	req apc.MossReq
+	bck cmn.Bck
 
-// TODO -- FIXME: refactor - split in parts
-func buildMossReq(c *cli.Context) (*mossReqParseCtx, error) {
-	var (
-		req   apc.MossReq
-		shift int
-	)
-	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
-		return nil, err
-	}
-	if err := errMutuallyExclusive(c, listFlag, templateFlag, lhotseManifestFlag); err != nil {
-		return nil, err
-	}
-	if err := errMutuallyExclusive(c, specFlag, lhotseManifestFlag); err != nil {
-		return nil, err
-	}
+	// output file
+	outFile string
 
-	// bucket [+list|template]
-	var (
-		names []string
-	)
-	bck, objNameOrTmpl, err := parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
-	if flagIsSet(c, listFlag) && err != nil {
-		return nil, fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(listFlag), err)
-	}
-	if flagIsSet(c, templateFlag) && err != nil {
-		return nil, fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(templateFlag), err)
-	}
+	// additional/optional command line input
+	names []string
+	shift int
 
-	if err == nil {
-		shift++
-		oltp, err := dopOLTP(c, bck, objNameOrTmpl)
-		if err != nil {
-			return nil, err
-		}
-		switch {
-		case oltp.tmpl != "":
-			pt, err := cos.NewParsedTemplate(oltp.tmpl)
-			if err != nil {
-				return nil, err
-			}
-			if err := pt.CheckIsRange(); err != nil {
-				return nil, err
-			}
-			if names, err = pt.Expand(); err != nil {
-				return nil, err
-			}
-		case oltp.list == "":
-			if objNameOrTmpl != "" {
-				names = []string{objNameOrTmpl}
-			}
-		default:
-			names = splitCsv(oltp.list)
-		}
-	}
-
-	if len(names) == 0 && !flagIsSet(c, specFlag) && !flagIsSet(c, lhotseManifestFlag) {
-		return nil, fmt.Errorf("with no (%s, %s) options expecting object names and/or archived filenames in the command line",
-			qflprn(specFlag), qflprn(lhotseManifestFlag))
-	}
-
-	// native spec
-	if flagIsSet(c, specFlag) {
-		specBytes, ext, err := loadSpec(c)
-		if err != nil {
-			return nil, err
-		}
-		if err := parseSpec(ext, specBytes, &req); err != nil {
-			return nil, err
-		}
-	}
-
-	var (
-		outputFormat string
-		outFile      string
-	)
-	// given (batchSizeFlag and outputTemplateFlag)
-	// outFile can be computed from the latter
-	// (currently, lhotse only)
-	if c.NArg() > shift {
-		outFile = c.Args().Get(shift)
-		outputFormat, err = archive.Strict("", cos.Ext(outFile))
-		if err != nil {
-			return nil, err
-		}
-		if req.OutputFormat != "" && outputFormat != "" && req.OutputFormat != outputFormat {
-			if !flagIsSet(c, nonverboseFlag) {
-				warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
-					outputFormat, qflprn(specFlag), req.OutputFormat)
-				actionWarn(c, warn)
-			}
-		}
-		req.OutputFormat = outputFormat
-	}
-
-	// NOTE: no real way to check these assorted overrides; common expectation, though,
-	// is for command line to take precedence
-	req.ContinueOnErr = flagIsSet(c, continueOnErrorFlag)
-	req.StreamingGet = flagIsSet(c, streamingGetFlag)
-	req.OnlyObjName = flagIsSet(c, omitSrcBucketNameFlag)
-
-	var (
-		ctx = mossReqParseCtx{outFile: outFile, bck: bck}
-	)
-	// lhotse spec
-	if flagIsSet(c, lhotseManifestFlag) {
-		ctx.batchSize, ctx.pt, err = parseLhotseBatchFlags(c)
-		if err != nil {
-			return nil, err
-		}
-		if ctx.batchSize > 0 {
-			// note: early return to generate multiple apc.MossReq requests and batches
-			return &ctx, nil
-		}
-
-		if outFile == "" {
-			return nil, missingArgumentsError(c, c.Command.ArgsUsage)
-		}
-
-		ins, err := loadAndParseLhotse(c)
-		if err != nil {
-			return nil, err
-		}
-		req.In = ins
-	} else if outFile == "" {
-		return nil, missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	if len(names) > 0 {
-		if len(req.In) == 0 {
-			req.In = make([]apc.MossIn, 0, len(names))
-		} else {
-			warn := fmt.Sprintf("adding %d command-line defined name%s to the %d spec-defined",
-				len(names), cos.Plural(len(names)), len(req.In))
-			actionWarn(c, warn)
-		}
-		for _, o := range names {
-			in := apc.MossIn{
-				ObjName: o,
-				// no need to insert command-line bck -
-				// the latter is passed as the default bucket in api.GetBatch
-			}
-			if oname, archpath := splitArchivePath(o); archpath != "" {
-				in.ObjName = oname
-				in.ArchPath = archpath
-			}
-			req.In = append(req.In, in)
-		}
-	}
-
-	if len(req.In) == 0 {
-		return nil, errors.New("empty get-batch request")
-	}
-
-	ctx.req = req
-	return &ctx, nil
+	// Lhotse-specific
+	pt        *cos.ParsedTemplate
+	batchSize int
 }
 
 func getBatchHandler(c *cli.Context) error {
-	ctx, err := buildMossReq(c)
+	ctx, err := parseMlArgs(c)
 	if err != nil {
+		return err
+	}
+	if err := ctx.load(c); err != nil {
 		return err
 	}
 
@@ -306,4 +159,159 @@ func getBatchHandler(c *cli.Context) error {
 		cos.RemoveFile(outFile)
 	}
 	return err
+}
+
+// parse CLI arguments and setup context
+func parseMlArgs(c *cli.Context) (ctx *mossReqCtx, _ error) {
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, specFlag); err != nil {
+		return nil, err
+	}
+	if err := errMutuallyExclusive(c, listFlag, templateFlag, lhotseManifestFlag); err != nil {
+		return nil, err
+	}
+	if err := errMutuallyExclusive(c, specFlag, lhotseManifestFlag); err != nil {
+		return nil, err
+	}
+
+	// bucket [+list|template]
+	bck, objNameOrTmpl, err := parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
+	if flagIsSet(c, listFlag) && err != nil {
+		return nil, fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(listFlag), err)
+	}
+	if flagIsSet(c, templateFlag) && err != nil {
+		return nil, fmt.Errorf("option %s requires bucket in the command line [err: %v]", qflprn(templateFlag), err)
+	}
+
+	ctx = &mossReqCtx{bck: bck}
+	if err == nil {
+		ctx.shift++
+		oltp, err := dopOLTP(c, bck, objNameOrTmpl)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case oltp.tmpl != "":
+			pt, err := cos.NewParsedTemplate(oltp.tmpl)
+			if err != nil {
+				return nil, err
+			}
+			if err := pt.CheckIsRange(); err != nil {
+				return nil, err
+			}
+			if ctx.names, err = pt.Expand(); err != nil {
+				return nil, err
+			}
+		case oltp.list == "":
+			if objNameOrTmpl != "" {
+				ctx.names = []string{objNameOrTmpl}
+			}
+		default:
+			ctx.names = splitCsv(oltp.list)
+		}
+	}
+
+	if len(ctx.names) == 0 && !flagIsSet(c, specFlag) && !flagIsSet(c, lhotseManifestFlag) {
+		return nil, fmt.Errorf("with no (%s, %s) options expecting object names and/or archived filenames in the command line",
+			qflprn(specFlag), qflprn(lhotseManifestFlag))
+	}
+
+	// lhotse only: given (batchSizeFlag & outputTemplateFlag) outFile(s) are computed from the latter
+	if c.NArg() > ctx.shift {
+		// Note: may be unused in Lhotse multi-batch mode
+		ctx.outFile = c.Args().Get(ctx.shift)
+		outputFormat, err := archive.Strict("", cos.Ext(ctx.outFile))
+		if err != nil {
+			return nil, err
+		}
+		ctx.req.OutputFormat = outputFormat
+	}
+
+	// there's no real way to check these assorted overrides; common expectation, though,
+	// is for command line to take precedence
+
+	ctx.req.ContinueOnErr = flagIsSet(c, continueOnErrorFlag)
+	ctx.req.StreamingGet = flagIsSet(c, streamingGetFlag)
+	ctx.req.OnlyObjName = flagIsSet(c, omitSrcBucketNameFlag)
+
+	return ctx, nil
+}
+
+// populate get-batch request from native (single-batch) spec or Lhotse manifest
+func (ctx *mossReqCtx) load(c *cli.Context) error {
+	// native spec
+	if flagIsSet(c, specFlag) {
+		specBytes, ext, err := loadSpec(c)
+		if err != nil {
+			return err
+		}
+
+		outputFormat := ctx.req.OutputFormat
+		if err := parseSpec(ext, specBytes, &ctx.req); err != nil {
+			return err
+		}
+		// warn
+		if ctx.req.OutputFormat != "" && outputFormat != "" && ctx.req.OutputFormat != outputFormat {
+			if !flagIsSet(c, nonverboseFlag) {
+				warn := fmt.Sprintf("output format %s in the command line takes precedence (over %s specified %s)",
+					outputFormat, qflprn(specFlag), ctx.req.OutputFormat)
+				actionWarn(c, warn)
+			}
+		}
+	}
+
+	// lhotse spec
+	if flagIsSet(c, lhotseManifestFlag) {
+		var err error
+		ctx.batchSize, ctx.pt, err = parseLhotseBatchFlags(c)
+		if err != nil {
+			return err
+		}
+		if ctx.batchSize > 0 {
+			// note: early return to generate multiple apc.MossReq requests and batches
+			if ctx.outFile != "" {
+				warn := fmt.Sprintf("output file %s is ignored in multi-batch mode (batch size %d)", ctx.outFile, ctx.batchSize)
+				actionWarn(c, warn)
+			}
+			return nil
+		}
+		if ctx.outFile == "" {
+			return errors.New("output file is required for single-batch mode")
+		}
+
+		ins, err := loadAndParseLhotse(c)
+		if err != nil {
+			return err
+		}
+		ctx.req.In = ins
+	} else if ctx.outFile == "" {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+
+	if len(ctx.names) > 0 {
+		if len(ctx.req.In) == 0 {
+			ctx.req.In = make([]apc.MossIn, 0, len(ctx.names))
+		} else {
+			warn := fmt.Sprintf("adding %d command-line defined name%s to the %d spec-defined",
+				len(ctx.names), cos.Plural(len(ctx.names)), len(ctx.req.In))
+			actionWarn(c, warn)
+		}
+		for _, o := range ctx.names {
+			in := apc.MossIn{
+				ObjName: o,
+				// no need to insert command-line bck -
+				// the latter is passed as the default bucket in api.GetBatch
+			}
+			if oname, archpath := splitArchivePath(o); archpath != "" {
+				in.ObjName = oname
+				in.ArchPath = archpath
+			}
+			ctx.req.In = append(ctx.req.In, in)
+		}
+	}
+
+	if len(ctx.req.In) == 0 {
+		return errors.New("empty get-batch request")
+	}
+
+	return nil
 }

@@ -230,7 +230,7 @@ func parseLhotseSrc(uri string) (bck cmn.Bck, objName string, err error) {
 // generate multiple batches in a streaming fashion
 //
 
-func lhotseMultiBatch(c *cli.Context, outCtx *mossReqParseCtx) error {
+func lhotseMultiBatch(c *cli.Context, outCtx *mossReqCtx) error {
 	inCtx, err := openLhotseReader(c)
 	if err != nil {
 		return err
@@ -310,7 +310,7 @@ func lhotseMultiBatch(c *cli.Context, outCtx *mossReqParseCtx) error {
 	return nil
 }
 
-func genLhotseBatch(c *cli.Context, outCtx *mossReqParseCtx, batch []apc.MossIn, outputFile string) error {
+func genLhotseBatch(c *cli.Context, outCtx *mossReqCtx, batch []apc.MossIn, outputFile string) error {
 	// 1) create MossReq for this batch
 	req := apc.MossReq{
 		In:            batch,
