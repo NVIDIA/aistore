@@ -37,7 +37,7 @@ jobs:
           go run main.go param.go
           cd ../..
           make restful-api-doc
-          OPENAPI_GENERATOR_VERSION: 7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
+          OPENAPI_GENERATOR_VERSION=7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
           cp docs-generated/README.md docs/api-documentation.md
           cp -r docs-generated/Apis docs/
 
