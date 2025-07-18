@@ -149,8 +149,8 @@ class Bucket(AISSource):
             etl (Optional[ETLConfig], optional): An optional ETL configuration. If provided, the URLs
                 will include ETL processing parameters. Defaults to None.
 
-        Returns:
-            Iterable[str]: An iterator yielding full URLs of all objects matching the prefix.
+        Yields:
+            str: Full URLs of all objects matching the prefix.
         """
         for entry in self.list_objects_iter(prefix=prefix, props="name"):
             yield self.object(entry.name).get_url(etl=etl)
@@ -167,8 +167,8 @@ class Bucket(AISSource):
             props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
                 Properties: "name", "size", "atime", "version", "checksum", "target_url", "copies".
 
-        Returns:
-            Iterator of all object URLs matching the prefix
+        Yields:
+            Object: Objects matching the prefix with the specified properties.
         """
         for entry in self.list_objects_iter(prefix=prefix, props=props):
             yield self.object(entry.name, entry.generate_object_props())
@@ -317,6 +317,7 @@ class Bucket(AISSource):
             present (bool): If True, summary entails present entities. Defaults to True.
 
         Raises:
+            UnexpectedHTTPStatusCode: If the response status code is not as expected
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
@@ -401,6 +402,7 @@ class Bucket(AISSource):
             prefix (str): Only include objects with the given prefix in the bucket
 
         Raises:
+            UnexpectedHTTPStatusCode: If the response status code is not as expected
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable

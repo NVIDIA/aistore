@@ -99,7 +99,8 @@ class BatchResponseItem(BaseModel):
         Automatically decode base64 encoded opaque field back to bytes.
 
         Args:
-            opaque_val: The raw opaque value (string or bytes)
+            opaque_val (Union[str, bytes, None]): The raw opaque value. Can be a base64-encoded
+                string, already decoded bytes, or None if no opaque data was provided.
 
         Returns:
             Optional[bytes]: Decoded bytes or None

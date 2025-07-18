@@ -84,9 +84,9 @@ class MultipartDecoder:
         Args:
             response (Response): HTTP response object containing multipart data
 
-        Returns:
-            Iterator[Tuple[bytes, Union[bytes, Iterator[bytes]]]]: Iterator over
-                extracted body parts. If parse_as_stream=False, yields (headers, body).
+        Yields:
+            Tuple[bytes, Union[bytes, Iterator[bytes]]]: Extracted body parts.
+                If parse_as_stream=False, yields (headers, body).
                 If parse_as_stream=True, yields (headers, body_stream).
         """
         # Validate content type

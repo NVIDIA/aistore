@@ -234,9 +234,9 @@ class RoleManager:
             missing_ok (bool): Ignore error if role does not exist. Defaults to False
 
         Raises:
+            ErrRoleNotFound: If the role does not exist and missing_ok is False.
             aistore.sdk.errors.AISError: All other types of errors with AIStore.
             requests.RequestException: If the HTTP request fails.
-            ValueError: If the role does not exist.
         """
         logger.info("Deleting role with name: %s", name)
 

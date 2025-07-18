@@ -39,8 +39,8 @@ class ContentIterProvider:
             offset (int, optional): The offset in bytes to apply. If not provided, no offset
                                     is applied.
 
-        Returns:
-            Generator[bytes, None, None]: An iterator over chunks of the object's content.
+        Yields:
+            bytes: Chunks of the object's content.
         """
         stream = self._client.get(stream=True, offset=offset)
         try:

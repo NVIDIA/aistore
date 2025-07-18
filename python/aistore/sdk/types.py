@@ -90,7 +90,7 @@ class Smap(BaseModel):
             Snode: The assigned target node.
 
         Raises:
-            AISError: If no suitable target node is found.
+            NoTargetError: If no target node is found.
         """
         digest = get_digest(uname)
 

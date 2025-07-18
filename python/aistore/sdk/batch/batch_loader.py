@@ -93,15 +93,14 @@ class BatchLoader:
                 the corresponding multipart response is decoded on the fly rather than loaded
                 into memory. Defaults to False.
 
-        Yields:
-            Tuple[BatchResponseItem, bytes]: Object name and corresponding data in bytes
-
         Returns:
             Union[Generator[Tuple[BatchResponseItem, bytes], None, None], Union[BytesIO, Any]]:
-                Generator of response items and file content, or raw stream data
+                If return_raw=True, returns raw HTTPResponse stream.
+                Otherwise, returns a Generator that yields (BatchResponseItem, bytes) tuples.
 
         Raises:
             ValueError: If BatchRequest is None or empty
+            Exception: If decoding the multipart batch response fails
         """
         if not batch_request or batch_request.is_empty():
             raise ValueError("Batch request must not be empty")

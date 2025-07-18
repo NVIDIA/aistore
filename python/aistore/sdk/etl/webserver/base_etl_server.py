@@ -75,9 +75,6 @@ class ETLServer(ABC):
         """
         Optional override to specify MIME type of transformed response.
 
-        Args:
-            path (str): Request path or object path.
-
         Returns:
             str: MIME type (e.g., "application/json", "text/plain").
         """

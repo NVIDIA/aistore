@@ -109,9 +109,6 @@ class BatchRequest:
             length (Optional[int], optional): Number of bytes to retrieve starting from the
                 start offset. Must be used together with start parameter. When None,
                 retrieves from start offset to end of object. Defaults to None.
-
-        Returns:
-            None
         """
         request_data = {
             GB_OBJNAME: obj.name,

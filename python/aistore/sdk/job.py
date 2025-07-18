@@ -69,9 +69,10 @@ class Job:
         Return status of a job
 
         Returns:
-            The job status including id, finish time, and error info.
+            JobStatus: The job status including id, finish time, and error info
 
         Raises:
+            ValueError: If the job does not have an assigned ID
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
@@ -98,9 +99,6 @@ class Job:
         Args:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
-
-        Returns:
-            None
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -147,9 +145,6 @@ class Job:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
 
-        Returns:
-            None
-
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
@@ -173,9 +168,6 @@ class Job:
         Args:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
-
-        Returns:
-            None
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."

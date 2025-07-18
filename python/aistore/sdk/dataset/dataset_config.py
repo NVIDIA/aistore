@@ -84,9 +84,8 @@ class DatasetConfig:
         Args:
             max_shard_items (int): The maximum number of items to include in a shard
 
-        Returns:
-            Generator (Tuple[Dict[str, Any], List[str]]): A generator that yields samples in webdataset format
-                and a list of missing attributes
+        Yields:
+            Tuple[Dict[str, Any], List[str]]: Samples in webdataset format and a list of missing attributes
         """
         all_attributes = [self.primary_attribute] + self.secondary_attributes
         # Generate the dataset

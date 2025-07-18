@@ -52,6 +52,7 @@ class ArchiveStreamExtractor:
             Tuple[BatchResponseItem, bytes]: Response and file content in bytes
 
         Raises:
+            ValueError: If the output format is unsupported
             RuntimeError: If stream extraction fails
         """
         # Decode based on output fmt type

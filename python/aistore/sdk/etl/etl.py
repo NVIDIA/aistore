@@ -106,10 +106,12 @@ class Etl:
                 Existing templates can be found at `sdk.etl_templates`
                 For more information visit: https://github.com/NVIDIA/ais-etl/tree/main/transformers
             communication_type (str): Communication type of the ETL (options: hpull, hpush)
-            init_timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
-            obj_timeout (str): [optional, default="45s"] Timeout of transforming a single object
+            init_timeout (str, optional): Timeout of the ETL job (e.g., "5m" for 5 minutes). Default is "5m".
+            obj_timeout (str, optional): Timeout for transforming a single object (e.g., "45s"). Default is "45s".
+            arg_type (str, optional): Additional argument type for the ETL. Default is an empty string.
+
         Returns:
-            Job ID string associated with this ETL
+            str: Job ID string associated with this ETL
         """
         _validate_comm_type(communication_type, ETL_COMM_OPTIONS)
 

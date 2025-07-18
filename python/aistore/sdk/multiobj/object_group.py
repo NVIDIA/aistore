@@ -104,8 +104,8 @@ class ObjectGroup(AISSource):
             etl (Optional[ETLConfig], optional): An optional ETL configuration. If provided, the URLs
                 will include ETL processing parameters. Defaults to None.
 
-        Returns:
-            Iterator of all object URLs in the group
+        Yields:
+            str: Full URLs of objects in the group.
         """
         for obj_name in self._obj_collection:
             yield self.bck.object(obj_name).get_url(etl=etl)
@@ -122,8 +122,8 @@ class ObjectGroup(AISSource):
             props (str, optional): By default, will include all object properties.
                 Pass in None to skip and avoid the extra API call.
 
-        Returns:
-            Iterator of all the objects in the group
+        Yields:
+            Object: Objects in the group matching the specified prefix.
         """
         for obj_name in self._obj_collection:
 

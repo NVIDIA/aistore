@@ -70,6 +70,7 @@ class UserManager:
             missing_ok (bool):  Ignore error if user does not exist. Defaults to False.
 
         Raises:
+            ErrUserNotFound: If the user does not exist and missing_ok is False.
             AISError: If the user deletion request fails.
         """
         logger.info("Deleting user with ID: %s", username)
@@ -150,6 +151,7 @@ class UserManager:
             UserInfo: The updated user's information.
 
         Raises:
+            ValueError: If neither password nor roles are provided.
             AISError: If the user update request fails.
         """
         if not (password or roles):

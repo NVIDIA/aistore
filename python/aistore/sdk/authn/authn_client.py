@@ -92,7 +92,7 @@ class AuthNClient:
 
         Raises:
             ValueError: If the password is empty or consists only of spaces.
-            AISError: If the login request fails.
+            Exception: If the login request fails or any other error occurs.
         """
         if password.strip() == "":
             raise ValueError("Password cannot be empty or spaces only")
@@ -120,7 +120,8 @@ class AuthNClient:
         Logs out and revokes current token from the AuthN Server.
 
         Raises:
-            AISError: If the logout request fails.
+            ValueError: If no token is available (not logged in).
+            Exception: If the logout request fails or any other error occurs.
         """
         if not self.client.token:
             raise ValueError("Must be logged in first (no token)")
