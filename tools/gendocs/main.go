@@ -1,6 +1,6 @@
 // Package main generates swagger annotations from AIStore source code comments.
 //
-// Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 package main
 
 import (
@@ -11,19 +11,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
 	apcPath         string
 	targetRoot      string
 	annotationsPath string
+	swaggerYamlPath string
 )
 
 const (
 	// Relative paths from project root
 	apcRelativePath         = "api/apc/query.go"
 	aisRelativePath         = "ais"
-	annotationsRelativePath = "tools/gendocs/annotations.go"
+	annotationsRelativePath = "tools/gendocs/gendocs-temp/annotations.go"
+	docsRelativePath        = ".docs"
+	tempDirRelativePath     = "tools/gendocs/gendocs-temp"
 
 	goFileExt   = ".go"
 	newlineChar = "\n"
@@ -42,10 +47,14 @@ const (
 	closeBracket = "]"
 	comma        = ","
 	equals       = "="
+	pipe         = "|"
+
+	actionPrefix = "action=" + openBracket
+	apcPrefix    = "apc."
 
 	errorParsingEndpoint = "Error parsing endpoint: %v\n"
 	warningNoComment     = "Warning: no comment for %s\n"
-	cleanupMessage       = "Cleaning up %d files in %s\n"
+	cleanupMessage       = "Cleaning up temp directory %s\n"
 	malformedEndpointErr = "malformed endpoint line"
 
 	paramTemplate   = "// @Param %s query %s false \"%s\""
@@ -54,14 +63,36 @@ const (
 	idTemplate      = "// @ID %s"
 	tagsTemplate    = "// @Tags %s"
 
+	bodyParamTemplate      = "// @Param request body %s true \"%s\""
+	supportedActionsHeader = "Supported actions: "
+	actionLabelFormat      = "%s - Available fields: "
+	modelExampleFormat     = "%s"
+	modelLabelFormat       = "%s - No fields available"
+	fieldDetailsNA         = "No fields available"
+	actionSeparator        = "; "
+	lineBreak              = ""
+
 	quote        = `"`
 	escapedQuote = `\"`
 
 	funcKeyword = "func "
 	openParen   = "("
+
+	modelActionsFileName = "model-actions.yaml"
+
+	definitionsKey       = "definitions"
+	xSupportedActionsKey = "x-supported-actions"
+
+	actionLinkFormat = "<a href='../Models/%s.html'>%s</a>"
+	apiLinkFormat    = "<a href='../Apis/%sApi.html#%s'>%s</a>"
 )
 
 type (
+	actionModel struct {
+		Action string
+		Model  string
+	}
+
 	endpoint struct {
 		Method      string
 		Path        string
@@ -69,11 +100,14 @@ type (
 		Summary     string
 		OperationID string
 		Tag         string
+		Actions     []actionModel
 	}
 
 	fileParser struct {
-		Path     string
-		ParamSet *paramSet
+		Path         string
+		ParamSet     *paramSet
+		ActionMap    map[string]string
+		ModelActions map[string][]string
 	}
 
 	fileWalker struct {
@@ -82,8 +116,10 @@ type (
 	}
 
 	endpointProcessor struct {
-		Walker   *fileWalker
-		ParamSet *paramSet
+		Walker       *fileWalker
+		ParamSet     *paramSet
+		ActionMap    map[string]string
+		ModelActions map[string][]string
 	}
 )
 
@@ -111,9 +147,17 @@ func main() {
 	apcPath = filepath.Join(projectRoot, apcRelativePath)
 	targetRoot = filepath.Join(projectRoot, aisRelativePath)
 	annotationsPath = filepath.Join(projectRoot, annotationsRelativePath)
+	swaggerYamlPath = filepath.Join(projectRoot, docsRelativePath, "swagger.yaml")
 
 	if len(os.Args) > 1 && os.Args[1] == "-cleanup" {
 		cleanupAnnotations()
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "-inject-extensions" {
+		if err := injectModelExtensions(); err != nil {
+			panic(fmt.Errorf("failed to inject model extensions: %v", err))
+		}
 		return
 	}
 
@@ -122,15 +166,33 @@ func main() {
 		panic(err)
 	}
 
+	// Load action constants from actmsg.go
+	actionMap, err := loadActionsFromFile(filepath.Join(projectRoot, "api/apc/actmsg.go"))
+	if err != nil {
+		panic(err)
+	}
+
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
-		Walker:   walker,
-		ParamSet: &paramSet,
+		Walker:       walker,
+		ParamSet:     &paramSet,
+		ActionMap:    actionMap,
+		ModelActions: make(map[string][]string),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
 		panic(err)
 	}
+}
+
+// Helper function to prevent duplicate action/model pairs
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // Extracts the function name from a function declaration line
@@ -249,6 +311,37 @@ func determineTag(path string) string {
 	return "Default"
 }
 
+// Extracts action/model pairs from the action=[...] clause
+func parseActionClause(annotationLine string) []actionModel {
+	actions := make([]actionModel, 0, 4)
+	actionStart := strings.Index(annotationLine, actionPrefix)
+	if actionStart == -1 {
+		return actions
+	}
+
+	openIdx := actionStart + len(actionPrefix)
+	closeIdx := strings.Index(annotationLine[openIdx:], closeBracket)
+	if closeIdx == -1 {
+		return actions
+	}
+
+	actionBlock := annotationLine[openIdx : openIdx+closeIdx]
+	pairs := strings.Split(actionBlock, pipe)
+
+	for _, pair := range pairs {
+		parts := strings.SplitN(strings.TrimSpace(pair), equals, 2)
+		if len(parts) != 2 {
+			continue
+		}
+		actions = append(actions, actionModel{
+			Action: strings.TrimSpace(parts[0]),
+			Model:  strings.TrimSpace(parts[1]),
+		})
+	}
+
+	return actions
+}
+
 func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	line := strings.TrimSpace(lines[i])
 	trimmed := strings.TrimSpace(line[len(commentWithSpace+endpointPrefix):])
@@ -279,20 +372,25 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 			}
 			fullKey, typ := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 			desc := ""
+			value := ""
 			if def, ok := (*fp.ParamSet)[fullKey]; ok {
 				desc = def.Description
+				value = def.Value
 			}
 			params = append(params, param{
 				Name:        fullKey,
 				Type:        typ,
 				Description: desc,
+				Value:       value,
 			})
 		}
 	}
 	summaryLines := collectSummaryLines(lines, i)
 	summary := strings.Join(summaryLines, " ")
 
-	// Find the function declaration and extract function name
+	actions := parseActionClause(line)
+
+	// Find the function declaration and extract function name first
 	operationID := ""
 	for j := i + 1; j < len(lines); j++ {
 		next := strings.TrimSpace(lines[j])
@@ -308,6 +406,20 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		}
 	}
 
+	// Get API class tag for the link
+	tag := determineTag(path)
+
+	// Reverse mapping for model actions with API links
+	for _, action := range actions {
+		actionName := strings.TrimPrefix(action.Action, apcPrefix)
+		if realValue, exists := fp.ActionMap[actionName]; exists {
+			actionLink := fmt.Sprintf(apiLinkFormat, tag, operationID, realValue)
+			if !contains(fp.ModelActions[action.Model], actionLink) {
+				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], actionLink)
+			}
+		}
+	}
+
 	return endpoint{
 		Method:      method,
 		Path:        path,
@@ -315,6 +427,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		Summary:     summary,
 		OperationID: operationID,
 		Tag:         determineTag(path),
+		Actions:     actions,
 	}, nil
 }
 
@@ -361,7 +474,7 @@ func (fp *fileParser) process() error {
 				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep)
+			swaggerComments := generateSwaggerComments(&ep, fp.ActionMap)
 			writeToAnnotations(swaggerComments)
 			i++
 			continue
@@ -403,32 +516,52 @@ func (ep *endpointProcessor) run(root string) error {
 
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
-			Path:     file,
-			ParamSet: ep.ParamSet,
+			Path:         file,
+			ParamSet:     ep.ParamSet,
+			ActionMap:    ep.ActionMap,
+			ModelActions: ep.ModelActions,
 		}
 		if err := parser.process(); err != nil {
 			return err
 		}
 	}
-	return nil
+
+	// Save ModelActions to temporary file for extension injection
+	return ep.saveModelActions()
+}
+
+// Writes the collected ModelActions to a temporary file for inject-extensions
+func (ep *endpointProcessor) saveModelActions() error {
+	if len(ep.ModelActions) == 0 {
+		return nil
+	}
+
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
+
+	// Ensure the temp directory exists
+	if err := os.MkdirAll(filepath.Dir(modelActionsPath), 0o755); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(ep.ModelActions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal model actions: %v", err)
+	}
+
+	return os.WriteFile(modelActionsPath, data, 0o644)
 }
 
 func (*endpointProcessor) clearAnnotations() error {
+	if err := os.MkdirAll(filepath.Dir(annotationsPath), 0o755); err != nil {
+		return err
+	}
 	// Write the basic header content
-	headerContent := `package main
-// @title AIStore API
-// @version 3.24
-// @description AIStore: scalable storage for AI applications
-// @contact.name AIStore
-// @contact.url https://aiatscale.org
-// @contact.email aistore@nvidia.com
-// @license.name MIT
-// @license.url https://github.com/NVIDIA/aistore/blob/main/LICENSE
-// @host localhost:8080
-// @BasePath /v1
-// Generated endpoint documentation
-
-`
+	headerContent := "package main\n"
 	dummyFuncCounter = 0
 	return os.WriteFile(annotationsPath, []byte(headerContent), 0o644)
 }
@@ -484,7 +617,7 @@ func collectSummaryLines(lines []string, i int) []string {
 	return summaryLines
 }
 
-func generateSwaggerComments(ep *endpoint) []string {
+func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string {
 	swaggerComments := []string{}
 	if ep.Summary != "" {
 		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
@@ -495,16 +628,37 @@ func generateSwaggerComments(ep *endpoint) []string {
 	swaggerComments = append(swaggerComments, fmt.Sprintf(tagsTemplate, ep.Tag))
 
 	for _, param := range ep.Params {
-		short := strings.TrimPrefix(param.Name, apcQparamPrefix)
-		short = strings.ToLower(short)
+		paramName := param.Value
 		desc := param.Description
 		if desc == "" {
 			fmt.Fprintf(os.Stderr, warningNoComment, param.Name)
 			continue
 		}
 		desc = strings.ReplaceAll(desc, quote, escapedQuote)
-		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, short, param.Type, desc))
+		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, paramName, param.Type, desc))
 	}
+
+	// Add single parameters that references the action(s)
+	if len(ep.Actions) > 0 {
+		var actionLinks []string
+		for _, action := range ep.Actions {
+			actionName := strings.TrimPrefix(action.Action, apcPrefix)
+			if realValue, exists := actionMap[actionName]; exists {
+				actionName = realValue
+			}
+			link := fmt.Sprintf(actionLinkFormat, action.Model, actionName)
+			actionLinks = append(actionLinks, link)
+		}
+
+		description := fmt.Sprintf("%s%s", supportedActionsHeader, strings.Join(actionLinks, ", "))
+
+		// Generate one @Param request body for each model
+		for _, action := range ep.Actions {
+			bodyParamComment := fmt.Sprintf(bodyParamTemplate, action.Model, description)
+			swaggerComments = append(swaggerComments, bodyParamComment)
+		}
+	}
+
 	swaggerComments = append(swaggerComments,
 		successTemplate,
 		fmt.Sprintf(routerTemplate, ep.Path, ep.Method))
@@ -512,5 +666,80 @@ func generateSwaggerComments(ep *endpoint) []string {
 }
 
 func cleanupAnnotations() error {
-	return os.Remove(annotationsPath)
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+	tempDirPath := filepath.Join(projectRoot, tempDirRelativePath)
+	return os.RemoveAll(tempDirPath)
+}
+
+// reads the swagger.yaml file and injects vendor extensions
+func injectModelExtensions() error {
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
+	modelActionsData, err := os.ReadFile(modelActionsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No model actions found, skipping extension injection")
+			return nil
+		}
+		return fmt.Errorf("failed to read model actions: %v", err)
+	}
+
+	var modelActions map[string][]string
+	if err := yaml.Unmarshal(modelActionsData, &modelActions); err != nil {
+		return fmt.Errorf("failed to parse model actions: %v", err)
+	}
+
+	// Read swagger.yaml
+	yamlData, err := os.ReadFile(swaggerYamlPath)
+	if err != nil {
+		return fmt.Errorf("failed to read swagger.yaml: %v", err)
+	}
+
+	var spec map[string]any
+	if err := yaml.Unmarshal(yamlData, &spec); err != nil {
+		return fmt.Errorf("failed to parse swagger.yaml: %v", err)
+	}
+
+	// Navigate to definitions section
+	definitions, ok := spec[definitionsKey].(map[string]any)
+	if !ok {
+		fmt.Println("No definitions section found in swagger.yaml")
+		return nil
+	}
+
+	// Inject x-supported-actions for each model
+	injected := 0
+	for model, actions := range modelActions {
+		if len(actions) == 0 {
+			continue
+		}
+
+		if modelDef, exists := definitions[model]; exists {
+			if modelDefMap, ok := modelDef.(map[string]any); ok {
+				modelDefMap[xSupportedActionsKey] = actions
+				injected++
+				fmt.Printf("  Injected extensions for model: %s\n", model)
+			}
+		}
+	}
+
+	// Write back to file
+	updatedYaml, err := yaml.Marshal(spec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated yaml: %v", err)
+	}
+
+	if err := os.WriteFile(swaggerYamlPath, updatedYaml, 0o644); err != nil {
+		return fmt.Errorf("failed to write updated swagger.yaml: %v", err)
+	}
+
+	fmt.Printf("Successfully injected extensions for %d models\n", injected)
+
+	return nil
 }

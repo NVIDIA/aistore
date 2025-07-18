@@ -151,6 +151,7 @@ var (
 		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation}
 )
 
+// swagger:model
 type LsoMsg struct {
 	Header            http.Header `json:"hdr,omitempty"`         // (for pointers, see `ListArgs` in api/ls.go)
 	UUID              string      `json:"uuid"`                  // ID to identify a single multi-page request

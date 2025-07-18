@@ -52,6 +52,7 @@ const (
 )
 
 type (
+	// swagger:model
 	MossIn struct {
 		ObjName string `json:"objname"`
 		// optional fields
@@ -63,6 +64,7 @@ type (
 		Start    int64  `json:"start,omitempty"`
 		Length   int64  `json:"length,omitempty"`
 	}
+	// swagger:model
 	MossReq struct {
 		In            []MossIn `json:"in"`             // of arbitrary size >= 1
 		OutputFormat  string   `json:"mime,omitempty"` // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
@@ -70,6 +72,7 @@ type (
 		OnlyObjName   bool     `json:"onob"`           // name-in-archive: default naming convention is <Bucket>/<ObjName>; set this flag to have <ObjName> only
 		StreamingGet  bool     `json:"strm"`           // stream resulting archive prior to finalizing it in memory
 	}
+	// swagger:model
 	MossOut struct {
 		ObjName  string `json:"objname"`            // same as the corresponding MossIn.ObjName
 		ArchPath string `json:"archpath,omitempty"` // ditto
@@ -79,6 +82,7 @@ type (
 		ErrMsg   string `json:"err_msg,omitempty"`
 		Size     int64  `json:"size"`
 	}
+	// swagger:model
 	MossResp struct {
 		Out  []MossOut `json:"out"`
 		UUID string    `json:"uuid"`

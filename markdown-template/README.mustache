@@ -1,10 +1,7 @@
-# Documentation for {{appName}}
-
 {{#generateApiDocs}}
 <a name="documentation-for-api-endpoints"></a>
 ## Documentation for API Endpoints
 
-All URIs are relative to *{{{basePath}}}*
 
 | Class | Method | HTTP request | Parameters | Description |
 |------------ | ------------- | ------------- | ------------- | -------------|
@@ -16,8 +13,20 @@ All URIs are relative to *{{{basePath}}}*
 <a name="documentation-for-models"></a>
 ## Documentation for Models
 
+<div class="models-structure-notice" style="background: #f8f9fa; border-left: 4px solid #28a745; padding: 12px; margin: 15px 0; border-radius: 4px;">
+    💡 <strong>Note:</strong> All models only represent the expected value field in the final body payload for the corresponding action. The complete JSON body should look like:
+    <pre style="background: #f1f3f4; padding: 8px; margin: 8px 0; border-radius: 4px; font-family: monospace;">
+{
+  "action": "selected action",
+  "value": "the model",
+  "name": "specify if needed for the selected action"
+}</pre>
+</div>
+
 {{#modelPackage}}
-{{#models}}{{#model}} - [{{{classname}}}](./{{{modelPackage}}}/{{modelDocPath}}{{{classFilename}}}.md)
+| Model | Description |
+|------------ | -------------|
+{{#models}}{{#model}}| [{{{classname}}}]({{{modelPackage}}}/{{{classFilename}}}.html) | Model definition for {{{classname}}} |
 {{/model}}{{/models}}
 {{/modelPackage}}
 {{^modelPackage}}
