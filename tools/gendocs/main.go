@@ -42,6 +42,10 @@ const (
 	closeBracket = "]"
 	comma        = ","
 	equals       = "="
+	pipe         = "|"
+
+	actionPrefix = "action=" + openBracket
+	apcPrefix    = "apc."
 
 	errorParsingEndpoint = "Error parsing endpoint: %v\n"
 	warningNoComment     = "Warning: no comment for %s\n"
@@ -54,6 +58,17 @@ const (
 	idTemplate      = "// @ID %s"
 	tagsTemplate    = "// @Tags %s"
 
+	bodyParamTemplate      = "// @Param body body %s true \"%s\""
+	supportedActionsHeader = "<h3>Supported Actions</h3><br/>"
+	actionLabelFormat      = "**Action:** %s"
+	modelExampleFormat     = "**Model Example Value:**<br/>%s"
+	modelLabelFormat       = "**Model:** %s"
+	fieldDetailsNA         = "*(Field details not available)*"
+	actionSeparator        = "<br/><br/>---<br/><br/>"
+	lineBreak              = " <br/> "
+
+	warningModelNotFound = "Warning: model %s not found for action %s\n"
+
 	quote        = `"`
 	escapedQuote = `\"`
 
@@ -62,6 +77,11 @@ const (
 )
 
 type (
+	actionModel struct {
+		Action string
+		Model  string
+	}
+
 	endpoint struct {
 		Method      string
 		Path        string
@@ -69,11 +89,13 @@ type (
 		Summary     string
 		OperationID string
 		Tag         string
+		Actions     []actionModel
 	}
 
 	fileParser struct {
 		Path     string
 		ParamSet *paramSet
+		ModelSet *modelSet
 	}
 
 	fileWalker struct {
@@ -84,6 +106,7 @@ type (
 	endpointProcessor struct {
 		Walker   *fileWalker
 		ParamSet *paramSet
+		ModelSet *modelSet
 	}
 )
 
@@ -122,10 +145,17 @@ func main() {
 		panic(err)
 	}
 
+	var modelSet modelSet
+	apcDir := filepath.Dir(apcPath)
+	if err := modelSet.loadFromDirectory(apcDir); err != nil {
+		panic(fmt.Errorf("failed to load models: %v", err))
+	}
+
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
 		Walker:   walker,
 		ParamSet: &paramSet,
+		ModelSet: &modelSet,
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -249,6 +279,37 @@ func determineTag(path string) string {
 	return "Default"
 }
 
+// Extracts action/model pairs from the action=[...] clause
+func parseActionClause(annotationLine string) []actionModel {
+	var actions []actionModel
+	actionStart := strings.Index(annotationLine, actionPrefix)
+	if actionStart == -1 {
+		return actions
+	}
+
+	openIdx := actionStart + len(actionPrefix)
+	closeIdx := strings.Index(annotationLine[openIdx:], closeBracket)
+	if closeIdx == -1 {
+		return actions
+	}
+
+	actionBlock := annotationLine[openIdx : openIdx+closeIdx]
+	pairs := strings.Split(actionBlock, pipe)
+
+	for _, pair := range pairs {
+		parts := strings.SplitN(strings.TrimSpace(pair), equals, 2)
+		if len(parts) != 2 {
+			continue
+		}
+		actions = append(actions, actionModel{
+			Action: strings.TrimSpace(parts[0]),
+			Model:  strings.TrimSpace(parts[1]),
+		})
+	}
+
+	return actions
+}
+
 func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	line := strings.TrimSpace(lines[i])
 	trimmed := strings.TrimSpace(line[len(commentWithSpace+endpointPrefix):])
@@ -292,6 +353,8 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	summaryLines := collectSummaryLines(lines, i)
 	summary := strings.Join(summaryLines, " ")
 
+	actions := parseActionClause(line)
+
 	// Find the function declaration and extract function name
 	operationID := ""
 	for j := i + 1; j < len(lines); j++ {
@@ -315,6 +378,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		Summary:     summary,
 		OperationID: operationID,
 		Tag:         determineTag(path),
+		Actions:     actions,
 	}, nil
 }
 
@@ -361,7 +425,7 @@ func (fp *fileParser) process() error {
 				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep)
+			swaggerComments := generateSwaggerComments(&ep, fp.ModelSet)
 			writeToAnnotations(swaggerComments)
 			i++
 			continue
@@ -405,6 +469,7 @@ func (ep *endpointProcessor) run(root string) error {
 		parser := &fileParser{
 			Path:     file,
 			ParamSet: ep.ParamSet,
+			ModelSet: ep.ModelSet,
 		}
 		if err := parser.process(); err != nil {
 			return err
@@ -416,6 +481,7 @@ func (ep *endpointProcessor) run(root string) error {
 func (*endpointProcessor) clearAnnotations() error {
 	// Write the basic header content
 	headerContent := `package main
+
 // @title AIStore API
 // @version 3.24
 // @description AIStore: scalable storage for AI applications
@@ -484,7 +550,7 @@ func collectSummaryLines(lines []string, i int) []string {
 	return summaryLines
 }
 
-func generateSwaggerComments(ep *endpoint) []string {
+func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 	swaggerComments := []string{}
 	if ep.Summary != "" {
 		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
@@ -505,6 +571,43 @@ func generateSwaggerComments(ep *endpoint) []string {
 		desc = strings.ReplaceAll(desc, quote, escapedQuote)
 		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, short, param.Type, desc))
 	}
+
+	// Add single body parameter documenting all actions
+	if len(ep.Actions) > 0 {
+		primaryModel := ep.Actions[0].Model
+
+		var actionDescriptions []string
+		for _, action := range ep.Actions {
+			modelName := strings.TrimPrefix(action.Model, apcPrefix)
+			if !modelSet.hasModel(modelName) {
+				fmt.Fprintf(os.Stderr, warningModelNotFound, action.Model, action.Action)
+				continue
+			}
+
+			actionName := strings.TrimPrefix(action.Action, apcPrefix)
+			structDetails := getStructFieldDetails(modelSet, modelName)
+			actionParts := []string{
+				fmt.Sprintf(actionLabelFormat, actionName),
+			}
+
+			if structDetails != "" {
+				actionParts = append(actionParts, fmt.Sprintf(modelExampleFormat, structDetails))
+			} else {
+				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model))
+				actionParts = append(actionParts, fieldDetailsNA)
+			}
+
+			actionDescriptions = append(actionDescriptions, strings.Join(actionParts, lineBreak))
+		}
+
+		fullDesc := supportedActionsHeader + strings.Join(actionDescriptions, actionSeparator)
+
+		fullDesc = strings.ReplaceAll(fullDesc, `"`, `\"`)
+
+		bodyParamComment := fmt.Sprintf(bodyParamTemplate, primaryModel, fullDesc)
+		swaggerComments = append(swaggerComments, bodyParamComment)
+	}
+
 	swaggerComments = append(swaggerComments,
 		successTemplate,
 		fmt.Sprintf(routerTemplate, ep.Path, ep.Method))

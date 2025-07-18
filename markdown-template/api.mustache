@@ -18,12 +18,17 @@ All URIs are relative to *{{basePath}}*
 
     {{.}}{{/notes}}
 
+{{#allParams}}{{#isBodyParam}}
+{{{description}}}
+
+{{/isBodyParam}}{{/allParams}}
+
 ### Parameters
-{{^allParams}}This endpoint does not need any parameter.{{/allParams}}{{#allParams}}{{#-last}}
+{{#allParams}}{{^isBodyParam}}{{#-first}}
 |Name | Type | Description  | Notes |
-|------------- | ------------- | ------------- | -------------|{{/-last}}{{/allParams}}
-{{#allParams}}| **{{paramName}}** | {{#isPrimitiveType}}**{{dataType}}**{{/isPrimitiveType}}{{^isPrimitiveType}}{{#isFile}}**{{dataType}}**{{/isFile}}{{^isFile}}{{#generateModelDocs}}[**{{dataType}}**](../{{modelPackage}}/{{baseType}}.md){{/generateModelDocs}}{{^generateModelDocs}}**{{dataType}}**{{/generateModelDocs}}{{/isFile}}{{/isPrimitiveType}}| {{description}} |{{^required}} [optional]{{/required}}{{#defaultValue}} [default to {{.}}]{{/defaultValue}}{{#allowableValues}} [enum: {{#values}}{{{.}}}{{^-last}}, {{/-last}}{{/values}}]{{/allowableValues}} |
-{{/allParams}}
+|------------- | ------------- | ------------- | -------------|{{/-first}}{{/isBodyParam}}{{/allParams}}
+{{#allParams}}{{^isBodyParam}}| **{{paramName}}** | {{#isPrimitiveType}}**{{dataType}}**{{/isPrimitiveType}}{{^isPrimitiveType}}{{#isFile}}**{{dataType}}**{{/isFile}}{{^isFile}}{{#generateModelDocs}}[**{{dataType}}**](../{{modelPackage}}/{{baseType}}.md){{/generateModelDocs}}{{^generateModelDocs}}**{{dataType}}**{{/generateModelDocs}}{{/isFile}}{{/isPrimitiveType}}| {{description}} |{{^required}} [optional]{{/required}}{{#defaultValue}} [default to {{.}}]{{/defaultValue}}{{#allowableValues}} [enum: {{#values}}{{{.}}}{{^-last}}, {{/-last}}{{/values}}]{{/allowableValues}} |
+{{/isBodyParam}}{{/allParams}}
 
 ### Return type
 

@@ -1265,7 +1265,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint POST /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool]
+// +gen:endpoint POST /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
 // Create buckets or perform bucket operations (copy, move, etc.)
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
@@ -1675,7 +1675,7 @@ func crerrStatus(err error) (ecode int) {
 	return
 }
 
-// +gen:endpoint POST /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint POST /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActPromote=apc.PromoteArgs|apc.ActBlobDl=apc.BlobMsg]
 // Perform actions on objects (rename, promote, blob download, check lock)
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := p.readActionMsg(w, r)
