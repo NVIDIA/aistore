@@ -6,7 +6,7 @@ In addition, CLI provides dataset management commands, performance monitoring, a
 The entire (diverse and growing) command set is partitioned into top-level _namespaces_:
 
 ```console
-$ ais  <TAB>
+$ ais  <TAB-TAB>
 advanced         cluster          etl              ls               remote-cluster   space-cleanup
 alias            config           evict            ml               rmb              start
 archive          cp               get              object           rmo              stop
@@ -15,10 +15,14 @@ blob-download    download         job              prefetch         search      
 bucket           dsort            log              put              show             wait
 ```
 
-> **CLI namespaces:**
-> Hit `<Tab>` after typing `ais ` and Bash/Zsh completion reveals *namespaces* — self‑contained toolboxes such as
-> `bucket`, `cluster`, `etl`, or the `ml` namespace introduced in **v3.30** for machine‑learning data ops.
-> Drill into any namespace with `--help` to discover its verbs, flags, and usage examples.
+### CLI namespaces
+
+Hit `<TAB>` after typing `ais ` and Bash/Zsh completion reveals *namespaces* — self‑contained toolboxes such as
+`bucket`, `cluster`, `etl`, `performance`, or `ml` namespace (introduced in **v3.30**), and so on.
+
+Drill into any namespace with `<TAB>` and `--help` to discover its verbs, flags, and usage examples.
+
+### `ais show`
 
 Given an existing AIS instance, maybe the very first command you run would be `ais show cluster`. For example:
 
