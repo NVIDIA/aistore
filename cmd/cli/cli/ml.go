@@ -44,11 +44,12 @@ const getBatchUsage = "Get multiple objects and/or archived files from different
 const lhotseGetBatchUsage = "Get multiple objects from Lhotse manifests and package into consolidated archive(s).\n" +
 	indent1 + "\tReturns TAR by default; supported formats include: " + archFormats + ".\n" +
 	indent1 + "\tSupports chunking, filtering, and multi-output generation from Lhotse cut manifests.\n" +
+	indent1 + "\tLhotse manifest format: each line contains a single cut JSON object with recording sources;\n" +
+	indent1 + "\tLhotse manifest may be plain (`.jsonl`), gzip‑compressed (`.jsonl.gz` / `.gzip`), or LZ4‑compressed (`.jsonl.lz4`).\n" +
 	indent1 + "\tExamples:\n" +
 	indent1 + "\t- 'ais ml lhotse-get-batch --cuts manifest.jsonl.gz output.tar'\t- entire manifest as single TAR;\n" +
 	indent1 + "\t- 'ais ml lhotse-get-batch --cuts cuts.jsonl --sample-rate 16000 output.tar'\t- with sample rate conversion;\n" +
-	indent1 + "\t- 'ais ml lhotse-get-batch --cuts manifest.jsonl.gz --batch-size 1000 --output-template \"batch-{001..999}.tar\"'\t- chunked output;\n" +
-	indent1 + "\tLhotse manifest format: each line contains a single cut JSON object with recording sources.\n" +
+	indent1 + "\t- 'ais ml lhotse-get-batch --cuts m.jsonl.lz4 --batch-size 1000 --output-template \"a-{001..999}.tar\"'\t- generate 999 'a-*.tar' batches (1000 cuts each)\n" +
 	indent1 + "\tSee [Lhotse docs](https://lhotse.readthedocs.io/) for manifest format details."
 
 var (

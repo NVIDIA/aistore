@@ -1,3 +1,59 @@
+AIS CLI is the Swiss‑army knife for managing and monitoring every aspect of an AIStore cluster’s lifecycle — from
+initial bootstrap to day‑to-day operations, and from single-object I/O to distributed ML workflows.
+
+In addition, CLI provides dataset management commands, performance monitoring, advanced operations, and more.
+
+The entire (diverse and growing) command set is partitioned into top-level _namespaces_:
+
+```console
+$ ais  <TAB>
+advanced         cluster          etl              ls               remote-cluster   space-cleanup
+alias            config           evict            ml               rmb              start
+archive          cp               get              object           rmo              stop
+auth             create           help             performance      scrub            storage
+blob-download    download         job              prefetch         search           tls
+bucket           dsort            log              put              show             wait
+```
+
+> **CLI namespaces:**
+> Hit `<Tab>` after typing `ais ` and Bash/Zsh completion reveals *namespaces* — self‑contained toolboxes such as
+> `bucket`, `cluster`, `etl`, or the `ml` namespace introduced in **v3.30** for machine‑learning data ops.
+> Drill into any namespace with `--help` to discover its verbs, flags, and usage examples.
+
+Given an existing AIS instance, maybe the very first command you run would be `ais show cluster`. For example:
+
+```console
+$ ais show cluster
+PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME          K8s POD         STATUS
+p[DlPmJiRU]      0.01%           366.36GiB       [0.1 0.3 0.3]   526h28m20s      ais-proxy-5     online
+p[JedAkLgG][P]   0.02%           366.52GiB       [0.7 0.3 0.3]   526h27m30s      ais-proxy-7     online
+...
+
+TARGET         MEM USED(%)     MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE     UPTIME        K8s POD         STATUS
+t[KoplySra]    0.03%           366.37GiB     52%           8.324TiB      [0.1 0.3 0.3]   -             526h26m10s    ais-target-1    online
+...
+
+Summary:
+   Proxies:             10 (all electable)
+   Targets:             10 (total disks: 30)
+   Cluster Map:         version 760, UUID HCGGmT4K0, primary p[JedAkLgG]
+   Deployment:          K8s
+   Status:              20 online
+   Rebalance:           n/a
+   Authentication:      ...
+   Version:             ...
+   Build:               ...
+```
+
+> Press <TAB-TAB> to see all `ais show` subcommands:
+```
+$ ais show <TAB>
+auth         bucket       performance      rebalance    remote-cluster   log      etl
+object       cluster      storage          config       job              tls
+```
+
+Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
+
 ## Table of contents
 
 - [Getting Started](#getting-started)
@@ -13,42 +69,6 @@
 AIS command-line interface (CLI) is a tool to easily manage and monitor every aspect of the AIS clusters' lifecycle.
 
 In addition, CLI provides dataset management commands, reading and writing primitives, and more.
-
-Given an existing aistore instance, maybe the very first command you execute would be `ais show cluster` - a variant of numerous `ais show` subcommands.  For example:
-
-```console
-$ ais show cluster
-PROXY            MEM USED(%)     MEM AVAIL       LOAD AVERAGE    UPTIME          K8s POD         STATUS
-p[DlPmJiRU]      0.01%           366.36GiB       [0.1 0.3 0.3]   526h28m20s      ais-proxy-5     online
-p[JedAkLgG][P]   0.02%           366.52GiB       [0.7 0.3 0.3]   526h27m30s      ais-proxy-7     online
-...
-...
-...
-
-TARGET         MEM USED(%)     MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE     UPTIME        K8s POD         STATUS
-t[KoplySra]    0.03%           366.37GiB     52%           8.324TiB      [0.1 0.3 0.3]   -             526h26m10s    ais-target-1    online
-t[MgHaIvNG]    0.03%           366.62GiB     52%           8.177TiB      [0.9 0.8 0.6]   -             526h27m10s    ais-target-4    online
-t[WoLfoQEW]    0.03%           366.56GiB     50%           8.499TiB      [0.4 0.2 0.2]   -             526h28m30s    ais-target-7    online
-t[fXFPnenn]    0.03%           366.52GiB     51%           8.347TiB      [0.7 0.3 0.3]   -             526h28m10s    ais-target-6    online
-t[fwKWswQP]    0.03%           366.56GiB     51%           8.434TiB      [0.5 0.3 0.3]   -             526h27m40s    ais-target-5    online
-t[tFUjHCCO]    0.03%           366.37GiB     50%           8.509TiB      [1.5 0.9 0.6]   -             526h28m40s    ais-target-8    online
-t[tfNKAtFk]    0.03%           366.40GiB     52%           8.350TiB      [1.6 0.8 0.6]   -             526h26m30s    ais-target-2    online
-...
-...
-
-Summary:
-   Proxies:             10 (all electable)
-   Targets:             10 (total disks: 30)
-   Cluster Map:         version 760, UUID HCGGmT4K0, primary p[JedAkLgG]
-   Deployment:          K8s
-   Status:              20 online
-   Rebalance:           n/a
-   Authentication:      disabled
-   Version:             3.22.rc2.f889d45
-   Build:               2024-01-29T00:29:36+0000
-```
-
-Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
 
 ## Getting Started
 
@@ -101,18 +121,17 @@ See also:
 
 ## CLI Reference
 
-The recommended and, actually, fastest way to get started with CLI is to type `ais` and press `<TAB-TAB>`:
+The recommended and quickest way to get started with CLI is to type `ais` and press `<TAB-TAB>`:
 
 ```console
 $ ais <TAB-TAB>
 
-advanced         config           get              prefetch         show
-alias            cp               help             put              space-cleanup
-archive          create           job              remote-cluster   start
-auth             download         log              rmb              stop
-blob-download    dsort            ls               rmo              storage
-bucket           etl              object           scrub            tls
-cluster          evict            performance      search           wait
+advanced         cluster          etl              ls               remote-cluster   space-cleanup
+alias            config           evict            ml               rmb              start
+archive          cp               get              object           rmo              stop
+auth             create           help             performance      scrub            storage
+blob-download    download         job              prefetch         search           tls
+bucket           dsort            log              put              show             wait
 ```
 
 These are the current set of top-level commands. Each command has its own extended help (the `--help` option) and, usually, multiple sub-commands
@@ -133,6 +152,7 @@ The list of top-level commands provides an overview of the supported functionali
 | [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations. |
 | [`ais etl`](/docs/cli/etl.md) | Execute custom transformations on objects. |
 | [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka eXtended actions or `xactions`). |
+| [`ais ml`](/docs/cli/ml.md) | Commands that target ML‑centric workflows, including bulk extraction of training samples. |
 | [`ais object`](/docs/cli/object.md) | PUT and GET (write and read), APPEND, archive, concat, list (buckets, objects), move, evict, promote, ... |
 | [`ais search`](/docs/cli/search.md) | Search `ais` commands. |
 | [`ais show`](/docs/cli/show.md) | Monitor anything and everything: performance (all aspects), buckets, jobs, remote clusters and more. |
@@ -143,6 +163,7 @@ The list of top-level commands provides an overview of the supported functionali
 {: .nobreak}
 
 Other CLI documentation:
+
 - [`ais help`](/docs/cli/help.md)
 - [Reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
 - [Monitoring](/docs/cli/show.md)
@@ -165,9 +186,10 @@ Notice:
 
 * CLI configuration directory: `$HOME/.config/ais/cli`
 * CLI configuration filename: `cli.json`
+* Reset: `ais config cli reset`
+* One‑liner view: `ais config cli --json | jq .`
 
 > For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/main/cmn/fname/fname.go) source.
-
 
 When used the very first time, *or* if the `$HOME/.config/ais/cli/cli.json` does not exist, the latter will be created with default parameters:
 
@@ -233,8 +255,9 @@ $ export AIS_ENDPOINT=https://10.07.56.68:51080
 
 In addition, environment can be used to **override** client-side TLS (aka, HTTPS) configuration - the knobs "client_crt", etc. also listed in the table below:
 
-| var name | description | the corresponding [CLI Config](#cli-config) |
+| Var name | Overrides `cli.json` field | The corresponding [CLI Config](#cli-config) |
 | -- | -- | -- |
+| `AIS_ENDPOINT`        | `cluster.url`              |
 | `AIS_CRT`             | X.509 certificate | "cluster.client_crt" |
 | `AIS_CRT_KEY`         | X.509 certificate's private key | "cluster.client_crt_key"|
 | `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate | "cluster.client_ca_tls" |

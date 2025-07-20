@@ -1130,7 +1130,7 @@ var (
 
 	continueOnErrorFlag = cli.BoolFlag{
 		Name:  "cont-on-err",
-		Usage: "Keep running archiving xaction (job) in presence of errors in a any given multi-object transaction",
+		Usage: "Keep running archiving xaction (job) in presence of errors in any given multi-object transaction",
 	}
 	// end archive
 
@@ -1280,7 +1280,7 @@ var (
 
 	streamingGetFlag = cli.BoolFlag{
 		Name:  "streaming",
-		Usage: "stream resulting archive prior to finalizing it in memory",
+		Usage: "stream the resulting archive prior to finalizing it in memory",
 	}
 
 	//
@@ -1288,7 +1288,7 @@ var (
 	//
 	lhotseManifestFlag = cli.StringFlag{ // see also: specFlag
 		Name:     "cuts",
-		Usage:    "path to Lhotse cuts.jsonl or cuts.jsonl.gz",
+		Usage:    "path to Lhotse cuts.jsonl or cuts.jsonl.gz or cuts.jsonl.lz4",
 		Required: true,
 	}
 	sampleRateFlag = cli.IntFlag{
