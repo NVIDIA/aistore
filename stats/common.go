@@ -99,6 +99,8 @@ const (
 	RenameCount = "ren.n"
 	ListCount   = "lst.n" // list-objects
 
+	GetBlobCount = "getblob.n"
+
 	// error counters
 	// see also: `Inc`, `regCommon`, `ioErrNames`
 	ErrGetCount    = errPrefix + GetCount
@@ -108,6 +110,8 @@ const (
 	ErrDeleteCount = errPrefix + DeleteCount
 	ErrRenameCount = errPrefix + RenameCount
 	ErrListCount   = errPrefix + ListCount
+
+	ErrGetBlobCount = errPrefix + GetBlobCount
 
 	ErrKaliveCount    = errPrefix + "kalive.n"
 	ErrHTTPWriteCount = errPrefix + "http.write.n"
@@ -232,6 +236,12 @@ func (r *runner) regCommon(snode *meta.Snode) {
 			VarLabs: BckVlabs,
 		},
 	)
+	r.reg(snode, GetBlobCount, KindCounter,
+		&Extra{
+			Help:    "total number of executed blob download requests",
+			VarLabs: BckXlabs,
+		},
+	)
 
 	// basic error counters, respectively
 	r.reg(snode, ErrGetCount, KindCounter,
@@ -274,6 +284,12 @@ func (r *runner) regCommon(snode *meta.Snode) {
 		&Extra{
 			Help:    "total number of list-objects errors",
 			VarLabs: BckVlabs,
+		},
+	)
+	r.reg(snode, ErrGetBlobCount, KindCounter,
+		&Extra{
+			Help:    "total number of blob download errors",
+			VarLabs: BckXlabs,
 		},
 	)
 	r.reg(snode, ErrKaliveCount, KindCounter,

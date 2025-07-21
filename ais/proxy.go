@@ -1746,7 +1746,6 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 			writeXid(w, xid)
 		}
 	case apc.ActBlobDl:
-		// TODO: add stats.GetBlobCount and *ErrCount
 		if err := p.checkAccess(w, r, bck, apc.AccessRW); err != nil {
 			return
 		}

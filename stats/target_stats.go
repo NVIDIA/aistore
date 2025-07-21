@@ -103,6 +103,8 @@ const (
 	GetSize = "get.size"
 	PutSize = "put.size"
 
+	GetBlobSize = "getblob.size"
+
 	// core
 	RemoteDeletedDelCount = core.RemoteDeletedDelCount // compare w/ common `DeleteCount`
 
@@ -367,6 +369,12 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, PutSize, KindSize,
 		&Extra{
 			Help:    "PUT: total cumulative size (bytes)",
+			VarLabs: BckXlabs,
+		},
+	)
+	r.reg(snode, GetBlobSize, KindSize,
+		&Extra{
+			Help:    "BLOB DOWNLOAD: total cumulative size (bytes)",
 			VarLabs: BckXlabs,
 		},
 	)

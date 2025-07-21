@@ -421,8 +421,18 @@ fin:
 				cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.vlabs},
 			)
 
+			debug.Assert(r.args.Lom.Lsize() == r.woff)
+			tstats.IncWith(stats.GetBlobCount, r.vlabs)
+			tstats.AddWith(
+				cos.NamedVal64{Name: stats.GetBlobSize, Value: r.args.Lom.Lsize(), VarLabs: r.vlabs},
+			)
+
 			r.ObjsAdd(1, 0)
 		} else {
+			tstats := core.T.StatsUpdater()
+			tstats.IncWith(stats.ErrGetCount, r.vlabs)
+			tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
+
 			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !cos.IsNotExist(errRemove) {
 				nlog.Errorln("nested err:", errRemove)
 			}

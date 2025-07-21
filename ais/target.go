@@ -1094,7 +1094,6 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			t.statsT.IncWith(stats.ErrRenameCount, vlabs)
 		}
 	case apc.ActBlobDl:
-		// TODO: add stats.GetBlobCount and *ErrCount
 		var (
 			xid     string
 			objName = msg.Name
