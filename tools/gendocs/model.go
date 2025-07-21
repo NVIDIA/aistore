@@ -209,7 +209,7 @@ func extractFieldInfo(field *ast.Field) (string, string, string) {
 
 	// Convert Go types to JSON types
 	fieldType := formatFieldType(field.Type)
-	jsonType := goTypeToJsonType(fieldType)
+	jsonType := goTypeToJSONType(fieldType)
 
 	// Extract inline comment
 	var comment string
@@ -223,7 +223,7 @@ func extractFieldInfo(field *ast.Field) (string, string, string) {
 }
 
 // Converts Go types to JSON type representations
-func goTypeToJsonType(goType string) string {
+func goTypeToJSONType(goType string) string {
 	switch {
 	case strings.Contains(goType, goTypeString):
 		return jsonTypeString

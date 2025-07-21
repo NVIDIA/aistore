@@ -58,7 +58,7 @@ const (
 	idTemplate      = "// @ID %s"
 	tagsTemplate    = "// @Tags %s"
 
-	bodyParamTemplate      = "// @Param body body %s true \"%s\""
+	bodyParamTemplate      = "// @Param request body %s true \"%s\""
 	supportedActionsHeader = "<h3>Supported Actions</h3><br/>"
 	actionLabelFormat      = "**Action:** %s"
 	modelExampleFormat     = "**Model Example Value:**<br/>%s"
@@ -279,7 +279,7 @@ func determineTag(path string) string {
 
 // Extracts action/model pairs from the action=[...] clause
 func parseActionClause(annotationLine string) []actionModel {
-	var actions []actionModel
+	actions := make([]actionModel, 0, 4)
 	actionStart := strings.Index(annotationLine, actionPrefix)
 	if actionStart == -1 {
 		return actions
@@ -591,8 +591,7 @@ func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 			if structDetails != "" {
 				actionParts = append(actionParts, fmt.Sprintf(modelExampleFormat, structDetails))
 			} else {
-				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model))
-				actionParts = append(actionParts, fieldDetailsNA)
+				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model), fieldDetailsNA)
 			}
 
 			actionDescriptions = append(actionDescriptions, strings.Join(actionParts, lineBreak))
