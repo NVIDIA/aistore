@@ -67,8 +67,6 @@ const (
 	actionSeparator        = "<br/><br/>---<br/><br/>"
 	lineBreak              = " <br/> "
 
-	warningModelNotFound = "Warning: model %s not found for action %s\n"
-
 	quote        = `"`
 	escapedQuote = `\"`
 
@@ -580,7 +578,7 @@ func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 		for _, action := range ep.Actions {
 			modelName := strings.TrimPrefix(action.Model, apcPrefix)
 			if !modelSet.hasModel(modelName) {
-				fmt.Fprintf(os.Stderr, warningModelNotFound, action.Model, action.Action)
+				fmt.Fprintf(os.Stderr, "Warning: model %s not found for action %s\n", action.Model, action.Action)
 				continue
 			}
 
@@ -602,7 +600,7 @@ func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 
 		fullDesc := supportedActionsHeader + strings.Join(actionDescriptions, actionSeparator)
 
-		fullDesc = strings.ReplaceAll(fullDesc, `"`, `\"`)
+		fullDesc = strings.ReplaceAll(fullDesc, quote, escapedQuote)
 
 		bodyParamComment := fmt.Sprintf(bodyParamTemplate, primaryModel, fullDesc)
 		swaggerComments = append(swaggerComments, bodyParamComment)

@@ -141,7 +141,6 @@ func getStructFieldDetails(modelSet *modelSet, modelName string) string {
 	for i, line := range uniqueLines {
 		jsonBlock += "  " + line
 		if i < len(uniqueLines)-1 {
-			// Only add comma if the line doesn't already have one (for comments)
 			if !strings.Contains(line, commentSeparator) {
 				jsonBlock += comma
 			}
@@ -159,11 +158,9 @@ func extractFieldsForJSON(structType *ast.StructType, modelSet *modelSet) []stri
 
 	for _, field := range structType.Fields.List {
 		if len(field.Names) > 0 {
-			// Regular field with name
 			jsonName, jsonType, comment := extractFieldInfo(field)
 			if jsonName != "" {
 				if comment != "" {
-					// Escape quotes in comments and format with comma before comment
 					comment = strings.ReplaceAll(comment, quote, htmlQuote)
 					lines = append(lines, fmt.Sprintf(jsonFieldWithComment, jsonName, jsonType, comment))
 				} else {
