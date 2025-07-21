@@ -1,6 +1,6 @@
 // Package main generates swagger annotations from AIStore source code comments.
 //
-// Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 package main
 
 import (
@@ -59,13 +59,13 @@ const (
 	tagsTemplate    = "// @Tags %s"
 
 	bodyParamTemplate      = "// @Param request body %s true \"%s\""
-	supportedActionsHeader = "<h3>Supported Actions</h3><br/>"
-	actionLabelFormat      = "**Action:** %s"
-	modelExampleFormat     = "**Model Example Value:**<br/>%s"
-	modelLabelFormat       = "**Model:** %s"
-	fieldDetailsNA         = "*(Field details not available)*"
-	actionSeparator        = "<br/><br/>---<br/><br/>"
-	lineBreak              = " <br/> "
+	supportedActionsHeader = "Supported Actions: "
+	actionLabelFormat      = "%s - Available fields: "
+	modelExampleFormat     = "%s"
+	modelLabelFormat       = "%s - No fields available"
+	fieldDetailsNA         = "No fields available"
+	actionSeparator        = "; "
+	lineBreak              = ""
 
 	quote        = `"`
 	escapedQuote = `\"`
@@ -481,7 +481,7 @@ func (*endpointProcessor) clearAnnotations() error {
 	headerContent := `package main
 
 // @title AIStore API
-// @version 3.24
+// @version 3.30
 // @description AIStore: scalable storage for AI applications
 // @contact.name AIStore
 // @contact.url https://aiatscale.org
@@ -583,23 +583,22 @@ func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 			}
 
 			actionName := strings.TrimPrefix(action.Action, apcPrefix)
-			structDetails := getStructFieldDetails(modelSet, modelName)
 			actionParts := []string{
 				fmt.Sprintf(actionLabelFormat, actionName),
 			}
 
+			structDetails := getStructFieldDetails(modelSet, modelName)
 			if structDetails != "" {
-				actionParts = append(actionParts, fmt.Sprintf(modelExampleFormat, structDetails))
+				actionParts = append(actionParts, structDetails)
 			} else {
-				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model), fieldDetailsNA)
+				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model))
+				actionParts = append(actionParts, fieldDetailsNA)
 			}
 
 			actionDescriptions = append(actionDescriptions, strings.Join(actionParts, lineBreak))
 		}
 
 		fullDesc := supportedActionsHeader + strings.Join(actionDescriptions, actionSeparator)
-
-		fullDesc = strings.ReplaceAll(fullDesc, quote, escapedQuote)
 
 		bodyParamComment := fmt.Sprintf(bodyParamTemplate, primaryModel, fullDesc)
 		swaggerComments = append(swaggerComments, bodyParamComment)

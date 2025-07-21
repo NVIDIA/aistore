@@ -19,15 +19,9 @@ const (
 	jsonTagStart   = `json:"`
 	jsonTagExclude = "-"
 
-	// HTML/JSON formatting
-	htmlOpenBrace  = "{<br/>"
-	htmlCloseBrace = "}"
-	htmlLineBreak  = "<br/>"
-	htmlQuote      = "&quot;"
-
 	// JSON field formatting
-	jsonFieldFormat      = `&quot;%s&quot;: &quot;%s&quot;`
-	jsonFieldWithComment = `&quot;%s&quot;: &quot;%s&quot;,   → %s`
+	jsonFieldFormat      = `"%s": "%s"`
+	jsonFieldWithComment = `"%s": "%s",   → %s`
 	commentSeparator     = ",   →"
 
 	// Go type strings
@@ -48,6 +42,12 @@ const (
 
 	// Default types
 	defaultType = "interface{}"
+
+
+	colonSeparator = ": "
+	commaSeparator = ", "
+	quoteChar      = `"`
+	commaChar      = ","
 
 	// Punctuation
 	dot  = "."
@@ -133,23 +133,35 @@ func getStructFieldDetails(modelSet *modelSet, modelName string) string {
 	}
 
 	if len(uniqueLines) == 0 {
-		return ""
+		return "No fields available"
 	}
 
-	// HTML formatting
-	jsonBlock := htmlOpenBrace
-	for i, line := range uniqueLines {
-		jsonBlock += "  " + line
-		if i < len(uniqueLines)-1 {
-			if !strings.Contains(line, commentSeparator) {
-				jsonBlock += comma
+	var fields []string
+	for _, line := range uniqueLines {
+		if strings.Contains(line, commentSeparator) {
+			parts := strings.Split(line, commentSeparator)
+			if len(parts) >= 2 {
+				fieldPart := strings.TrimSpace(parts[0])
+				comment := strings.TrimSpace(parts[1])
+				fieldPart = strings.ReplaceAll(fieldPart, quoteChar, "")
+				fieldPart = strings.TrimSuffix(fieldPart, commaChar)
+				fieldParts := strings.Split(fieldPart, colonSeparator)
+				if len(fieldParts) == 2 {
+					fields = append(fields, fmt.Sprintf("%s -> %s (%s)", fieldParts[0], fieldParts[1], comment))
+				}
+			}
+		} else {
+			fieldPart := strings.TrimSpace(line)
+			fieldPart = strings.ReplaceAll(fieldPart, quoteChar, "")
+			fieldPart = strings.TrimSuffix(fieldPart, commaChar)
+			fieldParts := strings.Split(fieldPart, colonSeparator)
+			if len(fieldParts) == 2 {
+				fields = append(fields, fmt.Sprintf("%s -> %s", fieldParts[0], fieldParts[1]))
 			}
 		}
-		jsonBlock += htmlLineBreak
 	}
-	jsonBlock += htmlCloseBrace
 
-	return jsonBlock
+	return strings.Join(fields, commaSeparator)
 }
 
 // Recursively extracts fields formatted as JSON lines
@@ -161,7 +173,6 @@ func extractFieldsForJSON(structType *ast.StructType, modelSet *modelSet) []stri
 			jsonName, jsonType, comment := extractFieldInfo(field)
 			if jsonName != "" {
 				if comment != "" {
-					comment = strings.ReplaceAll(comment, quote, htmlQuote)
 					lines = append(lines, fmt.Sprintf(jsonFieldWithComment, jsonName, jsonType, comment))
 				} else {
 					lines = append(lines, fmt.Sprintf(jsonFieldFormat, jsonName, jsonType))
@@ -217,6 +228,7 @@ func extractFieldInfo(field *ast.Field) (string, string, string) {
 		comment = strings.TrimSpace(field.Comment.Text())
 		comment = strings.TrimPrefix(comment, commentPrefix)
 		comment = strings.TrimSpace(comment)
+		comment = strings.ReplaceAll(comment, `"`, `'`)
 	}
 
 	return jsonName, jsonType, comment

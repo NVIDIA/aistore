@@ -383,7 +383,7 @@ api-docs-website: restful-api-doc ## Generate complete API documentation for Jek
 	@./scripts/website-preprocess.sh
 	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"
 	@echo "$(cyan)Updated files:$(term-reset)"
-	@echo "  docs/http-api.md - Website API documentation"
+	@echo "  docs/http-api.md - Website HTTP API documentation"
 	@echo "  docs-generated/README.md - Generated documentation"
 	@echo ""
 	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"

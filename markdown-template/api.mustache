@@ -19,7 +19,131 @@ All URIs are relative to *{{basePath}}*
     {{.}}{{/notes}}
 
 {{#allParams}}{{#isBodyParam}}
-{{{description}}}
+{{#description}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var description = "{{{.}}}";
+    var containers = document.querySelectorAll('.actions-container');
+    
+    containers.forEach(function(container) {
+        // Handle case where there are no supported actions
+        if (!description || description.indexOf('Supported Actions:') === -1) {
+            container.innerHTML = description || '<p>No supported actions</p>';
+            return;
+        }
+        
+        try {
+            // Parse the simple format
+            var actionsText = description.replace('Supported Actions: ', '');
+            
+            // Handle case where actions list is empty
+            if (!actionsText.trim()) {
+                container.innerHTML = '<h3>Supported Actions</h3><p>No actions available</p>';
+                return;
+            }
+            
+            // Split actions by '; ' but respect semicolons inside parentheses
+            var actions = [];
+            var current = '';
+            var paren = 0;
+            for (var i = 0; i < actionsText.length; i++) {
+                var ch = actionsText[i];
+                if (ch === '(') paren++;
+                else if (ch === ')') {
+                    if (paren > 0) paren--;
+                }
+                // Only split on '; ' when we're outside parentheses
+                if (ch === ';' && paren === 0 && i + 1 < actionsText.length && actionsText[i + 1] === ' ') {
+                    actions.push(current.trim());
+                    current = '';
+                    i++; // skip the space after semicolon
+                    continue;
+                }
+                current += ch;
+            }
+            if (current.trim()) actions.push(current.trim());
+            
+            var html = '<h3>Supported Actions</h3>';
+            
+            actions.forEach(function(action, index) {
+                // Parse each action - handle cases where format might vary
+                var actionParts = action.split(' - Available fields: ');
+                var actionName = actionParts[0] || 'Unknown Action';
+                var fieldsText = actionParts[1] || '';
+                
+                html += '<p><strong>Action:</strong> ' + actionName + '</p>';
+                html += '<p><strong>Model Example Value:</strong></p>';
+                html += '<pre><code class="language-json">{';
+                
+                // Handle different field scenarios
+                if (fieldsText && fieldsText.trim() && fieldsText.indexOf('No fields available') === -1) {
+                    // Split fields respecting commas inside parentheses
+                    var fields = [];
+                    var current = '';
+                    var paren = 0;
+                    for (var i = 0; i < fieldsText.length; i++) {
+                        var ch = fieldsText[i];
+                        if (ch === '(') paren++;
+                        else if (ch === ')') {
+                            if (paren > 0) paren--;
+                        }
+                        if (ch === ',' && paren === 0) {
+                            fields.push(current.trim());
+                            current = '';
+                            continue;
+                        }
+                        current += ch;
+                    }
+                    if (current.trim()) fields.push(current.trim());
+
+                    fields.forEach(function(field, fieldIndex) {
+                        var arrowIndex = field.indexOf(' -> ');
+                        if (arrowIndex === -1) return; // skip malformed
+                        var name = field.substring(0, arrowIndex).trim();
+                        var rest = field.substring(arrowIndex + 4).trim();
+
+                        var type = '';
+                        var comment = '';
+                        var parenIdx = rest.indexOf(' (');
+                        if (parenIdx !== -1) {
+                            type = rest.substring(0, parenIdx).trim();
+                            comment = rest.substring(parenIdx + 2).trim(); // plus 2 to skip space(
+                            if (comment.charAt(comment.length - 1) === ')') comment = comment.slice(0, -1);
+                        } else {
+                            type = rest.trim();
+                        }
+                        var line = '  "' + name + '": "' + type + '"';
+                        if (comment) line += ' → ' + comment;
+                        if (fieldIndex < fields.length - 1) line += ',';
+                        html += '\n' + line;
+                    });
+                } else {
+                    // No fields case
+                    html += '\n  // No fields available';
+                }
+                
+                html += '\n}</code></pre>';
+                
+                // Add separator between actions (but not after the last one)
+                if (index < actions.length - 1) {
+                    html += '<hr>';
+                }
+            });
+            
+            container.innerHTML = html;
+            
+        } catch (error) {
+            // Fallback to original description
+            container.innerHTML = description;
+        }
+    });
+});
+</script>
+<div class="actions-container">{{{.}}}</div>
+{{/description}}
+{{^description}}
+<p>No description available</p>
+{{/description}}
 
 {{/isBodyParam}}{{/allParams}}
 
