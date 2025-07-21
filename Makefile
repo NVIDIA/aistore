@@ -377,13 +377,13 @@ api-docs-website: restful-api-doc ## Generate complete API documentation for Jek
 	@echo "Generating markdown documentation with custom template..."
 	@openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
 	@echo "Copying generated documentation to website location..."
-	@cp docs-generated/README.md docs/api-documentation.md
+	@cp docs-generated/README.md docs/http-api.md
 	@cp -r docs-generated/Apis docs/
 	@echo "Adding Jekyll front matter..."
 	@./scripts/website-preprocess.sh
 	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"
 	@echo "$(cyan)Updated files:$(term-reset)"
-	@echo "  docs/api-documentation.md - Website API documentation"
+	@echo "  docs/http-api.md - Website API documentation"
 	@echo "  docs-generated/README.md - Generated documentation"
 	@echo ""
 	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"

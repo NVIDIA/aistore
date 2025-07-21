@@ -19,6 +19,7 @@ theme: minima
 header_pages:
   - blog.md
   - docs.md
+  - http-api.md
 include:
   - _pages/
   - assets/

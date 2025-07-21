@@ -131,4 +131,4 @@ The documentation is automatically generated and deployed when changes are pushe
 - `.docs/swagger.yaml` - OpenAPI specification
 - `.docs/swagger.json` - OpenAPI specification (JSON format)
 - `docs-generated/README.md` - Generated markdown documentation
-- `docs/api-documentation.md` - Final documentation for website
+- `docs/http-api.md` - Final documentation for website
