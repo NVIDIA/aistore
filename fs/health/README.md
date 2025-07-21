@@ -1,8 +1,7 @@
 Filesystem Health Checker (FSHC)
 ---------------------------------
 
-**Note Dec 2024**: some of the following content **may be outdated** and/or **incomplete**. For the most recent updates, please check:
-- [Changelog](https://github.com/NVIDIA/aistore/tree/main/docs/changelog)
+**Note Dec 2024**: some of the following content **may be outdated** and/or **incomplete**.
 
 ## Overview
 
