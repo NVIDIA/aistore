@@ -210,6 +210,20 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
+
+		DecodeMetadata: func(header http.Header) (metadata map[string]string) {
+			for headerKey := range header {
+				if strings.HasPrefix(headerKey, AwsHeaderMetaPrefix) {
+					if metadata == nil {
+						metadata = make(map[string]string)
+					}
+					key := strings.TrimPrefix(headerKey, AwsHeaderMetaPrefix)
+					value := header.Get(headerKey)
+					metadata[key] = value
+				}
+			}
+			return
+		},
 	},
 	HTTP: backendFuncs{
 		EncodeETag: func(v any) (string, bool) {
