@@ -75,7 +75,7 @@ func AddPart(id string, npart *MptPart) (err error) {
 	upsMu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
-		err = fmt.Errorf("upload %q not found (%s, %d)", id, npart.FQN, npart.Num)
+		err = newErrNoSuchUpload(id)
 	} else {
 		mpt.parts = append(mpt.parts, npart)
 	}
@@ -89,7 +89,7 @@ func CheckParts(id string, parts []types.CompletedPart) ([]*MptPart, error) {
 	defer upsMu.RUnlock()
 	mpt, ok := ups[id]
 	if !ok {
-		return nil, fmt.Errorf("upload %q not found", id)
+		return nil, newErrNoSuchUpload(id)
 	}
 	// first, check that all parts are present
 	var prev = int32(-1)
@@ -123,7 +123,7 @@ func ObjSize(id string) (size int64, err error) {
 	upsMu.RLock()
 	mpt, ok := ups[id]
 	if !ok {
-		err = fmt.Errorf("upload %q not found", id)
+		err = newErrNoSuchUpload(id)
 	} else {
 		for _, part := range mpt.parts {
 			size += part.Size

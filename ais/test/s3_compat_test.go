@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -38,6 +39,7 @@ import (
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
@@ -593,4 +595,47 @@ func TestS3MultipartPartOperations(t *testing.T) {
 	for err := range errors {
 		tassert.CheckFatal(t, err)
 	}
+}
+
+func TestS3MultipartErrorHandling(t *testing.T) {
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-mpt-err-" + trand.String(6), Provider: apc.AIS}
+		testData = "test"
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tools.SetClusterConfig(t, cos.StrKVs{"features": feat.S3ReverseProxy.String()})
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
+	})
+
+	s3Client := s3.New(s3.Options{
+		HTTPClient:   newS3Client(true /*pathStyle*/),
+		Region:       env.AwsDefaultRegion(),
+		BaseEndpoint: aws.String(proxyURL),
+		UsePathStyle: true,
+		Credentials:  aws.AnonymousCredentials{},
+	})
+
+	// Call UploadPart with invalid upload ID
+	_, err := s3Client.UploadPart(t.Context(), &s3.UploadPartInput{
+		Bucket:        aws.String(bck.Name),
+		Key:           aws.String("test-object"),
+		PartNumber:    aws.Int32(1),
+		UploadId:      aws.String("invalid-upload-id"),
+		Body:          strings.NewReader(testData),
+		ContentLength: aws.Int64(int64(len(testData))),
+	})
+
+	// Check that the error code is NoSuchUpload
+	var s3Err smithy.APIError
+	tassert.Errorf(t, errors.As(err, &s3Err) && s3Err.ErrorCode() == "NoSuchUpload",
+		"expected NoSuchUpload error, got: %v", err)
+
+	// Check that the status code is 404
+	var httpErr *smithyhttp.ResponseError
+	tassert.Errorf(t, errors.As(err, &httpErr) && httpErr.HTTPStatusCode() == 404,
+		"expected HTTP 404, got: %v", err)
 }

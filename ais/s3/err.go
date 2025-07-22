@@ -6,6 +6,7 @@ package s3
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,17 +44,22 @@ func (e *Error) mustMarshal(sgl *memsys.SGL) {
 
 // with user-friendly tip
 func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, lom *core.LOM, uploadID string) {
-	// specifically, for s3cmd example
-	name := strings.Replace(lom.Cname(), apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
-	s3cmd := "s3cmd abortmp " + name + " " + uploadID
-	if len(s3cmd) > 50 {
-		s3cmd = "\n  " + s3cmd
+	if isErrNoSuchUpload(err) {
+		if ecode == 0 {
+			ecode = http.StatusNotFound
+		}
+	} else {
+		if ecode == 0 {
+			ecode = http.StatusInternalServerError
+		}
+		name := strings.Replace(lom.Cname(), apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
+		s3cmd := "s3cmd abortmp " + name + " " + uploadID
+		if len(s3cmd) > 50 {
+			s3cmd = "\n  " + s3cmd
+		}
+		err = fmt.Errorf("%w\nUse upload ID %q to cleanup, e.g.: %s", err, uploadID, s3cmd)
 	}
-	e := fmt.Errorf("%v\nUse upload ID %q to cleanup, e.g.: %s", err, uploadID, s3cmd)
-	if ecode == 0 {
-		ecode = http.StatusInternalServerError
-	}
-	WriteErr(w, r, e, ecode)
+	WriteErr(w, r, err, ecode)
 }
 
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
@@ -73,6 +79,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 		out.Code = "BucketAlreadyExists"
 	case cmn.IsErrBckNotFound(err):
 		out.Code = "NoSuchBucket"
+	case isErrNoSuchUpload(err):
+		out.Code = "NoSuchUpload"
 	case in.TypeCode != "":
 		out.Code = in.TypeCode
 	default:
@@ -99,4 +107,24 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 	if allocated {
 		cmn.FreeHterr(in)
 	}
+}
+
+type errNoSuchUpload struct {
+	uploadID string
+}
+
+func newErrNoSuchUpload(uploadID string) *errNoSuchUpload {
+	return &errNoSuchUpload{uploadID: uploadID}
+}
+
+func (e *errNoSuchUpload) Error() string {
+	return fmt.Sprintf("upload %q not found", e.uploadID)
+}
+
+func isErrNoSuchUpload(err error) bool {
+	if _, ok := err.(*errNoSuchUpload); ok {
+		return true
+	}
+	var errMpt *errNoSuchUpload
+	return errors.As(err, &errMpt)
 }
