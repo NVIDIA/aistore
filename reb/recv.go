@@ -6,9 +6,11 @@ package reb
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -19,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -163,23 +166,48 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.RebID(), meta.Tname(tsid), lom, stages[stage])
 	}
 
+	xreb := reb.xctn()
+
 	//
-	// when destination exists
+	// when destination exists:
+	// VA (local)  <--> VB (from tsid sender) [ <--> VC (from cloud ]
 	//
 	if lom.Load(false, false) == nil {
 		if lom.CheckEq(&hdr.ObjAttrs) == nil {
 			// no-op: optimize-out duplicated write
-			cos.DrainReader(objReader)
-			return reb.regACK(smap, hdr, tsid)
+			goto drainOk
 		}
-		if lom.Bck().IsRemote() {
+
+		// TODO: add operation‑scope '--latest' flag: `ais start rebalance --latest`
+		// will likely need to extend ActMsg (Value, Action, Name) to also carry the boolean
+
+		if lom.Bck().IsRemote() && (lom.VersionConf().Sync || lom.VersionConf().ValidateWarmGet) {
 			oa, ecode, err := core.T.HeadCold(lom, nil)
 			if err == nil {
-				// receive latest version from tsid
-				if oa.CheckEq(&hdr.ObjAttrs) == nil {
-					goto rx // go ahead to overwrite this lom
+				switch {
+				case oa.CheckEq(&hdr.ObjAttrs) == nil:
+					goto rx // receiving latest-ver from tsid (the sender)
+				case oa.CheckEq(lom.ObjAttrs()) == nil:
+					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+						nlog.Infof("%s g[%d]: sender stale (%s), keeping local == latest %s", core.T, xreb.ID(), hdr.Cname(), lom.Cname())
+					}
+					goto drainOk
+				default:
+					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+						nlog.Infoln("cold-get latest (when VC differs)", xreb.ID(), lom.Cname())
+					}
+					ecodeCold, errCold := core.T.GetCold(context.Background(), lom, xreb.Kind(), cmn.OwtGetTryLock)
+					if errCold == nil {
+						if cmn.Rom.FastV(5, cos.SmoduleReb) {
+							nlog.Infoln("cold-get ok")
+						}
+						goto drainOk // ok
+					}
+					nlog.Warningln("cold-get fail", xreb.ID(), lom.Cname(), ecodeCold, errCold)
 				}
 			}
+
+			// --sync to maybe delete
 			if cos.IsNotExist(err, ecode) && lom.VersionConf().Sync {
 				// try to delete in place (TODO: compare with lom.CheckRemoteMD; unify)
 				locked := lom.TryLock(true)
@@ -189,17 +217,46 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 				}
 				if errDel != nil {
 					nlog.Errorf("%s g[%d]: failed to sync-delete %s: %v", core.T, reb.RebID(), lom, errDel)
-				} else if cmn.Rom.FastV(5, cos.SmoduleReb) {
-					nlog.Infof("%s g[%d]: sync-deleted %s", core.T, reb.RebID(), lom)
+				} else {
+					// TODO -- FIXME: optimize vlabs out
+					vlabs := map[string]string{"bucket": lom.Bck().Cname("")}
+					core.T.StatsUpdater().IncWith(stats.RemoteDeletedDelCount, vlabs)
+					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+						nlog.Infof("%s g[%d]: sync-deleted %s", core.T, reb.RebID(), lom)
+					}
 				}
+				goto drain
 			}
+
+			goto ambiguity // proceeding to "ambiguity"
 		}
 
-		// cannot choose between the source and the destination
-		if cmn.Rom.FastV(5, cos.SmoduleReb) {
-			nlog.Warningf("%s g[%d]: recv ambiguity (%s, %s) vs (%s) - dropping, discarding", core.T, reb.RebID(),
-				lom, lom.ObjAttrs().String(), hdr.ObjAttrs.String())
+		if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
+			if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+				va, vb := lom.Version(), hdr.ObjAttrs.Version()
+				vera, erra := strconv.ParseUint(va, 10, 64)
+				verb, errb := strconv.ParseUint(vb, 10, 64)
+				if erra == nil && errb == nil && vera > 0 && verb > 0 {
+					switch {
+					case verb > vera:
+						goto rx // sender newer
+					case verb < vera:
+						goto drainOk // we’re newer
+					}
+				}
+			}
+			goto ambiguity // proceeding to "ambiguity"
 		}
+
+	drainOk: // success paths that require only draining
+		xreb.InObjsAdd(1, hdr.ObjAttrs.Size)
+		goto drain
+
+	ambiguity:
+		// cannot decide between the source and the destination
+		nlog.Warningln("recv ambiguity - dropping/discarding [", xreb.ID(), lom.Cname(), lom.ObjAttrs().String(), hdr.ObjAttrs.String(), "]")
+
+	drain: // drop/discard paths (no stats)
 		cos.DrainReader(objReader)
 		return reb.regACK(smap, hdr, tsid)
 	}
@@ -207,7 +264,6 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 rx:
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 
-	xreb := reb.xctn()
 	if xreb.IsAborted() {
 		return nil
 	}

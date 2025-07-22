@@ -451,6 +451,8 @@ type (
 		// - prefetch bucket (*)
 		// - prefetch multiple objects (see api/multiobj.go)
 		// - copy bucket
+		// - rebalance (object migration)
+		//
 		// Applies to Cloud and remote AIS buckets - generally, buckets that have remote backends
 		// that in turn provide some form of object versioning.
 		// (*) Xactions (ie., jobs) that read-access multiple objects (e.g., prefetch, copy-bucket)
