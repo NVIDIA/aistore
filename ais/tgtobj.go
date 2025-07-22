@@ -1504,8 +1504,12 @@ func (a *apndOI) pack(workFQN string) string {
 
 // main method
 func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
+	if coi.ETLArgs == nil {
+		coi.ETLArgs = &core.ETLArgs{}
+	}
+
 	if coi.DryRun {
-		return coi._dryRun(lom, coi.ObjnameTo)
+		return coi._dryRun(lom, coi.ObjnameTo, coi.ETLArgs)
 	}
 
 	// (no-op transform) and (remote source) => same flow as actual transform but with default reader
@@ -1533,14 +1537,16 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		q.Set(apc.QparamOWT, coi.OWT.ToS())
 		daddr.RawQuery = q.Encode()
 	}
-	gargs := &core.GetROCArgs{Daddr: daddr.String(), Local: local}
+
+	coi.ETLArgs.Daddr = daddr.String()
+	coi.ETLArgs.Local = local
 	if !local {
 		var r cos.ReadOpenCloser
 		if coi.PutWOC != nil {
-			_, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, nil, gargs)
+			_, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, nil, coi.ETLArgs)
 			return xs.CoiRes{Err: err, Ecode: ecode}
 		} else if coi.GetROC != nil {
-			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
+			resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, coi.ETLArgs)
 			// skip t2t send if encounter error during GetROC, (etl direct put will return ErrSkip in this case)
 			if resp.Err != nil {
 				return xs.CoiRes{Err: resp.Err, Ecode: resp.Ecode}
@@ -1567,12 +1573,12 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
 		}
 	case coi.PutWOC != nil: // take precedence over GetROC, if any
-		res = coi._writer(t, lom, dst, gargs)
+		res = coi._writer(t, lom, dst, coi.ETLArgs)
 		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err) {
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
 	case coi.GetROC != nil:
-		res = coi._reader(t, dm, lom, dst, gargs)
+		res = coi._reader(t, dm, lom, dst, coi.ETLArgs)
 		if res.Ecode == http.StatusNotFound && !cos.IsNotExist(err) {
 			// to keep not-found
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
@@ -1617,7 +1623,7 @@ func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DM) bool {
 	return res.Eq
 }
 
-func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
+func (coi *coi) _dryRun(lom *core.LOM, objnameTo string, args *core.ETLArgs) (res xs.CoiRes) {
 	if coi.GetROC == nil {
 		uname := coi.BckTo.MakeUname(objnameTo)
 		if lom.Uname() != cos.UnsafeS(uname) {
@@ -1626,7 +1632,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 		return res
 	}
 
-	resp := coi.GetROC(lom, false /*latestVer*/, false /*sync*/, nil /*GetROCArgs*/)
+	resp := coi.GetROC(lom, false /*latestVer*/, false /*sync*/, args)
 	if resp.Err != nil {
 		return xs.CoiRes{Err: resp.Err}
 	}
@@ -1636,13 +1642,13 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string) (res xs.CoiRes) {
 	return xs.CoiRes{Lsize: size, Err: err}
 }
 
-func (coi *coi) _writer(t *target, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
+func (coi *coi) _writer(t *target, lom, dst *core.LOM, args *core.ETLArgs) (res xs.CoiRes) {
 	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileTransform)
 	lomWriter, err := dst.CreateWork(workFQN) // closed in the `coi.PutWOC` call
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
-	size, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, lomWriter, gargs)
+	size, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, lomWriter, args)
 	if err != nil {
 		cos.RemoveFile(workFQN)
 		return xs.CoiRes{Err: err, Ecode: ecode}
@@ -1670,8 +1676,8 @@ func (coi *coi) _writer(t *target, lom, dst *core.LOM, gargs *core.GetROCArgs) (
 //
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, gargs *core.GetROCArgs) (res xs.CoiRes) {
-	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, gargs)
+func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core.ETLArgs) (res xs.CoiRes) {
+	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, args)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
 	}

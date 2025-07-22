@@ -29,6 +29,7 @@ type (
 		BckTo  *meta.Bck
 		core.GetROC
 		core.PutWOC
+		ETLArgs         *core.ETLArgs
 		ObjnameTo       string
 		Buf             []byte
 		OWT             cmn.OWT

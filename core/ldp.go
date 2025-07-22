@@ -37,14 +37,14 @@ type (
 	// - `core.DefaultGetROC`: fetches from local or remote backend
 	// - `etl.HTTPCommunicator.OfflineTransform`: fetches transformed object from ETL pod through HTTP response
 	// - `etl.statefulCommnicator.Transform`: fetches transformed object from ETL pod through WebSocket message
-	GetROCArgs struct {
+	ETLArgs struct {
 		Daddr         string // destination target's address for direct put
 		TransformArgs string // optional and ETL-specific; can be used to indicate transformation on a per-object basis
 		Local         bool   // true when the destination is local; used by communicator to handle direct put
 	}
-	GetROC func(lom *LOM, latestVer, sync bool, args *GetROCArgs) ReadResp
+	GetROC func(lom *LOM, latestVer, sync bool, args *ETLArgs) ReadResp
 
-	PutWOC func(lom *LOM, latestVer, sync bool, woc io.WriteCloser, args *GetROCArgs) (written int64, ecode int, err error)
+	PutWOC func(lom *LOM, latestVer, sync bool, woc io.WriteCloser, args *ETLArgs) (written int64, ecode int, err error)
 
 	// returned by lom.CheckRemoteMD
 	CRMD struct {
@@ -148,7 +148,7 @@ remote:
 	return resp
 }
 
-func GetDefaultROC(lom *LOM, latestVer, sync bool, _ *GetROCArgs) ReadResp {
+func GetDefaultROC(lom *LOM, latestVer, sync bool, _ *ETLArgs) ReadResp {
 	return lom.GetROC(latestVer, sync)
 }
 

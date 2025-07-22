@@ -5,10 +5,10 @@ import random
 import unittest
 import io
 import tarfile
-import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
+import xxhash
 
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.etl import ETLConfig
@@ -604,19 +604,21 @@ class TestObjectOps(ParallelTestBase):
         etl = self.client.etl(etl_name)
 
         try:
-            etl.init(image="aistorage/transformer_md5:latest")
+            etl.init(image="aistorage/transformer_hash_with_args:latest")
 
             # Copy with ETL transformation
             dest_obj = dest_bucket.object(source_obj.name)
-            etl_config = ETLConfig(name=etl_name)
+            etl_config = ETLConfig(name=etl_name, args="123")
             response = source_obj.copy(dest_obj, etl=etl_config)
             self.assertEqual(response.status_code, 200)
 
             # Verify the copied object has the transformed content (MD5 hash)
             copied_obj = dest_bucket.object(source_obj.name)
             copied_content = copied_obj.get_reader().read_all()
-            expected_md5 = hashlib.md5(content).hexdigest().encode()
-            self.assertEqual(copied_content, expected_md5)
+
+            hasher = xxhash.xxh64(seed=int(etl_config.args))
+            hasher.update(content)
+            self.assertEqual(copied_content, hasher.hexdigest().encode("ascii"))
 
             # Verify original object is unchanged
             original_content = source_obj.get_reader().read_all()

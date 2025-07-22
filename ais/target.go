@@ -958,7 +958,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 				return
 			}
 		}
-		ecode, err = t.copyObject(lom, bck, objName, etlName, config) // lom is locked/unlocked during the call
+		ecode, err = t.copyObject(lom, bck, objName, etlName, apireq.dpq.etl.targs, config) // lom is locked/unlocked during the call
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1437,7 +1437,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	return code, err
 }
 
-func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName string, config *cmn.Config) (ecode int, err error) {
+func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName, etlArgs string, config *cmn.Config) (ecode int, err error) {
 	coiParams := xs.AllocCOI()
 	{
 		coiParams.BckTo = bck
@@ -1445,6 +1445,7 @@ func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName strin
 		coiParams.Config = config
 		coiParams.ObjnameTo = objName
 		coiParams.OAH = lom
+		coiParams.ETLArgs = &core.ETLArgs{TransformArgs: etlArgs}
 	}
 
 	var xetl *etl.XactETL

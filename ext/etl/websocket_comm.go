@@ -37,9 +37,9 @@ type (
 	Session interface {
 		// Finish cleans up the job's communication channel, and aborts the undergoing xaction (`TCB`/`TCO`) if errCause is provided
 		Finish(errCause error) error
-		OfflineWrite(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error)
+		OfflineWrite(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error)
 
-		transform(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error)
+		transform(lom *core.LOM, latestVer, sync bool, writer io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error)
 	}
 
 	//nolint:dupword // ASCII diagram contains repeated characters by design
@@ -156,7 +156,7 @@ func (ws *webSocketComm) setupConnection(_, podAddr string) (ecode int, err erro
 
 func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int64, int, error) {
 	// use pre-established inline sessions to serve inline transform requests
-	return ws.inlineSession.transform(lom, latestVer, false /*sync*/, cos.NopWriteCloser(w), &core.GetROCArgs{
+	return ws.inlineSession.transform(lom, latestVer, false /*sync*/, cos.NopWriteCloser(w), &core.ETLArgs{
 		TransformArgs: targs,
 		Local:         true, // inline transform is always local
 	})
@@ -233,21 +233,21 @@ func (ws *webSocketComm) stop() error {
 // wsSession //
 ///////////////
 
-func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error) {
+func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error) {
 	task, ecode, err := wss.createTask(lom, latestVer, sync, woc)
 	if err != nil {
 		return 0, ecode, err
 	}
 
-	if gargs != nil {
-		task.ctrlmsg.Targs = gargs.TransformArgs
-		if wss.msg.IsDirectPut() && !gargs.Local && gargs.Daddr != "" {
-			task.ctrlmsg.Daddr = gargs.Daddr
+	if args != nil {
+		task.ctrlmsg.Targs = args.TransformArgs
+		if wss.msg.IsDirectPut() && !args.Local && args.Daddr != "" {
+			task.ctrlmsg.Daddr = args.Daddr
 		}
 	}
 
 	// local object should contain empty direct put address; remote object should contain valid direct put address
-	debug.Assert(gargs == nil || task.ctrlmsg.Daddr == "" && gargs.Local || task.ctrlmsg.Daddr != "" && !gargs.Local)
+	debug.Assert(args == nil || task.ctrlmsg.Daddr == "" && args.Local || task.ctrlmsg.Daddr != "" && !args.Local)
 	debug.Assert(task.ctrlmsg.Targs == "" || task.ctrlmsg.Daddr == "") // Targs is for inline transform, while Daddr is for offline transform
 
 	l, c := len(wss.workCh), cap(wss.workCh)
@@ -291,8 +291,8 @@ func (wss *wsSession) createTask(lom *core.LOM, latestVer, sync bool, woc io.Wri
 	return task, 0, nil
 }
 
-func (wss *wsSession) OfflineWrite(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, gargs *core.GetROCArgs) (written int64, ecode int, err error) {
-	return wss.transform(lom, latestVer, sync, woc, gargs)
+func (wss *wsSession) OfflineWrite(lom *core.LOM, latestVer, sync bool, woc io.WriteCloser, args *core.ETLArgs) (written int64, ecode int, err error) {
+	return wss.transform(lom, latestVer, sync, woc, args)
 }
 
 func (wss *wsSession) Finish(errCause error) error {

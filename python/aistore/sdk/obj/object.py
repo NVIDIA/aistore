@@ -525,12 +525,6 @@ class Object:
 
         # Add ETL configuration if provided
         if etl:
-            if etl.args:
-                warnings.warn(
-                    "etl_args is still WIP, currently only supports etlName",
-                    UserWarning,
-                    stacklevel=2,
-                )
             etl.update_qparams(query_params)
 
         return self._client.request(

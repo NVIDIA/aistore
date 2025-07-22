@@ -66,7 +66,7 @@ type (
 		// - redirectComm
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
-		OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp
+		OfflineTransform(lom *core.LOM, latestVer, sync bool, args *core.ETLArgs) core.ReadResp
 	}
 
 	baseComm struct {
@@ -272,7 +272,7 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
+func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync bool) core.ReadResp {
 	if err := lom.InitBck(lom.Bucket()); err != nil {
 		return core.ReadResp{Err: err}
 	}
@@ -309,8 +309,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		query = url.Values{"command": []string{"bash", "-c", strings.Join(pc.command, " ")}}
 	}
 
-	if targs != "" {
-		query.Set(apc.QparamETLTransformArgs, targs)
+	if args != nil && args.TransformArgs != "" {
+		query.Set(apc.QparamETLTransformArgs, args.TransformArgs)
 	}
 
 	reqArgs := &cmn.HreqArgs{
@@ -321,8 +321,8 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 		Query:  query,
 	}
 
-	if pc.msg.IsDirectPut() && gargs != nil && !gargs.Local {
-		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
+	if pc.msg.IsDirectPut() && args != nil && !args.Local {
+		reqArgs.Header.Add(apc.HdrNodeURL, args.Daddr)
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
@@ -336,7 +336,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, targs string, latestVer, sync bool,
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
-	resp := pc.doRequest(lom, targs, latestVer, false, nil)
+	resp := pc.doRequest(lom, &core.ETLArgs{TransformArgs: targs}, latestVer, false /* sync */) // TODO: support sync
 	if resp.Err != nil {
 		return 0, resp.Ecode, resp.Err
 	}
@@ -357,8 +357,8 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 	return n, 0, err
 }
 
-func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, gargs *core.GetROCArgs) core.ReadResp {
-	resp := pc.doRequest(lom, "", latestVer, sync, gargs)
+func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, args *core.ETLArgs) core.ReadResp {
+	resp := pc.doRequest(lom, args, latestVer, sync)
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err, resp.Ecode)
 	}
@@ -411,13 +411,17 @@ func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string
 	return path, query
 }
 
-func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs *core.GetROCArgs) core.ReadResp {
+func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args *core.ETLArgs) core.ReadResp {
 	clone := *lom
 	ecode, err := lomLoad(&clone, rc.xctn.Kind())
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
 	path, query := rc.redirectArgs(&clone, latestVer)
+
+	if args != nil && args.TransformArgs != "" {
+		query.Set(apc.QparamETLTransformArgs, args.TransformArgs)
+	}
 
 	reqArgs := &cmn.HreqArgs{
 		Method: http.MethodGet,
@@ -428,8 +432,8 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, gargs
 		Query:  query,
 	}
 
-	if rc.msg.IsDirectPut() && gargs != nil && !gargs.Local {
-		reqArgs.Header.Add(apc.HdrNodeURL, gargs.Daddr)
+	if rc.msg.IsDirectPut() && args != nil && !args.Local {
+		reqArgs.Header.Add(apc.HdrNodeURL, args.Daddr)
 	}
 
 	_, objTimeout := rc.msg.Timeouts()

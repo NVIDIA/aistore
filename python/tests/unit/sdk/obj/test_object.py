@@ -8,6 +8,7 @@ network traffic or AIS cluster is required.
 
 import unittest
 from unittest.mock import Mock, patch, mock_open
+from json import dumps as json_dumps
 
 import warnings
 
@@ -657,7 +658,6 @@ class TestObject(unittest.TestCase):
         mock_response.status_code = 200
         self.mock_client.request.return_value = mock_response
 
-        # TODO: Once etl_args work, add them in config/test
         etl_config = ETLConfig(name=ETL_NAME)
 
         response = self.object.copy(dest_object, etl=etl_config)
@@ -666,6 +666,35 @@ class TestObject(unittest.TestCase):
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{OBJ_NAME}"
         expected_params[QPARAM_ETL_NAME] = ETL_NAME
+
+        self.mock_client.request.assert_called_once_with(
+            HTTP_METHOD_PUT,
+            path=REQUEST_PATH,
+            params=expected_params,
+        )
+
+    def test_copy_with_etl_args(self):
+        """Test copying object with ETL transformation and etl_args."""
+        dest_bucket_details = BucketDetails(
+            DEST_BCK_NAME, Provider.AIS, {"provider": "ais"}, f"ais/@#/{DEST_BCK_NAME}/"
+        )
+        dest_object = Object(self.mock_client, dest_bucket_details, OBJ_NAME)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        self.mock_client.request.return_value = mock_response
+
+        etl_config = ETLConfig(name=ETL_NAME, args={"seed": "42", "mode": "test"})
+
+        response = self.object.copy(dest_object, etl=etl_config)
+
+        self.assertEqual(response, mock_response)
+        expected_params = self.bck_qparams.copy()
+        expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{OBJ_NAME}"
+        expected_params[QPARAM_ETL_NAME] = ETL_NAME
+        expected_params[QPARAM_ETL_ARGS] = json_dumps(
+            etl_config.args, separators=(",", ":")
+        )
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,

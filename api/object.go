@@ -140,6 +140,7 @@ type (
 	TransformArgs struct {
 		CopyArgs
 		ETLName string
+		ETLArgs string
 	}
 )
 
@@ -337,7 +338,7 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 	return
 }
 
-func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName string) error {
+func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName, etlArgs string) error {
 	var (
 		q         = qalloc()
 		toObjName = cos.Left(args.ToObjName, args.FromObjName)
@@ -346,6 +347,9 @@ func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName string) error 
 	args.ToBck.AddUnameToQuery(q, apc.QparamObjTo, toObjName)
 	if etlName != "" {
 		q.Add(apc.QparamETLName, etlName)
+	}
+	if etlArgs != "" {
+		q.Add(apc.QparamETLTransformArgs, etlArgs)
 	}
 
 	bp.Method = http.MethodPut
@@ -366,12 +370,12 @@ func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName string) error 
 // This is a synchronous, blocking operation.
 // If ToObjName is empty, uses FromObjName as the destination.
 func CopyObject(bp BaseParams, args *CopyArgs) error {
-	return copyOrTransformObject(bp, args, "")
+	return copyOrTransformObject(bp, args, "" /*etlName*/, "" /*etlArgs*/)
 }
 
 // Same as CopyObject, but with an ETL transformation
 func TransformObject(bp BaseParams, args *TransformArgs) error {
-	return copyOrTransformObject(bp, &args.CopyArgs, args.ETLName)
+	return copyOrTransformObject(bp, &args.CopyArgs, args.ETLName, args.ETLArgs)
 }
 
 // HEAD(object)  ==============================================================================================
