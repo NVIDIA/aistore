@@ -31,6 +31,34 @@ However.
 When downloading a remote bucket (**any** remote bucket), it is always **preferable** to have the corresponding SDK linked-in.
 Downloader will then detect the SDK "presence" at runtime and use a wider range of options available via this SDK.
 
+### HuggingFace Integration
+
+AIStore includes native support for downloading datasets and models from [HuggingFace](https://huggingface.co/), providing:
+
+* **Direct dataset downloads** - Download entire datasets or specific files with simple CLI commands
+* **Model downloads** - Access any public or private model repository  
+* **Authentication support** - Use HuggingFace tokens for private/gated content
+* **Configurable job batching** - Splits large datasets into optimized download jobs based on file sizes
+* **Concurrent metadata collection** - Parallel HEAD requests for faster dataset discovery
+
+
+### HuggingFace Example
+
+The following example shows downloading a dataset from HuggingFace:
+
+```console
+$ ais download --hf-dataset squad ais://datasets/squad/
+Warning: destination bucket ais://datasets/squad doesn't exist. Bucket with default properties will be created.
+Found 2 parquet files in dataset 'squad'
+Started download job dnl-c7nsf2UG9
+All 2 files successfully downloaded
+$ ais ls ais://datasets/squad/
+NAME                     SIZE            
+train/0.parquet          13.79MiB        
+validation/0.parquet     1.74MiB         
+```
+
+
 Other supported features include:
 
 * Can download a single file (object), a range, an entire bucket, **and** a virtual directory in a given remote bucket.
