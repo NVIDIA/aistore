@@ -229,6 +229,10 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 		}
 	}
 
+	if extArgs.Bck != nil && extArgs.Bck.IsEmpty() {
+		extArgs.Bck = nil
+	}
+
 	var (
 		bmd = core.T.Bowner().Get()
 		// runtime context (scope: this uniquely ID-ed rebalance)
@@ -242,7 +246,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 			ecUsed: bmd.IsECUsed(),
 		}
 	)
-	if rargs.bck != nil && !rargs.bck.IsEmpty() {
+	if rargs.bck != nil {
+		debug.Assert(!rargs.bck.IsEmpty(), extArgs.Bck)
 		rargs.logHdr += "::" + rargs.bck.Cname(rargs.prefix)
 	}
 	if !_pingall(rargs) {
@@ -366,7 +371,7 @@ func _pingall(rargs *rebArgs) bool {
 
 func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams bool) bool {
 	var ctlmsg string
-	if rargs.bck != nil && !rargs.bck.IsEmpty() {
+	if rargs.bck != nil {
 		ctlmsg = rargs.bck.Cname(rargs.prefix)
 	}
 	rns := xreg.RenewRebalance(rargs.id, ctlmsg)
