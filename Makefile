@@ -379,6 +379,7 @@ api-docs-website: restful-api-doc ## Generate complete API documentation for Jek
 	@echo "Copying generated documentation to website location..."
 	@cp docs-generated/README.md docs/http-api.md
 	@cp -r docs-generated/Apis docs/
+	@cp -r docs-generated/Models docs/
 	@echo "Adding Jekyll front matter..."
 	@./scripts/website-preprocess.sh
 	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"

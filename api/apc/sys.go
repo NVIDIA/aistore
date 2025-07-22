@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
+// @Description System memory and CPU usage information for monitoring node health and performance
 type MemCPUInfo struct {
 	MemUsed    uint64      `json:"mem_used"`
 	MemAvail   uint64      `json:"mem_avail"`

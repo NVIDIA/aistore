@@ -93,7 +93,6 @@ type (
 	fileParser struct {
 		Path     string
 		ParamSet *paramSet
-		ModelSet *modelSet
 	}
 
 	fileWalker struct {
@@ -104,7 +103,6 @@ type (
 	endpointProcessor struct {
 		Walker   *fileWalker
 		ParamSet *paramSet
-		ModelSet *modelSet
 	}
 )
 
@@ -143,17 +141,10 @@ func main() {
 		panic(err)
 	}
 
-	var modelSet modelSet
-	apcDir := filepath.Dir(apcPath)
-	if err := modelSet.loadFromDirectory(apcDir); err != nil {
-		panic(fmt.Errorf("failed to load models: %v", err))
-	}
-
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
 		Walker:   walker,
 		ParamSet: &paramSet,
-		ModelSet: &modelSet,
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -423,7 +414,7 @@ func (fp *fileParser) process() error {
 				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep, fp.ModelSet)
+			swaggerComments := generateSwaggerComments(&ep)
 			writeToAnnotations(swaggerComments)
 			i++
 			continue
@@ -467,7 +458,6 @@ func (ep *endpointProcessor) run(root string) error {
 		parser := &fileParser{
 			Path:     file,
 			ParamSet: ep.ParamSet,
-			ModelSet: ep.ModelSet,
 		}
 		if err := parser.process(); err != nil {
 			return err
@@ -548,7 +538,7 @@ func collectSummaryLines(lines []string, i int) []string {
 	return summaryLines
 }
 
-func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
+func generateSwaggerComments(ep *endpoint) []string {
 	swaggerComments := []string{}
 	if ep.Summary != "" {
 		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
@@ -570,38 +560,21 @@ func generateSwaggerComments(ep *endpoint, modelSet *modelSet) []string {
 		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, short, param.Type, desc))
 	}
 
-	// Add single body parameter documenting all actions
+	// Add single parameters that references the action(s)
 	if len(ep.Actions) > 0 {
-		primaryModel := ep.Actions[0].Model
-
-		var actionDescriptions []string
+		var actionNames []string
 		for _, action := range ep.Actions {
-			modelName := strings.TrimPrefix(action.Model, apcPrefix)
-			if !modelSet.hasModel(modelName) {
-				fmt.Fprintf(os.Stderr, "Warning: model %s not found for action %s\n", action.Model, action.Action)
-				continue
-			}
-
 			actionName := strings.TrimPrefix(action.Action, apcPrefix)
-			actionParts := []string{
-				fmt.Sprintf(actionLabelFormat, actionName),
-			}
-
-			structDetails := getStructFieldDetails(modelSet, modelName)
-			if structDetails != "" {
-				actionParts = append(actionParts, structDetails)
-			} else {
-				actionParts = append(actionParts, fmt.Sprintf(modelLabelFormat, action.Model))
-				actionParts = append(actionParts, fieldDetailsNA)
-			}
-
-			actionDescriptions = append(actionDescriptions, strings.Join(actionParts, lineBreak))
+			actionNames = append(actionNames, actionName)
 		}
 
-		fullDesc := supportedActionsHeader + strings.Join(actionDescriptions, actionSeparator)
+		description := fmt.Sprintf("Supported actions: %s", strings.Join(actionNames, ", "))
 
-		bodyParamComment := fmt.Sprintf(bodyParamTemplate, primaryModel, fullDesc)
-		swaggerComments = append(swaggerComments, bodyParamComment)
+		// Generate one @Param request body for each model
+		for _, action := range ep.Actions {
+			bodyParamComment := fmt.Sprintf(bodyParamTemplate, action.Model, description)
+			swaggerComments = append(swaggerComments, bodyParamComment)
+		}
 	}
 
 	swaggerComments = append(swaggerComments,

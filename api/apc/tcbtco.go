@@ -17,6 +17,7 @@ import (
 // TODO: `ContinueOnError` not implemented for the most part
 
 type (
+	// @Description Configuration for bucket-to-bucket copy operations including naming, filtering, and synchronization options.
 	CopyBckMsg struct {
 		Prepend   string `json:"prepend"`              // destination naming, as in: dest-obj-name = Prepend + source-obj-name
 		Prefix    string `json:"prefix"`               // prefix to select matching _source_ objects or virtual directories
@@ -26,12 +27,15 @@ type (
 		Sync      bool   `json:"synchronize"`          // see also: 'versioning.synchronize'
 		NonRecurs bool   `json:"non-recurs,omitempty"` // do not copy contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.EvdMsg`)
 	}
+	// Transform contains ETL transformation parameters.
+	// @Description ETL transformation configuration including transform name and timeout settings.
 	Transform struct {
 		Name    string       `json:"id,omitempty"`
 		Timeout cos.Duration `json:"request_timeout,omitempty"`
 	}
 
-	// bucket to bucket
+	// TCBMsg represents parameters for bucket-to-bucket copy and transform operations.
+	// @Description Complete configuration for source-to-destination object actions, supporting extension mapping, ETL transformations, and copy options.
 	TCBMsg struct {
 		// Objname Extension ----------------------------------------------------------------------
 		// - resulting object names will have this extension, if specified.
@@ -53,6 +57,7 @@ type (
 
 	// multi-object
 	// (cmn.TCOMsg = TCOMsg +  source and destination buckets)
+	// @Description Multi-object operation message combining transformation/copy parameters with object selection and transaction tracking
 	TCOMsg struct {
 		TxnUUID string // (plstcx client; one control message)
 		TCBMsg

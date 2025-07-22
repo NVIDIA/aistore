@@ -15,6 +15,8 @@ import (
 
 const _bldl = "blob-downloader"
 
+// BlobMsg contains parameters for blob download operations.
+// @Description Configuration for downloading large objects using chunked blob downloading with multiple workers.
 type BlobMsg struct {
 	ChunkSize  int64 `json:"chunk-size"`  // as in: chunk size
 	FullSize   int64 `json:"full-size"`   // user-specified (full) size of the object to download

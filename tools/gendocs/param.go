@@ -1,6 +1,6 @@
 // Package main provides parameter parsing functionality for AIStore API documentation generation.
 //
-// Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 package main
 
 import (

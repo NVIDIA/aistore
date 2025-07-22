@@ -31,13 +31,33 @@ find docs -type f -name "*.md" | while read -r file; do
     permalink="/docs/$bname"
     redirect1="/${bname}.md/"
     redirect2="/docs/${bname}.md/"
+  elif [[ "$dir_path" == "Models" ]]; then
+    # Models need .html extension for proper MIME type
+    permalink="/docs/$dir_path/$bname.html"
+    redirect1="/${dir_path}/${bname}.md/"
+    redirect2="/docs/${dir_path}/${bname}.md/"
+    redirect3="/docs/$dir_path/$bname"
   else
     permalink="/docs/$dir_path/$bname"
     redirect1="/${dir_path}/${bname}.md/"
     redirect2="/docs/${dir_path}/${bname}.md/"
   fi
 
-  frontmatter=$(cat <<EOF
+  if [[ "$dir_path" == "Models" ]]; then
+    frontmatter=$(cat <<EOF
+---
+layout: post
+title: ${bname^^}
+permalink: $permalink
+redirect_from:
+ - $redirect1
+ - $redirect2
+ - $redirect3
+---
+EOF
+)
+  else
+    frontmatter=$(cat <<EOF
 ---
 layout: post
 title: ${bname^^}
@@ -48,6 +68,7 @@ redirect_from:
 ---
 EOF
 )
+  fi
 
   tmp=$(mktemp)
   printf '%s\n\n' "$frontmatter" > "$tmp"

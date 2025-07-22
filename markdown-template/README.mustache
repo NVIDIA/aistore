@@ -17,7 +17,9 @@ All URIs are relative to *{{{basePath}}}*
 ## Documentation for Models
 
 {{#modelPackage}}
-{{#models}}{{#model}} - [{{{classname}}}](./{{{modelPackage}}}/{{modelDocPath}}{{{classFilename}}}.md)
+| Model | Description |
+|------------ | -------------|
+{{#models}}{{#model}}| [{{{classname}}}]({{{modelPackage}}}/{{{classFilename}}}.html) | Model definition for {{{classname}}} |
 {{/model}}{{/models}}
 {{/modelPackage}}
 {{^modelPackage}}
