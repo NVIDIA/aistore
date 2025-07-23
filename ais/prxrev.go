@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 type (
@@ -40,6 +43,114 @@ type (
 		u  *url.URL
 	}
 )
+
+// [METHOD] /v1/reverse
+func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
+	apiItems, err := p.parseURL(w, r, apc.URLPathReverse.L, 1, false)
+	if err != nil {
+		return
+	}
+
+	// validate targeted endpoint (e.g., daemon/mountpaths)
+	apiEndpoint := apiItems[0]
+	if !strings.HasPrefix(apiEndpoint, apc.Daemon) {
+		p.writeErrURL(w, r)
+		return
+	}
+
+	// update URL path: remove `apc.Reverse`
+	r.URL.Path = cos.JoinWords(apc.Version, apiEndpoint)
+
+	nodeID := r.Header.Get(apc.HdrNodeID)
+	if nodeID == "" {
+		p.writeErrMsg(w, r, "missing node ID")
+		return
+	}
+	smap := p.owner.smap.get()
+	si := smap.GetNode(nodeID)
+	if si != nil && si.InMaintOrDecomm() {
+		daeStatus := "inactive"
+		switch {
+		case si.Flags.IsSet(meta.SnodeMaint):
+			daeStatus = apc.NodeMaintenance
+		case si.Flags.IsSet(meta.SnodeDecomm):
+			daeStatus = apc.NodeDecommission
+		}
+		if r.Method == http.MethodGet {
+			what := r.URL.Query().Get(apc.QparamWhat)
+			if what == apc.WhatNodeStatsAndStatus {
+				// skip reversing, return status as per Smap
+				msg := &stats.NodeStatus{
+					Node:   stats.Node{Snode: si},
+					Status: daeStatus,
+				}
+				p.writeJSON(w, r, msg, what)
+				return
+			}
+		}
+		// otherwise, warn and go ahead
+		// (e.g. scenario: shutdown when transitioning through states)
+		nlog.Warningln(p.String()+":", si.StringEx(), "status is:", daeStatus)
+	}
+
+	// access control
+	switch r.Method {
+	case http.MethodGet:
+		// must be consistent with httpdaeget, httpcluget
+		err = p.checkAccess(w, r, nil, apc.AceShowCluster)
+	case http.MethodPost:
+		// (ditto) httpdaepost, httpclupost
+		err = p.checkAccess(w, r, nil, apc.AceAdmin)
+	case http.MethodPut, http.MethodDelete:
+		// (ditto) httpdaeput/delete and httpcluput/delete
+		err = p.checkAccess(w, r, nil, apc.AceAdmin)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
+		return
+	}
+	if err != nil {
+		return
+	}
+	if si == nil {
+		v := &p.rproxy.removed
+		v.mu.Lock()
+		si = v.m[nodeID]
+		v.mu.Unlock()
+
+		if si == nil {
+			// when failing to find in Smap and (self)removed, both
+			var s string
+			if !smap.IsPrimary(p.si) {
+				s = "non-primary, "
+			}
+			err = &errNodeNotFound{p.si, smap, s + "cannot forward request to node", nodeID}
+			p.writeErr(w, r, err, http.StatusNotFound)
+			return
+		}
+
+		// cleanup in place
+		go p._clremoved(nodeID)
+	}
+
+	// do
+	if si.ID() == p.SID() {
+		p.daemonHandler(w, r) // (apiEndpoint above)
+		return
+	}
+	p.reverseNodeRequest(w, r, si)
+}
+
+func (p *proxy) _clremoved(sid string) {
+	time.Sleep(cmn.Rom.MaxKeepalive())
+	smap := p.owner.smap.get()
+	if smap.GetNode(sid) == nil {
+		return
+	}
+	v := &p.rproxy.removed
+	v.mu.Lock()
+	delete(v.m, sid)
+	v.mu.Unlock()
+}
 
 // forward control plane request to the current primary proxy
 // returns:
@@ -147,6 +258,8 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 }
 
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode) {
+	debug.Assert(si.ID() != p.SID(), "reversing to self")
+
 	parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
 	debug.AssertNoErr(err)
 	p.reverseRequest(w, r, si.ID(), parsedURL)

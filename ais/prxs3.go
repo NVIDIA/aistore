@@ -239,14 +239,14 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	}
 
 	smap := p.owner.smap.get()
-	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
+	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
 // DELETE /s3/i<bucket-name>?delete
@@ -480,17 +480,17 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 	objName := strings.Trim(parts[1], "/")
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bckSrc.MakeUname(objName))
+	tsi, err := smap.HrwName2T(bckSrc.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, si.StringEx())
+		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, tsi.StringEx())
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
-	p.s3Redirect(w, r, si, redirectURL, bckDst.Name)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraControl)
+	p.s3Redirect(w, r, tsi, redirectURL, bckDst.Name)
 }
 
 // PUT /s3/<bucket-name>/<object-name> - with empty `cos.S3HdrObjSrc`
@@ -515,18 +515,18 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	}
 
 	smap := p.owner.smap.get()
-	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
+	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
 
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
 // GET /s3/<bucket-name>/<object-name>
@@ -554,18 +554,18 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 	}
 
 	smap := p.owner.smap.get()
-	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
+	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
 
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
 // GET /s3/<bucket-name>/<object-name> with `s3.QparamMptUploads`
@@ -635,16 +635,17 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	p.reverseNodeRequest(w, r, si)
+	// TODO: make p.s3Redirect() work or (last resort) use direct call
+	p.reverseNodeRequest(w, r, tsi)
 }
 
 // DELETE /s3/<bucket-name>/<object-name>
@@ -668,17 +669,17 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	}
 
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleS3) {
-		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
+		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
-	p.s3Redirect(w, r, si, redirectURL, bck.Name)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraControl)
+	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
 // GET /s3/<bucket-name>?versioning
