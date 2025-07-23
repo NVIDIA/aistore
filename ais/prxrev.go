@@ -57,6 +57,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		p.writeErrURL(w, r)
 		return
 	}
+	debug.Assert(len(apiEndpoint) == len(apc.Daemon) || apiEndpoint[len(apc.Daemon)] == '/', apiEndpoint)
 
 	// update URL path: remove `apc.Reverse`
 	r.URL.Path = cos.JoinWords(apc.Version, apiEndpoint)
@@ -260,7 +261,7 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode) {
 	debug.Assert(si.ID() != p.SID(), "reversing to self")
 
-	parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
+	parsedURL, err := url.Parse(si.URL(cmn.NetIntraControl))
 	debug.AssertNoErr(err)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
 }

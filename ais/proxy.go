@@ -210,7 +210,7 @@ func (p *proxy) Run() error {
 	// REST API: register proxy handlers and start listening
 	//
 	networkHandlers := []networkHandler{
-		{r: apc.Reverse, h: p.reverseHandler, net: accessNetPublic},
+		{r: apc.Reverse, h: p.reverseHandler, net: accessNetPublicControl},
 
 		// pubnet handlers: cluster must be started
 		{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},

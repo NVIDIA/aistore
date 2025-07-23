@@ -1272,10 +1272,11 @@ func testEvictMultiObject(t *testing.T) {
 	}
 
 	// Evict specific objects using list
-	tlog.Logf("Testing evict with object list...")
+	tlog.Logln("Testing evict with object list...")
 	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{"obj1.txt", "obj2.txt"}}}
 	evictListID, err := api.EvictMultiObj(baseParams, bck, evdListMsg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -1286,10 +1287,11 @@ func testEvictMultiObject(t *testing.T) {
 	}
 
 	// Evict with prefix (template without ranges)
-	tlog.Logf("Testing evict with prefix...")
+	tlog.Logln("Testing evict with prefix...")
 	evdPrefixMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "test_prefix_"}}
 	evictPrefixID, err := api.EvictMultiObj(baseParams, bck, evdPrefixMsg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictPrefixID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -1300,10 +1302,11 @@ func testEvictMultiObject(t *testing.T) {
 	}
 
 	// Single object eviction with --keep-md (equivalent)
-	tlog.Logf("Testing single object evict...")
+	tlog.Logln("Testing single object evict...")
 	evdSingleMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{"keepmd_test.txt"}}}
 	evictSingleID, err := api.EvictMultiObj(baseParams, bck, evdSingleMsg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictSingleID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -1312,10 +1315,11 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.Errorf(t, !exists, "object should be evicted: keepmd_test.txt")
 
 	// Template-based eviction with brace expansion
-	tlog.Logf("Testing evict with template...")
+	tlog.Logln("Testing evict with template...")
 	evdTemplateMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "template_{001..002}.txt"}}
 	evictTemplateID, err := api.EvictMultiObj(baseParams, bck, evdTemplateMsg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictTemplateID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -1326,7 +1330,7 @@ func testEvictMultiObject(t *testing.T) {
 	}
 
 	// Non-recursive prefix eviction
-	tlog.Logf("Testing non-recursive evict...")
+	tlog.Logln("Testing non-recursive evict...")
 	evdNonRecMsg := &apc.EvdMsg{
 		ListRange: apc.ListRange{Template: "nonrec/"},
 		NonRecurs: true,
@@ -1336,6 +1340,7 @@ func testEvictMultiObject(t *testing.T) {
 	args = xact.ArgsMsg{ID: evictNonRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 
 	exists = tools.CheckObjIsPresent(proxyURL, bck, "nonrec/file.txt")
 	tassert.Errorf(t, !exists, "direct file should be evicted: nonrec/file.txt")
@@ -1343,10 +1348,11 @@ func testEvictMultiObject(t *testing.T) {
 	tassert.Fatalf(t, exists, "deeper file should remain cached: nonrec/deep/file.txt")
 
 	// Recursive prefix eviction (default behavior)
-	tlog.Logf("Testing recursive evict...")
+	tlog.Logln("Testing recursive evict...")
 	evdRecMsg := &apc.EvdMsg{ListRange: apc.ListRange{Template: "nested/"}}
 	evictRecID, err := api.EvictMultiObj(baseParams, bck, evdRecMsg)
 	tassert.CheckFatal(t, err)
+	time.Sleep(time.Second)
 	args = xact.ArgsMsg{ID: evictRecID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -1989,6 +1995,7 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
+					time.Sleep(time.Second)
 					args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: waitTimeout}
 					_, err = api.WaitForXactionIC(baseParams, &args)
 					tassert.CheckFatal(t, err)

@@ -644,8 +644,13 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	// TODO: make p.s3Redirect() work or (last resort) use direct call
-	p.reverseNodeRequest(w, r, tsi)
+	// forward using data net (to reach target's /s3)
+	//
+	// TODO -- FIXME: eliminate reverse
+	// (make p.s3Redirect() work, otherwise - direct call)
+	parsedURL, err := url.Parse(tsi.URL(cmn.NetIntraData))
+	debug.AssertNoErr(err)
+	p.reverseRequest(w, r, tsi.ID(), parsedURL)
 }
 
 // DELETE /s3/<bucket-name>/<object-name>
@@ -756,7 +761,10 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
 		// [intra-cluster communications]
 		// instead of regular HTTP redirect (below) reverse-proxy S3 API call to a designated target
-		p.reverseNodeRequest(w, r, si)
+		// forward using pub net
+		parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
+		debug.AssertNoErr(err)
+		p.reverseRequest(w, r, si.ID(), parsedURL)
 		return
 	}
 
