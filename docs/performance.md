@@ -107,17 +107,17 @@ $ iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 
 ## Maximum number of open files
 
-This must be done before running benchmarks, let alone deploying AIS inproduction - the maximum number of open file descriptors must be increased.
+This must be done before running benchmarks, let alone deploying AIS in production - the maximum number of open file descriptors must be increased.
 
 The corresponding system configuration file is `/etc/security/limits.conf`.
 
-> In Linux, the default per-process maximum is 1024. It is **strongly recommended** to raise it to at least `100,000`.
+> In Linux, the default per-process maximum is 1024. It is **strongly recommended** to raise it to at least `100,000` for AIStore processes.
 
 Here's a full replica of [/etc/security/limits.conf](https://github.com/NVIDIA/aistore/blob/main/deploy/conf/limits.conf) that we use for development _and_ production.
 
 To check your current settings, run `ulimit -n` or `tail /etc/security/limits.conf`.
 
-To increase the limits, copy the following 5 lines into `/etc/security/limits.conf`:
+To increase the limits, copy the following lines into `/etc/security/limits.conf`:
 
 ```console
 $ tail /etc/security/limits.conf
@@ -125,27 +125,43 @@ $ tail /etc/security/limits.conf
 #ftp             -       chroot          /ftp
 #@student        -       maxlogins       4
 
-root             hard    nofile          999999
-root             soft    nofile          999999
-*                hard    nofile          999999
-*                soft    nofile          999999
+root             hard    nofile          250000
+root             soft    nofile          250000
+*                hard    nofile          65536
+*                soft    nofile          65536
 
 # End of file
 ```
 
-Once done, re-login and double-check that both *soft* and *hard* limits have indeed changed:
+**Important:** The 250,000 limit applies only to the root user. This is typically sufficient for AIStore deployments where aisnode processes (proxy + target) run with elevated privileges and may consume tens of thousands of file descriptors under load.
+
+Regular users get a 65,536 limit, which is adequate for AIStore utilities and tooling while preventing runaway processes from consuming excessive system resources.
+
+Once done, re-login and double-check that both *soft* and *hard* limits have indeed changed.
+
+**As root, you should expect to see:**
 
 ```console
 $ ulimit -n
-999999
+250000
 $ ulimit -Hn
-999999
+250000
 ```
 
-For further references, google:
+**As a regular user, you should see:**
+
+```console
+$ ulimit -n
+65536
+$ ulimit -Hn
+65536
+```
+
+**For containerized deployments:** You may also need to configure container-level limits. For further references, consult:
 
 * `docker run --ulimit`
-* `DefaultLimitNOFILE`
+* `DefaultLimitNOFILE` (for systemd-managed services)
+* Kubernetes resource limits and security contexts
 
 ## Storage
 
