@@ -157,13 +157,13 @@ const (
 
 // ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
-	// @Description Control message structure for API actions, specifying the action type, parameters, and optional metadata
+	// swagger:model
 	ActMsg struct {
 		Value  any    `json:"value"`  // action-specific and optional
 		Action string `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
 		Name   string `json:"name"`   // action-specific info of any kind (not necessarily "name")
 	}
-	// @Description Configuration parameters for removing a node from the cluster, including rebalancing and cleanup options
+	// swagger:model
 	ActValRmNode struct {
 		DaemonID          string `json:"sid"`
 		SkipRebalance     bool   `json:"skip_rebalance"`
@@ -174,7 +174,7 @@ type (
 )
 
 type (
-	// @Description Result of a node join operation, containing the daemon ID and any associated rebalance operation ID
+	// swagger:model
 	JoinNodeResult struct {
 		DaemonID    string `json:"daemon_id"`
 		RebalanceID string `json:"rebalance_id"`
@@ -187,7 +187,7 @@ type (
 //   - Disabled  - list of disabled mountpaths, the mountpaths that generated
 //     IO errors followed by (FSHC) health check, etc.
 type (
-	// @Description Storage mountpath status information for targets, categorizing paths as available, waiting for detach, or disabled
+	// swagger:model
 	MountpathList struct {
 		Available []string `json:"available"`
 		WaitingDD []string `json:"waiting_dd"`
@@ -197,23 +197,25 @@ type (
 
 // sysinfo
 type (
-	// @Description Storage capacity information including used space, total capacity, and utilization percentage
+	// swagger:model
 	CapacityInfo struct {
 		Used    uint64  `json:"fs_used,string"`
 		Total   uint64  `json:"fs_capacity,string"`
 		PctUsed float64 `json:"pct_fs_used"`
 	}
-	// @Description Complete target system information combining memory, CPU, and storage capacity metrics
+	// swagger:model
 	TSysInfo struct {
 		MemCPUInfo
 		CapacityInfo
 	}
-	// @Description Cluster-wide system information with structured data for all proxy and target nodes
+
+	// swagger:model
 	ClusterSysInfo struct {
 		Proxy  map[string]*MemCPUInfo `json:"proxy"`
 		Target map[string]*TSysInfo   `json:"target"`
 	}
-	// @Description Raw cluster system information containing unparsed JSON data for proxy and target nodes
+
+	// swagger:model
 	ClusterSysInfoRaw struct {
 		Proxy  cos.JSONRawMsgs `json:"proxy"`
 		Target cos.JSONRawMsgs `json:"target"`

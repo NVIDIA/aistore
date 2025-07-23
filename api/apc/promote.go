@@ -7,7 +7,7 @@ package apc
 import "strings"
 
 // common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
-// @Description Arguments for promoting files from filesystem to AIStore objects, including source path, destination naming, and promotion options.
+// swagger:model
 type PromoteArgs struct {
 	DaemonID  string `json:"tid,omitempty"` // target ID
 	SrcFQN    string `json:"src,omitempty"` // source file or directory (must be absolute pathname)

@@ -15,12 +15,12 @@ import (
 // (common for all multi-object operations)
 type (
 	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
-	// @Description List of object names or template pattern for specifying multiple objects in batch operations
+	// swagger:model
 	ListRange struct {
 		Template string   `json:"template"`
 		ObjNames []string `json:"objnames"`
 	}
-	// @Description Message for evicting (deleting) multiple objects with options for worker concurrency and error handling
+	// swagger:model
 	EvdMsg struct {
 		ListRange
 		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
@@ -60,7 +60,7 @@ func (lrm *ListRange) Str(sb *strings.Builder, isPrefix bool) {
 }
 
 // prefetch
-// @Description Message for prefetching objects from remote storage with blob download support and version checking options
+// swagger:model
 type PrefetchMsg struct {
 	ListRange
 	BlobThreshold   int64 `json:"blob-threshold"`       // when greater than threshold prefetch using blob-downloader; otherwise cold GET
@@ -109,7 +109,7 @@ func (*PrefetchMsg) delim(sb *strings.Builder) {
 // --------------------  terminology   ---------------------
 // here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
 // [NOTE] see cmn/api for cmn.ArchiveMsg (that also contains ToBck)
-// @Description Configuration for archiving multiple objects into tar, zip, or other supported archive formats with naming and append options
+// swagger:model
 type ArchiveMsg struct {
 	TxnUUID     string `json:"-"`        // internal use
 	FromBckName string `json:"-"`        // ditto
