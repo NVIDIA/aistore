@@ -590,10 +590,19 @@ For details and usage examples, see: docs/cli/config.md`
 			Token: loggedUserToken,
 			UA:    ua,
 		}
+		cargs := cmn.TransportArgs{
+			DialTimeout: cfg.Timeout.TCPTimeout,
+			Timeout:     cfg.Timeout.HTTPTimeout,
+		}
 		if cos.IsHTTPS(bp.URL) {
-			// NOTE: alternatively, cmn.NewClientTLS(..., TLSArgs{SkipVerify: true})
-			bp.Client = clientTLS
+			// Create temp TLS client with verification skip for remote clusters
+			// (remais cluster may have different cert than the main cluster)
+			sargs := cmn.TLSArgs{SkipVerify: true}
+			bp.Client = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 		} else {
+			if clientH == nil {
+				clientH = cmn.NewClient(cargs)
+			}
 			bp.Client = clientH
 		}
 		if clutime, _, err := api.HealthUptime(bp); err == nil {
