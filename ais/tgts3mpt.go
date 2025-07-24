@@ -136,6 +136,10 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
+	if !s3.UploadExists(uploadID) {
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID), http.StatusNotFound, lom, uploadID)
+		return
+	}
 	// workfile name format: <upload-id>.<part-number>.<obj-name>
 	prefix := uploadID + "." + strconv.FormatInt(int64(partNum), 10)
 	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
@@ -217,8 +221,8 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		Size: size,
 		Num:  partNum,
 	}
-	if err := s3.AddPart(uploadID, npart); err != nil {
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
+	if ecode, err := s3.AddPart(uploadID, npart); err != nil {
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
 	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
@@ -274,9 +278,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	size, errN := s3.ObjSize(uploadID)
+	size, ecode, errN := s3.ObjSize(uploadID)
 	if errN != nil {
-		s3.WriteMptErr(w, r, errN, 0, lom, uploadID)
+		s3.WriteMptErr(w, r, errN, ecode, lom, uploadID)
 		return
 	}
 
@@ -318,9 +322,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sort.Slice(partList.Parts, func(i, j int) bool {
 		return *partList.Parts[i].PartNumber < *partList.Parts[j].PartNumber
 	})
-	nparts, err := s3.CheckParts(uploadID, partList.Parts)
+	nparts, ecode, err := s3.CheckParts(uploadID, partList.Parts)
 	if err != nil {
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
 	// 2. <upload-id>.complete.<obj-name>
@@ -380,7 +384,11 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		if version != "" {
 			lom.SetCustomKey(cmn.VersionObjMD, version)
 		}
-		metadata := s3.GetUploadMetadata(uploadID)
+		metadata, ecode, err := s3.GetUploadMetadata(uploadID)
+		if err != nil {
+			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
+			return
+		}
 		for k, v := range cmn.BackendHelpers.Amazon.EncodeMetadata(metadata) {
 			lom.SetCustomKey(k, v)
 		}
@@ -399,8 +407,8 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	freePOI(poi)
 
 	// .6 cleanup parts - unconditionally
-	exists := s3.CleanupUpload(uploadID, lom, false /*aborted*/)
-	debug.Assert(exists)
+	_, cleanupErr := s3.CleanupUpload(uploadID, lom, false /*aborted*/)
+	debug.Assert(cleanupErr == nil)
 
 	if errF != nil {
 		// NOTE: not failing if remote op. succeeded
@@ -483,10 +491,8 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 		}
 	}
 
-	exists := s3.CleanupUpload(uploadID, lom, true /*aborted*/)
-	if !exists {
-		err := fmt.Errorf("upload %q does not exist", uploadID)
-		s3.WriteErr(w, r, err, http.StatusNotFound)
+	if ecode, err := s3.CleanupUpload(uploadID, lom, true /*aborted*/); err != nil {
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
 

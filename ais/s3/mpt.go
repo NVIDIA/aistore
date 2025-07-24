@@ -71,42 +71,42 @@ func InitUpload(id, bckName, objName string, metadata map[string]string) {
 // Add part to an active upload.
 // Some clients may omit size and md5. Only partNum is must-have.
 // md5 and fqn is filled by a target after successful saving the data to a workfile.
-func AddPart(id string, npart *MptPart) (err error) {
+func AddPart(id string, npart *MptPart) (ecode int, err error) {
 	upsMu.Lock()
+	defer upsMu.Unlock()
 	mpt, ok := ups[id]
 	if !ok {
-		err = newErrNoSuchUpload(id)
-	} else {
-		mpt.parts = append(mpt.parts, npart)
+		return http.StatusNotFound, NewErrNoSuchUpload(id)
 	}
-	upsMu.Unlock()
-	return
+	mpt.parts = append(mpt.parts, npart)
+	return 0, nil
 }
 
 // TODO: compare non-zero sizes (note: s3cmd sends 0) and part.ETag as well, if specified
-func CheckParts(id string, parts []types.CompletedPart) ([]*MptPart, error) {
+func CheckParts(id string, parts []types.CompletedPart) (nparts []*MptPart, ecode int, err error) {
 	upsMu.RLock()
 	defer upsMu.RUnlock()
 	mpt, ok := ups[id]
 	if !ok {
-		return nil, newErrNoSuchUpload(id)
+		return nil, http.StatusNotFound, NewErrNoSuchUpload(id)
 	}
+
 	// first, check that all parts are present
 	var prev = int32(-1)
 	for _, part := range parts {
 		curr := *part.PartNumber
 		debug.Assert(curr > prev) // must ascend
 		if mpt.getPart(curr) == nil {
-			return nil, fmt.Errorf("upload %q: part %d not found", id, curr)
+			return nil, http.StatusBadRequest, fmt.Errorf("upload %q: part %d not found", id, curr)
 		}
 		prev = curr
 	}
 	// copy (to work on it with no locks)
-	nparts := make([]*MptPart, 0, len(parts))
+	nparts = make([]*MptPart, 0, len(parts))
 	for _, part := range parts {
 		nparts = append(nparts, mpt.getPart(*part.PartNumber))
 	}
-	return nparts, nil
+	return nparts, 0, nil
 }
 
 func ParsePartNum(s string) (int32, error) {
@@ -119,39 +119,45 @@ func ParsePartNum(s string) (int32, error) {
 
 // Return a sum of upload part sizes.
 // Used on upload completion to calculate the final size of the object.
-func ObjSize(id string) (size int64, err error) {
-	upsMu.RLock()
-	mpt, ok := ups[id]
-	if !ok {
-		err = newErrNoSuchUpload(id)
-	} else {
-		for _, part := range mpt.parts {
-			size += part.Size
-		}
-	}
-	upsMu.RUnlock()
-	return
-}
-
-func GetUploadMetadata(id string) (metadata map[string]string) {
+func ObjSize(id string) (size int64, ecode int, err error) {
 	upsMu.RLock()
 	defer upsMu.RUnlock()
 	mpt, ok := ups[id]
 	if !ok {
-		return nil
+		return 0, http.StatusNotFound, NewErrNoSuchUpload(id)
 	}
-	return mpt.metadata
+	for _, part := range mpt.parts {
+		size += part.Size
+	}
+	return size, 0, nil
+}
+
+func UploadExists(id string) bool {
+	upsMu.RLock()
+	_, ok := ups[id]
+	upsMu.RUnlock()
+	return ok
+}
+
+func GetUploadMetadata(id string) (metadata map[string]string, ecode int, err error) {
+	upsMu.RLock()
+	defer upsMu.RUnlock()
+	mpt, ok := ups[id]
+	if !ok {
+		return nil, http.StatusNotFound, NewErrNoSuchUpload(id)
+	}
+	return mpt.metadata, 0, nil
 }
 
 // remove all temp files and delete from the map
 // if completed (i.e., not aborted): store xattr
-func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
+func CleanupUpload(id string, lom *core.LOM, aborted bool) (ecode int, err error) {
 	debug.Assert(lom != nil)
 	upsMu.Lock()
 	mpt, ok := ups[id]
 	if !ok {
 		upsMu.Unlock()
-		return false
+		return http.StatusNotFound, NewErrNoSuchUpload(id)
 	}
 	delete(ups, id)
 	upsMu.Unlock()
@@ -166,7 +172,7 @@ func CleanupUpload(id string, lom *core.LOM, aborted bool) (exists bool) {
 			nlog.Errorln("failed to remove part [", id, part.FQN, lom.Cname(), err, "]")
 		}
 	}
-	return true
+	return
 }
 
 func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult {

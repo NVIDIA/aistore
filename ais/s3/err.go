@@ -44,22 +44,25 @@ func (e *Error) mustMarshal(sgl *memsys.SGL) {
 
 // with user-friendly tip
 func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, lom *core.LOM, uploadID string) {
-	if isErrNoSuchUpload(err) {
-		if ecode == 0 {
-			ecode = http.StatusNotFound
-		}
-	} else {
-		if ecode == 0 {
-			ecode = http.StatusInternalServerError
-		}
-		name := strings.Replace(lom.Cname(), apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
-		s3cmd := "s3cmd abortmp " + name + " " + uploadID
-		if len(s3cmd) > 50 {
-			s3cmd = "\n  " + s3cmd
-		}
-		err = fmt.Errorf("%w\nUse upload ID %q to cleanup, e.g.: %s", err, uploadID, s3cmd)
+	if ecode == 0 {
+		ecode = http.StatusInternalServerError
 	}
+	if isErrNoSuchUpload(err) {
+		// For NoSuchUpload, suggest listing uploads in bucket
+		bucketCname := aisToS3Path(lom.Bck().Cname(""))
+		err = fmt.Errorf("%w\nList uploads in %s to see available upload IDs", err, bucketCname)
+	} else {
+		// For other errors, provide abort information
+		objectPath := aisToS3Path(lom.Cname())
+		err = fmt.Errorf("%w\nUse upload ID %q on %s to abort", err, uploadID, objectPath)
+	}
+
 	WriteErr(w, r, err, ecode)
+}
+
+// aisToS3Path converts ais:// scheme to s3:// scheme
+func aisToS3Path(path string) string {
+	return strings.Replace(path, apc.AISScheme+apc.BckProviderSeparator, apc.S3Scheme+apc.BckProviderSeparator, 1)
 }
 
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
@@ -113,7 +116,7 @@ type errNoSuchUpload struct {
 	uploadID string
 }
 
-func newErrNoSuchUpload(uploadID string) *errNoSuchUpload {
+func NewErrNoSuchUpload(uploadID string) error {
 	return &errNoSuchUpload{uploadID: uploadID}
 }
 
