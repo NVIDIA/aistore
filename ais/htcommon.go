@@ -217,7 +217,7 @@ type (
 
 var htverbs = [...]string{
 	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
-	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
+	http.MethodDelete, http.MethodOptions, http.MethodTrace,
 }
 
 var (
@@ -503,47 +503,8 @@ func (*nlogWriter) Write(p []byte) (int, error) {
 // netServer //
 ///////////////
 
-// Override muxer ServeHTTP to support proxying HTTPS requests. Clients
-// initiate all HTTPS requests with CONNECT method instead of GET/PUT etc.
 func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// plain
-	if r.Method != http.MethodConnect {
-		server.muxers.ServeHTTP(w, r)
-		return
-	}
-
-	// HTTPS
-	destConn, err := net.DialTimeout("tcp", r.Host, cmn.DfltDialupTimeout)
-	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-
-	// hijack the connection
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		cmn.WriteErr(w, r, errors.New("response writer does not support hijacking"), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-
-	clientConn, _, err := hijacker.Hijack()
-	if err != nil {
-		nlog.Errorln(err)
-		return
-	}
-
-	// send/receive both ways (bi-directional tunnel)
-	// (one of those close() calls will fail, the one that loses the race)
-	go _copy(destConn, clientConn)
-	go _copy(clientConn, destConn)
-}
-
-func _copy(destination io.WriteCloser, source io.ReadCloser) {
-	io.Copy(destination, source)
-	source.Close()
-	destination.Close()
+	server.muxers.ServeHTTP(w, r)
 }
 
 const (
@@ -686,7 +647,7 @@ func (m httpMuxers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sm.ServeHTTP(w, r)
 		return
 	}
-	w.WriteHeader(http.StatusBadRequest)
+	cmn.WriteErr405(w, r)
 }
 
 /////////////////
