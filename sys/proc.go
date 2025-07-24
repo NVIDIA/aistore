@@ -1,8 +1,10 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
+
+import "github.com/NVIDIA/aistore/cmn/debug"
 
 type (
 	ProcCPUStats struct {
@@ -41,4 +43,10 @@ func ProcessStats(pid int) (ProcStats, error) {
 	stats.Mem = mem
 
 	return stats, nil
+}
+
+func ProcFDSize() int {
+	n, err := getFDSize()
+	debug.AssertNoErr(err)
+	return n
 }

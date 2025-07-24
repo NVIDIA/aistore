@@ -1,11 +1,13 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -68,4 +70,37 @@ func procCPU(pid int) (ProcCPUStats, error) {
 	cpu.Total = cpu.User + cpu.System
 
 	return cpu, nil
+}
+
+// FDSize represents currently allocated FD table size
+func getFDSize() (int, error) {
+	const (
+		prefix = "FDSize:"
+	)
+	data, err := os.ReadFile(hostProcessInfo)
+	if err != nil {
+		return 0, err
+	}
+	ld := len(data)
+
+	needle := cos.UnsafeB(prefix)
+	if idx := bytes.Index(data, needle); idx >= 0 {
+		off := idx + len(needle)
+		if off >= ld {
+			return 0, fmt.Errorf("no '%s' in %s: too short", prefix, hostProcessInfo)
+		}
+		b := data[off:]
+		l := bytes.IndexByte(b, '\n')
+		if l > 0 {
+			b = b[:l]
+		}
+		sval := strings.TrimSpace(string(b))
+		val, err := strconv.Atoi(sval)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse '%s': %v", prefix, err)
+		}
+		return val, nil
+	}
+
+	return 0, fmt.Errorf("failed to find '%s' in %s", prefix, hostProcessInfo)
 }

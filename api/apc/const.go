@@ -27,6 +27,12 @@ const (
 	EnvReadHeaderTimeout = "AIS_READ_HEADER_TIMEOUT"
 )
 
+// ulimits
+const (
+	UlimitProxy  = 65536
+	UlimitTarget = 250000
+)
+
 // timeouts for intra-cluster requests
 const (
 	DefaultTimeout = time.Duration(-1)

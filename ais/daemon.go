@@ -29,6 +29,8 @@ import (
 	"github.com/NVIDIA/aistore/tracing"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
+
+	"golang.org/x/sys/unix"
 )
 
 const usecli = " -role=<proxy|target> -config=</dir/config.json> -local_config=</dir/local-config.json> ..."
@@ -243,6 +245,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 		// init distributed tracing
 		tracing.Init(&config.Tracing, p.si, nil, version)
 
+		// check ulimits
+		checkUlimits(apc.UlimitProxy, config.TestingEnv())
+
 		return p
 	}
 
@@ -264,6 +269,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	tracing.Init(&config.Tracing, t.si, nil, version)
 
 	cmn.InitObjProps2Hdr()
+
+	// check ulimits
+	checkUlimits(apc.UlimitTarget, config.TestingEnv())
 
 	return t
 }
@@ -324,6 +332,26 @@ func newTarget(co *configOwner) *target {
 	t.owner.etl = newEtlMDOwnerTgt()
 	t.owner.config = co
 	return t
+}
+
+func checkUlimits(expectMax uint64, testingEnv bool) {
+	lim := unix.Rlimit{}
+	err := unix.Getrlimit(unix.RLIMIT_NOFILE, &lim)
+	if err != nil {
+		nlog.Errorln("failed to get file descriptor limit:", err)
+		return
+	}
+	if lim.Cur >= expectMax {
+		return
+	}
+	// warn
+	s := fmt.Sprintf("file descriptor limit is low (%d); recommended %d+ (hard limit %d)",
+		lim.Cur, expectMax, lim.Max)
+	if testingEnv {
+		nlog.Infoln("Warning:", s)
+	} else {
+		nlog.Warningln(s, "for production")
+	}
 }
 
 // Run is the 'main' where everything gets started

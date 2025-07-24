@@ -16,8 +16,13 @@ const (
 	// Memory usage by a process
 	hostProcessStatMemPath = proc + "%d/statm"
 
-	// container stats
+	// Name, Umask, State, other process details
+	// Used to get FDSize
+	hostProcessInfo = proc + "self/status"
+)
 
+// container stats
+const (
 	// path to read all memory info for cgroup
 	contMemPath = "/sys/fs/cgroup/memory/"
 	// path to read all CPU info for cgroup

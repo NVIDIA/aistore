@@ -54,6 +54,7 @@ const (
 	dfltPeriodicTimeStamp = time.Hour            // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
 	dfltStatsLogInterval  = int64(time.Minute)   // stats logging interval when not idle; `config.Log.StatsTime` takes precedence if defined
 	dlftCapLogInterval    = int64(4 * time.Hour) // capacity logging interval
+	dlftFDsLogInterval    = dlftCapLogInterval   // size of FD table in the kernel
 )
 
 // periodic
@@ -464,6 +465,7 @@ waitStartup:
 		kaliveErrs        int64
 		startTime         = mono.NanoTime() // uptime henceforth
 		lastDateTimestamp = startTime       // RFC822
+		lastFDs           = startTime
 	)
 	for {
 		select {
@@ -506,6 +508,9 @@ waitStartup:
 				// clear
 				r.ClrFlag(NodeAlerts, cos.KeepAliveErrors)
 			}
+
+			// 5. FD count
+			lastFDs = _checkFDs(now, lastFDs)
 		case <-r.stopCh:
 			r.ticker.Stop()
 			return nil
@@ -632,6 +637,14 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 		nlog.Warningln("High number of goroutines:", ngr)
 	}
 	return lastNgr
+}
+
+func _checkFDs(now, lastFDs int64) int64 {
+	if now-lastFDs > dlftFDsLogInterval {
+		nlog.Infoln("currently allocated FD table:", sys.ProcFDSize())
+		return now
+	}
+	return lastFDs
 }
 
 func (r *runner) Stop(err error) {

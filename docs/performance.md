@@ -162,6 +162,7 @@ $ ulimit -Hn
 * `docker run --ulimit`
 * `DefaultLimitNOFILE` (for systemd-managed services)
 * Kubernetes resource limits and security contexts
+* [api/apc/const.go](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go)
 
 ## Storage
 
