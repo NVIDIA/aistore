@@ -1250,11 +1250,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			// NOTE: limiting the scope of rebalance to a given bucket[/prefix] (advanced usage)
 			b := (*meta.Bck)(&xargs.Bck)
 			if _, present := p.owner.bmd.get().Get(b); !present {
-				if b.IsRemote() {
-					p.writeErr(w, r, cmn.NewErrRemoteBckNotFound(&xargs.Bck))
-				} else {
-					p.writeErr(w, r, cmn.NewErrBckNotFound(&xargs.Bck))
-				}
+				p.writeErr(w, r, cmn.NewErrBckNotFound(&xargs.Bck))
 				return
 			}
 		} else if msg.Name != "" {

@@ -974,7 +974,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 	code := reqErr.ErrorCode()
 	switch reqErr.(type) {
 	case *types.NoSuchBucket:
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
 	case *types.NoSuchKey:
 		e := fmt.Errorf("%s[%s: %s]", aiss3.ErrPrefix, reqErr.ErrorCode(), bck.Cname(objName))
 		return http.StatusNotFound, e
@@ -988,7 +988,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, erro
 		case http.StatusMovedPermanently:
 			// [BUG] when bucket does not exist or isn't accessible AWS may return
 			// 301 ("MovedPermanently") with code == "PermanentRedirect" which is 308
-			err := cmn.NewErrRemoteBckNotFound(bck)
+			err := cmn.NewErrRemBckNotFound(bck)
 			err.Set(" (PermanentRedirect)")
 			return http.StatusNotFound, err
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:

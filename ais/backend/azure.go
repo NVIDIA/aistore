@@ -159,7 +159,7 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 
 	switch bloberror.Code(stgErr.ErrorCode) {
 	case bloberror.ContainerNotFound:
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
 	case bloberror.BlobNotFound:
 		return http.StatusNotFound, errors.New(azErrPrefix + "NotFound: " + bck.Cname(objName) + "]")
 	case bloberror.InvalidResourceName:
@@ -170,7 +170,7 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 
 	// NOTE above
 	if objName == "" && bloberror.Code(stgErr.ErrorCode) == bloberror.OutOfRangeInput {
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
 	}
 
 	status, err := _azureErr(azureError, stgErr)

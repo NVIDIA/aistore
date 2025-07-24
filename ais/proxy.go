@@ -2932,7 +2932,7 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, query url.Values) (http.Header, int,
 	switch ecode {
 	case http.StatusNotFound:
 		if err = res.err; err == nil {
-			err = cmn.NewErrRemoteBckNotFound(bck)
+			err = cmn.NewErrRemBckNotFound(bck)
 		}
 	case http.StatusGone:
 		err = cmn.NewErrRemoteBckOffline(bck)

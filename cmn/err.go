@@ -361,10 +361,17 @@ func IsErrBucketAlreadyExists(err error) bool {
 	return ok
 }
 
-// remote ErrRemoteBckNotFound (compare with ErrBckNotFound)
+// bucket--not--found -------------------------------
 
-func NewErrRemoteBckNotFound(bck *Bck) *ErrRemoteBckNotFound {
-	return &ErrRemoteBckNotFound{bck: *bck}
+func NewErrRemBckNotFound(bck *Bck) *ErrRemoteBckNotFound { return &ErrRemoteBckNotFound{bck: *bck} }
+func NewErrAisBckNotFound(bck *Bck) *ErrBckNotFound       { return &ErrBckNotFound{bck: *bck} }
+
+// [for convenience]
+func NewErrBckNotFound(bck *Bck) error {
+	if bck.IsRemote() {
+		return NewErrRemBckNotFound(bck)
+	}
+	return NewErrAisBckNotFound(bck)
 }
 
 func (e *ErrRemoteBckNotFound) Set(ctx string) { e.ctx = ctx }
@@ -380,13 +387,6 @@ func (e *ErrRemoteBckNotFound) Error() string {
 func IsErrRemoteBckNotFound(err error) bool {
 	_, ok := err.(*ErrRemoteBckNotFound)
 	return ok
-}
-
-// ErrBckNotFound - applies to ais buckets exclusively
-// (compare with ErrRemoteBckNotFound)
-
-func NewErrBckNotFound(bck *Bck) *ErrBckNotFound {
-	return &ErrBckNotFound{bck: *bck}
 }
 
 func (e *ErrBckNotFound) Error() string {

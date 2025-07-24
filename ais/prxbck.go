@@ -300,7 +300,7 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 	remoteHdr, ecode, err := bctx.lookup(bck)
 	if err == nil && ecode != http.StatusOK && bck.IsCloud() {
 		debug.Assert(ecode == http.StatusNotFound, ecode)
-		e := cmn.NewErrRemoteBckNotFound(bck.Bucket())
+		e := cmn.NewErrRemBckNotFound(bck.Bucket())
 		e.Set(" (cannot create cloud bucket on the fly)")
 		err = e
 	}

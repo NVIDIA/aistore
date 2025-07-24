@@ -310,7 +310,7 @@ func bmodCreate(ctx *bmdModifier, clone *bucketMD) (err error) {
 func bmodRm(ctx *bmdModifier, clone *bucketMD) error {
 	bck := ctx.bcks[0]
 	if _, present := clone.Get(bck); !present {
-		return cmn.NewErrBckNotFound(bck.Bucket())
+		return cmn.NewErrAisBckNotFound(bck.Bucket())
 	}
 	deleted := clone.del(bck)
 	cos.Assert(deleted)
@@ -326,7 +326,7 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *meta.Bck) (string, error) {
 
 	// 1. confirm existence
 	if _, present := p.owner.bmd.get().Get(bck); !present {
-		return "", cmn.NewErrBckNotFound(bck.Bucket())
+		return "", cmn.NewErrAisBckNotFound(bck.Bucket())
 	}
 
 	// 2. begin
@@ -402,7 +402,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		return "", cmn.NewErrBckNotFound(bck.Bucket())
+		return "", cmn.NewErrAisBckNotFound(bck.Bucket())
 	}
 	bck.Props = bprops
 
@@ -508,7 +508,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
+		return "", cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 	}
 	if _, present := bmd.Get(bckTo); present {
 		return "", cmn.NewErrBckAlreadyExists(bckTo.Bucket())
@@ -610,7 +610,7 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (str
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, existsFrom := bmd.Get(bckFrom); !existsFrom {
-		return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
+		return "", cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 	}
 	_, existsTo := bmd.Get(bckTo)
 	debug.Assert(existsTo || bckTo.IsAIS())
@@ -745,7 +745,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (string, error) {
 	// 1. confirm existence
 	props, present := p.owner.bmd.get().Get(bck)
 	if !present {
-		return "", cmn.NewErrBckNotFound(bck.Bucket())
+		return "", cmn.NewErrAisBckNotFound(bck.Bucket())
 	}
 
 	// 1.5. validate ec config

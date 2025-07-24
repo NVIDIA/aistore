@@ -452,9 +452,6 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) error {
 	bck := &lom.bck
 	bprops, present := bmd.Get(bck)
 	if !present {
-		if bck.IsRemote() {
-			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
-		}
 		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
 	if lom.bid() != bprops.BID {

@@ -160,7 +160,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 				exists = p.BID == backend.Props.BID
 			}
 			if !exists {
-				err = cmn.NewErrRemoteBckNotFound(backend.Bucket())
+				err = cmn.NewErrRemBckNotFound(backend.Bucket())
 			} else if backend.Props != p {
 				backend.Props = p
 			}
@@ -197,10 +197,7 @@ func (b *Bck) init(bmd *BMD) error {
 	if b.Props != nil {
 		return nil // ok
 	}
-	if b.IsAIS() {
-		return cmn.NewErrBckNotFound(b.Bucket())
-	}
-	return cmn.NewErrRemoteBckNotFound(b.Bucket())
+	return cmn.NewErrBckNotFound(b.Bucket())
 }
 
 // to support s3 clients:
@@ -211,12 +208,12 @@ func InitByNameOnly(bckName string, bowner Bowner) (bck *Bck, ecode int, err err
 	all := bmd.getAllByName(bckName)
 	switch {
 	case all == nil:
-		err = cmn.NewErrBckNotFound(&cmn.Bck{Name: bckName})
+		err = cmn.NewErrAisBckNotFound(&cmn.Bck{Name: bckName})
 		ecode = http.StatusNotFound
 	case len(all) == 1:
 		bck = &all[0]
 		if bck.Props == nil {
-			err = cmn.NewErrBckNotFound(bck.Bucket())
+			err = cmn.NewErrAisBckNotFound(bck.Bucket())
 			ecode = http.StatusNotFound
 		} else if backend := bck.Backend(); backend != nil && backend.Props == nil {
 			debug.Assert(apc.IsRemoteProvider(backend.Provider))

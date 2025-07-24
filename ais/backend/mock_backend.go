@@ -51,11 +51,11 @@ func (*mockbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, err error) 
 }
 
 func (*mockbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
-	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
+	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemBckNotFound(lom.Bucket())
 }
 
 func (*mockbp) GetObj(_ context.Context, lom *core.LOM, _ cmn.OWT, _ *http.Request) (int, error) {
-	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
+	return http.StatusNotFound, cmn.NewErrRemBckNotFound(lom.Bucket())
 }
 
 func (*mockbp) GetObjReader(_ context.Context, lom *core.LOM, _, _ int64) (res core.GetReaderResult) {
@@ -65,9 +65,9 @@ func (*mockbp) GetObjReader(_ context.Context, lom *core.LOM, _, _ int64) (res c
 }
 
 func (*mockbp) PutObj(_ context.Context, _ io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
-	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
+	return http.StatusNotFound, cmn.NewErrRemBckNotFound(lom.Bucket())
 }
 
 func (*mockbp) DeleteObj(_ context.Context, lom *core.LOM) (int, error) {
-	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
+	return http.StatusNotFound, cmn.NewErrRemBckNotFound(lom.Bucket())
 }

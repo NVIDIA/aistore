@@ -512,7 +512,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		originalURL := apireq.query.Get(apc.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
-			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
+			err = cmn.NewErrRemBckNotFound(apireq.bck.Bucket())
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
 		}

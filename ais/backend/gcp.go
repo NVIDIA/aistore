@@ -480,7 +480,7 @@ func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
 		nlog.InfoDepth(1, "end "+gcpErrPrefix+" ===========================")
 	}
 	if gcpError == storage.ErrBucketNotExist {
-		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+		return http.StatusNotFound, cmn.NewErrRemBckNotFound(bck)
 	}
 	err := _gcpErr(gcpError)
 	if gcpError == storage.ErrObjectNotExist {

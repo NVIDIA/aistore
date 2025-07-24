@@ -500,7 +500,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 	}
 	bmd := t.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		return cmn.NewErrBckNotFound(bckFrom.Bucket())
+		return cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 	}
 	if _, present := bmd.Get(bckTo); present {
 		return cmn.NewErrBckAlreadyExists(bckTo.Bucket())
@@ -552,7 +552,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, disableDM bool) (string, error)
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
+			return "", cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 		}
 		if err := t._tcbBegin(c, msg, disableDM); err != nil {
 			return "", err
@@ -677,7 +677,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
-			return xid, cmn.NewErrBckNotFound(bckFrom.Bucket())
+			return xid, cmn.NewErrAisBckNotFound(bckFrom.Bucket())
 		}
 		// begin
 		custom := &xreg.TCOArgs{BckFrom: bckFrom, BckTo: bckTo, Msg: &msg.TCOMsg, DisableDM: disableDM}
