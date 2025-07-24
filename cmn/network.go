@@ -6,9 +6,11 @@
 package cmn
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 )
 
 const (
@@ -39,23 +41,36 @@ func ValidatePort(port int) (int, error) {
 	return port, nil
 }
 
-func Host2IP(host string) (net.IP, error) {
-	ips, err := net.LookupIP(host)
+func Host2IP(host string, local bool) (net.IP, error) {
+	timeout := max(time.Second, Rom.MaxKeepalive())
+	if local {
+		timeout = max(time.Second, Rom.CplaneOperation())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
-	for _, ip := range ips {
-		if ip.To4() != nil {
+	for _, addr := range addrs {
+		if ip := addr.IP.To4(); ip != nil {
 			return ip, nil
 		}
+	}
+
+	// return err
+	ips := make([]net.IP, len(addrs))
+	for i, addr := range addrs {
+		ips[i] = addr.IP
 	}
 	return nil, fmt.Errorf("failed to locally resolve %q (have IPs %v)", host, ips)
 }
 
-func ParseHost2IP(host string) (net.IP, error) {
+func ParseHost2IP(host string, local bool) (net.IP, error) {
 	ip := net.ParseIP(host)
 	if ip != nil {
 		return ip, nil // is a parse-able IP addr
 	}
-	return Host2IP(host)
+	return Host2IP(host, local)
 }

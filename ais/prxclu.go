@@ -457,7 +457,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname); err != nil {
+	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname, false /*local*/); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s: invalid hostname: %v", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}

@@ -292,13 +292,13 @@ func (d *Snode) HasURL(rawURL string) bool {
 	}
 
 	// slow path: locally resolve (hostname => IPv4) and compare
-	rip, err := cmn.ParseHost2IP(host)
+	rip, err := cmn.ParseHost2IP(host, true /*local*/)
 	if err != nil {
 		nlog.Warningln(host, err)
 		return false
 	}
 	for _, ni := range nis {
-		nip, err := cmn.ParseHost2IP(ni.Hostname)
+		nip, err := cmn.ParseHost2IP(ni.Hostname, true /*local*/)
 		if err != nil {
 			nlog.Warningln(ni.Hostname, err)
 			return false

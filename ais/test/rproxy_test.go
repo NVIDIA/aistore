@@ -215,7 +215,7 @@ func TestRProxyInvalidURL(t *testing.T) {
 		tassert.CheckError(t, err)
 		api.DestroyBucket(baseParams, hbo.Bck)
 
-		req, err := http.NewRequest(http.MethodGet, test.url, http.NoBody) //nolint:noctx // no context
+		req, err := http.NewRequest(http.MethodGet, test.url, http.NoBody)
 		tassert.CheckFatal(t, err)
 		api.SetAuxHeaders(req, &baseParams)
 

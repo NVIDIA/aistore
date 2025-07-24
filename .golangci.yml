@@ -170,12 +170,15 @@ linters:
           - dupl
           - gosec
           - nakedret
+          - noctx
       - path: bench/
         linters:
           - nakedret
+          - noctx
       - path: tools/
         linters:
           - nakedret
+          - noctx
 
       # Exclude some `staticcheck` messages.
       - linters:

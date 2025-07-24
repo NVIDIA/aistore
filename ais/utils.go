@@ -166,7 +166,7 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 		if net.ParseIP(host) != nil { // parses as IP
 			ipv4 = host
 		} else {
-			ip, err := cmn.Host2IP(host)
+			ip, err := cmn.Host2IP(host, true /*local*/)
 			if err != nil {
 				nlog.Errorln("failed to resolve hostname(?)", host, "err:", err, "[idx:", i, len(hostnames))
 				continue

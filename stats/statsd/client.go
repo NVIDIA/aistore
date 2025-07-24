@@ -5,6 +5,7 @@
 package statsd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -58,7 +59,12 @@ var (
 
 // New returns a UDP client that we then use to send metrics to the specified IP:port
 func New(ip string, port int, prefix string, probe bool) (*Client, error) {
-	c, err := net.ListenPacket("udp", ":0")
+	lc := net.ListenConfig{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c, err := lc.ListenPacket(ctx, "udp", ":0")
+
 	if err != nil {
 		return &Client{}, err
 	}

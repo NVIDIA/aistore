@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 
@@ -51,7 +52,10 @@ var (
 )
 
 func k8sShowSvcHandler(c *cli.Context) (err error) {
-	output, err := exec.Command("kubectl", cmdSvcList...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), execLinuxCommandTimeLong)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "kubectl", cmdSvcList...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
 	}
@@ -67,7 +71,10 @@ func k8sShowClusterHandler(c *cli.Context) error {
 }
 
 func k8sShowEntireCluster(c *cli.Context) (err error) {
-	output, err := exec.Command(cmdK8s, cmdPodList...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), execLinuxCommandTimeLong)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cmdK8s, cmdPodList...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
 	}
@@ -87,7 +94,10 @@ func k8sShowSingleDaemon(c *cli.Context) error {
 	cmdLine := make([]string, 0, len(cmdNodeInfo)+1)
 	cmdLine = append(cmdLine, cmdNodeInfo...)
 	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+node.ID())
-	output, err := exec.Command(cmdK8s, cmdLine...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), execLinuxCommandTimeLong)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cmdK8s, cmdLine...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
 	}

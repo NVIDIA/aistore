@@ -7,6 +7,7 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -232,7 +233,9 @@ func helpMorePrinter(_ io.Writer, templ string, data any) {
 	w.Close()
 	wg.Wait()
 
-	cmd := exec.Command("more")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "more")
 	cmd.Stdin = buffer
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

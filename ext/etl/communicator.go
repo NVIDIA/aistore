@@ -187,7 +187,9 @@ func (c *baseComm) dial() (int, error) {
 }
 
 func (c *baseComm) call() (int, error) {
-	conn, err := net.DialTimeout("tcp", c.podAddr, cmn.Rom.MaxKeepalive())
+	ctx := context.Background()
+	dialer := &net.Dialer{Timeout: cmn.Rom.MaxKeepalive()}
+	conn, err := dialer.DialContext(ctx, "tcp", c.podAddr)
 	if err != nil {
 		return 0, err
 	}

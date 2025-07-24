@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -132,7 +133,9 @@ func _clusterURL(cfg *config.Config) string {
 }
 
 func detectK8s() bool {
-	cmd := exec.Command("which", "kubectl")
+	ctx, cancel := context.WithTimeout(context.Background(), execLinuxCommandTime)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "which", "kubectl")
 	err := cmd.Run()
 	return err == nil
 }
