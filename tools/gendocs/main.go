@@ -563,12 +563,16 @@ func generateSwaggerComments(ep *endpoint) []string {
 	// Add single parameters that references the action(s)
 	if len(ep.Actions) > 0 {
 		var actionNames []string
+		var actionMappings []string
 		for _, action := range ep.Actions {
 			actionName := strings.TrimPrefix(action.Action, apcPrefix)
 			actionNames = append(actionNames, actionName)
+			mapping := fmt.Sprintf("%s:%s", actionName, action.Model)
+			actionMappings = append(actionMappings, mapping)
 		}
 
-		description := fmt.Sprintf("Supported actions: %s", strings.Join(actionNames, ", "))
+		description := fmt.Sprintf("Supported actions: %s <!-- mappings: %s -->",
+			strings.Join(actionNames, ", "), strings.Join(actionMappings, ", "))
 
 		// Generate one @Param request body for each model
 		for _, action := range ep.Actions {

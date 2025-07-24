@@ -31,8 +31,8 @@ type (
 
 	// swagger:model
 	Transform struct {
-		Name    string       `json:"id,omitempty"`
-		Timeout cos.Duration `json:"request_timeout,omitempty"`
+		Name string `json:"id,omitempty"`
+		Timeout cos.Duration `json:"request_timeout,omitempty" swaggertype:"primitive,integer"`
 	}
 
 	// TCBMsg represents parameters for bucket-to-bucket copy and transform operations.
@@ -46,8 +46,8 @@ type (
 		// - this field might not be any longer required
 		Ext cos.StrKVs `json:"ext"`
 
-		Transform  `json:"transform"`
-		CopyBckMsg `json:"copybckmsg"`
+		Transform
+		CopyBckMsg
 
 		// user-defined number of concurrent workers:
 		// * 0:  number of mountpaths (default)
