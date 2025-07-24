@@ -345,8 +345,8 @@ func checkUlimits(expectMax uint64, testingEnv bool) {
 		return
 	}
 	// warn
-	s := fmt.Sprintf("file descriptor limit is low (%d); recommended %d+ (hard limit %d)",
-		lim.Cur, expectMax, lim.Max)
+	s := fmt.Sprintf("file descriptor limit is low (%d); hard limit (%d); recommended %d+",
+		lim.Cur, lim.Max, expectMax)
 	if testingEnv {
 		nlog.Infoln("Warning:", s)
 	} else {
