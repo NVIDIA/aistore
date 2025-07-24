@@ -99,7 +99,39 @@ NODE             ID      KIND            BUCKET  OBJECTS         BYTES          
 
 
 ```console
-$ ais start rebalance
+$ ais start rebalance --help
+NAME:
+   ais start rebalance - Rebalance ais cluster
+
+USAGE:
+   ais start rebalance [BUCKET[/PREFIX]] [command options]
+
+OPTIONS:
+   latest     Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version
+              from the associated remote bucket;
+              the option provides operation-level control over object versioning (and version synchronization)
+              without the need to change the corresponding bucket configuration: 'versioning.validate_warm_get';
+              see also:
+                - 'ais show bucket BUCKET versioning'
+                - 'ais bucket props set BUCKET versioning'
+                - 'ais ls --check-versions'
+              supported commands include:
+                - 'ais cp', 'ais prefetch', 'ais get', 'ais start rebalance'
+   prefix     Select virtual directories or objects with names starting with the specified prefix, e.g.:
+              '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+              '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   sync       Fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;
+              the option is, effectively, a stronger variant of the '--latest' (option):
+              in addition to bringing existing in-cluster objects in-sync with their respective out-of-band updates (if any)
+              it also entails removing in-cluster objects that are no longer present remotely;
+              like '--latest', this option provides operation-level control over synchronization
+              without requiring to change the corresponding bucket configuration: 'versioning.synchronize';
+              see also:
+                - 'ais show bucket BUCKET versioning'
+                - 'ais bucket props set BUCKET versioning'
+                - 'ais start rebalance'
+                - 'ais ls --check-versions'
+   help, h    Show help
 ```
 
 ## Automated Resilvering

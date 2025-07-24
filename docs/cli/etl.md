@@ -1,8 +1,16 @@
 # CLI Reference for ETLs
 
-This section documents ETL management operations with `ais etl`. But first, note:
+This section documents ETL management operations with `ais etl`.
 
 > As with [global rebalance](/docs/rebalance.md), [dSort](/docs/dsort.md), and [download](/docs/download.md), all ETL management commands can also be executed via `ais job` and `ais show`—the commands that, by definition, support all AIS *xactions*, including AIS-ETL.
+
+In the `ais etl` namespace, the commands include:
+
+```console
+$ ais etl <TAB-TAB>
+
+init     show      view-logs   start     stop      rm      object    bucket
+```
 
 For background on AIS-ETL, getting started, working examples, and tutorials, please refer to:
 
@@ -61,7 +69,7 @@ COMMANDS:
      - 'ais etl init -f spec.yaml --comm-type hpull'      override communication type;
      - 'ais etl init -f spec.yaml --object-timeout 30s'   set custom object transformation timeout.
      - 'ais etl init --spec <file|URL>'                   deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.
-   
+
 Additional Info:
    - You may define multiple ETLs in a single spec file using YAML document separators ('---').
    - CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.
@@ -476,6 +484,61 @@ Use offline transformation to process entire buckets or a selected set of object
 
 ```bash
 ais etl bucket <ETL_NAME> <SRC_BUCKET> <DST_BUCKET>
+```
+
+Here's the command's help as of v3.30:
+
+```bash
+$ ais etl bucket --help
+NAME:
+   ais etl bucket - Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').
+   Examples:
+     - 'ais etl bucket my-etl ais://src ais://dst'                                       transform all objects from source to destination bucket;
+     - 'ais etl bucket my-etl ais://src ais://dst --prefix images/'                      transform objects with prefix 'images/';
+     - 'ais etl bucket my-etl ais://src ais://dst --template "shard-{0001..0999}.tar"'   transform objects matching the template;
+     - 'ais etl bucket my-etl s3://remote-src ais://dst --all'                           transform all objects including non-cached ones;
+     - 'ais etl bucket my-etl ais://src ais://dst --dry-run'                             preview transformation without executing;
+     - 'ais etl bucket my-etl ais://src ais://dst --num-workers 8'                       use 8 concurrent workers for transformation;
+     - 'ais etl bucket my-etl ais://src ais://dst --prepend processed/'                  add prefix to transformed object names.
+
+USAGE:
+   ais etl bucket ETL_NAME SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET [command options]
+
+OPTIONS:
+   all          Transform all objects from a remote bucket including those that are not present (not cached) in cluster
+   cont-on-err  Keep running archiving xaction (job) in presence of errors in any given multi-object transaction
+   dry-run      Show total size of new objects without really creating them
+   ext          Mapping from old to new extensions of transformed objects' names
+   force,f      Force execution of the command (caution: advanced usage only)
+   list         Comma-separated list of object or file names, e.g.:
+                --list 'o1,o2,o3'
+                --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                or, when listing files and/or directories:
+                --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   num-workers  Number of concurrent workers; if omitted or zero defaults to a number of target mountpaths (disks);
+                use (-1) to indicate single-threaded serial execution (ie., no workers);
+                any positive value will be adjusted _not_ to exceed the number of target CPUs
+   prefix       Select virtual directories or objects with names starting with the specified prefix, e.g.:
+                '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   prepend      Prefix to prepend to every object name during operation (copy or transform), e.g.:
+                --prepend=abc   - prefix all object names with "abc"
+                --prepend=abc/  - use "abc" as a virtual directory (note trailing filepath separator)
+                                - during 'copy', this flag applies to copied objects
+                                - during 'transform', this flag applies to transformed objects
+   template     Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                (with optional steps and gaps), e.g.:
+                --template "" # (an empty or '*' template matches everything)
+                --template 'dir/subdir/'
+                --template 'shard-{1000..9999}.tar'
+                --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                and similarly, when specifying files and directories:
+                --template '/home/dir/subdir/'
+                --template "/abc/prefix-{0010..9999..2}-suffix"
+   timeout      Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                valid time units: ns, us (or µs), ms, s (default), m, h
+   wait         Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   help, h      Show help
 ```
 
 ### Available Flags

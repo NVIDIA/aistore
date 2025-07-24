@@ -3,7 +3,8 @@ It is easy to see all CLI operations on *buckets*:
 ```console
 $ ais bucket <TAB-TAB>
 
-ls   summary    validate   lru     evict   show    create     cp     mv      rm       props
+ls         validate   evict      show       cp         etl      rm
+summary    lru        prefetch   create     archive    mv       props
 ```
 
 For convenience, a few of the most popular verbs are also aliased:

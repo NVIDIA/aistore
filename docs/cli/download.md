@@ -1,6 +1,73 @@
 # Start, Stop, and monitor downloads
 
-AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet. For details and background, please see the [downloader's own readme](/docs/downloader.md).
+AIS Downloader is intended for downloading massive numbers of files (objects) and datasets from both Cloud Storage (buckets) and Internet.
+
+Here's the command's help as of v3.30:
+
+```console
+$ ais download --help
+NAME:
+   ais download - (alias for "job start download") Download files and objects from remote sources, e.g.:
+     - 'ais download http://example.com/file.tar ais://bucket/'                            - download from HTTP into AIS bucket;
+     - 'ais download s3://bucket/file.tar ais://local-bucket/'                             - download from S3 into AIS bucket;
+     - 'ais download gs://bucket/file.tar ais://local/ --progress'                         - download from GCS with progress monitoring;
+     - 'ais download s3://bucket ais://local --sync'                                       - download and sync entire S3 bucket;
+     - 'ais download "gs://bucket/file-{001..100}.tar" ais://local/'                       - download range of files using template;
+     - 'ais download --hf-model bert-base-uncased --hf-file config.json ais://local/'      - download specific file from HuggingFace model;
+     - 'ais download --hf-dataset squad --hf-file train-v1.1.json ais://local/ --hf-auth'  - download dataset file with authentication;
+     - 'ais download --hf-model bert-large-uncased ais://local/ --blob-threshold 100MB'    - download model with size-based routing (large files get individual jobs).
+
+USAGE:
+   ais download SOURCE DESTINATION [command options]
+
+OPTIONS:
+   blob-threshold     Utilize built-in blob-downloader for remote objects greater than the specified (threshold) size
+                      in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')
+   description,desc   job description
+   download-timeout   Server-side time limit for downloading a single file from remote source;
+                      valid time units: ns, us (or µs), ms, s (default), m, h
+   hf-auth            HuggingFace authentication token for private repositories
+   hf-dataset         HuggingFace dataset repository name, e.g.:
+                      --hf-dataset squad
+                      --hf-dataset glue
+                      --hf-dataset lhoestq/demo1
+   hf-file            Specific file to download from HF repository (optional, downloads entire repository if not specified)
+   hf-model           HuggingFace model repository name, e.g.:
+                      --hf-model bert-base-uncased
+                      --hf-model microsoft/DialoGPT-medium
+                      --hf-model openai/whisper-large-v2
+   hf-revision        HuggingFace repository revision/branch/tag (default: main)
+   limit-bph          Maximum download speed, or more exactly: maximum download size per target (node) per hour, e.g.:
+                      '--limit-bph 1GiB' (or same: '--limit-bph 1073741824');
+                      the value is parsed in accordance with the '--units' (see '--units' for details);
+                      omitting the flag or specifying '--limit-bph 0' means that download won't be throttled
+   max-conns          Maximum number of connections each target can make concurrently (up to num mountpaths)
+   object-list,from   Path to file containing JSON array of object names to download
+   progress           Show progress bar(s) and progress of execution in real time
+   progress-interval  Download progress interval for continuous monitoring;
+                      valid time units: ns, us (or µs), ms, s (default), m, h
+   sync               Fully synchronize in-cluster content of a given remote bucket with its (Cloud or remote AIS) source;
+                      the option is, effectively, a stronger variant of the '--latest' (option):
+                      in addition to bringing existing in-cluster objects in-sync with their respective out-of-band updates (if any)
+                      it also entails removing in-cluster objects that are no longer present remotely;
+                      like '--latest', this option provides operation-level control over synchronization
+                      without requiring to change the corresponding bucket configuration: 'versioning.synchronize';
+                      see also:
+                        - 'ais show bucket BUCKET versioning'
+                        - 'ais bucket props set BUCKET versioning'
+                        - 'ais start rebalance'
+                        - 'ais ls --check-versions'
+   timeout            Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                      valid time units: ns, us (or µs), ms, s (default), m, h
+   units              Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                      si  - SI (metric) format, e.g.: KB, MB, GB
+                      raw - do not convert to (or from) human-readable format
+   wait               Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   help, h            Show help
+```
+
+For details and background, please see the [downloader's own readme](/docs/downloader.md).
 
 ## Table of Contents
 - [Start download job](#start-download-job)

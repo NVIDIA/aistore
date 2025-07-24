@@ -6,8 +6,8 @@ Namely:
 ```console
 $ ais object <TAB-TAB>
 
-get          put          cp           set-custom   show         rm
-ls           promote      concat       evict        mv           cat
+get     put        cp           etl          set-custom   prefetch     show      cat
+ls      promote    archive      concat       rm           evict        mv
 ```
 
 ## Table of Contents
