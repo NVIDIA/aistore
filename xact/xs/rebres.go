@@ -7,6 +7,7 @@ package xs
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -34,6 +35,7 @@ type (
 	}
 
 	Rebalance struct {
+		Args *xreg.RebArgs
 		xact.Base
 	}
 	Resilver struct {
@@ -96,10 +98,28 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 
 func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	xreb = &Rebalance{}
-	ctlmsg, ok := p.Args.Custom.(string)
-	debug.Assert(ok)
+
+	xreb.Args = p.Args.Custom.(*xreg.RebArgs)
+	debug.Assert(xreb.Args != nil)
+
+	// ctlmsg
+	var ctlmsg string
+	if xreb.Args.Bck != nil {
+		ctlmsg = xreb.Args.Bck.Cname(xreb.Args.Prefix) + " "
+	}
+	if xreb.Args.Flags&xact.XrbLatestVer != 0 {
+		ctlmsg += "--latest "
+	}
+	if xreb.Args.Flags&xact.XrbSync != 0 {
+		ctlmsg += "--sync"
+	} else {
+		ctlmsg = strings.TrimRight(ctlmsg, " ")
+	}
+
+	// init
 	xreb.InitBase(p.Args.UUID, p.Kind(), ctlmsg, nil)
 
+	// ID
 	id, err := xact.S2RebID(p.Args.UUID)
 	if err != nil {
 		return nil, err

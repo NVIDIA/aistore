@@ -763,7 +763,7 @@ var (
 		EnvVar: "HF_TOKEN",
 	}
 
-	// sync
+	// latestVer and sync
 	latestVerFlag = cli.BoolFlag{
 		Name: "latest",
 		Usage: "Check in-cluster metadata and, possibly, GET, download, prefetch, or otherwise copy the latest object version\n" +
@@ -775,7 +775,7 @@ var (
 			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
 			indent1 + "\t\t- 'ais ls --check-versions'\n" +
 			indent1 + "\tsupported commands include:\n" +
-			indent1 + "\t\t- 'ais cp', 'ais prefetch', 'ais get'",
+			indent1 + "\t\t- 'ais cp', 'ais prefetch', 'ais get', 'ais start rebalance'",
 	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
@@ -788,6 +788,7 @@ var (
 			indent1 + "\tsee also:\n" +
 			indent1 + "\t\t- 'ais show bucket BUCKET versioning'\n" +
 			indent1 + "\t\t- 'ais bucket props set BUCKET versioning'\n" +
+			indent1 + "\t\t- 'ais start rebalance'\n" +
 			indent1 + "\t\t- 'ais ls --check-versions'",
 	}
 

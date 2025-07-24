@@ -99,6 +99,8 @@ var (
 	startSpecialFlags = map[string][]cli.Flag{
 		commandRebalance: {
 			verbObjPrefixFlag,
+			latestVerFlag,
+			syncFlag,
 		},
 		cmdDownload: {
 			dloadTimeoutFlag,

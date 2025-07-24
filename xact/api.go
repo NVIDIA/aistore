@@ -52,6 +52,8 @@ const (
 // ArgsMsg.Flags
 const (
 	XrmZeroSize = 1 << iota // usage: x-cleanup (apc.ActStoreCleanup) to remove zero size objects
+	XrbLatestVer
+	XrbSync
 )
 
 type (

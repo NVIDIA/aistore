@@ -53,4 +53,9 @@ type (
 		Smap              *meta.Smap
 		SkipGlobMisplaced bool
 	}
+	RebArgs struct {
+		Bck    *meta.Bck // (limited-scope)
+		Prefix string    // (ditto)
+		Flags  uint32    // = xact.ArgsMsg.Flags
+	}
 )

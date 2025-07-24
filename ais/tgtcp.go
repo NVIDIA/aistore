@@ -965,13 +965,14 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 			if err := cos.MorphMarshal(msg.Value, &xargs); err == nil {
 				extArgs.Bck = (*meta.Bck)(&xargs.Bck)
 				extArgs.Prefix = msg.Name
+				extArgs.Flags = xargs.Flags
 			}
 		}
 
 		nlog.Infoln(tname, "starting user-requested", xname, nxid)
 
 		// (##a)
-		go t.reb.RunRebalance(&smap.Smap, &extArgs)
+		go t.reb.Run(&smap.Smap, &extArgs)
 		return
 	}
 
@@ -993,7 +994,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		}
 		nlog.Infoln(tname, "starting", msg.String(), "-triggered", xname, s, opts)
 		// (##b)
-		go t.reb.RunRebalance(&smap.Smap, &extArgs)
+		go t.reb.Run(&smap.Smap, &extArgs)
 
 	// 2.2. "pure" metasync(newRMD) w/ no action - double-check with cluster config
 	default:
@@ -1003,7 +1004,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 		if config.Rebalance.Enabled {
 			nlog.Infoln(tname, "starting", xname)
 			// (##c)
-			go t.reb.RunRebalance(&smap.Smap, &extArgs)
+			go t.reb.Run(&smap.Smap, &extArgs)
 		} else {
 			runtime.Gosched()
 
@@ -1024,7 +1025,7 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 
 				// (##d)
 				nlog.Infoln(tname, "starting", xname)
-				t.reb.RunRebalance(&smap.Smap, &extArgs)
+				t.reb.Run(&smap.Smap, &extArgs)
 			}()
 		}
 	}

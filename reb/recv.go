@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 func (reb *Reb) _recvErr(err error) error {
@@ -167,6 +168,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 	}
 
 	xreb := reb.xctn()
+	latestVer, sync := _latestVer(lom.VersionConf(), xreb.Args.Flags)
 
 	//
 	// when destination exists:
@@ -178,10 +180,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 			goto drainOk
 		}
 
-		// TODO: add operation‑scope '--latest' flag: `ais start rebalance --latest`
-		// will likely need to extend ActMsg (Value, Action, Name) to also carry the boolean
-
-		if lom.Bck().IsRemote() && (lom.VersionConf().Sync || lom.VersionConf().ValidateWarmGet) {
+		if lom.Bck().IsRemote() && latestVer {
 			oa, ecode, err := core.T.HeadCold(lom, nil)
 			if err == nil {
 				switch {
@@ -208,7 +207,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 			}
 
 			// --sync to maybe delete
-			if cos.IsNotExist(err, ecode) && lom.VersionConf().Sync {
+			if cos.IsNotExist(err, ecode) && sync {
 				// try to delete in place (TODO: compare with lom.CheckRemoteMD; unify)
 				locked := lom.TryLock(true)
 				errDel := lom.RemoveObj(true)
@@ -288,6 +287,17 @@ rx:
 
 	// ACK
 	return reb.regACK(smap, hdr, tsid)
+}
+
+func _latestVer(conf cmn.VersionConf, flags uint32) (latestVer, sync bool) {
+	switch {
+	case (flags&xact.XrbSync != 0) || conf.Sync:
+		return true, true
+	case (flags&xact.XrbLatestVer != 0) || conf.ValidateWarmGet:
+		return true, false
+	default:
+		return false, false
+	}
 }
 
 func (reb *Reb) regACK(smap *meta.Smap, hdr *transport.ObjHdr, tsid string) error {

@@ -86,6 +86,7 @@ type (
 		Prefix string    // ditto
 		Oxid   string    // oldRMD g[version]
 		NID    int64     // newRMD version
+		Flags  uint32    // xact.ArgsMsg.Flags
 	}
 )
 
@@ -213,7 +214,7 @@ func _preempt2(logHdr string, id int64) bool {
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
+func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if reb.rebID.Load() == extArgs.NID {
 		return
 	}
@@ -272,7 +273,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, extArgs *ExtArgs) {
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
-	if !reb.initRenew(rargs, extArgs.Notif, haveStreams) {
+	if !reb.initRenew(rargs, extArgs, haveStreams) {
 		reb.dm.UnregRecv()
 		return
 	}
@@ -369,12 +370,8 @@ func _pingall(rargs *rebArgs) bool {
 	return true
 }
 
-func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams bool) bool {
-	var ctlmsg string
-	if rargs.bck != nil {
-		ctlmsg = rargs.bck.Cname(rargs.prefix)
-	}
-	rns := xreg.RenewRebalance(rargs.id, ctlmsg)
+func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bool {
+	rns := xreg.RenewRebalance(rargs.id, &xreg.RebArgs{Bck: rargs.bck, Prefix: rargs.prefix, Flags: extArgs.Flags})
 	if rns.Err != nil {
 		return false
 	}
@@ -384,8 +381,8 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, haveStreams boo
 	xctn := rns.Entry.Get()
 	rargs.xreb = xctn.(*xs.Rebalance)
 
-	notif.Xact = rargs.xreb
-	rargs.xreb.AddNotif(notif)
+	extArgs.Notif.Xact = rargs.xreb
+	rargs.xreb.AddNotif(extArgs.Notif)
 
 	reb.mu.Lock()
 
