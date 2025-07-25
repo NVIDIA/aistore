@@ -305,7 +305,7 @@ func suggestNodesInMaint(c *cli.Context) {
 func showClusterCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0:
-		fmt.Println(apc.Proxy, apc.Target, cmdSmap, cmdBMD, cmdConfig, cmdShowStats, cmdSummary)
+		fmt.Println(apc.Proxy, apc.Target, cmdSmap, cmdBMD, cmdConfig, cmdShowStats)
 	case 1:
 		switch c.Args().Get(0) {
 		case apc.Proxy:

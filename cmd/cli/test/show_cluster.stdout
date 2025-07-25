@@ -1,4 +1,4 @@
-^Summary:$
+^Cluster:$
 ^.*Proxies:.*$
 ^.*Targets:.*$
 ^.*Capacity:.*$
@@ -20,7 +20,7 @@
 ^.*Network:.*$
 ^.*Storage:.*$
 ^.*Filesystems:.*$
-^Summary:$
+^Cluster:$
 ^.*Proxies:.*$
 ^.*Targets:.*$
 ^.*Capacity:.*$

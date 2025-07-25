@@ -70,10 +70,10 @@ var (
 
 	showCmdDashboard = cli.Command{
 		Name:         cmdDashboard,
-		Usage:        "Show comprehensive cluster dashboard: storage, performance, alerts, and health metrics",
+		Usage:        "Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more",
 		ArgsUsage:    optionalNodeIDArgument,
 		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
-		Action:       showClusterSummaryHandler,
+		Action:       clusterDashboardHandler,
 		BashComplete: suggestAllNodes,
 	}
 
@@ -121,7 +121,7 @@ var (
 	}
 	showCmdCluster = cli.Command{
 		Name:         cmdCluster,
-		Usage:        "Main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)",
+		Usage:        "Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)",
 		ArgsUsage:    showClusterArgument,
 		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
 		Action:       showClusterHandler,
@@ -149,14 +149,6 @@ var (
 				ArgsUsage: showClusterConfigArgument,
 				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
-			},
-			{
-				Name:         cmdSummary,
-				Usage:        "Show comprehensive cluster dashboard: storage, performance, alerts, and health metrics",
-				ArgsUsage:    optionalNodeIDArgument,
-				Flags:        sortFlags(showCmdsFlags[cmdCluster]),
-				Action:       showClusterSummaryHandler,
-				BashComplete: suggestAllNodes,
 			},
 			makeAlias(&showCmdPerformance, &mkaliasOpts{
 				newName:  cmdShowStats,
@@ -383,7 +375,7 @@ func showClusterConfigHandler(c *cli.Context) error {
 	return showClusterConfig(c, c.Args().Get(0))
 }
 
-func showClusterSummaryHandler(c *cli.Context) error {
+func clusterDashboardHandler(c *cli.Context) error {
 	var (
 		smap       *meta.Smap
 		tstatusMap teb.StstMap

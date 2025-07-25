@@ -97,15 +97,15 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 
 		// Add warning about refresh flag for better results
 		if !flagIsSet(c, refreshFlag) {
-			warn := fmt.Sprintf("for better throughput results, use %s option and/or run several iterations\n", qflprn(refreshFlag))
-			actionWarn(c, warn)
+			note := fmt.Sprintf("for more accurate performance results, use %s option and run several iterations\n", qflprn(refreshFlag))
+			actionNote(c, note)
 		}
 	}
 
 	// summary
-	title := fblue("Summary:")
+	title := fblue("Cluster:")
 	if isRebalancing(body.Stst.Tmap) {
-		title = fcyan("Summary:")
+		title = fcyan("Cluster:")
 	}
 
 	out.WriteString(title)

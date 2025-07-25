@@ -110,6 +110,9 @@ var (
 		Usage: "Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.",
 		Subcommands: []cli.Command{
 			makeAlias(&showCmdCluster, &mkaliasOpts{newName: commandShow}),
+			makeAlias(&showCmdDashboard, &mkaliasOpts{
+				aliasFor: joinCommandWords(commandShow, cmdDashboard),
+			}),
 			{
 				Name:      cmdCluAttach,
 				Usage:     "Attach remote ais cluster",
