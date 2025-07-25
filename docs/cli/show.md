@@ -57,6 +57,7 @@ In other words, there are currently 11 subcommands that are briefly described in
 - [`ais show performance`](#ais-show-performance)
 - [`ais show job`](#ais-show-job)
 - [`ais show cluster`](#ais-show-cluster)
+- [`ais show cluster summary`](#ais-show-cluster-summary)
 - [`ais show auth`](#ais-show-auth)
 - [`ais show bucket`](#ais-show-bucket)
 - [`ais show object`](#ais-show-object)
@@ -474,6 +475,7 @@ Summary:
    Proxies:             10 (0 unelectable)
    Targets:             10
    Cluster Map:         version 1512, UUID AGetvIKTz, primary p[EciZrNdH]
+   Backend:             AWS
    Deployment:          K8s
    Status:              20 online
    Rebalance:           n/a
@@ -491,6 +493,106 @@ Summary:
 ### See also
 
 * [`ais cluster` command](cluster.md#cluster-or-daemon-status)
+
+
+## `ais show cluster summary`
+
+The `ais show cluster summary` command provides comprehensive cluster analytics and health monitoring. Unlike the basic `ais show cluster` command which shows node tables and basic summary, this command focuses on detailed analytics including storage metrics, performance indicators, error tracking, and system health.
+
+### Command Overview
+
+```console
+$ ais show cluster summary --help
+NAME:
+   ais show cluster summary - Show comprehensive cluster analytics: storage, performance, alerts, and health metrics
+
+USAGE:
+   ais show cluster summary [NODE_ID] [command options]
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --json, -j        json input/output
+   --no-headers, -H  display tables without headers
+   --help, -h        show help
+```
+
+### What it shows
+
+The command provides a comprehensive view of your cluster's health and performance:
+
+**Performance and Health Section:**
+- **State**: Overall cluster operational status (Operational, Critical, Maintenance, etc.)
+- **Throughput**: Current read/write throughput rates (idle when no activity)
+- **I/O Errors**: Total disk I/O errors across all nodes
+- **Load Avg**: 1-minute load average aggregated across all nodes (avg, min, max)
+- **Disk Usage**: Average, minimum, and maximum disk usage percentages
+- **Network**: Network health status (healthy, degraded, etc.)
+- **Storage**: Total mountpaths and their health status
+- **Filesystems**: Types and counts of filesystems in use
+
+**Summary Section:**
+- **Proxies**: Number of proxy nodes and their electability status
+- **Targets**: Number of target nodes and total disks
+- **Capacity**: Used and available storage capacity with percentages
+- **Cluster Map**: Version, UUID, and primary node information
+- **Software**: Version and build information
+- **Backend**: Detected backend type (AWS, GCP, etc.)
+- **Deployment**: Deployment type (dev, K8s, etc.)
+- **Status**: Number of online nodes
+- **Rebalance**: Current rebalance status
+- **Authentication**: Authentication status (enabled/disabled)
+- **Version**: Software version information
+- **Build**: Build timestamp
+
+### Example Output
+
+```console
+$ ais show cluster summary --refresh 5
+
+Analytics:
+   Analytics:
+   State:               Multiple issues
+   - Maintenance (1/6): t[FFIt8090]
+   - Rebalancing (5/6): t[ZHHt8087], t[atEt8086], t[UTat8088], t[zHut8091], t[xgAt8089]
+   Throughput:          Read 2.4MiB/s, Write 13.2MiB/s (5s avg)
+   I/O Errors:          0
+   Load Avg:            avg 0.5, min 0.5, max 0.5 (1m)
+   Disk Usage:          avg 12.0%, min 12.0%, max 12.0%
+   Network:             healthy
+   Storage:             28 mountpaths (all healthy)
+   Filesystems:         ext4(28)
+
+Summary:
+   Proxies:             6 (all electable)
+   Targets:             6 (one disk)
+   Capacity:            used 53.03GiB (12%), available 364.47GiB
+   Cluster Map:         version 30, UUID Ba5eThUG9, primary p[rbap8080]
+   Software:            3.29.e230a780d (build: 2025-07-14T11:39:53-0700)
+   Backend:             AWS
+   Deployment:          dev
+   Status:              12 online
+   Rebalance:           -
+   Authentication:      disabled
+   Version:             3.29.e230a780d
+   Build:               2025-07-14T11:39:53-0700
+```
+
+### Continuous Monitoring
+
+Use the `--refresh` flag for continuous monitoring:
+
+```console
+# Monitor cluster every 5 seconds
+$ ais show cluster summary --refresh 5
+
+# Monitor for 10 iterations (50 seconds total)
+$ ais show cluster summary --refresh 5 --count 10
+
+# Monitor with JSON output
+$ ais show cluster summary --refresh 10 --json
+```
 
 
 ## `ais show auth`

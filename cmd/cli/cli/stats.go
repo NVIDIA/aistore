@@ -48,6 +48,21 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 const versionSepa = "."
 
 func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
+	smap, tstatusMap, pstatusMap, err = fillStatusMapNoVersion(c, daeType)
+	checkNodeStatusVersion(c, tstatusMap, pstatusMap)
+	return smap, tstatusMap, pstatusMap, err
+}
+
+func checkNodeStatusVersion(c *cli.Context, tstatusMap, pstatusMap teb.StstMap) {
+	mmc := strings.Split(cmn.VersionAIStore, versionSepa)
+	debug.Assert(len(mmc) > 1)
+	ok := checkVersionWarn(c, apc.Target, mmc, tstatusMap)
+	if ok && pstatusMap != nil {
+		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)
+	}
+}
+
+func fillStatusMapNoVersion(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return nil, nil, nil, err
 	}
@@ -74,13 +89,6 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatus
 	}
 
 	wg.Wait()
-
-	mmc := strings.Split(cmn.VersionAIStore, versionSepa)
-	debug.Assert(len(mmc) > 1)
-	ok := checkVersionWarn(c, apc.Target, mmc, tstatusMap)
-	if ok && pstatusMap != nil {
-		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)
-	}
 	return smap, tstatusMap, pstatusMap, nil
 }
 
@@ -251,7 +259,7 @@ func _cluStatusBeginEnd(c *cli.Context, ini teb.StstMap, sleep time.Duration) (b
 
 	time.Sleep(sleep)
 
-	// post-interval (end) stats
-	_, e, _, err = fillNodeStatusMap(c, apc.Target)
+	// post-interval (end) stats without checking cli version a second time
+	_, e, _, err = fillStatusMapNoVersion(c, apc.Target)
 	return
 }

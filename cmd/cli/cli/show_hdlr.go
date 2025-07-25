@@ -68,6 +68,15 @@ var (
 		},
 	}
 
+	showCmdDashboard = cli.Command{
+		Name:         cmdDashboard,
+		Usage:        "Show comprehensive cluster dashboard: storage, performance, alerts, and health metrics",
+		ArgsUsage:    optionalNodeIDArgument,
+		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
+		Action:       showClusterSummaryHandler,
+		BashComplete: suggestAllNodes,
+	}
+
 	showCmd = cli.Command{
 		Name:  commandShow,
 		Usage: "Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself",
@@ -76,6 +85,7 @@ var (
 			showCmdObject,
 			showCmdBucket,
 			showCmdCluster,
+			showCmdDashboard,
 			showCmdPerformance,
 			showCmdStorage,
 			showCmdRebalance,
@@ -139,6 +149,14 @@ var (
 				ArgsUsage: showClusterConfigArgument,
 				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
+			},
+			{
+				Name:         cmdSummary,
+				Usage:        "Show comprehensive cluster dashboard: storage, performance, alerts, and health metrics",
+				ArgsUsage:    optionalNodeIDArgument,
+				Flags:        sortFlags(showCmdsFlags[cmdCluster]),
+				Action:       showClusterSummaryHandler,
+				BashComplete: suggestAllNodes,
 			},
 			makeAlias(&showCmdPerformance, &mkaliasOpts{
 				newName:  cmdShowStats,
@@ -236,7 +254,7 @@ func showClusterHandler(c *cli.Context) error {
 		return V(err)
 	}
 
-	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, cos.Left(sid, what))
+	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, cos.Left(sid, what), false)
 }
 
 func showObjectHandler(c *cli.Context) error {
@@ -363,6 +381,38 @@ func showBMDHandler(c *cli.Context) error {
 
 func showClusterConfigHandler(c *cli.Context) error {
 	return showClusterConfig(c, c.Args().Get(0))
+}
+
+func showClusterSummaryHandler(c *cli.Context) error {
+	var (
+		smap       *meta.Smap
+		tstatusMap teb.StstMap
+		pstatusMap teb.StstMap
+		what, sid  string
+	)
+	if c.NArg() > 0 {
+		what = c.Args().Get(0)
+		if node, _, errV := getNode(c, what); errV == nil {
+			sid = node.ID()
+		} else {
+			sid = what
+		}
+	}
+
+	// Check if longRun is requested
+	setLongRunParams(c)
+
+	smap, tstatusMap, pstatusMap, err := fillNodeStatusMap(c, apc.WhatNodeStatsAndStatus)
+	if err != nil {
+		return err
+	}
+	cluConfig, err := api.GetClusterConfig(apiBP)
+	if err != nil {
+		return err
+	}
+
+	// Use cluDaeStatus with rich analytics enabled
+	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, sid, true)
 }
 
 func showAnyConfigHandler(c *cli.Context) error {

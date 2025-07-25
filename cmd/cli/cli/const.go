@@ -18,20 +18,21 @@ import (
 
 // top-level commands (categories - nouns)
 const (
-	commandAdvanced = "advanced"
-	commandAlias    = "alias"
-	commandArch     = "archive"
-	commandAuth     = "auth"
-	commandBucket   = "bucket"
-	commandCluster  = "cluster"
-	commandConfig   = "config"
-	commandETL      = apc.ETL
-	commandJob      = "job"
-	commandLog      = "log"
-	commandObject   = "object"
-	commandPerf     = "performance"
-	commandStorage  = "storage"
-	commandTLS      = "tls"
+	commandAdvanced  = "advanced"
+	commandAlias     = "alias"
+	commandArch      = "archive"
+	commandAuth      = "auth"
+	commandBucket    = "bucket"
+	commandCluster   = "cluster"
+	commandConfig    = "config"
+	commandDashboard = "dashboard"
+	commandETL       = apc.ETL
+	commandJob       = "job"
+	commandLog       = "log"
+	commandObject    = "object"
+	commandPerf      = "performance"
+	commandStorage   = "storage"
+	commandTLS       = "tls"
 
 	commandSearch = "search"
 )
@@ -108,6 +109,7 @@ const (
 	cmdSummary      = "summary" // ditto apc.ActSummaryBck
 
 	cmdCluster    = commandCluster
+	cmdDashboard  = commandDashboard
 	cmdNode       = "node"
 	cmdPrimary    = "set-primary"
 	cmdList       = commandList

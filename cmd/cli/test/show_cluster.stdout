@@ -1,0 +1,35 @@
+^Summary:$
+^.*Proxies:.*$
+^.*Targets:.*$
+^.*Capacity:.*$
+^.*ClusterMap:.*$
+^.*Software:.*$
+^.*Backend:.*$
+^.*Deployment:.*$
+^.*Status:.*$
+^.*Rebalance:.*$
+^.*Authentication:.*$
+^.*Version:.*$
+^.*Build:.*$
+^Performance and Health:$
+^.*State:.*$
+^.*Throughput:.*$
+^.*I/O Errors:.*$
+^.*Load Avg:.*$
+^.*Disk Usage:.*$
+^.*Network:.*$
+^.*Storage:.*$
+^.*Filesystems:.*$
+^Summary:$
+^.*Proxies:.*$
+^.*Targets:.*$
+^.*Capacity:.*$
+^.*Cluster Map:.*$
+^.*Software:.*$
+^.*Backend:.*$
+^.*Deployment:.*$
+^.*Status:.*$
+^.*Rebalance:.*$
+^.*Authentication:.*$
+^.*Version:.*$
+^.*Build:.*$
