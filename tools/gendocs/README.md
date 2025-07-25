@@ -56,10 +56,23 @@ Actions specify which operations are supported by an endpoint and their correspo
 - **Model**: The Go struct type used for this action's request body (e.g., `apc.TCBMsg`, `apc.PromoteArgs`)
 - **Separator**: Multiple actions are separated by `|` (pipe character)
 
+💡 **Important**: The models shown in the documentation often represent **nested fields** within larger request structures, not the complete request body.
+
+**Example - Complete request structure:**
+All models only represent the expected value field in the final body payload for the corresponding action. The complete JSON body should look like:
+
+```json
+{
+  "action": "selected action",
+  "value": "the model",
+  "name": "specify if needed for the selected action"
+}
+```
+
 ## Data Model Annotations
 
 ### Swagger Model Annotation
-Use `//swagger:model` to mark Go structs as API data models that should be included in the OpenAPI specification:
+Use `// swagger:model` to mark Go structs as API data models that should be included in the OpenAPI specification:
 
 ```go
 // swagger:model
@@ -71,7 +84,7 @@ type PromoteArgs struct {
 ```
 
 **Model Usage Flow:**
-1. Define struct with `//swagger:model` annotation
+1. Define struct with `// swagger:model` annotation
 2. Reference the model in endpoint `action` parameters  
 3. Generator automatically creates OpenAPI schema definitions
 4. Request/response documentation includes the model's fields and types
@@ -187,7 +200,7 @@ obj      String    destination object name
 rcr      Boolean   recursively promote nested dirs                  
 ```
 
-**Supported Actions**: `ActPromote` becomes a clickable link that opens the detailed model documentation
+**Supported Actions**: Action names are automatically converted to clickable HTML links that navigate to their corresponding model documentation.
 
 ## Limitations of Swagger with Custom Go Types
 

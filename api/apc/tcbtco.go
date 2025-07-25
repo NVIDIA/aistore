@@ -27,15 +27,12 @@ type (
 		Sync      bool   `json:"synchronize"`          // see also: 'versioning.synchronize'
 		NonRecurs bool   `json:"non-recurs,omitempty"` // do not copy contents of nested virtual subdirectories (see also: `apc.LsNoRecursion`, `apc.EvdMsg`)
 	}
-	// Transform contains ETL transformation parameters.
 
 	// swagger:model
 	Transform struct {
 		Name    string       `json:"id,omitempty"`
 		Timeout cos.Duration `json:"request_timeout,omitempty" swaggertype:"primitive,integer"`
 	}
-
-	// TCBMsg represents parameters for bucket-to-bucket copy and transform operations.
 
 	// swagger:model
 	TCBMsg struct {

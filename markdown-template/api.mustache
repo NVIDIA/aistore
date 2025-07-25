@@ -22,40 +22,6 @@ All URIs are relative to *{{basePath}}*
 {{#description}}
 <div class="supported-actions">
     <p>{{{.}}}</p>
-    <script>
-    (function() {
-        var container = document.currentScript.previousElementSibling;
-        var text = container.innerHTML;
-        if (text.indexOf('Supported actions:') !== -1) {
-            // Extract mappings from HTML comment
-            var mappingsMatch = text.match(/<!-- mappings: ([^-]+) -->/);
-            if (mappingsMatch) {
-                var mappingsStr = mappingsMatch[1];
-                var mappings = {};
-                mappingsStr.split(', ').forEach(function(mapping) {
-                    var parts = mapping.split(':');
-                    if (parts.length === 2) {
-                        mappings[parts[0]] = parts[1];
-                    }
-                });
-                
-                // Replace action names with links using the correct models
-                text = text.replace(/Supported actions:\s*([^<]+)<!-- mappings[^>]*-->/, function(match, actions) {
-                    var linkedActions = actions.split(',').map(function(action) {
-                        var trimmed = action.trim();
-                        var model = mappings[trimmed];
-                        if (model) {
-                            return '<a href="../Models/' + model + '.html">' + trimmed + '</a>';
-                        }
-                        return trimmed;
-                    }).join(', ');
-                    return 'Supported actions: ' + linkedActions;
-                });
-            }
-            container.innerHTML = text;
-        }
-    })();
-    </script>
 </div>
 {{/description}}
 {{^description}}

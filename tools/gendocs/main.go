@@ -59,7 +59,7 @@ const (
 	tagsTemplate    = "// @Tags %s"
 
 	bodyParamTemplate      = "// @Param request body %s true \"%s\""
-	supportedActionsHeader = "Supported Actions: "
+	supportedActionsHeader = "Supported actions: "
 	actionLabelFormat      = "%s - Available fields: "
 	modelExampleFormat     = "%s"
 	modelLabelFormat       = "%s - No fields available"
@@ -562,17 +562,14 @@ func generateSwaggerComments(ep *endpoint) []string {
 
 	// Add single parameters that references the action(s)
 	if len(ep.Actions) > 0 {
-		var actionNames []string
-		var actionMappings []string
+		var actionLinks []string
 		for _, action := range ep.Actions {
 			actionName := strings.TrimPrefix(action.Action, apcPrefix)
-			actionNames = append(actionNames, actionName)
-			mapping := fmt.Sprintf("%s:%s", actionName, action.Model)
-			actionMappings = append(actionMappings, mapping)
+			link := fmt.Sprintf("<a href='../Models/%s.html'>%s</a>", action.Model, actionName)
+			actionLinks = append(actionLinks, link)
 		}
 
-		description := fmt.Sprintf("Supported actions: %s <!-- mappings: %s -->",
-			strings.Join(actionNames, ", "), strings.Join(actionMappings, ", "))
+		description := fmt.Sprintf("%s%s", supportedActionsHeader, strings.Join(actionLinks, ", "))
 
 		// Generate one @Param request body for each model
 		for _, action := range ep.Actions {

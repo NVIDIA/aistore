@@ -15,7 +15,6 @@ import (
 
 const _bldl = "blob-downloader"
 
-// BlobMsg contains parameters for blob download operations.
 // swagger:model
 type BlobMsg struct {
 	ChunkSize  int64 `json:"chunk-size"`  // as in: chunk size
