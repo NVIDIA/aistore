@@ -55,6 +55,7 @@ type (
 		BuildTime string // ditto
 		NumDisks  int
 		Backend   string // configured backend providers
+		Endpoint  string // cluster endpoint URL
 	}
 	ListBucketsHelper struct {
 		XactID string

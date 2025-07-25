@@ -1,5 +1,5 @@
 ais show cluster | grep -E "(Cluster|Proxies|Targets|Capacity|Cluster Map|Software|Backend|Deployment|Status|Rebalance|Authentication|Version|Build)"
-ais show dashboard | grep -E "(Performance and Health|State|Throughput|I/O Errors|Load Avg|Disk Usage|Network|Storage|Filesystems|Cluster|Proxies|Targets|Capacity|Cluster Map|Software|Backend|Deployment|Status|Rebalance|Authentication|Version|Build)" | head -23
+ais show dashboard | grep -E "(Performance and Health|State|I/O Errors|Load Avg|Disk Usage|Network|Storage|Filesystems|Active Jobs|Cluster|Proxies|Targets|Endpoint|Capacity|Cluster Map|Software|Backend|Deployment|Status|Rebalance|Authentication|Version|Build)" | head -23
 ais show cluster --json // IGNORE
 ais show cluster $RANDOM_TARGET // IGNORE
 ais show cluster FOO // FAIL "expecting a valid NODE_ID or node type"

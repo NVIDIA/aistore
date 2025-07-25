@@ -475,6 +475,7 @@ t[wSJzGVnU]      0.10%           363.33GiB       76.67%          30.972TiB      
 Cluster:
    Proxies:             10 (0 unelectable)
    Targets:             10
+   Endpoint:            http://<cluster-endpoint>:<port>
    Cluster Map:         version 1512, UUID AGetvIKTz, primary p[EciZrNdH]
    Backend:             AWS
    Deployment:          K8s
@@ -510,10 +511,13 @@ NAME:
 USAGE:
    ais show dashboard [NODE_ID] [command options]
 
+
+
 OPTIONS:
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --verbose, -v     verbose output
    --json, -j        json input/output
    --no-headers, -H  display tables without headers
    --help, -h        show help
@@ -524,18 +528,21 @@ OPTIONS:
 The command provides a comprehensive view of your cluster's health and performance:
 
 **Performance and Health Section:**
-- **State**: Overall cluster operational status (Operational, Critical, Maintenance, etc.)
-- **Throughput**: Current read/write throughput rates (idle when no activity)
+- **State**: Overall cluster operational status with summary of affected nodes and issue types
+- **Throughput**: Current read/write throughput rates (only shown when active)
 - **I/O Errors**: Total disk I/O errors across all nodes
 - **Load Avg**: 1-minute load average aggregated across all nodes (avg, min, max)
 - **Disk Usage**: Average, minimum, and maximum disk usage percentages
 - **Network**: Network health status (healthy, degraded, etc.)
 - **Storage**: Total mountpaths and their health status
 - **Filesystems**: Types and counts of filesystems in use
+- **Active Jobs**: Currently running job types (download, rebalance, etc.)
+
 
 **Cluster Section:**
 - **Proxies**: Number of proxy nodes and their electability status
 - **Targets**: Number of target nodes and total disks
+- **Endpoint**: Cluster endpoint URL for API access
 - **Capacity**: Used and available storage capacity with percentages
 - **Cluster Map**: Version, UUID, and primary node information
 - **Software**: Version and build information
@@ -553,9 +560,8 @@ The command provides a comprehensive view of your cluster's health and performan
 $ ais show dashboard --refresh 5
 
 Performance and Health:
-   State:               Multiple issues
-   - Maintenance (1/6): t[FFIt8090]
-   - Rebalancing (5/6): t[ZHHt8087], t[atEt8086], t[UTat8088], t[zHut8091], t[xgAt8089]
+   State:               Multiple issues (6 node(s) affected: 2 maintenance, 4 rebalancing)
+      Details:          Use '--verbose' for detailed breakdown
    Throughput:          Read 2.4MiB/s, Write 13.2MiB/s (5s avg)
    I/O Errors:          0
    Load Avg:            avg 0.5, min 0.5, max 0.5 (1m)
@@ -563,10 +569,12 @@ Performance and Health:
    Network:             healthy
    Storage:             28 mountpaths (all healthy)
    Filesystems:         ext4(28)
+   Active Jobs:         download, rebalance
 
 Cluster:
    Proxies:             6 (all electable)
    Targets:             6 (one disk)
+   Endpoint:            http://<cluster-endpoint>:<port>
    Capacity:            used 53.03GiB (12%), available 364.47GiB
    Cluster Map:         version 30, UUID Ba5eThUG9, primary p[rbap8080]
    Software:            3.29.e230a780d (build: 2025-07-14T11:39:53-0700)
@@ -577,6 +585,22 @@ Cluster:
    Authentication:      disabled
    Version:             3.29.e230a780d
    Build:               2025-07-14T11:39:53-0700
+```
+
+### Detailed Issue Breakdown
+
+When cluster issues are detected, use the `--verbose` flag for a detailed breakdown:
+
+```console
+$ ais show dashboard --verbose
+
+Performance and Health:
+   State:               Multiple issues (6 node(s) affected: 2 maintenance, 4 rebalancing)
+   ...
+
+CLUSTER HEALTH DETAILS:
+Maintenance (2/6):   t[FFIt8090], t[zHut8091]
+Rebalancing (4/6):   t[ZHHt8087], t[atEt8086], t[UTat8088], t[xgAt8089]
 ```
 
 ### Continuous Monitoring

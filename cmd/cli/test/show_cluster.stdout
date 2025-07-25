@@ -13,16 +13,17 @@
 ^.*Build:.*$
 ^Performance and Health:$
 ^.*State:.*$
-^.*Throughput:.*$
 ^.*I/O Errors:.*$
 ^.*Load Avg:.*$
 ^.*Disk Usage:.*$
 ^.*Network:.*$
 ^.*Storage:.*$
 ^.*Filesystems:.*$
+^.*Active Jobs:.*$
 ^Cluster:$
 ^.*Proxies:.*$
 ^.*Targets:.*$
+^.*Endpoint:.*$
 ^.*Capacity:.*$
 ^.*Cluster Map:.*$
 ^.*Software:.*$

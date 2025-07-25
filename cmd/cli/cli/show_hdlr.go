@@ -39,7 +39,7 @@ var (
 			jsonFlag,
 			noHeaderFlag,
 			unitsFlag,
-			nonverboseFlag,
+			verboseFlag,
 		),
 		cmdSmap: append(
 			longRunFlags,
@@ -69,12 +69,10 @@ var (
 	}
 
 	showCmdDashboard = cli.Command{
-		Name:         cmdDashboard,
-		Usage:        "Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more",
-		ArgsUsage:    optionalNodeIDArgument,
-		Flags:        sortFlags(showCmdsFlags[cmdCluster]),
-		Action:       clusterDashboardHandler,
-		BashComplete: suggestAllNodes,
+		Name:   cmdDashboard,
+		Usage:  "Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more",
+		Flags:  sortFlags(showCmdsFlags[cmdCluster]),
+		Action: clusterDashboardHandler,
 	}
 
 	showCmd = cli.Command{
@@ -150,6 +148,7 @@ var (
 				Flags:     sortFlags(showCmdsFlags[cmdConfig]),
 				Action:    showClusterConfigHandler,
 			},
+
 			makeAlias(&showCmdPerformance, &mkaliasOpts{
 				newName:  cmdShowStats,
 				aliasFor: joinCommandWords(commandShow, commandPerf),
