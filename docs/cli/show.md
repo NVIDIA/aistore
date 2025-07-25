@@ -11,7 +11,8 @@ COMMANDS:
    auth            show entity in authn
    object          show object properties
    bucket          show bucket properties
-   cluster         main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
+   cluster         Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)
+   dashboard       show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
    performance     show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
    storage         show storage usage and utilization, disks and mountpaths
    rebalance       show rebalance status and stats
@@ -48,16 +49,16 @@ As far as `ais show`, the command currently extends as follows:
 $ ais show <TAB-TAB>
 
 auth             bucket           performance      rebalance        remote-cluster   log
-object           cluster          storage          config           job              tls
+object           cluster          dashboard        storage          config           job              tls
 ```
 
-In other words, there are currently 11 subcommands that are briefly described in the rest of this text.
+In other words, there are currently 12 subcommands that are briefly described in the rest of this text.
 
 ## Table of Contents
 - [`ais show performance`](#ais-show-performance)
 - [`ais show job`](#ais-show-job)
 - [`ais show cluster`](#ais-show-cluster)
-- [`ais show cluster summary`](#ais-show-cluster-summary)
+- [`ais show dashboard`](#ais-show-dashboard)
 - [`ais show auth`](#ais-show-auth)
 - [`ais show bucket`](#ais-show-bucket)
 - [`ais show object`](#ais-show-object)
@@ -421,7 +422,7 @@ proxy    target   smap     bmd      config   stats
 ```console
 $ ais show cluster --help
 NAME:
-   ais show cluster - main dashboard: show cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
+   ais show cluster - Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)
 
 USAGE:
    ais show cluster command [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]] [command options]
@@ -471,7 +472,7 @@ t[uxvpIDPc]      0.15%           362.57GiB       77.67%          31.846TiB      
 t[vAWmZZPv]      0.11%           363.68GiB       78.67%          31.608TiB       23.09%         94d      ais-target-3    online
 t[wSJzGVnU]      0.10%           363.33GiB       76.67%          30.972TiB       17.13%         94d      ais-target-9    online
 
-Summary:
+Cluster:
    Proxies:             10 (0 unelectable)
    Targets:             10
    Cluster Map:         version 1512, UUID AGetvIKTz, primary p[EciZrNdH]
@@ -495,19 +496,19 @@ Summary:
 * [`ais cluster` command](cluster.md#cluster-or-daemon-status)
 
 
-## `ais show cluster summary`
+## `ais show dashboard`
 
-The `ais show cluster summary` command provides comprehensive cluster analytics and health monitoring. Unlike the basic `ais show cluster` command which shows node tables and basic summary, this command focuses on detailed analytics including storage metrics, performance indicators, error tracking, and system health.
+The `ais show dashboard` command provides comprehensive cluster analytics and health monitoring. Unlike the basic `ais show cluster` command which shows node tables and basic summary, this command focuses on detailed analytics including storage metrics, performance indicators, error tracking, and system health.
 
 ### Command Overview
 
 ```console
-$ ais show cluster summary --help
+$ ais show dashboard --help
 NAME:
-   ais show cluster summary - Show comprehensive cluster analytics: storage, performance, alerts, and health metrics
+   ais show dashboard - Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
 
 USAGE:
-   ais show cluster summary [NODE_ID] [command options]
+   ais show dashboard [NODE_ID] [command options]
 
 OPTIONS:
    --refresh value   interval for continuous monitoring;
@@ -532,7 +533,7 @@ The command provides a comprehensive view of your cluster's health and performan
 - **Storage**: Total mountpaths and their health status
 - **Filesystems**: Types and counts of filesystems in use
 
-**Summary Section:**
+**Cluster Section:**
 - **Proxies**: Number of proxy nodes and their electability status
 - **Targets**: Number of target nodes and total disks
 - **Capacity**: Used and available storage capacity with percentages
@@ -549,10 +550,9 @@ The command provides a comprehensive view of your cluster's health and performan
 ### Example Output
 
 ```console
-$ ais show cluster summary --refresh 5
+$ ais show dashboard --refresh 5
 
-Analytics:
-   Analytics:
+Performance and Health:
    State:               Multiple issues
    - Maintenance (1/6): t[FFIt8090]
    - Rebalancing (5/6): t[ZHHt8087], t[atEt8086], t[UTat8088], t[zHut8091], t[xgAt8089]
@@ -564,7 +564,7 @@ Analytics:
    Storage:             28 mountpaths (all healthy)
    Filesystems:         ext4(28)
 
-Summary:
+Cluster:
    Proxies:             6 (all electable)
    Targets:             6 (one disk)
    Capacity:            used 53.03GiB (12%), available 364.47GiB
@@ -585,13 +585,13 @@ Use the `--refresh` flag for continuous monitoring:
 
 ```console
 # Monitor cluster every 5 seconds
-$ ais show cluster summary --refresh 5
+$ ais show dashboard --refresh 5
 
 # Monitor for 10 iterations (50 seconds total)
-$ ais show cluster summary --refresh 5 --count 10
+$ ais show dashboard --refresh 5 --count 10
 
 # Monitor with JSON output
-$ ais show cluster summary --refresh 10 --json
+$ ais show dashboard --refresh 10 --json
 ```
 
 
