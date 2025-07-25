@@ -82,6 +82,9 @@ type (
 		ProgressInterval string      `json:"progress_interval"`
 		Limits           Limits      `json:"limits"`
 		Headers          http.Header `json:"headers,omitempty"`
+		// ETL fields
+		ETLName string `json:"etl_name,omitempty"`
+		ETLArgs string `json:"etl_args,omitempty"`
 	}
 
 	SingleObj struct {

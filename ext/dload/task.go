@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -81,9 +82,13 @@ func (task *singleTask) download(lom *core.LOM) {
 
 	task.started.Store(time.Now())
 	lom.SetAtimeUnix(task.started.Load().UnixNano())
-	if task.obj.fromRemote {
+	// 3 types of downloads: ETL, remote, local
+	switch {
+	case task.job.etlName() != "":
+		err = task.downloadViaETL(lom)
+	case task.obj.fromRemote:
 		err = task.downloadRemote(lom)
-	} else {
+	default:
 		err = task.downloadLocal(lom)
 	}
 	task.ended.Store(time.Now())
@@ -286,4 +291,60 @@ func (task *singleTask) String() (str string) {
 		"{id: %q, obj_name: %q, link: %q, from_remote: %v, bucket: %q}",
 		task.jobID(), task.obj.objName, task.obj.link, task.obj.fromRemote, task.job.Bck(),
 	)
+}
+
+func (task *singleTask) downloadViaETL(lom *core.LOM) error {
+	comm, err := etl.GetCommunicator(task.job.etlName())
+	if err != nil {
+		return fmt.Errorf("failed to get ETL communicator for %q: %w", task.job.etlName(), err)
+	}
+
+	etlCtx := &etl.ETLObjDownloadCtx{
+		ObjName: task.obj.objName,
+		Link:    task.obj.link,
+		ETLArgs: task.job.etlArgs(),
+	}
+
+	reader, ecode, err := comm.ProcessDownloadJob(etlCtx)
+	if err != nil {
+		return err
+	}
+	if ecode >= http.StatusBadRequest {
+		if ecode == http.StatusNotFound {
+			return cmn.NewErrHTTP(nil, errors.New("ETL transform failed: object not found"), http.StatusNotFound)
+		}
+		return cmn.NewErrHTTP(nil, fmt.Errorf("ETL pod returned error status: %d", ecode), ecode)
+	}
+
+	fatal, err := task._dputETL(lom, reader)
+	reader.Close()
+	if fatal {
+		return err
+	}
+	return err
+}
+
+func (task *singleTask) _dputETL(lom *core.LOM, reader cos.ReadCloseSizer) (bool /*err is fatal*/, error) {
+	r := task.wrapReader(reader) // progress tracking
+	task.setTotalSize(reader.Size())
+
+	params := core.AllocPutParams()
+	defer core.FreePutParams(params)
+	{
+		params.WorkTag = "etl-dl"
+		params.Reader = r
+		params.OWT = cmn.OwtTransform
+		params.Atime = task.started.Load()
+		params.Size = reader.Size()
+		params.Xact = task.xdl
+	}
+
+	erp := core.T.PutObject(lom, params)
+	if erp != nil {
+		return true, erp
+	}
+	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+		return true, err
+	}
+	return false, nil
 }

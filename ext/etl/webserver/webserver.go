@@ -22,7 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 ///////////////////////
@@ -52,6 +54,7 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 	http.HandleFunc("/", base.handler)
 	http.HandleFunc("/health", base.healthHandler)
 	http.HandleFunc("/ws", base.websocketHandler)
+	http.HandleFunc("/"+apc.ETLDownload, base.downloadHandler)
 
 	log.Printf("Starting transformer at %s", base.endpoint)
 	return http.ListenAndServe(base.endpoint, nil)
@@ -267,6 +270,72 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 		}
 		writer.Close()
 	}
+}
+
+// handleETLObjectDownload processes individual object download requests from ETL communicator
+func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *http.Request, etlArgs, objName, link string) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Infof("Processing ETL object download: %s from %s", objName, link)
+	}
+
+	// Download from external URL
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, link, http.NoBody)
+	if err != nil {
+		cmn.WriteErr(w, r, fmt.Errorf("failed to create download request: %w", err))
+		return
+	}
+
+	resp, err := wrapHTTPError(base.client.Do(req)) //nolint:bodyclose // closed below
+	if err != nil {
+		cmn.WriteErr(w, r, fmt.Errorf("failed to download from %s: %w", link, err))
+		return
+	}
+	defer resp.Body.Close()
+
+	// Transform the downloaded data
+	transformedReader, err := base.Transform(resp.Body, objName, etlArgs)
+	if err != nil {
+		cmn.WriteErr(w, r, fmt.Errorf("failed to transform downloaded data: %w", err))
+		return
+	}
+	defer transformedReader.Close()
+
+	// Stream transformed data back to target
+	bufsz := int64(memsys.DefaultBufSize)
+	buf, slab := core.T.PageMM().AllocSize(bufsz)
+	defer slab.Free(buf)
+
+	w.WriteHeader(http.StatusOK)
+	if _, err := cos.CopyBuffer(w, transformedReader, buf); err != nil {
+		nlog.Errorf("Failed to stream transformed data: %v", err)
+		return
+	}
+
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Infof("Successfully streamed ETL transformed object: %s", objName)
+	}
+}
+
+func (base *etlServerBase) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		cmn.WriteErr405(w, r, r.Method)
+		return
+	}
+
+	etlArgs := r.URL.Query().Get(apc.QparamETLTransformArgs)
+	objName := r.URL.Query().Get(apc.QparamObjTo)
+	link := r.URL.Query().Get(apc.QparamOrigURL)
+
+	if objName == "" || link == "" {
+		cmn.WriteErrMsg(w, r, "object_name and original_url query parameters are required")
+		return
+	}
+
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		nlog.Infof("ETL pod processing object: %s from %s", objName, link)
+	}
+
+	base.handleETLObjectDownload(w, r, etlArgs, objName, link)
 }
 
 func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {

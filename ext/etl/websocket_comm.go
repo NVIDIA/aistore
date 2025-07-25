@@ -6,6 +6,7 @@ package etl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -227,6 +228,10 @@ func (ws *webSocketComm) stop() error {
 	ws.sessions = nil
 	ws.commCtxCancel()
 	return nil
+}
+
+func (*webSocketComm) ProcessDownloadJob(_ *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error) {
+	return nil, http.StatusNotImplemented, errors.New("ETL downloads not supported for websocket communication type")
 }
 
 ///////////////

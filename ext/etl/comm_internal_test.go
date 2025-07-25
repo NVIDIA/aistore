@@ -5,8 +5,10 @@
 package etl
 
 import (
+	"bytes"
 	cryptorand "crypto/rand"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -184,6 +186,72 @@ var _ = Describe("CommunicatorTest", func() {
 			})
 		}
 	}
+
+	It("Process download job", func() {
+		realURL := "https://storage.googleapis.com/minikube/iso/minikube-v0.23.0.iso.sha256"
+
+		// Create an ETL server that downloads and returns data
+		etlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodPost))
+			Expect(r.URL.Path).To(Equal("/" + apc.ETLDownload))
+
+			origURL := r.URL.Query().Get(apc.QparamOrigURL)
+			Expect(origURL).To(Equal(realURL))
+
+			resp, err := http.Get(origURL)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			// Stream the data back
+			w.WriteHeader(http.StatusOK)
+
+			// buffsize based on content length
+			bufSize := int64(4096)
+			if resp.ContentLength > 0 && resp.ContentLength < 1024*1024 {
+				bufSize = resp.ContentLength
+			}
+			cos.CopyBuffer(w, resp.Body, make([]byte, bufSize))
+		}))
+		defer etlServer.Close()
+
+		msg := &InitSpecMsg{
+			InitMsgBase: InitMsgBase{
+				CommTypeX:   Hpush,
+				InitTimeout: cos.Duration(DefaultInitTimeout),
+			},
+		}
+		pc := &pushComm{}
+		pc.msg = msg
+		pc.podURI = etlServer.URL
+
+		// Test ProcessDownloadJob
+		ctx := &ETLObjDownloadCtx{
+			ObjName: "minikube.sha256",
+			Link:    realURL,
+			ETLArgs: "",
+		}
+
+		// Get data via ETL webserver download endpoint
+		etlReader, ecode, err := pc.ProcessDownloadJob(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ecode).To(Equal(http.StatusOK))
+		Expect(etlReader).NotTo(BeNil())
+		defer etlReader.Close()
+
+		// Get same data using normal HTTP client
+		directResp, err := http.Get(realURL)
+		Expect(err).NotTo(HaveOccurred())
+		defer directResp.Body.Close()
+
+		// compare both paths
+		etlData, err := io.ReadAll(etlReader)
+		Expect(err).NotTo(HaveOccurred())
+
+		directData, err := io.ReadAll(directResp.Body)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(bytes.Equal(etlData, directData)).To(BeTrue())
+	})
 })
 
 // Creates a file with random content.

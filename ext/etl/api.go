@@ -153,6 +153,13 @@ type (
 		Path  string `json:"path,omitempty"`
 	}
 
+	// ETLObjDownloadCtx contains ETL download job parameters
+	ETLObjDownloadCtx struct {
+		ObjName string // Target object name
+		Link    string // Source URL to download from
+		ETLArgs string // Transform arguments
+	}
+
 	// used by 2PC initialization
 	PodMap  map[string]PodInfo // target ID to ETL pod info
 	PodInfo struct {

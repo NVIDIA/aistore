@@ -6,6 +6,7 @@ package etl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -54,6 +55,9 @@ type (
 		//    - ecode: error code
 		//    - err: error encountered during transformation
 		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error)
+
+		// ProcessDownloadJob extracts objects from job and routes them to ETL pod
+		ProcessDownloadJob(ctx *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error)
 	}
 
 	// httpCommunicator manages stateless communication to ETL pod through HTTP requests
@@ -208,6 +212,47 @@ func (c *baseComm) stop() error {
 	}
 
 	return nil
+}
+
+// ProcessDownloadJob routes download job to ETL pod
+func (pc *pushComm) ProcessDownloadJob(ctx *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error) {
+	if ctx.ObjName == "" || ctx.Link == "" {
+		return nil, http.StatusBadRequest, errors.New("missing objName or link in ETL job context")
+	}
+
+	query := make(url.Values, 3)
+	query.Set(apc.QparamOrigURL, ctx.Link)
+	query.Set(apc.QparamObjTo, ctx.ObjName)
+	if ctx.ETLArgs != "" {
+		query.Set(apc.QparamETLTransformArgs, ctx.ETLArgs)
+	}
+
+	reqArgs := cmn.AllocHra()
+	defer cmn.FreeHra(reqArgs)
+	{
+		reqArgs.Method = http.MethodPost
+		reqArgs.Base = pc.podURI
+		reqArgs.Path = apc.ETLDownload
+		reqArgs.Query = query
+	}
+
+	_, objTimeout := pc.msg.Timeouts()
+	resp, ecode, err := doWithTimeout(reqArgs, nil, objTimeout.D())
+
+	if err != nil {
+		return nil, ecode, fmt.Errorf("failed to send object to ETL pod: %v", err)
+	}
+	if ecode >= http.StatusBadRequest {
+		if resp != nil {
+			resp.Close()
+		}
+		return nil, ecode, fmt.Errorf("ETL pod returned error status: %d", ecode)
+	}
+	if resp == nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("no response from ETL pod for %s", ctx.ObjName)
+	}
+
+	return resp, http.StatusOK, nil
 }
 
 func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) core.ReadResp {
@@ -447,6 +492,10 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args 
 	}
 	clone.SetSize(r.Size())
 	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)
+}
+
+func (*redirectComm) ProcessDownloadJob(_ *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error) {
+	return nil, http.StatusNotImplemented, errors.New("ETL downloads not supported for hpull communication type")
 }
 
 //

@@ -82,6 +82,9 @@ const (
 	ETLHealth  = "health"
 	ETLMetrics = "metrics"
 
+	// ETL webserver
+	ETLDownload = "download"
+
 	// ETL proxy only
 	ETLStart = Start
 	ETLStop  = Stop
