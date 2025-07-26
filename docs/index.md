@@ -11,7 +11,7 @@ AIStore (AIS) is a lightweight distributed storage stack tailored for AI applica
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-AIS consistently shows balanced I/O distribution and linear scalability across arbitrary numbers of clustered nodes. The system supports fast data access, reliability, and rich customization for data transformation workloads.
+AIS consistently shows [balanced I/O distribution and linear scalability](https://aistore.nvidia.com/blog/2025/07/26/smooth-max-line-speed) across an arbitrary number of clustered nodes. The system supports fast data access, reliability, and rich customization for data transformation workloads.
 
 ## Features
 
