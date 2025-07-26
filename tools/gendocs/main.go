@@ -91,8 +91,9 @@ type (
 	}
 
 	fileParser struct {
-		Path     string
-		ParamSet *paramSet
+		Path      string
+		ParamSet  *paramSet
+		ActionMap map[string]string
 	}
 
 	fileWalker struct {
@@ -101,8 +102,9 @@ type (
 	}
 
 	endpointProcessor struct {
-		Walker   *fileWalker
-		ParamSet *paramSet
+		Walker    *fileWalker
+		ParamSet  *paramSet
+		ActionMap map[string]string
 	}
 )
 
@@ -141,10 +143,17 @@ func main() {
 		panic(err)
 	}
 
+	// Load action constants from actmsg.go
+	actionMap, err := loadActionsFromFile(filepath.Join(projectRoot, "api/apc/actmsg.go"))
+	if err != nil {
+		panic(err)
+	}
+
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
-		Walker:   walker,
-		ParamSet: &paramSet,
+		Walker:    walker,
+		ParamSet:  &paramSet,
+		ActionMap: actionMap,
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -329,13 +338,16 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 			}
 			fullKey, typ := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 			desc := ""
+			value := ""
 			if def, ok := (*fp.ParamSet)[fullKey]; ok {
 				desc = def.Description
+				value = def.Value
 			}
 			params = append(params, param{
 				Name:        fullKey,
 				Type:        typ,
 				Description: desc,
+				Value:       value,
 			})
 		}
 	}
@@ -414,7 +426,7 @@ func (fp *fileParser) process() error {
 				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep)
+			swaggerComments := generateSwaggerComments(&ep, fp.ActionMap)
 			writeToAnnotations(swaggerComments)
 			i++
 			continue
@@ -456,8 +468,9 @@ func (ep *endpointProcessor) run(root string) error {
 
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
-			Path:     file,
-			ParamSet: ep.ParamSet,
+			Path:      file,
+			ParamSet:  ep.ParamSet,
+			ActionMap: ep.ActionMap,
 		}
 		if err := parser.process(); err != nil {
 			return err
@@ -538,7 +551,7 @@ func collectSummaryLines(lines []string, i int) []string {
 	return summaryLines
 }
 
-func generateSwaggerComments(ep *endpoint) []string {
+func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string {
 	swaggerComments := []string{}
 	if ep.Summary != "" {
 		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
@@ -549,15 +562,14 @@ func generateSwaggerComments(ep *endpoint) []string {
 	swaggerComments = append(swaggerComments, fmt.Sprintf(tagsTemplate, ep.Tag))
 
 	for _, param := range ep.Params {
-		short := strings.TrimPrefix(param.Name, apcQparamPrefix)
-		short = strings.ToLower(short)
+		paramName := param.Value
 		desc := param.Description
 		if desc == "" {
 			fmt.Fprintf(os.Stderr, warningNoComment, param.Name)
 			continue
 		}
 		desc = strings.ReplaceAll(desc, quote, escapedQuote)
-		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, short, param.Type, desc))
+		swaggerComments = append(swaggerComments, fmt.Sprintf(paramTemplate, paramName, param.Type, desc))
 	}
 
 	// Add single parameters that references the action(s)
@@ -565,6 +577,9 @@ func generateSwaggerComments(ep *endpoint) []string {
 		var actionLinks []string
 		for _, action := range ep.Actions {
 			actionName := strings.TrimPrefix(action.Action, apcPrefix)
+			if realValue, exists := actionMap[actionName]; exists {
+				actionName = realValue
+			}
 			link := fmt.Sprintf("<a href='../Models/%s.html'>%s</a>", action.Model, actionName)
 			actionLinks = append(actionLinks, link)
 		}
