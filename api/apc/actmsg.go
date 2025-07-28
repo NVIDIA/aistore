@@ -157,11 +157,13 @@ const (
 
 // ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
+	// swagger:model
 	ActMsg struct {
 		Value  any    `json:"value"`  // action-specific and optional
 		Action string `json:"action"` // ActShutdown, ActRebalance, and many more (see apc/const.go)
 		Name   string `json:"name"`   // action-specific info of any kind (not necessarily "name")
 	}
+	// swagger:model
 	ActValRmNode struct {
 		DaemonID          string `json:"sid"`
 		SkipRebalance     bool   `json:"skip_rebalance"`
@@ -172,6 +174,7 @@ type (
 )
 
 type (
+	// swagger:model
 	JoinNodeResult struct {
 		DaemonID    string `json:"daemon_id"`
 		RebalanceID string `json:"rebalance_id"`
@@ -184,6 +187,7 @@ type (
 //   - Disabled  - list of disabled mountpaths, the mountpaths that generated
 //     IO errors followed by (FSHC) health check, etc.
 type (
+	// swagger:model
 	MountpathList struct {
 		Available []string `json:"available"`
 		WaitingDD []string `json:"waiting_dd"`
@@ -193,19 +197,25 @@ type (
 
 // sysinfo
 type (
+	// swagger:model
 	CapacityInfo struct {
 		Used    uint64  `json:"fs_used,string"`
 		Total   uint64  `json:"fs_capacity,string"`
 		PctUsed float64 `json:"pct_fs_used"`
 	}
+	// swagger:model
 	TSysInfo struct {
 		MemCPUInfo
 		CapacityInfo
 	}
+
+	// swagger:model
 	ClusterSysInfo struct {
 		Proxy  map[string]*MemCPUInfo `json:"proxy"`
 		Target map[string]*TSysInfo   `json:"target"`
 	}
+
+	// swagger:model
 	ClusterSysInfoRaw struct {
 		Proxy  cos.JSONRawMsgs `json:"proxy"`
 		Target cos.JSONRawMsgs `json:"target"`

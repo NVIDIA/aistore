@@ -344,8 +344,10 @@ restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
 	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@v1.16.4
 	@echo "Generating OpenAPI specification..."
 	@mkdir -p .docs
-	@swag init --generalInfo tools/gendocs/annotations.go --output .docs
-	@echo "Cleaning up generated annotations file..."
+	@swag init --generalInfo tools/gendocs/gendocs-temp/annotations.go --output .docs
+	@echo "Injecting model extensions..."
+	@GOROOT="" go run ./tools/gendocs -inject-extensions
+	@echo "Cleaning up generated temp files..."
 	@GOROOT="" go run ./tools/gendocs -cleanup
 	@echo "$(cyan)Documentation generated successfully!$(term-reset)"
 	@echo "$(cyan)Generated files:$(term-reset)"
@@ -377,13 +379,14 @@ api-docs-website: restful-api-doc ## Generate complete API documentation for Jek
 	@echo "Generating markdown documentation with custom template..."
 	@openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
 	@echo "Copying generated documentation to website location..."
-	@cp docs-generated/README.md docs/api-documentation.md
+	@cp docs-generated/README.md docs/http-api.md
 	@cp -r docs-generated/Apis docs/
+	@cp -r docs-generated/Models docs/
 	@echo "Adding Jekyll front matter..."
 	@./scripts/website-preprocess.sh
 	@echo "$(cyan)Website API documentation generated successfully!$(term-reset)"
 	@echo "$(cyan)Updated files:$(term-reset)"
-	@echo "  docs/api-documentation.md - Website API documentation"
+	@echo "  docs/http-api.md - Website HTTP API documentation"
 	@echo "  docs-generated/README.md - Generated documentation"
 	@echo ""
 	@echo "$(cyan)The documentation is now ready for the Jekyll website!$(term-reset)"
