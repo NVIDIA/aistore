@@ -11,12 +11,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
 	apcPath         string
 	targetRoot      string
 	annotationsPath string
+	swaggerYamlPath string
 )
 
 const (
@@ -24,6 +27,7 @@ const (
 	apcRelativePath         = "api/apc/query.go"
 	aisRelativePath         = "ais"
 	annotationsRelativePath = "tools/gendocs/annotations.go"
+	docsRelativePath        = ".docs"
 
 	goFileExt   = ".go"
 	newlineChar = "\n"
@@ -91,9 +95,10 @@ type (
 	}
 
 	fileParser struct {
-		Path      string
-		ParamSet  *paramSet
-		ActionMap map[string]string
+		Path         string
+		ParamSet     *paramSet
+		ActionMap    map[string]string
+		ModelActions map[string][]string
 	}
 
 	fileWalker struct {
@@ -102,9 +107,10 @@ type (
 	}
 
 	endpointProcessor struct {
-		Walker    *fileWalker
-		ParamSet  *paramSet
-		ActionMap map[string]string
+		Walker       *fileWalker
+		ParamSet     *paramSet
+		ActionMap    map[string]string
+		ModelActions map[string][]string
 	}
 )
 
@@ -132,9 +138,17 @@ func main() {
 	apcPath = filepath.Join(projectRoot, apcRelativePath)
 	targetRoot = filepath.Join(projectRoot, aisRelativePath)
 	annotationsPath = filepath.Join(projectRoot, annotationsRelativePath)
+	swaggerYamlPath = filepath.Join(projectRoot, docsRelativePath, "swagger.yaml")
 
 	if len(os.Args) > 1 && os.Args[1] == "-cleanup" {
 		cleanupAnnotations()
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "-inject-extensions" {
+		if err := injectModelExtensions(); err != nil {
+			panic(fmt.Errorf("failed to inject model extensions: %v", err))
+		}
 		return
 	}
 
@@ -151,14 +165,25 @@ func main() {
 
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
-		Walker:    walker,
-		ParamSet:  &paramSet,
-		ActionMap: actionMap,
+		Walker:       walker,
+		ParamSet:     &paramSet,
+		ActionMap:    actionMap,
+		ModelActions: make(map[string][]string),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
 		panic(err)
 	}
+}
+
+// Helper function to prevent duplicate action/model pairs
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // Extracts the function name from a function declaration line
@@ -356,6 +381,16 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 
 	actions := parseActionClause(line)
 
+	// Reverse mapping for model actions
+	for _, action := range actions {
+		actionName := strings.TrimPrefix(action.Action, apcPrefix)
+		if realValue, exists := fp.ActionMap[actionName]; exists {
+			if !contains(fp.ModelActions[action.Model], realValue) {
+				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], realValue)
+			}
+		}
+	}
+
 	// Find the function declaration and extract function name
 	operationID := ""
 	for j := i + 1; j < len(lines); j++ {
@@ -468,15 +503,44 @@ func (ep *endpointProcessor) run(root string) error {
 
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
-			Path:      file,
-			ParamSet:  ep.ParamSet,
-			ActionMap: ep.ActionMap,
+			Path:         file,
+			ParamSet:     ep.ParamSet,
+			ActionMap:    ep.ActionMap,
+			ModelActions: ep.ModelActions,
 		}
 		if err := parser.process(); err != nil {
 			return err
 		}
 	}
-	return nil
+
+	// Save ModelActions to temporary file for extension injection
+	return ep.saveModelActions()
+}
+
+// Writes the collected ModelActions to a temporary file for inject-extensions
+func (ep *endpointProcessor) saveModelActions() error {
+	if len(ep.ModelActions) == 0 {
+		return nil
+	}
+
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	modelActionsPath := filepath.Join(projectRoot, docsRelativePath, "model-actions.yaml")
+
+	// Ensure the .docs directory exists
+	if err := os.MkdirAll(filepath.Dir(modelActionsPath), 0o755); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(ep.ModelActions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal model actions: %v", err)
+	}
+
+	return os.WriteFile(modelActionsPath, data, 0o644)
 }
 
 func (*endpointProcessor) clearAnnotations() error {
@@ -601,4 +665,73 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string
 
 func cleanupAnnotations() error {
 	return os.Remove(annotationsPath)
+}
+
+// reads the swagger.yaml file and injects vendor extensions
+func injectModelExtensions() error {
+	modelActionsPath := filepath.Join(filepath.Dir(swaggerYamlPath), "model-actions.yaml")
+	modelActionsData, err := os.ReadFile(modelActionsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No model actions found, skipping extension injection")
+			return nil
+		}
+		return fmt.Errorf("failed to read model actions: %v", err)
+	}
+
+	var modelActions map[string][]string
+	if err := yaml.Unmarshal(modelActionsData, &modelActions); err != nil {
+		return fmt.Errorf("failed to parse model actions: %v", err)
+	}
+
+	// Read swagger.yaml
+	yamlData, err := os.ReadFile(swaggerYamlPath)
+	if err != nil {
+		return fmt.Errorf("failed to read swagger.yaml: %v", err)
+	}
+
+	var spec map[string]any
+	if err := yaml.Unmarshal(yamlData, &spec); err != nil {
+		return fmt.Errorf("failed to parse swagger.yaml: %v", err)
+	}
+
+	// Navigate to definitions section
+	definitions, ok := spec["definitions"].(map[string]any)
+	if !ok {
+		fmt.Println("No definitions section found in swagger.yaml")
+		return nil
+	}
+
+	// Inject x-supported-actions for each model
+	injected := 0
+	for model, actions := range modelActions {
+		if len(actions) == 0 {
+			continue
+		}
+
+		if modelDef, exists := definitions[model]; exists {
+			if modelDefMap, ok := modelDef.(map[string]any); ok {
+				modelDefMap["x-supported-actions"] = actions
+				injected++
+				fmt.Printf("  Injected extensions for model: %s\n", model)
+			}
+		}
+	}
+
+	// Write back to file
+	updatedYaml, err := yaml.Marshal(spec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated yaml: %v", err)
+	}
+
+	if err := os.WriteFile(swaggerYamlPath, updatedYaml, 0o644); err != nil {
+		return fmt.Errorf("failed to write updated swagger.yaml: %v", err)
+	}
+
+	fmt.Printf("Successfully injected extensions for %d models\n", injected)
+
+	// Clean up temporary file
+	os.Remove(modelActionsPath)
+
+	return nil
 }

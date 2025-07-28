@@ -345,6 +345,8 @@ restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
 	@echo "Generating OpenAPI specification..."
 	@mkdir -p .docs
 	@swag init --generalInfo tools/gendocs/annotations.go --output .docs
+	@echo "Injecting model extensions..."
+	@GOROOT="" go run ./tools/gendocs -inject-extensions
 	@echo "Cleaning up generated annotations file..."
 	@GOROOT="" go run ./tools/gendocs -cleanup
 	@echo "$(cyan)Documentation generated successfully!$(term-reset)"

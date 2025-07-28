@@ -1,6 +1,10 @@
 {{#models}}
 {{#model}}
 # {{{classname}}}
+
+{{#vendorExtensions.x-supported-actions}}
+{{#-first}}**Supported actions:** {{/-first}}{{.}}{{^-last}}, {{/-last}}
+{{/vendorExtensions.x-supported-actions}}
 ## Properties
 
 | Name | Type | Description | Notes |
@@ -15,5 +19,5 @@
 
 [[Back to Model list]](../http-api#documentation-for-models) [[Back to API list]](../http-api#documentation-for-api-endpoints)
 
-    {{/model}}
+{{/model}}
 {{/models}}
