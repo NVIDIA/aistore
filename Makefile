@@ -344,10 +344,10 @@ restful-api-doc: ## Generate OpenAPI/Swagger documentation from code annotations
 	@command -v swag >/dev/null 2>&1 || GOOS="" go install github.com/swaggo/swag/cmd/swag@v1.16.4
 	@echo "Generating OpenAPI specification..."
 	@mkdir -p .docs
-	@swag init --generalInfo tools/gendocs/annotations.go --output .docs
+	@swag init --generalInfo tools/gendocs/gendocs-temp/annotations.go --output .docs
 	@echo "Injecting model extensions..."
 	@GOROOT="" go run ./tools/gendocs -inject-extensions
-	@echo "Cleaning up generated annotations file..."
+	@echo "Cleaning up generated temp files..."
 	@GOROOT="" go run ./tools/gendocs -cleanup
 	@echo "$(cyan)Documentation generated successfully!$(term-reset)"
 	@echo "$(cyan)Generated files:$(term-reset)"

@@ -26,8 +26,9 @@ const (
 	// Relative paths from project root
 	apcRelativePath         = "api/apc/query.go"
 	aisRelativePath         = "ais"
-	annotationsRelativePath = "tools/gendocs/annotations.go"
+	annotationsRelativePath = "tools/gendocs/gendocs-temp/annotations.go"
 	docsRelativePath        = ".docs"
+	tempDirRelativePath     = "tools/gendocs/gendocs-temp"
 
 	goFileExt   = ".go"
 	newlineChar = "\n"
@@ -53,7 +54,7 @@ const (
 
 	errorParsingEndpoint = "Error parsing endpoint: %v\n"
 	warningNoComment     = "Warning: no comment for %s\n"
-	cleanupMessage       = "Cleaning up %d files in %s\n"
+	cleanupMessage       = "Cleaning up temp directory %s\n"
 	malformedEndpointErr = "malformed endpoint line"
 
 	paramTemplate   = "// @Param %s query %s false \"%s\""
@@ -76,6 +77,14 @@ const (
 
 	funcKeyword = "func "
 	openParen   = "("
+
+	modelActionsFileName = "model-actions.yaml"
+
+	definitionsKey       = "definitions"
+	xSupportedActionsKey = "x-supported-actions"
+
+	actionLinkFormat = "<a href='../Models/%s.html'>%s</a>"
+	apiLinkFormat    = "<a href='../Apis/%sApi.html#%s'>%s</a>"
 )
 
 type (
@@ -381,17 +390,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 
 	actions := parseActionClause(line)
 
-	// Reverse mapping for model actions
-	for _, action := range actions {
-		actionName := strings.TrimPrefix(action.Action, apcPrefix)
-		if realValue, exists := fp.ActionMap[actionName]; exists {
-			if !contains(fp.ModelActions[action.Model], realValue) {
-				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], realValue)
-			}
-		}
-	}
-
-	// Find the function declaration and extract function name
+	// Find the function declaration and extract function name first
 	operationID := ""
 	for j := i + 1; j < len(lines); j++ {
 		next := strings.TrimSpace(lines[j])
@@ -404,6 +403,20 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 				operationID = functionName
 			}
 			break
+		}
+	}
+
+	// Get API class tag for the link
+	tag := determineTag(path)
+
+	// Reverse mapping for model actions with API links
+	for _, action := range actions {
+		actionName := strings.TrimPrefix(action.Action, apcPrefix)
+		if realValue, exists := fp.ActionMap[actionName]; exists {
+			actionLink := fmt.Sprintf(apiLinkFormat, tag, operationID, realValue)
+			if !contains(fp.ModelActions[action.Model], actionLink) {
+				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], actionLink)
+			}
 		}
 	}
 
@@ -528,9 +541,9 @@ func (ep *endpointProcessor) saveModelActions() error {
 		return err
 	}
 
-	modelActionsPath := filepath.Join(projectRoot, docsRelativePath, "model-actions.yaml")
+	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
 
-	// Ensure the .docs directory exists
+	// Ensure the temp directory exists
 	if err := os.MkdirAll(filepath.Dir(modelActionsPath), 0o755); err != nil {
 		return err
 	}
@@ -544,6 +557,9 @@ func (ep *endpointProcessor) saveModelActions() error {
 }
 
 func (*endpointProcessor) clearAnnotations() error {
+	if err := os.MkdirAll(filepath.Dir(annotationsPath), 0o755); err != nil {
+		return err
+	}
 	// Write the basic header content
 	headerContent := `package main
 
@@ -644,7 +660,7 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string
 			if realValue, exists := actionMap[actionName]; exists {
 				actionName = realValue
 			}
-			link := fmt.Sprintf("<a href='../Models/%s.html'>%s</a>", action.Model, actionName)
+			link := fmt.Sprintf(actionLinkFormat, action.Model, actionName)
 			actionLinks = append(actionLinks, link)
 		}
 
@@ -664,12 +680,21 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string
 }
 
 func cleanupAnnotations() error {
-	return os.Remove(annotationsPath)
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+	tempDirPath := filepath.Join(projectRoot, tempDirRelativePath)
+	return os.RemoveAll(tempDirPath)
 }
 
 // reads the swagger.yaml file and injects vendor extensions
 func injectModelExtensions() error {
-	modelActionsPath := filepath.Join(filepath.Dir(swaggerYamlPath), "model-actions.yaml")
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
 	modelActionsData, err := os.ReadFile(modelActionsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -696,7 +721,7 @@ func injectModelExtensions() error {
 	}
 
 	// Navigate to definitions section
-	definitions, ok := spec["definitions"].(map[string]any)
+	definitions, ok := spec[definitionsKey].(map[string]any)
 	if !ok {
 		fmt.Println("No definitions section found in swagger.yaml")
 		return nil
@@ -711,7 +736,7 @@ func injectModelExtensions() error {
 
 		if modelDef, exists := definitions[model]; exists {
 			if modelDefMap, ok := modelDef.(map[string]any); ok {
-				modelDefMap["x-supported-actions"] = actions
+				modelDefMap[xSupportedActionsKey] = actions
 				injected++
 				fmt.Printf("  Injected extensions for model: %s\n", model)
 			}
@@ -729,9 +754,6 @@ func injectModelExtensions() error {
 	}
 
 	fmt.Printf("Successfully injected extensions for %d models\n", injected)
-
-	// Clean up temporary file
-	os.Remove(modelActionsPath)
 
 	return nil
 }

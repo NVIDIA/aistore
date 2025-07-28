@@ -72,7 +72,14 @@ EOF
 
   tmp=$(mktemp)
   printf '%s\n\n' "$frontmatter" > "$tmp"
-  cat "$file" >> "$tmp"
+  
+  if [[ "$file" == *"http-api.md"* ]]; then
+    # Fix escaped underscores in parameter names (e.g., parameter\_name -> parameter_name)
+    sed 's/\([a-zA-Z0-9]\)\\\_\([a-zA-Z0-9]\)/\1_\2/g' "$file" >> "$tmp"
+  else
+    cat "$file" >> "$tmp"
+  fi
+  
   mv "$tmp" "$file"
   echo "Added front-matter to $file"
 done
