@@ -467,7 +467,7 @@ func (m *AISbp) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRe
 		ecode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
-	*lst = *lstRes
+	*lst = *lstRes // NOTE: not clearing remote `apc.EntryIsCached` - done later by x-lso
 
 	// Restore the original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	lst.UUID = msg.UUID

@@ -35,6 +35,7 @@ func (entries LsoEntries) cmp(i, j int) bool {
 func (be *LsoEnt) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
 
 func (be *LsoEnt) SetFlag(fl uint16)           { be.Flags |= fl }
+func (be *LsoEnt) ClrFlag(fl uint16)           { be.Flags &^= fl }
 func (be *LsoEnt) IsAnyFlagSet(fl uint16) bool { return be.Flags&fl != 0 }
 
 // location _status_

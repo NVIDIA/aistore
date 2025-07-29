@@ -153,6 +153,7 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 			continue
 		}
 
+		en.ClrFlag(apc.EntryIsCached) // always clear remote (ie, remais) 'is-cached' bit
 		lom := core.AllocLOM(en.Name)
 		if err := lom.InitBck(bck); err != nil {
 			if cmn.IsErrBucketNought(err) {
