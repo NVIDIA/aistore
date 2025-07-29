@@ -131,7 +131,7 @@ class FastAPIServer(ETLServer):
 
     async def _handle_request(self, path: str, request: Request, is_get: bool):
         """Unified request handler for GET/PUT operations."""
-        self.logger.info(
+        self.logger.debug(
             "Processing %s request for path: %s", "GET" if is_get else "PUT", path
         )
         etl_args: str = request.query_params.get(QPARAM_ETL_ARGS, "")
@@ -194,7 +194,7 @@ class FastAPIServer(ETLServer):
         """Safely read local file content with path normalization."""
         decoded_path = unquote(path)
         safe_path = os.path.normpath(os.path.join("/", decoded_path.lstrip("/")))
-        self.logger.info("Reading local file: %s", safe_path)
+        self.logger.debug("Reading local file: %s", safe_path)
 
         async with aiofiles.open(safe_path, "rb") as f:
             return await f.read()
@@ -203,7 +203,7 @@ class FastAPIServer(ETLServer):
         """Retrieve content from AIS target with async HTTP client."""
         obj_path = quote(path, safe="@")
         target_url = f"{self.host_target}/{obj_path}"
-        self.logger.info("Forwarding to target: %s", target_url)
+        self.logger.debug("Forwarding to target: %s", target_url)
 
         response = await self.client.get(target_url)
         response.raise_for_status()
