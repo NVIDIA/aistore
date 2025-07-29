@@ -478,6 +478,40 @@ ais etl object transformer-hash-with-args ais://shards/shard-0.tar - --args=123
 
 ---
 
+## Single-Object Transformation
+
+For operations on selected objects, use `ais object` and its subcommands.
+
+In particular, notice two *highlighted* subcommands:
+
+```console
+$ ais object <TAB-TAB>
+get       put          *cp*        *etl*       set-custom   prefetch    show     cat
+ls        promote      archive     concat      rm           evict       mv
+```
+
+To transform or copy a single object, you can interchangeably use `ais object etl` (or `ais object cp`), or
+their respective aliases - as shown below.
+
+### Examples
+
+#### Copy and transform to a destination object (same or different bucket)
+
+```bash
+ais etl object transformer-md5 cp ais://src/image.jpg ais://dst/image-md5.txt
+```
+
+This command applies the ETL to the source object and stores the transformed result at the destination location.
+
+* `<ETL_NAME>` is the name of the registered ETL
+* `cp` indicates copy-and-transform
+* `<SOURCE_OBJECT>` is the full AIS URL of the object to transform
+* `<DESTINATION>` is either a specific object or a destination bucket (preserving source name)
+
+> For details and performance, see technical blog: [Single-Object Transformation](https://aistore.nvidia.com/blog/2025/07/25/single-object-copy-transformation-capability).
+
+---
+
 ## Offline Transformation
 
 Use offline transformation to process entire buckets or a selected set of objects. The result is saved in a **new destination bucket**.

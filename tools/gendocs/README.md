@@ -85,7 +85,7 @@ type PromoteArgs struct {
 
 **Model Usage Flow:**
 1. Define struct with `// swagger:model` annotation
-2. Reference the model in endpoint `action` parameters  
+2. Reference the model in endpoint `action` parameters
 3. Generator automatically creates OpenAPI schema definitions
 4. Request/response documentation includes the model's fields and types
 
@@ -97,7 +97,7 @@ Parameters must be defined in `../api/apc/query.go` with descriptions:
 var QueryParameters = map[string]ParameterDefinition{
     "apc.QparamProvider": {
         Name:        "provider",
-        Type:        "string", 
+        Type:        "string",
         Description: "Cloud provider name (e.g., aws, gcp, azure)",
     },
     // ... more parameters
@@ -121,7 +121,7 @@ func ListBuckets() {
 
 The system automatically generates API tags (groupings) based on the endpoint path:
 - `/v1/buckets/...` → **Buckets** tag
-- `/v1/objects/...` → **Objects** tag  
+- `/v1/objects/...` → **Objects** tag
 - `/v1/health/...` → **Health** tag
 - `/v1/etl/...` → **Etl** tag
 - `/v1/daemon/...` → **Daemon** tag
@@ -143,11 +143,11 @@ Operation IDs are automatically generated from function names:
 func GetClusterBuckets(w http.ResponseWriter, r *http.Request) {
     // Extract cluster ID from path
     clusterID := mux.Vars(r)["cluster-id"]
-    
+
     // Get query parameters
     provider := r.URL.Query().Get("provider")
     namespace := r.URL.Query().Get("namespace")
-    
+
     // Implementation...
 }
 ```
@@ -158,7 +158,7 @@ This generates:
 - **Parameters**: `provider` (string), `namespace` (string)
 - **Tag**: `Clusters`
 - **Operation ID**: `GetClusterBuckets`
-- **Summary**: "Retrieves all buckets in the specified cluster. Supports filtering by cloud provider and 
+- **Summary**: "Retrieves all buckets in the specified cluster. Supports filtering by cloud provider and
 namespace. Returns detailed bucket information including size and object count."
 
 ### Example 2: POST Endpoint with Action Parameters and Data Models
@@ -179,7 +179,7 @@ func PromoteObjects(w http.ResponseWriter, r *http.Request) {
         // Handle error...
         return
     }
-    
+
     // Implementation...
 }
 ```
@@ -193,11 +193,11 @@ APC.PROMOTEARGS
 
 apc.PromoteArgs
 Properties
-Name     Type      Description                                        
-tid      String    target ID                                       
-src      String    source file path                                  
-obj      String    destination object name                            
-rcr      Boolean   recursively promote nested dirs                  
+Name     Type      Description
+tid      String    target ID
+src      String    source file path
+obj      String    destination object name
+rcr      Boolean   recursively promote nested dirs
 ```
 
 **Supported Actions**: Action names are automatically converted to clickable HTML links that navigate to their corresponding model documentation.
@@ -248,7 +248,7 @@ Where `type` can be `integer`, `string`, `boolean`, etc., matching the OpenAPI s
 
 ### Locally
 ```bash
-# Generate annotations and markdown documentation  
+# Generate annotations and markdown documentation
 make api-docs-website
 ```
 

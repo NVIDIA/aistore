@@ -156,6 +156,36 @@ $ ais etl bucket ffmpeg-etl ais://libre-speech ais://libre-speech-transformed --
 $ ais ls ais://libre-speech-transformed | head -5
 ```
 
+### Single-Object Transformation
+
+Single-object Transformation allows you to transform one object at a time between any two buckets. It's similar to a regular copy operation, but with an ETL transformation applied in-flight. This is ideal for quick, ad-hoc conversions where creating an entire new bucket isn’t necessary.
+
+Compared to inline ETL (which returns the result directly to the client), this operation stores the transformed result back to a destination bucket for future use.
+
+#### Example: Apply MD5 Transformation During Copy
+
+```bash
+# Step 1: Create source and destination buckets
+$ ais bucket create ais://src
+$ ais bucket create ais://dst
+
+# Step 2: Upload a sample object to source
+$ echo "hello world" > text.txt
+$ ais put text.txt ais://src
+
+# Step 3: Initialize the MD5 transformer
+$ ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/refs/heads/main/transformers/md5/etl_spec.yaml --name md5-etl
+
+# Step 4: Transform and copy the object using ETL
+$ ais etl object md5-etl cp ais://src/text.txt ais://dst/hashed.txt
+
+# Step 5: Retrieve the transformed object
+$ ais get ais://dst/hashed.txt
+```
+
+This approach is lightweight, flexible, and avoids the overhead of launching a full offline ETL job. It’s well-suited for transforming one or a few objects as part of a scripted workflow or user-driven action.
+
+
 **Note**: there are two ways to run ETL initialization and transformation:
 - [ETL CLI](/docs/cli/etl.md)
 - [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
@@ -477,6 +507,7 @@ Below are specifications for a valid `ETL_NAME`:
 * For technical blogs with in-depth background and working real-life examples, see:
   - [ETL: Introduction](https://aistore.nvidia.com/blog/2021/10/21/ais-etl-1)
   - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aistore.nvidia.com/blog/2023/04/03/transform-images-with-python-sdk)
+  - [Single-Object Copy/Transformation Capability](https://aistore.nvidia.com/blog/2025/07/25/single-object-copy-transformation-capability)
   - [ETL: Using WebDataset to train on a sharded dataset ](https://aistore.nvidia.com/blog/2021/10/29/ais-etl-3)
 * For step-by-step tutorials, see:
   - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
