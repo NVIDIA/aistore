@@ -292,7 +292,7 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 		}
 		xctn := rns.Entry.Get()
 		flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
-		xreg.DoAbort(flt, errors.New("make-n-copies"))
+		xreg.DoAbort(&flt, errors.New("make-n-copies"))
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
 
@@ -372,14 +372,14 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 			}
 			xctn := rns.Entry.Get()
 			flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
-			xreg.DoAbort(flt, errors.New("re-mirror"))
+			xreg.DoAbort(&flt, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
 			xid = xctn.ID()
 		}
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
 			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: c.bck}
-			xreg.DoAbort(flt, errors.New("re-ec"))
+			xreg.DoAbort(&flt, errors.New("re-ec"))
 
 			// checkAndRecover always false (compare w/ ecEncode below)
 			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.Commit2PC, false /*check & recover missing/corrupted*/)

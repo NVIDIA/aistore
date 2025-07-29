@@ -599,10 +599,11 @@ func (h *htrun) stop(wg *sync.WaitGroup, rmFromSmap bool) {
 		shuthttp()
 		wg.Done()
 	}()
-	entry := xreg.GetRunning(xreg.Flt{})
+	var flt xreg.Flt
+	entry := xreg.GetRunning(&flt)
 	if entry != nil {
 		time.Sleep(sleep)
-		entry = xreg.GetRunning(xreg.Flt{})
+		entry = xreg.GetRunning(&flt)
 		if entry != nil {
 			nlog.Warningln("Timed out waiting for", entry.Kind(), "... to stop")
 		}

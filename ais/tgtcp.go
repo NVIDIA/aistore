@@ -488,7 +488,8 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func _rebSnap() (rebSnap *core.Snap) {
-	if entry := xreg.GetLatest(xreg.Flt{Kind: apc.ActRebalance}); entry != nil {
+	flt := xreg.Flt{Kind: apc.ActRebalance}
+	if entry := xreg.GetLatest(&flt); entry != nil {
 		if xctn := entry.Get(); xctn != nil {
 			rebSnap = xctn.Snap()
 		}
@@ -857,12 +858,12 @@ func (f *delb) do(nbck *meta.Bck) bool {
 	// assorted props changed?
 	if f.obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
 		flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: nbck}
-		xreg.DoAbort(flt, errors.New("apply-bmd"))
+		xreg.DoAbort(&flt, errors.New("apply-bmd"))
 		// NOTE: apc.ActMakeNCopies takes care of itself
 	}
 	if f.obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
 		flt := xreg.Flt{Kind: apc.ActECEncode, Bck: nbck}
-		xreg.DoAbort(flt, errors.New("apply-bmd"))
+		xreg.DoAbort(&flt, errors.New("apply-bmd"))
 	}
 	return true // break
 }

@@ -56,6 +56,11 @@ linters:
     - usetesting
     - wastedassign
     - whitespace
+    # containedctx ## (TODO: revisit this group)
+    # exhaustive
+    # ginkgolinter
+    # nilnil
+    # recvcheck
 
 # See: https://golangci-lint.run/usage/linters/
   settings:

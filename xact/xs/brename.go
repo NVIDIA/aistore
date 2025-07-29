@@ -114,7 +114,7 @@ loop:
 	for total < bmvMaxWait {
 		time.Sleep(sleep)
 		total += sleep
-		rebStats, err := xreg.GetSnap(flt)
+		rebStats, err := xreg.GetSnap(&flt)
 		debug.AssertNoErr(err)
 		for _, stat := range rebStats {
 			if stat.Finished() || stat.IsAborted() {

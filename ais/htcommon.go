@@ -900,7 +900,7 @@ func _reEC(bprops, nprops *cmn.Bprops, bck *meta.Bck, smap *smapX) (targetCnt in
 		if bprops.EC.Enabled {
 			// abort running ec-encode xaction, if exists
 			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: bck}
-			xreg.DoAbort(flt, errors.New("ec-disabled"))
+			xreg.DoAbort(&flt, errors.New("ec-disabled"))
 		}
 		return
 	}

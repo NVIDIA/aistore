@@ -93,7 +93,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	xactQuery := xreg.Flt{
 		ID: xactMsg.ID, Kind: xactMsg.Kind, Bck: bck, OnlyRunning: xactMsg.OnlyRunning,
 	}
-	t.xquery(w, r, what, xactQuery)
+	t.xquery(w, r, what, &xactQuery)
 }
 
 func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +168,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			err = cmn.ErrXactICNotifAbort
 		}
 		flt := xreg.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
-		xreg.DoAbort(flt, err)
+		xreg.DoAbort(&flt, err)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -192,7 +192,7 @@ func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string)
 	t.writeErr(w, r, err, http.StatusNotFound, Silent)
 }
 
-func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.Flt) {
+func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery *xreg.Flt) {
 	stats, err := xreg.GetSnap(xactQuery)
 	if err == nil {
 		t.writeJSON(w, r, stats, what) // ok

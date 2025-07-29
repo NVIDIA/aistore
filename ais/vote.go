@@ -62,7 +62,8 @@ type (
 )
 
 func voteInProgress() (xele core.Xact) {
-	if e := xreg.GetRunning(xreg.Flt{Kind: apc.ActElection}); e != nil {
+	flt := xreg.Flt{Kind: apc.ActElection}
+	if e := xreg.GetRunning(&flt); e != nil {
 		xele = e.Get()
 	}
 	return

@@ -222,9 +222,9 @@ func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	sort.Strings(inout.Idle)
 }
 
-func GetRunning(flt Flt) Renewable { return dreg.getRunning(flt) }
+func GetRunning(flt *Flt) Renewable { return dreg.getRunning(flt) }
 
-func (r *registry) getRunning(flt Flt) (entry Renewable) {
+func (r *registry) getRunning(flt *Flt) (entry Renewable) {
 	e := &r.entries
 	e.mtx.RLock()
 	entry = e.findRunning(flt)
@@ -233,7 +233,7 @@ func (r *registry) getRunning(flt Flt) (entry Renewable) {
 }
 
 // NOTE: relies on the find() to walk in the newer --> older order
-func GetLatest(flt Flt) Renewable {
+func GetLatest(flt *Flt) Renewable {
 	entry := dreg.entries.find(flt)
 	return entry
 }
@@ -258,7 +258,7 @@ func AbortKind(err error, kind string) {
 
 func AbortByNewReb(err error) { dreg.abort(&abortArgs{err: err, newreb: true}) }
 
-func DoAbort(flt Flt, err error) {
+func DoAbort(flt *Flt, err error) {
 	switch {
 	case flt.ID != "":
 		xctn, errV := dreg.getXact(flt.ID)
@@ -279,7 +279,7 @@ func DoAbort(flt Flt, err error) {
 	}
 }
 
-func GetSnap(flt Flt) ([]*core.Snap, error) {
+func GetSnap(flt *Flt) ([]*core.Snap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
@@ -324,7 +324,7 @@ func GetSnap(flt Flt) ([]*core.Snap, error) {
 			matching = make([]*core.Snap, 0, min(len(dreg.entries.active), 8))
 			if flt.Kind == "" {
 				for kind := range xact.Table {
-					entry := dreg.entries.findRunning(Flt{Kind: kind, Bck: flt.Bck})
+					entry := dreg.entries.findRunning(&Flt{Kind: kind, Bck: flt.Bck})
 					if entry != nil {
 						matching = append(matching, entry.Get().Snap())
 					}
@@ -492,19 +492,19 @@ func (r *registry) hkDelOld(int64) time.Duration {
 
 func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {
 	flt := Flt{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
-	rns = r._renewFlt(entry, flt)
+	rns = r._renewFlt(entry, &flt)
 	rns.beingRenewed()
 	return
 }
 
 func (r *registry) renew(entry Renewable, bck *meta.Bck, buckets ...*meta.Bck) (rns RenewRes) {
 	flt := Flt{Kind: entry.Kind(), Bck: bck, Buckets: buckets}
-	rns = r._renewFlt(entry, flt)
+	rns = r._renewFlt(entry, &flt)
 	rns.beingRenewed()
 	return
 }
 
-func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
+func (r *registry) _renewFlt(entry Renewable, flt *Flt) (rns RenewRes) {
 	// first, try to reuse under rlock
 	r.renewMtx.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
@@ -534,7 +534,7 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 }
 
 // reusing current (aka "previous") xaction: default policies
-func usePrev(xprev core.Xact, nentry Renewable, flt Flt) bool {
+func usePrev(xprev core.Xact, nentry Renewable, flt *Flt) bool {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
 	pdtor, ndtor := xact.Table[pkind], xact.Table[nkind]
@@ -573,7 +573,7 @@ func usePrev(xprev core.Xact, nentry Renewable, flt Flt) bool {
 	return true
 }
 
-func (r *registry) renewLocked(entry Renewable, flt Flt) (rns RenewRes) {
+func (r *registry) renewLocked(entry Renewable, flt *Flt) (rns RenewRes) {
 	var (
 		xprev core.Xact
 		wpr   WPR
@@ -607,7 +607,7 @@ func (r *registry) renewLocked(entry Renewable, flt Flt) (rns RenewRes) {
 //////////////////////
 
 // NOTE: the caller must take rlock
-func (e *entries) findRunning(flt Flt) Renewable {
+func (e *entries) findRunning(flt *Flt) Renewable {
 	onl := true
 	flt.OnlyRunning = &onl
 	for _, entry := range e.active {
@@ -632,14 +632,14 @@ func (e *entries) findRunningKind(kind string) Renewable {
 	return nil
 }
 
-func (e *entries) find(flt Flt) (entry Renewable) {
+func (e *entries) find(flt *Flt) (entry Renewable) {
 	e.mtx.RLock()
 	entry = e.findUnlocked(flt)
 	e.mtx.RUnlock()
 	return
 }
 
-func (e *entries) findUnlocked(flt Flt) Renewable {
+func (e *entries) findUnlocked(flt *Flt) Renewable {
 	if flt.OnlyRunning != nil && *flt.OnlyRunning {
 		return e.findRunning(flt)
 	}
@@ -860,7 +860,7 @@ func (flt *Flt) String() string {
 	return msg.String()
 }
 
-func (flt Flt) Matches(xctn core.Xact) (yes bool) {
+func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
 	// running?
 	if flt.OnlyRunning != nil {

@@ -185,7 +185,8 @@ func (reb *Reb) _preempt(logHdr, oxid string) error {
 }
 
 func _preempt2(logHdr string, id int64) bool {
-	entry := xreg.GetRunning(xreg.Flt{Kind: apc.ActRebalance})
+	flt := xreg.Flt{Kind: apc.ActRebalance}
+	entry := xreg.GetRunning(&flt)
 	if entry == nil {
 		return true
 	}
