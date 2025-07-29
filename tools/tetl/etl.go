@@ -229,11 +229,12 @@ func headETLLogs(etlLogs etl.Logs, maxLen int) string {
 	return str
 }
 
-func WaitForETLAborted(t *testing.T, bp api.BaseParams) {
+func WaitForETLAborted(t *testing.T, bp api.BaseParams, etlNames ...string) {
 	tlog.Logln("Waiting for all ETLs to abort...")
 	var (
 		etls         etl.InfoList
 		stopDeadline = time.Now().Add(20 * time.Second)
+		watchlist    = cos.NewStrSet(etlNames...)
 		interval     = 2 * time.Second
 		err          error
 	)
@@ -244,7 +245,7 @@ func WaitForETLAborted(t *testing.T, bp api.BaseParams) {
 
 		allAborted := true
 		for _, info := range etls {
-			if info.Stage != etl.Aborted.String() {
+			if watchlist.Contains(info.Name) && info.Stage != etl.Aborted.String() {
 				allAborted = false
 				break
 			}

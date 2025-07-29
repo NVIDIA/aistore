@@ -95,7 +95,7 @@ func Init(msg InitMsg, xid, secret string) (core.Xact, PodInfo, error) {
 
 // cleanupEntities removes provided entities. It tries its best to remove all
 // entities so it doesn't stop when encountering an error.
-func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error) {
+func CleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error) {
 	if svcName != "" {
 		if deleteErr := deleteEntity(errCtx, k8s.Svc, svcName); deleteErr != nil {
 			err = deleteErr
@@ -148,7 +148,7 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podInfo PodInfo
 	}
 
 	// 3. Cleanup previously started entities, if any.
-	err = cleanupEntities(errCtx, boot.pod.GetName(), boot.svc.GetName())
+	err = CleanupEntities(errCtx, boot.pod.GetName(), boot.svc.GetName())
 	debug.AssertNoErr(err)
 
 	// initialize pod watcher
@@ -211,6 +211,11 @@ func Stop(etlName string, errCause error) (err error) {
 	if err := comm.stop(); err != nil {
 		return err
 	}
+
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("Stopping ETL: %s, %v", etlName, errCause)
+	}
+
 	boot.pw.stop(true)
 	mgr.del(etlName)
 
@@ -224,7 +229,7 @@ func Stop(etlName string, errCause error) (err error) {
 		ETLName:   etlName,
 		TID:       core.T.SID(),
 	}
-	return cleanupEntities(errCtx, boot.pod.GetName(), boot.svc.GetName())
+	return CleanupEntities(errCtx, boot.pod.GetName(), boot.svc.GetName())
 }
 
 func Delete(etlName string) error { return Stop(etlName, cmn.ErrXactUserAbort) }

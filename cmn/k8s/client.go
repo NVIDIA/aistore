@@ -8,6 +8,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/env"
@@ -21,6 +22,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 )
 
 type (
@@ -220,4 +223,50 @@ func (c *defaultClient) Health(podName string) (string, error) {
 		return "Error", err
 	}
 	return string(response.Status.Phase), nil
+}
+
+// InitTestClient initializes a K8s client for testing environments using kubeconfig.
+// This is designed for use in Go tests running from shell environments with kubectl access.
+func InitTestClient(namespace ...string) (Client, error) {
+	config, err := _getKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	ns := "default"
+	if len(namespace) > 0 && namespace[0] != "" {
+		ns = namespace[0]
+	} else if envNs := os.Getenv("KUBERNETES_NAMESPACE"); envNs != "" {
+		ns = envNs
+	}
+
+	return &defaultClient{
+		namespace: ns,
+		client:    client,
+		config:    config,
+	}, nil
+}
+
+// _getKubeConfig attempts to load kubeconfig from various standard locations
+func _getKubeConfig() (*rest.Config, error) {
+	// 1. Try KUBECONFIG environment variable
+	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+
+	// 2. Try default location in home directory
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig := filepath.Join(home, ".kube", "config")
+		if _, err := os.Stat(kubeconfig); err == nil {
+			return clientcmd.BuildConfigFromFlags("", kubeconfig)
+		}
+	}
+
+	// 3. Fall back to in-cluster config (for running in pods)
+	return rest.InClusterConfig()
 }

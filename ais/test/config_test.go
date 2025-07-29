@@ -208,7 +208,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 
 	// Restart and check that config persisted
 	tlog.Logf("Killing %s\n", proxy.StringEx())
-	cmd, err := tools.KillNode(proxy)
+	cmd, err := tools.KillNode(baseParams, proxy)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
 	tassert.CheckFatal(t, err)
@@ -242,7 +242,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Killing %s\n", proxy.StringEx())
-	cmd, err := tools.KillNode(proxy)
+	cmd, err := tools.KillNode(baseParams, proxy)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {

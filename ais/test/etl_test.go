@@ -658,10 +658,10 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, bp, etlName) })
 
-	numWorkersTest := []int{}
+	numWorkersTest := []int{0, 4}
 
 	if !testing.Short() {
-		numWorkersTestLong := []int{16}
+		numWorkersTestLong := []int{-1, 16}
 		numWorkersTest = append(numWorkersTest, numWorkersTestLong...)
 	}
 

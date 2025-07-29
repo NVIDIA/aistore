@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -32,7 +34,7 @@ func TestETLBucketAbort(t *testing.T) {
 		fixedSize: true,
 	}
 
-	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+	_, xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 	tlog.Logf("Aborting etl[%s]\n", xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}
@@ -54,33 +56,124 @@ func TestETLTargetDown(t *testing.T) {
 	m := &ioContext{
 		t:         t,
 		num:       100_000,
-		fileSize:  512,
+		fileSize:  4 * cos.KiB,
 		fixedSize: true,
 	}
-	if testing.Short() {
-		m.num /= 10
-	}
 	m.initAndSaveState(true /*cleanup*/)
-	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
-	tlog.Logln("Waiting for ETL to process a few objects...")
-	time.Sleep(1 * time.Second)
+	t.Run("target_graceful_shutdown", func(t *testing.T) {
+		name, xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
-	_, removedTarget := tools.RmTargetSkipRebWait(t, proxyURL, m.smap)
+		tlog.Logln("Waiting for ETL to process a few objects...")
+		time.Sleep(1 * time.Second)
 
-	t.Cleanup(func() {
-		time.Sleep(4 * time.Second)
-		var rebID string
-		rebID, _ = tools.RestoreTarget(t, proxyURL, removedTarget)
-		tools.WaitForRebalanceByID(t, baseParams, rebID)
-		m.waitAndCheckCluState()
+		_, removedTarget := tools.RmTargetSkipRebWait(t, proxyURL, m.smap)
+
+		t.Cleanup(func() {
+			time.Sleep(4 * time.Second)
+			var rebID string
+			rebID, _ = tools.RestoreTarget(t, proxyURL, removedTarget)
+			tools.WaitForRebalanceByID(t, baseParams, rebID)
+			m.waitAndCheckCluState()
+
+			tetl.CheckNoRunningETLContainers(t, baseParams)
+		})
+
+		tetl.WaitForETLAborted(t, baseParams, name)
+		err := tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
+	})
+
+	t.Run("target_force_shutdown", func(t *testing.T) {
+		name, xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+
+		tlog.Logln("Waiting for ETL to process a few objects...")
+		time.Sleep(1 * time.Second)
+
+		target, err := m.smap.GetRandTarget()
+		tassert.CheckFatal(t, err)
+		_, err = tools.KillNode(baseParams, target)
+		tassert.CheckFatal(t, err)
+
+		tetl.WaitForETLAborted(t, baseParams, name)
+		err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
+	})
+
+	t.Run("target_force_shutdown_sequence_same_target", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+		// 1. Start ETL, kill a target, check ETL aborted.
+		name1, xid1 := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+		tlog.Logln("Waiting for ETL to process a few objects...")
+		time.Sleep(1 * time.Second)
+
+		target, err := m.smap.GetRandTarget()
+		tassert.CheckFatal(t, err)
+		_, err = tools.KillNode(baseParams, target)
+		tassert.CheckFatal(t, err)
+
+		tetl.WaitForETLAborted(t, baseParams, name1)
+		err = tetl.WaitForAborted(baseParams, xid1, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
+
+		// 2. Start ETL again, kill the same target, check ETL aborted.
+		name2, xid2 := etlPrepareAndStart(t, m, tetl.MD5, etl.Hpush)
+		tlog.Logln("Waiting for ETL to process a few objects (second run)...")
+		time.Sleep(1 * time.Second)
+
+		_, err = tools.KillNode(baseParams, target)
+		tassert.CheckFatal(t, err)
+
+		tetl.WaitForETLAborted(t, baseParams, name1, name2)
+		err = tetl.WaitForAborted(baseParams, xid2, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
+	})
+
+	t.Run("target_force_shutdown_different_targets", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+		// 1. Pick two random targets from the Tmap
+		var t1, t2 *meta.Snode
+		targets := make([]*meta.Snode, 0, len(m.smap.Tmap))
+		for _, tgt := range m.smap.Tmap {
+			targets = append(targets, tgt)
+		}
+		switch len(targets) {
+		case 0:
+			t1, t2 = nil, nil
+		case 1:
+			t1 = targets[0]
+			t2 = targets[0]
+		default:
+			rand.Shuffle(len(targets), func(i, j int) { targets[i], targets[j] = targets[j], targets[i] })
+			t1, t2 = targets[0], targets[1]
+		}
+
+		// 2. Start ETL, kill the first target, check ETL aborted.
+		name1, xid1 := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+		tlog.Logln("Waiting for ETL to process a few objects...")
+		time.Sleep(1 * time.Second)
+
+		_, err := tools.KillNode(baseParams, t1)
+		tassert.CheckFatal(t, err)
+
+		tetl.WaitForETLAborted(t, baseParams, name1)
+		err = tetl.WaitForAborted(baseParams, xid1, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
+
+		// 3. Start ETL again, kill the second target, check ETL aborted.
+		name2, xid2 := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
+		tlog.Logln("Waiting for ETL to process a few objects (second run)...")
+		time.Sleep(1 * time.Second)
+
+		_, err = tools.KillNode(baseParams, t2)
+		tassert.CheckFatal(t, err)
+
+		tetl.WaitForETLAborted(t, baseParams, name1, name2)
+		err = tetl.WaitForAborted(baseParams, xid2, apc.ActETLBck, 5*time.Minute)
+		tassert.CheckFatal(t, err)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
-
-	err := tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
-	tassert.CheckFatal(t, err)
-	tetl.WaitForETLAborted(t, baseParams)
 }
 
 func TestETLBigBucket(t *testing.T) {
@@ -159,7 +252,7 @@ func TestETLBigBucket(t *testing.T) {
 }
 
 // Responsible for cleaning all resources, except ETL xact.
-func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid string) {
+func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (name, xid string) {
 	var (
 		bckFrom = cmn.Bck{Name: "etl-in-" + trand.String(5), Provider: apc.AIS}
 		bckTo   = cmn.Bck{Name: "etl-out-" + trand.String(5), Provider: apc.AIS}
@@ -180,5 +273,5 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.Cname(""))
 	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
 	xid = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
-	return
+	return etlName, xid
 }

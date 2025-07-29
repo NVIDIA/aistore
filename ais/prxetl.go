@@ -529,14 +529,21 @@ type _etlFinalizer struct {
 	msg etl.InitMsg
 }
 
-// NOTE: to update etlMD on xaction abort
+// when target shuts down (graceful or not) => rebalance triggered => globally abort apc.ActETLInline xaction => finalizer triggered through proxy notification => cleanup remaining ETL resources
 func (ef *_etlFinalizer) cb(nl nl.Listener) {
-	nlog.Infoln("ETL finalizer triggered with error:", nl.Err())
-	// TODO: record nl.Err() and show on listETL call
-
+	nlog.Errorf("ETL finalizer triggered: %s, %v", ef.msg.Cname(), nl.Err())
 	etlMD := ef.p.owner.etl.get()
-	if _, ok := etlMD.ETLs[ef.msg.Name()]; !ok {
+	entry, ok := etlMD.ETLs[ef.msg.Name()]
+	if !ok {
 		return
+	}
+
+	if err := nl.Err(); err != nil {
+		// TODO: record nl.Err() and show on listETL call
+		for _, pod := range entry.PodMap {
+			nlog.Warningf("%s finalizer triggered with error: %v, removing pod/svc: %s/%s", ef.msg.Cname(), nl.Err(), pod.PodName, pod.SvcName)
+			etl.CleanupEntities(nil, pod.PodName, pod.SvcName)
+		}
 	}
 
 	ctx := &etlMDModifier{

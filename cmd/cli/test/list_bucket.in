@@ -21,7 +21,7 @@ ais ls http:// --all // FAIL "backend"
 
 ais ls #ns // IGNORE
 ais ls @ // IGNORE
-ais ls @uuid --all // FAIL "remote cluster "uuid"
+ais ls @uuid --all // FAIL "notfound"
 
 ais ls ais://#ns // IGNORE
 ais ls ais://#ns/tmp // FAIL "bucket "ais://#ns/tmp" does not exist"

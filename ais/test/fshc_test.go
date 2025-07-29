@@ -582,7 +582,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 
 	// Kill and restore target
 	tlog.Logf("Killing %s\n", target.StringEx())
-	tcmd, err := tools.KillNode(target)
+	tcmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "target removed", smap.Version, proxyCnt, targetCnt-1)
 
@@ -660,7 +660,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 
 	// Kill and restore target
 	tlog.Logf("Killing target %s\n", target.StringEx())
-	tcmd, err := tools.KillNode(target)
+	tcmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)

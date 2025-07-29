@@ -193,7 +193,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	// Select a random target
 	targetNode, _ = m.smap.GetRandTarget()
 	tlog.Logf("Killing %s\n", targetNode.StringEx())
-	tcmd, err := tools.KillNode(targetNode)
+	tcmd, err := tools.KillNode(baseParams, targetNode)
 	tassert.CheckFatal(t, err)
 
 	proxyURL := tools.RandomProxyURL(t)
@@ -386,10 +386,10 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// Unregister targets.
 	tlog.Logf("Killing %s and %s\n", target1.StringEx(), target2.StringEx())
-	cmd1, err := tools.KillNode(target1)
+	cmd1, err := tools.KillNode(baseParams, target1)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
-	cmd2, err := tools.KillNode(target2)
+	cmd2, err := tools.KillNode(baseParams, target2)
 	tassert.CheckFatal(t, err)
 
 	// Start putting objects into bucket
@@ -1850,7 +1850,7 @@ func TestICRebalance(t *testing.T) {
 
 	tlog.Logf("Killing %s\n", icNode.StringEx())
 	// cmd and args are the original command line of how the proxy is started
-	cmd, err := tools.KillNode(icNode)
+	cmd, err := tools.KillNode(baseParams, icNode)
 	tassert.CheckFatal(t, err)
 
 	proxyCnt := m.smap.CountActivePs()
@@ -1922,7 +1922,7 @@ func TestICDecommission(t *testing.T) {
 	tlog.Logf("Killing %s\n", icNode.StringEx())
 
 	// cmd and args are the original command line of how the proxy is started
-	cmd, err := tools.KillNode(icNode)
+	cmd, err := tools.KillNode(baseParams, icNode)
 	tassert.CheckFatal(t, err)
 
 	proxyCnt := m.smap.CountActivePs()

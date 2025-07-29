@@ -112,7 +112,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	tlog.Logf("Killing primary: %s --> %s\n", oldPrimaryURL, oldPrimaryID)
 
 	// cmd and args are the original command line of how the proxy is started
-	cmd, err := tools.KillNode(smap.Primary)
+	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "new primary elected", smap.Version,
@@ -178,7 +178,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 killRestore:
 	cfg := tools.GetDaemonConfig(t, node)
 	tlog.Logf("Killing %s\n", node.StringEx())
-	cmd, err := tools.KillNode(node)
+	cmd, err := tools.KillNode(baseParams, node)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(proxyURL, "cluster to stabilize", smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
@@ -240,7 +240,7 @@ func primaryAndTargetCrash(t *testing.T) {
 
 	oldPrimaryURL := smap.Primary.URL(cmn.NetPublic)
 	tlog.Logf("Killing proxy %s - %s\n", oldPrimaryURL, smap.Primary.ID())
-	cmd, err := tools.KillNode(smap.Primary)
+	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	// Select a random target
@@ -257,7 +257,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	targetID = targetNode.ID()
 
 	tlog.Logf("Killing target: %s - %s\n", targetURL, targetID)
-	tcmd, err := tools.KillNode(targetNode)
+	tcmd, err := tools.KillNode(baseParams, targetNode)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "new primary elected",
@@ -296,7 +296,7 @@ func proxyCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Killing non-primary %s\n", secondNode.StringEx())
-	secondCmd, err := tools.KillNode(secondNode)
+	secondCmd, err := tools.KillNode(baseParams, secondNode)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(primaryURL, "proxy removed", smap.Version, origProxyCount-1, 0)
@@ -426,7 +426,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Killing primary: %s - %s\n", oldPrimaryURL, oldPrimaryID)
-	cmd, err := tools.KillNode(smap.Primary)
+	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	// Do not choose the next primary in line, or the current primary proxy
@@ -444,7 +444,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	time.Sleep(time.Duration(n+1) * time.Second)
 
 	tlog.Logf("Killing non-primary: %s\n", secondNode.StringEx())
-	secondCmd, err := tools.KillNode(secondNode)
+	secondCmd, err := tools.KillNode(baseParams, secondNode)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "elect new primary",
@@ -504,7 +504,7 @@ func targetRejoin(t *testing.T) {
 	}
 	id = node.ID()
 
-	cmd, err := tools.KillNode(node)
+	cmd, err := tools.KillNode(baseParams, node)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(randProxyURL, "target crashed", smap.Version, origProxyCount, origTargetCount-1)
 	tassert.CheckFatal(t, err)
@@ -542,7 +542,7 @@ func crashAndFastRestore(t *testing.T) {
 	oldPrimaryID := smap.Primary.ID()
 	tlog.Logf("The current primary %s, Smap version %d\n", oldPrimaryID, smap.Version)
 
-	cmd, err := tools.KillNode(smap.Primary)
+	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	// quick crash and recover
@@ -871,7 +871,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		if si.HasURL(config.Proxy.DiscoveryURL) {
 			pcnt++
 			tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
-			cmd, err := tools.KillNode(si)
+			cmd, err := tools.KillNode(baseParams, si)
 			tassert.CheckFatal(t, err)
 			restoreCmd = append(restoreCmd, cmd)
 			continue
@@ -885,7 +885,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		// Kill a random non primary proxy
 		pcnt++
 		tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
-		cmd, err := tools.KillNode(si)
+		cmd, err := tools.KillNode(baseParams, si)
 		tassert.CheckFatal(t, err)
 		restoreCmd = append(restoreCmd, cmd)
 		randomKilled = true
@@ -896,14 +896,14 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tcnt++
 	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, target.StringEx())
-	cmd, err := tools.KillNode(target)
+	cmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
 	// Kill original primary
 	pcnt++
 	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, smap.Primary.StringEx())
-	cmd, err = tools.KillNode(smap.Primary)
+	cmd, err = tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
@@ -1251,12 +1251,12 @@ func primaryAndNextCrash(t *testing.T) {
 	// kill the current primary
 	oldPrimaryURL, oldPrimaryID := smap.Primary.URL(cmn.NetPublic), smap.Primary.ID()
 	tlog.Logf("Killing primary proxy: %s - %s\n", oldPrimaryURL, oldPrimaryID)
-	cmdFirst, err := tools.KillNode(smap.Primary)
+	cmdFirst, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	// kill the next primary
 	tlog.Logf("Killing next to primary proxy: %s - %s\n", firstPrimaryID, firstPrimaryURL)
-	cmdSecond, errSecond := tools.KillNode(firstPrimary)
+	cmdSecond, errSecond := tools.KillNode(baseParams, firstPrimary)
 	// if kill fails it does not make sense to wait for the cluster is stable
 	if errSecond == nil {
 		// the cluster should vote, so the smap version should be increased at
@@ -1314,7 +1314,7 @@ func killRandNonPrimaryIC(t testing.TB, smap *meta.Smap) (tools.RestoreCmd, *met
 			break
 		}
 	}
-	cmd, err := tools.KillNode(killNode)
+	cmd, err := tools.KillNode(baseParams, killNode)
 	tassert.CheckFatal(t, err)
 
 	smap, err = tools.WaitForClusterState(primary.URL(cmn.NetPublic), "propagate new Smap",

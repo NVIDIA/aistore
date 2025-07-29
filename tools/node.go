@@ -26,15 +26,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
-	maxNodeRetry = 10 // max retries to get health
+	maxNodeRetry       = 10               // max retries to get health
+	processKillTimeout = 30 * time.Second // timeout to wait for process to terminate
 )
 
 const resilverTimeout = time.Minute
@@ -334,55 +338,110 @@ func GetTargetsMountpaths(t *testing.T, smap *meta.Smap, params api.BaseParams) 
 	return mpathsByTarget
 }
 
-func KillNode(node *meta.Snode) (cmd RestoreCmd, err error) {
-	restoreNodesOnce.Do(func() {
-		initNodeCmd()
-	})
+// killProxyOrTargetK8s kills a proxy or target in test environments using kubeconfig-based K8s client.
+// This function is designed for use in Go tests running from shell environments.
+func killProxyOrTargetK8s(bp api.BaseParams, node *meta.Snode, namespace ...string) error {
+	smap, err := api.GetClusterMap(bp)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster map; err: %v", err)
+	}
 
+	client, err := k8s.InitTestClient(namespace...)
+	if err != nil {
+		return fmt.Errorf("failed to get test K8s client; err: %v", err)
+	}
+
+	ds, err := api.GetStatsAndStatus(bp, node)
+	if err != nil {
+		return fmt.Errorf("failed to get stats and status; err: %v", err)
+	}
+	tlog.Logfln("Deleting pod %s", ds.K8sPodName)
+	err = client.Delete(k8s.Pod, ds.K8sPodName)
+	if err != nil {
+		return fmt.Errorf("failed to delete pod %s; err: %v", ds.K8sPodName, err)
+	}
+
+	err = WaitForCondition(func() bool {
+		phase, err := client.Health(ds.K8sPodName)
+		if err != nil {
+			return false
+		}
+		if phase != string(corev1.PodRunning) {
+			tlog.Logf("Pod %s is not running, phase: %s\n", ds.K8sPodName, phase)
+			return false
+		}
+		return true
+	}, WaitRetryOpts{MaxRetries: maxNodeRetry, Interval: processKillTimeout})
+	if err != nil {
+		return err
+	}
+	tlog.Logf("Joining node %s (current %s)\n", node.StringEx(), smap.StringEx())
+	// In K8s deployments, the StatefulSet may restart the target so quickly that the kalive ping doesn't miss it and the cluster map version may not increment.
+	_, err = WaitForClusterState(bp.URL, "cluster to stabilize", 0, smap.CountActivePs(), smap.CountActiveTs())
+	return err
+}
+
+// In Kubernetes mode, killing a pod will cause it to be automatically recreated by the StatefulSet.
+// In non-Kubernetes modes, the node must be manually restored using the returned RestoreCmd.
+func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {
 	var (
 		daemonID = node.ID()
 		port     = node.PubNet.Port
 		pid      int
 	)
-	cmd.Node = node
-	if docker.IsRunning() {
+
+	isK8s, _ := isClusterK8s()
+	switch {
+	case isK8s:
+		return cmd, killProxyOrTargetK8s(bp, node, "ais")
+	case docker.IsRunning():
 		tlog.Logf("Stopping container %s\n", daemonID)
 		err := docker.Stop(daemonID)
 		return cmd, err
-	}
-
-	pid, cmd.Cmd, cmd.Args, err = getProcess(port)
-	if err != nil {
-		return
-	}
-
-	if err = syscall.Kill(pid, syscall.SIGINT); err != nil {
-		return
-	}
-	// wait for the process to actually disappear
-	to := time.Now().Add(time.Second * 30)
-	for {
-		if _, _, _, errPs := getProcess(port); errPs != nil {
-			break
+	default: // local deployment
+		restoreNodesOnce.Do(func() {
+			initNodeCmd()
+		})
+		cmd.Node = node
+		if docker.IsRunning() {
+			tlog.Logf("Stopping container %s\n", daemonID)
+			err := docker.Stop(daemonID)
+			return cmd, err
 		}
-		if time.Now().After(to) {
-			err = fmt.Errorf("failed to 'kill -2' process (pid: %d, port: %s)", pid, port)
-			break
+
+		pid, cmd.Cmd, cmd.Args, err = getProcess(port)
+		if err != nil {
+			return
 		}
+
+		if err = syscall.Kill(pid, syscall.SIGINT); err != nil {
+			return
+		}
+		// wait for the process to actually disappear
+		to := time.Now().Add(processKillTimeout)
+		for {
+			if _, _, _, errPs := getProcess(port); errPs != nil {
+				break
+			}
+			if time.Now().After(to) {
+				err = fmt.Errorf("failed to 'kill -2' process (pid: %d, port: %s)", pid, port)
+				break
+			}
+			time.Sleep(time.Second)
+		}
+
+		syscall.Kill(pid, syscall.SIGKILL)
 		time.Sleep(time.Second)
-	}
 
-	syscall.Kill(pid, syscall.SIGKILL)
-	time.Sleep(time.Second)
-
-	if err != nil {
-		if _, _, _, errPs := getProcess(port); errPs != nil {
-			err = nil
-		} else {
-			err = fmt.Errorf("failed to 'kill -9' process (pid: %d, port: %s)", pid, port)
+		if err != nil {
+			if _, _, _, errPs := getProcess(port); errPs != nil {
+				err = nil
+			} else {
+				err = fmt.Errorf("failed to 'kill -9' process (pid: %d, port: %s)", pid, port)
+			}
 		}
 	}
-	return
+	return cmd, err
 }
 
 func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
