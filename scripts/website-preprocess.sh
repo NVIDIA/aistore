@@ -36,7 +36,6 @@ find docs -type f -name "*.md" | while read -r file; do
     permalink="/docs/$dir_path/$bname.html"
     redirect1="/${dir_path}/${bname}.md/"
     redirect2="/docs/${dir_path}/${bname}.md/"
-    redirect3="/docs/$dir_path/$bname"
   else
     permalink="/docs/$dir_path/$bname"
     redirect1="/${dir_path}/${bname}.md/"
@@ -52,7 +51,6 @@ permalink: $permalink
 redirect_from:
  - $redirect1
  - $redirect2
- - $redirect3
 ---
 EOF
 )
