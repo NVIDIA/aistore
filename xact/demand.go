@@ -83,8 +83,13 @@ func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time
 func (r *DemandBase) Reset(idleTime time.Duration) { r.idle.d.Store(int64(idleTime)) }
 
 func (r *DemandBase) hkcb(now int64) time.Duration {
-	last := r.idle.last.Load()
 	idle := r.idle.d.Load()
+
+	if r.pending.Load() > 0 {
+		return time.Duration(idle)
+	}
+
+	last := r.idle.last.Load()
 	if last != 0 && now-last >= idle {
 		if r.ticks != nil {
 			// signal parent xaction to finish and exit (via `IdleTimer` chan)
