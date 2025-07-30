@@ -219,12 +219,12 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 }
 
-func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []string) {
-	if len(parts) < 2 {
+func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []string) {
+	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3BckObj, 0)
 		return
 	}
-	bck := p.initByNameOnly(w, r, parts[0] /*bucket*/)
+	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
 	if bck == nil {
 		return
 	}
@@ -232,7 +232,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
-	objName := s3.ObjName(parts)
+	objName := s3.ObjName(items)
 	if err := cos.ValidOname(objName); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
