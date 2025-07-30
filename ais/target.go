@@ -395,6 +395,7 @@ func (t *target) Run() error {
 	// register object type and workfile type
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{})
 
 	// Init meta-owners and load local instances
 	if prev := t.owner.bmd.init(); prev {

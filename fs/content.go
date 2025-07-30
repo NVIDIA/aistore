@@ -38,6 +38,12 @@ const (
 	WorkfileType = "wk"
 	ECSliceType  = "ec"
 	ECMetaType   = "mt"
+	ObjChunkType = "oc"
+)
+
+const (
+	ssepa = "."
+	bsepa = '.'
 )
 
 type (
@@ -73,6 +79,7 @@ type (
 	WorkfileContentResolver struct{}
 	ECSliceContentResolver  struct{}
 	ECMetaContentResolver   struct{}
+	ObjChunkContentResolver struct{}
 )
 
 var CSM *contentSpecMgr
@@ -83,6 +90,7 @@ var (
 	_ ContentResolver = (*WorkfileContentResolver)(nil)
 	_ ContentResolver = (*ECSliceContentResolver)(nil)
 	_ ContentResolver = (*ECMetaContentResolver)(nil)
+	_ ContentResolver = (*ObjChunkContentResolver)(nil)
 )
 
 func (f *contentSpecMgr) Resolver(contentType string) ContentResolver {
@@ -167,34 +175,28 @@ func (*ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old, ok 
 }
 
 func (*WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
-	const (
-		contentSepa = "."
-	)
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
 	)
-	fname = prefix + contentSepa + fname
+	fname = prefix + ssepa + fname
 	base = filepath.Join(dir, fname)
-	return base + contentSepa + tieBreaker + contentSepa + spid
+	return base + ssepa + tieBreaker + ssepa + spid
 }
 
 func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
-	const (
-		contentSepa = '.'
-	)
 	// remove original content type
-	cntIndex := strings.IndexByte(base, contentSepa)
+	cntIndex := strings.IndexByte(base, bsepa)
 	if cntIndex < 0 {
 		return "", false, false
 	}
 	base = base[cntIndex+1:]
 
-	pidIndex := strings.LastIndexByte(base, contentSepa) // pid
+	pidIndex := strings.LastIndexByte(base, bsepa) // pid
 	if pidIndex < 0 {
 		return "", false, false
 	}
-	tieIndex := strings.LastIndexByte(base[:pidIndex], contentSepa) // tie breaker
+	tieIndex := strings.LastIndexByte(base[:pidIndex], bsepa) // tie breaker
 	if tieIndex < 0 {
 		return "", false, false
 	}
@@ -204,6 +206,18 @@ func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, o
 	}
 
 	return base[:tieIndex], filePID != pid, true
+}
+
+func (*ObjChunkContentResolver) GenUniqueFQN(base, snum string) string {
+	return base + ssepa + snum
+}
+
+func (*ObjChunkContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+	idx := strings.LastIndexByte(base, bsepa) // pid
+	if idx < 0 {
+		return "", false, false
+	}
+	return base[:idx], false, true
 }
 
 func (*ECSliceContentResolver) GenUniqueFQN(base, _ string) string { return base }

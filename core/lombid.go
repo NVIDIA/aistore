@@ -41,7 +41,7 @@ type (
 
 const (
 	lmflFntl = lomFlags(1 << iota)
-	lmflReserved
+	lmflChunk
 )
 
 func NewBID(serial uint64, isAis bool) uint64 {

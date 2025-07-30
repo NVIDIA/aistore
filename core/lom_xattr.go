@@ -25,8 +25,7 @@ import (
 )
 
 const (
-	MetaverLOM   = 1 // LOM
-	MetaverChunk = 2 // LOM chunk // TODO: niy
+	MetaverLOM = 1 // LOM
 )
 
 // On-disk metadata layout - changing any of this must be done with respect
@@ -49,14 +48,13 @@ const (
 // adding more checksums will likely require a new MetaverLOM version
 const mdCksumTyXXHash = 1
 
-// on-disk xattr names
+// on-disk xattr
 const (
-	xattrLOM   = "user.ais.lom"
-	xattrChunk = "user.ais.chunk"
+	xattrLOM = "user.ais.lom"
 )
 
 const (
-	xattrMaxSize = memsys.MaxSmallSlabSize // lom and chunk, both
+	xattrMaxSize = memsys.MaxSmallSlabSize // lom and chunk(?)
 )
 
 // cmd/xmeta support

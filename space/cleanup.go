@@ -379,6 +379,7 @@ func (j *clnJ) jogBck() (int64, error) {
 	return j.rmLeftovers()
 }
 
+// TODO -- FIXME: visit chunks (fs.ObjChunkType)
 func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkfileType:
