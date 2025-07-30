@@ -352,6 +352,18 @@ const (
 	showLogArgument = nodeIDArgument
 	getLogArgument  = nodeIDArgument + " [OUT_FILE|OUT_DIR|-]"
 
+	// job columnar values
+	jobColNode   = "NODE"
+	jobColID     = "ID"
+	jobColKind   = "KIND"
+	jobColBucket = "BUCKET"
+	jobColState  = "STATE"
+
+	// job states
+	jobStateAborted  = "Aborted"
+	jobStateRunning  = "Running"
+	jobStateFinished = "Finished"
+
 	// cluster
 	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
 
@@ -522,6 +534,16 @@ var (
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
 		Usage: "Regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",
+	}
+
+	columnFilterFlag = cli.StringFlag{
+		Name: "filter",
+		Usage: "Regular expression to filter job table rows based on column values, format: \"COLUMN=PATTERN\", e.g.:\n" +
+			indent4 + "\t--filter \"STATE=Running\" - show only running jobs\n" +
+			indent4 + "\t--filter \"NODE=(FFIt8090|UTat8088)\" - show jobs for specific nodes\n" +
+			indent4 + "\t--filter \"BUCKET=.*ais-.*\" - show jobs for buckets matching pattern\n" +
+			indent4 + "\t--filter \"KIND=rebalance.*\" - show only rebalance jobs\n" +
+			indent4 + "\tnote: use --all to include finished jobs in any filter",
 	}
 
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "JSON input/output"}

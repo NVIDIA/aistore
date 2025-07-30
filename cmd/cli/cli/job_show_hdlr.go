@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -53,6 +54,7 @@ var showJobFlags = append(
 	jsonFlag,
 	allJobsFlag,
 	regexJobsFlag,
+	columnFilterFlag,
 	noHeaderFlag,
 	verboseJobFlag,
 	unitsFlag,
@@ -76,6 +78,28 @@ var showCmdJob = cli.Command{
 // - be omitted, in part or in total, and may
 // - come in arbitrary order
 func showJobsHandler(c *cli.Context) error {
+	// validation of --filter flag
+	if filterStr := parseStrFlag(c, columnFilterFlag); filterStr != "" {
+		parts := strings.SplitN(filterStr, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid filter format '%s' - expected 'COLUMN=PATTERN'", filterStr)
+		}
+		columnName := strings.ToUpper(strings.TrimSpace(parts[0]))
+		switch columnName {
+		case jobColNode, jobColID, jobColKind, jobColBucket, jobColState:
+			// valid column
+		default:
+			return fmt.Errorf("invalid column '%s' - valid columns: %s, %s, %s, %s, %s", columnName, jobColNode, jobColID, jobColKind, jobColBucket, jobColState)
+		}
+		pattern := strings.TrimSpace(parts[1])
+		if pattern == "" {
+			return errors.New("filter pattern cannot be empty")
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("invalid filter regex pattern '%s': %v", pattern, err)
+		}
+	}
+
 	var (
 		multimatch                    bool
 		l                             int
@@ -134,8 +158,13 @@ func showJobsHandler(c *cli.Context) error {
 		if name != "" {
 			what = " '" + name + "'"
 		}
-		fmt.Fprintf(c.App.Writer, "No running%s jobs. "+
-			"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", what, n, n, h)
+
+		if filterStr := parseStrFlag(c, columnFilterFlag); filterStr != "" {
+			fmt.Fprintf(c.App.Writer, "No jobs match filter '%s'. Use %s for details.\n", filterStr, h)
+		} else {
+			fmt.Fprintf(c.App.Writer, "No running%s jobs. "+
+				"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", what, n, n, h)
+		}
 	}
 	return err
 }
@@ -509,6 +538,61 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 				},
 			},
 		})
+	}
+
+	// extractColumnValue extracts the value for a given column from a job snapshot
+	extractColumnValue := func(columnName string, nodeSnap nodeSnaps, snap *core.Snap) string {
+		switch columnName {
+		case jobColNode:
+			return nodeSnap.DaemonID
+		case jobColID:
+			return snap.ID
+		case jobColKind:
+			return snap.Kind
+		case jobColBucket:
+			if !snap.Bck.IsEmpty() {
+				return snap.Bck.Cname("")
+			}
+			return ""
+		case jobColState:
+			switch {
+			case snap.AbortedX:
+				return jobStateAborted
+			case snap.EndTime.IsZero():
+				return jobStateRunning
+			default:
+				return jobStateFinished
+			}
+		default:
+			return ""
+		}
+	}
+
+	// columnar filtering for --filter flag on `ais show job`
+	filterStr := parseStrFlag(c, columnFilterFlag)
+	if filterStr != "" {
+		parts := strings.SplitN(filterStr, "=", 2)
+		columnName := strings.ToUpper(strings.TrimSpace(parts[0]))
+		pattern := strings.TrimSpace(parts[1])
+		regex, _ := regexp.Compile(pattern) // Pre-validated in showJobsHandler
+
+		filtered := make([]nodeSnaps, 0, len(dts))
+		for _, nodeSnap := range dts {
+			var filteredSnaps []*core.Snap
+			for _, snap := range nodeSnap.XactSnaps {
+				value := extractColumnValue(columnName, nodeSnap, snap)
+				if regex.MatchString(value) {
+					filteredSnaps = append(filteredSnaps, snap)
+				}
+			}
+			if len(filteredSnaps) > 0 || nodeSnap.DaemonID == teb.XactColTotals {
+				filtered = append(filtered, nodeSnaps{
+					DaemonID:  nodeSnap.DaemonID,
+					XactSnaps: filteredSnaps,
+				})
+			}
+		}
+		dts = filtered
 	}
 
 	l := len(dts)
