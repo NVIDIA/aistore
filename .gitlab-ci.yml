@@ -646,7 +646,7 @@ test:long:ishard:
   extends: .test_k8s
   variables:
     NUM_PROXY: 1
-    NUM_TARGET: 1
+    NUM_TARGET: 3
   rules:
     - !reference [.test_k8s, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*etl.*/'
