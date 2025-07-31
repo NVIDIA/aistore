@@ -486,11 +486,11 @@ func (r *XactMoss) packOpaque(data *mossOpaque) []byte {
 
 func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 	unpacker := cos.NewUnpacker(opaque)
-	data := &mossOpaque{}
-	if err := unpacker.ReadAny(data); err != nil {
+	mopaque := &mossOpaque{}
+	if err := mopaque.Unpack(unpacker); err != nil {
 		return nil, fmt.Errorf("%s: failed to unpack opaque data: %w", r.Name(), err)
 	}
-	return data, nil
+	return mopaque, nil
 }
 
 // demux -> wi.recv()
