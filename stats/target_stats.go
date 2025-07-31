@@ -73,7 +73,6 @@ const (
 	GetRedirLatency   = "get.redir.ns"
 	PutRedirLatency   = "put.redir.ns"
 	DloadLatencyTotal = "dl.ns.total"
-	HeadLatency       = "head.ns"
 	HeadLatencyTotal  = "head.ns.total"
 
 	// Dsort
@@ -315,12 +314,6 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		&Extra{
 			Help:    "PUT: total cumulative time (nanoseconds)",
 			VarLabs: BckXlabs,
-		},
-	)
-	r.reg(snode, HeadLatency, KindLatency,
-		&Extra{
-			Help:    "HEAD: average time (milliseconds) over the last periodic.stats_time interval",
-			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, HeadLatencyTotal, KindTotal,

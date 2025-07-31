@@ -145,7 +145,7 @@ func LatencyToCounter(latName string) string {
 		return RatelimGetRetryCount
 	case RatelimPutRetryLatencyTotal:
 		return RatelimPutRetryCount
-	case HeadLatency:
+	case HeadLatencyTotal:
 		return HeadCount
 	case ListLatency:
 		return ListCount

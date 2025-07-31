@@ -130,8 +130,6 @@ For convenience, we also include here a (somewhat redundant) table that summariz
     - **Variable Labels:** `bucket`, `xkind`
 
 - **HEAD Latency Metrics:**
-  - `HeadLatency`: HEAD average time (milliseconds) over the last periodic.stats_time interval.
-    - **Variable Labels:** `bucket`
   - `HeadLatencyTotal`: HEAD total cumulative time (nanoseconds).
     - **Variable Labels:** `bucket`
 

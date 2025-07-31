@@ -1183,6 +1183,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 // NOTE: sets whdr.ContentLength = obj-size, with no response body
 func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
+		started     = mono.NanoTime()
 		fltPresence int
 		exists      = true
 	)
@@ -1295,6 +1296,21 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)
+
+	var (
+		vlabs = stats.EmptyBckVlabs
+		fl    = cmn.Rom.Features()
+		cname string
+	)
+	if fl.IsSet(feat.EnableDetailedPromMetrics) {
+		cname = bck.Cname("")
+		vlabs = map[string]string{stats.VlabBucket: cname}
+	}
+	delta := mono.SinceNano(started)
+	t.statsT.IncWith(stats.HeadCount, vlabs)
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: delta, VarLabs: vlabs},
+	)
 	return 0, nil
 }
 
