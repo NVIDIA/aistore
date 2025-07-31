@@ -310,7 +310,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 			return
 		}
 		if bck.IsAIS() {
-			s3.WriteErr(w, r, cos.NewErrNotFound(t, lom.Cname()), 0)
+			s3.WriteErr(w, r, cos.NewErrNotFound(t, lom.Cname()), http.StatusNotFound)
 			return
 		}
 	}
