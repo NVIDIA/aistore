@@ -58,7 +58,7 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 func (b *etlBootstrapper) _prepSpec() (err error) {
 	// Override pod name: append target ID
 	// (K8s doesn't allow `_` and uppercase)
-	b.pod.SetName(k8s.CleanName(b.msg.Name() + "-" + core.T.SID()))
+	b.pod.SetName(b.msg.PodName(core.T.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
 	b.pod.Kind = "Pod"

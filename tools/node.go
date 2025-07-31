@@ -39,6 +39,7 @@ import (
 const (
 	maxNodeRetry       = 10               // max retries to get health
 	processKillTimeout = 30 * time.Second // timeout to wait for process to terminate
+	DefaultNamespace   = "ais"
 )
 
 const resilverTimeout = time.Minute
@@ -393,7 +394,7 @@ func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {
 	isK8s, _ := isClusterK8s()
 	switch {
 	case isK8s:
-		return cmd, killProxyOrTargetK8s(bp, node, "ais")
+		return cmd, killProxyOrTargetK8s(bp, node, DefaultNamespace)
 	case docker.IsRunning():
 		tlog.Logf("Stopping container %s\n", daemonID)
 		err := docker.Stop(daemonID)

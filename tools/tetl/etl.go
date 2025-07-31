@@ -32,8 +32,10 @@ import (
 )
 
 const (
-	NonExistImage = "non-exist-image"
-	InvalidYaml   = "invalid-yaml"
+	NonExistImage              = "non-exist-image"
+	InvalidYaml                = "invalid-yaml"
+	PodWithResourcesConstraint = "resources-constraint"
+
 	Tar2TF        = "tar2tf"
 	Echo          = "transformer-echo"
 	EchoGolang    = "echo-go"
@@ -91,6 +93,18 @@ spec:
         - name: default
           containerPort: 80
 `
+	podWithResourcesConstraintSpec = `
+name: md5-transformer-etl
+runtime:
+  image: aistorage/transformer_md5:latest
+resources:
+  requests:
+    memory: "%s"
+    cpu: "%s"
+  limits:
+    memory: "%s"
+    cpu: "%s"
+`
 )
 
 var (
@@ -104,8 +118,9 @@ var (
 	}
 
 	testSpecs = map[string]string{
-		NonExistImage: nonExistImageSpec,
-		InvalidYaml:   invalidYamlSpec,
+		NonExistImage:              nonExistImageSpec,
+		InvalidYaml:                invalidYamlSpec,
+		PodWithResourcesConstraint: podWithResourcesConstraintSpec,
 	}
 
 	client = &http.Client{}
@@ -127,8 +142,15 @@ func validateETLName(name string) error {
 	return nil
 }
 
-func GetTransformYaml(etlName string) ([]byte, error) {
+func GetTransformYaml(etlName string, replaceArgs ...string) ([]byte, error) {
 	if spec, ok := testSpecs[etlName]; ok {
+		if len(replaceArgs) > 0 {
+			args := make([]any, len(replaceArgs))
+			for i, v := range replaceArgs {
+				args[i] = v
+			}
+			spec = fmt.Sprintf(spec, args...)
+		}
 		return []byte(spec), nil
 	}
 	if err := validateETLName(etlName); err != nil {
@@ -337,15 +359,14 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 	}()
 }
 
-func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string) (xid, name string) {
+func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string, replaceArgs ...string) (msg etl.InitMsg) {
 	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, commType)
-	spec, err := GetTransformYaml(etlName)
+	spec, err := GetTransformYaml(etlName, replaceArgs...)
 	tassert.CheckFatal(t, err)
 
 	var (
 		etlSpec  etl.ETLSpecMsg
 		initSpec etl.InitSpecMsg
-		msg      etl.InitMsg
 	)
 	etlName += strings.ReplaceAll(strings.ToLower(cos.GenUUID()), "_", "-") // add random suffix to avoid conflicts
 	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
@@ -365,7 +386,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 
 	tassert.Fatalf(t, msg.Name() == etlName, "%q vs %q", msg.Name(), etlName) // assert
 
-	xid, err = api.ETLInit(bp, msg)
+	xid, err := api.ETLInit(bp, msg)
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.TypeCode == "ErrUnsupp" && msg.CommType() == etl.WebSocket {
 		t.Skip("skipping, WebSocket only work with direct put supported transformers")
 	}
@@ -384,7 +405,15 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 		tassert.Errorf(t, bytes.Equal(spec, initSpec.Spec), "pod specs differ, expected %s, got %s", string(spec), string(initSpec.Spec))
 	}
 
-	return xid, etlName
+	return msg
+}
+
+func InspectPod(t *testing.T, podName string) corev1.Pod {
+	client, err := k8s.InitTestClient(tools.DefaultNamespace)
+	tassert.CheckFatal(t, err)
+	pod, err := client.Pod(podName)
+	tassert.CheckFatal(t, err)
+	return *pod
 }
 
 func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg) string {

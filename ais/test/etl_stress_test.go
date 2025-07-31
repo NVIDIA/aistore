@@ -217,9 +217,9 @@ func TestETLBigBucket(t *testing.T) {
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
-			_, etlName = tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
+			initMsg := tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
 			t.Cleanup(func() {
-				tetl.StopAndDeleteETL(t, baseParams, etlName)
+				tetl.StopAndDeleteETL(t, baseParams, initMsg.Name())
 				tetl.WaitForETLAborted(t, baseParams)
 			})
 
@@ -265,13 +265,13 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (name,
 
 	m.puts()
 
-	_, etlName = tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
+	initMsg := tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
 	t.Cleanup(func() {
-		tetl.StopAndDeleteETL(t, baseParams, etlName)
+		tetl.StopAndDeleteETL(t, baseParams, initMsg.Name())
 	})
 
-	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.Cname(""))
-	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
+	tlog.Logf("Start offline %s => %s\n", initMsg.Cname(), bckTo.Cname(""))
+	msg := &apc.TCBMsg{Transform: apc.Transform{Name: initMsg.Name()}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
 	xid = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
-	return etlName, xid
+	return initMsg.Name(), xid
 }

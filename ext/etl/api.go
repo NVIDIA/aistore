@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -104,7 +106,8 @@ type (
 	InitMsg interface {
 		Name() string
 		Cname() string
-		MsgType() string // Code or Spec
+		PodName(tid string) string // ETL pod name on the given target
+		MsgType() string
 		CommType() string
 		ArgType() string
 		Validate() error
@@ -132,8 +135,9 @@ type (
 
 	// ETLSpecMsg is a YAML representation of the ETL pod spec.
 	ETLSpecMsg struct {
-		InitMsgBase `yaml:",inline"` // included all optional fields from InitMsgBase
-		Runtime     RuntimeSpec      `json:"runtime" yaml:"runtime"`
+		InitMsgBase `yaml:",inline"`            // included all optional fields from InitMsgBase
+		Runtime     RuntimeSpec                 `json:"runtime" yaml:"runtime"`
+		Resources   corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
 	}
 
 	RuntimeSpec struct {
@@ -215,11 +219,12 @@ var (
 	_ InitMsg = (*ETLSpecMsg)(nil)
 )
 
-func (m *InitMsgBase) CommType() string  { return m.CommTypeX }
-func (m *InitMsgBase) ArgType() string   { return m.ArgTypeX }
-func (m *InitMsgBase) Name() string      { return m.EtlName }
-func (m *InitMsgBase) Cname() string     { return "ETL[" + m.EtlName + "]" }
-func (m *InitMsgBase) IsDirectPut() bool { return m.SupportDirectPut }
+func (m *InitMsgBase) CommType() string          { return m.CommTypeX }
+func (m *InitMsgBase) ArgType() string           { return m.ArgTypeX }
+func (m *InitMsgBase) Name() string              { return m.EtlName }
+func (m *InitMsgBase) Cname() string             { return "ETL[" + m.EtlName + "]" }
+func (m *InitMsgBase) PodName(tid string) string { return m.EtlName + "-" + strings.ToLower(tid) }
+func (m *InitMsgBase) IsDirectPut() bool         { return m.SupportDirectPut }
 
 func (m *InitMsgBase) GetEnv() []corev1.EnvVar { return m.Env }
 func (m *InitMsgBase) Timeouts() (initTimeout, objTimeout cos.Duration) {
@@ -238,21 +243,24 @@ func (e *ETLSpecMsg) String() string {
 }
 
 func UnmarshalInitMsg(b []byte) (InitMsg, error) {
+	var err1, err2 error
 	// try parsing it as ETLSpecMsg first
 	var etlSpec ETLSpecMsg
-	if err := jsoniter.Unmarshal(b, &etlSpec); err == nil {
-		if etlSpec.Validate() == nil {
+	if err1 = jsoniter.Unmarshal(b, &etlSpec); err1 == nil {
+		if err1 = etlSpec.Validate(); err1 == nil {
 			return &etlSpec, nil
 		}
 	}
 
 	// if fail, try parsing it as InitSpecMsg
 	var podSpec InitSpecMsg
-	if err := jsoniter.Unmarshal(b, &podSpec); err == nil {
-		return &podSpec, err
+	if err2 = jsoniter.Unmarshal(b, &podSpec); err2 == nil {
+		if err2 = podSpec.Validate(); err2 == nil {
+			return &podSpec, nil
+		}
 	}
 
-	return nil, fmt.Errorf("invalid etl.InitMsg: %+v", podSpec)
+	return nil, fmt.Errorf("invalid etl.InitMsg: ETLSpecMsg error: %v; InitSpecMsg error: %v", err1, err2)
 }
 
 func (m *InitMsgBase) Validate(detail string) error {
@@ -410,8 +418,9 @@ func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
 						},
 					},
 				},
-				Command: e.Runtime.Command,
-				Env:     e.Runtime.Env,
+				Command:   e.Runtime.Command,
+				Env:       e.Runtime.Env,
+				Resources: e.Resources,
 			}},
 		},
 	}
@@ -429,6 +438,23 @@ func (e *ETLSpecMsg) FormatEnv() string {
 	}
 	b.WriteString("]")
 	return b.String()
+}
+
+// UnmarshalYAML works around the fact that resource.Quantity can't unmarshal from YAML directly.
+// We decode the YAML node into a map, marshal it to JSON, and unmarshal again to parse resource.Quantity correctly.
+func (e *ETLSpecMsg) UnmarshalYAML(node *yaml.Node) error {
+	var intermediate map[string]any
+	if err := node.Decode(&intermediate); err != nil {
+		return fmt.Errorf("yaml node decode: %w", err)
+	}
+	data, err := jsoniter.Marshal(intermediate)
+	if err != nil {
+		return fmt.Errorf("json marshal: %w", err)
+	}
+	if err := jsoniter.Unmarshal(data, e); err != nil {
+		return fmt.Errorf("json unmarshal: %w", err)
+	}
+	return nil
 }
 
 func (s Stage) String() string {

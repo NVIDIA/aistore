@@ -50,16 +50,16 @@ func TestETLMultiObj(t *testing.T) {
 		)
 	}
 
-	_, etlName := tetl.InitSpec(t, baseParams, transformer, etlCommType, etl.ArgTypeDefault)
-	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
+	msg := tetl.InitSpec(t, baseParams, transformer, etlCommType, etl.ArgTypeDefault)
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, msg.Name()) })
 
 	for _, bcktest := range bcktests {
 		bckFrom, tname := bcktest.setupBckFrom(t, prefix, objCnt)
 
 		for _, ty := range []string{"range", "list"} {
-			t.Run(tname+fmt.Sprintf("/%s-%s-%s", etlName, strings.TrimSuffix(etlCommType, "://"), ty), func(t *testing.T) {
+			t.Run(tname+fmt.Sprintf("/%s-%s-%s", msg.Name(), strings.TrimSuffix(etlCommType, "://"), ty), func(t *testing.T) {
 				template := fmt.Sprintf("%s/{%04d..%04d}", prefix, rangeStart, rangeStart+copyCnt-1)
-				testETLMultiObj(t, etlName, prefix, bckFrom, template, ty, bcktest, tetl.MD5Transform)
+				testETLMultiObj(t, msg.Name(), prefix, bckFrom, template, ty, bcktest, tetl.MD5Transform)
 			})
 		}
 	}
