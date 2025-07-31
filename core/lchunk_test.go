@@ -61,7 +61,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 	Describe("chunk manifest", func() {
 		var (
-			testFileSize   = int64(1024 * 1024) // 1MB
+			testFileSize   = int64(cos.MiB)
 			testObjectName = "chunked/test-obj.bin"
 			localFQN       = mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
 		)
@@ -77,7 +77,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			for i := range numChunks {
 				manifest.Chunks[i] = core.Uchunk{
 					Siz:      chunkSizes[i],
-					CksumVal: trand.String(16), // mock checksum
+					Path:     trand.String(7),
+					CksumVal: trand.String(16),
 				}
 			}
 			return manifest
@@ -86,8 +87,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 		Describe("Store and Load", func() {
 			It("should store and load chunk manifest correctly", func() {
 				// Create test file (chunk #1)
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Create chunk manifest for 3 chunks - ensure sizes sum to testFileSize
 				chunkSizes := []int64{400000, 400000, 248576} // total = 1048576 (1MB)
@@ -115,13 +116,14 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				for i := range 3 {
 					Expect(loadedManifest.Chunks[i].Siz).To(Equal(chunkSizes[i]))
+					Expect(loadedManifest.Chunks[i].Path).To(Equal(manifest.Chunks[i].Path))
 					Expect(loadedManifest.Chunks[i].CksumVal).To(Equal(manifest.Chunks[i].CksumVal))
 				}
 			})
 
 			It("should handle single chunk manifest", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Single chunk manifest
 				chunkSizes := []int64{testFileSize}
@@ -139,8 +141,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			})
 
 			It("should handle many small chunks", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// 100 chunks of ~10KB each
 				numChunks := uint16(100)
@@ -174,8 +176,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 		Describe("validation", func() {
 			It("should fail when num doesn't match chunks length", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Create invalid manifest - num says 3 but only 2 chunks
 				manifest := &core.Ufest{
@@ -183,19 +185,19 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					Num:      3,
 					CksumTyp: cos.ChecksumOneXxh,
 					Chunks: []core.Uchunk{
-						{Siz: 500000, CksumVal: "abc123"},
-						{Siz: 524000, CksumVal: "def456"},
+						{Siz: 500000, Path: "a", CksumVal: "abc123"},
+						{Siz: 524000, Path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", CksumVal: "def456"},
 					},
 				}
 
 				err := manifest.Store(lom)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid manifest num=3, len=2"))
+				Expect(err.Error()).To(ContainSubstring("invalid chunk-manifest"))
 			})
 
 			It("should fail when num is zero", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				manifest := &core.Ufest{
 					Size:     testFileSize,
@@ -206,37 +208,40 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				err := manifest.Store(lom)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid manifest num=0"))
+				Expect(err.Error()).To(ContainSubstring("invalid chunk-manifest"))
 			})
 
 			It("should fail when manifest is too large for xattr", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				numChunks := 1000
+				chunkSize := 1024
+				totalSize := int64(numChunks * chunkSize)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, totalSize)
 
 				// Create a manifest that will exceed xattr size limits
 				// Use many chunks with long checksum values
-				numChunks := uint16(1000)
 				chunkSizes := make([]int64, numChunks)
 				for i := range numChunks {
-					chunkSizes[i] = 1024
+					chunkSizes[i] = int64(chunkSize)
 				}
 
-				manifest := createChunkManifest(int64(numChunks)*1024, numChunks, chunkSizes)
-				// Make checksum values very long to exceed xattr limits
+				manifest := createChunkManifest(totalSize, uint16(numChunks), chunkSizes)
+				// Make values very long to exceed xattr limits
 				for i := range manifest.Chunks {
+					manifest.Chunks[i].Path = trand.String(1000)
 					manifest.Chunks[i].CksumVal = trand.String(1000)
 				}
 
 				err := manifest.Store(lom)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("manifest too large"))
+				Expect(err.Error()).To(ContainSubstring("too large"))
 			})
 		})
 
 		Describe("serialization errors", func() {
 			It("should fail when loading non-existent manifest", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				manifest := &core.Ufest{}
 				err := manifest.Load(lom)
@@ -244,9 +249,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(err.Error()).To(ContainSubstring("chunk-manifest"))
 			})
 
-			It("should fail when metadata version is invalid", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+			It("should fail when meta-version corrupted", func() {
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Store valid manifest first
 				chunkSizes := []int64{testFileSize}
@@ -264,12 +269,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				loadedManifest := &core.Ufest{}
 				err = loadedManifest.Load(lom)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unsupported chunk-manifest meta-version 99"))
+				Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 			})
 
 			It("should fail when checksum verification fails", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Store valid manifest
 				chunkSizes := []int64{testFileSize}
@@ -294,8 +299,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			})
 
 			It("should fail when xattr data is truncated", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				// Store valid manifest
 				chunkSizes := []int64{testFileSize}
@@ -318,8 +323,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 		Describe("packing/unpacking edge cases", func() {
 			It("should handle empty checksum values", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				manifest := &core.Ufest{
 					Size:     testFileSize,
@@ -343,15 +348,15 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			})
 
 			It("should handle zero-sized chunks", func() {
-				createTestFile(localFQN, int(testFileSize))
-				lom := NewBasicLom(localFQN)
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
 
 				manifest := &core.Ufest{
 					Size:     testFileSize,
 					Num:      3,
 					CksumTyp: cos.ChecksumOneXxh,
 					Chunks: []core.Uchunk{
-						{Siz: 0, CksumVal: "empty"}, // zero size
+						{Siz: 0, Path: "a/b/c/ddd", CksumVal: "empty"}, // zero size
 						{Siz: testFileSize, CksumVal: "full"},
 						{Siz: 0, CksumVal: "empty2"}, // another zero - total = 1048576
 					},
@@ -371,3 +376,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 		})
 	})
 })
+
+func createDummyFile(fqn string) {
+	_ = os.Remove(fqn)
+	_, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+}

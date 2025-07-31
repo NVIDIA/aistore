@@ -26,7 +26,7 @@ import (
  *
  * When walking through the files we need to know if the file is an object or
  * other content. To do that we generate fqn with Gen. It adds short
- * prefix to the base name, which we believe is unique and will separate objects
+ * prefix (or suffix) to the base name, which we believe is unique and will separate objects
  * from content files. We parse the file type to run ParseUniqueFQN (implemented
  * by this file type) on the rest of the base name.
  */
@@ -50,8 +50,8 @@ type (
 	ContentResolver interface {
 		// Generates unique base name for original one. This function may add
 		// additional information to the base name.
-		// prefix - user-defined marker
-		GenUniqueFQN(base, prefix string) (ufqn string)
+		// extra - a user-defined marker
+		GenUniqueFQN(base, extra string) (ufqn string)
 		// Parses generated unique fqn to the original one.
 		ParseUniqueFQN(base string) (orig string, old, ok bool)
 	}
@@ -123,10 +123,10 @@ func (f *contentSpecMgr) _reg(contentType string, spec ContentResolver) error {
 }
 
 // Gen returns a new FQN generated from given parts.
-func (f *contentSpecMgr) Gen(parts PartsFQN, contentType, prefix string) (fqn string) {
+func (f *contentSpecMgr) Gen(parts PartsFQN, contentType, extra string) (fqn string) {
 	var (
 		spec    = f.m[contentType]
-		objName = spec.GenUniqueFQN(parts.ObjectName(), prefix)
+		objName = spec.GenUniqueFQN(parts.ObjectName(), extra)
 	)
 
 	// [NOTE]
@@ -174,12 +174,12 @@ func (*ObjectContentResolver) ParseUniqueFQN(base string) (orig string, old, ok 
 	return base, false, true
 }
 
-func (*WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
+func (*WorkfileContentResolver) GenUniqueFQN(base, extra string) string {
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
 	)
-	fname = prefix + ssepa + fname
+	fname = extra + ssepa + fname
 	base = filepath.Join(dir, fname)
 	return base + ssepa + tieBreaker + ssepa + spid
 }
@@ -213,7 +213,7 @@ func (*ObjChunkContentResolver) GenUniqueFQN(base, snum string) string {
 }
 
 func (*ObjChunkContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
-	idx := strings.LastIndexByte(base, bsepa) // pid
+	idx := strings.LastIndexByte(base, bsepa) // ".0001", "0002", etc.
 	if idx < 0 {
 		return "", false, false
 	}

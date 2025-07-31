@@ -18,6 +18,8 @@ const (
 	SizeofI64 = int(unsafe.Sizeof(uint64(0)))
 	SizeofI32 = int(unsafe.Sizeof(uint32(0)))
 	SizeofI16 = int(unsafe.Sizeof(uint16(0)))
+
+	SizeXXHash64 = SizeofI64
 )
 
 // Unsafe cast (string => []byte) and ([]byte => string)

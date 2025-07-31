@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	sizeXXHash64  = cos.SizeofI64
 	lz4BufferSize = lz4.Block64Kb
 )
 
@@ -57,7 +56,7 @@ func Encode(ws cos.WriterAt, v any, opts Options) error {
 		debug.Assert(off == prefLen)
 	}
 	if opts.Checksum {
-		var cksum [sizeXXHash64]byte
+		var cksum [cos.SizeXXHash64]byte
 		w.Write(cksum[:]) // reserve for checksum
 	}
 	if opts.Compress {
@@ -69,7 +68,7 @@ func Encode(ws cos.WriterAt, v any, opts Options) error {
 	}
 	if opts.Checksum {
 		h = onexxh.New64()
-		cos.Assert(h.Size() == sizeXXHash64)
+		cos.Assert(h.Size() == cos.SizeXXHash64)
 		w = io.MultiWriter(h, w)
 	}
 
@@ -136,7 +135,7 @@ func Decode(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 }
 
 func _decksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
-	var cksum [sizeXXHash64]byte
+	var cksum [cos.SizeXXHash64]byte
 	if _, err := r.Read(cksum[:]); err != nil {
 		return nil, err
 	}

@@ -337,7 +337,7 @@ var _ = Describe("LOM", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
-					lom := NewBasicLom(noneFQN)
+					lom := newBasicLom(noneFQN)
 					cksum, err := lom.ComputeSetCksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cksum).To(BeNil())
@@ -366,7 +366,7 @@ var _ = Describe("LOM", func() {
 					Expect(cksumValue).To(BeEquivalentTo(expectedChecksum))
 					Expect(lom.Checksum().Equal(cksum)).To(BeTrue())
 
-					newLom := NewBasicLom(lom.FQN)
+					newLom := newBasicLom(lom.FQN)
 					err = newLom.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 					cksumType, _ = newLom.Checksum().Get()
@@ -379,7 +379,7 @@ var _ = Describe("LOM", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
-					lom := NewBasicLom(noneFQN)
+					lom := newBasicLom(noneFQN)
 					err := lom.ValidateMetaChecksum()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Checksum()).To(BeNil())
@@ -389,7 +389,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					fsLOM := NewBasicLom(localFQN)
+					fsLOM := newBasicLom(localFQN)
 					err := fsLOM.Load(false, false)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -401,7 +401,7 @@ var _ = Describe("LOM", func() {
 
 					Expect(lom.Checksum()).ToNot(BeNil())
 					_, val := lom.Checksum().Get()
-					fsLOM = NewBasicLom(localFQN)
+					fsLOM = newBasicLom(localFQN)
 					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 					_, fsVal := fsLOM.Checksum().Get()
@@ -459,7 +459,7 @@ var _ = Describe("LOM", func() {
 				It("should correctly validate meta checksum after the checksum type has changed", func() {
 					// Using bucket that has checksum type that is *not* `none`.
 					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN)
+					lom := newBasicLom(localFQN)
 					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
 					orig := lom.Bck().Props.Cksum.Type
 					lom.Bck().Props.Cksum.Type = cos.ChecksumNone
@@ -479,7 +479,7 @@ var _ = Describe("LOM", func() {
 					testObject := "foldr/test-obj.ext"
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
 
-					lom := NewBasicLom(noneFQN)
+					lom := newBasicLom(noneFQN)
 					err := lom.ValidateContentChecksum(false)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(lom.Checksum()).To(BeNil())
@@ -489,7 +489,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					expectedChecksum := getTestFileHash(localFQN)
 
-					fsLOM := NewBasicLom(localFQN)
+					fsLOM := newBasicLom(localFQN)
 					err := fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
@@ -502,7 +502,7 @@ var _ = Describe("LOM", func() {
 					Expect(lom.Checksum()).ToNot(BeNil())
 					_, cksumValue := lom.Checksum().Get()
 
-					fsLOM = NewBasicLom(localFQN)
+					fsLOM = newBasicLom(localFQN)
 					err = fsLOM.Load(false, false)
 					Expect(err).ShouldNot(HaveOccurred())
 
@@ -513,20 +513,20 @@ var _ = Describe("LOM", func() {
 
 				It("should accept when filesystem and memory checksums match", func() {
 					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN)
+					lom := newBasicLom(localFQN)
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
 				It("should accept when both filesystem and memory checksums are nil", func() {
 					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN)
+					lom := newBasicLom(localFQN)
 
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when object content has changed", func() {
 					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN)
+					lom := newBasicLom(localFQN)
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					err := os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
@@ -538,7 +538,7 @@ var _ = Describe("LOM", func() {
 				It("should correctly validate content checksum after the checksum type has changed", func() {
 					// Using bucket that has checksum type that is *not* `none`.
 					createTestFile(localFQN, testFileSize)
-					lom := NewBasicLom(localFQN)
+					lom := newBasicLom(localFQN)
 					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
 					lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
 
@@ -550,7 +550,7 @@ var _ = Describe("LOM", func() {
 				It("should error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
 					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
-					lom := NewBasicLom(noneFQN)
+					lom := newBasicLom(noneFQN)
 
 					Expect(lom.FromFS()).To(HaveOccurred())
 				})
@@ -559,7 +559,7 @@ var _ = Describe("LOM", func() {
 					startTime := time.Now()
 					time.Sleep(50 * time.Millisecond)
 					lom1 := filePut(localFQN, testFileSize)
-					lom2 := NewBasicLom(localFQN)
+					lom2 := newBasicLom(localFQN)
 					Expect(lom1.Persist()).NotTo(HaveOccurred())
 
 					Expect(lom1.ValidateContentChecksum(false)).NotTo(HaveOccurred())
@@ -695,7 +695,7 @@ var _ = Describe("LOM", func() {
 			hrwLom.UncacheUnless()
 
 			// Reload copy, to make sure it is fresh
-			dst = NewBasicLom(dst.FQN)
+			dst = newBasicLom(dst.FQN)
 			Expect(dst.Load(false, true)).NotTo(HaveOccurred())
 			lck := dst.IsLocked() > apc.LockNone
 			Expect(dst.ValidateContentChecksum(lck)).NotTo(HaveOccurred())
@@ -707,7 +707,7 @@ var _ = Describe("LOM", func() {
 			expectedHash := getTestFileHash(defaultLOM.FQN)
 
 			for _, copyFQN := range copiesFQNs {
-				copyLOM := NewBasicLom(copyFQN)
+				copyLOM := newBasicLom(copyFQN)
 				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
 
 				_, cksumValue := copyLOM.Checksum().Get()
@@ -943,7 +943,7 @@ var _ = Describe("LOM", func() {
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
-				lom = NewBasicLom(mirrorFQNs[0])
+				lom = newBasicLom(mirrorFQNs[0])
 				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeFalse())
@@ -971,7 +971,7 @@ var _ = Describe("LOM", func() {
 				Expect(mirrorFQNs[1]).NotTo(BeAnExistingFile())
 
 				// Reload default object and check if the lom was correctly updated.
-				lom = NewBasicLom(mirrorFQNs[0])
+				lom = newBasicLom(mirrorFQNs[0])
 				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeTrue())
@@ -979,7 +979,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.GetCopies()).To(And(HaveKey(mirrorFQNs[0]), HaveKey(mirrorFQNs[2])))
 
 				// Check that left copy was correctly updated.
-				copyLOM := NewBasicLom(mirrorFQNs[2])
+				copyLOM := newBasicLom(mirrorFQNs[2])
 				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
 				_, cksumValue := copyLOM.Checksum().Get()
 				Expect(cksumValue).To(Equal(expectedHash))
@@ -1014,7 +1014,7 @@ var _ = Describe("LOM", func() {
 				Expect(mirrorFQNs[2]).NotTo(BeAnExistingFile())
 
 				// Reload default object and see if the lom was correctly updated.
-				lom = NewBasicLom(mirrorFQNs[0])
+				lom = newBasicLom(mirrorFQNs[0])
 				Expect(lom.Load(false, true)).ToNot(HaveOccurred())
 				Expect(lom.IsCopy()).To(BeFalse())
 				Expect(lom.HasCopies()).To(BeFalse())
@@ -1066,6 +1066,258 @@ var _ = Describe("LOM", func() {
 			fs.Enable(mpaths[2])
 		})
 	})
+
+	//nolint:dupword // ok
+	/* TODO -- FIXME: finish up --------------------------------------------- //nolint:dupword // ok
+
+	Describe("Chunked Objects", func() {
+		const (
+			testObjectName = "chunked/test-obj.bin"
+			testFileSize   = int64(1024 * 1024) // 1MB
+		)
+
+		createChunkedLOM := func(fqn string, chunkSizes []int64) *core.LOM {
+			// Create the main file (chunk #1)
+			createTestFile(fqn, int(chunkSizes[0]))
+			lom := newBasicLom(fqn)
+			lom.SetSize(testFileSize) // total size, not just chunk #1
+
+			// Create and store chunk manifest
+			manifest := &core.Ufest{
+				Size:     testFileSize,
+				Num:      uint16(len(chunkSizes)),
+				CksumTyp: cos.ChecksumOneXxh,
+				Chunks:   make([]core.Uchunk, len(chunkSizes)),
+			}
+
+			for i, size := range chunkSizes {
+				manifest.Chunks[i] = core.Uchunk{
+					Siz:      size,
+					CksumVal: trand.String(16),
+				}
+			}
+
+			Expect(manifest.Store(lom)).NotTo(HaveOccurred())
+			Expect(persist(lom)).NotTo(HaveOccurred())
+			lom.UncacheUnless()
+			return lom
+		}
+
+		Describe("lmflChunk flag", func() {
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
+
+			It("should set and persist lmflChunk flag for chunked objects", func() {
+				chunkSizes := []int64{400000, 400000, 248576} // total = 1048576
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Verify flag is set in memory
+				Expect(lom.IsChunked()).To(BeTrue())
+
+				// Reload from disk and verify flag persists
+				newLom := newBasicLom(localFQN)
+				err := newLom.Load(false, false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newLom.IsChunked()).To(BeTrue())
+			})
+
+			It("should not set lmflChunk flag for regular objects", func() {
+				regularFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "regular/test-obj.bin")
+				lom := filePut(regularFQN, int(testFileSize))
+
+				// Verify flag is not set
+				Expect(lom.IsChunked()).To(BeFalse())
+
+				// Reload and verify
+				newLom := newBasicLom(regularFQN)
+				err := newLom.Load(false, false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newLom.IsChunked()).To(BeFalse())
+			})
+
+			It("should handle flag correctly during object operations", func() {
+				chunkSizes := []int64{testFileSize} // single chunk
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Test version increment preserves flag
+				origVersion := lom.Version()
+				lom.IncVersion()
+				Expect(persist(lom)).NotTo(HaveOccurred())
+				Expect(lom.IsChunked()).To(BeTrue())
+				Expect(lom.Version()).NotTo(Equal(origVersion))
+
+				// Test checksum operations preserve flag
+				Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
+				Expect(lom.IsChunked()).To(BeTrue())
+
+				// Test custom metadata preserves flag
+				lom.SetCustomMD(cos.StrKVs{cmn.ETag: "test-etag"})
+				Expect(persist(lom)).NotTo(HaveOccurred())
+				Expect(lom.IsChunked()).To(BeTrue())
+			})
+		})
+
+		Describe("chunked object metadata", func() {
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
+
+			It("should load chunk manifest along with LOM metadata", func() {
+				chunkSizes := []int64{300000, 400000, 348576} // total = 1048576
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Reload and verify both LOM and chunk manifest are loaded
+				newLom := newBasicLom(localFQN)
+				err := newLom.Load(false, false)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(newLom.IsChunked()).To(BeTrue())
+				Expect(newLom.Lsize()).To(Equal(testFileSize))
+
+				// Load chunk manifest separately to verify it exists
+				manifest := &core.Ufest{}
+				err = manifest.Load(newLom)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(manifest.Num).To(Equal(uint16(3)))
+				Expect(manifest.Size).To(Equal(testFileSize))
+			})
+
+			It("should handle corrupted chunk manifest gracefully", func() {
+				chunkSizes := []int64{testFileSize}
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Corrupt the chunk manifest xattr
+				b, err := fs.GetXattr(localFQN, "user.ais.chunk")
+				Expect(err).NotTo(HaveOccurred())
+				b[0] = 99 // corrupt version
+				Expect(fs.SetXattr(localFQN, "user.ais.chunk", b)).NotTo(HaveOccurred())
+
+				// LOM should still load, but chunk manifest should fail
+				newLom := newBasicLom(localFQN)
+				err = newLom.Load(false, false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(newLom.IsChunked()).To(BeTrue()) // flag still set
+
+				// But manifest loading should fail
+				manifest := &core.Ufest{}
+				err = manifest.Load(newLom)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported chunk-manifest meta-version"))
+			})
+		})
+
+		Describe("chunked object operations", func() {
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
+
+			It("should copy chunked objects correctly", func() {
+				chunkSizes := []int64{500000, 548576} // total = 1048576
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Create copy destination
+				copyFQN := mis[1].MakePathFQN(&localBckB, fs.ObjectType, testObjectName+"-copy")
+				copyLOM, err := lom.Copy2FQN(copyFQN, make([]byte, testFileSize))
+				Expect(err).NotTo(HaveOccurred())
+
+				// Copy should NOT be chunked (it's a new monolithic object)
+				Expect(copyLOM.IsChunked()).To(BeFalse())
+				Expect(copyLOM.Lsize()).To(Equal(int64(len(chunkSizes[0])))) // only chunk #1 was copied
+
+				// Original should still be chunked
+				Expect(lom.IsChunked()).To(BeTrue())
+				Expect(lom.Lsize()).To(Equal(testFileSize))
+			})
+
+			It("should validate checksums for chunked objects", func() {
+				chunkSizes := []int64{testFileSize}
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Validate content checksum should work
+				err := lom.ValidateContentChecksum(false)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Validate meta checksum should work
+				err = lom.ValidateMetaChecksum()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should still be chunked after validation
+				Expect(lom.IsChunked()).To(BeTrue())
+			})
+
+			It("should handle size operations correctly for chunked objects", func() {
+				chunkSizes := []int64{200000, 300000, 548576} // total = 1048576
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Total size should be sum of all chunks
+				Expect(lom.Lsize()).To(Equal(testFileSize))
+				Expect(lom.SizeBytes()).To(Equal(testFileSize))
+
+				// But actual file size is just chunk #1
+				stat, err := os.Stat(localFQN)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stat.Size()).To(Equal(chunkSizes[0])) // only chunk #1 on disk
+			})
+
+			It("should preserve chunked flag during rename operations", func() {
+				chunkSizes := []int64{testFileSize}
+				lom := createChunkedLOM(localFQN, chunkSizes)
+
+				// Rename the object (simulate mv operation)
+				newName := "chunked/renamed-obj.bin"
+				newFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, newName)
+
+				err := os.Rename(localFQN, newFQN)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create new LOM for renamed file
+				newLom := newBasicLom(newFQN)
+				err = newLom.Load(false, false)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should still be chunked
+				Expect(newLom.IsChunked()).To(BeTrue())
+
+				// Chunk manifest should still be accessible
+				manifest := &core.Ufest{}
+				err = manifest.Load(newLom)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Describe("mixed chunked and regular objects", func() {
+			It("should handle both types in the same bucket", func() {
+				// Create regular object
+				regularFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "regular-obj.bin")
+				regularLOM := filePut(regularFQN, int(testFileSize))
+
+				// Create chunked object
+				chunkedFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "chunked-obj.bin")
+				chunkSizes := []int64{600000, 448576}
+				chunkedLOM := createChunkedLOM(chunkedFQN, chunkSizes)
+
+				// Verify they have different flags
+				Expect(regularLOM.IsChunked()).To(BeFalse())
+				Expect(chunkedLOM.IsChunked()).To(BeTrue())
+
+				// Reload both and verify flags persist
+				newRegular := newBasicLom(regularFQN)
+				newChunked := newBasicLom(chunkedFQN)
+
+				Expect(newRegular.Load(false, false)).NotTo(HaveOccurred())
+				Expect(newChunked.Load(false, false)).NotTo(HaveOccurred())
+
+				Expect(newRegular.IsChunked()).To(BeFalse())
+				Expect(newChunked.IsChunked()).To(BeTrue())
+
+				// Both should have same total size but different on-disk sizes
+				Expect(newRegular.Lsize()).To(Equal(testFileSize))
+				Expect(newChunked.Lsize()).To(Equal(testFileSize))
+
+				regularStat, _ := os.Stat(regularFQN)
+				chunkedStat, _ := os.Stat(chunkedFQN)
+				Expect(regularStat.Size()).To(Equal(testFileSize))  // full file
+				Expect(chunkedStat.Size()).To(Equal(chunkSizes[0])) // just chunk #1
+			})
+		})
+
+	})
+	------------------------------------------------ */
 })
 
 //
@@ -1073,16 +1325,20 @@ var _ = Describe("LOM", func() {
 //
 
 // needs to be called inside of gomega scope like Describe/It
-func NewBasicLom(fqn string) *core.LOM {
+func newBasicLom(fqn string, size ...int64) *core.LOM {
 	lom := &core.LOM{}
 	err := lom.InitFQN(fqn, nil)
 	Expect(err).NotTo(HaveOccurred())
+
+	if len(size) > 0 {
+		lom.SetSize(size[0])
+	}
 	return lom
 }
 
 func filePut(fqn string, size int) *core.LOM {
 	createTestFile(fqn, size)
-	lom := NewBasicLom(fqn)
+	lom := newBasicLom(fqn)
 	lom.SetSize(int64(size))
 	lom.IncVersion()
 	Expect(persist(lom)).NotTo(HaveOccurred())

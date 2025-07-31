@@ -100,7 +100,7 @@ func Tinit(t Target, config *cmn.Config, runHK bool) {
 	bckLocker = newNameLocker()
 	T = t
 	{
-		g.maxLmeta.Store(xattrMaxSize)
+		g.maxLmeta.Store(xattrLomSize)
 		g.locker = newNameLocker()
 		g.pmm = t.PageMM()
 		g.smm = t.ByteMM()

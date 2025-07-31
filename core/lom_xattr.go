@@ -51,10 +51,8 @@ const mdCksumTyXXHash = 1
 // on-disk xattr
 const (
 	xattrLOM = "user.ais.lom"
-)
 
-const (
-	xattrMaxSize = memsys.MaxSmallSlabSize // lom and chunk(?)
+	xattrLomSize = memsys.MaxSmallSlabSize // maximum
 )
 
 // cmd/xmeta support
@@ -152,9 +150,9 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		if err != syscall.ERANGE {
 			return whingeLmeta(lom.Cname(), err)
 		}
-		debug.Assert(mdSize < xattrMaxSize)
+		debug.Assert(mdSize < xattrLomSize)
 		// 2nd attempt: max-size
-		buf, slab = g.smm.AllocSize(xattrMaxSize)
+		buf, slab = g.smm.AllocSize(xattrLomSize)
 		b, err = lom.GetXattr(buf)
 		if err != nil {
 			slab.Free(buf)
@@ -266,7 +264,7 @@ func (lom *LOM) pack() (buf []byte) {
 	lmsize := g.maxLmeta.Load()
 	buf = lom.md.pack(lmsize)
 	size := int64(len(buf))
-	debug.Assert(size <= xattrMaxSize)
+	debug.Assert(size <= xattrLomSize)
 	_mdsize(size, lmsize)
 	return
 }
@@ -275,10 +273,10 @@ func _mdsize(size, mdSize int64) {
 	const grow = memsys.SmallSlabIncStep
 	var nsize int64
 	if size > mdSize {
-		nsize = min(size+grow, xattrMaxSize)
+		nsize = min(size+grow, xattrLomSize)
 		g.maxLmeta.CAS(mdSize, nsize)
-	} else if mdSize == xattrMaxSize && size < xattrMaxSize-grow {
-		nsize = min(size+grow, (size+xattrMaxSize)/2)
+	} else if mdSize == xattrLomSize && size < xattrLomSize-grow {
+		nsize = min(size+grow, (size+xattrLomSize)/2)
 		g.maxLmeta.CAS(mdSize, nsize)
 	}
 }

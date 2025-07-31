@@ -134,7 +134,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
-				newLom := NewBasicLom(localFQN)
+				newLom := newBasicLom(localFQN)
 				err = newLom.Load(false, true)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Checksum()).To(BeEquivalentTo(newLom.Checksum()))
@@ -174,7 +174,7 @@ var _ = Describe("LOM Xattributes", func() {
 				ver := lom.Version()
 				lom.UncacheUnless()
 
-				newLom := NewBasicLom(cachedFQN)
+				newLom := newBasicLom(cachedFQN)
 				err = newLom.Load(false, true)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Checksum()).To(BeEquivalentTo(newLom.Checksum()))
@@ -253,7 +253,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
-				newLom := NewBasicLom(localFQN)
+				newLom := newBasicLom(localFQN)
 				err = newLom.Load(false, true)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.Checksum()).To(BeEquivalentTo(newLom.Checksum()))
@@ -266,8 +266,8 @@ var _ = Describe("LOM Xattributes", func() {
 		Describe("LoadMetaFromFS", func() {
 			It("should read fresh meta from fs", func() {
 				createTestFile(localFQN, testFileSize)
-				lom1 := NewBasicLom(localFQN)
-				lom2 := NewBasicLom(localFQN)
+				lom1 := newBasicLom(localFQN)
+				lom2 := newBasicLom(localFQN)
 				lom1.Lock(true)
 				defer lom1.Unlock(true)
 				lom1.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
@@ -290,7 +290,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				BeforeEach(func() {
 					createTestFile(localFQN, testFileSize)
-					lom = NewBasicLom(localFQN)
+					lom = newBasicLom(localFQN)
 					lom.Lock(true)
 					defer lom.Unlock(true)
 					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "test_checksum"))
