@@ -593,7 +593,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint GET /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint GET /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // List buckets or list objects within a bucket
 func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
@@ -713,7 +713,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 }
 
-// +gen:endpoint GET /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamOrigURL=string,apc.QparamLatestVer=bool]
+// +gen:endpoint GET /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamOrigURL=string,apc.QparamLatestVer=bool]
 // Retrieve the object content with the given uname
 func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	// 1. request
@@ -779,7 +779,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	p.statsT.IncBck(stats.GetCount, bck.Bucket())
 }
 
-// +gen:endpoint PUT /v1/objects/bucket-name/object-name[apc.QparamAppendType=string,apc.QparamAppendHandle=string]
+// +gen:endpoint PUT /v1/objects/{bucket-name}/{object-name}[apc.QparamAppendType=string,apc.QparamAppendHandle=string]
 // Create a new object with the given uname
 func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
@@ -882,7 +882,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	p.statsT.IncWith(scnt, vlabs)
 }
 
-// +gen:endpoint DELETE /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint DELETE /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // Delete an object with the given uname
 func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	bckArgs := allocBctx()
@@ -925,7 +925,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
 }
 
-// +gen:endpoint DELETE /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamKeepRemote=bool]
+// +gen:endpoint DELETE /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamKeepRemote=bool]
 // Delete a bucket or delete/evict objects within a bucket
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	// 1. request
@@ -1202,7 +1202,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// +gen:endpoint PUT /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint PUT /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // Perform actions on a bucket (like archiving)
 func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -1265,7 +1265,9 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint POST /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck"}
+// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
 // Create buckets or perform bucket operations (copy, move, etc.)
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
@@ -1675,7 +1677,9 @@ func crerrStatus(err error) (ecode int) {
 	return
 }
 
-// +gen:endpoint POST /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActPromote=apc.PromoteArgs|apc.ActBlobDl=apc.BlobMsg]
+// +gen:endpoint POST /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActPromote=apc.PromoteArgs|apc.ActBlobDl=apc.BlobMsg]
+// +gen:payload apc.ActPromote={"action": "promote", "name": "/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true}}
+// +gen:payload apc.ActBlobDl={"action": "blob-download", "value": {"chunk-size": 10485760, "num-workers": 4}}
 // Perform actions on objects (rename, promote, blob download, check lock)
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := p.readActionMsg(w, r)
@@ -1787,7 +1791,7 @@ func _checkObjMv(bck *meta.Bck, msg *apc.ActMsg, apireq *apiRequest) error {
 	return nil
 }
 
-// +gen:endpoint HEAD /v1/buckets/bucket-name/prefix[apc.QparamFltPresence=string,apc.QparamBinfoWithOrWithoutRemote=string,apc.QparamDontAddRemote=bool]
+// +gen:endpoint HEAD /v1/buckets/{bucket-name}/[apc.QparamFltPresence=string,apc.QparamBinfoWithOrWithoutRemote=string,apc.QparamDontAddRemote=bool]
 // Get bucket metadata and properties
 // with additional preparsing step to support api.GetBucketInfo prefix
 // (e.g. 'ais ls ais://nnn --summary --prefix=aaa/bbb')
@@ -1918,7 +1922,7 @@ func toHdr(w http.ResponseWriter, bck *meta.Bck, info *cmn.BsummResult, status i
 	}
 }
 
-// +gen:endpoint PATCH /v1/buckets/bucket-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint PATCH /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // Update bucket properties and settings
 func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
@@ -1986,7 +1990,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 }
 
-// +gen:endpoint HEAD /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamSilent=bool]
+// +gen:endpoint HEAD /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamSilent=bool]
 // Get object metadata and properties
 func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck ...string) {
 	bckArgs := allocBctx()
@@ -2020,7 +2024,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
-// +gen:endpoint PATCH /v1/objects/bucket-name/object-name[apc.QparamProvider=string,apc.QparamNamespace=string]
+// +gen:endpoint PATCH /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
 // Update object metadata and custom properties
 func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()

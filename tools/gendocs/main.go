@@ -23,68 +23,62 @@ var (
 )
 
 const (
-	// Relative paths from project root
+	// File paths and extensions
 	apcRelativePath         = "api/apc/query.go"
 	aisRelativePath         = "ais"
 	annotationsRelativePath = "tools/gendocs/gendocs-temp/annotations.go"
 	docsRelativePath        = ".docs"
 	tempDirRelativePath     = "tools/gendocs/gendocs-temp"
+	goFileExt               = ".go"
 
-	goFileExt   = ".go"
-	newlineChar = "\n"
+	// Generation annotation prefixes
+	endpointPrefix = "+gen:endpoint"
+	payloadPrefix  = "+gen:payload"
 
-	endpointPrefix    = "+gen:endpoint"
-	summaryAnnotation = "// @Summary "
-	commentPrefix     = "//"
-	commentWithSpace  = "// "
+	// Comment parsing
+	commentPrefix    = "//"
+	commentWithSpace = "// "
+	funcKeyword      = "func "
+	openParen        = "("
 
+	// Swagger annotation keywords
 	atSummary = "@Summary"
 	atParam   = "@Param"
 	atSuccess = "@Success"
 	atRouter  = "@Router"
 
-	openBracket  = "["
-	closeBracket = "]"
-	comma        = ","
-	equals       = "="
-	pipe         = "|"
+	baseURL          = "AIS_ENDPOINT"
+	paramPlaceholder = "<value>"
 
-	actionPrefix = "action=" + openBracket
+	// Curl command generation
+	curlBase        = "curl -i -L -X "
+	headerFlag      = "-H"
+	dataFlag        = "-d"
+	contentTypeJSON = "Content-Type: application/json"
+	backslash       = " \\"
+
+	// Action parsing constants
+	actionPrefix = "action=["
 	apcPrefix    = "apc."
 
-	errorParsingEndpoint = "Error parsing endpoint: %v\n"
-	warningNoComment     = "Warning: no comment for %s\n"
-	cleanupMessage       = "Cleaning up temp directory %s\n"
-	malformedEndpointErr = "malformed endpoint line"
-
-	paramTemplate   = "// @Param %s query %s false \"%s\""
-	successTemplate = "// @Success 200 {object} object \"Success\""
-	routerTemplate  = "// @Router %s [%s]"
-	idTemplate      = "// @ID %s"
-	tagsTemplate    = "// @Tags %s"
-
-	bodyParamTemplate      = "// @Param request body %s true \"%s\""
-	supportedActionsHeader = "Supported actions: "
-	actionLabelFormat      = "%s - Available fields: "
-	modelExampleFormat     = "%s"
-	modelLabelFormat       = "%s - No fields available"
-	fieldDetailsNA         = "No fields available"
-	actionSeparator        = "; "
-	lineBreak              = ""
-
-	quote        = `"`
-	escapedQuote = `\"`
-
-	funcKeyword = "func "
-	openParen   = "("
-
+	// Temporary files for vendor extensions
 	modelActionsFileName = "model-actions.yaml"
+	httpExamplesFileName = "http-examples.yaml"
 
+	// YAML keys for vendor extensions
 	definitionsKey       = "definitions"
 	xSupportedActionsKey = "x-supported-actions"
+	XHTTPExamplesKey     = "x-http-examples"
 
-	actionLinkFormat = "<a href='../Models/%s.html'>%s</a>"
-	apiLinkFormat    = "<a href='../Apis/%sApi.html#%s'>%s</a>"
+	// Template strings for Swagger generation
+
+	summaryAnnotation = "// @Summary "
+	paramTemplate     = "// @Param %s query %s false \"%s\""
+	successTemplate   = "// @Success 200 {object} object \"Success\""
+	routerTemplate    = "// @Router %s [%s]"
+	idTemplate        = "// @ID %s"
+	tagsTemplate      = "// @Tags %s"
+	bodyParamTemplate = "// @Param request body %s true \"%s\""
 )
 
 type (
@@ -93,14 +87,23 @@ type (
 		Model  string
 	}
 
+	commandExample struct {
+		Label   string `yaml:"label"`   // Example title (e.g., "Copy Bucket")
+		Command string `yaml:"command"` // HTTP command
+	}
+
+	// maps operation IDs to their HTTP examples
+	operationHTTPExamples map[string][]commandExample
+
 	endpoint struct {
-		Method      string
-		Path        string
-		Params      []param
-		Summary     string
-		OperationID string
-		Tag         string
-		Actions     []actionModel
+		Method       string
+		Path         string
+		Params       []param
+		Summary      string
+		OperationID  string
+		Tag          string
+		Actions      []actionModel
+		HTTPExamples []commandExample
 	}
 
 	fileParser struct {
@@ -108,6 +111,7 @@ type (
 		ParamSet     *paramSet
 		ActionMap    map[string]string
 		ModelActions map[string][]string
+		HTTPExamples operationHTTPExamples
 	}
 
 	fileWalker struct {
@@ -120,8 +124,142 @@ type (
 		ParamSet     *paramSet
 		ActionMap    map[string]string
 		ModelActions map[string][]string
+		HTTPExamples operationHTTPExamples
 	}
 )
+
+// Auto-generate URL from gen:endpoint annotation
+func buildURLFromEndpoint(ep *endpoint) string {
+	url := baseURL + ep.Path
+
+	// Add query parameters if they exist
+	if len(ep.Params) > 0 {
+		var queryParams []string
+		for _, param := range ep.Params {
+			queryParams = append(queryParams, fmt.Sprintf("%s=%s", param.Value, paramPlaceholder))
+		}
+		if len(queryParams) > 0 {
+			url += queryStart + strings.Join(queryParams, queryJoin)
+		}
+	}
+
+	return url
+}
+
+// Auto-generate complete HTTP command from endpoint data and optional payload
+func generateHTTPCommand(ep *endpoint, payload string) string {
+	method := strings.ToUpper(ep.Method)
+	url := buildURLFromEndpoint(ep)
+
+	cmd := curlBase + method + backslash + newlineChar
+
+	// Add headers and payload only if JSON payload provided
+	if payload != "" {
+		cmd += "  " + headerFlag + " '" + contentTypeJSON + "'" + backslash + newlineChar
+		cmd += fmt.Sprintf("  %s '%s'%s", dataFlag, payload, backslash) + newlineChar
+	}
+
+	cmd += fmt.Sprintf("  '%s'", url)
+	return cmd
+}
+
+// Parse payload annotation: apc.ActCopyBck={"action": "copy-bck"}
+func parsePayload(line string) (string, string) {
+	content := strings.TrimSpace(line[len(commentWithSpace+payloadPrefix):])
+	equalsIndex := strings.Index(content, "=")
+	if equalsIndex == -1 {
+		return "", ""
+	}
+
+	action := strings.TrimSpace(content[:equalsIndex])
+	payload := strings.TrimSpace(content[equalsIndex+1:])
+
+	return action, payload
+}
+
+// Generate readable labels from endpoint and action (example: "Copy Bucket")
+func generateLabelFromAction(action actionModel, actionMap map[string]string) string {
+	actionName := strings.TrimPrefix(action.Action, apcPrefix)
+	if mappedName, exists := actionMap[actionName]; exists {
+		return mappedName
+	}
+	return actionName
+}
+
+// Generate readable label from endpoint path (example: "Objects")
+func generateLabelFromPath(path string) string {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) >= 2 {
+		return segments[1]
+	}
+	return defaultLabel
+}
+
+// Collect payloads and auto-generate HTTP examples
+func collectAndGenerateHTTPExamples(lines []string, i int, ep *endpoint, actionMap map[string]string) []commandExample {
+	var examples []commandExample
+	payloads := make(map[string]string) // action -> payload mapping
+
+	// First pass: collect any manual payloads and legacy examples
+	j := i + 1
+	for ; j < len(lines); j++ {
+		next := strings.TrimSpace(lines[j])
+		if isFunctionDeclaration(next) {
+			break
+		}
+		if next == "" {
+			continue
+		}
+		if !strings.HasPrefix(next, commentPrefix) {
+			break
+		}
+		if strings.Contains(next, endpointPrefix) {
+			continue
+		}
+		if strings.Contains(next, payloadPrefix) {
+			action, payload := parsePayload(next)
+			if action != "" && payload != "" {
+				payloads[action] = payload
+			}
+			continue
+		}
+
+		if isSwaggerComment(next) {
+			continue
+		}
+
+		cleanLine := strings.TrimSpace(strings.TrimPrefix(next, commentPrefix))
+		if cleanLine != "" {
+			break
+		}
+	}
+
+	// Auto-generate examples based on endpoint type
+	if len(ep.Actions) > 0 {
+		for _, action := range ep.Actions {
+			payload := payloads[action.Action]
+			httpCmd := generateHTTPCommand(ep, payload)
+			label := generateLabelFromAction(action, actionMap)
+
+			examples = append(examples, commandExample{
+				Label:   label,
+				Command: httpCmd,
+			})
+		}
+	} else if len(examples) == 0 {
+		httpCmd := generateHTTPCommand(ep, "")
+
+		method := strings.ToLower(ep.Method)
+		label := strings.ToUpper(method[:1]) + method[1:] + " " + generateLabelFromPath(ep.Path)
+
+		examples = append(examples, commandExample{
+			Label:   label,
+			Command: httpCmd,
+		})
+	}
+
+	return examples
+}
 
 // Returns the absolute path to the project root directory
 func getProjectRoot() (string, error) {
@@ -158,6 +296,9 @@ func main() {
 		if err := injectModelExtensions(); err != nil {
 			panic(fmt.Errorf("failed to inject model extensions: %v", err))
 		}
+		if err := injectCodeSamples(); err != nil {
+			panic(fmt.Errorf("failed to inject code extensions: %v", err))
+		}
 		return
 	}
 
@@ -178,6 +319,7 @@ func main() {
 		ParamSet:     &paramSet,
 		ActionMap:    actionMap,
 		ModelActions: make(map[string][]string),
+		HTTPExamples: make(operationHTTPExamples),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -390,6 +532,15 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 
 	actions := parseActionClause(line)
 
+	tempEndpoint := &endpoint{
+		Method:  method,
+		Path:    path,
+		Params:  params,
+		Actions: actions,
+	}
+
+	httpExamples := collectAndGenerateHTTPExamples(lines, i, tempEndpoint, fp.ActionMap)
+
 	// Find the function declaration and extract function name first
 	operationID := ""
 	for j := i + 1; j < len(lines); j++ {
@@ -419,15 +570,15 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 			}
 		}
 	}
-
 	return endpoint{
-		Method:      method,
-		Path:        path,
-		Params:      params,
-		Summary:     summary,
-		OperationID: operationID,
-		Tag:         determineTag(path),
-		Actions:     actions,
+		Method:       method,
+		Path:         path,
+		Params:       params,
+		Summary:      summary,
+		OperationID:  operationID,
+		Tag:          determineTag(path),
+		Actions:      actions,
+		HTTPExamples: httpExamples,
 	}, nil
 }
 
@@ -474,7 +625,7 @@ func (fp *fileParser) process() error {
 				i++
 				continue
 			}
-			swaggerComments := generateSwaggerComments(&ep, fp.ActionMap)
+			swaggerComments := generateSwaggerComments(&ep, fp.ActionMap, fp.HTTPExamples)
 			writeToAnnotations(swaggerComments)
 			i++
 			continue
@@ -520,6 +671,7 @@ func (ep *endpointProcessor) run(root string) error {
 			ParamSet:     ep.ParamSet,
 			ActionMap:    ep.ActionMap,
 			ModelActions: ep.ModelActions,
+			HTTPExamples: ep.HTTPExamples,
 		}
 		if err := parser.process(); err != nil {
 			return err
@@ -527,7 +679,12 @@ func (ep *endpointProcessor) run(root string) error {
 	}
 
 	// Save ModelActions to temporary file for extension injection
-	return ep.saveModelActions()
+	if err := ep.saveModelActions(); err != nil {
+		return err
+	}
+
+	// Save HTTPExamples to temporary file for code samples injection
+	return ep.saveHTTPExamples()
 }
 
 // Writes the collected ModelActions to a temporary file for inject-extensions
@@ -606,6 +763,9 @@ func collectSummaryLines(lines []string, i int) []string {
 		if strings.Contains(next, endpointPrefix) {
 			continue
 		}
+		if strings.Contains(next, payloadPrefix) {
+			continue
+		}
 		if isSwaggerComment(next) {
 			continue
 		}
@@ -617,7 +777,7 @@ func collectSummaryLines(lines []string, i int) []string {
 	return summaryLines
 }
 
-func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string {
+func generateSwaggerComments(ep *endpoint, actionMap map[string]string, httpExamples operationHTTPExamples) []string {
 	swaggerComments := []string{}
 	if ep.Summary != "" {
 		swaggerComments = append(swaggerComments, summaryAnnotation+ep.Summary)
@@ -626,6 +786,10 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string) []string
 		swaggerComments = append(swaggerComments, fmt.Sprintf(idTemplate, ep.OperationID))
 	}
 	swaggerComments = append(swaggerComments, fmt.Sprintf(tagsTemplate, ep.Tag))
+
+	if len(ep.HTTPExamples) > 0 {
+		httpExamples[ep.OperationID] = ep.HTTPExamples
+	}
 
 	for _, param := range ep.Params {
 		paramName := param.Value
@@ -674,7 +838,7 @@ func cleanupAnnotations() error {
 	return os.RemoveAll(tempDirPath)
 }
 
-// reads the swagger.yaml file and injects vendor extensions
+// reads the swagger.yaml file and injects model vendor extensions
 func injectModelExtensions() error {
 	projectRoot, err := getProjectRoot()
 	if err != nil {
@@ -742,4 +906,112 @@ func injectModelExtensions() error {
 	fmt.Printf("Successfully injected extensions for %d models\n", injected)
 
 	return nil
+}
+
+// reads the swagger.yaml file and injects curl vendor extensions
+func injectCodeSamples() error {
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	httpExamplesPath := filepath.Join(projectRoot, tempDirRelativePath, httpExamplesFileName)
+	httpExamplesData, err := os.ReadFile(httpExamplesPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No HTTP examples found, skipping code samples injection")
+			return nil
+		}
+		return fmt.Errorf("failed to read HTTP examples: %v", err)
+	}
+
+	var endpointExamples operationHTTPExamples
+	if err := yaml.Unmarshal(httpExamplesData, &endpointExamples); err != nil {
+		return fmt.Errorf("failed to parse HTTP examples: %v", err)
+	}
+
+	yamlData, err := os.ReadFile(swaggerYamlPath)
+	if err != nil {
+		return fmt.Errorf("failed to read swagger.yaml: %v", err)
+	}
+
+	var spec map[string]any
+	if err := yaml.Unmarshal(yamlData, &spec); err != nil {
+		return fmt.Errorf("failed to parse swagger.yaml: %v", err)
+	}
+
+	paths, ok := spec["paths"].(map[string]any)
+	if !ok {
+		fmt.Println("No paths section found in swagger.yaml")
+		return nil
+	}
+
+	injected := 0
+	for operationID, examples := range endpointExamples {
+		if len(examples) == 0 {
+			continue
+		}
+
+		// Convert curlExample to x-codeSamples format
+		var codeSamples []map[string]any
+		for _, example := range examples {
+			codeSamples = append(codeSamples, map[string]any{
+				"lang":   bashLang,
+				"label":  example.Label,
+				"source": example.Command,
+			})
+		}
+
+		if injectCodeSamplesInPaths(paths, operationID, codeSamples) {
+			injected++
+			fmt.Printf("  Injected code samples for operation: %s\n", operationID)
+		}
+	}
+
+	updatedYaml, err := yaml.Marshal(spec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated yaml: %v", err)
+	}
+
+	if err := os.WriteFile(swaggerYamlPath, updatedYaml, 0o644); err != nil {
+		return fmt.Errorf("failed to write updated swagger.yaml: %v", err)
+	}
+
+	fmt.Printf("Successfully injected code samples for %d operations\n", injected)
+	return nil
+}
+
+func injectCodeSamplesInPaths(paths map[string]any, operationID string, codeSamples []map[string]any) bool {
+	for _, pathItem := range paths {
+		if pathMap, ok := pathItem.(map[string]any); ok {
+			for _, operation := range pathMap {
+				if opMap, ok := operation.(map[string]any); ok {
+					if opID, exists := opMap["operationId"]; exists && opID == operationID {
+						opMap[XHTTPExamplesKey] = codeSamples
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (ep *endpointProcessor) saveHTTPExamples() error {
+	if len(ep.HTTPExamples) == 0 {
+		return nil
+	}
+
+	projectRoot, err := getProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	httpExamplesPath := filepath.Join(projectRoot, tempDirRelativePath, httpExamplesFileName)
+	yamlData, err := yaml.Marshal(ep.HTTPExamples)
+	if err != nil {
+		return fmt.Errorf("failed to marshal HTTP examples: %v", err)
+	}
+
+	return os.WriteFile(httpExamplesPath, yamlData, 0o644)
 }

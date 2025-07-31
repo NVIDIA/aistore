@@ -100,3 +100,27 @@ img[alt="AIS-ETL Overview"] {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Copy button styling for curl examples */
+.copy-btn {
+  background: #0366d6;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  margin-left: 10px;
+}
+
+.copy-btn:hover {
+  background: #0256c7;
+  transform: translateY(-1px);
+}
+
+.copy-btn:active {
+  background: #044289;
+  transform: translateY(0);
+}
