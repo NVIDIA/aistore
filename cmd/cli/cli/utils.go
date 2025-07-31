@@ -495,6 +495,11 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 		minLen = min(minLen, len(a))
 	}
 
+	// Handle empty arguments
+	if minLen == 0 {
+		return
+	}
+
 	i := 0
 	for {
 		for _, a := range args {

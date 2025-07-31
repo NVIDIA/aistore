@@ -205,6 +205,12 @@ func (pt *ParsedTemplate) InitIter() {
 }
 
 func (pt *ParsedTemplate) Next() (string, bool) {
+	if pt.rangesCount == 0 {
+		pt.buf.Reset()
+		pt.buf.WriteString(pt.Prefix)
+		return pt.buf.String(), false
+	}
+
 	pt.buf.Reset()
 	for i := pt.rangesCount - 1; i >= 0; i-- {
 		if pt.at[i] > pt.Ranges[i].End {

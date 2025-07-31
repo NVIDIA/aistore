@@ -616,6 +616,13 @@ func (lr *lrCtx) dry(c *cli.Context, fileList []string, pt *cos.ParsedTemplate) 
 		return
 	}
 
+	// Handle bucket-only URI (e.g., "s3://bucket" with no object specified)
+	if lr.listObjs == "" && lr.tmplObjs == "" && pt.IsPrefixOnly() && pt.Count() == 1 {
+		fmt.Fprintf(c.App.Writer, "[DRY RUN] %s all objects from %s\n",
+			strings.ToUpper(c.Command.Name), lr.bck.Cname(""))
+		return
+	}
+
 	objs, err := pt.Expand(dryRunExamplesCnt)
 	if err != nil {
 		debug.AssertNoErr(err)
