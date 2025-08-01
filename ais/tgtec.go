@@ -75,8 +75,9 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 
 func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 	const (
-		hkname   = apc.ActEcClose + hk.NameSuffix
-		postpone = time.Minute
+		hknameEC  = apc.ActCloseEC + hk.NameSuffix
+		hknameSDM = apc.ActCloseSDM + hk.NameSuffix
+		postpone  = time.Minute
 	)
 	items, err := t.parseURL(w, r, apc.URLPathEC.L, 1, false)
 	if err != nil {
@@ -134,49 +135,66 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			nlog.Errorln(xctn.Name(), "already finished - dropping", lom.Cname())
 			core.FreeLOM(lom)
 		}
-	case apc.ActEcOpen:
-		hk.UnregIf(hkname, closeEc) // just in case, a no-op most of the time
+
+	// TODO [minor]: consider reusing ais/streams_toggle or otherwise reducing copy/paste
+
+	case apc.ActOpenEC:
+		hk.UnregIf(hknameEC, closeEc) // just in case, a no-op most of the time
 		ec.ECM.OpenStreams(false /*with refc*/)
-	case apc.ActEcClose:
+	case apc.ActCloseEC:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		if ec.ECM.IsActive() {
-			t.writeErr(w, r, errors.New("EC is active, cannot close"))
+			t.writeErr(w, r, _errOff("EC"))
 			return
 		}
 		nlog.Infoln(t.String(), "hk-postpone", action)
-		hk.Reg(hkname, closeEc, postpone)
+		hk.Reg(hknameEC, closeEc, postpone)
 
-	case apc.ActDmOpen:
+	case apc.ActOpenSDM:
+		hk.UnregIf(hknameSDM, closeSDM) // ditto
 		if err := bundle.SDM.Open(); err != nil {
 			t.writeErr(w, r, err)
 		}
-	case apc.ActDmClose:
+	case apc.ActCloseSDM:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		// TODO: consider delaying via hk (see above)
-		if err := bundle.SDM.Close(); err != nil {
-			t.writeErr(w, r, err)
+		if bundle.SDM.IsActive() {
+			t.writeErr(w, r, _errOff(bundle.SDMName))
+			return
 		}
+		nlog.Infoln(t.String(), "hk-postpone", action)
+		hk.Reg(hknameSDM, closeSDM, postpone)
 
 	default:
 		t.writeErr(w, r, errActEc(action))
 	}
 }
 
+func _errOff(what string) error { return errors.New(what + " is active, cannot close") }
+
 func closeEc(int64) time.Duration {
 	if ec.ECM.IsActive() {
-		nlog.Warningln("hk-cb: cannot close EC streams")
+		nlog.Warningln("hk-cb:", _errOff("EC"))
 	} else {
 		ec.ECM.CloseStreams(false /*with refc*/)
 	}
 	return hk.UnregInterval
 }
 
+func closeSDM(int64) time.Duration {
+	if bundle.SDM.IsActive() {
+		nlog.Warningln("hk-cb:", _errOff(bundle.SDMName))
+	} else if err := bundle.SDM.Close(); err != nil {
+		nlog.Errorln(err)
+	}
+	return hk.UnregInterval
+}
+
 func errActEc(act string) error {
-	return fmt.Errorf(fmtErrInvaldAction, act, []string{apc.ActEcOpen, apc.ActEcClose})
+	return fmt.Errorf(fmtErrInvaldAction, act, []string{apc.ActOpenEC, apc.ActCloseEC})
 }
 
 func (t *target) ECRestoreReq(ct *core.CT, tsi *meta.Snode, uuid string) error {

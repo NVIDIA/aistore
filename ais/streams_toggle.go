@@ -29,8 +29,8 @@ import (
 type (
 	streamsToggle struct {
 		hdrActive string       // apc.HdrActiveEC, ...
-		actOn     string       // apc.ActEcOpen, ...
-		actOff    string       // apc.ActEcClose, ...
+		actOn     string       // apc.ActOpenEC, ...
+		actOff    string       // apc.ActCloseEC, ...
 		last      atomic.Int64 // mono-time of last positive refresh
 	}
 
@@ -44,16 +44,16 @@ type (
 
 func (f *ecToggle) init() {
 	f.hdrActive = apc.HdrActiveEC
-	f.actOn = apc.ActEcOpen
-	f.actOff = apc.ActEcClose
+	f.actOn = apc.ActOpenEC
+	f.actOff = apc.ActCloseEC
 }
 
 func (*ecToggle) timeout() time.Duration { return cmn.Rom.EcStreams() }
 
 func (f *dmToggle) init() {
 	f.hdrActive = apc.HdrActiveDM
-	f.actOn = apc.ActDmOpen
-	f.actOff = apc.ActDmClose
+	f.actOn = apc.ActOpenSDM
+	f.actOff = apc.ActCloseSDM
 }
 
 func (*dmToggle) timeout() time.Duration { return cmn.SharedStreamsDflt }

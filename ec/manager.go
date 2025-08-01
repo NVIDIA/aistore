@@ -96,7 +96,7 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return
 	}
-	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActEcOpen)
+	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActOpenEC)
 	var (
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
@@ -128,7 +128,7 @@ func (mgr *Manager) CloseStreams(justRefc bool) {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
-	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActEcClose)
+	nlog.InfoDepth(1, core.T.String(), "ECM", apc.ActCloseEC)
 	mgr.req().Close(false)
 	mgr.resp().Close(false)
 }

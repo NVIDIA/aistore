@@ -29,15 +29,15 @@ func (p *proxy) httpecpost(w http.ResponseWriter, r *http.Request) {
 	}
 	action := apiItems[0]
 	switch action {
-	case apc.ActEcOpen:
+	case apc.ActOpenEC:
 		p.ec.setActive(mono.NanoTime())
-	case apc.ActEcClose:
+	case apc.ActCloseEC:
 		p.ec.setActive(0)
 
 	// TODO: refactor as post-toggle-shared-streams
-	case apc.ActDmOpen:
+	case apc.ActOpenSDM:
 		p.dm.setActive(mono.NanoTime())
-	case apc.ActDmClose:
+	case apc.ActCloseSDM:
 		p.dm.setActive(0)
 
 	default:

@@ -58,7 +58,9 @@ func (sdm *sharedDM) IsActive() (active bool) {
 }
 
 // constant (until and unless we run multiple shared-DMs)
-func (*sharedDM) trname() string { return "shared-dm" }
+const SDMName = "shared-dm"
+
+func (*sharedDM) trname() string { return SDMName }
 
 // called on-demand
 func (sdm *sharedDM) Open() error {
