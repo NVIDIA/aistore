@@ -41,6 +41,7 @@ It supports both **inline transformations** (real-time processing via GET reques
   * [Argument Types](#argument-types)
   * [Direct Put Optimization](#direct-put-optimization)
   * [Timeouts](#timeouts)
+  * [Resource Limits](#resource-limits)
 * [ETL Pod Lifecycle](#etl-pod-lifecycle)
   * [Lifecycle Stages & Transitions](#lifecycle-stages--transitions)
 * [Advanced Approach: Build a Container Image from Scratch](#advanced-approach-build-a-container-image-from-scratch)
@@ -235,7 +236,7 @@ You can build this server using the [AIS ETL Webserver Framework](#ais-etl-webse
 
 #### 1. Runtime Specification (Recommended)
 
-The preferred method of initialization is through a runtime YAML spec, which defines the ETL’s configuration, including [communication method](#communication-mechanisms), [argument type](#argument-types), [timeouts](#timeouts), and [support for direct writes](#direct-put-optimization).
+The preferred method of initialization is through a runtime YAML spec, which defines the ETL’s configuration, including [communication method](#communication-mechanisms), [argument type](#argument-types), [timeouts](#timeouts), [support for direct writes](#direct-put-optimization), and [resource limit](#resource-limits).
 
 Example `etl_spec.yaml`:
 
@@ -252,6 +253,13 @@ argument: fqn                # "" (default) or "fqn" to mount host volumes
 init_timeout: 5m             # Max time to initialize ETL container (default: 5m)
 obj_timeout: 45s             # Max time to process a single object (default: 45s)
 support_direct_put: true     # Enable zero-copy bucket-to-bucket optimization (default: false)
+resources:
+  requests:
+    memory: "256Mi"          # Minimum memory guaranteed for scheduling
+    cpu: "500m"              # Minimum CPU guaranteed (0.5 CPU cores)
+  limits:
+    memory: "512Mi"          # Maximum memory before container gets killed
+    cpu: "1"                 # Maximum CPU usage (1 CPU core)
 ```
 
 Initialize the ETL:
@@ -374,6 +382,43 @@ If the container fails to initialize within this period, the ETL setup will be a
 Defines the maximum time permitted to transform a single object.
 **Default:** `45s` (45 seconds)
 If a transformation exceeds this duration, the operation will be terminated and logged as a failure.
+
+### Resource Limits
+
+ETL containers support standard Kubernetes resource limits to control CPU and memory consumption. Setting appropriate resource limits ensures predictable performance and prevents ETL containers from overwhelming cluster nodes, especially during intensive transformation workloads.
+
+**Resource Configuration:**
+
+Resource limits can be specified in your ETL spec using the standard Kubernetes `resources` field:
+
+```yaml
+name: my-etl-transformer
+
+runtime:
+  image: aistorage/my_transformer:latest
+
+resources:
+  requests:
+    memory: "256Mi"    # Minimum memory guaranteed for scheduling
+    cpu: "500m"        # Minimum CPU guaranteed (0.5 CPU cores)
+  limits:
+    memory: "512Mi"    # Maximum memory before container gets killed
+    cpu: "1"           # Maximum CPU usage (1 CPU core)
+```
+
+| Resource Type | Description |
+|---------------|-------------|
+| **`requests`** | Minimum guaranteed resources allocated to the container. Used by the Kubernetes scheduler for pod placement. |
+| **`limits`** | Maximum resources the container can consume. ETL container will be throttled (CPU) or aborted (memory) if these limits are exceeded. |
+
+**Usage Notes:**
+
+- `memory.requests` sets the minimum memory needed for ETL container scheduling
+- `memory.limits` prevents containers from using excessive memory during heavy transformations  
+- `cpu.requests` guarantees CPU allocation for consistent transformation performance
+- `cpu.limits` controls maximum CPU usage to avoid impacting other containers
+
+If no resource limits are specified, ETL containers can use all available memory and CPU on the node, unless the cluster has other restrictions in place.
 
 ## ETL Pod Lifecycle
 
