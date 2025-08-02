@@ -208,16 +208,29 @@ func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, o
 	return base[:tieIndex], filePID != pid, true
 }
 
-func (*ObjChunkContentResolver) GenUniqueFQN(base, snum string) string {
-	return base + ssepa + snum
+// The following content resolvers handle temporary or derived files that don't require
+// complex filename parsing. They rely on directory structure (%ch/, %ec/, %mt/) rather
+// than filename encoding for organization:
+//
+// - ObjChunkContentResolver: temporary chunk files during chunked uploads
+//   Named by the chunk manifest (e.g., objectname.sessionID.0001)
+//   Cleaned up by session ID after upload completion/failure
+//
+// - ECSliceContentResolver: erasure coding data slices (%ec/ directory)
+//   Generated during EC encoding, cleaned up with the original object
+//
+// - ECMetaContentResolver: erasure coding metadata (%mt/ directory)
+//   Contains EC reconstruction information, lifecycle tied to EC slices
+//
+// All use pass-through GenUniqueFQN/ParseUniqueFQN since the content type
+// in the path provides sufficient identification for cleanup and management.
+
+func (*ObjChunkContentResolver) GenUniqueFQN(base, _ string) string {
+	return base
 }
 
 func (*ObjChunkContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
-	idx := strings.LastIndexByte(base, bsepa) // ".0001", "0002", etc.
-	if idx < 0 {
-		return "", false, false
-	}
-	return base[:idx], false, true
+	return base, false, true
 }
 
 func (*ECSliceContentResolver) GenUniqueFQN(base, _ string) string { return base }

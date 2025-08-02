@@ -1087,9 +1087,9 @@ var _ = Describe("LOM", func() {
 					Num:      3,
 					CksumTyp: cos.ChecksumOneXxh,
 					Chunks: []core.Uchunk{
-						{Siz: sz1, Path: "ch/" + objName + ".00001", CksumVal: trand.String(16)},
-						{Siz: sz2, Path: "ch/" + objName + ".00002", CksumVal: trand.String(16)},
-						{Siz: sz3, Path: "ch/" + objName + ".00003", CksumVal: trand.String(16)},
+						{Siz: sz1, Num: 3, Path: "ch/" + objName + ".00001", CksumVal: trand.String(16)},
+						{Siz: sz2, Num: 2, Path: "ch/" + objName + ".00002", CksumVal: trand.String(16)},
+						{Siz: sz3, Num: 1, Path: "ch/" + objName + ".00003", CksumVal: trand.String(16)},
 					},
 				}
 			}

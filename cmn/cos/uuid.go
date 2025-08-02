@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 
@@ -202,4 +203,12 @@ func GenYAID(sid string) string {
 	b[l+2] = uuidABC[(tie>>6)&0x3f]
 	b[l+3] = uuidABC[(tie>>12)&0x3f]
 	return UnsafeS(b)
+}
+
+func GenTAID(t time.Time) string {
+	timeStr := t.Format(StampSec2) // HHMMSS format
+	baseID := "t" + timeStr        // must start with a letter
+
+	id := GenYAID(baseID)
+	return id
 }

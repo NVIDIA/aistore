@@ -14,6 +14,7 @@ import (
 const (
 	StampMicro = "15:04:05.000000" // time.StampMicro without a date
 	StampSec   = "15:04:05"        // time.Stamp without a date
+	StampSec2  = "150405"          // HHMMSS (same as above but without ':')
 
 	// S3 ListObjectsV2
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html

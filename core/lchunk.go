@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 
@@ -25,18 +28,30 @@ const (
 	umetaver = 1
 )
 
+const (
+	chunkNameSepa = "."
+)
+
+// TODO: consider lower-casing member state vars
+
 type (
 	Uchunk struct {
-		Siz      int64
 		Path     string // (may become v2 _location_)
 		CksumVal string
+		Siz      int64
+		Num      uint16
 	}
 	Ufest struct {
-		Num      uint16
-		CksumTyp string
-		Chunks   []Uchunk
+		ID        string
+		StartTime time.Time
+		Num       uint16
+		CksumTyp  string
+		Chunks    []Uchunk
+
 		// runtime state
-		Size int64
+		lom    *LOM
+		Size   int64
+		suffix string
 	}
 )
 
@@ -54,7 +69,30 @@ const (
 	tooShort = "failed to unpack: too short"
 )
 
+// default chunk slice capacity for new manifests
+const defaultChunkCap = 16
+
+// NewUfest creates a new chunk manifest with optional ID
+// If id is empty, generates one based on current time:
+//   - time-based UUIDs (e.g., "t161208-a3z") for traceability
+func NewUfest(id string, lom *LOM) *Ufest {
+	startTime := time.Now()
+	if id == "" {
+		id = cos.GenTAID(startTime)
+	}
+	return &Ufest{
+		ID:        id,
+		StartTime: startTime,
+		Chunks:    make([]Uchunk, 0, defaultChunkCap),
+		CksumTyp:  cos.ChecksumOneXxh,
+		lom:       lom,
+		suffix:    chunkNameSepa + id + chunkNameSepa,
+	}
+}
+
 func (u *Ufest) Load(lom *LOM) error {
+	debug.Assert(u.lom == nil)
+
 	cbuf, cslab := g.pmm.AllocSize(xattrChunkMax)
 	defer cslab.Free(cbuf)
 
@@ -76,6 +114,11 @@ func (u *Ufest) Load(lom *LOM) error {
 	dbuf, dslab := g.pmm.AllocSize(xattrChunkMax)
 	err = u._load(lom, compressedData, dbuf)
 	dslab.Free(dbuf)
+
+	debug.Assert(u.validNums() == nil)
+
+	u.lom = lom
+
 	return err
 }
 
@@ -115,11 +158,48 @@ func _ucerr(cname string, err error) error {
 
 func _utag(cname string) string { return itag + "[" + cname + "]" }
 
+// The `num` here is Uchunk.Num; notes:
+// - chunk #1 stays on object's mountpath
+// - other chunks get HRW distributed
+func (u *Ufest) ChunkName(num int) (string, error) {
+	debug.Assert(u.lom != nil)
+	if num <= 0 {
+		return "", fmt.Errorf("%s: invalid chunk number (%d)", _utag(u.lom.Cname()), num)
+	}
+	var (
+		contentResolver = fs.CSM.Resolver(fs.ObjChunkType)
+		suffix          = u.suffix + fmt.Sprintf("%04d", num)
+		chname          = contentResolver.GenUniqueFQN(u.lom.ObjName, suffix)
+	)
+	if num == 1 {
+		return u.lom.Mountpath().MakePathFQN(u.lom.Bucket(), fs.ObjChunkType, chname), nil
+	}
+	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(chname))
+	return mi.MakePathFQN(u.lom.Bucket(), fs.ObjChunkType, chname), err
+}
+
+func (u *Ufest) validNums() error {
+	if u.Num == 0 {
+		return errors.New("no chunks to validate")
+	}
+	for i, c := range u.Chunks {
+		if c.Num <= 0 || c.Num > u.Num {
+			return fmt.Errorf("chunk %d has invalid part number [%d, %d]", i, c.Num, u.Num)
+		}
+		for j := range i {
+			if u.Chunks[j].Num == c.Num {
+				return fmt.Errorf("duplicate part number: [%d, %d, %d]", c.Num, i, j)
+			}
+		}
+	}
+	return nil
+}
+
 func (u *Ufest) Store(lom *LOM) error {
 	// validate
 	var total int64
 	if u.Num == 0 || int(u.Num) != len(u.Chunks) {
-		return fmt.Errorf("%s: num %d vs %d", _utag(lom.Cname()), u.Num, len(u.Chunks))
+		return fmt.Errorf("store %s: num %d vs %d", _utag(lom.Cname()), u.Num, len(u.Chunks))
 	}
 	lsize := lom.Lsize(true)
 	if u.Size != 0 && u.Size != lsize {
@@ -129,7 +209,14 @@ func (u *Ufest) Store(lom *LOM) error {
 		total += u.Chunks[i].Siz
 	}
 	if total != lsize {
-		return fmt.Errorf("%s: total size mismatch (%d vs %d)", _utag(lom.Cname()), total, lsize)
+		return fmt.Errorf("store %s: total size mismatch (%d vs %d)", _utag(lom.Cname()), total, lsize)
+	}
+
+	// sort
+	sort.Slice(u.Chunks, func(i, j int) bool { return u.Chunks[i].Num < u.Chunks[j].Num })
+
+	if err := u.validNums(); err != nil {
+		return fmt.Errorf("%s: failed to store, err: %v", _utag(lom.Cname()), err)
 	}
 
 	// pack
@@ -148,7 +235,7 @@ func (u *Ufest) Store(lom *LOM) error {
 	sgl.Write(checksumBuf[:])
 
 	if sgl.Len() > xattrChunkMax {
-		return fmt.Errorf("%s: too large (%d > %d max)", _utag(lom.Cname()), sgl.Len(), xattrChunkMax)
+		return fmt.Errorf("store %s: too large (%d > %d max)", _utag(lom.Cname()), sgl.Len(), xattrChunkMax)
 	}
 
 	// write
@@ -160,13 +247,24 @@ func (u *Ufest) Store(lom *LOM) error {
 }
 
 func (u *Ufest) pack(w io.Writer) {
+	var (
+		b64 [cos.SizeofI64]byte
+		b16 [cos.SizeofI16]byte
+	)
+
 	// meta-version
 	w.Write([]byte{umetaver})
 
+	// ID
+	_packStr(w, u.ID)
+
+	// StartTime (Unix timestamp)
+	binary.BigEndian.PutUint64(b64[:], uint64(u.StartTime.Unix()))
+	w.Write(b64[:])
+
 	// number of chunks
-	var buf [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(buf[:], u.Num)
-	w.Write(buf[:])
+	binary.BigEndian.PutUint16(b16[:], u.Num)
+	w.Write(b16[:])
 
 	// checksum type
 	_packStr(w, u.CksumTyp)
@@ -174,9 +272,12 @@ func (u *Ufest) pack(w io.Writer) {
 	// chunks
 	for _, c := range u.Chunks {
 		// chunk size
-		var sizeBuf [cos.SizeofI64]byte
-		binary.BigEndian.PutUint64(sizeBuf[:], uint64(c.Siz))
-		w.Write(sizeBuf[:])
+		binary.BigEndian.PutUint64(b64[:], uint64(c.Siz))
+		w.Write(b64[:])
+
+		// chunk num
+		binary.BigEndian.PutUint16(b16[:], c.Num)
+		w.Write(b16[:])
 
 		// chunk path
 		_packStr(w, c.Path)
@@ -207,6 +308,19 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		return fmt.Errorf("unsupported %s meta-version %d (expecting %d)", utag, metaver, umetaver)
 	}
 
+	// ID
+	if u.ID, offset, err = _unpackStr(data, offset); err != nil {
+		return err
+	}
+
+	// StartTime
+	if len(data) < offset+cos.SizeofI64 {
+		return errors.New(tooShort)
+	}
+	timestamp := int64(binary.BigEndian.Uint64(data[offset:]))
+	u.StartTime = time.Unix(timestamp, 0)
+	offset += cos.SizeofI64
+
 	// number of chunks
 	if len(data) < offset+cos.SizeofI16 {
 		return errors.New(tooShort)
@@ -232,6 +346,14 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		c.Siz = int64(binary.BigEndian.Uint64(data[offset:]))
 		offset += cos.SizeofI64
 		u.Size += c.Siz
+
+		// chunk num
+		if len(data) < offset+cos.SizeofI16 {
+			return errors.New(tooShort)
+		}
+		c.Num = binary.BigEndian.Uint16(data[offset:])
+		offset += cos.SizeofI16
+
 		// chunk path
 		if c.Path, offset, err = _unpackStr(data, offset); err != nil {
 			return err
