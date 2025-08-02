@@ -251,7 +251,7 @@ noatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131
 
 External links:
 
-* [The atime and noatime attribute](http://en.tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html)
+* [The atime and noatime attribute](https://tldp.org/LDP/solrhe/Securing-Optimizing-Linux-RH-Edition-v1.3/chap6sec73.html)
 * [Mount with noatime](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/global_file_system_2/s2-manage-mountnoatime)
 * [Gain 30% Linux Disk Performance with noatime](https://lonesysadmin.net/2013/12/08/gain-30-linux-disk-performance-noatime-nodiratime-relatime)
 

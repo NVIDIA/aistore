@@ -32,6 +32,13 @@ jobs:
           echo "https://gist.github.com/*" >> .lycheeignore
           echo "https://www.youtube.com/embed/*" >> .lycheeignore
           echo "https://github.com/NVIDIA/aistore/commit/*" >> .lycheeignore
+          echo "https://www.uber.com/blog/scaling-hdfs/" >> .lycheeignore
+          echo "https://www.oracle.com/cloud/*" >> .lycheeignore
+          echo "https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22" >> .lycheeignore
+          echo "https://stackoverflow.com/*" >> .lycheeignore
+          echo "http://localhost:16686" >> .lycheeignore
+          echo "http://prometheus-server:9090/" >> .lycheeignore
+          echo "https://linux.die.net/man/1/ionice" >> .lycheeignore
 
       - name: Link Checker
         id: lychee

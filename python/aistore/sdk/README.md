@@ -2,7 +2,7 @@
 
 AIS Python SDK provides a (growing) set of client-side APIs to access and utilize AIS clusters, buckets, and objects.
 
-The project is, essentially, a Python port of the [AIS Go APIs](https://aistore.nvidia.com/docs/http-api), with additional objectives that prioritize *utmost convenience for Python developers*.
+The project is, essentially, a Python port of the [AIS Go APIs](https://aistore.nvidia.com/docs/http_api), with additional objectives that prioritize *utmost convenience for Python developers*.
 
 The SDK also includes the `authn` sub-package for managing authentication, users, roles, clusters, and tokens. For more details, refer to the [AuthN sub-package README](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/authn/README.md).
 
