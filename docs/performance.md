@@ -125,10 +125,10 @@ $ tail /etc/security/limits.conf
 #ftp             -       chroot          /ftp
 #@student        -       maxlogins       4
 
-root             hard    nofile          250000
-root             soft    nofile          250000
-*                hard    nofile          65536
-*                soft    nofile          65536
+root             hard    nofile          262144
+root             soft    nofile          262144
+*                hard    nofile          16384
+*                soft    nofile          16384
 
 # End of file
 ```
@@ -143,18 +143,18 @@ Once done, re-login and double-check that both *soft* and *hard* limits have ind
 
 ```console
 $ ulimit -n
-250000
+262144
 $ ulimit -Hn
-250000
+262144
 ```
 
 **As a regular user, you should see:**
 
 ```console
 $ ulimit -n
-65536
+16384
 $ ulimit -Hn
-65536
+16384
 ```
 
 **For containerized deployments:** You may also need to configure container-level limits. For further references, consult:

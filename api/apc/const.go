@@ -29,8 +29,8 @@ const (
 
 // ulimits
 const (
-	UlimitProxy  = 65536
-	UlimitTarget = 250000
+	UlimitProxy  = 16384
+	UlimitTarget = 262144
 )
 
 // timeouts for intra-cluster requests
