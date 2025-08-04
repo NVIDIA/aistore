@@ -134,9 +134,13 @@ func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, lsflags uint
 			numWorkers += 2
 		}
 	}
-	numWorkers, err := throttleNwp(r.parent.Name(), numWorkers, l)
+	n, err := throttleNwp(r.parent.Name(), numWorkers, l)
 	if err != nil {
 		return err
+	}
+	if n != numWorkers {
+		nlog.Warningln(r.parent.Name(), "throttle num-workers:", n, "[ from", numWorkers, "]")
+		numWorkers = n
 	}
 	if numWorkers == nwpNone {
 		return nil

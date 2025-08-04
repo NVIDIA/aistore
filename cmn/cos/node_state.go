@@ -29,8 +29,8 @@ const (
 	LowCapacity                                      // node (used > high); warning: OOS possible soon..
 	LowMemory                                        // ditto OOM
 	DiskFault                                        // red
-	NoMountpaths                                     // red: (reserved, not used)
-	NumGoroutines                                    // red
+	NumGoroutines                                    // yellow
+	HighNumGoroutines                                // red
 	CertWillSoonExpire                               // warning X.509
 	CertificateExpired                               // red --/--
 	CertificateInvalid                               // red --/--
@@ -41,16 +41,16 @@ const (
 	DiskLowCapacity                                  // warning
 )
 
-func (f NodeStateFlags) IsOK() bool { return f == NodeStarted|ClusterStarted }
+const (
+	isRed = OOS | OOM | OOCPU | DiskFault | HighNumGoroutines | CertificateExpired | DiskOOS
 
-func (f NodeStateFlags) IsRed() bool {
-	return f.IsAnySet(OOS | OOM | OOCPU | DiskFault | NoMountpaths | NumGoroutines | CertificateExpired | DiskOOS)
-}
+	isWarn = Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
+		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire | DiskLowCapacity | NumGoroutines
+)
 
-func (f NodeStateFlags) IsWarn() bool {
-	return f.IsAnySet(Rebalancing | RebalanceInterrupted | Resilvering | ResilverInterrupted | NodeRestarted | MaintenanceMode |
-		LowCapacity | LowMemory | LowCPU | CertWillSoonExpire | DiskLowCapacity)
-}
+func (f NodeStateFlags) IsOK() bool   { return f == NodeStarted|ClusterStarted }
+func (f NodeStateFlags) IsRed() bool  { return f.IsAnySet(isRed) }
+func (f NodeStateFlags) IsWarn() bool { return f.IsAnySet(isWarn) }
 
 func (f NodeStateFlags) IsSet(flag NodeStateFlags) bool { return BitFlags(f).IsSet(BitFlags(flag)) }
 
@@ -133,10 +133,10 @@ func (f NodeStateFlags) _str(sb []string) string {
 	if f&DiskFault == DiskFault {
 		sb = append(sb, "disk-fault")
 	}
-	if f&NoMountpaths == NoMountpaths {
-		sb = append(sb, "no-mountpaths")
-	}
 	if f&NumGoroutines == NumGoroutines {
+		sb = append(sb, "number-of-goroutines")
+	}
+	if f&HighNumGoroutines == HighNumGoroutines {
 		sb = append(sb, "high-number-of-goroutines")
 	}
 	if f&CertWillSoonExpire == CertWillSoonExpire {

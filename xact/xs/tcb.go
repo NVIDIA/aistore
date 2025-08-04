@@ -131,9 +131,13 @@ func (p *tcbFactory) Start() error {
 	if msg.NumWorkers > 0 {
 		// tune-up the specified number of workers
 		l := fs.NumAvail()
-		numWorkers, err := throttleNwp(r.Name(), max(msg.NumWorkers, l), l)
+		n := max(msg.NumWorkers, l)
+		numWorkers, err := throttleNwp(r.Name(), n, l)
 		if err != nil {
 			return err
+		}
+		if n != numWorkers {
+			nlog.Warningln(r.Name(), "throttle num-workers:", numWorkers, "[ from", n, "]")
 		}
 		if numWorkers >= l {
 			// delegate intra-cluster copying/transforming to additional workers;

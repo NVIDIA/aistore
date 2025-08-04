@@ -64,9 +64,10 @@ const (
 )
 
 const (
-	ngrHighTime    = 10 * time.Minute // log a warning if the number of goroutines remains high
-	ngrExtremeTime = 5 * time.Minute  // when more then twice the maximum (below)
-	lshiftGorHigh  = 8                // max expressed as left shift of the num CPUs
+	NgrPrompt     = "Number of goroutines"
+	ngrHighTime   = 10 * time.Minute  // log a warning if the number of goroutines remains high
+	lshiftNgrHigh = 10                // red alert: 1024 * num-CPUs
+	lshiftNgrWarn = lshiftNgrHigh - 1 // yellow
 )
 
 // Naming conventions: error counters' prefixes
@@ -633,25 +634,40 @@ func (r *runner) GetMetricNames() cos.StrKVs {
 	return out
 }
 
+// TODO: add Prometheus metric
 func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
-	lim := goMaxProcs << lshiftGorHigh
-	ngr := runtime.NumGoroutine()
-	if ngr < lim {
+	var (
+		warn = goMaxProcs << lshiftNgrWarn
+		ngr  = runtime.NumGoroutine()
+	)
+	if ngr < warn {
 		if lastNgr != 0 {
-			r.ClrFlag(NodeAlerts, cos.NumGoroutines)
-			nlog.Infoln("Number of goroutines is now back to normal:", ngr)
+			r.ClrFlag(NodeAlerts, cos.HighNumGoroutines|cos.NumGoroutines)
+			nlog.Infoln(NgrPrompt, "is now back to normal:", ngr)
 		}
 		return 0
 	}
-	if lastNgr == 0 {
-		r.SetFlag(NodeAlerts, cos.NumGoroutines)
-		lastNgr = now
-	} else if d := time.Duration(now - lastNgr); (d >= ngrHighTime) || (ngr > lim<<1 && d >= ngrExtremeTime) {
-		lastNgr = now
+
+	var (
+		high     = goMaxProcs << lshiftNgrHigh
+		set, clr cos.NodeStateFlags
+		tag      = "(red alert)"
+	)
+	if ngr < high {
+		clr = cos.HighNumGoroutines
+		set = cos.NumGoroutines
+		tag = "(yellow alert)"
+	} else {
+		set = cos.HighNumGoroutines
+		clr = cos.NumGoroutines
 	}
-	if lastNgr == now {
-		nlog.Warningln("High number of goroutines:", ngr)
+	r.SetClrFlag(NodeAlerts, set, clr)
+
+	if lastNgr == 0 || time.Duration(now-lastNgr) >= ngrHighTime {
+		lastNgr = now
+		nlog.Warningln(NgrPrompt, ngr, tag)
 	}
+
 	return lastNgr
 }
 

@@ -186,7 +186,6 @@ AIStore node states are categorized into three severity levels:
    - `OOM` - Out of memory condition
    - `OOCPU` - Out of CPU resources
    - `DiskFault` - Disk failures detected
-   - `NoMountpaths` - No available mountpaths
    - `NumGoroutines` - Excessive number of goroutines
    - `CertificateExpired` - TLS certificate has expired
    - `CertificateInvalid` - TLS certificate is invalid
@@ -232,7 +231,6 @@ ais_target_state_flags > 0 and on (node_id) (
   ais_target_state_flags & 16384 > 0 or # OOM
   ais_target_state_flags & 262144 > 0 or # OOCPU
   ais_target_state_flags & 65536 > 0 or # DiskFault
-  ais_target_state_flags & 131072 > 0 or # NoMountpaths
   ais_target_state_flags & 262144 > 0 or # NumGoroutines
   ais_target_state_flags & 1048576 > 0 # CertificateExpired
 )

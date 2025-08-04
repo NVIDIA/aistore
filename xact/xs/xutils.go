@@ -96,39 +96,48 @@ const (
 	nwpDflt = 0  // (number of mountpaths)
 )
 
-// strict rules
-func throttleNwp(xname string, n, l int) (int, error) {
-	// 1. alert 'too many gorutines'
-	tstats := core.T.StatsUpdater()
-	flags := cos.NodeStateFlags(tstats.Get(cos.NodeAlerts))
-	if flags.IsSet(cos.NumGoroutines) {
-		nlog.Warningln(xname, "too many gorutines:", runtime.NumGoroutine(), "[ num-cpu:", sys.NumCPU(), "]")
-		n = min(n, l)
+// throttle all list-range type jobs and tcb, where:
+// - xname is xaction name
+// - n is the requested number of workers
+func throttleNwp(xname string, n, numMpaths int) (int, error) {
+	var (
+		mm     = core.T.PageMM()
+		tstats = core.T.StatsUpdater()
+		flags  = cos.NodeStateFlags(tstats.Get(cos.NodeAlerts))
+	)
+	// red alert 'num goroutines'
+	if flags.IsSet(cos.HighNumGoroutines) {
+		_ = mm.Pressure() // log
+		nlog.Warningln(xname, stats.NgrPrompt, runtime.NumGoroutine())
+		return nwpNone, nil
 	}
 
-	// 2. number of available cores(*)
+	// normally, always limit by the number of available (containerized) cores
 	n = min(sys.MaxParallelism()+4, n)
 
-	// 3. factor-in memory pressure
-	var (
-		mm       = core.T.PageMM()
-		pressure = mm.Pressure()
-	)
+	// yellow alert 'num goroutines'
+	if flags.IsSet(cos.NumGoroutines) {
+		nlog.Warningln(xname, stats.NgrPrompt, runtime.NumGoroutine())
+		n = min(n, numMpaths)
+	}
+
+	// factor-in memory pressure
+	pressure := mm.Pressure()
 	switch pressure {
 	case memsys.OOM, memsys.PressureExtreme:
 		oom.FreeToOS(true)
 		if !cmn.Rom.TestingEnv() {
 			return 0, errors.New(xname + ": " + memsys.FmtErrExtreme + " - not starting")
 		}
+		return nwpNone, nil
 	case memsys.PressureHigh:
 		if flags.IsSet(cos.NumGoroutines) {
 			return nwpNone, nil
 		}
 		n = min(nwpMin+1, n)
-		nlog.Warningln(xname, "num-workers =", n)
 	}
 
-	// 4. finally, take into account load averages
+	// finally, take into account load averages
 	var (
 		load     = sys.MaxLoad()
 		highLoad = sys.HighLoadWM()
