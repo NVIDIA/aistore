@@ -19,7 +19,6 @@
 ^.*Network:.*$
 ^.*Storage:.*$
 ^.*Filesystems:.*$
-^.*Active Jobs:.*$
 ^Cluster:$
 ^.*Proxies:.*$
 ^.*Targets:.*$

@@ -28,6 +28,50 @@ import (
 	"github.com/urfave/cli"
 )
 
+type (
+	cluWarnNodes struct {
+		alerts       []string
+		warnings     []string
+		maintenance  []string
+		decommission []string
+		rebalancing  []string
+		totalNodes   int
+	}
+	cluAnalytics struct {
+		// Performance metrics
+		readRate, WriteRate int64
+		durationLabel       string
+
+		// Error metrics
+		totalDiskIOErrors     int64
+		recentKeepAliveErrors bool
+
+		// Latency metrics
+		latencies []float64
+
+		// Resource utilization
+		cpuUsages  []float64
+		diskUsages []float64
+
+		// Storage metrics
+		totalMountpaths   int
+		healthyMountpaths int
+		filesystemTypes   map[string]int
+		mountpathWarnings []string
+
+		// Network metrics
+		totalOps int64
+
+		// Cluster state
+		nodeCount int
+		tmap      teb.StstMap
+		warnNodes *cluWarnNodes
+
+		// Active jobs
+		runningJobs []string
+	}
+)
+
 func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, cfg *cmn.ClusterConfig, sid string, withRichAnalytics bool) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
@@ -84,6 +128,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	body.Endpoint = _getClusterEndpoint()
 
 	var out strings.Builder
+	out.Grow(256)
 
 	// For regular 'ais show cluster', include proxy and target tables
 	// For 'ais show cluster summary', skip them
@@ -107,9 +152,9 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 
 		// Show detailed issues when verbose flag is set
 		if flagIsSet(c, verboseFlag) {
-			ca := newClusterAnalytics(c, body.Stst.Tmap, units)
+			ca := newAnalytics(c, body.Stst.Tmap, units)
 			out.WriteString("\n")
-			out.WriteString(ca.Issues.GetDetailedStatus())
+			out.WriteString(ca.warnNodes.GetDetailedStatus())
 			out.WriteString("\n")
 		}
 	}
@@ -237,7 +282,7 @@ func _measureThroughput(c *cli.Context, initialTmap teb.StstMap, duration time.D
 	return readRate, writeRate
 }
 
-// _getTotalBytes sums up total bytes read/written across all nodes at that time
+// sum up total bytes read/written across all nodes at that time
 func _getTotalBytes(tmap teb.StstMap) (totalRead, totalWrite int64) {
 	for _, ds := range tmap {
 		totalRead += _getTrackerValue(ds, "get.size")
@@ -246,60 +291,56 @@ func _getTotalBytes(tmap teb.StstMap) (totalRead, totalWrite int64) {
 	return totalRead, totalWrite
 }
 
-// ClusterIssues holds categorized cluster health information
-type ClusterIssues struct {
-	Critical, Warnings, Maintenance, Decommission, Rebalancing []string
-	TotalNodes                                                 int
+// return true if there are any cluster issues
+func (ci *cluWarnNodes) hasIssues() bool {
+	return len(ci.alerts) > 0 || len(ci.warnings) > 0 || len(ci.maintenance) > 0 ||
+		len(ci.decommission) > 0 || len(ci.rebalancing) > 0
 }
 
-// HasIssues returns true if there are any cluster issues
-func (ci *ClusterIssues) HasIssues() bool {
-	return len(ci.Critical) > 0 || len(ci.Warnings) > 0 || len(ci.Maintenance) > 0 ||
-		len(ci.Decommission) > 0 || len(ci.Rebalancing) > 0
-}
-
-// GetSummary returns a brief summary of issues
-func (ci *ClusterIssues) GetSummary() string {
-	if !ci.HasIssues() {
+func (ci *cluWarnNodes) summary() string {
+	if !ci.hasIssues() {
 		return fgreen("Operational")
 	}
 
 	var parts []string
-	if len(ci.Critical) > 0 {
-		parts = append(parts, fmt.Sprintf("%d critical", len(ci.Critical)))
+	if l := len(ci.alerts); l > 0 {
+		parts = append(parts, fmt.Sprintf("%d alert%s", l, cos.Plural(l)))
 	}
-	if len(ci.Warnings) > 0 {
-		parts = append(parts, fmt.Sprintf("%d warnings", len(ci.Warnings)))
+	if l := len(ci.warnings); l > 0 {
+		parts = append(parts, fmt.Sprintf("%d warning%s", l, cos.Plural(l)))
 	}
-	if len(ci.Maintenance) > 0 {
-		parts = append(parts, fmt.Sprintf("%d maintenance", len(ci.Maintenance)))
+	if l := len(ci.maintenance); l > 0 {
+		parts = append(parts, fmt.Sprintf("%d in maintenance", l))
 	}
-	if len(ci.Decommission) > 0 {
-		parts = append(parts, fmt.Sprintf("%d decommission", len(ci.Decommission)))
+	if l := len(ci.decommission); l > 0 {
+		parts = append(parts, fmt.Sprintf("%d being decommissioned", l))
 	}
-	if len(ci.Rebalancing) > 0 {
-		parts = append(parts, fmt.Sprintf("%d rebalancing", len(ci.Rebalancing)))
-	}
-
-	// Count unique node issues
-	affectedNodes := make(map[string]bool)
-	for _, issues := range [][]string{ci.Critical, ci.Warnings, ci.Maintenance, ci.Decommission, ci.Rebalancing} {
-		for _, nodeID := range issues {
-			affectedNodes[nodeID] = true
+	if l := len(ci.rebalancing); l > 0 {
+		if l == ci.totalNodes {
+			parts = append(parts, "cluster rebalancing")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d node%s rebalancing", l, cos.Plural(l)))
 		}
 	}
 
-	summary := strings.Join(parts, ", ")
-	return fmt.Sprintf("Multiple issues (%d node(s) affected: %s)", len(affectedNodes), summary)
+	affectedNodes := make(map[string]bool, ci.totalNodes)
+	for _, issues := range [][]string{ci.alerts, ci.warnings, ci.maintenance, ci.decommission, ci.rebalancing} {
+		for _, node := range issues {
+			affectedNodes[node] = true
+		}
+	}
+	l := len(affectedNodes)
+	return fmt.Sprintf("%d node%s report alerts and/or warnings: %v", l, cos.Plural(l), parts)
 }
 
 // GetDetailedStatus returns the full detailed breakdown (for dashboard --verbose)
-func (ci *ClusterIssues) GetDetailedStatus() string {
-	if !ci.HasIssues() {
+func (ci *cluWarnNodes) GetDetailedStatus() string {
+	if !ci.hasIssues() {
 		return fgreen("All nodes operational")
 	}
 
 	var b strings.Builder
+	b.Grow(256)
 	b.WriteString(fblue("CLUSTER HEALTH DETAILS:"))
 	b.WriteString("\n")
 
@@ -308,42 +349,42 @@ func (ci *ClusterIssues) GetDetailedStatus() string {
 			return
 		}
 		nodeList := strings.Join(nodes, ", ")
-		label := fmt.Sprintf("%s (%d/%d):", issueType, len(nodes), ci.TotalNodes)
+		label := fmt.Sprintf("%s (%d/%d):", issueType, len(nodes), ci.totalNodes)
 		b.WriteString(fmt.Sprintf("%-20s %s\n", colorFn(label), nodeList))
 	}
 
-	addIssue("Critical", fred, ci.Critical)
-	addIssue("Warnings", fcyan, ci.Warnings)
-	addIssue("Maintenance", fcyan, ci.Maintenance)
-	addIssue("Decommission", fred, ci.Decommission)
-	addIssue("Rebalancing", fcyan, ci.Rebalancing)
+	addIssue("Alerts", fred, ci.alerts)
+	addIssue("Warnings", fcyan, ci.warnings)
+	addIssue("Maintenance", fcyan, ci.maintenance)
+	addIssue("Decommission", fred, ci.decommission)
+	addIssue("Rebalancing", fcyan, ci.rebalancing)
 
 	return b.String()
 }
 
 // _analyzeClusterHealth categorizes node states and returns detailed issue breakdown
-func _analyzeClusterHealth(ca *ClusterAnalytics) *ClusterIssues {
-	ci := &ClusterIssues{
-		TotalNodes: len(ca.TMap),
+func _analyzeClusterHealth(ca *cluAnalytics) *cluWarnNodes {
+	ci := &cluWarnNodes{
+		totalNodes: len(ca.tmap),
 	}
 
-	for _, ds := range ca.TMap {
-		nodeID := ds.Snode.StringEx()
+	for _, ds := range ca.tmap {
+		node := ds.Snode.StringEx()
 
 		if ds.Snode.Flags.IsAnySet(meta.SnodeDecomm) {
-			ci.Decommission = append(ci.Decommission, nodeID)
+			ci.decommission = append(ci.decommission, node)
 		}
 		if ds.Snode.Flags.IsAnySet(meta.SnodeMaint) {
-			ci.Maintenance = append(ci.Maintenance, nodeID)
+			ci.maintenance = append(ci.maintenance, node)
 		}
 		if ds.Cluster.Flags.IsRed() {
-			ci.Critical = append(ci.Critical, nodeID)
+			ci.alerts = append(ci.alerts, node)
 		}
 		if ds.Cluster.Flags.IsAnySet(cos.Rebalancing) {
-			ci.Rebalancing = append(ci.Rebalancing, nodeID)
+			ci.rebalancing = append(ci.rebalancing, node)
 		}
 		if ds.Cluster.Flags.IsWarn() {
-			ci.Warnings = append(ci.Warnings, nodeID)
+			ci.warnings = append(ci.warnings, node)
 		}
 	}
 
@@ -369,61 +410,27 @@ func _calculateStats(values []float64) (minVal, maxVal, avg float64) {
 	return
 }
 
-// ClusterAnalytics holds collected cluster statistics
-type ClusterAnalytics struct {
-	// Performance metrics
-	ReadRate, WriteRate int64
-	DurationLabel       string
-
-	// Error metrics
-	TotalDiskIOErrors     int64
-	RecentKeepAliveErrors bool
-
-	// Latency metrics
-	Latencies []float64
-
-	// Resource utilization
-	CPUUsages  []float64
-	DiskUsages []float64
-
-	// Storage metrics
-	TotalMountpaths, HealthyMountpaths int
-	FilesystemTypes                    map[string]int
-	MountpathWarnings                  []string
-
-	// Network metrics
-	TotalOps int64
-
-	// Cluster state
-	NodeCount int
-	TMap      teb.StstMap
-	Issues    *ClusterIssues
-
-	// Active jobs
-	ActiveJobs []string
-}
-
-// newClusterAnalytics collects all statistics from the target map
-func newClusterAnalytics(c *cli.Context, tmap teb.StstMap, _ string) *ClusterAnalytics {
-	ca := &ClusterAnalytics{
-		NodeCount:         len(tmap),
-		TMap:              tmap,
-		FilesystemTypes:   make(map[string]int),
-		MountpathWarnings: make([]string, 0, len(tmap)),
-		CPUUsages:         make([]float64, 0, len(tmap)),
-		DiskUsages:        make([]float64, 0, len(tmap)),
+// newcluAnalytics collects all statistics from the target map
+func newAnalytics(c *cli.Context, tmap teb.StstMap, _ string) *cluAnalytics {
+	ca := &cluAnalytics{
+		nodeCount:         len(tmap),
+		tmap:              tmap,
+		filesystemTypes:   make(map[string]int),
+		mountpathWarnings: make([]string, 0, len(tmap)),
+		cpuUsages:         make([]float64, 0, len(tmap)),
+		diskUsages:        make([]float64, 0, len(tmap)),
 	}
 
 	ca.collectMetrics()
-	ca.collectActiveJobs()
+	ca.collectrunningJobs()
 	ca.measureThroughput(c)
-	ca.Issues = _analyzeClusterHealth(ca)
+	ca.warnNodes = _analyzeClusterHealth(ca)
 	return ca
 }
 
 // collectMetrics gathers all statistics from target nodes
-func (ca *ClusterAnalytics) collectMetrics() {
-	for _, ds := range ca.TMap {
+func (ca *cluAnalytics) collectMetrics() {
+	for _, ds := range ca.tmap {
 		ca.collectErrorMetrics(ds)
 		ca.collectLatencyMetrics(ds)
 		ca.collectNetworkMetrics(ds)
@@ -433,18 +440,18 @@ func (ca *ClusterAnalytics) collectMetrics() {
 }
 
 // collectErrorMetrics gathers error-related statistics
-func (ca *ClusterAnalytics) collectErrorMetrics(ds *stats.NodeStatus) {
+func (ca *cluAnalytics) collectErrorMetrics(ds *stats.NodeStatus) {
 	if ds.Cluster.Flags&cos.KeepAliveErrors != 0 {
-		ca.RecentKeepAliveErrors = true
+		ca.recentKeepAliveErrors = true
 	}
 
-	ca.TotalDiskIOErrors += _getTrackerValue(ds, "err.io.get.n") +
+	ca.totalDiskIOErrors += _getTrackerValue(ds, "err.io.get.n") +
 		_getTrackerValue(ds, "err.io.put.n") +
 		_getTrackerValue(ds, "err.io.del.n")
 }
 
 // collectLatencyMetrics gathers latency statistics
-func (ca *ClusterAnalytics) collectLatencyMetrics(ds *stats.NodeStatus) {
+func (ca *cluAnalytics) collectLatencyMetrics(ds *stats.NodeStatus) {
 	getCount := _getTrackerValue(ds, "get.n")
 	putCount := _getTrackerValue(ds, "put.n")
 	getLatency := _getTrackerValue(ds, "get.ns.total")
@@ -453,68 +460,68 @@ func (ca *ClusterAnalytics) collectLatencyMetrics(ds *stats.NodeStatus) {
 	// Only calculate latency if there are operations
 	if getCount > 0 {
 		avgGetLatency := time.Duration(getLatency / getCount).Milliseconds()
-		ca.Latencies = append(ca.Latencies, float64(avgGetLatency))
+		ca.latencies = append(ca.latencies, float64(avgGetLatency))
 	}
 
 	if putCount > 0 {
 		avgPutLatency := time.Duration(putLatency / putCount).Milliseconds()
-		ca.Latencies = append(ca.Latencies, float64(avgPutLatency))
+		ca.latencies = append(ca.latencies, float64(avgPutLatency))
 	}
 }
 
 // collectNetworkMetrics gathers network-related statistics
-func (ca *ClusterAnalytics) collectNetworkMetrics(ds *stats.NodeStatus) {
-	ca.TotalOps += _getTrackerValue(ds, "get.n") + _getTrackerValue(ds, "put.n")
+func (ca *cluAnalytics) collectNetworkMetrics(ds *stats.NodeStatus) {
+	ca.totalOps += _getTrackerValue(ds, "get.n") + _getTrackerValue(ds, "put.n")
 }
 
 // collectResourceMetrics gathers CPU and resource utilization
-func (ca *ClusterAnalytics) collectResourceMetrics(ds *stats.NodeStatus) {
+func (ca *cluAnalytics) collectResourceMetrics(ds *stats.NodeStatus) {
 	loadAvg := ds.MemCPUInfo.LoadAvg.One
-	ca.CPUUsages = append(ca.CPUUsages, loadAvg)
+	ca.cpuUsages = append(ca.cpuUsages, loadAvg)
 }
 
 // collectStorageMetrics gathers storage and filesystem statistics
-func (ca *ClusterAnalytics) collectStorageMetrics(ds *stats.NodeStatus) {
-	ca.TotalMountpaths += len(ds.Tcdf.Mountpaths)
+func (ca *cluAnalytics) collectStorageMetrics(ds *stats.NodeStatus) {
+	ca.totalMountpaths += len(ds.Tcdf.Mountpaths)
 	diskUsages := ca.calculateNodeDiskUsage(ds)
 
 	if len(diskUsages) > 0 {
-		ca.DiskUsages = append(ca.DiskUsages, ca.averageUsage(diskUsages))
+		ca.diskUsages = append(ca.diskUsages, ca.averageUsage(diskUsages))
 	}
 }
 
 // calculateNodeDiskUsage calculates disk usage for a single node
-func (ca *ClusterAnalytics) calculateNodeDiskUsage(ds *stats.NodeStatus) []float64 {
+func (ca *cluAnalytics) calculateNodeDiskUsage(ds *stats.NodeStatus) []float64 {
 	var (
-		nodeDiskUsages []float64
+		nodediskUsages []float64
 		fsIDs          []cos.FsID
 		nodeHasWarning bool
 	)
 
 	for _, cdf := range ds.Tcdf.Mountpaths {
 		if alert, _ := fs.HasAlert(cdf.Disks); alert == "" {
-			ca.HealthyMountpaths++
+			ca.healthyMountpaths++
 		} else {
 			nodeHasWarning = true
 		}
-		ca.FilesystemTypes[cdf.FS.FsType]++
+		ca.filesystemTypes[cdf.FS.FsType]++
 
 		var unique bool
 		fsIDs, unique = cos.AddUniqueFsID(fsIDs, cdf.FS.FsID)
 		if unique && cdf.Capacity.PctUsed > 0 {
-			nodeDiskUsages = append(nodeDiskUsages, float64(cdf.Capacity.PctUsed))
+			nodediskUsages = append(nodediskUsages, float64(cdf.Capacity.PctUsed))
 		}
 	}
 
 	if nodeHasWarning {
-		ca.MountpathWarnings = append(ca.MountpathWarnings, ds.Snode.StringEx())
+		ca.mountpathWarnings = append(ca.mountpathWarnings, ds.Snode.StringEx())
 	}
 
-	return nodeDiskUsages
+	return nodediskUsages
 }
 
 // averageUsage calculates average from a slice of usage values
-func (*ClusterAnalytics) averageUsage(usages []float64) float64 {
+func (*cluAnalytics) averageUsage(usages []float64) float64 {
 	var sum float64
 	for _, usage := range usages {
 		sum += usage
@@ -523,8 +530,8 @@ func (*ClusterAnalytics) averageUsage(usages []float64) float64 {
 }
 
 // measureThroughput calculates current throughput
-func (ca *ClusterAnalytics) measureThroughput(c *cli.Context) {
-	if len(ca.TMap) == 0 {
+func (ca *cluAnalytics) measureThroughput(c *cli.Context) {
+	if len(ca.tmap) == 0 {
 		return
 	}
 
@@ -533,95 +540,95 @@ func (ca *ClusterAnalytics) measureThroughput(c *cli.Context) {
 		measurementDuration = max(parseDurationFlag(c, refreshFlag), time.Second)
 	}
 
-	ca.ReadRate, ca.WriteRate = _measureThroughput(c, ca.TMap, measurementDuration)
-	ca.DurationLabel = fmt.Sprintf("%.0fs avg", measurementDuration.Seconds())
+	ca.readRate, ca.WriteRate = _measureThroughput(c, ca.tmap, measurementDuration)
+	ca.durationLabel = fmt.Sprintf("%.0fs avg", measurementDuration.Seconds())
 }
 
 // writeState writes cluster state information
-func (ca *ClusterAnalytics) writeState(out *strings.Builder, isVerbose bool) {
-	fmt.Fprintf(out, indent1+"State:\t\t%s\n", ca.Issues.GetSummary())
-	if ca.Issues.HasIssues() && !isVerbose {
+func (ca *cluAnalytics) writeState(out *strings.Builder, isVerbose bool) {
+	fmt.Fprintf(out, indent1+"State:\t\t%s\n", ca.warnNodes.summary())
+	if ca.warnNodes.hasIssues() && !isVerbose {
 		fmt.Fprintf(out, indent1+indent1+"Details:\t\tUse '--verbose' for detailed breakdown\n")
 	}
 }
 
 // writeThroughput writes throughput information
-func (ca *ClusterAnalytics) writeThroughput(out *strings.Builder, units string) {
-	if ca.ReadRate > 0 || ca.WriteRate > 0 {
+func (ca *cluAnalytics) writeThroughput(out *strings.Builder, units string) {
+	if ca.readRate > 0 || ca.WriteRate > 0 {
 		fmt.Fprintf(out, indent1+"Throughput:\t\tRead %s/s, Write %s/s (%s)\n",
-			teb.FmtSize(ca.ReadRate, units, 1),
+			teb.FmtSize(ca.readRate, units, 1),
 			teb.FmtSize(ca.WriteRate, units, 1),
-			ca.DurationLabel)
+			ca.durationLabel)
 	}
 }
 
 // writeErrors writes error information
-func (ca *ClusterAnalytics) writeErrors(out *strings.Builder) {
-	if ca.TotalDiskIOErrors > 0 {
-		fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", fred(strconv.FormatInt(ca.TotalDiskIOErrors, 10)))
+func (ca *cluAnalytics) writeErrors(out *strings.Builder) {
+	if ca.totalDiskIOErrors > 0 {
+		fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", fred(strconv.FormatInt(ca.totalDiskIOErrors, 10)))
 	} else {
 		fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", fgreen("0"))
 	}
 }
 
 // writeResourceUtilization writes CPU and disk usage information
-func (ca *ClusterAnalytics) writeResourceUtilization(out *strings.Builder) {
-	if len(ca.CPUUsages) > 0 {
-		minCPU, maxCPU, avgCPU := _calculateStats(ca.CPUUsages)
+func (ca *cluAnalytics) writeResourceUtilization(out *strings.Builder) {
+	if len(ca.cpuUsages) > 0 {
+		minCPU, maxCPU, avgCPU := _calculateStats(ca.cpuUsages)
 		fmt.Fprintf(out, indent1+"Load Avg:\t\tavg %.1f, min %.1f, max %.1f (1m)\n",
 			avgCPU, minCPU, maxCPU)
 	}
 
-	if len(ca.DiskUsages) > 0 {
-		minDisk, maxDisk, avgDisk := _calculateStats(ca.DiskUsages)
+	if len(ca.diskUsages) > 0 {
+		minDisk, maxDisk, avgDisk := _calculateStats(ca.diskUsages)
 		fmt.Fprintf(out, indent1+"Disk Usage:\t\tavg %.1f%%, min %.1f%%, max %.1f%%\n",
 			avgDisk, minDisk, maxDisk)
 	}
 }
 
 // writeNetwork writes network health information
-func (ca *ClusterAnalytics) writeNetwork(out *strings.Builder) {
+func (ca *cluAnalytics) writeNetwork(out *strings.Builder) {
 	var networkStatus string
 	switch {
-	case ca.RecentKeepAliveErrors:
+	case ca.recentKeepAliveErrors:
 		networkStatus = fred("keep-alive errors (last 5m)")
-	case ca.TotalOps > 0:
+	case ca.totalOps > 0:
 		networkStatus = fgreen("healthy")
 	default:
-		networkStatus = fcyan("idle")
+		networkStatus = "cluster is idle"
 	}
 	fmt.Fprintf(out, indent1+"Network:\t\t%s\n", networkStatus)
 }
 
 // writeStorage writes storage information
-func (ca *ClusterAnalytics) writeStorage(out *strings.Builder) {
-	warnings := ca.TotalMountpaths - ca.HealthyMountpaths
+func (ca *cluAnalytics) writeStorage(out *strings.Builder) {
+	warnings := ca.totalMountpaths - ca.healthyMountpaths
 	if warnings > 0 {
 		fmt.Fprintf(out, indent1+"Storage:\t\t%d mountpaths (%d healthy, %d warnings)\n",
-			ca.TotalMountpaths, ca.HealthyMountpaths, warnings)
-		if len(ca.MountpathWarnings) > 0 {
-			fmt.Fprintf(out, indent1+"   Warnings:\t\t%s\n", strings.Join(ca.MountpathWarnings, ", "))
+			ca.totalMountpaths, ca.healthyMountpaths, warnings)
+		if len(ca.mountpathWarnings) > 0 {
+			fmt.Fprintf(out, indent1+"   Warnings:\t\t%s\n", strings.Join(ca.mountpathWarnings, ", "))
 		}
 	} else {
-		fmt.Fprintf(out, indent1+"Storage:\t\t%d mountpaths (all healthy)\n", ca.TotalMountpaths)
+		fmt.Fprintf(out, indent1+"Storage:\t\t%d mountpaths (all healthy)\n", ca.totalMountpaths)
 	}
 }
 
 // writeFilesystems writes filesystem information
-func (ca *ClusterAnalytics) writeFilesystems(out *strings.Builder) {
-	if len(ca.FilesystemTypes) == 0 {
+func (ca *cluAnalytics) writeFilesystems(out *strings.Builder) {
+	if len(ca.filesystemTypes) == 0 {
 		return
 	}
 
-	fsInfo := make([]string, 0, len(ca.FilesystemTypes))
-	for fsType, count := range ca.FilesystemTypes {
+	fsInfo := make([]string, 0, len(ca.filesystemTypes))
+	for fsType, count := range ca.filesystemTypes {
 		fsInfo = append(fsInfo, fmt.Sprintf("%s(%d)", fsType, count))
 	}
 	fmt.Fprintf(out, indent1+"Filesystems:\t\t%s\n", strings.Join(fsInfo, ", "))
 }
 
-// collectActiveJobs gathers currently running jobs
-func (ca *ClusterAnalytics) collectActiveJobs() {
+// collectrunningJobs gathers currently running jobs
+func (ca *cluAnalytics) collectrunningJobs() {
 	xargs := &xact.ArgsMsg{
 		OnlyRunning: true,
 	}
@@ -639,23 +646,24 @@ func (ca *ClusterAnalytics) collectActiveJobs() {
 		}
 	}
 
-	ca.ActiveJobs = jobTypes.ToSlice()
+	ca.runningJobs = jobTypes.ToSlice()
 }
 
-// writeActiveJobs writes active jobs information
-func (ca *ClusterAnalytics) writeActiveJobs(out *strings.Builder) {
-	if len(ca.ActiveJobs) == 0 {
-		fmt.Fprintf(out, indent1+"Active Jobs:\t\tNone\n")
+// write active jobs information
+func (ca *cluAnalytics) writeRunningJobs(out *strings.Builder) {
+	if len(ca.runningJobs) == 0 {
+		fmt.Fprintf(out, indent1+"Running Jobs:\t\tNone\n")
 	} else {
-		fmt.Fprintf(out, indent1+"Active Jobs:\t\t%s\n", strings.Join(ca.ActiveJobs, ", "))
+		fmt.Fprintf(out, indent1+"Running Jobs:\t\t%s\n", strings.Join(ca.runningJobs, ", "))
 	}
 }
 
 // _fmtStorageSummary provides enhanced storage, performance, network, error, and throughput details
 func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
-	ca := newClusterAnalytics(c, tmap, units)
+	ca := newAnalytics(c, tmap, units)
 
 	var out strings.Builder
+	out.Grow(256)
 	out.WriteString(fblue("Performance and Health:"))
 	out.WriteString("\n")
 
@@ -666,7 +674,7 @@ func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
 	ca.writeNetwork(&out)
 	ca.writeStorage(&out)
 	ca.writeFilesystems(&out)
-	ca.writeActiveJobs(&out)
+	ca.writeRunningJobs(&out)
 
 	return out.String()
 }
