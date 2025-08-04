@@ -1,20 +1,20 @@
 // RUN k8s
-curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o hello_world_init_spec.yaml -s // IGNORE
-ais etl init spec --spec="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-1 // IGNORE
+curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o /tmp/e2e.hello_world_init_spec.yaml -s // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-1 // IGNORE
 ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
-ais etl init spec --spec="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 --arg-type="fqn" // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 --arg-type="fqn" // IGNORE
 ais etl show | grep $ETL_NAME-2 | awk '{print $2}'
-ais etl init --spec="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-main // IGNORE
+ais etl init --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-main // IGNORE
 ais etl show | grep $ETL_NAME-main | awk '{print $2}'
 
 # Test URL support for --spec flag (new functionality)
 ais etl init spec --spec="https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml" --comm-type="hpush://" --name=$ETL_NAME-url // IGNORE
 ais etl show | grep $ETL_NAME-url | awk '{print $2}'
 
-curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml -o hash_with_args_init_spec.yaml -s // IGNORE
-ais etl init spec -f="hash_with_args_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-3 // IGNORE
+curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hash_with_args/pod.yaml -o /tmp/e2e.hash_with_args_init_spec.yaml -s // IGNORE
+ais etl init spec -f="/tmp/e2e.hash_with_args_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-3 // IGNORE
 ais etl show | grep $ETL_NAME-3 | awk '{print $2}'
-rm -f hash_with_args_init_spec.yaml // IGNORE
+rm -f /tmp/e2e.hash_with_args_init_spec.yaml // IGNORE
 
 echo "0123456789" > $OBJECT_1.txt
 ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
@@ -65,18 +65,18 @@ ais etl stop $ETL_NAME-main
 ais etl rm $ETL_NAME-main
 
 # Test etl rm with multiple ETL names
-ais etl init spec --spec="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi1 // IGNORE
-ais etl init spec --spec="hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi2 // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi1 // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-multi2 // IGNORE
 ais etl show | grep $ETL_NAME-multi1 | awk '{print $2}'
 ais etl show | grep $ETL_NAME-multi2 | awk '{print $2}'
 ais etl rm $ETL_NAME-multi1 $ETL_NAME-multi2
 ! ais etl show | grep "$ETL_NAME-multi"
 
 # Test etl rm --all and initializing multiple ETLs per file
-ais etl init spec --spec="hello_world_init_spec.yaml" --name=$ETL_NAME-all1 // IGNORE
-ais etl init spec --spec="hello_world_init_spec.yaml" --name=$ETL_NAME-all2 // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --name=$ETL_NAME-all1 // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --name=$ETL_NAME-all2 // IGNORE
 ais etl show | grep $ETL_NAME-all1 | awk '{print $2}'
 ais etl show | grep $ETL_NAME-all2 | awk '{print $2}'
 ais etl rm --all
 ! ais etl show | grep "$ETL_NAME-all"
-rm -f hello_world_init_spec.yaml // IGNORE
+rm -f /tmp/e2e.hello_world_init_spec.yaml // IGNORE
