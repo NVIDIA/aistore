@@ -37,7 +37,7 @@ const (
 
 const (
 	// currently _required_ - e.g., `ais://mmm` cannot be reduced to `mmm`
-	// in the future, we may fully support cfg.DefaultProvider but not yet
+	// in the future, we may fully support gcfg.DefaultProvider but not yet
 	// * see also: cmd/cli/config/config.go
 	providerRequired = true
 )
@@ -61,7 +61,7 @@ type (
 )
 
 var (
-	cfg         *config.Config
+	gcfg        *config.Config
 	buildTime   string
 	k8sDetected bool
 )
@@ -71,7 +71,7 @@ var (
 	fred, fcyan, fblue, fgreen func(a ...any) string
 )
 
-func cliConfVerbose() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
+func cliConfVerbose() bool { return gcfg.Verbose } // more warnings, errors with backtraces and details
 
 // main method
 func Run(version, buildtime string, args []string) error {
@@ -89,7 +89,7 @@ func Run(version, buildtime string, args []string) error {
 
 	a.init(version, emptyCmdline)
 
-	teb.Init(os.Stdout, cfg.NoColor)
+	teb.Init(os.Stdout, gcfg.NoColor)
 
 	// run
 	if err := a.runOnce(args); err != nil {
@@ -98,7 +98,7 @@ func Run(version, buildtime string, args []string) error {
 	if !a.longRun.isSet() {
 		if emptyCmdline {
 			fmt.Println("\nALIASES:")
-			fmt.Println(indent1 + cfg.Aliases.Str(indent1))
+			fmt.Println(indent1 + gcfg.Aliases.Str(indent1))
 		}
 		return nil
 	}
@@ -168,7 +168,7 @@ func (a *acli) runN(args []string) error {
 func (a *acli) init(version string, emptyCmdline bool) {
 	app := a.app
 
-	if cfg.NoColor {
+	if gcfg.NoColor {
 		fcyan = fmt.Sprint
 		fred = fmt.Sprint
 		fblue = fmt.Sprint
@@ -200,12 +200,12 @@ func (a *acli) init(version string, emptyCmdline bool) {
 	app.Description = cliDescr
 
 	// paginate help via `more`
-	if !cfg.NoMore {
+	if !gcfg.NoMore {
 		cli.HelpPrinter = helpMorePrinter
 	}
 
 	// custom templates and help coloring
-	if !cfg.NoColor {
+	if !gcfg.NoColor {
 		cli.AppHelpTemplate = appColoredHelpTemplate
 		cli.CommandHelpTemplate = commandColoredHelpTemplate
 		cli.SubcommandHelpTemplate = subcommandColoredHelpTemplate

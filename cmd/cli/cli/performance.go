@@ -450,7 +450,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 		setLongRunParams(c, lfooter)
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize, NoColor: cfg.NoColor}
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize, NoColor: gcfg.NoColor}
 		table, num, err := ctx.MakeTab(tstatusMap)
 		if err != nil {
 			return err
@@ -517,7 +517,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
-			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle, NoColor: cfg.NoColor}
+			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle, NoColor: gcfg.NoColor}
 		table, _, err := ctx.MakeTab(mapBegin)
 		if err != nil {
 			return err
@@ -565,7 +565,7 @@ func showMpathCapHandler(c *cli.Context) error {
 		return err
 	}
 
-	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units, NoColor: cfg.NoColor}
+	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units, NoColor: gcfg.NoColor}
 	table := teb.NewMpathCapTab(tstatusMap, &ctx, showMpaths)
 
 	out := table.Template(hideHeader)

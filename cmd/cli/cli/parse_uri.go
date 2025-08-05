@@ -76,7 +76,7 @@ func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
 
 	opts := cmn.ParseURIOpts{}
 	if !providerRequired {
-		opts.DefaultProvider = cfg.DefaultProvider
+		opts.DefaultProvider = gcfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 	switch {
@@ -155,7 +155,7 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 	} else {
 		var opts cmn.ParseURIOpts
 		if !providerRequired {
-			opts.DefaultProvider = cfg.DefaultProvider
+			opts.DefaultProvider = gcfg.DefaultProvider
 		}
 		bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 		if err != nil {

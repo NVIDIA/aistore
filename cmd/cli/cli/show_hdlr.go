@@ -632,8 +632,8 @@ For details and usage examples, see: docs/cli/config.md`
 			UA:    ua,
 		}
 		cargs := cmn.TransportArgs{
-			DialTimeout: cfg.Timeout.TCPTimeout,
-			Timeout:     cfg.Timeout.HTTPTimeout,
+			DialTimeout: gcfg.Timeout.TCPTimeout,
+			Timeout:     gcfg.Timeout.HTTPTimeout,
 		}
 		if cos.IsHTTPS(bp.URL) {
 			// Create temp TLS client with verification skip for remote clusters

@@ -37,7 +37,7 @@ func isAlias(c *cli.Context) bool {
 }
 
 func lastAliasedWord(c *cli.Context) string {
-	alias, ok := cfg.Aliases[c.Command.Name]
+	alias, ok := gcfg.Aliases[c.Command.Name]
 	if !ok {
 		return ""
 	}
@@ -78,10 +78,10 @@ func (a *acli) getAliasCmd() cli.Command {
 	return aliasCmd
 }
 
-// initAliases reads cfg.Aliases and returns all aliases.
+// initAliases reads gcfg.Aliases and returns all aliases.
 // NOTE: for default alias config, see cmd/cli/config/config.go and `DefaultAliasConfig`
 func (a *acli) initAliases() (aliasCmds []cli.Command) {
-	for alias, orig := range cfg.Aliases {
+	for alias, orig := range gcfg.Aliases {
 		cmd := a.resolveCmd(orig)
 
 		if cmd != nil {
@@ -131,8 +131,8 @@ func (a *acli) resolveCmd(command string) *cli.Command {
 }
 
 func resetAliasHandler(c *cli.Context) (err error) {
-	cfg.Aliases = config.DefaultAliasConfig
-	if err := config.Save(cfg); err != nil {
+	gcfg.Aliases = config.DefaultAliasConfig
+	if err := config.Save(gcfg); err != nil {
 		return err
 	}
 
@@ -142,13 +142,13 @@ func resetAliasHandler(c *cli.Context) (err error) {
 
 // compare w/ AliasConfig.String()
 func showAliasHandler(*cli.Context) (err error) {
-	b := cos.StrKVs(cfg.Aliases)
+	b := cos.StrKVs(gcfg.Aliases)
 	keys := b.Keys()
 	sort.Slice(keys, func(i, j int) bool { return b[keys[i]] < b[keys[j]] })
 
-	aliases := make(nvpairList, 0, len(cfg.Aliases))
+	aliases := make(nvpairList, 0, len(gcfg.Aliases))
 	for _, k := range keys {
-		aliases = append(aliases, nvpair{Name: k, Value: cfg.Aliases[k]})
+		aliases = append(aliases, nvpair{Name: k, Value: gcfg.Aliases[k]})
 	}
 	return teb.Print(aliases, teb.AliasTemplate)
 }
@@ -158,11 +158,11 @@ func rmAliasHandler(c *cli.Context) (err error) {
 	if alias == "" {
 		return missingArgumentsError(c, "alias")
 	}
-	if _, ok := cfg.Aliases[alias]; !ok {
+	if _, ok := gcfg.Aliases[alias]; !ok {
 		return &errDoesNotExist{what: "alias", name: alias}
 	}
-	delete(cfg.Aliases, alias)
-	return config.Save(cfg)
+	delete(gcfg.Aliases, alias)
+	return config.Save(gcfg)
 }
 
 func (a *acli) setAliasHandler(c *cli.Context) (err error) {
@@ -177,7 +177,7 @@ func (a *acli) setAliasHandler(c *cli.Context) (err error) {
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	oldCmd, ok := cfg.Aliases[alias]
+	oldCmd, ok := gcfg.Aliases[alias]
 	newCmd := ""
 	for _, arg := range c.Args().Tail() {
 		if newCmd != "" {
@@ -188,11 +188,11 @@ func (a *acli) setAliasHandler(c *cli.Context) (err error) {
 	if cmd := a.resolveCmd(newCmd); cmd == nil {
 		return fmt.Errorf("%q is not AIS command", newCmd)
 	}
-	cfg.Aliases[alias] = newCmd
+	gcfg.Aliases[alias] = newCmd
 	if ok {
 		fmt.Fprintf(c.App.Writer, "Alias %q new command %q (was: %q)\n", alias, newCmd, oldCmd)
 	} else {
 		fmt.Fprintf(c.App.Writer, "Aliased %q = %q\n", newCmd, alias)
 	}
-	return config.Save(cfg)
+	return config.Save(gcfg)
 }

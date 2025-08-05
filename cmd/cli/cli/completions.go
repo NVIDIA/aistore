@@ -861,7 +861,7 @@ func suggestRemote(_ *cli.Context) {
 }
 
 func cliPropCompletions(c *cli.Context) {
-	err := cmn.IterFields(cfg, func(tag string, _ cmn.IterField) (error, bool) {
+	err := cmn.IterFields(gcfg, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
 			fmt.Println(tag)
 		}

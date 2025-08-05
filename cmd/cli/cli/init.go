@@ -23,7 +23,7 @@ import (
 var loggedUserToken string
 
 func Init(args []string) (err error) {
-	cfg, err = config.Load(args, cmdReset)
+	gcfg, err = config.Load(args, cmdReset)
 	if err != nil {
 		return err
 	}
@@ -41,18 +41,18 @@ func Init(args []string) (err error) {
 	loggedUserToken, _ = authn.LoadToken("") // No error handling as token might not be needed
 
 	// http clients: the main one and the auth, if enabled
-	clusterURL = _clusterURL(cfg)
+	clusterURL = getClusterEndpoint(gcfg)
 
 	var (
 		cargs = cmn.TransportArgs{
-			DialTimeout: cfg.Timeout.TCPTimeout,
-			Timeout:     cfg.Timeout.HTTPTimeout,
+			DialTimeout: gcfg.Timeout.TCPTimeout,
+			Timeout:     gcfg.Timeout.HTTPTimeout,
 		}
 		sargs = cmn.TLSArgs{
-			ClientCA:    cfg.Cluster.ClientCA,
-			Certificate: cfg.Cluster.Certificate,
-			Key:         cfg.Cluster.CertKey,
-			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
+			ClientCA:    gcfg.Cluster.ClientCA,
+			Certificate: gcfg.Cluster.Certificate,
+			Key:         gcfg.Cluster.CertKey,
+			SkipVerify:  gcfg.Cluster.SkipVerifyCrt,
 		}
 	)
 
@@ -64,7 +64,7 @@ func Init(args []string) (err error) {
 		UA:    ua,
 	}
 	if cos.IsHTTPS(clusterURL) {
-		// TODO -- FIXME: cfg.WarnTLS("aistore at " + clusterURL)
+		// TODO -- FIXME: gcfg.WarnTLS("aistore at " + clusterURL)
 		clientTLS = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 		apiBP.Client = clientTLS
 	} else {
@@ -72,7 +72,7 @@ func Init(args []string) (err error) {
 		apiBP.Client = clientH
 	}
 
-	if authnURL := cliAuthnURL(cfg); authnURL != "" {
+	if authnURL := cliAuthnURL(gcfg); authnURL != "" {
 		authParams = api.BaseParams{
 			URL:   authnURL,
 			Token: loggedUserToken,
@@ -80,7 +80,7 @@ func Init(args []string) (err error) {
 		}
 		if cos.IsHTTPS(authnURL) {
 			if clientTLS == nil {
-				// TODO -- FIXME: cfg.WarnTLS("AuthN at " + authnURL)
+				// TODO -- FIXME: gcfg.WarnTLS("AuthN at " + authnURL)
 				clientTLS = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
 			}
 			authParams.Client = clientTLS
@@ -95,31 +95,31 @@ func Init(args []string) (err error) {
 }
 
 // resolving order:
-// 1. cfg.Cluster.URL; if empty:
+// 1. gcfg.Cluster.URL; if empty:
 // 2. Proxy docker container IP address; if not successful:
 // 3. Docker default; if not present:
-// 4. Default as cfg.Cluster.DefaultAISHost
-func _clusterURL(cfg *config.Config) string {
+// 4. Default as gcfg.Cluster.DefaultAISHost
+func getClusterEndpoint(gcfg *config.Config) string {
 	if envURL := os.Getenv(env.AisEndpoint); envURL != "" {
 		return envURL
 	}
-	if cfg.Cluster.URL != "" {
-		return cfg.Cluster.URL
+	if gcfg.Cluster.URL != "" {
+		return gcfg.Cluster.URL
 	}
 
 	if docker.IsRunning() {
 		clustersIDs, err := docker.ClusterIDs()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
-			return cfg.Cluster.DefaultDockerHost
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, gcfg.Cluster.DefaultDockerHost)
+			return gcfg.Cluster.DefaultDockerHost
 		}
 
 		debug.Assert(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
 
 		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
-			return cfg.Cluster.DefaultDockerHost
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, gcfg.Cluster.DefaultDockerHost)
+			return gcfg.Cluster.DefaultDockerHost
 		}
 
 		if len(clustersIDs) > 1 {
@@ -129,7 +129,7 @@ func _clusterURL(cfg *config.Config) string {
 		return "http://" + proxyGateway + ":8080"
 	}
 
-	return cfg.Cluster.DefaultAISHost
+	return gcfg.Cluster.DefaultAISHost
 }
 
 func detectK8s() bool {

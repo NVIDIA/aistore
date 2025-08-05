@@ -432,7 +432,7 @@ func showCfgCLI(c *cli.Context) (err error) {
 		return
 	}
 	if flagIsSet(c, jsonFlag) {
-		out, errV := jsonMarshalIndent(cfg)
+		out, errV := jsonMarshalIndent(gcfg)
 		if errV != nil {
 			return errV
 		}
@@ -440,7 +440,7 @@ func showCfgCLI(c *cli.Context) (err error) {
 		return
 	}
 
-	flat := flattenJSON(cfg, c.Args().Get(0))
+	flat := flattenJSON(gcfg, c.Args().Get(0))
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
@@ -463,14 +463,14 @@ func setCfgCLI(c *cli.Context) (err error) {
 		return err
 	}
 
-	flatOld := flattenJSON(cfg, "")
+	flatOld := flattenJSON(gcfg, "")
 	for k, v := range nvs {
-		if err := cmn.UpdateFieldValue(cfg, k, v); err != nil {
+		if err := cmn.UpdateFieldValue(gcfg, k, v); err != nil {
 			return err
 		}
 	}
 
-	flatNew := flattenJSON(cfg, "")
+	flatNew := flattenJSON(gcfg, "")
 	diff := diffConfigs(flatNew, flatOld)
 	for _, val := range diff {
 		if val.Old == "-" {
@@ -479,7 +479,7 @@ func setCfgCLI(c *cli.Context) (err error) {
 		fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", val.Name, val.Current, val.Old)
 	}
 
-	return config.Save(cfg)
+	return config.Save(gcfg)
 }
 
 func resetCfgCLI(c *cli.Context) (err error) {

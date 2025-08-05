@@ -123,7 +123,7 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	body.NumDisks, body.Capacity = _totals(body.Stst.Tmap, units, cfg)
 	body.Version, body.BuildTime = _clusoft(body.Stst.Tmap, body.Stst.Pmap)
 	body.Backend = _detectBackend()
-	body.Endpoint = _getClusterEndpoint()
+	body.Endpoint = getClusterEndpoint(gcfg)
 
 	var out strings.Builder
 	out.Grow(256)
@@ -652,7 +652,7 @@ func (ca *cluAnalytics) writeRunningJobs(out *strings.Builder) {
 	}
 }
 
-// _fmtStorageSummary provides enhanced storage, performance, network, error, and throughput details
+// details: storage, performance, network, error, and throughput
 func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
 	ca := newAnalytics(c, tmap, units)
 
@@ -672,7 +672,7 @@ func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
 	return out.String()
 }
 
-// _detectBackend detects the configured cloud backend providers
+// detect configured cloud backend providers
 func _detectBackend() string {
 	backends, err := api.GetConfiguredBackends(apiBP)
 	if err != nil {
@@ -688,9 +688,4 @@ func _detectBackend() string {
 		return "None"
 	}
 	return strings.Join(cloudBackends, ", ")
-}
-
-// _getClusterEndpoint returns the cluster endpoint URL
-func _getClusterEndpoint() string {
-	return apiBP.URL // can be overridden by AIS_ENDPOINT env var (env takes precedence)
 }
