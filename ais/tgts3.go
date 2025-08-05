@@ -159,7 +159,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 
 	// NOTE: lom will be safely loaded, locked, unlocked during the call
-	ecode, err = t.copyObject(lom, bckTo, s3.ObjName(items), "" /*etlName*/, "" /*etlArgs*/, config)
+	ecode, err = t.copyObject(lom, bckTo, s3.ObjName(items), nil /*dpq*/, config)
 	if err != nil {
 		if err == cmn.ErrSkip {
 			name := lom.Cname()

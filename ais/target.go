@@ -941,7 +941,6 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		var (
 			bck     *meta.Bck
 			objName string
-			etlName = apireq.dpq.etl.name // apc.QparamETLName
 		)
 
 		bck, objName, err = meta.ParseUname(apireq.dpq.objto, true /*object name required*/)
@@ -959,7 +958,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 				return
 			}
 		}
-		ecode, err = t.copyObject(lom, bck, objName, etlName, apireq.dpq.etl.targs, config) // lom is locked/unlocked during the call
+		ecode, err = t.copyObject(lom, bck, objName, apireq.dpq, config) // lom is locked/unlocked during the call
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1453,7 +1452,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	return code, err
 }
 
-func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName, etlArgs string, config *cmn.Config) (ecode int, err error) {
+func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, dpq *dpq, config *cmn.Config) (ecode int, err error) {
 	coiParams := xs.AllocCOI()
 	{
 		coiParams.BckTo = bck
@@ -1461,15 +1460,19 @@ func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName, etlName, etlA
 		coiParams.Config = config
 		coiParams.ObjnameTo = objName
 		coiParams.OAH = lom
-		coiParams.ETLArgs = &core.ETLArgs{TransformArgs: etlArgs}
 	}
 
 	var xetl *etl.XactETL
-	if etlName != "" {
-		coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(etlName, nil /*xaction*/)
-		if err != nil {
-			xs.FreeCOI(coiParams)
-			return 0, err
+	if dpq != nil {
+		coiParams.LatestVer = dpq.latestVer
+		coiParams.Sync = dpq.sync
+		if dpq.etl.name != "" {
+			coiParams.ETLArgs = &core.ETLArgs{TransformArgs: dpq.etl.targs}
+			coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(dpq.etl.name, nil /*xaction*/)
+			if err != nil {
+				xs.FreeCOI(coiParams)
+				return 0, err
+			}
 		}
 	}
 

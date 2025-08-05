@@ -48,6 +48,7 @@ from aistore.sdk.const import (
     AIS_MIRROR_COPIES,
     AIS_PRESENT,
     QPARAM_LATEST,
+    QPARAM_SYNC,
 )
 from aistore.sdk.obj.object import (
     Object,
@@ -616,6 +617,8 @@ class TestObject(unittest.TestCase):
         self.assertEqual(response, mock_response)
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{OBJ_NAME}"
+        expected_params[QPARAM_LATEST] = "false"
+        expected_params[QPARAM_SYNC] = "false"
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
@@ -640,6 +643,8 @@ class TestObject(unittest.TestCase):
         self.assertEqual(response, mock_response)
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{new_name}"
+        expected_params[QPARAM_LATEST] = "false"
+        expected_params[QPARAM_SYNC] = "false"
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
@@ -666,6 +671,8 @@ class TestObject(unittest.TestCase):
         expected_params = self.bck_qparams.copy()
         expected_params[QPARAM_OBJ_TO] = f"ais/@#/{DEST_BCK_NAME}/{OBJ_NAME}"
         expected_params[QPARAM_ETL_NAME] = ETL_NAME
+        expected_params[QPARAM_LATEST] = "false"
+        expected_params[QPARAM_SYNC] = "false"
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
@@ -695,6 +702,8 @@ class TestObject(unittest.TestCase):
         expected_params[QPARAM_ETL_ARGS] = json_dumps(
             etl_config.args, separators=(",", ":")
         )
+        expected_params[QPARAM_LATEST] = "false"
+        expected_params[QPARAM_SYNC] = "false"
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,

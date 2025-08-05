@@ -37,7 +37,7 @@ from tests.utils import (
     has_targets,
     random_string,
 )
-from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET
+from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET, AWS_BUCKET
 
 
 # pylint: disable=unused-variable, too-many-public-methods
@@ -531,6 +531,108 @@ class TestObjectOps(ParallelTestBase):
 
         source_content = source_obj.get_reader().read_all()
         self.assertEqual(content, source_content)
+
+    @unittest.skipIf(
+        not AWS_BUCKET,
+        "AWS bucket is not set",
+    )
+    def test_copy_object_latest_flag(self):
+        """Test copying an object with latest flag to get updated version from remote backend."""
+        dest_bucket = self._create_bucket(prefix="copy-latest-dest")
+        obj_name = random_string()
+        first_version_content = b"first version content"
+        second_version_content = b"second version content"
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
+
+        # out-of-band PUT: first version
+        self.s3_client.put_object(
+            Bucket=self.bucket.name, Key=obj_name, Body=first_version_content
+        )
+
+        # cold GET to cache the object
+        source_obj = self.bucket.object(obj_name)
+        content = source_obj.get_reader().read_all()
+        self.assertEqual(first_version_content, content)
+
+        # out-of-band PUT: 2nd version (overwrite)
+        self.s3_client.put_object(
+            Bucket=self.bucket.name, Key=obj_name, Body=second_version_content
+        )
+
+        # Copy without latest flag - should copy the cached first version
+        dest_obj_old = dest_bucket.object(f"{obj_name}-old")
+        response = source_obj.copy(dest_obj_old)
+        self.assertEqual(response.status_code, 200)
+
+        # Verify copied content is the old cached version
+        copied_content_old = dest_obj_old.get_reader().read_all()
+        self.assertEqual(first_version_content, copied_content_old)
+
+        # Copy with latest=True - should copy the updated version from remote
+        dest_obj_latest = dest_bucket.object(f"{obj_name}-latest")
+        response = source_obj.copy(dest_obj_latest, latest=True)
+        self.assertEqual(response.status_code, 200)
+
+        # Verify copied content is the updated version
+        copied_content_latest = dest_obj_latest.get_reader().read_all()
+        self.assertEqual(second_version_content, copied_content_latest)
+
+        # out-of-band DELETE
+        self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+
+        # Copy without latest should still work (using cached version)
+        dest_obj_cached = dest_bucket.object(f"{obj_name}-cached")
+        response = source_obj.copy(dest_obj_cached)
+        self.assertEqual(response.status_code, 200)
+
+        copied_content_cached = dest_obj_cached.get_reader().read_all()
+        self.assertEqual(first_version_content, copied_content_cached)
+
+        # Copy with latest=True should fail since object was deleted from remote
+        dest_obj_deleted = dest_bucket.object(f"{obj_name}-deleted")
+        with self.assertRaises(AISError):
+            source_obj.copy(dest_obj_deleted, latest=True)
+
+    @unittest.skipIf(
+        not AWS_BUCKET,
+        "AWS bucket is not set",
+    )
+    def test_copy_object_sync_flag(self):
+        """Test copying objects with sync flag to ensure synchronization with remote backend."""
+        dest_bucket = self._create_bucket(prefix="copy-sync-dest")
+        obj_name = random_string()
+        content = b"sync test content"
+        self._register_for_post_test_cleanup(names=[obj_name], is_bucket=False)
+
+        # Create object out-of-band via S3
+        self.s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=content)
+
+        # Cache object by reading it
+        source_obj = self.bucket.object(obj_name)
+        cached_content = source_obj.get_reader().read_all()
+        self.assertEqual(content, cached_content)
+
+        # Copy without sync should work (uses cached version)
+        dest_obj_no_sync = dest_bucket.object(f"no-sync-{obj_name}")
+        response = source_obj.copy(dest_obj_no_sync)
+        self.assertEqual(response.status_code, 200)
+
+        # Verify copy worked
+        copied_content = dest_obj_no_sync.get_reader().read_all()
+        self.assertEqual(content, copied_content)
+
+        # Delete object out-of-band via S3
+        self.s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+
+        # Copy without sync should still work (uses cached version)
+        dest_obj_cached = dest_bucket.object(f"cached-{obj_name}")
+        response = source_obj.copy(dest_obj_cached)
+        self.assertEqual(response.status_code, 200)
+
+        # Copy with sync=True should fail since object was deleted from remote
+        dest_obj_sync = dest_bucket.object(f"sync-{obj_name}")
+        with self.assertRaises(AISError):
+            source_obj.copy(dest_obj_sync, sync=True)
 
     def test_copy_object_different_name(self):
         """Test copying an object to another bucket with a different name."""

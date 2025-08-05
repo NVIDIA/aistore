@@ -74,6 +74,7 @@ QPARAM_OBJ_TO = "object_to"
 DSORT_UUID = "uuid"
 QPARAM_UUID = "uuid"
 QPARAM_LATEST = "latest-ver"
+QPARAM_SYNC = "synchronize"
 QPARAM_NEW_CUSTOM = "set-new-custom"
 # etl
 QPARAM_ETL_NAME = "etl_name"

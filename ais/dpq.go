@@ -47,6 +47,7 @@ type dpq struct {
 	dontAddRemote bool // QparamDontAddRemote
 	silent        bool // QparamSilent
 	latestVer     bool // QparamLatestVer
+	sync          bool // QparamSync
 	isS3          bool // special use: frontend S3 API
 }
 
@@ -168,6 +169,8 @@ func (dpq *dpq) parse(rawQuery string) error {
 			dpq.silent = cos.IsParseBool(value)
 		case apc.QparamLatestVer:
 			dpq.latestVer = cos.IsParseBool(value)
+		case apc.QparamSync:
+			dpq.sync = cos.IsParseBool(value)
 
 		default: // the key must be known or `_except`-ed
 			if strings.HasPrefix(key, s3.HeaderPrefix) {

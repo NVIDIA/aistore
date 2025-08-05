@@ -24,6 +24,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Add support for OS packages in `init_class`.
 - Add `MultipartDecoder` class to allow for the parsing of multipart HTTP responses.
 - Add `Object.copy()` method with support for `ETLConfig` parameter for copying/transforming a single object.
+- Add `Object.copy()` method with support for `latest` and `sync` options.
 - Add `BatchLoader`, `BatchRequest`, and `BatchResponseItem` classes for new GetBatch AIStore API.
 - Add `ArchiveStreamExtractor` for extraction of archive contents streamed from GetBatch calls.
 - Added new internal `BatchObjectRequest` and `BatchResponse` classes to represent metadata.

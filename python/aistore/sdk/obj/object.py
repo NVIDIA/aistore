@@ -27,6 +27,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_NAME,
     QPARAM_ETL_ARGS,
     QPARAM_LATEST,
+    QPARAM_SYNC,
     QPARAM_OBJ_TO,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
@@ -497,7 +498,13 @@ class Object:
             params=self.query_params,
         )
 
-    def copy(self, to_obj: "Object", etl: Optional[ETLConfig] = None) -> Response:
+    def copy(
+        self,
+        to_obj: "Object",
+        etl: Optional[ETLConfig] = None,
+        latest: bool = False,
+        sync: bool = False,
+    ) -> Response:
         """
         Copy this object to another object (which specifies the destination bucket and name),
         optionally with ETL transformation.
@@ -505,6 +512,8 @@ class Object:
         Args:
             to_obj (Object): Destination object specifying both the target bucket and object name
             etl (ETLConfig, optional): ETL configuration for transforming the object during copy
+            latest (bool, optional): GET the latest object version from the associated remote bucket.
+            sync (bool, optional): In addition to the latest, also entails removing remotely deleted objects
 
         Returns:
             Response: The response from the copy operation
@@ -522,6 +531,8 @@ class Object:
 
         # Use uname for destination bucket+object
         query_params[QPARAM_OBJ_TO] = to_obj.uname
+        query_params[QPARAM_LATEST] = "true" if latest else "false"
+        query_params[QPARAM_SYNC] = "true" if sync else "false"
 
         # Add ETL configuration if provided
         if etl:

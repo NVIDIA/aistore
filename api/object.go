@@ -136,6 +136,8 @@ type (
 		FromObjName string
 		ToBck       cmn.Bck
 		ToObjName   string // if empty, defaults to FromObjName
+		LatestVer   bool   // see also: QparamLatestVer
+		Sync        bool   // see also: 'versioning.synchronize'
 	}
 	TransformArgs struct {
 		CopyArgs
@@ -350,6 +352,12 @@ func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName, etlArgs strin
 	}
 	if etlArgs != "" {
 		q.Add(apc.QparamETLTransformArgs, etlArgs)
+	}
+	if args.LatestVer {
+		q.Set(apc.QparamLatestVer, "true")
+	}
+	if args.Sync {
+		q.Set(apc.QparamSync, "true")
 	}
 
 	bp.Method = http.MethodPut
