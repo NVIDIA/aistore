@@ -209,7 +209,7 @@ func (xctn *Base) Finish() {
 	switch {
 	case err == nil:
 		debug.Assert(n == 0, n)
-		nlog.Infoln(xname, "finished")
+		nlog.Infoln(xname, "finished") // TODO: consider skipping LogLess as well
 		return
 	case Table[xctn.kind].LogLess:
 		// skip

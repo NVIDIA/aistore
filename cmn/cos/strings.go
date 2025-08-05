@@ -4,8 +4,6 @@
  */
 package cos
 
-import "strings"
-
 const _dfltLen = 16
 
 func BHead(b []byte, ls ...int) string {
@@ -71,23 +69,6 @@ func Plural(num int) (s string) {
 		s = "s"
 	}
 	return
-}
-
-// optimal append(strings)
-func AppendStrings(sb *strings.Builder /*in-out*/, prefix string, sepa byte, items ...string) {
-	l := len(prefix)
-	l += len(items) - 1 // times sepa
-	for _, s := range items {
-		l += len(s)
-	}
-	sb.Grow(l)
-
-	sb.WriteString(prefix)
-	sb.WriteString(items[0])
-	for _, s := range items[1:] {
-		sb.WriteByte(sepa)
-		sb.WriteString(s)
-	}
 }
 
 func StrDup(s string) string { return string([]byte(s)) }

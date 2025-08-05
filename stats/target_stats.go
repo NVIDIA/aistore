@@ -847,6 +847,8 @@ func (r *Trunner) logDiskStats(verbose bool) {
 	}
 }
 
+const maxJobs2Log = 32
+
 func (r *Trunner) _jobs(verbose bool) string {
 	r.xallRun.Running = r.xallRun.Running[:0]
 	r.xallRun.Idle = r.xallRun.Idle[:0]
@@ -860,14 +862,8 @@ func (r *Trunner) _jobs(verbose bool) string {
 	}
 
 	var sb strings.Builder
-	if len(r.xallRun.Running) > 0 {
-		cos.AppendStrings(&sb, "running: ", ' ', r.xallRun.Running...)
-		if len(r.xallRun.Idle) > 0 {
-			cos.AppendStrings(&sb, ";  idle: ", ' ', r.xallRun.Idle...)
-		}
-	} else if len(r.xallRun.Idle) > 0 {
-		cos.AppendStrings(&sb, "idle: ", ' ', r.xallRun.Idle...)
-	}
+	_more(&sb, r.xallRun.Running, "running")
+	_more(&sb, r.xallRun.Idle, "idle")
 
 	ln := sb.String()
 	if ln != "" && ln != r.xln {
@@ -875,6 +871,48 @@ func (r *Trunner) _jobs(verbose bool) string {
 	}
 
 	return ln
+}
+
+func _more(sb *strings.Builder, xnames []string, prefix string) {
+	l := len(xnames)
+	if l == 0 {
+		return
+	}
+	show := xnames
+	more := l - maxJobs2Log
+	if more > 0 {
+		show = show[:maxJobs2Log]
+	}
+
+	if sb.Len() > 0 {
+		prefix = "; " + prefix
+	}
+	_apps(sb, prefix, show, l)
+	if more > 0 {
+		sb.WriteString("... (and ")
+		sb.WriteString(strconv.Itoa(more))
+		sb.WriteString(" more)")
+	}
+}
+
+func _apps(sb *strings.Builder, prefix string, items []string, total int) {
+	l := len(prefix)
+	l += 12             // count
+	l += len(items) - 1 // times sepa
+	for _, s := range items {
+		l += len(s)
+	}
+	sb.Grow(l)
+
+	sb.WriteString(prefix)
+	sb.WriteByte('(')
+	sb.WriteString(strconv.Itoa(total))
+	sb.WriteString("): ")
+	sb.WriteString(items[0])
+	for _, s := range items[1:] {
+		sb.WriteByte(' ')
+		sb.WriteString(s)
+	}
 }
 
 func (r *Trunner) statsTime(newval time.Duration) {

@@ -180,14 +180,23 @@ func GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 }
 
 func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
-	var roActive []Renewable
-	if periodic {
-		roActive = e.roActive
-		roActive = roActive[:len(e.active)]
-	} else {
-		roActive = make([]Renewable, len(e.active))
-	}
+	var (
+		roActive []Renewable
+		l        int
+	)
 	e.mtx.RLock()
+	l = len(e.active)
+	if l == 0 {
+		e.mtx.RUnlock()
+		return
+	}
+	if periodic && cap(e.roActive) >= l { // reuse existing
+		roActive = e.roActive
+		roActive = roActive[:l]
+	} else { // allocate
+		roActive = make([]Renewable, l)
+		e.roActive = roActive // reuse later
+	}
 	copy(roActive, e.active)
 	e.mtx.RUnlock()
 
