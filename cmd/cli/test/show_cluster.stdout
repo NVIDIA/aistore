@@ -1,4 +1,5 @@
 ^Cluster:$
+^.*Endpoint:.*$
 ^.*Proxies:.*$
 ^.*Targets:.*$
 ^.*Capacity:.*$
@@ -19,10 +20,11 @@
 ^.*Network:.*$
 ^.*Storage:.*$
 ^.*Filesystems:.*$
+^.*Running Jobs:.*$
 ^Cluster:$
+^.*Endpoint:.*$
 ^.*Proxies:.*$
 ^.*Targets:.*$
-^.*Endpoint:.*$
 ^.*Capacity:.*$
 ^.*Cluster Map:.*$
 ^.*Software:.*$

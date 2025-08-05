@@ -8,14 +8,12 @@ package cli
 import (
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -39,7 +37,7 @@ type (
 	}
 	cluAnalytics struct {
 		// Performance metrics
-		readRate, WriteRate int64
+		readRate, writeRate int64
 		durationLabel       string
 
 		// Error metrics
@@ -410,7 +408,7 @@ func _calculateStats(values []float64) (minVal, maxVal, avg float64) {
 	return
 }
 
-// newcluAnalytics collects all statistics from the target map
+// newAnalytics collects all statistics from the target map
 func newAnalytics(c *cli.Context, tmap teb.StstMap, _ string) *cluAnalytics {
 	ca := &cluAnalytics{
 		nodeCount:         len(tmap),
@@ -422,9 +420,9 @@ func newAnalytics(c *cli.Context, tmap teb.StstMap, _ string) *cluAnalytics {
 	}
 
 	ca.collectMetrics()
-	ca.collectrunningJobs()
-	ca.measureThroughput(c)
 	ca.warnNodes = _analyzeClusterHealth(ca)
+	ca.collectRunningJobs()
+	ca.measureThroughput(c)
 	return ca
 }
 
@@ -471,7 +469,8 @@ func (ca *cluAnalytics) collectLatencyMetrics(ds *stats.NodeStatus) {
 
 // collectNetworkMetrics gathers network-related statistics
 func (ca *cluAnalytics) collectNetworkMetrics(ds *stats.NodeStatus) {
-	ca.totalOps += _getTrackerValue(ds, "get.n") + _getTrackerValue(ds, "put.n")
+	ca.totalOps += _getTrackerValue(ds, "get.n")
+	ca.totalOps += _getTrackerValue(ds, "put.n")
 }
 
 // collectResourceMetrics gathers CPU and resource utilization
@@ -486,7 +485,7 @@ func (ca *cluAnalytics) collectStorageMetrics(ds *stats.NodeStatus) {
 	diskUsages := ca.calculateNodeDiskUsage(ds)
 
 	if len(diskUsages) > 0 {
-		ca.diskUsages = append(ca.diskUsages, ca.averageUsage(diskUsages))
+		ca.diskUsages = append(ca.diskUsages, averageUsage(diskUsages))
 	}
 }
 
@@ -521,7 +520,7 @@ func (ca *cluAnalytics) calculateNodeDiskUsage(ds *stats.NodeStatus) []float64 {
 }
 
 // averageUsage calculates average from a slice of usage values
-func (*cluAnalytics) averageUsage(usages []float64) float64 {
+func averageUsage(usages []float64) float64 {
 	var sum float64
 	for _, usage := range usages {
 		sum += usage
@@ -540,7 +539,7 @@ func (ca *cluAnalytics) measureThroughput(c *cli.Context) {
 		measurementDuration = max(parseDurationFlag(c, refreshFlag), time.Second)
 	}
 
-	ca.readRate, ca.WriteRate = _measureThroughput(c, ca.tmap, measurementDuration)
+	ca.readRate, ca.writeRate = _measureThroughput(c, ca.tmap, measurementDuration)
 	ca.durationLabel = fmt.Sprintf("%.0fs avg", measurementDuration.Seconds())
 }
 
@@ -554,21 +553,21 @@ func (ca *cluAnalytics) writeState(out *strings.Builder, isVerbose bool) {
 
 // writeThroughput writes throughput information
 func (ca *cluAnalytics) writeThroughput(out *strings.Builder, units string) {
-	if ca.readRate > 0 || ca.WriteRate > 0 {
+	if ca.readRate > 0 || ca.writeRate > 0 {
 		fmt.Fprintf(out, indent1+"Throughput:\t\tRead %s/s, Write %s/s (%s)\n",
 			teb.FmtSize(ca.readRate, units, 1),
-			teb.FmtSize(ca.WriteRate, units, 1),
+			teb.FmtSize(ca.writeRate, units, 1),
 			ca.durationLabel)
 	}
 }
 
 // writeErrors writes error information
 func (ca *cluAnalytics) writeErrors(out *strings.Builder) {
+	errorStr := fgreen("0")
 	if ca.totalDiskIOErrors > 0 {
-		fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", fred(strconv.FormatInt(ca.totalDiskIOErrors, 10)))
-	} else {
-		fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", fgreen("0"))
+		errorStr = fred(strconv.FormatInt(ca.totalDiskIOErrors, 10))
 	}
+	fmt.Fprintf(out, indent1+"I/O Errors:\t\t%s\n", errorStr)
 }
 
 // writeResourceUtilization writes CPU and disk usage information
@@ -578,7 +577,6 @@ func (ca *cluAnalytics) writeResourceUtilization(out *strings.Builder) {
 		fmt.Fprintf(out, indent1+"Load Avg:\t\tavg %.1f, min %.1f, max %.1f (1m)\n",
 			avgCPU, minCPU, maxCPU)
 	}
-
 	if len(ca.diskUsages) > 0 {
 		minDisk, maxDisk, avgDisk := _calculateStats(ca.diskUsages)
 		fmt.Fprintf(out, indent1+"Disk Usage:\t\tavg %.1f%%, min %.1f%%, max %.1f%%\n",
@@ -627,11 +625,8 @@ func (ca *cluAnalytics) writeFilesystems(out *strings.Builder) {
 	fmt.Fprintf(out, indent1+"Filesystems:\t\t%s\n", strings.Join(fsInfo, ", "))
 }
 
-// collectrunningJobs gathers currently running jobs
-func (ca *cluAnalytics) collectrunningJobs() {
-	xargs := &xact.ArgsMsg{
-		OnlyRunning: true,
-	}
+func (ca *cluAnalytics) collectRunningJobs() {
+	xargs := &xact.ArgsMsg{OnlyRunning: true}
 
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
@@ -645,16 +640,15 @@ func (ca *cluAnalytics) collectrunningJobs() {
 			jobTypes.Set(snap.Kind)
 		}
 	}
-
 	ca.runningJobs = jobTypes.ToSlice()
 }
 
 // write active jobs information
 func (ca *cluAnalytics) writeRunningJobs(out *strings.Builder) {
 	if len(ca.runningJobs) == 0 {
-		fmt.Fprintf(out, indent1+"Running Jobs:\t\tNone\n")
+		fmt.Fprintf(out, "%-24sNone\n", indent1+"Running Jobs:")
 	} else {
-		fmt.Fprintf(out, indent1+"Running Jobs:\t\t%s\n", strings.Join(ca.runningJobs, ", "))
+		fmt.Fprintf(out, "%-24s%s\n", indent1+"Running Jobs:", strings.Join(ca.runningJobs, ", "))
 	}
 }
 
@@ -666,7 +660,6 @@ func _fmtStorageSummary(c *cli.Context, tmap teb.StstMap, units string) string {
 	out.Grow(256)
 	out.WriteString(fblue("Performance and Health:"))
 	out.WriteString("\n")
-
 	ca.writeState(&out, flagIsSet(c, verboseFlag))
 	ca.writeThroughput(&out, units)
 	ca.writeErrors(&out)
@@ -685,25 +678,19 @@ func _detectBackend() string {
 	if err != nil {
 		return "N/A"
 	}
-
-	cloudBackends := []string{}
+	var cloudBackends []string
 	for _, backend := range backends {
 		if apc.IsCloudProvider(backend) {
 			cloudBackends = append(cloudBackends, apc.DisplayProvider(backend))
 		}
 	}
-
 	if len(cloudBackends) == 0 {
 		return "None"
 	}
-
 	return strings.Join(cloudBackends, ", ")
 }
 
 // _getClusterEndpoint returns the cluster endpoint URL
 func _getClusterEndpoint() string {
-	if envURL := os.Getenv(env.AisEndpoint); envURL != "" {
-		return envURL
-	}
-	return apiBP.URL // Fall back to configured proxy URL
+	return apiBP.URL // can be overridden by AIS_ENDPOINT env var (env takes precedence)
 }

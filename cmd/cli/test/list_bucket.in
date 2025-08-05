@@ -1,3 +1,4 @@
+// RUN clean-cluster
 # This test file focuses solely on listing local bucket functionality. 
 # It evicts all remote buckets to ensure consistent behavior during the tests.
 ais evict gs: || true // IGNORE
