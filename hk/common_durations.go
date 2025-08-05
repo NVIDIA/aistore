@@ -18,7 +18,7 @@ const (
 	//
 	// when things are considered _old_
 	//
-	OldAgeLsoX     = time.Minute      // x-lso
+	OldAgeXshort   = time.Minute      // x-lso, x-moss
 	OldAgeX        = time.Hour        // all other xactions
 	OldAgeNotif    = 3 * time.Minute  // old notifications
 	OldAgeNotifLso = 10 * time.Second // note: seconds

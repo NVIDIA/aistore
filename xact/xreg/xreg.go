@@ -25,8 +25,8 @@ import (
 
 // TODO: some of these constants must be configurable or derived from the config
 const (
-	initialCap       = 256 // initial capacity
-	keepOldThreshold = 256 // keep so many
+	initialCap       = 256  // initial capacity
+	keepOldThreshold = 1024 // keep so many
 
 	waitPrevAborted = 2 * time.Second
 	waitLimitedCoex = 3 * time.Second
@@ -122,8 +122,8 @@ func newRegistry() (r *registry) {
 	return &registry{
 		entries: entries{
 			all:      make([]Renewable, 0, initialCap),
-			active:   make([]Renewable, 0, 32),
-			roActive: make([]Renewable, 0, 64),
+			active:   make([]Renewable, 0, 128),
+			roActive: make([]Renewable, 0, 192),
 		},
 		bckXacts:    make(map[string]Renewable, 32),
 		nonbckXacts: make(map[string]Renewable, 32),
@@ -428,11 +428,13 @@ func (r *registry) hkPruneActive(int64) time.Duration {
 	return hk.PruneActiveIval
 }
 
+func _keepLess(kind string) bool { return kind == apc.ActList || kind == apc.ActGetBatch }
+
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
-		toRemove  []string
-		numNonLso int
-		now       = time.Now()
+		toRemove    []string
+		numKeepMore int
+		now         = time.Now()
 	)
 
 	r.entries.mtx.RLock()
@@ -441,29 +443,30 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	// first, cleanup list-objects: walk older to newer while counting non-lso
 	for i := range l {
 		xctn := r.entries.all[i].Get()
-		if xctn.Kind() != apc.ActList {
-			numNonLso++
+		if !_keepLess(xctn.Kind()) {
+			numKeepMore++
 			continue
 		}
 		if xctn.Finished() {
-			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeLsoX {
+			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeXshort {
 				toRemove = append(toRemove, xctn.ID())
 			}
 		}
 	}
+
 	// all the rest: older to newer, while keeping at least `keepOldThreshold`
-	if numNonLso > keepOldThreshold {
+	if numKeepMore > keepOldThreshold {
 		var cnt int
 		for i := range l {
 			xctn := r.entries.all[i].Get()
-			if xctn.Kind() == apc.ActList {
+			if _keepLess(xctn.Kind()) {
 				continue
 			}
 			if xctn.Finished() {
 				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeX {
 					toRemove = append(toRemove, xctn.ID())
 					cnt++
-					if numNonLso-cnt <= keepOldThreshold {
+					if numKeepMore-cnt <= keepOldThreshold {
 						break
 					}
 				}

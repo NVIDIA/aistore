@@ -243,21 +243,31 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			xctn = rns.Entry.Get()
 		} else {
 			// phase 2.
-			debug.Assert(cos.IsValidUUID(xid), xid)
 			debug.Assert(nat > 1, "not expecting POST -> non-DT when single-node ", nat) // (ctx.nat checked above)
 
+			if !cos.IsValidUUID(xid) {
+				// (unlikely)
+				err := fmt.Errorf("moss: invalid xid %q at phase 2 (non-DT)", xid)
+				debug.AssertNoErr(err)
+				t.writeErr(w, r, err)
+				return
+			}
 			rns := xreg.RenewGetBatch(ctx.bck, xid, false /*designated*/)
 			if rns.Err != nil {
 				t.writeErr(w, r, rns.Err)
 				return
 			}
-			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-				nlog.Infoln(t.String(), "Sender: x-moss", xid, "running:", rns.IsRunning())
-			}
 			xctn = rns.Entry.Get()
-			debug.Assert(xid == xctn.ID(), t.String(), " Sender: expecting x-moss ID given by DT: ", xid, " got ", xctn.ID())
+			if xid != xctn.ID() {
+				// (unlikely)
+				err := fmt.Errorf("moss: expecting xid %q given by DT, got %q", xid, xctn.ID())
+				debug.AssertNoErr(err)
+				xctn.Abort(err)
+				t.writeErr(w, r, err)
+				return
+			}
 			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-				nlog.Infoln(t.String(), "Sender: x-moss renewed", xctn.Name())
+				nlog.Infoln(t.String(), "x-moss renewed:", xctn.Name(), "running:", rns.IsRunning())
 			}
 		}
 

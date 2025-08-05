@@ -155,13 +155,28 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	if prev.UUID() == p.UUID() {
 		return xreg.WprUse, nil
 	}
-	if p.designated {
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
-			nlog.Infoln(core.T.String(), "DT prev:", prev.UUID(), "curr:", p.UUID(), "- using prev...")
-		}
-		return xreg.WprUse, nil
+
+	// sender
+	if !p.designated {
+		return xreg.WprKeepAndStartNew, nil
 	}
-	return xreg.WprKeepAndStartNew, nil
+
+	// DT: use previous
+	xprev := prev.Get()
+	r, ok := xprev.(*XactMoss)
+	if !ok || !cos.IsValidUUID(xprev.ID()) {
+		// (unlikely)
+		nlog.Errorln("unexpected xprev: [", ok, xprev.Name(), xprev.ID(), xprev.Kind(), "]")
+		debug.Assert(false)
+		return xreg.WprKeepAndStartNew, nil
+	}
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(core.T.String(), "DT prev:", r.Name(), "curr:", p.UUID(), "- using prev...")
+	}
+	// reset DemandBase.last timestamp to prevent idle timeout between now and Assemble()
+	r.DemandBase.IncPending()
+	r.DemandBase.DecPending()
+	return xreg.WprUse, nil
 }
 
 func newMoss(p *mossFactory) *XactMoss {
