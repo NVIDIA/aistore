@@ -428,8 +428,6 @@ func (r *registry) hkPruneActive(int64) time.Duration {
 	return hk.PruneActiveIval
 }
 
-func _keepLess(kind string) bool { return kind == apc.ActList || kind == apc.ActGetBatch }
-
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		toRemove    []string
@@ -440,10 +438,10 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	r.entries.mtx.RLock()
 	l := len(r.entries.all)
 
-	// first, cleanup list-objects: walk older to newer while counting non-lso
+	// first, cleanup (x-lso, x-moss): walk older to newer while counting the other kinds
 	for i := range l {
 		xctn := r.entries.all[i].Get()
-		if !_keepLess(xctn.Kind()) {
+		if !xact.Table[xctn.Kind()].LogLess {
 			numKeepMore++
 			continue
 		}
@@ -459,7 +457,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 		var cnt int
 		for i := range l {
 			xctn := r.entries.all[i].Get()
-			if _keepLess(xctn.Kind()) {
+			if xact.Table[xctn.Kind()].LogLess {
 				continue
 			}
 			if xctn.Finished() {
@@ -475,10 +473,19 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	}
 	r.entries.mtx.RUnlock()
 
-	d, ll := hk.DelOldIval, len(toRemove)
-	if l-ll > keepOldThreshold<<1 {
-		d >>= 1
+	// adaptive HK cadence based on finished-registry backlog
+	var (
+		d       = hk.DelOldIval
+		ll      = len(toRemove)
+		remains = l - ll
+	)
+	switch {
+	case remains > keepOldThreshold<<1:
+		d = max(d>>2, hk.OldAgeXshort)
+	case remains > keepOldThreshold:
+		d = max(d>>1, hk.OldAgeXshort)
 	}
+
 	if ll == 0 {
 		return d
 	}
@@ -601,7 +608,12 @@ func (r *registry) renewLocked(entry Renewable, flt *Flt) (rns RenewRes) {
 		return RenewRes{Err: err}
 	}
 
-	r.entries.add(entry)
+	// add to registry
+	e := &r.entries
+	e.mtx.Lock()
+	e._add(entry)
+	e.mtx.Unlock()
+
 	return RenewRes{Entry: entry}
 }
 
@@ -694,11 +706,21 @@ func (e *entries) del(id string) {
 	}
 }
 
-func (e *entries) add(entry Renewable) {
-	e.mtx.Lock()
+// is called under lock
+// history control for LogLess kinds (x-lso, x-moss)
+// – keep up to 1 024 finished records
+// – anything beyond is silently dropped
+func (e *entries) _add(entry Renewable) {
 	e.active = append(e.active, entry)
+
+	if l := len(e.all); xact.Table[entry.Kind()].LogLess && l >= keepOldThreshold {
+		if n := skipXregHst.Inc(); n%skipXregHstCnt == 1 {
+			nlog.Warningln("num entries in xreg history:", l, "exceeds the cap:", keepOldThreshold,
+				"- not adding:", xact.Cname(entry.Kind(), entry.UUID()))
+		}
+		return
+	}
 	e.all = append(e.all, entry)
-	e.mtx.Unlock()
 
 	// grow
 	if cap(e.roActive) < len(e.active) {

@@ -7,21 +7,14 @@ package xreg
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 
 	onexxh "github.com/OneOfOne/xxhash"
 )
 
-var (
-	PrimeTime atomic.Int64
-	MyTime    atomic.Int64
-)
-
-// see related: cmn/cos/uuid.go
-
 // "best-effort ID" - to independently and locally generate globally unique xaction ID
+// see related: cmn/cos/uuid.go
 func GenBEID(div uint64, tag []byte) (beid string, xctn core.Xact, err error) {
 	// primary's "now"
 	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())

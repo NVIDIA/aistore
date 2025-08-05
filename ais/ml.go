@@ -18,16 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
-
-// TODO -- FIXME:
-// - t.httpmlget
-// - use parseReq and dpq
 
 // -----------------------------------------------------------------------
 // Control Flow (where DT: designated target, senders: all the rest)
@@ -51,6 +46,10 @@ func (p *proxy) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 const (
 	tmosspathNumItems = 5
+)
+
+const (
+	placeholderXID = "noxid"
 )
 
 func tmosspath(bucket, xid, wid string, nat int) string {
@@ -128,7 +127,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	// phase 1: call DT
 	var (
 		wid  = cos.GenYAID(p.SID())
-		xid  = "noxid" // placeholder
+		xid  = placeholderXID
 		hreq = cmn.HreqArgs{
 			Method: http.MethodPost,
 			Path:   tmosspath(bucket, xid, wid, nat),
@@ -149,9 +148,15 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	debug.Assert(cos.IsValidUUID(xid), xid)
+	if !cos.IsValidUUID(xid) {
+		err := fmt.Errorf("moss: invalid xid %q at phase 1", xid)
+		debug.AssertNoErr(err)
+		p.writeErr(w, r, err)
+		return
+	}
 
-	hreq.Path = tmosspath(bucket, xid, wid, nat)
+	path := tmosspath(bucket, xid, wid, nat)
+	hreq.Path = path
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(p.String(), apc.Moss, "DT", tsi.String(), "xid", xid, "wid", wid, "[", hreq.Path, hreq.Method, "]")
 	}
@@ -178,7 +183,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// phase 3: redirect user's GET => DT
-	r.URL.Path = hreq.Path
+	r.URL.Path = path
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
 	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
@@ -202,9 +207,9 @@ type mossCtx struct {
 
 func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	// phase 1: DT to initialize Rx (see `designated`)
+	// phase 2: senders to open SDM and start sending
 	case http.MethodPost:
-		// phase 1: DT to initialize Rx (see `designated`)
-		// phase 2: senders to open SDM and start sending
 		ctx, err := t.mossparse(w, r)
 		if err != nil {
 			return
@@ -226,25 +231,21 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 		// renew x-moss or find/reuse existing one
 		var (
-			xctn       core.Xact
 			xid        = ctx.xid
 			designated = ctx.tid == t.SID()
 		)
 		if designated {
 			// phase 1.
-			debug.Assert(xid == "noxid", xid) // placeholder
-			xid = cos.GenUUID()
-
-			rns := xreg.RenewGetBatch(ctx.bck, xid, true /*designated*/)
-			if rns.Err != nil {
-				t.writeErr(w, r, rns.Err)
+			if xid != placeholderXID {
+				err := fmt.Errorf("moss: expected '%s', got %q", placeholderXID, xid)
+				debug.AssertNoErr(err)
+				t.writeErr(w, r, err)
 				return
 			}
-			xctn = rns.Entry.Get()
+			xid = cos.GenUUID()
 		} else {
 			// phase 2.
 			debug.Assert(nat > 1, "not expecting POST -> non-DT when single-node ", nat) // (ctx.nat checked above)
-
 			if !cos.IsValidUUID(xid) {
 				// (unlikely)
 				err := fmt.Errorf("moss: invalid xid %q at phase 2 (non-DT)", xid)
@@ -252,23 +253,23 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 				t.writeErr(w, r, err)
 				return
 			}
-			rns := xreg.RenewGetBatch(ctx.bck, xid, false /*designated*/)
-			if rns.Err != nil {
-				t.writeErr(w, r, rns.Err)
-				return
-			}
-			xctn = rns.Entry.Get()
-			if xid != xctn.ID() {
-				// (unlikely)
-				err := fmt.Errorf("moss: expecting xid %q given by DT, got %q", xid, xctn.ID())
-				debug.AssertNoErr(err)
-				xctn.Abort(err)
-				t.writeErr(w, r, err)
-				return
-			}
-			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
-				nlog.Infoln(t.String(), "x-moss renewed:", xctn.Name(), "running:", rns.IsRunning())
-			}
+		}
+		rns := xreg.RenewGetBatch(ctx.bck, xid, designated)
+		if rns.Err != nil {
+			t.writeErr(w, r, rns.Err)
+			return
+		}
+		xctn := rns.Entry.Get()
+		if xid != xctn.ID() {
+			// (unlikely)
+			err := fmt.Errorf("moss: expecting xid %q, got %q [DT=%t, %s, %s]", xid, xctn.ID(), designated, ctx.tid, t.SID())
+			debug.AssertNoErr(err)
+			xctn.Abort(err)
+			t.writeErr(w, r, err)
+			return
+		}
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			nlog.Infoln(t.String(), "x-moss renewed:", xctn.Name(), "was running:", rns.IsRunning())
 		}
 
 		xmoss, ok := xctn.(*xs.XactMoss)
@@ -279,20 +280,22 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if designated {
-			err = xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1 /*receiving*/)
+			if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1 /*receiving*/); err != nil {
+				xmoss.Abort(err)
+				t.writeErr(w, r, err)
+				return
+			}
+			w.Header().Set(apc.HdrXactionID, xid)
 		} else {
-			err = xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid)
-			if err != nil {
+			if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid); err != nil {
+				xmoss.Abort(err)
 				xmoss.BcastAbort(err)
+				t.writeErr(w, r, err)
+				return
 			}
 		}
-		if err != nil {
-			xmoss.Abort(err)
-			t.writeErr(w, r, err)
-			return
-		}
-		w.Header().Set(apc.HdrXactionID, xmoss.ID())
 
+	// phase 3: redirect
 	case http.MethodGet:
 		ctx, err := t.mossparse(w, r)
 		if err != nil {

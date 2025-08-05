@@ -168,7 +168,7 @@ func (xctn *Base) Abort(err error) bool {
 		close(xctn.abort.ch)
 	}
 
-	if xctn.Kind() != apc.ActList {
+	if !Table[xctn.kind].LogLess {
 		nlog.InfoDepth(1, xctn.Name(), err)
 	}
 	return true
@@ -211,7 +211,7 @@ func (xctn *Base) Finish() {
 		debug.Assert(n == 0, n)
 		nlog.Infoln(xname, "finished")
 		return
-	case xctn.Kind() == apc.ActList:
+	case Table[xctn.kind].LogLess:
 		// skip
 	case aborted:
 		nlog.Warningln(xname, "aborted:", err)
