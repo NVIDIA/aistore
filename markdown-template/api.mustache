@@ -28,11 +28,23 @@
 
 {{/isBodyParam}}{{/allParams}}
 
+{{#vendorExtensions.x-http-examples}}
+
+**Example: {{label}}** <button class="copy-btn" onclick="copyCode(this)" title="Copy to clipboard" style="background: #0366d6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 10px;">Copy</button>
+
+{{#description}}{{description}}{{/description}}
+
+```{{lang}}
+{{{source}}}
+```
+
+{{/vendorExtensions.x-http-examples}}
+
 ### Parameters
 {{#allParams}}{{^isBodyParam}}{{#-first}}
-|Name | Type | Description  | Notes |
-|------------- | ------------- | ------------- | -------------|{{/-first}}{{/isBodyParam}}{{/allParams}}
-{{#allParams}}{{^isBodyParam}}| **{{paramName}}** | {{#isPrimitiveType}}**{{dataType}}**{{/isPrimitiveType}}{{^isPrimitiveType}}{{#isFile}}**{{dataType}}**{{/isFile}}{{^isFile}}{{#generateModelDocs}}[**{{dataType}}**](../{{modelPackage}}/{{baseType}}.md){{/generateModelDocs}}{{^generateModelDocs}}**{{dataType}}**{{/generateModelDocs}}{{/isFile}}{{/isPrimitiveType}}| {{description}} |{{^required}} [optional]{{/required}}{{#defaultValue}} [default to {{.}}]{{/defaultValue}}{{#allowableValues}} [enum: {{#values}}{{{.}}}{{^-last}}, {{/-last}}{{/values}}]{{/allowableValues}} |
+|Name | Type | Description |
+|------------- | ------------- | -------------|{{/-first}}{{/isBodyParam}}{{/allParams}}
+{{#allParams}}{{^isBodyParam}}| **{{paramName}}** | {{#isPrimitiveType}}**{{dataType}}**{{/isPrimitiveType}}{{^isPrimitiveType}}{{#isFile}}**{{dataType}}**{{/isFile}}{{^isFile}}{{#generateModelDocs}}[**{{dataType}}**](../{{modelPackage}}/{{baseType}}.md){{/generateModelDocs}}{{^generateModelDocs}}**{{dataType}}**{{/generateModelDocs}}{{/isFile}}{{/isPrimitiveType}}| {{description}}{{#allowableValues}} [enum: {{#values}}{{{.}}}{{^-last}}, {{/-last}}{{/values}}]{{/allowableValues}} |
 {{/isBodyParam}}{{/allParams}}
 
 ### Return type

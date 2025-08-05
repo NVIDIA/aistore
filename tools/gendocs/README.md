@@ -55,6 +55,7 @@ Actions specify which operations are supported by an endpoint and their correspo
 - **Action Name**: The action constant (e.g., `apc.ActCopyBck`, `apc.ActPromote`)
 - **Model**: The Go struct type used for this action's request body (e.g., `apc.TCBMsg`, `apc.PromoteArgs`)
 - **Separator**: Multiple actions are separated by `|` (pipe character)
+- `gen:payload` must be provided for each action
 
 💡 **Important**: The models shown in the documentation often represent **nested fields** within larger request structures, not the complete request body.
 
@@ -68,6 +69,34 @@ All models only represent the expected value field in the final body payload for
   "name": "specify if needed for the selected action"
 }
 ```
+
+### 5. Payload Annotations (Required for Actions)
+For each action specified in the endpoint, you **must** provide a corresponding `+gen:payload` annotation that defines the JSON payload for that action. The action won't be rendered in the documentation unless a payload annotation is explicitly provided:
+
+```go
+// +gen:endpoint POST /v1/buckets/bucket-name[params] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck"}
+// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
+```
+
+**Steps:**
+1. **Identify each action** in your `action=[...]` clause
+2. **Write the JSON payload** for each action following the format: `{"action": "action-name", "value": model-data-if-needed}`
+3. **Add the annotation** using: `// +gen:payload ActionConstant=JsonPayload`
+
+These annotations automatically generate the HTTP command examples in the documentation with the proper JSON payloads.
+
+### Action Constant Mapping
+The system automatically maps action constants to their string values:
+
+| Action Constant | Display Name |
+|----------------|--------------|
+| `apc.ActCopyBck` | `copy-bck` |
+| `apc.ActETLBck` | `etl-bck` |
+| `apc.ActPromote` | `promote` |
+| ... | ... |
+
+This mapping ensures consistency between the `+gen:endpoint` action definitions and the `+gen:payload` labels.
 
 ## Data Model Annotations
 
@@ -132,7 +161,6 @@ Operation IDs are automatically generated from function names:
 - Simple case: `ListBuckets` → `ListBuckets`
 - Multiple endpoints per function: `CreateBucket` + `/buckets/{name}` → `CreateBucketbuckets`
 
-## Complete Examples
 
 ### Example 1: GET Endpoint with Query Parameters
 ```go
