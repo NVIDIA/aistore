@@ -34,7 +34,7 @@ jobs:
       - name: Generate API Documentation
         run: |
           cd tools/gendocs
-          go run main.go param.go
+          go run .
           cd ../..
           make restful-api-doc
           OPENAPI_GENERATOR_VERSION=7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec

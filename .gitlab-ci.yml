@@ -220,6 +220,24 @@ lint:linux:
     - make fmt-check
     - make spell-check
 
+build:gendocs:
+  stage: build
+  tags:
+    - $RUNNER_TAG
+  timeout: 10m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*website.*/'
+  script:
+    - cd tools/gendocs
+    - go run .
+    - cd ../..
+    - make restful-api-doc
+    - OPENAPI_GENERATOR_VERSION=7.14.0 openapi-generator-cli generate -i .docs/swagger.yaml -g markdown -o ./docs-generated --template-dir ./markdown-template --skip-validate-spec
+    - cp docs-generated/README.md docs/http-api.md
+    - cp -r docs-generated/Apis docs/
+    - cp -r docs-generated/Models docs/
+    - ./scripts/website-preprocess.sh
+
 # Runs cluster with 5 proxies and 5 targets (each with 6 mountpaths).
 test:short:
   <<: *test_short_def

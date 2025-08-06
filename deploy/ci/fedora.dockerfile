@@ -11,6 +11,7 @@ RUN dnf -y update && \
        coreutils \
        curl \
        gcc \
+       gcc-c++ \
        gettext \
        git \
        java-21-openjdk \
