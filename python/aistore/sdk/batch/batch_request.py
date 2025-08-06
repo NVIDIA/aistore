@@ -39,7 +39,7 @@ class BatchRequest:
     Args:
         output_format (str, optional): Format for the batch response output. Determines how the
             retrieved objects are packaged and returned. Supported formats include .tar.gz, .tgz,
-            and .tar. Defaults to .tar.
+            .tar, and .zip. Defaults to .tar.
 
         continue_on_err (bool, optional): Whether to continue processing remaining objects in the
             batch if an error occurs with one object. When True, errors for individual objects

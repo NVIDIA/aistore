@@ -18,6 +18,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.batch.stateful_streaming_parser import StatefulStreamingParser
 from aistore.sdk.batch.errors import MultipartDecodeError
+from aistore.sdk.batch.body_stream_iterator import BodyStreamIterator
 
 
 logger = get_logger(__name__)
@@ -77,7 +78,7 @@ class MultipartDecoder:
 
     def decode(
         self, response: Response
-    ) -> Iterator[Tuple[bytes, Union[bytes, Iterator[bytes]]]]:
+    ) -> Iterator[Tuple[bytes, Union[bytes, BodyStreamIterator]]]:
         """
         Decode contents of a multipart HTTP response.
 
@@ -206,7 +207,7 @@ class MultipartDecoder:
 
     def _parse_content_streaming(
         self, response: Response, boundary: str
-    ) -> Iterator[Tuple[bytes, Iterator[bytes]]]:
+    ) -> Iterator[Tuple[bytes, BodyStreamIterator]]:
         """
         Use a streaming parser to start decoding incoming multipart stream.
         Only extracts headers in memory and streams the body content per part.

@@ -14,7 +14,7 @@ from aistore.sdk.request_client import RequestClient
 from aistore.sdk.batch.batch_loader import BatchLoader
 from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk.batch.batch_response import BatchResponseItem
-from aistore.sdk.batch.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamExtractor
 
 
 SAMPLE_JSON = {
@@ -42,13 +42,19 @@ class TestBatchLoader(unittest.TestCase):
     Tests cover initialization and batch requests with different fields.
     """
 
-    def setUp(self):
+    # pylint: disable=arguments-differ
+    @patch("aistore.sdk.batch.batch_loader.ExtractorManager")
+    def setUp(self, mock_extractor_manager_cls):
         """Set up test fixtures before each test method."""
         self.mock_request_client = Mock(spec=RequestClient)
         self.batch_loader = BatchLoader(self.mock_request_client)
 
         # Sample batch request using from_json
         self.sample_req = BatchRequest.from_json(json.dumps(SAMPLE_JSON))
+
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        self.mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = self.mock_extractor
 
     def test_get_batch_empty_request(self):
         """Test get_batch with None or empty request raises ValueError."""
@@ -61,9 +67,8 @@ class TestBatchLoader(unittest.TestCase):
             list(self.batch_loader.get_batch(empty_req))
         self.assertIn("Batch request must not be empty", str(context.exception))
 
-    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
     @patch("aistore.sdk.batch.batch_loader.MultipartDecoder")
-    def test_get_batch_streaming(self, mock_decoder_class, mock_extractor_class):
+    def test_get_batch_streaming(self, mock_decoder_class):
         """Test BatchLoader get_batch in streaming mode."""
         mock_response = Mock()
         mock_response.raw = BytesIO(self._create_test_tar())
@@ -77,14 +82,12 @@ class TestBatchLoader(unittest.TestCase):
         }
 
         # Configure mock instances
-        mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor.extract.return_value = iter(
+        self.mock_extractor.extract.return_value = iter(
             [
                 (BatchResponseItem(**obj_req), b"file content 1"),
                 (BatchResponseItem(**obj_req), b"file content 2"),
             ]
         )
-        mock_extractor_class.return_value = mock_extractor
 
         mock_decoder = Mock(spec=MultipartDecoder)
         mock_decoder_class.return_value = mock_decoder
@@ -94,8 +97,8 @@ class TestBatchLoader(unittest.TestCase):
         # Verify mock calls
         mock_decoder.decode.assert_not_called()
         self.mock_request_client.request.assert_called_once()
-        mock_extractor.extract.assert_called_once()
-        mock_extractor.extract.assert_called_with(ANY, ANY, self.sample_req, None)
+        self.mock_extractor.extract.assert_called_once()
+        self.mock_extractor.extract.assert_called_with(ANY, ANY, self.sample_req, None)
 
         self.assertEqual(len(result), 2)
         result_dict = result[0][0].dict(by_alias=True)
@@ -105,9 +108,8 @@ class TestBatchLoader(unittest.TestCase):
         self.assertEqual(result[0][1], b"file content 1")
         self.assertEqual(result[1][1], b"file content 2")
 
-    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
     @patch("aistore.sdk.batch.batch_loader.MultipartDecoder")
-    def test_get_batch_non_streaming(self, mock_decoder_class, mock_extractor_class):
+    def test_get_batch_non_streaming(self, mock_decoder_class):
         """Test BatchLoader get_batch in non-streaming mode."""
         batch_request = self.sample_req
         batch_request.streaming = False
@@ -149,19 +151,17 @@ class TestBatchLoader(unittest.TestCase):
         mock_decoder.parse_as_stream = False
         mock_decoder_class.return_value = mock_decoder
 
-        mock_extractor = Mock(spec=ArchiveStreamExtractor)
-        mock_extractor.extract.return_value = iter(
+        self.mock_extractor.extract.return_value = iter(
             [
                 (BatchResponseItem(**obj_req), b""),
                 (BatchResponseItem(**obj_req), b""),
             ]
         )
-        mock_extractor_class.return_value = mock_extractor
 
         # Execute get_batch
         result = list(self.batch_loader.get_batch(batch_request))
 
-        mock_extractor.extract.assert_called()
+        self.mock_extractor.extract.assert_called()
 
         self.assertEqual(len(result), 2)
         result_dict = result[0][0].dict(by_alias=True)
@@ -181,21 +181,18 @@ class TestBatchLoader(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIsInstance(result, BytesIO)
 
-    @patch("aistore.sdk.batch.batch_loader.ArchiveStreamExtractor")
-    def test_get_batch_extractor(self, mock_extractor_class):
+    def test_get_batch_extractor(self):
         """Test BatchLoader with extractor."""
         mock_response = Mock()
         mock_response.raw = BytesIO(b"raw tar data")
         self.mock_request_client.request.return_value = mock_response
 
-        mock_extractor = Mock()
-        mock_extractor.extract.return_value = iter(
+        self.mock_extractor.extract.return_value = iter(
             [
                 (BatchResponseItem.from_batch_request(self.sample_req, 0), b""),
                 (BatchResponseItem.from_batch_request(self.sample_req, 1), b""),
             ]
         )
-        mock_extractor_class.return_value = mock_extractor
 
         result = list(self.batch_loader.get_batch(self.sample_req))
 

@@ -11,7 +11,7 @@ from aistore.sdk.batch.batch_response import (
     BatchResponseItem,
 )
 from aistore.sdk.batch.batch_request import BatchRequest
-from aistore.sdk.batch.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.extractor.extractor_manager import ExtractorManager
 from aistore.sdk.batch.multipart_decoder import MultipartDecoder
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
@@ -46,6 +46,7 @@ class BatchLoader:
             request_client (RequestClient): RequestClient instance for making requests
         """
         self._request_client = request_client
+        self._extractor_manager = ExtractorManager()
 
     def get_batch(
         self,
@@ -91,7 +92,7 @@ class BatchLoader:
                 Defaults to False.
             decode_as_stream (bool): If True and `BatchRequest.streaming=False`, then
                 the corresponding multipart response is decoded on the fly rather than loaded
-                into memory. Defaults to False.
+                 into memory. Defaults to False.
 
         Returns:
             Union[Generator[Tuple[BatchResponseItem, bytes], None, None], Union[BytesIO, Any]]:
@@ -124,7 +125,7 @@ class BatchLoader:
         if return_raw:
             return response.raw
 
-        extractor = ArchiveStreamExtractor()
+        extractor = self._extractor_manager.get_extractor(batch_request.output_format)
 
         if batch_request.streaming:
             # Streaming mode: process response as stream
@@ -138,13 +139,24 @@ class BatchLoader:
 
             parts_iter = decoder.decode(response)
 
+            if decode_as_stream:
+                # BodyStreamIter, need to read fully to decode
+                metadata_body = next(parts_iter)[1].read()
+            else:
+                metadata_body = next(parts_iter)[1]
+
             # Get metadata json (part 1)
             batch_response = BatchResponse.from_json(
-                next(parts_iter)[1].decode(decoder.encoding)
+                metadata_body.decode(decoder.encoding)
             )
 
-            # Load archive (part 2) into memory buffer for non-streaming mode
-            data_stream = BytesIO(next(parts_iter)[1])
+            if decode_as_stream:
+                # Archive (part 2) is BodyStreamIter now
+                data_stream = next(parts_iter)[1]
+            else:
+                # Load archive (part 2) into memory buffer for non-streaming mode
+                data_stream = BytesIO(next(parts_iter)[1])
+
         except Exception as e:
             # Log that we failed to decode
             logger.error("Failed to decode multipart batch response: %s", str(e))

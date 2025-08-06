@@ -18,6 +18,7 @@ from aistore.sdk.const import (
     GB_SIZE,
     GB_OUT,
     GB_UUID,
+    MISSING_DATA_PREFIX,
 )
 from aistore.sdk.batch.batch_request import BatchRequest
 
@@ -117,6 +118,42 @@ class BatchResponseItem(BaseModel):
                 # Handle invalid base64 gracefully
                 return None
         return None
+
+    def is_file_missing(self, filename: str) -> bool:
+        """
+        Checks if filename is equal to the batch missing path convention or not.
+        When (and only if) `BatchRequest.continue_on_err` is set true:
+            - Missing files will be present in the resulting archive
+            - When you extract they will have path: __404__/<Bucket>/<ObjName>
+
+        Args:
+            filename: Expected filename extracted from archive metadata
+        """
+        return filename == f"{MISSING_DATA_PREFIX}/{self.bucket}/{self.obj_name}"
+
+    @staticmethod
+    def from_request_or_response(
+        index: int,
+        batch_request: BatchRequest,
+        batch_response: Optional["BatchResponse"],
+    ) -> "BatchResponseItem":
+        """
+        Helper method to populate a `BatchResponseItem` given an index and request/response.
+        If streaming mode is enabled, item is inferred from request. Else, item is inferred from
+        response.
+
+        Args:
+            index (int): Index of item in the batch
+            batch_request (BatchRequest): Request that fetched the archive
+            batch_response (Optional[BatchResponse]): Provided if request is not streaming
+
+        """
+        # Streaming mode, so infer response item from request data
+        if batch_request.streaming:
+            return BatchResponseItem.from_batch_request(batch_request, index)
+
+        # Else, metadata was decoded into response object
+        return batch_response.responses[index]
 
 
 class BatchResponse(BaseModel):

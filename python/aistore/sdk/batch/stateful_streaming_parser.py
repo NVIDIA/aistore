@@ -52,7 +52,7 @@ class StatefulStreamingParser:
         # Line ending in response
         self._cached_line_end = None
 
-    def get_next_part(self) -> Optional[Tuple[bytes, Iterator[bytes]]]:
+    def get_next_part(self) -> Optional[Tuple[bytes, BodyStreamIterator]]:
         """
         Get the next part without loading it completely into memory.
 
