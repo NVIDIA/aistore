@@ -13,14 +13,19 @@ RUN dnf -y update && \
        gcc \
        gettext \
        git \
+       java-21-openjdk \
+       jq \
        lsof \
        make \
+       maven \
        openssl \
        podman-docker \
        procps-ng \
        python3-pip \
        python3-setuptools \
        python3.11 \
+       ruby \
+       rubygems \
        s3cmd \
        sysstat \
        tar \
@@ -42,6 +47,13 @@ ENV PATH="/opt/venv/bin:${PATH}"
 RUN python3 --version \
  && python3 -m pip install --upgrade pip \
  && python3 -m pip install awscli black[jupyter]
+
+# Configure Ruby and website generation tools
+RUN gem install bundler && \
+    mkdir -p /usr/local/bin/openapitools && \
+    curl -L https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/bin/utils/openapi-generator-cli.sh > /usr/local/bin/openapitools/openapi-generator-cli && \
+    chmod +x /usr/local/bin/openapitools/openapi-generator-cli
+ENV PATH="/usr/local/bin/openapitools:${PATH}"
 
 # Install Kubectl
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
