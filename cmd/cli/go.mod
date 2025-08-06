@@ -7,11 +7,11 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo/v2 v2.23.4
-	github.com/onsi/gomega v1.37.0
+	github.com/onsi/gomega v1.38.0
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/urfave/cli v1.22.17
 	github.com/vbauerster/mpb/v4 v4.12.2
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.16.0
 	golang.org/x/term v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
 )
