@@ -3,9 +3,12 @@
 #
 
 import os
+import sys
 import logging
 from abc import ABC, abstractmethod
-import sys
+from typing import Tuple
+import requests
+from aistore.sdk.const import STATUS_NO_CONTENT, STATUS_OK, HEADER_DIRECT_PUT_LENGTH
 
 
 class ETLServer(ABC):
@@ -79,3 +82,35 @@ class ETLServer(ABC):
             str: MIME type (e.g., "application/json", "text/plain").
         """
         return "application/octet-stream"
+
+    def client_put(
+        self, url: str, data: bytes, headers: dict, timeout: int = None
+    ) -> requests.Response:
+        """Simple wrapper for requests.put()."""
+        return requests.put(url, data, timeout=timeout, headers=headers)
+
+    def handle_direct_put_response(
+        self, resp: requests.Response, data: bytes
+    ) -> Tuple[int, bytes, int]:
+        """Handle the response from a direct PUT request."""
+        if resp.status_code == STATUS_NO_CONTENT:
+            return (
+                resp.status_code,
+                b"",
+                int(resp.headers.get(HEADER_DIRECT_PUT_LENGTH, "0")),
+            )
+
+        if resp.status_code == STATUS_OK:
+            if resp.content:  # from other ETL server, forward the content back
+                return resp.status_code, resp.content, 0
+
+            return STATUS_NO_CONTENT, b"", len(data)  # from target, no content
+
+        error = resp.content
+        self.logger.error(
+            "Direct put failed to %s: HTTP %s - %s",
+            resp.url,
+            resp.status_code,
+            error,
+        )
+        return resp.status_code, error, 0

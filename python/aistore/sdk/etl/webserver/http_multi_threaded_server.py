@@ -13,15 +13,19 @@ from urllib.parse import unquote, urlparse, parse_qs
 import requests
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.utils import compose_etl_direct_put_url
+from aistore.sdk.etl.webserver.utils import (
+    compose_etl_direct_put_url,
+    parse_etl_pipeline,
+)
+from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
     HEADER_CONTENT_LENGTH,
     HEADER_CONTENT_TYPE,
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
     STATUS_OK,
-    STATUS_NO_CONTENT,
     QPARAM_ETL_ARGS,
+    STATUS_INTERNAL_SERVER_ERROR,
 )
 
 
@@ -76,32 +80,39 @@ class HTTPMultiThreadedServer(ETLServer):
             # Suppress default request logging (or override as needed)
             pass
 
-        def _direct_put(self, direct_put_url: str, data: bytes) -> bool:
+        def _direct_put(
+            self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+        ) -> Tuple[int, bytes, int]:
             """
             Sends the transformed object directly to the specified AIS node (`direct_put_url`),
             eliminating the additional network hop through the original target.
             Used only in bucket-to-bucket offline transforms.
+
+            Args:
+                direct_put_url: The first URL in the ETL pipeline
+                data: The transformed data to send
+                remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
+
+            Returns:
+                status code of the direct put request, transformed data, length of the transformed data (if any)
             """
-            logger = self.server.etl_server.logger
             try:
                 url = compose_etl_direct_put_url(
                     direct_put_url, self.server.etl_server.host_target
                 )
-                resp = requests.put(url, data, timeout=None)
-                if resp.status_code == 200:
-                    return True
+                headers = {}
+                if remaining_pipeline:
+                    headers[HEADER_NODE_URL] = remaining_pipeline
 
-                error = resp.text()
-                logger.error(
-                    "Failed to deliver object to %s: HTTP %s, %s",
-                    direct_put_url,
-                    resp.status_code,
-                    error,
-                )
+                resp = self.server.etl_server.client_put(url, data, headers=headers)
+                return self.server.etl_server.handle_direct_put_response(resp, data)
+
             except Exception as e:
-                logger.error("Exception during delivery to %s: %s", direct_put_url, e)
-
-            return False
+                error = str(e).encode()
+                self.server.etl_server.logger.error(
+                    "Exception during direct put to %s: %s", direct_put_url, e
+                )
+                return STATUS_INTERNAL_SERVER_ERROR, error, 0
 
         def _get_fqn_content(self, path: str) -> bytes:
             """
@@ -115,6 +126,38 @@ class HTTPMultiThreadedServer(ETLServer):
             with open(safe_path, "rb") as f:
                 return f.read()
 
+        def _send_with_pipeline(self, transformed: bytes):
+            """
+            Forward transformed data to the next ETL stage if a pipeline header exists;
+            otherwise, respond directly with the transformed data.
+
+            Args:
+                transformed (bytes): The transformed data to be sent.
+            """
+            pipeline_header = self.headers.get(HEADER_NODE_URL)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    status_code, transformed, direct_put_length = self._direct_put(
+                        first_url, transformed, remaining_pipeline
+                    )
+                    self._set_headers(
+                        status_code=status_code,
+                        length=len(transformed),
+                        direct_put_length=direct_put_length,
+                    )
+                    if transformed:
+                        self.wfile.write(transformed)
+                    return
+
+            self._set_headers(
+                status_code=STATUS_OK,
+                length=len(transformed),
+                direct_put_length=0,
+            )
+            self.wfile.write(transformed)
+
+        # pylint: disable=too-many-locals
         def do_GET(self):
             """
             Handle GET requests by forwarding them to the AIS target or reading from FQN,
@@ -163,20 +206,13 @@ class HTTPMultiThreadedServer(ETLServer):
                     content, raw_path, etl_args
                 )
 
-                direct_put_url = self.headers.get(HEADER_NODE_URL)
-                if direct_put_url:
-                    success = self._direct_put(direct_put_url, transformed)
-                    if success:
-                        self._set_headers(
-                            status_code=STATUS_NO_CONTENT,
-                            length=0,
-                            direct_put_length=len(transformed),
-                        )
-                        return
+                self._send_with_pipeline(transformed)
 
-                self._set_headers(length=len(transformed))
-                self.wfile.write(transformed)
-
+            except InvalidPipelineError as e:
+                self.server.etl_server.logger.error(
+                    "Invalid pipeline header: %s", str(e)
+                )
+                self.send_error(400, f"Invalid pipeline header: {str(e)}")
             except FileNotFoundError as exc:
                 fs_path = exc.filename or raw_path
                 logger.error(
@@ -220,24 +256,16 @@ class HTTPMultiThreadedServer(ETLServer):
                     content, raw_path, etl_args
                 )
 
-                direct_put_url = self.headers.get(HEADER_NODE_URL)
-                if direct_put_url:
-                    success = self._direct_put(direct_put_url, transformed)
-                    if success:
-                        self._set_headers(
-                            status_code=STATUS_NO_CONTENT,
-                            length=0,
-                            direct_put_length=len(transformed),
-                        )
-                        return
+                self._send_with_pipeline(transformed)
 
-                self._set_headers(length=len(transformed))
-                self.wfile.write(transformed)
-
+            except InvalidPipelineError as e:
+                self.server.etl_server.logger.error(
+                    "Invalid pipeline header: %s", str(e)
+                )
+                self.send_error(400, f"Invalid pipeline header: {str(e)}")
             except FileNotFoundError:
                 logger.error("File not found: %s", raw_path)
                 self.send_error(404, f"Local file not found: {raw_path}")
-
             except Exception as e:
                 logger.error("Error processing PUT request: %s", str(e))
                 self.send_error(500, "Internal error during transformation")

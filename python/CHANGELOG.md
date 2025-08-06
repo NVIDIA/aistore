@@ -6,6 +6,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## Added
+
+- Add ETL pipeline header processing and direct put handling in all ETL webservers.
+
 ### Changed
 - **BREAKING**: `BatchLoader.get_batch()` no longer takes `extractor` and `decoder` args. Instead, use `return_raw` and `decode_as_stream`.
 - Support `ETLConfig.args` parameter in `Object.copy` method.

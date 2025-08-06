@@ -4,17 +4,23 @@
 
 import os
 from urllib.parse import unquote, quote
+from typing import Tuple
 
 import requests
 from flask import Flask, request, Response, jsonify
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.utils import compose_etl_direct_put_url
+from aistore.sdk.etl.webserver.utils import (
+    compose_etl_direct_put_url,
+    parse_etl_pipeline,
+)
+from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
-    STATUS_NO_CONTENT,
+    STATUS_OK,
     QPARAM_ETL_ARGS,
     HEADER_DIRECT_PUT_LENGTH,
+    STATUS_INTERNAL_SERVER_ERROR,
 )
 
 
@@ -48,13 +54,33 @@ class FlaskServer(ETLServer):
             else:
                 transformed = self._handle_put(path)
 
-            direct_put_url = request.headers.get(HEADER_NODE_URL)
-            if direct_put_url:
-                resp = self._direct_put(direct_put_url, transformed)
-                if resp is not None:
-                    return resp
+            pipeline_header = request.headers.get(HEADER_NODE_URL)
+            self.logger.debug("pipeline_header: %r", pipeline_header)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    status_code, transformed, direct_put_length = self._direct_put(
+                        first_url, transformed, remaining_pipeline
+                    )
+                    return Response(
+                        response=transformed,
+                        status=status_code,
+                        headers=(
+                            {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                            if direct_put_length != 0
+                            else {}
+                        ),
+                    )
 
-            return Response(response=transformed, content_type=self.get_mime_type())
+            return Response(
+                response=transformed,
+                status=STATUS_OK,
+                content_type=self.get_mime_type(),
+            )
+
+        except InvalidPipelineError as e:
+            self.logger.error("Invalid pipeline header: %s", str(e))
+            return Response(f"Invalid pipeline header: {str(e)}", status=400)
         except FileNotFoundError as exc:
             fs_path = exc.filename or path
             self.logger.error(
@@ -110,32 +136,35 @@ class FlaskServer(ETLServer):
         with open(safe_path, "rb") as f:
             return f.read()
 
-    def _direct_put(self, direct_put_url: str, data: bytes):
+    def _direct_put(
+        self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+    ) -> Tuple[int, bytes, int]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
         eliminating the additional network hop through the original target.
         Used only in bucket-to-bucket offline transforms.
+
+        Args:
+            direct_put_url: The first URL in the ETL pipeline
+            data: The transformed data to send
+            remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
+
+        Returns:
+            status code, transformed data, length of the transformed data (if any)
         """
         try:
             url = compose_etl_direct_put_url(direct_put_url, self.host_target)
-            resp = requests.put(url, data, timeout=None)
-            if resp.status_code == 200:
-                return Response(
-                    status=STATUS_NO_CONTENT,
-                    headers={HEADER_DIRECT_PUT_LENGTH: str(len(data))},
-                )
+            headers = {}
+            if remaining_pipeline:
+                headers[HEADER_NODE_URL] = remaining_pipeline
 
-            error = resp.text()
-            self.logger.error(
-                "Failed to deliver object to %s: HTTP %s, %s",
-                direct_put_url,
-                resp.status_code,
-                error,
-            )
+            resp = self.client_put(url, data, headers=headers)
+            return self.handle_direct_put_response(resp, data)
+
         except Exception as e:
-            self.logger.error("Exception during delivery to %s: %s", direct_put_url, e)
-
-        return None
+            error = str(e).encode()
+            self.logger.error("Exception in direct put to %s: %s", direct_put_url, e)
+            return STATUS_INTERNAL_SERVER_ERROR, error, 0
 
     # Example Gunicorn command to run this server:
     # command: ["gunicorn", "your_module:flask_app", "--bind", "0.0.0.0:8000", "--workers", "4"]

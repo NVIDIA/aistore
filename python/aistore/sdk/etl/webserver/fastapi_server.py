@@ -5,7 +5,7 @@
 import os
 import asyncio
 from urllib.parse import unquote, quote
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from fastapi import (
     FastAPI,
@@ -19,16 +19,22 @@ import aiofiles
 import uvicorn
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
-from aistore.sdk.utils import compose_etl_direct_put_url
+from aistore.sdk.etl.webserver.utils import (
+    compose_etl_direct_put_url,
+    parse_etl_pipeline,
+)
+from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
     STATUS_NO_CONTENT,
+    STATUS_OK,
     ETL_WS_FQN,
     ETL_WS_PATH,
-    ETL_WS_DESTINATION_ADDR,
+    ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
     QPARAM_ETL_ARGS,
+    STATUS_INTERNAL_SERVER_ERROR,
 )
 
 
@@ -65,7 +71,6 @@ class FastAPIServer(ETLServer):
         async def handle_put(path: str, request: Request):
             return await self._handle_request(path, request, is_get=False)
 
-        # pylint: disable=too-many-branches
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             try:
@@ -76,36 +81,7 @@ class FastAPIServer(ETLServer):
                 self.active_connections.append(websocket)
 
                 while True:
-                    ctrl_msg = await websocket.receive_json(mode="binary")
-                    self.logger.debug("Received control message: %s", ctrl_msg)
-
-                    fqn = ctrl_msg.get(ETL_WS_FQN)
-                    path = ctrl_msg.get(ETL_WS_PATH)
-                    content = (
-                        await self._get_fqn_content(fqn)
-                        if fqn
-                        else await websocket.receive_bytes()
-                    )
-                    etl_args = ctrl_msg.get(QPARAM_ETL_ARGS)
-
-                    self.logger.debug("Received content length: %d", len(content))
-                    transformed = await asyncio.to_thread(
-                        self.transform, content, path, etl_args
-                    )
-
-                    direct_put_url = ctrl_msg.get(ETL_WS_DESTINATION_ADDR)
-                    if direct_put_url:
-                        try:
-                            response = await self._direct_put(
-                                direct_put_url, transformed
-                            )
-                            if response:
-                                await websocket.send_text(str(len(transformed)))
-                                continue
-                        except Exception as e:
-                            self.logger.warning("Direct put failed: %s", e)
-
-                    await websocket.send_bytes(transformed)
+                    await self._handle_ws_message(websocket)
 
             except Exception as e:
                 self.logger.error(
@@ -148,21 +124,45 @@ class FastAPIServer(ETLServer):
                     else await request.body()
                 )
 
+            # Transform the content
             transformed = await asyncio.to_thread(
                 self.transform, content, path, etl_args
             )
 
-            delivery_target_url = request.headers.get(HEADER_NODE_URL)
-            if delivery_target_url:
-                response = await self._direct_put(delivery_target_url, transformed)
-                if response:
-                    return Response(
-                        status_code=STATUS_NO_CONTENT,
-                        headers={HEADER_DIRECT_PUT_LENGTH: str(len(transformed))},
+            # Handle pipeline if present
+            pipeline_header = request.headers.get(HEADER_NODE_URL)
+            self.logger.debug("pipeline_header: %r", pipeline_header)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    status_code, transformed, direct_put_length = (
+                        await self._direct_put(
+                            first_url, transformed, remaining_pipeline
+                        )
                     )
 
-            return self._build_response(transformed, self.get_mime_type())
+                    return Response(
+                        content=transformed,
+                        status_code=status_code,
+                        headers=(
+                            {HEADER_DIRECT_PUT_LENGTH: str(direct_put_length)}
+                            if direct_put_length != 0
+                            else {}
+                        ),
+                    )
 
+            # No pipeline, return transformed content directly
+            return Response(
+                content=transformed,
+                status_code=STATUS_OK,
+                media_type=self.get_mime_type(),
+            )
+
+        except InvalidPipelineError as e:
+            self.logger.error("Invalid pipeline header: %s", str(e))
+            raise HTTPException(
+                status_code=400, detail=f"Invalid pipeline header: {str(e)}"
+            ) from e
         except FileNotFoundError as exc:
             fs_path = exc.filename or path
             self.logger.error(
@@ -209,34 +209,35 @@ class FastAPIServer(ETLServer):
         response.raise_for_status()
         return response.content
 
-    async def _direct_put(self, delivery_target_url: str, data: bytes) -> bool:
+    async def _direct_put(
+        self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+    ) -> Tuple[int, bytes, int]:
         """
-        Sends the transformed object directly to the specified AIS node (`delivery_target_url`),
+        Sends the transformed object directly to the specified AIS node (`direct_put_url`),
         eliminating the additional network hop through the original target.
         Used only in bucket-to-bucket offline transforms.
 
+        Args:
+            direct_put_url: The first URL in the ETL pipeline
+            data: The transformed data to send
+            remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
+
         Returns:
-            True if the direct put succeeds, False otherwise.
+            status code, transformed data, length of the transformed data (if any)
         """
         try:
-            url = compose_etl_direct_put_url(delivery_target_url, self.host_target)
-            resp = await self.client.put(url, data=data)
-            if resp.status_code == 200:
-                return True
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target)
+            headers = {}
+            if remaining_pipeline:
+                headers[HEADER_NODE_URL] = remaining_pipeline
 
-            error = await resp.text()
-            self.logger.error(
-                "Failed to deliver object to %s: HTTP %s, %s",
-                delivery_target_url,
-                resp.status_code,
-                error,
-            )
-        except Exception as e:
-            self.logger.error(
-                "Exception during delivery to %s: %s", delivery_target_url, e
-            )
+            resp = await self.client.put(url, content=data, headers=headers)
+            return self.handle_direct_put_response(resp, data)
 
-        return False
+        except Exception as exc:
+            error = str(exc).encode()
+            self.logger.error("Direct put exception to %s: %s", direct_put_url, exc)
+            return STATUS_INTERNAL_SERVER_ERROR, error, 0
 
     def _build_response(self, content: bytes, mime_type: str) -> Response:
         """Construct standardized response with appropriate headers."""
@@ -245,6 +246,47 @@ class FastAPIServer(ETLServer):
             media_type=mime_type,
             headers={HEADER_CONTENT_LENGTH: str(len(content))},
         )
+
+    async def _handle_ws_message(self, websocket: WebSocket):
+        """Handle a single WebSocket message."""
+        ctrl_msg = await websocket.receive_json(mode="binary")
+        self.logger.debug("Received control message: %s", ctrl_msg)
+
+        fqn = ctrl_msg.get(ETL_WS_FQN)
+        path = ctrl_msg.get(ETL_WS_PATH)
+        content = (
+            await self._get_fqn_content(fqn) if fqn else await websocket.receive_bytes()
+        )
+        etl_args = ctrl_msg.get(QPARAM_ETL_ARGS)
+
+        try:
+            transformed = await asyncio.to_thread(
+                self.transform, content, path, etl_args
+            )
+
+            pipeline_header = ctrl_msg.get(ETL_WS_PIPELINE)
+            if pipeline_header:
+                first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
+                if first_url:
+                    status_code, transformed, direct_put_length = (
+                        await self._direct_put(
+                            first_url, transformed, remaining_pipeline
+                        )
+                    )
+                    if status_code in (STATUS_OK, STATUS_NO_CONTENT) and transformed:
+                        await websocket.send_bytes(transformed)
+                    else:
+                        await websocket.send_text(str(direct_put_length))
+
+            # No pipeline, send transformed data
+            await websocket.send_bytes(transformed)
+
+        except InvalidPipelineError as e:
+            self.logger.error("Invalid pipeline header: %s", str(e))
+            await websocket.send_text(f"Invalid pipeline header: {str(e)}")
+        except Exception as e:
+            self.logger.error("Transform error: %s", str(e))
+            await websocket.send_text(f"Transform error: {str(e)}")
 
     def start(self):
         """Start the server with production-optimized settings."""

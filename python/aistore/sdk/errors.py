@@ -158,3 +158,9 @@ class NoTargetError(Exception):
         super().__init__(
             f"No available targets in the cluster map. Total nodes: {total_nodes}"
         )
+
+
+class InvalidPipelineError(ValueError):
+    """
+    Raised when an ETL pipeline header is malformed or invalid.
+    """

@@ -80,7 +80,7 @@ QPARAM_NEW_CUSTOM = "set-new-custom"
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_ETL_ARGS = "etl_args"
 # etl websocket
-ETL_WS_DESTINATION_ADDR = "dst_addr"
+ETL_WS_PIPELINE = "pipeline"
 ETL_WS_FQN = "fqn"
 ETL_WS_PATH = "path"
 
@@ -160,6 +160,7 @@ STATUS_BAD_REQUEST = 400
 STATUS_PARTIAL_CONTENT = 206
 STATUS_REDIRECT_TMP = 307
 STATUS_REDIRECT_PERM = 301
+STATUS_INTERNAL_SERVER_ERROR = 500
 
 # Protocol
 HTTP = "http://"
