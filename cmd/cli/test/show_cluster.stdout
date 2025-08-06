@@ -35,3 +35,12 @@
 ^.*Authentication:.*$
 ^.*Version:.*$
 ^.*Build:.*$
+^Performance and Health:$
+^.*State:.*$
+^.*I/O Errors:.*$
+^.*Load Avg:.*$
+^.*Disk Usage:.*$
+^.*Network:.*$
+^.*Storage:.*$
+^.*Filesystems:.*$
+^.*Running Jobs:.*$

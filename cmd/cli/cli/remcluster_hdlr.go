@@ -11,6 +11,6 @@ var remClusterCmd = cli.Command{
 	Name:  cmdShowRemoteAIS,
 	Usage: "Show attached AIS clusters",
 	Subcommands: []cli.Command{
-		makeAlias(&showCmdRemoteAIS, &mkaliasOpts{newName: commandShow}),
+		makeAlias(&showCmdRemote, &mkaliasOpts{newName: commandShow}),
 	},
 }

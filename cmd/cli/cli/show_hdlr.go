@@ -65,6 +65,7 @@ var (
 			noHeaderFlag,
 			verboseFlag,
 			jsonFlag,
+			unitsFlag,
 		},
 	}
 
@@ -88,7 +89,8 @@ var (
 			showCmdStorage,
 			showCmdRebalance,
 			showCmdConfig,
-			showCmdRemoteAIS,
+			makeAlias(&showCmdRemoteCluster, &mkaliasOpts{newName: cmdShowRemoteAIS}),
+			showCmdRemote,
 			showCmdJob,
 			showCmdLog,
 			showTLS,
@@ -171,12 +173,28 @@ var (
 		Action:       showAnyConfigHandler,
 		BashComplete: showConfigCompletions,
 	}
-	showCmdRemoteAIS = cli.Command{
-		Name:      cmdShowRemoteAIS,
-		Usage:     "Show attached AIS clusters",
+
+	showCmdRemoteCluster = cli.Command{
+		Name:      "cluster",
+		Usage:     "Show attached remote AIS clusters",
 		ArgsUsage: "",
-		Flags:     sortFlags(showCmdsFlags[cmdShowRemoteAIS]),
-		Action:    showRemoteAISHandler,
+		Flags:     sortFlags([]cli.Flag{noHeaderFlag}),
+		Action:    showRemoteClustersTable,
+	}
+
+	showCmdRemote = cli.Command{
+		Name:  "remote",
+		Usage: "Show remote cluster information and statistics",
+		Subcommands: []cli.Command{
+			showCmdRemoteCluster,
+			{
+				Name:      "dashboard",
+				Usage:     "Show remote cluster dashboard with performance and health metrics",
+				ArgsUsage: "",
+				Flags:     sortFlags([]cli.Flag{noHeaderFlag, unitsFlag}),
+				Action:    showRemoteDashboardHandler,
+			},
+		},
 	}
 )
 
@@ -607,7 +625,46 @@ func showNodeConfig(c *cli.Context) error {
 }
 
 // TODO -- FIXME: check backend.conf <new JSON formatted value>
-func showRemoteAISHandler(c *cli.Context) error {
+
+// Remote cluster methods
+// getRemoteClustersData fetches all remote clusters + creates base params for each.
+func getRemoteClustersData() ([]*meta.RemAis, map[string]api.BaseParams, error) {
+	all, err := api.GetRemoteAIS(apiBP)
+	if err != nil {
+		return nil, nil, V(err)
+	}
+
+	bpMap := make(map[string]api.BaseParams, len(all.A))
+	for _, ra := range all.A {
+		bpMap[ra.UUID] = createRemoteBaseParams(ra)
+	}
+	return all.A, bpMap, nil
+}
+
+func createRemoteBaseParams(ra *meta.RemAis) api.BaseParams {
+	bp := api.BaseParams{
+		URL:   ra.URL,
+		Token: loggedUserToken,
+		UA:    ua,
+	}
+	cargs := cmn.TransportArgs{
+		DialTimeout: gcfg.Timeout.TCPTimeout,
+		Timeout:     gcfg.Timeout.HTTPTimeout,
+	}
+	if cos.IsHTTPS(bp.URL) {
+		sargs := cmn.TLSArgs{SkipVerify: true}
+		bp.Client = cmn.NewClientTLS(cargs, sargs, false)
+	} else {
+		if clientH == nil {
+			clientH = cmn.NewClient(cargs)
+		}
+		bp.Client = clientH
+	}
+	return bp
+}
+
+// ais show remote cluster
+func showRemoteClustersTable(c *cli.Context) error {
 	const (
 		warnRemAisOffline = `remote ais cluster at %s is currently unreachable.
 Run 'ais config cluster backend.conf --json' - to show the respective configuration;
@@ -615,41 +672,26 @@ Run 'ais config cluster backend.conf --json' - to show the respective configurat
 For details and usage examples, see: docs/cli/config.md`
 	)
 
-	all, err := api.GetRemoteAIS(apiBP)
+	clusters, bpMap, err := getRemoteClustersData()
 	if err != nil {
-		return V(err)
+		return err
 	}
+
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 	if !flagIsSet(c, noHeaderFlag) {
 		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tUptime")
 	}
-	for _, ra := range all.A {
+
+	for _, ra := range clusters {
 		uptime := teb.UnknownStatusVal
-		bp := api.BaseParams{
-			URL:   ra.URL,
-			Token: loggedUserToken,
-			UA:    ua,
-		}
-		cargs := cmn.TransportArgs{
-			DialTimeout: gcfg.Timeout.TCPTimeout,
-			Timeout:     gcfg.Timeout.HTTPTimeout,
-		}
-		if cos.IsHTTPS(bp.URL) {
-			// Create temp TLS client with verification skip for remote clusters
-			// (remais cluster may have different cert than the main cluster)
-			sargs := cmn.TLSArgs{SkipVerify: true}
-			bp.Client = cmn.NewClientTLS(cargs, sargs, false /*intra-cluster*/)
-		} else {
-			if clientH == nil {
-				clientH = cmn.NewClient(cargs)
-			}
-			bp.Client = clientH
-		}
+		bp := bpMap[ra.UUID]
+
 		if clutime, _, err := api.HealthUptime(bp); err == nil {
 			ns, _ := strconv.ParseInt(clutime, 10, 64)
 			uptime = time.Duration(ns).String()
 		}
+
 		if ra.Smap != nil {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\tv%d\t%d\t%s\n",
 				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), uptime)
@@ -663,29 +705,59 @@ For details and usage examples, see: docs/cli/config.md`
 				teb.UnknownStatusVal, teb.UnknownStatusVal, teb.UnknownStatusVal, uptime)
 
 			warn := fmt.Sprintf(warnRemAisOffline, url)
-
-			if len(all.A) == 1 {
+			if len(clusters) == 1 {
 				tw.Flush()
 				fmt.Fprintln(c.App.Writer)
 				return errors.New(warn)
 			}
-			actionWarn(c, warn+"\n")
+			actionWarn(c, warn)
 		}
 	}
 	tw.Flush()
+	return nil
+}
 
-	if flagIsSet(c, verboseFlag) {
-		for _, ra := range all.A {
-			if ra.Smap == nil {
-				continue
-			}
+// ais show remote dashboard
+func showRemoteDashboardHandler(c *cli.Context) error {
+	clusters, bpMap, err := getRemoteClustersData()
+	if err != nil {
+		return err
+	}
+
+	units, err := parseUnitsFlag(c, unitsFlag)
+	if err != nil {
+		return err
+	}
+
+	for _, ra := range clusters {
+		if ra.Smap == nil {
+			continue
+		}
+		bp := bpMap[ra.UUID]
+		if dashStr, err := getRemoteClusterDashboard(c, bp, ra.Smap, units); err == nil {
+			actionCptn(c, ra.Alias+"["+ra.UUID+"]", "dashboard:")
+			fmt.Fprint(c.App.Writer, dashStr)
 			fmt.Fprintln(c.App.Writer)
-			actionCptn(c, ra.Alias+"["+ra.UUID+"]", "cluster map:")
-			err := smapFromNode(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
-			if err != nil {
-				actionWarn(c, err.Error())
-			}
+		} else {
+			actionWarn(c, fmt.Sprintf("Failed to get dashboard for %s: %v", ra.Alias, err))
 		}
 	}
 	return nil
+}
+
+func getRemoteClusterDashboard(c *cli.Context, bp api.BaseParams, smap *meta.Smap, units string) (string, error) {
+	tstatusMap := make(teb.StstMap, smap.CountTargets())
+	for _, tnode := range smap.Tmap {
+		if ds, err := api.GetStatsAndStatus(bp, tnode); err == nil {
+			tstatusMap[tnode.ID()] = ds
+		}
+	}
+
+	if len(tstatusMap) == 0 {
+		return "", errors.New("no target stats available")
+	}
+
+	// uses ais show dashboard's state, throughput, health metrics, etc.
+	// we just pass in remais cluster status map
+	return _fmtStorageSummary(c, tstatusMap, units), nil
 }
