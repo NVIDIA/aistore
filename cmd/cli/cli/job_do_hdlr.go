@@ -46,6 +46,10 @@ const blobDownloadUsage = "Download a large object or multiple objects from remo
 	indent1 + "\t- 'blob-download s3://ab --list \"f1, f2\" --num-workers=4 --progress'\t- run 4 concurrent readers to download 2 (listed) blobs\n" +
 	indent1 + "When _not_ using '--progress' option, run 'ais show job' to monitor."
 
+const waitUsage = "Wait for a specific job to complete, e.g.:\n" +
+	indent1 + "\t- 'wait prefetch-listrange'\t- wait for prefetch job to finish (silent);\n" +
+	indent1 + "\t- 'wait prefetch-listrange --refresh 5s'\t- wait with progress updates every 5 seconds."
+
 const downloadUsage = "Download files and objects from remote sources, e.g.:\n" +
 	indent1 + "\t- 'ais download http://example.com/file.tar ais://bucket/'\t- download from HTTP into AIS bucket;\n" +
 	indent1 + "\t- 'ais download s3://bucket/file.tar ais://local-bucket/'\t- download from S3 into AIS bucket;\n" +
@@ -256,7 +260,7 @@ var (
 	}
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
-		Usage:        "wait for a specific batch job to complete (" + tabHelpOpt + ")",
+		Usage:        waitUsage,
 		ArgsUsage:    jobAnyArg,
 		Flags:        sortFlags(waitCmdsFlags),
 		Action:       waitJobHandler,
@@ -1398,15 +1402,8 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 		}
 		return waitDsortHandler(c, xid /*job ID*/)
 	}
-	// TODO: niy
-	if flagIsSet(c, refreshFlag) {
-		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(refreshFlag))
-		actionWarn(c, warn)
-	} else if flagIsSet(c, progressFlag) {
-		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(progressFlag))
-		actionWarn(c, warn)
-	}
-	// x-wait
+
+	// shared wait parameters
 	var (
 		xactID, xname = xid, name
 		xactKind      string
@@ -1432,12 +1429,59 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 		_, xname = xact.GetKindName(xargs.Kind)
 	}
 
-	msg := formatXactMsg(xactID, xname, bck)
+	// TODO: --progress flag niy
+	if flagIsSet(c, refreshFlag) {
+		return waitJobWithRefresh(c, &xargs, xname, bck)
+	} else if flagIsSet(c, progressFlag) {
+		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(progressFlag))
+		actionWarn(c, warn)
+	}
+
+	msg := formatXactMsg(xargs.ID, xname, bck)
 	fmt.Fprintln(c.App.Writer, "Waiting for "+msg+" ...")
 	err := waitXact(&xargs)
 	if err == nil {
 		actionDone(c, "Done.")
 	}
+	return nil
+}
+
+func waitJobWithRefresh(c *cli.Context, xargs *xact.ArgsMsg, xname string, bck cmn.Bck) error {
+	msg := formatXactMsg(xargs.ID, xname, bck)
+	refreshRate := max(parseDurationFlag(c, refreshFlag), refreshRateMinDur)
+
+	ctx := context.Background()
+	if xargs.Timeout != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, xargs.Timeout)
+		defer cancel()
+	}
+
+	fmt.Fprintln(c.App.Writer, "Waiting for "+msg+" ...")
+	var total time.Duration
+
+	for {
+		status, err := api.GetOneXactionStatus(apiBP, xargs)
+		if err != nil {
+			return V(err)
+		}
+		if status.Aborted() {
+			return fmt.Errorf("%s was aborted", msg)
+		}
+		if status.Finished() {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for %s: %v", msg, ctx.Err())
+		case <-time.After(refreshRate):
+			total += refreshRate
+			fmt.Fprintf(c.App.Writer, "\rIn progress...(%v elapsed)", total.Truncate(time.Second))
+		}
+	}
+
+	actionDone(c, "Done.")
 	return nil
 }
 
