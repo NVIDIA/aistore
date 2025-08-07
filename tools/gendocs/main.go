@@ -59,6 +59,7 @@ const (
 
 	// Action parsing constants
 	actionPrefix = "action=["
+	modelPrefix  = "model=["
 	apcPrefix    = "apc."
 
 	// Temporary files for vendor extensions
@@ -103,6 +104,7 @@ type (
 		OperationID  string
 		Tag          string
 		Actions      []actionModel
+		Models       []string
 		HTTPExamples []commandExample
 	}
 
@@ -235,7 +237,8 @@ func collectAndGenerateHTTPExamples(lines []string, i int, ep *endpoint, actionM
 	}
 
 	// Auto-generate examples based on endpoint type
-	if len(ep.Actions) > 0 {
+	switch {
+	case len(ep.Actions) > 0:
 		for _, action := range ep.Actions {
 			payload := payloads[action.Action]
 			httpCmd := generateHTTPCommand(ep, payload)
@@ -246,7 +249,21 @@ func collectAndGenerateHTTPExamples(lines []string, i int, ep *endpoint, actionM
 				Command: httpCmd,
 			})
 		}
-	} else if len(examples) == 0 {
+	case len(ep.Models) > 0:
+		// Handle model-based endpoints
+		for _, model := range ep.Models {
+			payload := payloads[model]
+			httpCmd := generateHTTPCommand(ep, payload)
+
+			method := strings.ToLower(ep.Method)
+			label := strings.ToUpper(method[:1]) + method[1:] + " " + generateLabelFromPath(ep.Path)
+
+			examples = append(examples, commandExample{
+				Label:   label,
+				Command: httpCmd,
+			})
+		}
+	case len(examples) == 0:
 		httpCmd := generateHTTPCommand(ep, "")
 
 		method := strings.ToLower(ep.Method)
@@ -484,8 +501,43 @@ func parseActionClause(annotationLine string) []actionModel {
 	return actions
 }
 
+// Extracts models from the model=[...] clause
+func parseModelClause(annotationLine string) []string {
+	models := make([]string, 0, 4)
+	modelStart := strings.Index(annotationLine, modelPrefix)
+	if modelStart == -1 {
+		return models
+	}
+
+	openIdx := modelStart + len(modelPrefix)
+	closeIdx := strings.Index(annotationLine[openIdx:], closeBracket)
+	if closeIdx == -1 {
+		return models
+	}
+
+	modelBlock := annotationLine[openIdx : openIdx+closeIdx]
+	modelList := strings.Split(modelBlock, pipe)
+
+	for _, model := range modelList {
+		model = strings.TrimSpace(model)
+		if model != "" {
+			models = append(models, model)
+		}
+	}
+
+	return models
+}
+
 func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	line := strings.TrimSpace(lines[i])
+
+	// check for conflicting action and model clauses
+	hasAction := strings.Contains(line, actionPrefix)
+	hasModel := strings.Contains(line, modelPrefix)
+	if hasAction && hasModel {
+		return endpoint{}, fmt.Errorf("endpoint annotation cannot contain both 'action=' and 'model=' clauses in the same line: %s", line)
+	}
+
 	trimmed := strings.TrimSpace(line[len(commentWithSpace+endpointPrefix):])
 	paramStart := strings.Index(trimmed, openBracket)
 	paramEnd := strings.Index(trimmed, closeBracket)
@@ -531,12 +583,14 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	summary := strings.Join(summaryLines, " ")
 
 	actions := parseActionClause(line)
+	models := parseModelClause(line)
 
 	tempEndpoint := &endpoint{
 		Method:  method,
 		Path:    path,
 		Params:  params,
 		Actions: actions,
+		Models:  models,
 	}
 
 	httpExamples := collectAndGenerateHTTPExamples(lines, i, tempEndpoint, fp.ActionMap)
@@ -578,6 +632,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		OperationID:  operationID,
 		Tag:          determineTag(path),
 		Actions:      actions,
+		Models:       models,
 		HTTPExamples: httpExamples,
 	}, nil
 }
@@ -819,6 +874,28 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string, httpExam
 		// Generate one @Param request body for each model
 		for _, action := range ep.Actions {
 			bodyParamComment := fmt.Sprintf(bodyParamTemplate, action.Model, description)
+			swaggerComments = append(swaggerComments, bodyParamComment)
+		}
+	}
+
+	// Add request body parameters for direct model references
+	if len(ep.Models) > 0 {
+		var modelLinks []string
+		for _, model := range ep.Models {
+			modelName := model
+			if strings.Contains(model, dot) {
+				parts := strings.Split(model, dot)
+				modelName = parts[len(parts)-1]
+			}
+			link := fmt.Sprintf(actionLinkFormat, model, modelName)
+			modelLinks = append(modelLinks, link)
+		}
+
+		description := "Request model: " + strings.Join(modelLinks, ", ")
+
+		// Generate one @Param request body for each model
+		for _, model := range ep.Models {
+			bodyParamComment := fmt.Sprintf(bodyParamTemplate, model, description)
 			swaggerComments = append(swaggerComments, bodyParamComment)
 		}
 	}

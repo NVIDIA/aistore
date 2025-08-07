@@ -45,22 +45,33 @@ Parameters are specified in square brackets `[param1=type,param2=type]`. Each pa
 - **Name**: The parameter name (should match definitions in `../api/apc/query.go`)
 - **Type**: The parameter type (`string`, `int`, `bool`, etc.)
 
-### 4. Actions (Optional)
-Actions specify which operations are supported by an endpoint and their corresponding data models. They are specified using the `action=[action1=model1|action2=model2]` syntax:
+### 4. Actions vs Models: When to use which
+
+There are two ways to annotate endpoints based on their payload structure:
+
+#### Action-Based Endpoints: `action=[...]`
+Use when an endpoint supports **multiple operations** that share the same URL but perform different actions. Each action expects a JSON payload with an `action` field wrapper.
 
 ```go
-// +gen:endpoint POST /v1/buckets/bucket-name[params] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:endpoint POST /v1/buckets/bucket-name action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {...}}
+// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {...}}
 ```
 
-- **Action Name**: The action constant (e.g., `apc.ActCopyBck`, `apc.ActPromote`)
-- **Model**: The Go struct type used for this action's request body (e.g., `apc.TCBMsg`, `apc.PromoteArgs`)
-- **Separator**: Multiple actions are separated by `|` (pipe character)
-- `gen:payload` must be provided for each action
+**Characteristics:**
+- Multiple actions share the same endpoint
+- Each action has its own model for the `value` field
+- JSON payload structure: `{"action": "action-name", "value": model-data}`
+- All actions must have a corresponding model
+- Requires `+gen:payload` annotations for each action
 
-💡 **Important**: The models shown in the documentation often represent **nested fields** within larger request structures, not the complete request body.
+#### Model-Based Endpoints: `model=[...]`
+Use when an endpoint accepts a **single, direct model** as the JSON payload without action wrapper.
 
-**Example - Complete request structure:**
-All models only represent the expected value field in the final body payload for the corresponding action. The complete JSON body should look like:
+```go
+// +gen:endpoint GET /v1/ml/moss/{bucket} model=[apc.MossReq]
+// +gen:payload apc.MossReq={"in":[{"objname":"file.tar"}],"mime":"tar"}
+```
 
 ```json
 {
@@ -70,21 +81,28 @@ All models only represent the expected value field in the final body payload for
 }
 ```
 
-### 5. Payload Annotations (Required for Actions)
-For each action specified in the endpoint, you **must** provide a corresponding `+gen:payload` annotation that defines the JSON payload for that action. The action won't be rendered in the documentation unless a payload annotation is explicitly provided:
+### 5. Payload Annotations (Required)
+You **must** provide a `+gen:payload` annotation for every action or model specified in your endpoint. This defines the JSON payload structure that will appear in the generated curl examples.
 
+#### For Action-Based Endpoints:
 ```go
-// +gen:endpoint POST /v1/buckets/bucket-name[params] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
-// +gen:payload apc.ActCopyBck={"action": "copy-bck"}
+// +gen:endpoint POST /v1/buckets/bucket-name action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {"dry_run": false}}
 // +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
 ```
 
-**Steps:**
-1. **Identify each action** in your `action=[...]` clause
-2. **Write the JSON payload** for each action following the format: `{"action": "action-name", "value": model-data-if-needed}`
-3. **Add the annotation** using: `// +gen:payload ActionConstant=JsonPayload`
+#### For Model-Based Endpoints:
+```go
+// +gen:endpoint GET /v1/ml/moss/{bucket} model=[apc.MossReq]
+// +gen:payload apc.MossReq={"in":[{"objname":"file.tar"}],"mime":"tar","coer":true}
+```
 
-These annotations automatically generate the HTTP command examples in the documentation with the proper JSON payloads.
+**Steps:**
+1. **Identify each action or model** in your endpoint annotation
+2. **Write the JSON payload** following the appropriate structure (action-wrapped or direct model)
+3. **Add the annotation** using: `// +gen:payload`
+
+These annotations automatically generate the HTTP command examples in the documentation with proper JSON payloads.
 
 ### Action Constant Mapping
 The system automatically maps action constants to their string values:

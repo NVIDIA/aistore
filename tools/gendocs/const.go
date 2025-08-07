@@ -10,6 +10,7 @@ const (
 	comma        = ","
 	equals       = "="
 	pipe         = "|"
+	dot          = "."
 	queryStart   = "?"
 	queryJoin    = "&"
 	dash         = "-"
