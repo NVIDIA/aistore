@@ -45,8 +45,9 @@ func (e *Error) mustMarshal(sgl *memsys.SGL) {
 // with user-friendly tip
 func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, lom *core.LOM, uploadID string) {
 	if ecode == 0 {
-		ecode = http.StatusInternalServerError
+		ecode = http.StatusBadRequest
 	}
+
 	if isErrNoSuchUpload(err) {
 		// For NoSuchUpload, suggest listing uploads in bucket
 		bucketCname := aisToS3Path(lom.Bck().Cname(""))
@@ -54,7 +55,7 @@ func WriteMptErr(w http.ResponseWriter, r *http.Request, err error, ecode int, l
 	} else {
 		// For other errors, provide abort information
 		objectPath := aisToS3Path(lom.Cname())
-		err = fmt.Errorf("%w\nUse upload ID %q on %s to abort", err, uploadID, objectPath)
+		err = fmt.Errorf("%w (Use upload ID %q on %s to abort)", err, uploadID, objectPath)
 	}
 
 	WriteErr(w, r, err, ecode)

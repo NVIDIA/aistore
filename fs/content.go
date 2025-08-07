@@ -225,8 +225,8 @@ func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, o
 // All use pass-through GenUniqueFQN/ParseUniqueFQN since the content type
 // in the path provides sufficient identification for cleanup and management.
 
-func (*ObjChunkContentResolver) GenUniqueFQN(base, _ string) string {
-	return base
+func (*ObjChunkContentResolver) GenUniqueFQN(base, suffix string) string {
+	return base + suffix
 }
 
 func (*ObjChunkContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {

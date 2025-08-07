@@ -10,10 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -23,26 +21,9 @@ import (
 
 const (
 	iniCapUploads = 8
-	iniCapParts   = 4
 )
 
-// NOTE: xattr stores only the (*) marked attributes
-type (
-	MptPart struct {
-		MD5  string // MD5 of the part (*)
-		FQN  string // FQN of the corresponding workfile
-		Size int64  // part size in bytes (*)
-		Num  int32  // part number (*)
-	}
-	mpt struct {
-		ctime    time.Time // InitUpload time
-		bckName  string
-		objName  string
-		parts    []*MptPart // by part number
-		metadata map[string]string
-	}
-	uploads map[string]*mpt // by upload ID
-)
+type uploads map[string]*core.Ufest // by upload ID
 
 var (
 	ups   uploads
@@ -50,63 +31,23 @@ var (
 	once  sync.Once
 )
 
-// Start multipart upload
-func InitUpload(id, bckName, objName string, metadata map[string]string) {
+// - see tgts3mpt NOTE in re "active uploads in memory"
+// - TODO: this is the place to call Ufest.Store
+func InitUpload(id string, lom *core.LOM, metadata map[string]string) {
 	// just once
 	once.Do(func() {
 		ups = make(uploads, iniCapUploads)
 	})
 
-	upsMu.Lock()
-	ups[id] = &mpt{
-		bckName:  bckName,
-		objName:  objName,
-		parts:    make([]*MptPart, 0, iniCapParts),
-		ctime:    time.Now(),
-		metadata: metadata,
+	// Create chunk manifest
+	manifest := core.NewUfest(id, lom)
+	if metadata != nil {
+		manifest.Metadata = metadata
 	}
+
+	upsMu.Lock()
+	ups[id] = manifest
 	upsMu.Unlock()
-}
-
-// Add part to an active upload.
-// Some clients may omit size and md5. Only partNum is must-have.
-// md5 and fqn is filled by a target after successful saving the data to a workfile.
-func AddPart(id string, npart *MptPart) (ecode int, err error) {
-	upsMu.Lock()
-	defer upsMu.Unlock()
-	mpt, ok := ups[id]
-	if !ok {
-		return http.StatusNotFound, NewErrNoSuchUpload(id)
-	}
-	mpt.parts = append(mpt.parts, npart)
-	return 0, nil
-}
-
-// TODO: compare non-zero sizes (note: s3cmd sends 0) and part.ETag as well, if specified
-func CheckParts(id string, parts []types.CompletedPart) (nparts []*MptPart, ecode int, err error) {
-	upsMu.RLock()
-	defer upsMu.RUnlock()
-	mpt, ok := ups[id]
-	if !ok {
-		return nil, http.StatusNotFound, NewErrNoSuchUpload(id)
-	}
-
-	// first, check that all parts are present
-	var prev = int32(-1)
-	for _, part := range parts {
-		curr := *part.PartNumber
-		debug.Assert(curr > prev) // must ascend
-		if mpt.getPart(curr) == nil {
-			return nil, http.StatusBadRequest, fmt.Errorf("upload %q: part %d not found", id, curr)
-		}
-		prev = curr
-	}
-	// copy (to work on it with no locks)
-	nparts = make([]*MptPart, 0, len(parts))
-	for _, part := range parts {
-		nparts = append(nparts, mpt.getPart(*part.PartNumber))
-	}
-	return nparts, 0, nil
 }
 
 func ParsePartNum(s string) (int32, error) {
@@ -117,76 +58,62 @@ func ParsePartNum(s string) (int32, error) {
 	return int32(partNum), err
 }
 
-// Return a sum of upload part sizes.
-// Used on upload completion to calculate the final size of the object.
-func ObjSize(id string) (size int64, ecode int, err error) {
+func GetUpload(id string) (manifest *core.Ufest) {
 	upsMu.RLock()
-	defer upsMu.RUnlock()
-	mpt, ok := ups[id]
-	if !ok {
-		return 0, http.StatusNotFound, NewErrNoSuchUpload(id)
-	}
-	for _, part := range mpt.parts {
-		size += part.Size
-	}
-	return size, 0, nil
-}
-
-func UploadExists(id string) bool {
-	upsMu.RLock()
-	_, ok := ups[id]
+	manifest = ups[id]
 	upsMu.RUnlock()
-	return ok
+
+	return
 }
 
-func GetUploadMetadata(id string) (metadata map[string]string, ecode int, err error) {
-	upsMu.RLock()
-	defer upsMu.RUnlock()
-	mpt, ok := ups[id]
-	if !ok {
-		return nil, http.StatusNotFound, NewErrNoSuchUpload(id)
-	}
-	return mpt.metadata, 0, nil
-}
-
-// remove all temp files and delete from the map
-// if completed (i.e., not aborted): store xattr
-func CleanupUpload(id string, lom *core.LOM, aborted bool) (ecode int, err error) {
+// - see tgts3mpt NOTE in re "active uploads in memory"
+// - notwithstanding, keeping this from-disk loading code for future
+func AbortUpload(id string, lom *core.LOM) (ecode int, err error) {
 	debug.Assert(lom != nil)
+
 	upsMu.Lock()
-	mpt, ok := ups[id]
+	manifest, ok := ups[id]
 	if !ok {
 		upsMu.Unlock()
-		return http.StatusNotFound, NewErrNoSuchUpload(id)
+		// Try to load from xattr
+		manifest = core.NewUfest(id, lom)
+		err = manifest.Load(lom)
+		if err != nil {
+			return http.StatusNotFound, NewErrNoSuchUpload(id)
+		}
+		upsMu.Lock()
 	}
 	delete(ups, id)
 	upsMu.Unlock()
 
-	if !aborted {
-		if err := storeMptXattr(lom, mpt); err != nil {
-			nlog.Warningln("failed to xattr [", id, lom.Cname(), err, "]")
-		}
+	if err := manifest.Abort(lom); err != nil {
+		nlog.Warningln("failed to cleanup chunks [", id, lom.Cname(), err, "]")
+		return http.StatusInternalServerError, err
 	}
-	for _, part := range mpt.parts {
-		if err := cos.RemoveFile(part.FQN); err != nil {
-			nlog.Errorln("failed to remove part [", id, part.FQN, lom.Cname(), err, "]")
-		}
-	}
-	return
+
+	return 0, nil
 }
 
+func DelCompletedUpload(id string) {
+	upsMu.Lock()
+	delete(ups, id)
+	upsMu.Unlock()
+}
+
+// - see tgts3mpt NOTE in re "active uploads in memory"
+// - notwithstanding, keeping this from-disk loading code for future
 func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult {
 	results := make([]UploadInfoResult, 0, len(ups))
 
 	// lock all (notice performance trade-off)
 	upsMu.RLock()
 	// filter by bucket
-	for id, mpt := range ups {
-		if bckName == "" || mpt.bckName == bckName {
+	for id, manifest := range ups {
+		if bckName == "" || manifest.Lom.Bck().Name == bckName {
 			results = append(results, UploadInfoResult{
-				Key:       mpt.objName,
+				Key:       manifest.Lom.ObjName,
 				UploadID:  id,
-				Initiated: mpt.ctime,
+				Initiated: manifest.StartTime,
 			})
 		}
 	}
@@ -228,26 +155,31 @@ func ListUploads(bckName, idMarker string, maxUploads int) *ListMptUploadsResult
 	}
 }
 
+// - see tgts3mpt NOTE in re "active uploads in memory"
+// - notwithstanding, keeping this from-disk loading code for future
 func ListParts(id string, lom *core.LOM) (parts []types.CompletedPart, ecode int, err error) {
 	upsMu.RLock()
-	mpt, ok := ups[id]
+	manifest, ok := ups[id]
+	upsMu.RUnlock()
+
 	if !ok {
-		ecode = http.StatusNotFound
-		mpt, err = loadMptXattr(lom)
-		if err != nil || mpt == nil {
-			upsMu.RUnlock()
-			return nil, ecode, err
+		manifest = core.NewUfest(id, lom)
+		if err = manifest.Load(lom); err != nil {
+			return nil, http.StatusNotFound, err
 		}
-		mpt.bckName, mpt.objName = lom.Bck().Name, lom.ObjName
-		mpt.ctime = lom.Atime()
+		upsMu.Lock()
+		ups[id] = manifest
+		upsMu.Unlock()
 	}
-	parts = make([]types.CompletedPart, 0, len(mpt.parts))
-	for _, part := range mpt.parts {
+
+	manifest.Lock()
+	parts = make([]types.CompletedPart, 0, len(manifest.Chunks))
+	for _, c := range manifest.Chunks {
 		parts = append(parts, types.CompletedPart{
-			ETag:       apc.Ptr(part.MD5),
-			PartNumber: apc.Ptr(part.Num),
+			ETag:       apc.Ptr(c.MD5),
+			PartNumber: apc.Ptr(int32(c.Num)),
 		})
 	}
-	upsMu.RUnlock()
-	return parts, ecode, err
+	manifest.Unlock()
+	return parts, 0, nil
 }

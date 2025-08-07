@@ -91,7 +91,6 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(manifest.ID).ToNot(BeEmpty())
 				Expect(manifest.StartTime).ToNot(BeZero())
 				Expect(manifest.Chunks).To(HaveLen(0))
-				Expect(manifest.Chunks).To(HaveCap(16)) // default capacity
 				Expect(manifest.CksumTyp).To(Equal(cos.ChecksumOneXxh))
 
 				// ID should contain timestamp

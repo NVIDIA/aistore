@@ -127,7 +127,10 @@ type (
 		io.Writer
 	}
 
-	WriterMulti struct{ writers []io.Writer }
+	WriterMulti struct {
+		writers []io.Writer
+		size    int64
+	}
 
 	// WriterOnly is a helper struct to hide `io.ReaderFrom` interface implementation
 	// As far as http.ResponseWriter (and its underlying tcp conn.), the following are tradeoffs:
@@ -361,23 +364,37 @@ func (f *FileSectionHandle) Close() error                 { return f.fh.Close() 
 // WriterMulti //
 /////////////////
 
-func NewWriterMulti(w ...io.Writer) *WriterMulti { return &WriterMulti{w} }
+func NewWriterMulti(ws ...io.Writer) *WriterMulti { return &WriterMulti{ws, 0} }
 
-func (mw *WriterMulti) Write(b []byte) (n int, err error) {
+func IniWriterMulti(ws ...io.Writer) *WriterMulti {
+	mw := &WriterMulti{
+		writers: make([]io.Writer, 0, 3),
+	}
+	for _, w := range ws {
+		if w != nil {
+			mw.writers = append(mw.writers, w)
+		}
+	}
+	return mw
+}
+
+func (mw *WriterMulti) Write(b []byte) (int, error) {
 	l := len(b)
 	for _, w := range mw.writers {
-		n, err = w.Write(b)
-		if err == nil && n == l {
-			continue
+		debug.Assert(w != nil, "must use IniWriterMulti")
+		n, err := w.Write(b)
+		if err != nil {
+			return n, err
 		}
-		if err == nil {
-			err = io.ErrShortWrite
+		if n != l {
+			return n, io.ErrShortWrite
 		}
-		return
 	}
-	n = l
-	return
+	mw.size += int64(l)
+	return l, nil
 }
+
+func (mw *WriterMulti) Size() int64 { return mw.size }
 
 ////////////
 // Buffer //
