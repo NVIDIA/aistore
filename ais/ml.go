@@ -60,6 +60,8 @@ func tmosspath(bucket, xid, wid string, nat int) string {
 }
 
 // GET /v1/ml/moss/bucket-name
+// +gen:endpoint GET /v1/ml/moss/{bucket}[apc.QparamTID=string] model=[apc.MossReq]
+// Machine Learning endpoint for batch processing of objects using MOSS (Multi-Object Streaming Service)
 func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	// parse/validate
 	items, err := p.parseURL(w, r, apc.URLPathML.L, 1, true)

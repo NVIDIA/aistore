@@ -59,6 +59,7 @@ const (
 
 	// Action parsing constants
 	actionPrefix = "action=["
+	modelPrefix  = "model=["
 	apcPrefix    = "apc."
 
 	// Temporary files for vendor extensions
@@ -103,6 +104,7 @@ type (
 		OperationID  string
 		Tag          string
 		Actions      []actionModel
+		Models       []string
 		HTTPExamples []commandExample
 	}
 
@@ -484,6 +486,33 @@ func parseActionClause(annotationLine string) []actionModel {
 	return actions
 }
 
+// Extracts models from the model=[...] clause
+func parseModelClause(annotationLine string) []string {
+	models := make([]string, 0, 4)
+	modelStart := strings.Index(annotationLine, modelPrefix)
+	if modelStart == -1 {
+		return models
+	}
+
+	openIdx := modelStart + len(modelPrefix)
+	closeIdx := strings.Index(annotationLine[openIdx:], closeBracket)
+	if closeIdx == -1 {
+		return models
+	}
+
+	modelBlock := annotationLine[openIdx : openIdx+closeIdx]
+	modelList := strings.Split(modelBlock, pipe)
+
+	for _, model := range modelList {
+		model = strings.TrimSpace(model)
+		if model != "" {
+			models = append(models, model)
+		}
+	}
+
+	return models
+}
+
 func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	line := strings.TrimSpace(lines[i])
 	trimmed := strings.TrimSpace(line[len(commentWithSpace+endpointPrefix):])
@@ -531,12 +560,14 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	summary := strings.Join(summaryLines, " ")
 
 	actions := parseActionClause(line)
+	models := parseModelClause(line)
 
 	tempEndpoint := &endpoint{
 		Method:  method,
 		Path:    path,
 		Params:  params,
 		Actions: actions,
+		Models:  models,
 	}
 
 	httpExamples := collectAndGenerateHTTPExamples(lines, i, tempEndpoint, fp.ActionMap)
@@ -578,6 +609,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		OperationID:  operationID,
 		Tag:          determineTag(path),
 		Actions:      actions,
+		Models:       models,
 		HTTPExamples: httpExamples,
 	}, nil
 }
@@ -819,6 +851,14 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string, httpExam
 		// Generate one @Param request body for each model
 		for _, action := range ep.Actions {
 			bodyParamComment := fmt.Sprintf(bodyParamTemplate, action.Model, description)
+			swaggerComments = append(swaggerComments, bodyParamComment)
+		}
+	}
+
+	// Add request body parameters for direct model references
+	if len(ep.Models) > 0 {
+		for _, model := range ep.Models {
+			bodyParamComment := fmt.Sprintf(bodyParamTemplate, model, "Request model")
 			swaggerComments = append(swaggerComments, bodyParamComment)
 		}
 	}
