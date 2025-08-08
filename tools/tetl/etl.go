@@ -42,6 +42,7 @@ const (
 	MD5           = "transformer-md5"
 	HashWithArgs  = "hash-with-args"
 	Tar2tfFilters = "tar2tf-filters"
+	ParquetParser = "parquet-parser"
 	tar2tfFilter  = `
 {
   "conversions": [
@@ -115,6 +116,7 @@ var (
 		Tar2tfFilters: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/tar2tf/pod.yaml",
 		Echo:          "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/echo/etl_spec.yaml",
 		EchoGolang:    "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/go_echo/pod.yaml",
+		ParquetParser: "https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/parquet-parser/etl_spec.yaml",
 	}
 
 	testSpecs = map[string]string{
@@ -137,7 +139,7 @@ var (
 
 func validateETLName(name string) error {
 	if _, ok := links[name]; !ok {
-		return fmt.Errorf("%s is invalid etlName, expected predefined (%s, %s, %s)", name, Echo, Tar2TF, MD5)
+		return fmt.Errorf("%s is invalid etlName, expected predefined (%s, %s, %s, %s)", name, Echo, Tar2TF, MD5, ParquetParser)
 	}
 	return nil
 }
