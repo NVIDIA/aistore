@@ -115,14 +115,18 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 
 type errNoSuchUpload struct {
 	uploadID string
+	err      error
 }
 
-func NewErrNoSuchUpload(uploadID string) error {
-	return &errNoSuchUpload{uploadID: uploadID}
+func NewErrNoSuchUpload(uploadID string, err error) error {
+	return &errNoSuchUpload{uploadID: uploadID, err: err}
 }
 
 func (e *errNoSuchUpload) Error() string {
-	return fmt.Sprintf("upload %q not found", e.uploadID)
+	if e.err == nil {
+		return fmt.Sprintf("upload %q not found", e.uploadID)
+	}
+	return fmt.Sprintf("upload %q not found [err: %v]", e.uploadID, e.err)
 }
 
 func isErrNoSuchUpload(err error) bool {

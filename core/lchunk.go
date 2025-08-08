@@ -49,7 +49,7 @@ type (
 		Num       uint16
 		CksumTyp  string
 		Chunks    []Uchunk
-		Metadata  map[string]string // S3 object-level metadata
+		Metadata  map[string]string // remote object metadata
 
 		// runtime state
 		Lom    *LOM
@@ -83,7 +83,6 @@ func NewUfest(id string, lom *LOM) *Ufest {
 		StartTime: startTime,
 		Chunks:    make([]Uchunk, 0, defaultChunkCap),
 		CksumTyp:  cos.ChecksumOneXxh,
-		Metadata:  make(map[string]string),
 		Lom:       lom,
 		suffix:    chunkNameSepa + id + chunkNameSepa,
 	}

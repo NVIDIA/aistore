@@ -55,9 +55,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/ais/s3"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -92,33 +90,18 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		lom      = &core.LOM{ObjName: objName}
 		metadata map[string]string
 		uploadID string
-		ecode    int
 	)
 	err := lom.InitBck(bck.Bucket())
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	switch {
-	case bck.IsRemoteS3():
-		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
-		uploadID, ecode, err = backend.StartMptAWS(lom, r, q)
-		if err != nil {
-			s3.WriteErr(w, r, err, ecode)
-			return
-		}
-	case bck.IsRemoteOCI():
-		metadata = cmn.BackendHelpers.OCI.DecodeMetadata(r.Header)
-		uploadID, ecode, err = backend.StartMptOCI(t.Backend(lom.Bck()), lom, r, q)
-		if err != nil {
-			s3.WriteErr(w, r, err, ecode)
-			return
-		}
-	default:
-		uploadID = cos.GenUUID()
-	}
 
-	s3.InitUpload(uploadID, lom, metadata)
+	uploadID, metadata, err = t.ups.start(w, r, lom, q)
+	if err != nil {
+		return
+	}
+	t.ups.init(uploadID, lom, metadata)
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
 
 	sgl := t.gmm.NewSGL(0)
@@ -151,14 +134,14 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteErr(w, r, fmt.Errorf("upload %q: missing part number", uploadID), 0)
 		return
 	}
-	partNum, err := s3.ParsePartNum(part)
+	partNum, err := t.ups.parsePartNum(part)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if partNum < 1 || partNum > s3.MaxPartsPerUpload {
+	if partNum < 1 || partNum > maxPartsPerUpload {
 		err := fmt.Errorf("upload %q: invalid part number %d, must be between 1 and %d",
-			uploadID, partNum, s3.MaxPartsPerUpload)
+			uploadID, partNum, maxPartsPerUpload)
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -171,10 +154,10 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	// Check if manifest exists in s3 package cache
-	manifest := s3.GetUpload(uploadID)
+	// TODO: compare with listMptUploads (that does fromFS)
+	manifest := t.ups.get(uploadID)
 	if manifest == nil {
-		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID), http.StatusNotFound, lom, uploadID)
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
 		return
 	}
 
@@ -231,12 +214,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		expectedSize, err = io.Copy(mw, r.Body)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			if bck.IsRemoteS3() {
-				etag, ecode, err = backend.PutMptPartAWS(lom, sgl, r, q, uploadID, expectedSize, partNum)
-			} else {
-				debug.Assert(bck.IsRemoteOCI())
-				etag, ecode, err = backend.PutMptPartOCI(t.Backend(lom.Bck()), lom, sgl, r, q, uploadID, expectedSize, partNum)
-			}
+			etag, ecode, err = t.ups.putPartRemote(lom, sgl, r, q, uploadID, expectedSize, partNum)
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
@@ -245,12 +223,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		expectedSize = r.ContentLength
 		tr := io.NopCloser(io.TeeReader(r.Body, mw))
 		remoteStart := mono.NanoTime()
-		if bck.IsRemoteS3() {
-			etag, ecode, err = backend.PutMptPartAWS(lom, tr, r, q, uploadID, expectedSize, partNum)
-		} else {
-			debug.Assert(bck.IsRemoteOCI())
-			etag, ecode, err = backend.PutMptPartOCI(t.Backend(lom.Bck()), lom, tr, r, q, uploadID, expectedSize, partNum)
-		}
+		etag, ecode, err = t.ups.putPartRemote(lom, tr, r, q, uploadID, expectedSize, partNum)
 		remotePutLatency = mono.SinceNano(remoteStart)
 	}
 
@@ -346,7 +319,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 	if len(partList.Parts) == 0 {
-		s3.WriteErr(w, r, fmt.Errorf("upload %q: empty list of upload parts", uploadID), 0)
+		s3.WriteErr(w, r, fmt.Errorf("upload %q: empty list of upload parts", uploadID), http.StatusBadRequest)
 		return
 	}
 	objName := s3.ObjName(items)
@@ -356,38 +329,24 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	// Get manifest from s3 package cache
-	manifest := s3.GetUpload(uploadID)
+	// TODO: compare with listMptUploads (that does fromFS)
+	manifest := t.ups.get(uploadID)
 	if manifest == nil {
-		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID), http.StatusNotFound, lom, uploadID)
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
 		return
 	}
 
-	// call s3
+	// call remote
 	var (
-		version string
 		etag    string
 		started = time.Now()
 		remote  = bck.IsRemoteS3() || bck.IsRemoteOCI()
 	)
 	if remote {
-		if bck.IsRemoteS3() {
-			v, e, ecode, err := backend.CompleteMptAWS(lom, r, q, uploadID, body, partList)
-			if err != nil {
-				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-				return
-			}
-			version = v
-			etag = e
-		} else {
-			debug.Assert(bck.IsRemoteOCI())
-			v, e, ecode, err := backend.CompleteMptOCI(t.Backend(lom.Bck()), lom, r, q, uploadID, body, partList)
-			if err != nil {
-				s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-				return
-			}
-			version = v
-			etag = e
+		var err error
+		etag, err = t.ups.completeRemote(w, r, lom, q, uploadID, body, partList)
+		if err != nil {
+			return
 		}
 	}
 
@@ -495,19 +454,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	// .5 finalize
 	lom.SetSize(written)
 	if remote {
-		lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-		if version != "" {
-			lom.SetCustomKey(cmn.VersionObjMD, version)
-		}
-		if bck.IsRemoteS3() {
-			for k, v := range cmn.BackendHelpers.Amazon.EncodeMetadata(metadata) {
-				lom.SetCustomKey(k, v)
-			}
-		} else {
-			debug.Assert(bck.IsRemoteOCI())
-			for k, v := range cmn.BackendHelpers.OCI.EncodeMetadata(metadata) {
-				lom.SetCustomKey(k, v)
-			}
+		md := t.ups.encodeRemoteMetadata(lom, metadata)
+		for k, v := range md {
+			lom.SetCustomKey(k, v)
 		}
 	}
 	lom.SetCustomKey(cmn.ETag, etag)
@@ -528,7 +477,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
 		return
 	}
-	s3.DelCompletedUpload(uploadID)
+	t.ups.del(uploadID)
 
 	if errF != nil {
 		// NOTE: not failing if remote op. succeeded
@@ -604,22 +553,12 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	}
 
 	uploadID := q.Get(s3.QparamMptUploadID)
-
-	if bck.IsRemoteS3() {
-		ecode, err := backend.AbortMptAWS(lom, r, q, uploadID)
-		if err != nil {
-			s3.WriteErr(w, r, err, ecode)
-			return
-		}
-	} else if bck.IsRemoteOCI() {
-		ecode, err := backend.AbortMptOCI(t.Backend(lom.Bck()), lom, r, q, uploadID)
-		if err != nil {
-			s3.WriteErr(w, r, err, ecode)
+	if bck.IsRemote() {
+		if err := t.ups.abortRemote(w, r, lom, q, uploadID); err != nil {
 			return
 		}
 	}
-
-	if ecode, err := s3.AbortUpload(uploadID, lom); err != nil {
+	if ecode, err := t.ups.abort(uploadID, lom); err != nil {
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
@@ -642,7 +581,16 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 		return
 	}
 
-	parts, ecode, err := s3.ListParts(uploadID, lom)
+	manifest := t.ups.get(uploadID)
+	if manifest == nil {
+		var err error
+		if manifest, err = t.ups.fromFS(uploadID, lom, true /*add*/); err != nil {
+			s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, err), http.StatusNotFound, lom, uploadID)
+			return
+		}
+	}
+
+	parts, ecode, err := s3.ListParts(manifest)
 	if err != nil {
 		s3.WriteErr(w, r, err, ecode)
 		return
@@ -670,7 +618,8 @@ func (t *target) listMptUploads(w http.ResponseWriter, bck *meta.Bck, q url.Valu
 		}
 	}
 	idMarker = q.Get(s3.QparamMptUploadIDMarker)
-	result := s3.ListUploads(bck.Name, idMarker, maxUploads)
+	all := t.ups.toSlice()
+	result := s3.ListUploads(all, bck.Name, idMarker, maxUploads)
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)
@@ -689,7 +638,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	partNum, err := s3.ParsePartNum(q.Get(s3.QparamMptPartNo))
+	partNum, err := t.ups.parsePartNum(q.Get(s3.QparamMptPartNo))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

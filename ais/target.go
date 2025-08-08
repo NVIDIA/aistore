@@ -73,6 +73,7 @@ type (
 		res      *res.Res
 		txns     txns
 		regstate regstate
+		ups      uploads
 	}
 )
 
@@ -396,6 +397,8 @@ func (t *target) Run() error {
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{})
+
+	t.ups.t = t
 
 	// Init meta-owners and load local instances
 	if prev := t.owner.bmd.init(); prev {

@@ -45,10 +45,6 @@ const (
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"
 
-	// Maximum number of parts per upload
-	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
-	MaxPartsPerUpload = 10000
-
 	DefaultPartSize = 128 * cos.MiB
 
 	s3Namespace = "http://s3.amazonaws.com/doc/2006-03-01"
