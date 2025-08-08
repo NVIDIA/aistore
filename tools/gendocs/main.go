@@ -383,8 +383,8 @@ func extractFunctionName(line string) string {
 	return strings.TrimSpace(withoutFunc[:openParenIndex])
 }
 
-// Creates a unique operation ID by combining function name with path segments
-func generateUniqueOperationID(functionName, path string) string {
+// Creates a unique operation ID by combining function name with path segments and method
+func generateUniqueOperationID(functionName, method, path string) string {
 	cleanPath := strings.Trim(path, "/")
 	segments := strings.Split(cleanPath, "/")
 
@@ -405,11 +405,13 @@ func generateUniqueOperationID(functionName, path string) string {
 		}
 	}
 
+	methodPrefix := strings.ToLower(method)
+
 	// Use only the last filtered segment for concise but descriptive names
 	if len(filteredSegments) > 0 {
-		return functionName + filteredSegments[len(filteredSegments)-1]
+		return functionName + methodPrefix + filteredSegments[len(filteredSegments)-1]
 	}
-	return functionName
+	return functionName + methodPrefix
 }
 
 // Checks if there are multiple +gen:endpoint annotations for the same function to produce unique names
@@ -603,7 +605,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 			functionName := extractFunctionName(next)
 			// Only generate unique operation IDs when there are multiple endpoints for the same function
 			if hasMultipleEndpoints(lines, i) {
-				operationID = generateUniqueOperationID(functionName, path)
+				operationID = generateUniqueOperationID(functionName, method, path)
 			} else {
 				operationID = functionName
 			}

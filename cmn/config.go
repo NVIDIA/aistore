@@ -597,7 +597,7 @@ type (
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
-		CallTimeout         cos.Duration `json:"call_timeout"`
+		CallTimeout         cos.Duration `json:"call_timeout" swaggertype:"primitive,integer"`
 	}
 	DsortConfToSet struct {
 		XactConfToSet
@@ -606,7 +606,7 @@ type (
 		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
 		EKMMissingKey       *string       `json:"ekm_missing_key,omitempty"`
 		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
-		CallTimeout         *cos.Duration `json:"call_timeout,omitempty"`
+		CallTimeout         *cos.Duration `json:"call_timeout,omitempty" swaggertype:"primitive,integer"`
 		DsorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 	}
 

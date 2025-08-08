@@ -52,10 +52,12 @@ There are two ways to annotate endpoints based on their payload structure:
 #### Action-Based Endpoints: `action=[...]`
 Use when an endpoint supports **multiple operations** that share the same URL but perform different actions. Each action expects a JSON payload with an `action` field wrapper.
 
-```go
-// +gen:endpoint POST /v1/buckets/bucket-name action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
-// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {...}}
-// +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {...}}
+```json
+{
+  "action": "selected action",
+  "value": "the model",
+  "name": "specify if needed for the selected action"
+}
 ```
 
 **Characteristics:**
@@ -67,19 +69,6 @@ Use when an endpoint supports **multiple operations** that share the same URL bu
 
 #### Model-Based Endpoints: `model=[...]`
 Use when an endpoint accepts a **single, direct model** as the JSON payload without action wrapper.
-
-```go
-// +gen:endpoint GET /v1/ml/moss/{bucket} model=[apc.MossReq]
-// +gen:payload apc.MossReq={"in":[{"objname":"file.tar"}],"mime":"tar"}
-```
-
-```json
-{
-  "action": "selected action",
-  "value": "the model",
-  "name": "specify if needed for the selected action"
-}
-```
 
 ### 5. Payload Annotations (Required)
 You **must** provide a `+gen:payload` annotation for every action or model specified in your endpoint. This defines the JSON payload structure that will appear in the generated curl examples.
@@ -177,7 +166,8 @@ The system automatically generates API tags (groupings) based on the endpoint pa
 
 Operation IDs are automatically generated from function names:
 - Simple case: `ListBuckets` → `ListBuckets`
-- Multiple endpoints per function: `CreateBucket` + `/buckets/{name}` → `CreateBucketbuckets`
+- Multiple endpoints per function: `dsortHandler` + `POST` + `/sort` → `dsortHandlerpostsort`
+- Different methods on same path: `dsortHandler` + `GET` + `/sort` → `dsortHandlergetsort`
 
 
 ### Example 1: GET Endpoint with Query Parameters

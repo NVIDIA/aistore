@@ -2542,7 +2542,12 @@ func (p *proxy) _configURLs(_ *configModifier, clone *globalConfig) (updated boo
 	return updated, nil
 }
 
-// [METHOD] /v1/sort
+// +gen:endpoint POST /v1/sort model=[dsort.RequestSpec]
+// +gen:endpoint GET /v1/sort
+// +gen:endpoint DELETE /v1/sort/abort
+// +gen:endpoint DELETE /v1/sort
+// +gen:payload dsort.RequestSpec={"input_bck":{"name":"<input-bucket-name>","provider":"<provider>"},"input_format":{"template":"<input-template>"},"output_format":"<output-template>","output_shard_size":"<shard-size>","input_extension":"<input-ext>","output_extension":"<output-ext>","description":"<description>","algorithm":{"kind":"<algorithm-kind>"}}
+// Start, monitor, abort, or remove distributed sort (dsort) jobs
 func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
