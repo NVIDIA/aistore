@@ -35,6 +35,11 @@ const AwsMultipartDelim = "-"
 // - https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html#UserMetadata
 const AwsHeaderMetaPrefix = "X-Amz-Meta-"
 
+// OCI Object Storage user metadata
+// from: https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingobjects.htm
+// User metadata uses the "opc-meta-" prefix (canonicalized to "Opc-Meta-").
+const OCIHeaderMetaPrefix = "Opc-Meta-"
+
 func isS3MultipartEtag(etag string) bool {
 	return strings.Contains(etag, AwsMultipartDelim)
 }
@@ -210,14 +215,24 @@ var BackendHelpers = struct {
 				return "", false
 			}
 		},
-
+		EncodeMetadata: func(metadata map[string]string) (header map[string]string) {
+			if len(metadata) == 0 {
+				return
+			}
+			header = make(map[string]string, len(metadata))
+			for k, v := range metadata {
+				key := http.CanonicalHeaderKey(OCIHeaderMetaPrefix + k)
+				header[key] = v
+			}
+			return
+		},
 		DecodeMetadata: func(header http.Header) (metadata map[string]string) {
 			for headerKey := range header {
-				if strings.HasPrefix(headerKey, AwsHeaderMetaPrefix) {
+				if strings.HasPrefix(headerKey, OCIHeaderMetaPrefix) {
 					if metadata == nil {
 						metadata = make(map[string]string)
 					}
-					key := strings.TrimPrefix(headerKey, AwsHeaderMetaPrefix)
+					key := strings.TrimPrefix(headerKey, OCIHeaderMetaPrefix)
 					value := header.Get(headerKey)
 					metadata[key] = value
 				}
