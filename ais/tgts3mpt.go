@@ -67,6 +67,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -207,22 +208,41 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		cksumMD5 = cos.NewCksumHash(cos.ChecksumMD5)
 	}
 
+	if r.ContentLength <= 0 {
+		err := fmt.Errorf("put-part invalid size (%d)", r.ContentLength)
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
+		return
+	}
+
 	// 3. write
+	// for remote buckets, use SGL buffering when memory is available;
+	// fall back to TeeReader to avoid high memory usage under pressure
 	mw := cos.IniWriterMulti(cksumMD5.H, cksumSHA.H, partFh)
 
-	if !remote {
-		// write locally
-		buf, slab := t.gmm.Alloc()
+	switch {
+	case !remote:
+		buf, slab := t.gmm.AllocSize(r.ContentLength)
 		expectedSize, err = io.CopyBuffer(mw, r.Body, buf)
 		slab.Free(buf)
-	} else {
-		// write locally and utilize TeeReader to simultaneously send data to S3
-		expectedSize = r.ContentLength
-		if expectedSize <= 0 {
-			err := fmt.Errorf("put-part invalid size (%d)", expectedSize)
-			s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-			return
+	case t.gmm.Pressure() < memsys.PressureHigh:
+		// write 1) locally + sgl + checksums; 2) write sgl => backend
+		sgl := t.gmm.NewSGL(r.ContentLength)
+		mw.Append(sgl)
+		expectedSize, err = io.Copy(mw, r.Body)
+		if err == nil {
+			remoteStart := mono.NanoTime()
+			if bck.IsRemoteS3() {
+				etag, ecode, err = backend.PutMptPartAWS(lom, sgl, r, q, uploadID, expectedSize, partNum)
+			} else {
+				debug.Assert(bck.IsRemoteOCI())
+				etag, ecode, err = backend.PutMptPartOCI(t.Backend(lom.Bck()), lom, sgl, r, q, uploadID, expectedSize, partNum)
+			}
+			remotePutLatency = mono.SinceNano(remoteStart)
 		}
+		sgl.Free()
+	default:
+		// utilize TeeReader to simultaneously write => backend
+		expectedSize = r.ContentLength
 		tr := io.NopCloser(io.TeeReader(r.Body, mw))
 		remoteStart := mono.NanoTime()
 		if bck.IsRemoteS3() {

@@ -368,7 +368,7 @@ func NewWriterMulti(ws ...io.Writer) *WriterMulti { return &WriterMulti{ws, 0} }
 
 func IniWriterMulti(ws ...io.Writer) *WriterMulti {
 	mw := &WriterMulti{
-		writers: make([]io.Writer, 0, 3),
+		writers: make([]io.Writer, 0, 4),
 	}
 	for _, w := range ws {
 		if w != nil {
@@ -377,6 +377,8 @@ func IniWriterMulti(ws ...io.Writer) *WriterMulti {
 	}
 	return mw
 }
+
+func (mw *WriterMulti) Append(w io.Writer) { mw.writers = append(mw.writers, w) }
 
 func (mw *WriterMulti) Write(b []byte) (int, error) {
 	l := len(b)
