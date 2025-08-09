@@ -43,7 +43,7 @@ This technical blog will dive into [Dask `DataFrames`](https://examples.dask.org
 
 The [Dask DataFrame](https://docs.dask.org/en/stable/dataframe.html#dask-dataframe) is a data structure based on the `pandas.dataframe` (data structure) representing two-dimensional, size-mutable tabular data. Dask DataFrames consist of many Pandas DataFrames arranged along the *index*. In fact, the Dask DataFrame API [copies](https://docs.dask.org/en/stable/dataframe.html#dask-dataframe-copies-the-pandas-dataframe-api) the Pandas DataFrame API, and should be very familiar to previous Pandas users.
 
-The `dask.dataframe` library, and most other Dask libraries, supports data access via [HTTP(s)](https://docs.dask.org/en/stable/how-to/connect-to-remote-data.html#http-s). AIStore, on the other hand, provides both native and Amazon S3 compatible [REST API](https://aiatscale.org/docs/http-api), which means that data stored on AIStore can be accessed and used directly from/by Dask clients.
+The `dask.dataframe` library, and most other Dask libraries, supports data access via [HTTP(s)](https://docs.dask.org/en/stable/how-to/connect-to-remote-data.html#http-s). AIStore, on the other hand, provides both native and Amazon S3 compatible [REST API](https://aiatscale.org/docs/http_api), which means that data stored on AIStore can be accessed and used directly from/by Dask clients.
 
 We can instantiate a Dask DataFrame, loading a sample CSV residing in an AIStore bucket as follows: 
 

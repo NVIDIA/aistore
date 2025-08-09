@@ -775,7 +775,7 @@ To correlate issues with metrics:
 ## Further Reading
 
 - [AIStore K8s Repository](https://github.com/NVIDIA/ais-k8s)
-- [Prometheus Operator Documentation](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md)
+- [Prometheus Operator Documentation](https://prometheus-operator.dev/docs/developer/getting-started/)
 - [Kubernetes Monitoring Best Practices](https://kubernetes.io/docs/tasks/debug-application-cluster/resource-usage-monitoring/)
 - [Grafana Loki Documentation](https://grafana.com/docs/loki/latest/)
 - [Fluent Bit Kubernetes Documentation](https://docs.fluentbit.io/manual/installation/kubernetes)
