@@ -502,7 +502,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	if err := writeObject(lom, args.Reader, lom.Lsize(true), args.Xact); err != nil {
 		return err
 	}
-	if !args.Cksum.IsEmpty() && !lom.EqCksum(args.Cksum) {
+	if !cos.NoneC(args.Cksum) && !lom.EqCksum(args.Cksum) {
 		return cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
 	}
 

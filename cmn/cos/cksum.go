@@ -44,7 +44,7 @@ const (
 )
 
 type (
-	noopHash struct{}
+	noneHash struct{}
 
 	// in-cluster checksum validation (compare with cmn.ErrInvalidCksum)
 	ErrBadCksum struct {
@@ -77,16 +77,21 @@ var checksums = StrSet{
 	ChecksumSHA512: {},
 }
 
-// interface guard
-var (
-	_ hash.Hash                  = (*noopHash)(nil)
-	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
-	_ encoding.BinaryUnmarshaler = (*noopHash)(nil)
-
-	_ io.Writer = (*CksumHashSize)(nil)
-)
-
 var NoneCksum = NewCksum(ChecksumNone, "")
+
+func NoneC(ck *Cksum) bool {
+	if ck == nil {
+		return true
+	}
+	return ck.ty == "" || ck.ty == ChecksumNone || ck.value == ""
+}
+
+func NoneH(ck *CksumHash) bool {
+	if ck == nil {
+		return true
+	}
+	return NoneC(&ck.Cksum)
+}
 
 ///////////////
 // CksumHash //
@@ -121,7 +126,7 @@ func (ck *CksumHash) Init(ty string) {
 	ck.ty = ty
 	switch ty {
 	case ChecksumNone, "":
-		ck.ty, ck.H = ChecksumNone, newNoopHash()
+		ck.ty, ck.H = ChecksumNone, &noneHash{}
 	case ChecksumOneXxh:
 		ck.H = onexxh.New64()
 	case ChecksumCesXxh:
@@ -153,6 +158,11 @@ func (ck *CksumHash) Finalize() {
 // CksumHashSize //
 ///////////////////
 
+// interface guard
+var (
+	_ io.Writer = (*CksumHashSize)(nil)
+)
+
 func (ck *CksumHashSize) Write(b []byte) (n int, err error) {
 	n, err = ck.H.Write(b)
 	ck.Size += int64(n)
@@ -162,10 +172,6 @@ func (ck *CksumHashSize) Write(b []byte) (n int, err error) {
 ///////////
 // Cksum //
 ///////////
-
-func (ck *Cksum) IsEmpty() bool {
-	return ck == nil || ck.ty == "" || ck.ty == ChecksumNone || ck.value == ""
-}
 
 func NewCksum(ty, value string) *Cksum {
 	if err := ValidateCksumType(ty, true /*empty OK*/); err != nil {
@@ -179,8 +185,8 @@ func NewCksum(ty, value string) *Cksum {
 
 // NOTE [caution]: empty checksums are also equal (compare with lom.EqCksum and friends)
 func (ck *Cksum) Equal(to *Cksum) bool {
-	if ck.IsEmpty() || to.IsEmpty() {
-		return ck.IsEmpty() == to.IsEmpty()
+	if a, b := NoneC(ck), NoneC(to); a || b {
+		return a && b
 	}
 	return ck.ty == to.ty && ck.value == to.value
 }
@@ -258,17 +264,23 @@ func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
 }
 
 //
-// noopHash
+// noneHash
 //
 
-func newNoopHash() hash.Hash                     { return &noopHash{} }
-func (*noopHash) Write(b []byte) (int, error)    { return len(b), nil }
-func (*noopHash) Sum([]byte) []byte              { return nil }
-func (*noopHash) Reset()                         {}
-func (*noopHash) Size() int                      { return 0 }
-func (*noopHash) BlockSize() int                 { return KiB }
-func (*noopHash) MarshalBinary() ([]byte, error) { return nil, nil }
-func (*noopHash) UnmarshalBinary([]byte) error   { return nil }
+// interface guard
+var (
+	_ hash.Hash                = (*noneHash)(nil)
+	_ encoding.BinaryMarshaler = (*noneHash)(nil) // usage: append object (to serialize append handle)
+)
+
+func (*noneHash) Write(b []byte) (int, error) { return len(b), nil }
+func (*noneHash) Sum([]byte) []byte           { return nil }
+func (*noneHash) Reset()                      {}
+func (*noneHash) Size() int                   { return 0 }
+func (*noneHash) BlockSize() int              { return KiB }
+
+func (*noneHash) MarshalBinary() ([]byte, error) { return nil, nil }
+func (*noneHash) UnmarshalBinary([]byte) error   { return nil }
 
 //
 // errors

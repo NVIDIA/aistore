@@ -171,7 +171,7 @@ func (lom *LOM) SetSize(size int64) { lom.md.Size = size }
 func (lom *LOM) Checksum() *cos.Cksum      { return lom.md.Cksum }
 func (lom *LOM) SetCksum(cksum *cos.Cksum) { lom.md.Cksum = cksum }
 func (lom *LOM) EqCksum(cksum *cos.Cksum) bool {
-	return !lom.md.Cksum.IsEmpty() && lom.md.Cksum.Equal(cksum)
+	return !cos.NoneC(lom.md.Cksum) && lom.md.Cksum.Equal(cksum)
 }
 
 func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
@@ -331,13 +331,13 @@ recomp:
 	if cksumType == cos.ChecksumNone { // as far as do-no-checksum-checking bucket rules
 		return nil
 	}
-	if !lom.md.Cksum.IsEmpty() {
+	if !cos.NoneC(lom.md.Cksum) {
 		cksumType = lom.md.Cksum.Ty() // takes precedence on the other hand
 	}
 	if cksums.comp, err = lom.ComputeCksum(cksumType, locked); err != nil {
 		return err
 	}
-	if lom.md.Cksum.IsEmpty() { // store computed
+	if cos.NoneC(lom.md.Cksum) { // store computed
 		lom.md.Cksum = cksums.comp.Clone()
 		if !lom.loaded() {
 			lom.SetAtimeUnix(time.Now().UnixNano())

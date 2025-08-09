@@ -37,7 +37,9 @@ const (
 	iniChunksCap = 16
 
 	maxChunkSize = 5 * cos.GiB
-	maxMetaKeys  = 1000
+
+	maxMetaKeys     = 1000
+	maxMetaEntryLen = 4 * cos.KiB
 )
 
 const (
@@ -107,6 +109,11 @@ func (u *Ufest) Completed() bool { return u.Flags&completed == completed }
 func (u *Ufest) SetMeta(md map[string]string) error {
 	if l := len(md); l > maxMetaKeys {
 		return fmt.Errorf("%s: number of metadata entries %d exceeds %d limit", utag, l, maxMetaKeys)
+	}
+	for k, v := range md {
+		if len(k) > maxMetaEntryLen || len(v) > maxMetaEntryLen {
+			return fmt.Errorf("%s: metadata entry too large (%d, %d, %d)", utag, len(k), len(v), maxMetaEntryLen)
+		}
 	}
 	u.mdmap = md
 	return nil
@@ -419,7 +426,7 @@ func _packStr(w io.Writer, s string) {
 }
 
 func _packCksum(w io.Writer, cksum *cos.Cksum) {
-	if cksum == nil || cksum.IsEmpty() {
+	if cos.NoneC(cksum) {
 		_packStr(w, "")
 		return
 	}

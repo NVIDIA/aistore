@@ -489,7 +489,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		// not using `ReadFrom` of the `*os.File` -
 		// ultimately, https://github.com/golang/go/blob/master/src/internal/poll/copy_file_range_linux.go#L100
 		written, err = cos.CopyBuffer(lmfh, poi.r, buf)
-	case !poi.cksumToUse.IsEmpty() && !poi.validateCksum(ckconf):
+	case !cos.NoneC(poi.cksumToUse) && !poi.validateCksum(ckconf):
 		// if the corresponding validation is not configured/enabled we just go ahead
 		// and use the checksum that has arrived with the object
 		poi.lom.SetCksum(poi.cksumToUse)
@@ -499,7 +499,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		writers := make([]io.Writer, 0, 3)
 		cksums.store = cos.NewCksumHash(ckconf.Type) // always according to the bucket
 		writers = append(writers, cksums.store.H)
-		if !poi.skipVC && !poi.cksumToUse.IsEmpty() && poi.validateCksum(ckconf) {
+		if !poi.skipVC && !cos.NoneC(poi.cksumToUse) && poi.validateCksum(ckconf) {
 			cksums.expct = poi.cksumToUse
 			if poi.cksumToUse.Type() == cksums.store.Type() {
 				cksums.compt = cksums.store
@@ -1450,7 +1450,7 @@ func (a *apndOI) flush() (int, error) {
 	debug.Assert(a.hdl.partialCksum != nil)
 	a.hdl.partialCksum.Finalize()
 	partialCksum := a.hdl.partialCksum.Clone()
-	if !a.cksum.IsEmpty() && !partialCksum.Equal(a.cksum) {
+	if !cos.NoneC(a.cksum) && !partialCksum.Equal(a.cksum) {
 		return http.StatusInternalServerError, cos.NewErrDataCksum(partialCksum, a.cksum)
 	}
 

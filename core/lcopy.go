@@ -278,7 +278,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		srcCksum  = lom.Checksum()
 		cksumType = cos.ChecksumNone
 	)
-	if !srcCksum.IsEmpty() {
+	if !cos.NoneC(srcCksum) {
 		cksumType = srcCksum.Ty()
 	}
 	if dst.isMirror(lom) && lom.md.copies != nil {

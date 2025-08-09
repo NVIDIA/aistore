@@ -111,7 +111,7 @@ func (oa *ObjAttrs) Checksum() *cos.Cksum    { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string) { oa.Cksum = cos.NewCksum(ty, val) }
 
 func (oa *ObjAttrs) EqCksum(cksum *cos.Cksum) bool {
-	return !oa.Cksum.IsEmpty() && oa.Cksum.Equal(cksum)
+	return !cos.NoneC(oa.Cksum) && oa.Cksum.Equal(cksum)
 }
 
 func (oa *ObjAttrs) Version(_ ...bool) string {
@@ -189,7 +189,7 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 	} else {
 		cksum = oah.Checksum()
 	}
-	if !cksum.IsEmpty() {
+	if !cos.NoneC(cksum) {
 		hdr.Set(apc.HdrObjCksumType, cksum.Ty())
 		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
 	}
@@ -270,12 +270,12 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 		sameEtag  bool
 		sameCksum bool
 	)
-	// size check
+	// 1. size
 	if remSize := rem.Lsize(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
 		return fmt.Errorf("size %d != %d remote", oa.Size, remSize)
 	}
 
-	// Cloud version check (NOTE: ais own version is currently a non-unique sequence number)
+	// 2. version (note that ais own version is a simple sequence number)
 	if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
@@ -286,32 +286,28 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 		}
 	}
 
-	// checksum check
-	if a, b := rem.Checksum(), oa.Cksum; a != nil && b != nil {
-		cksumType := a.Ty()
-		if !a.IsEmpty() && !b.IsEmpty() && cksumType == b.Ty() {
+	// 3. checksum
+	if a := rem.Checksum(); !cos.NoneC(a) {
+		b := oa.Cksum
+		if !cos.NoneC(b) {
+			ty := a.Ty()
 			if !a.Equal(b) {
-				return fmt.Errorf("%s checksum %s != %s remote", cksumType, b, a)
+				return fmt.Errorf("%s checksum %s != %s remote", ty, b, a)
 			}
 			cksumVal = a.Val()
-
-			// [NOTE]
-			// unless overridden via feature flag
-			// trust two checksums, namely md5 and xxhash, that are _not_ cryptographically secure
-
 			switch {
 			case Rom.Features().IsSet(feat.TrustCryptoSafeChecksums):
-				sameCksum = (cksumType == cos.ChecksumSHA256 || cksumType == cos.ChecksumSHA512)
+				sameCksum = (ty == cos.ChecksumSHA256 || ty == cos.ChecksumSHA512)
 			default:
-				debug.Assert(cksumType != cos.ChecksumNone)
-				sameCksum = cksumType != cos.ChecksumCRC32C
+				// NOTE trust non-cryptographic checksums except crc (unless overridden by feature flag)
+				debug.Assert(ty != cos.ChecksumNone)
+				sameCksum = ty != cos.ChecksumCRC32C
 			}
-
 			count++
 		}
 	}
 
-	// custom MD: ETag check (ignoring enclosing quotes)
+	// 4. custom MD: ETag check (ignoring enclosing quotes)
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
 			if !_eqIgnoreQuotes(remMeta, locMeta) {
@@ -324,7 +320,7 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 			}
 		}
 	}
-	// custom MD: CRC check
+	// 4.1. custom MD: CRC
 	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
@@ -336,7 +332,7 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 		}
 	}
 
-	// custom MD: MD5 check iff count < 2
+	// 4.2. custom MD: MD5 iff count < 2
 	// (ETag ambiguity, see: https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.htm)
 	if !sameEtag {
 		if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok && remMeta != "" {

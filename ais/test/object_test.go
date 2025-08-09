@@ -292,7 +292,7 @@ func TestAppendObject(t *testing.T) {
 			writer := bytes.NewBuffer(nil)
 			getArgs := api.GetArgs{Writer: writer}
 			oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &getArgs)
-			if !cksum.IsEmpty() {
+			if !cos.NoneH(cksum) {
 				tassert.CheckFatal(t, err)
 			}
 			tassert.Errorf(

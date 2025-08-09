@@ -284,7 +284,7 @@ func loadEtlMD(mpaths fs.MPI, path string) (mainEtlMD *etlMD) {
 			mainEtlMD = etlMD
 			continue
 		}
-		if mainEtlMD.cksum.IsEmpty() {
+		if cos.NoneC(mainEtlMD.cksum) {
 			cos.ExitLogf("EtlMD is not checksummed (%q): %v", mpath, mainEtlMD)
 		}
 		if mainEtlMD.cksum.Equal(etlMD.cksum) {
