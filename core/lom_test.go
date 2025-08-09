@@ -1083,13 +1083,12 @@ var _ = Describe("LOM", func() {
 			// helper to build a manifest with paths + fake checksums
 			newManifest = func() *core.Ufest {
 				return &core.Ufest{
-					Size:     totalSize,
-					Num:      3,
-					CksumTyp: cos.ChecksumOneXxh,
+					Size: totalSize,
+					Num:  3,
 					Chunks: []core.Uchunk{
-						{Siz: sz1, Num: 3, Path: "ch/" + objName + ".00001", CksumVal: trand.String(16)},
-						{Siz: sz2, Num: 2, Path: "ch/" + objName + ".00002", CksumVal: trand.String(16)},
-						{Siz: sz3, Num: 1, Path: "ch/" + objName + ".00003", CksumVal: trand.String(16)},
+						{Siz: sz1, Num: 3, Path: "ch/" + objName + ".00001", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
+						{Siz: sz2, Num: 2, Path: "ch/" + objName + ".00002", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
+						{Siz: sz3, Num: 1, Path: "ch/" + objName + ".00003", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
 					},
 				}
 			}
@@ -1126,7 +1125,7 @@ var _ = Describe("LOM", func() {
 			for i := range 3 {
 				Expect(out.Chunks[i].Siz).To(Equal(manifest.Chunks[i].Siz))
 				Expect(out.Chunks[i].Path).To(Equal(manifest.Chunks[i].Path))
-				Expect(out.Chunks[i].CksumVal).To(Equal(manifest.Chunks[i].CksumVal))
+				Expect(out.Chunks[i].Cksum.Equal(manifest.Chunks[i].Cksum)).To(BeTrue())
 			}
 		})
 	})

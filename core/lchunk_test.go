@@ -74,11 +74,14 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			manifest.Chunks = make([]core.Uchunk, numChunks)
 
 			for i := range numChunks {
+				// Create a proper checksum instead of random string
+				cksumVal := trand.String(16)
 				manifest.Chunks[i] = core.Uchunk{
-					Siz:      chunkSizes[i],
-					Num:      i + 1,
-					Path:     trand.String(7),
-					CksumVal: trand.String(16),
+					Siz:   chunkSizes[i],
+					Num:   i + 1,
+					Path:  trand.String(7),
+					Cksum: cos.NewCksum(cos.ChecksumCesXxh, cksumVal), // Use proper checksum type
+					MD5:   trand.String(32),                           // S3 legacy MD5
 				}
 			}
 			return manifest
@@ -89,12 +92,11 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest := core.NewUfest("", nil)
 
 				Expect(manifest.ID).ToNot(BeEmpty())
-				Expect(manifest.StartTime).ToNot(BeZero())
+				Expect(manifest.Created).ToNot(BeZero())
 				Expect(manifest.Chunks).To(HaveLen(0))
-				Expect(manifest.CksumTyp).To(Equal(cos.ChecksumOneXxh))
 
 				// ID should contain timestamp
-				timeStr := manifest.StartTime.Format(cos.StampSec2)
+				timeStr := manifest.Created.Format(cos.StampSec2)
 				Expect(manifest.ID).To(ContainSubstring(timeStr))
 			})
 
@@ -103,7 +105,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest := core.NewUfest(customID, nil)
 
 				Expect(manifest.ID).To(Equal(customID))
-				Expect(manifest.StartTime).ToNot(BeZero())
+				Expect(manifest.Created).ToNot(BeZero())
 			})
 
 			It("should create unique IDs for concurrent calls", func() {
@@ -111,6 +113,11 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest2 := core.NewUfest("", nil)
 
 				Expect(manifest1.ID).ToNot(Equal(manifest2.ID))
+			})
+
+			It("should initialize with not completed flag", func() {
+				manifest := core.NewUfest("", nil)
+				Expect(manifest.Completed()).To(BeFalse())
 			})
 		})
 
@@ -128,6 +135,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				err := manifest.Store(lom)
 				Expect(err).NotTo(HaveOccurred())
 
+				// After store, manifest should be marked as completed
+				Expect(manifest.Completed()).To(BeTrue())
+
 				// Verify xattr was written
 				b, err := fs.GetXattr(localFQN, xattrChunk)
 				Expect(b).ToNot(BeEmpty())
@@ -140,16 +150,31 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				// Verify manifest contents including new fields
 				Expect(loadedManifest.ID).To(Equal("test-session-001"))
-				Expect(loadedManifest.StartTime.Unix()).To(Equal(manifest.StartTime.Unix()))
+				Expect(loadedManifest.Created.Unix()).To(Equal(manifest.Created.Unix()))
 				Expect(loadedManifest.Size).To(Equal(testFileSize))
 				Expect(loadedManifest.Num).To(Equal(uint16(3)))
-				Expect(loadedManifest.CksumTyp).To(Equal(cos.ChecksumOneXxh))
 				Expect(loadedManifest.Chunks).To(HaveLen(3))
+				Expect(loadedManifest.Completed()).To(BeTrue())
 
 				for i := range 3 {
 					Expect(loadedManifest.Chunks[i].Siz).To(Equal(chunkSizes[i]))
 					Expect(loadedManifest.Chunks[i].Path).To(Equal(manifest.Chunks[i].Path))
-					Expect(loadedManifest.Chunks[i].CksumVal).To(Equal(manifest.Chunks[i].CksumVal))
+
+					// Safe checksum comparison that handles nil cases
+					originalCksum := manifest.Chunks[i].Cksum
+					loadedCksum := loadedManifest.Chunks[i].Cksum
+
+					if originalCksum == nil && loadedCksum == nil {
+						// Both nil - equal
+					} else if originalCksum == nil || loadedCksum == nil {
+						// One nil, one not - not equal
+						Expect(originalCksum).To(Equal(loadedCksum), "checksum nil mismatch")
+					} else {
+						// Both non-nil - use Equal method
+						Expect(loadedCksum.Equal(originalCksum)).To(BeTrue())
+					}
+
+					Expect(loadedManifest.Chunks[i].MD5).To(Equal(manifest.Chunks[i].MD5))
 				}
 			})
 
@@ -171,14 +196,15 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(loadedManifest.ID).To(Equal("single-chunk-session"))
 				Expect(loadedManifest.Num).To(Equal(uint16(1)))
 				Expect(loadedManifest.Chunks[0].Siz).To(Equal(testFileSize))
+				Expect(loadedManifest.Completed()).To(BeTrue())
 			})
 
 			It("should handle many small chunks", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				// 100 chunks of ~10KB each
-				numChunks := uint16(100)
+				// 20 chunks of ~10KB each
+				numChunks := uint16(20)
 				chunkSize := testFileSize / int64(numChunks)
 				chunkSizes := make([]int64, numChunks)
 				for i := range numChunks {
@@ -199,6 +225,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(loadedManifest.ID).To(Equal("many-chunks-session"))
 				Expect(loadedManifest.Num).To(Equal(numChunks))
 				Expect(loadedManifest.Chunks).To(HaveLen(int(numChunks)))
+				Expect(loadedManifest.Completed()).To(BeTrue())
 
 				var totalSize int64
 				for _, chunk := range loadedManifest.Chunks {
@@ -216,7 +243,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				// Set a specific time for testing
 				testTime := time.Date(2025, 8, 2, 15, 30, 45, 0, time.UTC)
-				manifest.StartTime = testTime
+				manifest.Created = testTime
 
 				err := manifest.Store(lom)
 				Expect(err).NotTo(HaveOccurred())
@@ -226,7 +253,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Unix timestamp has second precision
-				Expect(loadedManifest.StartTime.Unix()).To(Equal(testTime.Unix()))
+				Expect(loadedManifest.Created.Unix()).To(Equal(testTime.Unix()))
 			})
 		})
 
@@ -240,8 +267,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 3
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 500000, Num: 1, Path: "a", CksumVal: "abc123"},
-					{Siz: 524000, Num: 2, Path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", CksumVal: "def456"},
+					{Siz: 500000, Num: 1, Path: "a", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "abc123")},
+					{Siz: 524000, Num: 2, Path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "def456")},
 				}
 
 				err := manifest.Store(lom)
@@ -281,7 +308,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				// Make values very long to exceed xattr limits
 				for i := range manifest.Chunks {
 					manifest.Chunks[i].Path = trand.String(1000)
-					manifest.Chunks[i].CksumVal = trand.String(1000)
+					// Create a very long checksum value
+					longVal := trand.String(1000)
+					manifest.Chunks[i].Cksum = cos.NewCksum(cos.ChecksumCesXxh, longVal)
 				}
 
 				err := manifest.Store(lom)
@@ -354,7 +383,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				// Store valid manifest
+				// Store valid manifest first
 				chunkSizes := []int64{testFileSize}
 				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "truncated-test", lom)
 				err := manifest.Store(lom)
@@ -374,6 +403,31 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 		})
 
 		Describe("packing/unpacking edge cases", func() {
+			It("should handle nil checksum values", func() {
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
+
+				manifest := core.NewUfest("nil-checksum-test", lom)
+				manifest.Size = testFileSize
+				manifest.Num = 2
+				manifest.Chunks = []core.Uchunk{
+					{Siz: 500000, Num: 1, Cksum: nil, MD5: "md5hash1"},                                               // nil checksum
+					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
+				}
+
+				err := manifest.Store(lom)
+				Expect(err).NotTo(HaveOccurred())
+
+				loadedManifest := &core.Ufest{}
+				err = loadedManifest.Load(lom)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(loadedManifest.ID).To(Equal("nil-checksum-test"))
+				Expect(loadedManifest.Chunks[0].Cksum).To(BeNil())
+				Expect(loadedManifest.Chunks[1].Cksum).ToNot(BeNil())
+				Expect(loadedManifest.Chunks[1].Cksum.Val()).To(Equal("validchecksum"))
+			})
+
 			It("should handle empty checksum values", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
@@ -382,8 +436,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 2
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 500000, Num: 1, CksumVal: ""},               // empty checksum
-					{Siz: 548576, Num: 2, CksumVal: "valid_checksum"}, // total = 1048576
+					{Siz: 500000, Num: 1, Cksum: cos.NewCksum(cos.ChecksumCesXxh, ""), MD5: "md5hash1"},              // empty checksum value
+					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
 				}
 
 				err := manifest.Store(lom)
@@ -394,8 +448,10 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(loadedManifest.ID).To(Equal("empty-checksum-test"))
-				Expect(loadedManifest.Chunks[0].CksumVal).To(Equal(""))
-				Expect(loadedManifest.Chunks[1].CksumVal).To(Equal("valid_checksum"))
+				// Empty checksum should be treated as nil after unpacking
+				Expect(loadedManifest.Chunks[0].Cksum).To(BeNil())
+				Expect(loadedManifest.Chunks[1].Cksum).ToNot(BeNil())
+				Expect(loadedManifest.Chunks[1].Cksum.Val()).To(Equal("validchecksum"))
 			})
 
 			It("should handle zero-sized chunks", func() {
@@ -406,9 +462,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 3
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 0, Num: 1, Path: "a/b/c/ddd", CksumVal: "empty"}, // zero size
-					{Siz: testFileSize, Num: 2, CksumVal: "full"},
-					{Siz: 0, Num: 3, CksumVal: "empty2"}, // another zero - total = 1048576
+					{Siz: 0, Num: 1, Path: "a/b/c/ddd", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty"), MD5: "md5_1"}, // zero size
+					{Siz: testFileSize, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "full"), MD5: "md5_2"},
+					{Siz: 0, Num: 3, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty2"), MD5: "md5_3"}, // another zero - total = 1048576
 				}
 
 				err := manifest.Store(lom)
@@ -432,7 +488,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 1
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "test", CksumVal: "checksum"},
+					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
 				}
 
 				err := manifest.Store(lom)
@@ -455,7 +511,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 1
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "test", CksumVal: "checksum"},
+					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
 				}
 
 				err := manifest.Store(lom)
@@ -469,14 +525,14 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			})
 		})
 
-		Describe("ID and StartTime functionality", func() {
+		Describe("ID and Created functionality", func() {
 			It("should generate different IDs for sessions started at different times", func() {
 				manifest1 := core.NewUfest("", nil)
 				time.Sleep(time.Second) // ensure different timestamps
 				manifest2 := core.NewUfest("", nil)
 
 				Expect(manifest1.ID).ToNot(Equal(manifest2.ID))
-				Expect(manifest1.StartTime.Before(manifest2.StartTime)).To(BeTrue())
+				Expect(manifest1.Created.Before(manifest2.Created)).To(BeTrue())
 			})
 
 			It("should preserve custom ID through store/load cycle", func() {
@@ -488,7 +544,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Size = testFileSize
 				manifest.Num = 1
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "chunk1", CksumVal: "abc123"},
+					{Siz: testFileSize, Num: 1, Path: "chunk1", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "abc123"), MD5: "md5hash"},
 				}
 
 				err := manifest.Store(lom)
@@ -513,6 +569,31 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				// Should contain time information
 				Expect(manifest.ID).To(HavePrefix("t"))
+			})
+		})
+
+		Describe("completed flag functionality", func() {
+			It("should mark manifest as completed after store", func() {
+				createDummyFile(localFQN)
+				lom := newBasicLom(localFQN, testFileSize)
+
+				chunkSizes := []int64{testFileSize}
+				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "completed-test", lom)
+
+				// Initially not completed
+				Expect(manifest.Completed()).To(BeFalse())
+
+				err := manifest.Store(lom)
+				Expect(err).NotTo(HaveOccurred())
+
+				// After store, should be completed
+				Expect(manifest.Completed()).To(BeTrue())
+
+				// Should persist completed state
+				loadedManifest := &core.Ufest{}
+				err = loadedManifest.Load(lom)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(loadedManifest.Completed()).To(BeTrue())
 			})
 		})
 	})

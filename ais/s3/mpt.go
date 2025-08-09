@@ -22,7 +22,7 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 			results = append(results, UploadInfoResult{
 				Key:       manifest.Lom.ObjName,
 				UploadID:  manifest.ID,
-				Initiated: manifest.StartTime,
+				Initiated: manifest.Created,
 			})
 		}
 	}

@@ -180,7 +180,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		ecode        int
 		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
-		cksumSHA     = &cos.CksumHash{}
+		cksumSHA     *cos.CksumHash
 		cksumMD5     = &cos.CksumHash{}
 		remote       = bck.IsRemoteS3() || bck.IsRemoteOCI()
 	)
@@ -238,7 +238,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 
 	size := mw.Size()
 	if size != expectedSize {
-		err := fmt.Errorf("put-part size mismatch (%d vs %d)", size, expectedSize)
+		err := fmt.Errorf("part %d size mismatch (%d vs %d)", partNum, size, expectedSize)
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
@@ -254,7 +254,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		cksumSHA.Finalize()
 		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
 		if !cksumSHA.Equal(recvSHA) {
-			detail := fmt.Sprintf("upload %q, %s, part %d", uploadID, lom, partNum)
+			detail := fmt.Sprintf("part %d", partNum)
 			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
 			s3.WriteMptErr(w, r, err, http.StatusInternalServerError, lom, uploadID)
 			return
@@ -262,11 +262,13 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	}
 
 	chunk := &core.Uchunk{
-		MD5:      md5,
-		Path:     chunkPath,
-		Siz:      size,
-		Num:      uint16(partNum),
-		CksumVal: md5,
+		MD5:  md5,
+		Path: chunkPath,
+		Siz:  size,
+		Num:  uint16(partNum),
+	}
+	if checkPartSHA {
+		chunk.Cksum = &cksumSHA.Cksum
 	}
 
 	// - see NOTE above in re "active uploads in memory"

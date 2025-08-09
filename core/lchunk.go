@@ -31,25 +31,29 @@ const (
 )
 
 const (
-	chunkNameSepa   = "."
-	defaultChunkCap = 16
+	chunkNameSepa = "."
+
+	iniChunksCap = 16
+
+	completed = 1 // Ufest.Flags
 )
 
 type (
 	Uchunk struct {
-		Siz      int64
-		Path     string // (may become v2 _location_)
-		CksumVal string
-		Num      uint16 // chunk/part number
-		MD5      string // S3-specific MD5 hash
+		Siz   int64      // size
+		Path  string     // (may become v2 _remote location_)
+		Cksum *cos.Cksum // nil means none; otherwise non-empty
+		Num   uint16     // chunk/part number
+		Flags uint16     // bit flags (future use)
+		MD5   string     // S3/legacy
 	}
 	Ufest struct {
-		ID        string    // upload/manifest ID
-		StartTime time.Time // creation time
-		Num       uint16
-		CksumTyp  string
-		Chunks    []Uchunk
-		Metadata  map[string]string // remote object metadata
+		ID       string    // upload/manifest ID
+		Created  time.Time // creation time
+		Num      uint16    // number of chunks (so far)
+		Flags    uint16    // bit flags { completed, ...}
+		Chunks   []Uchunk
+		Metadata map[string]string // remote object metadata
 
 		// runtime state
 		Lom    *LOM
@@ -79,14 +83,15 @@ func NewUfest(id string, lom *LOM) *Ufest {
 		id = cos.GenTAID(startTime)
 	}
 	return &Ufest{
-		ID:        id,
-		StartTime: startTime,
-		Chunks:    make([]Uchunk, 0, defaultChunkCap),
-		CksumTyp:  cos.ChecksumOneXxh,
-		Lom:       lom,
-		suffix:    chunkNameSepa + id + chunkNameSepa,
+		ID:      id,
+		Created: startTime,
+		Chunks:  make([]Uchunk, 0, iniChunksCap),
+		Lom:     lom,
+		suffix:  chunkNameSepa + id + chunkNameSepa,
 	}
 }
+
+func (u *Ufest) Completed() bool { return u.Flags&completed == completed }
 
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
@@ -266,6 +271,8 @@ func (u *Ufest) Store(lom *LOM) error {
 		return fmt.Errorf("%s: failed to store, err: %v", _utag(lom.Cname()), err)
 	}
 
+	u.Flags = completed
+
 	// pack
 	sgl := g.pmm.NewSGL(xattrChunkDflt)
 	defer sgl.Free()
@@ -311,29 +318,31 @@ func (u *Ufest) validNums() error {
 }
 
 func (u *Ufest) pack(w io.Writer) {
+	var (
+		b64 [cos.SizeofI64]byte
+		b16 [cos.SizeofI16]byte
+	)
+
 	// meta-version
 	w.Write([]byte{umetaver})
 
-	// upload ID
+	// ID
 	_packStr(w, u.ID)
 
-	// start time (Unix nano)
-	var timeBuf [cos.SizeofI64]byte
-	binary.BigEndian.PutUint64(timeBuf[:], uint64(u.StartTime.UnixNano()))
-	w.Write(timeBuf[:])
+	// creation time
+	binary.BigEndian.PutUint64(b64[:], uint64(u.Created.UnixNano()))
+	w.Write(b64[:])
 
 	// number of chunks
-	var buf [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(buf[:], u.Num)
-	w.Write(buf[:])
-
-	// checksum type
-	_packStr(w, u.CksumTyp)
+	binary.BigEndian.PutUint16(b16[:], u.Num)
+	w.Write(b16[:])
+	// flags
+	binary.BigEndian.PutUint16(b16[:], u.Flags)
+	w.Write(b16[:])
 
 	// metadata map
-	var metaBuf [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(metaBuf[:], uint16(len(u.Metadata)))
-	w.Write(metaBuf[:])
+	binary.BigEndian.PutUint16(b16[:], uint16(len(u.Metadata)))
+	w.Write(b16[:])
 	for k, v := range u.Metadata {
 		_packStr(w, k)
 		_packStr(w, v)
@@ -342,31 +351,40 @@ func (u *Ufest) pack(w io.Writer) {
 	// chunks
 	for _, c := range u.Chunks {
 		// chunk size
-		var sizeBuf [cos.SizeofI64]byte
-		binary.BigEndian.PutUint64(sizeBuf[:], uint64(c.Siz))
-		w.Write(sizeBuf[:])
+		binary.BigEndian.PutUint64(b64[:], uint64(c.Siz))
+		w.Write(b64[:])
 
-		// chunk path
+		// path
 		_packStr(w, c.Path)
 
-		// chunk checksum
-		_packStr(w, c.CksumVal)
+		// checksum
+		_packCksum(w, c.Cksum)
 
-		// chunk number
-		var numBuf [cos.SizeofI16]byte
-		binary.BigEndian.PutUint16(numBuf[:], c.Num)
-		w.Write(numBuf[:])
+		// chunk number and flags
+		binary.BigEndian.PutUint16(b16[:], c.Num)
+		w.Write(b16[:])
+		binary.BigEndian.PutUint16(b16[:], c.Flags)
+		w.Write(b16[:])
 
-		// chunk MD5 (S3-specific)
+		// MD5 (legacy)
 		_packStr(w, c.MD5)
 	}
 }
 
 func _packStr(w io.Writer, s string) {
-	var lenBuf [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(lenBuf[:], uint16(len(s)))
-	w.Write(lenBuf[:])
+	var b16 [cos.SizeofI16]byte
+	binary.BigEndian.PutUint16(b16[:], uint16(len(s)))
+	w.Write(b16[:])
 	w.Write(cos.UnsafeB(s))
+}
+
+func _packCksum(w io.Writer, cksum *cos.Cksum) {
+	if cksum == nil || cksum.IsEmpty() {
+		_packStr(w, "")
+		return
+	}
+	_packStr(w, cksum.Ty())
+	_packStr(w, cksum.Val())
 }
 
 func (u *Ufest) unpack(data []byte) (err error) {
@@ -393,7 +411,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		return errors.New(tooShort)
 	}
 	timeNano := int64(binary.BigEndian.Uint64(data[offset:]))
-	u.StartTime = time.Unix(0, timeNano)
+	u.Created = time.Unix(0, timeNano)
 	offset += cos.SizeofI64
 
 	// number of chunks
@@ -402,11 +420,12 @@ func (u *Ufest) unpack(data []byte) (err error) {
 	}
 	u.Num = binary.BigEndian.Uint16(data[offset:])
 	offset += cos.SizeofI16
-
-	// checksum type
-	if u.CksumTyp, offset, err = _unpackStr(data, offset); err != nil {
-		return err
+	// flags
+	if len(data) < offset+cos.SizeofI16 {
+		return errors.New(tooShort)
 	}
+	u.Flags = binary.BigEndian.Uint16(data[offset:])
+	offset += cos.SizeofI16
 
 	// metadata map
 	if len(data) < offset+cos.SizeofI16 {
@@ -449,15 +468,20 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		}
 
 		// chunk checksum
-		if c.CksumVal, offset, err = _unpackStr(data, offset); err != nil {
+		if c.Cksum, offset, err = _unpackCksum(data, offset); err != nil {
 			return err
 		}
 
-		// chunk number
+		// chunk number and flags
 		if len(data) < offset+cos.SizeofI16 {
 			return errors.New(tooShort)
 		}
 		c.Num = binary.BigEndian.Uint16(data[offset:])
+		offset += cos.SizeofI16
+		if len(data) < offset+cos.SizeofI16 {
+			return errors.New(tooShort)
+		}
+		c.Flags = binary.BigEndian.Uint16(data[offset:])
 		offset += cos.SizeofI16
 
 		// chunk MD5
@@ -481,6 +505,22 @@ func _unpackStr(data []byte, offset int) (string, int, error) {
 	str := string(data[offset : offset+l])
 	offset += l
 	return str, offset, nil
+}
+
+func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error) {
+	var (
+		ty, val string
+	)
+	ty, off, err = _unpackStr(data, offset)
+	if err != nil || ty == "" {
+		return nil, off, err
+	}
+	offset = off
+	val, off, err = _unpackStr(data, offset)
+	if err == nil {
+		cksum = cos.NewCksum(ty, val)
+	}
+	return
 }
 
 //
