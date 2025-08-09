@@ -17,7 +17,6 @@ package backend
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -117,16 +116,6 @@ func NewAzure(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Bac
 	bp.base.init(t.Snode(), tstats, startingUp)
 
 	return bp, nil
-}
-
-// (compare w/ cmn/backend)
-func azEncodeEtag(etag azcore.ETag) string { return cmn.UnquoteCEV(string(etag)) }
-
-func azEncodeChecksum(v []byte) string {
-	if len(v) == 0 {
-		return ""
-	}
-	return hex.EncodeToString(v)
 }
 
 //
@@ -260,6 +249,7 @@ func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = bck.RemoteBck()
 		cntURL   = azbp.u + "/" + cloudBck.Name
 		num      = int32(msg.PageSize)
@@ -301,8 +291,8 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 			continue
 		}
 
-		en.Checksum = azEncodeChecksum(blob.Properties.ContentMD5)
-		etag := azEncodeEtag(*blob.Properties.ETag)
+		en.Checksum, _ = h.EncodeCksum(blob.Properties.ContentMD5)
+		etag, _ := h.EncodeETag(string(*blob.Properties.ETag))
 		en.Version = etag // (TODO a the top)
 		if wantCustom {
 			custom = custom[:0]
@@ -366,6 +356,7 @@ func (azbp *azbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
 
 func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bucket().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
@@ -387,12 +378,12 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	oa.SetCustomKey(cmn.SourceObjMD, apc.Azure)
 	oa.Size = *resp.ContentLength
 
-	etag := azEncodeEtag(*resp.ETag)
+	etag, _ := h.EncodeETag(string(*resp.ETag))
 	oa.SetCustomKey(cmn.ETag, etag)
 
 	oa.SetVersion(etag) // TODO #200224
 
-	if md5 := azEncodeChecksum(resp.ContentMD5); md5 != "" {
+	if md5, _ := h.EncodeCksum(resp.ContentMD5); md5 != "" {
 		oa.SetCustomKey(cmn.MD5ObjMD, md5)
 	}
 	if v := resp.LastModified; v != nil {
@@ -430,6 +421,7 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 
 func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
+		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bucket().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
@@ -465,12 +457,12 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	if length == 0 {
 		// custom metadata
 		lom.SetCustomKey(cmn.SourceObjMD, apc.Azure)
-		etag := azEncodeEtag(*respProps.ETag)
+		etag, _ := h.EncodeETag(string(*respProps.ETag))
 		lom.SetCustomKey(cmn.ETag, etag)
 
 		lom.SetVersion(etag) // TODO #200224
 
-		if md5 := azEncodeChecksum(respProps.ContentMD5); md5 != "" {
+		if md5, _ := h.EncodeCksum(respProps.ContentMD5); md5 != "" {
 			lom.SetCustomKey(cmn.MD5ObjMD, md5)
 			res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, md5)
 		}
@@ -503,7 +495,8 @@ func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 
-	etag := azEncodeEtag(*resp.ETag)
+	h := cmn.BackendHelpers.Azure
+	etag, _ := h.EncodeETag(string(*resp.ETag))
 	lom.SetCustomKey(cmn.ETag, etag)
 
 	lom.SetVersion(etag) // TODO #200224
