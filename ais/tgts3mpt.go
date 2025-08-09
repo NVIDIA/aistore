@@ -101,7 +101,10 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 	if err != nil {
 		return
 	}
-	t.ups.init(uploadID, lom, metadata)
+	if err := t.ups.init(uploadID, lom, metadata); err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
 
 	sgl := t.gmm.NewSGL(0)
@@ -264,8 +267,6 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	chunk := &core.Uchunk{
 		MD5:  md5,
 		Path: chunkPath,
-		Siz:  size,
-		Num:  uint16(partNum),
 	}
 	if checkPartSHA {
 		chunk.Cksum = &cksumSHA.Cksum
@@ -273,7 +274,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 
 	// - see NOTE above in re "active uploads in memory"
 	// - TODO: this is the place to call Ufest.Store(partial manifest)
-	if err := manifest.Add(chunk); err != nil {
+	if err := manifest.Add(chunk, size, int64(partNum)); err != nil {
 		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
 	}
@@ -400,7 +401,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		nparts[i] = c
 	}
 
-	metadata := manifest.Metadata
+	metadata := manifest.GetMeta()
 	manifest.Unlock()
 
 	// 2. Create final work file

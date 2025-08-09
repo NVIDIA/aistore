@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -25,6 +26,13 @@ import (
 const (
 	xattrChunk = "user.ais.chunk"
 )
+
+var manifestMeta = map[string]string{
+	"content-type":  "application/octet-stream",
+	"storage-class": "STANDARD",
+	"cache-control": "no-cache",
+	"user-agent":    "ais-client/1.0",
+}
 
 var _ = Describe("Chunk Manifest Xattrs", func() {
 	const (
@@ -73,15 +81,17 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			manifest.Num = numChunks
 			manifest.Chunks = make([]core.Uchunk, numChunks)
 
+			err := manifest.SetMeta(manifestMeta)
+			debug.AssertNoErr(err)
+
 			for i := range numChunks {
-				// Create a proper checksum instead of random string
 				cksumVal := trand.String(16)
 				manifest.Chunks[i] = core.Uchunk{
 					Siz:   chunkSizes[i],
 					Num:   i + 1,
 					Path:  trand.String(7),
-					Cksum: cos.NewCksum(cos.ChecksumCesXxh, cksumVal), // Use proper checksum type
-					MD5:   trand.String(32),                           // S3 legacy MD5
+					Cksum: cos.NewCksum(cos.ChecksumCesXxh, cksumVal),
+					MD5:   trand.String(32),
 				}
 			}
 			return manifest
@@ -147,6 +157,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				loadedManifest := &core.Ufest{}
 				err = loadedManifest.Load(lom)
 				Expect(err).NotTo(HaveOccurred())
+
+				loadedMeta := loadedManifest.GetMeta()
+				Expect(loadedMeta).To(HaveLen(len(manifestMeta)))
+				for k, v := range manifestMeta {
+					Expect(loadedMeta[k]).To(Equal(v), "metadata key %q mismatch", k)
+				}
 
 				// Verify manifest contents including new fields
 				Expect(loadedManifest.ID).To(Equal("test-session-001"))
@@ -221,6 +237,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				loadedManifest := &core.Ufest{}
 				err = loadedManifest.Load(lom)
 				Expect(err).NotTo(HaveOccurred())
+
+				loadedMeta := loadedManifest.GetMeta()
+				Expect(loadedMeta).To(HaveLen(len(manifestMeta)))
+				for k, v := range manifestMeta {
+					Expect(loadedMeta[k]).To(Equal(v), "metadata key %q mismatch", k)
+				}
 
 				Expect(loadedManifest.ID).To(Equal("many-chunks-session"))
 				Expect(loadedManifest.Num).To(Equal(numChunks))

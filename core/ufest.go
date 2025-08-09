@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"sync"
@@ -35,7 +36,26 @@ const (
 
 	iniChunksCap = 16
 
-	completed = 1 // Ufest.Flags
+	maxChunkSize = 5 * cos.GiB
+	maxMetaKeys  = 1000
+)
+
+const (
+	completed uint16 = 1 << 0 // Ufest.Flags
+)
+
+// on-disk xattr
+const (
+	xattrChunk = "user.ais.chunk"
+
+	xattrChunkDflt = memsys.DefaultBufSize
+	xattrChunkMax  = memsys.DefaultBuf2Size // NOTE: 64K hard limit
+)
+
+const (
+	utag     = "chunk-manifest"
+	itag     = "invalid " + utag
+	tooShort = "failed to unpack: too short"
 )
 
 type (
@@ -47,13 +67,14 @@ type (
 		Flags uint16     // bit flags (future use)
 		MD5   string     // S3/legacy
 	}
-	Ufest struct {
-		ID       string    // upload/manifest ID
-		Created  time.Time // creation time
-		Num      uint16    // number of chunks (so far)
-		Flags    uint16    // bit flags { completed, ...}
-		Chunks   []Uchunk
-		Metadata map[string]string // remote object metadata
+	mdpair struct{ k, v string }
+	Ufest  struct {
+		ID      string    // upload/manifest ID
+		Created time.Time // creation time
+		Num     uint16    // number of chunks (so far)
+		Flags   uint16    // bit flags { completed, ...}
+		Chunks  []Uchunk
+		mdmap   map[string]string // remote object metadata (gets sorted when packing)
 
 		// runtime state
 		Lom    *LOM
@@ -61,20 +82,6 @@ type (
 		suffix string
 		mu     sync.Mutex
 	}
-)
-
-// on-disk xattr
-const (
-	xattrChunk = "user.ais.chunk"
-
-	xattrChunkDflt = memsys.DefaultBufSize
-	xattrChunkMax  = memsys.DefaultBuf2Size // maximum 64K
-)
-
-const (
-	utag     = "chunk-manifest"
-	itag     = "invalid " + utag
-	tooShort = "failed to unpack: too short"
 )
 
 func NewUfest(id string, lom *LOM) *Ufest {
@@ -93,10 +100,32 @@ func NewUfest(id string, lom *LOM) *Ufest {
 
 func (u *Ufest) Completed() bool { return u.Flags&completed == completed }
 
+// NOTE:
+// - GetMeta() returns a reference that callers must not mutate
+// - alternatively, clone it and call SetMeta
+// - on-disk order is deterministic (sorted at pack time)
+func (u *Ufest) SetMeta(md map[string]string) error {
+	if l := len(md); l > maxMetaKeys {
+		return fmt.Errorf("%s: number of metadata entries %d exceeds %d limit", utag, l, maxMetaKeys)
+	}
+	u.mdmap = md
+	return nil
+}
+func (u *Ufest) GetMeta() map[string]string { return u.mdmap }
+
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
 
-func (u *Ufest) Add(c *Uchunk) error {
+func (u *Ufest) Add(c *Uchunk, size, num int64) error {
+	if size > maxChunkSize {
+		return fmt.Errorf("%s [add] chunk size %d exceeds %d limit", utag, size, maxChunkSize)
+	}
+	c.Siz = size
+	if num > math.MaxUint16 || len(u.Chunks) >= math.MaxUint16 {
+		return fmt.Errorf("%s [add] chunk number (%d, %d) exceeds %d limit", utag, num, len(u.Chunks), math.MaxUint16)
+	}
+	c.Num = uint16(num)
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -115,7 +144,7 @@ func (u *Ufest) Add(c *Uchunk) error {
 	dup := &u.Chunks[idx]
 	if idx < l && dup.Num == c.Num {
 		if err := cos.RemoveFile(dup.Path); err != nil {
-			return fmt.Errorf("failed to replace chunk [%d, %s]: %v", c.Num, dup.Path, err)
+			return fmt.Errorf("%s [add] failed to replace chunk [%d, %s]: %v", utag, c.Num, dup.Path, err)
 		}
 		u.Size += c.Siz - dup.Siz
 		*dup = *c
@@ -164,7 +193,7 @@ func (u *Ufest) Abort(lom *LOM) error {
 func (u *Ufest) ChunkName(num int) (string, error) {
 	lom := u.Lom
 	if lom == nil {
-		return "", errors.New("nil lom")
+		return "", errors.New(utag + ": nil lom")
 	}
 	if num <= 0 {
 		return "", fmt.Errorf("%s: invalid chunk number (%d)", _utag(lom.Cname()), num)
@@ -293,7 +322,9 @@ func (u *Ufest) Store(lom *LOM) error {
 	}
 
 	// write
-	if err := lom.setXchunk(sgl.Bytes()); err != nil {
+	b := sgl.Bytes()
+	if err := lom.setXchunk(b); err != nil {
+		u.Flags &^= completed
 		return err
 	}
 	lom.md.lid.setlmfl(lmflChunk) // TODO -- FIXME: persist
@@ -340,12 +371,21 @@ func (u *Ufest) pack(w io.Writer) {
 	binary.BigEndian.PutUint16(b16[:], u.Flags)
 	w.Write(b16[:])
 
-	// metadata map
-	binary.BigEndian.PutUint16(b16[:], uint16(len(u.Metadata)))
+	// metadata
+	l := len(u.mdmap)
+	binary.BigEndian.PutUint16(b16[:], uint16(l))
 	w.Write(b16[:])
-	for k, v := range u.Metadata {
-		_packStr(w, k)
-		_packStr(w, v)
+	if l > 0 {
+		mdslice := make([]mdpair, 0, l)
+		for k, v := range u.mdmap {
+			mdslice = append(mdslice, mdpair{k, v})
+		}
+		sort.Slice(mdslice, func(i, j int) bool { return mdslice[i].k < mdslice[j].k }) // deterministic
+		for _, kv := range mdslice {
+			_packStr(w, kv.k)
+			_packStr(w, kv.v)
+		}
+		clear(mdslice)
 	}
 
 	// chunks
@@ -435,7 +475,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 	offset += cos.SizeofI16
 
 	if metaCount > 0 {
-		u.Metadata = make(map[string]string, metaCount)
+		u.mdmap = make(map[string]string, metaCount)
 		for range metaCount {
 			var k, v string
 			if k, offset, err = _unpackStr(data, offset); err != nil {
@@ -444,7 +484,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 			if v, offset, err = _unpackStr(data, offset); err != nil {
 				return err
 			}
-			u.Metadata[k] = v
+			u.mdmap[k] = v
 		}
 	}
 

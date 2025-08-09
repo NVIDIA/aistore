@@ -39,16 +39,18 @@ type (
 	}
 )
 
-func (ups *uploads) init(id string, lom *core.LOM, metadata map[string]string) {
+func (ups *uploads) init(id string, lom *core.LOM, metadata map[string]string) error {
 	manifest := core.NewUfest(id, lom)
-	manifest.Metadata = metadata
-
+	if err := manifest.SetMeta(metadata); err != nil {
+		return err
+	}
 	ups.Lock()
 	if ups.m == nil {
 		ups.m = make(map[string]*core.Ufest, iniCapUploads)
 	}
 	ups._add(id, manifest)
 	ups.Unlock()
+	return nil
 }
 
 func (ups *uploads) _add(id string, manifest *core.Ufest) {
