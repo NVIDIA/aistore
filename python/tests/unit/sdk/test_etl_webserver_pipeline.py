@@ -5,7 +5,8 @@ import time
 import threading
 import concurrent.futures
 from http.server import HTTPServer
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
+from fastapi.testclient import TestClient
 
 import requests
 
@@ -13,6 +14,7 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_DIRECT_PUT_LENGTH,
     HEADER_CONTENT_LENGTH,
+    ETL_WS_PIPELINE,
 )
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
@@ -307,19 +309,19 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         """Test pipeline forwarding between multiple HTTP servers."""
 
         # Start three HTTP servers on different ports
-        server1 = self._start_http_server(9001, "step1")
-        server2 = self._start_http_server(9002, "step2")
-        server3 = self._start_http_server(9003, "step3")
+        server1 = self._start_http_server(19001, "step1")
+        server2 = self._start_http_server(19002, "step2")
+        server3 = self._start_http_server(19003, "step3")
 
         # Create pipeline header: server1 -> server2 -> server3
-        pipeline = "http://localhost:9002/transform,http://localhost:9003/transform"
+        pipeline = "http://localhost:19002/transform,http://localhost:19003/transform"
         headers = {HEADER_NODE_URL: pipeline}
         content = b"original"
         result = server3.transform(server2.transform(server1.transform(content)))
 
         # Send request to first server with pipeline
         response = requests.put(
-            "http://localhost:9001/test", data=content, headers=headers, timeout=5
+            "http://localhost:19001/test", data=content, headers=headers, timeout=5
         )
 
         # Should get 200 (pipeline processed to the final ETL server)
@@ -370,12 +372,12 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         """Test pipeline forwarding between multiple Flask servers."""
 
         # Start three Flask servers
-        server1 = self._start_flask_server(9011, "flask1")
-        server2 = self._start_flask_server(9012, "flask2")
-        server3 = self._start_flask_server(9013, "flask3")
+        server1 = self._start_flask_server(19011, "flask1")
+        server2 = self._start_flask_server(19012, "flask2")
+        server3 = self._start_flask_server(19013, "flask3")
 
         # Create pipeline header: server1 -> server2 -> server3
-        pipeline = "http://localhost:9012/transform,http://localhost:9013/transform"
+        pipeline = "http://localhost:19012/transform,http://localhost:19013/transform"
         headers = {HEADER_NODE_URL: pipeline}
         content = b"original"
         result = server3.transform(
@@ -384,7 +386,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
 
         # Send request to first server with pipeline
         response = requests.put(
-            "http://localhost:9011/test", data=content, headers=headers, timeout=5
+            "http://localhost:19011/test", data=content, headers=headers, timeout=5
         )
 
         # Should get 200 (pipeline processed to the final ETL server)
@@ -397,8 +399,8 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         """Test pipeline forwarding between Flask servers ending with a target server."""
 
         # Start two ETL servers
-        server1 = self._start_flask_server(9021, "step1")
-        server2 = self._start_flask_server(9022, "step2")
+        server1 = self._start_flask_server(19021, "step1")
+        server2 = self._start_flask_server(19022, "step2")
 
         # Create mock response for target server call
         target_response = Mock()
@@ -410,14 +412,14 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server2.client_put.return_value = target_response
 
         # Create pipeline header: server1 -> server2 -> target
-        pipeline = "http://localhost:9022/transform,http://localhost:9023/target"
+        pipeline = "http://localhost:19022/transform,http://localhost:19023/target"
         headers = {HEADER_NODE_URL: pipeline}
         content = b"original"
         result = server2.transform(server1.transform(content, "", ""), "", "")
 
         # Send request to first server with pipeline
         response = requests.put(
-            "http://localhost:9021/test", data=content, headers=headers, timeout=5
+            "http://localhost:19021/test", data=content, headers=headers, timeout=5
         )
 
         # Should get 204 (server converts target's 200 with empty content to 204)
@@ -428,7 +430,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         )
 
         server2.client_put.assert_called_once_with(
-            "http://localhost:9023/target", result, headers={}
+            "http://localhost:19023/target", result, headers={}
         )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
@@ -462,8 +464,8 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         """Test pipeline forwarding between FastAPI servers ending with a target server."""
 
         # Start two ETL servers
-        server1 = self._start_fastapi_server(9041, "step1")
-        server2 = self._start_fastapi_server(9042, "step2")
+        server1 = self._start_fastapi_server(19041, "step1")
+        server2 = self._start_fastapi_server(19042, "step2")
 
         # Create mock response for target server call
         target_response = AsyncMock()
@@ -476,14 +478,14 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server2.client.put.return_value = target_response
 
         # Create pipeline header: server1 -> server2 -> target
-        pipeline = "http://localhost:9042/transform,http://localhost:9043/target"
+        pipeline = "http://localhost:19042/transform,http://localhost:19043/target"
         headers = {HEADER_NODE_URL: pipeline}
         content = b"original"
         result = server2.transform(server1.transform(content, "", ""), "", "")
 
         # Send request to first server with pipeline
         response = requests.put(
-            "http://localhost:9041/test", data=content, headers=headers, timeout=5
+            "http://localhost:19041/test", data=content, headers=headers, timeout=5
         )
 
         # Should get 204 (server converts target's 200 with empty content to 204)
@@ -494,25 +496,25 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         )
 
         server2.client.put.assert_awaited_once_with(
-            "http://localhost:9043/target", content=result, headers={}
+            "http://localhost:19043/target", content=result, headers={}
         )
 
     def test_mixed_server_type_pipeline(self):
         """Test pipeline forwarding across different server types."""
 
         # Start one server of each type
-        http_server = self._start_http_server(9031, "http")
-        flask_server = self._start_flask_server(9032, "flask")
+        http_server = self._start_http_server(19031, "http")
+        flask_server = self._start_flask_server(19032, "flask")
 
         # Pipeline: HTTP -> Flask
-        pipeline = "http://localhost:9032/transform"
+        pipeline = "http://localhost:19032/transform"
         headers = {HEADER_NODE_URL: pipeline}
         result = flask_server.transform(
             http_server.transform(b"mixed_data", "", ""), "", ""
         )
 
         response = requests.put(
-            "http://localhost:9031/mixed",
+            "http://localhost:19031/mixed",
             data=b"mixed_data",
             headers=headers,
             timeout=5,
@@ -549,14 +551,14 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
     def test_pipeline_error_handling(self):
         """Test error handling when pipeline target is unreachable."""
 
-        self._start_http_server(9061, "error_test")
+        self._start_http_server(19061, "error_test")
 
         # Pipeline to non-existent server
-        pipeline = "http://localhost:9999/nonexistent"
+        pipeline = "http://localhost:19999/nonexistent"
         headers = {HEADER_NODE_URL: pipeline}
 
         response = requests.put(
-            "http://localhost:9061/error",
+            "http://localhost:19061/error",
             data=b"error_data",
             headers=headers,
             timeout=5,
@@ -575,18 +577,18 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         result = content
         servers = []
         for i in range(5):
-            port = 9070 + i
+            port = 19070 + i
             server = self._start_fastapi_server(port, f"stage{i+1}")
             servers.append(server)
             result = server.transform(result, "", "")
 
         # Create 5-stage pipeline
-        pipeline_stages = [f"http://localhost:{9071 + i}/stage{i+2}" for i in range(4)]
+        pipeline_stages = [f"http://localhost:{19071 + i}/stage{i+2}" for i in range(4)]
         pipeline = ",".join(pipeline_stages)
         headers = {HEADER_NODE_URL: pipeline}
 
         response = requests.put(
-            "http://localhost:9070/long", data=content, headers=headers, timeout=10
+            "http://localhost:19070/long", data=content, headers=headers, timeout=10
         )
 
         self.assertEqual(response.status_code, 200)
@@ -595,13 +597,13 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
     def test_empty_pipeline_header(self):
         """Test behavior with empty pipeline header."""
 
-        server = self._start_http_server(9081, "empty")
+        server = self._start_http_server(19081, "empty")
         content = b"original"
         result = server.transform(content, "", "")
 
         # Empty pipeline header should return transformed data normally
         response = requests.put(
-            "http://localhost:9081/empty", data=content, headers={}, timeout=5
+            "http://localhost:19081/empty", data=content, headers={}, timeout=5
         )
 
         self.assertEqual(response.status_code, 200)
@@ -610,13 +612,13 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
     def test_malformed_pipeline_header(self):
         """Test behavior with malformed pipeline header."""
 
-        self._start_http_server(9091, "malformed")
+        self._start_http_server(19091, "malformed")
 
         # Malformed pipeline (just commas)
         headers = {HEADER_NODE_URL: ",,,,"}
 
         response = requests.put(
-            "http://localhost:9091/malformed",
+            "http://localhost:19091/malformed",
             data=b"malformed_test",
             headers=headers,
             timeout=5,
@@ -629,15 +631,15 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
     def test_concurrent_pipeline_requests(self):
         """Test multiple concurrent requests through pipeline."""
 
-        self._start_http_server(9101, "concurrent1")
-        self._start_http_server(9102, "concurrent2")
+        self._start_http_server(19101, "concurrent1")
+        self._start_http_server(19102, "concurrent2")
 
-        pipeline = "http://localhost:9102/concurrent"
+        pipeline = "http://localhost:19102/concurrent"
         headers = {HEADER_NODE_URL: pipeline}
 
         def make_request(i):
             return requests.put(
-                "http://localhost:9101/concurrent",
+                "http://localhost:19101/concurrent",
                 data=f"request_{i}".encode(),
                 headers=headers,
                 timeout=5,
@@ -653,3 +655,204 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         # All should succeed
         for response in results:
             self.assertEqual(response.status_code, 200)
+
+
+class TestWebSocketPipelineIntegration(TestPipelineBase):
+    """Test WebSocket ETL pipeline integration with various server types."""
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_to_http_pipeline(self):
+        """Test WebSocket client connecting to FastAPI server with HTTP pipeline."""
+
+        # Start FastAPI and HTTP servers
+        fastapi_server = self._start_fastapi_server(14001, "ws_fastapi")
+        http_server = self._start_http_server(14002, "ws_http")
+
+        client = TestClient(fastapi_server.app)
+
+        # Test pipeline to HTTP server
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"websocket_test_data"
+            pipeline = "http://localhost:14002/transform"
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_bytes()
+
+            # Data should be transformed by both servers
+            expected = http_server.transform(
+                fastapi_server.transform(test_data, "", ""), "", ""
+            )
+            self.assertEqual(result, expected)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_to_flask_pipeline(self):
+        """Test WebSocket client connecting to FastAPI server with Flask pipeline."""
+
+        # Start FastAPI and Flask servers
+        fastapi_server = self._start_fastapi_server(14011, "ws_fastapi")
+        flask_server = self._start_flask_server(14012, "ws_flask")
+
+        client = TestClient(fastapi_server.app)
+
+        # Test pipeline to Flask server
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"websocket_flask_data"
+            pipeline = "http://localhost:14012/transform"
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_bytes()
+
+            # Data should be transformed by both servers
+            expected = flask_server.transform(
+                fastapi_server.transform(test_data, "", ""), "", ""
+            )
+            self.assertEqual(result, expected)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_to_fastapi_pipeline(self):
+        """Test WebSocket client connecting to FastAPI server with FastAPI pipeline."""
+
+        # Start two FastAPI servers
+        fastapi_server1 = self._start_fastapi_server(14021, "ws_fastapi1")
+        fastapi_server2 = self._start_fastapi_server(14022, "ws_fastapi2")
+
+        client = TestClient(fastapi_server1.app)
+
+        # Test pipeline to another FastAPI server
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"websocket_fastapi_data"
+            pipeline = "http://localhost:14022/transform"
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_bytes()
+
+            # Data should be transformed by both servers
+            expected = fastapi_server2.transform(
+                fastapi_server1.transform(test_data, "", ""), "", ""
+            )
+            self.assertEqual(result, expected)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_to_target_direct_pipeline(self):
+        """Test WebSocket client connecting to FastAPI server with direct target pipeline."""
+
+        # Start FastAPI server
+        fastapi_server = self._start_fastapi_server(14031, "ws_target")
+        client = TestClient(fastapi_server.app)
+
+        # Mock target response
+        with patch.object(fastapi_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 200
+            mock_resp.content = b""
+            mock_client.put.return_value = mock_resp
+
+            # Test direct pipeline to target
+            with client.websocket_connect("/ws") as websocket:
+                test_data = b"websocket_target_data"
+                pipeline = "http://localhost:14032/target"
+
+                websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+                websocket.send_bytes(test_data)
+                result = websocket.receive_text()
+
+                # Should receive data length as acknowledgment
+                expected_data = fastapi_server.transform(test_data, "", "")
+                self.assertEqual(result, str(len(expected_data)))
+
+                # Verify direct put was called
+                mock_client.put.assert_awaited_once_with(
+                    "http://localhost:14032/target", content=expected_data, headers={}
+                )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_multi_stage_pipeline(self):
+        """Test WebSocket with multi-stage pipeline (HTTP->Flask->FastAPI)."""
+
+        # Start all three server types
+        ws_server = self._start_fastapi_server(14041, "ws_origin")
+        http_server = self._start_http_server(14042, "stage1")
+        flask_server = self._start_flask_server(14043, "stage2")
+        fastapi_server = self._start_fastapi_server(14044, "stage3")
+
+        client = TestClient(ws_server.app)
+
+        # Test three-stage pipeline
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"multi_stage_data"
+            pipeline = "http://localhost:14042/trans,http://localhost:14043/trans,http://localhost:14044/trans"
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_bytes()
+
+            # Data should be transformed by all four servers in sequence
+            step1 = ws_server.transform(test_data, "", "")
+            step2 = http_server.transform(step1, "", "")
+            step3 = flask_server.transform(step2, "", "")
+            expected = fastapi_server.transform(step3, "", "")
+
+            self.assertEqual(result, expected)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_pipeline_error_handling(self):
+        """Test WebSocket error handling when pipeline target fails."""
+
+        # Start FastAPI server
+        fastapi_server = self._start_fastapi_server(14051, "ws_error")
+        client = TestClient(fastapi_server.app)
+
+        # Test pipeline to non-existent server
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"error_test_data"
+            pipeline = "http://localhost:19999/nonexistent"
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_text()
+
+            # Should receive error message
+            self.assertIn("0", result)  # Error indicated by 0 length
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_invalid_pipeline_format(self):
+        """Test WebSocket with invalid pipeline format."""
+
+        # Start FastAPI server
+        fastapi_server = self._start_fastapi_server(14061, "ws_invalid")
+        client = TestClient(fastapi_server.app)
+
+        # Test invalid pipeline format
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"invalid_pipeline_data"
+            pipeline = ",,invalid,,"  # Invalid format with empty entries
+
+            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+            websocket.send_bytes(test_data)
+            result = websocket.receive_text()
+
+            # Should receive error message about invalid pipeline
+            self.assertIn("Invalid pipeline", result)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    def test_websocket_no_pipeline_fallback(self):
+        """Test WebSocket behavior without pipeline (fallback to direct response)."""
+
+        # Start FastAPI server
+        fastapi_server = self._start_fastapi_server(14071, "ws_direct")
+        client = TestClient(fastapi_server.app)
+
+        # Test without pipeline
+        with client.websocket_connect("/ws") as websocket:
+            test_data = b"direct_response_data"
+
+            websocket.send_json(data={}, mode="binary")  # No pipeline
+            websocket.send_bytes(test_data)
+            result = websocket.receive_bytes()
+
+            # Should receive directly transformed data
+            expected = fastapi_server.transform(test_data, "", "")
+            self.assertEqual(result, expected)

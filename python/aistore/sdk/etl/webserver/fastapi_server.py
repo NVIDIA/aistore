@@ -27,7 +27,6 @@ from aistore.sdk.errors import InvalidPipelineError
 from aistore.sdk.const import (
     HEADER_NODE_URL,
     HEADER_CONTENT_LENGTH,
-    STATUS_NO_CONTENT,
     STATUS_OK,
     ETL_WS_FQN,
     ETL_WS_PATH,
@@ -266,6 +265,7 @@ class FastAPIServer(ETLServer):
 
             pipeline_header = ctrl_msg.get(ETL_WS_PIPELINE)
             if pipeline_header:
+                self.logger.debug("pipeline_header: %r", pipeline_header)
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
                     status_code, transformed, direct_put_length = (
@@ -273,10 +273,11 @@ class FastAPIServer(ETLServer):
                             first_url, transformed, remaining_pipeline
                         )
                     )
-                    if status_code in (STATUS_OK, STATUS_NO_CONTENT) and transformed:
+                    if status_code == STATUS_OK:
                         await websocket.send_bytes(transformed)
                     else:
                         await websocket.send_text(str(direct_put_length))
+                    return
 
             # No pipeline, send transformed data
             await websocket.send_bytes(transformed)

@@ -9,6 +9,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ## Added
 
 - Add ETL pipeline header processing and direct put handling in all ETL webservers.
+- Add ETL pipeline processing in WebSocket control message of ETL FastAPI web server.
 
 ### Changed
 - **BREAKING**: `BatchLoader.get_batch()` no longer takes `extractor` and `decoder` args. Instead, use `return_raw` and `decode_as_stream`.
