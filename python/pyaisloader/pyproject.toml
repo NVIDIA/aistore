@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["pyaisloader"]
+
+[project]
+name = "pyaisloader"
+version = "0.0.1"
+authors = [
+  { name = "Team AIStore", email = "aistore@nvidia.com" },
+]
+description = "AIStore Python loader for benchmarking and testing"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Benchmark",
+]
+
+dependencies = [
+    "aistore>=1.15.0",
+    "alive_progress>=3.3.0",
+    "colorama>=0.4.6",
+    "humanfriendly>=10.0",
+    "pendulum>=3.1.0",
+    "tabulate>=0.9.0",
+    "torch>=2.8.0",
+    "torchdata>=0.11.0",
+]
+
+keywords = [
+    "AIStore",
+    "Benchmark",
+    "Performance Testing",
+    "PyTorch",
+    "Data Loading",
+]
+
+[project.scripts]
+pyaisloader = "pyaisloader.main:main"
+
+[project.urls]
+"Homepage" = "https://aistore.nvidia.com"
+"Documentation" = "https://aistore.nvidia.com/docs"
+"Source" = "https://github.com/NVIDIA/aistore/tree/main/python/pyaisloader"

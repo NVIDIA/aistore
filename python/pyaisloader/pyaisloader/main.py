@@ -65,22 +65,22 @@ def main():
         dest="type",
         title="types",
         description=(
-            'Choose a benchmark type. Type "PUT -h", "GET -h", '
-            '"MIXED -h", or "LIST -h" for more information about the specific benchmark.'
+            "Choose a benchmark type. Type 'PUT -h', 'GET -h', "
+            "'MIXED -h', or 'LIST -h' for more information about the specific benchmark."
         ),
     )
 
     put_parser = subparsers.add_parser(
         "PUT",
         aliases=["put", "P", "p"],
-        help="100% PUT benchmark",
-        description="This command runs a 100% PUT benchmark.",
+        help="100%% PUT benchmark",
+        description="This command runs a 100%% PUT benchmark.",
     )
     get_parser = subparsers.add_parser(
         "GET",
         aliases=["get", "G", "g"],
-        help="100% GET benchmark",
-        description="This command runs a 100% GET benchmark.",
+        help="100%% GET benchmark",
+        description="This command runs a 100%% GET benchmark.",
     )
     mixed_parser = subparsers.add_parser(
         "MIXED",

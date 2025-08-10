@@ -1,5 +1,5 @@
 import os
 from aistore import Client
 
-ENDPOINT = os.environ["AIS_ENDPOINT"]
-client = Client(ENDPOINT)
+AIS_ENDPOINT = os.environ.get("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(AIS_ENDPOINT)

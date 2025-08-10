@@ -8,7 +8,7 @@ from pyaisloader.utils.cli_utils import (
 )
 from pyaisloader.utils.concurrency_utils import multiworker_deploy
 from pyaisloader.utils.stat_utils import combine_results, print_results
-from pyaisloader.client_config import ENDPOINT
+from pyaisloader.client_config import AIS_ENDPOINT
 from pyaisloader.benchmark import PutGetMixedBenchmark, BenchmarkStats
 
 from aistore.pytorch import AISMapDataset, AISIterDataset
@@ -32,7 +32,7 @@ class AISDatasetBenchmark(PutGetMixedBenchmark):
 
     def get_benchmark(self, duration):
         dataset = AISMapDataset(
-            client_url=ENDPOINT,
+            client_url=AIS_ENDPOINT,
             urls_list=f"{self.bucket.provider}://{self.bucket.name}",
         )
         dataset_len = len(dataset)

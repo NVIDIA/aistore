@@ -597,12 +597,10 @@ test:long:pyaisloader:
   tags:
     - $RUNNER_TAG
   timeout: 15m
-  variables:
-    AIS_ENDPOINT: "http://localhost:8080"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
-    - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
+    - make -C python/pyaisloader ci-long
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
@@ -759,7 +757,7 @@ test:long:k8s:pyaisloader:
   timeout: 15m
   script:
     - sleep 10 # Give some time for the cluster to stabilize.
-    - cd ./python; make PYAISLOADER_TEST_TYPE=etl test-pyaisloader
+    - make -C python/pyaisloader ci-etl
 
 test:long:k8s:all:
   extends: .test_k8s_long_template

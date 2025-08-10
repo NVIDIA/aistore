@@ -134,12 +134,6 @@ generate-pytorch-docs:
 	@ pydoc-markdown -I ./aistore/pytorch -m base_map_dataset -m base_iter_dataset -m map_dataset -m iter_dataset -m shard_reader -m multishard_dataset '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(TORCH_DOCFILE)
 	@ sed -i -e 's/####/###/g' $(TORCH_DOCFILE)
 
-
-.PHONY:
-test-pyaisloader:
-	@./pyaisloader/ci-test.sh $(PYAISLOADER_TEST_TYPE)
-
-
 # Coverage targets (unit, integration, combined)
 COV_PKG := aistore
 COV_CONFIG := .coveragerc

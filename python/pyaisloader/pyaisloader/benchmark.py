@@ -251,7 +251,7 @@ class PutGetMixedBenchmark(Benchmark):
         print_results(
             result,
             title=(
-                "Benchmark Results (100% PUT)"
+                "Benchmark Results (100%% PUT)"
                 + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
@@ -275,7 +275,7 @@ class PutGetMixedBenchmark(Benchmark):
         print_results(
             result,
             title=(
-                "Benchmark Results (100% GET)"
+                "Benchmark Results (100%% GET)"
                 + (f" with ETL {self.etl_spec_type}" if self.etl_config else "")
             ),
         )
