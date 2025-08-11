@@ -9,6 +9,7 @@ from multiprocessing import current_process
 from requests import Session
 from requests.adapters import HTTPAdapter
 from urllib3 import Retry
+import urllib3
 
 from aistore.sdk.const import AIS_CLIENT_CA, AIS_CLIENT_KEY, AIS_CLIENT_CRT, HTTPS, HTTP
 
@@ -47,6 +48,11 @@ class SessionManager:
             client_cert = (cert, key) if cert and key else None
         self._client_cert = client_cert
         self._max_pool_size = max_pool_size
+
+        # Suppress urllib3 SSL warnings when certificate verification is skipped
+        if self._skip_verify:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
         self._session_pool = {current_process().pid: self._create_session()}
 
     @property

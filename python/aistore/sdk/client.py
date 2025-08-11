@@ -76,6 +76,13 @@ class Client:
         else:
             self.retry_config = RetryConfig.default()
 
+        if skip_verify:
+            warnings.warn(
+                "Skipping SSL certificate verification is insecure. "
+                "Use a valid SSL certificate instead.",
+                UserWarning,
+            )
+
         session_manager = SessionManager(
             retry=self.retry_config.http_retry,
             ca_cert=ca_cert,

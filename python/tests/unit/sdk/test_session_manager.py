@@ -96,3 +96,17 @@ class TestSessionManager(unittest.TestCase):  # pylint: disable=unused-variable
                     [call(AIS_CLIENT_CRT), call(AIS_CLIENT_KEY)], any_order=True
                 )
             self.assertEqual(test_case[1], session_manager.session.cert)
+
+    @patch("urllib3.disable_warnings")
+    def test_skip_verify_suppresses_warnings(self, mock_disable_warnings):
+        """Test that SSL warnings are suppressed when skip_verify=True."""
+        SessionManager(skip_verify=True)
+        mock_disable_warnings.assert_called_once_with(
+            urllib3.exceptions.InsecureRequestWarning
+        )
+
+    @patch("urllib3.disable_warnings")
+    def test_verify_enabled_no_warning_suppression(self, mock_disable_warnings):
+        """Test that SSL warnings are NOT suppressed when skip_verify=False."""
+        SessionManager(skip_verify=False)
+        mock_disable_warnings.assert_not_called()
