@@ -22,9 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/etl"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 ///////////////////////
@@ -301,12 +299,8 @@ func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *htt
 	defer transformedReader.Close()
 
 	// Stream transformed data back to target
-	bufsz := int64(memsys.DefaultBufSize)
-	buf, slab := core.T.PageMM().AllocSize(bufsz)
-	defer slab.Free(buf)
-
 	w.WriteHeader(http.StatusOK)
-	if _, err := cos.CopyBuffer(w, transformedReader, buf); err != nil {
+	if _, err := io.Copy(w, transformedReader); err != nil {
 		nlog.Errorf("Failed to stream transformed data: %v", err)
 		return
 	}
