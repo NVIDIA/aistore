@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.15.1] - 2025-08-11
+
 ## Added
 
 - Add ETL pipeline header processing and direct put handling in all ETL webservers.
