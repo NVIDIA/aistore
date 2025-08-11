@@ -89,7 +89,7 @@ func newConfigOwner(config *cmn.Config) (co *configOwner) {
 // (with respect to those in-memory only updated values)
 // See also:
 // - api.SetClusterConfig
-// - apc.ActTransient
+// - apc.QparamTransient
 func (co *configOwner) get() (clone *globalConfig, err error) {
 	clone = &globalConfig{}
 	if _, err = jsp.LoadMeta(co.globalFpath, clone); err == nil {

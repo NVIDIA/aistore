@@ -1266,7 +1266,6 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 }
 
 // +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
-// +gen:payload apc.ActCopyBck={"action": "copy-bck"}
 // +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
 // Create buckets or perform bucket operations (copy, move, etc.)
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
@@ -1690,7 +1689,6 @@ func crerrStatus(err error) (ecode int) {
 }
 
 // +gen:endpoint POST /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string] action=[apc.ActPromote=apc.PromoteArgs|apc.ActBlobDl=apc.BlobMsg]
-// +gen:payload apc.ActPromote={"action": "promote", "name": "/user/dir", "value": {"target": "234ed78", "trim_prefix": "/user/", "recurs": true, "keep": true}}
 // +gen:payload apc.ActBlobDl={"action": "blob-download", "value": {"chunk-size": 10485760, "num-workers": 4}}
 // Perform actions on objects (rename, promote, blob download, check lock)
 func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {

@@ -10,6 +10,8 @@ const (
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
 
+	QparamTransient = "transient" // transient - in-memory only
+
 	QparamUUID  = "uuid"  // Transaction/xaction UUID identifier
 	QparamJobID = "jobid" // Job identifier
 

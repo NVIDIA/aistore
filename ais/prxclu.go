@@ -48,11 +48,9 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//
-// GET /v1/cluster - query cluster states and stats
-//
-
-// (compare w/ httpdaeget)
+// +gen:endpoint GET /v1/cluster[apc.QparamWhat=string]
+// Query cluster states, statistics, and information.
+// Supports various query types: node stats, system info, backends, remote AIS, mountpaths, etc.
 func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	var (
 		query = r.URL.Query()
@@ -348,7 +346,8 @@ func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceRe
 	return
 }
 
-// POST /v1/cluster - handles joins and keepalives
+// +gen:endpoint POST /v1/cluster/{operation}
+// Handle cluster join operations and node keepalives.
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 1, true)
 	if err != nil {
@@ -947,9 +946,10 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 // - cluster membership, including maintenance and decommission
 // - rebalance
 // - set-primary
-// - cluster-wide configuration
-// - start/stop xactions
-// - logs...
+// +gen:endpoint PUT /v1/cluster[apc.QparamTransient=bool] action=[apc.ActSetConfig=cmn.ConfigToSet|apc.ActResetConfig=apc.ActMsg|apc.ActRotateLogs=apc.ActMsg|apc.ActShutdownCluster=apc.ActMsg|apc.ActDecommissionCluster=apc.ActValRmNode|apc.ActStartMaintenance=apc.ActValRmNode|apc.ActDecommissionNode=apc.ActValRmNode|apc.ActShutdownNode=apc.ActValRmNode|apc.ActRmNodeUnsafe=apc.ActValRmNode|apc.ActStopMaintenance=apc.ActMsg|apc.ActResetStats=apc.ActMsg|apc.ActClearLcache=apc.ActMsg|apc.ActXactStart=apc.ActMsg|apc.ActXactStop=apc.ActMsg|apc.ActReloadBackendCreds=apc.ActMsg|apc.ActBumpMetasync=apc.ActMsg]
+// +gen:payload apc.ActDecommissionCluster={"action": "decommission", "value": {"sid": "target_id", "skip_rebalance": false, "rm_user_data": true}}
+// +gen:payload apc.ActResetStats={"action": "reset-stats", "value": false}
+// Administrative cluster operations: configuration changes, node management, log rotation, shutdown/decommission operations.
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 0, true)
 	if err != nil {
@@ -1002,7 +1002,7 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		query := r.URL.Query()
-		if transient := cos.IsParseBool(query.Get(apc.ActTransient)); transient {
+		if transient := cos.IsParseBool(query.Get(apc.QparamTransient)); transient {
 			p.setCluCfgTransient(w, r, toUpdate, msg)
 		} else {
 			p.setCluCfgPersistent(w, r, toUpdate, msg)
@@ -1102,6 +1102,7 @@ func (p *proxy) cluputMsg(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// +gen:payload apc.ActSetConfig={"action": "set-config", "value": {"timeout": {"send_file_time": "10m"}}}
 func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
 	ctx := &configModifier{
 		pre:      _setConfPre,
@@ -1211,7 +1212,7 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 		Method: http.MethodPut,
 		Path:   apc.URLPathDae.S,
 		Body:   cos.MustMarshal(msg),
-		Query:  url.Values{apc.ActTransient: []string{"true"}},
+		Query:  url.Values{apc.QparamTransient: []string{"true"}},
 	}
 	args.to = core.AllNodes
 	p.bcastAndRespond(w, r, args)
@@ -1234,6 +1235,7 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 }
 
 // xstart: rebalance, resilver, other "startables" (see xaction/api.go)
+// +gen:payload apc.ActXactStart={"action": "start-xaction", "name": "rebalance"}
 func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var xargs xact.ArgsMsg
 	if msg.Value != nil {
@@ -1339,6 +1341,7 @@ func (p *proxy) blobdl(smap *smapX, xargs *xact.ArgsMsg, msg *apc.ActMsg) (tsi *
 	return tsi, err
 }
 
+// +gen:payload apc.ActXactStop={"action": "stop-xaction", "name": "rebalance"}
 func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var xargs xact.ArgsMsg
 	if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
@@ -1406,6 +1409,7 @@ func (p *proxy) _checkMaint(xargs *xact.ArgsMsg) error {
 	return nil
 }
 
+// +gen:payload apc.ActReloadBackendCreds={"action": "reload-backend-creds", "name": "aws"}
 func (p *proxy) reloadCreds(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
@@ -1459,6 +1463,10 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 }
 
 // gracefully remove node via apc.ActStartMaintenance, apc.ActDecommission, apc.ActShutdownNode
+// +gen:payload apc.ActStartMaintenance={"action": "start-maintenance", "value": {"sid": "target_id", "skip_rebalance": false}}
+// +gen:payload apc.ActDecommissionNode={"action": "decommission-node", "value": {"sid": "target_id", "skip_rebalance": false, "rm_user_data": true}}
+// +gen:payload apc.ActShutdownNode={"action": "shutdown-node", "value": {"sid": "target_id", "skip_rebalance": false}}
+// +gen:payload apc.ActRmNodeUnsafe={"action": "remove-node-unsafe", "value": {"sid": "target_id", "skip_rebalance": false}}
 func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	var (
 		opts apc.ActValRmNode
@@ -1642,6 +1650,7 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 	ctx.rmdCtx = rmdCtx
 }
 
+// +gen:payload apc.ActStopMaintenance={"action": "stop-maintenance", "value": {"sid": "target_id"}}
 func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	const tag = "stop-maintenance:"
 	var (
@@ -1734,7 +1743,7 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 			p.writeErr(w, r, err)
 			return
 		}
-		if transient := cos.IsParseBool(query.Get(apc.ActTransient)); transient {
+		if transient := cos.IsParseBool(query.Get(apc.QparamTransient)); transient {
 			p.setCluCfgTransient(w, r, toUpdate, msg)
 		} else {
 			p.setCluCfgPersistent(w, r, toUpdate, msg)
@@ -1984,6 +1993,9 @@ func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 // DELETE /v1/cluster - self-unregister //
 //////////////////////////////////////////
 
+// +gen:endpoint DELETE /v1/cluster/daemon/{daemon-id}
+// Remove a node from the cluster by daemon ID.
+// Used for self-initiated node removal (e.g., when a node loses all mountpaths).
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathCluDaemon.L, 1, false)
 	if err != nil {

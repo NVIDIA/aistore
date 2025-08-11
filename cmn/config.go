@@ -232,8 +232,8 @@ type (
 		ToStderr  *bool         `json:"to_stderr,omitempty"`
 		MaxSize   *cos.SizeIEC  `json:"max_size,omitempty"`
 		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
-		FlushTime *cos.Duration `json:"flush_time,omitempty"`
-		StatsTime *cos.Duration `json:"stats_time,omitempty"`
+		FlushTime *cos.Duration `json:"flush_time,omitempty" swaggertype:"primitive,string"`
+		StatsTime *cos.Duration `json:"stats_time,omitempty" swaggertype:"primitive,string"`
 	}
 
 	// TracingConf defines the configuration used for the OpenTelemetry (OTEL) trace exporter.
@@ -283,9 +283,9 @@ type (
 		NotifTime     cos.Duration `json:"notif_time"`      // (IC notifications)
 	}
 	PeriodConfToSet struct {
-		StatsTime     *cos.Duration `json:"stats_time,omitempty"`
-		RetrySyncTime *cos.Duration `json:"retry_sync_time,omitempty"`
-		NotifTime     *cos.Duration `json:"notif_time,omitempty"`
+		StatsTime     *cos.Duration `json:"stats_time,omitempty" swaggertype:"primitive,string"`
+		RetrySyncTime *cos.Duration `json:"retry_sync_time,omitempty" swaggertype:"primitive,string"`
+		NotifTime     *cos.Duration `json:"notif_time,omitempty" swaggertype:"primitive,string"`
 	}
 
 	// maximum intra-cluster latencies (in the increasing order)
@@ -304,15 +304,15 @@ type (
 		ColdGetConflict cos.Duration `json:"cold_get_conflict,omitempty"`
 	}
 	TimeoutConfToSet struct {
-		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
-		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty"`
-		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
-		Startup         *cos.Duration `json:"startup_time,omitempty"`
-		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty"`
-		SendFile        *cos.Duration `json:"send_file_time,omitempty"`
-		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty"`
-		ObjectMD        *cos.Duration `json:"object_md,omitempty"`
-		ColdGetConflict *cos.Duration `json:"cold_get_conflict,omitempty"`
+		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty" swaggertype:"primitive,string"`
+		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty" swaggertype:"primitive,string"`
+		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty" swaggertype:"primitive,string"`
+		Startup         *cos.Duration `json:"startup_time,omitempty" swaggertype:"primitive,string"`
+		JoinAtStartup   *cos.Duration `json:"join_startup_time,omitempty" swaggertype:"primitive,string"`
+		SendFile        *cos.Duration `json:"send_file_time,omitempty" swaggertype:"primitive,string"`
+		EcStreams       *cos.Duration `json:"ec_streams_time,omitempty" swaggertype:"primitive,string"`
+		ObjectMD        *cos.Duration `json:"object_md,omitempty" swaggertype:"primitive,string"`
+		ColdGetConflict *cos.Duration `json:"cold_get_conflict,omitempty" swaggertype:"primitive,string"`
 	}
 
 	ClientConf struct {
@@ -321,9 +321,9 @@ type (
 		ListObjTimeout cos.Duration `json:"list_timeout"`
 	}
 	ClientConfToSet struct {
-		Timeout        *cos.Duration `json:"client_timeout,omitempty"` // readonly as far as intra-cluster
-		TimeoutLong    *cos.Duration `json:"client_long_timeout,omitempty"`
-		ListObjTimeout *cos.Duration `json:"list_timeout,omitempty"`
+		Timeout        *cos.Duration `json:"client_timeout,omitempty" swaggertype:"primitive,string"` // readonly as far as intra-cluster
+		TimeoutLong    *cos.Duration `json:"client_long_timeout,omitempty" swaggertype:"primitive,string"`
+		ListObjTimeout *cos.Duration `json:"list_timeout,omitempty" swaggertype:"primitive,string"`
 	}
 
 	ProxyConf struct {
@@ -375,8 +375,8 @@ type (
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToSet struct {
-		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty"`
-		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"`
+		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty" swaggertype:"primitive,string"`
+		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty" swaggertype:"primitive,string"`
 		Enabled         *bool         `json:"enabled,omitempty"`
 	}
 
@@ -391,8 +391,8 @@ type (
 		DiskUtilLowWM   *int64        `json:"disk_util_low_wm,omitempty"`
 		DiskUtilHighWM  *int64        `json:"disk_util_high_wm,omitempty"`
 		DiskUtilMaxWM   *int64        `json:"disk_util_max_wm,omitempty"`
-		IostatTimeLong  *cos.Duration `json:"iostat_time_long,omitempty"`
-		IostatTimeShort *cos.Duration `json:"iostat_time_short,omitempty"`
+		IostatTimeLong  *cos.Duration `json:"iostat_time_long,omitempty" swaggertype:"primitive,string"`
+		IostatTimeShort *cos.Duration `json:"iostat_time_short,omitempty" swaggertype:"primitive,string"`
 	}
 
 	RebalanceConf struct {
@@ -402,7 +402,7 @@ type (
 	}
 	RebalanceConfToSet struct {
 		XactConfToSet
-		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
+		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty" swaggertype:"primitive,string"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -510,7 +510,7 @@ type (
 		ServerNameTLS *string `json:"domain_tls,omitempty"`
 		ClientCA      *string `json:"client_ca_tls,omitempty"`
 		// added v3.26
-		IdleConnTimeout     *cos.Duration `json:"idle_conn_time,omitempty"`
+		IdleConnTimeout     *cos.Duration `json:"idle_conn_time,omitempty" swaggertype:"primitive,string"`
 		MaxIdleConnsPerHost *int          `json:"idle_conns_per_host,omitempty"`
 		MaxIdleConns        *int          `json:"idle_conns,omitempty"`
 		// cont-d
@@ -545,7 +545,7 @@ type (
 		TestFileCount *int          `json:"test_files,omitempty"`
 		HardErrs      *int          `json:"error_limit,omitempty"`
 		IOErrs        *int          `json:"io_err_limit,omitempty"`
-		IOErrTime     *cos.Duration `json:"io_err_time,omitempty"`
+		IOErrTime     *cos.Duration `json:"io_err_time,omitempty" swaggertype:"primitive,string"`
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
@@ -577,7 +577,7 @@ type (
 		Factor   uint8        `json:"factor"`   // only average
 	}
 	KeepaliveTrackerConfToSet struct {
-		Interval *cos.Duration `json:"interval,omitempty"`
+		Interval *cos.Duration `json:"interval,omitempty" swaggertype:"primitive,string"`
 		Name     *string       `json:"name,omitempty" list:"readonly"`
 		Factor   *uint8        `json:"factor,omitempty"`
 	}
@@ -586,7 +586,7 @@ type (
 		Timeout cos.Duration `json:"timeout"`
 	}
 	DownloaderConfToSet struct {
-		Timeout *cos.Duration `json:"timeout,omitempty"`
+		Timeout *cos.Duration `json:"timeout,omitempty" swaggertype:"primitive,string"`
 	}
 
 	DsortConf struct {
@@ -606,7 +606,7 @@ type (
 		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
 		EKMMissingKey       *string       `json:"ekm_missing_key,omitempty"`
 		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
-		CallTimeout         *cos.Duration `json:"call_timeout,omitempty" swaggertype:"primitive,integer"`
+		CallTimeout         *cos.Duration `json:"call_timeout,omitempty" swaggertype:"primitive,string"`
 		DsorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 	}
 
@@ -627,8 +627,8 @@ type (
 	TransportConfToSet struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty"`
 		Burst            *int          `json:"burst_buffer,omitempty"`
-		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
-		QuiesceTime      *cos.Duration `json:"quiescent,omitempty"`
+		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty" swaggertype:"primitive,string"`
+		QuiesceTime      *cos.Duration `json:"quiescent,omitempty" swaggertype:"primitive,string"`
 		LZ4BlockMaxSize  *cos.SizeIEC  `json:"lz4_block,omitempty"`
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
@@ -645,7 +645,7 @@ type (
 		MinFree        *cos.SizeIEC  `json:"min_free,omitempty"`
 		DefaultBufSize *cos.SizeIEC  `json:"default_buf,omitempty"`
 		SizeToGC       *cos.SizeIEC  `json:"to_gc,omitempty"`
-		HousekeepTime  *cos.Duration `json:"hk_time,omitempty"`
+		HousekeepTime  *cos.Duration `json:"hk_time,omitempty" swaggertype:"primitive,string"`
 		MinPctTotal    *int          `json:"min_pct_total,omitempty"`
 		MinPctFree     *int          `json:"min_pct_free,omitempty"`
 	}
@@ -711,7 +711,7 @@ type (
 	}
 	RateLimitBaseToSet struct {
 		Verbs     *string       `json:"per_op_max_tokens,omitempty"`
-		Interval  *cos.Duration `json:"interval,omitempty"`
+		Interval  *cos.Duration `json:"interval,omitempty" swaggertype:"primitive,string"`
 		MaxTokens *int          `json:"max_tokens,omitempty"`
 		Enabled   *bool         `json:"enabled,omitempty"`
 	}
@@ -873,7 +873,7 @@ func (c *Config) TestingEnv() bool {
 func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
 	var anyExists bool
 	for key := range query {
-		if key == apc.ActTransient {
+		if key == apc.QparamTransient {
 			continue
 		}
 		anyExists = true

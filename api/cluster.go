@@ -271,7 +271,7 @@ func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient bool) error {
 		q.Set(key, val)
 	}
 	if transient {
-		q.Set(apc.ActTransient, "true")
+		q.Set(apc.QparamTransient, "true")
 	}
 
 	bp.Method = http.MethodPut
@@ -296,7 +296,7 @@ func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToSet, tr
 		msg = apc.ActMsg{Action: apc.ActSetConfig, Value: configToUpdate}
 	)
 	if transient {
-		q = url.Values{apc.ActTransient: []string{"true"}}
+		q = url.Values{apc.QparamTransient: []string{"true"}}
 	}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()

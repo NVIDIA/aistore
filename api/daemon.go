@@ -165,7 +165,7 @@ func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...
 		query.Add(key, val)
 	}
 	if len(transient) > 0 {
-		query.Add(apc.ActTransient, strconv.FormatBool(transient[0]))
+		query.Add(apc.QparamTransient, strconv.FormatBool(transient[0]))
 	}
 	reqParams := AllocRp()
 	{

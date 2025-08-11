@@ -55,6 +55,7 @@ type (
 
 type (
 	// Snode's networking info
+	// swagger:model
 	NetInfo struct {
 		Hostname    string `json:"node_ip_addr"`
 		Port        string `json:"daemon_port"`
@@ -68,6 +69,7 @@ type (
 	}
 
 	// Snode - a node (gateway or target) in a cluster
+	// swagger:model
 	Snode struct {
 		nmr        NetNamer
 		LocalNet   *net.IPNet `json:"-"`

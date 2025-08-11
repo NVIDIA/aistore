@@ -109,11 +109,12 @@ type (
 	}
 
 	fileParser struct {
-		Path         string
-		ParamSet     *paramSet
-		ActionMap    map[string]string
-		ModelActions map[string][]string
-		HTTPExamples operationHTTPExamples
+		Path           string
+		ParamSet       *paramSet
+		ActionMap      map[string]string
+		ModelActions   map[string][]string
+		HTTPExamples   operationHTTPExamples
+		GlobalPayloads map[string]string
 	}
 
 	fileWalker struct {
@@ -122,11 +123,12 @@ type (
 	}
 
 	endpointProcessor struct {
-		Walker       *fileWalker
-		ParamSet     *paramSet
-		ActionMap    map[string]string
-		ModelActions map[string][]string
-		HTTPExamples operationHTTPExamples
+		Walker         *fileWalker
+		ParamSet       *paramSet
+		ActionMap      map[string]string
+		ModelActions   map[string][]string
+		HTTPExamples   operationHTTPExamples
+		GlobalPayloads map[string]string
 	}
 )
 
@@ -179,6 +181,50 @@ func parsePayload(line string) (string, string) {
 	return action, payload
 }
 
+// Auto-generate simple payloads that just need the action field
+func autoGenerateSimplePayloads(ep *endpoint, payloads, actionMap map[string]string) {
+	for _, action := range ep.Actions {
+		if _, exists := payloads[action.Action]; exists {
+			continue
+		}
+
+		actionName := getActionString(action.Action, actionMap)
+		if actionName != "" {
+			payloads[action.Action] = fmt.Sprintf(`{"action": "%s"}`, actionName)
+		}
+	}
+}
+
+func getActionString(actionConstant string, actionMap map[string]string) string {
+	actionName := strings.TrimPrefix(actionConstant, apcPrefix)
+	if mappedName, exists := actionMap[actionName]; exists {
+		return mappedName
+	}
+	return ""
+}
+
+// Collect all payload annotations from all files in the walker
+func (ep *endpointProcessor) collectGlobalPayloads() error {
+	for _, file := range ep.Walker.Files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			trimmedLine := strings.TrimSpace(line)
+			if strings.Contains(trimmedLine, payloadPrefix) {
+				action, payload := parsePayload(trimmedLine)
+				if action != "" && payload != "" {
+					ep.GlobalPayloads[action] = payload
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Generate readable labels from endpoint and action (example: "Copy Bucket")
 func generateLabelFromAction(action actionModel, actionMap map[string]string) string {
 	actionName := strings.TrimPrefix(action.Action, apcPrefix)
@@ -198,43 +244,18 @@ func generateLabelFromPath(path string) string {
 }
 
 // Collect payloads and auto-generate HTTP examples
-func collectAndGenerateHTTPExamples(lines []string, i int, ep *endpoint, actionMap map[string]string) []commandExample {
+func collectAndGenerateHTTPExamples(ep *endpoint, actionMap, globalPayloads map[string]string) []commandExample {
 	var examples []commandExample
 	payloads := make(map[string]string) // action -> payload mapping
 
-	// First pass: collect any manual payloads and legacy examples
-	j := i + 1
-	for ; j < len(lines); j++ {
-		next := strings.TrimSpace(lines[j])
-		if isFunctionDeclaration(next) {
-			break
-		}
-		if next == "" {
-			continue
-		}
-		if !strings.HasPrefix(next, commentPrefix) {
-			break
-		}
-		if strings.Contains(next, endpointPrefix) {
-			continue
-		}
-		if strings.Contains(next, payloadPrefix) {
-			action, payload := parsePayload(next)
-			if action != "" && payload != "" {
-				payloads[action] = payload
-			}
-			continue
-		}
-
-		if isSwaggerComment(next) {
-			continue
-		}
-
-		cleanLine := strings.TrimSpace(strings.TrimPrefix(next, commentPrefix))
-		if cleanLine != "" {
-			break
+	// Copy relevant payloads from global collection
+	for _, action := range ep.Actions {
+		if payload, exists := globalPayloads[action.Action]; exists {
+			payloads[action.Action] = payload
 		}
 	}
+
+	autoGenerateSimplePayloads(ep, payloads, actionMap)
 
 	// Auto-generate examples based on endpoint type
 	switch {
@@ -332,11 +353,12 @@ func main() {
 
 	walker := &fileWalker{Root: targetRoot}
 	processor := &endpointProcessor{
-		Walker:       walker,
-		ParamSet:     &paramSet,
-		ActionMap:    actionMap,
-		ModelActions: make(map[string][]string),
-		HTTPExamples: make(operationHTTPExamples),
+		Walker:         walker,
+		ParamSet:       &paramSet,
+		ActionMap:      actionMap,
+		ModelActions:   make(map[string][]string),
+		HTTPExamples:   make(operationHTTPExamples),
+		GlobalPayloads: make(map[string]string),
 	}
 
 	if err := processor.run(targetRoot); err != nil {
@@ -595,7 +617,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		Models:  models,
 	}
 
-	httpExamples := collectAndGenerateHTTPExamples(lines, i, tempEndpoint, fp.ActionMap)
+	httpExamples := collectAndGenerateHTTPExamples(tempEndpoint, fp.ActionMap, fp.GlobalPayloads)
 
 	// Find the function declaration and extract function name first
 	operationID := ""
@@ -717,6 +739,11 @@ func (ep *endpointProcessor) run(root string) error {
 		return err
 	}
 
+	// Collect all payload annotations globally before processing endpoints
+	if err := ep.collectGlobalPayloads(); err != nil {
+		return err
+	}
+
 	// Clear annotations file and reset counter
 	if err := ep.clearAnnotations(); err != nil {
 		return err
@@ -724,11 +751,12 @@ func (ep *endpointProcessor) run(root string) error {
 
 	for _, file := range ep.Walker.Files {
 		parser := &fileParser{
-			Path:         file,
-			ParamSet:     ep.ParamSet,
-			ActionMap:    ep.ActionMap,
-			ModelActions: ep.ModelActions,
-			HTTPExamples: ep.HTTPExamples,
+			Path:           file,
+			ParamSet:       ep.ParamSet,
+			ActionMap:      ep.ActionMap,
+			ModelActions:   ep.ModelActions,
+			HTTPExamples:   ep.HTTPExamples,
+			GlobalPayloads: ep.GlobalPayloads,
 		}
 		if err := parser.process(); err != nil {
 			return err

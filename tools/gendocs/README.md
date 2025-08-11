@@ -91,7 +91,54 @@ You **must** provide a `+gen:payload` annotation for every action or model speci
 2. **Write the JSON payload** following the appropriate structure (action-wrapped or direct model)
 3. **Add the annotation** using: `// +gen:payload`
 
+#### Payload Annotation Placement
+
+For better code maintainability, place payload annotations **above the subfunction** that implements the action (if it exists):
+
+```go
+// +gen:endpoint PUT /v1/cluster action=[apc.ActSetConfig=cmn.ConfigToSet|apc.ActXactStart=apc.ActMsg]
+// Administrative cluster operations
+func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
+    // Main endpoint handler - clean, no payload clutter
+}
+
+// +gen:payload apc.ActSetConfig={"action": "set-config", "value": {"timeout": {"send_file_time": "10m"}}}
+func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
+    // Subfunction implementation - payload annotation right where the action is implemented
+}
+
+// +gen:payload apc.ActXactStart={"action": "start-xaction", "name": "rebalance"}
+func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+    // Another subfunction with its payload annotation
+}
+```
+
+**Fallback:** If an action doesn't have a dedicated subfunction, place the payload annotation above the main endpoint handler.
+
 These annotations automatically generate the HTTP command examples in the documentation with proper JSON payloads.
+
+### Automatic Payload Generation
+
+The system automatically generates simple payloads for actions that only require the `action` field, reducing manual annotation overhead.
+
+#### Auto-Generated Payloads (Simple Actions)
+Actions that only need `{"action": "action-name"}` are **automatically generated** and don't require manual `+gen:payload` annotations:
+
+```go
+// +gen:endpoint PUT /v1/cluster action=[apc.ActResetConfig=apc.ActMsg|apc.ActRotateLogs=apc.ActMsg]
+// No manual payload needed - these are auto-generated:
+// ✓ apc.ActResetConfig → {"action": "reset-config"}  
+// ✓ apc.ActRotateLogs → {"action": "rotate-logs"}
+```
+
+#### Decision Logic
+- **Auto-generated**: Actions that map to `apc.ActMsg` and only need the action name
+- **Manual required**: Actions with:
+  - Complex `value` objects (configurations, node options, etc.)
+  - Additional fields like `name` (xaction names, provider names, etc.)
+  - Custom model structures (non-action based endpoints)
+
+The auto-generation uses gap-filling logic: it only generates payloads for actions that don't already have manual annotations, ensuring developers maintain full control when needed.
 
 ### Action Constant Mapping
 The system automatically maps action constants to their string values:
