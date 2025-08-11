@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -79,10 +80,11 @@ type (
 		mdmap   map[string]string // remote object metadata (gets sorted when packing)
 
 		// runtime state
-		Lom    *LOM
-		Size   int64
-		suffix string
-		mu     sync.Mutex
+		Lom       *LOM
+		Size      int64
+		suffix    string
+		completed atomic.Bool
+		mu        sync.Mutex
 	}
 )
 
@@ -100,7 +102,8 @@ func NewUfest(id string, lom *LOM) *Ufest {
 	}
 }
 
-func (u *Ufest) Completed() bool { return u.Flags&completed == completed }
+// immutable once completed
+func (u *Ufest) Completed() bool { return u.completed.Load() }
 
 // NOTE:
 // - GetMeta() returns a reference that callers must not mutate
@@ -243,6 +246,9 @@ func (u *Ufest) Load(lom *LOM) error {
 	debug.Assert(u.validNums() == nil)
 
 	u.Lom = lom
+	if u.Flags&completed == completed {
+		u.completed.Store(true)
+	}
 
 	return err
 }
@@ -334,6 +340,9 @@ func (u *Ufest) Store(lom *LOM) error {
 		u.Flags &^= completed
 		return err
 	}
+	// immutable henceforth
+	u.completed.Store(true)
+
 	lom.md.lid.setlmfl(lmflChunk) // TODO -- FIXME: persist
 	return nil
 }
@@ -571,7 +580,7 @@ func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error
 }
 
 //
-// additional lom
+// chunk persistence
 //
 
 func (lom *LOM) getXchunk(buf []byte) ([]byte, error) {
@@ -580,4 +589,114 @@ func (lom *LOM) getXchunk(buf []byte) ([]byte, error) {
 
 func (lom *LOM) setXchunk(data []byte) error {
 	return fs.SetXattr(lom.FQN, xattrChunk, data)
+}
+
+/////////////////
+// UfestReader //
+/////////////////
+
+// UfestReader is a LomReader
+// expected usage pattern: (construct -- read -- close) in a single goroutine
+
+type (
+	UfestReader struct {
+		// parent
+		u *Ufest
+		// chunk
+		cfh  *os.File
+		coff int64
+		cidx int
+		// global
+		goff int64
+	}
+)
+
+var (
+	_ cos.LomReader = (*UfestReader)(nil)
+)
+
+func (u *Ufest) NewReader() (*UfestReader, error) {
+	if !u.Completed() {
+		var cname string
+		if u.Lom != nil {
+			cname = u.Lom.Cname()
+		}
+		return nil, fmt.Errorf("%s is incomplete and cannot be read [%q, %q]", utag, u.ID, cname)
+	}
+	return &UfestReader{u: u}, nil
+}
+
+// TODO -- FIXME: state-wise currently assuming _no_ ReadAt()
+func (r *UfestReader) Read(p []byte) (n int, err error) {
+	u := r.u
+	for len(p) > 0 {
+		// done
+		if r.cidx >= int(u.Num) {
+			debug.Assert(r.goff == u.Size, "offset ", r.goff, " vs full size ", u.Size)
+			return n, io.EOF
+		}
+		c := &u.Chunks[r.cidx]
+
+		// open on demand
+		if r.cfh == nil {
+			debug.Assert(r.coff == 0)
+			r.cfh, err = os.Open(c.Path)
+			if err != nil {
+				return n, err
+			}
+		}
+
+		// read
+		var (
+			m   int
+			rem = min(c.Siz-r.coff, int64(len(p)))
+		)
+		if rem > 0 {
+			m, err = r.cfh.Read(p[:rem])
+			n += m
+		}
+		p = p[m:]
+		r.coff += int64(m)
+		r.goff += int64(m)
+
+		switch err {
+		case io.EOF:
+			if r.coff < c.Siz {
+				return n, io.ErrUnexpectedEOF // truncated
+			}
+		case nil:
+			if rem > int64(m) {
+				continue // (unlikely)
+			}
+		default:
+			return n, err
+		}
+
+		// next chunk
+		if r.coff >= c.Siz {
+			cos.Close(r.cfh)
+			r.cfh = nil
+			r.coff = 0
+			r.cidx++
+
+			if len(p) == 0 {
+				return n, nil
+			}
+		}
+	}
+
+	return n, nil
+}
+
+func (r *UfestReader) Close() error {
+	if r.cfh != nil {
+		cos.Close(r.cfh)
+		r.cfh = nil
+	}
+	return nil
+}
+
+// TODO -- FIXME: niy
+func (*UfestReader) ReadAt([]byte, int64) (int, error) {
+	return 0, cmn.NewErrNotImpl("read-at", utag)
 }

@@ -5,7 +5,6 @@
 package core_test
 
 import (
-	cryptorand "crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -20,8 +19,10 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/trand"
 
+	onexxh "github.com/OneOfOne/xxhash"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -72,6 +73,7 @@ var _ = Describe("LOM", func() {
 
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjectContentResolver{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
@@ -1130,6 +1132,238 @@ var _ = Describe("LOM", func() {
 		})
 	})
 
+	Describe("UfestReader", func() {
+		const (
+			fileSize  = 1 * cos.GiB
+			chunkSize = 64 * cos.MiB
+		)
+
+		It("should correctly read chunked file with checksum validation", func() {
+			testObject := "chunked/large-file.bin"
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+
+			createDummyFile(localFQN)
+			lom := newBasicLom(localFQN, fileSize)
+
+			Expect(cos.CreateDir(filepath.Dir(localFQN))).NotTo(HaveOccurred())
+
+			ufest := core.NewUfest("test-upload-"+cos.GenTie(), lom)
+
+			// Generate large file in chunks and compute original checksum
+			originalChecksum := onexxh.New64()
+			var totalBytesWritten int64
+
+			for chunkNum := 1; totalBytesWritten < fileSize; chunkNum++ {
+				// Calculate this chunk's size
+				remaining := fileSize - totalBytesWritten
+				thisChunkSize := min(chunkSize, remaining)
+
+				chunkPath, err := ufest.ChunkName(chunkNum)
+				Expect(err).NotTo(HaveOccurred())
+
+				createTestChunk(chunkPath, int(thisChunkSize), originalChecksum)
+
+				chunk := &core.Uchunk{
+					Path:  chunkPath,
+					Cksum: nil, // No individual chunk checksums for this test
+					MD5:   "",
+				}
+
+				err = ufest.Add(chunk, thisChunkSize, int64(chunkNum))
+				Expect(err).NotTo(HaveOccurred())
+
+				totalBytesWritten += thisChunkSize
+			}
+
+			// Verify we wrote the expected amount
+			Expect(totalBytesWritten).To(Equal(int64(fileSize)))
+			Expect(ufest.Size).To(Equal(int64(fileSize)))
+
+			// Store manifest (this will mark it as completed)
+			err := ufest.Store(lom)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ufest.Completed()).To(BeTrue())
+
+			// Create chunk reader
+			reader, err := ufest.NewReader()
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(reader.Close()).NotTo(HaveOccurred())
+			}()
+
+			// Read entire file
+			readChecksum := onexxh.New64()
+			buffer := make([]byte, 32*cos.KiB) // 32KB read buffer
+			var totalBytesRead int64
+
+			for {
+				n, rerr := reader.Read(buffer)
+				if n > 0 {
+					readChecksum.Write(buffer[:n])
+					totalBytesRead += int64(n)
+				}
+
+				if rerr == io.EOF {
+					break
+				}
+				Expect(rerr).NotTo(HaveOccurred())
+			}
+
+			// Verify
+			Expect(totalBytesRead).To(Equal(int64(fileSize)))
+
+			originalSum := originalChecksum.Sum64()
+			readSum := readChecksum.Sum64()
+			Expect(readSum).To(Equal(originalSum))
+
+			By(fmt.Sprintf("Successfully read %d bytes in %d chunks, checksums match (0x%x)",
+				totalBytesRead, ufest.Num, originalSum))
+		})
+
+		It("should handle edge cases correctly", func() {
+			By("testing empty file")
+			testObject := "chunked/empty-file.bin"
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+
+			createDummyFile(localFQN)
+			lom := newBasicLom(localFQN, 0)
+			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom)
+
+			// Create single empty chunk
+			chunkPath, err := ufest.ChunkName(1)
+			Expect(err).NotTo(HaveOccurred())
+
+			createTestChunk(chunkPath, 0, nil) // Create empty file, no xxhash needed
+
+			chunk := &core.Uchunk{Path: chunkPath}
+			err = ufest.Add(chunk, 0, 1)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = ufest.Store(lom)
+			Expect(err).NotTo(HaveOccurred())
+
+			reader, err := ufest.NewReader()
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(reader.Close()).NotTo(HaveOccurred())
+			}()
+
+			buffer := make([]byte, 1024)
+			n, err := reader.Read(buffer)
+			Expect(n).To(Equal(0))
+			Expect(err).To(Equal(io.EOF))
+
+			By("testing incomplete manifest")
+			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "incomplete.bin")
+			createDummyFile(fqn2)
+			lom2 := newBasicLom(fqn2)
+			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2)
+
+			// Don't call Store() - manifest remains incomplete
+			_, err = ufest2.NewReader()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("incomplete"))
+		})
+
+		It("should validate chunk size consistency", func() {
+			testObject := "chunked/size-test.bin"
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+
+			createDummyFile(localFQN)
+			lom := newBasicLom(localFQN)
+			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom)
+
+			// Create chunk that's smaller than declared size
+			chunkPath, err := ufest.ChunkName(1)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create file with only 100 bytes using our helper
+			createTestChunk(chunkPath, 100, nil)
+
+			// But claim it's 200 bytes in the manifest
+			chunk := &core.Uchunk{Path: chunkPath}
+			err = ufest.Add(chunk, 200, 1)
+			Expect(err).NotTo(HaveOccurred())
+
+			lom.SetSize(200)
+			err = ufest.Store(lom)
+			Expect(err).NotTo(HaveOccurred())
+
+			reader, err := ufest.NewReader()
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(reader.Close()).NotTo(HaveOccurred())
+			}()
+
+			// Reading should fail with unexpected EOF
+			buffer := make([]byte, 300)
+			_, err = reader.Read(buffer)
+			Expect(err).To(Equal(io.ErrUnexpectedEOF))
+		})
+
+		It("should handle multiple small chunks", func() {
+			const (
+				numChunks     = 100
+				chunkSize     = 1 * cos.MiB
+				totalFileSize = numChunks * chunkSize
+			)
+
+			testObject := "chunked/many-small-chunks.bin"
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+
+			createDummyFile(localFQN)
+			lom := newBasicLom(localFQN, totalFileSize)
+			ufest := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom)
+
+			originalChecksum := onexxh.New64()
+
+			// Create many small chunks
+			for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
+				chunkPath, err := ufest.ChunkName(chunkNum)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create chunk and update checksum in one step
+				createTestChunk(chunkPath, chunkSize, originalChecksum)
+
+				chunk := &core.Uchunk{Path: chunkPath}
+				err = ufest.Add(chunk, chunkSize, int64(chunkNum))
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			err := ufest.Store(lom)
+			Expect(err).NotTo(HaveOccurred())
+
+			reader, err := ufest.NewReader()
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(reader.Close()).NotTo(HaveOccurred())
+			}()
+
+			// Read with various buffer sizes to test edge cases
+			readChecksum := onexxh.New64()
+			buffer := make([]byte, 7*cos.KiB)
+			var totalRead int64
+
+			for {
+				n, rerr := reader.Read(buffer)
+				if n > 0 {
+					readChecksum.Write(buffer[:n])
+					totalRead += int64(n)
+				}
+				if rerr == io.EOF {
+					break
+				}
+				Expect(rerr).NotTo(HaveOccurred())
+			}
+
+			Expect(totalRead).To(Equal(int64(totalFileSize)))
+			Expect(readChecksum.Sum64()).To(Equal(originalChecksum.Sum64()))
+
+			By(fmt.Sprintf("Successfully read %d chunks totaling %d bytes",
+				numChunks, totalFileSize))
+		})
+	})
+
 })
 
 //
@@ -1164,12 +1398,28 @@ func createTestFile(fqn string, size int) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	if size > 0 {
-		buff := make([]byte, size)
-		_, _ = cryptorand.Read(buff)
-		_, err := testFile.Write(buff)
+		reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+		_, err := io.Copy(testFile, reader)
 		_ = testFile.Close()
 
 		Expect(err).ShouldNot(HaveOccurred())
+	}
+}
+
+func createTestChunk(fqn string, size int, xxhash io.Writer) {
+	_ = os.Remove(fqn)
+	testFile, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	if size > 0 {
+		mw := cos.IniWriterMulti(testFile, xxhash)
+		reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+		_, err := io.Copy(mw, reader)
+		_ = testFile.Close()
+
+		Expect(err).ShouldNot(HaveOccurred())
+	} else {
+		_ = testFile.Close()
 	}
 }
 
