@@ -104,7 +104,6 @@ func loadCertHandler(c *cli.Context) (err error) {
 	return err
 }
 
-// TODO: check expiration times as well
 func validateCertHandler(c *cli.Context) error {
 	smap, err := getClusterMap(c)
 	if err != nil {
@@ -121,6 +120,7 @@ func validateCertHandler(c *cli.Context) error {
 	if err != nil {
 		return V(err)
 	}
+	cnt += checkCertExpiration(c, info, smap.Primary)
 	for pid, snode := range smap.Pmap {
 		if pid == smap.Primary.ID() {
 			continue
@@ -131,6 +131,7 @@ func validateCertHandler(c *cli.Context) error {
 			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
 			continue
 		}
+		cnt += checkCertExpiration(c, i, snode)
 		cnt += compareCerts(c, info, i, smap.Primary, snode)
 	}
 	for tid, snode := range smap.Tmap {
@@ -140,11 +141,12 @@ func validateCertHandler(c *cli.Context) error {
 			actionWarn(c, fmt.Sprintf("%s returned error: %v", snode, V(err)))
 			continue
 		}
+		cnt += checkCertExpiration(c, i, snode)
 		cnt += compareCerts(c, info, i, smap.Primary, snode)
 	}
 
 	if cnt == 0 {
-		actionDone(c, "Done: all TLS certificates are identical")
+		actionDone(c, "Done: all TLS certificates are identical and valid")
 	} else if cnt > 1 {
 		warn := fmt.Sprintf("\n==== %d differences overall ====", cnt)
 		actionWarn(c, warn)
@@ -162,6 +164,20 @@ func compareCerts(c *cli.Context, info, i cos.StrKVs, pnode, snode *meta.Snode) 
 			pnode, snode, k, v1, k, v2)
 		actionWarn(c, warn)
 		return 1
+	}
+	return 0
+}
+
+func checkCertExpiration(c *cli.Context, info cos.StrKVs, snode *meta.Snode) int {
+	if errorMsg, hasError := info["error"]; hasError {
+		warn := fmt.Sprintf("node %s certificate issue: %s", snode, errorMsg)
+		actionWarn(c, warn)
+		return 1
+	}
+
+	if warning, hasWarning := info["warning"]; hasWarning {
+		warn := fmt.Sprintf("node %s certificate warning: %s", snode, warning)
+		actionWarn(c, warn)
 	}
 	return 0
 }

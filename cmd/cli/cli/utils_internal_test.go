@@ -5,12 +5,15 @@
 package cli
 
 import (
+	"fmt"
+	"io"
 	"reflect"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/urfave/cli"
@@ -543,4 +546,27 @@ func TestFlattenJSONSectionFiltering(t *testing.T) {
 	// Should have both sections
 	tassert.Fatalf(t, allMap["log.level"] == "3", "Expected log.level=3 in full config")
 	tassert.Fatalf(t, allMap["mirror.enabled"] == "true", "Expected mirror.enabled=true in full config")
+}
+
+func TestCheckCertExpiration(t *testing.T) {
+	fcyan = fmt.Sprint
+
+	node := &meta.Snode{}
+	node.Init("test-node", "target")
+
+	app := cli.NewApp()
+	app.ErrWriter = io.Discard
+	c := cli.NewContext(app, nil, nil)
+
+	info := cos.StrKVs{"error": "tls-cert-expired"}
+	result := checkCertExpiration(c, info, node)
+	tassert.Errorf(t, result == 1, "expected 1 for error case, got %d", result)
+
+	info = cos.StrKVs{"warning": "tls-cert-will-soon-expire"}
+	result = checkCertExpiration(c, info, node)
+	tassert.Errorf(t, result == 0, "expected 0 for warning case, got %d", result)
+
+	info = cos.StrKVs{}
+	result = checkCertExpiration(c, info, node)
+	tassert.Errorf(t, result == 0, "expected 0 for no issues case, got %d", result)
 }
