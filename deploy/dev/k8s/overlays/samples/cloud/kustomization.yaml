@@ -4,13 +4,13 @@ kind: Kustomization
 namespace: ais
 
 resources:
-- ../../base
+- ../../../base
 
 configMapGenerator:
 - name: ais-cluster-config-override
   behavior: replace
   files:
-    - ais_cluster_override_cloud.json
+    - ais_cluster_override.json
   options:
     annotations:
       kapp.k14s.io/change-group: "setup"
@@ -34,7 +34,7 @@ secretGenerator:
 patches:
 - patch: |
     - op: add
-      path: /spec/template/spec/containers/0/envFrom/-
+      path: /spec/template/spec/containers/0/envFrom
       value:
         secretRef:
           name: aws-credentials
