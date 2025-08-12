@@ -188,6 +188,14 @@ var (
 		Subcommands: []cli.Command{
 			showCmdRemoteCluster,
 			{
+				Name:         "config",
+				Usage:        "Show remote cluster configuration",
+				ArgsUsage:    showRemoteConfigArgument,
+				Flags:        sortFlags(showCmdsFlags[cmdConfig]),
+				Action:       showRemoteConfigHandler,
+				BashComplete: showRemoteConfigCompletions,
+			},
+			{
 				Name:      "dashboard",
 				Usage:     "Show remote cluster dashboard with performance and health metrics",
 				ArgsUsage: "",
@@ -392,6 +400,36 @@ func showClusterConfigHandler(c *cli.Context) error {
 	return showClusterConfig(c, c.Args().Get(0))
 }
 
+func showRemoteConfigHandler(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return incorrectUsageMsg(c, "missing arguments (hint: "+tabtab+")")
+	}
+
+	aliasOrUUID := c.Args().Get(0)
+	section := c.Args().Get(1)
+
+	clusters, bpMap, err := getRemoteClustersData()
+	if err != nil {
+		return err
+	}
+
+	var targetCluster *meta.RemAis
+	for _, ra := range clusters {
+		if ra.Alias == aliasOrUUID || ra.UUID == aliasOrUUID {
+			targetCluster = ra
+			break
+		}
+	}
+
+	if targetCluster == nil {
+		return fmt.Errorf("remote cluster %q not found (alias or UUID)", aliasOrUUID)
+	}
+
+	bp := bpMap[targetCluster.UUID]
+	hint := fmt.Sprintf(configSectionNotFoundHint, fmt.Sprintf("ais show remote config %s --json", aliasOrUUID))
+	return showConfigForBP(c, bp, section, hint)
+}
+
 func clusterDashboardHandler(c *cli.Context) error {
 	var (
 		smap       *meta.Smap
@@ -438,10 +476,11 @@ func showAnyConfigHandler(c *cli.Context) error {
 }
 
 // TODO: prune config.ClusterConfig - hide deprecated "non_electable"
-func showClusterConfig(c *cli.Context, section string) error {
+// shared printer for cluster configuration, local or remote (via BaseParams)
+func showConfigForBP(c *cli.Context, bp api.BaseParams, section, notFoundHint string) error {
 	var (
 		usejs          = flagIsSet(c, jsonFlag)
-		cluConfig, err = api.GetClusterConfig(apiBP)
+		cluConfig, err = api.GetClusterConfig(bp)
 	)
 	if err != nil {
 		return err
@@ -451,9 +490,7 @@ func showClusterConfig(c *cli.Context, section string) error {
 		if printSectionJSON(c, cluConfig, section) {
 			return nil
 		}
-		// Section not found - show helpful error with available sections
-		showSectionNotFoundError(c, section, cluConfig,
-			"Try 'ais config cluster --json' to see all sections, or remove --json flag for table format")
+		showSectionNotFoundError(c, section, cluConfig, notFoundHint)
 		return nil
 	}
 
@@ -465,7 +502,7 @@ func showClusterConfig(c *cli.Context, section string) error {
 	if section != "backend" {
 		flat = flattenJSON(cluConfig, section)
 	} else {
-		backends, err := api.GetConfiguredBackends(apiBP)
+		backends, err := api.GetConfiguredBackends(bp)
 		if err != nil {
 			return V(err)
 		}
@@ -474,8 +511,7 @@ func showClusterConfig(c *cli.Context, section string) error {
 
 	// Check if section was found (for non-backend sections)
 	if section != "" && section != "backend" && len(flat) == 0 {
-		showSectionNotFoundError(c, section, cluConfig,
-			"Try 'ais config cluster --json' to see all sections, or remove --json flag for table format")
+		showSectionNotFoundError(c, section, cluConfig, notFoundHint)
 		return nil
 	}
 
@@ -501,6 +537,12 @@ func showClusterConfig(c *cli.Context, section string) error {
 	}
 
 	return err
+}
+
+// (remote) reuses the shared printer above
+func showClusterConfig(c *cli.Context, section string) error {
+	hint := fmt.Sprintf(configSectionNotFoundHint, "ais config cluster --json")
+	return showConfigForBP(c, apiBP, section, hint)
 }
 
 func showNodeConfig(c *cli.Context) error {

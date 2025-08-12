@@ -860,6 +860,16 @@ func suggestRemote(_ *cli.Context) {
 	}
 }
 
+func showRemoteConfigCompletions(c *cli.Context) {
+	if c.NArg() == 0 {
+		suggestRemote(c)
+		return
+	}
+	if c.NArg() == 1 {
+		configSectionCompletions(c, cmdCluster)
+	}
+}
+
 func cliPropCompletions(c *cli.Context) {
 	err := cmn.IterFields(gcfg, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {

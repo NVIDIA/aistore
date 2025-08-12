@@ -372,6 +372,8 @@ const (
 		"                NODE_ID [ inherited | local | all [CONFIG SECTION OR PREFIX]]"
 
 	showClusterConfigArgument = "[CONFIG_SECTION]"
+	showRemoteConfigArgument  = aliasArgument + " [CONFIG_SECTION]"
+	configSectionNotFoundHint = "Try '%s' to see all sections, or remove --json flag for table format"
 	nodeConfigArgument        = nodeIDArgument + " " + keyValuePairsArgument
 
 	// remais
