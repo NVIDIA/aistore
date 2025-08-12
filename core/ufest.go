@@ -28,6 +28,10 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
+// TODO:
+// - space cleanup; orphans
+// - err-busy
+
 const (
 	umetaver = 1
 )
@@ -89,13 +93,13 @@ type (
 )
 
 func NewUfest(id string, lom *LOM) *Ufest {
-	startTime := time.Now()
+	now := time.Now()
 	if id == "" {
-		id = cos.GenTAID(startTime)
+		id = cos.GenTAID(now)
 	}
 	return &Ufest{
 		ID:      id,
-		Created: startTime,
+		Created: now,
 		Chunks:  make([]Uchunk, 0, iniChunksCap),
 		Lom:     lom,
 		suffix:  chunkNameSepa + id + chunkNameSepa,
@@ -175,6 +179,9 @@ func (u *Ufest) GetChunk(num uint16, locked bool) *Uchunk {
 		u.mu.Lock()
 		defer u.mu.Unlock()
 	}
+	if int(num) <= len(u.Chunks) && u.Chunks[num-1].Num == num {
+		return &u.Chunks[num-1]
+	}
 	for i := range u.Chunks {
 		if u.Chunks[i].Num == num {
 			return &u.Chunks[i]
@@ -186,10 +193,10 @@ func (u *Ufest) GetChunk(num uint16, locked bool) *Uchunk {
 func (u *Ufest) Abort(lom *LOM) error {
 	u.mu.Lock()
 	for i := range u.Chunks {
-		chunk := &u.Chunks[i]
-		if err := cos.RemoveFile(chunk.Path); err != nil {
+		c := &u.Chunks[i]
+		if err := cos.RemoveFile(c.Path); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("u.Abort: failed to remove [", u.ID, lom.Cname(), chunk.Path, err, "]")
+				nlog.Warningln("abort", utag, "- failed to remove [", u.ID, lom.Cname(), c.Path, err, "]")
 			}
 		}
 	}
@@ -206,7 +213,7 @@ func (u *Ufest) ChunkName(num int) (string, error) {
 		return "", errors.New(utag + ": nil lom")
 	}
 	if num <= 0 {
-		return "", fmt.Errorf("%s: invalid chunk number (%d)", _utag(lom.Cname()), num)
+		return "", fmt.Errorf("%s: invalid chunk number (%d)", u._itag(lom.Cname()), num)
 	}
 	var (
 		contentResolver = fs.CSM.Resolver(fs.ObjChunkType)
@@ -226,7 +233,7 @@ func (u *Ufest) Load(lom *LOM) error {
 
 	data, err := lom.getXchunk(cbuf)
 	if err != nil {
-		return _ucerr(lom.Cname(), err)
+		return u._errXattr(lom.Cname(), err)
 	}
 
 	// validate and strip/remove the trailing checksum
@@ -272,53 +279,114 @@ func (u *Ufest) _load(lom *LOM, compressedData, buf []byte) error {
 	}
 
 	if err := u.unpack(data); err != nil {
-		return _ucerr(lom.Cname(), err)
+		return u._errXattr(lom.Cname(), err)
 	}
 	if u.Size != lom.Lsize(true) {
-		return fmt.Errorf("%s load size mismatch: %d vs %d", _utag(lom.Cname()), u.Size, lom.Lsize(true))
+		return fmt.Errorf("%s load size mismatch: %d vs %d", u._itag(lom.Cname()), u.Size, lom.Lsize(true))
 	}
 	return nil
 }
 
-func _ucerr(cname string, err error) error {
+func (u *Ufest) _errXattr(cname string, err error) error {
 	if cos.IsErrXattrNotFound(err) {
-		return cmn.NewErrLmetaNotFound(_utag(cname), err)
+		return cmn.NewErrLmetaNotFound(u._itag(cname), err)
 	}
-	return os.NewSyscallError(getxattr, fmt.Errorf("%s, err: %w", _utag(cname), err))
+	return os.NewSyscallError(getxattr, fmt.Errorf("%s, err: %w", u._itag(cname), err))
 }
 
-func _utag(cname string) string { return itag + "[" + cname + "]" }
+func (u *Ufest) _itag(cnames ...string) string {
+	var cname string
+	if len(cnames) > 0 {
+		cname = cnames[0]
+	} else if u.Lom != nil {
+		cname = u.Lom.Cname()
+	}
+	return itag + "[" + cname + "@" + u.ID + "]"
+}
 
-func (u *Ufest) Store(lom *LOM) error {
+func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
 	// validate
-	var total int64
-	if u.Num == 0 || int(u.Num) != len(u.Chunks) {
-		return fmt.Errorf("%s: num %d vs %d", _utag(lom.Cname()), u.Num, len(u.Chunks))
+	if err := u._errCompleted(lom); err != nil {
+		return err
 	}
+	if u.Num == 0 || int(u.Num) != len(u.Chunks) {
+		return fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.Num, len(u.Chunks))
+	}
+
 	lsize := lom.Lsize(true)
 	if u.Size != 0 && u.Size != lsize {
-		return fmt.Errorf("%s store size: %d vs %d", _utag(lom.Cname()), u.Size, lsize)
+		return fmt.Errorf("%s store size: %d vs %d", u._itag(lom.Cname()), u.Size, lsize)
 	}
+
+	var total int64
 	for i := range u.Num {
 		total += u.Chunks[i].Siz
 	}
 	if total != lsize {
-		return fmt.Errorf("%s: total size mismatch (%d vs %d)", _utag(lom.Cname()), total, lsize)
+		return fmt.Errorf("%s: total size mismatch (%d vs %d)", u._itag(lom.Cname()), total, lsize)
 	}
 
 	if err := u.validNums(); err != nil {
-		return fmt.Errorf("%s: failed to store, err: %v", _utag(lom.Cname()), err)
+		return fmt.Errorf("%s: failed to store, err: %v", u._itag(lom.Cname()), err)
 	}
 
-	u.Flags = completed
+	// fixup chunk #1
+	orig := u.Chunks[0].Path
+	if len(testing) == 0 {
+		if err := lom.RenameFinalize(u.Chunks[0].Path); err != nil {
+			return err
+		}
+	}
+	u.Chunks[0].Path = lom.FQN
 
-	// pack
+	// store
+	u.Flags |= completed
+	u.completed.Store(true)
+
 	sgl := g.pmm.NewSGL(xattrChunkDflt)
-	defer sgl.Free()
+	err := u._store(lom, sgl)
+	sgl.Free()
+	if err != nil {
+		u.Flags &^= completed // undo
+		u.completed.Store(false)
+		if len(testing) == 0 {
+			if nerr := cos.Rename(lom.FQN, orig); nerr != nil {
+				nlog.Errorf("failed to store %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
+				T.FSHC(err, lom.Mountpath(), lom.FQN)
+			} else {
+				u.Chunks[0].Path = orig
+			}
+		}
+	}
+	return err
+}
 
+func (u *Ufest) _errCompleted(lom *LOM) error {
+	if u.Completed() {
+		return errors.New(u._itag(lom.Cname()) + ": already completed")
+	}
+	return nil
+}
+
+func (u *Ufest) StorePartial(lom *LOM) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	if err := u._errCompleted(lom); err != nil {
+		return err
+	}
+	u.Flags &^= completed // always incomplete here
+	sgl := g.pmm.NewSGL(xattrChunkDflt)
+	err := u._store(lom, sgl)
+	sgl.Free()
+	return err
+}
+
+func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL) error {
+	// compress
 	zw := lz4.NewWriter(sgl)
 	u.pack(zw)
 	zw.Close()
@@ -331,38 +399,48 @@ func (u *Ufest) Store(lom *LOM) error {
 	sgl.Write(checksumBuf[:])
 
 	if sgl.Len() > xattrChunkMax {
-		return fmt.Errorf("%s: too large (%d > %d max)", _utag(lom.Cname()), sgl.Len(), xattrChunkMax)
+		return fmt.Errorf("%s: too large (%d > %d max)", u._itag(lom.Cname()), sgl.Len(), xattrChunkMax)
 	}
-
 	// write
 	b := sgl.Bytes()
-	if err := lom.setXchunk(b); err != nil {
-		u.Flags &^= completed
-		return err
-	}
-	// immutable henceforth
-	u.completed.Store(true)
+	return u.setXchunk(lom, b)
+}
 
-	lom.md.lid.setlmfl(lmflChunk) // TODO -- FIXME: persist
-	return nil
+// note get/set xattr asymmetry, Load and Store paths respectively
+
+func (lom *LOM) getXchunk(buf []byte) ([]byte, error) {
+	return fs.GetXattrBuf(lom.FQN, xattrChunk, buf)
+}
+
+func (u *Ufest) setXchunk(lom *LOM, data []byte) error {
+	fqn := u.Chunks[0].Path
+	if u.Completed() {
+		fqn = lom.FQN
+	}
+	return fs.SetXattr(fqn, xattrChunk, data)
 }
 
 func (u *Ufest) validNums() error {
 	if u.Num == 0 {
 		return errors.New("no chunks to validate")
 	}
-	for i, c := range u.Chunks {
+	for i := range u.Chunks {
+		c := &u.Chunks[i]
 		if c.Num <= 0 || c.Num > u.Num {
 			return fmt.Errorf("chunk %d has invalid part number [%d, %d]", i, c.Num, u.Num)
 		}
 		for j := range i {
 			if u.Chunks[j].Num == c.Num {
-				return fmt.Errorf("duplicate part number: [%d, %d, %d]", c.Num, i, j)
+				return fmt.Errorf("duplicate chunk number: [%d, %d, %d]", c.Num, i, j)
 			}
 		}
 	}
 	return nil
 }
+
+//
+// pack -- unpack -- xattr --------------------------------
+//
 
 func (u *Ufest) pack(w io.Writer) {
 	var (
@@ -580,23 +658,46 @@ func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error
 }
 
 //
-// chunk persistence
+// LOM: chunk persistence ------------------------------------------------------
 //
 
-func (lom *LOM) getXchunk(buf []byte) ([]byte, error) {
-	return fs.GetXattrBuf(lom.FQN, xattrChunk, buf)
+// TODO:
+// - do not start-mpt if bucket.mirror.enabled - check and fail w/NIY
+func (lom *LOM) CompleteUfest(u *Ufest) error {
+	lom.Lock(true)
+	defer lom.Unlock(true)
+
+	if err := u.StoreCompleted(lom); err != nil {
+		lom.abortUfest(u, err)
+		return err
+	}
+	lom.SetAtimeUnix(u.Created.UnixNano())
+
+	lom.md.lid.setlmfl(lmflChunk)
+	if err := lom.PersistMain(); err != nil {
+		lom.md.lid.clrlmfl(lmflChunk)
+		lom.abortUfest(u, err)
+		return err
+	}
+
+	return nil
 }
 
-func (lom *LOM) setXchunk(data []byte) error {
-	return fs.SetXattr(lom.FQN, xattrChunk, data)
+// rollback w/ full cleanup
+func (lom *LOM) abortUfest(u *Ufest, err error) {
+	if nerr := u.Abort(lom); nerr != nil {
+		nlog.Errorf("failed to complete %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
+		T.FSHC(err, lom.Mountpath(), lom.FQN)
+	}
 }
 
 /////////////////
 // UfestReader //
 /////////////////
 
-// UfestReader is a LomReader
-// expected usage pattern: (construct -- read -- close) in a single goroutine
+// - is a LomReader
+// - not thread-safe on purpose
+// - usage pattern: (construct -- read -- close) in a single goroutine
 
 type (
 	UfestReader struct {
@@ -617,16 +718,11 @@ var (
 
 func (u *Ufest) NewReader() (*UfestReader, error) {
 	if !u.Completed() {
-		var cname string
-		if u.Lom != nil {
-			cname = u.Lom.Cname()
-		}
-		return nil, fmt.Errorf("%s is incomplete and cannot be read [%q, %q]", utag, u.ID, cname)
+		return nil, fmt.Errorf("%s: is incomplete - cannot be read", u._itag())
 	}
 	return &UfestReader{u: u}, nil
 }
 
-// TODO -- FIXME: state-wise currently assuming _no_ ReadAt()
 func (r *UfestReader) Read(p []byte) (n int, err error) {
 	u := r.u
 	for len(p) > 0 {
@@ -696,7 +792,61 @@ func (r *UfestReader) Close() error {
 	return nil
 }
 
-// TODO -- FIXME: niy
-func (*UfestReader) ReadAt([]byte, int64) (int, error) {
-	return 0, cmn.NewErrNotImpl("read-at", utag)
+// consistent with io.ReaderAt semantics:
+// - do not use or modify reader's offset (r.goff) or any other state
+// - open the needed chunk(s) transiently and close them immediately
+// - return io.EOF when less than len(p)
+func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
+	if off < 0 {
+		return 0, errors.New(utag + ": negative offset")
+	}
+	u := r.u
+	if off >= u.Size {
+		return 0, io.EOF
+	}
+
+	// skip to position
+	var (
+		idx      int
+		chunkoff = off
+	)
+	for ; idx < len(u.Chunks) && chunkoff >= u.Chunks[idx].Siz; idx++ {
+		chunkoff -= u.Chunks[idx].Siz
+	}
+	if idx >= len(u.Chunks) {
+		return 0, io.EOF
+	}
+
+	total := len(p)
+	if total == 0 {
+		return 0, nil
+	}
+	// read
+	for n < total && idx < len(u.Chunks) {
+		c := &u.Chunks[idx]
+		debug.Assert(c.Siz-chunkoff > 0, c.Siz, " vs ", chunkoff)
+		toRead := min(int64(total-n), c.Siz-chunkoff)
+		fh, err := os.Open(c.Path)
+		if err != nil {
+			return n, err
+		}
+
+		var m int
+		m, err = fh.ReadAt(p[n:n+int(toRead)], chunkoff)
+		cos.Close(fh)
+
+		n += m
+		if err != nil {
+			return n, err
+		}
+
+		// 2nd, etc. chunks
+		idx++
+		chunkoff = 0
+	}
+
+	if n < total {
+		err = io.EOF
+	}
+	return n, err
 }

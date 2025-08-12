@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/readers"
-	"github.com/NVIDIA/aistore/tools/trand"
 
 	onexxh "github.com/OneOfOne/xxhash"
 	. "github.com/onsi/ginkgo/v2"
@@ -73,7 +72,7 @@ var _ = Describe("LOM", func() {
 
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjectContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
@@ -1070,68 +1069,6 @@ var _ = Describe("LOM", func() {
 		})
 	})
 
-	Describe("Chunked Objects – round-trip store/load", func() {
-		const (
-			objName = "chunked/roundtrip.bin"
-			// total size 1 MiB split into three chunks
-			sz1       = int64(400_000)
-			sz2       = int64(400_000)
-			sz3       = int64(cos.MiB) - sz1 - sz2
-			totalSize = int64(cos.MiB)
-		)
-
-		var (
-			fqn = mis[0].MakePathFQN(&localBckB, fs.ObjectType, objName)
-			// helper to build a manifest with paths + fake checksums
-			newManifest = func() *core.Ufest {
-				return &core.Ufest{
-					Size: totalSize,
-					Num:  3,
-					Chunks: []core.Uchunk{
-						{Siz: sz1, Num: 3, Path: "ch/" + objName + ".00001", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
-						{Siz: sz2, Num: 2, Path: "ch/" + objName + ".00002", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
-						{Siz: sz3, Num: 1, Path: "ch/" + objName + ".00003", Cksum: cos.NewCksum(cos.ChecksumCesXxh, trand.String(16))},
-					},
-				}
-			}
-		)
-
-		It("should persist and reload chunk manifest & flag", func() {
-			// ── 1. create Chunk-#1 and initial LOM ────────────────────────────────
-			createTestFile(fqn, int(sz1))
-			lom := newBasicLom(fqn, totalSize)
-			manifest := newManifest()
-
-			// store manifest, then persist normal LOM metadata
-			Expect(manifest.Store(lom)).To(Succeed())
-			Expect(persist(lom)).To(Succeed())
-			lom.UncacheUnless()
-
-			// ── 2. reload the object (fresh LOM) ──────────────────────────────────
-			re := newBasicLom(fqn)
-			Expect(re.Load(false, false)).To(Succeed())
-
-			// NOTE: IsChunked() is still false at this point because the
-			// manifest hasn’t been loaded yet – load it now, which also
-			// re-sets the lmflChunk flag in memory.
-			var out core.Ufest
-			Expect(out.Load(re)).To(Succeed())
-
-			// flag should now be restored
-			// TODO -- FIXME Expect(re.IsChunked()).To(BeTrue())
-			Expect(re.Lsize()).To(Equal(totalSize))
-
-			// compare manifest contents
-			Expect(out.Num).To(Equal(manifest.Num))
-			Expect(out.Size).To(Equal(manifest.Size))
-			for i := range 3 {
-				Expect(out.Chunks[i].Siz).To(Equal(manifest.Chunks[i].Siz))
-				Expect(out.Chunks[i].Path).To(Equal(manifest.Chunks[i].Path))
-				Expect(out.Chunks[i].Cksum.Equal(manifest.Chunks[i].Cksum)).To(BeTrue())
-			}
-		})
-	})
-
 	Describe("UfestReader", func() {
 		const (
 			fileSize  = 1 * cos.GiB
@@ -1142,7 +1079,7 @@ var _ = Describe("LOM", func() {
 			testObject := "chunked/large-file.bin"
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
 
-			createDummyFile(localFQN)
+			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, fileSize)
 
 			Expect(cos.CreateDir(filepath.Dir(localFQN))).NotTo(HaveOccurred())
@@ -1180,7 +1117,7 @@ var _ = Describe("LOM", func() {
 			Expect(ufest.Size).To(Equal(int64(fileSize)))
 
 			// Store manifest (this will mark it as completed)
-			err := ufest.Store(lom)
+			err := ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
 
@@ -1225,7 +1162,7 @@ var _ = Describe("LOM", func() {
 			testObject := "chunked/empty-file.bin"
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
 
-			createDummyFile(localFQN)
+			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, 0)
 			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom)
 
@@ -1239,7 +1176,7 @@ var _ = Describe("LOM", func() {
 			err = ufest.Add(chunk, 0, 1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = ufest.Store(lom)
+			err = ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()
@@ -1255,7 +1192,7 @@ var _ = Describe("LOM", func() {
 
 			By("testing incomplete manifest")
 			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "incomplete.bin")
-			createDummyFile(fqn2)
+			createTestFile(fqn2, 0)
 			lom2 := newBasicLom(fqn2)
 			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2)
 
@@ -1269,7 +1206,7 @@ var _ = Describe("LOM", func() {
 			testObject := "chunked/size-test.bin"
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
 
-			createDummyFile(localFQN)
+			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN)
 			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom)
 
@@ -1286,7 +1223,7 @@ var _ = Describe("LOM", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			lom.SetSize(200)
-			err = ufest.Store(lom)
+			err = ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()
@@ -1311,7 +1248,7 @@ var _ = Describe("LOM", func() {
 			testObject := "chunked/many-small-chunks.bin"
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
 
-			createDummyFile(localFQN)
+			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, totalFileSize)
 			ufest := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom)
 
@@ -1330,7 +1267,7 @@ var _ = Describe("LOM", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			err := ufest.Store(lom)
+			err := ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()

@@ -475,8 +475,8 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	ecode, errF := poi.finalize()
 	freePOI(poi)
 
-	// .6 write manifest
-	if err := manifest.Store(lom); err != nil {
+	// .6 write manifest // TODO -- FIXME: niy
+	if err := manifest.StoreCompleted(lom, true); err != nil {
 		s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
 		return
 	}

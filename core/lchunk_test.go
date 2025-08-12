@@ -42,6 +42,8 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 		bucketLocal = "CHUNK_TEST_Local"
 	)
 
+	const unitTestingWithNoRealChunks = true
+
 	localBck := cmn.Bck{Name: bucketLocal, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
@@ -142,7 +144,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest := createChunkManifest(testFileSize, 3, chunkSizes, "test-session-001", lom)
 
 				// Store manifest
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				// After store, manifest should be marked as completed
@@ -202,7 +204,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				chunkSizes := []int64{testFileSize}
 				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "single-chunk-session", lom)
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -231,7 +233,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 				manifest := createChunkManifest(testFileSize, numChunks, chunkSizes, "many-chunks-session", lom)
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -267,7 +269,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				testTime := time.Date(2025, 8, 2, 15, 30, 45, 0, time.UTC)
 				manifest.Created = testTime
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -293,7 +295,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: 524000, Num: 2, Path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "def456")},
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid chunk-manifest"))
 			})
@@ -307,7 +309,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				manifest.Num = 0
 				manifest.Chunks = []core.Uchunk{}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid chunk-manifest"))
 			})
@@ -335,7 +337,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					manifest.Chunks[i].Cksum = cos.NewCksum(cos.ChecksumCesXxh, longVal)
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("too large"))
 			})
@@ -359,7 +361,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				// Store valid manifest first
 				chunkSizes := []int64{testFileSize}
 				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "version-test", lom)
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Corrupt the version byte
@@ -382,7 +384,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				// Store valid manifest
 				chunkSizes := []int64{testFileSize}
 				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "checksum-test", lom)
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				b, err := fs.GetXattr(localFQN, xattrChunk)
@@ -408,7 +410,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				// Store valid manifest first
 				chunkSizes := []int64{testFileSize}
 				manifest := createChunkManifest(testFileSize, 1, chunkSizes, "truncated-test", lom)
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Truncate the xattr data
@@ -437,7 +439,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -462,7 +464,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -489,7 +491,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: 0, Num: 3, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty2"), MD5: "md5_3"}, // another zero - total = 1048576
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -513,7 +515,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -536,7 +538,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -569,7 +571,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 					{Siz: testFileSize, Num: 1, Path: "chunk1", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "abc123"), MD5: "md5hash"},
 				}
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				loadedManifest := &core.Ufest{}
@@ -605,7 +607,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				// Initially not completed
 				Expect(manifest.Completed()).To(BeFalse())
 
-				err := manifest.Store(lom)
+				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
 				Expect(err).NotTo(HaveOccurred())
 
 				// After store, should be completed
