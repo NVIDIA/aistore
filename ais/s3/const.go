@@ -11,21 +11,21 @@ import (
 
 const (
 	// AWS URL params
-	QparamVersioning        = "versioning"
+	QparamVersioning        = "versioning" // Configure or retrieve bucket versioning settings
 	QparamLifecycle         = "lifecycle"
 	QparamCORS              = "cors"
 	QparamPolicy            = "policy"
 	QparamACL               = "acl"
-	QparamMultiDelete       = "delete"
-	QparamMaxKeys           = "max-keys"
-	QparamPrefix            = "prefix"
-	QparamContinuationToken = "continuation-token"
-	QparamStartAfter        = "start-after"
-	QparamDelimiter         = "delimiter"
+	QparamMultiDelete       = "delete"             // Delete multiple objects in a single request
+	QparamMaxKeys           = "max-keys"           // Maximum number of objects to return in listing
+	QparamPrefix            = "prefix"             // Filter objects by key prefix
+	QparamContinuationToken = "continuation-token" // Pagination token for continued listing
+	QparamStartAfter        = "start-after"        // Start listing after this object key
+	QparamDelimiter         = "delimiter"          // Delimiter for grouping object keys
 
 	// multipart
-	QparamMptUploads        = "uploads"
-	QparamMptUploadID       = "uploadId"
+	QparamMptUploads        = "uploads"  // Start multipart upload or list active uploads
+	QparamMptUploadID       = "uploadId" // Complete, abort, or list parts of specific multipart upload
 	QparamMptPartNo         = "partNumber"
 	QparamMptMaxUploads     = "max-uploads"
 	QparamMptUploadIDMarker = "upload-id-marker"

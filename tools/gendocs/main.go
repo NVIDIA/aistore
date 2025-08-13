@@ -16,15 +16,18 @@ import (
 )
 
 var (
-	apcPath         string
 	targetRoot      string
 	annotationsPath string
 	swaggerYamlPath string
 )
 
+var (
+	// Parameter directories to scan for Qparam constants
+	paramDirectories = []string{"api/apc", "ais/s3"}
+)
+
 const (
 	// File paths and extensions
-	apcRelativePath         = "api/apc/query.go"
 	aisRelativePath         = "ais"
 	annotationsRelativePath = "tools/gendocs/gendocs-temp/annotations.go"
 	docsRelativePath        = ".docs"
@@ -55,12 +58,14 @@ const (
 	headerFlag      = "-H"
 	dataFlag        = "-d"
 	contentTypeJSON = "Content-Type: application/json"
+	contentTypeXML  = "Content-Type: application/xml"
 	backslash       = " \\"
 
 	// Action parsing constants
-	actionPrefix = "action=["
-	modelPrefix  = "model=["
-	apcPrefix    = "apc."
+	actionPrefix     = "action=["
+	modelPrefix      = "model=["
+	payloadRefPrefix = "payload="
+	apcPrefix        = "apc."
 
 	// Temporary files for vendor extensions
 	modelActionsFileName = "model-actions.yaml"
@@ -105,6 +110,7 @@ type (
 		Tag          string
 		Actions      []actionModel
 		Models       []string
+		PayloadRef   string
 		HTTPExamples []commandExample
 	}
 
@@ -157,9 +163,14 @@ func generateHTTPCommand(ep *endpoint, payload string) string {
 
 	cmd := curlBase + method + backslash + newlineChar
 
-	// Add headers and payload only if JSON payload provided
+	// Add headers and payload only if payload provided
 	if payload != "" {
-		cmd += "  " + headerFlag + " '" + contentTypeJSON + "'" + backslash + newlineChar
+		// Detect S3 endpoints and use appropriate content type
+		contentType := contentTypeJSON
+		if strings.HasPrefix(ep.Path, "/s3/") || ep.Path == "/s3" {
+			contentType = contentTypeXML
+		}
+		cmd += "  " + headerFlag + " '" + contentType + "'" + backslash + newlineChar
 		cmd += fmt.Sprintf("  %s '%s'%s", dataFlag, payload, backslash) + newlineChar
 	}
 
@@ -285,15 +296,31 @@ func collectAndGenerateHTTPExamples(ep *endpoint, actionMap, globalPayloads map[
 			})
 		}
 	case len(examples) == 0:
-		httpCmd := generateHTTPCommand(ep, "")
+		if ep.PayloadRef != "" {
+			if payload, exists := globalPayloads[ep.PayloadRef]; exists {
+				httpCmd := generateHTTPCommand(ep, payload)
 
-		method := strings.ToLower(ep.Method)
-		label := strings.ToUpper(method[:1]) + method[1:] + " " + generateLabelFromPath(ep.Path)
+				method := strings.ToLower(ep.Method)
+				label := strings.ToUpper(method[:1]) + method[1:] + " " + generateLabelFromPath(ep.Path)
 
-		examples = append(examples, commandExample{
-			Label:   label,
-			Command: httpCmd,
-		})
+				examples = append(examples, commandExample{
+					Label:   label,
+					Command: httpCmd,
+				})
+			}
+		}
+
+		if len(examples) == 0 {
+			httpCmd := generateHTTPCommand(ep, "")
+
+			method := strings.ToLower(ep.Method)
+			label := strings.ToUpper(method[:1]) + method[1:] + " " + generateLabelFromPath(ep.Path)
+
+			examples = append(examples, commandExample{
+				Label:   label,
+				Command: httpCmd,
+			})
+		}
 	}
 
 	return examples
@@ -320,7 +347,6 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("failed to determine project root: %v", err))
 	}
-	apcPath = filepath.Join(projectRoot, apcRelativePath)
 	targetRoot = filepath.Join(projectRoot, aisRelativePath)
 	annotationsPath = filepath.Join(projectRoot, annotationsRelativePath)
 	swaggerYamlPath = filepath.Join(projectRoot, docsRelativePath, "swagger.yaml")
@@ -341,7 +367,7 @@ func main() {
 	}
 
 	var paramSet paramSet
-	if err := paramSet.loadFromFile(apcPath); err != nil {
+	if err := paramSet.loadFromDirectories(projectRoot, paramDirectories); err != nil {
 		panic(err)
 	}
 
@@ -525,6 +551,26 @@ func parseActionClause(annotationLine string) []actionModel {
 	return actions
 }
 
+// Extracts payload reference from payload=value clause
+func parsePayloadClause(annotationLine string) string {
+	payloadStart := strings.Index(annotationLine, payloadRefPrefix)
+	if payloadStart == -1 {
+		return ""
+	}
+
+	valueStart := payloadStart + len(payloadRefPrefix)
+	remaining := annotationLine[valueStart:]
+
+	var endIdx int
+	if spaceIdx := strings.Index(remaining, " "); spaceIdx != -1 {
+		endIdx = spaceIdx
+	} else {
+		endIdx = len(remaining)
+	}
+
+	return strings.TrimSpace(remaining[:endIdx])
+}
+
 // Extracts models from the model=[...] clause
 func parseModelClause(annotationLine string) []string {
 	models := make([]string, 0, 4)
@@ -555,11 +601,13 @@ func parseModelClause(annotationLine string) []string {
 func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 	line := strings.TrimSpace(lines[i])
 
-	// check for conflicting action and model clauses
+	// check that only one annotation type is used
 	hasAction := strings.Contains(line, actionPrefix)
 	hasModel := strings.Contains(line, modelPrefix)
-	if hasAction && hasModel {
-		return endpoint{}, fmt.Errorf("endpoint annotation cannot contain both 'action=' and 'model=' clauses in the same line: %s", line)
+	hasPayload := strings.Contains(line, payloadRefPrefix)
+
+	if (hasAction && hasModel) || (hasAction && hasPayload) || (hasModel && hasPayload) {
+		return endpoint{}, fmt.Errorf("endpoint annotation can only contain one of 'action=', 'model=', or 'payload=' in the same line: %s", line)
 	}
 
 	trimmed := strings.TrimSpace(line[len(commentWithSpace+endpointPrefix):])
@@ -608,13 +656,15 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 
 	actions := parseActionClause(line)
 	models := parseModelClause(line)
+	payloadRef := parsePayloadClause(line)
 
 	tempEndpoint := &endpoint{
-		Method:  method,
-		Path:    path,
-		Params:  params,
-		Actions: actions,
-		Models:  models,
+		Method:     method,
+		Path:       path,
+		Params:     params,
+		Actions:    actions,
+		Models:     models,
+		PayloadRef: payloadRef,
 	}
 
 	httpExamples := collectAndGenerateHTTPExamples(tempEndpoint, fp.ActionMap, fp.GlobalPayloads)

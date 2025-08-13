@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"strings"
 )
 
@@ -26,14 +27,40 @@ type param struct {
 // paramSet is a map of parameter names to their definitions
 type paramSet map[string]param
 
-// populates the paramSet from a Go source file
-func (ps *paramSet) loadFromFile(filePath string) error {
+// scans multiple directories for Go files with Qparam constants
+func (ps *paramSet) loadFromDirectories(projectRoot string, dirs []string) error {
+	*ps = make(paramSet)
+
+	for _, dir := range dirs {
+		dirPath := filepath.Join(projectRoot, dir)
+		walker := &fileWalker{Root: dirPath}
+
+		if err := walker.walk(); err != nil {
+			return fmt.Errorf("failed to walk directory %s: %v", dir, err)
+		}
+
+		for _, filePath := range walker.Files {
+			if err := ps.processParamFile(filePath); err != nil {
+				fmt.Printf("Warning: failed to parse %s: %v\n", filePath, err)
+			}
+		}
+	}
+	return nil
+}
+
+// processes a single Go file for Qparam constants
+func (ps *paramSet) processParamFile(filePath string) error {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("failed to parse file %s: %v", filePath, err)
+		return err
 	}
-	*ps = extractQparamConstants(node)
+	packagePrefix := node.Name.Name + dot
+	newParams := extractQparamConstants(node, packagePrefix)
+
+	for k, v := range newParams {
+		(*ps)[k] = v
+	}
 	return nil
 }
 
@@ -78,8 +105,8 @@ func extractActionConstants(node *ast.File) map[string]string {
 	return actions
 }
 
-// extracts Qparam constants from the AST
-func extractQparamConstants(node *ast.File) map[string]param {
+// extracts Qparam constants from the AST with specified package prefix
+func extractQparamConstants(node *ast.File, packagePrefix string) map[string]param {
 	params := make(map[string]param)
 	for _, decl := range node.Decls {
 		gen, ok := decl.(*ast.GenDecl)
@@ -100,7 +127,7 @@ func extractQparamConstants(node *ast.File) map[string]param {
 				}
 
 				desc := extractDescription(valSpec)
-				paramName := apcQparamPrefix + name.Name[6:]
+				paramName := packagePrefix + name.Name
 				params[paramName] = param{
 					Name:        paramName,
 					Description: desc,

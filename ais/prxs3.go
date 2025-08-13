@@ -156,8 +156,9 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /s3
 // NOTE: unlike native API, this one is limited to list only those that are currently present in the BMD.
+// +gen:endpoint GET /s3
+// List all buckets from the bucket metadata
 func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 	var (
 		bmd  = p.owner.bmd.get()
@@ -174,7 +175,8 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 	sgl.Free()
 }
 
-// PUT /s3/<bucket-name> (i.e., create bucket)
+// +gen:endpoint PUT /s3/{bucket-name}
+// Create a new S3 bucket
 func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	if err := p.access(r.Header, nil, apc.AceCreateBucket); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
@@ -194,7 +196,9 @@ func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 }
 
-// DELETE /s3/<bucket-name> (TODO: AWS allows to delete bucket only if it is empty)
+// TODO: AWS allows to delete bucket only if it is empty
+// +gen:endpoint DELETE /s3/{bucket-name}
+// Delete an S3 bucket
 func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
@@ -219,6 +223,8 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	}
 }
 
+// +gen:endpoint POST /s3/{bucket-name}/{object-name} [s3.QparamMptUploads=string,s3.QparamMptUploadID=string]
+// Handle S3 multipart upload operations
 func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3BckObj, 0)
@@ -249,8 +255,10 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []
 	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
-// DELETE /s3/i<bucket-name>?delete
-// Delete a list of objects
+// DELETE /s3/<bucket-name>?delete
+// +gen:endpoint DELETE /s3/{bucket-name} [s3.QparamMultiDelete=string] payload=s3-delete-multiple
+// +gen:payload s3-delete-multiple=<?xml version="1.0" encoding="UTF-8"?><Delete><Object><Key>file1.txt</Key></Object><Object><Key>file2.txt</Key></Object></Delete>
+// Delete a list of objects from an S3 bucket
 func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
@@ -314,7 +322,8 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	sgl.Free()
 }
 
-// HEAD /s3/<bucket-name>
+// +gen:endpoint HEAD /s3/{bucket-name}
+// Check if S3 bucket exists and retrieve metadata
 func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
@@ -337,8 +346,8 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	w.Header().Set(cos.S3HdrBckRegion, s3.AISRegion)
 }
 
-// GET /s3/<bucket-name>
-// https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
+// +gen:endpoint GET /s3/{bucket-name} [s3.QparamMaxKeys=string,s3.QparamPrefix=string,s3.QparamContinuationToken=string,s3.QparamStartAfter=string,s3.QparamDelimiter=string]
+// List objects in an S3 bucket
 func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket string, q url.Values) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
@@ -440,7 +449,8 @@ func (p *proxy) lsAllPagesS3(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg,
 	return lst, nil
 }
 
-// PUT /s3/<bucket-name>/<object-name>
+// +gen:endpoint PUT /s3/{bucket-name}/{object-name}
+// Upload or copy an S3 object
 func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if r.Header.Get(cos.S3HdrObjSrc) == "" {
 		p.directPutObjS3(w, r, items)
@@ -529,7 +539,8 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
-// GET /s3/<bucket-name>/<object-name>
+// +gen:endpoint GET /s3/{bucket-name}/{object-name}
+// Download an S3 object or list multipart uploads
 func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, listMultipart bool) {
 	bck := p.initByNameOnly(w, r, items[0] /*bucket*/)
 	if bck == nil {
@@ -615,7 +626,8 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 	sgl.Free()
 }
 
-// HEAD /s3/<bucket-name>/<object-name>
+// +gen:endpoint HEAD /s3/{bucket-name}/{object-name}
+// Retrieve S3 object metadata and headers
 func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3BckObj, 0)
@@ -653,7 +665,8 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 	p.reverseRequest(w, r, tsi.ID(), parsedURL)
 }
 
-// DELETE /s3/<bucket-name>/<object-name>
+// +gen:endpoint DELETE /s3/{bucket-name}/{object-name}
+// Delete an S3 object
 func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3BckObj, 0)
@@ -687,7 +700,8 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
 }
 
-// GET /s3/<bucket-name>?versioning
+// +gen:endpoint GET /s3/{bucket-name} [s3.QparamVersioning=string]
+// Get S3 bucket versioning configuration
 func (p *proxy) getBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	bck := p.initByNameOnly(w, r, bucket)
 	if bck == nil {
@@ -710,7 +724,9 @@ func (p *proxy) unsupported(w http.ResponseWriter, r *http.Request, bucket strin
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// PUT /s3/<bucket-name>?versioning
+// +gen:endpoint PUT /s3/{bucket-name} [s3.QparamVersioning=string] payload=s3-versioning
+// +gen:payload s3-versioning=<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>
+// Configure S3 bucket versioning settings
 func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
 	msg := &apc.ActMsg{Action: apc.ActSetBprops}
 	if p.forwardCP(w, r, nil, msg.Action+"-"+bucket) {

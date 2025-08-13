@@ -117,6 +117,31 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 These annotations automatically generate the HTTP command examples in the documentation with proper JSON payloads.
 
+#### For S3-Compatible Endpoints: `payload=reference`
+S3-compatible endpoints require a different approach because they expect **AWS S3 XML format**, not AIStore JSON action messages. Use the `payload=` parameter to directly reference XML payload examples.
+
+```go
+// +gen:endpoint DELETE /s3/{bucket-name} [s3.QparamMultiDelete=string] payload=s3-delete-multiple
+// +gen:payload s3-delete-multiple=<?xml version="1.0" encoding="UTF-8"?><Delete><Object><Key>file1.txt</Key></Object><Object><Key>file2.txt</Key></Object></Delete>
+// Delete a list of objects from an S3 bucket
+func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket string) {
+    // S3-compatible implementation
+}
+
+// +gen:endpoint PUT /s3/{bucket-name} [s3.QparamVersioning=string] payload=s3-versioning
+// +gen:payload s3-versioning=<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>
+// Configure S3 bucket versioning settings  
+func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucket string) {
+    // S3-compatible implementation
+}
+```
+
+**Key Differences:**
+- **Content-Type**: Automatically generates `Content-Type: application/xml` headers (not JSON)
+- **Payload Format**: Uses raw XML (not JSON action wrappers)
+- **Direct Reference**: `payload=key` directly maps to `+gen:payload key=xml-content`
+- **Usage**: Only for endpoints that expect XML request bodies (e.g., S3 delete multiple objects, versioning configuration)
+
 ### Automatic Payload Generation
 
 The system automatically generates simple payloads for actions that only require the `action` field, reducing manual annotation overhead.
