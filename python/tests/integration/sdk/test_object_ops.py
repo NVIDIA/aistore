@@ -712,7 +712,7 @@ class TestObjectOps(ParallelTestBase):
             dest_obj = dest_bucket.object(source_obj.name)
             etl_config = ETLConfig(name=etl_name, args="123")
             response = source_obj.copy(dest_obj, etl=etl_config)
-            self.assertEqual(response.status_code, 200)
+            self.assertIn(response.status_code, [200, 204])
 
             # Verify the copied object has the transformed content (MD5 hash)
             copied_obj = dest_bucket.object(source_obj.name)

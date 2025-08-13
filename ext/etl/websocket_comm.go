@@ -155,11 +155,11 @@ func (ws *webSocketComm) setupConnection(_, podAddr string) (ecode int, err erro
 	return 0, err
 }
 
-func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (int64, int, error) {
+func (ws *webSocketComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, args *InlineTransArgs) (int64, int, error) {
 	// use pre-established inline sessions to serve inline transform requests
-	return ws.inlineSession.transform(lom, latestVer, false /*sync*/, cos.NopWriteCloser(w), &core.ETLArgs{
-		TransformArgs: targs,
-		Local:         true, // inline transform is always local
+	return ws.inlineSession.transform(lom, args.LatestVer, false /*sync*/, cos.NopWriteCloser(w), &core.ETLArgs{
+		Pipeline:      args.Pipeline,
+		TransformArgs: args.TransformArgs,
 	})
 }
 
@@ -246,14 +246,14 @@ func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.Writ
 
 	if args != nil {
 		task.ctrlmsg.Targs = args.TransformArgs
-		if wss.msg.IsDirectPut() && !args.Local && args.Daddr != "" {
-			task.ctrlmsg.Daddr = args.Daddr
+		if len(args.Pipeline) != 0 {
+			task.ctrlmsg.Pipeline = args.Pipeline.Pack()
 		}
 	}
 
-	// local object should contain empty direct put address; remote object should contain valid direct put address
-	debug.Assert(args == nil || task.ctrlmsg.Daddr == "" && args.Local || task.ctrlmsg.Daddr != "" && !args.Local)
-	debug.Assert(task.ctrlmsg.Targs == "" || task.ctrlmsg.Daddr == "") // Targs is for inline transform, while Daddr is for offline transform
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(WebSocket, lom.Cname(), args.Pipeline.String(), err, ecode)
+	}
 
 	l, c := len(wss.workCh), cap(wss.workCh)
 	wss.chanFull.Check(l, c)
@@ -422,6 +422,14 @@ func (wctx *wsConnCtx) readLoop() (err error) {
 				// TODO: update task.written with the actual size of direct put (for stats)
 				task.err = cmn.ErrSkip // indicates that the object was successfully handled by direct put
 				task.done(nil)
+				continue
+			}
+
+			if task.w == nil {
+				err = fmt.Errorf("task.w is nil, expected direct put but got result from pipeline: %s, task: %v", task.ctrlmsg.Pipeline, task)
+				debug.AssertNoErr(err)
+				task.done(err)
+				cos.DrainReader(r)
 				continue
 			}
 

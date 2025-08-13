@@ -200,7 +200,7 @@ func readExamples(fileName string) (examples []*core.TFExample, err error) {
 	return core.NewTFRecordReader(f).ReadAllExamples()
 }
 
-func testETLObject(t *testing.T, etlName string, args any, inPath, outPath string, fTransform transformFunc, fEq filesEqualFunc) {
+func testETLObject(t *testing.T, etlName string, args any, inPath, outPath string, fTransform transformFunc, fEq filesEqualFunc, pipeline ...string) {
 	var (
 		inputFilePath          string
 		expectedOutputFilePath string
@@ -245,7 +245,7 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	defer fho.Close()
 
 	tlog.Logf("GET %s via etl[%s], args=%v\n", bck.Cname(objName), etlName, args)
-	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args}, bck, objName, fho)
+	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args, Pipeline: pipeline}, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
 	stat, _ := fho.Stat()
@@ -649,7 +649,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 
 // also responsible for cleanup: ETL xaction, ETL containers, destination bucket.
 func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckFrom cmn.Bck, objCnt, fileSize int, timeout time.Duration,
-	skipByteStats bool, bcktest testBucketConfig, transform transformFunc) {
+	skipByteStats bool, bcktest testBucketConfig, transform transformFunc, pipeline ...string) {
 	var (
 		xid, kind      string
 		err            error
@@ -671,8 +671,9 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 			bckTo := bcktest.setupBckTo(t, prefix, objCnt)
 			msg := &apc.TCBMsg{
 				Transform: apc.Transform{
-					Name:    etlName,
-					Timeout: cos.Duration(requestTimeout),
+					Name:     etlName,
+					Pipeline: pipeline,
+					Timeout:  cos.Duration(requestTimeout),
 				},
 				CopyBckMsg: apc.CopyBckMsg{Force: true, Prefix: prefix},
 				NumWorkers: numWorkers,

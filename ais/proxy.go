@@ -1381,6 +1381,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				p.writeErr(w, r, err, http.StatusNotFound)
 				return
 			}
+			for _, etlName := range tcbmsg.Transform.Pipeline {
+				if err := p.etlExists(etlName); err != nil {
+					p.writeErr(w, r, err, http.StatusNotFound)
+					return
+				}
+			}
 		}
 		if tcbmsg.Sync && tcbmsg.Prepend != "" {
 			p.writeErrf(w, r, errPrependSync, tcbmsg.Prepend)
@@ -1460,6 +1466,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			if err := p.etlExists(tcomsg.Transform.Name); err != nil {
 				p.writeErr(w, r, err, http.StatusNotFound)
 				return
+			}
+			for _, etlName := range tcomsg.Transform.Pipeline {
+				if err := p.etlExists(etlName); err != nil {
+					p.writeErr(w, r, err, http.StatusNotFound)
+					return
+				}
 			}
 		}
 		if tcomsg.Sync && tcomsg.Prepend != "" {

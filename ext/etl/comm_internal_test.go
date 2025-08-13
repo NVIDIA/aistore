@@ -108,7 +108,11 @@ var _ = Describe("CommunicatorTest", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeFalse())
 
-			_, ecode, err := comm.InlineTransform(w, r, lom, val, receivedEtlTransformArgs)
+			_, ecode, err := comm.InlineTransform(w, r, lom, &InlineTransArgs{
+				LatestVer:     val,
+				TransformArgs: receivedEtlTransformArgs,
+				Pipeline:      nil,
+			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ecode).To(Equal(0))
 		}))

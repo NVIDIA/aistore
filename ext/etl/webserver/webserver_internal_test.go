@@ -349,7 +349,7 @@ func TestWebSocketHandler(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "WebSocket connection failed: %v", err)
 
 	// Test direct PUT
-	err = conn.WriteJSON(etl.WebsocketCtrlMsg{Daddr: directPutServer.URL + directPutURL})
+	err = conn.WriteJSON(etl.WebsocketCtrlMsg{Pipeline: directPutServer.URL + directPutURL})
 	tassert.Fatalf(t, err == nil, "Write JSON failed")
 	err = conn.WriteMessage(websocket.BinaryMessage, originalData)
 	tassert.Fatalf(t, err == nil, "Write message failed")

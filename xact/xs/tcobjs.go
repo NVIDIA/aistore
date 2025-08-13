@@ -449,12 +449,16 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 
 func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 	r := wi.r
-	a := r.copier.prepare(lom, r.args.BckTo, &r.args.Msg.TCBMsg, r.config, buf, r.owt)
+	a, err := r.copier.prepare(lom, r.args.BckTo, &r.args.Msg.TCBMsg, r.config, buf, r.owt)
+	if err != nil {
+		r.Abort(err)
+		return
+	}
 
 	// multiple messages per x-tco (compare w/ x-tcb)
 	a.LatestVer, a.Sync = wi.msg.LatestVer, wi.msg.Sync
 
-	err := r.copier.do(a, lom, r.p.dm)
+	err = r.copier.do(a, lom, r.p.dm)
 	if cos.IsNotExist(err) && lrit.lrp == lrpList {
 		r.AddErr(err, 5, cos.SmoduleXs)
 	}

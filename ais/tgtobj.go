@@ -1524,7 +1524,6 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
-	local := tsi.ID() == t.SID()
 
 	daddr, err := url.Parse(cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname)))) // use escaped URL to simplify parsing on the ETL side)
 	if err != nil {
@@ -1538,9 +1537,11 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		daddr.RawQuery = q.Encode()
 	}
 
-	coi.ETLArgs.Daddr = daddr.String()
-	coi.ETLArgs.Local = local
-	if !local {
+	if tsi.ID() != t.SID() {
+		if coi.ETLArgs.Pipeline == nil {
+			coi.ETLArgs.Pipeline = make(apc.ETLPipeline, 0, 1)
+		}
+		coi.ETLArgs.Pipeline.Join(daddr.String()) // attach direct put destination target to the pipeline
 		var r cos.ReadOpenCloser
 		if coi.PutWOC != nil {
 			_, ecode, err := coi.PutWOC(lom, coi.LatestVer, coi.Sync, nil, coi.ETLArgs)

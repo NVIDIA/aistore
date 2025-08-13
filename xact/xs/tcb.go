@@ -386,9 +386,12 @@ func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 	if r.nwp.workers == nil {
 		args := r.args // TCBArgs
-		a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+		a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+		if err != nil {
+			return err
+		}
 
-		err := r.copier.do(a, lom, r.dm)
+		err = r.copier.do(a, lom, r.dm)
 		if err == nil && args.Msg.Sync {
 			r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
 		}
@@ -554,7 +557,10 @@ func (worker *tcbworker) do(lif core.LIF, buf []byte) bool {
 		return true
 	}
 
-	a := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+	a, err := r.copier.prepare(lom, args.BckTo, args.Msg, r.Config, buf, r.owt)
+	if err != nil {
+		return true
+	}
 	if err := r.copier.do(a, lom, r.dm); err != nil {
 		return r.IsAborted()
 	}

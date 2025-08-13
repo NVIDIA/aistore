@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -28,6 +29,9 @@ type ETLObjArgs struct {
 
 	// ETLName specifies the running ETL instance to be used in inline transform.
 	ETLName string
+
+	// Pipeline specifies the pipeline to be used in inline transform.
+	Pipeline []string
 }
 
 // Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
@@ -195,6 +199,9 @@ func ETLObject(bp BaseParams, args *ETLObjArgs, bck cmn.Bck, objName string, w i
 			return oah, err
 		}
 		query.Add(apc.QparamETLTransformArgs, targs)
+	}
+	if len(args.Pipeline) > 0 {
+		query.Add(apc.QparamETLPipeline, strings.Join(args.Pipeline, apc.ETLPipelineSeparator))
 	}
 
 	return GetObject(bp, bck, objName, &GetArgs{Writer: w, Query: query})

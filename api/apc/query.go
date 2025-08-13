@@ -15,6 +15,7 @@ const (
 
 	// etl
 	QparamETLName          = "etl_name"
+	QparamETLPipeline      = "etl_pipeline"
 	QparamETLTransformArgs = "etl_args"
 	QparamETLSecret        = "etl_secret" // secret generated during ETL init to validate directly target access from trusted ETL
 

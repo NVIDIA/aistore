@@ -147,10 +147,10 @@ type (
 	}
 
 	WebsocketCtrlMsg struct {
-		Daddr string `json:"dst_addr,omitempty"`
-		Targs string `json:"etl_args,omitempty"`
-		FQN   string `json:"fqn,omitempty"`
-		Path  string `json:"path,omitempty"`
+		Pipeline string `json:"pipeline,omitempty"`
+		Targs    string `json:"etl_args,omitempty"`
+		FQN      string `json:"fqn,omitempty"`
+		Path     string `json:"path,omitempty"`
 	}
 
 	// ETLObjDownloadCtx contains ETL download job parameters

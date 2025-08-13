@@ -95,7 +95,7 @@ type (
 	}
 )
 
-func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, config *cmn.Config, buf []byte, owt cmn.OWT) *CoiParams {
+func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, config *cmn.Config, buf []byte, owt cmn.OWT) (a *CoiParams, err error) {
 	toName := msg.ToName(lom.ObjName)
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infoln(tc.r.Name(), lom.Cname(), "=>", bckTo.Cname(toName))
@@ -104,7 +104,7 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, confi
 	// apply frontend rate-limit, if any
 	tc.rate.acquire()
 
-	a := AllocCOI()
+	a = AllocCOI()
 	{
 		a.GetROC = tc.getROC
 		a.PutWOC = tc.putWOC
@@ -121,7 +121,16 @@ func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, confi
 		a.ContinueOnError = msg.ContinueOnError
 	}
 
-	return a
+	if msg.Transform.Pipeline != nil {
+		a.ETLArgs = &core.ETLArgs{}
+		a.ETLArgs.Pipeline, err = etl.GetPipeline(msg.Transform.Pipeline)
+		if err != nil { // unlikely, since the pipeline is already validated in the begin phase of tcb/tcobjs
+			FreeCOI(a)
+			return a, err
+		}
+	}
+
+	return a, nil
 }
 
 func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {

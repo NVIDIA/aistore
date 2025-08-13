@@ -249,8 +249,8 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 			break
 		}
 
-		if ctrl.Daddr != "" {
-			err := base.handleDirectPut(ctrl.Daddr, transformed)
+		if ctrl.Pipeline != "" {
+			err := base.handleDirectPut(ctrl.Pipeline, transformed)
 			if err == nil {
 				conn.WriteMessage(websocket.TextMessage, cos.UnsafeB("direct put success"))
 				continue

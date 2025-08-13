@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -141,8 +142,23 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	}
 
 	// do
-	xetl := comm.Xact()
-	size, ecode, err := comm.InlineTransform(w, r, lom, dpq.latestVer, dpq.etl.targs)
+	var (
+		xetl     = comm.Xact()
+		pipeline apc.ETLPipeline
+		err      error
+	)
+	if dpq.etl.pipeline != "" {
+		pipeline, err = etl.GetPipeline(strings.Split(dpq.etl.pipeline, apc.ETLPipelineSeparator))
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+	size, ecode, err := comm.InlineTransform(w, r, lom, &etl.InlineTransArgs{
+		LatestVer:     dpq.latestVer,
+		TransformArgs: dpq.etl.targs,
+		Pipeline:      pipeline,
+	})
 
 	// error handling
 	switch {

@@ -30,7 +30,7 @@ type (
 		Remote bool
 	}
 	// GetROC defines a function that retrieves an object based on the given `lom` and flags.
-	// If `daddr` are provided, the implementation may choose to deliver the object directly,
+	// If `Pipeline` are provided, the implementation may choose to deliver the object directly,
 	// in which case the returned ReadResp will have R = nil and Ecode = 204.
 	//
 	// Implementations include:
@@ -38,9 +38,8 @@ type (
 	// - `etl.HTTPCommunicator.OfflineTransform`: fetches transformed object from ETL pod through HTTP response
 	// - `etl.statefulCommnicator.Transform`: fetches transformed object from ETL pod through WebSocket message
 	ETLArgs struct {
-		Daddr         string // destination target's address for direct put
-		TransformArgs string // optional and ETL-specific; can be used to indicate transformation on a per-object basis
-		Local         bool   // true when the destination is local; used by communicator to handle direct put
+		Pipeline      apc.ETLPipeline // intermediate ETL pod's address or destination target's address for direct put
+		TransformArgs string          // optional and ETL-specific; can be used to indicate transformation on a per-object basis
 	}
 	GetROC func(lom *LOM, latestVer, sync bool, args *ETLArgs) ReadResp
 

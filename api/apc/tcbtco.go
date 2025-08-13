@@ -30,8 +30,9 @@ type (
 
 	// swagger:model
 	Transform struct {
-		Name    string       `json:"id,omitempty"`
-		Timeout cos.Duration `json:"request_timeout,omitempty" swaggertype:"primitive,integer"`
+		Name     string       `json:"id,omitempty"`
+		Pipeline []string     `json:"pipeline,omitempty"`
+		Timeout  cos.Duration `json:"request_timeout,omitempty" swaggertype:"primitive,integer"`
 	}
 
 	// swagger:model

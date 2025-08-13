@@ -7,6 +7,7 @@ package etl
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -174,7 +175,7 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podInfo PodInfo
 	if podAddr, err = boot.getPodAddr(); err != nil {
 		goto cleanup
 	}
-	if _, err = comm.setupConnection("http://", podAddr); err != nil {
+	if _, err = comm.setupConnection(boot.schema, podAddr); err != nil {
 		goto cleanup
 	}
 
@@ -254,6 +255,28 @@ func GetCommunicator(etlName string) (Communicator, error) {
 		return nil, cos.NewErrNotFound(core.T, etlName)
 	}
 	return comm, nil
+}
+
+func GetPipeline(etlNames []string) (apc.ETLPipeline, error) {
+	pipeline := make(apc.ETLPipeline, 0, len(etlNames))
+	for _, name := range etlNames {
+		_, boot := mgr.getByName(name)
+		if boot == nil {
+			return nil, cmn.NewErrETL(&cmn.ETLErrCtx{
+				TID:     core.T.SID(),
+				ETLName: name,
+			}, "entry not found in the target", http.StatusNotFound)
+		}
+		addr, err := boot.getPodAddr()
+		if err != nil {
+			return nil, err
+		}
+		pipeline.Join(boot.schema + addr)
+	}
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("etlNames: %v => pipeline: %s", etlNames, pipeline.String())
+	}
+	return pipeline, nil
 }
 
 func GetInitMsg(etlName string) (InitMsg, error) {

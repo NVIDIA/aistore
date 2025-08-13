@@ -54,7 +54,7 @@ type (
 		//    - size: the size of transformed object
 		//    - ecode: error code
 		//    - err: error encountered during transformation
-		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error)
+		InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, args *InlineTransArgs) (size int64, ecode int, err error)
 
 		// ProcessDownloadJob extracts objects from job and routes them to ETL pod
 		ProcessDownloadJob(ctx *ETLObjDownloadCtx) (cos.ReadCloseSizer, int, error)
@@ -71,6 +71,13 @@ type (
 		// - revProxyComm
 		// See also, and separately: on-the-fly transformation as part of a user (e.g. training model) GET request handling
 		OfflineTransform(lom *core.LOM, latestVer, sync bool, args *core.ETLArgs) core.ReadResp
+	}
+
+	InlineTransArgs struct {
+		TransformArgs string
+		Pipeline      apc.ETLPipeline
+		LatestVer     bool
+		// TODO: add sync option
 	}
 
 	baseComm struct {
@@ -354,10 +361,6 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 		query = url.Values{"command": []string{"bash", "-c", strings.Join(pc.command, " ")}}
 	}
 
-	if args != nil && args.TransformArgs != "" {
-		query.Set(apc.QparamETLTransformArgs, args.TransformArgs)
-	}
-
 	reqArgs := &cmn.HreqArgs{
 		Method: http.MethodPut,
 		Base:   pc.podURI,
@@ -366,8 +369,13 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 		Query:  query,
 	}
 
-	if pc.msg.IsDirectPut() && args != nil && !args.Local {
-		reqArgs.Header.Add(apc.HdrNodeURL, args.Daddr)
+	if args != nil {
+		if args.TransformArgs != "" {
+			query.Set(apc.QparamETLTransformArgs, args.TransformArgs)
+		}
+		if len(args.Pipeline) > 0 {
+			reqArgs.Header.Add(apc.HdrNodeURL, args.Pipeline.Pack())
+		}
 	}
 
 	// note: `Content-Length` header is set during `retryer.call()` below
@@ -376,12 +384,17 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 	if err != nil {
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
+
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(Hpush, lom.Cname(), args.Pipeline.String(), err, ecode)
+	}
+
 	oah.Size = r.Size()
 	return core.ReadResp{R: cos.NopOpener(r), OAH: oah, Err: err, Ecode: ecode}
 }
 
-func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
-	resp := pc.doRequest(lom, &core.ETLArgs{TransformArgs: targs}, latestVer, false /* sync */) // TODO: support sync
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom *core.LOM, args *InlineTransArgs) (size int64, ecode int, err error) {
+	resp := pc.doRequest(lom, &core.ETLArgs{TransformArgs: args.TransformArgs, Pipeline: args.Pipeline}, args.LatestVer, false /* sync */) // TODO: support sync
 	if resp.Err != nil {
 		return 0, resp.Ecode, resp.Err
 	}
@@ -414,7 +427,11 @@ func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, args *
 // redirectComm: implements Hpull
 //////////////////
 
-func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, latestVer bool, targs string) (size int64, ecode int, err error) {
+// NOTE: pipeline not implemented for hpull, since HTTP redirect doesn't preserve headers. Cannot use header to pass pipeline.
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, lom *core.LOM, args *InlineTransArgs) (size int64, ecode int, err error) {
+	if args.Pipeline != nil {
+		return 0, http.StatusBadRequest, errors.New("inline transform pipeline not supported for " + rc.msg.CommType())
+	}
 	if err := rc.xctn.AbortErr(); err != nil {
 		return 0, 0, err
 	}
@@ -423,9 +440,9 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 		return 0, ecode, err
 	}
 
-	path, query := rc.redirectArgs(lom, latestVer)
-	if targs != "" {
-		query.Set(apc.QparamETLTransformArgs, targs)
+	path, query := rc.redirectArgs(lom, args.LatestVer)
+	if args.TransformArgs != "" {
+		query.Set(apc.QparamETLTransformArgs, args.TransformArgs)
 	}
 	url := cos.JoinQuery(cos.JoinPath(rc.podURI, path), query)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
@@ -477,8 +494,8 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args 
 		Query:  query,
 	}
 
-	if rc.msg.IsDirectPut() && args != nil && !args.Local {
-		reqArgs.Header.Add(apc.HdrNodeURL, args.Daddr)
+	if args != nil && len(args.Pipeline) > 0 {
+		reqArgs.Header.Add(apc.HdrNodeURL, args.Pipeline.Pack())
 	}
 
 	_, objTimeout := rc.msg.Timeouts()
@@ -488,7 +505,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args 
 	}
 
 	if cmn.Rom.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpull, clone.Cname(), err, ecode)
+		nlog.Infoln(Hpull, clone.Cname(), args.Pipeline.String(), err, ecode)
 	}
 	clone.SetSize(r.Size())
 	return handleRespEcode(ecode, &clone, cos.NopOpener(r), err)

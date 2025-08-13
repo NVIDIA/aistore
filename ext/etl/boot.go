@@ -36,6 +36,7 @@ type etlBootstrapper struct {
 	secret string
 
 	// runtime
+	schema          string // http:// or https://
 	k8sClient       k8s.Client
 	pw              *podWatcher
 	pod             *corev1.Pod
@@ -51,6 +52,7 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 		return cmn.NewErrETLf(b.errCtx, "failed to parse: %v", err)
 	}
 	b.originalPodName = b.pod.GetName()
+	b.schema = "http://" //TODO: make it configurable
 	b.errCtx.ETLName = b.originalPodName
 	return b._prepSpec()
 }

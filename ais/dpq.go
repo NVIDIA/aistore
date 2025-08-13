@@ -31,7 +31,7 @@ type dpq struct {
 		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below)
 	}
 	etl struct {
-		name, targs string // QparamETLName, QparamETLTransformArgs
+		name, pipeline, targs string // QparamETLName, QparamETLPipeline, QparamETLTransformArgs
 	}
 
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
@@ -163,6 +163,11 @@ func (dpq *dpq) parse(rawQuery string) error {
 
 		case apc.QparamETLName:
 			dpq.etl.name = value
+		case apc.QparamETLPipeline:
+			var err error
+			if dpq.etl.pipeline, err = url.QueryUnescape(value); err != nil {
+				return err
+			}
 		case apc.QparamETLTransformArgs:
 			dpq.etl.targs = value
 		case apc.QparamSilent:
