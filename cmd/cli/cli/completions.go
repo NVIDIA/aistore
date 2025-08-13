@@ -357,7 +357,7 @@ func suggestUpdatableConfig(c *cli.Context) {
 		scope = apc.Daemon
 	}
 
-	props := append(configPropList(scope), apc.ActTransient)
+	props := append(configPropList(scope), apc.QparamTransient)
 	for _, prop := range props {
 		if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
 			fmt.Println(prop)

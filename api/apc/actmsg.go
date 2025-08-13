@@ -134,9 +134,6 @@ const (
 	// Actions on xactions
 	ActXactStop  = Stop
 	ActXactStart = Start
-
-	// auxiliary
-	ActTransient = "transient" // transient - in-memory only
 )
 
 const (
