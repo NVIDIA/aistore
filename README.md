@@ -22,7 +22,7 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 * ✅ **Data Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write-consistency) across all gateways, with [write-through](/docs/overview.md#write-through) semantics in presence of [remote backends](/docs/overview.md#backend-provider).
 * ✅ **Small File Optimization:** AIS supports TAR, ZIP, TAR.GZ, and TAR.LZ4 serialization for batching and processing small files. Features include [initial sharding](https://aistore.nvidia.com/blog/2024/08/16/ishard), distributed shuffle (re-sharding), appending to existing shards, listing contained files, and [more](/docs/overview.md#shard).
 * ✅ **Kubernetes:** For production deployments, we developed the [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/main/operator). A dedicated GitHub [repository](https://github.com/NVIDIA/ais-k8s) contains Ansible scripts, Helm charts, and deployment guidance.
-* ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md).
+* ✅ **Authentication and Access Control:** OAuth 2.0-compatible [authentication server (AuthN)](/docs/authn.md)[^authn-beta].
 * ✅ **Batch Jobs:** Start, monitor, and control cluster-wide [batch operations](/docs/batch.md).
 
 The feature set is actively growing and also includes: [adding/removing nodes at runtime](/docs/lifecycle_node.md), managing [TLS certificates](/docs/cli/x509.md) at runtime, listing, copying, prefetching, and transforming [virtual directories](/docs/howto_virt_dirs.md), executing [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests), adaptive [rate limiting](/docs/rate_limit.md), and more.
@@ -133,8 +133,10 @@ Let others know your project is powered by high-performance AI storage:
 * [Batch Jobs](/docs/batch.md)
 * [Performance](/docs/performance.md) and [CLI: performance](/docs/cli/performance.md)
 * [CLI Reference](/docs/cli.md)
-* [Authentication](/docs/authn.md)
+* [Authentication](/docs/authn.md)[^authn-beta]
 * [Production Deployment: Kubernetes Operator, Ansible Playbooks, Helm Charts, Monitoring](https://github.com/NVIDIA/ais-k8s)
+
+[^authn-beta]: AuthN is under development and has *NOT* gone through a complete security audit.
 
 ### How to find information
 

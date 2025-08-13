@@ -2,6 +2,8 @@
 
 The AIStore Authentication Server (AuthN) is a standalone service that provides secure, user- and role-based access to AIStore by leveraging [OAuth 2.0](https://oauth.net/2/) compliant [JSON Web Tokens (JWTs)](https://datatracker.ietf.org/doc/html/rfc7519). The `aistore.sdk.authn` sub-package in the Python SDK allows developers to interact with the AuthN server to manage authentication, users, roles, clusters, and tokens seamlessly.
 
+> Note: AuthN is currently in beta.
+
 > For more details, please refer to the [AuthN documentation](https://github.com/NVIDIA/aistore/blob/main/docs/authn.md).
 
 ### Quick Start

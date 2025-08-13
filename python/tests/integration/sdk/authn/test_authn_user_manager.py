@@ -159,7 +159,6 @@ class TestAuthNUserManager(
         # Test invalid login with old password
         with self.assertRaises(ErrUserInvalidCredentials):
             self.authn_client.login(self.user.id, "12345")
-        self.authn_client.login(self.user.id, "123456")
 
         # Check if the user has the same roles
         updated_user = self.user_manager.get(username=self.user.id)
@@ -187,7 +186,6 @@ class TestAuthNUserManager(
         # Test invalid login with old password
         with self.assertRaises(ErrUserInvalidCredentials):
             self.authn_client.login(self.user.id, "12345")
-        self.authn_client.login(self.user.id, "1234567")
 
         # Check if the user has the new role and not the old role
         updated_user = self.user_manager.get(username=self.user.id)

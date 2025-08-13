@@ -422,11 +422,13 @@ When a cluster is registered, an arbitrary alias can be assigned to the cluster.
 
 | Operation               | HTTP Action | Example                                                                                                               |
 |-------------------------|-------------|-----------------------------------------------------------------------------------------------------------------------|
-| Get a list of users     | GET /v1/users | `curl -X GET $AUTHSRV/v1/users`                                                                                          |
-| Get a user              | GET /v1/users/\<user-id\> | `curl -X GET $AUTHSRV/v1/users/<user-id>`                                                                                  |
+| Get a list of users     | GET /v1/users | `curl -X GET $AUTHSRV/v1/users -H 'Authorization: Bearer <token>'`                                                        |
+| Get a user              | GET /v1/users/\<user-id\> | `curl -X GET $AUTHSRV/v1/users/<user-id> -H 'Authorization: Bearer <token>'`                                                |
 | Add a user              | POST /v1/users | `curl -X POST $AUTHSRV/v1/users -d '{"id": "<user-id>", "password": "<password>", "roles": "[{<role-json>}]"' -H 'Authorization: Bearer <token>'` |
 | Update an existing user | PUT /v1/users/\<user-id\> | `curl -X PUT $AUTHSRV/v1/users/<user-id> -d '{"id": "<user-id>", "password": "<password>", "roles": "[{<role-json>}]"' -H 'Authorization: Bearer <token>'`                    |
 | Delete a user           | DELETE /v1/users/\<user-id\> | `curl -X DELETE $AUTHSRV/v1/users/<user-id>  -H 'Authorization: Bearer <token>'`                                                      |
+
+> Note: A user can update their own password without admin privileges by issuing `PUT /v1/users/<user-id>` with only the `password` field set, authorized with their own token. A user can also retrieve their own user info via `GET /v1/users/<user-id>` using their own token.
 
 ### Configuration
 

@@ -2,6 +2,8 @@ For quick getting-started (local-playground) session _and_ in-depth overview, pl
 
 * [AIS AuthN documentation](/docs/authn.md).
 
+> Note: AuthN is currently in beta.
+
 ## Table of contents
 
 - [User Account and Access management](#user-account-and-access-management)

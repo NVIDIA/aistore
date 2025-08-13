@@ -266,6 +266,9 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		code  int
 	)
 	if len(items) == 0 {
+		if err := validateAdminPerms(w, r); err != nil {
+			return
+		}
 		if users, code, err = h.mgr.userList(); err != nil {
 			cmn.WriteErr(w, r, err, code)
 			return
@@ -274,6 +277,17 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 			uInfo.Password = ""
 		}
 		writeJSON(w, users, "list users")
+		return
+	}
+	tk, err := getToken(r)
+	if err != nil {
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+		return
+	}
+	reqUser := items[0]
+	if !tk.IsAdmin && tk.UserID != reqUser {
+		err := errors.New("not authorized: requires admin or self")
+		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
 	uInfo, code, err := h.mgr.lookupUser(items[0])
