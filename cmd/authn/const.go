@@ -18,8 +18,7 @@ const (
 	revokedCollection  = "revoked"
 	clustersCollection = "cluster"
 
-	adminUserID   = "admin"
-	adminUserPass = "admin"
+	adminUserID = "admin"
 
 	// when user-provided token expiration time is zero it means the token never expires;
 	// we then create a token and set it to expire in 20 years - effectively, never

@@ -520,7 +520,10 @@ func initializeDB(driver kvdb.Driver) (int, error) {
 
 	// environment override
 	userName := cos.Right(adminUserID, os.Getenv(env.AisAuthAdminUsername))
-	password := cos.Right(adminUserPass, os.Getenv(env.AisAuthAdminPassword))
+	password, exists := os.LookupEnv(env.AisAuthAdminPassword)
+	if !exists || password == "" {
+		return 0, fmt.Errorf("failed to initialize DB, no password provided for admin user. Set with %q", env.AisAuthAdminPassword)
+	}
 
 	// Create the admin user
 	su := &authn.User{

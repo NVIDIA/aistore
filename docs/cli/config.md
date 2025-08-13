@@ -272,7 +272,7 @@ Display all cluster configurations (and overrides) of the node with ID `CASGt808
 $ ais show config inherited CASGt8088
 PROPERTY                                 VALUE                                                           DEFAULT
 auth.enabled                             false                                                           -
-auth.secret                              aBitLongSecretKey                                               -
+auth.secret                              **********                                                      -
 backend.conf                             map[]                                                           -
 checksum.enable_read_range               false                                                           -
 checksum.type                            xxhash                                                          -

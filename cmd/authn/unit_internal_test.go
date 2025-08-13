@@ -9,6 +9,9 @@ package main
 // NOTE go:build debug (above) =====================================
 
 import (
+	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"os"
 	"testing"
 	"time"
 
@@ -136,15 +139,38 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 }
 
+func createManagerWithAdmin(driver kvdb.Driver) (m *mgr, code int, err error) {
+	oldPass, wasSet := os.LookupEnv(env.AisAuthAdminPassword)
+	os.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
+	// Reset after test
+	defer func() {
+		if wasSet {
+			os.Setenv(env.AisAuthAdminPassword, oldPass)
+		} else {
+			os.Unsetenv(env.AisAuthAdminPassword)
+		}
+	}()
+	return newMgr(driver)
+}
+
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, _, err := newMgr(driver)
+	mgr, _, err := createManagerWithAdmin(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
 	testUserDelete(mgr, t)
 	deleteUsers(mgr, false, t)
+}
+
+func TestManagerNoAdminPass(t *testing.T) {
+	driver := mock.NewDBDriver()
+	// If no admin password exists in env, initializing manager must fail
+	_, _, err := newMgr(driver)
+	if err == nil {
+		t.Fatal("expected error initializing manager without admin password Env, got nil")
+	}
 }
 
 func TestToken(t *testing.T) {
@@ -158,7 +184,7 @@ func TestToken(t *testing.T) {
 	)
 
 	driver := mock.NewDBDriver()
-	mgr, _, err := newMgr(driver)
+	mgr, _, err := createManagerWithAdmin(driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)

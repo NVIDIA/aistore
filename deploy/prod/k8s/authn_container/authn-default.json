@@ -12,7 +12,7 @@
         }
     },
     "auth": {
-        "secret": "aBitLongSecretKey",
+        "secret": "",
         "expiration_time": "24h"
     },
     "timeout": {

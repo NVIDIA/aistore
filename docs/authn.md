@@ -1,5 +1,8 @@
 The AIStore Authentication Server (AuthN) provides secure access to AIStore by leveraging [OAuth 2.0](https://oauth.net/2/) compliant [JSON Web Tokens (JWT)](https://datatracker.ietf.org/doc/html/rfc7519).
 
+>  **NOTE**: AuthN is under development and has NOT gone through a complete security audit. 
+Please review your deployment carefully and follow [our security policy](https://github.com/NVIDIA/aistore/blob/main/SECURITY.md) to report any issues.
+
 For more details:
 - [Introduction to JWT](https://jwt.io/introduction/)
 - [Go implementation of JSON Web Tokens](https://github.com/golang-jwt/jwt) used for AuthN.
@@ -40,22 +43,26 @@ AuthN generates tokens that are *self-sufficient*, meaning a proxy does not need
 
 ## Getting Started
 
-In this section, we use AIStore [Local Playground](/docs/getting_started.md#local-playground). This is done for purely (easy-to-use-and-repropduce) demonsration purposes.
+In this section, we use AIStore [Local Playground](/docs/getting_started.md#local-playground). This is done for demonstration purposes, as it's easy to use and reproduce.
 
-To deploy an AIS cluster with AuthN enabled, follow these steps:
+If you already have an AIS cluster deployed and just want to add AuthN to it for authentication and access control, follow [these instructions](#how-to-enable-authn-server-after-deployment).
 
-1. Optionally, shutdown and cleanup [Local Playground](/docs/getting_started.md#local-playground):
+To deploy a new local AIS cluster with AuthN enabled, follow these steps:
+
+1. Optionally, shutdown and cleanup any existing [Local Playground](/docs/getting_started.md#local-playground) deployments:
     ```sh
     make kill clean
     ```
 
-> **Note:** If you already have AIS cluster deployed and just want to add AuthN to it - that is, enable authentication and access control - follow these [instructions](#how-to-enable-authn-server-after-deployment).
+> **Note:** When deploying AIStore with AuthN, an `admin` user is created by default with `admin` privileges.
+> 
+> The default password for the `admin` user **must** be set with the environment variable `AIS_AUTHN_SU_PASS`.
+> 
+> For the list of environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section below.
 
-> **Note:** When deploying AIStore with AuthN, an `admin` user is created by default with `admin` privileges. The default password for the `admin` user isalso `admin`. You can override it by setting the environment variable `AIS_AUTHN_ADMIN_PASSWORD` before deployment, as the password cannot be updated after deployment. For the list of environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section below.
-
-2. Deploy the cluster with AuthN enabled:
+2. Deploy the cluster with AuthN enabled and the required environment variables :
     ```sh
-    AIS_AUTHN_ENABLED=true make deploy
+    AIS_AUTHN_ENABLED=true AIS_AUTHN_SU_PASS="adminpass" AIS_AUTHN_SECRET_KEY="demoSecretKey" make deploy
     ```
 
 This will start up an AIStore cluster with the AuthN server.
@@ -172,26 +179,26 @@ Further references:
 
 Environment variables used by the deployment script to set up the AuthN server:
 
-| Variable               | Default Value       | Description                                                                                     |
-|------------------------|---------------------|-------------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                                  |
-| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)                  |
-| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                         |
-| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                      |
-| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
-| `AIS_SERVER_CRT`       | `""`                | TLS certificate. Required when `AIS_AUTHN_USE_HTTPS` is `true`                                  |
-| `AIS_SERVER_KEY`       | `""`                | private key for the TLS certificate (above).                                                    |
-| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                                |
-| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                            |
+| Variable               | Default Value      | Description                                                                                        |
+|------------------------|--------------------|----------------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_ENABLED`    | `false`            | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)                     |
+| `AIS_AUTHN_PORT`       | `52001`            | Port on which AuthN listens to requests                                                            |
+| `AIS_AUTHN_TTL`        | `24h`              | Token expiration time. Can be set to `0` for no expiration                                         |
+| `AIS_AUTHN_USE_HTTPS`  | `false`            | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` to be set |
+| `AIS_SERVER_CRT`       | `""`               | TLS certificate. Required when `AIS_AUTHN_USE_HTTPS` is `true`                                     |
+| `AIS_SERVER_KEY`       | `""`               | private key for the TLS certificate (above).                                                       |
+| `AIS_AUTHN_SU_NAME`    | `admin`            | Superuser (admin) name for AuthN                                                                   |
+| `AIS_AUTHN_SU_PASS`    | None -- required   | Superuser (admin) password for AuthN                                                               |
+| `AIS_AUTHN_SECRET_KEY` | `""`               | Secret key used to sign tokens.                                                                    |    
 
 All variables can be set at AIStore cluster deployment and will override values in the config.
 Example of starting a cluster with AuthN enabled:
 
 ```sh
-AIS_AUTHN_ENABLED=true make deploy
+AIS_AUTHN_ENABLED=true AIS_AUTHN_SU_PASS="password" AIS_AUTHN_SECRET_KEY="keyForSigningTokens" make deploy
 ```
 
-> **Note:** Don't forget to change the _default secret key_ used to sign tokens and the _admin password_ before starting the deployment process. If you don't, you will have to restart the cluster.
+> **Note:** The secret key used to sign tokens and the admin password MUST be provided to deploy and cannot be changed without restarting the cluster.
 * More info on env vars: [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/main/api/env/authn.go)
 
 Separately, there's also client-side AuthN environment that includes:

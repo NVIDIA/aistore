@@ -43,6 +43,7 @@ jobs:
           AIS_AUTHN_ENABLED: "true"
           AIS_AUTHN_SU_NAME: "admin"
           AIS_AUTHN_SU_PASS: "admin"
+          AIS_AUTHN_SECRET_KEY: "githubCISigningKey"
           AIS_AUTHN_URL: "http://localhost:52001"
         run: |
           export GOPATH="$(go env GOPATH)"

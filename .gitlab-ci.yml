@@ -343,6 +343,7 @@ test:short:python-authn:
     AIS_AUTHN_ENABLED: "true"
     AIS_AUTHN_SU_NAME: "admin"
     AIS_AUTHN_SU_PASS: "admin"
+    AIS_AUTHN_SECRET_KEY: "gitlabCISigningKey"
     AIS_AUTHN_URL: "http://localhost:52001"
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
@@ -400,6 +401,7 @@ test:short:authn:
     AIS_AUTHN_ENABLED: "true"
     AIS_AUTHN_SU_NAME: "admin"
     AIS_AUTHN_SU_PASS: "admin"
+    AIS_AUTHN_SECRET_KEY: "gitlabCISigningKey"
     AIS_AUTHN_URL: "http://localhost:52001"
     BUCKET: "ais://test"
     RE: "TestAuth"

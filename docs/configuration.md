@@ -216,7 +216,7 @@ There are also node-specific settings, such as:
 # ais show config t[CCDpt8088]
 PROPERTY                                 VALUE                                                           DEFAULT
 auth.enabled                             false                                                           -
-auth.secret                              aBitLongSecretKey                                               -
+auth.secret                              **********                                                     -
 backend.conf                             map[aws:map[] gcp:map[]]                                        -
 checksum.enable_read_range               false                                                           -
 checksum.type                            xxhash                                                          -

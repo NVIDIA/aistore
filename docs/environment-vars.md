@@ -282,17 +282,17 @@ AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web
 
 AuthN supports multiple AIS clusters; in fact, there's no limit on the number of clusters a given AuthN instance can provide authentication and access control service for.
 
-| Variable               | Default Value       | Description                                                                               |
-|------------------------|---------------------|-------------------------------------------------------------------------------------------|
-| `AIS_AUTHN_SECRET_KEY` | `aBitLongSecretKey` | Secret key used to sign tokens                                                            |
-| `AIS_AUTHN_ENABLED`    | `false`             | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)            |
-| `AIS_AUTHN_PORT`       | `52001`             | Port on which AuthN listens to requests                                                   |
-| `AIS_AUTHN_TTL`        | `24h`               | Token expiration time. Can be set to `0` for no expiration                                |
-| `AIS_AUTHN_USE_HTTPS`  | `false`             | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY`  |
-| `AIS_SERVER_CRT`       | `""`                | TLS certificate (pathname). Required when `AIS_AUTHN_USE_HTTPS` is `true`                 |
-| `AIS_SERVER_KEY`       | `""`                | pathname that contains X.509 certificate private key                                      |
-| `AIS_AUTHN_SU_NAME`    | `admin`             | Superuser (admin) name for AuthN                                                          |
-| `AIS_AUTHN_SU_PASS`    | `admin`             | Superuser (admin) password for AuthN                                                      |
+| Variable               | Default Value    | Description                                                                              |
+|------------------------|------------------|------------------------------------------------------------------------------------------|
+| `AIS_AUTHN_ENABLED`    | `false`          | Enable AuthN server and token-based access in AIStore proxy (`true` to enable)           |
+| `AIS_AUTHN_PORT`       | `52001`          | Port on which AuthN listens to requests                                                  |
+| `AIS_AUTHN_TTL`        | `24h`            | Token expiration time. Can be set to `0` for no expiration                               |
+| `AIS_AUTHN_USE_HTTPS`  | `false`          | Enable HTTPS for AuthN server. If `true`, requires `AIS_SERVER_CRT` and `AIS_SERVER_KEY` |
+| `AIS_SERVER_CRT`       | `""`             | TLS certificate (pathname). Required when `AIS_AUTHN_USE_HTTPS` is `true`                |
+| `AIS_SERVER_KEY`       | `""`             | pathname that contains X.509 certificate private key                                     |
+| `AIS_AUTHN_SU_NAME`    | `admin`          | Superuser (admin) name for AuthN                                                         |
+| `AIS_AUTHN_SU_PASS`    | None -- required | Superuser (admin) password for AuthN                                                     |
+| `AIS_AUTHN_SECRET_KEY` | `""`             | Secret key used to sign tokens.                                                          |
 
 Separately, there's also client-side AuthN environment that includes:
 

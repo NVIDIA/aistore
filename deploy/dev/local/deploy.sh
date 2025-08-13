@@ -81,10 +81,8 @@ if $AIS_USE_HTTPS; then
 fi
 LOG_ROOT="${LOG_ROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
-AIS_AUTHN_SECRET_KEY="${AIS_AUTHN_SECRET_KEY:-aBitLongSecretKey}"
 AIS_AUTHN_ENABLED="${AIS_AUTHN_ENABLED:-false}"
 AIS_AUTHN_SU_NAME="${AIS_AUTHN_SU_NAME:-admin}"
-AIS_AUTHN_SU_PASS="${AIS_AUTHN_SU_PASS:-admin}"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0

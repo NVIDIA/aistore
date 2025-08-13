@@ -41,8 +41,42 @@ func logFlush() {
 	}
 }
 
+func getConfigDir() (configDir string) {
+	confDirFlag := flag.Lookup("config")
+	if confDirFlag != nil {
+		configDir = confDirFlag.Value.String()
+	}
+	if configDir == "" {
+		configDir = os.Getenv(env.AisAuthConfDir)
+	}
+	if configDir == "" {
+		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
+			svcName, "config", env.AisAuthConfDir)
+	}
+	return
+}
+
+func initConf(configDir string) {
+	configPath = filepath.Join(configDir, fname.AuthNConfig)
+	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
+		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
+	}
+	Conf.Init()
+	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
+		Conf.SetSecret(&val)
+	}
+	if Conf.Secret() == "" {
+		cos.ExitLogf("Secret key not provided. Set in config or override with %q", env.AisAuthSecretKey)
+	}
+	if err := updateLogOptions(); err != nil {
+		cos.ExitLogf("Failed to set up logger: %v", err)
+	}
+	if Conf.Verbose() {
+		nlog.Infof("Loaded configuration from %s", configPath)
+	}
+}
+
 func main() {
-	var configDir string
 	if len(os.Args) == 2 && os.Args[1] == "version" {
 		printVer()
 		os.Exit(0)
@@ -54,33 +88,8 @@ func main() {
 	}
 	installSignalHandler()
 	flag.Parse()
-
-	confDirFlag := flag.Lookup("config")
-	if confDirFlag != nil {
-		configDir = confDirFlag.Value.String()
-	}
-	if configDir == "" {
-		configDir = os.Getenv(env.AisAuthConfDir)
-	}
-	if configDir == "" {
-		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
-			svcName, confDirFlag.Name, env.AisAuthConfDir)
-	}
-	configPath = filepath.Join(configDir, fname.AuthNConfig)
-	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
-		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
-	}
-	Conf.Init()
-	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
-		Conf.SetSecret(&val)
-	}
-	if err := updateLogOptions(); err != nil {
-		cos.ExitLogf("Failed to set up logger: %v", err)
-	}
-	if Conf.Verbose() {
-		nlog.Infof("Loaded configuration from %s", configPath)
-	}
-
+	configDir := getConfigDir()
+	initConf(configDir)
 	dbPath := filepath.Join(configDir, fname.AuthNDB)
 	driver, err := kvdb.NewBuntDB(dbPath)
 	if err != nil {
