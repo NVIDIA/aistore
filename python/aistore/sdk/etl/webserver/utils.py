@@ -5,11 +5,32 @@
 import base64
 from typing import Type, Tuple
 from urllib.parse import urlparse, urlunparse
+import io
+import pickle
+import importlib
 
-import cloudpickle
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import InvalidPipelineError
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+    """Unpickler that only allows ETLServer subclasses."""
+
+    def find_class(self, module: str, name: str):
+        # Import the class
+        try:
+            mod = importlib.import_module(module)
+            obj = getattr(mod, name)
+        except (ImportError, AttributeError) as exc:
+            raise pickle.UnpicklingError(f"Cannot import: {module}.{name}") from exc
+
+        # Check if it's a class and subclass of ETLServer
+        if not isinstance(obj, type) or not issubclass(obj, ETLServer):
+            raise pickle.UnpicklingError(
+                f"{module}.{name} is not a subclass of ETLServer"
+            )
+        return obj
 
 
 def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
@@ -28,7 +49,7 @@ def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
     """
     if not isinstance(cls, type) or not issubclass(cls, ETLServer):
         raise TypeError(f"{cls!r} is not a subclass of ETLServer")
-    pickled = cloudpickle.dumps(cls)
+    pickled = pickle.dumps(cls, protocol=pickle.HIGHEST_PROTOCOL)
     return base64.b64encode(pickled).decode(encoding)
 
 
@@ -47,11 +68,7 @@ def deserialize_class(payload: str, encoding: str = UTF_ENCODING) -> Type[ETLSer
         TypeError: If the unpickled object is not a subclass of ETLServer.
     """
     raw = base64.b64decode(payload.encode(encoding))
-    cls = cloudpickle.loads(raw)
-
-    if not isinstance(cls, type) or not issubclass(cls, ETLServer):
-        raise TypeError(f"{cls!r} is not a subclass of ETLServer")
-
+    cls = RestrictedUnpickler(io.BytesIO(raw)).load()
     return cls
 
 
