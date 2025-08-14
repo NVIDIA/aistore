@@ -6,6 +6,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- Move cold get retry delay logic into the tenacity `before_sleep` option and improve logging.
+
 ## [1.15.2] - 2025-08-18
 
 ### Added

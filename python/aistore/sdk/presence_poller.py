@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Callable, Any
+from typing import Callable
 
 from requests import PreparedRequest, Response
 from tenacity import Retrying, wait_exponential, retry_if_not_result, stop_after_delay
@@ -25,7 +25,7 @@ class PresencePoller:
 
     def __init__(
         self,
-        session_request_fn: Callable[[str, str, Any], Response],
+        session_request_fn: Callable[..., Response],
         cold_get_conf: ColdGetConf,
     ):
         self._session_request_fn = session_request_fn

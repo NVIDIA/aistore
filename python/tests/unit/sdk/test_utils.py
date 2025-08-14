@@ -3,11 +3,19 @@
 #
 import unittest
 from unittest.mock import Mock, patch, mock_open
+from urllib.parse import urlencode
 
+import requests
 from msgspec import msgpack
-from requests import Response
+from requests import Response, PreparedRequest
 
-from aistore.sdk.const import MSGPACK_CONTENT_TYPE, HEADER_CONTENT_TYPE, XX_HASH_SEED
+from aistore.sdk.const import (
+    MSGPACK_CONTENT_TYPE,
+    HEADER_CONTENT_TYPE,
+    XX_HASH_SEED,
+    QPARAM_PROVIDER,
+)
+from aistore.sdk.provider import Provider
 
 from aistore.sdk.utils import (
     decode_response,
@@ -19,6 +27,7 @@ from aistore.sdk.utils import (
     validate_file,
     xoshiro256_hash,
     get_digest,
+    get_provider_from_request,
 )
 from tests.const import PREFIX_NAME
 from tests.utils import cases
@@ -144,3 +153,23 @@ class TestUtils(unittest.TestCase):
             seed=XX_HASH_SEED, input=name.encode("utf-8")
         )
         self.assertEqual(result, 987654321)
+
+    def test_get_provider_from_request(self):
+        for provider in list(Provider):
+            req = Mock(spec=requests.Request, params={QPARAM_PROVIDER: provider.value})
+            self.assertEqual(provider, get_provider_from_request(req))
+
+    def test_get_provider_from_request_prepared(self):
+        for provider in list(Provider):
+            query = urlencode({QPARAM_PROVIDER: provider.value})
+            req = PreparedRequest()
+            req.url = f"https://example.com/path?{query}"
+            self.assertEqual(provider, get_provider_from_request(req))
+
+    @cases(
+        Mock(spec=requests.Request, params={}),
+        Mock(spec=requests.PreparedRequest, url="https://example.com/path"),
+    )
+    def test_get_provider_from_request_invalid(self, req):
+        with self.assertRaises(ValueError):
+            get_provider_from_request(req)

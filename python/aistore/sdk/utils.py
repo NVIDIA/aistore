@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Iterator, Optional, Tuple, Type, TypeVar, Union
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 import braceexpand
 import humanize
@@ -22,7 +22,9 @@ from aistore.sdk.const import (
     MSGPACK_CONTENT_TYPE,
     DEFAULT_LOG_FORMAT,
     XX_HASH_SEED,
+    QPARAM_PROVIDER,
 )
+from aistore.sdk.provider import Provider
 
 T = TypeVar("T")
 MASK = 0xFFFFFFFFFFFFFFFF  # 64-bit mask
@@ -299,4 +301,33 @@ def is_read_timeout(exc: requests.ConnectionError) -> bool:
     # Expect it to be wrapped in urllib's retry
     if not isinstance(inner_exc, MaxRetryError):
         return False
+    # urllib3 ReadTimeoutError != requests ReadTimeout
     return isinstance(inner_exc.reason, ReadTimeoutError)
+
+
+def get_provider_from_request(
+    req: Union[requests.Request, requests.PreparedRequest],
+) -> Provider:
+    """
+    Given either a Request or PreparedRequest, return an AIS bucket provider.
+    The request property of a `requests.RequestException` can be either of these types,
+        so this can be used to find the bucket provider involved in the initial request.
+
+    Args:
+        req (Union[requests.Request, requests.PreparedRequest]): Any request or prepared request.
+
+    Returns:
+        Parsed AIS bucket Provider Enum.
+    """
+    if isinstance(req, requests.Request):
+        qparams = req.params
+    else:
+        parsed_url = urlparse(req.url)
+        qparams = (
+            {k: v[0] for k, v in parse_qs(parsed_url.query).items()}
+            if parsed_url.query and isinstance(parsed_url.query, str)
+            else None
+        )
+    if not qparams:
+        raise ValueError("Cannot parse provider from request with no query params")
+    return Provider.parse(qparams.get(QPARAM_PROVIDER, ""))
