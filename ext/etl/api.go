@@ -119,31 +119,36 @@ type (
 	}
 
 	// and implementations
+	// swagger:model
 	InitMsgBase struct {
 		EtlName          string          `json:"name" yaml:"name"`
 		CommTypeX        string          `json:"communication" yaml:"communication"`
 		ArgTypeX         string          `json:"argument" yaml:"argument"`
-		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty"`
-		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty"`
+		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty" swaggertype:"primitive,string"`
+		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty" swaggertype:"primitive,string"`
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
-		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
+		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
 	}
+
+	// swagger:model
 	InitSpecMsg struct {
 		Spec        []byte `json:"spec"`
 		InitMsgBase `yaml:",inline"`
 	}
 
 	// ETLSpecMsg is a YAML representation of the ETL pod spec.
+	// swagger:model
 	ETLSpecMsg struct {
 		InitMsgBase `yaml:",inline"`            // included all optional fields from InitMsgBase
 		Runtime     RuntimeSpec                 `json:"runtime" yaml:"runtime"`
-		Resources   corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty"`
+		Resources   corev1.ResourceRequirements `json:"resources,omitempty" yaml:"resources,omitempty" swaggertype:"object"`
 	}
 
+	// swagger:model
 	RuntimeSpec struct {
 		Image   string          `json:"image" yaml:"image"`
 		Command []string        `json:"command,omitempty" yaml:"command,omitempty"`
-		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
+		Env     []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
 	}
 
 	WebsocketCtrlMsg struct {

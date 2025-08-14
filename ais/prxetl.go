@@ -50,10 +50,6 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint GET /v1/etl/{etl-name}
-// +gen:endpoint GET /v1/etl/{etl-name}/logs
-// +gen:endpoint GET /v1/etl/{etl-name}/health
-// +gen:endpoint GET /v1/etl/{etl-name}/metrics
 // List ETL jobs or get information, logs, health, and metrics for specific ETL jobs
 func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 0, true)
@@ -91,10 +87,10 @@ func (p *proxy) httpetlget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint PUT /v1/etl
+// +gen:endpoint PUT /v1/etl model=[etl.ETLSpecMsg|etl.InitSpecMsg]
+// +gen:payload etl.ETLSpecMsg={"name": "echo-etl", "communication": "hpush://", "runtime": {"image": "aistorage/transformer_echo:latest"}}
+// +gen:payload etl.InitSpecMsg={"name": "my-etl", "communication": "hpush://", "spec": "<base64-encoded-kubernetes-pod-spec>"}
 // Create and initialize a new ETL job to transform data during transfers.
-// Request body: etl.InitMsg (JSON)
-// Returns: ETL UUID on success.
 func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
 		return
@@ -275,8 +271,8 @@ func (p *proxy) _syncEtlMDFinal(ctx *etlMDModifier, clone *etlMD) {
 	}
 }
 
+// +gen:endpoint GET /v1/etl/{etl-name}
 // Get detailed information about a specific ETL job
-// GET /v1/etl/<etl-name>
 func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := k8s.ValidateEtlName(etlName); err != nil {
 		p.writeErr(w, r, err)
@@ -315,8 +311,8 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 	p.writeJSON(w, r, etl.Details{InitMsg: initMsg, ObjErrs: errs}, "etl-details")
 }
 
+// +gen:endpoint GET /v1/etl
 // List all ETL jobs in the cluster
-// GET /v1/etl
 func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathETL.S}
@@ -372,8 +368,9 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, list, "list-etl")
 }
 
+// +gen:endpoint GET /v1/etl/{etl-name}/logs
+// +gen:endpoint GET /v1/etl/{etl-name}/logs/{target-id}
 // Get logs from ETL job execution
-// GET /v1/etl/<etl-name>/logs[/<target_id>]
 func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, apiItems ...string) {
 	var (
 		results sliceResults
@@ -422,8 +419,8 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 	p.writeJSON(w, r, logs, "logs-etl")
 }
 
+// +gen:endpoint GET /v1/etl/{etl-name}/health
 // Get health status of ETL job
-// GET /v1/etl/<etl-name>/health
 func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	var (
 		results sliceResults
@@ -450,8 +447,8 @@ func (p *proxy) healthETL(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, healths, "health-etl")
 }
 
+// +gen:endpoint GET /v1/etl/{etl-name}/metrics
 // Get CPU and memory metrics for ETL job
-// GET /v1/etl/<etl-name>/metrics
 func (p *proxy) metricsETL(w http.ResponseWriter, r *http.Request) {
 	var (
 		results sliceResults

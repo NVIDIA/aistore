@@ -1265,9 +1265,14 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg]
+// +gen:endpoint POST /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamBckTo=string,apc.QparamDontHeadRemote=bool] action=[apc.ActMoveBck=apc.ActMsg|apc.ActCopyBck=apc.TCBMsg|apc.ActETLBck=apc.TCBMsg|apc.ActCopyObjects=cmn.TCOMsg|apc.ActETLObjects=cmn.TCOMsg|apc.ActAddRemoteBck=apc.ActMsg|apc.ActPrefetchObjects=apc.ActMsg|apc.ActMakeNCopies=apc.ActMsg|apc.ActECEncode=apc.ActMsg]
+// +gen:payload apc.ActCopyBck={"action": "copy-bck", "value": {"dry_run": false, "force": false}}
 // +gen:payload apc.ActETLBck={"action": "etl-bck", "value": {"id": "ETL_NAME"}}
-// Create buckets or perform bucket operations (copy, move, etc.)
+// +gen:payload apc.ActCopyObjects={"action": "copy-objects", "value": {"to_bck": {"name": "destination-bucket", "provider": "ais"}, "template": "prefix{001..100}"}}
+// +gen:payload apc.ActETLObjects={"action": "etl-objects", "value": {"to_bck": {"name": "destination-bucket", "provider": "ais"}, "transform": {"name": "ETL_NAME"}, "template": "prefix{001..100}"}}
+// +gen:payload apc.ActPrefetchObjects={"action": "prefetch-objects", "value": {"template": "shard-{001..999}.tar"}}
+// +gen:payload apc.ActMakeNCopies={"action": "make-n-copies", "value": {"copies": 2}}
+// Perform bucket operations: move, copy, ETL transform, prefetch, make copies, EC encode, and add remote buckets
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
 	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 1, true)

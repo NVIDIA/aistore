@@ -259,10 +259,17 @@ func collectAndGenerateHTTPExamples(ep *endpoint, actionMap, globalPayloads map[
 	var examples []commandExample
 	payloads := make(map[string]string) // action -> payload mapping
 
-	// Copy relevant payloads from global collection
+	// Copy action payloads from global collection
 	for _, action := range ep.Actions {
 		if payload, exists := globalPayloads[action.Action]; exists {
 			payloads[action.Action] = payload
+		}
+	}
+
+	// Copy model payloads from global collection
+	for _, model := range ep.Models {
+		if payload, exists := globalPayloads[model]; exists {
+			payloads[model] = payload
 		}
 	}
 
