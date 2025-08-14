@@ -613,10 +613,15 @@ class TransformBckMsg(BaseModel):
     """
 
     etl_name: str
+    etl_pipeline: List[str] = None
     timeout: str
 
     def as_dict(self):
-        return {"id": self.etl_name, "request_timeout": self.timeout}
+        return {
+            "id": self.etl_name,
+            "request_timeout": self.timeout,
+            "pipeline": self.etl_pipeline,
+        }
 
 
 class TCBckMsg(BaseModel):

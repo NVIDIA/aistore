@@ -315,6 +315,7 @@ class ObjectGroup(AISSource):
         latest: bool = False,
         sync: bool = False,
         num_workers: int = None,
+        etl_pipeline: List[str] = None,
     ):
         """
         Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -335,6 +336,7 @@ class ObjectGroup(AISSource):
             num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
                 mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
                 execution). Any positive value will be adjusted not to exceed the number of target CPUs.
+            etl_pipeline (List[str], optional): List of ETL names to be used for the transformation pipeline.
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -359,7 +361,9 @@ class ObjectGroup(AISSource):
         copy_msg = CopyBckMsg(
             prepend=prepend, dry_run=dry_run, force=force, latest=latest, sync=sync
         )
-        transform_msg = TransformBckMsg(etl_name=etl_name, timeout=timeout)
+        transform_msg = TransformBckMsg(
+            etl_name=etl_name, timeout=timeout, etl_pipeline=etl_pipeline
+        )
         value = TCMultiObj(
             to_bck=to_bck.as_model(),
             tc_msg=TCBckMsg(ext=ext, transform_msg=transform_msg, copy_msg=copy_msg),

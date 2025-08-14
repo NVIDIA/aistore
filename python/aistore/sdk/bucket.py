@@ -753,7 +753,7 @@ class Bucket(AISSource):
             return entries
         return [e for e in entries if e.name != archive_obj_name]
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def transform(
         self,
         etl_name: str,
@@ -768,6 +768,7 @@ class Bucket(AISSource):
         sync: bool = False,
         num_workers: Optional[int] = 0,
         cont_on_err: bool = False,
+        etl_pipeline: List[str] = None,
     ) -> str:
         """
         Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -789,6 +790,7 @@ class Bucket(AISSource):
                 - 0 (default): number of mountpaths
                 - -1: single thread, serial execution
             cont_on_err: (bool): If True, continue processing objects even if some of them fail
+            etl_pipeline (List[str], optional): List of ETL names to be used for the transformation pipeline
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -797,7 +799,9 @@ class Bucket(AISSource):
             ext=ext,
             num_workers=num_workers,
             cont_on_err=cont_on_err,
-            transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
+            transform_msg=TransformBckMsg(
+                etl_name=etl_name, timeout=timeout, etl_pipeline=etl_pipeline
+            ),
             copy_msg=CopyBckMsg(
                 prefix=prefix_filter,
                 prepend=prepend,

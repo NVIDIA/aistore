@@ -72,7 +72,24 @@ class Etl:
     def __init__(self, client: "Client", name: str):
         self._client = client
         self._name = name
+        self._pipeline: List[str] = []  # pipeline never includes the current ETL
         self.validate_etl_name(name)
+
+    def __rshift__(self, other: "Etl") -> "Etl":
+        """
+        Combine multiple ETLs into a pipeline.
+        The combined ETL will have the same name as the first ETL,
+        with the rest of the ETL stages added to the pipeline property.
+
+        Args:
+            other (Etl): The ETL to combine with.
+
+        Returns:
+            Etl: The combined ETL.
+        """
+        combined_etl = Etl(self._client, self._name)
+        combined_etl._pipeline = self.pipeline + [other._name] + other.pipeline
+        return combined_etl
 
     def __enter__(self):
         return self
@@ -83,6 +100,11 @@ class Etl:
             self.delete()
         except AISError as e:
             pass
+
+    @property
+    def pipeline(self) -> List[str]:
+        """List of ETL names in the pipeline"""
+        return self._pipeline
 
     @property
     def name(self) -> str:
@@ -244,6 +266,8 @@ class Etl:
             arg_type (str, optional):
                 What form AIS should pass the object to your `transform` method. If `""`,
                 you get the raw bytes. If `"fqn"`, you get a fully-qualified local path.
+                If the ETL is used as an intermediate stage in a pipeline, `"fqn"` will be skipped and
+                raw bytes will be passed instead.
                 Defaults to `""`.
             direct_put (bool, optional):
                 When doing a bucket-to-bucket transform, set to `True` to enable “direct put”

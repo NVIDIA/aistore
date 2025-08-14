@@ -538,6 +538,7 @@ class TestBucket(unittest.TestCase):
     def test_transform_default_params(self):
         action_value = {
             "id": ETL_NAME,
+            "pipeline": None,
             "prefix": "",
             "prepend": "",
             "force": False,

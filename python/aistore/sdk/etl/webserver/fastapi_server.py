@@ -139,6 +139,7 @@ class FastAPIServer(ETLServer):
                             first_url, transformed, remaining_pipeline
                         )
                     )
+                    self.logger.debug("status_code: %r", status_code)
 
                     return Response(
                         content=transformed,
@@ -150,6 +151,10 @@ class FastAPIServer(ETLServer):
                         ),
                     )
 
+            self.logger.debug(
+                "no pipeline, returning transformed content directly, length: %r",
+                len(transformed),
+            )
             # No pipeline, return transformed content directly
             return Response(
                 content=transformed,

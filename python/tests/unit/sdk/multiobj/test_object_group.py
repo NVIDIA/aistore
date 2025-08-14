@@ -194,6 +194,7 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["dry_run"] = False
         self.expected_value["force"] = False
         self.expected_value["id"] = ETL_NAME
+        self.expected_value["pipeline"] = None
         self.expected_value["request_timeout"] = DEFAULT_ETL_TIMEOUT
         self.expected_value["tobck"] = self.dest_bucket.as_model()
         self.expected_value["coer"] = False
@@ -208,6 +209,7 @@ class TestObjectGroup(unittest.TestCase):
             self.expected_value,
             to_bck=self.dest_bucket,
             etl_name=ETL_NAME,
+            etl_pipeline=None,
         )
         # Test provided optional args
         timeout = "30s"

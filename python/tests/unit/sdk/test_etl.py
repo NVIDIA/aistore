@@ -24,6 +24,7 @@ from aistore.sdk.etl.etl_const import (
 from aistore.sdk.types import ETLDetails
 from aistore.sdk.utils import convert_to_seconds
 from aistore.sdk.etl.etl import Etl, _get_runtime
+from aistore.sdk.etl.etl_config import ETLConfig
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver import serialize_class
 from aistore.sdk.errors import AISError
@@ -405,3 +406,31 @@ class TestEtl(
 
         self.etl.stop.assert_called_once()
         self.etl.delete.assert_called_once()
+
+
+class TestETLConfig(unittest.TestCase):
+    """Test ETLConfig with positional arguments."""
+
+    def test_no_arguments(self):
+        """Test creating ETLConfig with no arguments."""
+        config = ETLConfig()
+        self.assertIsNone(config.name)
+        self.assertIsNone(config.args)
+
+    def test_positional_name_only(self):
+        """Test creating ETLConfig with name as positional argument."""
+        config = ETLConfig("test-etl")
+        self.assertEqual(config.name, "test-etl")
+        self.assertIsNone(config.args)
+
+    def test_positional_name_and_args(self):
+        """Test creating ETLConfig with both name and args as positional arguments."""
+        config = ETLConfig("test-etl", {"key": "value"})
+        self.assertEqual(config.name, "test-etl")
+        self.assertEqual(config.args, {"key": "value"})
+
+    def test_mixed_positional_keyword(self):
+        """Test creating ETLConfig with name positional and args as keyword."""
+        config = ETLConfig("test-etl", args="string-args")
+        self.assertEqual(config.name, "test-etl")
+        self.assertEqual(config.args, "string-args")

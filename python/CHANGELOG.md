@@ -6,6 +6,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## Added
+
+- Add functionality to pipeline multiple ETLs.
+  - Add `>>` operator for combining multiple ETLs into a pipeline.
+  - Introduce `QPARAM_ETL_PIPELINE` constant for ETL pipeline configuration and object inline transformation.
+  - Add `etl_pipeline` argument to `Bucket.transform` and `ObjectGroup.transform` APIs.
+
 ## [1.15.1] - 2025-08-11
 
 ## Added
