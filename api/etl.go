@@ -21,7 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type ETLObjArgs struct {
+type ETL struct {
 	// TransformArgs holds the arguments to be used in ETL inline transform,
 	// which will be sent as `apc.QparamETLArgs` query parameter in the request.
 	// Optional, can be omitted (nil).
@@ -30,8 +30,17 @@ type ETLObjArgs struct {
 	// ETLName specifies the running ETL instance to be used in inline transform.
 	ETLName string
 
-	// Pipeline specifies the pipeline to be used in inline transform.
-	Pipeline []string
+	// pipeline specifies the pipeline to be used in inline transform.
+	// Use Chain() method to build pipelines.
+	pipeline []string
+}
+
+// Chain creates a new ETL pipeline by chaining this ETL with another.
+func (e *ETL) Chain(other *ETL) *ETL {
+	pipeline := make([]string, 0, len(e.pipeline)+1+len(other.pipeline))
+	pipeline = append(append(pipeline, e.pipeline...), other.ETLName)
+	pipeline = append(pipeline, other.pipeline...)
+	return &ETL{ETLName: e.ETLName, TransformArgs: e.TransformArgs, pipeline: pipeline}
 }
 
 // Initiate custom ETL workload by executing one of the documented `etl.InitMsg`
@@ -191,17 +200,17 @@ func etlPostAction(bp BaseParams, etlName, action string) (err error) {
 	return
 }
 
-func ETLObject(bp BaseParams, args *ETLObjArgs, bck cmn.Bck, objName string, w io.Writer) (oah ObjAttrs, err error) {
-	query := url.Values{apc.QparamETLName: []string{args.ETLName}}
-	if args.TransformArgs != nil {
-		targs, err := cos.ConvertToString(args.TransformArgs)
+func ETLObject(bp BaseParams, etl *ETL, bck cmn.Bck, objName string, w io.Writer) (oah ObjAttrs, err error) {
+	query := url.Values{apc.QparamETLName: []string{etl.ETLName}}
+	if etl.TransformArgs != nil {
+		targs, err := cos.ConvertToString(etl.TransformArgs)
 		if err != nil {
 			return oah, err
 		}
 		query.Add(apc.QparamETLTransformArgs, targs)
 	}
-	if len(args.Pipeline) > 0 {
-		query.Add(apc.QparamETLPipeline, strings.Join(args.Pipeline, apc.ETLPipelineSeparator))
+	if len(etl.pipeline) > 0 {
+		query.Add(apc.QparamETLPipeline, strings.Join(etl.pipeline, apc.ETLPipelineSeparator))
 	}
 
 	return GetObject(bp, bck, objName, &GetArgs{Writer: w, Query: query})

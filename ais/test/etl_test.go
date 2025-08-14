@@ -244,8 +244,12 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	tassert.CheckFatal(t, err)
 	defer fho.Close()
 
-	tlog.Logf("GET %s via etl[%s], args=%v\n", bck.Cname(objName), etlName, args)
-	oah, err := api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args, Pipeline: pipeline}, bck, objName, fho)
+	etl := &api.ETL{ETLName: etlName, TransformArgs: args}
+	for _, nextETL := range pipeline {
+		etl = etl.Chain(&api.ETL{ETLName: nextETL})
+	}
+
+	oah, err := api.ETLObject(baseParams, etl, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 
 	stat, _ := fho.Stat()
@@ -295,7 +299,8 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLon
 
 	bf := bytes.NewBuffer(nil)
 	tlog.Logf("Use ETL[%s] to read transformed object\n", etlName)
-	_, err = api.ETLObject(baseParams, &api.ETLObjArgs{ETLName: etlName, TransformArgs: args}, bck, objName, bf)
+	etl := &api.ETL{ETLName: etlName, TransformArgs: args}
+	_, err = api.ETLObject(baseParams, etl, bck, objName, bf)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, bf.Len() == cos.KiB, "Expected %d bytes, got %d", cos.KiB, bf.Len())
 }
