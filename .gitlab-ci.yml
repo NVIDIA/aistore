@@ -216,7 +216,7 @@ lint:linux:
     - !reference [.default_run_rules, rules]
   script:
     - make lint
-    - TAGS="oteltracing statsd ht" make lint
+    - TAGS="nethttp debug oteltracing statsd oci aws gcp azure" make lint
     - make fmt-check
     - make spell-check
 

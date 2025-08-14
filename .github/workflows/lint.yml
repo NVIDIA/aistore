@@ -37,7 +37,6 @@ jobs:
           export GOPATH="$(go env GOPATH)"
           make lint
           TAGS=statsd make lint    ############### TODO: delete after v3.30 (by Fall 2025)
-          TAGS="nethttp ht debug" make lint
-          TAGS="aws gcp azure" make lint
+          TAGS="nethttp debug oteltracing oci aws gcp azure" make lint
           make fmt-check
           make spell-check

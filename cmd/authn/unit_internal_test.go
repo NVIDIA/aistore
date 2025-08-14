@@ -9,17 +9,17 @@ package main
 // NOTE go:build debug (above) =====================================
 
 import (
-	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -139,7 +139,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 }
 
-func createManagerWithAdmin(driver kvdb.Driver) (m *mgr, code int, err error) {
+func createManagerWithAdmin(driver kvdb.Driver) (*mgr, error) {
 	oldPass, wasSet := os.LookupEnv(env.AisAuthAdminPassword)
 	os.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
 	// Reset after test
@@ -150,13 +150,14 @@ func createManagerWithAdmin(driver kvdb.Driver) (m *mgr, code int, err error) {
 			os.Unsetenv(env.AisAuthAdminPassword)
 		}
 	}()
-	return newMgr(driver)
+	m, _, err := newMgr(driver)
+	return m, err
 }
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, _, err := createManagerWithAdmin(driver)
+	mgr, err := createManagerWithAdmin(driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -184,7 +185,7 @@ func TestToken(t *testing.T) {
 	)
 
 	driver := mock.NewDBDriver()
-	mgr, _, err := createManagerWithAdmin(driver)
+	mgr, err := createManagerWithAdmin(driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)
