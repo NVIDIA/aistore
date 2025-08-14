@@ -279,7 +279,7 @@ class Etl:
 
             # Call init(), passing our special env-vars
             self.init(
-                image=f"aistorage/runtime_python:{_get_runtime()}",
+                image=f"gaikwadabhishek/runtime_python:{_get_runtime()}",
                 comm_type=comm_type,
                 init_timeout=init_timeout,
                 obj_timeout=obj_timeout,

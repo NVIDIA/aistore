@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 import io
 import pickle
 import importlib
+import cloudpickle
 
 from aistore.sdk.etl.webserver.base_etl_server import ETLServer
 from aistore.sdk.const import UTF_ENCODING
@@ -49,7 +50,7 @@ def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
     """
     if not isinstance(cls, type) or not issubclass(cls, ETLServer):
         raise TypeError(f"{cls!r} is not a subclass of ETLServer")
-    pickled = pickle.dumps(cls, protocol=pickle.HIGHEST_PROTOCOL)
+    pickled = cloudpickle.dumps(cls)
     return base64.b64encode(pickled).decode(encoding)
 
 
