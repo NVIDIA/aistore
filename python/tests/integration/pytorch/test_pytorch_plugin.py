@@ -25,6 +25,7 @@ from aistore.pytorch import (
     AISMultiShardStream,
     AISShardReader,
 )
+from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
 
 
 class TestPytorchPlugin(unittest.TestCase):
@@ -268,6 +269,20 @@ class TestPytorchPlugin(unittest.TestCase):
         for i, (basename, sample) in enumerate(shard_reader):
             self.assertEqual(basename, sample_names[i])
             self.assertEqual(sample, expected[i])
+
+    def test_ais_batch_iter_dataset(self):
+        content_dict = self.create_test_objects(10)
+        dataset = AISBatchIterDataset(
+            ais_source_list=self.bck,
+            client=self.client,
+        )
+
+        # Test iteration
+        results = {}
+        for name, content in dataset:
+            results[name] = content
+
+        self.verify_dataset_output(results, content_dict)
 
 
 if __name__ == "__main__":

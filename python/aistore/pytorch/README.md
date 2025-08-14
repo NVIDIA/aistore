@@ -127,3 +127,28 @@ for basename, content_dict in shard_reader:
 ```
 
 See the [ShardReader example notebook](../../examples/pytorch/shard_reader_example.ipynb) for more examples. Since the shard reader is also an iterable dataset, you can also use it with the `torch.utils.data.DataLoader` class for additional features.
+
+**AISBatchIterDataset - High-Performance Batch Processing**
+
+For enhanced performance when working with large datasets, AIStore provides AISBatchIterDataset, which leverages AIStore's batch API for efficient data loading.
+
+```python
+from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
+from aistore.sdk import Client
+import os
+
+ais_url = os.getenv("AIS_ENDPOINT", "http://localhost:8080")
+client = Client(ais_url)
+bucket = client.bucket("my-bck")
+
+batch_dataset = AISBatchIterDataset(
+    ais_source_list=bucket,
+    client=client,
+    batch_size=128,  # Number of objects to batch before sending batch request
+    streaming=True,  # Enable streaming mode for memory efficiency
+    show_progress=False
+)
+
+for sample in batch_dataset:
+    print(data_sample)
+```

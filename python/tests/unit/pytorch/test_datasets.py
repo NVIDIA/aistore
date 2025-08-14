@@ -5,12 +5,13 @@ Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 
 import unittest
 from unittest.mock import patch, Mock, MagicMock
-import unittest.mock
 from aistore.pytorch.map_dataset import AISMapDataset
 from aistore.pytorch.iter_dataset import AISIterDataset
 from aistore.pytorch.multishard_dataset import AISMultiShardStream
 from aistore.pytorch.shard_reader import AISShardReader
+from aistore.pytorch.batch_iter_dataset import AISBatchIterDataset
 from aistore.sdk import Bucket
+from aistore.sdk.batch.batch_request import BatchRequest
 from tarfile import open, TarInfo
 from io import BytesIO
 
@@ -27,7 +28,7 @@ class TestAISDataset(unittest.TestCase):
 
         self.patcher_get_objects_iterator = patch(
             "aistore.pytorch.base_iter_dataset.AISBaseIterDataset._create_objects_iter",
-            return_value=iter(self.mock_objects),
+            side_effect=lambda: iter(self.mock_objects),
         )
         self.patcher_get_objects = patch(
             "aistore.pytorch.base_map_dataset.AISBaseMapDataset._create_objects_list",
@@ -146,3 +147,54 @@ class TestAISDataset(unittest.TestCase):
         mock_create_samples_iter.assert_called()
 
         self.patcher.stop()
+
+    def test_batch_iter_dataset(self):
+        """Test AISBatchIterDataset functionality."""
+
+        # Mock the client and batch loader
+        mock_client = Mock()
+        mock_batch_loader = Mock()
+        mock_client.batch_loader.return_value = mock_batch_loader
+
+        # Create proper mock response items
+        mock_resp_item_1 = Mock()
+        mock_resp_item_1.obj_name = "test_obj_1"
+        mock_resp_item_2 = Mock()
+        mock_resp_item_2.obj_name = "test_obj_2"
+
+        # Create the response data as a list that can be iterated
+        mock_response_data = [
+            (mock_resp_item_1, b"batch data 1"),
+            (mock_resp_item_2, b"batch data 2"),
+        ]
+
+        # Mock the get_batch method to return an iterator over the response data
+        mock_batch_loader.get_batch.return_value = iter(mock_response_data)
+
+        # Create the batch dataset
+        batch_dataset = AISBatchIterDataset(
+            ais_source_list=self.mock_bck,
+            client=mock_client,
+        )
+
+        with patch(
+            "aistore.pytorch.batch_iter_dataset.BatchRequest"
+        ) as mock_batch_req_class:
+            mock_batch_req = Mock()
+            mock_batch_req_class.return_value = mock_batch_req
+
+            mock_batch_req.add_obj_request = Mock()
+
+            # Test iteration
+            results = list(batch_dataset)
+
+        # Verify results
+        expected_results = [
+            ("test_obj_1", b"batch data 1"),
+            ("test_obj_2", b"batch data 2"),
+        ]
+        self.assertEqual(results, expected_results)
+
+        # Verify batch loader was called
+        mock_client.batch_loader.assert_called_once()
+        mock_batch_loader.get_batch.assert_called_once()
