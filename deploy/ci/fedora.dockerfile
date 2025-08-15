@@ -32,6 +32,7 @@ RUN dnf -y update && \
        tar \
        uuid \
        which \
+       xxhash \
        yq \
     && dnf clean all
 
