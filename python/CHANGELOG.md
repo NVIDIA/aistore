@@ -6,16 +6,20 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
-## Added
+### Added
 
 - Add functionality to pipeline multiple ETLs.
   - Add `>>` operator for combining multiple ETLs into a pipeline.
   - Introduce `QPARAM_ETL_PIPELINE` constant for ETL pipeline configuration and object inline transformation.
   - Add `etl_pipeline` argument to `Bucket.transform` and `ObjectGroup.transform` APIs.
 
+### Removed
+
+- Remove 'deserialize_class' function from ETL Webserver Utils and clean imports.
+
 ## [1.15.1] - 2025-08-11
 
-## Added
+### Added
 
 - Add ETL pipeline header processing and direct put handling in all ETL webservers.
 - Add ETL pipeline processing in WebSocket control message of ETL FastAPI web server.

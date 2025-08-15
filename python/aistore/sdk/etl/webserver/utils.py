@@ -32,29 +32,6 @@ def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
     return base64.b64encode(pickled).decode(encoding)
 
 
-def deserialize_class(payload: str, encoding: str = UTF_ENCODING) -> Type[ETLServer]:
-    """
-    Decode a Base64 payload and unpickle it back into an ETLServer subclass.
-
-    Args:
-        payload: Base64-encoded pickled data.
-        encoding: The string encoding used to decode the payload.
-
-    Returns:
-        The ETLServer subclass.
-
-    Raises:
-        TypeError: If the unpickled object is not a subclass of ETLServer.
-    """
-    raw = base64.b64decode(payload.encode(encoding))
-    cls = cloudpickle.loads(raw)
-
-    if not isinstance(cls, type) or not issubclass(cls, ETLServer):
-        raise TypeError(f"{cls!r} is not a subclass of ETLServer")
-
-    return cls
-
-
 def compose_etl_direct_put_url(direct_put_url: str, host_target: str) -> str:
     """
     Compose a direct PUT URL by taking the scheme and netloc from `direct_put_url`
