@@ -1214,6 +1214,8 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		}
 		exists = false
 		if fltPresence == apc.FltPresentCluster {
+			// find the object in the local target and restore it to the right location
+			// TODO: must extend this to check whether the object is present in other targets, any disk inside the cluster
 			exists = lom.RestoreToLocation()
 		}
 	}

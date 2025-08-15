@@ -274,8 +274,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		propsFlag     []string
 		selectedProps []string
 		hargs         = api.HeadArgs{
-			FltPresence: apc.FltPresentCluster,
-			Silent:      flagIsSet(c, silentFlag) || silent,
+			Silent: flagIsSet(c, silentFlag) || silent,
 		}
 		isList      = actionIsHandler(c.Command.Action, listAnyHandler)
 		isRemote    = bck.IsRemote()
@@ -284,8 +283,13 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 	if errU != nil {
 		return false, errU
 	}
-	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
+	switch {
+	case flagIsSet(c, headObjPresentFlag):
+		hargs.FltPresence = apc.FltPresentCluster
+	case flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag):
 		hargs.FltPresence = apc.FltExists
+	default:
+		hargs.FltPresence = apc.FltPresent
 	}
 
 	// do

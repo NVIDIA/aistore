@@ -162,8 +162,12 @@ const (
 	FltExistsNoProps         // same as above but no need to return props/info
 	FltPresent               // bucket: is present | object: present and properly located
 	FltPresentNoProps        // same as above but no need to return props/info
-	FltPresentCluster        // objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
-	FltExistsOutside         // not present - exists _outside_ cluster (NOTE: currently, only list-buckets)
+
+	// Objects are present on any target, any disk inside the cluster (including replicas, EC slices, misplaced, or rebalancing).
+	// TODO: Currently, `FltPresentCluster` only checks whether the LOM can be loaded, and tries to find/restore it on the same target if loading fails.
+	// This should be extended to check whether the object is present on any target or any disk inside the cluster (see also: `t.headObjBcast()`).
+	FltPresentCluster
+	FltExistsOutside // not present - exists _outside_ cluster (NOTE: currently, only list-buckets)
 )
 
 func IsFltPresent(v int) bool {

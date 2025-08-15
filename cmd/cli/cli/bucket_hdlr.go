@@ -150,6 +150,7 @@ const evictUsage = "Evict one remote bucket, multiple remote buckets, or\n" +
 var (
 	lsCmdFlags = []cli.Flag{
 		allObjsOrBcksFlag,
+		headObjPresentFlag,
 		listCachedFlag,
 		listNotCachedFlag,
 		nameOnlyFlag,

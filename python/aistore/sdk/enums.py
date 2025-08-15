@@ -22,5 +22,8 @@ class FLTPresence(IntEnum):
     FLT_EXISTS_NO_PROPS = 1  # same as above but no need to return props/info
     FLT_PRESENT = 2  # bucket: is present | object: present and properly located
     FLT_PRESENT_NO_PROPS = 3  # same as above but no need to return props/info
-    FLT_PRESENT_CLUSTER = 4  # objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
+
+    # objects are present on any target, any disk inside the cluster
+    # (including replicas, EC slices, misplaced, or rebalancing)
+    FLT_PRESENT_CLUSTER = 4
     FLT_EXISTS_OUTSIDE = 5  # not present - exists _outside_ cluster
