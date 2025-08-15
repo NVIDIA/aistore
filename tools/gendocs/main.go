@@ -1002,7 +1002,7 @@ func cleanupAnnotations() error {
 	return os.RemoveAll(tempDirPath)
 }
 
-// reads the swagger.yaml file and injects model vendor extensions
+// reads the swagger.yaml file, simplifies model names, and injects model vendor extensions
 func injectModelExtensions() error {
 	projectRoot, err := getProjectRoot()
 	if err != nil {
@@ -1041,18 +1041,32 @@ func injectModelExtensions() error {
 		return nil
 	}
 
-	// Inject x-supported-actions for each model
+	// Simplify model names
+	simpleName := make(map[string]any)
+	for qualifiedName, definition := range definitions {
+		parts := strings.Split(qualifiedName, dot)
+		baseName := parts[len(parts)-1]
+		simpleName[baseName] = definition
+	}
+
+	spec[definitionsKey] = simpleName
+
+	// Inject x-supported-actions for each model using the simplified names
 	injected := 0
 	for model, actions := range modelActions {
 		if len(actions) == 0 {
 			continue
 		}
 
-		if modelDef, exists := definitions[model]; exists {
+		// Convert model name [apc.ActMsg] to [ActMsg]
+		parts := strings.Split(model, dot)
+		baseName := parts[len(parts)-1]
+
+		if modelDef, exists := simpleName[baseName]; exists {
 			if modelDefMap, ok := modelDef.(map[string]any); ok {
 				modelDefMap[xSupportedActionsKey] = actions
 				injected++
-				fmt.Printf("  Injected extensions for model: %s\n", model)
+				fmt.Printf("  Injected extensions for model: %s\n", baseName)
 			}
 		}
 	}
