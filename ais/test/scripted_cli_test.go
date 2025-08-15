@@ -148,7 +148,6 @@ func TestCopySyncRemaisUsingScript(t *testing.T) {
 // 1. MD5 checksum
 // 2. "apc.S3Scheme+apc.BckProviderSeparator+bck.Name"
 func TestMPU_1_UsingScript(t *testing.T) {
-	t.Skipf("skipping %s - requires xxhsum installed", t.Name())
 	tempdir := t.TempDir()
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
@@ -174,7 +173,6 @@ func TestMPU_1_UsingScript(t *testing.T) {
 }
 
 func TestMPU_2_UsingScript(t *testing.T) {
-	t.Skipf("skipping %s - requires xxhsum installed", t.Name())
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 	cmd := exec.Command("./scripts/multipart-smoke.sh", "--bucket", bck.Cname(""))
 

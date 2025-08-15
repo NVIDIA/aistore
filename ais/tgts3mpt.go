@@ -324,7 +324,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	}
 
 	// TODO: compare with listMptUploads (that does fromFS)
-	manifest := t.ups.get(uploadID)
+	manifest, metadata := t.ups.getWithMeta(uploadID)
 	if manifest == nil {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
 		return
@@ -378,7 +378,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	// compute "whole" checksum // TODO -- FIXME: sha256 may take precedence when implied by partSHA (see above)
 	var (
 		wholeCksum *cos.CksumHash
-		metadata   = manifest.GetMeta()
 		remote     = bck.IsRemoteS3() || bck.IsRemoteOCI()
 	)
 	if remote && lom.CksumConf().Type != cos.ChecksumNone {
@@ -395,7 +394,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		lom.SetCksum(&wholeCksum.Cksum)
 	}
 
-	// compute ETag if need be
+	// compute multipart-compliant ETag if need be
 	var etag string
 	if !remote {
 		var err error

@@ -86,9 +86,9 @@ elif [[ "$bucket" == s3://* ]]; then
   bucket_name="${bucket#s3://}"
   s3_bucket="$bucket"
 
-  # Verify S3 bucket exists (s3cmd will fail if it doesn't)
-  if ! s3cmd ls "$bucket" >/dev/null 2>&1; then
-    echo "Error: S3 bucket $bucket does not exist or is not accessible"
+  # Verify bucket exists
+  if ! ais show bucket "$bucket" -c >/dev/null 2>&1; then
+    echo "Error: $bucket does not exist"
     exit 1
   fi
 
@@ -128,10 +128,18 @@ h1=$(xxhsum "$src" | awk '{print $1}')
 echo "   Source hash: $h1"
 
 echo "3. uploading via s3cmd to $s3_bucket..."
-s3cmd put "$src" "$s3_bucket/${filename}" || exit $?
+s3cmd put "$src" "$s3_bucket/${filename}" \
+  --no-ssl \
+  --host=localhost:8080/s3 \
+  --host-bucket="localhost:8080/s3/%(bucket)" \
+|| exit $?
 
 echo "4. downloading via s3cmd from $s3_bucket..."
-s3cmd get "$s3_bucket/${filename}" "$dst" --force || exit $?
+s3cmd get "$s3_bucket/${filename}" "$dst" --force \
+  --no-ssl \
+  --host=localhost:8080/s3 \
+  --host-bucket="localhost:8080/s3/%(bucket)" \
+|| exit $?
 
 echo "5. computing xxhash of downloaded file..."
 h2=$(xxhsum "$dst" | awk '{print $1}')

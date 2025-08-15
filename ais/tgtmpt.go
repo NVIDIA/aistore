@@ -28,59 +28,69 @@ const (
 
 // see also: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 const (
-	maxPartsPerUpload = 10000
+	maxPartsPerUpload = 9999 // 64K limited (compressed) unless (e.g.) `mkfs.xfs -m attr=128k /dev/sdX`
 )
 
 type (
-	uploads struct {
+	up struct {
+		u   *core.Ufest
+		rmd map[string]string
+	}
+	ups struct {
 		t *target
-		m map[string]*core.Ufest // by upload ID
+		m map[string]up
 		sync.RWMutex
 	}
 )
 
-func (ups *uploads) init(id string, lom *core.LOM, metadata map[string]string) error {
+func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 	manifest := core.NewUfest(id, lom, false /*must-exist*/)
-	if err := manifest.SetMeta(metadata); err != nil {
-		return err
-	}
 	ups.Lock()
 	if ups.m == nil {
-		ups.m = make(map[string]*core.Ufest, iniCapUploads)
+		ups.m = make(map[string]up, iniCapUploads)
 	}
-	ups._add(id, manifest)
+	ups._add(id, manifest, rmd)
 	ups.Unlock()
 	return nil
 }
 
-func (ups *uploads) _add(id string, manifest *core.Ufest) {
+func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) {
 	debug.Assert(manifest.Lom != nil)
 	_, ok := ups.m[id]
 	debug.Assert(!ok, "duplicated upload ID: ", id, " ", manifest.Lom.Cname())
-	ups.m[id] = manifest
+	ups.m[id] = up{manifest, rmd}
 }
 
-func (ups *uploads) get(id string) (manifest *core.Ufest) {
+func (ups *ups) get(id string) (manifest *core.Ufest) {
 	ups.RLock()
-	manifest = ups.m[id]
+	manifest = ups.m[id].u
+	ups.RUnlock()
+	return
+}
+
+func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]string) {
+	ups.RLock()
+	manifest = ups.m[id].u
+	rmd = ups.m[id].rmd
 	ups.RUnlock()
 	return
 }
 
 // NOTE: must be called with ups unlocked
-func (ups *uploads) fromFS(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
+func (ups *ups) fromFS(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
 	manifest = core.NewUfest(id, lom, true /*must-exist*/)
 	if err = manifest.Load(lom); err == nil && add {
 		ups.Lock()
-		ups._add(id, manifest)
+		ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)
 		ups.Unlock()
 	}
 	return
 }
 
-func (ups *uploads) abort(id string, lom *core.LOM) (ecode int, err error) {
+func (ups *ups) abort(id string, lom *core.LOM) (ecode int, err error) {
+	var manifest *core.Ufest
 	ups.Lock()
-	manifest, ok := ups.m[id]
+	up, ok := ups.m[id]
 	if !ok {
 		ups.Unlock()
 		manifest, err = ups.fromFS(id, lom, false /*add*/)
@@ -88,6 +98,7 @@ func (ups *uploads) abort(id string, lom *core.LOM) (ecode int, err error) {
 			return 0, err
 		}
 	} else {
+		manifest = up.u
 		delete(ups.m, id)
 		ups.Unlock()
 	}
@@ -100,17 +111,17 @@ func (ups *uploads) abort(id string, lom *core.LOM) (ecode int, err error) {
 	return 0, nil
 }
 
-func (ups *uploads) toSlice() (all []*core.Ufest) {
+func (ups *ups) toSlice() (all []*core.Ufest) {
 	ups.RLock()
 	all = make([]*core.Ufest, 0, len(ups.m))
-	for _, manifest := range ups.m {
-		all = append(all, manifest)
+	for _, up := range ups.m {
+		all = append(all, up.u)
 	}
 	ups.RUnlock()
 	return
 }
 
-func (ups *uploads) del(id string) {
+func (ups *ups) del(id string) {
 	ups.Lock()
 	delete(ups.m, id)
 	ups.Unlock()
@@ -120,7 +131,7 @@ func (ups *uploads) del(id string) {
 // backend operations - encapsulate IsRemoteS3/IsRemoteOCI pattern
 //
 
-func (ups *uploads) start(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values) (uploadID string, metadata map[string]string, err error) {
+func (ups *ups) start(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values) (uploadID string, metadata map[string]string, err error) {
 	var (
 		ecode int
 		bck   = lom.Bck()
@@ -141,7 +152,7 @@ func (ups *uploads) start(w http.ResponseWriter, r *http.Request, lom *core.LOM,
 	return
 }
 
-func (ups *uploads) putPartRemote(lom *core.LOM, reader io.ReadCloser, r *http.Request, q url.Values, uploadID string, expectedSize int64, partNum int32) (etag string, ecode int, err error) {
+func (ups *ups) putPartRemote(lom *core.LOM, reader io.ReadCloser, r *http.Request, q url.Values, uploadID string, expectedSize int64, partNum int32) (etag string, ecode int, err error) {
 	bck := lom.Bck()
 	if bck.IsRemoteS3() {
 		etag, ecode, err = backend.PutMptPartAWS(lom, reader, r, q, uploadID, expectedSize, partNum)
@@ -152,7 +163,7 @@ func (ups *uploads) putPartRemote(lom *core.LOM, reader io.ReadCloser, r *http.R
 	return
 }
 
-func (ups *uploads) completeRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string, body []byte, partList *s3.CompleteMptUpload) (etag string, err error) {
+func (ups *ups) completeRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string, body []byte, partList *s3.CompleteMptUpload) (etag string, err error) {
 	var (
 		ecode    int
 		provider string
@@ -178,7 +189,7 @@ func (ups *uploads) completeRemote(w http.ResponseWriter, r *http.Request, lom *
 	return
 }
 
-func (ups *uploads) abortRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string) (err error) {
+func (ups *ups) abortRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string) (err error) {
 	var (
 		ecode int
 		bck   = lom.Bck()
@@ -194,7 +205,7 @@ func (ups *uploads) abortRemote(w http.ResponseWriter, r *http.Request, lom *cor
 	return
 }
 
-func (*uploads) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md map[string]string) {
+func (*ups) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md map[string]string) {
 	bck := lom.Bck()
 	if bck.IsRemoteS3() {
 		md = cmn.BackendHelpers.Amazon.EncodeMetadata(metadata)
@@ -209,7 +220,7 @@ func (*uploads) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) 
 // misc
 //
 
-func (*uploads) parsePartNum(s string) (int32, error) {
+func (*ups) parsePartNum(s string) (int32, error) {
 	partNum, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
 		err = fmt.Errorf("invalid part number %q (must be in 1-%d range): %v", s, maxPartsPerUpload, err)

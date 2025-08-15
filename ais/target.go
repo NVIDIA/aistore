@@ -73,7 +73,7 @@ type (
 		res      *res.Res
 		txns     txns
 		regstate regstate
-		ups      uploads
+		ups      ups
 	}
 )
 

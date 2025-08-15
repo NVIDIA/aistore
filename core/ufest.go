@@ -36,7 +36,7 @@ import (
 // - consider not storing remote mdmap  - redundant vs lom.SetCustomKey -- FIXME
 // - optimize ComputeWholeChecksum
 // - t.completeMpt() locks/unlocks two times - consider CoW
-// - remove debug.AssertFunc
+// - remove all debug.AssertFunc
 // - space cleanup; orphan chunks
 // - err-busy
 // - warn if bucket.mirror.enabled - NIY
@@ -45,17 +45,16 @@ const (
 	umetaver = 1
 )
 
+// assorted
 const (
 	chunkNameSepa = "."
 
 	iniChunksCap = 16
 
 	maxChunkSize = 5 * cos.GiB
-
-	maxMetaKeys     = 1000
-	maxMetaEntryLen = 4 * cos.KiB
 )
 
+// single flag so far
 const (
 	completed uint16 = 1 << 0 // Ufest.Flags
 )
@@ -65,7 +64,7 @@ const (
 	xattrChunk = "user.ais.chunk"
 
 	xattrChunkDflt = memsys.DefaultBufSize
-	xattrChunkMax  = memsys.DefaultBuf2Size // NOTE: 64K hard limit
+	xattrChunkMax  = memsys.DefaultBuf2Size // NOTE: 64K hard limit unless (e.g.) `mkfs.xfs -m attr=128k /dev/sdX`
 )
 
 const (
@@ -85,14 +84,12 @@ type (
 		MD5  []byte
 		ETag string
 	}
-	mdpair struct{ k, v string }
-	Ufest  struct {
+	Ufest struct {
 		ID      string    // upload/manifest ID
 		Created time.Time // creation time
 		Num     uint16    // number of chunks (so far)
 		Flags   uint16    // bit flags { completed, ...}
 		Chunks  []Uchunk
-		mdmap   map[string]string // remote object metadata (gets sorted when packing)
 
 		// runtime state
 		Lom       *LOM
@@ -101,6 +98,11 @@ type (
 		completed atomic.Bool
 		mu        sync.Mutex
 	}
+)
+
+var (
+	errNoChunks   = errors.New("no chunks")
+	errNoChunkOne = errors.New("no chunk #1")
 )
 
 func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
@@ -120,28 +122,13 @@ func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
 // immutable once completed
 func (u *Ufest) Completed() bool { return u.completed.Load() }
 
-// NOTE:
-// - GetMeta() returns a reference that callers must not mutate
-// - alternatively, clone it and call SetMeta
-// - on-disk order is deterministic (sorted at pack time)
-func (u *Ufest) SetMeta(md map[string]string) error {
-	if l := len(md); l > maxMetaKeys {
-		return fmt.Errorf("%s: number of metadata entries %d exceeds %d limit", utag, l, maxMetaKeys)
-	}
-	for k, v := range md {
-		if len(k) > maxMetaEntryLen || len(v) > maxMetaEntryLen {
-			return fmt.Errorf("%s: metadata entry too large (%d, %d, %d)", utag, len(k), len(v), maxMetaEntryLen)
-		}
-	}
-	u.mdmap = md
-	return nil
-}
-func (u *Ufest) GetMeta() map[string]string { return u.mdmap }
-
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
 
 func (u *Ufest) Add(c *Uchunk, size, num int64) error {
+	if num <= 0 {
+		return fmt.Errorf("%s: invalid chunk number: %d (must be > 0)", utag, num)
+	}
 	if size > maxChunkSize {
 		return fmt.Errorf("%s [add] chunk size %d exceeds %d limit", utag, size, maxChunkSize)
 	}
@@ -253,6 +240,32 @@ func (u *Ufest) Load(lom *LOM) error {
 		return u._errXattr(lom.Cname(), err)
 	}
 
+	err = u._load(lom, data)
+	if err == nil {
+		if size := lom.Lsize(true); size != u.Size {
+			return fmt.Errorf("%s load size mismatch: manifest %d vs %d lom", u._itag(lom.Cname()), u.Size, size)
+		}
+		debug.Assert(u.Flags&completed == completed)
+		u.completed.Store(u.Flags&completed == completed)
+	}
+	return err
+}
+
+func (u *Ufest) LoadPartial(lom *LOM) error {
+	cbuf, cslab := g.pmm.AllocSize(xattrChunkMax)
+	defer cslab.Free(cbuf)
+
+	data, err := u.getXchunk(cbuf)
+	if err != nil {
+		return u._errXattr(lom.Cname(), err)
+	}
+
+	err = u._load(lom, data)
+	debug.Assert(err != nil || u.Flags&completed != completed)
+	return err
+}
+
+func (u *Ufest) _load(lom *LOM, data []byte) error {
 	// validate and strip/remove the trailing checksum
 	checksumOffset := len(data) - cos.SizeXXHash64
 	expectedChecksum := binary.BigEndian.Uint64(data[checksumOffset:])
@@ -266,7 +279,7 @@ func (u *Ufest) Load(lom *LOM) error {
 
 	// decompress into a 2nd buffer
 	dbuf, dslab := g.pmm.AllocSize(xattrChunkMax)
-	err = u._load(lom, compressedData, dbuf)
+	err := u._loadCompressed(lom, compressedData, dbuf)
 	dslab.Free(dbuf)
 
 	debug.Assert(u.validNums() == nil)
@@ -276,14 +289,10 @@ func (u *Ufest) Load(lom *LOM) error {
 	}
 
 	u.Lom = lom
-	if u.Flags&completed == completed {
-		u.completed.Store(true)
-	}
-
 	return err
 }
 
-func (u *Ufest) _load(lom *LOM, compressedData, buf []byte) error {
+func (u *Ufest) _loadCompressed(lom *LOM, compressedData, buf []byte) error {
 	data := buf[:0]
 	zr := lz4.NewReader(bytes.NewReader(compressedData))
 
@@ -303,9 +312,6 @@ func (u *Ufest) _load(lom *LOM, compressedData, buf []byte) error {
 
 	if err := u.unpack(data); err != nil {
 		return u._errXattr(lom.Cname(), err)
-	}
-	if u.Size != lom.Lsize(true) {
-		return fmt.Errorf("%s load size mismatch: %d vs %d", u._itag(lom.Cname()), u.Size, lom.Lsize(true))
 	}
 	return nil
 }
@@ -357,19 +363,25 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	}
 
 	// fixup chunk #1
-	orig := u.Chunks[0].Path
+	c, e := u.firstChunk()
+	if e != nil {
+		return e
+	}
+	orig := c.Path
 	if len(testing) == 0 {
-		if err := lom.RenameFinalize(u.Chunks[0].Path); err != nil {
+		if err := lom.RenameFinalize(c.Path); err != nil {
 			return err
 		}
 	}
-	u.Chunks[0].Path = lom.FQN
+	c.Path = lom.FQN
 
 	// store
 	u.Flags |= completed
 	u.completed.Store(true)
 
 	sgl := g.pmm.NewSGL(xattrChunkDflt)
+
+	debug.Assert(c.Path == lom.FQN)
 	err := u._store(lom, sgl)
 	sgl.Free()
 	if err != nil {
@@ -380,8 +392,10 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 				nlog.Errorf("failed to store %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
 				T.FSHC(err, lom.Mountpath(), lom.FQN)
 			} else {
-				u.Chunks[0].Path = orig
+				c.Path = orig
 			}
+		} else {
+			c.Path = orig
 		}
 	}
 	return err
@@ -431,23 +445,65 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL) error {
 	return u.setXchunk(lom, b)
 }
 
-// note get/set xattr asymmetry, Load and Store paths respectively
+// note:
+// * Num == 1 keeps xattr until _completed_; LoadPartial uses the fact
+// * Add() keeps chunks sorted by Num, so index 0 is the lowest present
+func (u *Ufest) firstChunk() (*Uchunk, error) {
+	debug.AssertFunc(func() bool {
+		for i := 1; i < len(u.Chunks); i++ {
+			if u.Chunks[i-1].Num > u.Chunks[i].Num {
+				return false
+			}
+		}
+		return true
+	})
 
+	if err := u._check(); err != nil {
+		return nil, err
+	}
+	return &u.Chunks[0], nil
+}
+
+// (completed)
 func (lom *LOM) getXchunk(buf []byte) ([]byte, error) {
 	return fs.GetXattrBuf(lom.FQN, xattrChunk, buf)
 }
 
+// (partial)
+func (u *Ufest) getXchunk(buf []byte) ([]byte, error) {
+	c, err := u.firstChunk()
+	if err != nil {
+		return nil, err
+	}
+	return fs.GetXattrBuf(c.Path, xattrChunk, buf)
+}
+
+// (completed | partial)
 func (u *Ufest) setXchunk(lom *LOM, data []byte) error {
-	fqn := u.Chunks[0].Path
-	if u.Completed() {
-		fqn = lom.FQN
+	fqn := lom.FQN
+	if !u.Completed() {
+		c, err := u.firstChunk()
+		if err != nil {
+			return err
+		}
+		fqn = c.Path
 	}
 	return fs.SetXattr(fqn, xattrChunk, data)
 }
 
+func (u *Ufest) _check() error {
+	if len(u.Chunks) == 0 {
+		return errNoChunks
+	}
+	if u.Chunks[0].Num != 1 {
+		return errNoChunkOne
+	}
+	return nil
+}
+
 func (u *Ufest) validNums() error {
 	if u.Num == 0 {
-		return errors.New("no chunks to validate")
+		return errNoChunks
 	}
 	for i := range u.Chunks {
 		c := &u.Chunks[i]
@@ -508,10 +564,13 @@ func (u *Ufest) ETagS3() (string, error) {
 func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 	debug.Assert(u.Num > 0 && int(u.Num) == len(u.Chunks), "invalid chunks num ", u.Num, " vs ", len(u.Chunks))
 
-	var (
-		written   int64
-		buf, slab = g.pmm.AllocSize(u.Chunks[0].Siz)
-	)
+	c, err := u.firstChunk()
+	if err != nil {
+		return err
+	}
+
+	var written int64
+	buf, slab := g.pmm.AllocSize(c.Siz)
 	defer slab.Free(buf)
 
 	for i := range u.Num {
@@ -562,23 +621,6 @@ func (u *Ufest) pack(w io.Writer) {
 	// flags
 	binary.BigEndian.PutUint16(b16[:], u.Flags)
 	w.Write(b16[:])
-
-	// metadata
-	l := len(u.mdmap)
-	binary.BigEndian.PutUint16(b16[:], uint16(l))
-	w.Write(b16[:])
-	if l > 0 {
-		mdslice := make([]mdpair, 0, l)
-		for k, v := range u.mdmap {
-			mdslice = append(mdslice, mdpair{k, v})
-		}
-		sort.Slice(mdslice, func(i, j int) bool { return mdslice[i].k < mdslice[j].k }) // deterministic
-		for _, kv := range mdslice {
-			_packStr(w, kv.k)
-			_packStr(w, kv.v)
-		}
-		clear(mdslice)
-	}
 
 	// chunks
 	for _, c := range u.Chunks {
@@ -663,27 +705,6 @@ func (u *Ufest) unpack(data []byte) (err error) {
 	}
 	u.Flags = binary.BigEndian.Uint16(data[offset:])
 	offset += cos.SizeofI16
-
-	// metadata map
-	if len(data) < offset+cos.SizeofI16 {
-		return errors.New(tooShort)
-	}
-	metaCount := binary.BigEndian.Uint16(data[offset:])
-	offset += cos.SizeofI16
-
-	if metaCount > 0 {
-		u.mdmap = make(map[string]string, metaCount)
-		for range metaCount {
-			var k, v string
-			if k, offset, err = _unpackStr(data, offset); err != nil {
-				return err
-			}
-			if v, offset, err = _unpackStr(data, offset); err != nil {
-				return err
-			}
-			u.mdmap[k] = v
-		}
-	}
 
 	// Read chunks
 	u.Chunks = make([]Uchunk, u.Num)
