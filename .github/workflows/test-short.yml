@@ -35,6 +35,19 @@ jobs:
           python -m pip install --user s3cmd
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Install xxhash
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xxhash
+
+      # Uncomment when macOS is enabled and added to the matrix
+      # - name: Install xxhash (macOS)
+      #   if: matrix.os == 'macos-latest'
+      #   run: |
+      #     brew update
+      #     brew install xxhash
+
       - name: Configure system
         run: |
           sudo sysctl -w vm.swappiness=10
