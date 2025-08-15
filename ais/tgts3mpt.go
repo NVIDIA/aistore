@@ -42,9 +42,6 @@ package ais
 //    - failed/aborted uploads clean up chunks but don't persist manifests
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -53,32 +50,18 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 )
-
-// TODO:
-// - remove appendChunks; make Ufest a reader
-// - test
-
-func decodeXML[T any](body []byte) (result T, _ error) {
-	if err := xml.Unmarshal(body, &result); err != nil {
-		return result, err
-	}
-	return result, nil
-}
 
 // Initialize multipart upload.
 // - Generate UUID for the upload
@@ -106,6 +89,8 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	result := &s3.InitiateMptUploadResult{Bucket: bck.Name, Key: objName, UploadID: uploadID}
+
+	nlog.Infoln("start", uploadID)
 
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
@@ -247,12 +232,6 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	}
 
 	// 4. finalize the part (expecting the part's remote etag to be md5 checksum)
-	md5 := cmn.UnquoteCEV(etag)
-	if cksumMD5.H != nil {
-		debug.Assert(etag == "")
-		cksumMD5.Finalize()
-		md5 = cksumMD5.Value()
-	}
 	if checkPartSHA {
 		cksumSHA.Finalize()
 		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
@@ -265,8 +244,12 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	}
 
 	chunk := &core.Uchunk{
-		MD5:  md5,
+		ETag: etag,
 		Path: chunkPath,
+	}
+	if cksumMD5.H != nil {
+		chunk.MD5 = cksumMD5.H.Sum(nil)
+		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
 	}
 	if checkPartSHA {
 		chunk.Cksum = &cksumSHA.Cksum
@@ -278,7 +261,14 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
 	}
-	w.Header().Set(cos.S3CksumHeader, md5) // s3cmd checks this one
+
+	// s3 compliance
+	if etag != "" {
+		w.Header().Set(cos.S3CksumHeader, etag)
+	} else {
+		debug.Assert(len(chunk.MD5) == 16)
+		w.Header().Set(cos.S3CksumHeader, cmn.MD5ToETag(chunk.MD5))
+	}
 
 	delta := mono.SinceNano(startTime)
 	vlabs := map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
@@ -310,13 +300,14 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		s3.WriteErr(w, r, errors.New("empty uploadId"), 0)
 		return
 	}
+	nlog.Infoln("complete", uploadID)
 
 	body, err := cos.ReadAllN(r.Body, r.ContentLength)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
-	partList, err := decodeXML[*s3.CompleteMptUpload](body)
+	partList, err := s3.DecodeXML[*s3.CompleteMptUpload](body)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
@@ -339,27 +330,10 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	// call remote
+	// validate parts (note: maybe too strict)
 	var (
-		etag    string
-		started = time.Now()
-		remote  = bck.IsRemoteS3() || bck.IsRemoteOCI()
+		numParts = len(partList.Parts)
 	)
-	if remote {
-		var err error
-		etag, err = t.ups.completeRemote(w, r, lom, q, uploadID, body, partList)
-		if err != nil {
-			return
-		}
-	}
-
-	// append parts and finalize locally
-	var (
-		mw          io.Writer
-		actualCksum *cos.CksumHash
-		numParts    = len(partList.Parts)
-	)
-
 	if numParts == 0 {
 		s3.WriteMptErr(w, r, errors.New("empty parts list"), 0, lom, uploadID)
 		return
@@ -367,7 +341,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	sort.Slice(partList.Parts, func(i, j int) bool {
 		return *partList.Parts[i].PartNumber < *partList.Parts[j].PartNumber
 	})
-
 	for i, p := range partList.Parts {
 		if p.PartNumber == nil {
 			s3.WriteMptErr(w, r, fmt.Errorf("nil part number at index %d", i), http.StatusBadRequest, lom, uploadID)
@@ -382,7 +355,8 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 			return
 		}
 	}
-	manifest.Lock()
+
+	manifest.Lock() // ------------------------------------------------ TODO -- FIXME: consider CoW
 	if len(manifest.Chunks) < numParts {
 		manifest.Unlock()
 		s3.WriteMptErr(w, r,
@@ -401,97 +375,69 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		nparts[i] = c
 	}
 
-	metadata := manifest.GetMeta()
-	manifest.Unlock()
-
-	// 2. Create final work file
-	prefix := uploadID + ".complete"
-	wfqn := fs.CSM.Gen(lom, fs.WorkfileType, prefix)
-	wfh, errC := lom.CreateWork(wfqn)
-	if errC != nil {
-		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
-		return
-	}
+	// compute "whole" checksum // TODO -- FIXME: sha256 may take precedence when implied by partSHA (see above)
+	var (
+		wholeCksum *cos.CksumHash
+		metadata   = manifest.GetMeta()
+		remote     = bck.IsRemoteS3() || bck.IsRemoteOCI()
+	)
 	if remote && lom.CksumConf().Type != cos.ChecksumNone {
-		actualCksum = cos.NewCksumHash(lom.CksumConf().Type)
+		wholeCksum = cos.NewCksumHash(lom.CksumConf().Type)
 	} else {
-		actualCksum = cos.NewCksumHash(cos.ChecksumMD5)
+		wholeCksum = cos.NewCksumHash(cos.ChecksumMD5)
 	}
-	mw = cos.IniWriterMulti(actualCksum.H, wfh)
 
-	// .3 write - append chunks in order
-	buf, slab := t.gmm.Alloc()
-	multichunkMD5, written, errA := _finalizeChunks(nparts, buf, mw)
-	slab.Free(buf)
-
-	if lom.IsFeatureSet(feat.FsyncPUT) {
-		errS := wfh.Sync()
-		debug.AssertNoErr(errS)
-	}
-	cos.Close(wfh)
-
-	if errA == nil && written <= 0 {
-		errA = fmt.Errorf("upload %q %q: invalid full size %d", uploadID, lom.Cname(), written)
-	}
-	if errA != nil {
-		if nerr := cos.RemoveFile(wfqn); nerr != nil && !cos.IsNotExist(nerr) {
-			nlog.Errorf(fmtNested, t, errA, "remove", wfqn, nerr)
+	if wholeCksum != nil {
+		if err := manifest.ComputeWholeChecksum(wholeCksum); err != nil {
+			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
+			return
 		}
-		s3.WriteMptErr(w, r, errA, 0, lom, uploadID)
-		return
+		lom.SetCksum(&wholeCksum.Cksum)
 	}
 
-	// .4 (s3 client => ais://) compute resulting MD5 and, optionally, ETag
-	if actualCksum.H != nil {
-		actualCksum.Finalize()
-		lom.SetCksum(actualCksum.Cksum.Clone())
+	// compute ETag if need be
+	var etag string
+	if !remote {
+		var err error
+		if etag, err = manifest.ETagS3(); err != nil {
+			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
+			return
+		}
 	}
-	if etag == "" {
-		debug.Assert(!remote)
-		debug.Assert(multichunkMD5 != nil)
+	manifest.Unlock() // -------------------------------------------------- TODO -- FIXME: ditto
 
-		multichunkMD5.Finalize()
-		etag = `"` + multichunkMD5.Val() + cmn.AwsMultipartDelim + strconv.Itoa(len(nparts)) + `"`
-	}
-
-	// .5 finalize
-	lom.SetSize(written)
+	// call remote
 	if remote {
-		md := t.ups.encodeRemoteMetadata(lom, metadata)
+		var err error
+		etag, err = t.ups.completeRemote(w, r, lom, q, uploadID, body, partList)
+		if err != nil {
+			return
+		}
+	}
+
+	if remote {
+		md := t.ups.encodeRemoteMetadata(lom, metadata) // TODO -- FIXME: vs ufest.mdmap
 		for k, v := range md {
 			lom.SetCustomKey(k, v)
 		}
 	}
 	lom.SetCustomKey(cmn.ETag, etag)
 
-	poi := allocPOI()
-	{
-		poi.t = t
-		poi.atime = started.UnixNano()
-		poi.lom = lom
-		poi.workFQN = wfqn
-		poi.owt = cmn.OwtNone
-	}
-	ecode, errF := poi.finalize()
-	freePOI(poi)
-
-	// .6 write manifest // TODO -- FIXME: niy
-	if err := manifest.StoreCompleted(lom, true); err != nil {
-		s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
-		return
-	}
-	t.ups.del(uploadID)
-
-	if errF != nil {
-		// NOTE: not failing if remote op. succeeded
+	// atomically flip: persist manifest, mark chunked, persist main
+	if err := lom.CompleteUfest(manifest); err != nil {
 		if !remote {
-			s3.WriteMptErr(w, r, errF, ecode, lom, uploadID)
+			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 			return
 		}
-		nlog.Errorf("upload %q: failed to complete %s locally: %v(%d)", uploadID, lom.Cname(), errF, ecode)
+		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
+		return
 	}
 
-	// .7 respond
+	t.ups.del(uploadID)
+
+	nlog.Infoln(uploadID, "completed")
+
+	// respond
 	result := &s3.CompleteMptUploadResult{Bucket: bck.Name, Key: objName, ETag: etag}
 	sgl := t.gmm.NewSGL(0)
 	result.MustMarshal(sgl)
@@ -506,34 +452,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	if remote {
 		t.statsT.IncWith(t.Backend(bck).MetricName(stats.PutCount), vlabs)
 	}
-}
-
-func _finalizeChunks(nparts []*core.Uchunk, buf []byte, mw io.Writer) (cksum *cos.CksumHash, written int64, err error) {
-	cksum = cos.NewCksumHash(cos.ChecksumMD5)
-	for _, c := range nparts {
-		fh, err := os.Open(c.Path)
-		if err != nil {
-			return nil, 0, err
-		}
-		n, err := io.CopyBuffer(mw, fh, buf)
-		cos.Close(fh)
-		if err != nil {
-			return nil, 0, err
-		}
-		if n != c.Siz {
-			return nil, 0, fmt.Errorf("invalid size for c %d: %d vs %d", c.Num, n, c.Siz)
-		}
-		written += n
-
-		bin, derr := hex.DecodeString(c.MD5)
-		if derr != nil || len(bin) != md5.Size {
-			return nil, 0, fmt.Errorf("invalid MD5 for c %d: %q", c.Num, c.MD5)
-		}
-		if _, err := cksum.H.Write(bin); err != nil {
-			return nil, 0, err
-		}
-	}
-	return cksum, written, nil
 }
 
 // Abort an active multipart upload.
@@ -651,7 +569,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	defer lom.Unlock(false)
 
 	// load chunk manifest and find out the part num's offset & size
-	manifest := core.NewUfest("", lom) // ID will be loaded from xattr
+	manifest := core.NewUfest("", lom, true /*must-exist*/)
 	err = manifest.Load(lom)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusNotFound)

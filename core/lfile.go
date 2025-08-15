@@ -7,6 +7,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,23 +82,32 @@ func (lh *LomHandle) Open() (cos.ReadOpenCloser, error) { return lh.lom.NewHandl
 // LOM (open, close, remove) -------------------------------
 //
 
+var _ io.ReaderAt = (*os.File)(nil) // sanity (whereby UfestReader is guarded elsewhere)
+
 // open read-only, return a reader
 // see also: lom.NewDeferROC()
 // see also: lom.GetROC()
-func (lom *LOM) Open() (fh cos.LomReader, err error) {
+func (lom *LOM) Open() (lh cos.LomReader, err error) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
-	fh, err = os.Open(lom.FQN)
+	if lom.IsChunked() {
+		lh, err = lom.NewUfestReader()
+	} else {
+		// TODO: remove after a while
+		debug.AssertFunc(func() bool {
+			buf := make([]byte, xattrChunkMax)
+			_, xerr := lom.getXchunk(buf)
+			return xerr != nil
+		})
+		lh, err = os.Open(lom.FQN)
+	}
 	switch {
 	case err == nil:
-		return fh, nil
+		return lh, nil
 	case cos.IsNotExist(err):
 		if e := lom._checkBdir(); e != nil {
 			err = e
 		}
 		return nil, err
-
-	// case cos.IsErrFntl(err)
-
 	default:
 		return nil, err
 	}
@@ -113,7 +123,7 @@ func (lom *LOM) Create() (cos.LomWriter, error) {
 }
 
 func (lom *LOM) CreateWork(wfqn string) (cos.LomWriter, error) { return lom._cf(wfqn) } // -> lom
-func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // TODO: differentiate
+func (lom *LOM) CreatePart(wfqn string) (*os.File, error)      { return lom._cf(wfqn) } // TODO -- FIXME: niy
 func (lom *LOM) CreateSlice(wfqn string) (*os.File, error)     { return lom._cf(wfqn) } // --/--
 
 func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {

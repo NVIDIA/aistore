@@ -272,3 +272,10 @@ func (r *DeleteResult) MustMarshal(sgl *memsys.SGL) {
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
 }
+
+func DecodeXML[T any](body []byte) (result T, _ error) {
+	if err := xml.Unmarshal(body, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}

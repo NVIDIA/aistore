@@ -516,6 +516,8 @@ var _ = Describe("LOM", func() {
 				It("should accept when filesystem and memory checksums match", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := newBasicLom(localFQN)
+					lom.TestAtime()
+					Expect(lom.Persist()).NotTo(HaveOccurred())
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
@@ -523,12 +525,19 @@ var _ = Describe("LOM", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := newBasicLom(localFQN)
 
+					lom.TestAtime()
+					Expect(lom.Persist()).NotTo(HaveOccurred())
+
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 
 				It("should not accept when object content has changed", func() {
 					createTestFile(localFQN, testFileSize)
 					lom := newBasicLom(localFQN)
+
+					lom.TestAtime()
+					Expect(lom.Persist()).NotTo(HaveOccurred())
+
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
 					err := os.WriteFile(localFQN, []byte("wrong file"), cos.PermRWR)
@@ -544,6 +553,8 @@ var _ = Describe("LOM", func() {
 					// Set checksum type to `none` to simulate LOM with old checksum type (set to `none`).
 					lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
 
+					lom.TestAtime()
+					Expect(lom.Persist()).NotTo(HaveOccurred())
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 				})
 			})
@@ -1084,7 +1095,7 @@ var _ = Describe("LOM", func() {
 
 			Expect(cos.CreateDir(filepath.Dir(localFQN))).NotTo(HaveOccurred())
 
-			ufest := core.NewUfest("test-upload-"+cos.GenTie(), lom)
+			ufest := core.NewUfest("test-upload-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			// Generate large file in chunks and compute original checksum
 			originalChecksum := onexxh.New64()
@@ -1103,7 +1114,6 @@ var _ = Describe("LOM", func() {
 				chunk := &core.Uchunk{
 					Path:  chunkPath,
 					Cksum: nil, // No individual chunk checksums for this test
-					MD5:   "",
 				}
 
 				err = ufest.Add(chunk, thisChunkSize, int64(chunkNum))
@@ -1164,7 +1174,7 @@ var _ = Describe("LOM", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, 0)
-			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom)
+			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			// Create single empty chunk
 			chunkPath, err := ufest.ChunkName(1)
@@ -1194,7 +1204,7 @@ var _ = Describe("LOM", func() {
 			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "incomplete.bin")
 			createTestFile(fqn2, 0)
 			lom2 := newBasicLom(fqn2)
-			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2)
+			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2, false /*must-exist*/)
 
 			// Don't call Store() - manifest remains incomplete
 			_, err = ufest2.NewReader()
@@ -1208,7 +1218,7 @@ var _ = Describe("LOM", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN)
-			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom)
+			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			// Create chunk that's smaller than declared size
 			chunkPath, err := ufest.ChunkName(1)
@@ -1250,7 +1260,7 @@ var _ = Describe("LOM", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, totalFileSize)
-			ufest := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom)
+			ufest := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			originalChecksum := onexxh.New64()
 
@@ -1301,6 +1311,127 @@ var _ = Describe("LOM", func() {
 		})
 	})
 
+	Describe("MPU Complete -> GET scenario", func() {
+		const (
+			testObject = "mpu/test-chunked-object.bin"
+			chunkSize  = 64 * cos.KiB
+			numChunks  = 5
+			totalSize  = numChunks * chunkSize
+		)
+		It("should persist chunked flag correctly and survive LOM reload", func() {
+			By("Step 1: Simulating successful MPU completion")
+
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			// Create initial LOM for the object (no need for empty file - chunks are the real data)
+			lom := newBasicLom(localFQN)
+
+			// Create Ufest (multipart upload session)
+			ufest := core.NewUfest("mpu-test-"+cos.GenTie(), lom, false /*must-exist*/)
+
+			// Add chunks to simulate MPU
+			for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
+				chunkPath, err := ufest.ChunkName(chunkNum)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create actual chunk file
+				createTestChunk(chunkPath, chunkSize, nil)
+
+				chunk := &core.Uchunk{
+					Path: chunkPath,
+					Siz:  chunkSize,
+				}
+
+				err = ufest.Add(chunk, chunkSize, int64(chunkNum))
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Complete the MPU - this should set the chunked flag
+			err := lom.CompleteUfest(ufest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked immediately after CompleteUfest")
+
+			err = lom.Load(false, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Step 2: Verify chunked flag is set immediately after Load")
+			Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked immediately after Load")
+
+			By("Step 3: Simulate first GET request with fresh LOM instance")
+
+			// This simulates what happens on a GET request - fresh LOM instance
+			getLom := &core.LOM{}
+			err = getLom.InitFQN(localFQN, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Load metadata from filesystem (this is where the chunked flag should be read)
+			err = getLom.Load(false, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Step 4: Verify chunked flag is still present after reload")
+			Expect(getLom.IsChunked()).To(BeTrue(), "Fresh LOM instance should detect chunked flag from persisted metadata")
+		})
+
+		It("should handle the chunked flag through manual persistence cycle", func() {
+			By("Testing manual flag persistence without Ufest")
+
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+
+			createTestFile(localFQN, totalSize)
+			lom := newBasicLom(localFQN)
+			lom.SetSize(totalSize)
+			lom.SetAtimeUnix(time.Now().UnixNano())
+
+			// TODO -- FIXME: Manually set chunked flag and persist
+			lom.Lock(true)
+			// lom.SetLmfl(core.LmflChunk) // Manually set the flag
+			err := lom.PersistMain()
+			lom.Unlock(true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify it persisted correctly
+			freshLom := &core.LOM{}
+			err = freshLom.InitFQN(localFQN, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = freshLom.Load(false, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Expect(freshLom.IsChunked()).To(BeTrue(), "Manually set chunked flag should persist")
+		})
+
+		It("should detect when chunked flag is lost", func() {
+			By("Creating chunked object and then clearing flag to simulate the bug")
+
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			lom := newBasicLom(localFQN)
+
+			// Set up as chunked object
+			ufest := core.NewUfest("bug-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			chunkPath, _ := ufest.ChunkName(1)
+			createTestChunk(chunkPath, chunkSize, nil)
+
+			chunk := &core.Uchunk{Path: chunkPath, Siz: chunkSize}
+			ufest.Add(chunk, chunkSize, 1)
+
+			err := lom.CompleteUfest(ufest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lom.IsChunked()).To(BeTrue())
+
+			// Now simulate the bug - create fresh LOM and see if flag is missing
+			bugLom := &core.LOM{}
+			err = bugLom.InitFQN(localFQN, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = bugLom.Load(false, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			if !bugLom.IsChunked() {
+				Fail("BUG REPRODUCED: Fresh LOM instance lost chunked flag after CompleteUfest!")
+			}
+
+			By("If we reach here, the chunked flag persisted correctly")
+		})
+	})
 })
 
 //

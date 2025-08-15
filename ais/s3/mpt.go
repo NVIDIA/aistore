@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/core"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -66,9 +67,14 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, err error) {
 	manifest.Lock()
 	parts = make([]types.CompletedPart, 0, len(manifest.Chunks))
-	for _, c := range manifest.Chunks {
+	for i := range manifest.Chunks {
+		c := &manifest.Chunks[i]
+		etag := c.ETag
+		if etag == "" {
+			etag = cmn.MD5ToETag(c.MD5)
+		}
 		parts = append(parts, types.CompletedPart{
-			ETag:       apc.Ptr(c.MD5),
+			ETag:       apc.Ptr(etag),
 			PartNumber: apc.Ptr(int32(c.Num)),
 		})
 	}

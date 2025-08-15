@@ -43,6 +43,10 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
+const (
+	checksumRangeSizeThreshold = 4 * cos.MiB // see goi._txrng
+)
+
 //
 // PUT, GET, APPEND (to file | to archive), and COPY object
 //
@@ -1069,37 +1073,49 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	return ecode, err
 }
 
-func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) (err error) {
+func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) error {
 	var (
 		r          io.Reader
 		sgl        *memsys.SGL
 		cksum      = goi.lom.Checksum()
 		ckconf     = goi.lom.CksumConf()
 		size       = hrng.Length
-		cksumRange = ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange
+		cksumRange = ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange && (hrng.Start > 0 || size < goi.lom.Lsize())
+		ra, ok     = lmfh.(io.ReaderAt)
 	)
-	r = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
+	debug.Assertf(ok, "expecting ReaderAt, got (%T)", lmfh) // m.b. fh or UfestReader
 
-	// compute range checksum
+	r = io.NewSectionReader(ra, hrng.Start, size)
+
 	if cksumRange {
-		sgl = goi.t.gmm.NewSGL(size)
-		_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
-		if err != nil {
-			sgl.Free()
-			goi.isIOErr = true
-			return err
-		}
-		r = sgl
-		if cksumH != nil {
+		if size <= checksumRangeSizeThreshold {
+			// small (pagecache)
+			_, cksumH, err := cos.CopyAndChecksum(io.Discard, r, nil, ckconf.Type)
+			if err != nil {
+				goi.isIOErr = true
+				return err
+			}
 			cksum = &cksumH.Cksum
+			r = io.NewSectionReader(ra, hrng.Start, size)
+		} else {
+			// large (+ sgl)
+			sgl = goi.t.gmm.NewSGL(size)
+			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
+			if err != nil {
+				sgl.Free()
+				goi.isIOErr = true
+				return err
+			}
+			cksum = &cksumH.Cksum
+			r = sgl
 		}
 	}
 
-	// set response header
 	goi.setwhdr(whdr, cksum, size)
 
+	// transmit
 	buf, slab := goi.t.gmm.AllocSize(_txsize(size))
-	err = goi.transmit(r, buf, fqn, size)
+	err := goi.transmit(r, buf, fqn, size)
 	slab.Free(buf)
 	if sgl != nil {
 		sgl.Free()

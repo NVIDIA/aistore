@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -143,32 +142,43 @@ func TestCopySyncRemaisUsingScript(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
-// NOTE: not running with an actual remote s3 bucket (could take hours)
-// instead, using aisore S3 API with a temp `ais://` bucket, and with two additional workarounds:
-// 1. MD5
-// 2. "apc.S3Scheme+apc.BckProviderSeparator+bck.Name" (below)
-func TestMultipartUploadUsingScript(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{
-		Long: true,
-	})
-
+// not running with an actual remote s3 bucket (could take hours)
+// using aistore S3 (compatibility) API with a temp `ais://` bucket
+// notice:
+// 1. MD5 checksum
+// 2. "apc.S3Scheme+apc.BckProviderSeparator+bck.Name"
+func TestMPU_1_UsingScript(t *testing.T) {
+	t.Skipf("skipping %s - requires xxhsum installed", t.Name())
 	tempdir := t.TempDir()
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 
-	// 1. set MD5 to satisfy `s3cmd` (for details, see docs/s3compat.md)
-	bprops := &cmn.BpropsToSet{
-		Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumMD5)},
-	}
-	tools.CreateBucket(t, proxyURL, bck, bprops, true /*cleanup*/)
-
-	// 2. subst "ais://" with "s3://" to circumvent s3cmd failing with "not a recognized URI"
-	cmd := exec.Command("./scripts/s3-mpt-large-files.sh", tempdir, apc.S3Scheme+apc.BckProviderSeparator+bck.Name,
+	// Script handles bucket creation and MD5 checksum setup automatically
+	args := []string{"./scripts/s3-mpt-large-files.sh", tempdir, bck.Cname(""),
 		"1",    // number of iterations
 		"true", // generate large files
 		"1",    // number of large files
-	)
+	}
+
+	if testing.Short() {
+		args = append(args, "--short")
+	}
+
+	cmd := exec.Command(args[0], args[1:]...)
 
 	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+func TestMPU_2_UsingScript(t *testing.T) {
+	t.Skipf("skipping %s - requires xxhsum installed", t.Name())
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	cmd := exec.Command("./scripts/multipart-smoke.sh", "--bucket", bck.Cname(""))
+
+	tlog.Logf("Running '%s'...)\n", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))

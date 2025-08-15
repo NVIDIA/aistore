@@ -5,6 +5,7 @@
 package core_test
 
 import (
+	"encoding/hex"
 	"os"
 	"time"
 
@@ -78,22 +79,26 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 		)
 
 		createChunkManifest := func(totalSize int64, numChunks uint16, chunkSizes []int64, id string, lom *core.LOM) *core.Ufest {
-			manifest := core.NewUfest(id, lom)
+			manifest := core.NewUfest(id, lom, false /*must-exist*/)
 			manifest.Size = totalSize
 			manifest.Num = numChunks
 			manifest.Chunks = make([]core.Uchunk, numChunks)
 
 			err := manifest.SetMeta(manifestMeta)
 			debug.AssertNoErr(err)
+			md5str := "d41d8cd98f00b204e9800998ecf8427e"
 
 			for i := range numChunks {
 				cksumVal := trand.String(16)
+				j := int(i) % len(md5str)
+				s := md5str[j:] + md5str[:j]
+				a, _ := hex.DecodeString(s)
 				manifest.Chunks[i] = core.Uchunk{
 					Siz:   chunkSizes[i],
 					Num:   i + 1,
 					Path:  trand.String(7),
 					Cksum: cos.NewCksum(cos.ChecksumCesXxh, cksumVal),
-					MD5:   trand.String(32),
+					MD5:   a,
 				}
 			}
 			return manifest
@@ -101,7 +106,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 		Describe("Constructor", func() {
 			It("should create manifest with generated ID when empty", func() {
-				manifest := core.NewUfest("", nil)
+				manifest := core.NewUfest("", nil, false /*must-exist*/)
 
 				Expect(manifest.ID).ToNot(BeEmpty())
 				Expect(manifest.Created).ToNot(BeZero())
@@ -114,21 +119,21 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 			It("should create manifest with provided ID", func() {
 				customID := "test-session-123"
-				manifest := core.NewUfest(customID, nil)
+				manifest := core.NewUfest(customID, nil, false /*must-exist*/)
 
 				Expect(manifest.ID).To(Equal(customID))
 				Expect(manifest.Created).ToNot(BeZero())
 			})
 
 			It("should create unique IDs for concurrent calls", func() {
-				manifest1 := core.NewUfest("", nil)
-				manifest2 := core.NewUfest("", nil)
+				manifest1 := core.NewUfest("", nil, false /*must-exist*/)
+				manifest2 := core.NewUfest("", nil, false /*must-exist*/)
 
 				Expect(manifest1.ID).ToNot(Equal(manifest2.ID))
 			})
 
 			It("should initialize with not completed flag", func() {
-				manifest := core.NewUfest("", nil)
+				manifest := core.NewUfest("", nil, false /*must-exist*/)
 				Expect(manifest.Completed()).To(BeFalse())
 			})
 		})
@@ -287,7 +292,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				lom := newBasicLom(localFQN, testFileSize)
 
 				// Create invalid manifest - num says 3 but only 2 chunks
-				manifest := core.NewUfest("invalid-manifest", lom)
+				manifest := core.NewUfest("invalid-manifest", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 3
 				manifest.Chunks = []core.Uchunk{
@@ -304,7 +309,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				manifest := core.NewUfest("zero-chunks", lom)
+				manifest := core.NewUfest("zero-chunks", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 0
 				manifest.Chunks = []core.Uchunk{}
@@ -431,12 +436,14 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				manifest := core.NewUfest("nil-checksum-test", lom)
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
+				b, _ := hex.DecodeString("41d8cd98f00b204e9800998ecf8427ed")
+				manifest := core.NewUfest("nil-checksum-test", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 2
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 500000, Num: 1, Cksum: nil, MD5: "md5hash1"},                                               // nil checksum
-					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
+					{Siz: 500000, Num: 1, Cksum: nil, MD5: a},
+					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: b}, // total = 1048576
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -456,12 +463,14 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				manifest := core.NewUfest("empty-checksum-test", lom)
+				manifest := core.NewUfest("empty-checksum-test", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 2
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
+				b, _ := hex.DecodeString("41d8cd98f00b204e9800998ecf8427ed")
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 500000, Num: 1, Cksum: cos.NewCksum(cos.ChecksumCesXxh, ""), MD5: "md5hash1"},              // empty checksum value
-					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: "md5hash2"}, // total = 1048576
+					{Siz: 500000, Num: 1, Cksum: cos.NewCksum(cos.ChecksumCesXxh, ""), MD5: a},              // empty checksum value
+					{Siz: 548576, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "validchecksum"), MD5: b}, // total = 1048576
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -482,13 +491,16 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				manifest := core.NewUfest("zero-size-test", lom)
+				manifest := core.NewUfest("zero-size-test", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 3
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
+				b, _ := hex.DecodeString("41d8cd98f00b204e9800998ecf8427ed")
+				c, _ := hex.DecodeString("1d8cd98f00b204e9800998ecf8427ed4")
 				manifest.Chunks = []core.Uchunk{
-					{Siz: 0, Num: 1, Path: "a/b/c/ddd", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty"), MD5: "md5_1"}, // zero size
-					{Siz: testFileSize, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "full"), MD5: "md5_2"},
-					{Siz: 0, Num: 3, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty2"), MD5: "md5_3"}, // another zero - total = 1048576
+					{Siz: 0, Num: 1, Path: "a/b/c/ddd", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty"), MD5: a}, // zero size
+					{Siz: testFileSize, Num: 2, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "full"), MD5: b},
+					{Siz: 0, Num: 3, Cksum: cos.NewCksum(cos.ChecksumCesXxh, "empty2"), MD5: c}, // another zero - total = 1048576
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -508,11 +520,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				createDummyFile(localFQN)
 				lom := newBasicLom(localFQN, testFileSize)
 
-				manifest := core.NewUfest("", lom)
+				manifest := core.NewUfest("", lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 1
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
+					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: a},
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -531,11 +544,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				lom := newBasicLom(localFQN, testFileSize)
 
 				longID := "very-long-session-id-" + trand.String(100)
-				manifest := core.NewUfest(longID, lom)
+				manifest := core.NewUfest(longID, lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 1
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: "md5hash"},
+					{Siz: testFileSize, Num: 1, Path: "test", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "checksum"), MD5: a},
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -551,9 +565,9 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 
 		Describe("ID and Created functionality", func() {
 			It("should generate different IDs for sessions started at different times", func() {
-				manifest1 := core.NewUfest("", nil)
+				manifest1 := core.NewUfest("", nil, false /*must-exist*/)
 				time.Sleep(time.Second) // ensure different timestamps
-				manifest2 := core.NewUfest("", nil)
+				manifest2 := core.NewUfest("", nil, false /*must-exist*/)
 
 				Expect(manifest1.ID).ToNot(Equal(manifest2.ID))
 				Expect(manifest1.Created.Before(manifest2.Created)).To(BeTrue())
@@ -564,11 +578,12 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 				lom := newBasicLom(localFQN, testFileSize)
 
 				customID := "my-custom-upload-session-12345"
-				manifest := core.NewUfest(customID, lom)
+				manifest := core.NewUfest(customID, lom, false /*must-exist*/)
 				manifest.Size = testFileSize
 				manifest.Num = 1
+				a, _ := hex.DecodeString("d41d8cd98f00b204e9800998ecf8427e")
 				manifest.Chunks = []core.Uchunk{
-					{Siz: testFileSize, Num: 1, Path: "chunk1", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "abc123"), MD5: "md5hash"},
+					{Siz: testFileSize, Num: 1, Path: "chunk1", Cksum: cos.NewCksum(cos.ChecksumCesXxh, "abc123"), MD5: a},
 				}
 
 				err := manifest.StoreCompleted(lom, unitTestingWithNoRealChunks)
@@ -582,7 +597,7 @@ var _ = Describe("Chunk Manifest Xattrs", func() {
 			})
 
 			It("should validate ID format in generated IDs", func() {
-				manifest := core.NewUfest("", nil)
+				manifest := core.NewUfest("", nil, false /*must-exist*/)
 
 				// Generated ID should be UUID-compliant time-based format
 				// GenTAID format: "t" + HHMMSS + "-" + 3-char-tie

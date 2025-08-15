@@ -41,6 +41,24 @@ type backendFuncs struct {
 	DecodeMetadata func(header http.Header) (metadata map[string]string)
 }
 
+// unquote checksum, ETag, and version
+// e.g., https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+func UnquoteCEV(val string) string {
+	return strings.Trim(val, "\"")
+}
+
+// S3 requires that the ETag header value should be enclosed in double quotes
+func MD5ToETag(md5hash []byte) string {
+	return `"` + hex.EncodeToString(md5hash) + `"`
+}
+
+// NOTE: hex.DecodeString() won't complain on empty ("") etag - caller must validate
+func ETagToMD5(etag string) ([]byte, error) {
+	s := UnquoteCEV(etag)
+	debug.Assert(s != "")
+	return hex.DecodeString(s)
+}
+
 // backend-specific encoding/decoding functions
 var BackendHelpers = struct {
 	Amazon backendFuncs
@@ -83,12 +101,6 @@ func isS3MultipartEtag(etag string) bool {
 
 func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "" && *version != "null"
-}
-
-// unquote checksum, ETag, and version
-// e.g., https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
-func UnquoteCEV(val string) string {
-	return strings.Trim(val, "\"")
 }
 
 //

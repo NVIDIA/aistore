@@ -31,7 +31,7 @@ fi
 
 echo "=== Backend Rate Limiting Test ==="
 
-# Backend rate limiting controls requests to remote storage 
+# Backend rate limiting controls requests to remote storage
 if [[ -z "$backend_bucket" ]]; then
     backend_bucket="s3://ais-rate-limit-backend-test"
     echo "Creating cloud bucket for backend testing: $backend_bucket"
@@ -42,7 +42,7 @@ if [[ -z "$backend_bucket" ]]; then
         exit 0
     fi
     created_test_bucket=true
-    
+
     # Verify bucket was actually created and is accessible
     if ! ais show bucket $backend_bucket -c >/dev/null 2>&1; then
         echo "Created bucket is not accessible, skipping backend test"
@@ -66,15 +66,15 @@ cleanup() {
   rc=$?
   echo
   echo "=== Cleanup ==="
-  
+
   # Only attempt cleanup if bucket is accessible
   if ais show bucket $backend_bucket -c >/dev/null 2>&1; then
     echo "Disabling rate limiting..."
     ais bucket props set $backend_bucket rate_limit.backend.enabled=false 1>/dev/null 2>&1
-    
+
     echo "Cleaning up test objects..."
     ais rmo "$backend_bucket/rate-test-*" -y 1>/dev/null 2>&1
-    
+
     # Clean up backend test bucket if we created it
     if [[ "$backend_bucket" == "s3://ais-rate-limit-backend-test" ]]; then
       echo "Cleaning up test bucket..."
@@ -83,7 +83,7 @@ cleanup() {
   else
     echo "Backend bucket not accessible, skipping cleanup"
   fi
-  
+
   exit $rc
 }
 

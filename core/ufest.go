@@ -6,13 +6,16 @@ package core
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -29,8 +32,14 @@ import (
 )
 
 // TODO:
-// - space cleanup; orphans
+// - remove or isolate `testing` bits -- FIXME
+// - consider not storing remote mdmap  - redundant vs lom.SetCustomKey -- FIXME
+// - optimize ComputeWholeChecksum
+// - t.completeMpt() locks/unlocks two times - consider CoW
+// - remove debug.AssertFunc
+// - space cleanup; orphan chunks
 // - err-busy
+// - warn if bucket.mirror.enabled - NIY
 
 const (
 	umetaver = 1
@@ -72,7 +81,9 @@ type (
 		Cksum *cos.Cksum // nil means none; otherwise non-empty
 		Num   uint16     // chunk/part number
 		Flags uint16     // bit flags (future use)
-		MD5   string     // S3/legacy
+		// S3/legacy (either/or)
+		MD5  []byte
+		ETag string
 	}
 	mdpair struct{ k, v string }
 	Ufest  struct {
@@ -92,9 +103,9 @@ type (
 	}
 )
 
-func NewUfest(id string, lom *LOM) *Ufest {
+func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
 	now := time.Now()
-	if id == "" {
+	if id == "" && !mustExist {
 		id = cos.GenTAID(now)
 	}
 	return &Ufest{
@@ -227,7 +238,13 @@ func (u *Ufest) ChunkName(num int) (string, error) {
 	return mi.MakePathFQN(lom.Bucket(), fs.ObjChunkType, chname), err
 }
 
+// do not validate manifest ID since
+// callers may use temporary/generated IDs when loading existing manifests
+// (during GET)
 func (u *Ufest) Load(lom *LOM) error {
+	debug.Assert(lom != nil)
+	debug.Assert(u.Lom == nil || u.Lom == lom)
+
 	cbuf, cslab := g.pmm.AllocSize(xattrChunkMax)
 	defer cslab.Free(cbuf)
 
@@ -245,12 +262,18 @@ func (u *Ufest) Load(lom *LOM) error {
 		return cos.NewErrMetaCksum(expectedChecksum, actualChecksum, utag)
 	}
 
+	givenID := u.ID
+
 	// decompress into a 2nd buffer
 	dbuf, dslab := g.pmm.AllocSize(xattrChunkMax)
 	err = u._load(lom, compressedData, dbuf)
 	dslab.Free(dbuf)
 
 	debug.Assert(u.validNums() == nil)
+
+	if givenID != "" && givenID != u.ID {
+		return fmt.Errorf("%s ID mismatch: given %q vs %q stored", u._itag(lom.Cname()), givenID, u.ID)
+	}
 
 	u.Lom = lom
 	if u.Flags&completed == completed {
@@ -386,6 +409,8 @@ func (u *Ufest) StorePartial(lom *LOM) error {
 }
 
 func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL) error {
+	debug.Assert(u.ID != "")
+
 	// compress
 	zw := lz4.NewWriter(sgl)
 	u.pack(zw)
@@ -435,6 +460,79 @@ func (u *Ufest) validNums() error {
 			}
 		}
 	}
+	return nil
+}
+
+//
+// checksum and size of the _WHOLE_ ---------------------------------------------------------------
+//
+
+func (u *Ufest) ETagS3() (string, error) {
+	debug.Assert(u.Num > 0 && int(u.Num) == len(u.Chunks), "invalid chunks num ", u.Num, " vs ", len(u.Chunks))
+
+	h := md5.New()
+	for i := range u.Num {
+		c := &u.Chunks[i]
+		switch {
+		case len(c.MD5) == md5.Size:
+			h.Write(c.MD5)
+			if c.ETag != "" {
+				if bin, err := cmn.ETagToMD5(c.ETag); err == nil {
+					debug.Assert(bytes.Equal(bin, c.MD5),
+						"ETag/md5 mismatch: ", c.ETag, " vs ", cmn.MD5ToETag(c.MD5))
+				}
+			}
+		case c.ETag != "":
+			bin, err := cmn.ETagToMD5(c.ETag)
+			if err == nil && len(bin) == md5.Size {
+				h.Write(bin)
+				continue
+			}
+			fallthrough
+		default:
+			err := fmt.Errorf("%s: invalid ETag for part %d: %q", u._itag(), i+1, c.ETag)
+			debug.AssertNoErr(err)
+			return "", err
+		}
+	}
+	// S3 compliant multipart ETag has the following format:
+	// (note: should there be a special case for u.Num == 1?)
+	sum := h.Sum(nil)
+	s := hex.EncodeToString(sum)
+	return `"` + s + cmn.AwsMultipartDelim + strconv.Itoa(int(u.Num)) + `"`, nil
+}
+
+// reread all chunk payloads to compute a checksum of the given type
+// TODO: avoid the extra pass by accumulating during AddPart/StorePartial or by caching a tree-hash
+// see also: s3/mpt for ListParts
+func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
+	debug.Assert(u.Num > 0 && int(u.Num) == len(u.Chunks), "invalid chunks num ", u.Num, " vs ", len(u.Chunks))
+
+	var (
+		written   int64
+		buf, slab = g.pmm.AllocSize(u.Chunks[0].Siz)
+	)
+	defer slab.Free(buf)
+
+	for i := range u.Num {
+		c := &u.Chunks[i]
+		fh, err := os.Open(c.Path)
+		if err != nil {
+			return err
+		}
+		nn, e := io.CopyBuffer(cksumH.H, fh, buf)
+		cos.Close(fh)
+		if e != nil {
+			return e
+		}
+		if nn != c.Siz {
+			return fmt.Errorf("%s: invalid size for part %d: got %d, want %d", u._itag(), c.Num, nn, c.Siz)
+		}
+		written += nn
+	}
+
+	debug.Assert(written == u.Size, "invalid chunks total size ", written, " vs ", u.Size)
+	cksumH.Finalize()
 	return nil
 }
 
@@ -500,16 +598,21 @@ func (u *Ufest) pack(w io.Writer) {
 		binary.BigEndian.PutUint16(b16[:], c.Flags)
 		w.Write(b16[:])
 
-		// MD5 (legacy)
-		_packStr(w, c.MD5)
+		// S3 legacy
+		_packBytes(w, c.MD5)
+		_packStr(w, c.ETag)
 	}
 }
 
 func _packStr(w io.Writer, s string) {
+	_packBytes(w, cos.UnsafeB(s))
+}
+
+func _packBytes(w io.Writer, b []byte) {
 	var b16 [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(b16[:], uint16(len(s)))
+	binary.BigEndian.PutUint16(b16[:], uint16(len(b)))
 	w.Write(b16[:])
-	w.Write(cos.UnsafeB(s))
+	w.Write(b)
 }
 
 func _packCksum(w io.Writer, cksum *cos.Cksum) {
@@ -618,27 +721,40 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		c.Flags = binary.BigEndian.Uint16(data[offset:])
 		offset += cos.SizeofI16
 
-		// chunk MD5
-		if c.MD5, offset, err = _unpackStr(data, offset); err != nil {
+		// S3 legacy
+		if c.MD5, offset, err = _unpackBytes(data, offset); err != nil {
+			return err
+		}
+		if l := len(c.MD5); l != 0 && l != md5.Size {
+			return fmt.Errorf("invalid MD5 size %d", l)
+		}
+		if c.ETag, offset, err = _unpackStr(data, offset); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func _unpackStr(data []byte, offset int) (string, int, error) {
+func _unpackStr(data []byte, offset int) (s string, off int, err error) {
+	var b []byte
+	b, off, err = _unpackBytes(data, offset)
+	if err == nil {
+		s = string(b)
+	}
+	return
+}
+
+func _unpackBytes(data []byte, offset int) ([]byte, int, error) {
 	if len(data) < offset+cos.SizeofI16 {
-		return "", offset, errors.New(tooShort)
+		return nil, offset, errors.New(tooShort)
 	}
 
 	l := int(binary.BigEndian.Uint16(data[offset:]))
 	offset += cos.SizeofI16
 	if len(data) < offset+l {
-		return "", offset, errors.New(tooShort)
+		return nil, offset, errors.New(tooShort)
 	}
-	str := string(data[offset : offset+l])
-	offset += l
-	return str, offset, nil
+	return data[offset : offset+l], offset + l, nil
 }
 
 func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error) {
@@ -661,24 +777,40 @@ func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error
 // LOM: chunk persistence ------------------------------------------------------
 //
 
-// TODO:
-// - do not start-mpt if bucket.mirror.enabled - check and fail w/NIY
 func (lom *LOM) CompleteUfest(u *Ufest) error {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
+	debug.AssertFunc(func() bool {
+		var total int64
+		for i := range u.Num {
+			total += u.Chunks[i].Siz
+		}
+		return total == u.Size
+	})
+
+	lom.SetSize(u.Size) // StoreCompleted still performs non-debug validation
 	if err := u.StoreCompleted(lom); err != nil {
 		lom.abortUfest(u, err)
 		return err
 	}
 	lom.SetAtimeUnix(u.Created.UnixNano())
 
-	lom.md.lid.setlmfl(lmflChunk)
+	lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
+	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
+
 	if err := lom.PersistMain(); err != nil {
 		lom.md.lid.clrlmfl(lmflChunk)
 		lom.abortUfest(u, err)
 		return err
 	}
+
+	debug.AssertFunc(func() bool {
+		l2 := &LOM{ObjName: lom.ObjName}
+		l2.InitBck(lom.Bucket())
+		l2.Load(false, true)
+		return l2.IsChunked()
+	})
 
 	return nil
 }
@@ -696,7 +828,7 @@ func (lom *LOM) abortUfest(u *Ufest, err error) {
 /////////////////
 
 // - is a LomReader
-// - not thread-safe on purpose
+// - not thread-safe on purpose and by design
 // - usage pattern: (construct -- read -- close) in a single goroutine
 
 type (
@@ -715,6 +847,14 @@ type (
 var (
 	_ cos.LomReader = (*UfestReader)(nil)
 )
+
+func (lom *LOM) NewUfestReader() (cos.LomReader, error) {
+	u := NewUfest("", lom, true)
+	if err := u.Load(lom); err != nil {
+		return nil, err
+	}
+	return u.NewReader()
+}
 
 func (u *Ufest) NewReader() (*UfestReader, error) {
 	if !u.Completed() {
@@ -754,15 +894,19 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 		p = p[m:]
 		r.coff += int64(m)
 		r.goff += int64(m)
+		debug.Assert(r.goff <= u.Size)
+		debug.Assert(r.coff <= c.Siz)
 
 		switch err {
 		case io.EOF:
 			if r.coff < c.Siz {
 				return n, io.ErrUnexpectedEOF // truncated
 			}
+			err = nil
 		case nil:
 			if rem > int64(m) {
-				continue // (unlikely)
+				// unlikely (but legal) short read; keep filling from the current chunk
+				continue
 			}
 		default:
 			return n, err

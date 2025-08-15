@@ -40,7 +40,7 @@ type (
 )
 
 func (ups *uploads) init(id string, lom *core.LOM, metadata map[string]string) error {
-	manifest := core.NewUfest(id, lom)
+	manifest := core.NewUfest(id, lom, false /*must-exist*/)
 	if err := manifest.SetMeta(metadata); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (ups *uploads) get(id string) (manifest *core.Ufest) {
 
 // NOTE: must be called with ups unlocked
 func (ups *uploads) fromFS(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
-	manifest = &core.Ufest{ID: id}
+	manifest = core.NewUfest(id, lom, true /*must-exist*/)
 	if err = manifest.Load(lom); err == nil && add {
 		ups.Lock()
 		ups._add(id, manifest)

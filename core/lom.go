@@ -210,10 +210,9 @@ func (lom *LOM) ObjectName() string       { return lom.ObjName }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
 
-// chunks vs whole // TODO: NIY
-func (lom *LOM) IsChunked(special ...bool) bool {
-	debug.Assert(len(special) > 0 || lom.loaded())
-	return false
+func (lom *LOM) IsChunked() bool {
+	debug.Assertf(lom.loaded(), "cannot is-chunked() non-loaded %q", lom)
+	return lom.md.lid.haslmfl(lmflChunk)
 }
 
 func ParseObjLoc(loc string) (tname, mpname string) {
@@ -394,17 +393,19 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 	}
 	if !locked {
 		lom.Lock(false)
+		defer lom.Unlock(false)
+	}
+	if err := lom.Load(false, true); err != nil {
+		return nil, fmt.Errorf("compute-checksum -- load: %v", err)
 	}
 	lmfh, err := lom.Open()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("compute-checksum -- open: %v", err)
 	}
-	// No need to allocate `buf` as `io.Discard` has efficient `io.ReaderFrom` implementation.
+
+	// `buf` is nil: `io.Discard` has efficient `io.ReaderFrom`
 	_, cksum, err = cos.CopyAndChecksum(io.Discard, lmfh, nil, cksumType)
 	cos.Close(lmfh)
-	if !locked {
-		lom.Unlock(false)
-	}
 	return cksum, err
 }
 
@@ -423,6 +424,14 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
+
+		// TODO -- FIXME -- temp HACK
+		if !lom.md.lid.haslmfl(lmflChunk) {
+			var b [1]byte
+			if _, xerr := lom.getXchunk(b[:]); xerr == nil {
+				lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
+			}
+		}
 		return lom._checkBucket(bmd)
 	}
 
@@ -437,6 +446,14 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	// MetaverLOM = 1: always zero (not storing lom.md.lid)
 	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
 	lom.setbid(lom.Bprops().BID)
+
+	// TODO -- FIXME -- temp HACK
+	if !lom.md.lid.haslmfl(lmflChunk) {
+		var b [1]byte
+		if _, xerr := lom.getXchunk(b[:]); xerr == nil {
+			lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
+		}
+	}
 
 	if err := lom._checkBucket(bmd); err != nil {
 		return err

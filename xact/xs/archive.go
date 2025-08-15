@@ -208,16 +208,13 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 			s    string
 			lmfh cos.LomReader
 		)
-		if !wi.msg.AppendIfExists {
+		switch {
+		case !wi.msg.AppendIfExists:
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
-		} else if errX := wi.archlom.Load(false, false); errX == nil {
-			if !wi.archlom.IsChunked() {
-				s = " append"
-				lmfh, err = wi.beginAppend()
-			} else {
-				wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
-			}
-		} else {
+		case wi.archlom.Load(false, false) == nil:
+			s = " append"
+			lmfh, err = wi.beginAppend()
+		default:
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		}
 		if err != nil {
@@ -591,7 +588,7 @@ func (j *jogger) do(archtask *archtask) {
 // 3. error
 func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	msg := wi.msg
-	if msg.Mime == archive.ExtTar {
+	if msg.Mime == archive.ExtTar && !wi.archlom.IsChunked() {
 		// (special)
 		err = wi.openTarForAppend()
 		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail XactArch.Begin*/ {
@@ -616,6 +613,9 @@ func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	return lmfh, err
 }
 
+// [NOTE]
+// - archive.OpenTarForAppend calls os.OpenFile
+// - it therefore requires archlom to be a monolithic file - no chunks
 func (wi *archwi) openTarForAppend() (err error) {
 	if err = wi.archlom.RenameMainTo(wi.fqn); err != nil {
 		return err
