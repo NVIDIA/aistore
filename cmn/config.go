@@ -1084,6 +1084,9 @@ func (c *BackendConf) Get(provider string) (conf any) {
 }
 
 func (c *BackendConf) Set(provider string, newConf any) {
+	if c.Conf == nil {
+		c.Conf = make(map[string]any, 1)
+	}
 	c.Conf[provider] = newConf
 }
 
