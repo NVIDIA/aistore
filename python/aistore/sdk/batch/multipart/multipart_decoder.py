@@ -16,9 +16,11 @@ from aistore.sdk.const import (
     DEFAULT_MAX_BUFFER_SIZE,
     HTTP_BOUNDARY_REGEX,
 )
-from aistore.sdk.batch.stateful_streaming_parser import StatefulStreamingParser
+from aistore.sdk.batch.multipart.stateful_streaming_parser import (
+    StatefulStreamingParser,
+)
 from aistore.sdk.batch.errors import MultipartDecodeError
-from aistore.sdk.batch.body_stream_iterator import BodyStreamIterator
+from aistore.sdk.batch.multipart.body_stream_reader import BodyStreamReader
 
 
 logger = get_logger(__name__)
@@ -78,7 +80,7 @@ class MultipartDecoder:
 
     def decode(
         self, response: Response
-    ) -> Iterator[Tuple[bytes, Union[bytes, BodyStreamIterator]]]:
+    ) -> Iterator[Tuple[bytes, Union[bytes, BodyStreamReader]]]:
         """
         Decode contents of a multipart HTTP response.
 
@@ -86,7 +88,7 @@ class MultipartDecoder:
             response (Response): HTTP response object containing multipart data
 
         Yields:
-            Tuple[bytes, Union[bytes, Iterator[bytes]]]: Extracted body parts.
+            Tuple[bytes, Union[bytes, BodyStreamReader]]: Extracted body parts.
                 If parse_as_stream=False, yields (headers, body).
                 If parse_as_stream=True, yields (headers, body_stream).
         """
@@ -96,26 +98,6 @@ class MultipartDecoder:
             raise MultipartDecodeError("Response is not of multipart content type")
 
         # Extract boundary from content type header
-        boundary = self._extract_boundary(content_type)
-
-        if self.parse_as_stream:
-            yield from self._parse_content_streaming(response, boundary)
-        else:
-            yield from self._parse_content(response.content, boundary)
-
-    def _extract_boundary(self, content_type: str) -> Optional[str]:
-        """
-        Extract the multipart boundary from the Content-Type header.
-
-        Args:
-            content_type (str): Content-Type header value
-
-        Returns:
-            str: Boundary identifier separating multipart sections
-
-        Raises:
-            ValueError: If boundary not found in Content-Type header
-        """
         # Match boundary format: boundary=<BOUNDARY-ID>
         match = search(HTTP_BOUNDARY_REGEX, content_type, IGNORECASE)
 
@@ -123,7 +105,12 @@ class MultipartDecoder:
             raise ValueError("Boundary not found in Content-Type header")
 
         # Remove quotes if present
-        return match.group(1).strip("\"'")
+        boundary = match.group(1).strip("\"'")
+
+        if self.parse_as_stream:
+            yield from self._parse_content_streaming(response, boundary)
+        else:
+            yield from self._parse_content(response.content, boundary)
 
     def _parse_content(
         self,
@@ -207,7 +194,7 @@ class MultipartDecoder:
 
     def _parse_content_streaming(
         self, response: Response, boundary: str
-    ) -> Iterator[Tuple[bytes, BodyStreamIterator]]:
+    ) -> Iterator[Tuple[bytes, BodyStreamReader]]:
         """
         Use a streaming parser to start decoding incoming multipart stream.
         Only extracts headers in memory and streams the body content per part.

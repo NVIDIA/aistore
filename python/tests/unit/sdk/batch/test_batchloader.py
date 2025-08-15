@@ -9,7 +9,7 @@ from io import BytesIO
 import tarfile
 import json
 
-from aistore.sdk.batch.multipart_decoder import MultipartDecoder
+from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.batch.batch_loader import BatchLoader
 from aistore.sdk.batch.batch_request import BatchRequest

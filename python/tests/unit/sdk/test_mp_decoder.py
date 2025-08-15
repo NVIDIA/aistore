@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 import requests
 
-from aistore.sdk.batch.multipart_decoder import (
+from aistore.sdk.batch.multipart.multipart_decoder import (
     MultipartDecoder,
     MultipartDecodeError,
 )
@@ -30,41 +30,6 @@ class TestMultipartDecoder(unittest.TestCase):
         """Test MultipartDecoder initialization with custom encoding."""
         decoder = MultipartDecoder(encoding="latin-1")
         self.assertEqual(decoder.encoding, "latin-1")
-
-    def test_extract_boundary_success(self):
-        """Test successful boundary extraction from Content-Type header."""
-        content_type = (
-            "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW"
-        )
-        # pylint: disable=protected-access
-        boundary = self.decoder._extract_boundary(content_type)
-        self.assertEqual(boundary, "----WebKitFormBoundary7MA4YWxkTrZu0gW")
-
-    def test_extract_boundary_with_quotes(self):
-        """Test boundary extraction with quoted boundary."""
-        content_type = (
-            'multipart/form-data; boundary="----WebKitFormBoundary7MA4YWxkTrZu0gW"'
-        )
-        # pylint: disable=protected-access
-        boundary = self.decoder._extract_boundary(content_type)
-        self.assertEqual(boundary, "----WebKitFormBoundary7MA4YWxkTrZu0gW")
-
-    def test_extract_boundary_with_single_quotes(self):
-        """Test boundary extraction with single-quoted boundary."""
-        content_type = (
-            "multipart/form-data; boundary='----WebKitFormBoundary7MA4YWxkTrZu0gW'"
-        )
-        # pylint: disable=protected-access
-        boundary = self.decoder._extract_boundary(content_type)
-        self.assertEqual(boundary, "----WebKitFormBoundary7MA4YWxkTrZu0gW")
-
-    def test_extract_boundary_not_found(self):
-        """Test boundary extraction failure when boundary not present."""
-        content_type = "multipart/form-data"
-        with self.assertRaises(ValueError) as context:
-            # pylint: disable=protected-access
-            self.decoder._extract_boundary(content_type)
-        self.assertIn("Boundary not found", str(context.exception))
 
     def test_parse_part_unix_line_endings(self):
         """Test parsing part with Unix line endings."""

@@ -12,7 +12,7 @@ from aistore.sdk.batch.batch_response import (
 )
 from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk.batch.extractor.extractor_manager import ExtractorManager
-from aistore.sdk.batch.multipart_decoder import MultipartDecoder
+from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     JSON_CONTENT_TYPE,
