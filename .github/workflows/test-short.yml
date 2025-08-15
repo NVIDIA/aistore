@@ -48,6 +48,19 @@ jobs:
       #     brew update
       #     brew install xxhash
 
+      - name: Configure s3cmd for AIS
+        run: |
+          cat > "$HOME/.s3cfg" << 'EOF'
+          [default]
+          host_base = localhost:8080/s3
+          host_bucket = localhost:8080/s3/%(bucket)
+          access_key = NO_KEY
+          secret_key = NO_SECRET
+          use_https = False
+          signature_v2 = False
+          check_ssl_certificate = False
+          EOF
+
       - name: Configure system
         run: |
           sudo sysctl -w vm.swappiness=10
