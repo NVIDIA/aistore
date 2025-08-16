@@ -435,7 +435,6 @@ func (t *target) Run() error {
 	}
 
 	// begin target metrics, disks first -------
-
 	avail, disabled := fs.Get()
 	if len(avail) == 0 {
 		cos.ExitLog(cmn.ErrNoMountpaths)
@@ -443,17 +442,13 @@ func (t *target) Run() error {
 	regDiskMetrics(t.si, tstats, avail)
 	regDiskMetrics(t.si, tstats, disabled)
 
-	if xsize := fs.ProbeMaxsz(avail); xsize > 0 {
-		nlog.Infoln("max xattr size:", xsize)
-	} else {
-		nlog.Errorln(t.String(), "failed to probe xattr size - check filesystem support for extended attributes!")
-	}
-
 	tstats.RegMetrics(t.si)
 
 	t.initBackends() // (+ reg backend metrics)
-
 	// end target metrics -----------------------
+
+	// probe xattrs
+	fs.ProbeMaxsz(avail, t.String())
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {

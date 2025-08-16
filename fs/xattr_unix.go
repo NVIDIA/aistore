@@ -5,8 +5,10 @@
 package fs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -52,24 +54,34 @@ func removeXattr(fqn, attrName string) error {
 	return nil
 }
 
-//
 // probe max xattr size - one of {4, 16, 64, 128+} KiB
-// TODO: consider adding more logic to handle:
-// - _good_ errors: E2BIG | ENOSPC => try smaller; keep looping
-// - _bad_ errors:  ENOTSUP | EPERM | EACCES => cos.Exit()
-//
+// TODO: consider failing startup upon !(E2BIG | ENOSPC)
 
 const (
-	maxszBase = ".$maxszprobe"
-	maxszName = "user.ais.probe"
+	maxszBase   = ".$maxszprobe"
+	maxszName   = "user.ais.probe"
+	maxszPrompt = "max xattr size"
 )
 
-func ProbeMaxsz(avail MPI) (size int64) {
+func ProbeMaxsz(avail MPI, tname string) {
 	debug.Assert(len(avail) > 0)
 	var mi *Mountpath
 	for _, mi = range avail {
 		break
 	}
+	size := mi.probexsz()
+	switch size {
+	case 4 * cos.KiB:
+		nlog.Warningln(maxszPrompt, "[", size, mi.String(), "]")
+	case 0:
+		nlog.Errorln(tname, "failed to probe xattr size: [", 0, mi.String(), "]")
+		nlog.Errorln(tname, "check filesystem support for extended attributes!")
+	default:
+		nlog.Infoln(maxszPrompt, "[", size, mi.String(), "]")
+	}
+}
+
+func (mi *Mountpath) probexsz() (size int64) {
 	dir := mi.TempDir(maxszBase)
 	if err := cos.CreateDir(dir); err != nil {
 		return 0
@@ -85,8 +97,12 @@ func ProbeMaxsz(avail MPI) (size int64) {
 	buf, slab := memsys.PageMM().AllocSize(128 * cos.KiB)
 	debug.Assert(len(buf) == 128*cos.KiB)
 	for _, size = range []int64{128 * cos.KiB, 64 * cos.KiB, 16 * cos.KiB, 4 * cos.KiB} {
-		if SetXattr(fqn, maxszName, buf[:size-256]) == nil {
+		err := SetXattr(fqn, maxszName, buf[:size-256])
+		if err == nil {
 			break
+		}
+		if !errors.Is(err, syscall.ENOSPC) && !errors.Is(err, syscall.E2BIG) {
+			nlog.Errorln(maxszPrompt, "failure:", err, "[", size, mi.String(), "]")
 		}
 	}
 	slab.Free(buf)
