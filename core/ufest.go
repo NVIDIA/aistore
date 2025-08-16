@@ -34,6 +34,7 @@ import (
 // TODO:
 // - remove or isolate `testing` bits -- FIXME
 // - consider not storing remote mdmap  - redundant vs lom.SetCustomKey -- FIXME
+// - probe and log max xattrs size
 // - optimize ComputeWholeChecksum
 // - t.completeMpt() locks/unlocks two times - consider CoW
 // - remove all debug.AssertFunc

@@ -411,7 +411,7 @@ func (t *target) Run() error {
 		smap = newSmap()
 		smap.Tmap[t.SID()] = t.si // add self to initial temp smap
 	} else {
-		nlog.Infoln(t.String()+": loaded", smap.StringEx())
+		nlog.Infoln(t.String(), "loaded", smap.StringEx())
 	}
 	t.owner.smap.put(smap)
 
@@ -442,6 +442,12 @@ func (t *target) Run() error {
 	}
 	regDiskMetrics(t.si, tstats, avail)
 	regDiskMetrics(t.si, tstats, disabled)
+
+	if xsize := fs.ProbeMaxsz(avail); xsize > 0 {
+		nlog.Infoln("max xattr size:", xsize)
+	} else {
+		nlog.Errorln(t.String(), "failed to probe xattr size - check filesystem support for extended attributes!")
+	}
 
 	tstats.RegMetrics(t.si)
 
