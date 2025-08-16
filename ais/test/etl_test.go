@@ -1157,7 +1157,7 @@ func TestETLPodInitClassFailure(t *testing.T) {
 		onlyLong     bool
 		expectedErrs []string
 	}{
-		{etlName: "invalid-class-payload", deps: "", code: invalidClassPayload, runtime: py311, expectedErrs: []string{"Failed to decode ETL class payload"}},
+		{etlName: "invalid-class-payload", deps: "", code: invalidClassPayload, runtime: py311, expectedErrs: []string{"Failed to deserialize ETL class"}},
 		{etlName: "empty-class-payload", deps: "", code: "", runtime: py311, expectedErrs: []string{"ETL_CLASS_PAYLOAD is not set"}},
 	}
 	for _, test := range tests {
