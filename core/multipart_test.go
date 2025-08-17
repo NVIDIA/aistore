@@ -5,8 +5,11 @@
 package core_test
 
 import (
+	"bytes"
+	"crypto/md5"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools/readers"
 
 	onexxh "github.com/OneOfOne/xxhash"
 	. "github.com/onsi/ginkgo/v2"
@@ -469,4 +473,376 @@ var _ = Describe("MPU-UfestRead", func() {
 			By("If we reach here, the chunked flag persisted correctly")
 		})
 	})
+
+	It("should validate sequential parts and compute whole checksums during complete upload", func() {
+		var (
+			partSize      = rand.IntN(2*cos.MiB) + 64*cos.KiB
+			numParts      = rand.IntN(10) + 1
+			totalFileSize = partSize * numParts
+			testObject    = "mpu/complete-upload-test-" + cos.GenTie() + ".bin"
+			localFQN      = mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+		)
+		By("Step 1: Setting up chunked upload with sequential parts")
+		lom := newBasicLom(localFQN)
+
+		uploadID := "complete-test-" + cos.GenTie()
+		manifest := core.NewUfest(uploadID, lom, false /*must-exist*/)
+
+		// track expected checksums
+		var (
+			expectedWholeMD5 = cos.NewCksumHash(cos.ChecksumMD5)
+			partMD5s         [][]byte
+		)
+		// create chunks in sorted order; compute "whole" MD5 as well
+		for partNum := 1; partNum <= numParts; partNum++ {
+			chunkPath, err := manifest.ChunkName(partNum)
+			Expect(err).NotTo(HaveOccurred())
+
+			partMD5 := creatChunkMD5andWhole(chunkPath, partSize, expectedWholeMD5.H)
+			partMD5s = append(partMD5s, partMD5)
+
+			chunk := &core.Uchunk{
+				Path: chunkPath,
+				MD5:  partMD5,
+			}
+
+			err = manifest.Add(chunk, int64(partSize), int64(partNum))
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("Step 2: Validate manifest state before completion")
+		Expect(manifest.Num).To(Equal(uint16(numParts)), "Should have correct number of parts")
+		Expect(manifest.Size).To(Equal(int64(totalFileSize)), "Should have correct total size")
+		Expect(manifest.Completed()).To(BeFalse(), "Should not be completed yet")
+
+		By("Step 3: Simulate complete-upload validation logic")
+		manifest.Lock()
+
+		Expect(len(manifest.Chunks)).To(BeNumerically(">=", numParts),
+			"Should have at least the requested number of parts")
+
+		for i := range numParts {
+			expectedPartNum := uint16(i + 1)
+			actualChunk := manifest.GetChunk(expectedPartNum, true /*locked*/)
+			Expect(actualChunk).NotTo(BeNil(), "Part %d should exist", expectedPartNum)
+			Expect(actualChunk.Num).To(Equal(expectedPartNum),
+				"Part should have correct sequential number")
+			Expect(bytes.Equal(actualChunk.MD5, partMD5s[i])).To(BeTrue(), "Part should have correct MD5")
+		}
+
+		manifest.Unlock()
+
+		By("Step 4: Compute whole-object checksum (production lines 378-395)")
+		wholeCksum := cos.NewCksumHash(cos.ChecksumMD5) // Local bucket uses MD5
+		err := manifest.ComputeWholeChecksum(wholeCksum)
+		Expect(err).NotTo(HaveOccurred(), "Should compute whole checksum successfully")
+
+		// computed checksum must match
+		expectedWholeMD5.Finalize()
+		Expect(wholeCksum.Cksum.Value()).To(Equal(expectedWholeMD5.Cksum.Value()),
+			"Computed whole checksum should match expected")
+
+		By("Step 5: Generate S3 multipart ETag")
+		etag, err := manifest.ETagS3()
+		Expect(err).NotTo(HaveOccurred(), "Should generate S3 ETag successfully")
+		Expect(etag).To(MatchRegexp(`^"[a-f0-9]{32}-\d+"$`),
+			"ETag should follow S3 multipart format: <md5>-<partcount>")
+		Expect(etag).To(HaveSuffix(fmt.Sprintf("-%d\"", numParts)),
+			"ETag should end with correct part count")
+
+		By("Step 6: Perform atomic completion (production line 426)")
+		lom.SetCksum(&wholeCksum.Cksum)
+		lom.SetCustomKey(cmn.ETag, etag)
+
+		err = lom.CompleteUfest(manifest)
+		Expect(err).NotTo(HaveOccurred(), "CompleteUfest should succeed")
+
+		By("Step 7: Verify post-completion state")
+		Expect(manifest.Completed()).To(BeTrue(), "Manifest should be marked completed")
+		Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked")
+
+		// check LOM checksum
+		lomCksum := lom.Checksum()
+		Expect(lomCksum).NotTo(BeNil(), "LOM should have checksum set")
+		Expect(lomCksum.Value()).To(Equal(wholeCksum.Cksum.Value()),
+			"LOM checksum should match computed whole checksum")
+
+		// ETag
+		lomETag, exists := lom.GetCustomKey(cmn.ETag)
+		Expect(exists).To(BeTrue(), "LOM's ETag must exist")
+		Expect(lomETag).To(Equal(etag), "LOM should have correct ETag")
+
+		By("Step 8: Verify persistence across LOM reload")
+		freshLom := &core.LOM{}
+		err = freshLom.InitFQN(localFQN, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = freshLom.Load(false, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(freshLom.IsChunked()).To(BeTrue(), "Reloaded LOM should still be chunked")
+		reloadedCksum := freshLom.Checksum()
+		Expect(reloadedCksum).NotTo(BeNil(), "Reloaded LOM should have checksum")
+		Expect(reloadedCksum.Value()).To(Equal(wholeCksum.Cksum.Value()),
+			"Reloaded checksum should match")
+
+		reloadedETag, exists := freshLom.GetCustomKey(cmn.ETag)
+		Expect(exists).To(BeTrue(), "Reloaded ETag must exist")
+		Expect(reloadedETag).To(Equal(etag), "Reloaded ETag should match")
+
+		By(fmt.Sprintf("Successfully completed upload with %d parts, total size %d bytes, ETag: %s",
+			numParts, totalFileSize, etag))
+	})
+	It("should support identical range reads for chunked and monolithic objects", func() {
+		const (
+			numChunks = 5
+		)
+		// make some interesting boundaries
+		chunkSize := rand.IntN(400*cos.KiB) + 50*cos.KiB + rand.IntN(1000)
+
+		chunkedObject := "mpu/range-test-chunked-" + cos.GenTie() + ".bin"
+		monolithicObject := "mpu/range-test-mono-" + cos.GenTie() + ".bin"
+
+		By("Step 1: Create chunked object")
+		chunkedFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, chunkedObject)
+		Expect(cos.CreateDir(filepath.Dir(chunkedFQN))).NotTo(HaveOccurred())
+
+		chunkedLom := newBasicLom(chunkedFQN)
+
+		// cleanup
+		chunkedLom.RemoveMain()
+
+		uploadID := "range-test-" + cos.GenTie()
+		manifest := core.NewUfest(uploadID, chunkedLom, false /*must-exist*/)
+
+		// Create deterministic test data - we'll recreate this same data for monolithic
+		seed := int64(12345)    // Fixed seed for reproducible data
+		var allChunkData []byte // Collect all chunk data to create identical monolithic
+
+		for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
+			chunkPath, err := manifest.ChunkName(chunkNum)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create chunk and collect its data for monolithic reconstruction
+			chunkData := createDeterministicChunk(chunkPath, chunkSize, seed+int64(chunkNum))
+			allChunkData = append(allChunkData, chunkData...)
+
+			chunk := &core.Uchunk{
+				Path: chunkPath,
+			}
+
+			err = manifest.Add(chunk, int64(chunkSize), int64(chunkNum))
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// complete
+		err := chunkedLom.CompleteUfest(manifest)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Step 2: Create identical monolithic object")
+		monolithicFQN := mis[1].MakePathFQN(&localBckB, fs.ObjectType, monolithicObject)
+		Expect(cos.CreateDir(filepath.Dir(monolithicFQN))).NotTo(HaveOccurred())
+
+		totalFileSize := manifest.Size
+
+		// create monolithic file with identical data
+		createFileFromData(monolithicFQN, allChunkData)
+		monolithicLom := newBasicLom(monolithicFQN)
+		monolithicLom.SetSize(totalFileSize)
+		monolithicLom.IncVersion()
+		monolithicLom.SetAtimeUnix(time.Now().UnixNano())
+		err = persist(monolithicLom)
+		Expect(err).NotTo(HaveOccurred())
+		monolithicLom.UncacheUnless()
+
+		By("Step 3: Test range reads across various scenarios")
+
+		testRanges := []struct {
+			name   string
+			offset int64
+			length int
+		}{
+			// Within single chunks
+			{"start of first chunk", 0, 1024},
+			{"middle of first chunk", 1024, 2048},
+			{"end of first chunk", int64(chunkSize) - 1024, 1024},
+			{"middle of third chunk", 2*int64(chunkSize) + 5000, 3000},
+
+			// Cross chunk boundaries
+			{"across first two chunks", int64(chunkSize) - 512, 1024},
+			{"across middle chunks", 2*int64(chunkSize) - 1000, 2000},
+			{"across last two chunks", 4*int64(chunkSize) - 256, 512},
+
+			// Larger ranges spanning multiple chunks
+			{"span three chunks", int64(chunkSize) / 2, 2*chunkSize + 1000},
+			{"most of object", 1000, int(totalFileSize - 2000)},
+
+			// Edge cases
+			{"single byte at start", 0, 1},
+			{"single byte at end", totalFileSize - 1, 1},
+			{"single byte at chunk boundary", int64(chunkSize), 1},
+			{"zero length read", 5000, 0},
+			{"exactly one chunk", int64(chunkSize), chunkSize},
+			{"entire object", 0, int(totalFileSize)},
+		}
+
+		for _, tr := range testRanges {
+			By(fmt.Sprintf("Testing range: %s (offset=%d, length=%d)", tr.name, tr.offset, tr.length))
+
+			// read from chunked
+			chunkedLom.Lock(false)
+			chunkedHandle, err := chunkedLom.NewHandle(true /*loaded*/)
+			Expect(err).NotTo(HaveOccurred(), "Should create chunked handle")
+
+			chunkedData := make([]byte, tr.length)
+			chunkedN, chunkedErr := chunkedHandle.ReadAt(chunkedData, tr.offset)
+			chunkedHandle.Close()
+			chunkedLom.Unlock(false)
+
+			// read from monolithic
+			monolithicLom.Lock(false)
+			monolithicHandle, err := monolithicLom.NewHandle(true /*loaded*/)
+			Expect(err).NotTo(HaveOccurred(), "Should create monolithic handle")
+
+			monolithicData := make([]byte, tr.length)
+			monolithicN, monolithicErr := monolithicHandle.ReadAt(monolithicData, tr.offset)
+			monolithicHandle.Close()
+			monolithicLom.Unlock(false)
+
+			Expect(chunkedN).To(Equal(monolithicN), fmt.Sprintf("Read lengths should match for %s, got (chunked %d, mono %d)",
+				tr.name, chunkedN, monolithicN))
+
+			if chunkedErr != nil || monolithicErr != nil {
+				Expect(chunkedErr).To(HaveOccurred(), "Chunked should have failed")
+				Expect(monolithicErr).To(HaveOccurred(), "Monolithic should have failed")
+			}
+
+			if chunkedErr == nil && monolithicErr == nil {
+				Expect(bytes.Equal(chunkedData[:chunkedN], monolithicData[:monolithicN])).To(BeTrue(),
+					fmt.Sprintf("Read mismatch %q: %v (%d) vs %v (%d)",
+						tr.name, cos.BHead(chunkedData[:chunkedN]), chunkedN, cos.BHead(monolithicData[:monolithicN]), monolithicN))
+			}
+		}
+
+		By("Step 4: Test out-of-bounds reads")
+
+		outOfBoundsTests := []struct {
+			name      string
+			offset    int64
+			length    int
+			expectErr bool
+		}{
+			{"read past end", totalFileSize, 1000, true},
+			{"read way past end", totalFileSize + 1000000, 1000, true},
+			{"negative offset", -1, 1000, true},
+			{"read starting just before end", totalFileSize - 10, 100, false}, // Partial read, should work
+		}
+
+		for _, test := range outOfBoundsTests {
+			By("Testing out-of-bounds: " + test.name)
+
+			// chunked
+			chunkedLom.Lock(false)
+			chunkedHandle, err := chunkedLom.NewHandle(true /*loaded*/)
+			Expect(err).NotTo(HaveOccurred())
+
+			chunkedData := make([]byte, test.length)
+			chunkedN, chunkedErr := chunkedHandle.ReadAt(chunkedData, test.offset)
+			chunkedHandle.Close()
+			chunkedLom.Unlock(false)
+
+			// monolithic
+			monolithicLom.Lock(false)
+			monolithicHandle, err := monolithicLom.NewHandle(true /*loaded*/)
+			Expect(err).NotTo(HaveOccurred())
+
+			monolithicData := make([]byte, test.length)
+			monolithicN, monolithicErr := monolithicHandle.ReadAt(monolithicData, test.offset)
+			monolithicHandle.Close()
+			monolithicLom.Unlock(false)
+
+			Expect(chunkedN).To(Equal(monolithicN))
+
+			if chunkedErr != nil || monolithicErr != nil {
+				// both must fail as expected
+				Expect(chunkedErr).To(HaveOccurred(), "Chunked should have failed")
+				Expect(monolithicErr).To(HaveOccurred(), "Monolithic should have failed")
+			}
+
+			if test.expectErr {
+				Expect(chunkedErr).To(HaveOccurred(), "Should fail for %s", test.name)
+			}
+		}
+
+		By(fmt.Sprintf("Successfully tested range reads on %d-byte object with %d chunks", totalFileSize, numChunks))
+	})
 })
+
+//
+// HELPER functions
+//
+
+// optionally, compute "whole" MD5 as well
+func creatChunkMD5andWhole(fqn string, size int, wholeMD5Writer io.Writer) []byte {
+	_ = os.Remove(fqn)
+	testFile, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	if size == 0 {
+		_ = testFile.Close()
+		return make([]byte, md5.Size)
+	}
+	var (
+		mw       io.Writer
+		chunkMD5 = cos.NewCksumHash(cos.ChecksumMD5)
+	)
+	if wholeMD5Writer != nil {
+		mw = cos.IniWriterMulti(testFile, chunkMD5.H, wholeMD5Writer)
+	} else {
+		mw = cos.IniWriterMulti(testFile, chunkMD5.H)
+	}
+
+	reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+	_, err = io.Copy(mw, reader)
+	_ = testFile.Close()
+
+	Expect(err).ShouldNot(HaveOccurred())
+	chunkMD5.Finalize()
+
+	md5Bytes := chunkMD5.Sum()
+	Expect(len(md5Bytes)).To(Equal(md5.Size), fmt.Sprintf("MD5 size %d should be exactly %d bytes", len(md5Bytes), md5.Size))
+	return md5Bytes
+}
+
+func createDeterministicChunk(fqn string, size int, seed int64) []byte {
+	_ = os.Remove(fqn)
+	testFile, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+	defer func(f *os.File) { Expect(f.Close()).ShouldNot(HaveOccurred()) }(testFile)
+
+	if size == 0 {
+		return []byte{}
+	}
+
+	data := make([]byte, size)
+	pattern := byte(seed % 256) // Use seed as base pattern
+
+	for i := range data {
+		data[i] = byte((int(pattern) + i) % 256) // Simple incrementing pattern
+	}
+
+	_, err = testFile.Write(data)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	return data
+}
+
+func createFileFromData(fqn string, data []byte) {
+	_ = os.Remove(fqn)
+	testFile, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+	defer func(f *os.File) { Expect(f.Close()).ShouldNot(HaveOccurred()) }(testFile)
+
+	_, err = testFile.Write(data)
+	Expect(err).ShouldNot(HaveOccurred())
+}

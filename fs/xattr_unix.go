@@ -39,6 +39,11 @@ func GetXattrBuf(fqn, attrName string, buf []byte) (b []byte, err error) {
 	return
 }
 
+func IsXattrExist(fqn, attrName string) bool {
+	_, err := unix.Getxattr(fqn, attrName, nil)
+	return err == nil // note: not differentiating ENODATA vs other errors
+}
+
 // SetXattr sets xattr name = value
 func SetXattr(fqn, attrName string, data []byte) (err error) {
 	return unix.Setxattr(fqn, attrName, data, 0)

@@ -827,13 +827,6 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		return err
 	}
 
-	debug.AssertFunc(func() bool {
-		l2 := &LOM{ObjName: lom.ObjName}
-		l2.InitBck(lom.Bucket())
-		l2.Load(false, true)
-		return l2.IsChunked()
-	})
-
 	return nil
 }
 

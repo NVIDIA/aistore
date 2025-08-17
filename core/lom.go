@@ -427,8 +427,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 
 		// TODO -- FIXME -- temp HACK
 		if !lom.md.lid.haslmfl(lmflChunk) {
-			var b [1]byte
-			if _, xerr := lom.getXchunk(b[:]); xerr == nil {
+			if fs.IsXattrExist(lom.FQN, xattrChunk) {
 				lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
 			}
 		}
@@ -446,14 +445,6 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	// MetaverLOM = 1: always zero (not storing lom.md.lid)
 	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
 	lom.setbid(lom.Bprops().BID)
-
-	// TODO -- FIXME -- temp HACK
-	if !lom.md.lid.haslmfl(lmflChunk) {
-		var b [1]byte
-		if _, xerr := lom.getXchunk(b[:]); xerr == nil {
-			lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
-		}
-	}
 
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
@@ -636,9 +627,19 @@ exist:
 		}
 		return err
 	}
+
+	// TODO -- FIXME -- temp HACK
+	if !lom.md.lid.haslmfl(lmflChunk) {
+		if fs.IsXattrExist(lom.FQN, xattrChunk) {
+			lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
+		}
+	}
+
 	// fstat & atime
-	if lom.md.Size != size { // corruption or tampering
-		return cmn.NewErrLmetaCorrupted(lom.whingeSize(size))
+	if !lom.md.lid.haslmfl(lmflChunk) {
+		if lom.md.Size != size { // corruption or tampering
+			return cmn.NewErrLmetaCorrupted(lom.whingeSize(size))
+		}
 	}
 	lom.md.Atime = atimefs
 	lom.md.atimefs = uint64(atimefs)
