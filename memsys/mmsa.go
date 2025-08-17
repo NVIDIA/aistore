@@ -305,21 +305,42 @@ func (r *MMSA) _selectSlab(size int64) (slab *Slab) {
 	return
 }
 
-func (r *MMSA) Append(buf []byte, bytes string) (nbuf []byte) {
+func (r *MMSA) AppendB(buf []byte, b byte) (nbuf []byte) {
+	ll, c := len(buf), cap(buf)
+	if ll+1 > c {
+		nbuf = r._grow(buf, int64(c+1))
+		nbuf = nbuf[:ll+1]
+	} else {
+		nbuf = buf[:ll+1]
+	}
+	nbuf[ll] = b
+	return
+}
+
+func (r *MMSA) _grow(buf []byte, size int64) (nbuf []byte) {
+	nbuf, _ = r.AllocSize(size) // not returning slab - no need
+	copy(nbuf, buf)
+	r.Free(buf)
+	return
+}
+
+func (r *MMSA) AppendBytes(buf, bytes []byte) (nbuf []byte) {
 	var (
 		ll, l, c = len(buf), len(bytes), cap(buf)
 		a        = ll + l - c
 	)
 	if a > 0 {
-		nbuf, _ = r.AllocSize(int64(c + a))
-		copy(nbuf, buf)
-		r.Free(buf)
+		nbuf = r._grow(buf, int64(c+a))
 		nbuf = nbuf[:ll+l]
 	} else {
 		nbuf = buf[:ll+l]
 	}
 	copy(nbuf[ll:], bytes)
 	return
+}
+
+func (r *MMSA) AppendString(buf []byte, s string) (nbuf []byte) {
+	return r.AppendBytes(buf, cos.UnsafeB(s))
 }
 
 // private

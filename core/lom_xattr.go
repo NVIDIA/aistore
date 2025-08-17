@@ -81,11 +81,15 @@ const (
 
 // packing format: separators
 const (
-	stringSepa = "\x00"
-	customSepa = "\x01"
+	stringSepa  = "\x00"
+	stringSepaB = '\x00'
+
+	customSepa  = "\x01"
+	customSepaB = '\x01'
+
 	recordSepa = "\xe3/\xbd"
 
-	lenStrSepa = len(stringSepa)
+	lenStrSepa = 1
 	lenRecSepa = len(recordSepa)
 )
 
@@ -419,30 +423,30 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 
 	// checksum
 	cksumType, cksumValue := md.Cksum.Get()
-	buf = _packRecord(buf, packedCksumT, cksumType, true)
-	buf = _packRecord(buf, packedCksumV, cksumValue, true)
+	buf = _packRecordS(buf, packedCksumT, cksumType, true)
+	buf = _packRecordS(buf, packedCksumV, cksumValue, true)
 
 	// version
 	if v := md.Version(); v != "" {
-		buf = _packRecord(buf, packedVer, v, true)
+		buf = _packRecordS(buf, packedVer, v, true)
 	}
 
 	// size
 	var b8 [cos.SizeofI64]byte
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
-	buf = _packRecord(buf, packedSize, cos.UnsafeS(b8[:]), false)
+	buf = _packRecordB(buf, packedSize, b8[:], false)
 
 	// copies
 	if len(md.copies) > 0 {
-		buf = g.smm.Append(buf, recordSepa)
-		buf = _packRecord(buf, packedCopies, "", false)
+		buf = g.smm.AppendString(buf, recordSepa)
+		buf = _packRecordS(buf, packedCopies, "", false)
 		buf = _packCopies(buf, md.copies)
 	}
 
 	// custom md
 	if custom := md.GetCustomMD(); len(custom) > 0 {
-		buf = g.smm.Append(buf, recordSepa)
-		buf = _packRecord(buf, packedCustom, "", false)
+		buf = g.smm.AppendString(buf, recordSepa)
+		buf = _packRecordS(buf, packedCustom, "", false)
 		buf = _packCustom(buf, custom)
 	}
 
@@ -454,13 +458,26 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	return buf
 }
 
-func _packRecord(buf []byte, key int, value string, sepa bool) []byte {
+func _packRecordB(buf []byte, key int, value []byte, sepa bool) []byte {
 	var bkey [cos.SizeofI16]byte
 	binary.BigEndian.PutUint16(bkey[:], uint16(key))
-	buf = g.smm.Append(buf, cos.UnsafeS(bkey[:]))
-	buf = g.smm.Append(buf, value)
+	buf = g.smm.AppendBytes(buf, bkey[:])
+	buf = g.smm.AppendBytes(buf, value)
 	if sepa {
-		buf = g.smm.Append(buf, recordSepa)
+		buf = g.smm.AppendString(buf, recordSepa)
+	}
+	return buf
+}
+
+func _packRecordS(buf []byte, key int, value string, sepa bool) []byte {
+	var bkey [cos.SizeofI16]byte
+	binary.BigEndian.PutUint16(bkey[:], uint16(key))
+	buf = g.smm.AppendBytes(buf, bkey[:])
+	if value != "" {
+		buf = g.smm.AppendString(buf, value)
+	}
+	if sepa {
+		buf = g.smm.AppendString(buf, recordSepa)
 	}
 	return buf
 }
@@ -473,9 +490,9 @@ func _packCopies(buf []byte, copies fs.MPI) []byte {
 	for copyFQN := range copies {
 		debug.Assert(copyFQN != "")
 		i++
-		buf = g.smm.Append(buf, copyFQN)
+		buf = g.smm.AppendString(buf, copyFQN)
 		if i < num {
-			buf = g.smm.Append(buf, stringSepa)
+			buf = g.smm.AppendB(buf, stringSepaB)
 		}
 	}
 	return buf
@@ -489,11 +506,11 @@ func _packCustom(buf []byte, md cos.StrKVs) []byte {
 	for k, v := range md {
 		debug.Assert(k != "")
 		i++
-		buf = g.smm.Append(buf, k)
-		buf = g.smm.Append(buf, customSepa)
-		buf = g.smm.Append(buf, v)
+		buf = g.smm.AppendString(buf, k)
+		buf = g.smm.AppendB(buf, customSepaB)
+		buf = g.smm.AppendString(buf, v)
 		if i < num {
-			buf = g.smm.Append(buf, customSepa)
+			buf = g.smm.AppendB(buf, customSepaB)
 		}
 	}
 	return buf
