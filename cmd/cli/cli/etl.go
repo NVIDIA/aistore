@@ -798,7 +798,7 @@ func etlObjectHandler(c *cli.Context) error {
 		return errV
 	}
 
-	etlArgs := &api.ETLObjArgs{ETLName: etlName}
+	etlArgs := &api.ETL{ETLName: etlName}
 	if transformArgs := parseStrFlag(c, etlTransformArgsFlag); transformArgs != "" {
 		etlArgs.TransformArgs = transformArgs
 	}
