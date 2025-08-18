@@ -80,6 +80,7 @@ QPARAM_NEW_CUSTOM = "set-new-custom"
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_ETL_ARGS = "etl_args"
 QPARAM_ETL_PIPELINE = "etl_pipeline"
+QPARAM_ETL_FQN = "etl_fqn"
 # etl websocket
 ETL_WS_PIPELINE = "pipeline"
 ETL_WS_FQN = "fqn"

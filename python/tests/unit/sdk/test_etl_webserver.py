@@ -12,6 +12,7 @@ from aistore.sdk.const import (
     ETL_WS_FQN,
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
+    QPARAM_ETL_FQN,
 )
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
@@ -209,7 +210,6 @@ class TestRequestHandlerHelpers(unittest.TestCase):
 class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ARG_TYPE"] = ""
         os.environ["DIRECT_PUT"] = "false"
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
@@ -238,7 +238,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_handle_get_request(self):
-        self.etl_server.arg_type = ""
         path = "test/object?etl_args=arg"
         original_content = b"original data"
         transformed_content = original_content[::-1]
@@ -255,7 +254,6 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_handle_put_request(self):
-        self.etl_server.arg_type = ""
         path = "test/object"
         input_content = b"input data"
         transformed_content = input_content[::-1]
@@ -278,14 +276,12 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
 class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ARG_TYPE"] = ""
         os.environ["DIRECT_PUT"] = "true"
         self.etl_server = DummyFastAPIServer()
         self.client = TestClient(self.etl_server.app)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
-    async def test_direct_put(self):
-        self.etl_server.arg_type = ""
+    async def test_hpush_with_direct_put(self):
         path = "test/object"
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
@@ -323,8 +319,68 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         self.etl_server.client.put.assert_awaited_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    async def test_hpush_with_direct_put_and_fqn(self):
+        path = "test/object"
+        fqn = "test@some%fqn"
+        input_content = b"input data"
+        transformed_content = self.etl_server.transform(input_content, path, "")
+
+        # Mock the direct put response (simulate 200 OK)
+        with patch.object(
+            self.etl_server,
+            "_get_fqn_content",
+            AsyncMock(return_value=input_content),
+        ) as get_fqn_mock:
+            mock_response_success = AsyncMock()
+            mock_response_success.content = b""
+            mock_response_success.status_code = 200
+            self.etl_server.client = AsyncMock()
+            self.etl_server.client.put.return_value = mock_response_success
+
+            headers = {
+                HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"
+            }
+            params = {QPARAM_ETL_FQN: fqn}
+            response = self.client.put(
+                f"/{path}", content=input_content, headers=headers, params=params
+            )
+
+            self.assertEqual(response.status_code, 204)
+            self.assertEqual(response.content, b"")  # No content returned
+            self.assertEqual(
+                response.headers.get(HEADER_DIRECT_PUT_LENGTH),
+                str(len(transformed_content)),
+            )
+            self.etl_server.client.put.assert_awaited_once()
+            get_fqn_mock.assert_called_once_with(fqn)
+
+        # Mock the direct put response (simulate 500 FAIL)
+        with patch.object(
+            self.etl_server,
+            "_get_fqn_content",
+            AsyncMock(return_value=input_content),
+        ) as get_fqn_mock:
+            mock_response_fail = AsyncMock()
+            mock_response_fail.status_code = 500
+            mock_response_fail.content = b"error message"
+            self.etl_server.client = AsyncMock()
+            self.etl_server.client.put.return_value = mock_response_fail
+
+            headers = {
+                HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"
+            }
+            params = {QPARAM_ETL_FQN: fqn}
+            response = self.client.put(
+                f"/{path}", content=input_content, headers=headers, params=params
+            )
+
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.content, b"error message")
+            self.etl_server.client.put.assert_awaited_once()
+            get_fqn_mock.assert_called_once_with(fqn)
+
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_websocket_with_direct_put(self):
-        self.etl_server.arg_type = ""
         input_data = b"testdata"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
 
@@ -392,7 +448,6 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         fqn = "test/object"
         original_content = b"original data"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
-        self.etl_server.arg_type = "fqn"  # Use fqn
         transformed_content = self.etl_server.transform(original_content, fqn, "")
         # Mock the direct put response (simulate 200 OK)
         with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
@@ -516,7 +571,6 @@ class TestFlaskServer(unittest.TestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     def test_direct_put_delivery(self):
-        self.etl_server.arg_type = ""
         path = "test/object"
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
@@ -619,7 +673,6 @@ class TestBaseEnforcement(unittest.TestCase):
 class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         os.environ["AIS_TARGET_URL"] = "http://localhost:8080"
-        os.environ["ARG_TYPE"] = ""
         os.environ["DIRECT_PUT"] = "false"
 
         class ArgFastAPI(FastAPIServer):
@@ -647,7 +700,6 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_put_with_etl_args(self):
-        self.etl_server.arg_type = ""
         path = "test/object?etl_args=arg"
         input_content = b"input data"
         transformed_content = b"arg"

@@ -33,6 +33,7 @@ from aistore.sdk.const import (
     ETL_WS_PIPELINE,
     HEADER_DIRECT_PUT_LENGTH,
     QPARAM_ETL_ARGS,
+    QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
 )
 
@@ -104,24 +105,23 @@ class FastAPIServer(ETLServer):
         await self.client.aclose()
         self.logger.info("Server shutting down")
 
+    # pylint: disable=too-many-locals
     async def _handle_request(self, path: str, request: Request, is_get: bool):
         """Unified request handler for GET/PUT operations."""
         self.logger.debug(
             "Processing %s request for path: %s", "GET" if is_get else "PUT", path
         )
-        etl_args: str = request.query_params.get(QPARAM_ETL_ARGS, "")
-
-        self.logger.debug("etl_args = %r", etl_args)
+        etl_args = request.query_params.get(QPARAM_ETL_ARGS, "").strip()
+        fqn = request.query_params.get(QPARAM_ETL_FQN, "").strip()
+        self.logger.debug("etl_args = %r, fqn = %r", etl_args, fqn)
 
         try:
-            if self.arg_type == "fqn":
-                content = await self._get_fqn_content(path)
+            if fqn:
+                content = await self._get_fqn_content(fqn)
+            elif is_get:
+                content = await self._get_network_content(path)
             else:
-                content = (
-                    await self._get_network_content(path)
-                    if is_get
-                    else await request.body()
-                )
+                content = await request.body()
 
             # Transform the content
             transformed = await asyncio.to_thread(

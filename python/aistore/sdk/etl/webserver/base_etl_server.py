@@ -40,7 +40,6 @@ class ETLServer(ABC):
         self.host_target = os.getenv("AIS_TARGET_URL")
         if not self.host_target:
             raise EnvironmentError("Environment variable 'AIS_TARGET_URL' must be set.")
-        self.arg_type = os.getenv("ARG_TYPE", "").lower()  # "", "fqn" or "url"
         self.direct_put = os.getenv("DIRECT_PUT", "false").lower() == "true"
 
         # Configure logging

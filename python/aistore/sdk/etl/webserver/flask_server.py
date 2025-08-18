@@ -19,6 +19,7 @@ from aistore.sdk.const import (
     HEADER_NODE_URL,
     STATUS_OK,
     QPARAM_ETL_ARGS,
+    QPARAM_ETL_FQN,
     HEADER_DIRECT_PUT_LENGTH,
     STATUS_INTERNAL_SERVER_ERROR,
 )
@@ -106,9 +107,10 @@ class FlaskServer(ETLServer):
             return jsonify({"error": str(e)}), 500
 
     def _handle_get(self, path):
-        etl_args = request.args.get(QPARAM_ETL_ARGS, "")
-        if self.arg_type == "fqn":
-            content = self._get_fqn_content(path)
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
+        fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
+        if fqn:
+            content = self._get_fqn_content(fqn)
         else:
             obj_path = quote(path, safe="@")
             target_url = f"{self.host_target}/{obj_path}"
@@ -119,11 +121,10 @@ class FlaskServer(ETLServer):
         return self.transform(content, path, etl_args)
 
     def _handle_put(self, path):
-
-        etl_args = request.args.get(QPARAM_ETL_ARGS, "")
-
-        if self.arg_type == "fqn":
-            content = self._get_fqn_content(path)
+        etl_args = request.args.get(QPARAM_ETL_ARGS, "").strip()
+        fqn = request.args.get(QPARAM_ETL_FQN, "").strip()
+        if fqn:
+            content = self._get_fqn_content(fqn)
         else:
             content = request.get_data()
 

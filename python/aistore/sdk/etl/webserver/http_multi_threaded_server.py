@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     HEADER_DIRECT_PUT_LENGTH,
     STATUS_OK,
     QPARAM_ETL_ARGS,
+    QPARAM_ETL_FQN,
     STATUS_INTERNAL_SERVER_ERROR,
 )
 
@@ -169,9 +170,15 @@ class HTTPMultiThreadedServer(ETLServer):
             parsed = urlparse(self.path)
             raw_path = parsed.path
             params = parse_qs(parsed.query)
-            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0]
+            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0].strip()
+            fqn = params.get(QPARAM_ETL_FQN, [""])[0].strip()
 
-            logger.debug("Received GET request for path: %s", raw_path)
+            logger.debug(
+                "Received GET request for path: %s, etl_args: %s, fqn: %s",
+                raw_path,
+                etl_args,
+                fqn,
+            )
 
             # Health check
             if raw_path == "/health":
@@ -181,8 +188,8 @@ class HTTPMultiThreadedServer(ETLServer):
                 return
 
             try:
-                if self.server.etl_server.arg_type == "fqn":
-                    content = self._get_fqn_content(raw_path)
+                if fqn:
+                    content = self._get_fqn_content(fqn)
                 else:
                     target_url = f"{self.server.etl_server.host_target}{raw_path}"
                     logger.debug("Forwarding GET to AIS target: %s", target_url)
@@ -242,13 +249,19 @@ class HTTPMultiThreadedServer(ETLServer):
             parsed = urlparse(self.path)
             raw_path = parsed.path
             params = parse_qs(parsed.query)
-            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0]
+            etl_args = params.get(QPARAM_ETL_ARGS, [""])[0].strip()
+            fqn = params.get(QPARAM_ETL_FQN, [""])[0].strip()
 
-            logger.debug("Received PUT request for path: %s", raw_path)
+            logger.debug(
+                "Received PUT request for path: %s, etl_args: %s, fqn: %s",
+                raw_path,
+                etl_args,
+                fqn,
+            )
 
             try:
-                if self.server.etl_server.arg_type == "fqn":
-                    content = self._get_fqn_content(raw_path)
+                if fqn:
+                    content = self._get_fqn_content(fqn)
                 else:
                     content_length = int(self.headers.get(HEADER_CONTENT_LENGTH, 0))
                     content = self.rfile.read(content_length)
