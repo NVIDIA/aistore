@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
@@ -118,9 +119,13 @@ func reportErr(t *testing.T, errCh chan opRes, ignoreStatusNotFound bool) {
 			continue
 		}
 		status := api.HTTPStatus(opRes.err)
+
 		if status == http.StatusNotFound && ignoreStatusNotFound {
 			continue
 		}
+
+		tlog.Logfln(">>>>> DEBUG: err %v (%v) status %d ignore %t", opRes.err, cmn.UnwrapErrHTTP(opRes.err), status, ignoreStatusNotFound) // DEBUG
+
 		i++
 		if i > maxErrCount {
 			t.Fatalf("%s failed %v", opRes.op, opRes.err)

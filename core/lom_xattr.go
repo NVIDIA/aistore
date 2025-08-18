@@ -24,10 +24,43 @@ import (
 	onexxh "github.com/OneOfOne/xxhash"
 )
 
+// LOM
 const (
-	MetaverLOM = 1 // LOM
+	// backward compat v3.31 and prior
+	MetaverLOM_V1 = 1 //nolint:revive // readability
+
+	// current
+	MetaverLOM = 2
 )
 
+// NOTE: Metadata version 2 (v2)
+//
+// In addition to persisting LOM flags, v2 also serializes the bucket ID (BID)
+// into the `lomBID` field. This is a permanent, persistent association: every
+// on-disk object record carries not only its flags but also the full 50+ bits
+// of the BID assigned to its bucket at creation time.
+//
+// Consequences / rationale:
+//   * Flags survive eviction/reload cycles, restarts, rebalance, etc.
+//
+//   * BID provides a durable guard that ties the object to a specific bucket
+//     incarnation, protecting against subtle races or leftover files.
+//
+//   * On load, a mismatch between stored BID and current bucket.BID means the
+//     object belongs to a previous generation (e.g., bucket is being destroyed
+//     or evicted, mountpath replaced). The v1 code “adopted” the new BID from
+//     bucket props (effectively, BMD); v2 loading logic will now fail with
+//     cmn.NewErrObjDefunct (thus enforcing strict integrity).
+//
+//   * Under normal operation (destroy => trash) mismatches must be extremely
+//     unlikely.
+//
+// Effectively, v2 moves from “best-effort flags only” to a strong, persistent
+// identity: {flags, BID}. This makes objects self-describing and detectable
+// even if cached state is lost.
+
+// TODO -- FIXME: the layout is getting obsolete and must be updated
+//
 // On-disk metadata layout - changing any of this must be done with respect
 // to backward compatibility (and with caution).
 //
@@ -52,7 +85,8 @@ const mdCksumTyXXHash = 1
 const (
 	xattrLOM = "user.ais.lom"
 
-	xattrLomSize = memsys.MaxSmallSlabSize // maximum
+	// TODO -- FIXME: revisit and consider 1) g.pmm or 2) g.ssm with 8K slab
+	xattrLomSize = memsys.MaxSmallSlabSize
 )
 
 // cmd/xmeta support
@@ -64,7 +98,6 @@ const lomDirtyMask = uint64(1 << 63)
 
 const (
 	badLmeta = "bad lmeta"
-	badChunk = "bad lchunk"
 )
 
 // packing format: enum internal attrs
@@ -75,8 +108,7 @@ const (
 	packedSize
 	packedCopies
 	packedCustom
-	packedNum
-	packedChunk
+	packedLid
 )
 
 // packing format: separators
@@ -168,23 +200,40 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return md, err
 }
 
-func (lom *LOM) unpack(b []byte, mdSize int64, populate bool) (md *lmeta, err error) {
-	size := int64(len(b))
+func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ error) {
+	size := int64(len(buf))
 	if size == 0 {
 		nlog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		return nil, os.NewSyscallError(getxattr, syscall.ENOENT)
 	}
-	md = &lom.md
-	if !populate {
-		md = &lmeta{}
+	if size < prefLen {
+		return nil, fmt.Errorf("%s: too short (%d)", badLmeta, size)
 	}
-	err = md.unpack(b)
-	if err == nil {
-		_mdsize(size, mdSize)
-	} else {
-		err = cmn.NewErrLmetaCorrupted(err)
+
+	switch metaver := buf[0]; metaver {
+	case MetaverLOM_V1, MetaverLOM:
+		md = &lom.md
+		if !populate {
+			md = &lmeta{}
+		}
+		if err := md.unpack(buf); err != nil {
+			return nil, cmn.NewErrLmetaCorrupted(err)
+		}
+		// fixup v1 BID
+		if populate && metaver == MetaverLOM_V1 && lom.Bprops() != nil {
+			lom.setbid(lom.Bprops().BID)
+		}
+	default:
+		return nil, fmt.Errorf("%s: unknown LOM meta-version %d", badLmeta, metaver)
 	}
-	return md, err
+
+	// TODO: remove
+	debug.Assertf(md.lid.haslmfl(lmflChunk) == fs.HasXattr(lom.FQN, xattrChunk),
+		"lmflChunk %t != %t manifest",
+		md.lid.haslmfl(lmflChunk), fs.HasXattr(lom.FQN, xattrChunk))
+
+	_mdsize(size, mdSize)
+	return md, nil
 }
 
 func (lom *LOM) PersistMain() (err error) {
@@ -307,15 +356,10 @@ func (md *lmeta) unpack(buf []byte) error {
 		expectedCksum, actualCksum        uint64
 		cksumType, cksumValue             string
 		haveSize, haveVersion, haveCopies bool
+		haveLid                           bool
 		haveCksumType, haveCksumValue     bool
 		last                              bool
 	)
-	if len(buf) < prefLen {
-		return fmt.Errorf("%s: too short (%d)", badLmeta, len(buf))
-	}
-	if buf[0] != MetaverLOM {
-		return fmt.Errorf("%s: unknown version %d", badLmeta, buf[0])
-	}
 	if buf[1] != mdCksumTyXXHash {
 		return fmt.Errorf("%s: unknown checksum %d", badLmeta, buf[1])
 	}
@@ -403,16 +447,23 @@ func (md *lmeta) unpack(buf []byte) error {
 				}
 			}
 			md.SetCustomMD(custom)
+		case packedLid:
+			if haveLid {
+				return errors.New(badLmeta + " #6")
+			}
+			md.lid = lomBID(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
+			haveLid = true
 		default:
-			return errors.New(badLmeta + " #6")
+			return errors.New(badLmeta + " #101")
 		}
 	}
+
 	if haveCksumType != haveCksumValue {
-		return errors.New(badLmeta + " #7")
+		return errors.New(badLmeta + " #102")
 	}
 	md.Cksum = cos.NewCksum(cksumType, cksumValue)
 	if !haveSize {
-		return errors.New(badLmeta + " #8")
+		return errors.New(badLmeta + " #103")
 	}
 	return nil
 }
@@ -435,6 +486,11 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	var b8 [cos.SizeofI64]byte
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
 	buf = _packRecordB(buf, packedSize, b8[:], false)
+
+	// lid (v2)
+	binary.BigEndian.PutUint64(b8[:], uint64(md.lid))
+	buf = g.smm.AppendString(buf, recordSepa)
+	buf = _packRecordB(buf, packedLid, b8[:], false)
 
 	// copies
 	if len(md.copies) > 0 {

@@ -48,6 +48,8 @@ func NewBID(serial uint64, isAis bool) uint64 {
 	// not adding runtime check given the time reasonably
 	// required to create (1 << 52) buckets
 	debug.Assert(serial&(flagmask<<bitshift) == 0)
+	// serial also must not set MSB
+	debug.Assert(serial&AisBID == 0)
 
 	if isAis {
 		return serial | AisBID

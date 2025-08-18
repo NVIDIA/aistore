@@ -5,7 +5,11 @@
 package core_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -15,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 
+	onexxh "github.com/OneOfOne/xxhash"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -39,6 +44,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
 
 	var (
 		copyMpathInfo *fs.Mountpath
@@ -335,12 +341,12 @@ var _ = Describe("LOM Xattributes", func() {
 					b[0] = 128 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("bad lmeta: unknown version 128"))
+					Expect(err).To(MatchError("bad lmeta: unknown LOM meta-version 128"))
 
 					b[0] = 0 // corrupting metadata version
 					Expect(fs.SetXattr(localFQN, xattrLOM, b)).NotTo(HaveOccurred())
 					err = lom.LoadMetaFromFS()
-					Expect(err).To(MatchError("bad lmeta: unknown version 0"))
+					Expect(err).To(MatchError("bad lmeta: unknown LOM meta-version 0"))
 				})
 
 				It("should fail when metadata is too short", func() {
@@ -365,6 +371,116 @@ var _ = Describe("LOM Xattributes", func() {
 					Expect(err.Error()).To(ContainSubstring("BAD META CHECKSUM"))
 				})
 			})
+		})
+
+		Describe("MetaverLOM=2", func() {
+			It("persists MetaverLOM=2 and round-trips basic fields", func() {
+				obj := "lomv2/smoke-" + cos.GenTie()
+				fqn := mix.MakePathFQN(&localBck, fs.ObjectType, obj)
+
+				// create empty file
+				Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
+				f, err := cos.CreateFile(fqn)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(f.Close()).To(Succeed())
+
+				// persist (writer now emits v2)
+				lom := newBasicLom(fqn)
+				lom.SetSize(12345) // any size
+
+				// TODO: set flag lom.md.lid = lom.md.lid.setlmfl(lmflChunk); check upon loading
+
+				Expect(persist(lom)).To(Succeed())
+
+				// read raw xattr → first byte is metadata version
+				raw, err := fs.GetXattr(fqn, xattrLOM)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(raw)).To(BeNumerically(">=", 10))    // >= prefLen
+				Expect(raw[0]).To(Equal(byte(core.MetaverLOM))) // MetaverLOM == 2
+
+				// reload and sanity-check size
+				fresh := newBasicLom(fqn)
+				Expect(fresh.Load(false, false)).To(Succeed())
+				Expect(fresh.Lsize()).To(Equal(int64(12345)))
+			})
+
+			It("loads legacy v1 lmeta and upgrades to v2 on persist", func() {
+				obj := "lomv2/coexist-" + cos.GenTie()
+				fqn := mix.MakePathFQN(&localBck, fs.ObjectType, obj)
+
+				// ----- build minimal v1 blob: [cksumT|sep][cksumV|sep][size] -----
+				// constants from v1 writer/parser
+				// NOTE: duplicating actual values here for strictly-testing purposes
+				const (
+					prefLen         = 10
+					mdCksumTyXXHash = 1
+					recordSepa      = "\xe3/\xbd"
+				)
+				const (
+					packedCksumT = iota
+					packedCksumV
+					packedVer
+					packedSize
+					packedCopies
+					packedCustom
+					packedLid
+				)
+				wantSize := uint64(777777)
+
+				createTestFile(fqn, int(wantSize))
+
+				var payload bytes.Buffer
+				writeRec := func(key uint16, val []byte, addSep bool) {
+					var k [2]byte
+					binary.BigEndian.PutUint16(k[:], key)
+					payload.Write(k[:])
+					if len(val) > 0 {
+						payload.Write(val)
+					}
+					if addSep {
+						payload.WriteString(recordSepa)
+					}
+				}
+
+				// cksum type/value for object metadata (any pair is fine)
+				writeRec(packedCksumT, cos.UnsafeB(cos.ChecksumMD5), true)
+				writeRec(packedCksumV, cos.UnsafeB(strings.Repeat("0", 32)), true)
+
+				// size (u64 BE), last record (no trailing sepa)
+				var b8 [8]byte
+				binary.BigEndian.PutUint64(b8[:], wantSize)
+				writeRec(packedSize, b8[:], false)
+
+				// preamble (v1) + xxhash(payload)
+				raw := make([]byte, prefLen+payload.Len())
+				raw[0] = 1 // MetaverLOM_V1
+				raw[1] = mdCksumTyXXHash
+				copy(raw[prefLen:], payload.Bytes())
+				sum := onexxh.Checksum64S(raw[prefLen:], cos.MLCG32)
+				binary.BigEndian.PutUint64(raw[2:], sum)
+
+				// write legacy v1 xattr
+				Expect(fs.SetXattr(fqn, xattrLOM, raw)).To(Succeed())
+
+				// Load legacy v1 *without* enforcing BID (policy: no adoption on Load)
+				lom := newBasicLom(fqn)
+				Expect(lom.LoadMetaFromFS()).To(Succeed())
+				Expect(lom.Lsize(true)).To(Equal(int64(wantSize)))
+
+				// Persist should rewrite as v2
+				Expect(persist(lom)).To(Succeed())
+
+				// Verify xattr version flipped to 2
+				got, err := fs.GetXattr(fqn, xattrLOM)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(got)).To(BeNumerically(">=", prefLen))
+				Expect(got[0]).To(Equal(byte(2)))
+
+				// After upgrade, full Load() should succeed (BID stamped during persist)
+				fresh := newBasicLom(fqn)
+				Expect(fresh.Load(false, false)).To(Succeed())
+			})
+
 		})
 	})
 })

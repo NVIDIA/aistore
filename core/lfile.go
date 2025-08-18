@@ -145,7 +145,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		)
 		fh, err = os.OpenFile(short[0], _openFlags, cos.PermRWR)
 		if err == nil {
-			lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+			lom.setlmfl(lmflFntl)
 			lom.SetCustomKey(cmn.OrigFntl, saved[0])
 		} else {
 			debug.Assert(!cos.IsErrFntl(err))
@@ -310,7 +310,7 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		)
 		err = lom.RenameToMain(wfqn)
 		if err == nil {
-			lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+			lom.setlmfl(lmflFntl)
 			lom.SetCustomKey(cmn.OrigFntl, saved[0])
 		} else {
 			debug.Assert(!cos.IsErrFntl(err))

@@ -63,16 +63,13 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 		return nil, err
 	}
 	bprops := lom.Bprops()
-	if bprops == nil {
-		err = cmn.NewErrObjDefunct(lom.String(), 0, lif.lid.bid())
+	debug.Assert(bprops != nil)
+	if bid := lif.lid.bid(); bid != 0 && bid != bprops.BID {
+		err = cmn.NewErrObjDefunct(lom.String(), lif.lid.bid(), bprops.BID)
 		FreeLOM(lom)
 		return nil, err
 	}
-	if lif.lid.bid() != bprops.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), bprops.BID, lif.lid.bid())
-		FreeLOM(lom)
-		return nil, err
-	}
+	lom.setbid(bprops.BID) // reconstruction path
 	return lom, nil
 }
 

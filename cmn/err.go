@@ -685,7 +685,7 @@ func IsErrXactNotFound(err error) bool {
 // ErrObjDefunct
 
 func (e *ErrObjDefunct) Error() string {
-	return fmt.Sprintf("%s is defunct (%x != %x)", e.name, e.d1, e.d2)
+	return fmt.Sprintf("%s is defunct (lom '%x' != '%x' bmd)", e.name, e.d1, e.d2)
 }
 
 func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
@@ -694,7 +694,10 @@ func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
 
 func isErrObjDefunct(err error) bool {
 	_, ok := err.(*ErrObjDefunct)
-	return ok
+	if ok || err == nil {
+		return ok
+	}
+	return strings.Contains(err.Error(), "is defunct") // TODO -- FIXME: remove/revise
 }
 
 // ErrAborted
@@ -1018,6 +1021,7 @@ func IsErrObjNought(err error) bool {
 func isErrNotFoundExtended(err error, status int) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
 		IsErrMpathNotFound(err) || IsErrXactNotFound(err) ||
+		IsErrObjNought(err) ||
 		cos.IsNotExist(err, status)
 }
 

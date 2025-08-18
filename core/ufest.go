@@ -818,7 +818,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 	}
 	lom.SetAtimeUnix(u.Created.UnixNano())
 
-	lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
+	lom.setlmfl(lmflChunk)
 	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
 
 	if err := lom.PersistMain(); err != nil {

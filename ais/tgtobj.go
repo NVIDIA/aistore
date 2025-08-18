@@ -1212,9 +1212,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 	if err != nil || written != size {
 		errTx = goi._txerr(err, fqn /*lbget*/, written, size)
 	}
-	if errTx != nil && errTx != cmn.ErrGetTxBenign {
-		debug.Assert(isErrGetTxSevere(errTx), errTx)
-		lom.UncacheDel()
+	if errTx != nil {
 		return errTx
 	}
 
@@ -1224,10 +1222,12 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 		goi.t.reb.FilterAdd(*bname)
 	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
 		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			fs.CleanPathErr(err)
-			goi.isIOErr = true
-			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
-			return err
+			if !cmn.IsErrObjNought(err) {
+				fs.CleanPathErr(err)
+				goi.isIOErr = true
+				goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+			}
+			return cmn.ErrGetTxBenign
 		}
 		lom.SetAtimeUnix(goi.atime)
 		lom.Recache()
@@ -1241,12 +1241,14 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 	const act = "(transmit)"
-	cname := goi.lom.Cname()
+	lom := goi.lom
+	cname := lom.Cname()
 
 	// enforce transmit size
 	if err == nil && written != size {
 		// [corruption?]
 		goi.isIOErr = true
+		lom.UncacheDel()
 		errTx := &errGetTxSevere{
 			msg: fmt.Sprintf("%s %s: invalid size %d != %d", act, cname, written, size),
 		}
@@ -1254,14 +1256,20 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 		return errTx
 	}
 
-	// [failure to transmit] return cmn.ErrGetTxBenign and keep the object
+	// [failure to transmit] return cmn.ErrGetTxBenign
 	switch {
 	case cos.IsRetriableConnErr(err):
 		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
 		}
+	case cmn.IsErrObjNought(err):
+		lom.UncacheDel()
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			nlog.WarningDepth(1, act, cname, "err:", err)
+		}
 	default: // notwithstanding
-		goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+		goi.t.FSHC(err, lom.Mountpath(), fqn)
+		lom.UncacheDel()
 		nlog.ErrorDepth(1, act, cname, "err:", err)
 	}
 

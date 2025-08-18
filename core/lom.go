@@ -180,6 +180,7 @@ func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
 func (lom *LOM) bid() uint64             { return lom.md.lid.bid() }
 func (lom *LOM) setbid(bpropsBID uint64) { lom.md.lid = lom.md.lid.setbid(bpropsBID) }
+func (lom *LOM) setlmfl(fl lomFlags)     { lom.md.lid = lom.md.lid.setlmfl(fl) }
 
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
@@ -424,14 +425,10 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
-
-		// TODO -- FIXME -- temp HACK
-		if !lom.md.lid.haslmfl(lmflChunk) {
-			if fs.IsXattrExist(lom.FQN, xattrChunk) {
-				lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
-			}
+		err := lom._checkBucket(bmd)
+		if !cos.IsNotExist(err) {
+			return err
 		}
-		return lom._checkBucket(bmd)
 	}
 
 	// slow path
@@ -442,14 +439,11 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 
-	// MetaverLOM = 1: always zero (not storing lom.md.lid)
-	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
-	lom.setbid(lom.Bprops().BID)
-
 	if err := lom._checkBucket(bmd); err != nil {
 		return err
 	}
 	if cacheit {
+		debug.Assert(lom.bid() != 0)
 		md := lom.md
 		lcache.Store(lom.digest, &md)
 	}
@@ -460,39 +454,52 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) error {
 	bck := &lom.bck
 	bprops, present := bmd.Get(bck)
 	if !present {
+		lom.UncacheDel()
 		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
-	if lom.bid() != bprops.BID {
-		return cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
+	return lom._checkBID(bprops)
+}
+
+func (lom *LOM) _checkBID(bprops *cmn.Bprops) error {
+	switch {
+	case lom.bid() == 0:
+		lom.UncacheDel()
+		return cos.NewErrNotFound(T, lom.Cname())
+	case lom.bid() != bprops.BID:
+		err := cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
+		if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 { // TODO -- FIXME: s/||/&&/ to reduce noise
+			nlog.Warningln(err)
+		}
+		lom.UncacheDel()
+		return err
+	default:
+		return nil
 	}
-	return nil
 }
 
 // usage: fast (and unsafe) loading object metadata except atime - no locks
 // compare with conventional Load() above
-func (lom *LOM) LoadUnsafe() (err error) {
-	var (
-		_, lmd = lom.fromCache()
-		bmd    = T.Bowner().Get()
-	)
-	// fast path
-	if lmd != nil {
+func (lom *LOM) LoadUnsafe() error {
+	if _, lmd := lom.fromCache(); lmd != nil {
 		lom.md = *lmd
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
-		return lom._checkBucket(bmd)
+		err := lom._checkBucket(T.Bowner().Get())
+		if !cos.IsNotExist(err) {
+			return err
+		}
+	}
+	// slow path
+	// NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
+	// either a) handled or b) benign from the caller's perspective
+	if _, err := lom.lmfs(true); err != nil {
+		return err
 	}
 
-	// read and decode xattr; NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
-	// either a) handled or b) benign from the caller's perspective
-	if _, err = lom.lmfs(true); err == nil {
-		// MetaverLOM = 1: always zero (not storing lom.md.lid)
-		debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
-		lom.setbid(lom.Bprops().BID)
-		err = lom._checkBucket(bmd)
-	}
-	return err
+	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
+	lom.setbid(lom.Bprops().BID)
+	return lom._checkBucket(T.Bowner().Get())
 }
 
 //
@@ -589,8 +596,8 @@ func (lom *LOM) FromFS() error {
 		return cos.NewErrNotFound(T, lom.Cname())
 
 	case cos.IsErrFntl(err):
-		lom.md.lid = lomBID(lom.Bprops().BID)
-		lom.md.lid = lom.md.lid.setlmfl(lmflFntl)
+		lom.setbid(lom.Bprops().BID)
+		lom.setlmfl(lmflFntl)
 
 		// temp substitute to check existence
 		short := lom.ShortenFntl()
@@ -626,13 +633,6 @@ exist:
 			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}
 		return err
-	}
-
-	// TODO -- FIXME -- temp HACK
-	if !lom.md.lid.haslmfl(lmflChunk) {
-		if fs.IsXattrExist(lom.FQN, xattrChunk) {
-			lom.md.lid = lom.md.lid.setlmfl(lmflChunk)
-		}
 	}
 
 	// fstat & atime
@@ -707,6 +707,7 @@ func (lom *LOM) ShortenFntl() []string {
 	return []string{nfqn, noname}
 }
 
+// TODO -- FIXME: revisit metaver v2 usage
 func (lom *LOM) fixupFntl() {
 	if !fs.IsFntl(lom.ObjName) {
 		return
