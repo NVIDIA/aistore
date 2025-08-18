@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.15.2] - 2025-08-18
+
 ### Added
 
 - Add functionality to pipeline multiple ETLs.
