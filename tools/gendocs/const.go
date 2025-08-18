@@ -7,6 +7,8 @@ const (
 	// String parsing and formatting constants
 	openBracket  = "["
 	closeBracket = "]"
+	openParen    = "("
+	closeParen   = ")"
 	comma        = ","
 	equals       = "="
 	pipe         = "|"

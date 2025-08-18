@@ -9,10 +9,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 var (
@@ -42,7 +43,6 @@ const (
 	commentPrefix    = "//"
 	commentWithSpace = "// "
 	funcKeyword      = "func "
-	openParen        = "("
 
 	// Swagger annotation keywords
 	atSummary = "@Summary"
@@ -333,21 +333,6 @@ func collectAndGenerateHTTPExamples(ep *endpoint, actionMap, globalPayloads map[
 	return examples
 }
 
-// Returns the absolute path to the project root directory
-func getProjectRoot() (string, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", errors.New("unable to get caller info")
-	}
-	// from tools/gendocs/main.go, project root is 2 levels up
-	root := filepath.Join(filepath.Dir(filename), "../..")
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return "", err
-	}
-	return absRoot, nil
-}
-
 func main() {
 	// Set up dynamic paths
 	projectRoot, err := getProjectRoot()
@@ -397,134 +382,6 @@ func main() {
 	if err := processor.run(targetRoot); err != nil {
 		panic(err)
 	}
-}
-
-// Helper function to prevent duplicate action/model pairs
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-// Extracts the function name from a function declaration line
-func extractFunctionName(line string) string {
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, funcKeyword) {
-		return ""
-	}
-
-	// Remove "func " prefix
-	withoutFunc := strings.TrimSpace(trimmed[len(funcKeyword):])
-
-	// Handle receiver (e.g., "(p *proxy) functionName" or "functionName")
-	if strings.HasPrefix(withoutFunc, "(") {
-		// Find the closing parenthesis of the receiver
-		closingParen := strings.Index(withoutFunc, ")")
-		if closingParen == -1 {
-			return ""
-		}
-		withoutFunc = strings.TrimSpace(withoutFunc[closingParen+1:])
-	}
-
-	// Extract function name
-	openParenIndex := strings.Index(withoutFunc, "(")
-	if openParenIndex == -1 {
-		return ""
-	}
-
-	return strings.TrimSpace(withoutFunc[:openParenIndex])
-}
-
-// Creates a unique operation ID by combining function name with path segments and method
-func generateUniqueOperationID(functionName, method, path string) string {
-	cleanPath := strings.Trim(path, "/")
-	segments := strings.Split(cleanPath, "/")
-
-	var filteredSegments []string
-	for _, segment := range segments {
-		// Skip version segments like "v1"
-		if strings.HasPrefix(segment, "v") && len(segment) <= 3 {
-			continue
-		}
-		// Skip parameter placeholders like "{bucket-name}", "{etl-name}"
-		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
-			continue
-		}
-		// Convert to lowercase and remove hyphens
-		cleaned := strings.ToLower(strings.ReplaceAll(segment, "-", ""))
-		if cleaned != "" {
-			filteredSegments = append(filteredSegments, cleaned)
-		}
-	}
-
-	methodPrefix := strings.ToLower(method)
-
-	// Use only the last filtered segment for concise but descriptive names
-	if len(filteredSegments) > 0 {
-		return functionName + methodPrefix + filteredSegments[len(filteredSegments)-1]
-	}
-	return functionName + methodPrefix
-}
-
-// Checks if there are multiple +gen:endpoint annotations for the same function to produce unique names
-func hasMultipleEndpoints(lines []string, currentIndex int) bool {
-	var functionLine string
-	for j := currentIndex + 1; j < len(lines); j++ {
-		next := strings.TrimSpace(lines[j])
-		if isFunctionDeclaration(next) {
-			functionLine = next
-			break
-		}
-	}
-
-	if functionLine == "" {
-		return false
-	}
-
-	count := 0
-	for k := currentIndex; k >= 0; k-- {
-		line := strings.TrimSpace(lines[k])
-		if strings.HasPrefix(line, commentWithSpace+endpointPrefix) {
-			count++
-			if count > 1 {
-				return true
-			}
-		}
-		if k != currentIndex && isFunctionDeclaration(line) {
-			break
-		}
-	}
-
-	return false
-}
-
-// Determines API Class based on the endpoint path by parsing the first segment
-func determineTag(path string) string {
-	cleanPath := strings.Trim(path, "/")
-	segments := strings.Split(cleanPath, "/")
-
-	for _, segment := range segments {
-		// Skip version segments like "v1"
-		if strings.HasPrefix(segment, "v") && len(segment) <= 3 {
-			continue
-		}
-		// Skip parameter placeholders like "{bucket-name}", "{etl-name}"
-		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
-			continue
-		}
-		// Use the first meaningful segment, capitalize first letter
-		if segment != "" {
-			// Remove hyphens and capitalize first letter
-			cleaned := strings.ReplaceAll(segment, "-", "")
-			if cleaned != "" {
-				return strings.ToUpper(cleaned[:1]) + strings.ToLower(cleaned[1:])
-			}
-		}
-	}
-	return "Default"
 }
 
 // Extracts action/model pairs from the action=[...] clause
@@ -700,7 +557,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		actionName := strings.TrimPrefix(action.Action, apcPrefix)
 		if realValue, exists := fp.ActionMap[actionName]; exists {
 			actionLink := fmt.Sprintf(apiLinkFormat, tag, operationID, realValue)
-			if !contains(fp.ModelActions[action.Model], actionLink) {
+			if !cos.StringInSlice(actionLink, fp.ModelActions[action.Model]) {
 				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], actionLink)
 			}
 		}
@@ -865,29 +722,6 @@ func (*endpointProcessor) clearAnnotations() error {
 	return os.WriteFile(annotationsPath, []byte(headerContent), 0o644)
 }
 
-func isSwaggerComment(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, commentPrefix) {
-		return false
-	}
-	content := strings.TrimSpace(strings.TrimPrefix(trimmed, commentPrefix))
-	swaggerPrefixes := []string{atSummary, atParam, atSuccess, atRouter}
-	for _, prefix := range swaggerPrefixes {
-		if strings.HasPrefix(content, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func isFunctionDeclaration(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, funcKeyword) {
-		return false
-	}
-	return strings.Contains(trimmed, openParen)
-}
-
 func collectSummaryLines(lines []string, i int) []string {
 	var summaryLines []string
 	j := i + 1
@@ -991,188 +825,6 @@ func generateSwaggerComments(ep *endpoint, actionMap map[string]string, httpExam
 		successTemplate,
 		fmt.Sprintf(routerTemplate, ep.Path, ep.Method))
 	return swaggerComments
-}
-
-func cleanupAnnotations() error {
-	projectRoot, err := getProjectRoot()
-	if err != nil {
-		return err
-	}
-	tempDirPath := filepath.Join(projectRoot, tempDirRelativePath)
-	return os.RemoveAll(tempDirPath)
-}
-
-// reads the swagger.yaml file, simplifies model names, and injects model vendor extensions
-func injectModelExtensions() error {
-	projectRoot, err := getProjectRoot()
-	if err != nil {
-		return err
-	}
-	modelActionsPath := filepath.Join(projectRoot, tempDirRelativePath, modelActionsFileName)
-	modelActionsData, err := os.ReadFile(modelActionsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Println("No model actions found, skipping extension injection")
-			return nil
-		}
-		return fmt.Errorf("failed to read model actions: %v", err)
-	}
-
-	var modelActions map[string][]string
-	if err := yaml.Unmarshal(modelActionsData, &modelActions); err != nil {
-		return fmt.Errorf("failed to parse model actions: %v", err)
-	}
-
-	// Read swagger.yaml
-	yamlData, err := os.ReadFile(swaggerYamlPath)
-	if err != nil {
-		return fmt.Errorf("failed to read swagger.yaml: %v", err)
-	}
-
-	var spec map[string]any
-	if err := yaml.Unmarshal(yamlData, &spec); err != nil {
-		return fmt.Errorf("failed to parse swagger.yaml: %v", err)
-	}
-
-	// Navigate to definitions section
-	definitions, ok := spec[definitionsKey].(map[string]any)
-	if !ok {
-		fmt.Println("No definitions section found in swagger.yaml")
-		return nil
-	}
-
-	// Simplify model names
-	simpleName := make(map[string]any)
-	for qualifiedName, definition := range definitions {
-		parts := strings.Split(qualifiedName, dot)
-		baseName := parts[len(parts)-1]
-		simpleName[baseName] = definition
-	}
-
-	spec[definitionsKey] = simpleName
-
-	// Inject x-supported-actions for each model using the simplified names
-	injected := 0
-	for model, actions := range modelActions {
-		if len(actions) == 0 {
-			continue
-		}
-
-		// Convert model name [apc.ActMsg] to [ActMsg]
-		parts := strings.Split(model, dot)
-		baseName := parts[len(parts)-1]
-
-		if modelDef, exists := simpleName[baseName]; exists {
-			if modelDefMap, ok := modelDef.(map[string]any); ok {
-				modelDefMap[xSupportedActionsKey] = actions
-				injected++
-				fmt.Printf("  Injected extensions for model: %s\n", baseName)
-			}
-		}
-	}
-
-	// Write back to file
-	updatedYaml, err := yaml.Marshal(spec)
-	if err != nil {
-		return fmt.Errorf("failed to marshal updated yaml: %v", err)
-	}
-
-	if err := os.WriteFile(swaggerYamlPath, updatedYaml, 0o644); err != nil {
-		return fmt.Errorf("failed to write updated swagger.yaml: %v", err)
-	}
-
-	fmt.Printf("Successfully injected extensions for %d models\n", injected)
-
-	return nil
-}
-
-// reads the swagger.yaml file and injects curl vendor extensions
-func injectCodeSamples() error {
-	projectRoot, err := getProjectRoot()
-	if err != nil {
-		return err
-	}
-
-	httpExamplesPath := filepath.Join(projectRoot, tempDirRelativePath, httpExamplesFileName)
-	httpExamplesData, err := os.ReadFile(httpExamplesPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Println("No HTTP examples found, skipping code samples injection")
-			return nil
-		}
-		return fmt.Errorf("failed to read HTTP examples: %v", err)
-	}
-
-	var endpointExamples operationHTTPExamples
-	if err := yaml.Unmarshal(httpExamplesData, &endpointExamples); err != nil {
-		return fmt.Errorf("failed to parse HTTP examples: %v", err)
-	}
-
-	yamlData, err := os.ReadFile(swaggerYamlPath)
-	if err != nil {
-		return fmt.Errorf("failed to read swagger.yaml: %v", err)
-	}
-
-	var spec map[string]any
-	if err := yaml.Unmarshal(yamlData, &spec); err != nil {
-		return fmt.Errorf("failed to parse swagger.yaml: %v", err)
-	}
-
-	paths, ok := spec["paths"].(map[string]any)
-	if !ok {
-		fmt.Println("No paths section found in swagger.yaml")
-		return nil
-	}
-
-	injected := 0
-	for operationID, examples := range endpointExamples {
-		if len(examples) == 0 {
-			continue
-		}
-
-		// Convert curlExample to x-codeSamples format
-		var codeSamples []map[string]any
-		for _, example := range examples {
-			codeSamples = append(codeSamples, map[string]any{
-				"lang":   bashLang,
-				"label":  example.Label,
-				"source": example.Command,
-			})
-		}
-
-		if injectCodeSamplesInPaths(paths, operationID, codeSamples) {
-			injected++
-			fmt.Printf("  Injected code samples for operation: %s\n", operationID)
-		}
-	}
-
-	updatedYaml, err := yaml.Marshal(spec)
-	if err != nil {
-		return fmt.Errorf("failed to marshal updated yaml: %v", err)
-	}
-
-	if err := os.WriteFile(swaggerYamlPath, updatedYaml, 0o644); err != nil {
-		return fmt.Errorf("failed to write updated swagger.yaml: %v", err)
-	}
-
-	fmt.Printf("Successfully injected code samples for %d operations\n", injected)
-	return nil
-}
-
-func injectCodeSamplesInPaths(paths map[string]any, operationID string, codeSamples []map[string]any) bool {
-	for _, pathItem := range paths {
-		if pathMap, ok := pathItem.(map[string]any); ok {
-			for _, operation := range pathMap {
-				if opMap, ok := operation.(map[string]any); ok {
-					if opID, exists := opMap["operationId"]; exists && opID == operationID {
-						opMap[XHTTPExamplesKey] = codeSamples
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
 }
 
 func (ep *endpointProcessor) saveHTTPExamples() error {
