@@ -220,11 +220,9 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 			return nil, cmn.NewErrLmetaCorrupted(err)
 		}
 		// fixup v1 BID
-		if populate && metaver == MetaverLOM_V1 {
-			debug.Assert(lom.Bprops() != nil, lom.Cname())
-			if lom.Bprops() != nil {
-				lom.setbid(lom.Bprops().BID)
-			}
+		// (affects either lom.md or scratch md depending on `populate`)
+		if metaver == MetaverLOM_V1 && lom.Bprops() != nil {
+			md.lid = md.lid.setbid(lom.Bprops().BID)
 		}
 	default:
 		return nil, fmt.Errorf("%s: unknown LOM meta-version %d", badLmeta, metaver)
