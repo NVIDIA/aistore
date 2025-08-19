@@ -54,6 +54,7 @@ type (
 		cmn.ObjAttrs
 		atimefs uint64 // (high bit `lomDirtyMask` | int64: atime)
 		lid     lomBID // (for bitwise structure, see lombid.go)
+		flags   uint64 // reserve (storage-class, compression/encryption, write-back, etc.)
 	}
 	LOM struct {
 		mi      *fs.Mountpath

@@ -424,7 +424,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateMetaChecksum()).NotTo(HaveOccurred())
 
-					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 					Expect(persist(lom)).NotTo(HaveOccurred())
 					Expect(lom.ValidateContentChecksum(false)).To(HaveOccurred())
 				})
@@ -450,7 +450,7 @@ var _ = Describe("LOM", func() {
 					lom := filePut(localFQN, testFileSize)
 					Expect(lom.ValidateContentChecksum(false)).NotTo(HaveOccurred())
 
-					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "wrong checksum"))
+					lom.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 					Expect(lom.ValidateMetaChecksum()).To(HaveOccurred())
 				})
 

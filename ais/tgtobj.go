@@ -1399,7 +1399,11 @@ func (a *apndOI) do(r *http.Request) (packedHdl string, ecode int, err error) {
 		}
 	}
 	if cksumValue != "" {
+		cksumType = strings.ToLower(cksumType)
 		a.cksum = cos.NewCksum(cksumType, cksumValue)
+		if err := a.cksum.Validate(); err != nil {
+			return "", 0, err
+		}
 	}
 
 	switch a.op {

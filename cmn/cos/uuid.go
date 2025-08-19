@@ -175,6 +175,25 @@ func CheckAlphaPlus(s, tag string) error {
 	return nil
 }
 
+// value is exactly n hex chars
+func isHexN(s string, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	for i := range n {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			continue
+		}
+		lc := c | 0x20 // lowercase
+		if lc >= 'a' && lc <= 'f' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 // 3-letter tie breaker (fast)
 // (see also: bench/micro/uuid/genid_test.go)
 func GenTie() string {

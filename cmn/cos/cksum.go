@@ -174,13 +174,50 @@ func (ck *CksumHashSize) Write(b []byte) (n int, err error) {
 ///////////
 
 func NewCksum(ty, value string) *Cksum {
-	if err := ValidateCksumType(ty, true /*empty OK*/); err != nil {
-		AssertMsg(false, err.Error())
-	}
 	if ty == "" {
-		Assert(value == "")
+		return &Cksum{ChecksumNone, ""}
 	}
 	return &Cksum{ty, value}
+}
+
+// validate size vs type (not to confuse with computed validation)
+func (ck *Cksum) Validate() error {
+	if NoneC(ck) {
+		if ck.value != "" {
+			return fmt.Errorf("checksum: none requires empty ck.value, have (%q, %q)", ck.ty, ck.value)
+		}
+		return nil
+	}
+
+	switch ck.ty {
+	case ChecksumOneXxh, ChecksumCesXxh:
+		if !isHexN(ck.value, 16) {
+			return fmt.Errorf("checksum: %s must be 16 hex chars, have (%q, %q)", ck.ty, ck.value, ck.value)
+		}
+		return nil
+	case ChecksumMD5:
+		if !isHexN(ck.value, 32) {
+			return fmt.Errorf("checksum: md5 must be 32 hex chars, have (%q, %q)", ck.ty, ck.value)
+		}
+		return nil
+	case ChecksumCRC32C:
+		if !isHexN(ck.value, 8) {
+			return fmt.Errorf("checksum: crc32c must be 8 hex chars, have (%q, %q)", ck.ty, ck.value)
+		}
+		return nil
+	case ChecksumSHA256:
+		if !isHexN(ck.value, 64) {
+			return fmt.Errorf("checksum: sha256 must be 64 hex chars, have (%q, %q)", ck.ty, ck.value)
+		}
+		return nil
+	case ChecksumSHA512:
+		if !isHexN(ck.value, 128) {
+			return fmt.Errorf("checksum: sha512 must be 128 hex chars, have (%q, %q)", ck.ty, ck.value)
+		}
+		return nil
+	default:
+		return fmt.Errorf("checksum: unsupported type, have (%q, %q)", ck.ty, ck.value)
+	}
 }
 
 // NOTE [caution]: empty checksums are also equal (compare with lom.EqCksum and friends)

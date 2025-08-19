@@ -33,7 +33,7 @@ const (
 	MetaverLOM = 2
 )
 
-// NOTE: Metadata version 2 (v2)
+// Metadata version 2 (v2)
 //
 // In addition to persisting LOM flags, v2 also serializes the bucket ID (BID)
 // into the `lomBID` field. This is a permanent, persistent association: every
@@ -46,7 +46,7 @@ const (
 //   * BID provides a durable guard that ties the object to a specific bucket
 //     incarnation, protecting against subtle races or leftover files.
 //
-//   * On load, a mismatch between stored BID and current bucket.BID means the
+//   * On load, a mismatch between stored BID and current bucket's BID means the
 //     object belongs to a previous generation (e.g., bucket is being destroyed
 //     or evicted, mountpath replaced). The v1 code “adopted” the new BID from
 //     bucket props (effectively, BMD); v2 loading logic will now fail with
@@ -59,33 +59,25 @@ const (
 // identity: {flags, BID}. This makes objects self-describing and detectable
 // even if cached state is lost.
 
-// TODO -- FIXME: the layout is getting obsolete and must be updated
-//
 // On-disk metadata layout - changing any of this must be done with respect
 // to backward compatibility (and with caution).
 //
-// | ------------------ PREAMBLE ----------------- | --- MD VALUES ---- |
-// | --- 1 --- | ----- 1 ----- | -- [CKSUM LEN] -- | - [METADATA LEN] - |
-// |  version  | checksum-type |   checksum-value  | ---- metadata ---- |
+// | -------------------- PREAMBLE -------------------- | --- MD VALUES ---- |
+// | ------ 1 ----- | ----- 1 ----- | -- [CKSUM LEN] -- | - [METADATA LEN] - |
+// |  meta-version  | checksum-type |   checksum-value  | ---- metadata ---- |
 //
-// * version - determines the layout version. Thanks to this we can be backward
-//   compatible and deprecate old versions if needed.
-// * checksum-type - determines the checksum algorithm used to compute checksum
-//   of the metadata.
-// * checksum-value - computed checksum of the metadata. The length of the checksum
-//   can vary depending on the checksum algorithm.
-// * metadata - the rest of the layout. The content of the metadata can vary depending
-//   on the version of the layout.
+// * meta-version - determines on-disk structure of the metadata.
+// * checksum-type - determines the metadata checksum type
+// * checksum-value - respectively, computed checksum
+// * metadata - object metadata payload
 
-// the one and only currently supported checksum type == xxhash;
-// adding more checksums will likely require a new MetaverLOM version
-const mdCksumTyXXHash = 1
+const mdCksumTyXXHash = 1 // metadata checksum type: xxhash
 
 // on-disk xattr
 const (
 	xattrLOM = "user.ais.lom"
 
-	// TODO -- FIXME: revisit and consider 1) g.pmm or 2) g.ssm with 8K slab
+	// NOTE: 4K limit
 	xattrLomSize = memsys.MaxSmallSlabSize
 )
 
@@ -109,6 +101,18 @@ const (
 	packedCopies
 	packedCustom
 	packedLid
+	packedFlags
+)
+
+const (
+	haveCksumT = 1 << iota
+	haveCksumV
+	haveVer
+	haveSize
+	haveCopies
+	haveCustom
+	haveLid
+	haveFlags
 )
 
 // packing format: separators
@@ -245,6 +249,7 @@ func (lom *LOM) PersistMain() (err error) {
 		lom.Recache()
 		return nil
 	}
+
 	// write-immediate (default)
 	buf := lom.pack()
 	if err = lom.SetXattr(buf); err != nil {
@@ -353,14 +358,15 @@ func (md *lmeta) poprt(saved []uint64) {
 
 func (md *lmeta) unpack(buf []byte) error {
 	var (
-		payload                           []byte
-		expectedCksum, actualCksum        uint64
-		cksumType, cksumValue             string
-		haveSize, haveVersion, haveCopies bool
-		haveLid                           bool
-		haveCksumType, haveCksumValue     bool
-		last                              bool
+		payload                    []byte
+		expectedCksum, actualCksum uint64
+		cksumType, cksumValue      string
+		seen                       uint32
+		last                       bool
 	)
+	if len(buf) < prefLen {
+		return errors.New(badLmeta + " short preamble")
+	}
 	if buf[1] != mdCksumTyXXHash {
 		return fmt.Errorf("%s: unknown checksum %d", badLmeta, buf[1])
 	}
@@ -386,36 +392,36 @@ func (md *lmeta) unpack(buf []byte) error {
 		off += i + lenRecSepa
 		switch key {
 		case packedCksumV:
-			if haveCksumValue {
+			if seen&haveCksumV != 0 {
 				return errors.New(badLmeta + " #1")
 			}
 			cksumValue = string(record[cos.SizeofI16:])
-			haveCksumValue = true
+			seen |= haveCksumV
 		case packedCksumT:
-			if haveCksumType {
+			if seen&haveCksumT != 0 {
 				return errors.New(badLmeta + " #2")
 			}
 			cksumType = string(record[cos.SizeofI16:])
-			haveCksumType = true
+			seen |= haveCksumT
 		case packedVer:
-			if haveVersion {
+			if seen&haveVer != 0 {
 				return errors.New(badLmeta + " #3")
 			}
 			md.SetVersion(string(record[cos.SizeofI16:]))
-			haveVersion = true
+			seen |= haveVer
 		case packedSize:
-			if haveSize {
+			if seen&haveSize != 0 {
 				return errors.New(badLmeta + " #4")
 			}
 			md.Size = int64(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
-			haveSize = true
+			seen |= haveSize
 		case packedCopies:
-			if haveCopies {
+			if seen&haveCopies != 0 {
 				return errors.New(badLmeta + " #5")
 			}
 			val := string(record[cos.SizeofI16:])
 			copyFQNs := strings.Split(val, stringSepa)
-			haveCopies = true
+			seen |= haveCopies
 			md.copies = make(fs.MPI, len(copyFQNs))
 			for _, copyFQN := range copyFQNs {
 				if copyFQN == "" {
@@ -449,23 +455,34 @@ func (md *lmeta) unpack(buf []byte) error {
 			}
 			md.SetCustomMD(custom)
 		case packedLid:
-			if haveLid {
+			if seen&haveLid != 0 {
 				return errors.New(badLmeta + " #6")
 			}
 			md.lid = lomBID(binary.BigEndian.Uint64(record[cos.SizeofI16:]))
-			haveLid = true
+			seen |= haveLid
+		case packedFlags:
+			if seen&haveFlags != 0 {
+				return errors.New(badLmeta + " #7")
+			}
+			md.flags = binary.BigEndian.Uint64(record[cos.SizeofI16:])
+			seen |= haveFlags
 		default:
 			return errors.New(badLmeta + " #101")
 		}
 	}
 
-	if haveCksumType != haveCksumValue {
-		return errors.New(badLmeta + " #102")
-	}
-	md.Cksum = cos.NewCksum(cksumType, cksumValue)
-	if !haveSize {
+	if seen&haveSize != haveSize {
 		return errors.New(badLmeta + " #103")
 	}
+	return md._setCksum(cksumType, cksumValue, seen&haveCksumT != 0, seen&haveCksumV != 0)
+}
+
+func (md *lmeta) _setCksum(cksumT, cksumV string, haveT, haveV bool) error {
+	if haveV != haveT {
+		return fmt.Errorf("%s %s %q %q", badLmeta, "#102:", cksumT, cksumV)
+	}
+
+	md.Cksum = cos.NewCksum(cksumT, cksumV)
 	return nil
 }
 
@@ -474,7 +491,13 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
 
 	// checksum
-	cksumType, cksumValue := md.Cksum.Get()
+	var (
+		cksumType  = cos.ChecksumNone
+		cksumValue string
+	)
+	if md.Cksum != nil { // compare w/ cos.NoneC
+		cksumType, cksumValue = md.Cksum.Get()
+	}
 	buf = _packRecordS(buf, packedCksumT, cksumType, true)
 	buf = _packRecordS(buf, packedCksumV, cksumValue, true)
 
@@ -486,12 +509,15 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	// size
 	var b8 [cos.SizeofI64]byte
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
-	buf = _packRecordB(buf, packedSize, b8[:], false)
+	buf = _packRecordB(buf, packedSize, b8[:], true)
 
 	// lid (v2)
 	binary.BigEndian.PutUint64(b8[:], uint64(md.lid))
-	buf = g.smm.AppendString(buf, recordSepa)
-	buf = _packRecordB(buf, packedLid, b8[:], false)
+	buf = _packRecordB(buf, packedLid, b8[:], true)
+
+	// flags (v2)
+	binary.BigEndian.PutUint64(b8[:], md.flags)
+	buf = _packRecordB(buf, packedFlags, b8[:], false)
 
 	// copies
 	if len(md.copies) > 0 {
