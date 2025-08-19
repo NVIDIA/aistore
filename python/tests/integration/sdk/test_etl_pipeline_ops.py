@@ -195,6 +195,43 @@ class TestETLPipelineOps(unittest.TestCase):
             )
         dst_bucket.delete(missing_ok=True)
 
+    @pytest.mark.etl
+    def test_copy_object_with_etl_pipeline(self):
+        """Test copying an object with ETL pipeline transformation."""
+        dest_bucket = self.client.bucket(
+            "copy-etl-pipeline-dest" + random_string()
+        ).create()
 
-if __name__ == "__main__":
-    unittest.main()
+        try:
+            source_obj_name = "pipeline.txt"
+            source_content = self.test_objects[source_obj_name]
+            source_obj = self.bucket.object(source_obj_name)
+
+            # Create ETL pipeline: upper -> reverse (two-stage pipeline)
+            etl_upper = self._register_etl("upper", ETL_COMM_HPUSH)
+            etl_reverse = self._register_etl("reverse", ETL_COMM_WS)
+
+            # Copy with ETL pipeline transformation
+            dest_obj = dest_bucket.object(source_obj_name)
+            etl_config = ETLConfig(etl_upper >> etl_reverse)
+            response = source_obj.copy(dest_obj, etl=etl_config)
+            self.assertIn(response.status_code, [200, 204])
+
+            # Verify the copied object has the transformed content
+            copied_content = dest_obj.get_reader().read_all()
+            self.assertEqual(
+                copied_content,
+                source_content.upper()[::-1],
+                "Copied object should have pipeline-transformed content",
+            )
+
+            # Verify original object is unchanged
+            original_content = source_obj.get_reader().read_all()
+            self.assertEqual(
+                original_content,
+                source_content,
+                "Original object should remain unchanged after copy with ETL",
+            )
+
+        finally:
+            dest_bucket.delete(missing_ok=True)

@@ -11,11 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -141,8 +144,7 @@ type (
 	}
 	TransformArgs struct {
 		CopyArgs
-		ETLName string
-		ETLArgs string
+		ETL
 	}
 )
 
@@ -340,18 +342,27 @@ func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 	return
 }
 
-func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName, etlArgs string) error {
+func copyOrTransformObject(bp BaseParams, args *CopyArgs, etl *ETL) error {
 	var (
 		q         = qalloc()
 		toObjName = cos.Left(args.ToObjName, args.FromObjName)
 	)
 	args.FromBck.SetQuery(q)
 	args.ToBck.AddUnameToQuery(q, apc.QparamObjTo, toObjName)
-	if etlName != "" {
-		q.Add(apc.QparamETLName, etlName)
-	}
-	if etlArgs != "" {
-		q.Add(apc.QparamETLTransformArgs, etlArgs)
+	if etl != nil {
+		if etl.ETLName != "" {
+			q.Add(apc.QparamETLName, etl.ETLName)
+		}
+		if etl.TransformArgs != nil {
+			s, err := jsoniter.MarshalToString(etl.TransformArgs)
+			if err != nil {
+				return err
+			}
+			q.Add(apc.QparamETLTransformArgs, s)
+		}
+		if etl.pipeline != nil {
+			q.Add(apc.QparamETLPipeline, strings.Join(etl.pipeline, apc.ETLPipelineSeparator))
+		}
 	}
 	if args.LatestVer {
 		q.Set(apc.QparamLatestVer, "true")
@@ -378,12 +389,12 @@ func copyOrTransformObject(bp BaseParams, args *CopyArgs, etlName, etlArgs strin
 // This is a synchronous, blocking operation.
 // If ToObjName is empty, uses FromObjName as the destination.
 func CopyObject(bp BaseParams, args *CopyArgs) error {
-	return copyOrTransformObject(bp, args, "" /*etlName*/, "" /*etlArgs*/)
+	return copyOrTransformObject(bp, args, nil /*etl*/)
 }
 
 // Same as CopyObject, but with an ETL transformation
 func TransformObject(bp BaseParams, args *TransformArgs) error {
-	return copyOrTransformObject(bp, &args.CopyArgs, args.ETLName, args.ETLArgs)
+	return copyOrTransformObject(bp, &args.CopyArgs, &args.ETL)
 }
 
 // HEAD(object)  ==============================================================================================

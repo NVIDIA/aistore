@@ -612,7 +612,3 @@ class TestETLOps(unittest.TestCase):
             self.assertEqual(ls[0].id, self.etl_name, "ETL name does not match")
 
         assert_with_retries(assertion_fn)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1474,11 +1474,19 @@ func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, dpq *d
 		coiParams.LatestVer = dpq.latestVer
 		coiParams.Sync = dpq.sync
 		if dpq.etl.name != "" {
-			coiParams.ETLArgs = &core.ETLArgs{TransformArgs: dpq.etl.targs}
+			etlArgs := &core.ETLArgs{TransformArgs: dpq.etl.targs}
+			if dpq.etl.pipeline != "" {
+				etlArgs.Pipeline, err = etl.GetPipeline(strings.Split(dpq.etl.pipeline, apc.ETLPipelineSeparator))
+				if err != nil {
+					xs.FreeCOI(coiParams)
+					return 0, fmt.Errorf("%w [%s, %s]", err, t.si, lom)
+				}
+			}
+			coiParams.ETLArgs = etlArgs
 			coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(dpq.etl.name, nil /*xaction*/)
 			if err != nil {
 				xs.FreeCOI(coiParams)
-				return 0, err
+				return 0, fmt.Errorf("%w [%s, %s]", err, t.si, lom)
 			}
 		}
 	}

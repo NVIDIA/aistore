@@ -898,8 +898,10 @@ func TestETLCopyTransformSingleObj(t *testing.T) {
 		transformFunc = tetl.MD5Transform
 		comm          = etl.Hpush
 		content       = []byte("This is a test object for ETL transformation. It will be transformed to MD5 checksum.")
+		etl1, etl2    *api.ETL
 	)
 	msg := tetl.InitSpec(t, baseParams, transformer, comm, etl.ArgTypeDefault)
+	etl1 = &api.ETL{ETLName: msg.Name()}
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, msg.Name()) })
 
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
@@ -922,7 +924,7 @@ func TestETLCopyTransformSingleObj(t *testing.T) {
 			ToBck:       bckTo,
 			ToObjName:   objTo,
 		},
-		ETLName: msg.Name(),
+		ETL: *etl1,
 	})
 	tassert.CheckFatal(t, err)
 
@@ -931,6 +933,27 @@ func TestETLCopyTransformSingleObj(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tassert.Fatal(t, tools.ReaderEqual(transformFunc(readers.NewBytes(content)), r), "expected transformed object to match the MD5 checksum")
+
+	msg2 := tetl.InitSpec(t, baseParams, transformer, comm, etl.ArgTypeDefault)
+	etl2 = &api.ETL{ETLName: msg2.Name()}
+	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, msg2.Name()) })
+
+	err = api.TransformObject(baseParams, &api.TransformArgs{
+		CopyArgs: api.CopyArgs{
+			FromBck:     bckFrom,
+			FromObjName: objFrom,
+			ToBck:       bckTo,
+			ToObjName:   objTo,
+		},
+		ETL: *etl1.Chain(etl2),
+	})
+	tassert.CheckFatal(t, err)
+
+	tlog.Logln("GET transformed object")
+	r, _, err = api.GetObjectReader(baseParams, bckTo, objTo, &api.GetArgs{})
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatal(t, tools.ReaderEqual(transformFunc(transformFunc(readers.NewBytes(content))), r), "expected transformed object to match the MD5 of the MD5 checksum")
 }
 
 func TestETLMultipleTransformersAtATime(t *testing.T) {
