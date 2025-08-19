@@ -5,10 +5,11 @@ import time
 import threading
 import concurrent.futures
 from http.server import HTTPServer
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock, patch
 from fastapi.testclient import TestClient
 
 import requests
+import pytest
 
 from aistore.sdk.const import (
     HEADER_NODE_URL,
@@ -60,8 +61,9 @@ def wait_for_server_ready(
         if attempt < max_retries - 1:  # Don't sleep after the last attempt
             time.sleep(retry_interval)
 
-    print(
-        f"WARNING: {server_type} server at {host}:{port} failed to become ready after {max_retries} attempts"
+    # If we get here, server didn't become ready
+    raise RuntimeError(
+        f"{server_type} server at {host}:{port} failed to become ready after {max_retries} attempts"
     )
 
 
@@ -178,11 +180,13 @@ class TestPipelineBase(unittest.TestCase):
 class TestPipelineParsing(TestPipelineBase):
     """Test the pipeline parsing utility function."""
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_single_url(self):
         """Test parsing a single URL."""
         result = parse_etl_pipeline("http://node1:8080/transform")
         self.assertEqual(result, ("http://node1:8080/transform", ""))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_multiple_urls(self):
         """Test parsing multiple URLs."""
 
@@ -193,6 +197,7 @@ class TestPipelineParsing(TestPipelineBase):
             remaining, "http://node2:8080/transform2,http://node3:8080/final"
         )
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_empty(self):
         """Test parsing empty pipeline."""
 
@@ -202,6 +207,7 @@ class TestPipelineParsing(TestPipelineBase):
         result = parse_etl_pipeline(None)
         self.assertEqual(result, ("", ""))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_with_spaces(self):
         """Test parsing pipeline with spaces around URLs."""
 
@@ -210,18 +216,21 @@ class TestPipelineParsing(TestPipelineBase):
         self.assertEqual(first_url, "http://node1:8080/transform1")
         self.assertEqual(remaining, "http://node2:8080/transform2")
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_leading_comma(self):
         """Test pipeline validation with leading comma."""
         with self.assertRaises(InvalidPipelineError) as cm:
             parse_etl_pipeline(",http://node1:8080/transform")
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_trailing_comma(self):
         """Test pipeline validation with trailing comma."""
         with self.assertRaises(InvalidPipelineError) as cm:
             parse_etl_pipeline("http://node1:8080/transform,")
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_double_comma(self):
         """Test pipeline validation with double comma."""
         with self.assertRaises(InvalidPipelineError) as cm:
@@ -230,12 +239,14 @@ class TestPipelineParsing(TestPipelineBase):
             )
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_multiple_empty_entries(self):
         """Test pipeline validation with multiple empty entries."""
         with self.assertRaises(InvalidPipelineError) as cm:
             parse_etl_pipeline(",,,")
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_mixed_empty_entries(self):
         """Test pipeline validation with mixed valid and empty entries."""
         with self.assertRaises(InvalidPipelineError) as cm:
@@ -244,12 +255,14 @@ class TestPipelineParsing(TestPipelineBase):
             )
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_parse_etl_pipeline_invalid_only_spaces(self):
         """Test pipeline validation with only spaces between commas."""
         with self.assertRaises(InvalidPipelineError) as cm:
             parse_etl_pipeline("   ,   ")
         self.assertIn("empty entry", str(cm.exception))
 
+    @pytest.mark.etl
     def test_http_server_invalid_pipeline_validation(self):
         """Test HTTP server properly validates malformed pipeline headers."""
 
@@ -275,6 +288,7 @@ class TestPipelineParsing(TestPipelineBase):
                 self.assertEqual(response.status_code, 400)
                 self.assertIn("Invalid pipeline", response.text)
 
+    @pytest.mark.etl
     def test_flask_server_invalid_pipeline_validation(self):
         """Test Flask server properly validates malformed pipeline headers."""
 
@@ -304,6 +318,7 @@ class TestPipelineParsing(TestPipelineBase):
 class TestMultiServerPipelineIntegration(TestPipelineBase):
     """Integration tests with actual servers running on different ports."""
 
+    @pytest.mark.etl
     def test_http_to_http_pipeline_chain(self):
         """Test pipeline forwarding between multiple HTTP servers."""
 
@@ -329,6 +344,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.content, result)
         self.assertEqual(response.headers.get(HEADER_CONTENT_LENGTH), str(len(result)))
 
+    @pytest.mark.etl
     def test_http_to_target_pipeline_chain(self):
         """Test pipeline forwarding between HTTP servers ending with a target server."""
 
@@ -367,6 +383,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             "http://localhost:12003/target", result, headers={}
         )
 
+    @pytest.mark.etl
     def test_flask_to_flask_pipeline_chain(self):
         """Test pipeline forwarding between multiple Flask servers."""
 
@@ -394,6 +411,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.content, result)
         self.assertEqual(response.headers.get(HEADER_CONTENT_LENGTH), str(len(result)))
 
+    @pytest.mark.etl
     def test_flask_to_target_pipeline_chain(self):
         """Test pipeline forwarding between Flask servers ending with a target server."""
 
@@ -433,6 +451,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_fastapi_to_fastapi_pipeline_chain(self):
         """Test pipeline forwarding between multiple FastAPI servers."""
 
@@ -459,6 +478,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.headers.get(HEADER_CONTENT_LENGTH), str(len(result)))
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_fastapi_to_target_pipeline_chain(self):
         """Test pipeline forwarding between FastAPI servers ending with a target server."""
 
@@ -467,14 +487,14 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         server2 = self._start_fastapi_server(19042, "step2")
 
         # Create mock response for target server call
-        target_response = Mock()
+        target_response = AsyncMock()
         target_response.status_code = 200  # Will be converted to 204 by server
         target_response.content = b""
         target_response.headers = {}
 
         # Mock the direct delivery response (simulate 200 OK)
-        server2.client_put = Mock()
-        server2.client_put.return_value = target_response
+        server2.client.put = AsyncMock()
+        server2.client.put.return_value = target_response
 
         # Create pipeline header: server1 -> server2 -> target
         pipeline = "http://localhost:19042/transform,http://localhost:19043/target"
@@ -494,10 +514,11 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
             response.headers.get(HEADER_DIRECT_PUT_LENGTH), str(len(result))
         )
 
-        server2.client_put.assert_called_once_with(
-            "http://localhost:19043/target", result, {}
+        server2.client.put.assert_awaited_once_with(
+            "http://localhost:19043/target", content=result, headers={}
         )
 
+    @pytest.mark.etl
     def test_mixed_server_type_pipeline(self):
         """Test pipeline forwarding across different server types."""
 
@@ -523,6 +544,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.content, result)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_three_way_mixed_pipeline(self):
         """Test HTTP -> Flask -> FastAPI pipeline."""
 
@@ -547,6 +569,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, result)
 
+    @pytest.mark.etl
     def test_pipeline_error_handling(self):
         """Test error handling when pipeline target is unreachable."""
 
@@ -568,6 +591,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertIn(b"ConnectionError", response.content)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_long_pipeline_chain(self):
         """Test a longer pipeline with 5 servers."""
 
@@ -593,6 +617,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, result)
 
+    @pytest.mark.etl
     def test_empty_pipeline_header(self):
         """Test behavior with empty pipeline header."""
 
@@ -608,6 +633,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, result)
 
+    @pytest.mark.etl
     def test_malformed_pipeline_header(self):
         """Test behavior with malformed pipeline header."""
 
@@ -627,6 +653,7 @@ class TestMultiServerPipelineIntegration(TestPipelineBase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Invalid pipeline", response.text)
 
+    @pytest.mark.etl
     def test_concurrent_pipeline_requests(self):
         """Test multiple concurrent requests through pipeline."""
 
@@ -660,6 +687,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
     """Test WebSocket ETL pipeline integration with various server types."""
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_to_http_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with HTTP pipeline."""
 
@@ -685,6 +713,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertEqual(result, expected)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_to_flask_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with Flask pipeline."""
 
@@ -710,6 +739,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertEqual(result, expected)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_to_fastapi_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with FastAPI pipeline."""
 
@@ -735,38 +765,41 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertEqual(result, expected)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_to_target_direct_pipeline(self):
         """Test WebSocket client connecting to FastAPI server with direct target pipeline."""
 
         # Start FastAPI server
         fastapi_server = self._start_fastapi_server(14031, "ws_target")
         client = TestClient(fastapi_server.app)
-        fastapi_server.client_put = Mock()
+
         # Mock target response
-        mock_resp = Mock()
-        mock_resp.status_code = 200
-        mock_resp.content = b""
-        fastapi_server.client_put.return_value = mock_resp
+        with patch.object(fastapi_server, "client", new=AsyncMock()) as mock_client:
+            mock_resp = AsyncMock()
+            mock_resp.status_code = 200
+            mock_resp.content = b""
+            mock_client.put.return_value = mock_resp
 
-        # Test direct pipeline to target
-        with client.websocket_connect("/ws") as websocket:
-            test_data = b"websocket_target_data"
-            pipeline = "http://localhost:14032/target"
+            # Test direct pipeline to target
+            with client.websocket_connect("/ws") as websocket:
+                test_data = b"websocket_target_data"
+                pipeline = "http://localhost:14032/target"
 
-            websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
-            websocket.send_bytes(test_data)
-            result = websocket.receive_text()
+                websocket.send_json(data={ETL_WS_PIPELINE: pipeline}, mode="binary")
+                websocket.send_bytes(test_data)
+                result = websocket.receive_text()
 
-            # Should receive data length as acknowledgment
-            expected_data = fastapi_server.transform(test_data, "", "")
-            self.assertEqual(result, str(len(expected_data)))
+                # Should receive data length as acknowledgment
+                expected_data = fastapi_server.transform(test_data, "", "")
+                self.assertEqual(result, str(len(expected_data)))
 
-            # Verify direct put was called
-            fastapi_server.client_put.assert_called_with(
-                "http://localhost:14032/target", expected_data, {}
-            )
+                # Verify direct put was called
+                mock_client.put.assert_awaited_once_with(
+                    "http://localhost:14032/target", content=expected_data, headers={}
+                )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_multi_stage_pipeline(self):
         """Test WebSocket with multi-stage pipeline (HTTP->Flask->FastAPI)."""
 
@@ -796,6 +829,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertEqual(result, expected)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_pipeline_error_handling(self):
         """Test WebSocket error handling when pipeline target fails."""
 
@@ -816,6 +850,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertIn("0", result)  # Error indicated by 0 length
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_invalid_pipeline_format(self):
         """Test WebSocket with invalid pipeline format."""
 
@@ -836,6 +871,7 @@ class TestWebSocketPipelineIntegration(TestPipelineBase):
             self.assertIn("Invalid pipeline", result)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_websocket_no_pipeline_fallback(self):
         """Test WebSocket behavior without pipeline (fallback to direct response)."""
 

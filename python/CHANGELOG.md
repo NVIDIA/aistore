@@ -12,6 +12,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - Add `>>` operator for combining multiple ETLs into a pipeline.
   - Introduce `QPARAM_ETL_PIPELINE` constant for ETL pipeline configuration and object inline transformation.
   - Add `etl_pipeline` argument to `Bucket.transform` and `ObjectGroup.transform` APIs.
+- Add `pip-system-certs` to common requirements to allow `requests` to access a local certificate in the `uv` virtual environment.
 
 ### Removed
 
