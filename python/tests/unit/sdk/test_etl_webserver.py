@@ -220,21 +220,22 @@ class TestFastAPIServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.content, b"Running")
 
     # pylint: disable=protected-access
-    async def test_get_network_content(self):
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @patch("requests.get")
+    async def test_get_network_content(self, mock_get):
         path = "test/path?etl_args=arg"
         fake_content = b"fake data"
 
-        with patch.object(self.etl_server, "client", AsyncMock()) as mock_client:
-            mock_response = AsyncMock()
-            mock_response.content = fake_content
-            mock_response.raise_for_status = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = fake_content
+        mock_response.raise_for_status = MagicMock()
 
-            mock_client.get.return_value = mock_response
+        mock_get.return_value = mock_response
 
-            result = await self.etl_server._get_network_content(path)
+        result = await self.etl_server._get_network_content(path)
 
-            self.assertEqual(result, fake_content)
-            mock_client.get.assert_called_once()
+        self.assertEqual(result, fake_content)
+        mock_get.assert_called_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_handle_get_request(self):
@@ -286,12 +287,12 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         input_content = b"input data"
         transformed_content = self.etl_server.transform(input_content, path, "")
 
-        # Mock the direct delivery response (simulate 200 OK)
-        mock_response_success = AsyncMock()
-        mock_response_success.content = b""
-        mock_response_success.status_code = 200
-        self.etl_server.client = AsyncMock()
-        self.etl_server.client.put.return_value = mock_response_success
+        self.etl_server.client_put = MagicMock()
+
+        mock_put_resp = MagicMock()
+        mock_put_resp.status_code = 200
+        mock_put_resp.content = b""
+        self.etl_server.client_put.return_value = mock_put_resp
 
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
         response = self.client.put(f"/{path}", content=input_content, headers=headers)
@@ -302,21 +303,28 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             response.headers.get(HEADER_DIRECT_PUT_LENGTH),
             str(len(transformed_content)),
         )
-        self.etl_server.client.put.assert_awaited_once()
+        self.etl_server.client_put.assert_called_with(
+            "http://localhost:8080/ais/@/etl_dst/test/object",
+            transformed_content,
+            {},
+        )
 
         # Mock the direct delivery response (simulate 500 FAIL)
-        mock_response_fail = AsyncMock()
+        mock_response_fail = MagicMock()
         mock_response_fail.status_code = 500
         mock_response_fail.content = b"error message"
-        self.etl_server.client = AsyncMock()
-        self.etl_server.client.put.return_value = mock_response_fail
+        self.etl_server.client_put.return_value = mock_response_fail
 
         headers = {HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"}
         response = self.client.put(f"/{path}", content=input_content, headers=headers)
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.content, b"error message")
-        self.etl_server.client.put.assert_awaited_once()
+        self.etl_server.client_put.assert_called_with(
+            "http://localhost:8080/ais/@/etl_dst/test/object",
+            transformed_content,
+            {},
+        )
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_hpush_with_direct_put_and_fqn(self):
@@ -331,11 +339,11 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             "_get_fqn_content",
             AsyncMock(return_value=input_content),
         ) as get_fqn_mock:
-            mock_response_success = AsyncMock()
+            mock_response_success = MagicMock()
             mock_response_success.content = b""
             mock_response_success.status_code = 200
-            self.etl_server.client = AsyncMock()
-            self.etl_server.client.put.return_value = mock_response_success
+            self.etl_server.client_put = MagicMock()
+            self.etl_server.client_put.return_value = mock_response_success
 
             headers = {
                 HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"
@@ -351,7 +359,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
                 response.headers.get(HEADER_DIRECT_PUT_LENGTH),
                 str(len(transformed_content)),
             )
-            self.etl_server.client.put.assert_awaited_once()
+            self.etl_server.client_put.assert_called_once()
             get_fqn_mock.assert_called_once_with(fqn)
 
         # Mock the direct put response (simulate 500 FAIL)
@@ -360,11 +368,11 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
             "_get_fqn_content",
             AsyncMock(return_value=input_content),
         ) as get_fqn_mock:
-            mock_response_fail = AsyncMock()
+            mock_response_fail = MagicMock()
             mock_response_fail.status_code = 500
             mock_response_fail.content = b"error message"
-            self.etl_server.client = AsyncMock()
-            self.etl_server.client.put.return_value = mock_response_fail
+            self.etl_server.client_put = MagicMock()
+            self.etl_server.client_put.return_value = mock_response_fail
 
             headers = {
                 HEADER_NODE_URL: "http://localhost:8080/ais/@/etl_dst/test/object"
@@ -376,7 +384,7 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(response.status_code, 500)
             self.assertEqual(response.content, b"error message")
-            self.etl_server.client.put.assert_awaited_once()
+            self.etl_server.client_put.assert_called_once()
             get_fqn_mock.assert_called_once_with(fqn)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
@@ -384,64 +392,62 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         input_data = b"testdata"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
 
+        self.etl_server.client_put = MagicMock()
+
         # Mock the direct put response (simulate 200 OK) => return length as ACK
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 200
-            mock_resp.content = b""
-            mock_client.put.return_value = mock_resp
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b""
+        self.etl_server.client_put.return_value = mock_resp
 
-            with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_json(
-                    data={
-                        ETL_WS_PIPELINE: direct_put_url,
-                    },
-                    mode="binary",
-                )
-                websocket.send_bytes(input_data)
-                result = websocket.receive_text()
-                self.assertEqual(
-                    result, str(len(input_data))
-                )  # Expecting length of input data as ACK
-
-            mock_client.put.assert_awaited_once()
-            mock_client.put.assert_called_once_with(
-                direct_put_url, content=input_data[::-1], headers={}
+        with self.client.websocket_connect("/ws") as websocket:
+            websocket.send_json(
+                data={
+                    ETL_WS_PIPELINE: direct_put_url,
+                },
+                mode="binary",
             )
+            websocket.send_bytes(input_data)
+            result = websocket.receive_text()
+            self.assertEqual(
+                result, str(len(input_data))
+            )  # Expecting length of input data as ACK
+
+        self.etl_server.client_put.assert_called_with(
+            direct_put_url, input_data[::-1], {}
+        )
 
         # Mock the direct put response (simulate 500 FAIL) => return transformed data
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 500
-            mock_resp.content = b"error message"
-            mock_client.put.return_value = mock_resp
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.content = b"error message"
+        self.etl_server.client_put.return_value = mock_resp
 
-            with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_json(
-                    data={
-                        ETL_WS_PIPELINE: direct_put_url,
-                    },
-                    mode="binary",
-                )
-                websocket.send_bytes(input_data)
-                error_msg = websocket.receive_text()
-                self.assertEqual(
-                    error_msg, str(0)
-                )  # 0 length indicating websocket received an error
-
-            mock_client.put.assert_awaited_once()
-            mock_client.put.assert_called_once_with(
-                direct_put_url, content=input_data[::-1], headers={}
+        with self.client.websocket_connect("/ws") as websocket:
+            websocket.send_json(
+                data={
+                    ETL_WS_PIPELINE: direct_put_url,
+                },
+                mode="binary",
             )
+            websocket.send_bytes(input_data)
+            error_msg = websocket.receive_text()
+            self.assertEqual(
+                error_msg, str(0)
+            )  # 0 length indicating websocket received an error
+
+        self.etl_server.client_put.assert_called_with(
+            direct_put_url, input_data[::-1], {}
+        )
 
         # Mock the empty direct put url (don't need direct put on this object) => return transformed data
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            with self.client.websocket_connect("/ws") as websocket:
-                websocket.send_json(data={}, mode="binary")
-                websocket.send_bytes(input_data)
-                result = websocket.receive_bytes()
-                self.assertEqual(result, input_data[::-1])
-            mock_client.put.assert_not_called()  # direct put shouldn't be called
+        self.etl_server.client_put = MagicMock()
+        with self.client.websocket_connect("/ws") as websocket:
+            websocket.send_json(data={}, mode="binary")
+            websocket.send_bytes(input_data)
+            result = websocket.receive_bytes()
+            self.assertEqual(result, input_data[::-1])
+        self.etl_server.client_put.assert_not_called()  # direct put shouldn't be called
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_websocket_with_direct_put_and_fqn(self):
@@ -449,90 +455,89 @@ class TestFastAPIServerWithDirectPut(unittest.IsolatedAsyncioTestCase):
         original_content = b"original data"
         direct_put_url = "http://localhost:8080/ais/@/etl_dst/final"
         transformed_content = self.etl_server.transform(original_content, fqn, "")
+
+        self.etl_server.client_put = MagicMock()
+
         # Mock the direct put response (simulate 200 OK)
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 200
-            mock_resp.content = b""
-            mock_client.put.return_value = mock_resp
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b""
+        self.etl_server.client_put.return_value = mock_resp
 
-            with patch.object(
-                self.etl_server,
-                "_get_fqn_content",
-                AsyncMock(return_value=original_content),
-            ) as get_fqn_mock:
-                with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_json(
-                        data={
-                            ETL_WS_PIPELINE: direct_put_url,
-                            ETL_WS_FQN: fqn,
-                        },
-                        mode="binary",
-                    )
-                    result = websocket.receive_text()
-                    self.assertEqual(
-                        result, str(len(transformed_content))
-                    )  # Expecting length of original content as ACK
+        with patch.object(
+            self.etl_server,
+            "_get_fqn_content",
+            AsyncMock(return_value=original_content),
+        ) as get_fqn_mock:
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_json(
+                    data={
+                        ETL_WS_PIPELINE: direct_put_url,
+                        ETL_WS_FQN: fqn,
+                    },
+                    mode="binary",
+                )
+                result = websocket.receive_text()
+                self.assertEqual(
+                    result, str(len(transformed_content))
+                )  # Expecting length of original content as ACK
 
-                get_fqn_mock.assert_called_once_with(fqn)
+            get_fqn_mock.assert_called_with(fqn)
 
-            mock_client.put.assert_awaited_once()
-            mock_client.put.assert_called_once_with(
-                direct_put_url, content=transformed_content, headers={}
-            )
+        self.etl_server.client_put.assert_called_once_with(
+            direct_put_url, transformed_content, {}
+        )
 
         # Mock the direct put response (simulate 500 FAIL) => return transformed data
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            mock_resp = AsyncMock()
-            mock_resp.status_code = 500
-            mock_resp.content = b"error message"
-            mock_client.put.return_value = mock_resp
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.content = b"error message"
+        self.etl_server.client_put.return_value = mock_resp
 
-            with patch.object(
-                self.etl_server,
-                "_get_fqn_content",
-                AsyncMock(return_value=original_content),
-            ) as get_fqn_mock:
-                with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_json(
-                        data={
-                            ETL_WS_PIPELINE: direct_put_url,
-                            ETL_WS_FQN: fqn,
-                        },
-                        mode="binary",
-                    )
-                    result = websocket.receive_text()
-                    self.assertEqual(
-                        result, str(0)
-                    )  # 0 length indicating websocket received an error
+        with patch.object(
+            self.etl_server,
+            "_get_fqn_content",
+            AsyncMock(return_value=original_content),
+        ) as get_fqn_mock:
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_json(
+                    data={
+                        ETL_WS_PIPELINE: direct_put_url,
+                        ETL_WS_FQN: fqn,
+                    },
+                    mode="binary",
+                )
+                result = websocket.receive_text()
+                self.assertEqual(
+                    result, str(0)
+                )  # 0 length indicating websocket received an error
 
-                get_fqn_mock.assert_called_once_with(fqn)
+            get_fqn_mock.assert_called_with(fqn)
 
-            mock_client.put.assert_awaited_once()
-            mock_client.put.assert_called_once_with(
-                direct_put_url, content=transformed_content, headers={}
-            )
+        self.etl_server.client_put.assert_called_with(
+            direct_put_url, transformed_content, {}
+        )
 
         # Mock the empty direct put url (don't need direct put on this object) => return transformed object
-        with patch.object(self.etl_server, "client", new=AsyncMock()) as mock_client:
-            with patch.object(
-                self.etl_server,
-                "_get_fqn_content",
-                AsyncMock(return_value=original_content),
-            ) as get_fqn_mock:
-                with self.client.websocket_connect("/ws") as websocket:
-                    websocket.send_json(
-                        data={
-                            ETL_WS_PIPELINE: "",
-                            ETL_WS_FQN: fqn,
-                        },
-                        mode="binary",
-                    )
-                    result = websocket.receive_bytes()
-                    self.assertEqual(result, transformed_content)
+        self.etl_server.client_put = MagicMock()
+        with patch.object(
+            self.etl_server,
+            "_get_fqn_content",
+            AsyncMock(return_value=original_content),
+        ) as get_fqn_mock:
+            with self.client.websocket_connect("/ws") as websocket:
+                websocket.send_json(
+                    data={
+                        ETL_WS_PIPELINE: "",
+                        ETL_WS_FQN: fqn,
+                    },
+                    mode="binary",
+                )
+                result = websocket.receive_bytes()
+                self.assertEqual(result, transformed_content)
 
-                get_fqn_mock.assert_called_once_with(fqn)
-            mock_client.put.assert_not_called()
+            get_fqn_mock.assert_called_with(fqn)
+        self.etl_server.client_put.assert_not_called()
 
 
 class TestFlaskServer(unittest.TestCase):
@@ -683,20 +688,21 @@ class TestFastAPIServerETLArgs(unittest.IsolatedAsyncioTestCase):
         self.client = TestClient(self.etl_server.app)
 
     # pylint: disable=protected-access
-    async def test_get_with_etl_args(self):
+    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @patch("requests.get")
+    async def test_get_with_etl_args(self, mock_get):
         path = "test/path?etl_args=arg"
 
-        with patch.object(self.etl_server, "client", AsyncMock()) as mock_client:
-            mock_response = AsyncMock()
-            mock_response.content = b"arg"
-            mock_response.raise_for_status = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = b"arg"
+        mock_response.raise_for_status = MagicMock()
 
-            mock_client.get.return_value = mock_response
+        mock_get.return_value = mock_response
 
-            result = await self.etl_server._get_network_content(path)
+        result = await self.etl_server._get_network_content(path)
 
-            self.assertEqual(result, b"arg")
-            mock_client.get.assert_called_once()
+        self.assertEqual(result, b"arg")
+        mock_get.assert_called_once()
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
     async def test_put_with_etl_args(self):

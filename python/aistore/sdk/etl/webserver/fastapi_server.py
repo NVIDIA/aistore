@@ -5,7 +5,7 @@
 import os
 import asyncio
 from urllib.parse import unquote, quote
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 
 from fastapi import (
     FastAPI,
@@ -14,7 +14,7 @@ from fastapi import (
     Response,
     WebSocket,
 )
-import httpx
+import requests
 import aiofiles
 import uvicorn
 
@@ -49,7 +49,6 @@ class FastAPIServer(ETLServer):
         self.host = host
         self.port = port
         self.app = FastAPI()
-        self.client: Optional[httpx.AsyncClient] = None
         self.active_connections: List[WebSocket] = []
         self._setup_app()
 
@@ -97,12 +96,10 @@ class FastAPIServer(ETLServer):
 
     async def startup_event(self):
         """Initialize resources on server startup."""
-        self.client = httpx.AsyncClient(timeout=None)
         self.logger.info("Server starting up")
 
     async def shutdown_event(self):
         """Cleanup resources on server shutdown."""
-        await self.client.aclose()
         self.logger.info("Server shutting down")
 
     # pylint: disable=too-many-locals
@@ -180,14 +177,14 @@ class FastAPIServer(ETLServer):
                     f"Error processing object {path!r}: file not found at {fs_path!r}."
                 ),
             ) from exc
-        except httpx.HTTPStatusError as e:
+        except requests.HTTPError as e:
             self.logger.warning(
                 "Target responded with error: %s", e.response.status_code
             )
             raise HTTPException(
                 e.response.status_code, detail="Target request failed"
             ) from e
-        except httpx.RequestError as e:
+        except requests.RequestException as e:
             self.logger.error("Network error: %s", str(e))
             raise HTTPException(502, detail=f"Network error: {str(e)}") from e
         except Exception as e:
@@ -204,12 +201,15 @@ class FastAPIServer(ETLServer):
             return await f.read()
 
     async def _get_network_content(self, path: str) -> bytes:
-        """Retrieve content from AIS target with async HTTP client."""
+        """Retrieve content from AIS target with requests."""
         obj_path = quote(path, safe="@")
         target_url = f"{self.host_target}/{obj_path}"
         self.logger.debug("Forwarding to target: %s", target_url)
 
-        response = await self.client.get(target_url)
+        # Use asyncio.to_thread to run requests.get in thread
+        response = await asyncio.to_thread(
+            requests.get, target_url, timeout=None, verify=False
+        )
         response.raise_for_status()
         return response.content
 
@@ -235,7 +235,8 @@ class FastAPIServer(ETLServer):
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
 
-            resp = await self.client.put(url, content=data, headers=headers)
+            # Use asyncio.to_thread to run client_put in thread
+            resp = await asyncio.to_thread(self.client_put, url, data, headers)
             return self.handle_direct_put_response(resp, data)
 
         except Exception as exc:
