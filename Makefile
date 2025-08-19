@@ -271,7 +271,26 @@ lint-update-ci:
 lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint-python
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
+	@$(MAKE) -C $(BUILD_DIR)/ishard lint
+
+## Lint only the go files included in build tags or .golangci.yml
+lint-scoped:
+	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
+
+## Lint all python files, both inside and outside the SDK
+lint-python:
+	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
+	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint-python
+
+lint-cli:
+	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
+	@$(MAKE) -C $(BUILD_DIR)/cli lint
+
+lint-ishard:
+	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(MAKE) -C $(BUILD_DIR)/ishard lint
 
 install-python-deps:

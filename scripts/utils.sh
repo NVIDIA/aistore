@@ -50,35 +50,6 @@ function check_deps {
   done
 }
 
-function check_python_formatting {
-  i=0
-  # Check any python code not in aistore/python
-  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*' ! -path '*/python/*'); do
-    pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
-    if [[ $? -gt 0 ]]; then i=$((i+1)); fi
-  done
-
-  # Check the python code in aistore/python using the make targets there
-  (cd 'python'; make lint && make lint-tests)
-  if [[ $? -gt 0 ]]; then i=$((i+1)); fi
-
-  if [[ $i -ne 0 ]]; then
-    printf "\npylint failed, fix before continuing\n"
-    exit 1
-  fi
-
-  i=0
-  black . --check --diff --quiet --extend-exclude examples
-  if [[ $? -ne 0 ]]; then
-    printf "\nIncorrect python formatting. Run make fmt-fix to fix it.\n\n" >&2
-    exit 1
-  fi
-}
-
-function python_black_fix {
-  black . --quiet --force-exclude examples
-}
-
 function perror {
   err_count=$(echo "$2" | sort -n | uniq | wc -l)
   if [[ -n $2 ]]; then

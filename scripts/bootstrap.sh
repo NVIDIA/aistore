@@ -55,10 +55,10 @@ run_tests() {
 
 AISTORE_PATH="$(cd "$(dirname "$0")/../"; pwd -P)" ## NOTE: this assumes `bootstrap.sh` itself is one level below
 SCRIPTS_DIR=${AISTORE_PATH}/scripts
-PYLINT_STYLE="$(dirname ${0})/config/.pylintrc"
 EXTERNAL_SRC_REGEX=".*\(venv\|build\|3rdparty\|dist\|.idea\|.vscode\)/.*"
-# This script is used by Makefile to run commands.
+
 source ${SCRIPTS_DIR}/utils.sh
+source ${SCRIPTS_DIR}/python_utils.sh
 
 ## NOTE: try `... run --fix` to auto-fix
 case $1 in
@@ -73,9 +73,14 @@ lint)
   fi
   exit $?
   ;;
-
+lint-python)
+  echo "Running lint for Python files"
+      if ! lint_python_outside_sdk || ! lint_python_sdk; then
+        echo "Python linting failed: Please fix the above lint errors."
+        exit 1
+      fi
+  ;;
 fmt)
-  err_count=0
   case $2 in
   --fix)
     echo "Running style fixing..." >&2

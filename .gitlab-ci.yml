@@ -206,7 +206,19 @@ build:k8s:
     - !reference [.test_k8s_short_template, rules]
     - *python_req_changes_rule
 
-lint:linux:
+lint:fmt:
+  stage: build
+  tags:
+    - $RUNNER_TAG
+  timeout: 10m
+  rules:
+    - !reference [ .default_rules, rules ]
+    - !reference [ .default_run_rules, rules ]
+  script:
+    - make fmt-check
+    - make spell-check
+
+lint:go:
   stage: build
   tags:
     - $RUNNER_TAG
@@ -215,10 +227,31 @@ lint:linux:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
-    - make lint
-    - TAGS="nethttp debug oteltracing statsd oci aws gcp azure" make lint
-    - make fmt-check
-    - make spell-check
+    - make lint-scoped
+    - make lint-cli
+    - make lint-ishard
+
+lint:python:
+  stage: build
+  tags:
+    - $RUNNER_TAG
+  timeout: 10m
+  rules:
+    - !reference [.default_rules, rules]
+    - !reference [.default_run_rules, rules]
+  script:
+    - make lint-python
+
+lint:tags:
+  stage: build
+  tags:
+    - $RUNNER_TAG
+  timeout: 10m
+  rules:
+    - !reference [.default_rules, rules]
+    - !reference [.default_run_rules, rules]
+  script:
+    - TAGS="nethttp debug oteltracing statsd oci aws gcp azure" make lint-scoped
 
 build:gendocs:
   stage: build
