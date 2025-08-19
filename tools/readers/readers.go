@@ -93,16 +93,11 @@ var (
 // randReader //
 ////////////////
 
-func NewRand(size int64, cksumType string, seeds ...int64) (Reader, error) {
+func NewRand(size int64, cksumType string) (Reader, error) {
 	var (
 		cksum *cos.Cksum
-		seed  int64
+		seed  = mono.NanoTime()
 	)
-	if len(seeds) > 0 {
-		seed = seeds[0]
-	} else {
-		seed = mono.NanoTime()
-	}
 	rand1 := newSeededReader(uint64(seed))
 	if cksumType != cos.ChecksumNone {
 		rr := &rrLimited{rand1, size, 0}

@@ -407,9 +407,16 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		unique[base] = true
 	}
 	if len(unique) != numPuts {
+		const maxcnt = 4
+		var cnt int
 		for _, name := range objNames {
 			if _, ok := unique[name]; !ok {
-				tlog.Logf("not found: %s\n", name)
+				cnt++
+				if cnt > maxcnt && numPuts-len(unique)-cnt > 1 {
+					tlog.Logf("not found: %s (and %d more objects)\n", name, numPuts-len(unique)-cnt)
+					break
+				}
+				tlog.Logfln("not found: %s", name)
 			}
 		}
 		err := fmt.Errorf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",

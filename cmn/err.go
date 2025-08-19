@@ -693,11 +693,8 @@ func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
 }
 
 func isErrObjDefunct(err error) bool {
-	_, ok := err.(*ErrObjDefunct)
-	if ok || err == nil {
-		return ok
-	}
-	return strings.Contains(err.Error(), "is defunct") // TODO -- FIXME: remove/revise
+	var wrapped *ErrObjDefunct
+	return errors.As(err, &wrapped)
 }
 
 // ErrAborted
@@ -857,9 +854,6 @@ func (e *ErrWarning) Error() string {
 }
 
 func IsErrWarning(err error) bool {
-	if _, ok := err.(*ErrWarning); ok {
-		return true
-	}
 	var wrapped *ErrWarning
 	return errors.As(err, &wrapped)
 }
@@ -883,8 +877,8 @@ func (e *ErrLmetaNotFound) Error() string       { return e.name + ", err: " + e.
 func (e *ErrLmetaNotFound) Unwrap() (err error) { return e.err }
 
 func IsErrLmetaNotFound(err error) bool {
-	_, ok := err.(*ErrLmetaNotFound)
-	return ok
+	var wrapped *ErrLmetaNotFound
+	return errors.As(err, &wrapped)
 }
 
 // ErrLimitedCoexistence
@@ -1021,8 +1015,8 @@ func IsErrObjNought(err error) bool {
 func isErrNotFoundExtended(err error, status int) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
 		IsErrMpathNotFound(err) || IsErrXactNotFound(err) ||
-		IsErrObjNought(err) ||
-		cos.IsNotExist(err, status)
+		cos.IsNotExist(err, status) ||
+		isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 func IsFileAlreadyClosed(err error) bool {

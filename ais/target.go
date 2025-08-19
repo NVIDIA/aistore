@@ -893,7 +893,7 @@ func _validateWarmGet(lom *core.LOM, latestVer bool /*apc.QparamLatestVer*/) boo
 }
 
 func (t *target) _erris(w http.ResponseWriter, r *http.Request, err error, code int, silent bool) {
-	if silent { // e.g,. apc.QparamSilent, StatusNotFound
+	if silent /*e.g,. apc.QparamSilent*/ || code == http.StatusNotFound {
 		t.writeErr(w, r, err, code, Silent)
 	} else {
 		t.writeErr(w, r, err, code)

@@ -193,11 +193,8 @@ func IsErrSyscallTimeout(err error) bool {
 }
 
 func IsPathErr(err error) (ok bool) {
-	pathErr := (*iofs.PathError)(nil)
-	if errors.As(err, &pathErr) {
-		ok = true
-	}
-	return ok
+	var pathErr *iofs.PathError
+	return errors.As(err, &pathErr)
 }
 
 // "file name too long" errno 0x24 (36); either one of the two possible reasons:
@@ -226,10 +223,7 @@ func IsErrOOS(err error) bool {
 }
 
 func IsErrDNSLookup(err error) bool {
-	if _, ok := err.(*net.DNSError); ok {
-		return ok
-	}
-	wrapped := &net.DNSError{}
+	var wrapped *net.DNSError
 	return errors.As(err, &wrapped)
 }
 

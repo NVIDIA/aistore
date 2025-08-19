@@ -415,9 +415,9 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 //
 // (compare w/ LoadUnsafe() below)
 func (lom *LOM) Load(cacheit, locked bool) error {
+	debug.Assert(lom.Bprops() != nil, lom.Cname()) // must be InitBck/InitFQN'ed
 	var (
 		lcache, lmd = lom.fromCache()
-		bmd         = T.Bowner().Get()
 	)
 	// fast path
 	if lmd != nil {
@@ -425,7 +425,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
-		err := lom._checkBucket(bmd)
+		err := lom._checkBucket()
 		if !cos.IsNotExist(err) {
 			return err
 		}
@@ -439,7 +439,11 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 
-	if err := lom._checkBucket(bmd); err != nil {
+	if lom.bid() == 0 && // when LOM is a _handle_
+		lom.Bprops() != nil { // TODO: remove (here and elsewhere)
+		lom.setbid(lom.Bprops().BID)
+	}
+	if err := lom._checkBucket(); err != nil {
 		return err
 	}
 	if cacheit {
@@ -450,8 +454,9 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	return nil
 }
 
-func (lom *LOM) _checkBucket(bmd *meta.BMD) error {
+func (lom *LOM) _checkBucket() error {
 	bck := &lom.bck
+	bmd := T.Bowner().Get()
 	bprops, present := bmd.Get(bck)
 	if !present {
 		lom.UncacheDel()
@@ -461,31 +466,28 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) error {
 }
 
 func (lom *LOM) _checkBID(bprops *cmn.Bprops) error {
-	switch {
-	case lom.bid() == 0:
-		lom.UncacheDel()
-		return cos.NewErrNotFound(T, lom.Cname())
-	case lom.bid() != bprops.BID:
-		err := cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
-		if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 { // TODO -- FIXME: s/||/&&/ to reduce noise
-			nlog.Warningln(err)
-		}
-		lom.UncacheDel()
-		return err
-	default:
+	if lom.bid() == bprops.BID {
+		debug.Assert(bprops.BID != 0)
 		return nil
 	}
+	err := cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
+	if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 { // TODO -- FIXME: s/||/&&/ to reduce noise
+		nlog.Warningln(err, "-- uncache")
+	}
+	lom.UncacheDel()
+	return err
 }
 
 // usage: fast (and unsafe) loading object metadata except atime - no locks
 // compare with conventional Load() above
 func (lom *LOM) LoadUnsafe() error {
+	debug.Assert(lom.Bprops() != nil, lom.Cname())
 	if _, lmd := lom.fromCache(); lmd != nil {
 		lom.md = *lmd
 		if lom.IsFntl() {
 			lom.fixupFntl()
 		}
-		err := lom._checkBucket(T.Bowner().Get())
+		err := lom._checkBucket()
 		if !cos.IsNotExist(err) {
 			return err
 		}
@@ -496,10 +498,10 @@ func (lom *LOM) LoadUnsafe() error {
 	if _, err := lom.lmfs(true); err != nil {
 		return err
 	}
-
-	debug.Assert(lom.bid() == 0 || lom.bid() == lom.Bprops().BID, lom.bid())
-	lom.setbid(lom.Bprops().BID)
-	return lom._checkBucket(T.Bowner().Get())
+	if lom.bid() == 0 && lom.Bprops() != nil { // ditto
+		lom.setbid(lom.Bprops().BID)
+	}
+	return lom._checkBucket()
 }
 
 //

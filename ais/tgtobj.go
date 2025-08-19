@@ -1009,8 +1009,10 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		poi.owt = cmn.OwtRebalance
 		poi.workFQN = workFQN
 		poi.atime = lom.ObjAttrs().Atime
-		debug.Assert(poi.atime != 0, lom.Cname(), " ", lom.ObjAttrs().String())
 		poi.cksumToUse = cksumToUse
+	}
+	if poi.atime == 0 {
+		poi.atime = time.Now().UnixNano()
 	}
 	ecode, erp := poi.putObject()
 	freePOI(poi)
