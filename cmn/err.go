@@ -692,7 +692,7 @@ func NewErrObjDefunct(name string, d1, d2 uint64) *ErrObjDefunct {
 	return &ErrObjDefunct{name, d1, d2}
 }
 
-func isErrObjDefunct(err error) bool {
+func IsErrObjDefunct(err error) bool {
 	var wrapped *ErrObjDefunct
 	return errors.As(err, &wrapped)
 }
@@ -1008,7 +1008,7 @@ func IsErrBucketNought(err error) bool {
 
 // lom.Load
 func IsErrObjNought(err error) bool {
-	return cos.IsNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+	return cos.IsNotExist(err) || IsStatusNotFound(err) || IsErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
@@ -1016,7 +1016,7 @@ func isErrNotFoundExtended(err error, status int) bool {
 	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
 		IsErrMpathNotFound(err) || IsErrXactNotFound(err) ||
 		cos.IsNotExist(err, status) ||
-		isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+		IsErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 func IsFileAlreadyClosed(err error) bool {

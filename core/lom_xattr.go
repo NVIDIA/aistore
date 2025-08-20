@@ -162,6 +162,20 @@ func (lom *LOM) LoadMetaFromFS() error {
 	return nil
 }
 
+func (lom *LOM) FixupBID() error {
+	debug.Assert(lom.bid() != lom.Bprops().BID)
+	lom.setbid(lom.Bprops().BID)
+	buf := lom.pack()
+	err := lom.SetXattr(buf)
+	g.smm.Free(buf)
+
+	if err != nil {
+		lom.UncacheDel()
+		T.FSHC(err, lom.Mountpath(), lom.FQN)
+	}
+	return err
+}
+
 func whingeLmeta(cname string, err error) (*lmeta, error) {
 	if cos.IsErrXattrNotFound(err) {
 		return nil, cmn.NewErrLmetaNotFound(cname, err)

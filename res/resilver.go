@@ -45,7 +45,8 @@ type (
 		SingleRmiJogger bool
 	}
 	joggerCtx struct {
-		xres *xs.Resilver
+		xres           *xs.Resilver
+		isRenameBucket bool
 	}
 )
 
@@ -75,7 +76,7 @@ func (res *Res) _end() {
 	res.end.Store(mono.NanoTime())
 }
 
-func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
+func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater, isRenameBucket bool) {
 	res._begin()
 	defer res._end()
 
@@ -102,8 +103,10 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 	var (
 		jg        *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		jctx      = &joggerCtx{xres: xres}
-
+		jctx      = &joggerCtx{
+			xres:           xres,
+			isRenameBucket: isRenameBucket,
+		}
 		opts = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjectType, fs.ECSliceType},
 			VisitObj: jctx.visitObj,
@@ -286,18 +289,28 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	}
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return nil
+		if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
+			if err = lom.FixupBID(); err != nil {
+				jg.xres.AddErr(err, 4)
+			}
+		}
+		if err != nil {
+			return nil
+		}
 	}
+
 	size = lom.Lsize()
 	// 2. fix hrw location; fail and subsequently abort if unsuccessful
 	var (
-		retries   int
-		mi, isHrw = lom.ToMpath()
+		retries int
 	)
-	if mi == nil {
-		goto ret // nothing to do
-	}
 redo:
+	// always recompute under the current 'lom' (which may have changed below)
+	mi, isHrw := lom.ToMpath()
+	if mi == nil {
+		goto ret
+	}
+
 	if isHrw {
 		// cannot have it associated with a non-hrw mp; TODO: !lom.WritePolicy().IsImmediate()
 		lom.Uncache()
@@ -324,7 +337,8 @@ redo:
 
 	// 3. fix copies
 	for {
-		mi, isHrw := lom.ToMpath()
+		// NOTE: do NOT shadow mi/isHrw; they are re-used at 'redo:'.
+		mi, isHrw = lom.ToMpath()
 		if mi == nil {
 			break
 		}

@@ -500,6 +500,10 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 	return nil
 }
 
+const (
+	prefixBckMvResilverID = apc.ActMoveBck + "-"
+)
+
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
 	if err := p.canRebalance(); err != nil {
@@ -545,7 +549,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	ctx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {
 			clone.inc()
-			clone.Resilver = cos.GenUUID()
+			clone.Resilver = prefixBckMvResilverID + cos.GenUUID()
 		},
 		smapCtx: &smapModifier{smap: p.owner.smap.get()},
 	}
