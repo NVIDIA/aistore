@@ -110,7 +110,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			chunk := &core.Uchunk{
 				Path:  chunkPath,
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 
 			err := manifest.Add(chunk, chunkSize, chunkNum)
@@ -396,7 +396,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			// Add chunk references to non-existent files
 			chunk := &core.Uchunk{
 				Path:  "/tmp/nonexistent_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -429,7 +429,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		It("should store partial manifest without completion", func() {
 			chunk := &core.Uchunk{
 				Path:  "/tmp/partial_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			createTestFile(chunk.Path, cos.MiB)
 			err := manifest.Add(chunk, cos.MiB, 1)
@@ -499,7 +499,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		It("should fail to store invalid manifest", func() {
 			chunk := &core.Uchunk{
 				Path:  "/tmp/invalid_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -521,7 +521,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			// Store valid manifest first to xattr
 			chunk := &core.Uchunk{
 				Path:  "/tmp/corrupt_test_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -555,7 +555,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			chunk := &core.Uchunk{
 				Path:  "/tmp/state_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -579,7 +579,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			// Should be able to use locked operations
 			chunk := &core.Uchunk{
 				Path:  "/tmp/lock_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash123"),
+				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
 			}
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())

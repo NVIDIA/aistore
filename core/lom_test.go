@@ -331,7 +331,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
 			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
-			dummyCksm := cos.NewCksum(cos.ChecksumOneXxh, "dummycksm")
+			dummyCksm := cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee1234567")
 
 			Describe("ComputeCksumIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {

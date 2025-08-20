@@ -964,7 +964,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ = os.Stat(fqn)
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
 
@@ -983,7 +983,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "badc0ffee0ddf00d"))
 	tassert.CheckError(t, err)
 
 	_, err = api.GetObject(baseParams, m.bck, objName, nil)
@@ -1084,7 +1084,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 			modify     func(*testing.T, *core.LOM)
 		}{
 			"checksum": {modify: func(_ *testing.T, lom *core.LOM) {
-				lom.SetCksum(cos.NewCksum(cos.ChecksumCesXxh, "01234"))
+				lom.SetCksum(cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 			}},
 			"local_content": {modify: func(t *testing.T, lom *core.LOM) {
 				err := os.WriteFile(lom.FQN, []byte("modified"), cos.PermRWR)
@@ -1455,7 +1455,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	objName = m.objNames[1]
 	fqn = findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 	tassert.CheckError(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
 
@@ -1474,7 +1474,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "01234abcde"))
+	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 	tassert.CheckError(t, err)
 	_, err = api.GetObject(baseParams, m.bck, objName, nil)
 	tassert.CheckError(t, err)

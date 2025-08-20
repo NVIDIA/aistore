@@ -169,10 +169,16 @@ func (lom *LOM) Digest() uint64    { return lom.digest }
 
 func (lom *LOM) SetSize(size int64) { lom.md.Size = size }
 
-func (lom *LOM) Checksum() *cos.Cksum      { return lom.md.Cksum }
-func (lom *LOM) SetCksum(cksum *cos.Cksum) { lom.md.Cksum = cksum }
+func (lom *LOM) Checksum() *cos.Cksum { return lom.md.Cksum }
 func (lom *LOM) EqCksum(cksum *cos.Cksum) bool {
 	return !cos.NoneC(lom.md.Cksum) && lom.md.Cksum.Equal(cksum)
+}
+
+func (lom *LOM) SetCksum(cksum *cos.Cksum) {
+	if !cos.NoneC(cksum) {
+		debug.AssertNoErr(cksum.Validate())
+	}
+	lom.md.Cksum = cksum
 }
 
 func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
@@ -297,12 +303,18 @@ func (lom *LOM) ValidateMetaChecksum() error {
 		// cannot validate meta checksum
 		return nil
 	}
-	md, err = lom.lmfsReload(false)
+	md, err = lom.lmfsReload(false /*populate*/)
 	if err != nil {
-		return err
+		goto rerr
 	}
 	if md == nil {
-		return fmt.Errorf("%s: no meta", lom)
+		err = fmt.Errorf("%s: no meta", lom)
+		goto rerr
+	}
+	if err = md.Cksum.Validate(); err != nil {
+		context := fmt.Sprintf("%q metadata corruption: %v", lom, err)
+		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, context)
+		goto rerr
 	}
 	if lom.md.Cksum == nil {
 		lom.SetCksum(md.Cksum)
@@ -311,8 +323,11 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	// different versions may have different checksums
 	if md.Version() == lom.md.Version() && !lom.EqCksum(md.Cksum) {
 		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, lom.String())
-		lom.UncacheDel()
+		goto rerr
 	}
+	return nil
+rerr:
+	lom.UncacheDel()
 	return err
 }
 
