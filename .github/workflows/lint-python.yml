@@ -1,0 +1,25 @@
+name: Lint Python
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  lint:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint python
+        run: |
+          python -m pip install pylint
+          make lint-python

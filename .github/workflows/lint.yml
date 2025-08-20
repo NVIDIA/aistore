@@ -32,11 +32,10 @@ jobs:
           version: v2.3.0
           args: --timeout=30m
 
-      - name: Lint
+      - name: Lint go
         run: |
           export GOPATH="$(go env GOPATH)"
           make lint
-          TAGS=statsd make lint    ############### TODO: delete after v3.30 (by Fall 2025)
           TAGS="nethttp debug oteltracing oci aws gcp azure" make lint
           make fmt-check
           make spell-check

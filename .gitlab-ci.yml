@@ -227,9 +227,7 @@ lint:go:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
-    - make lint-scoped
-    - make lint-cli
-    - make lint-ishard
+    - make lint
 
 lint:python:
   stage: build

@@ -271,11 +271,10 @@ lint-update-ci:
 lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
-	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint-python
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
 	@$(MAKE) -C $(BUILD_DIR)/ishard lint
 
-## Lint only the go files included in build tags or .golangci.yml
+## Lint only the go files in the main AIS project included in build tags or .golangci.yml
 lint-scoped:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
