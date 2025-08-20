@@ -254,7 +254,9 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		}
 	}
 
-	if !lom.TryLock(true) { // NOTE: skipping busy
+	if jg.isRenameBucket {
+		lom.Lock(true)
+	} else if !lom.TryLock(true) { // NOTE: skipping busy
 		time.Sleep(time.Second >> 1)
 		if !lom.TryLock(true) {
 			return nil
@@ -336,6 +338,7 @@ redo:
 	}
 
 	// 3. fix copies
+outer:
 	for {
 		// NOTE: do NOT shadow mi/isHrw; they are re-used at 'redo:'.
 		mi, isHrw = lom.ToMpath()
@@ -361,20 +364,25 @@ redo:
 			goto redo
 		}
 		err := lom.Copy(mi, buf)
-		if err == nil {
+		switch {
+		case err == nil:
 			copied = true
-			continue
-		}
-		if cos.IsErrOOS(err) {
+			retries = 0
+		case cos.IsErrOOS(err):
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			err = cmn.NewErrAborted(xname, "", errV)
 			jg.xres.Abort(err)
-		} else if !cos.IsNotExist(err) && !cos.IsErrNotFound(err) {
+			break outer
+		case !cos.IsNotExist(err) && !cos.IsErrNotFound(err):
+			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
+			nlog.Infoln("Warning:", errV)
+			jg.xres.AddErr(errV)
+			break outer
+		default:
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
 			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)
 		}
-		break
 	}
 ret:
 	// EC: remove old metafile
@@ -386,7 +394,7 @@ ret:
 	return nil
 }
 
-func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
+func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
 	if err = lom.Copy(mi, buf); err != nil {
 		return
 	}
@@ -399,6 +407,11 @@ func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *cor
 
 	// reload; cache iff write-policy != immediate
 	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
+	if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
+		if err = hlom.FixupBID(); err != nil {
+			jg.xres.AddErr(err, 4)
+		}
+	}
 	return
 }
 

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -162,20 +163,6 @@ func (lom *LOM) LoadMetaFromFS() error {
 	return nil
 }
 
-func (lom *LOM) FixupBID() error {
-	debug.Assert(lom.bid() != lom.Bprops().BID)
-	lom.setbid(lom.Bprops().BID)
-	buf := lom.pack()
-	err := lom.SetXattr(buf)
-	g.smm.Free(buf)
-
-	if err != nil {
-		lom.UncacheDel()
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	}
-	return err
-}
-
 func whingeLmeta(cname string, err error) (*lmeta, error) {
 	if cos.IsErrXattrNotFound(err) {
 		return nil, cmn.NewErrLmetaNotFound(cname, err)
@@ -255,7 +242,9 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 	return md, nil
 }
 
-func (lom *LOM) PersistMain() (err error) {
+func (lom *LOM) PersistMain() error {
+	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+
 	atime := lom.AtimeUnix()
 	debug.Assert(cos.IsValidAtime(atime))
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
@@ -266,51 +255,78 @@ func (lom *LOM) PersistMain() (err error) {
 
 	// write-immediate (default)
 	buf := lom.pack()
-	if err = lom.SetXattr(buf); err != nil {
-		lom.UncacheDel()
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	} else {
+	err := lom.SetXattr(buf)
+	g.smm.Free(buf)
+
+	if err == nil {
 		lom.md.clearDirty()
 		lom.Recache()
+		return nil
 	}
-	g.smm.Free(buf)
+
+	lom.UncacheDel()
+	T.FSHC(err, lom.Mountpath(), lom.FQN)
 	return err
 }
 
 // (caller must set atime; compare with the above)
-func (lom *LOM) Persist() (err error) {
+func (lom *LOM) Persist() error {
 	atime := lom.AtimeUnix()
+	bprops := lom.Bprops()
 	debug.Assert(cos.IsValidAtime(atime), atime)
 
 	if atime < 0 || !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
-		if lom.Bprops() != nil {
+		if bprops != nil {
 			if !lom.IsCopy() {
 				lom.Recache()
 			}
-			lom.setbid(lom.Bprops().BID)
+			lom.setbid(bprops.BID)
 		}
-		return
+		return nil
 	}
 
-	buf := lom.pack()
-	if err = lom.SetXattr(buf); err != nil {
-		lom.UncacheDel()
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	} else {
-		lom.md.clearDirty()
-		if lom.Bprops() != nil {
-			if !lom.IsCopy() {
-				lom.Recache()
-			}
-			lom.setbid(lom.Bprops().BID)
-		}
+	if bprops != nil {
+		lom.setbid(bprops.BID)
 	}
+	buf := lom.pack()
+	err := lom.SetXattr(buf)
 	g.smm.Free(buf)
-	return
+
+	if err == nil {
+		lom.md.clearDirty()
+		if bprops != nil && !lom.IsCopy() {
+			lom.Recache()
+		}
+		return nil
+	}
+
+	lom.UncacheDel()
+	T.FSHC(err, lom.Mountpath(), lom.FQN)
+	return err
+}
+
+func (lom *LOM) FixupBID() error {
+	debug.Assert(lom.IsLocked() == apc.LockWrite, "must be wlocked: ", lom.Cname())
+	bprops := lom.Bprops()
+	if lom.bid() == bprops.BID {
+		return nil
+	}
+	lom.setbid(bprops.BID)
+	buf := lom.pack()
+	err := lom.SetXattr(buf)
+	g.smm.Free(buf)
+
+	if err == nil {
+		return nil
+	}
+	lom.UncacheDel()
+	T.FSHC(err, lom.Mountpath(), lom.FQN)
+	return err
 }
 
 func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
+	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
 	buf := lom.pack()
 	// replicate across copies
 	for copyFQN = range lom.md.copies {

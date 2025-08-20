@@ -455,8 +455,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 		return err
 	}
 
-	if lom.bid() == 0 && // when LOM is a _handle_
-		lom.Bprops() != nil { // TODO: remove (here and elsewhere)
+	if lom.bid() == 0 { // when LOM is a _handle_
 		lom.setbid(lom.Bprops().BID)
 	}
 	if err := lom._checkBucket(); err != nil {

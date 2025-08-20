@@ -221,13 +221,18 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
 	)
+	if err := lom._checkBucket(); err != nil {
+		debug.AssertNoErr(err)
+		return err
+	}
+
 	// copy is a no-op if the destination exists and is identical
 	errExists := cos.Stat(copyFQN)
 	if errExists == nil {
 		cplom := AllocLOM(lom.ObjName)
 		defer FreeLOM(cplom)
 		if errExists = cplom.InitFQN(copyFQN, lom.Bucket()); errExists == nil {
-			if errExists = cplom.Load(false /*cache it*/, true /*locked*/); errExists == nil {
+			if errExists = cplom.LoadMetaFromFS(); errExists == nil {
 				if cplom.CheckEq(lom) == nil {
 					goto add // skip copying
 				}
