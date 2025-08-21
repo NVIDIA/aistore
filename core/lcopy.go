@@ -221,6 +221,7 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
 	)
+	debug.Assert(lom.bid() != 0, lom.String())
 	if err := lom._checkBucket(); err != nil {
 		debug.AssertNoErr(err)
 		return err

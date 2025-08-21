@@ -31,7 +31,6 @@ type LoadType int
 
 const (
 	noLoad LoadType = iota
-	LoadUnsafe
 	Load
 )
 
@@ -336,23 +335,14 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 }
 
 func (j *jogger) visitObj(lom *core.LOM, buf []byte) (err error) {
-	switch j.opts.DoLoad {
-	case noLoad:
-		goto visit
-	case LoadUnsafe:
-		err = lom.LoadUnsafe()
-	case Load:
-		err = lom.Load(false, false)
-	default:
-		debug.Assert(false, "invalid 'opts.DoLoad'", j.opts.DoLoad)
+	if j.opts.DoLoad == Load {
+		if err = lom.Load(false, false); err != nil {
+			return
+		}
+		if !j.opts.IncludeCopy && lom.IsCopy() {
+			return nil
+		}
 	}
-	if err != nil {
-		return
-	}
-	if !j.opts.IncludeCopy && lom.IsCopy() {
-		return nil
-	}
-visit:
 	return j.opts.VisitObj(lom, buf)
 }
 

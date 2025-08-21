@@ -114,6 +114,9 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater, isRenameBucket 
 			Slab:     slab,
 		}
 	)
+	if !isRenameBucket {
+		opts.DoLoad = mpather.Load
+	}
 	debug.AssertNoErr(err)
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 

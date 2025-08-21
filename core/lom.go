@@ -477,46 +477,16 @@ func (lom *LOM) _checkBucket() error {
 		lom.UncacheDel()
 		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
-	return lom._checkBID(bprops)
-}
-
-func (lom *LOM) _checkBID(bprops *cmn.Bprops) error {
 	if lom.bid() == bprops.BID {
 		debug.Assert(bprops.BID != 0)
 		return nil
 	}
 	err := cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
-	if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 { // TODO -- FIXME: s/||/&&/ to reduce noise
-		nlog.Warningln(err, "-- uncache")
+	if cmn.Rom.FastV(4, cos.SmoduleCore) {
+		nlog.Warningln(err)
 	}
 	lom.UncacheDel()
 	return err
-}
-
-// usage: fast (and unsafe) loading object metadata except atime - no locks
-// compare with conventional Load() above
-func (lom *LOM) LoadUnsafe() error {
-	debug.Assert(lom.Bprops() != nil, lom.Cname())
-	if _, lmd := lom.fromCache(); lmd != nil {
-		lom.md = *lmd
-		if lom.IsFntl() {
-			lom.fixupFntl()
-		}
-		err := lom._checkBucket()
-		if !cos.IsNotExist(err) {
-			return err
-		}
-	}
-	// slow path
-	// NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
-	// either a) handled or b) benign from the caller's perspective
-	if _, err := lom.lmfs(true); err != nil {
-		return err
-	}
-	if lom.bid() == 0 && lom.Bprops() != nil { // ditto
-		lom.setbid(lom.Bprops().BID)
-	}
-	return lom._checkBucket()
 }
 
 //

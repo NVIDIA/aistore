@@ -150,7 +150,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	opts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.encode,
-		DoLoad:   mpather.LoadUnsafe,
+		DoLoad:   mpather.Load,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
 

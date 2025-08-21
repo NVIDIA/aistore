@@ -103,7 +103,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		CTs:         []string{fs.ObjectType},
 		Prefix:      p.msg.Prefix,
 		VisitObj:    r.visitObj,
-		DoLoad:      mpather.LoadUnsafe,
+		DoLoad:      mpather.Load,
 		IncludeCopy: true,
 	}
 	if !p.Bck.IsQuery() {

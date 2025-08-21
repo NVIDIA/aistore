@@ -80,7 +80,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
-		DoLoad:   mpather.LoadUnsafe,
+		DoLoad:   mpather.Load,
 		Throttle: true,
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
