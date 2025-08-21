@@ -324,18 +324,41 @@ func (r *MMSA) _grow(buf []byte, size int64) (nbuf []byte) {
 	return
 }
 
-func (r *MMSA) AppendBytes(buf, bytes []byte) (nbuf []byte) {
+func (r *MMSA) AppendBytes(buf, data []byte) (nbuf []byte) {
 	var (
-		ll, l, c = len(buf), len(bytes), cap(buf)
-		a        = ll + l - c
+		ll, l, c = len(buf), len(data), cap(buf)
+		need     = ll + l
 	)
-	if a > 0 {
-		nbuf = r._grow(buf, int64(c+a))
+	if need > c {
+		nbuf = r._grow(buf, int64(need))
 		nbuf = nbuf[:ll+l]
 	} else {
 		nbuf = buf[:ll+l]
 	}
-	copy(nbuf[ll:], bytes)
+	copy(nbuf[ll:], data)
+	return
+}
+
+func (r *MMSA) AppendBytes2(buf, b1, b2 []byte) (nbuf []byte) {
+	var (
+		ll, c  = len(buf), cap(buf)
+		l1, l2 = len(b1), len(b2)
+		need   = ll + l1 + l2
+	)
+	if need > c {
+		nbuf = r._grow(buf, int64(need))
+		nbuf = nbuf[:need]
+	} else {
+		nbuf = buf[:need]
+	}
+	off := ll
+	if l1 != 0 {
+		copy(nbuf[off:], b1)
+		off += l1
+	}
+	if l2 != 0 {
+		copy(nbuf[off:], b2)
+	}
 	return
 }
 

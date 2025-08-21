@@ -95,7 +95,7 @@ const (
 
 // packing format: enum internal attrs
 const (
-	packedCksumT = iota
+	packedCksumT = uint16(iota)
 	packedCksumV
 	packedVer
 	packedSize
@@ -419,7 +419,7 @@ func (md *lmeta) unpack(buf []byte) error {
 		} else {
 			record = payload[off : off+i]
 		}
-		key := int(binary.BigEndian.Uint16(record)) // the corresponding 'val' is at rec[cos.SizeofI16:]
+		key := binary.BigEndian.Uint16(record)
 		off += i + lenRecSepa
 		switch key {
 		case packedCksumV:
@@ -529,39 +529,39 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	if md.Cksum != nil { // compare w/ cos.NoneC
 		cksumType, cksumValue = md.Cksum.Get()
 	}
-	buf = _packRecordS(buf, packedCksumT, cksumType, true)
-	buf = _packRecordS(buf, packedCksumV, cksumValue, true)
+	buf = _prsp(buf, cksumType, packedCksumT)
+	buf = _prsp(buf, cksumValue, packedCksumV)
 
 	// version
 	if v := md.Version(); v != "" {
-		buf = _packRecordS(buf, packedVer, v, true)
+		buf = _prsp(buf, v, packedVer)
 	}
 
 	// size
 	var b8 [cos.SizeofI64]byte
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
-	buf = _packRecordB(buf, packedSize, b8[:], true)
+	buf = _prbp(buf, b8[:], packedSize)
 
 	// lid (v2)
 	binary.BigEndian.PutUint64(b8[:], uint64(md.lid))
-	buf = _packRecordB(buf, packedLid, b8[:], true)
+	buf = _prbp(buf, b8[:], packedLid)
 
 	// flags (v2)
 	binary.BigEndian.PutUint64(b8[:], md.flags)
-	buf = _packRecordB(buf, packedFlags, b8[:], false)
+	buf = _prb(buf, b8[:], packedFlags)
 
 	// copies
 	if len(md.copies) > 0 {
-		buf = g.smm.AppendString(buf, recordSepa)
-		buf = _packRecordS(buf, packedCopies, "", false)
-		buf = _packCopies(buf, md.copies)
+		buf = g.smm.AppendBytes(buf, recdupSepa[:])
+		buf = _prso(buf, packedCopies)
+		buf = _pcopies(buf, md.copies)
 	}
 
 	// custom md
 	if custom := md.GetCustomMD(); len(custom) > 0 {
-		buf = g.smm.AppendString(buf, recordSepa)
-		buf = _packRecordS(buf, packedCustom, "", false)
-		buf = _packCustom(buf, custom)
+		buf = g.smm.AppendBytes(buf, recdupSepa[:])
+		buf = _prso(buf, packedCustom)
+		buf = _pcustom(buf, custom)
 	}
 
 	// checksum, prepend, and return
@@ -572,31 +572,41 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	return buf
 }
 
-func _packRecordB(buf []byte, key int, value []byte, sepa bool) []byte {
+// _prsp: pack record (string value) and append record separator
+// _prso: pack record (key only)
+// _prbp: pack record (binary value) and append record separator
+// _prb : pack record (binary value) without separator
+
+func _prb(buf, value []byte, key uint16) []byte {
 	var bkey [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(bkey[:], uint16(key))
-	buf = g.smm.AppendBytes(buf, bkey[:])
-	buf = g.smm.AppendBytes(buf, value)
-	if sepa {
-		buf = g.smm.AppendString(buf, recordSepa)
-	}
-	return buf
+	binary.BigEndian.PutUint16(bkey[:], key)
+	return g.smm.AppendBytes2(buf, bkey[:], value)
 }
 
-func _packRecordS(buf []byte, key int, value string, sepa bool) []byte {
+func _prbp(buf, value []byte, key uint16) []byte {
 	var bkey [cos.SizeofI16]byte
-	binary.BigEndian.PutUint16(bkey[:], uint16(key))
+	binary.BigEndian.PutUint16(bkey[:], key)
+	buf = g.smm.AppendBytes2(buf, bkey[:], value)
+	return g.smm.AppendBytes(buf, recdupSepa[:])
+}
+
+func _prso(buf []byte, key uint16) []byte {
+	var bkey [cos.SizeofI16]byte
+	binary.BigEndian.PutUint16(bkey[:], key)
+	return g.smm.AppendBytes(buf, bkey[:])
+}
+
+func _prsp(buf []byte, value string, key uint16) []byte {
+	var bkey [cos.SizeofI16]byte
+	binary.BigEndian.PutUint16(bkey[:], key)
 	buf = g.smm.AppendBytes(buf, bkey[:])
 	if value != "" {
 		buf = g.smm.AppendString(buf, value)
 	}
-	if sepa {
-		buf = g.smm.AppendString(buf, recordSepa)
-	}
-	return buf
+	return g.smm.AppendBytes(buf, recdupSepa[:])
 }
 
-func _packCopies(buf []byte, copies fs.MPI) []byte {
+func _pcopies(buf []byte, copies fs.MPI) []byte {
 	var (
 		i   int
 		num = len(copies)
@@ -612,7 +622,7 @@ func _packCopies(buf []byte, copies fs.MPI) []byte {
 	return buf
 }
 
-func _packCustom(buf []byte, md cos.StrKVs) []byte {
+func _pcustom(buf []byte, md cos.StrKVs) []byte {
 	var (
 		i   int
 		num = len(md)
