@@ -26,7 +26,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"} TAGS=${tags:-""} \
+    MODE=${mode} AIS_BACKEND_PROVIDERS=${providers:-"aws gcp oci"} TAGS=${tags:-""} \
     make node
 
 
