@@ -1976,7 +1976,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	}
 }
 
-func TestRenameBucketNonEmpty(t *testing.T) {
+func TestRenameBucketWithRandomMirrorEnable(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
@@ -2006,6 +2006,10 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	m.setNonDefaultBucketProps()
 	srcProps, err := api.HeadBucket(baseParams, srcBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
+
+	if srcProps.Mirror.Enabled {
+		tlog.Logln("NOTE: this test is currently failing (in re: meta-v1 => meta-v2 transition)")
+	}
 
 	// Put some files
 	m.puts()

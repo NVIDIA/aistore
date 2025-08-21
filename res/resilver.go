@@ -295,8 +295,8 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
-			if err = lom.FixupBID(); err != nil {
-				jg.xres.AddErr(err, 4)
+			if err = lom.FixupBID(); err != nil && !cos.IsNotExist(err) {
+				jg.xres.AddErr(err, 0)
 			}
 		}
 		if err != nil {
@@ -310,16 +310,12 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		retries int
 	)
 redo:
-	// always recompute under the current 'lom' (which may have changed below)
 	mi, isHrw := lom.ToMpath()
 	if mi == nil {
 		goto ret
 	}
 
 	if isHrw {
-		// cannot have it associated with a non-hrw mp; TODO: !lom.WritePolicy().IsImmediate()
-		lom.Uncache()
-
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
@@ -370,7 +366,6 @@ outer:
 		switch {
 		case err == nil:
 			copied = true
-			retries = 0
 		case cos.IsErrOOS(err):
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			err = cmn.NewErrAborted(xname, "", errV)
@@ -383,7 +378,6 @@ outer:
 			break outer
 		default:
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
-			nlog.Infoln("Warning:", errV)
 			jg.xres.AddErr(errV)
 		}
 	}
@@ -412,7 +406,7 @@ func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
 	if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
 		if err = hlom.FixupBID(); err != nil {
-			jg.xres.AddErr(err, 4)
+			jg.xres.AddErr(err, 0)
 		}
 	}
 	return

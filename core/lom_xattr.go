@@ -306,6 +306,7 @@ func (lom *LOM) Persist() error {
 	return err
 }
 
+// TODO -- FIXME: remove upon completing meta-v1 => meta-v2 transition
 func (lom *LOM) FixupBID() error {
 	debug.Assert(lom.IsLocked() == apc.LockWrite, "must be wlocked: ", lom.Cname())
 	bprops := lom.Bprops()
