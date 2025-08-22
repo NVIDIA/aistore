@@ -1,6 +1,6 @@
 {
   "input_extension": ".tar",
-  "bck": {
+  "input_bck": {
     "name": "src"
   },
   "output_bck": {

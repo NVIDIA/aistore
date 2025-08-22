@@ -10,7 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
 
@@ -34,6 +34,9 @@ var (
 
 func IsCompressed(ext string) bool {
 	rw, ok := RWs[ext]
-	debug.Assert(ok, ext)
+	if !ok {
+		nlog.Errorf("IsCompressed: unsupported or empty extension %q, defaulting to false", ext)
+		return false
+	}
 	return rw.IsCompressed()
 }

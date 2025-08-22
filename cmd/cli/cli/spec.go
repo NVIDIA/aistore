@@ -7,6 +7,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v3"
 )
@@ -69,24 +69,36 @@ func loadSpec(c *cli.Context) ([]byte, string /*ext*/, error) {
 
 // parse JSON or YAML bytes into the provided spec structure
 // JSON first w/ fall back to YAML
-func parseSpec(ext string, specBytes []byte, spec any) error {
+func parseSpec(ext string, specBytes []byte, spec any) (err error) {
 	if ext != "" {
 		ext = strings.ToLower(ext)
 	}
-	if ext == ".json" || ext == ".jsonc" || ext == ".js" {
-		if errj := jsoniter.Unmarshal(specBytes, spec); errj != nil {
-			if erry := yaml.Unmarshal(specBytes, spec); erry != nil {
-				return fmt.Errorf("failed to parse %s file, errs: (%v, %v)", specFlag, errj, erry)
-			}
-		}
-	} else {
-		if erry := yaml.Unmarshal(specBytes, spec); erry != nil {
-			if errj := jsoniter.Unmarshal(specBytes, spec); errj != nil {
-				return fmt.Errorf("failed to parse %s file, errs: (%v, %v)", specFlag, erry, errj)
-			}
-		}
+
+	// Detect if content looks like JSON (starts with { or [)
+	trimmed := strings.TrimSpace(string(specBytes))
+	isJSON := strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+
+	if isJSON || ext == ".json" || ext == ".jsonc" || ext == ".js" {
+		return parseJSONWithValidation(specBytes, spec)
 	}
-	return nil
+
+	// For YAML, try YAML first, then JSON as fallback
+	if err = yaml.Unmarshal(specBytes, spec); err == nil {
+		return nil
+	}
+	if err = parseJSONWithValidation(specBytes, spec); err == nil {
+		return nil
+	}
+	return fmt.Errorf("failed to parse %s file, error: %v", specFlag, err)
+}
+
+// parseJSONWithValidation parses JSON with strict validation that fails on unknown fields
+func parseJSONWithValidation(specBytes []byte, spec any) error {
+	// Use strict JSON decoder that disallows unknown fields
+	decoder := json.NewDecoder(bytes.NewReader(specBytes))
+	decoder.DisallowUnknownFields()
+
+	return decoder.Decode(spec)
 }
 
 func isInlineSpec(arg string) bool {
