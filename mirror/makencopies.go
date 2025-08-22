@@ -77,7 +77,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 	debug.Assert(p.args.Tag != "" && p.args.Copies > 0)
 	r = &mncXact{p: p}
 	mpopts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
+		CTs:      []string{fs.ObjCT},
 		VisitObj: r.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load,

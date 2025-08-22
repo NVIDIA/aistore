@@ -205,7 +205,7 @@ func (dr *DiffResolver) Abort(err error) { dr.err.Add(err) }
 func (dr *DiffResolver) walk(job jobif) {
 	defer dr.CloseSrc()
 	opts := &fs.WalkBckOpts{
-		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Sorted: true},
+		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjCT}, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(job.Bck())
 	opts.Callback = func(fqn string, _ fs.DirEntry) error { return dr.cb(fqn, job) }

@@ -750,7 +750,7 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 	defer rj.wg.Done()
 	{
 		rj.opts.Mi = mi
-		rj.opts.CTs = []string{fs.ObjectType}
+		rj.opts.CTs = []string{fs.ObjCT}
 		rj.opts.Callback = rj.visitObj
 		rj.opts.Sorted = false
 	}

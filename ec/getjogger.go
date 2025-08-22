@@ -273,7 +273,7 @@ func (c *getJogger) restoreReplicaFromDsk(ctx *restoreCtx) error {
 		size   int64
 	)
 	// for each target: check for the ctx.lom replica, break loop if found
-	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, "ec-restore-repl")
+	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkCT, "ec-restore-repl")
 
 loop: //nolint:gocritic // keeping label for readability
 	for node := range ctx.nodes {
@@ -332,7 +332,7 @@ loop: //nolint:gocritic // keeping label for readability
 	}
 
 	b := cos.MustMarshal(ctx.meta)
-	ctMeta := core.NewCTFromLOM(ctx.lom, fs.ECMetaType)
+	ctMeta := core.NewCTFromLOM(ctx.lom, fs.ECMetaCT)
 	if err := ctMeta.Write(bytes.NewReader(b), -1, "" /*work fqn*/); err != nil {
 		return err
 	}
@@ -380,7 +380,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		var writer *slice
 		if ctx.toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
-			fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
+			fqn := fs.CSM.Gen(ctx.lom, fs.WorkCT, prefix)
 			fh, err := ctx.lom.CreateSlice(fqn)
 			if err != nil {
 				return err
@@ -438,7 +438,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	cksums []*cos.CksumHash, cksumType string, idx int, sliceSize int64) error {
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
-		fqn := fs.CSM.Gen(ctx.lom, fs.WorkfileType, prefix)
+		fqn := fs.CSM.Gen(ctx.lom, fs.WorkCT, prefix)
 		file, err := ctx.lom.CreateSlice(fqn)
 		if err != nil {
 			return err
@@ -869,7 +869,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		wg     = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 8)
 		mtx    = &sync.Mutex{}
 		tmap   = core.T.Sowner().Get().Tmap
-		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaType)
+		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaCT)
 
 		md, err  = LoadMetadata(ctMeta.FQN())
 		mdExists = err == nil && len(md.Daemons) != 0

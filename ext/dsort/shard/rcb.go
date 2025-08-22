@@ -80,13 +80,13 @@ func (c *rcbCtx) xtar(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 	}
 	if c.tw == nil {
 		// tar (and zip - below)
-		args.fileType = fs.ObjectType
+		args.fileType = fs.ObjCT
 	} else {
 		// tar.gz and tar.lz4
 		if err := c.tw.WriteHeader(header); err != nil {
 			return true, err
 		}
-		args.fileType = ct.DsortFileType
+		args.fileType = ct.DsortFileCT
 		args.extractMethod.Set(ExtractToWriter)
 		args.w = c.tw
 	}
@@ -124,7 +124,7 @@ func (c *rcbCtx) xzip(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 	if c.toDisk {
 		args.extractMethod = ExtractToDisk
 	}
-	args.fileType = fs.ObjectType
+	args.fileType = fs.ObjCT
 
 	size, err := c.extractor.RecordWithBuffer(&args)
 	if err == nil {
@@ -137,7 +137,7 @@ func (c *rcbCtx) xzip(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 
 // common method to extract compressed tar using `ar` (archive reader)
 func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
-	workFQN := fs.CSM.Gen(lom, ct.DsortFileType, "") // tarFQN
+	workFQN := fs.CSM.Gen(lom, ct.DsortFileCT, "") // tarFQN
 	wfh, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return err

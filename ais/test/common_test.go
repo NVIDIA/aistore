@@ -899,10 +899,10 @@ func initFS() {
 	config.Backend = cfg.Backend
 	cmn.GCO.CommitUpdate(config)
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{})
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{})
+	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{})
+	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
@@ -945,7 +945,7 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 	fs.WalkBck(&fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
-			CTs:      []string{fs.ObjectType},
+			CTs:      []string{fs.ObjCT},
 			Callback: fsWalkFunc,
 			Sorted:   true, // false is unsupported and asserts
 		},

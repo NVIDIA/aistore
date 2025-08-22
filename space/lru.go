@@ -294,7 +294,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
-		CTs:      []string{fs.ObjectType},
+		CTs:      []string{fs.ObjCT},
 		Callback: j.walk,
 		Sorted:   false,
 	}
@@ -354,7 +354,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
 		return nil
 	}
-	if parsed.ContentType == fs.ObjectType {
+	if parsed.ContentType == fs.ObjCT {
 		j.visitLOM(&parsed)
 	}
 
@@ -493,7 +493,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 		v uint64
 	}, len(bcks))
 	for i := range bcks {
-		path := j.mi.MakePathCT(&bcks[i], fs.ObjectType)
+		path := j.mi.MakePathCT(&bcks[i], fs.ObjCT)
 		sized[i].b = bcks[i]
 		sized[i].v, _ = ios.DirSizeOnDisk(path, false /*withNonDirPrefix*/)
 	}

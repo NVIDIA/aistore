@@ -37,7 +37,7 @@ func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values)
 
 func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
-	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
+	workFQN := fs.CSM.Gen(lom, fs.WorkCT, params.WorkTag)
 
 	poi := allocPOI()
 	{

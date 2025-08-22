@@ -242,7 +242,7 @@ func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, sma
 		args   = r.args
 		msg    = r.args.Msg
 		mpopts = &mpather.JgroupOpts{
-			CTs:      []string{fs.ObjectType},
+			CTs:      []string{fs.ObjCT},
 			VisitObj: r.do,
 			Prefix:   msg.Prefix,
 			Slab:     slab,

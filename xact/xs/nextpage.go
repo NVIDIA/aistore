@@ -50,7 +50,7 @@ func (npg *npgCtx) nextPageA() error {
 	npg.idx = 0
 	opts := &fs.WalkBckOpts{
 		ValidateCb: npg.validateCb,
-		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: npg.cb, Sorted: true},
+		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjCT}, Callback: npg.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(npg.bck.Bucket())
 	err := fs.WalkBck(opts)

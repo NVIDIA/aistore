@@ -77,7 +77,7 @@ func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize
 			buf, slab = t.gmm.Alloc()
 			err       error
 		)
-		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)
+		workFQN = fs.CSM.Gen(lom, fs.WorkCT, fs.WorkfilePut)
 		fileSize, cksum, err = cos.CopyFile(params.SrcFQN, workFQN, buf, lom.CksumType())
 		slab.Free(buf)
 		if err != nil {

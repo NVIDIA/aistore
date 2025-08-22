@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -25,7 +25,7 @@ func init() {
 	pid = int64(os.Getpid())
 	spid = strconv.FormatInt(pid, 16)
 
-	CSM = &contentSpecMgr{m: make(map[string]ContentResolver, 8)}
+	CSM = &contentSpecMgr{m: make(map[string]ContentRes, 8)}
 }
 
 func IsDirEmpty(dir string) (names []string, empty bool, err error) {

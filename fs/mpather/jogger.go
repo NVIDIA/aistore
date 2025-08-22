@@ -169,7 +169,7 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 		config: config,
 	}
 	if opts.Prefix != "" {
-		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjectType) // this mountpath's bucket dir that contains objects
+		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjCT) // this mountpath's bucket dir that contains objects
 		j.objPrefix = filepath.Join(j.bdir, opts.Prefix)
 	}
 	j.stopCh.Init()
@@ -317,7 +317,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	}
 
 	switch ct.ContentType() {
-	case fs.ObjectType:
+	case fs.ObjCT:
 		lom := core.AllocLOM("")
 		lom.InitCT(ct)
 		err := j.visitObj(lom, buf)

@@ -394,10 +394,10 @@ func (t *target) Run() error {
 	}
 
 	// register object type and workfile type
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{})
-	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{})
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{})
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{})
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{})
+	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{})
 
 	t.ups.t = t
 
@@ -1663,7 +1663,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	if params.WriteSGL == nil {
 		// regular lom save (custom writer not present)
-		wfqn := fs.CSM.Gen(params.Lom, fs.WorkfileType, "blob-dl")
+		wfqn := fs.CSM.Gen(params.Lom, fs.WorkCT, "blob-dl")
 		lmfh, err := params.Lom.CreateWork(wfqn)
 		if err != nil {
 			return "", nil, err

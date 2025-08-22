@@ -101,14 +101,14 @@ func TestCompareObject(t *testing.T) {
 func prepareObject(t *testing.T) *core.LOM {
 	out := tools.PrepareObjects(t, tools.ObjectsDesc{
 		CTs: []tools.ContentTypeDesc{{
-			Type:       fs.ObjectType,
+			Type:       fs.ObjCT,
 			ContentCnt: 1,
 		}},
 		MountpathsCnt: 1,
 		ObjectSize:    1024,
 	})
 	lom := &core.LOM{}
-	err := lom.InitFQN(out.FQNs[fs.ObjectType][0], &out.Bck)
+	err := lom.InitFQN(out.FQNs[fs.ObjCT][0], &out.Bck)
 	tassert.CheckFatal(t, err)
 	err = lom.Load(false, false)
 	tassert.CheckFatal(t, err)

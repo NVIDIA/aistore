@@ -42,10 +42,10 @@ var _ = Describe("LOM Xattributes", func() {
 	localBck := cmn.Bck{Name: bucketLocal, Provider: apc.AIS, Ns: cmn.NsGlobal}
 	cachedBck := cmn.Bck{Name: bucketCached, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 
 	var (
 		copyMpathInfo *fs.Mountpath
@@ -91,16 +91,16 @@ var _ = Describe("LOM Xattributes", func() {
 			testObjectName = "xattr-foldr/test-obj.ext"
 
 			// Bucket needs to have checksum enabled
-			localFQN  = mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName+".qqq")
-			cachedFQN = mix.MakePathFQN(&cachedBck, fs.ObjectType, testObjectName)
+			localFQN  = mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName+".qqq")
+			cachedFQN = mix.MakePathFQN(&cachedBck, fs.ObjCT, testObjectName)
 
 			fqns []string
 		)
 
 		BeforeEach(func() {
 			fqns = []string{
-				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "copy/111/fqn"),
-				copyMpathInfo.MakePathFQN(&localBck, fs.ObjectType, "other/copy/fqn"),
+				copyMpathInfo.MakePathFQN(&localBck, fs.ObjCT, "copy/111/fqn"),
+				copyMpathInfo.MakePathFQN(&localBck, fs.ObjCT, "other/copy/fqn"),
 			}
 
 			// NOTE:
@@ -377,7 +377,7 @@ var _ = Describe("LOM Xattributes", func() {
 		Describe("MetaverLOM=2", func() {
 			It("persists MetaverLOM=2 and round-trips basic fields", func() {
 				obj := "lomv2/smoke-" + cos.GenTie()
-				fqn := mix.MakePathFQN(&localBck, fs.ObjectType, obj)
+				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
 
 				// create empty file
 				Expect(cos.CreateDir(filepath.Dir(fqn))).NotTo(HaveOccurred())
@@ -407,7 +407,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 			It("loads legacy v1 lmeta and upgrades to v2 on persist", func() {
 				obj := "lomv2/coexist-" + cos.GenTie()
-				fqn := mix.MakePathFQN(&localBck, fs.ObjectType, obj)
+				fqn := mix.MakePathFQN(&localBck, fs.ObjCT, obj)
 
 				// ----- build minimal v1 blob: [cksumT|sep][cksumV|sep][size] -----
 				// constants from v1 writer/parser

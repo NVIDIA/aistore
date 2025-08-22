@@ -148,7 +148,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	gowg.Done()
 
 	opts := &mpather.JgroupOpts{
-		CTs:      []string{fs.ObjectType},
+		CTs:      []string{fs.ObjCT},
 		VisitObj: r.encode,
 		DoLoad:   mpather.Load,
 	}
@@ -156,7 +156,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 
 	if r.checkAndRecover {
 		// additionally, traverse and visit
-		opts.CTs = []string{fs.ObjectType, fs.ECMetaType, fs.ECSliceType}
+		opts.CTs = []string{fs.ObjCT, fs.ECMetaCT, fs.ECSliceCT}
 		opts.VisitCT = r.checkRecover
 
 		r.last.Store(mono.NanoTime())
@@ -233,7 +233,7 @@ func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 	if !local {
 		return nil
 	}
-	mdFQN, _, err := core.HrwFQN(lom.Bck().Bucket(), fs.ECMetaType, lom.ObjName)
+	mdFQN, _, err := core.HrwFQN(lom.Bck().Bucket(), fs.ECMetaCT, lom.ObjName)
 	if err != nil {
 		nlog.Warningln("failed to generate md FQN for", lom.Cname(), "err:", err)
 		return err

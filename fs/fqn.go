@@ -41,7 +41,7 @@ const (
 type ParsedFQN struct {
 	Mountpath   *Mountpath
 	Bck         cmn.Bck
-	ContentType string // enum: { ObjectType, WorkfileType, ECSliceType, ... }
+	ContentType string // enum: { ObjCT, WorkCT, ECSliceCT, ... }
 	ObjName     string
 	Digest      uint64
 }
@@ -194,13 +194,13 @@ func CleanPathErr(err error) {
 	if strings.Contains(pathErr.Err.Error(), "no such file") {
 		var what string
 		switch parsed.ContentType {
-		case ObjectType:
+		case ObjCT:
 			what = "object"
-		case WorkfileType:
+		case WorkCT:
 			what = "work file"
-		case ECSliceType:
+		case ECSliceCT:
 			what = "ec slice"
-		case ECMetaType:
+		case ECMetaCT:
 			what = "ec metadata"
 		default:
 			what = fmt.Sprintf("content type '%s'(?)", parsed.ContentType)

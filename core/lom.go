@@ -688,7 +688,7 @@ func (lom *LOM) ShortenFntl() []string {
 	debug.Assert(fs.IsFntl(lom.ObjName), lom.FQN)
 
 	noname := fs.ShortenFntl(lom.FQN)
-	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, noname)
+	nfqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, noname)
 
 	debug.Assert(len(nfqn) < 4096, "PATH_MAX /usr/include/limits.h", len(nfqn))
 	return []string{nfqn, noname}
@@ -699,8 +699,8 @@ func (lom *LOM) fixupFntl() {
 	if !fs.IsFntl(lom.ObjName) {
 		return
 	}
-	lom.ObjName = fs.ShortenFntl(lom.FQN)                                  // noname
-	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName) // nfqn
+	lom.ObjName = fs.ShortenFntl(lom.FQN)                             // noname
+	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName) // nfqn
 	lom.HrwFQN = &lom.FQN
 }
 

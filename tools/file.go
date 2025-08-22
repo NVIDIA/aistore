@@ -167,10 +167,10 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	mios := mock.NewIOS()
 	fs.TestNew(mios)
 
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{}, true)
-	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{}, true)
+	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{}, true)
 
 	dir := t.TempDir()
 
@@ -213,7 +213,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 			mpathCnts[parsed.Mountpath.Path]++
 
 			switch ct.Type {
-			case fs.ObjectType:
+			case fs.ObjCT:
 				lom := &core.LOM{}
 				err = lom.InitFQN(fqn, nil)
 				tassert.CheckFatal(t, err)
@@ -222,7 +222,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				lom.SetAtimeUnix(time.Now().UnixNano())
 				err = lom.Persist()
 				tassert.CheckFatal(t, err)
-			case fs.WorkfileType, fs.ECSliceType, fs.ECMetaType:
+			case fs.WorkCT, fs.ECSliceCT, fs.ECMetaCT:
 			default:
 				cos.AssertMsg(false, "non-implemented type")
 			}

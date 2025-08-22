@@ -11,20 +11,20 @@ import (
 // for common content types, see fs/content.go
 
 const (
-	DsortFileType     = "ds"
-	DsortWorkfileType = "dw"
+	DsortFileCT = "ds"
+	DsortWorkCT = "dw"
 
 	WorkfileRecvShard   = "recv-shard"
 	WorkfileCreateShard = "create-shard"
 )
 
 // interface guard
-var _ fs.ContentResolver = (*DsortFile)(nil)
+var _ fs.ContentRes = (*DsortFile)(nil)
 
 type DsortFile struct{}
 
-func (*DsortFile) GenUniqueFQN(base string, _ ...string) string { return base }
+func (*DsortFile) MakeFQN(base string, _ ...string) string { return base }
 
-func (*DsortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+func (*DsortFile) ParseFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }

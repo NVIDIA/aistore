@@ -43,8 +43,8 @@ var _ = Describe("Mirror", func() {
 	fs.TestNew(nil)
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
 
 	var (
 		props = &cmn.Bprops{
@@ -57,9 +57,9 @@ var _ = Describe("Mirror", func() {
 		bmdMock         = mock.NewBaseBownerMock(&bck)
 		mi              = fs.Mountpath{Path: mpath}
 		mi2             = fs.Mountpath{Path: mpath2}
-		bucketPath      = mi.MakePathCT(bck.Bucket(), fs.ObjectType)
-		defaultObjFQN   = mi.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)
-		expectedCopyFQN = mi2.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)
+		bucketPath      = mi.MakePathCT(bck.Bucket(), fs.ObjCT)
+		defaultObjFQN   = mi.MakePathFQN(bck.Bucket(), fs.ObjCT, testObjectName)
+		expectedCopyFQN = mi2.MakePathFQN(bck.Bucket(), fs.ObjCT, testObjectName)
 	)
 
 	BeforeEach(func() {
@@ -92,7 +92,7 @@ var _ = Describe("Mirror", func() {
 			// Make copy
 			lom.Lock(true)
 			defer lom.Unlock(true)
-			copyFQN := mi2.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+			copyFQN := mi2.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 			clone, err := lom.Copy2FQN(copyFQN, nil)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(expectedCopyFQN).To(BeARegularFile())

@@ -274,7 +274,7 @@ func (lom *LOM) _enotdir(path string, e error) (bool, error) {
 
 			flat := prefix + strings.ReplaceAll(path, "/", "_")
 			name := filepath.Join(prefix+strconv.FormatInt(mono.NanoTime(), 32), flat)
-			fqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, name)
+			fqn := lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, name)
 			if err := cos.Rename(path, fqn); err != nil {
 				nlog.Warningln("failed to rename:", err)
 				return true, err

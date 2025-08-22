@@ -24,8 +24,8 @@ func TestJoggerGroup(t *testing.T) {
 	var (
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.WorkfileType, ContentCnt: 10},
-				{Type: fs.ObjectType, ContentCnt: 500},
+				{Type: fs.WorkCT, ContentCnt: 10},
+				{Type: fs.ObjCT, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
@@ -37,7 +37,7 @@ func TestJoggerGroup(t *testing.T) {
 
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
-		CTs: []string{fs.ObjectType},
+		CTs: []string{fs.ObjCT},
 		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
@@ -49,8 +49,8 @@ func TestJoggerGroup(t *testing.T) {
 	<-jg.ListenFinished()
 
 	tassert.Errorf(
-		t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
-		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
+		t, int(counter.Load()) == len(out.FQNs[fs.ObjCT]),
+		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjCT]),
 	)
 
 	err := jg.Stop()
@@ -61,8 +61,8 @@ func TestJoggerGroupLoad(t *testing.T) {
 	var (
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.WorkfileType, ContentCnt: 10},
-				{Type: fs.ObjectType, ContentCnt: 500},
+				{Type: fs.WorkCT, ContentCnt: 10},
+				{Type: fs.ObjCT, ContentCnt: 500},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
@@ -74,7 +74,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
-		CTs: []string{fs.ObjectType},
+		CTs: []string{fs.ObjCT},
 		VisitObj: func(lom *core.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.Lsize() == desc.ObjectSize, "incorrect object size (lom probably not loaded)")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
@@ -89,8 +89,8 @@ func TestJoggerGroupLoad(t *testing.T) {
 	<-jg.ListenFinished()
 
 	tassert.Errorf(
-		t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
-		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
+		t, int(counter.Load()) == len(out.FQNs[fs.ObjCT]),
+		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjCT]),
 	)
 
 	err := jg.Stop()
@@ -101,7 +101,7 @@ func TestJoggerGroupError(t *testing.T) {
 	var (
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.ObjectType, ContentCnt: 50},
+				{Type: fs.ObjCT, ContentCnt: 50},
 			},
 			MountpathsCnt: 4,
 			ObjectSize:    cos.KiB,
@@ -113,7 +113,7 @@ func TestJoggerGroupError(t *testing.T) {
 
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
-		CTs: []string{fs.ObjectType},
+		CTs: []string{fs.ObjCT},
 		VisitObj: func(_ *core.LOM, _ []byte) error {
 			counter.Inc()
 			return errors.New("oops")
@@ -140,7 +140,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		failAt      = int32(totalObjCnt/mpathsCnt) / 5 // Fail more or less at 20% of objects jogged.
 		desc        = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.ObjectType, ContentCnt: totalObjCnt},
+				{Type: fs.ObjCT, ContentCnt: totalObjCnt},
 			},
 			MountpathsCnt: mpathsCnt,
 			ObjectSize:    cos.KiB,
@@ -160,7 +160,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
-		CTs: []string{fs.ObjectType},
+		CTs: []string{fs.ObjCT},
 		VisitObj: func(lom *core.LOM, _ []byte) error {
 			cnt := counters[lom.Mountpath().Path].Inc()
 
@@ -194,13 +194,13 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 
 func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	var (
-		cts  = []string{fs.ObjectType, fs.ECSliceType, fs.ECMetaType}
+		cts  = []string{fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT}
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.WorkfileType, ContentCnt: 10},
-				{Type: fs.ObjectType, ContentCnt: 541},
-				{Type: fs.ECSliceType, ContentCnt: 244},
-				{Type: fs.ECMetaType, ContentCnt: 405},
+				{Type: fs.WorkCT, ContentCnt: 10},
+				{Type: fs.ObjCT, ContentCnt: 541},
+				{Type: fs.ECSliceCT, ContentCnt: 244},
+				{Type: fs.ECMetaCT, ContentCnt: 405},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
@@ -218,7 +218,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 		CTs: cts,
 		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
-			counters[fs.ObjectType].Inc()
+			counters[fs.ObjCT].Inc()
 			return nil
 		},
 		VisitCT: func(ct *core.CT, buf []byte) error {
@@ -231,8 +231,8 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	jg.Run()
 	<-jg.ListenFinished()
 
-	// NOTE: No need to check `fs.WorkfileType == 0` since we would get panic when
-	//  increasing the counter (counter for `fs.WorkfileType` is not allocated).
+	// NOTE: No need to check `fs.WorkCT == 0` since we would get panic when
+	//  increasing the counter (counter for `fs.WorkCT` is not allocated).
 	for _, ct := range cts {
 		tassert.Errorf(
 			t, int(counters[ct].Load()) == len(out.FQNs[ct]),

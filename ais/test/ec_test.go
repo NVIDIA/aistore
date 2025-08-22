@@ -150,7 +150,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 			return err
 		}
 		foundParts[fqn] = ecSliceMD{stat.Size()}
-		if ct.ContentType() == fs.ObjectType && oldest.After(stat.ModTime()) {
+		if ct.ContentType() == fs.ObjCT && oldest.After(stat.ModTime()) {
 			main = fqn
 			oldest = stat.ModTime()
 		}
@@ -160,7 +160,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 	fs.WalkBck(&fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
-			CTs:      []string{fs.ECSliceType, fs.ECMetaType, fs.ObjectType},
+			CTs:      []string{fs.ECSliceCT, fs.ECMetaCT, fs.ObjCT},
 			Callback: cb,
 			Sorted:   true, // false is unsupported and asserts
 		},
@@ -180,13 +180,13 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 		tassert.CheckFatal(t, err)
 
 		switch {
-		case ct.ContentType() == fs.ECMetaType:
+		case ct.ContentType() == fs.ECMetaCT:
 			metaCnt++
 			tassert.Errorf(t, md.size <= 4*cos.KiB, "Metafile %q size is too big: %d", k, md.size)
-		case ct.ContentType() == fs.ECSliceType:
+		case ct.ContentType() == fs.ECSliceCT:
 			tassert.Errorf(t, md.size == sliceSize, "Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
 		default:
-			tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
+			tassert.Errorf(t, ct.ContentType() == fs.ObjCT, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjCT)
 			tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 			tassert.Errorf(t, ct.ObjectName() == objPath, "invalid object name %s, expected: %s", ct.ObjectName(), objPath)
 			tassert.Errorf(t, md.size == objSize, "%q size mismatch: got %d, expected %d", k, md.size, objSize)
@@ -208,14 +208,14 @@ func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doE
 				ct, err := core.NewCTFromFQN(nm, nil)
 				tassert.CheckFatal(t, err)
 				if doEC {
-					if ct.ContentType() == fs.ECSliceType {
+					if ct.ContentType() == fs.ECSliceCT {
 						if md.size != sliceSize {
 							same = false
 							break
 						}
 					}
 				} else {
-					if ct.ContentType() == fs.ObjectType {
+					if ct.ContentType() == fs.ObjCT {
 						if md.size != objSize {
 							same = false
 							break
@@ -359,10 +359,10 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 				tassert.CheckFatal(t, err)
 
 				switch {
-				case ct.ContentType() == fs.ECMetaType:
+				case ct.ContentType() == fs.ECMetaCT:
 					metaCnt++
 					tassert.Errorf(t, md.size <= 512, "Metafile %q size is too big: %d", k, md.size)
-				case ct.ContentType() == fs.ECSliceType:
+				case ct.ContentType() == fs.ECSliceCT:
 					sliceCnt++
 					if md.size != sliceSize && doEC {
 						t.Errorf("Slice %q size mismatch: %d, expected %d", k, md.size, sliceSize)
@@ -371,7 +371,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 						t.Errorf("Copy %q size mismatch: %d, expected %d", k, md.size, objSize)
 					}
 				default:
-					tassert.Errorf(t, ct.ContentType() == fs.ObjectType, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjectType)
+					tassert.Errorf(t, ct.ContentType() == fs.ObjCT, "invalid content type %s, expected: %s", ct.ContentType(), fs.ObjCT)
 					tassert.Errorf(t, ct.Bck().Provider == bck.Provider, "invalid provider %s, expected: %s", ct.Bck().Provider, apc.AIS)
 					tassert.Errorf(t, ct.Bck().Name == bck.Name, "invalid bucket name %s, expected: %s", ct.Bck().Name, bck.Name)
 					tassert.Errorf(t, ct.ObjectName() == objPath, "invalid object name %s, expected: %s", ct.ObjectName(), objPath)
@@ -538,7 +538,7 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt 
 func damageMetadataCksum(t *testing.T, slicePath string) {
 	ct, err := core.NewCTFromFQN(slicePath, nil)
 	tassert.CheckFatal(t, err)
-	metaFQN := ct.Make(fs.ECMetaType)
+	metaFQN := ct.Make(fs.ECMetaCT)
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
@@ -709,7 +709,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 	ct, err := core.NewCTFromFQN(mainObjPath, nil)
 	tassert.CheckFatal(t, err)
-	metafile := ct.Make(fs.ECMetaType)
+	metafile := ct.Make(fs.ECMetaCT)
 	tlog.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, metafile)
 	tassert.CheckFatal(t, cos.RemoveFile(metafile))
 	if delSlice {
@@ -717,10 +717,10 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		for k := range foundParts {
 			ct, err := core.NewCTFromFQN(k, nil)
 			tassert.CheckFatal(t, err)
-			if k != mainObjPath && ct.ContentType() == fs.ECSliceType && doEC {
+			if k != mainObjPath && ct.ContentType() == fs.ECSliceCT && doEC {
 				sliceToDel = k
 				break
-			} else if k != mainObjPath && ct.ContentType() == fs.ObjectType && !doEC {
+			} else if k != mainObjPath && ct.ContentType() == fs.ObjCT && !doEC {
 				sliceToDel = k
 				break
 			}
@@ -734,7 +734,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 		ct, err := core.NewCTFromFQN(sliceToDel, nil)
 		tassert.CheckFatal(t, err)
-		metafile := ct.Make(fs.ECMetaType)
+		metafile := ct.Make(fs.ECMetaCT)
 		if doEC {
 			tlog.LogfCond(!o.silent, "Removing slice meta %s\n", metafile)
 		} else {
@@ -1009,7 +1009,7 @@ func TestECChecksum(t *testing.T) {
 		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
-		if k != mainObjPath1 && ct.ContentType() == fs.ECSliceType {
+		if k != mainObjPath1 && ct.ContentType() == fs.ECSliceCT {
 			damageMetadataCksum(t, k)
 			break
 		}
@@ -1026,7 +1026,7 @@ func TestECChecksum(t *testing.T) {
 		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
-		if k != mainObjPath2 && ct.ContentType() == fs.ECSliceType {
+		if k != mainObjPath2 && ct.ContentType() == fs.ECSliceCT {
 			damageMetadataCksum(t, k)
 		}
 	}
@@ -1548,7 +1548,7 @@ func TestECXattrs(t *testing.T) {
 
 		ct, err := core.NewCTFromFQN(mainObjPath, nil)
 		tassert.CheckFatal(t, err)
-		metafile := ct.Make(fs.ECMetaType)
+		metafile := ct.Make(fs.ECMetaCT)
 		tlog.Logf("Damaging %s [removing %s]\n", objPath, metafile)
 		tassert.CheckFatal(t, cos.RemoveFile(metafile))
 

@@ -199,7 +199,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	}
 	lom.SetSize(csv.size)
 
-	wfqn := fs.CSM.Gen(ctx.Lom, fs.WorkfileType, "")
+	wfqn := fs.CSM.Gen(ctx.Lom, fs.WorkCT, "")
 	wfh, err := ctx.Lom.CreateWork(wfqn)
 	if err != nil {
 		return _errInv("create-file", err)

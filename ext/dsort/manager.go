@@ -151,8 +151,8 @@ func Tinit(db kvdb.Driver, config *cmn.Config) {
 	debug.Assert(g.mem == nil) // only once
 	g.mem = core.T.PageMM()
 
-	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
-	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
+	fs.CSM.Reg(ct.DsortFileCT, &ct.DsortFile{})
+	fs.CSM.Reg(ct.DsortWorkCT, &ct.DsortFile{})
 
 	newBcastClient(config)
 }

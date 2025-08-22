@@ -22,7 +22,7 @@ func TestWorkerGroup(t *testing.T) {
 	var (
 		desc = tools.ObjectsDesc{
 			CTs: []tools.ContentTypeDesc{
-				{Type: fs.ObjectType, ContentCnt: 100},
+				{Type: fs.ObjCT, ContentCnt: 100},
 			},
 			MountpathsCnt: 10,
 			ObjectSize:    cos.KiB,
@@ -44,7 +44,7 @@ func TestWorkerGroup(t *testing.T) {
 
 	wg.Run()
 
-	for _, fqn := range out.FQNs[fs.ObjectType] {
+	for _, fqn := range out.FQNs[fs.ObjCT] {
 		lom := &core.LOM{}
 		err := lom.InitFQN(fqn, &out.Bck)
 		tassert.CheckError(t, err)
@@ -57,7 +57,7 @@ func TestWorkerGroup(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tassert.Errorf(
-		t, int(counter.Load()) == len(out.FQNs[fs.ObjectType]),
-		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjectType]),
+		t, int(counter.Load()) == len(out.FQNs[fs.ObjCT]),
+		"invalid number of objects visited (%d vs %d)", counter.Load(), len(out.FQNs[fs.ObjCT]),
 	)
 }

@@ -69,10 +69,10 @@ var _ = Describe("LOM", func() {
 		_, _ = fs.Add(mpath, "daeID")
 	}
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
@@ -123,7 +123,7 @@ var _ = Describe("LOM", func() {
 
 	Describe("FQN Resolution", func() {
 		testObject := "foldr/test-obj.ext"
-		desiredLocalFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+		desiredLocalFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 		When("run for an ais bucket", func() {
 			It("Should populate fields from Bucket and ObjName", func() {
@@ -167,18 +167,18 @@ var _ = Describe("LOM", func() {
 				testPid := strconv.FormatInt(9876, 16)
 				testTieIndex := strconv.FormatInt(1355314332000000, 16)[5:]
 				workObject := "foldr/get.test-obj.ext" + "." + testTieIndex + "." + testPid
-				localFQN := mis[0].MakePathFQN(&cloudBckA, fs.WorkfileType, workObject)
+				localFQN := mis[0].MakePathFQN(&cloudBckA, fs.WorkCT, workObject)
 
 				var parsed fs.ParsedFQN
 				_, err := core.ResolveFQN(localFQN, &parsed)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(parsed.ContentType).To(BeEquivalentTo(fs.WorkfileType))
+				Expect(parsed.ContentType).To(BeEquivalentTo(fs.WorkCT))
 			})
 		})
 
 		When("run for a cloud bucket", func() {
 			testObject := "foldr/test-obj.ext"
-			desiredCloudFQN := mis[0].MakePathFQN(&cloudBckA, fs.ObjectType, testObject)
+			desiredCloudFQN := mis[0].MakePathFQN(&cloudBckA, fs.ObjCT, testObject)
 
 			It("Should populate fields from Bucket and ObjName", func() {
 				// Ensure that it matches desiredCloudFQN
@@ -230,7 +230,7 @@ var _ = Describe("LOM", func() {
 					"invalid object name",
 					mis[0].MakePathFQN(
 						&cmn.Bck{Name: bucketCloudA, Provider: apc.AIS, Ns: cmn.NsGlobal},
-						fs.ObjectType,
+						fs.ObjCT,
 						" ??? ",
 					),
 				),
@@ -244,7 +244,7 @@ var _ = Describe("LOM", func() {
 				),
 				Entry(
 					"missing bucket type",
-					filepath.Join(mpaths[0], fs.ObjectType),
+					filepath.Join(mpaths[0], fs.ObjCT),
 				),
 				Entry(
 					"missing bucket",
@@ -256,7 +256,7 @@ var _ = Describe("LOM", func() {
 					"missing object",
 					mis[0].MakePathCT(
 						&cmn.Bck{Name: bucketLocalA, Provider: apc.AIS, Ns: cmn.NsGlobal},
-						fs.ObjectType,
+						fs.ObjCT,
 					),
 				),
 			)
@@ -267,7 +267,7 @@ var _ = Describe("LOM", func() {
 		Describe("Exists", func() {
 			testFileSize := 123
 			testObjectName := "fstat-foldr/test-obj.ext"
-			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObjectName)
+			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObjectName)
 
 			It("should find out that object does not exist", func() {
 				os.Remove(localFQN)
@@ -296,7 +296,7 @@ var _ = Describe("LOM", func() {
 			testObjectName := "foldr/test-obj.ext"
 
 			It("should fetch atime for bucket with LRU disabled", func() {
-				localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObjectName)
+				localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -311,7 +311,7 @@ var _ = Describe("LOM", func() {
 				Expect(time.Unix(0, lom.AtimeUnix())).To(BeEquivalentTo(desiredAtime))
 			})
 			It("should fetch atime for bucket with LRU enabled", func() {
-				localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
+				localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObjectName)
 				createTestFile(localFQN, 0)
 				Expect(os.Chtimes(localFQN, desiredAtime, desiredAtime)).ShouldNot(HaveOccurred())
 
@@ -331,13 +331,13 @@ var _ = Describe("LOM", func() {
 			testFileSize := 456
 			testObjectName := "cksum-foldr/test-obj.ext"
 			// Bucket needs to have checksum enabled
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObjectName)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObjectName)
 			dummyCksm := cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee1234567")
 
 			Describe("ComputeCksumIfMissing", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 					lom := newBasicLom(noneFQN)
 					cksum, err := lom.ComputeSetCksum(false)
@@ -379,7 +379,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateMetaChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 					lom := newBasicLom(noneFQN)
 					err := lom.ValidateMetaChecksum()
@@ -479,7 +479,7 @@ var _ = Describe("LOM", func() {
 			Describe("ValidateContentChecksum", func() {
 				It("should ignore if bucket checksum is none", func() {
 					testObject := "foldr/test-obj.ext"
-					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 					lom := newBasicLom(noneFQN)
 					err := lom.ValidateContentChecksum(false)
@@ -562,7 +562,7 @@ var _ = Describe("LOM", func() {
 			Describe("FromFS", func() {
 				It("should error if file does not exist", func() {
 					testObject := "foldr/test-obj-doesnt-exist.ext"
-					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+					noneFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 					lom := newBasicLom(noneFQN)
 
 					Expect(lom.FromFS()).To(HaveOccurred())
@@ -590,7 +590,7 @@ var _ = Describe("LOM", func() {
 		Describe("Version", func() {
 			testObject := "foldr/test-obj.ext"
 			desiredVersion := "9001"
-			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 			It("should be able to get version", func() {
 				lom := filePut(localFQN, 0)
@@ -605,7 +605,7 @@ var _ = Describe("LOM", func() {
 
 		Describe("CustomMD", func() {
 			testObject := "foldr/test-obj.ext"
-			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckA, fs.ObjCT, testObject)
 
 			It("should correctly set and get custom metadata", func() {
 				lom := filePut(localFQN, 0)
@@ -634,7 +634,7 @@ var _ = Describe("LOM", func() {
 		OuterLoop:
 			for _, mi := range mis {
 				bck := cmn.Bck{Name: bucket, Provider: apc.AIS, Ns: cmn.NsGlobal}
-				fqn := mi.MakePathFQN(&bck, fs.ObjectType, objectName)
+				fqn := mi.MakePathFQN(&bck, fs.ObjCT, objectName)
 				for _, ignoreFQN := range ignoreFQNs {
 					if fqn == ignoreFQN {
 						continue OuterLoop
@@ -1042,8 +1042,8 @@ var _ = Describe("LOM", func() {
 			testObject := "foldr/test-obj.ext"
 			localSameBck := cmn.Bck{Name: sameBucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			cloudSameBck := cmn.Bck{Name: sameBucketName, Provider: apc.AWS, Ns: cmn.NsGlobal}
-			desiredLocalFQN := mis[0].MakePathFQN(&localSameBck, fs.ObjectType, testObject)
-			desiredCloudFQN := mis[0].MakePathFQN(&cloudSameBck, fs.ObjectType, testObject)
+			desiredLocalFQN := mis[0].MakePathFQN(&localSameBck, fs.ObjCT, testObject)
+			desiredCloudFQN := mis[0].MakePathFQN(&cloudSameBck, fs.ObjCT, testObject)
 
 			fs.Disable(mpaths[1]) // Ensure that it matches desiredCloudFQN
 			fs.Disable(mpaths[2]) // ditto

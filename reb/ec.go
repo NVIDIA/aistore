@@ -76,7 +76,7 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 	defer wg.Done()
 	opts := &fs.WalkOpts{
 		Mi:       mi,
-		CTs:      []string{fs.ECMetaType},
+		CTs:      []string{fs.ECMetaCT},
 		Callback: reb.walkEC,
 		Prefix:   rargs.prefix,
 		Sorted:   false,
@@ -106,7 +106,7 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 		action = ecActMoveCT
 	}
 	// TODO: unify acquiring a reader for LOM and CT
-	if ct.ContentType() == fs.ObjectType {
+	if ct.ContentType() == fs.ObjCT {
 		lom = core.AllocLOM(ct.ObjectName())
 		if err := lom.InitBck(ct.Bck().Bucket()); err != nil {
 			core.FreeLOM(lom)
@@ -192,7 +192,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 // Used when slice conflict is detected: a target receives a new slice and it already
 // has a slice of the same generation with different ID
 func (*Reb) renameAsWorkFile(ct *core.CT) (string, error) {
-	fqn := ct.Make(fs.WorkfileType)
+	fqn := ct.Make(fs.WorkCT)
 	// Using os.Rename is safe as both CT and Workfile on the same mountpath
 	if err := os.Rename(ct.FQN(), fqn); err != nil {
 		return "", err
@@ -248,7 +248,7 @@ func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
 	if _, ok := req.md.Daemons[core.T.SID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := core.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), core.T.Bowner(), fs.ECMetaType)
+	mdCT, err := core.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), core.T.Bowner(), fs.ECMetaCT)
 	if err != nil {
 		return nil, err
 	}
@@ -324,9 +324,9 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	isReplica := md.SliceID == 0
 	var fileFQN string
 	if isReplica {
-		fileFQN = ct.Make(fs.ObjectType)
+		fileFQN = ct.Make(fs.ObjCT)
 	} else {
-		fileFQN = ct.Make(fs.ECSliceType)
+		fileFQN = ct.Make(fs.ECSliceCT)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
 		nlog.Warningf("%s no CT for metadata[%d]: %s", core.T, md.SliceID, fileFQN)

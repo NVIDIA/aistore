@@ -70,10 +70,10 @@ var _ = Describe("MPU-UfestRead", func() {
 		_, _ = fs.Add(mpath, "daeID")
 	}
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
-	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
@@ -130,7 +130,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		It("should correctly read chunked file with checksum validation", func() {
 			testObject := "chunked/large-file.bin"
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, fileSize)
@@ -212,7 +212,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		It("should handle edge cases correctly", func() {
 			By("testing empty file")
 			testObject := "chunked/empty-file.bin"
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, 0)
@@ -243,7 +243,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(err).To(Equal(io.EOF))
 
 			By("testing incomplete manifest")
-			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjectType, "incomplete.bin")
+			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjCT, "incomplete.bin")
 			createTestFile(fqn2, 0)
 			lom2 := newBasicLom(fqn2)
 			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2, false /*must-exist*/)
@@ -256,7 +256,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		It("should validate chunk size consistency", func() {
 			testObject := "chunked/size-test.bin"
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN)
@@ -298,7 +298,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			)
 
 			testObject := "chunked/many-small-chunks.bin"
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, totalFileSize)
@@ -363,7 +363,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		It("should persist chunked flag correctly and survive LOM reload", func() {
 			By("Step 1: Simulating successful MPU completion")
 
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 			// Create initial LOM for the object (no need for empty file - chunks are the real data)
 			lom := newBasicLom(localFQN)
 
@@ -416,7 +416,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		It("should handle the chunked flag through manual persistence cycle", func() {
 			By("Testing manual flag persistence without Ufest")
 
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, totalSize)
 			lom := newBasicLom(localFQN)
@@ -444,7 +444,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		It("should detect when chunked flag is lost", func() {
 			By("Creating chunked object and then clearing flag to simulate the bug")
 
-			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 			lom := newBasicLom(localFQN)
 
 			// Set up as chunked object
@@ -481,7 +481,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			numParts      = rand.IntN(10) + 1
 			totalFileSize = partSize * numParts
 			testObject    = "mpu/complete-upload-test-" + cos.GenTie() + ".bin"
-			localFQN      = mis[0].MakePathFQN(&localBckB, fs.ObjectType, testObject)
+			localFQN      = mis[0].MakePathFQN(&localBckB, fs.ObjCT, testObject)
 		)
 		By("Step 1: Setting up chunked upload with sequential parts")
 		lom := newBasicLom(localFQN)
@@ -605,7 +605,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		monolithicObject := "mpu/range-test-mono-" + cos.GenTie() + ".bin"
 
 		By("Step 1: Create chunked object")
-		chunkedFQN := mis[0].MakePathFQN(&localBckB, fs.ObjectType, chunkedObject)
+		chunkedFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, chunkedObject)
 		Expect(cos.CreateDir(filepath.Dir(chunkedFQN))).NotTo(HaveOccurred())
 
 		chunkedLom := newBasicLom(chunkedFQN)
@@ -641,7 +641,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Step 2: Create identical monolithic object")
-		monolithicFQN := mis[1].MakePathFQN(&localBckB, fs.ObjectType, monolithicObject)
+		monolithicFQN := mis[1].MakePathFQN(&localBckB, fs.ObjCT, monolithicObject)
 		Expect(cos.CreateDir(filepath.Dir(monolithicFQN))).NotTo(HaveOccurred())
 
 		totalFileSize := manifest.Size

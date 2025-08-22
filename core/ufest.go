@@ -209,17 +209,17 @@ func (u *Ufest) ChunkName(num int) (string, error) {
 		return "", fmt.Errorf("%s: invalid chunk number (%d)", u._itag(lom.Cname()), num)
 	}
 	var (
-		contentResolver = fs.CSM.Resolver(fs.ObjChunkType)
-		chname          = contentResolver.GenUniqueFQN(lom.ObjName, u.ID, fmt.Sprintf(fmtChunkNum, num))
+		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
+		chname          = contentResolver.MakeFQN(lom.ObjName, u.ID, fmt.Sprintf(fmtChunkNum, num))
 	)
 	if num > 9999 {
-		chname = contentResolver.GenUniqueFQN(lom.ObjName, u.ID, strconv.Itoa(num))
+		chname = contentResolver.MakeFQN(lom.ObjName, u.ID, strconv.Itoa(num))
 	}
 	if num == 1 {
-		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ObjChunkType, chname), nil
+		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), nil
 	}
 	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(chname))
-	return mi.MakePathFQN(lom.Bucket(), fs.ObjChunkType, chname), err
+	return mi.MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), err
 }
 
 // do not validate manifest ID since

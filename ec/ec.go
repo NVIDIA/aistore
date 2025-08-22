@@ -202,8 +202,8 @@ func Init() {
 	g.pmm = core.T.PageMM()
 	g.smm = core.T.ByteMM()
 
-	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
+	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{})
+	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{})
 
 	xreg.RegBckXact(&getFactory{})
 	xreg.RegBckXact(&putFactory{})
@@ -447,12 +447,12 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECSliceType)
+	ct, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECSliceCT)
 	if err != nil {
 		return err
 	}
 	ct.Lock(true)
-	ctMeta := ct.Clone(fs.ECMetaType)
+	ctMeta := ct.Clone(fs.ECMetaCT)
 	defer func() {
 		ct.Unlock(true)
 		if err == nil {
@@ -470,7 +470,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 			return nil
 		}
 	}
-	tmpFQN := ct.Make(fs.WorkfileType)
+	tmpFQN := ct.Make(fs.WorkCT)
 	if err := ct.Write(args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
@@ -490,7 +490,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	lom.Lock(false)
 	if args.Generation != 0 {
-		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
+		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
 			return nil
@@ -507,7 +507,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	}
 
 	// meta
-	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
+	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 	ctMeta.Lock(true)
 	err := ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/)
 	if err == nil {

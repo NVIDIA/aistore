@@ -50,9 +50,9 @@ var _ = Describe("Ufest Core Functionality", func() {
 		_ = mock.NewTarget(bmdMock)
 
 		// Register content resolvers
-		fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-		fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
-		fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
+		fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+		fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
+		fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 	})
 
 	AfterEach(func() {
@@ -65,7 +65,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		testFileSize := int64(cos.MiB)
 
 		It("should create manifest with generated ID when ID is empty", func() {
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, testFileSize)
 
 			startTime := time.Now()
@@ -79,7 +79,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should create manifest with provided ID", func() {
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, testFileSize)
 
 			customID := "custom-upload-" + trand.String(8)
@@ -99,7 +99,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		BeforeEach(func() {
 			testObjectName := "test-objects/add-test.bin"
 			testFileSize := int64(5 * cos.MiB)
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom = newBasicLom(localFQN, testFileSize)
 			manifest = core.NewUfest("test-upload-123", lom, false)
 		})
@@ -254,7 +254,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 		BeforeEach(func() {
 			testObjectName := "test-objects/getchunk-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
 			manifest = core.NewUfest("test-get-123", lom, false)
 
@@ -297,7 +297,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 		BeforeEach(func() {
 			testObjectName := "test-objects/chunkname-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
 			manifest = core.NewUfest("test-name-123", lom, false)
 		})
@@ -340,7 +340,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 		BeforeEach(func() {
 			testObjectName := "test-objects/abort-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
 			manifest = core.NewUfest("test-abort-123", lom, false)
 		})
@@ -406,7 +406,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		BeforeEach(func() {
 			testObjectName := "test-objects/persist-test.bin"
 			testFileSize := int64(3 * cos.MiB)
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 
 			_ = cos.CreateDir(filepath.Dir(localFQN))
 
@@ -532,7 +532,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 	Describe("State Management", func() {
 		It("should track completion status correctly", func() {
 			testObjectName := "test-objects/state-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 
 			_ = cos.CreateDir(filepath.Dir(localFQN))
 
@@ -562,7 +562,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 	Describe("Locking Behavior", func() {
 		It("should provide proper locking mechanisms", func() {
 			testObjectName := "test-objects/lock-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjectType, testObjectName)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, cos.MiB)
 			manifest := core.NewUfest("test-lock-123", lom, false)
 

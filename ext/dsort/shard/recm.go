@@ -248,7 +248,7 @@ func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName str
 		contentPath := genRecordUname(shardName, recordName) + recordExt
 		c, err := core.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
-		return contentPath, c.Make(ct.DsortFileType)
+		return contentPath, c.Make(ct.DsortFileCT)
 	default:
 		debug.Assert(false, storeType)
 		return "", ""
@@ -273,7 +273,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		contentPath := obj.ContentPath
 		c, err := core.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
-		return c.Make(ct.DsortFileType)
+		return c.Make(ct.DsortFileCT)
 	default:
 		debug.Assert(false, obj.StoreType)
 		return ""

@@ -318,7 +318,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 			if !empty {
 				err = fmt.Errorf("bucket %s: directory %s already exists and is not empty (%v...)",
 					bck, dir, names)
-				if contentType != WorkfileType {
+				if contentType != WorkCT {
 					return num, err
 				}
 				nlog.Errorln(err)
@@ -486,7 +486,7 @@ func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
 	if prefix == "" {
 		dirPath = mi.MakePathBck(bck)
 	} else {
-		dirPath = filepath.Join(mi.MakePathCT(bck, ObjectType), prefix)
+		dirPath = filepath.Join(mi.MakePathCT(bck, ObjCT), prefix)
 		if cos.Stat(dirPath) != nil {
 			withNonDirPrefix = true // ok to fail matching
 		}

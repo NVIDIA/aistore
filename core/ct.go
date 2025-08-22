@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -49,7 +49,7 @@ func (ct *CT) Digest() uint64           { return ct.digest }
 func (ct *CT) Cname() string            { return ct.bck.Cname(ct.objName) }
 
 func (ct *CT) LoadSliceFromFS() error {
-	debug.Assert(ct.ContentType() == fs.ECSliceType, "unexpected content type: ", ct.ContentType())
+	debug.Assert(ct.ContentType() == fs.ECSliceCT, "unexpected content type: ", ct.ContentType())
 	st, err := os.Stat(ct.FQN())
 	if err != nil {
 		return err
@@ -84,12 +84,12 @@ func (ct *CT) Unlock(exclusive bool) {
 // e.g.: generate workfile FQN from object FQN:
 //  ct, err := NewCTFromFQN(fqn, nil)
 //  if err != nil { ... }
-//  fqn := ct.Make(fs.WorkfileType)
+//  fqn := ct.Make(fs.WorkCT)
 //
 // e.g.: generate EC metafile FQN from bucket name, backend provider and object name:
 //  ct, err := NewCTFromBO(bckName, bckProvider, objName, nil)
 //  if err != nil { ... }
-//  fqn := ct.Make(fs.ECMetaType)
+//  fqn := ct.Make(fs.ECMetaCT)
 
 func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	var (
@@ -128,7 +128,7 @@ func NewCTFromBO(bck *cmn.Bck, objName string, b meta.Bowner, ctType ...string) 
 	}
 	ct.digest = digest
 	if len(ctType) == 0 {
-		ct.contentType = fs.ObjectType
+		ct.contentType = fs.ObjCT
 	} else {
 		ct.contentType = ctType[0]
 	}

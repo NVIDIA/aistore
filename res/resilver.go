@@ -108,7 +108,7 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater, isRenameBucket 
 			isRenameBucket: isRenameBucket,
 		}
 		opts = &mpather.JgroupOpts{
-			CTs:      []string{fs.ObjectType, fs.ECSliceType},
+			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
 			VisitObj: jctx.visitObj,
 			VisitCT:  jctx.visitCT,
 			Slab:     slab,
@@ -181,7 +181,7 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 		return
 	}
 
-	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceType, ct.ObjectName())
+	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceCT, ct.ObjectName())
 	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.Mountpath(), destMpath, buf)
 	if err != nil {
 		jg.xres.AddErr(err)
@@ -215,14 +215,14 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
 func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
-	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
+	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaCT, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
 	// the metafile has gone
 	if err := cos.Stat(src); cos.IsNotExist(err) {
 		return "", "", nil
 	}
-	dst := dstMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
+	dst := dstMpath.MakePathFQN(ct.Bucket(), fs.ECMetaCT, ct.ObjectName())
 	_, _, err := cos.CopyFile(src, dst, buf, cos.ChecksumNone)
 	if err == nil {
 		return src, dst, nil
@@ -283,7 +283,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 			nlog.Warningf("%s: %s %v", xname, lom, err)
 			return nil
 		}
-		ct := core.NewCTFromLOM(lom, fs.ObjectType)
+		ct := core.NewCTFromLOM(lom, fs.ObjCT)
 		// copy metafile
 		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.Mountpath(), parsed.Mountpath, buf)
 		if err != nil {
@@ -395,7 +395,7 @@ func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 	if err = lom.Copy(mi, buf); err != nil {
 		return
 	}
-	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 	hlom = &core.LOM{}
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
 		return
@@ -413,7 +413,7 @@ func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 }
 
 func (jg *joggerCtx) visitCT(ct *core.CT, buf []byte) (err error) {
-	debug.Assert(ct.ContentType() == fs.ECSliceType)
+	debug.Assert(ct.ContentType() == fs.ECSliceCT)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.

@@ -171,7 +171,7 @@ func (c *putJogger) ec(req *request, lom *core.LOM) (err error) {
 	switch req.Action {
 	case ActSplit:
 		if err = c.encode(req, lom); err != nil {
-			ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
+			ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 			errRm := cos.RemoveFile(ctMeta.FQN())
 			debug.AssertNoErr(errRm)
 		}
@@ -237,7 +237,7 @@ func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	}
 
 	var (
-		ctMeta                = core.NewCTFromLOM(lom, fs.ECMetaType)
+		ctMeta                = core.NewCTFromLOM(lom, fs.ECMetaCT)
 		generation            = mono.NanoTime()
 		cksumType, cksumValue = lom.Checksum().Get()
 	)
@@ -328,7 +328,7 @@ func (c *putJogger) ctSendCallback(hdr *transport.ObjHdr, _ io.ReadCloser, _ any
 // Remove slices and replicas across the cluster: remove local metafile
 // if exists and broadcast the request to other targets
 func (c *putJogger) cleanup(lom *core.LOM) error {
-	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
+	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 	md, err := LoadMetadata(ctMeta.FQN())
 	if err != nil {
 		if cos.IsNotExist(err) {
@@ -477,7 +477,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 
 	cksumType := ctx.lom.CksumType()
 	for i := range ctx.paritySlices {
-		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, fmt.Sprintf("ec-write-%d", i))
+		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkCT, fmt.Sprintf("ec-write-%d", i))
 		writer, err := ctx.lom.CreateSlice(workFQN)
 		if err != nil {
 			return err

@@ -73,8 +73,8 @@ var _ = Describe("space evict/cleanup tests", func() {
 			avail := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.AIS, Ns: cmn.NsGlobal}
-			filesPath = avail[basePath].MakePathCT(&bck, fs.ObjectType)
-			fpAnother = avail[basePath].MakePathCT(&bckAnother, fs.ObjectType)
+			filesPath = avail[basePath].MakePathCT(&bck, fs.ObjCT)
+			fpAnother = avail[basePath].MakePathCT(&bckAnother, fs.ObjCT)
 			cos.CreateDir(filesPath)
 			cos.CreateDir(fpAnother)
 		})
@@ -381,8 +381,8 @@ func createAndAddMountpath(path string) {
 	fs.TestNew(nil)
 	fs.Add(path, "daeID")
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
+	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
 }
 
 func getRandomFileName(fileCounter int) string {

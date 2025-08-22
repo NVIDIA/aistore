@@ -507,7 +507,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *actMsgExt) err
 	}
 	avail := fs.GetAvail()
 	for _, mi := range avail {
-		path := mi.MakePathCT(bckTo.Bucket(), fs.ObjectType)
+		path := mi.MakePathCT(bckTo.Bucket(), fs.ObjCT)
 		if err := cos.Stat(path); err != nil {
 			if !cos.IsNotExist(err) {
 				return err

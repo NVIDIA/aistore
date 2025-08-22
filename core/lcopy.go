@@ -118,7 +118,7 @@ func (lom *LOM) DelExtraCopies(fqn ...string) (removed bool, err error) {
 	}
 	avail := fs.GetAvail()
 	for _, mi := range avail {
-		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+		copyFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 		if _, ok := lom.md.copies[copyFQN]; ok {
 			continue
 		}
@@ -180,7 +180,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 		if path == lom.mi.Path {
 			continue
 		}
-		fqn := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+		fqn := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 		if err := cos.Stat(fqn); err != nil {
 			continue
 		}
@@ -218,8 +218,8 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 // (compare with lom.Copy2FQN below)
 func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 	var (
-		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
+		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkCT, fs.WorkfileCopy+"."+lom.ObjName)
 	)
 	debug.Assert(lom.bid() != 0, lom.String())
 	if err := lom._checkBucket(); err != nil {
@@ -298,7 +298,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		dst.SetVersion(lomInitialVersion)
 	}
 
-	workFQN := fs.CSM.Gen(dst, fs.WorkfileType, fs.WorkfileCopy)
+	workFQN := fs.CSM.Gen(dst, fs.WorkCT, fs.WorkfileCopy)
 	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, cksumType)
 	if err != nil {
 		return err

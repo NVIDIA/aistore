@@ -619,7 +619,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
 		ValidateCb: r.validateCb,
-		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
+		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjCT}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	if err := fs.WalkBck(opts); err != nil {
