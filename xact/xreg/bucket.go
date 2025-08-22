@@ -103,12 +103,12 @@ func RenewDsort(id string, custom *DsortArgs) RenewRes {
 	)
 }
 
-func RenewBckRename(bckFrom, bckTo *meta.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
-	custom := &BckRenameArgs{
+func RenewBckRename(bckFrom, bckTo *meta.Bck, uuid, phase string) RenewRes {
+	custom := &TCBArgs{
 		Phase:   phase,
-		RebID:   xact.RebID2S(rmdVersion),
 		BckFrom: bckFrom,
 		BckTo:   bckTo,
+		Msg:     &apc.TCBMsg{},
 	}
 	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{Custom: custom, UUID: uuid})
 }

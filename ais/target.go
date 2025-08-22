@@ -541,8 +541,7 @@ func (t *target) runResilver(args *res.Args, wg *sync.WaitGroup) {
 	if wg != nil {
 		wg.Done() // compare w/ xact.GoRunW(()
 	}
-	isRenameBucket := strings.HasPrefix(args.UUID, prefixBckMvResilverID)
-	t.res.RunResilver(args, t.statsT, isRenameBucket)
+	t.res.RunResilver(args, t.statsT)
 }
 
 func (t *target) endStartupStandby() (err error) {

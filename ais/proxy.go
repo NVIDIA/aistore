@@ -2842,13 +2842,6 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) error {
 		nl.SetOwner(equalIC)
 		err := p.notifs.add(nl)
 		debug.AssertNoErr(err)
-
-		if newRMD.Resilver != "" {
-			nl = xact.NewXactNL(newRMD.Resilver, apc.ActResilver, &smap.Smap, nil)
-			nl.SetOwner(equalIC)
-			err := p.notifs.add(nl)
-			debug.AssertNoErr(err)
-		}
 	}
 
 	return nil

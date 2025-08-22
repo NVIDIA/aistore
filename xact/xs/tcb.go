@@ -88,25 +88,33 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *tcbFactory) Start() error {
+	xctn, err := newXactTCB(p.UUID(), p.kind, p.Args.Custom.(*xreg.TCBArgs))
+	if err != nil {
+		return err
+	}
+	p.xctn = xctn
+	return nil
+}
+
+func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	var (
 		smap      = core.T.Sowner().Get()
 		nat       = smap.CountActiveTs()
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // estimate
-		args      = p.Args.Custom.(*xreg.TCBArgs)
+		r         = &XactTCB{args: args}
 		msg       = args.Msg
 	)
 	debug.AssertNoErr(err)
 
-	r := &XactTCB{args: args}
-	r.init(p, slab, config, smap, nat)
+	r.init(uuid, kind, slab, config, smap, nat)
 
 	r.owt = cmn.OwtCopy
-	if p.kind == apc.ActETLBck {
+	if kind == apc.ActETLBck {
 		r.owt = cmn.OwtTransform
 		r.copier.getROC, r.copier.xetl, r.transform, err = etl.GetOfflineTransform(args.Msg.Transform.Name, r)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if r.transform != nil {
 			r.putWOC = r.transform.OfflineWrite
@@ -114,12 +122,12 @@ func (p *tcbFactory) Start() error {
 	}
 
 	if err := core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
-		return err
+		return nil, err
 	}
 
 	// single-node cluster
 	if nat <= 1 {
-		return nil // ---->
+		return r, nil // ---->
 	}
 
 	// - unlike tco and other lrit-based xactions,
@@ -134,7 +142,7 @@ func (p *tcbFactory) Start() error {
 		n := max(msg.NumWorkers, l)
 		numWorkers, err := throttleNwp(r.Name(), n, l)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if n != numWorkers {
 			nlog.Warningln(r.Name(), "throttle num-workers:", numWorkers, "[ from", n, "]")
@@ -155,24 +163,23 @@ func (p *tcbFactory) Start() error {
 	// which also bypassed the multi-worker setup below.
 	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
 	if r.args.DisableDM {
-		return nil
+		return r, nil
 	}
 
 	// data mover and sentinel
 	// TODO: add ETL capability to provide Size(transformed-result)
 	var sizePDU int32
-	if p.kind == apc.ActETLBck {
+	if kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize // `transport` to generate PDU-based traffic
 	}
 	if err := r.newDM(sizePDU); err != nil {
-		return err
+		return nil, err
 	}
 
 	// sentinels, to coordinate finishing, aborting, and progress;
 	// use DM to communicate sentinel opcodes (opDone, opAbort, ...)
 	r.sntl.init(r, smap, nat)
-
-	return nil
+	return r, nil
 }
 
 func (r *XactTCB) _iniNwp(numWorkers int) {
@@ -237,7 +244,7 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) {
+func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config, smap *meta.Smap, nat int) {
 	var (
 		args   = r.args
 		msg    = r.args.Msg
@@ -262,7 +269,7 @@ func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, sma
 	msg.Str(&sb, fromCname, toCname)
 
 	// init base
-	r.BckJog.Init(p.UUID(), p.kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
+	r.BckJog.Init(uuid, kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
 
 	// xname
 	r._name(fromCname, toCname, r.BckJog.NumJoggers())
@@ -292,8 +299,6 @@ func (r *XactTCB) init(p *tcbFactory, slab *memsys.Slab, config *cmn.Config, sma
 		stats.VlabBucket: args.BckFrom.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
-
-	p.xctn = r
 }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {

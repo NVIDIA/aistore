@@ -35,10 +35,7 @@ type (
 		Recover bool
 	}
 	BckRenameArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-		RebID   string
-		Phase   string
+		TCBArgs
 	}
 	MNCArgs struct {
 		Tag    string

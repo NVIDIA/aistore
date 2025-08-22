@@ -292,7 +292,6 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 	if err := j.checkStopped(); err != nil {
 		return err
 	}
-
 	if err := j.visitFQN(fqn, j.buf); err != nil {
 		return err
 	}

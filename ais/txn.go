@@ -107,8 +107,7 @@ type (
 		txnBckBase
 	}
 	txnRenameBucket struct {
-		bckFrom *meta.Bck
-		bckTo   *meta.Bck
+		xbmv *xs.BckRename
 		txnBckBase
 	}
 	txnTCB struct {
@@ -560,9 +559,9 @@ func newTxnSetBucketProps(c *txnSrv, nprops *cmn.Bprops) (txn *txnSetBucketProps
 // txnRenameBucket //
 /////////////////////
 
-func newTxnRenameBucket(c *txnSrv, bckFrom, bckTo *meta.Bck) (txn *txnRenameBucket) {
-	txn = &txnRenameBucket{bckFrom: bckFrom, bckTo: bckTo}
-	txn.init(bckFrom)
+func newTxnRenameBucket(c *txnSrv, xbmv *xs.BckRename) (txn *txnRenameBucket) {
+	txn = &txnRenameBucket{xbmv: xbmv}
+	txn.init(xbmv.Args().BckFrom)
 	txn.fillFromCtx(c)
 	return
 }

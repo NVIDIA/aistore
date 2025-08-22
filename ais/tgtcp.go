@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
-	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
@@ -1029,20 +1028,6 @@ func (t *target) _runRe(newRMD *rebMD, msg *actMsgExt, smap *smapX, oxid string)
 				t.reb.Run(&smap.Smap, &extArgs)
 			}()
 		}
-	}
-
-	if newRMD.Resilver != "" {
-		nlog.Infoln(tname, "... and resilver")
-
-		// (##resilver)
-		args := &res.Args{
-			UUID: newRMD.Resilver,
-			Custom: xreg.ResArgs{
-				Config:            cmn.GCO.Get(),
-				SkipGlobMisplaced: true,
-			},
-		}
-		go t.runResilver(args, nil /*wg*/)
 	}
 
 	t.owner.rmd.put(newRMD)

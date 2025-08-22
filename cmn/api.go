@@ -51,7 +51,7 @@ type (
 		BackendBck  Bck             `json:"backend_bck,omitempty"`            // makes a remote bucket out of a given ais://
 		WritePolicy WritePolicyConf `json:"write_policy"`                     // write object metadata (immediate | delayed | never)
 		Provider    string          `json:"provider" list:"readonly"`         // backend provider
-		Renamed     string          `list:"omit"`                             // non-empty iff the bucket has been renamed
+		Renamed     string          `list:"omit"`                             // DEPRECATED: non-empty iff the bucket has been renamed
 		Cksum       CksumConf       `json:"checksum"`                         // this bucket's checksum (for supported enum, see cmn/cos.cksum)
 		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"` // e.g., AWS.Endpoint for this bucket
 		RateLimit   RateLimitConf   `json:"rate_limit"`                       // frontend and backend rate limiting - bursty and adaptive, respectively

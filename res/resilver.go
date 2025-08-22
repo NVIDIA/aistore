@@ -45,8 +45,7 @@ type (
 		SingleRmiJogger bool
 	}
 	joggerCtx struct {
-		xres           *xs.Resilver
-		isRenameBucket bool
+		xres *xs.Resilver
 	}
 )
 
@@ -76,7 +75,7 @@ func (res *Res) _end() {
 	res.end.Store(mono.NanoTime())
 }
 
-func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater, isRenameBucket bool) {
+func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 	res._begin()
 	defer res._end()
 
@@ -103,20 +102,14 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater, isRenameBucket 
 	var (
 		jg        *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		jctx      = &joggerCtx{
-			xres:           xres,
-			isRenameBucket: isRenameBucket,
-		}
-		opts = &mpather.JgroupOpts{
+		jctx      = &joggerCtx{xres: xres}
+		opts      = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
 			VisitObj: jctx.visitObj,
 			VisitCT:  jctx.visitCT,
 			Slab:     slab,
 		}
 	)
-	if !isRenameBucket {
-		opts.DoLoad = mpather.Load
-	}
 	debug.AssertNoErr(err)
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
@@ -257,9 +250,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		}
 	}
 
-	if jg.isRenameBucket {
-		lom.Lock(true)
-	} else if !lom.TryLock(true) { // NOTE: skipping busy
+	if !lom.TryLock(true) { // NOTE: skipping busy
 		time.Sleep(time.Second >> 1)
 		if !lom.TryLock(true) {
 			return nil
@@ -294,14 +285,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	}
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
-			if err = lom.FixupBID(); err != nil && !cos.IsNotExist(err) {
-				jg.xres.AddErr(err, 0)
-			}
-		}
-		if err != nil {
-			return nil
-		}
+		return nil
 	}
 
 	size = lom.Lsize()
@@ -391,7 +375,7 @@ ret:
 	return nil
 }
 
-func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
+func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
 	if err = lom.Copy(mi, buf); err != nil {
 		return
 	}
@@ -404,11 +388,6 @@ func (jg *joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 
 	// reload; cache iff write-policy != immediate
 	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
-	if cmn.IsErrObjDefunct(err) && jg.isRenameBucket {
-		if err = hlom.FixupBID(); err != nil {
-			jg.xres.AddErr(err, 0)
-		}
-	}
 	return
 }
 

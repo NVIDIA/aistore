@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -301,26 +300,6 @@ func (lom *LOM) Persist() error {
 		return nil
 	}
 
-	lom.UncacheDel()
-	T.FSHC(err, lom.Mountpath(), lom.FQN)
-	return err
-}
-
-// TODO -- FIXME: remove upon completing meta-v1 => meta-v2 transition
-func (lom *LOM) FixupBID() error {
-	debug.Assert(lom.IsLocked() == apc.LockWrite, "must be wlocked: ", lom.Cname())
-	bprops := lom.Bprops()
-	if lom.bid() == bprops.BID {
-		return nil
-	}
-	lom.setbid(bprops.BID)
-	buf := lom.pack()
-	err := lom.SetXattr(buf)
-	g.smm.Free(buf)
-
-	if err == nil {
-		return nil
-	}
 	lom.UncacheDel()
 	T.FSHC(err, lom.Mountpath(), lom.FQN)
 	return err

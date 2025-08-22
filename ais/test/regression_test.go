@@ -277,8 +277,6 @@ func TestRegressionBuckets(t *testing.T) {
 }
 
 func TestRenameBucket(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
-
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName,

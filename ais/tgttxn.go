@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
-	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -451,8 +450,19 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 			nlpFrom.Unlock()
 			return "", cmn.NewErrBusy("bucket", bckTo.Cname(""))
 		}
-		txn := newTxnRenameBucket(c, bckFrom, bckTo)
+		rns := xreg.RenewBckRename(bckFrom, bckTo, c.uuid, apc.Begin2PC)
+		if rns.Err != nil {
+			nlpFrom.Unlock()
+			nlpTo.Unlock()
+			return "", rns.Err
+		}
+		xctn := rns.Entry.Get()
+		xbmv, ok := xctn.(*xs.BckRename)
+		debug.Assert(ok)
+		txn := newTxnRenameBucket(c, xbmv)
 		if err := t.txns.begin(txn, nlpFrom, nlpTo); err != nil {
+			nlpFrom.Unlock()
+			nlpTo.Unlock()
 			return "", err
 		}
 	case apc.Abort2PC:
@@ -470,21 +480,25 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 		if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		rns := xreg.RenewBckRename(txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.Commit2PC)
+
+		custom := txnRenB.xbmv.Args()
+		if custom.Phase != apc.Begin2PC {
+			err = fmt.Errorf("%s: %s is already running", t, txnRenB.xbmv) // never here
+			nlog.Errorln(err)
+			return "", err
+		}
+		custom.Phase = apc.Commit2PC
+
+		rns := xreg.RenewBckRename(txnRenB.xbmv.Args().BckFrom, txnRenB.xbmv.Args().BckTo, c.uuid, apc.Commit2PC)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
-		err = fs.RenameBucketDirs(txnRenB.bckFrom.Bucket(), txnRenB.bckTo.Bucket())
-		if err != nil {
-			return "", err // ditto
-		}
+		debug.Assert(xctn.ID() == txnRenB.xbmv.ID())
+
 		c.addNotif(xctn) // notify upon completion
-
-		reb.OnTimedGFN()
-		xact.GoRunW(xctn) // run and wait until it starts running
-
+		xact.GoRunW(xctn)
 		return xctn.ID(), nil
 	}
 	return "", nil

@@ -37,7 +37,7 @@ const (
 const (
 	MetaverSmap  = 2 // Smap (cluster map) formatting version a.k.a. meta-version (see core/meta/jsp.go)
 	MetaverBMD   = 2 // BMD (bucket metadata) --/--
-	MetaverRMD   = 1 // Rebalance MD (jsp)
+	MetaverRMD   = 2 // Rebalance MD (jsp)
 	MetaverVMD   = 2 // Volume MD (jsp)
 	MetaverEtlMD = 2 // ETL MD (jsp)
 

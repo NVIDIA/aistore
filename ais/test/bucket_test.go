@@ -1925,7 +1925,6 @@ func TestBucketReadOnly(t *testing.T) {
 }
 
 func TestRenameBucketEmpty(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t: t,
@@ -2088,11 +2087,12 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 
 // Tries to rename same source bucket to two destination buckets - the second should fail.
 func TestRenameBucketTwice(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: false})
 	var (
 		m = ioContext{
-			t:   t,
-			num: 500,
+			t:        t,
+			num:      500,
+			fileSize: 64 * cos.KiB,
 		}
 		baseParams = tools.BaseAPIParams()
 		dstBck1    = cmn.Bck{
@@ -2105,12 +2105,12 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveState(true /*cleanup*/)
+	m.initAndSaveState(false /*cleanup*/)
 	m.proxyURL = tools.RandomProxyURL(t)
 	m.expectTargets(1)
 
 	srcBck := m.bck
-	tools.CreateBucket(t, m.proxyURL, srcBck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, m.proxyURL, srcBck, nil, false /*cleanup*/)
 	defer func() {
 		// This bucket should not be present (thus ignoring error) but
 		// try to delete in case something failed.
@@ -2120,6 +2120,16 @@ func TestRenameBucketTwice(t *testing.T) {
 	}()
 
 	m.puts()
+
+	// Get bucket summary before rename for validation
+	var srcSummary *cmn.BsummResult
+	msg := &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	_, summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(srcBck), msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(summaries) > 0, "source bucket summary not found")
+	srcSummary = summaries[0]
+	tlog.Logf("Source bucket summary: %d objects, %d bytes\n",
+		srcSummary.ObjCount.Present, srcSummary.TotalSize.PresentObjs)
 
 	// Rename to first destination
 	tlog.Logf("rename %s => %s\n", srcBck.String(), dstBck1.String())
@@ -2133,6 +2143,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	// Try to rename to first destination again - already in progress
 	tlog.Logf("try renaming %s => %s\n", srcBck.String(), dstBck1.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	tlog.Logf("error: %v\n", err)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
 	}
@@ -2140,6 +2151,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	// Try to rename to second destination - this should fail
 	tlog.Logf("try rename %s => %s\n", srcBck.String(), dstBck2.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
+	tlog.Logf("error: %v\n", err)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
 	}
@@ -2162,6 +2174,136 @@ func TestRenameBucketTwice(t *testing.T) {
 	if tools.BucketsContain(bcks, cmn.QueryBcks(dstBck2)) {
 		t.Error("second (failed) destination bucket found in buckets list")
 	}
+
+	tlog.Logln("validating objects in renamed bucket...")
+	m.bck = dstBck1   // Update context to renamed bucket
+	m.gets(nil, true) // GET all objects with checksum validation
+	m.ensureNoGetErrors()
+
+	// Validate bucket summary matches original
+	msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
+	_, dstSummaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(dstBck1), msg, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(dstSummaries) > 0, "destination bucket summary not found")
+
+	dstSummary := dstSummaries[0]
+	tlog.Logf("Destination bucket summary: %d objects, %d bytes\n",
+		dstSummary.ObjCount.Present, dstSummary.TotalSize.PresentObjs)
+
+	// Compare key summary metrics
+	tassert.Fatalf(t, srcSummary.ObjCount.Present == dstSummary.ObjCount.Present,
+		"Object count mismatch: source=%d, destination=%d",
+		srcSummary.ObjCount.Present, dstSummary.ObjCount.Present)
+	tassert.Fatalf(t, srcSummary.TotalSize.PresentObjs == dstSummary.TotalSize.PresentObjs,
+		"Total size mismatch: source=%d, destination=%d",
+		srcSummary.TotalSize.PresentObjs, dstSummary.TotalSize.PresentObjs)
+	tassert.Fatalf(t, srcSummary.ObjSize.Min == dstSummary.ObjSize.Min &&
+		srcSummary.ObjSize.Max == dstSummary.ObjSize.Max &&
+		srcSummary.ObjSize.Avg == dstSummary.ObjSize.Avg,
+		"Object size stats mismatch: source={min:%d,avg:%d,max:%d}, destination={min:%d,avg:%d,max:%d}",
+		srcSummary.ObjSize.Min, srcSummary.ObjSize.Avg, srcSummary.ObjSize.Max,
+		dstSummary.ObjSize.Min, dstSummary.ObjSize.Avg, dstSummary.ObjSize.Max)
+	tlog.Logln("bucket summary validation: PASSED")
+}
+
+func TestRenameBucketAbort(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	var (
+		m = ioContext{
+			t:        t,
+			num:      5000, // Large bucket to allow time for abort
+			fileSize: 64 * cos.KiB,
+		}
+		baseParams = tools.BaseAPIParams()
+		dstBck     = cmn.Bck{
+			Name:     testBucketName + "_abort_dst",
+			Provider: apc.AIS,
+		}
+	)
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.proxyURL = tools.RandomProxyURL(t)
+	m.expectTargets(1)
+
+	srcBck := m.bck
+	tools.CreateBucket(t, m.proxyURL, srcBck, nil, true /*cleanup*/)
+
+	m.puts()
+
+	// Get bucket summary before rename for validation
+	_, summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(srcBck), &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true, UUID: ""}, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(summaries) > 0, "source bucket summary not found")
+	srcSummary := summaries[0]
+	tlog.Logf("Source bucket summary before rename: %d objects, %d bytes\n",
+		srcSummary.ObjCount.Present, srcSummary.TotalSize.PresentObjs)
+
+	// Start rename operation
+	tlog.Logf("Starting rename %s => %s\n", srcBck.String(), dstBck.String())
+	xid, err := api.RenameBucket(baseParams, srcBck, dstBck)
+	tassert.CheckFatal(t, err)
+
+	// Immediately abort the rename operation
+	tlog.Logf("Aborting rename operation %s\n", xid)
+	err = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid})
+	tassert.CheckFatal(t, err)
+
+	// Wait for abort to complete
+	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
+	tassert.CheckFatal(t, err)
+	aborted, finished := _isAbortedOrFinished(xid, snaps)
+	tassert.Fatalf(t, aborted || finished, "expecting rename operation %q to abort or finish", xid)
+
+	if finished {
+		tlog.Logf("Rename operation %s finished before abort\n", xid)
+	} else {
+		tlog.Logf("Rename operation %s successfully aborted\n", xid)
+	}
+
+	// Validate destination bucket was not created
+	err = tools.WaitForCondition(
+		func() bool {
+			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
+			tassert.CheckError(t, err)
+			return !tools.BucketsContain(bcks, cmn.QueryBcks(dstBck))
+		}, tools.DefaultWaitRetry,
+	)
+	if aborted {
+		tassert.Fatalf(t, err == nil, "when aborted, should not contain destination bucket %s", dstBck.String())
+	}
+	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(srcBck), apc.FltExists)
+	tassert.CheckFatal(t, err)
+
+	// Validate source bucket still exists
+	tassert.Fatalf(t, tools.BucketsContain(bcks, cmn.QueryBcks(srcBck)),
+		"source bucket %s should still exist after aborted rename", srcBck.String())
+
+	// Validate source bucket summary remains unchanged
+	_, summariesAfter, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(srcBck), &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true, UUID: ""}, api.BsummArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(summariesAfter) > 0, "source bucket summary not found after abort")
+
+	srcSummaryAfter := summariesAfter[0]
+	tlog.Logf("Source bucket summary after aborted rename: %d objects, %d bytes\n",
+		srcSummaryAfter.ObjCount.Present, srcSummaryAfter.TotalSize.PresentObjs)
+
+	// Compare summaries to ensure they are identical
+	tassert.Fatalf(t, srcSummary.ObjCount.Present == srcSummaryAfter.ObjCount.Present,
+		"Object count changed after abort: before=%d, after=%d",
+		srcSummary.ObjCount.Present, srcSummaryAfter.ObjCount.Present)
+	tassert.Fatalf(t, srcSummary.TotalSize.PresentObjs == srcSummaryAfter.TotalSize.PresentObjs,
+		"Total size changed after abort: before=%d, after=%d",
+		srcSummary.TotalSize.PresentObjs, srcSummaryAfter.TotalSize.PresentObjs)
+	tassert.Fatalf(t, srcSummary.ObjSize.Min == srcSummaryAfter.ObjSize.Min &&
+		srcSummary.ObjSize.Max == srcSummaryAfter.ObjSize.Max &&
+		srcSummary.ObjSize.Avg == srcSummaryAfter.ObjSize.Avg,
+		"Object size stats changed after abort: before={min:%d,avg:%d,max:%d}, after={min:%d,avg:%d,max:%d}",
+		srcSummary.ObjSize.Min, srcSummary.ObjSize.Avg, srcSummary.ObjSize.Max,
+		srcSummaryAfter.ObjSize.Min, srcSummaryAfter.ObjSize.Avg, srcSummaryAfter.ObjSize.Max)
+
+	tlog.Logln("Bucket rename abort test: PASSED")
+	tlog.Logln("- Destination bucket was not created")
+	tlog.Logln("- Source bucket remains intact with identical summary")
 }
 
 func TestRenameBucketNonExistentSrc(t *testing.T) {

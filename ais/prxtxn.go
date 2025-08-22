@@ -500,15 +500,8 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 	return nil
 }
 
-const (
-	prefixBckMvResilverID = apc.ActMoveBck + "-"
-)
-
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
-	if err := p.canRebalance(); err != nil {
-		return "", cmn.NewErrFailedTo(p, "rename", bckFrom, err)
-	}
 	// 1. confirm existence & non-existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -545,28 +538,15 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	}
 	c.msg.BMDVersion = bmd.version()
 
-	// 4. ditto, RMD
-	ctx := &rmdModifier{
-		pre: func(_ *rmdModifier, clone *rebMD) {
-			clone.inc()
-			clone.Resilver = prefixBckMvResilverID + cos.GenUUID()
-		},
-		smapCtx: &smapModifier{smap: p.owner.smap.get()},
-	}
-
-	rmd, err := p.owner.rmd.modify(ctx)
-	if err != nil {
-		nlog.Errorln(err)
-		debug.AssertNoErr(err)
-	}
-	c.msg.RMDVersion = rmd.version()
-
-	// 5. IC
+	// 4. IC
 	nl := xact.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bucket(), bckTo.Bucket())
 	nl.SetOwner(equalIC)
-	p.ic.registerEqual(regIC{smap: c.smap, nl: nl, query: c.req.Query})
+	// add success/abort cleanup via notifications
+	r := &_brenameFinalizer{p, bckFrom, bckTo}
+	nl.F = r.cb
+	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
-	// 6. commit
+	// 5. commit
 	c.req.Body = cos.MustMarshal(c.msg)
 	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
@@ -575,21 +555,6 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 		return "", err
 	}
 
-	// 6. start rebalance and resilver
-	wg := p.metasyncer.sync(revsPair{rmd, c.msg})
-
-	// Register rebalance `nl`
-	nl = xact.NewXactNL(xact.RebID2S(rmd.Version), apc.ActRebalance, &c.smap.Smap, nil)
-	nl.SetOwner(equalIC)
-	err = p.notifs.add(nl)
-	debug.AssertNoErr(err)
-
-	// Register resilver `nl`
-	nl = xact.NewXactNL(rmd.Resilver, apc.ActResilver, &c.smap.Smap, nil)
-	nl.SetOwner(equalIC)
-	_ = p.notifs.add(nl)
-
-	wg.Wait()
 	return xid, nil
 }
 
@@ -1191,6 +1156,29 @@ func (p *proxy) initBackendProp(nprops *cmn.Bprops) (err error) {
 	// NOTE: backend versioning override
 	nprops.Versioning.Enabled = backend.Props.Versioning.Enabled
 	return
+}
+
+///////////////////////
+// _brenameFinalizer //
+///////////////////////
+
+type _brenameFinalizer struct {
+	p              *proxy
+	bckFrom, bckTo *meta.Bck
+}
+
+func (f *_brenameFinalizer) cb(nl nl.Listener) {
+	var (
+		err     = nl.Err()
+		aborted = nl.Aborted()
+	)
+	if aborted {
+		nlog.Warningln("abort:", err)
+		_ = f.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, f.bckTo)
+	} else {
+		nlog.Infoln("rename bucket success, destroying source bucket", f.bckFrom.Cname(""))
+		_ = f.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, f.bckFrom)
+	}
 }
 
 /////////////
