@@ -52,6 +52,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		// Register content resolvers
 		fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 		fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
+		fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
 	})
 
 	AfterEach(func() {
@@ -205,17 +206,6 @@ var _ = Describe("Ufest Core Functionality", func() {
 			retrievedChunk := manifest.GetChunk(1, false)
 			Expect(retrievedChunk.Path).To(Equal("/tmp/replacement_chunk"))
 			Expect(retrievedChunk.Siz).To(Equal(int64(2 * cos.MiB)))
-		})
-
-		It("should reject chunks exceeding size limit", func() {
-			oversizedChunk := &core.Uchunk{
-				Path: "/tmp/huge_chunk",
-			}
-			oversizedChunkSize := int64(6 * cos.GiB) // Exceeds maxChunkSize (5 GiB)
-
-			err := manifest.Add(oversizedChunk, oversizedChunkSize, 1)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("exceeds"))
 		})
 
 		It("should reject chunks with invalid numbers", func() {

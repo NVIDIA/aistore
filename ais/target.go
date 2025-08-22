@@ -397,6 +397,7 @@ func (t *target) Run() error {
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{})
+	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{})
 
 	t.ups.t = t
 

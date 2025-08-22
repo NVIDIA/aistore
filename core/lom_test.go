@@ -72,6 +72,7 @@ var _ = Describe("LOM", func() {
 	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 	fs.CSM.Reg(fs.ObjChunkType, &fs.ObjChunkContentResolver{}, true)
+	fs.CSM.Reg(fs.ObjCMType, &fs.ObjCMContentResolver{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(

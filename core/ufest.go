@@ -46,13 +46,12 @@ const (
 	umetaver = 1
 )
 
-// assorted
 const (
-	chunkNameSepa = "."
+	iniChunksCap = 32
+)
 
-	iniChunksCap = 16
-
-	maxChunkSize = 5 * cos.GiB
+const (
+	fmtChunkNum = "%04d" // 0001..9999 are zero-padded for lexicographic order; >=10000 uses raw num - update when needed
 )
 
 // single flag so far
@@ -95,7 +94,6 @@ type (
 		// runtime state
 		Lom       *LOM
 		Size      int64
-		suffix    string
 		completed atomic.Bool
 		mu        sync.Mutex
 	}
@@ -116,7 +114,6 @@ func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
 		Created: now,
 		Chunks:  make([]Uchunk, 0, iniChunksCap),
 		Lom:     lom,
-		suffix:  chunkNameSepa + id + chunkNameSepa,
 	}
 }
 
@@ -129,9 +126,6 @@ func (u *Ufest) Unlock() { u.mu.Unlock() }
 func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	if num <= 0 {
 		return fmt.Errorf("%s: invalid chunk number: %d (must be > 0)", utag, num)
-	}
-	if size > maxChunkSize {
-		return fmt.Errorf("%s [add] chunk size %d exceeds %d limit", utag, size, maxChunkSize)
 	}
 	c.Siz = size
 	if num > math.MaxUint16 || len(u.Chunks) >= math.MaxUint16 {
@@ -216,9 +210,11 @@ func (u *Ufest) ChunkName(num int) (string, error) {
 	}
 	var (
 		contentResolver = fs.CSM.Resolver(fs.ObjChunkType)
-		suffix          = u.suffix + fmt.Sprintf("%04d", num)
-		chname          = contentResolver.GenUniqueFQN(lom.ObjName, suffix)
+		chname          = contentResolver.GenUniqueFQN(lom.ObjName, u.ID, fmt.Sprintf(fmtChunkNum, num))
 	)
+	if num > 9999 {
+		chname = contentResolver.GenUniqueFQN(lom.ObjName, u.ID, strconv.Itoa(num))
+	}
 	if num == 1 {
 		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ObjChunkType, chname), nil
 	}

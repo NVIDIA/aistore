@@ -127,12 +127,6 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if partNum < 1 || partNum > maxPartsPerUpload {
-		err := fmt.Errorf("upload %q: invalid part number %d, must be between 1 and %d",
-			uploadID, partNum, maxPartsPerUpload)
-		s3.WriteErr(w, r, err, 0)
-		return
-	}
 
 	// 2. init lom, load/create chunk manifest
 	objName := s3.ObjName(items)

@@ -23,7 +23,7 @@ var _ fs.ContentResolver = (*DsortFile)(nil)
 
 type DsortFile struct{}
 
-func (*DsortFile) GenUniqueFQN(base, _ string) string { return base }
+func (*DsortFile) GenUniqueFQN(base string, _ ...string) string { return base }
 
 func (*DsortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true

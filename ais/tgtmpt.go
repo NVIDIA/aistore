@@ -26,11 +26,6 @@ const (
 	iniCapUploads = 8
 )
 
-// see also: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
-const (
-	maxPartsPerUpload = 9999 // 64K limited (compressed) unless (e.g.) `mkfs.xfs -m attr=128k /dev/sdX`
-)
-
 type (
 	up struct {
 		u   *core.Ufest
@@ -222,8 +217,12 @@ func (*ups) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md 
 
 func (*ups) parsePartNum(s string) (int32, error) {
 	partNum, err := strconv.ParseInt(s, 10, 32)
-	if err != nil {
-		err = fmt.Errorf("invalid part number %q (must be in 1-%d range): %v", s, maxPartsPerUpload, err)
+	switch {
+	case err != nil:
+		return 0, fmt.Errorf("invalid part number %q: %v", s, err)
+	case partNum < 1:
+		return 0, fmt.Errorf("part number must be a positive integer, got: %d", partNum)
+	default:
+		return int32(partNum), nil
 	}
-	return int32(partNum), err
 }
