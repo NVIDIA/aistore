@@ -447,7 +447,7 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECSliceCT)
+	ct, err := core.NewCTFromBO(meta.CloneBck(&hdr.Bck), hdr.ObjName, fs.ECSliceCT)
 	if err != nil {
 		return err
 	}
@@ -490,7 +490,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	lom.Lock(false)
 	if args.Generation != 0 {
-		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
+		ctMeta := core.LOM2CT(lom, fs.ECMetaCT)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
 			return nil
@@ -507,7 +507,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	}
 
 	// meta
-	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
+	ctMeta := core.LOM2CT(lom, fs.ECMetaCT)
 	ctMeta.Lock(true)
 	err := ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/)
 	if err == nil {

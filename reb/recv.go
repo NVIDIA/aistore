@@ -367,7 +367,7 @@ func (reb *Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err 
 // Receive MD update. Handling includes partially updating local information:
 // only the list of daemons and the _main_ target.
 func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
-	ctMeta, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECMetaCT)
+	ctMeta, err := core.NewCTFromBO(meta.CloneBck(&hdr.Bck), hdr.ObjName, fs.ECMetaCT)
 	if err != nil {
 		return err
 	}
@@ -389,7 +389,7 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 }
 
 func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
-	ct, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECSliceCT)
+	ct, err := core.NewCTFromBO(meta.CloneBck(&hdr.Bck), hdr.ObjName, fs.ECSliceCT)
 	if err != nil {
 		return err
 	}

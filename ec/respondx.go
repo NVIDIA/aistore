@@ -111,7 +111,7 @@ func (*XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 		nlog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
-	ct, err := core.NewCTFromBO(bck.Bucket(), objName, core.T.Bowner(), fs.ECSliceCT)
+	ct, err := core.NewCTFromBO(bck, objName, fs.ECSliceCT)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		nlog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := core.NewCTFromBO(bck.Bucket(), objName, core.T.Bowner(), fs.ECSliceCT)
+		ct, err := core.NewCTFromBO(bck, objName, fs.ECSliceCT)
 		if err != nil {
 			return err
 		}

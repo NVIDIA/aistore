@@ -426,7 +426,7 @@ func (ds *dsorterMem) connectOrSend(rec *shard.Record, obj *shard.RecordObj, tsi
 		fullContentPath = ds.m.recm.FullContentPath(obj)
 	)
 
-	ct, err := core.NewCTFromBO(&ds.m.Pars.OutputBck, fullContentPath, nil)
+	ct, err := core.NewCTObjCT(&ds.m.Pars.OutputBck, fullContentPath)
 	if err != nil {
 		return err
 	}

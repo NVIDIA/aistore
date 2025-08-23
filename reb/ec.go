@@ -248,7 +248,7 @@ func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
 	if _, ok := req.md.Daemons[core.T.SID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := core.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), core.T.Bowner(), fs.ECMetaCT)
+	mdCT, err := core.NewCTFromBO(ct.Bck(), ct.ObjectName(), fs.ECMetaCT)
 	if err != nil {
 		return nil, err
 	}

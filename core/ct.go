@@ -114,32 +114,36 @@ func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	return ct, err
 }
 
-func NewCTFromBO(bck *cmn.Bck, objName string, b meta.Bowner, ctType ...string) (ct *CT, err error) {
-	ct = &CT{objName: objName, bck: meta.CloneBck(bck)}
-	if b != nil {
-		if err = ct.bck.Init(b); err != nil {
-			return
-		}
-	}
-	var digest uint64
-	ct.mi, digest, err = fs.Hrw(ct.bck.MakeUname(objName))
-	if err != nil {
-		return
-	}
-	ct.digest = digest
-	if len(ctType) == 0 {
-		ct.contentType = fs.ObjCT
-	} else {
-		ct.contentType = ctType[0]
-	}
-	ct.fqn = fs.CSM.Gen(ct, ct.contentType, "")
+// FIXME: obsolete, dsort only
+func NewCTObjCT(bck *cmn.Bck, objName string) (ct *CT, err error) {
+	ct = &CT{objName: objName, bck: meta.CloneBck(bck), contentType: fs.ObjCT}
+	err = ct.init()
 	return
 }
 
-// Construct CT from LOM and change ContentType and FQN
-func NewCTFromLOM(lom *LOM, ctType string) *CT {
+func NewCTFromBO(bck *meta.Bck, objName, ctType string, extras ...string) (ct *CT, err error) {
+	ct = &CT{objName: objName, bck: bck, contentType: ctType}
+	if err = ct.bck.Init(T.Bowner()); err != nil {
+		return
+	}
+	err = ct.init(extras...)
+	return
+}
+
+func (ct *CT) init(extras ...string) error {
+	var digest uint64
+	mi, digest, err := fs.Hrw(ct.bck.MakeUname(ct.objName))
+	if err != nil {
+		return err
+	}
+	ct.mi, ct.digest = mi, digest
+	ct.fqn = fs.CSM.Gen(ct, ct.contentType, extras...)
+	return nil
+}
+
+func LOM2CT(lom *LOM, ctType string, extras ...string) *CT {
 	return &CT{
-		fqn:         fs.CSM.Gen(lom, ctType, ""),
+		fqn:         fs.CSM.Gen(lom, ctType, extras...),
 		objName:     lom.ObjName,
 		contentType: ctType,
 		bck:         lom.Bck(),

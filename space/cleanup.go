@@ -516,7 +516,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		// misplaced EC
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaCT, "")
 		if cos.Stat(metaFQN) != nil {
-			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjCT))
+			j.misplaced.ec = append(j.misplaced.ec, core.LOM2CT(lom, fs.ObjCT))
 		}
 	} else {
 		// misplaced object

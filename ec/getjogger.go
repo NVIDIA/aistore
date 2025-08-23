@@ -332,7 +332,7 @@ loop: //nolint:gocritic // keeping label for readability
 	}
 
 	b := cos.MustMarshal(ctx.meta)
-	ctMeta := core.NewCTFromLOM(ctx.lom, fs.ECMetaCT)
+	ctMeta := core.LOM2CT(ctx.lom, fs.ECMetaCT)
 	if err := ctMeta.Write(bytes.NewReader(b), -1, "" /*work fqn*/); err != nil {
 		return err
 	}
@@ -869,7 +869,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		wg     = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 8)
 		mtx    = &sync.Mutex{}
 		tmap   = core.T.Sowner().Get().Tmap
-		ctMeta = core.NewCTFromLOM(ctx.lom, fs.ECMetaCT)
+		ctMeta = core.LOM2CT(ctx.lom, fs.ECMetaCT)
 
 		md, err  = LoadMetadata(ctMeta.FQN())
 		mdExists = err == nil && len(md.Daemons) != 0
