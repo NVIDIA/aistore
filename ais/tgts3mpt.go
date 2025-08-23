@@ -144,7 +144,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	}
 
 	// Generate chunk file path
-	chunkPath, err := manifest.ChunkName(int(partNum))
+	chunkPath, err := manifest.ChunkFQN(int(partNum))
 	if err != nil {
 		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
@@ -361,9 +361,9 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	nparts := make([]*core.Uchunk, numParts)
 	for i := range numParts {
 		c := &manifest.Chunks[i]
-		if c.Num != uint16(i+1) {
+		if c.Num() != uint16(i+1) {
 			manifest.Unlock()
-			s3.WriteMptErr(w, r, fmt.Errorf("missing or out-of-order part %d (found %d)", i+1, c.Num), 0, lom, uploadID)
+			s3.WriteMptErr(w, r, fmt.Errorf("missing or out-of-order part %d (found %d)", i+1, c.Num()), 0, lom, uploadID)
 			return
 		}
 		nparts[i] = c
@@ -587,7 +587,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 	defer cos.Close(fh)
 
-	buf, slab := t.gmm.AllocSize(chunk.Siz)
+	buf, slab := t.gmm.AllocSize(chunk.Size())
 	defer slab.Free(buf)
 
 	if _, err := io.CopyBuffer(w, fh, buf); err != nil {
@@ -597,7 +597,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
 	t.statsT.IncWith(stats.GetCount, vlabs)
 	t.statsT.AddWith(
-		cos.NamedVal64{Name: stats.GetSize, Value: chunk.Siz, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.GetSize, Value: chunk.Size(), VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.GetLatencyTotal, Value: mono.SinceNano(startTime), VarLabs: vlabs},
 	)
 }

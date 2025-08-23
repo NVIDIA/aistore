@@ -71,8 +71,12 @@ func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]str
 	return
 }
 
-// NOTE: must be called with ups unlocked
+// NOTE: must be called with ups and lom both unlocked
 func (ups *ups) fromFS(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
+	debug.Assert(lom.IsLocked() == apc.LockNone, "expecting not locked: ", lom.Cname())
+
+	lom.Lock(false)
+	defer lom.Unlock(false)
 	manifest = core.NewUfest(id, lom, true /*must-exist*/)
 	if err = manifest.Load(lom); err == nil && add {
 		ups.Lock()

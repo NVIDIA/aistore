@@ -92,12 +92,6 @@ func (lom *LOM) Open() (lh cos.LomReader, err error) {
 	if lom.IsChunked() {
 		lh, err = lom.NewUfestReader()
 	} else {
-		// TODO: remove after a while
-		debug.AssertFunc(func() bool {
-			buf := make([]byte, xattrChunkMax)
-			_, xerr := lom.getXchunk(buf)
-			return xerr != nil
-		})
 		lh, err = os.Open(lom.FQN)
 	}
 	switch {

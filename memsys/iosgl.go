@@ -386,7 +386,7 @@ func (z *SGL) Free() {
 // NOTE assert and use with caution: heap allocation (via ReadAll)
 // is intended for tests (and only tests)
 func (z *SGL) Bytes() (b []byte) {
-	cos.Assert(z.roff == 0)
+	debug.Assert(z.roff == 0)
 	if z.woff >= z.slab.Size() {
 		b = z.ReadAll()
 		return

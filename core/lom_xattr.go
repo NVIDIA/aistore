@@ -232,11 +232,6 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 		return nil, fmt.Errorf("%s: unknown LOM meta-version %d", badLmeta, metaver)
 	}
 
-	// TODO: remove
-	debug.Assertf(md.lid.haslmfl(lmflChunk) == fs.HasXattr(lom.FQN, xattrChunk),
-		"lmflChunk %t != %t manifest",
-		md.lid.haslmfl(lmflChunk), fs.HasXattr(lom.FQN, xattrChunk))
-
 	_mdsize(size, mdSize)
 	return md, nil
 }

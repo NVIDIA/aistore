@@ -121,8 +121,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			retrievedChunk := manifest.GetChunk(1, false)
 			Expect(retrievedChunk).NotTo(BeNil())
 			Expect(retrievedChunk.Path).To(Equal(chunkPath))
-			Expect(retrievedChunk.Siz).To(Equal(chunkSize))
-			Expect(retrievedChunk.Num).To(Equal(uint16(1)))
+			Expect(retrievedChunk.Size()).To(Equal(chunkSize))
+			Expect(retrievedChunk.Num()).To(Equal(uint16(1)))
 		})
 
 		It("should add multiple chunks in order", func() {
@@ -151,7 +151,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 				retrievedChunk := manifest.GetChunk(uint16(c.num), false)
 				Expect(retrievedChunk).NotTo(BeNil())
 				Expect(retrievedChunk.Path).To(Equal(c.path))
-				Expect(retrievedChunk.Siz).To(Equal(c.size))
+				Expect(retrievedChunk.Size()).To(Equal(c.size))
 			}
 		})
 
@@ -205,7 +205,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			// Verify replacement
 			retrievedChunk := manifest.GetChunk(1, false)
 			Expect(retrievedChunk.Path).To(Equal("/tmp/replacement_chunk"))
-			Expect(retrievedChunk.Siz).To(Equal(int64(2 * cos.MiB)))
+			Expect(retrievedChunk.Size()).To(Equal(int64(2 * cos.MiB)))
 		})
 
 		It("should reject chunks with invalid numbers", func() {
@@ -244,7 +244,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			for i := 1; i <= numWorkers; i++ {
 				chunk := manifest.GetChunk(uint16(i), false)
 				Expect(chunk).NotTo(BeNil())
-				Expect(chunk.Num).To(Equal(uint16(i)))
+				Expect(chunk.Num()).To(Equal(uint16(i)))
 			}
 		})
 	})
@@ -272,7 +272,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		It("should retrieve existing chunks", func() {
 			chunk := manifest.GetChunk(2, false)
 			Expect(chunk).NotTo(BeNil())
-			Expect(chunk.Num).To(Equal(uint16(2)))
+			Expect(chunk.Num()).To(Equal(uint16(2)))
 			Expect(chunk.Path).To(Equal("/tmp/chunk2"))
 		})
 
@@ -288,11 +288,11 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			Expect(chunk1).NotTo(BeNil())
 			Expect(chunk2).NotTo(BeNil())
-			Expect(chunk1.Num).To(Equal(chunk2.Num))
+			Expect(chunk1.Num()).To(Equal(chunk2.Num()))
 		})
 	})
 
-	Describe("ChunkName Method - HRW Distribution", func() {
+	Describe("ChunkFQN Method - HRW Distribution", func() {
 		var manifest *core.Ufest
 
 		BeforeEach(func() {
@@ -303,31 +303,31 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should generate chunk names for valid numbers", func() {
-			chunkName1, err := manifest.ChunkName(1)
+			chunkFQN1, err := manifest.ChunkFQN(1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkName1).NotTo(BeEmpty())
+			Expect(chunkFQN1).NotTo(BeEmpty())
 
-			chunkName2, err := manifest.ChunkName(2)
+			chunkFQN2, err := manifest.ChunkFQN(2)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(chunkName2).NotTo(BeEmpty())
+			Expect(chunkFQN2).NotTo(BeEmpty())
 
 			// Names should be different
-			Expect(chunkName1).NotTo(Equal(chunkName2))
+			Expect(chunkFQN1).NotTo(Equal(chunkFQN2))
 		})
 
 		It("should reject invalid chunk numbers", func() {
-			_, err := manifest.ChunkName(0)
+			_, err := manifest.ChunkFQN(0)
 			Expect(err).To(HaveOccurred())
 
-			_, err = manifest.ChunkName(-1)
+			_, err = manifest.ChunkFQN(-1)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should generate unique names for different upload IDs", func() {
 			manifest2 := core.NewUfest("different-id", manifest.Lom, false)
 
-			name1, err1 := manifest.ChunkName(1)
-			name2, err2 := manifest2.ChunkName(1)
+			name1, err1 := manifest.ChunkFQN(1)
+			name2, err2 := manifest2.ChunkFQN(1)
 
 			Expect(err1).NotTo(HaveOccurred())
 			Expect(err2).NotTo(HaveOccurred())
@@ -431,10 +431,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(manifest.Completed()).To(BeFalse())
 
 			clone := core.NewUfest(manifest.ID, nil, true)
-			err = clone.Add(chunk, chunk.Siz, 1)
+			err = clone.Add(chunk, chunk.Size(), 1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = clone.LoadPartial(lom)
+			lom.Lock(false)
+			defer lom.Unlock(false)
+			err = clone.Load(lom)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clone.Completed()).To(BeFalse())
 		})
@@ -460,6 +462,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 				totalSize += size
 			}
 
+			lom.Lock(true)
 			lom.SetSize(totalSize)
 
 			err := manifest.StoreCompleted(lom, true) // testing=true to avoid file operations
@@ -469,6 +472,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			loadedManifest := core.NewUfest("", lom, true) // mustExist=true for loading
 			err = loadedManifest.Load(lom)
 			Expect(err).NotTo(HaveOccurred())
+			lom.Unlock(true)
 
 			Expect(loadedManifest.ID).To(Equal(manifest.ID))
 			Expect(loadedManifest.Completed()).To(BeTrue())
@@ -479,9 +483,9 @@ var _ = Describe("Ufest Core Functionality", func() {
 				loadedChunk := loadedManifest.GetChunk(uint16(i), false)
 
 				Expect(loadedChunk).NotTo(BeNil())
-				Expect(loadedChunk.Num).To(Equal(originalChunk.Num))
+				Expect(loadedChunk.Num()).To(Equal(originalChunk.Num()))
 				Expect(loadedChunk.Path).To(Equal(originalChunk.Path))
-				Expect(loadedChunk.Siz).To(Equal(originalChunk.Siz))
+				Expect(loadedChunk.Size()).To(Equal(originalChunk.Size()))
 				Expect(loadedChunk.MD5).To(Equal(originalChunk.MD5))
 			}
 		})
@@ -502,6 +506,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 		It("should fail to load non-existent manifest", func() {
 			// Try to load from LOM that has no stored manifest xattr
+			lom.Lock(false)
+			defer lom.Unlock(false)
 			loadManifest := core.NewUfest("", lom, true) // mustExist=true
 			err := loadManifest.Load(lom)
 			Expect(err).To(HaveOccurred())
@@ -516,6 +522,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
+			lom.Lock(true)
 			lom.SetSize(cos.MiB)
 			err = manifest.StoreCompleted(lom, true) // testing=true
 			Expect(err).NotTo(HaveOccurred())
@@ -524,6 +531,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			corruptManifest := core.NewUfest("", lom, true)
 			err = corruptManifest.Load(lom)
 			Expect(err).NotTo(HaveOccurred()) // Should succeed with valid data
+			lom.Unlock(true)
 
 			// TODO: add actual corruption testing when we have access to xattr manipulation
 		})
@@ -550,6 +558,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
+			lom.Lock(true)
+			defer lom.Unlock(true)
 			lom.SetSize(cos.MiB)
 			err = manifest.StoreCompleted(lom, true) // testing=true
 			Expect(err).NotTo(HaveOccurred())

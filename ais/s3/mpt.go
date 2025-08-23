@@ -75,7 +75,7 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 		}
 		parts = append(parts, types.CompletedPart{
 			ETag:       apc.Ptr(etag),
-			PartNumber: apc.Ptr(int32(c.Num)),
+			PartNumber: apc.Ptr(int32(c.Num())),
 		})
 	}
 	manifest.Unlock()

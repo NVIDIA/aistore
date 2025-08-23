@@ -233,7 +233,10 @@ func (*ObjChunkContentRes) ParseFQN(base string) (string, bool, bool) {
 }
 
 func (*ChunkMetaContentRes) MakeFQN(base string, extras ...string) string {
-	debug.Assert(len(extras) == 1, "expecting uploadID, got: ", extras)
+	if len(extras) == 0 {
+		return base
+	}
+	debug.Assert(len(extras) == 1, extras)
 	return base + ssepa + extras[0]
 }
 

@@ -148,7 +148,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				remaining := fileSize - totalBytesWritten
 				thisChunkSize := min(chunkSize, remaining)
 
-				chunkPath, err := ufest.ChunkName(chunkNum)
+				chunkPath, err := ufest.ChunkFQN(chunkNum)
 				Expect(err).NotTo(HaveOccurred())
 
 				createTestChunk(chunkPath, int(thisChunkSize), originalChecksum)
@@ -166,10 +166,12 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			// Verify we wrote the expected amount
 			Expect(totalBytesWritten).To(Equal(int64(fileSize)))
-			Expect(ufest.Size).To(Equal(int64(fileSize)))
+			Expect(ufest.Size()).To(Equal(int64(fileSize)))
 
 			// Store manifest (this will mark it as completed)
+			lom.Lock(true)
 			err := ufest.StoreCompleted(lom)
+			lom.Unlock(true)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
 
@@ -206,7 +208,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(readSum).To(Equal(originalSum))
 
 			By(fmt.Sprintf("Successfully read %d bytes in %d chunks, checksums match (0x%x)",
-				totalBytesRead, ufest.Num, originalSum))
+				totalBytesRead, ufest.Count(), originalSum))
 		})
 
 		It("should handle edge cases correctly", func() {
@@ -219,7 +221,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			// Create single empty chunk
-			chunkPath, err := ufest.ChunkName(1)
+			chunkPath, err := ufest.ChunkFQN(1)
 			Expect(err).NotTo(HaveOccurred())
 
 			createTestChunk(chunkPath, 0, nil) // Create empty file, no xxhash needed
@@ -228,8 +230,10 @@ var _ = Describe("MPU-UfestRead", func() {
 			err = ufest.Add(chunk, 0, 1)
 			Expect(err).NotTo(HaveOccurred())
 
+			lom.Lock(true)
 			err = ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
+			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -263,7 +267,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom, false /*must-exist*/)
 
 			// Create chunk that's smaller than declared size
-			chunkPath, err := ufest.ChunkName(1)
+			chunkPath, err := ufest.ChunkFQN(1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create file with only 100 bytes using our helper
@@ -274,9 +278,11 @@ var _ = Describe("MPU-UfestRead", func() {
 			err = ufest.Add(chunk, 200, 1)
 			Expect(err).NotTo(HaveOccurred())
 
+			lom.Lock(true)
 			lom.SetSize(200)
 			err = ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
+			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -308,7 +314,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			// Create many small chunks
 			for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
-				chunkPath, err := ufest.ChunkName(chunkNum)
+				chunkPath, err := ufest.ChunkFQN(chunkNum)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create chunk and update checksum in one step
@@ -319,8 +325,10 @@ var _ = Describe("MPU-UfestRead", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
+			lom.Lock(true)
 			err := ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
+			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -372,17 +380,13 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			// Add chunks to simulate MPU
 			for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
-				chunkPath, err := ufest.ChunkName(chunkNum)
+				chunkPath, err := ufest.ChunkFQN(chunkNum)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Create actual chunk file
 				createTestChunk(chunkPath, chunkSize, nil)
 
-				chunk := &core.Uchunk{
-					Path: chunkPath,
-					Siz:  chunkSize,
-				}
-
+				chunk := &core.Uchunk{Path: chunkPath}
 				err = ufest.Add(chunk, chunkSize, int64(chunkNum))
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -449,10 +453,10 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			// Set up as chunked object
 			ufest := core.NewUfest("bug-test-"+cos.GenTie(), lom, false /*must-exist*/)
-			chunkPath, _ := ufest.ChunkName(1)
+			chunkPath, _ := ufest.ChunkFQN(1)
 			createTestChunk(chunkPath, chunkSize, nil)
 
-			chunk := &core.Uchunk{Path: chunkPath, Siz: chunkSize}
+			chunk := &core.Uchunk{Path: chunkPath}
 			ufest.Add(chunk, chunkSize, 1)
 
 			err := lom.CompleteUfest(ufest)
@@ -496,7 +500,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		)
 		// create chunks in sorted order; compute "whole" MD5 as well
 		for partNum := 1; partNum <= numParts; partNum++ {
-			chunkPath, err := manifest.ChunkName(partNum)
+			chunkPath, err := manifest.ChunkFQN(partNum)
 			Expect(err).NotTo(HaveOccurred())
 
 			partMD5 := creatChunkMD5andWhole(chunkPath, partSize, expectedWholeMD5.H)
@@ -512,8 +516,8 @@ var _ = Describe("MPU-UfestRead", func() {
 		}
 
 		By("Step 2: Validate manifest state before completion")
-		Expect(manifest.Num).To(Equal(uint16(numParts)), "Should have correct number of parts")
-		Expect(manifest.Size).To(Equal(int64(totalFileSize)), "Should have correct total size")
+		Expect(manifest.Count()).To(Equal(numParts), "Should have correct number of parts")
+		Expect(manifest.Size()).To(Equal(int64(totalFileSize)), "Should have correct total size")
 		Expect(manifest.Completed()).To(BeFalse(), "Should not be completed yet")
 
 		By("Step 3: Simulate complete-upload validation logic")
@@ -526,7 +530,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			expectedPartNum := uint16(i + 1)
 			actualChunk := manifest.GetChunk(expectedPartNum, true /*locked*/)
 			Expect(actualChunk).NotTo(BeNil(), "Part %d should exist", expectedPartNum)
-			Expect(actualChunk.Num).To(Equal(expectedPartNum),
+			Expect(actualChunk.Num()).To(Equal(expectedPartNum),
 				"Part should have correct sequential number")
 			Expect(bytes.Equal(actualChunk.MD5, partMD5s[i])).To(BeTrue(), "Part should have correct MD5")
 		}
@@ -621,7 +625,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		var allChunkData []byte // Collect all chunk data to create identical monolithic
 
 		for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
-			chunkPath, err := manifest.ChunkName(chunkNum)
+			chunkPath, err := manifest.ChunkFQN(chunkNum)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create chunk and collect its data for monolithic reconstruction
@@ -644,7 +648,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		monolithicFQN := mis[1].MakePathFQN(&localBckB, fs.ObjCT, monolithicObject)
 		Expect(cos.CreateDir(filepath.Dir(monolithicFQN))).NotTo(HaveOccurred())
 
-		totalFileSize := manifest.Size
+		totalFileSize := manifest.Size()
 
 		// create monolithic file with identical data
 		createFileFromData(monolithicFQN, allChunkData)
