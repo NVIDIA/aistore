@@ -925,7 +925,9 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
 }
 
-// +gen:endpoint DELETE /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamKeepRemote=bool]
+// +gen:endpoint DELETE /v1/buckets/{bucket-name}[apc.QparamProvider=string,apc.QparamNamespace=string,apc.QparamKeepRemote=bool] action=[apc.ActDestroyBck=apc.ActMsg|apc.ActEvictRemoteBck=apc.ActMsg|apc.ActDeleteObjects=apc.EvdMsg|apc.ActEvictObjects=apc.EvdMsg]
+// +gen:payload apc.ActDeleteObjects={"action": "delete-listrange", "value": {"objnames": ["o1", "o2"]}}
+// +gen:payload apc.ActEvictObjects={"action": "evict-listrange", "value": {"template": "prefix{001..100}"}}
 // Delete a bucket or delete/evict objects within a bucket
 func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	// 1. request
