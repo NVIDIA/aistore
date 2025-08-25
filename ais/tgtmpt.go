@@ -50,9 +50,9 @@ func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 }
 
 func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) {
-	debug.Assert(manifest.Lom != nil)
+	debug.Assert(manifest.Lom() != nil)
 	_, ok := ups.m[id]
-	debug.Assert(!ok, "duplicated upload ID: ", id, " ", manifest.Lom.Cname())
+	debug.Assert(!ok, "duplicated upload ID: ", id, " ", manifest.Lom().Cname())
 	ups.m[id] = up{manifest, rmd}
 }
 
@@ -72,13 +72,13 @@ func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]str
 }
 
 // NOTE: must be called with ups and lom both unlocked
-func (ups *ups) fromFS(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
+func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
 	debug.Assert(lom.IsLocked() == apc.LockNone, "expecting not locked: ", lom.Cname())
 
 	lom.Lock(false)
 	defer lom.Unlock(false)
 	manifest = core.NewUfest(id, lom, true /*must-exist*/)
-	if err = manifest.Load(lom); err == nil && add {
+	if err = manifest.LoadPartial(lom); err == nil && add {
 		ups.Lock()
 		ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)
 		ups.Unlock()
@@ -92,7 +92,7 @@ func (ups *ups) abort(id string, lom *core.LOM) (ecode int, err error) {
 	up, ok := ups.m[id]
 	if !ok {
 		ups.Unlock()
-		manifest, err = ups.fromFS(id, lom, false /*add*/)
+		manifest, err = ups.loadPartial(id, lom, false /*add*/)
 		if err != nil {
 			return 0, err
 		}

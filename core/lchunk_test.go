@@ -73,9 +73,9 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			Expect(manifest).NotTo(BeNil())
 			Expect(len(manifest.ID)).To(BeNumerically(">", 0))
-			Expect(manifest.Created.After(startTime.Add(-time.Second))).To(BeTrue())
+			Expect(manifest.Created().After(startTime.Add(-time.Second))).To(BeTrue())
 			Expect(manifest.Completed()).To(BeFalse())
-			Expect(manifest.Lom).To(Equal(lom))
+			Expect(manifest.Lom()).To(Equal(lom))
 		})
 
 		It("should create manifest with provided ID", func() {
@@ -109,10 +109,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			chunkSize := int64(cos.MiB)
 			chunkNum := int64(1)
 
-			chunk := &core.Uchunk{
-				Path:  chunkPath,
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: chunkPath}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 
 			err := manifest.Add(chunk, chunkSize, chunkNum)
 			Expect(err).NotTo(HaveOccurred())
@@ -138,10 +136,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Add chunks in order
 			for _, c := range chunks {
-				chunk := &core.Uchunk{
-					Path:  c.path,
-					Cksum: cos.NewCksum(cos.ChecksumOneXxh, trand.String(16)),
-				}
+				chunk := &core.Uchunk{Path: c.path}
+				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee0ddf00d"))
 				err := manifest.Add(chunk, c.size, c.num)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -168,10 +164,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Add chunks out of order
 			for _, c := range chunks {
-				chunk := &core.Uchunk{
-					Path:  c.path,
-					Cksum: cos.NewCksum(cos.ChecksumOneXxh, trand.String(16)),
-				}
+				chunk := &core.Uchunk{Path: c.path}
+				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee045f00d"))
 				err := manifest.Add(chunk, c.size, c.num)
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -187,18 +181,14 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should replace existing chunk with same number (last wins)", func() {
-			originalChunk := &core.Uchunk{
-				Path:  "/tmp/original_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "original_hash"),
-			}
+			originalChunk := &core.Uchunk{Path: "/tmp/original_chunk"}
+			originalChunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee045f00d"))
 			err := manifest.Add(originalChunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Replace with new chunk
-			replacementChunk := &core.Uchunk{
-				Path:  "/tmp/replacement_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "replacement_hash"),
-			}
+			replacementChunk := &core.Uchunk{Path: "/tmp/replacement_chunk"}
+			replacementChunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "abcc0ffee045f00d"))
 			err = manifest.Add(replacementChunk, 2*cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -229,10 +219,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 				wg.Add(1)
 				go func(chunkNum int) {
 					defer wg.Done()
-					chunk := &core.Uchunk{
-						Path:  "/tmp/concurrent_chunk_" + strconv.Itoa(chunkNum),
-						Cksum: cos.NewCksum(cos.ChecksumOneXxh, trand.String(16)),
-					}
+					chunk := &core.Uchunk{Path: "/tmp/concurrent_chunk_" + strconv.Itoa(chunkNum)}
+					chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee0ddf00d"))
 					err := manifest.Add(chunk, cos.MiB, int64(chunkNum))
 					Expect(err).NotTo(HaveOccurred())
 				}(i)
@@ -260,10 +248,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Add some test chunks
 			for i := 1; i <= 3; i++ {
-				chunk := &core.Uchunk{
-					Path:  "/tmp/chunk" + strconv.Itoa(i),
-					Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash"+strconv.Itoa(i)),
-				}
+				chunk := &core.Uchunk{Path: "/tmp/chunk" + strconv.Itoa(i)}
+				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee0ddf00d"))
 				err := manifest.Add(chunk, cos.MiB, int64(i))
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -324,7 +310,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should generate unique names for different upload IDs", func() {
-			manifest2 := core.NewUfest("different-id", manifest.Lom, false)
+			manifest2 := core.NewUfest("different-id", manifest.Lom(), false)
 
 			name1, err1 := manifest.ChunkFQN(1)
 			name2, err2 := manifest2.ChunkFQN(1)
@@ -359,10 +345,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 					file.Close()
 				}
 
-				chunk := &core.Uchunk{
-					Path:  path,
-					Cksum: cos.NewCksum(cos.ChecksumOneXxh, trand.String(16)),
-				}
+				chunk := &core.Uchunk{Path: path}
+				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee0ddf00d"))
 				err := manifest.Add(chunk, cos.MiB, int64(i+1))
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -373,7 +357,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			}
 
 			// Abort and verify cleanup
-			err := manifest.Abort(manifest.Lom)
+			err := manifest.Abort(manifest.Lom())
 			Expect(err).NotTo(HaveOccurred())
 
 			// Files should be removed (may not fail if already gone)
@@ -385,14 +369,14 @@ var _ = Describe("Ufest Core Functionality", func() {
 		It("should handle missing chunk files gracefully", func() {
 			// Add chunk references to non-existent files
 			chunk := &core.Uchunk{
-				Path:  "/tmp/nonexistent_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
+				Path: "/tmp/nonexistent_chunk",
 			}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "123c0ffee0ddf00d"))
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Abort should not fail even if files don't exist
-			err = manifest.Abort(manifest.Lom)
+			err = manifest.Abort(manifest.Lom())
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -417,10 +401,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should store partial manifest without completion", func() {
-			chunk := &core.Uchunk{
-				Path:  "/tmp/partial_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: "/tmp/partial_chunk"}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 			createTestFile(chunk.Path, cos.MiB)
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -430,13 +412,13 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			Expect(manifest.Completed()).To(BeFalse())
 
-			clone := core.NewUfest(manifest.ID, nil, true)
+			clone := core.NewUfest(manifest.ID, lom, true)
 			err = clone.Add(chunk, chunk.Size(), 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			lom.Lock(false)
 			defer lom.Unlock(false)
-			err = clone.Load(lom)
+			err = clone.LoadPartial(lom)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clone.Completed()).To(BeFalse())
 		})
@@ -453,10 +435,10 @@ var _ = Describe("Ufest Core Functionality", func() {
 				md5bytes, _ := hex.DecodeString(s)
 
 				chunk := &core.Uchunk{
-					Path:  "/tmp/persist_chunk" + strconv.Itoa(i+1),
-					Cksum: cos.NewCksum(cos.ChecksumOneXxh, "hash"+strconv.Itoa(i+1)),
-					MD5:   md5bytes,
+					Path: "/tmp/persist_chunk" + strconv.Itoa(i+1),
+					MD5:  md5bytes,
 				}
+				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "999c0ffee0ddf00d"))
 				err := manifest.Add(chunk, size, int64(i+1))
 				Expect(err).NotTo(HaveOccurred())
 				totalSize += size
@@ -470,7 +452,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(manifest.Completed()).To(BeTrue())
 
 			loadedManifest := core.NewUfest("", lom, true) // mustExist=true for loading
-			err = loadedManifest.Load(lom)
+			err = loadedManifest.LoadCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 			lom.Unlock(true)
 
@@ -491,10 +473,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should fail to store invalid manifest", func() {
-			chunk := &core.Uchunk{
-				Path:  "/tmp/invalid_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: "/tmp/invalid_chunk"}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -509,16 +489,14 @@ var _ = Describe("Ufest Core Functionality", func() {
 			lom.Lock(false)
 			defer lom.Unlock(false)
 			loadManifest := core.NewUfest("", lom, true) // mustExist=true
-			err := loadManifest.Load(lom)
+			err := loadManifest.LoadCompleted(lom)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should handle corrupted manifest data", func() {
 			// Store valid manifest first to xattr
-			chunk := &core.Uchunk{
-				Path:  "/tmp/corrupt_test_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: "/tmp/corrupt_test_chunk"}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -529,7 +507,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify that valid data can be loaded
 			corruptManifest := core.NewUfest("", lom, true)
-			err = corruptManifest.Load(lom)
+			err = corruptManifest.LoadCompleted(lom)
 			Expect(err).NotTo(HaveOccurred()) // Should succeed with valid data
 			lom.Unlock(true)
 
@@ -551,10 +529,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			Expect(manifest.Completed()).To(BeFalse())
 
-			chunk := &core.Uchunk{
-				Path:  "/tmp/state_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: "/tmp/state_chunk"}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -577,10 +553,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			manifest := core.NewUfest("test-lock-123", lom, false)
 
 			// Should be able to use locked operations
-			chunk := &core.Uchunk{
-				Path:  "/tmp/lock_chunk",
-				Cksum: cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"),
-			}
+			chunk := &core.Uchunk{Path: "/tmp/lock_chunk"}
+			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
 			err := manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 

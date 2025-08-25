@@ -34,8 +34,7 @@ import (
 
 // TODO:
 // - remove or isolate `testing` bits -- FIXME
-// - readFile vs caller's intent      -- FIXME
-// - t.completeMpt() locks/unlocks two times - consider CoW
+// - partial manifest is expected in memory; TODO: resume upon restart (can wait)
 // - remove all debug.AssertFunc
 // - space cleanup; orphan chunks
 // - err-busy
@@ -52,6 +51,8 @@ const (
 const (
 	sizeLoad  = memsys.DefaultBufSize  // SGL buffer sizing
 	sizeStore = memsys.MaxPageSlabSize // ditto // (sgl.Bytes())
+
+	packedChunkSize = 256 // estimated max
 )
 
 const (
@@ -75,7 +76,7 @@ type (
 	Uchunk struct {
 		size  int64      // this chunk size
 		Path  string     // (may become v2 _remote location_)
-		Cksum *cos.Cksum // nil means none; otherwise non-empty
+		cksum *cos.Cksum // nil means none; otherwise non-empty
 		num   uint16     // chunk/part number
 		flags uint16     // bit flags (future use)
 		// S3/legacy (either/or)
@@ -84,13 +85,13 @@ type (
 	}
 	Ufest struct {
 		ID      string    // upload/manifest ID
-		Created time.Time // creation time
+		created time.Time // creation time
 		count   uint16    // number of chunks (so far)
 		flags   uint16    // bit flags { completed, ...}
 		Chunks  []Uchunk
 
 		// runtime state
-		Lom       *LOM
+		lom       *LOM
 		size      int64
 		completed atomic.Bool
 		mu        sync.Mutex
@@ -109,6 +110,13 @@ var (
 func (c *Uchunk) Size() int64 { return c.size }
 func (c *Uchunk) Num() uint16 { return c.num }
 
+func (c *Uchunk) SetCksum(cksum *cos.Cksum) {
+	if !cos.NoneC(cksum) {
+		debug.AssertNoErr(cksum.Validate())
+	}
+	c.cksum = cksum
+}
+
 ///////////
 // Ufest //
 ///////////
@@ -120,17 +128,19 @@ func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
 	}
 	return &Ufest{
 		ID:      id,
-		Created: now,
+		created: now,
 		Chunks:  make([]Uchunk, 0, iniChunksCap),
-		Lom:     lom,
+		lom:     lom,
 	}
 }
 
 // immutable once completed
 func (u *Ufest) Completed() bool { return u.completed.Load() }
 
-func (u *Ufest) Size() int64 { return u.size }
-func (u *Ufest) Count() int  { return int(u.count) }
+func (u *Ufest) Lom() *LOM          { return u.lom }
+func (u *Ufest) Size() int64        { return u.size }
+func (u *Ufest) Count() int         { return int(u.count) }
+func (u *Ufest) Created() time.Time { return u.created }
 
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
@@ -201,15 +211,16 @@ func (u *Ufest) Abort(lom *LOM) error {
 		c := &u.Chunks[i]
 		if err := cos.RemoveFile(c.Path); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("abort", utag, "- failed to remove chunk(s) [", u.ID, lom.Cname(), c.Path, err, "]")
+				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove chunk(s) [", c.Path, err, "]")
 			}
 		}
 	}
 	if u.ID != "" {
-		partial, _ := u.fqns(lom)
+		debug.Assert(cos.ValidateManifestID(u.ID) == nil, cos.ValidateManifestID(u.ID))
+		partial := u._fqns(lom, false)
 		if err := cos.RemoveFile(partial); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("abort", utag, "- failed to remove partial manifest [", u.ID, lom.Cname(), err, "]")
+				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove partial manifest [", err, "]")
 			}
 		}
 	}
@@ -221,7 +232,7 @@ func (u *Ufest) Abort(lom *LOM) error {
 // - chunk #1 stays on the object's mountpath
 // - other chunks get HRW distributed
 func (u *Ufest) ChunkFQN(num int) (string, error) {
-	lom := u.Lom
+	lom := u.lom
 	if lom == nil {
 		return "", errors.New(utag + ": nil lom")
 	}
@@ -243,33 +254,64 @@ func (u *Ufest) ChunkFQN(num int) (string, error) {
 }
 
 // must be called under lom rlock
-// do not validate manifest ID since
-// callers may use temporary/generated IDs when loading existing manifests
-// (during GET)
-func (u *Ufest) Load(lom *LOM) error {
-	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked: ", lom.Cname())
-	if u.Lom == nil {
-		u.Lom = lom
+// not validating manifest ID since (GET) callers may use temporary/generated IDs when loading existing manifests
+func (u *Ufest) LoadCompleted(lom *LOM) error {
+	const (
+		tag = "completed"
+	)
+	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
+	if u.lom == nil {
+		u.lom = lom
 	}
-	debug.Assert(u.Lom == lom && lom != nil)
+	debug.Assert(u.lom == lom && lom != nil)
+	if u.ID != "" {
+		if err := cos.ValidateManifestID(u.ID); err != nil {
+			return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
+		}
+	}
 
 	csgl := g.pmm.NewSGL(sizeLoad)
 	defer csgl.Free()
 
-	completed, err := u.readFile(lom, csgl)
+	err := u.fread(lom, csgl, true)
 	if err != nil {
-		return u._errLoad(lom.Cname(), err)
+		return u._errLoad(tag, lom.Cname(), err)
 	}
 	if err := u._load(lom, csgl); err != nil {
-		return err
+		return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(lom.Cname()), err)
 	}
-	if completed {
-		if size := lom.Lsize(true); size != u.size {
-			return fmt.Errorf("%s load size mismatch: manifest %d vs %d lom", u._itag(lom.Cname()), u.size, size)
-		}
-		debug.Assert(u.flags&flCompleted == flCompleted)
-		u.completed.Store(u.flags&flCompleted == flCompleted)
+	if size := lom.Lsize(true); size != u.size {
+		return fmt.Errorf("%s load size mismatch: %s manifest %d vs %d lom", u._itag(lom.Cname()), tag, u.size, size)
 	}
+
+	debug.Assert(u.flags&flCompleted == flCompleted)
+	u.completed.Store(true)
+	return nil
+}
+
+// must be in memory
+func (u *Ufest) LoadPartial(lom *LOM) error {
+	const (
+		tag = "partial"
+	)
+	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
+
+	if err := cos.ValidateManifestID(u.ID); err != nil {
+		return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
+	}
+	debug.Assert(u.lom == lom)
+
+	csgl := g.pmm.NewSGL(sizeLoad)
+	defer csgl.Free()
+
+	err := u.fread(lom, csgl, false)
+	if err != nil {
+		return u._errLoad(tag, lom.Cname(), err)
+	}
+	if err := u._load(lom, csgl); err != nil {
+		return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(lom.Cname()), err)
+	}
+	debug.Assert(u.flags&flCompleted == 0)
 	return nil
 }
 
@@ -289,20 +331,22 @@ func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL) error {
 
 	// decompress into a 2nd buffer
 	dbuf, dslab := g.pmm.AllocSize(sizeLoad)
-	err := u._loadCompressed(lom, compressedData, dbuf)
+	err := u._decompress(compressedData, dbuf)
 	dslab.Free(dbuf)
 
+	if err != nil {
+		return err
+	}
 	debug.Assert(u.validNums() == nil)
 
 	if givenID != "" && givenID != u.ID {
-		return fmt.Errorf("%s ID mismatch: given %q vs %q stored", u._itag(lom.Cname()), givenID, u.ID)
+		return fmt.Errorf("ID mismatch: given %q vs stored %q", givenID, u.ID)
 	}
-
-	u.Lom = lom
+	u.lom = lom
 	return err
 }
 
-func (u *Ufest) _loadCompressed(lom *LOM, compressedData, buf []byte) error {
+func (u *Ufest) _decompress(compressedData, buf []byte) error {
 	data := buf[:0]
 	zr := lz4.NewReader(bytes.NewReader(compressedData))
 
@@ -316,26 +360,30 @@ func (u *Ufest) _loadCompressed(lom *LOM, compressedData, buf []byte) error {
 			if err == io.EOF {
 				break
 			}
-			return fmt.Errorf("%s decompression failed: %v", utag, err)
+			return fmt.Errorf("failed to decompress: %w", err)
 		}
 	}
 
 	if err := u.unpack(data); err != nil {
-		return u._errLoad(lom.Cname(), err)
+		return fmt.Errorf("failed to unpack: %w", err)
 	}
 	return nil
 }
 
-func (u *Ufest) _errLoad(cname string, err error) error {
-	return fmt.Errorf("failed to load %s: %w", u._itag(cname), err)
+func (u *Ufest) _errLoad(tag, cname string, err error) error {
+	return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(cname), err)
+}
+
+func (u *Ufest) _utag(cname string) string {
+	return utag + "[" + cname + "@" + u.ID + "]"
 }
 
 func (u *Ufest) _itag(cnames ...string) string {
 	var cname string
 	if len(cnames) > 0 {
 		cname = cnames[0]
-	} else if u.Lom != nil {
-		cname = u.Lom.Cname()
+	} else if u.lom != nil {
+		cname = u.lom.Cname()
 	}
 	return itag + "[" + cname + "@" + u.ID + "]"
 }
@@ -389,12 +437,13 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	sgl := g.pmm.NewSGL(u._packSize())
 
 	debug.Assert(c.Path == lom.FQN)
-	partial, err := u._store(lom, sgl, true)
+	err := u._store(lom, sgl, true)
 	sgl.Free()
 
 	if err == nil {
-		err2 := cos.RemoveFile(partial)
-		debug.AssertNoErr(err2)
+		partial := u._fqns(lom, false)
+		err = cos.RemoveFile(partial)
+		debug.AssertNoErr(err)
 		return nil
 	}
 
@@ -446,25 +495,34 @@ func (u *Ufest) StorePartial(lom *LOM) error {
 	if err := u._errCompleted(lom); err != nil {
 		return err
 	}
-	if u.ID == "" || u.count == 0 {
-		return fmt.Errorf("%s: partial manifest must have a valid ID and at least one chunk (have %q, %d)",
-			u._itag(lom.Cname()), u.ID, u.count)
+	if err := cos.ValidateManifestID(u.ID); err != nil {
+		return fmt.Errorf("partial %s: %v", u._utag(lom.Cname()), err)
+	}
+	if u.count == 0 {
+		return fmt.Errorf("partial %s must have at least one chunk", u._utag(lom.Cname()))
 	}
 
 	u.flags &^= flCompleted // always incomplete here
 	sgl := g.pmm.NewSGL(u._packSize())
-	_, err := u._store(lom, sgl, false)
+	err := u._store(lom, sgl, false)
 	sgl.Free()
 	return err
 }
 
+// estimating:
+// - fixed portion: ~20 bytes
+// - path: usually < 120 bytes
+// - checksum value (wo/ type): ~16-32 bytes depending on algorithm
+// - S3 fields: 0 to 50 bytes
 func (u *Ufest) _packSize() int64 {
-	estimated := int64(len(u.Chunks)) * 128 // ~100 bytes per chunk (paths are typically 50-100 chars)
-	return max(sizeStore, estimated)
+	estimated := int64(len(u.Chunks)) * packedChunkSize
+	return max(sizeStore, estimated+32)
 }
 
-func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) (string, error) {
-	debug.Assert(u.ID != "")
+func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
+	if err := cos.ValidateManifestID(u.ID); err != nil {
+		return fmt.Errorf("cannot store %s: %v", u._utag(lom.Cname()), err)
+	}
 
 	// compress
 	zw := lz4.NewWriter(sgl)
@@ -478,8 +536,7 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) (string, error
 	binary.BigEndian.PutUint64(checksumBuf[:], h)
 	sgl.Write(checksumBuf[:])
 
-	// write
-	return u.writeFile(lom, sgl, completed)
+	return u.fwrite(lom, sgl, completed)
 }
 
 // note that Add() keeps chunks sorted by their respective numbers,
@@ -511,74 +568,61 @@ func (u *Ufest) _check() error {
 }
 
 //
-// readFile | writeFile
+// fread | fwrite
 // (completed | partial)
 //
 
-func (u *Ufest) fqns(lom *LOM) (partial, fqn string) {
-	if u.ID != "" {
-		partial = fs.CSM.Gen(lom, fs.ChunkMetaCT, u.ID)
+func (u *Ufest) _fqns(lom *LOM, completed bool) string {
+	if completed {
+		return fs.CSM.Gen(lom, fs.ChunkMetaCT)
 	}
-	fqn = fs.CSM.Gen(lom, fs.ChunkMetaCT)
-	return
+	debug.Assert(cos.ValidateManifestID(u.ID) == nil, cos.ValidateManifestID(u.ID))
+	return fs.CSM.Gen(lom, fs.ChunkMetaCT, u.ID)
 }
 
-// TODO -- FIXME: caller should be able to specify the intent: load completed OR load partial
-// TODO: currently, always under LOM read or write lock, even when partial
-func (u *Ufest) readFile(lom *LOM, sgl *memsys.SGL) (completed bool, err error) {
-	var (
-		fh           *os.File
-		partial, fqn = u.fqns(lom)
-	)
-	if partial != "" {
-		fh, err = os.Open(partial)
-	}
-	if partial == "" || err != nil {
-		fh, err = os.Open(fqn)
-		if err != nil {
-			return false, err
-		}
-		completed = true
+func (u *Ufest) fread(lom *LOM, sgl *memsys.SGL, completed bool) error {
+	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
+
+	fqn := u._fqns(lom, completed)
+	fh, err := os.Open(fqn)
+	if err != nil {
+		return err
 	}
 	defer cos.Close(fh)
 
 	var n int64
 	n, err = io.Copy(sgl, fh)
-
 	if err != nil {
-		return false, err
+		return err
 	}
 	debug.Assert(n == sgl.Len())
-	return completed, nil
+	return nil
 }
 
 // locking rules:
 // - there's always manifest mutex
 // - if the caller is completing this manifest there must be LOM wlock
-func (u *Ufest) writeFile(lom *LOM, sgl *memsys.SGL, completed bool) (string, error) {
+func (u *Ufest) fwrite(lom *LOM, sgl *memsys.SGL, completed bool) error {
 	debug.Assert(u.Completed() == completed)
-	debug.Assert(!completed || lom.IsLocked() == apc.LockWrite, "expecting w-locked when completed: ", lom.Cname())
+	debug.Assert(!completed || lom.IsLocked() == apc.LockWrite, "expecting w-locked", lom.Cname())
 
-	partial, fqn := u.fqns(lom)
-	if !completed {
-		fqn = partial
-	}
-
+	fqn := u._fqns(lom, completed)
 	wfh, err := cos.CreateFile(fqn)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer cos.Close(wfh)
 
-	l := sgl.Len()
-	written, erw := io.Copy(wfh, sgl)
-	if erw != nil {
-		return "", erw
+	var l, written int64
+	l = sgl.Len()
+	written, err = io.Copy(wfh, sgl)
+	if err != nil {
+		return err
 	}
 	if written != l {
-		return "", fmt.Errorf("%s: invalid write size %d != %d", u._itag(lom.Cname()), written, l) // (unlikely)
+		return fmt.Errorf("%s: invalid write size %d != %d", u._itag(lom.Cname()), written, l) // (unlikely)
 	}
-	return partial, nil
+	return nil
 }
 
 //
@@ -674,7 +718,7 @@ func (u *Ufest) pack(w io.Writer) {
 	_packStr(w, u.ID)
 
 	// creation time
-	binary.BigEndian.PutUint64(b64[:], uint64(u.Created.UnixNano()))
+	binary.BigEndian.PutUint64(b64[:], uint64(u.created.UnixNano()))
 	w.Write(b64[:])
 
 	// number of chunks
@@ -694,7 +738,7 @@ func (u *Ufest) pack(w io.Writer) {
 		_packStr(w, c.Path)
 
 		// checksum
-		_packCksum(w, c.Cksum)
+		_packCksum(w, c.cksum)
 
 		// chunk number and flags
 		binary.BigEndian.PutUint16(b16[:], c.num)
@@ -752,7 +796,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		return errors.New(tooShort)
 	}
 	timeNano := int64(binary.BigEndian.Uint64(data[offset:]))
-	u.Created = time.Unix(0, timeNano)
+	u.created = time.Unix(0, timeNano)
 	offset += cos.SizeofI64
 
 	// number of chunks
@@ -788,7 +832,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		}
 
 		// chunk checksum
-		if c.Cksum, offset, err = _unpackCksum(data, offset); err != nil {
+		if c.cksum, offset, err = _unpackCksum(data, offset); err != nil {
 			return err
 		}
 
@@ -877,7 +921,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		lom.abortUfest(u, err)
 		return err
 	}
-	lom.SetAtimeUnix(u.Created.UnixNano())
+	lom.SetAtimeUnix(u.created.UnixNano())
 
 	lom.setlmfl(lmflChunk)
 	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
@@ -928,11 +972,8 @@ func (lom *LOM) NewUfestReader() (cos.LomReader, error) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked: ", lom.Cname())
 
 	u := NewUfest("", lom, true)
-	if err := u.Load(lom); err != nil {
+	if err := u.LoadCompleted(lom); err != nil {
 		return nil, err
-	}
-	if !u.Completed() {
-		return nil, fmt.Errorf("%s: cannot read partial manifest", u._itag(lom.Cname()))
 	}
 	return u.NewReader()
 }

@@ -125,6 +125,31 @@ func GenTestingDaemonID(suffix string) string {
 }
 
 //
+// chunk manifest ID
+//
+
+func ValidateManifestID(id string) error {
+	const (
+		lmin = 8
+		lmax = 128
+	)
+	l := len(id)
+	if l < lmin {
+		return fmt.Errorf("chunk manifest ID %q is too short (expecting >= %d)", id, lmin)
+	}
+	if l > lmax {
+		return fmt.Errorf("chunk manifest ID %q is too long (expecting <= %d)", id, lmax)
+	}
+	for i := range l {
+		c := id[i]
+		if c < 32 || c > 126 || c == '/' || c == '\\' {
+			return fmt.Errorf("chunk manifest ID %q contains invalid character at position %d (expecting ASCII)", id, i)
+		}
+	}
+	return nil
+}
+
+//
 // utility functions
 //
 

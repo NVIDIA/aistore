@@ -19,11 +19,12 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 
 	// filter by bucket
 	for _, manifest := range all {
-		if bckName == "" || manifest.Lom.Bck().Name == bckName {
+		lom := manifest.Lom()
+		if bckName == "" || lom.Bck().Name == bckName {
 			results = append(results, UploadInfoResult{
-				Key:       manifest.Lom.ObjName,
+				Key:       lom.ObjName,
 				UploadID:  manifest.ID,
-				Initiated: manifest.Created,
+				Initiated: manifest.Created(),
 			})
 		}
 	}

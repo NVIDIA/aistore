@@ -153,11 +153,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 				createTestChunk(chunkPath, int(thisChunkSize), originalChecksum)
 
-				chunk := &core.Uchunk{
-					Path:  chunkPath,
-					Cksum: nil, // No individual chunk checksums for this test
-				}
-
+				chunk := &core.Uchunk{Path: chunkPath}
 				err = ufest.Add(chunk, thisChunkSize, int64(chunkNum))
 				Expect(err).NotTo(HaveOccurred())
 

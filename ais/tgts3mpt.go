@@ -4,42 +4,17 @@
  */
 package ais
 
-// NOTE -- TODO: S3 Multipart Upload Implementation
-//
 // 1. in-memory state
 //    - active uploads kept purely in-memory (ups map)
 //    - no support for target restart recovery during active uploads
-//    - if target restarts during upload, client must restart the entire upload
-//    - this simplifies design and avoids complex state recovery mechanisms
-//    - rationale: most multipart uploads complete within hours; target restarts
-//      are rare operational events. the complexity of persistent state recovery
-//      outweighs the benefit for the typical use case.
+//      (if target restarts during upload, client must restart the entire upload)
 //
-// 2. cleanup
-//    - no automatic cleanup of abandoned uploads
-//    - uploads remain in memory until explicitly completed or aborted
+// 2. t.completeMpt() locks/unlocks two times - consider CoW
 //
-// 3. parts ordering
-//    - completeMpt enforces strictly ascending, contiguous parts (1..n)
-//    - this is stricter than aws s3, which allows gaps and sparse part sets
-//    - rationale: simplifies chunk manifest structure and append logic;
-//      most s3 clients upload parts sequentially anyway
+// 3. TODO cleanup; orphan chunks, abandoned (partial) manifests
 //
-// 4. concurrency
-//    - global rwmutex for upload cache operations
-//    - individual manifest mutexes for chunk operations
-//    - tradeoff: simple consistency vs potential lock contention at scale
-//
-// 5. error handling
-//    - fail fast on inconsistencies (size mismatches, missing parts)
-//    - atomic operations where possible (chunk replacement, manifest storage)
-//    - orphaned chunks cleaned up only on explicit abort, not on errors
-//
-// 6. persistence
-//    - chunk manifests persisted to xattr only after successful completion
-//    - used later for individual chunk access (getMptPart)
-//    - not used for active upload state recovery
-//    - failed/aborted uploads clean up chunks but don't persist manifests
+// 4. parts ordering
+//    - Add(chunk) keeps chunks ("parts") sorted
 
 import (
 	"errors"
@@ -246,7 +221,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
 	}
 	if checkPartSHA {
-		chunk.Cksum = &cksumSHA.Cksum
+		chunk.SetCksum(&cksumSHA.Cksum)
 	}
 
 	// - see NOTE above in re "active uploads in memory"
@@ -498,7 +473,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 	manifest := t.ups.get(uploadID)
 	if manifest == nil {
 		var err error
-		if manifest, err = t.ups.fromFS(uploadID, lom, true /*add*/); err != nil {
+		if manifest, err = t.ups.loadPartial(uploadID, lom, true /*add*/); err != nil {
 			s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, err), http.StatusNotFound, lom, uploadID)
 			return
 		}
@@ -563,7 +538,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 
 	// load chunk manifest and find out the part num's offset & size
 	manifest := core.NewUfest("", lom, true /*must-exist*/)
-	err = manifest.Load(lom)
+	err = manifest.LoadCompleted(lom)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
