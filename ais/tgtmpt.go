@@ -39,7 +39,10 @@ type (
 )
 
 func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
-	manifest := core.NewUfest(id, lom, false /*must-exist*/)
+	manifest, err := core.NewUfest(id, lom, false /*must-exist*/)
+	if err != nil {
+		return err
+	}
 	ups.Lock()
 	if ups.m == nil {
 		ups.m = make(map[string]up, iniCapUploads)
@@ -75,9 +78,13 @@ func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]str
 func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.Ufest, err error) {
 	debug.Assert(lom.IsLocked() == apc.LockNone, "expecting not locked: ", lom.Cname())
 
+	manifest, err = core.NewUfest(id, lom, true /*must-exist*/)
+	if err != nil {
+		return nil, err
+	}
+
 	lom.Lock(false)
 	defer lom.Unlock(false)
-	manifest = core.NewUfest(id, lom, true /*must-exist*/)
 	if err = manifest.LoadPartial(lom); err == nil && add {
 		ups.Lock()
 		ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)

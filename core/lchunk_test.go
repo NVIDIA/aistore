@@ -69,10 +69,11 @@ var _ = Describe("Ufest Core Functionality", func() {
 			lom := newBasicLom(localFQN, testFileSize)
 
 			startTime := time.Now()
-			manifest := core.NewUfest("", lom, false)
+			manifest, err := core.NewUfest("", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(manifest).NotTo(BeNil())
-			Expect(len(manifest.ID)).To(BeNumerically(">", 0))
+			Expect(len(manifest.ID())).To(BeNumerically(">=", 8))
 			Expect(manifest.Created().After(startTime.Add(-time.Second))).To(BeTrue())
 			Expect(manifest.Completed()).To(BeFalse())
 			Expect(manifest.Lom()).To(Equal(lom))
@@ -83,9 +84,10 @@ var _ = Describe("Ufest Core Functionality", func() {
 			lom := newBasicLom(localFQN, testFileSize)
 
 			customID := "custom-upload-" + trand.String(8)
-			manifest := core.NewUfest(customID, lom, false)
+			manifest, err := core.NewUfest(customID, lom, false)
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(manifest.ID).To(Equal(customID))
+			Expect(manifest.ID()).To(Equal(customID))
 			Expect(manifest.Completed()).To(BeFalse())
 		})
 	})
@@ -97,11 +99,13 @@ var _ = Describe("Ufest Core Functionality", func() {
 		)
 
 		BeforeEach(func() {
+			var err error
 			testObjectName := "test-objects/add-test.bin"
 			testFileSize := int64(5 * cos.MiB)
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom = newBasicLom(localFQN, testFileSize)
-			manifest = core.NewUfest("test-upload-123", lom, false)
+			manifest, err = core.NewUfest("test-upload-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should add first chunk successfully", func() {
@@ -241,10 +245,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 		var manifest *core.Ufest
 
 		BeforeEach(func() {
+			var err error
 			testObjectName := "test-objects/getchunk-test.bin"
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
-			manifest = core.NewUfest("test-get-123", lom, false)
+			manifest, err = core.NewUfest("test-get-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Add some test chunks
 			for i := 1; i <= 3; i++ {
@@ -282,10 +288,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 		var manifest *core.Ufest
 
 		BeforeEach(func() {
+			var err error
 			testObjectName := "test-objects/chunkname-test.bin"
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
-			manifest = core.NewUfest("test-name-123", lom, false)
+			manifest, err = core.NewUfest("test-name-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should generate chunk names for valid numbers", func() {
@@ -310,7 +318,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should generate unique names for different upload IDs", func() {
-			manifest2 := core.NewUfest("different-id", manifest.Lom(), false)
+			manifest2, err := core.NewUfest("different-id", manifest.Lom(), false)
+			Expect(err).NotTo(HaveOccurred())
 
 			name1, err1 := manifest.ChunkFQN(1)
 			name2, err2 := manifest2.ChunkFQN(1)
@@ -325,10 +334,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 		var manifest *core.Ufest
 
 		BeforeEach(func() {
+			var err error
 			testObjectName := "test-objects/abort-test.bin"
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, int64(cos.MiB))
-			manifest = core.NewUfest("test-abort-123", lom, false)
+			manifest, err = core.NewUfest("test-abort-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should clean up chunk files on abort", func() {
@@ -388,6 +399,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 		)
 
 		BeforeEach(func() {
+			var err error
 			testObjectName := "test-objects/persist-test.bin"
 			testFileSize := int64(3 * cos.MiB)
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
@@ -397,7 +409,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			createTestFile(localFQN, 0)
 
 			lom = newBasicLom(localFQN, testFileSize)
-			manifest = core.NewUfest("test-persist-123", lom, false)
+			manifest, err = core.NewUfest("test-persist-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should store partial manifest without completion", func() {
@@ -412,7 +425,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			Expect(manifest.Completed()).To(BeFalse())
 
-			clone := core.NewUfest(manifest.ID, lom, true)
+			clone, err := core.NewUfest(manifest.ID(), lom, true)
+			Expect(err).NotTo(HaveOccurred())
 			err = clone.Add(chunk, chunk.Size(), 1)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -451,12 +465,13 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(manifest.Completed()).To(BeTrue())
 
-			loadedManifest := core.NewUfest("", lom, true) // mustExist=true for loading
+			loadedManifest, err := core.NewUfest("", lom, true) // mustExist=true for loading
+			Expect(err).NotTo(HaveOccurred())
 			err = loadedManifest.LoadCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 			lom.Unlock(true)
 
-			Expect(loadedManifest.ID).To(Equal(manifest.ID))
+			Expect(loadedManifest.ID()).To(Equal(manifest.ID()))
 			Expect(loadedManifest.Completed()).To(BeTrue())
 
 			// Verify chunks
@@ -485,11 +500,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should fail to load non-existent manifest", func() {
-			// Try to load from LOM that has no stored manifest xattr
+			var err error
 			lom.Lock(false)
 			defer lom.Unlock(false)
-			loadManifest := core.NewUfest("", lom, true) // mustExist=true
-			err := loadManifest.LoadCompleted(lom)
+			loadManifest, err := core.NewUfest("", lom, true) // mustExist=true
+			Expect(err).NotTo(HaveOccurred())
+			err = loadManifest.LoadCompleted(lom)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -506,7 +522,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify that valid data can be loaded
-			corruptManifest := core.NewUfest("", lom, true)
+			corruptManifest, err := core.NewUfest("", lom, true)
+			Expect(err).NotTo(HaveOccurred())
 			err = corruptManifest.LoadCompleted(lom)
 			Expect(err).NotTo(HaveOccurred()) // Should succeed with valid data
 			lom.Unlock(true)
@@ -525,13 +542,14 @@ var _ = Describe("Ufest Core Functionality", func() {
 			createTestFile(localFQN, 0)
 
 			lom := newBasicLom(localFQN, cos.MiB)
-			manifest := core.NewUfest("test-state-123", lom, false)
+			manifest, err := core.NewUfest("test-state-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(manifest.Completed()).To(BeFalse())
 
 			chunk := &core.Uchunk{Path: "/tmp/state_chunk"}
 			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err := manifest.Add(chunk, cos.MiB, 1)
+			err = manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			lom.Lock(true)
@@ -550,12 +568,13 @@ var _ = Describe("Ufest Core Functionality", func() {
 			testObjectName := "test-objects/lock-test.bin"
 			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
 			lom := newBasicLom(localFQN, cos.MiB)
-			manifest := core.NewUfest("test-lock-123", lom, false)
+			manifest, err := core.NewUfest("test-lock-123", lom, false)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Should be able to use locked operations
 			chunk := &core.Uchunk{Path: "/tmp/lock_chunk"}
 			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err := manifest.Add(chunk, cos.MiB, 1)
+			err = manifest.Add(chunk, cos.MiB, 1)
 			Expect(err).NotTo(HaveOccurred())
 
 			manifest.Lock()

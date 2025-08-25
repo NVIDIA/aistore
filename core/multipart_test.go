@@ -137,7 +137,8 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			Expect(cos.CreateDir(filepath.Dir(localFQN))).NotTo(HaveOccurred())
 
-			ufest := core.NewUfest("test-upload-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("test-upload-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Generate large file in chunks and compute original checksum
 			originalChecksum := onexxh.New64()
@@ -166,7 +167,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			// Store manifest (this will mark it as completed)
 			lom.Lock(true)
-			err := ufest.StoreCompleted(lom)
+			err = ufest.StoreCompleted(lom)
 			lom.Unlock(true)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
@@ -214,7 +215,8 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, 0)
-			ufest := core.NewUfest("empty-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("empty-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create single empty chunk
 			chunkPath, err := ufest.ChunkFQN(1)
@@ -246,7 +248,8 @@ var _ = Describe("MPU-UfestRead", func() {
 			fqn2 := mis[0].MakePathFQN(&localBckB, fs.ObjCT, "incomplete.bin")
 			createTestFile(fqn2, 0)
 			lom2 := newBasicLom(fqn2)
-			ufest2 := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2, false /*must-exist*/)
+			ufest2, err := core.NewUfest("incomplete-test-"+cos.GenTie(), lom2, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Don't call Store() - manifest remains incomplete
 			_, err = ufest2.NewReader()
@@ -260,7 +263,8 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN)
-			ufest := core.NewUfest("size-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("size-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create chunk that's smaller than declared size
 			chunkPath, err := ufest.ChunkFQN(1)
@@ -304,7 +308,8 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			createTestFile(localFQN, 0)
 			lom := newBasicLom(localFQN, totalFileSize)
-			ufest := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("multi-chunk-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			originalChecksum := onexxh.New64()
 
@@ -322,7 +327,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			}
 
 			lom.Lock(true)
-			err := ufest.StoreCompleted(lom)
+			err = ufest.StoreCompleted(lom)
 			Expect(err).NotTo(HaveOccurred())
 			lom.Unlock(true)
 
@@ -372,7 +377,8 @@ var _ = Describe("MPU-UfestRead", func() {
 			lom := newBasicLom(localFQN)
 
 			// Create Ufest (multipart upload session)
-			ufest := core.NewUfest("mpu-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("mpu-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Add chunks to simulate MPU
 			for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
@@ -388,7 +394,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			}
 
 			// Complete the MPU - this should set the chunked flag
-			err := lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked immediately after CompleteUfest")
 
@@ -448,14 +454,15 @@ var _ = Describe("MPU-UfestRead", func() {
 			lom := newBasicLom(localFQN)
 
 			// Set up as chunked object
-			ufest := core.NewUfest("bug-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			ufest, err := core.NewUfest("bug-test-"+cos.GenTie(), lom, false /*must-exist*/)
+			Expect(err).NotTo(HaveOccurred())
 			chunkPath, _ := ufest.ChunkFQN(1)
 			createTestChunk(chunkPath, chunkSize, nil)
 
 			chunk := &core.Uchunk{Path: chunkPath}
 			ufest.Add(chunk, chunkSize, 1)
 
-			err := lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lom.IsChunked()).To(BeTrue())
 
@@ -487,7 +494,8 @@ var _ = Describe("MPU-UfestRead", func() {
 		lom := newBasicLom(localFQN)
 
 		uploadID := "complete-test-" + cos.GenTie()
-		manifest := core.NewUfest(uploadID, lom, false /*must-exist*/)
+		manifest, err := core.NewUfest(uploadID, lom, false /*must-exist*/)
+		Expect(err).NotTo(HaveOccurred())
 
 		// track expected checksums
 		var (
@@ -535,7 +543,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		By("Step 4: Compute whole-object checksum (production lines 378-395)")
 		wholeCksum := cos.NewCksumHash(cos.ChecksumMD5) // Local bucket uses MD5
-		err := manifest.ComputeWholeChecksum(wholeCksum)
+		err = manifest.ComputeWholeChecksum(wholeCksum)
 		Expect(err).NotTo(HaveOccurred(), "Should compute whole checksum successfully")
 
 		// computed checksum must match
@@ -614,7 +622,8 @@ var _ = Describe("MPU-UfestRead", func() {
 		chunkedLom.RemoveMain()
 
 		uploadID := "range-test-" + cos.GenTie()
-		manifest := core.NewUfest(uploadID, chunkedLom, false /*must-exist*/)
+		manifest, err := core.NewUfest(uploadID, chunkedLom, false /*must-exist*/)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create deterministic test data - we'll recreate this same data for monolithic
 		seed := int64(12345)    // Fixed seed for reproducible data
@@ -637,7 +646,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		}
 
 		// complete
-		err := chunkedLom.CompleteUfest(manifest)
+		err = chunkedLom.CompleteUfest(manifest)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Step 2: Create identical monolithic object")

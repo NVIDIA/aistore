@@ -23,7 +23,7 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 		if bckName == "" || lom.Bck().Name == bckName {
 			results = append(results, UploadInfoResult{
 				Key:       lom.ObjName,
-				UploadID:  manifest.ID,
+				UploadID:  manifest.ID(),
 				Initiated: manifest.Created(),
 			})
 		}

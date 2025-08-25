@@ -532,12 +532,16 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
+	manifest, err := core.NewUfest("", lom, true /*must-exist*/)
+	if err != nil {
+		s3.WriteErr(w, r, err, 0)
+		return
+	}
 
 	lom.Lock(false)
 	defer lom.Unlock(false)
 
 	// load chunk manifest and find out the part num's offset & size
-	manifest := core.NewUfest("", lom, true /*must-exist*/)
 	err = manifest.LoadCompleted(lom)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusNotFound)

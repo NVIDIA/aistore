@@ -142,8 +142,11 @@ func ValidateManifestID(id string) error {
 	}
 	for i := range l {
 		c := id[i]
-		if c < 32 || c > 126 || c == '/' || c == '\\' {
-			return fmt.Errorf("chunk manifest ID %q contains invalid character at position %d (expecting ASCII)", id, i)
+		if c < 32 || c > 126 || c == '/' || c == '\\' || c == ' ' {
+			return fmt.Errorf("chunk manifest ID %q contains invalid character at position %d (expecting printable ASCII with no space and no slashes)", id, i)
+		}
+		if c == '.' && i < l-1 && id[i+1] == '.' {
+			return fmt.Errorf("chunk manifest ID %q contains invalid \"..\" substring", id)
 		}
 	}
 	return nil

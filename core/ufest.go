@@ -84,7 +84,7 @@ type (
 		ETag string
 	}
 	Ufest struct {
-		ID      string    // upload/manifest ID
+		id      string    // upload/manifest ID
 		created time.Time // creation time
 		count   uint16    // number of chunks (so far)
 		flags   uint16    // bit flags { completed, ...}
@@ -121,17 +121,23 @@ func (c *Uchunk) SetCksum(cksum *cos.Cksum) {
 // Ufest //
 ///////////
 
-func NewUfest(id string, lom *LOM, mustExist bool) *Ufest {
+func NewUfest(id string, lom *LOM, mustExist bool) (*Ufest, error) {
+	if id != "" {
+		if err := cos.ValidateManifestID(id); err != nil {
+			return nil, err
+		}
+	}
 	now := time.Now()
 	if id == "" && !mustExist {
 		id = cos.GenTAID(now)
 	}
-	return &Ufest{
-		ID:      id,
+	u := &Ufest{
+		id:      id,
 		created: now,
 		Chunks:  make([]Uchunk, 0, iniChunksCap),
 		lom:     lom,
 	}
+	return u, nil
 }
 
 // immutable once completed
@@ -141,6 +147,7 @@ func (u *Ufest) Lom() *LOM          { return u.lom }
 func (u *Ufest) Size() int64        { return u.size }
 func (u *Ufest) Count() int         { return int(u.count) }
 func (u *Ufest) Created() time.Time { return u.created }
+func (u *Ufest) ID() string         { return u.id }
 
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
@@ -215,8 +222,11 @@ func (u *Ufest) Abort(lom *LOM) error {
 			}
 		}
 	}
-	if u.ID != "" {
-		debug.Assert(cos.ValidateManifestID(u.ID) == nil, cos.ValidateManifestID(u.ID))
+	if u.id != "" {
+		debug.Func(func() {
+			err := cos.ValidateManifestID(u.id)
+			debug.AssertNoErr(err)
+		})
 		partial := u._fqns(lom, false)
 		if err := cos.RemoveFile(partial); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
@@ -241,10 +251,10 @@ func (u *Ufest) ChunkFQN(num int) (string, error) {
 	}
 	var (
 		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
-		chname          = contentResolver.MakeFQN(lom.ObjName, u.ID, fmt.Sprintf(fmtChunkNum, num))
+		chname          = contentResolver.MakeFQN(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
 	)
 	if num > 9999 {
-		chname = contentResolver.MakeFQN(lom.ObjName, u.ID, strconv.Itoa(num))
+		chname = contentResolver.MakeFQN(lom.ObjName, u.id, strconv.Itoa(num))
 	}
 	if num == 1 {
 		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), nil
@@ -264,8 +274,8 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 		u.lom = lom
 	}
 	debug.Assert(u.lom == lom && lom != nil)
-	if u.ID != "" {
-		if err := cos.ValidateManifestID(u.ID); err != nil {
+	if u.id != "" {
+		if err := cos.ValidateManifestID(u.id); err != nil {
 			return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
 		}
 	}
@@ -284,7 +294,10 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 		return fmt.Errorf("%s load size mismatch: %s manifest %d vs %d lom", u._itag(lom.Cname()), tag, u.size, size)
 	}
 
-	debug.Assert(u.flags&flCompleted == flCompleted)
+	if u.flags&flCompleted == 0 { // (unlikely)
+		debug.Assert(false)
+		return fmt.Errorf("%s %s: manifest not marked 'completed'", tag, u._utag(lom.Cname()))
+	}
 	u.completed.Store(true)
 	return nil
 }
@@ -296,7 +309,7 @@ func (u *Ufest) LoadPartial(lom *LOM) error {
 	)
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
 
-	if err := cos.ValidateManifestID(u.ID); err != nil {
+	if err := cos.ValidateManifestID(u.id); err != nil {
 		return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
 	}
 	debug.Assert(u.lom == lom)
@@ -327,7 +340,7 @@ func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL) error {
 		return cos.NewErrMetaCksum(expectedChecksum, actualChecksum, utag)
 	}
 
-	givenID := u.ID
+	givenID := u.id
 
 	// decompress into a 2nd buffer
 	dbuf, dslab := g.pmm.AllocSize(sizeLoad)
@@ -339,8 +352,8 @@ func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL) error {
 	}
 	debug.Assert(u.validNums() == nil)
 
-	if givenID != "" && givenID != u.ID {
-		return fmt.Errorf("ID mismatch: given %q vs stored %q", givenID, u.ID)
+	if givenID != "" && givenID != u.id {
+		return fmt.Errorf("ID mismatch: given %q vs stored %q", givenID, u.id)
 	}
 	u.lom = lom
 	return err
@@ -375,7 +388,7 @@ func (u *Ufest) _errLoad(tag, cname string, err error) error {
 }
 
 func (u *Ufest) _utag(cname string) string {
-	return utag + "[" + cname + "@" + u.ID + "]"
+	return utag + "[" + cname + "@" + u.id + "]"
 }
 
 func (u *Ufest) _itag(cnames ...string) string {
@@ -385,7 +398,7 @@ func (u *Ufest) _itag(cnames ...string) string {
 	} else if u.lom != nil {
 		cname = u.lom.Cname()
 	}
-	return itag + "[" + cname + "@" + u.ID + "]"
+	return itag + "[" + cname + "@" + u.id + "]"
 }
 
 func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
@@ -495,7 +508,7 @@ func (u *Ufest) StorePartial(lom *LOM) error {
 	if err := u._errCompleted(lom); err != nil {
 		return err
 	}
-	if err := cos.ValidateManifestID(u.ID); err != nil {
+	if err := cos.ValidateManifestID(u.id); err != nil {
 		return fmt.Errorf("partial %s: %v", u._utag(lom.Cname()), err)
 	}
 	if u.count == 0 {
@@ -520,7 +533,7 @@ func (u *Ufest) _packSize() int64 {
 }
 
 func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
-	if err := cos.ValidateManifestID(u.ID); err != nil {
+	if err := cos.ValidateManifestID(u.id); err != nil {
 		return fmt.Errorf("cannot store %s: %v", u._utag(lom.Cname()), err)
 	}
 
@@ -576,8 +589,11 @@ func (u *Ufest) _fqns(lom *LOM, completed bool) string {
 	if completed {
 		return fs.CSM.Gen(lom, fs.ChunkMetaCT)
 	}
-	debug.Assert(cos.ValidateManifestID(u.ID) == nil, cos.ValidateManifestID(u.ID))
-	return fs.CSM.Gen(lom, fs.ChunkMetaCT, u.ID)
+	debug.Func(func() {
+		err := cos.ValidateManifestID(u.id)
+		debug.AssertNoErr(err)
+	})
+	return fs.CSM.Gen(lom, fs.ChunkMetaCT, u.id)
 }
 
 func (u *Ufest) fread(lom *LOM, sgl *memsys.SGL, completed bool) error {
@@ -715,7 +731,7 @@ func (u *Ufest) pack(w io.Writer) {
 	w.Write([]byte{umetaver})
 
 	// ID
-	_packStr(w, u.ID)
+	_packStr(w, u.id)
 
 	// creation time
 	binary.BigEndian.PutUint64(b64[:], uint64(u.created.UnixNano()))
@@ -787,7 +803,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 	}
 
 	// upload ID
-	if u.ID, offset, err = _unpackStr(data, offset); err != nil {
+	if u.id, offset, err = _unpackStr(data, offset); err != nil {
 		return err
 	}
 
@@ -971,7 +987,8 @@ var (
 func (lom *LOM) NewUfestReader() (cos.LomReader, error) {
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked: ", lom.Cname())
 
-	u := NewUfest("", lom, true)
+	u, e := NewUfest("", lom, true)
+	debug.AssertNoErr(e)
 	if err := u.LoadCompleted(lom); err != nil {
 		return nil, err
 	}
