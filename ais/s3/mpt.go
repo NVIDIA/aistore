@@ -5,6 +5,9 @@
 package s3
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"sort"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -67,9 +70,9 @@ func ListUploads(all []*core.Ufest, bckName, idMarker string, maxUploads int) *L
 
 func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, err error) {
 	manifest.Lock()
-	parts = make([]types.CompletedPart, 0, len(manifest.Chunks))
-	for i := range manifest.Chunks {
-		c := &manifest.Chunks[i]
+	parts = make([]types.CompletedPart, 0, manifest.Count())
+	for i := range manifest.Count() {
+		c := manifest.GetChunk(i+1, true)
 		etag := c.ETag
 		if etag == "" {
 			etag = cmn.MD5ToETag(c.MD5)
@@ -81,4 +84,57 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 	}
 	manifest.Unlock()
 	return parts, 0, nil
+}
+
+// validate that the caller requests completion of
+// exactly all uploaded parts: the set {1..count} in ANY order
+// on success, normalize req.Parts in-place
+// on error return:
+// - 501 when partial completion is requested (len != count)
+// - 400 for malformed input (nil part number, out of range, duplicates)
+func EnforceCompleteAllParts(req *CompleteMptUpload, count int) (int, error) {
+	if req == nil {
+		return http.StatusBadRequest, errors.New("nil parts list")
+	}
+	if len(req.Parts) != count {
+		return http.StatusNotImplemented,
+			fmt.Errorf("partial completion is not allowed: requested %d parts, have %d",
+				len(req.Parts), count)
+	}
+	// fast path
+	for i := range count {
+		p := req.Parts[i]
+		if p.PartNumber == nil {
+			return http.StatusBadRequest, fmt.Errorf("nil part number at index %d", i)
+		}
+		if *p.PartNumber != int32(i+1) {
+			goto slow
+		}
+	}
+	return 0, nil
+
+slow:
+	sort.Slice(req.Parts, func(i, j int) bool {
+		pi, pj := req.Parts[i], req.Parts[j]
+		// nil can't occur here due to the fast-path scan, but be defensive
+		if pi.PartNumber == nil {
+			return false
+		}
+		if pj.PartNumber == nil {
+			return true
+		}
+		return *pi.PartNumber < *pj.PartNumber
+	})
+	for i := range count {
+		p := req.Parts[i]
+		if p.PartNumber == nil {
+			return http.StatusBadRequest, fmt.Errorf("nil part number after sort at index %d", i)
+		}
+		got := *p.PartNumber
+		if got != int32(i+1) {
+			return http.StatusBadRequest, fmt.Errorf("parts must be exactly 1..%d: got %d at position %d",
+				count, got, i)
+		}
+	}
+	return 0, nil
 }

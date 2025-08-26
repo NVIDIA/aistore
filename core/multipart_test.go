@@ -527,14 +527,14 @@ var _ = Describe("MPU-UfestRead", func() {
 		By("Step 3: Simulate complete-upload validation logic")
 		manifest.Lock()
 
-		Expect(len(manifest.Chunks)).To(BeNumerically(">=", numParts),
+		Expect(manifest.Count()).To(BeNumerically(">=", numParts),
 			"Should have at least the requested number of parts")
 
 		for i := range numParts {
-			expectedPartNum := uint16(i + 1)
+			expectedPartNum := i + 1
 			actualChunk := manifest.GetChunk(expectedPartNum, true /*locked*/)
 			Expect(actualChunk).NotTo(BeNil(), "Part %d should exist", expectedPartNum)
-			Expect(actualChunk.Num()).To(Equal(expectedPartNum),
+			Expect(int(actualChunk.Num())).To(Equal(expectedPartNum),
 				"Part should have correct sequential number")
 			Expect(bytes.Equal(actualChunk.MD5, partMD5s[i])).To(BeTrue(), "Part should have correct MD5")
 		}
@@ -786,6 +786,50 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		By(fmt.Sprintf("Successfully tested range reads on %d-byte object with %d chunks", totalFileSize, numChunks))
 	})
+
+	It("should handle concurrent uploads with unique IDs and serialized completion", func() {
+		const numUploads = 4
+
+		results := make(chan error, numUploads)
+
+		for i := range numUploads {
+			go func(idx int) {
+				defer GinkgoRecover()
+
+				objName := fmt.Sprintf("parallel/upload-test-%d.bin", idx)
+				objFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, objName)
+				lom := newBasicLom(objFQN, 0) // Size will come from chunks
+
+				manifest, err := core.NewUfest(fmt.Sprintf("upload-%d", idx), lom, false)
+				if err != nil {
+					results <- err
+					return
+				}
+
+				// Write and add chunk - size accumulates automatically
+				chunkPath, _ := manifest.ChunkFQN(1)
+				createTestChunk(chunkPath, int(cos.MiB), nil)
+
+				chunk := &core.Uchunk{Path: chunkPath}
+				err = manifest.Add(chunk, cos.MiB, 1)
+				if err != nil {
+					results <- err
+					return
+				}
+
+				// Complete via LOM - this is the correct interface
+				results <- lom.CompleteUfest(manifest)
+			}(i)
+		}
+
+		// Verify all completed successfully
+		for range numUploads {
+			Expect(<-results).NotTo(HaveOccurred())
+		}
+
+		By("All concurrent completions succeeded")
+	})
+
 })
 
 //

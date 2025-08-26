@@ -148,7 +148,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify all chunks are accessible
 			for _, c := range chunks {
-				retrievedChunk := manifest.GetChunk(uint16(c.num), false)
+				retrievedChunk := manifest.GetChunk(int(c.num), false)
 				Expect(retrievedChunk).NotTo(BeNil())
 				Expect(retrievedChunk.Path).To(Equal(c.path))
 				Expect(retrievedChunk.Size()).To(Equal(c.size))
@@ -234,7 +234,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify all chunks were added
 			for i := 1; i <= numWorkers; i++ {
-				chunk := manifest.GetChunk(uint16(i), false)
+				chunk := manifest.GetChunk(i, false)
 				Expect(chunk).NotTo(BeNil())
 				Expect(chunk.Num()).To(Equal(uint16(i)))
 			}
@@ -476,8 +476,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify chunks
 			for i := 1; i <= 3; i++ {
-				originalChunk := manifest.GetChunk(uint16(i), false)
-				loadedChunk := loadedManifest.GetChunk(uint16(i), false)
+				originalChunk := manifest.GetChunk(i, false)
+				loadedChunk := loadedManifest.GetChunk(i, false)
 
 				Expect(loadedChunk).NotTo(BeNil())
 				Expect(loadedChunk.Num()).To(Equal(originalChunk.Num()))

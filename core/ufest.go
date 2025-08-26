@@ -88,7 +88,7 @@ type (
 		created time.Time // creation time
 		count   uint16    // number of chunks (so far)
 		flags   uint16    // bit flags { completed, ...}
-		Chunks  []Uchunk
+		chunks  []Uchunk
 
 		// runtime state
 		lom       *LOM
@@ -134,7 +134,7 @@ func NewUfest(id string, lom *LOM, mustExist bool) (*Ufest, error) {
 	u := &Ufest{
 		id:      id,
 		created: now,
-		Chunks:  make([]Uchunk, 0, iniChunksCap),
+		chunks:  make([]Uchunk, 0, iniChunksCap),
 		lom:     lom,
 	}
 	return u, nil
@@ -157,27 +157,27 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 		return fmt.Errorf("%s: invalid chunk number: %d (must be > 0)", utag, num)
 	}
 	c.size = size
-	if num > math.MaxUint16 || len(u.Chunks) >= math.MaxUint16 {
-		return fmt.Errorf("%s [add] chunk number (%d, %d) exceeds %d limit", utag, num, len(u.Chunks), math.MaxUint16)
+	if num > math.MaxUint16 || len(u.chunks) >= math.MaxUint16 {
+		return fmt.Errorf("%s [add] chunk number (%d, %d) exceeds %d limit", utag, num, len(u.chunks), math.MaxUint16)
 	}
 	c.num = uint16(num)
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	l := len(u.Chunks)
+	l := len(u.chunks)
 	// append
-	if l == 0 || u.Chunks[l-1].num < c.num {
-		u.Chunks = append(u.Chunks, *c)
+	if l == 0 || u.chunks[l-1].num < c.num {
+		u.chunks = append(u.chunks, *c)
 		u.size += c.size
-		u.count = uint16(len(u.Chunks))
+		u.count = uint16(len(u.chunks))
 		return nil
 	}
 
-	idx := sort.Search(l, func(i int) bool { return u.Chunks[i].num >= c.num })
+	idx := sort.Search(l, func(i int) bool { return u.chunks[i].num >= c.num })
 
 	// replace ("last wins")
-	dup := &u.Chunks[idx]
+	dup := &u.chunks[idx]
 	if idx < l && dup.num == c.num {
 		if err := cos.RemoveFile(dup.Path); err != nil {
 			return fmt.Errorf("%s [add] failed to replace chunk [%d, %s]: %v", utag, c.num, dup.Path, err)
@@ -188,25 +188,25 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	}
 
 	// insert
-	u.Chunks = append(u.Chunks, Uchunk{})
-	copy(u.Chunks[idx+1:], u.Chunks[idx:])
-	u.Chunks[idx] = *c
+	u.chunks = append(u.chunks, Uchunk{})
+	copy(u.chunks[idx+1:], u.chunks[idx:])
+	u.chunks[idx] = *c
 	u.size += c.size
-	u.count = uint16(len(u.Chunks))
+	u.count = uint16(len(u.chunks))
 	return nil
 }
 
-func (u *Ufest) GetChunk(num uint16, locked bool) *Uchunk {
+func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 	if !locked {
 		u.mu.Lock()
 		defer u.mu.Unlock()
 	}
-	if int(num) <= len(u.Chunks) && u.Chunks[num-1].num == num {
-		return &u.Chunks[num-1]
+	if num <= len(u.chunks) && u.chunks[num-1].num == uint16(num) {
+		return &u.chunks[num-1]
 	}
-	for i := range u.Chunks {
-		if u.Chunks[i].num == num {
-			return &u.Chunks[i]
+	for i := range u.chunks {
+		if u.chunks[i].num == uint16(num) {
+			return &u.chunks[i]
 		}
 	}
 	return nil
@@ -214,8 +214,8 @@ func (u *Ufest) GetChunk(num uint16, locked bool) *Uchunk {
 
 func (u *Ufest) Abort(lom *LOM) error {
 	u.mu.Lock()
-	for i := range u.Chunks {
-		c := &u.Chunks[i]
+	for i := range u.chunks {
+		c := &u.chunks[i]
 		if err := cos.RemoveFile(c.Path); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
 				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove chunk(s) [", c.Path, err, "]")
@@ -409,8 +409,8 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	if err := u._errCompleted(lom); err != nil {
 		return err
 	}
-	if u.count == 0 || int(u.count) != len(u.Chunks) {
-		return fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.count, len(u.Chunks))
+	if u.count == 0 || int(u.count) != len(u.chunks) {
+		return fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.count, len(u.chunks))
 	}
 
 	lsize := lom.Lsize(true)
@@ -420,7 +420,7 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 
 	var total int64
 	for i := range u.count {
-		total += u.Chunks[i].size
+		total += u.chunks[i].size
 	}
 	if total != lsize {
 		return fmt.Errorf("%s: total size mismatch (%d vs %d)", u._itag(lom.Cname()), total, lsize)
@@ -487,13 +487,13 @@ func (u *Ufest) validNums() error {
 	if u.count == 0 {
 		return errNoChunks
 	}
-	for i := range u.Chunks {
-		c := &u.Chunks[i]
+	for i := range u.chunks {
+		c := &u.chunks[i]
 		if c.num <= 0 || c.num > u.count {
 			return fmt.Errorf("chunk %d has invalid part number [%d, %d]", i, c.num, u.count)
 		}
 		for j := range i {
-			if u.Chunks[j].num == c.num {
+			if u.chunks[j].num == c.num {
 				return fmt.Errorf("duplicate chunk number: [%d, %d, %d]", c.num, i, j)
 			}
 		}
@@ -528,7 +528,7 @@ func (u *Ufest) StorePartial(lom *LOM) error {
 // - checksum value (wo/ type): ~16-32 bytes depending on algorithm
 // - S3 fields: 0 to 50 bytes
 func (u *Ufest) _packSize() int64 {
-	estimated := int64(len(u.Chunks)) * packedChunkSize
+	estimated := int64(len(u.chunks)) * packedChunkSize
 	return max(sizeStore, estimated+32)
 }
 
@@ -553,28 +553,28 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
 }
 
 // note that Add() keeps chunks sorted by their respective numbers,
-// so Chunks[0] is the lowest present at any time
+// so u.chunks[0] is the lowest present at any time
 func (u *Ufest) firstChunk() (*Uchunk, error) {
 	debug.AssertFunc(func() bool {
-		for i := 1; i < len(u.Chunks); i++ {
-			if u.Chunks[i-1].num > u.Chunks[i].num {
+		for i := 1; i < len(u.chunks); i++ {
+			if u.chunks[i-1].num > u.chunks[i].num {
 				return false
 			}
 		}
 		return true
 	})
 
-	if err := u._check(); err != nil {
+	if err := u.Check(); err != nil {
 		return nil, err
 	}
-	return &u.Chunks[0], nil
+	return &u.chunks[0], nil
 }
 
-func (u *Ufest) _check() error {
-	if len(u.Chunks) == 0 {
+func (u *Ufest) Check() error {
+	if len(u.chunks) == 0 {
 		return errNoChunks
 	}
-	if u.Chunks[0].num != 1 {
+	if u.chunks[0].num != 1 {
 		return errNoChunkOne
 	}
 	return nil
@@ -646,11 +646,11 @@ func (u *Ufest) fwrite(lom *LOM, sgl *memsys.SGL, completed bool) error {
 //
 
 func (u *Ufest) ETagS3() (string, error) {
-	debug.Assert(u.count > 0 && int(u.count) == len(u.Chunks), "invalid chunks num ", u.count, " vs ", len(u.Chunks))
+	debug.Assert(u.count > 0 && int(u.count) == len(u.chunks), "invalid chunks num ", u.count, " vs ", len(u.chunks))
 
 	h := md5.New()
 	for i := range u.count {
-		c := &u.Chunks[i]
+		c := &u.chunks[i]
 		switch {
 		case len(c.MD5) == md5.Size:
 			h.Write(c.MD5)
@@ -684,7 +684,7 @@ func (u *Ufest) ETagS3() (string, error) {
 // TODO: avoid the extra pass by accumulating during AddPart/StorePartial or by caching a tree-hash
 // see also: s3/mpt for ListParts
 func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
-	debug.Assert(u.count > 0 && int(u.count) == len(u.Chunks), "invalid chunks num ", u.count, " vs ", len(u.Chunks))
+	debug.Assert(u.count > 0 && int(u.count) == len(u.chunks), "invalid chunks num ", u.count, " vs ", len(u.chunks))
 
 	c, err := u.firstChunk()
 	if err != nil {
@@ -696,7 +696,7 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 	defer slab.Free(buf)
 
 	for i := range u.count {
-		c := &u.Chunks[i]
+		c := &u.chunks[i]
 		fh, err := os.Open(c.Path)
 		if err != nil {
 			return err
@@ -745,7 +745,7 @@ func (u *Ufest) pack(w io.Writer) {
 	w.Write(b16[:])
 
 	// chunks
-	for _, c := range u.Chunks {
+	for _, c := range u.chunks {
 		// chunk size
 		binary.BigEndian.PutUint64(b64[:], uint64(c.size))
 		w.Write(b64[:])
@@ -829,10 +829,10 @@ func (u *Ufest) unpack(data []byte) (err error) {
 	offset += cos.SizeofI16
 
 	// Read chunks
-	u.Chunks = make([]Uchunk, u.count)
+	u.chunks = make([]Uchunk, u.count)
 	u.size = 0
 	for i := range u.count {
-		c := &u.Chunks[i]
+		c := &u.chunks[i]
 
 		// chunk size
 		if len(data) < offset+cos.SizeofI64 {
@@ -927,7 +927,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 	debug.AssertFunc(func() bool {
 		var total int64
 		for i := range u.count {
-			total += u.Chunks[i].size
+			total += u.chunks[i].size
 		}
 		return total == u.size
 	})
@@ -1010,7 +1010,7 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 			debug.Assert(r.goff == u.size, "offset ", r.goff, " vs full size ", u.size)
 			return n, io.EOF
 		}
-		c := &u.Chunks[r.cidx]
+		c := &u.chunks[r.cidx]
 
 		// open on demand
 		if r.cfh == nil {
@@ -1093,10 +1093,10 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		idx      int
 		chunkoff = off
 	)
-	for ; idx < len(u.Chunks) && chunkoff >= u.Chunks[idx].size; idx++ {
-		chunkoff -= u.Chunks[idx].size
+	for ; idx < len(u.chunks) && chunkoff >= u.chunks[idx].size; idx++ {
+		chunkoff -= u.chunks[idx].size
 	}
-	if idx >= len(u.Chunks) {
+	if idx >= len(u.chunks) {
 		return 0, io.EOF
 	}
 
@@ -1105,8 +1105,8 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, nil
 	}
 	// read
-	for n < total && idx < len(u.Chunks) {
-		c := &u.Chunks[idx]
+	for n < total && idx < len(u.chunks) {
+		c := &u.chunks[idx]
 		debug.Assert(c.size-chunkoff > 0, c.size, " vs ", chunkoff)
 		toRead := min(int64(total-n), c.size-chunkoff)
 		fh, err := os.Open(c.Path)

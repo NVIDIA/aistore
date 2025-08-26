@@ -47,29 +47,41 @@ func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 	if ups.m == nil {
 		ups.m = make(map[string]up, iniCapUploads)
 	}
-	ups._add(id, manifest, rmd)
+	err = ups._add(id, manifest, rmd)
 	ups.Unlock()
-	return nil
+	return err
 }
 
-func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) {
+func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) (err error) {
 	debug.Assert(manifest.Lom() != nil)
-	_, ok := ups.m[id]
-	debug.Assert(!ok, "duplicated upload ID: ", id, " ", manifest.Lom().Cname())
+	if _, ok := ups.m[id]; ok {
+		err = fmt.Errorf("duplicated upload ID: %q", id)
+		debug.AssertNoErr(err)
+		return
+	}
 	ups.m[id] = up{manifest, rmd}
+	return
 }
 
 func (ups *ups) get(id string) (manifest *core.Ufest) {
 	ups.RLock()
-	manifest = ups.m[id].u
+	up, ok := ups.m[id]
+	if ok {
+		manifest = up.u
+		debug.Assert(id == manifest.ID())
+	}
 	ups.RUnlock()
 	return
 }
 
 func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]string) {
 	ups.RLock()
-	manifest = ups.m[id].u
-	rmd = ups.m[id].rmd
+	up, ok := ups.m[id]
+	if ok {
+		manifest = up.u
+		rmd = up.rmd
+		debug.Assert(id == manifest.ID())
+	}
 	ups.RUnlock()
 	return
 }
