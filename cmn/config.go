@@ -364,12 +364,16 @@ type (
 	}
 
 	LRUConf struct {
-		// DontEvictTimeStr denotes the period of time during which eviction of an object
+		// DontEvictTime denotes the period of time during which eviction of an object
 		// is forbidden [atime, atime + DontEvictTime]
 		DontEvictTime cos.Duration `json:"dont_evict_time"`
 
-		// CapacityUpdTimeStr denotes the frequency at which AIStore updates local capacity utilization
+		// CapacityUpdTime denotes the frequency at which AIS targets update capacity (free/avail) utilization
 		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
+
+		// Specifies a unit of space-cleanup and LRU processing
+		// Zero value _translates_ as a (non-zero) system default
+		EvictBatchSize int64 `json:"evict_batch_size,omitempty"`
 
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
@@ -377,6 +381,7 @@ type (
 	LRUConfToSet struct {
 		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty" swaggertype:"primitive,string"`
 		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty" swaggertype:"primitive,string"`
+		EvictBatchSize  *int64        `json:"evict_batch_size,omitempty"`
 		Enabled         *bool         `json:"enabled,omitempty"`
 	}
 
@@ -1172,16 +1177,28 @@ func (c *SpaceConf) String() string {
 // LRUConf //
 /////////////
 
+const (
+	EvictBatchSizeMin  = 1024
+	evictBatchSizeDflt = 64 * 1024
+	evictBatchSizeMax  = 512 * 1024
+)
+
 func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return confDisabled
 	}
-	return fmt.Sprintf("lru.dont_evict_time=%v, lru.capacity_upd_time=%v", c.DontEvictTime, c.CapacityUpdTime)
+	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v, evict_batch_size=%d",
+		c.DontEvictTime, c.CapacityUpdTime, c.EvictBatchSize)
 }
 
 func (c *LRUConf) Validate() (err error) {
 	if c.CapacityUpdTime.D() < 10*time.Second {
-		err = fmt.Errorf("invalid %s (expecting: lru.capacity_upd_time >= 10s)", c)
+		return fmt.Errorf("invalid %s (expecting: lru.capacity_upd_time >= 10s)", c)
+	}
+	if c.EvictBatchSize == 0 {
+		c.EvictBatchSize = evictBatchSizeDflt
+	} else if n := c.EvictBatchSize; n < EvictBatchSizeMin || n > evictBatchSizeMax {
+		err = fmt.Errorf("invalid lru.evict_batch_size=%d (expecting range [%d - %d])", n, EvictBatchSizeMin, evictBatchSizeMax)
 	}
 	return
 }
