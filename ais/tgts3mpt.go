@@ -358,6 +358,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 }
 
 // (under manifest lock)
+// TODO: compute _whole_ checksum outside manifest lock (CoW again)
 func validateChecksumEtag(w http.ResponseWriter, r *http.Request, lom *core.LOM, manifest *core.Ufest, partList *s3.CompleteMptUpload) (string, error) {
 	uploadID := manifest.ID()
 	if err := manifest.Check(); err != nil {

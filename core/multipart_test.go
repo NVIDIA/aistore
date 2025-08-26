@@ -12,6 +12,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -828,6 +829,235 @@ var _ = Describe("MPU-UfestRead", func() {
 		}
 
 		By("All concurrent completions succeeded")
+	})
+
+	It("completes multiple concurrent uploads (unique IDs) and verifies content", func() {
+		const numUploads = 3
+
+		type uploadInfo struct {
+			lom          *core.LOM
+			expectedSize int64
+			expectedMD5  []byte
+			err          error
+		}
+
+		results := make(chan uploadInfo, numUploads)
+
+		var wg sync.WaitGroup
+		wg.Add(numUploads)
+
+		// Spawn workers (Go 1.22 integer range)
+		for i := range numUploads {
+			go func(idx int) {
+				defer GinkgoRecover()
+				defer wg.Done()
+
+				objName := fmt.Sprintf("parallel/upload-test-%d.bin", idx)
+				objFQN := mis[idx%len(mis)].MakePathFQN(&localBckB, fs.ObjCT, objName)
+				lom := newBasicLom(objFQN, 0) // size comes from chunks
+
+				manifest, err := core.NewUfest(fmt.Sprintf("upload-%d", idx), lom, false)
+				if err != nil {
+					results <- uploadInfo{lom: lom, err: err}
+					return
+				}
+
+				// 2–3 chunks
+				var (
+					numChunks    = 2 + rand.IntN(2) // 2 or 3
+					allChunkData []byte
+					chunkSize    = rand.IntN(400*cos.KiB) + 50*cos.KiB + rand.IntN(1000)
+				)
+				for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
+					chunkPath, _ := manifest.ChunkFQN(chunkNum)
+
+					seed := int64(idx*100 + chunkNum)
+					chunkData := createDeterministicChunk(chunkPath, chunkSize, seed)
+					allChunkData = append(allChunkData, chunkData...)
+
+					chunk := &core.Uchunk{Path: chunkPath}
+					if err := manifest.Add(chunk, int64(chunkSize), int64(chunkNum)); err != nil {
+						results <- uploadInfo{lom: lom, err: err}
+						return
+					}
+				}
+
+				// expected size + MD5 over concatenated chunks
+				expectedSize := int64(len(allChunkData))
+				h := md5.New()
+				h.Write(allChunkData)
+				expectedMD5 := h.Sum(nil)
+
+				// complete
+				err = lom.CompleteUfest(manifest)
+				results <- uploadInfo{
+					lom:          lom,
+					expectedSize: expectedSize,
+					expectedMD5:  expectedMD5,
+					err:          err,
+				}
+			}(i)
+		}
+
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
+
+		// collect and verify completions
+		var completedUploads []uploadInfo
+		for u := range results {
+			Expect(u.err).NotTo(HaveOccurred(), "complete should succeed for %q", u.lom.Cname())
+			completedUploads = append(completedUploads, u)
+		}
+		Expect(len(completedUploads)).To(Equal(numUploads), "should receive all results")
+
+		By("All concurrent completions succeeded — verifying on-disk objects")
+
+		// verify each completed object (size + whole-object MD5), then clean up
+		for i, upload := range completedUploads {
+			upload.lom.Lock(false) // -----------------------------------------
+
+			err := upload.lom.Load(false, true /*locked*/)
+			Expect(err).NotTo(HaveOccurred(), "should load completed object %d (%s)", i, upload.lom.Cname())
+
+			actualSize := upload.lom.Lsize(true)
+			Expect(actualSize).To(Equal(upload.expectedSize),
+				"size mismatch for object %d (%s)", i, upload.lom.Cname())
+
+			handle, err := upload.lom.NewHandle(true)
+			Expect(err).NotTo(HaveOccurred(), "should create handle for object %d (%s)", i, upload.lom.Cname())
+
+			actualData := make([]byte, actualSize)
+			n, err := handle.ReadAt(actualData, 0)
+			handle.Close()
+			Expect(err).NotTo(HaveOccurred(), "should read object %d (%s)", i, upload.lom.Cname())
+			Expect(int64(n)).To(Equal(actualSize), "should read full object %d (%s)", i, upload.lom.Cname())
+
+			upload.lom.Unlock(false) // -----------------------------------------
+
+			h := md5.New()
+			h.Write(actualData[:n])
+			actualMD5 := h.Sum(nil)
+			Expect(actualMD5).To(Equal(upload.expectedMD5),
+				"checksum mismatch for object %d (%s)", i, upload.lom.Cname())
+
+			By(fmt.Sprintf("Verified object %d: %s (size=%d bytes, checksum OK)", i, upload.lom.Cname(), actualSize))
+
+			// Cleanup
+			err = upload.lom.RemoveMain()
+			Expect(err).NotTo(HaveOccurred(), "cleanup should remove %s", upload.lom.Cname())
+		}
+
+		By(fmt.Sprintf("Successfully verified %d concurrent multi-chunk uploads", numUploads))
+	})
+
+	It("races completes for one object (3 uploads) and ensures final content equals one contender", func() {
+		const numWorkers = 3
+
+		type workerResult struct {
+			expectedSize int64
+			expectedMD5  []byte
+			err          error
+		}
+
+		// one common object name
+		objName := "parallel/one-key-race.bin"
+		objFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, objName)
+		lom := newBasicLom(objFQN, 0)
+
+		results := make(chan workerResult, numWorkers)
+
+		var wg sync.WaitGroup
+		wg.Add(numWorkers)
+
+		for i := range numWorkers {
+			go func(worker int) {
+				defer GinkgoRecover()
+				defer wg.Done()
+
+				uploadID := fmt.Sprintf("complete-manifest-race-%d", worker)
+				manifest, err := core.NewUfest(uploadID, lom, false)
+				if err != nil {
+					results <- workerResult{err: err}
+					return
+				}
+
+				var (
+					numChunks = 2 + rand.IntN(2) // 2 or 3
+					chunkSize = rand.IntN(400*cos.KiB) + 50*cos.KiB + rand.IntN(1000)
+					allData   []byte
+				)
+				for part := 1; part <= numChunks; part++ {
+					chunkPath, _ := manifest.ChunkFQN(part)
+					seed := int64(worker*1000 + part)
+					data := createDeterministicChunk(chunkPath, chunkSize, seed) // writes file and returns bytes
+					allData = append(allData, data...)
+
+					if err := manifest.Add(&core.Uchunk{Path: chunkPath}, int64(chunkSize), int64(part)); err != nil {
+						results <- workerResult{err: err}
+						return
+					}
+				}
+
+				h := md5.New()
+				h.Write(allData)
+				expMD5 := h.Sum(nil)
+				expSize := int64(len(allData))
+
+				// complete (API should serialize)
+				err = lom.CompleteUfest(manifest)
+
+				results <- workerResult{
+					expectedSize: expSize,
+					expectedMD5:  expMD5,
+					err:          err,
+				}
+			}(i)
+		}
+
+		go func() { wg.Wait(); close(results) }()
+
+		// collect and assert all completions succeeded
+		var wrs []workerResult
+		for r := range results {
+			Expect(r.err).NotTo(HaveOccurred(), "each CompleteUfest should succeed")
+			wrs = append(wrs, r)
+		}
+		Expect(len(wrs)).To(Equal(numWorkers), "should receive all worker results")
+
+		By("All concurrent completions succeeded — verifying final on-disk object matches one of the contenders")
+
+		// load and read final object
+		lom.Lock(false)
+		Expect(lom.Load(false, true /*locked*/)).NotTo(HaveOccurred())
+		finalSize := lom.Lsize(true)
+
+		handle, err := lom.NewHandle(true)
+		Expect(err).NotTo(HaveOccurred())
+		buf := make([]byte, finalSize)
+		n, err := handle.ReadAt(buf, 0)
+		_ = handle.Close()
+		lom.Unlock(false)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int64(n)).To(Equal(finalSize))
+
+		wh := md5.New()
+		wh.Write(buf[:n])
+		finalMD5 := wh.Sum(nil)
+
+		// final content must equal one of the workers’ payloads (the last finisher)
+		matched := false
+		for _, r := range wrs {
+			if r.expectedSize == finalSize && bytes.Equal(r.expectedMD5, finalMD5) {
+				matched = true
+				break
+			}
+		}
+		Expect(matched).To(BeTrue(), "final object must match one of the completed manifests")
+
+		Expect(lom.RemoveMain()).NotTo(HaveOccurred())
 	})
 
 })
