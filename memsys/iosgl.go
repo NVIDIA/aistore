@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -36,7 +36,7 @@ type (
 	// implements io.ReadWriteCloser + Reset
 	SGL struct {
 		slab *Slab
-		sgl  [][]byte
+		sgl  [][]byte // (clipped when recycled via sync.Pool)
 		woff int64
 		roff int64
 	}
@@ -77,6 +77,10 @@ func _allocSGL(isPage bool) (z *SGL) {
 	return
 }
 
+const (
+	clipSGL = 1024
+)
+
 func _freeSGL(z *SGL, isPage bool) {
 	var pool *sync.Pool
 	if isPage {
@@ -87,6 +91,7 @@ func _freeSGL(z *SGL, isPage bool) {
 		pool = &smPools[idx]
 	}
 	sgl := z.sgl[:0]
+	sgl = cos.ResetSliceCap(sgl, clipSGL) // clip cap
 	*z = sgl0
 	z.sgl = sgl
 	pool.Put(z)

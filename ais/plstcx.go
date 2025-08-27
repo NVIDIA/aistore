@@ -610,6 +610,8 @@ func (c *lstcx) _page() (int, error) {
 	lr := &c.tcomsg.ListRange
 	clear(lr.ObjNames)
 	lr.ObjNames = lr.ObjNames[:0]
+	lr.ObjNames = cos.ResetSliceCap(lr.ObjNames, apc.MaxPageSizeAIS) // clip cap
+
 	for _, en := range lst.Entries {
 		if en.IsAnyFlagSet(apc.EntryIsDir) { // always skip virtual dirs
 			continue

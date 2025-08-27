@@ -144,6 +144,10 @@ const (
 	minLogDiskUtil = 15 // skip logging idle disks
 
 	numTargetStats = 48 // approx. initial
+
+	numDisks = 12 // recommended ballpark for production targets
+
+	clipLogLines = 64 // max r.lines cap
 )
 
 /////////////
@@ -173,10 +177,10 @@ func (r *Trunner) Init() *atomic.Bool {
 	r.regCommon(r.t.Snode())
 
 	r.ctracker = make(copyTracker, numTargetStats) // these two are allocated once and only used in serial context
-	r.lines = make([]string, 0, 16)
+	r.lines = make([]string, 0, min(clipLogLines/4, 16))
 
-	r.disk.stats = make(cos.AllDiskStats, 16)
-	r.disk.metrics = make(map[string]dmetric, 16)
+	r.disk.stats = make(cos.AllDiskStats, cos.NumDiskMetrics*numDisks)
+	r.disk.metrics = make(map[string]dmetric, cos.NumDiskMetrics*numDisks)
 
 	config := cmn.GCO.Get()
 	r.core.statsTime = config.Periodic.StatsTime.D()
@@ -637,6 +641,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r._fshcMaybe(config)
 
 	r.lines = r.lines[:0]
+	r.lines = cos.ResetSliceCap(r.lines, clipLogLines) // clip cap
 
 	// 1. disk stats
 	refreshCap := r.Tcdf.Alerts() != 0

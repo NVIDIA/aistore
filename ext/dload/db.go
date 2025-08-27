@@ -140,7 +140,7 @@ func (db *downloaderDB) getTasks(id string) (tasks []TaskDlInfo, err error) {
 	return db.tasks(id)
 }
 
-// flushes caches into the disk
+// flushes caches to disk
 func (db *downloaderDB) flush(id string) error {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
@@ -157,7 +157,8 @@ func (db *downloaderDB) flush(id string) error {
 			return err
 		}
 
-		db.errCache[id] = db.errCache[id][:0] // clear cache
+		db.errCache[id] = db.errCache[id][:0]                   // clear cache
+		db.errCache[id] = cos.ResetSliceCap(db.errCache[id], 8) // clip cap
 	}
 
 	if len(db.taskInfoCache[id]) > 0 {
@@ -172,7 +173,8 @@ func (db *downloaderDB) flush(id string) error {
 			return err
 		}
 
-		db.taskInfoCache[id] = db.taskInfoCache[id][:0] // clear cache
+		db.taskInfoCache[id] = db.taskInfoCache[id][:0]                   // clear cache
+		db.taskInfoCache[id] = cos.ResetSliceCap(db.taskInfoCache[id], 8) // clip cap
 	}
 	return nil
 }

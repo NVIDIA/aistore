@@ -372,6 +372,7 @@ func (n *notifs) housekeep(int64) time.Duration {
 
 	n.nls.mtx.RLock()
 	n.tempnl = n.tempnl[:0]
+	n.tempnl = cos.ResetSliceCap(n.tempnl, len(n.nls.m)) // clip cap
 	for _, nl := range n.nls.m {
 		n.tempnl = append(n.tempnl, nl)
 	}

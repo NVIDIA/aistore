@@ -4,6 +4,10 @@
  */
 package cos
 
+const (
+	NumDiskMetrics = 5 // RBps, Ravg, WBps, Wavg, Util (see DiskStats)
+)
+
 type (
 	DiskStats struct {
 		RBps, Ravg, WBps, Wavg, Util int64

@@ -20,6 +20,8 @@ const (
 	lazyChanSize = 1024 // NOTE: can become 4096 if we ever hit chanFull
 
 	lazyDelayMin = 4 * time.Second
+
+	lazyClipCap = 64
 )
 
 const lazyTag = "lazy-delete"
@@ -62,8 +64,16 @@ func (r *lazydel) stop() { r.stopCh.Close() }
 
 // drop and drain
 func (r *lazydel) cleanup() {
-	clear(r.put)
-	clear(r.get)
+	if cap(r.put) > 0 {
+		clear(r.put)
+		r.put = r.put[:0]
+		r.put = cos.ResetSliceCap(r.put, lazyClipCap) // clip cap
+	}
+	if cap(r.get) > 0 {
+		clear(r.get)
+		r.get = r.get[:0]
+		r.get = cos.ResetSliceCap(r.get, lazyClipCap) // clip cap
+	}
 	for {
 		select {
 		case <-r.workCh:

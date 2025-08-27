@@ -1,10 +1,12 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
-import "strings"
+import (
+	"strings"
+)
 
 func StringInSlice(s string, arr []string) bool {
 	for _, el := range arr {
@@ -13,6 +15,22 @@ func StringInSlice(s string, arr []string) bool {
 		}
 	}
 	return false
+}
+
+func ResetSliceCap[T any](s []T, maxCap int) []T {
+	var (
+		l = len(s)
+		c = cap(s)
+	)
+	switch {
+	case maxCap <= 0:
+		return s[:0:0]
+	case c <= maxCap:
+		return s
+	default:
+		l = min(l, maxCap)
+		return s[:l:maxCap]
+	}
 }
 
 // StrSlicesEqual compares content of two string slices. It is replacement for
