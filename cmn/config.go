@@ -1179,7 +1179,7 @@ func (c *SpaceConf) String() string {
 
 const (
 	EvictBatchSizeMin  = 1024
-	evictBatchSizeDflt = 64 * 1024
+	evictBatchSizeDflt = 32 * 1024
 	evictBatchSizeMax  = 512 * 1024
 )
 

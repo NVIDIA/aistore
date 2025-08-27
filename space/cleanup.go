@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -75,8 +76,9 @@ type (
 			loms []*core.LOM
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
-		bck cmn.Bck
-		now int64
+		bck     cmn.Bck
+		now     int64
+		nvisits int64
 		// init-time
 		p       *clnP
 		ini     *IniCln
@@ -167,7 +169,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	for _, j := range joggers {
 		parent.wg.Add(1)
 		j.joggers = joggers
-		go j.run(providers)
+		go j.jog(providers)
 	}
 
 	parent.cs.a = fs.Cap()
@@ -189,10 +191,11 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 	if errCap != nil {
 		xcln.AddErr(errCap)
+		xcln.Finish()
+		nlog.Warningln(xcln.Name(), "finished with cap error:", errCap)
+	} else {
+		xcln.Finish()
 	}
-	xcln.Finish()
-	nlog.Infoln(xcln.Name(), "finished:", errCap)
-
 	return parent.cs.c
 }
 
@@ -230,10 +233,11 @@ func (p *clnP) rmMisplaced() bool {
 	if cserr != nil {
 		flog = nlog.Errorln
 	}
+	xcln := p.ini.Xaction
 	if ok {
-		flog(core.T.String(), p.ini.Xaction.String(), "proceeding to remove misplaced obj-s with force, ignoring: [", cserr, why, "]")
+		flog(core.T.String(), xcln.String(), "proceeding to remove misplaced obj-s with force, ignoring: [", cserr, why, "]")
 	} else {
-		flog(core.T.String(), p.ini.Xaction.String(), "not removing misplaced obj-s: [", cserr, why, "]")
+		flog(core.T.String(), xcln.String(), "not removing misplaced obj-s: [", cserr, why, "]")
 	}
 	return ok
 }
@@ -256,32 +260,26 @@ func (j *clnJ) String() string {
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
-func (j *clnJ) run(providers []string) {
-	var (
-		err, erm error
-	)
+func (j *clnJ) jog(providers []string) {
 	// globally
-	erm = j.rmDeleted()
-	if erm != nil {
-		nlog.Errorln(erm)
-	}
+	j.rmDeleted()
 
 	// traverse
 	if len(j.ini.Args.Buckets) != 0 {
-		err = j.jogBcks(j.ini.Args.Buckets)
+		j.jogBcks(j.ini.Args.Buckets)
 	} else {
-		err = j.jog(providers)
+		j.jogProviders(providers)
 	}
-	if err == nil {
-		err = erm
-	}
-	if err != nil {
-		nlog.Errorf("%s: %v", j, err)
-	}
+
+	j.oldWork = slices.Clip(j.oldWork)
+	j.misplaced.loms = slices.Clip(j.misplaced.loms)
+	j.misplaced.ec = slices.Clip(j.misplaced.ec)
+
 	j.p.wg.Done()
 }
 
-func (j *clnJ) jog(providers []string) (rerr error) {
+func (j *clnJ) jogProviders(providers []string) {
+	xcln := j.ini.Xaction
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
@@ -289,25 +287,24 @@ func (j *clnJ) jog(providers []string) (rerr error) {
 			opts = fs.WalkOpts{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
-			nlog.Errorln(err)
-			if rerr == nil {
-				rerr = err
-			}
+			xcln.AddErr(err, 0)
 			continue
 		}
 		if len(bcks) == 0 {
 			continue
 		}
-		err = j.jogBcks(bcks)
-		if err != nil && rerr == nil {
-			rerr = err
+		j.jogBcks(bcks)
+		if xcln.IsAborted() || j.done() {
+			return
 		}
 	}
-	return rerr
 }
 
-func (j *clnJ) jogBcks(bcks []cmn.Bck) (rerr error) {
-	bowner := core.T.Bowner()
+func (j *clnJ) jogBcks(bcks []cmn.Bck) {
+	var (
+		xcln   = j.ini.Xaction
+		bowner = core.T.Bowner()
+	)
 	for i := range bcks { // for each bucket under a given provider
 		var (
 			err error
@@ -322,50 +319,53 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (rerr error) {
 				if err = fs.DestroyBucket(act, &bck, 0 /*unknown BID*/); err == nil {
 					nlog.Infof("%s: %s %s", j, act, bck.String())
 				} else {
-					j.ini.Xaction.AddErr(err)
+					xcln.AddErr(err)
 					nlog.Errorf("%s %s: %v - skipping", j, act, err)
 				}
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
-				j.ini.Xaction.AddErr(err)
+				xcln.AddErr(err)
 				nlog.Errorf("%s: %v - skipping %s", j, err, bck.String())
 			}
 			continue
 		}
-		err = j.jogBck()
-		if err != nil && rerr == nil {
-			rerr = err
+		j.jogBck()
+		if xcln.IsAborted() || j.done() {
+			return
 		}
 	}
-	return rerr
 }
 
 // main method: walk and visit assorted content types (specified below)
-func (j *clnJ) jogBck() error {
+func (j *clnJ) jogBck() {
+	xcln := j.ini.Xaction
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
 		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT},
-		Callback: j.walk,
+		Callback: j.visit,
 		Sorted:   false,
 	}
 	if err := fs.Walk(opts); err != nil {
-		return err
+		xcln.AddErr(err)
+		return
 	}
-	return j.rmLeftovers(flagRmAll)
+	j.rmLeftovers(flagRmAll)
 }
 
-func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
+func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
+	xcln := j.ini.Xaction
 	if de.IsDir() {
 		j.rmEmptyDir(fqn)
 		return nil
 	}
-	if err := j.yieldTerm(); err != nil {
-		return err
+	if j.done() {
+		return nil
 	}
 
 	var parsed fs.ParsedFQN
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
+		xcln.AddErr(err)
 		return nil
 	}
 	if parsed.ContentType != fs.ObjCT {
@@ -375,10 +375,17 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 		j.visitObj(fqn, lom)
 		core.FreeLOM(lom)
 	}
+
+	j.nvisits++
+	if fs.IsThrottle(j.nvisits) {
+		if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
+			time.Sleep(fs.Throttle1ms)
+		}
+	}
+
 	return nil
 }
 
-// TODO -- FIXME: visit chunks (fs.ChunkCT)
 func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkCT:
@@ -440,11 +447,8 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	}
 }
 
-// [TODO]
-// - add stats error counters (stats.ErrLmetaCorruptedCount, ...)
-// - revisit rm-ed byte counting
-// - dry-run (feature) with all to-be removed listed
 func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
+	xcln := j.ini.Xaction
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
 		nlog.Errorln(j.String(), "unexpected object fqn", fqn, err)
 		// TODO -- FIXME: consider applying force
@@ -456,7 +460,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		if err != nil {
 			if !cos.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
-				j.ini.Xaction.AddErr(err)
+				xcln.AddErr(err)
 				core.T.FSHC(err, lom.Mountpath(), lom.FQN)
 			}
 			return
@@ -467,15 +471,15 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
-				nlog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
-				j.ini.Xaction.AddErr(err)
+				nlog.Errorf("%s rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
+				xcln.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
 		} else if cmn.IsErrLmetaNotFound(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
-				nlog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
-				j.ini.Xaction.AddErr(err)
+				nlog.Errorf("%s rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
+				xcln.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
 			}
@@ -535,49 +539,53 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 // removals --------------------------------------------
 //
 
-func (j *clnJ) rmAnyBatch(specifier int) error {
+func (j *clnJ) rmAnyBatch(specifier int) {
 	debug.Assert(j.config.LRU.EvictBatchSize >= cmn.EvictBatchSizeMin)
 
 	switch specifier {
 	case flagRmOldWork:
 		if int64(len(j.oldWork)) < j.config.LRU.EvictBatchSize {
-			return nil
+			return
 		}
 	case flagRmMisplacedLOMs:
 		if int64(len(j.misplaced.loms)) < j.config.LRU.EvictBatchSize {
-			return nil
+			return
 		}
 	case flagRmMisplacedEC:
 		if int64(len(j.misplaced.ec)) < j.config.LRU.EvictBatchSize {
-			return nil
+			return
 		}
 	default:
 		debug.Assert(false, "invalid rm-batch specifier: ", specifier)
+		return
 	}
-	return j.rmLeftovers(specifier)
+	j.rmLeftovers(specifier)
 }
 
-func (j *clnJ) rmDeleted() (err error) {
-	err = j.mi.RemoveDeleted(j.String())
+func (j *clnJ) rmDeleted() {
+	xcln := j.ini.Xaction
+	err := j.mi.RemoveDeleted(j.String())
 	if err != nil {
-		j.ini.Xaction.AddErr(err)
+		xcln.AddErr(err)
 	}
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
-		return err
+		return
 	}
 
 	// last rm-deleted done: refresh cap now
 	var errCap error
 	j.p.cs.b, err, errCap = fs.CapRefresh(j.config, nil /*tcdf*/)
 	if err != nil {
-		j.ini.Xaction.Abort(err)
-	} else {
-		nlog.Infoln(j.ini.Xaction.Name(), "post-rm('deleted'):", errCap)
+		xcln.Abort(err)
+		return
 	}
-	return err
+	if errCap != nil {
+		nlog.Warningln(xcln.Name(), "post-rm('deleted'):", errCap)
+	}
 }
 
 func (j *clnJ) rmExtraCopies(lom *core.LOM) {
+	xcln := j.ini.Xaction
 	if !lom.TryLock(true) {
 		return // must be busy
 	}
@@ -586,7 +594,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cos.IsNotExist(err) {
-			j.ini.Xaction.AddErr(err)
+			xcln.AddErr(err)
 		}
 		return
 	}
@@ -597,14 +605,16 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 		return // extremely unlikely but ok
 	}
 	if _, err := lom.DelExtraCopies(); err != nil {
-		err = fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
-		j.ini.Xaction.AddErr(err, 5, cos.SmoduleSpace)
+		e := fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
+		xcln.AddErr(e, 5, cos.SmoduleSpace)
 	}
 }
 
 func (j *clnJ) rmEmptyDir(fqn string) {
-	base := filepath.Base(fqn)
-
+	var (
+		xcln = j.ini.Xaction
+		base = filepath.Base(fqn)
+	)
 	if fs.LikelyCT(base) {
 		return
 	}
@@ -617,7 +627,7 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 
 	fh, err := os.Open(fqn)
 	if err != nil {
-		j.ini.Xaction.AddErr(fmt.Errorf("check-empty-dir: failed to open %q: %v", fqn, err))
+		xcln.AddErr(fmt.Errorf("check-empty-dir: open %q: %v", fqn, err))
 		core.T.FSHC(err, j.mi, "")
 		return
 	}
@@ -636,13 +646,14 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 			nlog.Infoln(j.String(), "rm empty dir:", fqn)
 		}
 	default:
-		nlog.Warningf("%s: failed to read dir %q: %v", j, fqn, ern)
+		nlog.Warningf("%s read dir %q: %v", j, fqn, ern)
 	}
 }
 
-func (j *clnJ) rmLeftovers(specifier int) error {
+func (j *clnJ) rmLeftovers(specifier int) {
 	var (
 		fevicted, bevicted int64
+		n                  int64
 		xcln               = j.ini.Xaction
 	)
 	if cmn.Rom.FastV(4, cos.SmoduleSpace) {
@@ -655,12 +666,13 @@ func (j *clnJ) rmLeftovers(specifier int) error {
 			finfo, erw := os.Stat(workfqn)
 			if erw == nil {
 				if err := cos.RemoveFile(workfqn); err != nil {
-					nlog.Errorf("%s: failed to rm old work %q: %v", j, workfqn, err)
+					e := fmt.Errorf("%s: rm old work %q: %v", j, workfqn, err)
+					xcln.AddErr(e)
 				} else {
 					fevicted++
 					bevicted += finfo.Size()
 					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-						nlog.Infof("%s: rm old work %q", j, workfqn)
+						nlog.Infof("%s: rm old work %q, size=%d", j, workfqn, finfo.Size())
 					}
 				}
 			}
@@ -673,17 +685,24 @@ func (j *clnJ) rmLeftovers(specifier int) error {
 		if len(j.misplaced.loms) > 0 && j.p.rmMisplaced() {
 			for _, mlom := range j.misplaced.loms {
 				var (
+					err     error
 					fqn     = mlom.FQN
 					removed bool
 				)
 				lom := core.AllocLOM(mlom.ObjName)
 				switch {
 				case lom.InitBck(&j.bck) != nil:
-					removed = os.Remove(fqn) == nil
+					err = os.Remove(fqn)
+					removed = err == nil
 				case lom.FromFS() != nil:
-					removed = os.Remove(fqn) == nil
+					err = os.Remove(fqn)
+					removed = err == nil
 				default:
-					removed, _ = lom.DelExtraCopies(fqn)
+					removed, err = lom.DelExtraCopies(fqn)
+				}
+				if err != nil {
+					e := fmt.Errorf("%s rm misplaced %q: %v", j, lom.String(), err)
+					xcln.AddErr(e)
 				}
 				core.FreeLOM(lom)
 
@@ -693,8 +712,17 @@ func (j *clnJ) rmLeftovers(specifier int) error {
 					if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 						nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.Lsize(true /*not loaded*/))
 					}
-					if err := j.yieldTerm(); err != nil {
-						return err
+
+					// throttle
+					n++
+					if fs.IsThrottle(n) {
+						if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
+							time.Sleep(fs.Throttle10ms)
+						}
+					}
+
+					if j.done() {
+						return
 					}
 				}
 			}
@@ -712,8 +740,17 @@ func (j *clnJ) rmLeftovers(specifier int) error {
 			if os.Remove(ct.FQN()) == nil {
 				fevicted++
 				bevicted += ct.Lsize()
-				if err := j.yieldTerm(); err != nil {
-					return err
+
+				// throttle
+				n++
+				if fs.IsThrottle(n) {
+					if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
+						time.Sleep(fs.Throttle10ms)
+					}
+				}
+
+				if j.done() {
+					return
 				}
 			}
 		}
@@ -723,26 +760,17 @@ func (j *clnJ) rmLeftovers(specifier int) error {
 	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted)
 	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
 	xcln.ObjsAdd(int(fevicted), bevicted)
-
-	return nil
 }
 
-//
-// self-throttle
-//
-
-func (j *clnJ) yieldTerm() error {
+func (j *clnJ) done() bool {
 	xcln := j.ini.Xaction
 	select {
-	case errCause := <-xcln.ChanAbort():
-		return cmn.NewErrAborted(xcln.Name(), "", errCause)
+	case <-xcln.ChanAbort():
+		return true
 	case <-j.stopCh:
-		return cmn.NewErrAborted(xcln.Name(), "", nil)
+		return true
 	default:
 		break
 	}
-	if xcln.Finished() {
-		return cmn.NewErrAborted(xcln.Name(), "", nil)
-	}
-	return nil
+	return xcln.Finished()
 }
