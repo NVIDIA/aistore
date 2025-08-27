@@ -377,7 +377,7 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 	}
 
 	j.nvisits++
-	if fs.IsThrottle(j.nvisits) {
+	if fs.IsThrottleWalk(j.nvisits) {
 		if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
 			time.Sleep(fs.Throttle1ms)
 		}
@@ -715,7 +715,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 
 					// throttle
 					n++
-					if fs.IsThrottle(n) {
+					if fs.IsThrottleDflt(n) {
 						if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
 							time.Sleep(fs.Throttle10ms)
 						}
@@ -743,7 +743,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 
 				// throttle
 				n++
-				if fs.IsThrottle(n) {
+				if fs.IsThrottleDflt(n) {
 					if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
 						time.Sleep(fs.Throttle10ms)
 					}

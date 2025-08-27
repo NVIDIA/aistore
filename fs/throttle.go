@@ -20,14 +20,18 @@ const (
 	Throttle10ms  = 10 * time.Millisecond
 	Throttle100ms = 100 * time.Millisecond
 
-	throttleBatch  = 0x1f // a.k.a. unit or period
+	throttleBatch  = 0x1f
 	throMiniBatch  = 0x1f >> 1
 	throMicroBatch = 0x1f >> 2
+
+	throttleWalk = 0xff
 )
 
-func IsThrottle(n int64) bool      { return n&throttleBatch == throttleBatch }
-func IsMiniThrottle(n int64) bool  { return n&throMiniBatch == throMiniBatch }
-func IsMicroThrottle(n int64) bool { return n&throMicroBatch == throMicroBatch }
+func IsThrottleDflt(n int64) bool  { return n&throttleBatch == throttleBatch }
+func IsThrottleMini(n int64) bool  { return n&throMiniBatch == throMiniBatch }
+func IsThrottleMicro(n int64) bool { return n&throMicroBatch == throMicroBatch }
+
+func IsThrottleWalk(n int64) bool { return n&throttleWalk == throttleWalk }
 
 // - max disk utilization across mountpaths
 // - max (1 minute, 5 minute) load average

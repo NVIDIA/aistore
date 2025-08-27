@@ -359,7 +359,7 @@ func (j *rcvyJogger) run() {
 
 		n++
 		// (compare with ec/putjogger where we also check memory pressure)
-		if err == nil && fs.IsThrottle(n) {
+		if err == nil && fs.IsThrottleDflt(n) {
 			pct, _, _ := fs.ThrottlePct()
 			if pct >= fs.MaxThrottlePct {
 				time.Sleep(fs.Throttle10ms)

@@ -150,7 +150,7 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 		c.parent.AddErr(err, 0)
 	}
 	c.ntotal++
-	if (c.micro && fs.IsMicroThrottle(c.ntotal)) || fs.IsMiniThrottle(c.ntotal) {
+	if (c.micro && fs.IsThrottleMicro(c.ntotal)) || fs.IsThrottleMini(c.ntotal) {
 		if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
 			time.Sleep(fs.Throttle100ms)
 			if !c.micro && pressure >= memsys.PressureExtreme {

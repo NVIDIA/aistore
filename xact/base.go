@@ -245,7 +245,10 @@ func (xctn *Base) AddErr(err error, logExtra ...int) {
 		return
 	}
 	// finally, FastV
-	module := logExtra[1]
+	module := cos.SmoduleXs
+	if len(logExtra) > 1 {
+		module = logExtra[1]
+	}
 	if cmn.Rom.FastV(level, module) {
 		nlog.InfoDepth(1, "Warning:", err)
 	}

@@ -166,7 +166,7 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.throttle && fs.IsThrottle(u.nd) {
+		if u.throttle && fs.IsThrottleDflt(u.nd) {
 			// compare with _throttle(evct.pct) but note: caller's waiting on wg
 			if u.pct >= maxEvictThreashold {
 				time.Sleep(fs.Throttle10ms)
@@ -371,7 +371,7 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	if fs.IsMiniThrottle(evct.evicted) {
+	if fs.IsThrottleMini(evct.evicted) {
 		_throttle(evct.pct)
 	}
 
