@@ -301,7 +301,8 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 	}
 }
 
-func (r *XactTCB) Run(wg *sync.WaitGroup) {
+// sub-routine that does the core copy bucket logic; doesn't include the Finish() call and abort check
+func (r *XactTCB) run(wg *sync.WaitGroup) {
 	// make sure `nat` hasn't changed between Start and now (highly unlikely)
 	if r.dm != nil {
 		smap := core.T.Sowner().Get()
@@ -367,6 +368,10 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	}
 
 	r.sntl.cleanup()
+}
+
+func (r *XactTCB) Run(wg *sync.WaitGroup) {
+	r.run(wg)
 	r.Finish()
 
 	if a := r.nwp.chanFull.Load(); a > 0 {

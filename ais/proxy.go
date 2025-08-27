@@ -2267,6 +2267,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 		final: p.bmodSync,
 		msg:   &apc.ActMsg{Value: apc.ActMoveBck},
 		bcks:  []*meta.Bck{meta.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
+		wait:  true,
 	}
 	_, err := p.owner.bmd.modify(ctx)
 	debug.AssertNoErr(err)

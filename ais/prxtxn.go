@@ -542,7 +542,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	nl := xact.NewXactNL(c.uuid, c.msg.Action, &c.smap.Smap, nil, bckFrom.Bucket(), bckTo.Bucket())
 	nl.SetOwner(equalIC)
 	// add success/abort cleanup via notifications
-	r := &_brenameFinalizer{p, bckFrom, bckTo}
+	r := &_brenameFinalizer{p, bckTo}
 	nl.F = r.cb
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -1163,8 +1163,8 @@ func (p *proxy) initBackendProp(nprops *cmn.Bprops) (err error) {
 ///////////////////////
 
 type _brenameFinalizer struct {
-	p              *proxy
-	bckFrom, bckTo *meta.Bck
+	p     *proxy
+	bckTo *meta.Bck
 }
 
 func (f *_brenameFinalizer) cb(nl nl.Listener) {
@@ -1175,9 +1175,6 @@ func (f *_brenameFinalizer) cb(nl nl.Listener) {
 	if aborted {
 		nlog.Warningln("abort:", err)
 		_ = f.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, f.bckTo)
-	} else {
-		nlog.Infoln("rename bucket success, destroying source bucket", f.bckFrom.Cname(""))
-		_ = f.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, f.bckFrom)
 	}
 }
 

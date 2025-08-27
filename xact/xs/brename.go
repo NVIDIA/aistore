@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -57,14 +58,6 @@ func (p *bmvFactory) Start() error {
 }
 
 func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	// if p.phase == apc.Begin2PC {
-	// 	if !prevEntry.Get().Finished() {
-	// 		err = fmt.Errorf("%s: cannot(%s=>%s) older rename still in progress",
-	// 			p.Kind(), p.cargs.BckFrom, p.cargs.BckTo)
-	// 		return
-	// 	}
-	// 	// TODO: more checks
-	// }
 	prev := prevEntry.(*bmvFactory)
 
 	if p.UUID() != prev.UUID() {
@@ -90,8 +83,17 @@ func newBckRename(uuid, kind string, tcbArgs *xreg.TCBArgs) (xctn *BckRename, er
 	return
 }
 
+// BckRename xaction is a wrapper around XactTCB that adds the following:
+// - if not aborted; call BMDVersionFixup to piggyback bucket renaming to remove bckFrom from BMD (see `whatRenamedLB` in proxy.go)
+// -
 func (r *BckRename) Run(wg *sync.WaitGroup) {
-	r.XactTCB.Run(wg)
+	r.XactTCB.run(wg)
+	if r.IsAborted() {
+		nlog.Infoln(r.Name(), "aborted", r.AbortErr())
+	} else {
+		core.T.BMDVersionFixup(nil, r.XactTCB.args.BckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
+	}
+	r.Finish()
 }
 
 func (r *BckRename) String() string {
