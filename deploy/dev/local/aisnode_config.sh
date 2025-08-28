@@ -69,14 +69,16 @@ cat > $AIS_CONF_FILE <<EOL
 	"lru": {
 		"dont_evict_time":   "120m",
 		"capacity_upd_time": "10m",
+		"evict_batch_size":  32768,
 		"enabled":           true
 	},
 	"disk":{
-	    "iostat_time_long":  "${AIS_IOSTAT_TIME_LONG:-2s}",
-	    "iostat_time_short": "${AIS_IOSTAT_TIME_SHORT:-100ms}",
-	    "disk_util_low_wm":  20,
-	    "disk_util_high_wm": 80,
-	    "disk_util_max_wm":  95
+	    "iostat_time_long":   "${AIS_IOSTAT_TIME_LONG:-2s}",
+	    "iostat_time_short":  "${AIS_IOSTAT_TIME_SHORT:-100ms}",
+	    "iostat_time_smooth": "8s",
+	    "disk_util_low_wm":   20,
+	    "disk_util_high_wm":  80,
+	    "disk_util_max_wm":   95
 	},
 	"rebalance": {
 		"dest_retry_time":	"2m",

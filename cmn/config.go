@@ -372,7 +372,7 @@ type (
 		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
 
 		// Specifies a unit of space-cleanup and LRU processing
-		// Zero value _translates_ as a (non-zero) system default
+		// Zero value _translates_ as a (non-zero) system default `evictBatchSizeDflt`
 		EvictBatchSize int64 `json:"evict_batch_size,omitempty"`
 
 		// Enabled: LRU will only run when set to true
@@ -391,6 +391,18 @@ type (
 		DiskUtilMaxWM   int64        `json:"disk_util_max_wm"`
 		IostatTimeLong  cos.Duration `json:"iostat_time_long"`
 		IostatTimeShort cos.Duration `json:"iostat_time_short"`
+
+		// Linear history window for disk utilization smoothing
+		// (not to confuse with storage capacity (aka, space) utilization).
+		// How it works:
+		// - previously sampled disk utilizations that fall into this window
+		// get then factored-in to compute the resulting "smoothed" numbers;
+		// - the idea is to eliminate instantaneous short-term spikes and further use
+		// the utilization stats in throttling and least-used decisions;
+		// - zero value _maps_ to a system default (see below)
+		// - any positive value smaller than `IostatTimeLong` disables smoothing
+		// (in other words, causes to report "raw" IO utilizations)
+		IostatTimeSmooth cos.Duration `json:"iostat_time_smooth,omitempty"`
 	}
 	DiskConfToSet struct {
 		DiskUtilLowWM   *int64        `json:"disk_util_low_wm,omitempty"`
@@ -398,6 +410,9 @@ type (
 		DiskUtilMaxWM   *int64        `json:"disk_util_max_wm,omitempty"`
 		IostatTimeLong  *cos.Duration `json:"iostat_time_long,omitempty" swaggertype:"primitive,string"`
 		IostatTimeShort *cos.Duration `json:"iostat_time_short,omitempty" swaggertype:"primitive,string"`
+
+		// see above
+		IostatTimeSmooth *cos.Duration `json:"iostat_time_smooth,omitempty"`
 	}
 
 	RebalanceConf struct {
@@ -1137,20 +1152,48 @@ func (c BackendConfAIS) String() (s string) {
 // DiskConf //
 //////////////
 
+const (
+	iosSmoothMaxMultiplier = 10
+
+	iosTimeLongMax  = 60 * time.Second
+	iosTimeLongMin  = 2 * time.Second
+	iosTimeShortMin = time.Millisecond
+)
+
 func (c *DiskConf) Validate() (err error) {
 	lwm, hwm, maxwm := c.DiskUtilLowWM, c.DiskUtilHighWM, c.DiskUtilMaxWM
 	if lwm <= 0 || hwm <= lwm || maxwm <= hwm || maxwm > 100 {
 		return fmt.Errorf("invalid (disk_util_lwm, disk_util_hwm, disk_util_maxwm) config %+v", c)
 	}
-	if c.IostatTimeLong <= 0 {
-		return errors.New("disk.iostat_time_long is zero")
+	if c.IostatTimeShort.D() < iosTimeShortMin || c.IostatTimeShort.D() > iosTimeLongMax {
+		return fmt.Errorf("invalid disk.ios_time_short %v (expecting range [%v, %v])",
+			c.IostatTimeShort, iosTimeShortMin, iosTimeLongMax)
 	}
-	if c.IostatTimeShort <= 0 {
-		return errors.New("disk.iostat_time_short is zero")
+	if c.IostatTimeLong.D() < iosTimeLongMin || c.IostatTimeLong.D() > iosTimeLongMax {
+		return fmt.Errorf("invalid disk.ios_time_long %v (expecting range [%v, %v])",
+			c.IostatTimeLong, iosTimeLongMin, iosTimeLongMax)
 	}
 	if c.IostatTimeLong < c.IostatTimeShort {
-		return fmt.Errorf("disk.iostat_time_long %v shorter than disk.iostat_time_short %v",
+		return fmt.Errorf("disk.ios_time_long %v shorter than disk.ios_time_short %v",
 			c.IostatTimeLong, c.IostatTimeShort)
+	}
+
+	if c.IostatTimeSmooth == 0 {
+		// try to come up with a sensible multiplier
+		switch {
+		case c.IostatTimeLong.D() >= iosTimeLongMax/2:
+			c.IostatTimeSmooth = c.IostatTimeLong
+		case c.IostatTimeLong.D() > 10*time.Second:
+			c.IostatTimeSmooth = 2 * c.IostatTimeLong
+		case c.IostatTimeLong.D() > 5*time.Second:
+			c.IostatTimeSmooth = 3 * c.IostatTimeLong
+		default:
+			c.IostatTimeSmooth = 4 * c.IostatTimeLong
+		}
+		// NOTE: a small positive value is interpreted as: disable smoothhin
+	} else if c.IostatTimeSmooth < 0 || c.IostatTimeSmooth > iosSmoothMaxMultiplier*c.IostatTimeLong {
+		return fmt.Errorf("invalid disk.ios_time_smooth %v (must be a non-negative value <= %d*ios_time_long)",
+			c.IostatTimeSmooth, iosSmoothMaxMultiplier)
 	}
 	return nil
 }

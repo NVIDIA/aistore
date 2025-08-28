@@ -483,16 +483,20 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 			writeBytes = _nonneg(ncache.wbytes[disk] - statsCache.wbytes[disk])
 		)
 		if elapsedMillis > 0 {
-			// On macOS computation of `diskUtil` may sometimes exceed 100%
-			// which may cause some further inaccuracies.
 			if ioMs >= elapsedMillis {
-				ncache.util[disk] = 100
+				ncache.util[disk] = 100 // (unlikely)
 			} else {
 				ncache.util[disk] = cos.DivRoundI64(ioMs*100, elapsedMillis)
 			}
 		} else {
 			ncache.util[disk] = statsCache.util[disk]
 		}
+
+		debug.Func(func() {
+			u := ncache.util[disk]
+			debug.Assertf(u >= 0 && u <= 100, "util out of bounds: %d, %s", u, disk)
+		})
+
 		if !config.TestingEnv() {
 			ncache.mpathUtil[mpath] += ncache.util[disk]
 		}
@@ -532,8 +536,10 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 				ncache.mpathUtil[mpath] = u
 				break
 			}
-			ncache.mpathUtilRO.set(mpath, u)
 			maxUtil = max(maxUtil, u)
+
+			smoothedUtil := ios._smoothedUtil(mpath, config, u, nowTs)
+			ncache.mpathUtilRO.set(mpath, smoothedUtil)
 		}
 		return ncache, maxUtil, missingInfo
 	}
@@ -546,10 +552,73 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 		u := cos.DivRoundI64(ncache.mpathUtil[mpath], num)
 		ncache.mpathUtil[mpath] = u
-		ncache.mpathUtilRO.set(mpath, u)
 		maxUtil = max(maxUtil, u)
+
+		smoothedUtil := ios._smoothedUtil(mpath, config, u, nowTs)
+		ncache.mpathUtilRO.set(mpath, smoothedUtil)
 	}
 	return ncache, maxUtil, missingInfo
+}
+
+// Hybrid smoothing:
+// - compute a linear age-weighted average over the ring (excludes the current sample).
+// - blend with the current sample using the conventional 80/20 mix.
+// Note:
+// This is not an EMA and does not use exponential decay; it is a linear kernel + convex blend.
+// For responsiveness, if the instantaneous util >= max(high-wm, 90%) threshold
+// we return the instantaneous value unmodified.
+
+func (ios *ios) _smoothedUtil(mpath string, config *cmn.Config, currentUtil, nowTs int64) int64 {
+	var (
+		weightedSum int64
+		totalWeight int64
+		cnt         int
+		l           = len(ios.cacheHst)
+		maxDelta    = config.Disk.IostatTimeSmooth.D().Nanoseconds()
+
+		// system default is 80%;
+		// the motivation to apply smoothing all the way to at least 90%
+		highWM = max(config.Disk.DiskUtilHighWM, 90)
+	)
+	// better throttle right away
+	if currentUtil >= highWM {
+		return currentUtil
+	}
+	// when disabled via config
+	if maxDelta < config.Disk.IostatTimeLong.D().Nanoseconds() {
+		return currentUtil
+	}
+
+	for i := 1; i < l; i++ {
+		idx := (ios.cacheIdx - i + l) % l
+		cache := ios.cacheHst[idx]
+		if cache.timestamp == 0 || cache.timestamp > nowTs {
+			continue
+		}
+		timeDelta := nowTs - cache.timestamp
+		if timeDelta >= maxDelta {
+			break
+		}
+		util, ok := cache.mpathUtil[mpath]
+		if !ok {
+			continue
+		}
+		// simple linear decay
+		cnt++
+		weight := maxDelta - timeDelta
+		weightedSum += util * weight
+		totalWeight += weight
+	}
+	// need at least 2 valid samples
+	if totalWeight == 0 || cnt < 2 {
+		return currentUtil
+	}
+
+	// 80/20
+	avg := cos.DivRoundI64(weightedSum, totalWeight)
+	debug.Assertf(avg >= 0 && avg <= 100, "smooth util out of bounds: %d, %s", avg, mpath)
+
+	return cos.DivRoundI64(80*avg+20*currentUtil, 100)
 }
 
 /////////////
