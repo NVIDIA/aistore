@@ -46,6 +46,10 @@ type (
 	}
 )
 
+const (
+	cacheRingSize = 32
+)
+
 // internal
 type (
 	cache struct {
@@ -74,7 +78,7 @@ type (
 		disk2sysfn  cos.StrKVs
 		blockStats  allBlockStats
 		cache       ratomic.Pointer[cache]
-		cacheHst    [16]*cache
+		cacheHst    [cacheRingSize]*cache
 		cacheIdx    int
 		mu          sync.Mutex
 		busy        atomic.Bool
@@ -89,15 +93,22 @@ var _ IOS = (*ios)(nil)
 ///////////////
 
 func (x *MpathUtil) Get(mpath string) int64 {
-	if v, ok := (*sync.Map)(x).Load(mpath); ok {
+	m := (*sync.Map)(x)
+	if v, ok := m.Load(mpath); ok {
 		util := v.(int64)
 		return util
 	}
 	return 100 // assume the worst
 }
 
-func (x *MpathUtil) Set(mpath string, util int64) {
-	(*sync.Map)(x).Store(mpath, util)
+func (x *MpathUtil) set(mpath string, util int64) {
+	m := (*sync.Map)(x)
+	m.Store(mpath, util)
+}
+
+func (x *MpathUtil) del(mpath string) {
+	m := (*sync.Map)(x)
+	m.Delete(mpath)
 }
 
 /////////
@@ -283,6 +294,11 @@ func (ios *ios) _update(mpath string, fsdisks FsDisks, disks []string) {
 func (ios *ios) RemoveMpath(mpath string, testingEnv bool) {
 	ios.mu.Lock()
 	ios._del(mpath, testingEnv)
+
+	for _, cache := range ios.cacheHst {
+		cache.mpathUtilRO.del(mpath)
+	}
+
 	ios.mu.Unlock()
 }
 
@@ -320,7 +336,7 @@ func (ios *ios) _delDiskTesting(mpath, disk string) {
 			}
 		}
 	}
-	delete(ios.mpath2disks, disk)
+	delete(ios.mpath2disks, mpath)
 }
 
 func (ios *ios) _delDisk(mpath, disk string) {
@@ -407,11 +423,9 @@ func (ios *ios) doRefresh(nowTs int64) *cache {
 	return ncache
 }
 
-func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingInfo bool) {
-	ios.cacheIdx++
-	ios.cacheIdx %= len(ios.cacheHst)
-	ncache = ios.cacheHst[ios.cacheIdx] // from a pool
+func _nonneg(v int64) int64 { return max(v, 0) }
 
+func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingInfo bool) {
 	var (
 		statsCache     = ios._get()
 		nowTs          = mono.NanoTime()
@@ -419,6 +433,15 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		elapsedSeconds = cos.DivRoundI64(elapsed, int64(time.Second))
 		elapsedMillis  = cos.DivRoundI64(elapsed, int64(time.Millisecond))
 	)
+
+	ios.cacheIdx++
+	ios.cacheIdx %= len(ios.cacheHst)
+	ncache = ios.cacheHst[ios.cacheIdx]
+	if ncache == statsCache { // (unlikely)
+		ios.cacheIdx++
+		ios.cacheIdx %= len(ios.cacheHst)
+		ncache = ios.cacheHst[ios.cacheIdx]
+	}
 
 	ncache.timestamp = nowTs
 	for mpath := range ios.mpath2disks {
@@ -453,11 +476,11 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 		// deltas
 		var (
-			ioMs       = ncache.ioms[disk] - statsCache.ioms[disk]
-			reads      = ncache.reads[disk] - statsCache.reads[disk]
-			writes     = ncache.writes[disk] - statsCache.writes[disk]
-			readBytes  = ncache.rbytes[disk] - statsCache.rbytes[disk]
-			writeBytes = ncache.wbytes[disk] - statsCache.wbytes[disk]
+			ioMs       = _nonneg(ncache.ioms[disk] - statsCache.ioms[disk])
+			reads      = _nonneg(ncache.reads[disk] - statsCache.reads[disk])
+			writes     = _nonneg(ncache.writes[disk] - statsCache.writes[disk])
+			readBytes  = _nonneg(ncache.rbytes[disk] - statsCache.rbytes[disk])
+			writeBytes = _nonneg(ncache.wbytes[disk] - statsCache.wbytes[disk])
 		)
 		if elapsedMillis > 0 {
 			// On macOS computation of `diskUtil` may sometimes exceed 100%
@@ -509,7 +532,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 				ncache.mpathUtil[mpath] = u
 				break
 			}
-			ncache.mpathUtilRO.Set(mpath, u)
+			ncache.mpathUtilRO.set(mpath, u)
 			maxUtil = max(maxUtil, u)
 		}
 		return ncache, maxUtil, missingInfo
@@ -523,7 +546,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 		u := cos.DivRoundI64(ncache.mpathUtil[mpath], num)
 		ncache.mpathUtil[mpath] = u
-		ncache.mpathUtilRO.Set(mpath, u)
+		ncache.mpathUtilRO.set(mpath, u)
 		maxUtil = max(maxUtil, u)
 	}
 	return ncache, maxUtil, missingInfo
@@ -533,14 +556,12 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 // FsDisks //
 /////////////
 
-func (fsdisks FsDisks) ToSlice() (disks []string) {
-	disks = make([]string, len(fsdisks))
-	var i int
+func (fsdisks FsDisks) ToSlice() (out []string) {
+	out = make([]string, 0, len(fsdisks))
 	for d := range fsdisks {
-		disks[i] = d
-		i++
+		out = append(out, d)
 	}
-	return disks
+	return out
 }
 
 func (fsdisks FsDisks) _str() string {

@@ -1,12 +1,11 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"regexp"
@@ -57,15 +56,13 @@ func readStats(disks, sysfnames cos.StrKVs, all allBlockStats) {
 
 // https://www.kernel.org/doc/Documentation/block/stat.txt
 func _read(sysfn string, ds *blockStats) bool {
-	file, err := os.Open(sysfn)
+	b, err := os.ReadFile(sysfn)
 	if err != nil {
 		return false
 	}
-	scanner := bufio.NewScanner(file)
-	scanner.Scan()
-	fields := strings.Fields(scanner.Text())
-
-	_ = file.Close()
+	// (stats is a single line)
+	line, _, _ := strings.Cut(string(b), "\n")
+	fields := strings.Fields(line)
 	if len(fields) < 11 {
 		return false
 	}
@@ -115,7 +112,7 @@ func icn(disk, dir string) (cdisk string, err error) {
 	}
 	dentries, errN := os.ReadDir(dir)
 	if errN != nil {
-		return "", fmt.Errorf("%q does not parse as NVMe icn", dir)
+		return "", fmt.Errorf("icn: failed to read %q for %q: %v", dir, disk, errN)
 	}
 	for _, d := range dentries {
 		name := d.Name()
@@ -126,6 +123,7 @@ func icn(disk, dir string) (cdisk string, err error) {
 		if len(b) < 4 {
 			continue
 		}
+		// same instance and namespace => candidate controller path
 		if a[1] == b[1] && a[2] == b[3] {
 			cdisk = name
 			break
@@ -158,6 +156,12 @@ func icnPath(dir, cdir, mountpath string) bool {
 		return false
 	}
 	fqn := fh.Name()
+
+	// write one byte and fsync
+	// (consider writing 4K if there's ever any doubt)
+	fh.Write([]byte{0x0})
+	fh.Sync()
+
 	fh.Close()
 	err = os.Remove(fqn)
 	debug.AssertNoErr(err)
