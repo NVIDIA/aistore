@@ -24,9 +24,9 @@ const (
 	QparamDelimiter         = "delimiter"          // Delimiter for grouping object keys
 
 	// multipart
-	QparamMptUploads        = "uploads"  // Start multipart upload or list active uploads
-	QparamMptUploadID       = "uploadId" // Complete, abort, or list parts of specific multipart upload
-	QparamMptPartNo         = "partNumber"
+	QparamMptUploads        = "uploads"    // Start multipart upload or list active uploads
+	QparamMptUploadID       = "uploadId"   // Complete, abort, or list parts of specific multipart upload
+	QparamMptPartNo         = "partNumber" // Part number for multipart upload
 	QparamMptMaxUploads     = "max-uploads"
 	QparamMptUploadIDMarker = "upload-id-marker"
 

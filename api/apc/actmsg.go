@@ -57,6 +57,11 @@ const (
 	ActPromote        = "promote"
 	ActRenameObject   = "rename-obj"
 
+	// multipart upload
+	ActMptUpload   = "mpt-upload"   // create a new multipart upload
+	ActMptComplete = "mpt-complete" // complete a multipart upload
+	ActMptAbort    = "mpt-abort"    // abort a multipart upload
+
 	// cp (reverse)
 	ActResetStats  = "reset-stats"
 	ActResetConfig = "reset-config"

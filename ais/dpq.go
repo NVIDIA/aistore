@@ -33,8 +33,13 @@ type dpq struct {
 	etl struct {
 		name, pipeline, targs string // QparamETLName, QparamETLPipeline, QparamETLTransformArgs
 	}
+	mpt struct {
+		uploadID string // QparamMptUploadID
+		partNo   int    // QparamMptPartNo
+	}
 
 	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
+	pid         string // QparamPID
 	uuid        string // xaction
 	origURL     string // ht://url->
 	owt         string // object write transaction { OwtPut, ... }
@@ -52,7 +57,6 @@ type dpq struct {
 }
 
 var _except = map[string]bool{
-	apc.QparamPID:            false,
 	apc.QparamDontHeadRemote: false,
 
 	// flows that utilize the following query parameters perform conventional r.URL.Query()
@@ -127,10 +131,20 @@ func (dpq *dpq) parse(rawQuery string) error {
 			if dpq.objto, err = url.QueryUnescape(value); err != nil {
 				return err
 			}
+		case apc.QparamMptUploadID:
+			dpq.mpt.uploadID = value
+		case apc.QparamMptPartNo:
+			var err error
+			dpq.mpt.partNo, err = strconv.Atoi(value)
+			if err != nil {
+				return err
+			}
 		case apc.QparamSkipVC:
 			dpq.skipVC = cos.IsParseBool(value)
 		case apc.QparamUnixTime:
 			dpq.ptime = value
+		case apc.QparamPID:
+			dpq.pid = value
 		case apc.QparamUUID:
 			dpq.uuid = value
 		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
@@ -233,6 +247,13 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 }
 
 func (dpq *dpq) isArch() bool { return dpq.arch.path != "" || dpq.arch.mmode != "" }
+
+func (dpq *dpq) isRedirect() (ptime string) {
+	if dpq.pid == "" || dpq.ptime == "" {
+		return
+	}
+	return dpq.ptime
+}
 
 // err & log
 func (dpq *dpq) _archstr() string {

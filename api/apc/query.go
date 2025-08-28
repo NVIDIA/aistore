@@ -146,6 +146,9 @@ const (
 
 	// Request to restore an object
 	QparamECObject = "object"
+
+	QparamMptUploadID = "uploadId"   // Complete, abort, or list parts of specific multipart upload
+	QparamMptPartNo   = "partNumber" // Part number for multipart upload
 )
 
 // QparamFltPresence enum.

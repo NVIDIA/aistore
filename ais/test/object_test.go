@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -1887,6 +1889,186 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		attrs2 := op.ObjAttrs
 		tassert.Errorf(t, attrs1.CheckEq(&attrs2) == nil, "PUT(obj) attrs %s != %s HEAD\n", attrs1.String(), attrs2.String())
 	}
+}
+
+func TestMultipartUpload(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+		objName = "test-multipart-object"
+
+		// Test data to upload in 3 parts
+		part1Data = []byte("This is the first part of the multipart upload test. ")
+		part2Data = []byte("This is the second part containing more test data. ")
+		part3Data = []byte("This is the final third part to complete the upload.")
+
+		// Complete expected content
+		expectedContent = append(append(part1Data, part2Data...), part3Data...)
+		partNumbers     = make([]int, 0, 3)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tlog.Logfln("multipart upload: %s/%s", bck.Name, objName)
+
+	// Step 1: Create multipart upload
+	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
+
+	// Step 2: Upload three parts
+	testParts := []struct {
+		partNum int
+		data    []byte
+	}{
+		{1, part1Data},
+		{2, part2Data},
+		{3, part3Data},
+	}
+
+	for _, part := range testParts {
+		putPartArgs := &api.PutPartArgs{
+			PutArgs: api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				ObjName:    objName,
+				Reader:     readers.NewBytes(part.data),
+				Size:       uint64(len(part.data)),
+			},
+			UploadID:   uploadID,
+			PartNumber: part.partNum,
+		}
+
+		err = api.UploadPart(putPartArgs)
+		tassert.CheckFatal(t, err)
+
+		partNumbers = append(partNumbers, part.partNum)
+	}
+
+	// Step 3: Complete multipart upload
+	err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+	tassert.CheckFatal(t, err)
+
+	// Step 4: Verify the uploaded object
+
+	// Check object exists
+	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+	objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+	tassert.CheckFatal(t, err)
+
+	// Verify object size matches expected content
+	expectedSize := int64(len(expectedContent))
+	tassert.Errorf(t, objAttrs.Size == expectedSize,
+		"object size mismatch: expected %d, got %d", expectedSize, objAttrs.Size)
+
+	// Download and verify content
+	writer := bytes.NewBuffer(nil)
+	getArgs := api.GetArgs{Writer: writer}
+	_, err = api.GetObject(baseParams, bck, objName, &getArgs)
+	tassert.CheckFatal(t, err)
+
+	downloadedContent := writer.Bytes()
+	tassert.Errorf(t, bytes.Equal(downloadedContent, expectedContent),
+		"content mismatch: expected %q, got %q", string(expectedContent), string(downloadedContent))
+}
+
+func TestMultipartUploadParallel(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+		objName = "test-multipart-parallel-object"
+
+		// Test data to upload in 5 parts
+		part1Data = []byte("Part 1: This is the first chunk of data. ")
+		part2Data = []byte("Part 2: This is the second chunk with more content. ")
+		part3Data = []byte("Part 3: Here is the middle section of our test. ")
+		part4Data = []byte("Part 4: Almost done with the parallel upload. ")
+		part5Data = []byte("Part 5: Final part to complete our test object.")
+
+		// Complete expected content in proper order
+		expectedContent = append(append(append(append(part1Data, part2Data...), part3Data...), part4Data...), part5Data...)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tlog.Logfln("multipart upload (parallel): %s/%s", bck.Name, objName)
+
+	// Step 1: Create multipart upload
+	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
+
+	// Step 2: Upload five parts in parallel with shuffled order
+	testParts := []struct {
+		partNum int
+		data    []byte
+	}{
+		{1, part1Data},
+		{2, part2Data},
+		{3, part3Data},
+		{4, part4Data},
+		{5, part5Data},
+	}
+
+	shuffledOrder := []int{3, 1, 5, 2, 4} // Upload parts in shuffled order
+
+	g := errgroup.Group{}
+	for _, partIdx := range shuffledOrder {
+		part := testParts[partIdx-1] // Convert to 0-based index
+
+		g.Go(func() error {
+			putPartArgs := &api.PutPartArgs{
+				PutArgs: api.PutArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					ObjName:    objName,
+					Reader:     readers.NewBytes(part.data),
+					Size:       uint64(len(part.data)),
+				},
+				UploadID:   uploadID,
+				PartNumber: part.partNum,
+			}
+
+			return api.UploadPart(putPartArgs)
+		})
+	}
+
+	// Wait for all goroutines to complete and check for errors
+	err = g.Wait()
+	tassert.CheckFatal(t, err)
+
+	// Step 3: Complete multipart upload with parts in correct order
+	partNumbers := []int{1, 2, 3, 4, 5} // Parts must be completed in correct order
+	err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+	tassert.CheckFatal(t, err)
+
+	// Step 4: Verify the uploaded object
+	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+	objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+	tassert.CheckFatal(t, err)
+
+	expectedSize := int64(len(expectedContent))
+	tassert.Errorf(t, objAttrs.Size == expectedSize,
+		"object size mismatch: expected %d, got %d", expectedSize, objAttrs.Size)
+
+	writer := bytes.NewBuffer(nil)
+	getArgs := api.GetArgs{Writer: writer}
+	_, err = api.GetObject(baseParams, bck, objName, &getArgs)
+	tassert.CheckFatal(t, err)
+
+	downloadedContent := writer.Bytes()
+	tassert.Errorf(t, bytes.Equal(downloadedContent, expectedContent),
+		"content mismatch: expected %q, got %q", string(expectedContent), string(downloadedContent))
+
+	tlog.Logfln("parallel multipart upload completed successfully with correct content ordering")
 }
 
 func TestOperationsWithRanges(t *testing.T) {

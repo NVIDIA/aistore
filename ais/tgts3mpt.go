@@ -26,14 +26,12 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/ais/s3"
-	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -41,12 +39,10 @@ import (
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck, q url.Values) {
+func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
 	var (
-		objName  = s3.ObjName(items)
-		lom      = &core.LOM{ObjName: objName}
-		metadata map[string]string
-		uploadID string
+		objName = s3.ObjName(items)
+		lom     = &core.LOM{ObjName: objName}
 	)
 	err := lom.InitBck(bck.Bucket())
 	if err != nil {
@@ -54,11 +50,8 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 
-	uploadID, metadata, err = t.ups.start(w, r, lom, q)
+	uploadID, err := t.createMptUpload(w, r, lom)
 	if err != nil {
-		return
-	}
-	if err := t.ups.init(uploadID, lom, metadata); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -80,11 +73,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
-	var (
-		remotePutLatency int64
-		startTime        = mono.NanoTime()
-	)
+func (t *target) putMptPartS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
 	// 1. parse/validate
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
@@ -110,148 +99,20 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	// TODO: compare with listMptUploads (that does fromFS)
-	manifest := t.ups.get(uploadID)
-	if manifest == nil {
-		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
+	etag, ecode, err := t.putMptPart(r, lom, uploadID, int(partNum))
+	// convert generic error to s3 error
+	if cos.IsErrNotFound(err) {
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
 		return
 	}
-
-	// Generate chunk file path
-	chunkPath, err := manifest.ChunkFQN(int(partNum))
 	if err != nil {
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-		return
-	}
-
-	partFh, errC := lom.CreatePart(chunkPath)
-	if errC != nil {
-		s3.WriteMptErr(w, r, errC, 0, lom, uploadID)
-		return
-	}
-
-	var (
-		etag         string
-		expectedSize int64
-		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
-		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
-		cksumSHA     *cos.CksumHash
-		cksumMD5     = &cos.CksumHash{}
-		remote       = bck.IsRemoteS3() || bck.IsRemoteOCI()
-	)
-	if checkPartSHA {
-		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
-	}
-	if !remote {
-		cksumMD5 = cos.NewCksumHash(cos.ChecksumMD5)
-	}
-
-	if r.ContentLength <= 0 {
-		err := fmt.Errorf("put-part invalid size (%d)", r.ContentLength)
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-		return
-	}
-
-	// 3. write
-	// for remote buckets, use SGL buffering when memory is available;
-	// fall back to TeeReader to avoid high memory usage under pressure
-	var (
-		ecode int
-		mw    = cos.IniWriterMulti(cksumMD5.H, cksumSHA.H, partFh)
-	)
-	switch {
-	case !remote:
-		buf, slab := t.gmm.AllocSize(r.ContentLength)
-		expectedSize, err = io.CopyBuffer(mw, r.Body, buf)
-		slab.Free(buf)
-	case t.gmm.Pressure() < memsys.PressureHigh:
-		// write 1) locally + sgl + checksums; 2) write sgl => backend
-		sgl := t.gmm.NewSGL(r.ContentLength)
-		mw.Append(sgl)
-		expectedSize, err = io.Copy(mw, r.Body)
-		if err == nil {
-			remoteStart := mono.NanoTime()
-			etag, ecode, err = t.ups.putPartRemote(lom, sgl, r, q, uploadID, expectedSize, partNum)
-			remotePutLatency = mono.SinceNano(remoteStart)
-		}
-		sgl.Free()
-	default:
-		// utilize TeeReader to simultaneously write => backend
-		expectedSize = r.ContentLength
-		tr := io.NopCloser(io.TeeReader(r.Body, mw))
-		remoteStart := mono.NanoTime()
-		etag, ecode, err = t.ups.putPartRemote(lom, tr, r, q, uploadID, expectedSize, partNum)
-		remotePutLatency = mono.SinceNano(remoteStart)
-	}
-	cos.Close(partFh)
-	if err != nil {
-		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
-			nlog.Errorf(fmtNested, t, err, "remove", chunkPath, nerr)
-		}
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-		return
-	}
-
-	size := mw.Size()
-	if size != expectedSize {
-		err := fmt.Errorf("part %d size mismatch (%d vs %d)", partNum, size, expectedSize)
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-		return
-	}
-
-	// 4. finalize the part (expecting the part's remote etag to be md5 checksum)
-	if checkPartSHA {
-		cksumSHA.Finalize()
-		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
-		if !cksumSHA.Equal(recvSHA) {
-			detail := fmt.Sprintf("part %d", partNum)
-			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
-			s3.WriteMptErr(w, r, err, http.StatusInternalServerError, lom, uploadID)
-			return
-		}
-	}
-
-	chunk := &core.Uchunk{
-		ETag: etag,
-		Path: chunkPath,
-	}
-	if cksumMD5.H != nil {
-		chunk.MD5 = cksumMD5.H.Sum(nil)
-		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
-	}
-	if checkPartSHA {
-		chunk.SetCksum(&cksumSHA.Cksum)
-	}
-
-	// - see NOTE above in re "active uploads in memory"
-	// - TODO: this is the place to call Ufest.Store(partial manifest)
-	if err := manifest.Add(chunk, size, int64(partNum)); err != nil {
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
 		return
 	}
 
 	// s3 compliance
 	if etag != "" {
 		w.Header().Set(cos.S3CksumHeader, etag)
-	} else {
-		debug.Assert(len(chunk.MD5) == 16)
-		w.Header().Set(cos.S3CksumHeader, cmn.MD5ToETag(chunk.MD5))
-	}
-
-	delta := mono.SinceNano(startTime)
-	vlabs := map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
-	t.statsT.AddWith(
-		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
-		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
-		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
-	)
-	if remotePutLatency > 0 {
-		backendBck := t.Backend(bck)
-		t.statsT.AddWith(
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency, VarLabs: vlabs},
-			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
-		)
 	}
 }
 
@@ -275,12 +136,12 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
-	partList, err := s3.DecodeXML[*s3.CompleteMptUpload](body)
+	s3PartList, err := s3.DecodeXML[*s3.CompleteMptUpload](body)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusBadRequest)
 		return
 	}
-	if partList == nil || len(partList.Parts) == 0 {
+	if s3PartList == nil || len(s3PartList.Parts) == 0 {
 		s3.WriteErr(w, r, errors.New("no parts"), http.StatusBadRequest)
 		return
 	}
@@ -292,53 +153,31 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 
-	// (compare with listMptUploads)
-	manifest, metadata := t.ups.getWithMeta(uploadID)
-	if manifest == nil {
-		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
-		return
+	// convert s3PartList to aistore native type
+	partList := make(apc.MptCompletedParts, 0, len(s3PartList.Parts))
+	for _, part := range s3PartList.Parts {
+		if part.PartNumber == nil {
+			continue
+		}
+		mptPart := apc.MptCompletedPart{
+			PartNumber: int(*part.PartNumber),
+		}
+		if part.ETag != nil {
+			mptPart.ETag = *part.ETag
+		}
+		partList = append(partList, mptPart)
 	}
 
-	// validate/enforce parts, compute _whole" checksum and etag
-	var etag string
-	manifest.Lock()
-	etag, err = validateChecksumEtag(w, r, lom, manifest, partList)
-	manifest.Unlock()
+	etag, ecode, err := t.completeMptUpload(r, lom, uploadID, body, partList)
+	// convert generic error to s3 error
+	if cos.IsErrNotFound(err) {
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
+		return
+	}
 	if err != nil {
+		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}
-
-	// call remote
-	remote := bck.IsRemoteS3() || bck.IsRemoteOCI()
-	if remote {
-		var err error
-		etag, err = t.ups.completeRemote(w, r, lom, q, uploadID, body, partList)
-		if err != nil {
-			return
-		}
-	}
-
-	if remote {
-		md := t.ups.encodeRemoteMetadata(lom, metadata) // TODO -- FIXME: vs ufest.mdmap
-		for k, v := range md {
-			lom.SetCustomKey(k, v)
-		}
-	}
-	lom.SetCustomKey(cmn.ETag, etag)
-
-	// atomically flip: persist manifest, mark chunked, persist main
-	if err := lom.CompleteUfest(manifest); err != nil {
-		if !remote {
-			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-			return
-		}
-		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
-		return
-	}
-
-	t.ups.del(uploadID)
-
-	nlog.Infoln(uploadID, "completed")
 
 	// respond
 	result := &s3.CompleteMptUploadResult{Bucket: bck.Name, Key: objName, ETag: etag}
@@ -348,58 +187,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 	s3.SetS3Headers(w.Header(), lom)
 	sgl.WriteTo2(w)
 	sgl.Free()
-
-	// stats
-	vlabs := map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
-	t.statsT.IncWith(stats.PutCount, vlabs)
-	if remote {
-		t.statsT.IncWith(t.Backend(bck).MetricName(stats.PutCount), vlabs)
-	}
-}
-
-// (under manifest lock)
-// TODO: compute _whole_ checksum outside manifest lock (CoW again)
-func validateChecksumEtag(w http.ResponseWriter, r *http.Request, lom *core.LOM, manifest *core.Ufest, partList *s3.CompleteMptUpload) (string, error) {
-	uploadID := manifest.ID()
-	if err := manifest.Check(); err != nil {
-		s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-		return "", err
-	}
-	if ecode, err := s3.EnforceCompleteAllParts(partList, manifest.Count()); err != nil {
-		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-		return "", err
-	}
-
-	// compute "whole" checksum (TODO: sha256 may take precedence when implied by `partSHA`)
-	var (
-		wholeCksum *cos.CksumHash
-		bck        = lom.Bck()
-		remote     = bck.IsRemoteS3() || bck.IsRemoteOCI()
-	)
-	if remote && lom.CksumConf().Type != cos.ChecksumNone {
-		wholeCksum = cos.NewCksumHash(lom.CksumConf().Type)
-	} else {
-		wholeCksum = cos.NewCksumHash(cos.ChecksumMD5)
-	}
-	if wholeCksum != nil {
-		if err := manifest.ComputeWholeChecksum(wholeCksum); err != nil {
-			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-			return "", err
-		}
-		lom.SetCksum(&wholeCksum.Cksum)
-	}
-
-	// compute multipart-compliant ETag if need be
-	var etag string
-	if !remote {
-		var err error
-		if etag, err = manifest.ETagS3(); err != nil {
-			s3.WriteMptErr(w, r, err, 0, lom, uploadID)
-			return "", err
-		}
-	}
-
-	return etag, nil
 }
 
 // Abort an active multipart upload.

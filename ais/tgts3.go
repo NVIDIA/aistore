@@ -36,11 +36,6 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if l := len(apiItems); (l == 0 && r.Method == http.MethodGet) || l < 2 {
-		err := fmt.Errorf(fmtErrBckObj, r.Method, apiItems)
-		s3.WriteErr(w, r, err, 0)
-		return
-	}
 
 	switch r.Method {
 	case http.MethodHead:
@@ -89,7 +84,7 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("putMptPart", bck.String(), items, q)
 		}
-		t.putMptPart(w, r, items, q, bck)
+		t.putMptPartS3(w, r, items, q, bck)
 	case r.Header.Get(cos.S3HdrObjSrc) == "":
 		objName := s3.ObjName(items)
 		lom := core.AllocLOM(objName)
@@ -388,7 +383,7 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
-		t.startMpt(w, r, items, bck, q)
+		t.startMpt(w, r, items, bck)
 		return
 	}
 	if q.Has(s3.QparamMptUploadID) {

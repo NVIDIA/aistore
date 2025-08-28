@@ -7,6 +7,7 @@ package ais
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -722,7 +723,7 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjdelete(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPost:
-		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*useDpq*/)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true)
 		t.httpobjpost(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPatch:
@@ -902,7 +903,7 @@ func (t *target) _erris(w http.ResponseWriter, r *http.Request, err error, code 
 }
 
 // PUT /v1/objects/bucket-name/object-name; does:
-// 1) append object 2) append to archive 3) PUT 4) single object copy
+// 1) append object 2) append to archive 3) PUT 4) single object copy 5) multipart upload
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *core.LOM) {
 	var (
 		config  = cmn.GCO.Get()
@@ -964,6 +965,8 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			}
 		}
 		ecode, err = t.copyObject(lom, bck, objName, apireq.dpq, config) // lom is locked/unlocked during the call
+	case apireq.dpq.mpt.uploadID != "": // apc.QparamMptUploadID
+		_, ecode, err = t.putMptPart(r, lom, apireq.dpq.mpt.uploadID, apireq.dpq.mpt.partNo)
 	case apireq.dpq.arch.path != "": // apc.QparamArchpath
 		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1078,7 +1081,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if t.parseReq(w, r, apireq) != nil {
 		return
 	}
-	if isRedirect(apireq.query) == "" {
+	if apireq.dpq.isRedirect() == "" {
 		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 		return
 	}
@@ -1121,6 +1124,40 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 
 			// lom is eventually freed by x-blob
 		}
+	case apc.ActMptUpload:
+		lom = &core.LOM{ObjName: apireq.items[1]} // NOTE: don't use AllocLOM here, we can't free it until the upload is complete
+		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		uploadID, err := t.createMptUpload(w, r, lom)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		writeXid(w, uploadID)
+		return
+	case apc.ActMptComplete:
+		var (
+			mptCompletedParts apc.MptCompletedParts
+			uploadID          = apireq.dpq.mpt.uploadID
+		)
+		err = cos.MorphMarshal(msg.Value, &mptCompletedParts)
+		if err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		lom = &core.LOM{ObjName: apireq.items[1]}
+		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		_, ecode, err := t.completeMptUpload(r, lom, uploadID, nil /*body*/, mptCompletedParts)
+		if err != nil {
+			t.writeErr(w, r, err, ecode)
+			return
+		}
+		return
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])
 		return
@@ -1132,6 +1169,207 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErr(w, r, err)
 		core.FreeLOM(lom)
 	}
+}
+
+func (t *target) createMptUpload(w http.ResponseWriter, r *http.Request, lom *core.LOM) (uploadID string, err error) {
+	uploadID, metadata, err := t.ups.start(w, r, lom, r.URL.Query())
+	if err != nil {
+		return
+	}
+	return uploadID, t.ups.init(uploadID, lom, metadata)
+}
+
+func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID string, body []byte, parts apc.MptCompletedParts) (eTag string, ecode int, err error) {
+	// (compare with listMptUploads)
+	manifest, metadata := t.ups.getWithMeta(uploadID)
+	if manifest == nil {
+		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
+	}
+
+	// validate/enforce parts, compute _whole" checksum and etag
+	var etag string
+	manifest.Lock()
+	etag, err = validateChecksumEtag(lom, manifest, parts)
+	manifest.Unlock()
+	if err != nil {
+		return "", http.StatusBadRequest, err
+	}
+
+	// call remote
+	remote := lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
+	if remote {
+		var err error
+		etag, ecode, err = t.ups.completeRemote(r, lom, r.URL.Query(), uploadID, body, parts)
+		if err != nil {
+			return "", ecode, err
+		}
+	}
+
+	if remote {
+		md := t.ups.encodeRemoteMetadata(lom, metadata) // TODO -- FIXME: vs ufest.mdmap
+		for k, v := range md {
+			lom.SetCustomKey(k, v)
+		}
+	}
+	lom.SetCustomKey(cmn.ETag, etag)
+
+	// atomically flip: persist manifest, mark chunked, persist main
+	if err = lom.CompleteUfest(manifest); err != nil {
+		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
+		return "", http.StatusInternalServerError, err
+	}
+
+	t.ups.del(uploadID)
+
+	nlog.Infoln(uploadID, "completed")
+
+	// stats
+	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
+	t.statsT.IncWith(stats.PutCount, vlabs)
+	if remote {
+		t.statsT.IncWith(t.Backend(lom.Bck()).MetricName(stats.PutCount), vlabs)
+	}
+
+	return etag, ecode, nil
+}
+
+func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, partNum int) (etag string, ecode int, err error) {
+	var (
+		expectedSize int64
+		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
+		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
+		cksumSHA     *cos.CksumHash
+		cksumMD5     = &cos.CksumHash{}
+		remote       = lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
+		writers      = make([]io.Writer, 0, 3)
+		startTime    = mono.NanoTime()
+	)
+
+	manifest := t.ups.get(uploadID)
+	if manifest == nil {
+		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
+	}
+
+	// Generate chunk file path
+	chunkPath, err := manifest.ChunkFQN(partNum)
+	if err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+
+	partFh, errC := lom.CreatePart(chunkPath)
+	if errC != nil {
+		return "", http.StatusInternalServerError, errC
+	}
+
+	if checkPartSHA {
+		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
+		writers = append(writers, cksumSHA.H)
+	}
+	if !remote {
+		cksumMD5 = cos.NewCksumHash(cos.ChecksumMD5)
+		writers = append(writers, cksumMD5.H)
+	}
+	writers = append(writers, partFh)
+
+	if r.ContentLength <= 0 {
+		return "", http.StatusBadRequest, fmt.Errorf("put-part invalid size (%d)", r.ContentLength)
+	}
+
+	// 3. write
+	// for remote buckets, use SGL buffering when memory is available;
+	// fall back to TeeReader to avoid high memory usage under pressure
+	var (
+		remotePutLatency int64
+		mw               = cos.IniWriterMulti(writers...)
+	)
+
+	switch {
+	case !remote:
+		buf, slab := t.gmm.AllocSize(r.ContentLength)
+		expectedSize, err = io.CopyBuffer(mw, r.Body, buf)
+		slab.Free(buf)
+	case t.gmm.Pressure() < memsys.PressureHigh:
+		// write 1) locally + sgl + checksums; 2) write sgl => backend
+		sgl := t.gmm.NewSGL(r.ContentLength)
+		mw.Append(sgl)
+		expectedSize, err = io.Copy(mw, r.Body)
+		if err == nil {
+			remoteStart := mono.NanoTime()
+			etag, ecode, err = t.ups.putPartRemote(lom, sgl, r, r.URL.Query(), uploadID, expectedSize, int32(partNum))
+			remotePutLatency = mono.SinceNano(remoteStart)
+		}
+		sgl.Free()
+	default:
+		// utilize TeeReader to simultaneously write => backend
+		expectedSize = r.ContentLength
+		tr := io.NopCloser(io.TeeReader(r.Body, mw))
+		remoteStart := mono.NanoTime()
+		etag, ecode, err = t.ups.putPartRemote(lom, tr, r, r.URL.Query(), uploadID, expectedSize, int32(partNum))
+		remotePutLatency = mono.SinceNano(remoteStart)
+	}
+	cos.Close(partFh)
+	if err != nil {
+		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
+			nlog.Errorf(fmtNested, t, err, "remove", chunkPath, nerr)
+		}
+		return "", http.StatusInternalServerError, err
+	}
+
+	size := mw.Size()
+	if size != expectedSize {
+		return "", http.StatusBadRequest, fmt.Errorf("part %d size mismatch (%d vs %d)", partNum, size, expectedSize)
+	}
+
+	// 4. finalize the part (expecting the part's remote etag to be md5 checksum)
+	if checkPartSHA {
+		cksumSHA.Finalize()
+		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
+		if !cksumSHA.Equal(recvSHA) {
+			detail := fmt.Sprintf("part %d", partNum)
+			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
+			return "", http.StatusBadRequest, err
+		}
+	}
+
+	chunk := &core.Uchunk{
+		ETag: etag,
+		Path: chunkPath,
+	}
+	if cksumMD5.H != nil {
+		chunk.MD5 = cksumMD5.H.Sum(nil)
+		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
+	}
+	if checkPartSHA {
+		chunk.SetCksum(&cksumSHA.Cksum)
+	}
+
+	// - see NOTE above in re "active uploads in memory"
+	// - TODO: this is the place to call Ufest.Store(partial manifest)
+	if err := manifest.Add(chunk, size, int64(partNum)); err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+
+	if etag == "" {
+		debug.Assert(len(chunk.MD5) == 16)
+		etag = cmn.MD5ToETag(chunk.MD5)
+	}
+
+	delta := mono.SinceNano(startTime)
+	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
+		cos.NamedVal64{Name: stats.PutLatencyTotal, Value: delta, VarLabs: vlabs},
+	)
+	if remotePutLatency > 0 {
+		backendBck := t.Backend(lom.Bck())
+		t.statsT.AddWith(
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutSize), Value: size, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutLatencyTotal), Value: remotePutLatency, VarLabs: vlabs},
+			cos.NamedVal64{Name: backendBck.MetricName(stats.PutE2ELatencyTotal), Value: delta, VarLabs: vlabs},
+		)
+	}
+	return etag, ecode, nil
 }
 
 // return object's lock status (enum { apc.LockNone, ... }) via HTTP status:

@@ -5,10 +5,12 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -20,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const (
@@ -181,30 +185,39 @@ func (ups *ups) putPartRemote(lom *core.LOM, reader io.ReadCloser, r *http.Reque
 	return
 }
 
-func (ups *ups) completeRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string, body []byte, partList *s3.CompleteMptUpload) (etag string, err error) {
+func (ups *ups) completeRemote(r *http.Request, lom *core.LOM, q url.Values, uploadID string, body []byte, partList apc.MptCompletedParts) (etag string, ecode int, err error) {
 	var (
-		ecode    int
 		provider string
 		version  string
 		bck      = lom.Bck()
+		// TODO: do the `apc.MptCompletedParts` -> `types.CompletedPart` translation inside the backend provider's methods. remove `types` dependency in this file.
+		s3Parts = &s3.CompleteMptUpload{
+			Parts: make([]types.CompletedPart, partList.Len()),
+		}
 	)
+	for i, part := range partList {
+		pn := int32(part.PartNumber)
+		s3Parts.Parts[i] = types.CompletedPart{
+			PartNumber: &pn,
+			ETag:       &part.ETag,
+		}
+	}
 	if bck.IsRemoteS3() {
 		provider = apc.AWS
-		version, etag, ecode, err = backend.CompleteMptAWS(lom, r, q, uploadID, body, partList)
+		version, etag, ecode, err = backend.CompleteMptAWS(lom, r, q, uploadID, body, s3Parts)
 	} else {
 		debug.Assert(bck.IsRemoteOCI())
 		provider = apc.OCI
-		version, etag, ecode, err = backend.CompleteMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID, body, partList)
+		version, etag, ecode, err = backend.CompleteMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID, body, s3Parts)
 	}
 	if err != nil {
-		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-	} else {
-		lom.SetCustomKey(cmn.SourceObjMD, provider)
-		if version != "" {
-			lom.SetCustomKey(cmn.VersionObjMD, version)
-		}
+		return "", ecode, err
 	}
-	return
+	lom.SetCustomKey(cmn.SourceObjMD, provider)
+	if version != "" {
+		lom.SetCustomKey(cmn.VersionObjMD, version)
+	}
+	return etag, ecode, nil
 }
 
 func (ups *ups) abortRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string) (err error) {
@@ -248,4 +261,77 @@ func (*ups) parsePartNum(s string) (int32, error) {
 	default:
 		return int32(partNum), nil
 	}
+}
+
+// (under manifest lock)
+// TODO: only for checking ETag and checksum for S3 backend, not needed for the native MPT APIs
+func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts) (string, error) {
+	if err := manifest.Check(); err != nil {
+		return "", err
+	}
+	if _, err := enforceCompleteAllParts(parts, manifest.Count()); err != nil {
+		return "", err
+	}
+
+	// compute "whole" checksum (TODO: sha256 may take precedence when implied by `partSHA`)
+	var (
+		wholeCksum *cos.CksumHash
+		bck        = lom.Bck()
+		remote     = bck.IsRemoteS3() || bck.IsRemoteOCI()
+	)
+	if remote && lom.CksumConf().Type != cos.ChecksumNone {
+		wholeCksum = cos.NewCksumHash(lom.CksumConf().Type)
+	} else {
+		wholeCksum = cos.NewCksumHash(cos.ChecksumMD5)
+	}
+	if wholeCksum != nil {
+		if err := manifest.ComputeWholeChecksum(wholeCksum); err != nil {
+			return "", err
+		}
+		lom.SetCksum(&wholeCksum.Cksum)
+	}
+
+	// compute multipart-compliant ETag if need be
+	var etag string
+	if !remote {
+		var err error
+		if etag, err = manifest.ETagS3(); err != nil {
+			return "", err
+		}
+	}
+
+	return etag, nil
+}
+
+func enforceCompleteAllParts(parts apc.MptCompletedParts, count int) (int, error) {
+	if parts == nil {
+		return http.StatusBadRequest, errors.New("nil parts list")
+	}
+	if len(parts) != count {
+		return http.StatusNotImplemented,
+			fmt.Errorf("partial completion is not allowed: requested %d parts, have %d",
+				len(parts), count)
+	}
+	// fast path
+	for i := range count {
+		p := parts[i]
+		if p.PartNumber != i+1 {
+			goto slow
+		}
+	}
+	return 0, nil
+
+slow:
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].PartNumber < parts[j].PartNumber
+	})
+	for i := range count {
+		p := parts[i]
+		got := p.PartNumber
+		if got != i+1 {
+			return http.StatusBadRequest, fmt.Errorf("parts must be exactly 1..%d: got %d at position %d",
+				count, got, i)
+		}
+	}
+	return 0, nil
 }
