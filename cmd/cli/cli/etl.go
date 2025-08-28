@@ -844,7 +844,7 @@ func etlObjectCopyHandler(c *cli.Context) error {
 			ToBck:       dstBck,
 			ToObjName:   dstObjName,
 		},
-		ETLName: etlName,
+		ETL: api.ETL{ETLName: etlName},
 	})
 
 	if err != nil {

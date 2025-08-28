@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */
-package cli
+package teb
 
 import (
 	"unsafe"
@@ -11,19 +11,19 @@ import (
 // implementation:
 // - reusable, single-threaded, best-effort, and once-allocated
 // motivation:
-// - to optimally replace `strings.Builder` when applicable
-// TODO:
-// - use elsewhere (currently, scrub only)
+// - to optimally replace `strings.Sbuilder` when applicable
+// usage:
+// - currently, scrub only
 
-type Builder struct {
+type Sbuilder struct {
 	buf []byte
 }
 
-func (b *Builder) String() string {
+func (b *Sbuilder) String() string {
 	return unsafe.String(unsafe.SliceData(b.buf), len(b.buf))
 }
 
-func (b *Builder) Reset(size int) {
+func (b *Sbuilder) Reset(size int) {
 	switch {
 	case b.buf == nil:
 		b.buf = make([]byte, 0, size)
@@ -34,9 +34,9 @@ func (b *Builder) Reset(size int) {
 	}
 }
 
-func (b *Builder) Len() int { return len(b.buf) }
-func (b *Builder) Cap() int { return cap(b.buf) }
+func (b *Sbuilder) Len() int { return len(b.buf) }
+func (b *Sbuilder) Cap() int { return cap(b.buf) }
 
-func (b *Builder) WriteByte(c byte) { b.buf = append(b.buf, c) }
+func (b *Sbuilder) WriteByte(c byte) { b.buf = append(b.buf, c) }
 
-func (b *Builder) WriteString(s string) { b.buf = append(b.buf, s...) }
+func (b *Sbuilder) WriteString(s string) { b.buf = append(b.buf, s...) }

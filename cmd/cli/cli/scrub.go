@@ -78,7 +78,7 @@ type (
 		total atomic.Int64
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
-		progLine   cos.Builder
+		progLine   teb.Sbuilder
 		numBcks    int
 		pid        int
 		haveRemote atomic.Bool
