@@ -73,6 +73,29 @@ const concatUsage = "Append a file, a directory, or multiple files and/or direct
 	indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
 	indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory."
 
+// Multipart upload usage strings
+const mptCreateUsage = "Create a multipart upload session for large objects.\n" +
+	indent1 + "Returns an upload ID that must be used for subsequent part uploads and completion, e.g.:\n" +
+	indent1 + "\t- 'mpu create ais://bucket/large-file.dat'\t\t\t- create session for large-file.dat;\n" +
+	indent1 + "\t- 'mpu create ais://bucket/video.mp4 --verbose'\t\t- create with verbose output."
+
+const mptPutUsage = "Upload individual parts for a multipart upload session.\n" +
+	indent1 + "Parts can be uploaded in parallel and in any order, e.g.:\n" +
+	indent1 + "\t- 'mpu put-part ais://bucket/large-file uploadID 1 /path/part1.dat'\t- upload part 1;\n" +
+	indent1 + "\t- 'mpu put-part ais://bucket/large-file uploadID 2 /path/part2.dat --verbose'\t- upload part 2 with progress;\n" +
+	indent1 + "\t- 'mpu put-part ais://bucket/large-file --upload-id uploadID --part-number 3 /path/part3.dat'\t- using flags."
+
+const mptCompleteUsage = "Complete a multipart upload by assembling all uploaded parts into the final object.\n" +
+	indent1 + "Parts are assembled in the order specified by part numbers, e.g.:\n" +
+	indent1 + "\t- 'mpu complete ais://bucket/large-file uploadID 1,2,3,4,5'\t\t- assemble 5 parts in order;\n" +
+	indent1 + "\t- 'mpu complete ais://bucket/large-file --upload-id uploadID --part-numbers 1,2,3'\t- using flags;\n" +
+	indent1 + "\t- 'mpu complete ais://bucket/large-file uploadID \"1,2,3\" --verbose'\t\t- with completion progress."
+
+const mptAbortUsage = "Abort a multipart upload session and clean up any uploaded parts.\n" +
+	indent1 + "All uploaded parts are discarded and the object is not created, e.g.:\n" +
+	indent1 + "\t- 'mpu abort ais://bucket/large-file uploadID'\t\t\t- abort upload session;\n" +
+	indent1 + "\t- 'mpu abort ais://bucket/large-file --upload-id uploadID --verbose'\t- abort with verbose output."
+
 const setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 	indent1 + "mykey1=value1 mykey2=value2 OR (same) '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
@@ -169,6 +192,24 @@ var (
 			cksumFlag,
 			forceFlag,
 			encodeObjnameFlag,
+		},
+		cmdMptCreate: {
+			verboseFlag,
+		},
+		cmdMptPut: {
+			mptUploadIDFlag,
+			mptPartNumberFlag,
+			progressFlag,
+			verboseFlag,
+		},
+		cmdMptComplete: {
+			mptUploadIDFlag,
+			mptPartNumbersFlag,
+			verboseFlag,
+		},
+		cmdMptAbort: {
+			mptUploadIDFlag,
+			verboseFlag,
 		},
 	}
 
@@ -279,6 +320,46 @@ var (
 				Flags:        sortFlags(objectCmdsFlags[commandCat]),
 				Action:       catHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
+			},
+			// multipart upload commands
+			{
+				Name:    commandMptUpload,
+				Aliases: []string{"mpu"},
+				Usage:   "Multipart upload operations: create, put parts, complete, and abort",
+				Subcommands: []cli.Command{
+					{
+						Name:         cmdMptCreate,
+						Usage:        mptCreateUsage,
+						ArgsUsage:    mptCreateArgument,
+						Flags:        sortFlags(objectCmdsFlags[cmdMptCreate]),
+						Action:       mptCreateHandler,
+						BashComplete: bucketCompletions(bcmplop{separator: true}),
+					},
+					{
+						Name:         cmdMptPut,
+						Usage:        mptPutUsage,
+						ArgsUsage:    mptPutArgument,
+						Flags:        sortFlags(objectCmdsFlags[cmdMptPut]),
+						Action:       mptPutHandler,
+						BashComplete: bucketCompletions(bcmplop{separator: true}),
+					},
+					{
+						Name:         cmdMptComplete,
+						Usage:        mptCompleteUsage,
+						ArgsUsage:    mptCompleteArgument,
+						Flags:        sortFlags(objectCmdsFlags[cmdMptComplete]),
+						Action:       mptCompleteHandler,
+						BashComplete: bucketCompletions(bcmplop{separator: true}),
+					},
+					{
+						Name:         cmdMptAbort,
+						Usage:        mptAbortUsage,
+						ArgsUsage:    mptAbortArgument,
+						Flags:        sortFlags(objectCmdsFlags[cmdMptAbort]),
+						Action:       mptAbortHandler,
+						BashComplete: bucketCompletions(bcmplop{separator: true}),
+					},
+				},
 			},
 		},
 	}

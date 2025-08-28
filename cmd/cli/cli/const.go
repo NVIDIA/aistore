@@ -70,6 +70,13 @@ const (
 	commandRename    = "mv"
 	commandSet       = "set"
 
+	// multipart upload commands
+	commandMptUpload = "multipart-upload"
+	cmdMptCreate     = "create"
+	cmdMptPut        = "put-part"
+	cmdMptComplete   = "complete"
+	cmdMptAbort      = "abort"
+
 	// ml namespace and subcommands
 	commandML         = "ml"
 	cmdGetBatch       = "get-batch"
@@ -326,6 +333,12 @@ const (
 	optionalObjectsArgument = "BUCKET[/OBJECT_NAME] ..."
 	dstShardArgument        = bucketDstArgument + "/SHARD_NAME"
 
+	// Multipart upload arguments
+	mptCreateArgument   = objectArgument
+	mptPutArgument      = objectArgument + " UPLOAD_ID PART_NUMBER FILE_PATH"
+	mptCompleteArgument = objectArgument + " UPLOAD_ID PART_NUMBERS"
+	mptAbortArgument    = objectArgument + " UPLOAD_ID"
+
 	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]"
 
 	optionalPrefixArgument = "BUCKET[/OBJECT_NAME_or_PREFIX]"
@@ -488,6 +501,22 @@ var (
 		Usage: "For each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - sum up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
+	}
+
+	//
+	// multipart upload flags
+	//
+	mptUploadIDFlag = cli.StringFlag{
+		Name:  "upload-id",
+		Usage: "Multipart upload ID returned from create operation",
+	}
+	mptPartNumberFlag = cli.IntFlag{
+		Name:  "part-number",
+		Usage: "Part number for multipart upload (starting from 1)",
+	}
+	mptPartNumbersFlag = cli.StringFlag{
+		Name:  "part-numbers",
+		Usage: "Comma-separated list of part numbers for completion, e.g.: '1,2,3,4'",
 	}
 
 	//

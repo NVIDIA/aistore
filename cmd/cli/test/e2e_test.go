@@ -15,6 +15,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// TestE2E runs end-to-end CLI tests based on `*.in` files in this directory.
+// Run specific tests: go test -v --ginkgo.focus="multipart"
+// Skip specific tests: go test -v --ginkgo.skip="etl"
 func TestE2E(t *testing.T) {
 	tools.InitLocalCluster()
 	cmd := exec.Command("which", "ais")

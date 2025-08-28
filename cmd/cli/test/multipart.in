@@ -1,0 +1,38 @@
+# Setup test files and bucket
+echo "Part 1: This is the first part of our multipart upload test." > /tmp/mpu_part1.txt
+echo "Part 2: Here comes the second segment with more data to test." > /tmp/mpu_part2.txt  
+echo "Part 3: This is the final third part to complete our test upload." > /tmp/mpu_part3.txt
+
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+
+# Test 1: Create and verify upload ID is returned
+ais object mpu create ais://$BUCKET_1/test-object
+
+# Test 2: Error conditions - missing arguments
+ais object mpu create // FAIL "bucket/object_name"
+ais object mpu put-part ais://$BUCKET_1/test // FAIL "arguments"
+ais object mpu complete ais://$BUCKET_1/test // FAIL "arguments"  
+ais object mpu abort ais://$BUCKET_1/test // FAIL "arguments"
+
+# Test 3: Error conditions - invalid bucket
+ais object mpu create ais://nonexistent-bucket/test // FAIL "bucket"
+
+# Test 4: Error conditions - missing object name
+ais object mpu create ais://$BUCKET_1 // FAIL "object name"
+
+# Test 5: Test put-part with missing upload ID
+ais object mpu put-part ais://$BUCKET_1/test-object invalidID 1 /tmp/mpu_part1.txt // FAIL "failed to upload part"
+
+# Test 6: Test put-part with invalid part number  
+ais object mpu put-part ais://$BUCKET_1/test-object someID 0 /tmp/mpu_part1.txt // FAIL "part number must be positive"
+ais object mpu put-part ais://$BUCKET_1/test-object someID -1 /tmp/mpu_part1.txt // FAIL "part number must be positive"
+
+# Test 7: Test complete with invalid upload ID
+ais object mpu complete ais://$BUCKET_1/test-object invalidID 1,2,3 // FAIL "failed to complete"
+
+# Test 8: Test abort with invalid upload ID 
+ais object mpu abort ais://$BUCKET_1/test-object invalidID // FAIL "failed to abort multipart upload"
+
+# Cleanup
+rm -f /tmp/mpu_part1.txt /tmp/mpu_part2.txt /tmp/mpu_part3.txt // IGNORE
+ais bucket rm ais://$BUCKET_1 --yes // IGNORE
