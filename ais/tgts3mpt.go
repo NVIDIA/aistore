@@ -209,12 +209,8 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	}
 
 	uploadID := q.Get(s3.QparamMptUploadID)
-	if bck.IsRemote() {
-		if err := t.ups.abortRemote(w, r, lom, q, uploadID); err != nil {
-			return
-		}
-	}
-	if ecode, err := t.ups.abort(uploadID, lom); err != nil {
+	ecode, err = t.abortMptUpload(r, lom, uploadID)
+	if err != nil {
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
 	}

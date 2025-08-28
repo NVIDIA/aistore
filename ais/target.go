@@ -1047,6 +1047,18 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		return
 	}
 
+	if msg.Action == apc.ActMptAbort {
+		lom := &core.LOM{ObjName: objName}
+		if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		if ecode, err := t.abortMptUpload(r, lom, apireq.query.Get(apc.QparamMptUploadID)); err != nil {
+			t.writeErr(w, r, err, ecode)
+		}
+		return
+	}
+
 	evict := msg.Action == apc.ActEvictObjects
 	lom := core.AllocLOM(objName)
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
@@ -1177,6 +1189,20 @@ func (t *target) createMptUpload(w http.ResponseWriter, r *http.Request, lom *co
 		return
 	}
 	return uploadID, t.ups.init(uploadID, lom, metadata)
+}
+
+// initialize lom before calling this method
+func (t *target) abortMptUpload(r *http.Request, lom *core.LOM, uploadID string) (ecode int, err error) {
+	if err := cos.ValidateManifestID(uploadID); err != nil {
+		return http.StatusBadRequest, err
+	}
+	if lom.Bck().IsRemote() {
+		ecode, err = t.ups.abortRemote(r, lom, r.URL.Query(), uploadID)
+		if err == nil {
+			return ecode, nil
+		}
+	}
+	return t.ups.abort(uploadID, lom)
 }
 
 func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID string, body []byte, parts apc.MptCompletedParts) (eTag string, ecode int, err error) {

@@ -92,3 +92,26 @@ func CompleteMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID strin
 
 	return err
 }
+
+// AbortMultipartUpload aborts a multipart upload.
+// - uploadID: the ID of the multipart upload to abort
+func AbortMultipartUpload(bp BaseParams, bck cmn.Bck, objName, uploadID string) error {
+	q := qalloc()
+	q.Set(apc.QparamMptUploadID, uploadID)
+	q = bck.AddToQuery(q)
+	bp.Method = http.MethodDelete
+
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMptAbort})
+		reqParams.Query = q
+	}
+
+	err := reqParams.DoRequest()
+	FreeRp(reqParams)
+	qfree(q)
+
+	return err
+}

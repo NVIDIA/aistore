@@ -220,20 +220,16 @@ func (ups *ups) completeRemote(r *http.Request, lom *core.LOM, q url.Values, upl
 	return etag, ecode, nil
 }
 
-func (ups *ups) abortRemote(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values, uploadID string) (err error) {
-	var (
-		ecode int
-		bck   = lom.Bck()
-	)
-	if bck.IsRemoteS3() {
-		ecode, err = backend.AbortMptAWS(lom, r, q, uploadID)
-	} else if bck.IsRemoteOCI() {
-		ecode, err = backend.AbortMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID)
+func (ups *ups) abortRemote(r *http.Request, lom *core.LOM, q url.Values, uploadID string) (ecode int, err error) {
+	bck := lom.Bck()
+	switch {
+	case bck.IsRemoteS3():
+		return backend.AbortMptAWS(lom, r, q, uploadID)
+	case bck.IsRemoteOCI():
+		return backend.AbortMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID)
+	default:
+		return http.StatusNotImplemented, cmn.NewErrUnsupp("abort", bck.Provider+" multipart upload")
 	}
-	if err != nil {
-		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
-	}
-	return
 }
 
 func (*ups) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md map[string]string) {
