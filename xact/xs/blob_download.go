@@ -57,6 +57,7 @@ type (
 		doneCh  chan chunkDone
 		args    *core.BlobParams
 		vlabs   map[string]string
+		xlabs   map[string]string
 		workCh  chan chunkWi
 		cksum   cos.CksumHash
 		sgls    []*memsys.SGL
@@ -186,6 +187,9 @@ func (p *blobFactory) Start() error {
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{
+		stats.VlabBucket: bck.Cname(""),
+	}
+	r.xlabs = map[string]string{
 		stats.VlabBucket: bck.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
@@ -416,9 +420,9 @@ fin:
 		if err == nil {
 			// stats
 			tstats := core.T.StatsUpdater()
-			tstats.IncWith(r.bp.MetricName(stats.GetCount), r.vlabs)
+			tstats.IncWith(r.bp.MetricName(stats.GetCount), r.xlabs)
 			tstats.AddWith(
-				cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.vlabs},
+				cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.xlabs},
 			)
 
 			debug.Assert(r.args.Lom.Lsize() == r.woff)
@@ -430,7 +434,10 @@ fin:
 			r.ObjsAdd(1, 0)
 		} else {
 			tstats := core.T.StatsUpdater()
+
+			// Increment global GET error count
 			tstats.IncWith(stats.ErrGetCount, r.vlabs)
+			// Increment blob-download specific GET error count
 			tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
 
 			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !cos.IsNotExist(errRemove) {
@@ -487,7 +494,7 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 	// stats
 	tstats := core.T.StatsUpdater()
 	tstats.AddWith(
-		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: size, VarLabs: r.vlabs},
+		cos.NamedVal64{Name: r.bp.MetricName(stats.GetSize), Value: size, VarLabs: r.xlabs},
 	)
 	r.ObjsAdd(0, size)
 

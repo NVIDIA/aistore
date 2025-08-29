@@ -240,7 +240,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, GetBlobCount, KindCounter,
 		&Extra{
 			Help:    "total number of executed blob download requests",
-			VarLabs: BckXlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 
@@ -290,7 +290,7 @@ func (r *runner) regCommon(snode *meta.Snode) {
 	r.reg(snode, ErrGetBlobCount, KindCounter,
 		&Extra{
 			Help:    "total number of blob download errors",
-			VarLabs: BckXlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 	r.reg(snode, ErrKaliveCount, KindCounter,

@@ -372,7 +372,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, GetBlobSize, KindSize,
 		&Extra{
 			Help:    "BLOB DOWNLOAD: total cumulative size (bytes)",
-			VarLabs: BckXlabs,
+			VarLabs: BckVlabs,
 		},
 	)
 
