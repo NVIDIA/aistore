@@ -1,4 +1,4 @@
-// Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
+// Package fs_test provides tests for fs package
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */

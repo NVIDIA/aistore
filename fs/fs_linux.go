@@ -1,15 +1,15 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 )
 
@@ -38,29 +38,32 @@ func (mi *Mountpath) resolveFS() error {
 	return nil
 }
 
-// NOTE:
-//   - filepath.Rel() returns '.' not an empty string when there is an exact match.
-//   - mountpath must be either a direct descendant of a mount point, or the mount point itself
-//     (when `rel` == ".")
-func _resolve(path string, fh *os.File) (fs, fsType string, _ error) {
+// mountpath must be either a direct descendant of a mount point, or the mount point itself
+// (when `rel` == ".")
+// NOTE: assuming ASCII, not unescaping from util-linux escapes: \040 (space), \011 (tab), \012 (nl), \134 (backslash))
+func _resolve(mountpath string, fh *os.File) (fs, fsType string, _ error) {
 	var (
 		bestMatch string
 		scanner   = bufio.NewScanner(fh)
 	)
 outer:
 	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
+		fields := bytes.Fields(scanner.Bytes())
 		if len(fields) < 3 {
 			continue
 		}
-		mountPoint := fields[1]
-		rel, err := filepath.Rel(path, mountPoint)
+
+		mountPoint := string(fields[1])
+
+		// intentionally: relative path from `mountpath` to `mountPoint`
+		// (shorter = better)
+		rel, err := filepath.Rel(mountpath, mountPoint)
 		if err != nil {
 			continue
 		}
 		if rel == "." {
-			// when ais mountpath EQ mount point
-			return fields[0], fields[2], nil
+			// exact match: mountpath _is_ the mount point
+			return string(fields[0]), string(fields[2]), nil
 		}
 		for i := range len(rel) {
 			if rel[i] != '.' && rel[i] != filepath.Separator {
@@ -71,15 +74,15 @@ outer:
 		}
 		if bestMatch == "" || len(rel) < len(bestMatch) /*minimizing `rel`*/ {
 			bestMatch = rel
-			fs = fields[0]
-			fsType = fields[2]
+			fs = string(fields[0])     // device/source
+			fsType = string(fields[2]) // fs type
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "", "", fmt.Errorf("FATAL: failed reading Linux %q, err: %w", procmounts, err)
 	}
 	if bestMatch == "" {
-		return "", "", fmt.Errorf("failed to resolve mountpath %q: mount point not found", path)
+		return "", "", fmt.Errorf("failed to resolve mountpath %q: mount point not found", mountpath)
 	}
 	return fs, fsType, nil
 }
