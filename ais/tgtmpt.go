@@ -7,23 +7,17 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"sync"
 
-	"github.com/NVIDIA/aistore/ais/backend"
-	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const (
@@ -153,83 +147,40 @@ func (ups *ups) del(id string) {
 // backend operations - encapsulate IsRemoteS3/IsRemoteOCI pattern
 //
 
-func (ups *ups) start(w http.ResponseWriter, r *http.Request, lom *core.LOM, q url.Values) (uploadID string, metadata map[string]string, err error) {
-	var (
-		ecode int
-		bck   = lom.Bck()
-	)
-	switch {
-	case bck.IsRemoteS3():
-		metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
-		uploadID, ecode, err = backend.StartMptAWS(lom, r, q)
-	case bck.IsRemoteOCI():
-		metadata = cmn.BackendHelpers.OCI.DecodeMetadata(r.Header)
-		uploadID, ecode, err = backend.StartMptOCI(ups.t.Backend(lom.Bck()), lom, r, q)
-	default:
+func (ups *ups) start(r *http.Request, lom *core.LOM) (uploadID string, metadata map[string]string, err error) {
+	bck := lom.Bck()
+	if bck.IsRemote() {
+		switch {
+		case bck.IsRemoteS3():
+			metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
+		case bck.IsRemoteOCI():
+			metadata = cmn.BackendHelpers.OCI.DecodeMetadata(r.Header)
+		}
+		uploadID, _, err = ups.t.Backend(bck).StartMpt(lom, r)
+	} else {
 		uploadID = cos.GenUUID()
 	}
-	if err != nil {
-		s3.WriteErr(w, r, err, ecode)
-	}
-	return
+
+	return uploadID, metadata, err
 }
 
-func (ups *ups) putPartRemote(lom *core.LOM, reader io.ReadCloser, r *http.Request, q url.Values, uploadID string, expectedSize int64, partNum int32) (etag string, ecode int, err error) {
-	bck := lom.Bck()
-	if bck.IsRemoteS3() {
-		etag, ecode, err = backend.PutMptPartAWS(lom, reader, r, q, uploadID, expectedSize, partNum)
-	} else {
-		debug.Assert(bck.IsRemoteOCI())
-		etag, ecode, err = backend.PutMptPartOCI(ups.t.Backend(lom.Bck()), lom, reader, r, q, uploadID, expectedSize, partNum)
-	}
-	return
-}
-
-func (ups *ups) completeRemote(r *http.Request, lom *core.LOM, q url.Values, uploadID string, body []byte, partList apc.MptCompletedParts) (etag string, ecode int, err error) {
+func (ups *ups) completeRemote(r *http.Request, lom *core.LOM, uploadID string, body []byte, partList apc.MptCompletedParts) (etag string, ecode int, err error) {
 	var (
-		provider string
 		version  string
 		bck      = lom.Bck()
-		// TODO: do the `apc.MptCompletedParts` -> `types.CompletedPart` translation inside the backend provider's methods. remove `types` dependency in this file.
-		s3Parts = &s3.CompleteMptUpload{
-			Parts: make([]types.CompletedPart, partList.Len()),
-		}
+		provider = bck.Provider
 	)
-	for i, part := range partList {
-		pn := int32(part.PartNumber)
-		s3Parts.Parts[i] = types.CompletedPart{
-			PartNumber: &pn,
-			ETag:       &part.ETag,
-		}
-	}
-	if bck.IsRemoteS3() {
-		provider = apc.AWS
-		version, etag, ecode, err = backend.CompleteMptAWS(lom, r, q, uploadID, body, s3Parts)
-	} else {
-		debug.Assert(bck.IsRemoteOCI())
-		provider = apc.OCI
-		version, etag, ecode, err = backend.CompleteMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID, body, s3Parts)
-	}
+
+	version, etag, ecode, err = ups.t.Backend(bck).CompleteMpt(lom, r, uploadID, body, partList)
 	if err != nil {
 		return "", ecode, err
 	}
+
 	lom.SetCustomKey(cmn.SourceObjMD, provider)
 	if version != "" {
 		lom.SetCustomKey(cmn.VersionObjMD, version)
 	}
 	return etag, ecode, nil
-}
-
-func (ups *ups) abortRemote(r *http.Request, lom *core.LOM, q url.Values, uploadID string) (ecode int, err error) {
-	bck := lom.Bck()
-	switch {
-	case bck.IsRemoteS3():
-		return backend.AbortMptAWS(lom, r, q, uploadID)
-	case bck.IsRemoteOCI():
-		return backend.AbortMptOCI(ups.t.Backend(lom.Bck()), lom, r, q, uploadID)
-	default:
-		return http.StatusNotImplemented, cmn.NewErrUnsupp("abort", bck.Provider+" multipart upload")
-	}
 }
 
 func (*ups) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md map[string]string) {

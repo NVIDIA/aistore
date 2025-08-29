@@ -50,7 +50,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 
-	uploadID, err := t.createMptUpload(w, r, lom)
+	uploadID, err := t.createMptUpload(r, lom)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

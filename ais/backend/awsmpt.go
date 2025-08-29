@@ -11,9 +11,9 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/url"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -25,9 +25,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-func StartMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, ecode int, _ error) {
+func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, err error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, nil, oq)
+		pts := aiss3.NewPresignedReq(oreq, lom, nil, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
@@ -68,12 +68,12 @@ func StartMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values) (id string, e
 	return id, ecode, err
 }
 
-func PutMptPartAWS(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Values, uploadID string, size int64, partNum int32) (string, int, error) {
+func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, r, oq)
+		pts := aiss3.NewPresignedReq(oreq, lom, r, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", resp.StatusCode, err
@@ -112,13 +112,12 @@ func PutMptPartAWS(lom *core.LOM, r io.ReadCloser, oreq *http.Request, oq url.Va
 	return etag, 0, nil
 }
 
-func CompleteMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string, obody []byte,
-	parts *aiss3.CompleteMptUpload) (version, etag string, _ int, _ error) {
+func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obody []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oq)
+		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return "", "", resp.StatusCode, err
@@ -150,7 +149,15 @@ func CompleteMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID s
 		nlog.Warningln(errN)
 	}
 
-	s3parts.Parts = parts.Parts
+	// Convert apc.MptCompletedParts to AWS types.CompletedPart
+	s3parts.Parts = make([]types.CompletedPart, len(parts))
+	for i, part := range parts {
+		pn := int32(part.PartNumber)
+		s3parts.Parts[i] = types.CompletedPart{
+			PartNumber: &pn,
+			ETag:       &part.ETag,
+		}
+	}
 	input.MultipartUpload = &s3parts
 
 	out, err := svc.CompleteMultipartUpload(context.Background(), &input)
@@ -164,9 +171,9 @@ func CompleteMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID s
 	return version, etag, 0, nil
 }
 
-func AbortMptAWS(lom *core.LOM, oreq *http.Request, oq url.Values, uploadID string) (ecode int, err error) {
+func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode int, err error) {
 	if lom.IsFeatureSet(feat.S3PresignedRequest) && oreq != nil {
-		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oq)
+		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
 			return resp.StatusCode, err

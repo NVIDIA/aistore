@@ -5,6 +5,7 @@
 package backend
 
 import (
+	"io"
 	"net/http"
 	"time"
 
@@ -215,6 +216,26 @@ func (b *base) GetBucketInv(*meta.Bck, *core.LsoInvCtx) (int, error) {
 
 func (b *base) ListObjectsInv(*meta.Bck, *apc.LsoMsg, *cmn.LsoRes, *core.LsoInvCtx) error {
 	return newErrInventory(b.provider)
+}
+
+//
+// multipart upload - default "not implemented" methods
+//
+
+func (b *base) StartMpt(*core.LOM, *http.Request) (string, int, error) {
+	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload start", b.provider)
+}
+
+func (b *base) PutMptPart(*core.LOM, io.ReadCloser, *http.Request, string, int64, int32) (string, int, error) {
+	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload part", b.provider)
+}
+
+func (b *base) CompleteMpt(*core.LOM, *http.Request, string, []byte, apc.MptCompletedParts) (string, string, int, error) {
+	return "", "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload complete", b.provider)
+}
+
+func (b *base) AbortMpt(*core.LOM, *http.Request, string) (int, error) {
+	return http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload abort", b.provider)
 }
 
 //

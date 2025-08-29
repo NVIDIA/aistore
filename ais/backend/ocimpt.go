@@ -11,10 +11,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 
-	s3types "github.com/NVIDIA/aistore/ais/s3"
-	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/core"
 
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -49,10 +47,7 @@ import (
 // The backend parameter is guaranteed to be *ocibp by the call path
 // routing logic (see ais/tgts3mpt)
 
-func StartMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Values) (string, int, error) {
-	bp, ok := bpif.(*ocibp)
-	debug.Assert(ok)
-
+func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 	var (
 		cloudBck                     = lom.Bck().RemoteBck()
 		createMultipartUploadRequest = ocios.CreateMultipartUploadRequest{
@@ -79,9 +74,8 @@ func StartMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Values
 	return uploadID, ecode, err
 }
 
-func PutMptPartOCI(bpif core.Backend, lom *core.LOM, r io.ReadCloser, _ *http.Request, _ url.Values, uploadID string, size int64, partNum int32) (string, int, error) {
+func (bp *ocibp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	var (
-		bp                = bpif.(*ocibp)
 		cloudBck          = lom.Bck().RemoteBck()
 		partNumInt        = int(partNum)
 		uploadPartRequest = ocios.UploadPartRequest{
@@ -110,9 +104,8 @@ func PutMptPartOCI(bpif core.Backend, lom *core.LOM, r io.ReadCloser, _ *http.Re
 	return etag, ecode, err
 }
 
-func CompleteMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Values, uploadID string, _ []byte, parts *s3types.CompleteMptUpload) (string, string, int, error) {
+func (bp *ocibp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (string, string, int, error) {
 	var (
-		bp                           = bpif.(*ocibp)
 		cloudBck                     = lom.Bck().RemoteBck()
 		commitMultipartUploadRequest = ocios.CommitMultipartUploadRequest{
 			NamespaceName: &bp.namespace,
@@ -120,7 +113,7 @@ func CompleteMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Val
 			ObjectName:    &lom.ObjName,
 			UploadId:      &uploadID,
 			CommitMultipartUploadDetails: ocios.CommitMultipartUploadDetails{
-				PartsToCommit: make([]ocios.CommitMultipartUploadPartDetails, 0, len(parts.Parts)),
+				PartsToCommit: make([]ocios.CommitMultipartUploadPartDetails, 0, len(parts)),
 			},
 		}
 		commitMultipartUploadResponse ocios.CommitMultipartUploadResponse
@@ -129,13 +122,13 @@ func CompleteMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Val
 		ecode                         int
 	)
 
-	for _, completedPart := range parts.Parts {
-		partNumInt := int(*completedPart.PartNumber)
+	// Convert apc.MptCompletedParts to OCI types
+	for _, completedPart := range parts {
 		commitMultipartUploadRequest.CommitMultipartUploadDetails.PartsToCommit = append(
 			commitMultipartUploadRequest.CommitMultipartUploadDetails.PartsToCommit,
 			ocios.CommitMultipartUploadPartDetails{
-				PartNum: &partNumInt,
-				Etag:    completedPart.ETag,
+				PartNum: &completedPart.PartNumber,
+				Etag:    &completedPart.ETag,
 			})
 	}
 
@@ -150,9 +143,8 @@ func CompleteMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Val
 	return "", etag, ecode, err
 }
 
-func AbortMptOCI(bpif core.Backend, lom *core.LOM, _ *http.Request, _ url.Values, uploadID string) (int, error) {
+func (bp *ocibp) AbortMpt(lom *core.LOM, _ *http.Request, uploadID string) (int, error) {
 	var (
-		bp                          = bpif.(*ocibp)
 		cloudBck                    = lom.Bck().RemoteBck()
 		abortMultipartUploadRequest = ocios.AbortMultipartUploadRequest{
 			NamespaceName: &bp.namespace,

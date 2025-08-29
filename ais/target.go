@@ -1142,7 +1142,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			t.writeErr(w, r, err)
 			return
 		}
-		uploadID, err := t.createMptUpload(w, r, lom)
+		uploadID, err := t.createMptUpload(r, lom)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -1183,8 +1183,8 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 }
 
-func (t *target) createMptUpload(w http.ResponseWriter, r *http.Request, lom *core.LOM) (uploadID string, err error) {
-	uploadID, metadata, err := t.ups.start(w, r, lom, r.URL.Query())
+func (t *target) createMptUpload(r *http.Request, lom *core.LOM) (uploadID string, err error) {
+	uploadID, metadata, err := t.ups.start(r, lom)
 	if err != nil {
 		return
 	}
@@ -1197,7 +1197,7 @@ func (t *target) abortMptUpload(r *http.Request, lom *core.LOM, uploadID string)
 		return http.StatusBadRequest, err
 	}
 	if lom.Bck().IsRemote() {
-		ecode, err = t.ups.abortRemote(r, lom, r.URL.Query(), uploadID)
+		ecode, err = t.Backend(lom.Bck()).AbortMpt(lom, r, uploadID)
 		if err == nil {
 			return ecode, nil
 		}
@@ -1225,7 +1225,7 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 	remote := lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
 	if remote {
 		var err error
-		etag, ecode, err = t.ups.completeRemote(r, lom, r.URL.Query(), uploadID, body, parts)
+		etag, ecode, err = t.ups.completeRemote(r, lom, uploadID, body, parts)
 		if err != nil {
 			return "", ecode, err
 		}
@@ -1321,7 +1321,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		expectedSize, err = io.Copy(mw, r.Body)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = t.ups.putPartRemote(lom, sgl, r, r.URL.Query(), uploadID, expectedSize, int32(partNum))
+			etag, ecode, err = t.Backend(lom.Bck()).PutMptPart(lom, sgl, r, uploadID, expectedSize, int32(partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
@@ -1330,7 +1330,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		expectedSize = r.ContentLength
 		tr := io.NopCloser(io.TeeReader(r.Body, mw))
 		remoteStart := mono.NanoTime()
-		etag, ecode, err = t.ups.putPartRemote(lom, tr, r, r.URL.Query(), uploadID, expectedSize, int32(partNum))
+		etag, ecode, err = t.Backend(lom.Bck()).PutMptPart(lom, tr, r, uploadID, expectedSize, int32(partNum))
 		remotePutLatency = mono.SinceNano(remoteStart)
 	}
 	cos.Close(partFh)
