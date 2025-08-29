@@ -614,7 +614,7 @@ func (ios *ios) _smoothedUtil(mpath string, config *cmn.Config, currentUtil, now
 		return currentUtil
 	}
 
-	// 80/20
+	// 80/20 mix (or same, smoothing factor alpha = 0.2)
 	avg := cos.DivRoundI64(weightedSum, totalWeight)
 	debug.Assertf(avg >= 0 && avg <= 100, "smooth util out of bounds: %d, %s", avg, mpath)
 

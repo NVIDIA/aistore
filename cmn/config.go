@@ -1190,7 +1190,7 @@ func (c *DiskConf) Validate() (err error) {
 		default:
 			c.IostatTimeSmooth = 4 * c.IostatTimeLong
 		}
-		// NOTE: a small positive value is interpreted as: disable smoothhin
+		// NOTE: a small positive value is interpreted as: disable smoothing, report raw values
 	} else if c.IostatTimeSmooth < 0 || c.IostatTimeSmooth > iosSmoothMaxMultiplier*c.IostatTimeLong {
 		return fmt.Errorf("invalid disk.ios_time_smooth %v (must be a non-negative value <= %d*ios_time_long)",
 			c.IostatTimeSmooth, iosSmoothMaxMultiplier)
