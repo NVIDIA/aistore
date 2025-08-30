@@ -61,7 +61,7 @@ var (
 func New(root, prefix string, smap *meta.Smap) (*Iter, error) {
 	// validate root
 	debug.Assert(!cos.IsLastB(root, filepath.Separator), root)
-	finfo, err := os.Stat(root)
+	finfo, err := os.Lstat(root)
 	if err != nil {
 		return nil, fmt.Errorf("root fstat: %w", err)
 	}
@@ -161,7 +161,7 @@ func (lpi *Iter) Callback(pathname string, de *godirwalk.Dirent) (err error) {
 
 		// NOTE: unit test only
 		if lpi.smap == nil {
-			if finfo, e := os.Stat(pathname); e == nil {
+			if finfo, e := os.Lstat(pathname); e == nil {
 				lpi.page[rel] = finfo.Size()
 			}
 			break

@@ -77,7 +77,7 @@ type (
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
 		bck     cmn.Bck
-		now     int64
+		now     time.Time
 		nvisits int64
 		// init-time
 		p       *clnP
@@ -150,7 +150,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		xcln.Finish()
 		return fs.CapStatus{}
 	}
-	now := time.Now().UnixNano()
+	now := time.Now()
 	for mpath, mi := range avail {
 		joggers[mpath] = &clnJ{
 			oldWork: make([]string, 0, 64),
@@ -342,7 +342,7 @@ func (j *clnJ) jogBck() {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
 		Bck:      j.bck,
-		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT},
+		CTs:      []string{fs.WorkCT, fs.ObjCT, fs.ECSliceCT, fs.ECMetaCT, fs.ChunkCT, fs.ChunkMetaCT},
 		Callback: j.visit,
 		Sorted:   false,
 	}
@@ -363,11 +363,21 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
+	if finfo, err := os.Lstat(fqn); err == nil {
+		mtime := finfo.ModTime()
+		if mtime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+			return nil // skipping - too early
+		}
+	}
+
 	var parsed fs.ParsedFQN
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
 		xcln.AddErr(err)
 		return nil
 	}
+
+	debug.Assertf(parsed.Bck.Equal(&j.bck), "unexpected bucket mismatch: %s vs %s", parsed.Bck.String(), j.bck.String())
+
 	if parsed.ContentType != fs.ObjCT {
 		j.visitCT(&parsed, fqn)
 	} else {
@@ -389,14 +399,15 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkCT:
-		_, base := filepath.Split(fqn)
+		_, ubase := filepath.Split(fqn)
 		contentResolver := fs.CSM.Resolver(fs.WorkCT)
-		_, old, ok := contentResolver.ParseFQN(base)
+		contentInfo := contentResolver.ParseUbase(ubase)
 		// workfiles: remove old or do nothing
-		if ok && old {
+		if contentInfo.Ok && contentInfo.Old {
 			j.oldWork = append(j.oldWork, fqn)
 			j.rmAnyBatch(flagRmOldWork)
 		}
+
 	case fs.ECSliceCT:
 		// EC slices:
 		// - EC enabled: remove only slices with missing metafiles
@@ -412,7 +423,8 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		}
 		// Saving a CT is not atomic: first it saves CT, then its metafile
 		// follows. Ignore just updated CTs to avoid processing incomplete data.
-		if ct.MtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+		mtime := time.Unix(0, ct.MtimeUnix())
+		if mtime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
 			return
 		}
 		metaFQN := fs.CSM.Gen(ct, fs.ECMetaCT, "")
@@ -436,22 +448,114 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		if cos.Stat(sliceCT.FQN()) == nil {
 			return
 		}
+
+		// TODO --  FIXME: does that work at all?
+
 		objCT := ct.Clone(fs.ObjCT)
 		if cos.Stat(objCT.FQN()) == nil {
 			return
 		}
 		j.oldWork = append(j.oldWork, fqn)
 		j.rmAnyBatch(flagRmOldWork)
+
+	case fs.ChunkCT:
+		contentInfo := fs.CSM.Resolver(fs.ChunkCT).ParseUbase(parsedFQN.ObjName)
+		if !contentInfo.Ok {
+			j.oldWork = append(j.oldWork, fqn)
+			j.rmAnyBatch(flagRmOldWork)
+			return
+		}
+		debug.Assert(len(contentInfo.Extras) == 2, contentInfo.Extras)
+
+		uploadID := contentInfo.Extras[0]
+		lomFQN := parsedFQN.Mountpath.MakePathFQN(&parsedFQN.Bck, fs.ObjCT, contentInfo.Base)
+		lom := core.AllocLOM("")
+		j.visitChunk(lomFQN, fqn, lom, uploadID)
+		core.FreeLOM(lom)
+	case fs.ChunkMetaCT:
+		// TODO -- FIXME: not implemented yet
+
 	default:
 		debug.Assert(false, "Unsupported content type: ", parsedFQN.ContentType)
 	}
 }
 
+func (j *clnJ) visitChunk(lomFQN, chunkFQN string, lom *core.LOM, uploadID string) {
+	xcln := j.ini.Xaction
+	if err := lom.InitFQN(lomFQN, &j.bck); err != nil {
+		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
+			xcln.Abort(err)
+		} else {
+			nlog.Errorln(j.String(), "unexpected resolve chunk => object [", chunkFQN, lomFQN, err, "]")
+		}
+		return
+	}
+
+	lom.Lock(false)
+	id := j._getCompletedID(lom)
+	lom.Unlock(false)
+
+	if id != "" {
+		if id != uploadID {
+			// have completed manifest, can remove this stray chunk
+			j.oldWork = append(j.oldWork, chunkFQN)
+			j.rmAnyBatch(flagRmOldWork)
+		}
+		return
+	}
+
+	// partial manifest:
+	// - resolve and check if exists;
+	// - if it does: check its age and possibly remove the chunk
+	fqn := fs.CSM.Gen(lom, fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
+	if finfo, err := os.Lstat(fqn); err == nil {
+		if finfo.ModTime().Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+			return
+		}
+		j.oldWork = append(j.oldWork, chunkFQN)
+		j.rmAnyBatch(flagRmOldWork)
+		return
+	}
+
+	// the chunk appears to be a) orphan and b) old
+	// - the latter already checked at the top of j.visit()
+	j.oldWork = append(j.oldWork, chunkFQN)
+	j.rmAnyBatch(flagRmOldWork)
+}
+
+func (j *clnJ) _getCompletedID(lom *core.LOM) (id string) {
+	xcln := j.ini.Xaction
+	if err := lom.Load(false, true); err != nil {
+		return
+	}
+	if !lom.IsChunked() {
+		return
+	}
+
+	manifest, err := core.NewUfest("", lom, true /*must-exist*/)
+	if err != nil {
+		debug.AssertNoErr(err)
+		xcln.AddErr(err, 0)
+		return
+	}
+	if err := manifest.LoadCompleted(lom); err != nil {
+		e := fmt.Errorf("%s: failed to load completed manifest that must exist: %v", j, err)
+		xcln.AddErr(e, 0)
+		return
+	}
+	return manifest.ID()
+}
+
 func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	xcln := j.ini.Xaction
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
-		nlog.Errorln(j.String(), "unexpected object fqn", fqn, err)
-		// TODO -- FIXME: consider applying force
+		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
+			xcln.Abort(err)
+		} else {
+			nlog.Errorln(j.String(), "unexpected object fqn", fqn, err)
+		}
 		return
 	}
 	// handle load err
@@ -466,20 +570,21 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			return
 		}
 		// too early to remove anything
-		if atimefs+int64(j.config.LRU.DontEvictTime) > j.now {
+		atime := time.Unix(0, atimefs)
+		if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
 			return
 		}
 		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
-				nlog.Errorf("%s rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
-				xcln.AddErr(err)
+				e := fmt.Errorf("%s rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
+				xcln.AddErr(e, 0)
 			} else {
 				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
 		} else if cmn.IsErrLmetaNotFound(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
-				nlog.Errorf("%s rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
-				xcln.AddErr(err)
+				e := fmt.Errorf("%s rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
+				xcln.AddErr(e, 0)
 			} else {
 				nlog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
 			}
@@ -489,7 +594,8 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 
 	// TODO: switch
 	// too early; NOTE: default dont-evict = 2h
-	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+	atime := lom.Atime()
+	if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-evict", j.config.LRU.DontEvictTime.D())
 		}
@@ -598,7 +704,8 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 		}
 		return
 	}
-	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+	atime := lom.Atime()
+	if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
 		return
 	}
 	if lom.IsCopy() {
@@ -663,7 +770,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 	// 1. rm older work
 	if specifier&flagRmOldWork != 0 {
 		for _, workfqn := range j.oldWork {
-			finfo, erw := os.Stat(workfqn)
+			finfo, erw := os.Lstat(workfqn)
 			if erw == nil {
 				if err := cos.RemoveFile(workfqn); err != nil {
 					e := fmt.Errorf("%s: rm old work %q: %v", j, workfqn, err)
@@ -678,6 +785,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 			}
 		}
 		j.oldWork = j.oldWork[:0]
+		j.now = time.Now()
 	}
 
 	// 2. rm misplaced
@@ -728,6 +836,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 			}
 		}
 		j.misplaced.loms = j.misplaced.loms[:0]
+		j.now = time.Now()
 	}
 
 	// 3. rm EC slices and replicas that are still without corresponding metafile
@@ -755,6 +864,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 			}
 		}
 		j.misplaced.ec = j.misplaced.ec[:0]
+		j.now = time.Now()
 	}
 
 	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted)

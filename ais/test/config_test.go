@@ -31,6 +31,7 @@ func TestConfig(t *testing.T) {
 		lowWM            = int32(60)
 		cleanupWM        = int32(55)
 		updTime          = time.Second * 20
+		dontEvictTime    = time.Hour * 2
 		configRegression = map[string]string{
 			"periodic.stats_time":   updTime.String(),
 			"space.cleanupwm":       strconv.Itoa(int(cleanupWM)),
@@ -38,7 +39,7 @@ func TestConfig(t *testing.T) {
 			"space.highwm":          strconv.Itoa(int(highWM)),
 			"lru.enabled":           "true",
 			"lru.capacity_upd_time": updTime.String(),
-			"lru.dont_evict_time":   updTime.String(),
+			"lru.dont_evict_time":   dontEvictTime.String(),
 		}
 		oconfig      = tools.GetClusterConfig(t)
 		ospaceconfig = oconfig.Space

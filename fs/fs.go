@@ -1030,7 +1030,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) error {
 		// thus, prior to going ahead with deletion:
 		if bid == 0 {
 			bdir := mi.MakePathBck(bck)
-			if finfo, erc := os.Stat(bdir); erc == nil {
+			if finfo, erc := os.Lstat(bdir); erc == nil {
 				mtime := finfo.ModTime()
 				if now.IsZero() {
 					now = time.Now()

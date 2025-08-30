@@ -50,7 +50,7 @@ func (ct *CT) Cname() string            { return ct.bck.Cname(ct.objName) }
 
 func (ct *CT) LoadSliceFromFS() error {
 	debug.Assert(ct.ContentType() == fs.ECSliceCT, "unexpected content type: ", ct.ContentType())
-	st, err := os.Stat(ct.FQN())
+	st, err := os.Lstat(ct.FQN())
 	if err != nil {
 		return err
 	}

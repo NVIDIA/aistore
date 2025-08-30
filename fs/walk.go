@@ -112,7 +112,7 @@ func _join(bdir, prefix string) string {
 		// (unless user says otherwise via feature flag)
 		// _not_ to have the names that contain it as a prefix substring
 		// (as in: "subdir/foo" and "subdir_bar")
-		if finfo, err := os.Stat(sub); err == nil && finfo.IsDir() {
+		if finfo, err := os.Lstat(sub); err == nil && finfo.IsDir() {
 			return sub
 		}
 	}

@@ -27,7 +27,7 @@ import (
  * When walking through the files we need to know if the file is an object or
  * other content. To do that we generate fqn with Gen. It adds short
  * prefix (or suffix) to the base name, which we believe is unique and will separate objects
- * from content files. We parse the file type to run ParseFQN (implemented
+ * from content files. We parse the file type to run ParseUbase (implemented
  * by this file type) on the rest of the base name.
  */
 
@@ -48,26 +48,26 @@ const (
 )
 
 type (
+	ContentInfo struct {
+		Base   string   // original base
+		Extras []string // original `extras` used to generate ubase; nil when not relevant (or not used)
+		Old    bool     // is only used to indicate old WorkCT
+		Ok     bool     // success or fail
+	}
+
 	ContentRes interface {
-		// Generates unique base name for original one. This function may add
-		// additional information to the base name.
-		// extras - user-defined marker(s)
-		MakeFQN(base string, extras ...string) (ufqn string)
-		// Parses generated unique fqn to the original one.
-		ParseFQN(base string) (orig string, old, ok bool)
+		// generate unique base name from the original one
+		// * extras - user-defined marker(s)
+		MakeUbase(base string, extras ...string) (ubase string)
+
+		// Parse ubase back to ContentInfo
+		ParseUbase(ubase string) ContentInfo
 	}
 
 	PartsFQN interface {
 		ObjectName() string
 		Bucket() *cmn.Bck
 		Mountpath() *Mountpath
-	}
-
-	ContentInfo struct {
-		Dir  string // original directory
-		Base string // original basename
-		Type string // content type
-		Old  bool   // true if old (subj. to space cleanup)
 	}
 
 	contentSpecMgr struct {
@@ -132,31 +132,32 @@ func (f *contentSpecMgr) Gen(parts PartsFQN, contentType string, extras ...strin
 	spec, ok := f.m[contentType]
 	debug.Assert(ok, contentType)
 
-	objName := spec.MakeFQN(parts.ObjectName(), extras...)
+	// make new (and unique) base
+	ubase := spec.MakeUbase(parts.ObjectName(), extras...)
 
 	// [NOTE]
 	// override caller-provided  `objName` to prevent "file name too long" errno 0x24
 	// - full pathname should be fine as (validated) bucket name <= 64
 	// - see related: core/lom and "fixup fntl"
-	if IsFntl(objName) {
-		nlog.Warningln("fntl:", objName)
-		objName = ShortenFntl(objName)
+	if IsFntl(ubase) {
+		nlog.Warningln("fntl:", ubase)
+		ubase = ShortenFntl(ubase)
 	}
 
-	return parts.Mountpath().MakePathFQN(parts.Bucket(), contentType, objName)
+	return parts.Mountpath().MakePathFQN(parts.Bucket(), contentType, ubase)
 }
 
 //
 // common content types (see also ext/dsort)
 //
 
-func (*ObjectContentRes) MakeFQN(base string, _ ...string) string { return base }
+func (*ObjectContentRes) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ObjectContentRes) ParseFQN(base string) (orig string, old, ok bool) {
-	return base, false, true
+func (*ObjectContentRes) ParseUbase(base string) ContentInfo {
+	return ContentInfo{Base: base, Ok: true}
 }
 
-func (*WorkContentRes) MakeFQN(base string, extras ...string) string {
+func (*WorkContentRes) MakeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 1, extras)
 	var (
 		dir, fname = filepath.Split(base)
@@ -168,28 +169,28 @@ func (*WorkContentRes) MakeFQN(base string, extras ...string) string {
 	return base + ssepa + tieBreaker + ssepa + spid
 }
 
-func (*WorkContentRes) ParseFQN(base string) (orig string, old, ok bool) {
+func (*WorkContentRes) ParseUbase(base string) (ci ContentInfo) {
 	// remove original content type
 	cntIndex := strings.IndexByte(base, bsepa)
 	if cntIndex < 0 {
-		return "", false, false
+		return
 	}
 	base = base[cntIndex+1:]
 
 	pidIndex := strings.LastIndexByte(base, bsepa) // pid
 	if pidIndex < 0 {
-		return "", false, false
+		return
 	}
 	tieIndex := strings.LastIndexByte(base[:pidIndex], bsepa) // tie breaker
 	if tieIndex < 0 {
-		return "", false, false
+		return
 	}
 	filePID, err := strconv.ParseInt(base[pidIndex+1:], 16, 64)
 	if err != nil {
-		return "", false, false
+		return
 	}
 
-	return base[:tieIndex], filePID != pid, true
+	return ContentInfo{Base: base[:tieIndex], Old: filePID != pid, Ok: true}
 }
 
 // The following content resolvers handle temporary or derived files that don't require
@@ -206,56 +207,66 @@ func (*WorkContentRes) ParseFQN(base string) (orig string, old, ok bool) {
 // - ECMetaContentRes: erasure coding metadata (%mt/ directory)
 //   Contains EC reconstruction information, lifecycle tied to EC slices
 //
-// All use pass-through MakeFQN/ParseFQN since the content type
+// All use pass-through MakeUbase/ParseUbase since the content type
 // in the path provides sufficient identification for cleanup and management.
 
-func (*ObjChunkContentRes) MakeFQN(base string, extras ...string) string {
+func (*ObjChunkContentRes) MakeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 2, "expecting uploadID and chunk number, got: ", extras)
 	return base + ssepa + extras[0] + ssepa + extras[1]
 }
 
-func (*ObjChunkContentRes) ParseFQN(base string) (string, bool, bool) {
+func (*ObjChunkContentRes) ParseUbase(base string) (ci ContentInfo) {
 	// (chunk number)
 	i := strings.LastIndexByte(base, bsepa)
 	if i < 0 {
-		return base, false, false
+		return
 	}
-	debug.Func(func() {
-		_, err := strconv.Atoi(base[i+1:])
-		debug.Assert(err == nil, err, " [", base, "]")
-	})
+
 	// (upload ID)
 	j := strings.LastIndexByte(base[:i], bsepa)
 	if j < 0 {
-		return base, false, false
+		return
 	}
-	return base[:j], false, true
+
+	uploadID, chunkNum := base[j+1:i], base[i+1:]
+	if err := cos.ValidateManifestID(uploadID); err != nil {
+		return
+	}
+	if _, err := strconv.Atoi(chunkNum); err != nil {
+		return
+	}
+
+	return ContentInfo{Base: base[:j], Extras: []string{uploadID, chunkNum}, Ok: true}
 }
 
-func (*ChunkMetaContentRes) MakeFQN(base string, extras ...string) string {
+func (*ChunkMetaContentRes) MakeUbase(base string, extras ...string) string {
 	if len(extras) == 0 {
-		return base
+		return base // completed
 	}
 	debug.Assert(len(extras) == 1, extras)
-	return base + ssepa + extras[0]
+	return base + ssepa + extras[0] // partial (with uploadID)
 }
 
-func (*ChunkMetaContentRes) ParseFQN(base string) (orig string, old, ok bool) {
+func (*ChunkMetaContentRes) ParseUbase(base string) ContentInfo {
 	i := strings.LastIndexByte(base, bsepa)
 	if i < 0 {
-		return base, false, false
+		return ContentInfo{Base: base, Ok: true} // completed
 	}
-	return base[:i], false, true
+	uploadID := base[i+1:]
+	if err := cos.ValidateManifestID(uploadID); err != nil {
+		return ContentInfo{}
+	}
+	return ContentInfo{Base: base[:i], Extras: []string{uploadID}, Ok: true} // partial
 }
 
-func (*ECSliceContentRes) MakeFQN(base string, _ ...string) string { return base }
+func (*ECSliceContentRes) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ECSliceContentRes) ParseFQN(base string) (orig string, old, ok bool) {
-	return base, false, true
+func (*ECSliceContentRes) ParseUbase(base string) ContentInfo {
+	return ContentInfo{Base: base, Ok: true}
 }
 
-func (*ECMetaContentRes) MakeFQN(base string, _ ...string) string { return base }
+func (*ECMetaContentRes) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ECMetaContentRes) ParseFQN(base string) (orig string, old, ok bool) {
-	return base, false, true
+func (*ECMetaContentRes) ParseUbase(base string) ContentInfo {
+	return ContentInfo{Base: base, Ok: true}
 }

@@ -1224,6 +1224,9 @@ const (
 	EvictBatchSizeMin  = 1024
 	evictBatchSizeDflt = 32 * 1024
 	evictBatchSizeMax  = 512 * 1024
+
+	capUpdTimeMin    = 10 * time.Second
+	dontEvictTimeMin = time.Hour
 )
 
 func (c *LRUConf) String() string {
@@ -1235,8 +1238,11 @@ func (c *LRUConf) String() string {
 }
 
 func (c *LRUConf) Validate() (err error) {
-	if c.CapacityUpdTime.D() < 10*time.Second {
-		return fmt.Errorf("invalid %s (expecting: lru.capacity_upd_time >= 10s)", c)
+	if c.CapacityUpdTime.D() < capUpdTimeMin {
+		return fmt.Errorf("invalid %+v (expecting: lru.capacity_upd_time >= %v)", c, capUpdTimeMin)
+	}
+	if c.DontEvictTime.D() < dontEvictTimeMin {
+		return fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
 	}
 	if c.EvictBatchSize == 0 {
 		c.EvictBatchSize = evictBatchSizeDflt

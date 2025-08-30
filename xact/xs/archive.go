@@ -740,7 +740,7 @@ func (wi *archwi) finalize() (int64, error) {
 	}
 	// tar append
 	if wi.appendPos > 0 {
-		finfo, err := os.Stat(wi.fqn)
+		finfo, err := os.Lstat(wi.fqn)
 		if err != nil {
 			debug.AssertNoErr(err)
 			return 0, err

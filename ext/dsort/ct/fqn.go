@@ -23,8 +23,8 @@ var _ fs.ContentRes = (*DsortFile)(nil)
 
 type DsortFile struct{}
 
-func (*DsortFile) MakeFQN(base string, _ ...string) string { return base }
+func (*DsortFile) MakeUbase(base string, _ ...string) string { return base }
 
-func (*DsortFile) ParseFQN(base string) (orig string, old, ok bool) {
-	return base, false, true
+func (*DsortFile) ParseUbase(base string) fs.ContentInfo {
+	return fs.ContentInfo{Base: base, Ok: true}
 }

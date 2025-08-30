@@ -251,10 +251,10 @@ func (u *Ufest) ChunkFQN(num int) (string, error) {
 	}
 	var (
 		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
-		chname          = contentResolver.MakeFQN(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
+		chname          = contentResolver.MakeUbase(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
 	)
 	if num > 9999 {
-		chname = contentResolver.MakeFQN(lom.ObjName, u.id, strconv.Itoa(num))
+		chname = contentResolver.MakeUbase(lom.ObjName, u.id, strconv.Itoa(num))
 	}
 	if num == 1 {
 		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), nil

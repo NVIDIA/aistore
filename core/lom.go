@@ -143,7 +143,7 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 
 // low-level access to the os.FileInfo of a chunk or whole file
 func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
-	finfo, err := os.Stat(lom.FQN)
+	finfo, err := os.Lstat(lom.FQN)
 	if err == nil {
 		size = finfo.Size() // NOTE: chunk?
 		mtime = finfo.ModTime()
