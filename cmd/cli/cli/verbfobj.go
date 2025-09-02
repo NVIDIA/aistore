@@ -435,6 +435,28 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 	if err != nil {
 		return err
 	}
+
+	// Multipart upload path
+	fileSize := finfo.Size()
+	if flagIsSet(c, chunkSizeFlag) {
+		chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
+		if err != nil {
+			return err
+		}
+		if fileSize > chunkSize {
+			return uploadFileInChunks(c, path, fileSize, chunkSize, bck, objName)
+		}
+	} else if fileSize > dfltObjSizeLimit {
+		chunkSize, shouldChunk, err := promptForChunking(c, fileSize, filepath.Base(path))
+		if err != nil {
+			return err
+		}
+		if shouldChunk {
+			return uploadFileInChunks(c, path, fileSize, chunkSize, bck, objName)
+		}
+	}
+
+	// Regular single file upload path
 	fh, err := cos.NewFileHandle(path)
 	if err != nil {
 		return err
@@ -493,6 +515,7 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		progress.Wait()
 	}
 
+	actionDone(c, fmt.Sprintf("PUT %q => %s\n", path, bck.Cname(objName)))
 	return err
 }
 

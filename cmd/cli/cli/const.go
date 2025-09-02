@@ -250,6 +250,12 @@ const flagPrefix = "--"
 
 const (
 	dfltStdinChunkSize = 10 * cos.MiB
+
+	// PUT: multipart uploads (chunking)
+	dfltObjSizeLimit = 1 * cos.GiB // the object size threshold that triggers auto-chunking and multipart uploads for PUT
+	dfltChunkSize    = 1 * cos.MiB // the default chunk size for multipart uploads for PUT
+	chunkSizeMin     = cos.KiB
+	chunkSizeMax     = 5 * cos.GiB
 )
 
 const (

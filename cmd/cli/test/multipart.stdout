@@ -1,2 +1,12 @@
 "ais://$BUCKET_1" created
 ^Upload ID: .*$
+^PUT.*small-file.*$
+
+^PUT in chunks.*large-file-chunked.*$
+
+^PUT in chunks.*content-file.*$
+
+^Verifying file integrity...$
+^Small file size matches$
+^Large file size matches$
+^Content file matches$

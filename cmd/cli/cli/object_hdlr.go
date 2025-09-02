@@ -436,7 +436,6 @@ func putHandler(c *cli.Context) error {
 			e := stripErr(err)
 			return fmt.Errorf("failed to %s %s => %s: %v", a.verb(), a.src.abspath, a.dst.bck.Cname(a.dst.oname), e)
 		}
-		actionDone(c, fmt.Sprintf("%s %q => %s\n", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
 	}
 

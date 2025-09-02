@@ -33,6 +33,36 @@ ais object mpu complete ais://$BUCKET_1/test-object invalidID 1,2,3 // FAIL "fai
 # Test 8: Test abort with invalid upload ID 
 ais object mpu abort ais://$BUCKET_1/test-object invalidID // FAIL "failed to abort multipart upload"
 
+# Test 9: Large file multipart upload tests
+# Create a small file (below 16MB threshold)
+dd if=/dev/zero of=/tmp/small_file.bin bs=1M count=8 // IGNORE
+# Create a large file (above 16MB threshold)  
+dd if=/dev/zero of=/tmp/large_file.bin bs=1M count=32 // IGNORE
+# Create content-based large file for integrity testing
+seq 1 1000000 > /tmp/large_content.txt // IGNORE
+
+# Test 10: Small file should not trigger multipart upload
+ais put /tmp/small_file.bin ais://$BUCKET_1/small-file
+
+# Test 11: Large file with --chunk-size flag
+ais put /tmp/large_file.bin ais://$BUCKET_1/large-file-chunked --chunk-size=8MB
+
+# Test 12: File smaller than threshold with --chunk-size flag
+ais put /tmp/large_content.txt ais://$BUCKET_1/content-file --chunk-size=4MB
+
+# Test 13: Verify uploaded files integrity
+ais get ais://$BUCKET_1/small-file /tmp/downloaded_small.bin --silent // IGNORE
+ais get ais://$BUCKET_1/large-file-chunked /tmp/downloaded_large.bin --silent // IGNORE
+ais get ais://$BUCKET_1/content-file /tmp/downloaded_content.txt --silent // IGNORE
+
+# Compare file sizes and checksums
+echo "Verifying file integrity..."
+ls -la /tmp/small_file.bin /tmp/downloaded_small.bin | awk '{print $5}' | sort -u | wc -l | grep -q "1" && echo "Small file size matches"
+ls -la /tmp/large_file.bin /tmp/downloaded_large.bin | awk '{print $5}' | sort -u | wc -l | grep -q "1" && echo "Large file size matches"  
+diff /tmp/large_content.txt /tmp/downloaded_content.txt > /dev/null && echo "Content file matches"
+
 # Cleanup
 rm -f /tmp/mpu_part1.txt /tmp/mpu_part2.txt /tmp/mpu_part3.txt // IGNORE
+rm -f /tmp/small_file.bin /tmp/large_file.bin /tmp/large_content.txt // IGNORE
+rm -f /tmp/downloaded_small.bin /tmp/downloaded_large.bin /tmp/downloaded_content.txt // IGNORE
 ais bucket rm ais://$BUCKET_1 --yes // IGNORE
