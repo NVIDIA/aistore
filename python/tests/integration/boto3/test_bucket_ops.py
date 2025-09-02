@@ -1,34 +1,12 @@
-from unittest import TestCase
-
-import boto3
-
-# pylint: disable=unused-import,unused-variable
-from aistore.botocore_patch import botocore
 from aistore.sdk.const import UTF_ENCODING
-from tests import AWS_ACCESS_KEY_ID, AWS_SESSION_TOKEN, AWS_SECRET_ACCESS_KEY
 
-from tests.integration import CLUSTER_ENDPOINT
-from tests.integration.boto3 import NUM_BUCKETS, NUM_OBJECTS, OBJECT_LENGTH, AWS_REGION
+from tests.integration.boto3 import NUM_BUCKETS, NUM_OBJECTS, OBJECT_LENGTH
+from tests.integration.boto3.base_test import BaseBotoTest
 from tests.utils import random_string
 
 
-class BotoTest(TestCase):
-    def setUp(self) -> None:
-        """
-        Test basic s3 operations on an AIS cluster using the boto3 client
-        """
-        self.client = boto3.client(
-            "s3",
-            region_name=AWS_REGION,
-            endpoint_url=CLUSTER_ENDPOINT + "/s3",
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            aws_session_token=AWS_SESSION_TOKEN,
-        )
-        self.clean_up()
-
-    def tearDown(self) -> None:
-        self.clean_up()
+class BotoTest(BaseBotoTest):
+    """Test basic S3 operations on an AIS cluster using the boto3 client"""
 
     def test_create_bucket(self):
         bucket_names = {random_string(20) for _ in range(NUM_BUCKETS)}
@@ -57,47 +35,3 @@ class BotoTest(TestCase):
         bucket_name = self.create_bucket()
         self.client.delete_bucket(Bucket=bucket_name)
         self.assertEqual([], self.client.list_buckets().get("Buckets"))
-
-    def test_multipart_upload(self):
-        key = "object-name"
-        data_len = 100
-        num_parts = 4
-        chunk_size = int(data_len / num_parts)
-        data = random_string(data_len)
-        parts = [data[i * chunk_size : (i + 1) * chunk_size] for i in range(num_parts)]
-        bucket_name = self.create_bucket()
-        response = self.client.create_multipart_upload(Bucket=bucket_name, Key=key)
-        upload_id = response.get("UploadId")
-        offset = 0
-        for part_num, part_data in enumerate(parts):
-            self.client.upload_part(
-                Body=part_data,
-                Bucket=bucket_name,
-                Key=key,
-                PartNumber=part_num + 1,
-                UploadId=upload_id,
-            )
-            offset += len(part_data)
-        self.client.complete_multipart_upload(
-            Bucket=bucket_name,
-            Key=key,
-            UploadId=upload_id,
-            MultipartUpload={
-                "Parts": [{"PartNumber": part_num + 1} for part_num in range(num_parts)]
-            },
-        )
-        response = self.client.get_object(Bucket=bucket_name, Key=key)
-        uploaded_data = response["Body"].read().decode(UTF_ENCODING)
-        self.assertEqual(data, uploaded_data)
-
-    def create_bucket(self):
-        bucket_name = random_string(20)
-        self.client.create_bucket(Bucket=bucket_name)
-        return bucket_name
-
-    def clean_up(self):
-        existing_bucket_names = [
-            b.get("Name") for b in self.client.list_buckets().get("Buckets")
-        ]
-        for bucket in existing_bucket_names:
-            self.client.delete_bucket(Bucket=bucket)

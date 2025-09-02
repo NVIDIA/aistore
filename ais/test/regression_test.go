@@ -701,7 +701,7 @@ func TestLRU(t *testing.T) {
 		"space.cleanupwm":       cleanupWMStr,
 		"space.lowwm":           lowWMStr,
 		"space.highwm":          highWMStr,
-		"lru.dont_evict_time":   "0s",
+		"lru.dont_evict_time":   time.Hour.String(),
 		"lru.capacity_upd_time": "10s",
 	})
 

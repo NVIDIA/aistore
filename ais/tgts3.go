@@ -276,6 +276,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	core.FreeLOM(lom)
 
 	if err != nil {
+		// TODO: should return standard S3 "NoSuchKey" error instead of "ErrNotFound"
 		s3.WriteErr(w, r, err, 0)
 	}
 	dpqFree(dpq)
