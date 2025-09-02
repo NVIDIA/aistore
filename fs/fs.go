@@ -1123,6 +1123,8 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 	}
 	if cos.IsErrXattrNotFound(err) {
 		err = nil
+	} else {
+		err = fmt.Errorf("unexpected failure to access mountpath %q: %w", mpath, err)
 	}
 	return
 }

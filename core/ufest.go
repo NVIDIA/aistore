@@ -1017,7 +1017,7 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 			debug.Assert(r.coff == 0)
 			r.cfh, err = os.Open(c.Path)
 			if err != nil {
-				return n, err
+				return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), r.cidx+1, u.count)
 			}
 		}
 
@@ -1039,7 +1039,8 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 		switch err {
 		case io.EOF:
 			if r.coff < c.size {
-				return n, io.ErrUnexpectedEOF // truncated
+				return n, fmt.Errorf("%s: chunk (%d/%d) appears to be truncated (%d/%d): %v",
+					r.u._itag(), r.cidx+1, u.count, r.coff, c.size, io.ErrUnexpectedEOF)
 			}
 			err = nil
 		case nil:
@@ -1111,7 +1112,7 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		toRead := min(int64(total-n), c.size-chunkoff)
 		fh, err := os.Open(c.Path)
 		if err != nil {
-			return n, err
+			return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), idx+1, u.count)
 		}
 
 		var m int
@@ -1120,7 +1121,8 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 
 		n += m
 		if err != nil {
-			return n, err
+			return n, fmt.Errorf("%s: failed to read chunk (%d/%d) at offset %d: %v",
+				r.u._itag(), idx+1, u.count, chunkoff, err)
 		}
 
 		// 2nd, etc. chunks

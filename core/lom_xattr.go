@@ -162,11 +162,16 @@ func (lom *LOM) LoadMetaFromFS() error {
 	return nil
 }
 
-func whingeLmeta(cname string, err error) (*lmeta, error) {
-	if cos.IsErrXattrNotFound(err) {
-		return nil, cmn.NewErrLmetaNotFound(cname, err)
+func _errLmeta(cname string, err error) (e error) {
+	switch {
+	case os.IsNotExist(err) || errors.Is(err, syscall.ENOENT):
+		e = cos.NewErrNotFound(T, cname)
+	case cos.IsErrXattrNotFound(err):
+		e = cmn.NewErrLmetaNotFound(cname, err)
+	default:
+		e = os.NewSyscallError(getxattr, fmt.Errorf("%s: %w", cname, err))
 	}
-	return nil, os.NewSyscallError(getxattr, fmt.Errorf("%s, err: %w", cname, err))
+	return
 }
 
 func (lom *LOM) lmfsReload(populate bool) (md *lmeta, err error) {
@@ -188,7 +193,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	if err != nil {
 		slab.Free(buf)
 		if err != syscall.ERANGE {
-			return whingeLmeta(lom.Cname(), err)
+			return nil, _errLmeta(lom.Cname(), err)
 		}
 		debug.Assert(mdSize < xattrLomSize)
 		// 2nd attempt: max-size
@@ -196,7 +201,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		b, err = lom.GetXattr(buf)
 		if err != nil {
 			slab.Free(buf)
-			return whingeLmeta(lom.Cname(), err)
+			return nil, _errLmeta(lom.Cname(), err)
 		}
 	}
 	md, err = lom.unpack(b, mdSize, populate)

@@ -60,6 +60,7 @@ var errBufferUnderrun = errors.New("buffer underrun")
 
 // ErrNotFound
 
+// note: where == nil is fine
 func NewErrNotFound(where fmt.Stringer, what string) *ErrNotFound {
 	return &ErrNotFound{where: where, what: what}
 }
@@ -75,11 +76,25 @@ func (e *ErrNotFound) Error() string {
 	return e.where.String() + ": " + s
 }
 
+// TODO -- FIXME: deprecated and must be eventually absorbed into IsNotExist() below
 func IsErrNotFound(err error) bool {
 	if _, ok := err.(*ErrNotFound); ok {
 		return true
 	}
 	return err != nil && strings.Contains(err.Error(), "does not exist")
+}
+
+// non-existence checker that must be used instead of the one above;
+// includes:
+// - 404 when/if provided
+// - cos.ErrNotFound
+// - fs.ErrNotExist (covers *os.PathError)
+// - bare syscall.ENOENT (explicitly checked)
+func IsNotExist(err error, ecode ...int) bool {
+	if len(ecode) > 0 && ecode[0] == http.StatusNotFound {
+		return true
+	}
+	return IsErrNotFound(err) || errors.Is(err, iofs.ErrNotExist) || errors.Is(err, syscall.ENOENT)
 }
 
 // ErrAlreadyExists
@@ -94,17 +109,6 @@ func (e *ErrAlreadyExists) Error() string {
 		return s
 	}
 	return e.where.String() + ": " + s
-}
-
-//
-// gen-purpose not-finding-anything: objects, directories, xactions, nodes, ...
-//
-
-func IsNotExist(err error, ecode ...int) bool {
-	if len(ecode) > 0 && ecode[0] == http.StatusNotFound {
-		return true
-	}
-	return IsErrNotFound(err) || os.IsNotExist(err) /*unwraps for fs.ErrNotExist*/
 }
 
 // Errs is a thread-safe collection of errors

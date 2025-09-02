@@ -79,6 +79,7 @@ type (
 		bck     cmn.Bck
 		now     time.Time
 		nvisits int64
+		norphan int64
 		// init-time
 		p       *clnP
 		ini     *IniCln
@@ -346,7 +347,11 @@ func (j *clnJ) jogBck() {
 		Callback: j.visit,
 		Sorted:   false,
 	}
-	if err := fs.Walk(opts); err != nil {
+	err := fs.Walk(opts)
+	if j.norphan > 0 {
+		nlog.Warningln(j.String(), "removed", j.norphan, "orphan chunks")
+	}
+	if err != nil {
 		xcln.AddErr(err)
 		return
 	}
@@ -468,9 +473,8 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		debug.Assert(len(contentInfo.Extras) == 2, contentInfo.Extras)
 
 		uploadID := contentInfo.Extras[0]
-		lomFQN := parsedFQN.Mountpath.MakePathFQN(&parsedFQN.Bck, fs.ObjCT, contentInfo.Base)
-		lom := core.AllocLOM("")
-		j.visitChunk(lomFQN, fqn, lom, uploadID)
+		lom := core.AllocLOM(contentInfo.Base)
+		j.visitChunk(fqn, lom, uploadID)
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
 		// TODO -- FIXME: not implemented yet
@@ -480,15 +484,20 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	}
 }
 
-func (j *clnJ) visitChunk(lomFQN, chunkFQN string, lom *core.LOM, uploadID string) {
+const (
+	sparseOrphanLogCnt = 100
+)
+
+func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	xcln := j.ini.Xaction
-	if err := lom.InitFQN(lomFQN, &j.bck); err != nil {
+	if err := lom.InitBck(&j.bck); err != nil {
 		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
-			xcln.Abort(err)
 		} else {
-			nlog.Errorln(j.String(), "unexpected resolve chunk => object [", chunkFQN, lomFQN, err, "]")
+			err = fmt.Errorf("%s: unexpected lom-init fail [ %q, %q, %w ]", j, chunkFQN, lom.ObjName, err)
+			nlog.Errorln(err)
 		}
+		xcln.Abort(err)
 		return
 	}
 
@@ -498,6 +507,9 @@ func (j *clnJ) visitChunk(lomFQN, chunkFQN string, lom *core.LOM, uploadID strin
 
 	if id != "" {
 		if id != uploadID {
+			if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+				nlog.Warningln(j.String(), "chunk ID vs completed manifest ID:", id, uploadID, lom.Cname())
+			}
 			// have completed manifest, can remove this stray chunk
 			j.oldWork = append(j.oldWork, chunkFQN)
 			j.rmAnyBatch(flagRmOldWork)
@@ -513,13 +525,17 @@ func (j *clnJ) visitChunk(lomFQN, chunkFQN string, lom *core.LOM, uploadID strin
 		if finfo.ModTime().Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
 			return
 		}
+		nlog.Warningln(j.String(), "removing old partial manifest:", uploadID, lom.Cname(), fqn)
 		j.oldWork = append(j.oldWork, chunkFQN)
 		j.rmAnyBatch(flagRmOldWork)
-		return
 	}
 
-	// the chunk appears to be a) orphan and b) old
-	// - the latter already checked at the top of j.visit()
+	// the chunk appears to be a) orphan and b) old enough (checked above)
+	// (sparse log; note total count log above)
+	j.norphan++
+	if j.norphan%sparseOrphanLogCnt == 1 {
+		nlog.Warningln(j.String(), "removing orphan chunk:", uploadID, lom.Cname(), chunkFQN, j.norphan)
+	}
 	j.oldWork = append(j.oldWork, chunkFQN)
 	j.rmAnyBatch(flagRmOldWork)
 }
@@ -560,20 +576,6 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 	// handle load err
 	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
-		_, atimefs, _, err := lom.Fstat(true /*get-atime*/)
-		if err != nil {
-			if !cos.IsNotExist(err) {
-				err = os.NewSyscallError("stat", err)
-				xcln.AddErr(err)
-				core.T.FSHC(err, lom.Mountpath(), lom.FQN)
-			}
-			return
-		}
-		// too early to remove anything
-		atime := time.Unix(0, atimefs)
-		if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
-			return
-		}
 		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
 				e := fmt.Errorf("%s rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)

@@ -1,14 +1,13 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
 	"errors"
 	"io"
-	"os"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -43,5 +42,5 @@ func IsIOError(err error) bool {
 
 func IsErrXattrNotFound(err error) bool {
 	// NOTE: syscall.ENOATTR confirmed to be returned on Darwin, instead of syscall.ENODATA.
-	return os.IsNotExist(err) || err == syscall.ENOATTR
+	return errors.Is(err, syscall.ENOATTR)
 }

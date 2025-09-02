@@ -294,7 +294,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			// Reading should fail with unexpected EOF
 			buffer := make([]byte, 300)
 			_, err = reader.Read(buffer)
-			Expect(err).To(Equal(io.ErrUnexpectedEOF))
+			Expect(err).To(MatchError(ContainSubstring("truncated")))
 		})
 
 		It("should handle multiple small chunks", func() {

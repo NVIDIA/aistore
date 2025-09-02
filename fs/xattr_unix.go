@@ -55,7 +55,11 @@ func SetXattr(fqn, attrName string, data []byte) (err error) {
 // removeXattr removes xattr
 func removeXattr(fqn, attrName string) error {
 	err := unix.Removexattr(fqn, attrName)
-	if err != nil && !cos.IsErrXattrNotFound(err) {
+	switch {
+	case err == nil:
+	case os.IsNotExist(err) || errors.Is(err, syscall.ENOENT):
+		// do nothing, return nil
+	case !cos.IsErrXattrNotFound(err):
 		nlog.Errorf("failed to remove %q from %s: %v", attrName, fqn, err)
 		return err
 	}
