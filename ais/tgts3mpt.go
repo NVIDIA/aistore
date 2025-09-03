@@ -322,7 +322,7 @@ func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	// read chunk file
-	fh, err := os.Open(chunk.Path)
+	fh, err := os.Open(chunk.Path())
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

@@ -35,6 +35,7 @@ import (
 // TODO:
 // - remove or isolate `testing` bits -- FIXME
 // - partial manifest is expected in memory; TODO: resume upon restart (can wait)
+// - add stats counters
 // - remove all debug.AssertFunc
 // - space cleanup; orphan chunks
 // - err-busy
@@ -75,7 +76,7 @@ const (
 type (
 	Uchunk struct {
 		size  int64      // this chunk size
-		Path  string     // (may become v2 _remote location_)
+		path  string     // (may become v2 _remote location_)
 		cksum *cos.Cksum // nil means none; otherwise non-empty
 		num   uint16     // chunk/part number
 		flags uint16     // bit flags (future use)
@@ -107,15 +108,20 @@ var (
 // Uchunk //
 ////////////
 
-func (c *Uchunk) Size() int64 { return c.size }
-func (c *Uchunk) Num() uint16 { return c.num }
+// readonly
+func (c *Uchunk) Size() int64  { return c.size }
+func (c *Uchunk) Num() uint16  { return c.num }
+func (c *Uchunk) Path() string { return c.path }
 
+// validate and set
 func (c *Uchunk) SetCksum(cksum *cos.Cksum) {
 	if !cos.NoneC(cksum) {
 		debug.AssertNoErr(cksum.Validate())
 	}
 	c.cksum = cksum
 }
+
+func (c *Uchunk) SetETag(etag string) { c.ETag = etag }
 
 ///////////
 // Ufest //
@@ -152,28 +158,66 @@ func (u *Ufest) ID() string         { return u.id }
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
 
-func (u *Ufest) Add(c *Uchunk, size, num int64) error {
-	if num <= 0 {
-		return fmt.Errorf("%s: invalid chunk number: %d (must be > 0)", utag, num)
+func _nolom(lom *LOM) error {
+	if lom == nil || lom.mi == nil {
+		return errors.New(utag + ": lom is nil or uninitialized")
 	}
-	if c == nil {
-		return fmt.Errorf("%s [add] nil chunk", utag)
+	return nil
+}
+
+// construct a new chunk and its pathname
+// - `num` is not an index (must start from 1)
+// - chunk #1 stays on the object's mountpath
+// - other chunks get HRW distributed
+func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
+	if err := _nolom(u.lom); err != nil {
+		return nil, err
 	}
-	if num > math.MaxUint16 || len(u.chunks) >= math.MaxUint16 {
-		return fmt.Errorf("%s [add] chunk number (%d, %d) exceeds %d limit", utag, num, len(u.chunks), math.MaxUint16)
+	if err := _nolom(lom); err != nil {
+		return nil, err
+	}
+	// TODO: strict and simple check (ie., not supporting mountpath changes during upload)
+	if lom.FQN != u.lom.FQN {
+		return nil, fmt.Errorf("%s: object mismatch: %s vs (%s, %s)", u._utag(u.lom.Cname()), u.lom.mi, lom.Cname(), lom.mi)
+	}
+	if num <= 0 || num > math.MaxUint16 {
+		return nil, fmt.Errorf("%s: invalid chunk number (%d)", u._utag(lom.Cname()), num)
 	}
 
-	if c.Path == "" {
-		return fmt.Errorf("%s [add] empty chunk path", utag)
+	var (
+		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
+		chname          = contentResolver.MakeUbase(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
+	)
+	if num > 9999 {
+		chname = contentResolver.MakeUbase(lom.ObjName, u.id, strconv.Itoa(num))
 	}
-	// TODO: optimize out
-	if fqn, err := u.ChunkFQN(int(num)); err != nil || fqn != c.Path {
-		if err != nil {
-			return err
-		}
-		if fqn != c.Path {
-			return fmt.Errorf("%s [add] invalid chunk path: %s (expecting %s)", utag, c.Path, fqn)
-		}
+
+	if num == 1 {
+		return &Uchunk{
+			path: lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname),
+			num:  uint16(num),
+		}, nil
+	}
+	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(chname))
+	if err != nil {
+		return nil, err
+	}
+	return &Uchunk{
+		path: mi.MakePathFQN(lom.Bucket(), fs.ChunkCT, chname),
+		num:  uint16(num),
+	}, nil
+}
+
+func (u *Ufest) Add(c *Uchunk, size, num int64) error {
+	if err := _nolom(u.lom); err != nil {
+		return err
+	}
+	lom := u.lom
+	if c == nil || c.num == 0 || c.path == "" {
+		return fmt.Errorf("%s: nil chunk", u._utag(lom.Cname()))
+	}
+	if num != int64(c.num) {
+		return fmt.Errorf("%s: invalid chunk number %d (expecting %d)", u._utag(lom.Cname()), num, c.num)
 	}
 
 	c.size = size
@@ -203,8 +247,8 @@ func (u *Ufest) _add(c *Uchunk) error {
 	// replace ("last wins")
 	dup := &u.chunks[idx]
 	if idx < l && dup.num == c.num {
-		if err := cos.RemoveFile(dup.Path); err != nil {
-			return fmt.Errorf("%s [add] failed to replace chunk [%d, %s]: %v", utag, c.num, dup.Path, err)
+		if err := cos.RemoveFile(dup.path); err != nil {
+			return fmt.Errorf("%s: failed to replace chunk [%d, %s]: %v", utag, c.num, dup.path, err)
 		}
 		u.size += c.size - dup.size
 		*dup = *c
@@ -240,9 +284,9 @@ func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 func (u *Ufest) removeChunks(lom *LOM) {
 	for i := range u.chunks {
 		c := &u.chunks[i]
-		if err := cos.RemoveFile(c.Path); err != nil {
+		if err := cos.RemoveFile(c.path); err != nil {
 			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove chunk(s) [", c.Path, err, "]")
+				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove chunk(s) [", c.path, err, "]")
 			}
 		}
 	}
@@ -279,38 +323,13 @@ func (u *Ufest) removeCompleted(lom *LOM) error {
 	u.removeChunks(lom)
 	fqn := u._fqns(lom, true)
 	err := cos.RemoveFile(fqn)
-	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleCore) {
-			nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove completed manifest [", err, "]")
-		}
+	if err == nil {
+		return nil
+	}
+	if cmn.Rom.FastV(4, cos.SmoduleCore) {
+		nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove completed manifest [", err, "]")
 	}
 	return err
-}
-
-// generate chunk file path to write the former
-// - `num` here is Uchunk.num starting from 1
-// - chunk #1 stays on the object's mountpath
-// - other chunks get HRW distributed
-func (u *Ufest) ChunkFQN(num int) (string, error) {
-	lom := u.lom
-	if lom == nil {
-		return "", errors.New(utag + ": nil lom")
-	}
-	if num <= 0 {
-		return "", fmt.Errorf("%s: invalid chunk number (%d)", u._itag(lom.Cname()), num)
-	}
-	var (
-		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
-		chname          = contentResolver.MakeUbase(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
-	)
-	if num > 9999 {
-		chname = contentResolver.MakeUbase(lom.ObjName, u.id, strconv.Itoa(num))
-	}
-	if num == 1 {
-		return lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), nil
-	}
-	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(chname))
-	return mi.MakePathFQN(lom.Bucket(), fs.ChunkCT, chname), err
 }
 
 // must be called under lom rlock
@@ -484,13 +503,13 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	if e != nil {
 		return e
 	}
-	orig := c.Path
+	orig := c.path
 	if len(testing) == 0 {
-		if err := lom.RenameFinalize(c.Path); err != nil {
+		if err := lom.RenameFinalize(c.path); err != nil {
 			return err
 		}
 	}
-	c.Path = lom.FQN
+	c.path = lom.FQN
 
 	// store
 	u.flags |= flCompleted
@@ -498,7 +517,7 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 
 	sgl := g.pmm.NewSGL(u._packSize())
 
-	debug.Assert(c.Path == lom.FQN)
+	debug.Assert(c.path == lom.FQN)
 	err := u._store(lom, sgl, true)
 	sgl.Free()
 
@@ -517,10 +536,10 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 			nlog.Errorf("failed to store %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
 			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		} else {
-			c.Path = orig
+			c.path = orig
 		}
 	} else {
-		c.Path = orig
+		c.path = orig
 	}
 	return err
 }
@@ -747,7 +766,7 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 
 	for i := range u.count {
 		c := &u.chunks[i]
-		fh, err := os.Open(c.Path)
+		fh, err := os.Open(c.path)
 		if err != nil {
 			return err
 		}
@@ -801,7 +820,7 @@ func (u *Ufest) pack(w io.Writer) {
 		w.Write(b64[:])
 
 		// path
-		_packStr(w, c.Path)
+		_packStr(w, c.path)
 
 		// checksum
 		_packCksum(w, c.cksum)
@@ -893,7 +912,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		u.size += c.size
 
 		// chunk path
-		if c.Path, offset, err = _unpackStr(data, offset); err != nil {
+		if c.path, offset, err = _unpackStr(data, offset); err != nil {
 			return err
 		}
 
@@ -1057,7 +1076,7 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 		// open on demand
 		if r.cfh == nil {
 			debug.Assert(r.coff == 0)
-			r.cfh, err = os.Open(c.Path)
+			r.cfh, err = os.Open(c.path)
 			if err != nil {
 				return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), r.cidx+1, u.count)
 			}
@@ -1152,7 +1171,7 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		c := &u.chunks[idx]
 		debug.Assert(c.size-chunkoff > 0, c.size, " vs ", chunkoff)
 		toRead := min(int64(total-n), c.size-chunkoff)
-		fh, err := os.Open(c.Path)
+		fh, err := os.Open(c.path)
 		if err != nil {
 			return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), idx+1, u.count)
 		}

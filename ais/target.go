@@ -1276,13 +1276,13 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
 
-	// Generate chunk file path
-	chunkPath, err := manifest.ChunkFQN(partNum)
+	// new chunk
+	chunk, err := manifest.NewChunk(partNum, lom)
 	if err != nil {
 		return "", http.StatusInternalServerError, err
 	}
 
-	partFh, errC := lom.CreatePart(chunkPath)
+	partFh, errC := lom.CreatePart(chunk.Path())
 	if errC != nil {
 		return "", http.StatusInternalServerError, errC
 	}
@@ -1335,8 +1335,8 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 	}
 	cos.Close(partFh)
 	if err != nil {
-		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
-			nlog.Errorf(fmtNested, t, err, "remove", chunkPath, nerr)
+		if nerr := cos.RemoveFile(chunk.Path()); nerr != nil && !cos.IsNotExist(nerr) {
+			nlog.Errorf(fmtNested, t, err, "remove", chunk.Path(), nerr)
 		}
 		return "", http.StatusInternalServerError, err
 	}
@@ -1357,10 +1357,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		}
 	}
 
-	chunk := &core.Uchunk{
-		ETag: etag,
-		Path: chunkPath,
-	}
+	chunk.SetETag(etag)
 	if cksumMD5.H != nil {
 		chunk.MD5 = cksumMD5.H.Sum(nil)
 		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
