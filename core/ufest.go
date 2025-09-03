@@ -156,15 +156,39 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	if num <= 0 {
 		return fmt.Errorf("%s: invalid chunk number: %d (must be > 0)", utag, num)
 	}
-	c.size = size
+	if c == nil {
+		return fmt.Errorf("%s [add] nil chunk", utag)
+	}
 	if num > math.MaxUint16 || len(u.chunks) >= math.MaxUint16 {
 		return fmt.Errorf("%s [add] chunk number (%d, %d) exceeds %d limit", utag, num, len(u.chunks), math.MaxUint16)
 	}
+
+	if c.Path == "" {
+		return fmt.Errorf("%s [add] empty chunk path", utag)
+	}
+	// TODO: optimize out
+	if fqn, err := u.ChunkFQN(int(num)); err != nil || fqn != c.Path {
+		if err != nil {
+			return err
+		}
+		if fqn != c.Path {
+			return fmt.Errorf("%s [add] invalid chunk path: %s (expecting %s)", utag, c.Path, fqn)
+		}
+	}
+
+	c.size = size
 	c.num = uint16(num)
 
 	u.mu.Lock()
-	defer u.mu.Unlock()
+	err := u._add(c)
 
+	// TODO: if store-every-so-often { u.StorePartial }
+
+	u.mu.Unlock()
+	return err
+}
+
+func (u *Ufest) _add(c *Uchunk) error {
 	l := len(u.chunks)
 	// append
 	if l == 0 || u.chunks[l-1].num < c.num {
@@ -193,6 +217,7 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	u.chunks[idx] = *c
 	u.size += c.size
 	u.count = uint16(len(u.chunks))
+
 	return nil
 }
 
@@ -212,8 +237,7 @@ func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 	return nil
 }
 
-func (u *Ufest) Abort(lom *LOM) error {
-	u.mu.Lock()
+func (u *Ufest) removeChunks(lom *LOM) {
 	for i := range u.chunks {
 		c := &u.chunks[i]
 		if err := cos.RemoveFile(c.Path); err != nil {
@@ -222,23 +246,49 @@ func (u *Ufest) Abort(lom *LOM) error {
 			}
 		}
 	}
-	if u.id != "" {
-		debug.Func(func() {
-			err := cos.ValidateManifestID(u.id)
-			debug.AssertNoErr(err)
-		})
-		partial := u._fqns(lom, false)
-		if err := cos.RemoveFile(partial); err != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove partial manifest [", err, "]")
-			}
-		}
-	}
-	u.mu.Unlock()
-	return nil
 }
 
-// Generate chunk file path - the `num` here is Uchunk.num
+func (u *Ufest) Abort(lom *LOM) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	u.removeChunks(lom)
+	if u.id == "" {
+		return
+	}
+	debug.Func(func() {
+		err := cos.ValidateManifestID(u.id)
+		debug.AssertNoErr(err)
+	})
+	partial := u._fqns(lom, false)
+	if err := cos.RemoveFile(partial); err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleCore) {
+			nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove partial manifest [", err, "]")
+		}
+	}
+}
+
+func (u *Ufest) removeCompleted(lom *LOM) error {
+	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	if err := u.LoadCompleted(lom); err != nil {
+		return err
+	}
+	u.removeChunks(lom)
+	fqn := u._fqns(lom, true)
+	err := cos.RemoveFile(fqn)
+	if err != nil {
+		if cmn.Rom.FastV(4, cos.SmoduleCore) {
+			nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove completed manifest [", err, "]")
+		}
+	}
+	return err
+}
+
+// generate chunk file path to write the former
+// - `num` here is Uchunk.num starting from 1
 // - chunk #1 stays on the object's mountpath
 // - other chunks get HRW distributed
 func (u *Ufest) ChunkFQN(num int) (string, error) {
@@ -302,7 +352,6 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 	return nil
 }
 
-// must be in memory
 func (u *Ufest) LoadPartial(lom *LOM) error {
 	const (
 		tag = "partial"
@@ -501,10 +550,11 @@ func (u *Ufest) validNums() error {
 	return nil
 }
 
-func (u *Ufest) StorePartial(lom *LOM) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
+func (u *Ufest) StorePartial(lom *LOM, locked bool) error {
+	if !locked {
+		u.mu.Lock()
+		defer u.mu.Unlock()
+	}
 	if err := u._errCompleted(lom); err != nil {
 		return err
 	}
@@ -934,7 +984,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 
 	lom.SetSize(u.size) // StoreCompleted still performs non-debug validation
 	if err := u.StoreCompleted(lom); err != nil {
-		lom.abortUfest(u, err)
+		u.Abort(lom)
 		return err
 	}
 	lom.SetAtimeUnix(u.created.UnixNano())
@@ -944,19 +994,11 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 
 	if err := lom.PersistMain(); err != nil {
 		lom.md.lid.clrlmfl(lmflChunk)
-		lom.abortUfest(u, err)
+		u.Abort(lom)
 		return err
 	}
 
 	return nil
-}
-
-// rollback w/ full cleanup
-func (lom *LOM) abortUfest(u *Ufest, err error) {
-	if nerr := u.Abort(lom); nerr != nil {
-		nlog.Errorf("failed to complete %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
-		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	}
 }
 
 /////////////////

@@ -377,7 +377,7 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 
 	var parsed fs.ParsedFQN
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
-		xcln.AddErr(err)
+		xcln.AddErr(err, 0)
 		return nil
 	}
 
@@ -470,18 +470,55 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 			j.rmAnyBatch(flagRmOldWork)
 			return
 		}
-		debug.Assert(len(contentInfo.Extras) == 2, contentInfo.Extras)
-
 		uploadID := contentInfo.Extras[0]
 		lom := core.AllocLOM(contentInfo.Base)
-		j.visitChunk(fqn, lom, uploadID)
+		if j.initCTLOM(lom, fqn) == nil {
+			j.visitChunk(fqn, lom, uploadID)
+		}
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
-		// TODO -- FIXME: not implemented yet
+		contentInfo := fs.CSM.Resolver(fs.ChunkMetaCT).ParseUbase(parsedFQN.ObjName)
+		if !contentInfo.Ok {
+			j.oldWork = append(j.oldWork, fqn)
+			j.rmAnyBatch(flagRmOldWork)
+			return
+		}
+		lom := core.AllocLOM(contentInfo.Base)
+
+		// TODO -- FIXME: completed manifests must be handled by visitObj()
+
+		if j.initCTLOM(lom, fqn) == nil {
+			if len(contentInfo.Extras) > 0 {
+				j.visitPartial(fqn, contentInfo.Extras[0] /*uploadID*/, lom)
+			}
+		}
+		core.FreeLOM(lom)
 
 	default:
 		debug.Assert(false, "Unsupported content type: ", parsedFQN.ContentType)
 	}
+}
+
+func (j *clnJ) initCTLOM(lom *core.LOM, fqn string) error {
+	err := lom.InitBck(&j.bck)
+	if err == nil {
+		return nil
+	}
+	xcln := j.ini.Xaction
+	if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+		nlog.Warningln(j.String(), "bucket gone - aborting:", err)
+	} else {
+		err = fmt.Errorf("%s: unexpected lom-init fail [ %q => %q, %w ]", j, fqn, lom.ObjName, err)
+		nlog.Errorln(err)
+	}
+	xcln.Abort(err)
+	return err
+}
+
+func (j *clnJ) visitPartial(fqn, uploadID string, lom *core.LOM) {
+	nlog.Warningln(j.String(), "removing old partial manifest:", uploadID, lom.Cname(), fqn)
+	j.oldWork = append(j.oldWork, fqn)
+	j.rmAnyBatch(flagRmOldWork)
 }
 
 const (
@@ -489,18 +526,6 @@ const (
 )
 
 func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
-	xcln := j.ini.Xaction
-	if err := lom.InitBck(&j.bck); err != nil {
-		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
-			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
-		} else {
-			err = fmt.Errorf("%s: unexpected lom-init fail [ %q, %q, %w ]", j, chunkFQN, lom.ObjName, err)
-			nlog.Errorln(err)
-		}
-		xcln.Abort(err)
-		return
-	}
-
 	lom.Lock(false)
 	id := j._getCompletedID(lom)
 	lom.Unlock(false)

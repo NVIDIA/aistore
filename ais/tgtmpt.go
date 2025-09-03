@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
 
@@ -119,11 +118,7 @@ func (ups *ups) abort(id string, lom *core.LOM) (ecode int, err error) {
 		ups.Unlock()
 	}
 
-	if err := manifest.Abort(lom); err != nil {
-		nlog.Warningln("failed to cleanup chunks [", id, lom.Cname(), err, "]")
-		return http.StatusInternalServerError, err
-	}
-
+	manifest.Abort(lom)
 	return 0, nil
 }
 

@@ -190,6 +190,7 @@ func (*LOM) AppendWork(wfqn string) (fh cos.LomWriter, err error) {
 //
 
 func (lom *LOM) RemoveMain() error {
+	// TODO -- FIXME: review datapath that calls directly - u.removeCompleted()
 	return cos.RemoveFile(lom.FQN)
 }
 
@@ -208,6 +209,14 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 	for copyFQN := range lom.md.copies {
 		if erc := cos.RemoveFile(copyFQN); erc != nil && !cos.IsNotExist(erc) && err == nil {
 			err = erc
+		}
+	}
+	if lom.IsChunked() {
+		u, e := NewUfest("", lom, true /*must-exist*/)
+		debug.AssertNoErr(e)
+		errN := u.removeCompleted(lom)
+		if err == nil {
+			err = errN
 		}
 	}
 	lom.md.lid = 0
