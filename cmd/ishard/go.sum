@@ -1,5 +1,5 @@
-github.com/NVIDIA/aistore v1.3.32-0.20250828213224-8ee86551d7ba h1:Q8TLckgJif+jqp7AgpbbgnMSl+At5BHsMlK70iI1DMQ=
-github.com/NVIDIA/aistore v1.3.32-0.20250828213224-8ee86551d7ba/go.mod h1:lTzIfsQutkLoPEjSgmdnISXzJHo+Z+402saqTZE/QBA=
+github.com/NVIDIA/aistore v1.3.32-0.20250903173830-98bebdba3048 h1:4VLa4r65Y8gTw83eXoIkSG5aJuUPmadLbTs4n3n/1kU=
+github.com/NVIDIA/aistore v1.3.32-0.20250903173830-98bebdba3048/go.mod h1:lTzIfsQutkLoPEjSgmdnISXzJHo+Z+402saqTZE/QBA=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
