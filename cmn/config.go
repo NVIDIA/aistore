@@ -110,6 +110,7 @@ type (
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		EC          ECConf          `json:"ec" allow:"cluster"`
+		Chunks      ChunksConf      `json:"chunks" allow:"cluster"`
 		Net         NetConf         `json:"net"`
 		Timeout     TimeoutConf     `json:"timeout"`
 		Transport   TransportConf   `json:"transport"`
@@ -217,6 +218,37 @@ type (
 		ParitySlices *int   `json:"parity_slices,omitempty"`
 		Enabled      *bool  `json:"enabled,omitempty"`
 		DiskOnly     *bool  `json:"disk_only,omitempty"`
+	}
+
+	ChunksConf struct {
+		// ObjSizeLimit is the object size threshold that triggers auto-chunking.
+		// The knob "mirrors" erasure coding semantics and similarly means:
+		//  -1  : never auto-chunk;
+		//  0   : always auto-chunk using the configured ChunkSize (see next);
+		//  > 0 : chunk if object size >= limit.
+		// [NOTE]
+		// multipart uploads (MPU) always result in chunked storage using
+		// the client-specified part size, regardless of the ObjSizeLimit and/or ChunkSize.
+		ObjSizeLimit cos.SizeIEC `json:"objsize_limit"`
+
+		// Default chunk size (aka "part size") used for auto-chunking (see above);
+		// 0 (zero) means default; Validate() sets it to chunkSizeDflt (1GiB).
+		ChunkSize cos.SizeIEC `json:"chunk_size,omitempty"`
+
+		// Persist the partial manifest after every N received chunks.
+		// 0 (zero) means keeping partial manifest strictly in memory for the entire
+		// duration of the upload.
+		CheckpointEvery int `json:"checkpoint_every,omitempty"`
+
+		// Reserved bitwise field for future advanced behaviors (compression, GC, placement, etc.)
+		Flags uint64 `json:"flags,omitempty"`
+	}
+
+	ChunksConfToSet struct {
+		ObjSizeLimit    *cos.SizeIEC `json:"objsize_limit,omitempty"`
+		ChunkSize       *cos.SizeIEC `json:"chunk_size,omitempty"`
+		CheckpointEvery *int         `json:"checkpoint_every,omitempty"`
+		Flags           *uint64      `json:"flags,omitempty"`
 	}
 
 	LogConf struct {
@@ -796,6 +828,7 @@ var (
 	_ Validator = (*SpaceConf)(nil)
 	_ Validator = (*MirrorConf)(nil)
 	_ Validator = (*ECConf)(nil)
+	_ Validator = (*ChunksConf)(nil)
 	_ Validator = (*VersionConf)(nil)
 	_ Validator = (*KeepaliveConf)(nil)
 	_ Validator = (*PeriodConf)(nil)
@@ -1348,15 +1381,15 @@ func (c *MirrorConf) String() string {
 ////////////
 
 const (
-	ObjSizeToAlwaysReplicate = -1 // (see `ObjSizeLimit` comment above)
+	ObjSizeToAlwaysReplicate = -1 // (that's when we have monolithic objects; see `ObjSizeLimit` comment above)
 
 	MinSliceCount = 1  // minimum number of data or parity slices
 	MaxSliceCount = 32 // maximum --/--
 )
 
 func (c *ECConf) Validate() error {
-	if c.ObjSizeLimit < -1 {
-		return fmt.Errorf("invalid ec.obj_size_limit: %d (expecting an integer greater or equal -1)", c.ObjSizeLimit)
+	if c.ObjSizeLimit < 0 && c.ObjSizeLimit != ObjSizeToAlwaysReplicate {
+		return fmt.Errorf("invalid ec.objsize_limit: %d (expecting an integer greater than or equal to -1)", c.ObjSizeLimit)
 	}
 	if c.DataSlices < MinSliceCount || c.DataSlices > MaxSliceCount {
 		err := fmt.Errorf("invalid ec.data_slices: %d (expected value in range [%d, %d])",
@@ -1419,6 +1452,42 @@ func (c *ECConf) numRequiredTargets() int {
 
 func (c *ECConf) RequiredRestoreTargets() int {
 	return c.DataSlices
+}
+
+////////////////
+// ChunksConf //
+////////////////
+
+const (
+	ObjSizeToNeverChunk = -1 // (that's when we have monolithic objects; see `ObjSizeLimit` comment above)
+
+	chunkSizeMin  = cos.KiB
+	chunkSizeDflt = cos.GiB
+	chunkSizeMax  = 5 * cos.GiB
+
+	checkpointEveryMax = 1024
+)
+
+func (c *ChunksConf) Validate() error {
+	if c.ObjSizeLimit < 0 && c.ObjSizeLimit != ObjSizeToNeverChunk {
+		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting an integer greater than or equal to -1)", c.ObjSizeLimit)
+	}
+
+	// TODO -- FIXME: remove
+	if c.ObjSizeLimit != ObjSizeToNeverChunk {
+		nlog.Warningln("auto-chunking not implemented yet - overriding chunks.objsize_limit")
+		c.ObjSizeLimit = ObjSizeToNeverChunk
+	}
+
+	if c.ChunkSize == 0 {
+		c.ChunkSize = chunkSizeDflt
+	} else if c.ChunkSize < chunkSizeMin || c.ChunkSize > chunkSizeMax {
+		return fmt.Errorf("expecting chunks.chunk_size in the range [%d, %d] (got %d)", chunkSizeMin, chunkSizeMax, c.ChunkSize)
+	}
+	if c.CheckpointEvery < 0 || c.CheckpointEvery > checkpointEveryMax {
+		return fmt.Errorf("chunks.checkpoint_every must be an integer in the range [0, %d] (got %d)", checkpointEveryMax, c.CheckpointEvery)
+	}
+	return nil
 }
 
 /////////////////////

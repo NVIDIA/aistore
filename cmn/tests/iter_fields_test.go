@@ -92,6 +92,7 @@ var _ = Describe("IterFields", func() {
 					"lru.enabled":           false,
 					"lru.dont_evict_time":   cos.Duration(0),
 					"lru.capacity_upd_time": cos.Duration(0),
+					"lru.evict_batch_size":  int64(0),
 
 					"extra.aws.cloud_region":   "us-central",
 					"extra.aws.endpoint":       "",
@@ -176,6 +177,7 @@ var _ = Describe("IterFields", func() {
 					"lru.enabled":           (*bool)(nil),
 					"lru.dont_evict_time":   (*cos.Duration)(nil),
 					"lru.capacity_upd_time": (*cos.Duration)(nil),
+					"lru.evict_batch_size":  (*int64)(nil),
 
 					"access":   apc.Ptr[apc.AccessAttrs](1024),
 					"features": apc.Ptr[feat.Flags](1024),
