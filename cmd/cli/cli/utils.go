@@ -530,6 +530,7 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 			{"checksum", props.Cksum.String()},
 			{"mirror", props.Mirror.String()},
 			{"ec", props.EC.String()},
+			{"chunks", props.Chunks.String()},
 			{"lru", props.LRU.String()},
 			{"versioning", props.Versioning.String()},
 		}
@@ -547,6 +548,12 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 				value = fmtBucketCreatedTime(props.Created)
 			case cmn.PropBucketAccessAttrs:
 				value = props.Access.Describe(true /*incl. all*/)
+			case "chunks.objsize_limit": // TODO -- FIXME: export the two constants
+				v := field.Value()
+				value = _toStr(v)
+				if props.Chunks.ObjSizeLimit == 0 {
+					value += " (auto-chunking disabled)"
+				}
 			default:
 				v := field.Value()
 				value = _toStr(v)

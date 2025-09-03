@@ -27,7 +27,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"disk_only":		false
 	},
         "chunks": {
-                "objsize_limit":    "-1",
+                "objsize_limit":    "0",
                 "chunk_size":       "1GiB",
                 "checkpoint_every": 0,
                 "flags":            0

@@ -5,6 +5,7 @@ Bucket props successfully updated.
 PROPERTY	     VALUE
 access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
 ^.*checksum	 Type: xxhash | Validate:.*$
+chunks           auto-chunking disabled
 ^.*created.*$
 ec		 Disabled
 lru		 Disabled
@@ -19,6 +20,7 @@ Bucket props successfully updated.
  PROPERTY	 VALUE
 access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,UPDATE-OBJECT,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
 ^.*checksum	 Type: xxhash | Validate:.*$
+chunks           auto-chunking disabled
 ^.*created.*$
 ec		     Disabled
 lru		     Disabled

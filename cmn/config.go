@@ -222,10 +222,8 @@ type (
 
 	ChunksConf struct {
 		// ObjSizeLimit is the object size threshold that triggers auto-chunking.
-		// The knob "mirrors" erasure coding semantics and similarly means:
-		//  -1  : never auto-chunk;
-		//  0   : always auto-chunk using the configured ChunkSize (see next);
-		//  > 0 : chunk if object size >= limit.
+		//  0   : never auto-chunk;
+		//  > 0 : auto-chunk using the configured ChunkSize if object size >= limit.
 		// [NOTE]
 		// multipart uploads (MPU) always result in chunked storage using
 		// the client-specified part size, regardless of the ObjSizeLimit and/or ChunkSize.
@@ -851,6 +849,7 @@ var (
 	_ PropsValidator = (*SpaceConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
+	_ PropsValidator = (*ChunksConf)(nil)
 	_ PropsValidator = (*WritePolicyConf)(nil)
 
 	_ json.Marshaler   = (*BackendConf)(nil)
@@ -1459,8 +1458,6 @@ func (c *ECConf) RequiredRestoreTargets() int {
 ////////////////
 
 const (
-	ObjSizeToNeverChunk = -1 // (that's when we have monolithic objects; see `ObjSizeLimit` comment above)
-
 	chunkSizeMin  = cos.KiB
 	chunkSizeDflt = cos.GiB
 	chunkSizeMax  = 5 * cos.GiB
@@ -1468,15 +1465,14 @@ const (
 	checkpointEveryMax = 1024
 )
 
-func (c *ChunksConf) Validate() error {
-	if c.ObjSizeLimit < 0 && c.ObjSizeLimit != ObjSizeToNeverChunk {
-		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting an integer greater than or equal to -1)", c.ObjSizeLimit)
-	}
+func (c *ChunksConf) autoEnabled() bool { return c.ObjSizeLimit > 0 }
 
-	// TODO -- FIXME: remove
-	if c.ObjSizeLimit != ObjSizeToNeverChunk {
-		nlog.Warningln("auto-chunking not implemented yet - overriding chunks.objsize_limit")
-		c.ObjSizeLimit = ObjSizeToNeverChunk
+func (c *ChunksConf) Validate() error {
+	if c.ObjSizeLimit < 0 {
+		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting a non-negative integer)", c.ObjSizeLimit)
+	}
+	if !c.autoEnabled() { // including v3.31 and prior buckets
+		return nil
 	}
 
 	if c.ChunkSize == 0 {
@@ -1488,6 +1484,31 @@ func (c *ChunksConf) Validate() error {
 		return fmt.Errorf("chunks.checkpoint_every must be an integer in the range [0, %d] (got %d)", checkpointEveryMax, c.CheckpointEvery)
 	}
 	return nil
+}
+
+func (c *ChunksConf) ValidateAsProps(...any) error {
+	return c.Validate()
+}
+
+func (c *ChunksConf) String() string {
+	if !c.autoEnabled() {
+		return "auto-chunking disabled"
+	}
+	var checkpoint string
+	switch c.CheckpointEvery {
+	case 0:
+		checkpoint = "checkpoint: never"
+	case 1:
+		checkpoint = "checkpoint: every chunk"
+	default:
+		checkpoint = fmt.Sprintf("checkpoint: every %d chunks", c.CheckpointEvery)
+	}
+
+	s := fmt.Sprintf("chunk-size: %s; %s; objsize-limit: %s", c.ChunkSize.String(), checkpoint, c.ObjSizeLimit.String())
+	if c.Flags != 0 {
+		s += fmt.Sprintf("; flags: 0x%x", c.Flags)
+	}
+	return s
 }
 
 /////////////////////
