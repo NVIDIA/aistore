@@ -164,7 +164,6 @@ func (t *target) runSpaceCleanup(xargs *xact.ArgsMsg, wg *sync.WaitGroup) fs.Cap
 	ini := space.IniCln{
 		StatsT:  t.statsT,
 		Xaction: xcln.(*space.XactCln),
-		Config:  cmn.GCO.Get(),
 		WG:      wg,
 		Args:    xargs,
 	}

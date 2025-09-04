@@ -63,7 +63,9 @@ cat > $AIS_CONF_FILE <<EOL
 		"cleanupwm":         65,
 		"lowwm":             ${AIS_SPACE_LOWWM:-75},
 		"highwm":            ${AIS_SPACE_HIGHWM:-90},
-		"out_of_space":      ${AIS_SPACE_OOS:-95}
+		"out_of_space":      ${AIS_SPACE_OOS:-95},
+		"batch_size":        32768,
+		"dont_cleanup_time": "120m"
 	},
 	"lru": {
 		"dont_evict_time":   "120m",

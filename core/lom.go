@@ -202,7 +202,7 @@ func (lom *LOM) IsHRW() bool {
 	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
 }
 
-// assorted accessors
+// assorted _convenient_ accessors
 func (lom *LOM) Bck() *meta.Bck                 { return &lom.bck }
 func (lom *LOM) Bprops() *cmn.Bprops            { return lom.bck.Props }
 func (lom *LOM) ECEnabled() bool                { return lom.Bprops().EC.Enabled }

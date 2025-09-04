@@ -360,7 +360,6 @@ func newInitStoreCln() *space.IniCln {
 	xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, "" /*ctlmsg*/, nil)
 	return &space.IniCln{
 		Xaction: xcln,
-		Config:  cmn.GCO.Get(),
 		StatsT:  mock.NewStatsTracker(),
 		Args:    &xact.ArgsMsg{},
 	}

@@ -1189,9 +1189,9 @@ func (t *target) abortMptUpload(r *http.Request, lom *core.LOM, uploadID string)
 	return t.ups.abort(uploadID, lom)
 }
 
-func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID string, body []byte, parts apc.MptCompletedParts) (eTag string, ecode int, err error) {
-	// (compare with listMptUploads)
-	manifest, metadata := t.ups.getWithMeta(uploadID)
+func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID string, body []byte,
+	parts apc.MptCompletedParts) (eTag string, ecode int, err error) {
+	manifest, remoteMeta := t.ups.get(uploadID, lom)
 	if manifest == nil {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
@@ -1215,8 +1215,8 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 		}
 	}
 
-	if remote {
-		md := t.ups.encodeRemoteMetadata(lom, metadata) // TODO -- FIXME: vs ufest.mdmap
+	if remote && remoteMeta != nil {
+		md := t.ups.encodeRemoteMetadata(lom, remoteMeta)
 		for k, v := range md {
 			lom.SetCustomKey(k, v)
 		}
@@ -1255,7 +1255,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		startTime    = mono.NanoTime()
 	)
 
-	manifest := t.ups.get(uploadID)
+	manifest, _ := t.ups.get(uploadID, lom)
 	if manifest == nil {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}

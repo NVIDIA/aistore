@@ -233,13 +233,10 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 		return
 	}
 
-	manifest := t.ups.get(uploadID)
+	manifest, _ := t.ups.get(uploadID, lom)
 	if manifest == nil {
-		var err error
-		if manifest, err = t.ups.loadPartial(uploadID, lom, true /*add*/); err != nil {
-			s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, err), http.StatusNotFound, lom, uploadID)
-			return
-		}
+		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), http.StatusNotFound, lom, uploadID)
+		return
 	}
 
 	parts, ecode, err := s3.ListParts(manifest)

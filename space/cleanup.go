@@ -46,7 +46,6 @@ type (
 	}
 	IniCln struct {
 		StatsT  stats.Tracker
-		Config  *cmn.Config
 		Xaction *XactCln
 		WG      *sync.WaitGroup
 		Args    *xact.ArgsMsg
@@ -261,6 +260,8 @@ func (j *clnJ) String() string {
 
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
+func (j *clnJ) dont() time.Duration { return j.config.Space.DontCleanupTime.D() }
+
 func (j *clnJ) jog(providers []string) {
 	// globally
 	j.rmDeleted()
@@ -370,7 +371,7 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 
 	if finfo, err := os.Lstat(fqn); err == nil {
 		mtime := finfo.ModTime()
-		if mtime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+		if mtime.Add(j.dont()).After(j.now) {
 			return nil // skipping - too early
 		}
 	}
@@ -429,7 +430,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		// Saving a CT is not atomic: first it saves CT, then its metafile
 		// follows. Ignore just updated CTs to avoid processing incomplete data.
 		mtime := time.Unix(0, ct.MtimeUnix())
-		if mtime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+		if mtime.Add(j.dont()).After(j.now) {
 			return
 		}
 		metaFQN := fs.CSM.Gen(ct, fs.ECMetaCT, "")
@@ -547,7 +548,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	// - if it does: check its age and possibly remove the chunk
 	fqn := fs.CSM.Gen(lom, fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
 	if finfo, err := os.Lstat(fqn); err == nil {
-		if finfo.ModTime().Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+		if finfo.ModTime().Add(j.dont()).After(j.now) {
 			return
 		}
 		nlog.Warningln(j.String(), "removing old partial manifest:", uploadID, lom.Cname(), fqn)
@@ -620,11 +621,11 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 
 	// TODO: switch
-	// too early; NOTE: default dont-evict = 2h
+	// too early; NOTE: default dont-cleanup = 2h
 	atime := lom.Atime()
-	if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+	if atime.Add(j.dont()).After(j.now) {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-evict", j.config.LRU.DontEvictTime.D())
+			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-cleanup", j.dont())
 		}
 		return
 	}
@@ -673,19 +674,20 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 //
 
 func (j *clnJ) rmAnyBatch(specifier int) {
-	debug.Assert(j.config.LRU.EvictBatchSize >= cmn.EvictBatchSizeMin)
+	batch := j.config.Space.BatchSize
+	debug.Assert(batch >= cmn.BatchSizeMin)
 
 	switch specifier {
 	case flagRmOldWork:
-		if int64(len(j.oldWork)) < j.config.LRU.EvictBatchSize {
+		if int64(len(j.oldWork)) < batch {
 			return
 		}
 	case flagRmMisplacedLOMs:
-		if int64(len(j.misplaced.loms)) < j.config.LRU.EvictBatchSize {
+		if int64(len(j.misplaced.loms)) < batch {
 			return
 		}
 	case flagRmMisplacedEC:
-		if int64(len(j.misplaced.ec)) < j.config.LRU.EvictBatchSize {
+		if int64(len(j.misplaced.ec)) < batch {
 			return
 		}
 	default:
@@ -732,7 +734,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 		return
 	}
 	atime := lom.Atime()
-	if atime.Add(j.config.LRU.DontEvictTime.D()).After(j.now) {
+	if atime.Add(j.dont()).After(j.now) {
 		return
 	}
 	if lom.IsCopy() {
@@ -786,9 +788,9 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 
 func (j *clnJ) rmLeftovers(specifier int) {
 	var (
-		fevicted, bevicted int64
-		n                  int64
-		xcln               = j.ini.Xaction
+		nfiles, nbytes int64
+		n              int64
+		xcln           = j.ini.Xaction
 	)
 	if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 		nlog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
@@ -803,8 +805,8 @@ func (j *clnJ) rmLeftovers(specifier int) {
 					e := fmt.Errorf("%s: rm old work %q: %v", j, workfqn, err)
 					xcln.AddErr(e)
 				} else {
-					fevicted++
-					bevicted += finfo.Size()
+					nfiles++
+					nbytes += finfo.Size()
 					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 						nlog.Infof("%s: rm old work %q, size=%d", j, workfqn, finfo.Size())
 					}
@@ -842,8 +844,8 @@ func (j *clnJ) rmLeftovers(specifier int) {
 				core.FreeLOM(lom)
 
 				if removed {
-					fevicted++
-					bevicted += mlom.Lsize(true /*not loaded*/)
+					nfiles++
+					nbytes += mlom.Lsize(true /*not loaded*/)
 					if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 						nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.Lsize(true /*not loaded*/))
 					}
@@ -874,8 +876,8 @@ func (j *clnJ) rmLeftovers(specifier int) {
 				continue
 			}
 			if os.Remove(ct.FQN()) == nil {
-				fevicted++
-				bevicted += ct.Lsize()
+				nfiles++
+				nbytes += ct.Lsize()
 
 				// throttle
 				n++
@@ -894,9 +896,9 @@ func (j *clnJ) rmLeftovers(specifier int) {
 		j.now = time.Now()
 	}
 
-	j.ini.StatsT.Add(stats.CleanupStoreSize, bevicted)
-	j.ini.StatsT.Add(stats.CleanupStoreCount, fevicted)
-	xcln.ObjsAdd(int(fevicted), bevicted)
+	j.ini.StatsT.Add(stats.CleanupStoreSize, nbytes)
+	j.ini.StatsT.Add(stats.CleanupStoreCount, nfiles)
+	xcln.ObjsAdd(int(nfiles), nbytes)
 }
 
 func (j *clnJ) done() bool {

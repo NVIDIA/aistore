@@ -48,6 +48,7 @@ var clusterFeatDesc = [...]string{
 	"when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)",
 	"include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction",
 	"system-reserved (do not set: the flag may be redefined or removed at any time)",
+	"resume interrupted multipart uploads from persisted partial manifests",
 
 	// "none" ====================
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
 )
 
@@ -60,26 +61,26 @@ func (ups *ups) _add(id string, manifest *core.Ufest, rmd map[string]string) (er
 	return
 }
 
-func (ups *ups) get(id string) (manifest *core.Ufest) {
+// NOTE:
+// - if not in memory may try to load from persistence given feat.ResumeInterruptedMPU
+// - and, if successful, will return remoteMeta = nil
+// TODO:
+// - consider deriving remoteMeta from lom.GetCustomMD() vs the risk of getting out of sync with remote
+// - consider adding stats counter mpu.resume_partial_count
+func (ups *ups) get(id string, lom *core.LOM) (manifest *core.Ufest, remoteMeta map[string]string) {
 	ups.RLock()
 	up, ok := ups.m[id]
+	ups.RUnlock()
 	if ok {
 		manifest = up.u
+		remoteMeta = up.rmd
 		debug.Assert(id == manifest.ID())
+		return
 	}
-	ups.RUnlock()
-	return
-}
-
-func (ups *ups) getWithMeta(id string) (manifest *core.Ufest, rmd map[string]string) {
-	ups.RLock()
-	up, ok := ups.m[id]
-	if ok {
-		manifest = up.u
-		rmd = up.rmd
-		debug.Assert(id == manifest.ID())
+	if !lom.IsFeatureSet(feat.ResumeInterruptedMPU) {
+		return
 	}
-	ups.RUnlock()
+	manifest, _ = ups.loadPartial(id, lom, true)
 	return
 }
 
@@ -94,9 +95,13 @@ func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.
 
 	lom.Lock(false)
 	defer lom.Unlock(false)
-	if err = manifest.LoadPartial(lom); err == nil && add {
+	if err = manifest.LoadPartial(lom); err != nil {
+		manifest = nil
+	} else if add {
 		ups.Lock()
-		ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)
+		if _, ok := ups.m[id]; !ok {
+			ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)
+		}
 		ups.Unlock()
 	}
 	return

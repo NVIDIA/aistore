@@ -32,5 +32,4 @@ PROPERTY                    VALUE
 lru.capacity_upd_time       10m
 lru.dont_evict_time         2h0m
 lru.enabled                 false
-lru.evict_batch_size        32768
 Bucket "ais://$BUCKET_1" already has the same values of props, nothing to do

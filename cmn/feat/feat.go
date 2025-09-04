@@ -44,6 +44,7 @@ const (
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET, PUT, and HEAD transaction
 	SystemReserved            // reserved; do not set: the flag may be redefined or removed at any time
+	ResumeInterruptedMPU      // resume interrupted multipart uploads from persisted partial manifests
 )
 
 var Cluster = [...]string{
@@ -68,6 +69,7 @@ var Cluster = [...]string{
 	"S3-ListObjectVersions",
 	"Enable-Detailed-Prom-Metrics",
 	"System-Reserved",
+	"Resume-Interrupted-MPU",
 
 	// "none" ====================
 }
@@ -80,6 +82,7 @@ var Bucket = [...]string{
 	"Streaming-Cold-GET",
 	"S3-Use-Path-Style", // https://aws.amazon.com/blogs/aws/amazon-s3-path-deprecation-plan-the-rest-of-the-story
 	"S3-ListObjectVersions",
+	"Resume-Interrupted-MPU",
 
 	// "none" ====================
 }

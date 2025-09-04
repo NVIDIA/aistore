@@ -385,12 +385,28 @@ type (
 		// Out-of-Space: if exceeded, the target starts failing new PUTs and keeps
 		// failing them until its local used-cap gets back below HighWM (see above)
 		OOS int64 `json:"out_of_space"`
+
+		// Specifies a unit of space-cleanup processing;
+		// Zero value _translates_ as a system default 32*1024 items
+		// See also:
+		// - SpaceConf.Validate()
+		BatchSize int64 `json:"batch_size,omitempty"`
+
+		// Sets the interval of time for cleanup and GC operations to skip (or ignore)
+		// any stored content with mtime or atime that fall within the interval;
+		// zero value _translates_ as a system default 2h (dontCleanupTimeDflt).
+		// See also:
+		// - SpaceConf.Validate()
+		// - lru.dont_evict_time
+		DontCleanupTime cos.Duration `json:"dont_cleanup_time,omitempty"`
 	}
 	SpaceConfToSet struct {
-		CleanupWM *int64 `json:"cleanupwm,omitempty"`
-		LowWM     *int64 `json:"lowwm,omitempty"`
-		HighWM    *int64 `json:"highwm,omitempty"`
-		OOS       *int64 `json:"out_of_space,omitempty"`
+		CleanupWM       *int64        `json:"cleanupwm,omitempty"`
+		LowWM           *int64        `json:"lowwm,omitempty"`
+		HighWM          *int64        `json:"highwm,omitempty"`
+		OOS             *int64        `json:"out_of_space,omitempty"`
+		BatchSize       *int64        `json:"batch_size,omitempty"`
+		DontCleanupTime *cos.Duration `json:"dont_cleanup_time,omitempty"`
 	}
 
 	LRUConf struct {
@@ -401,17 +417,12 @@ type (
 		// CapacityUpdTime denotes the frequency at which AIS targets update capacity (free/avail) utilization
 		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
 
-		// Specifies a unit of space-cleanup and LRU processing
-		// Zero value _translates_ as a (non-zero) system default `evictBatchSizeDflt`
-		EvictBatchSize int64 `json:"evict_batch_size,omitempty"`
-
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToSet struct {
 		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty" swaggertype:"primitive,string"`
 		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty" swaggertype:"primitive,string"`
-		EvictBatchSize  *int64        `json:"evict_batch_size,omitempty"`
 		Enabled         *bool         `json:"enabled,omitempty"`
 	}
 
@@ -1234,11 +1245,32 @@ func (c *DiskConf) Validate() (err error) {
 // SpaceConf //
 ///////////////
 
-func (c *SpaceConf) Validate() (err error) {
+const (
+	dontCleanupTimeDflt = 2 * time.Hour
+	dontCleanupTimeMin  = time.Hour
+
+	BatchSizeMin  = 1024
+	batchSizeDflt = 32 * 1024
+	batchSizeMax  = 512 * 1024
+)
+
+func (c *SpaceConf) Validate() error {
 	if c.CleanupWM <= 0 || c.LowWM < c.CleanupWM || c.HighWM < c.LowWM || c.OOS < c.HighWM || c.OOS > 100 {
-		err = fmt.Errorf("invalid %s (expecting: 0 < cleanup < low < high < OOS < 100)", c)
+		return fmt.Errorf("invalid %s (expecting: 0 < cleanup < low < high < OOS < 100)", c)
 	}
-	return
+
+	if c.DontCleanupTime == 0 {
+		c.DontCleanupTime = cos.Duration(dontCleanupTimeDflt)
+	} else if c.DontCleanupTime.D() < dontCleanupTimeMin {
+		return fmt.Errorf("invalid %+v (expecting: space.dont_cleanup_time >= %v)", c, dontCleanupTimeMin)
+	}
+
+	if c.BatchSize == 0 {
+		c.BatchSize = batchSizeDflt
+	} else if n := c.BatchSize; n < BatchSizeMin || n > batchSizeMax {
+		return fmt.Errorf("invalid space.batch_size=%d (expecting range [%d - %d])", n, BatchSizeMin, batchSizeMax)
+	}
+	return nil
 }
 
 func (c *SpaceConf) ValidateAsProps(...any) error { return c.Validate() }
@@ -1253,10 +1285,6 @@ func (c *SpaceConf) String() string {
 /////////////
 
 const (
-	EvictBatchSizeMin  = 1024
-	evictBatchSizeDflt = 32 * 1024
-	evictBatchSizeMax  = 512 * 1024
-
 	capUpdTimeMin    = 10 * time.Second
 	dontEvictTimeMin = time.Hour
 )
@@ -1265,8 +1293,7 @@ func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return confDisabled
 	}
-	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v, evict_batch_size=%d",
-		c.DontEvictTime, c.CapacityUpdTime, c.EvictBatchSize)
+	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v", c.DontEvictTime, c.CapacityUpdTime)
 }
 
 func (c *LRUConf) Validate() (err error) {
@@ -1274,12 +1301,7 @@ func (c *LRUConf) Validate() (err error) {
 		return fmt.Errorf("invalid %+v (expecting: lru.capacity_upd_time >= %v)", c, capUpdTimeMin)
 	}
 	if c.DontEvictTime.D() < dontEvictTimeMin {
-		return fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
-	}
-	if c.EvictBatchSize == 0 {
-		c.EvictBatchSize = evictBatchSizeDflt
-	} else if n := c.EvictBatchSize; n < EvictBatchSizeMin || n > evictBatchSizeMax {
-		err = fmt.Errorf("invalid lru.evict_batch_size=%d (expecting range [%d - %d])", n, EvictBatchSizeMin, evictBatchSizeMax)
+		err = fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
 	}
 	return
 }
