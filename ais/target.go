@@ -1097,17 +1097,16 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
 		return
 	}
-	var lom *core.LOM
+
+	var ecode int
 	switch msg.Action {
 	case apc.ActRenameObject:
-		lom = core.AllocLOM(apireq.items[1])
+		lom := &core.LOM{ObjName: apireq.items[1]}
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
 		if err = t.objMv(lom, msg); err == nil {
 			t.statsT.IncBck(stats.RenameCount, lom.Bucket())
-			core.FreeLOM(lom)
-			lom = nil
 		} else {
 			vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 			t.statsT.IncWith(stats.ErrRenameCount, vlabs)
@@ -1115,10 +1114,9 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	case apc.ActBlobDl:
 		var (
 			xid     string
-			objName = msg.Name
 			blobMsg apc.BlobMsg
+			lom     = core.AllocLOM(msg.Name)
 		)
-		lom = core.AllocLOM(objName)
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
@@ -1127,28 +1125,22 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			break
 		}
 		args := &core.BlobParams{
-			Lom: lom,
+			Lom: lom, // eventually freed by x-blob
 			Msg: &blobMsg,
 		}
 		if xid, _, err = t.blobdl(args, nil /*oa*/); xid != "" {
 			debug.AssertNoErr(err)
 			writeXid(w, xid)
-
-			// lom is eventually freed by x-blob
 		}
 	case apc.ActMptUpload:
-		lom = &core.LOM{ObjName: apireq.items[1]} // NOTE: don't use AllocLOM here, we can't free it until the upload is complete
+		lom := &core.LOM{ObjName: apireq.items[1]}
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
-			t.writeErr(w, r, err)
-			return
+			break
 		}
-		uploadID, err := t.createMptUpload(r, lom)
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
+		var uploadID string
+		if uploadID, err = t.createMptUpload(r, lom); err == nil {
+			writeXid(w, uploadID)
 		}
-		writeXid(w, uploadID)
-		return
 	case apc.ActMptComplete:
 		var (
 			mptCompletedParts apc.MptCompletedParts
@@ -1156,30 +1148,22 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		)
 		err = cos.MorphMarshal(msg.Value, &mptCompletedParts)
 		if err != nil {
-			t.writeErr(w, r, err)
-			return
+			break
 		}
-		lom = &core.LOM{ObjName: apireq.items[1]}
+		lom := &core.LOM{ObjName: apireq.items[1]}
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
-			t.writeErr(w, r, err)
-			return
+			break
 		}
-		_, ecode, err := t.completeMptUpload(r, lom, uploadID, nil /*body*/, mptCompletedParts)
-		if err != nil {
-			t.writeErr(w, r, err, ecode)
-			return
-		}
-		return
+		_, ecode, err = t.completeMptUpload(r, lom, uploadID, nil /*body*/, mptCompletedParts)
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])
-		return
 	default:
 		t.writeErrAct(w, r, msg.Action)
-		return
 	}
+
+	// common return
 	if err != nil {
-		t.writeErr(w, r, err)
-		core.FreeLOM(lom)
+		t.writeErr(w, r, err, ecode)
 	}
 }
 
@@ -1298,7 +1282,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 	writers = append(writers, partFh)
 
 	if r.ContentLength <= 0 {
-		return "", http.StatusBadRequest, fmt.Errorf("put-part invalid size (%d)", r.ContentLength)
+		return "", http.StatusBadRequest, fmt.Errorf("%s: put-part invalid size (%d)", lom.Cname(), r.ContentLength)
 	}
 
 	// 3. write
@@ -1343,7 +1327,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 
 	size := mw.Size()
 	if size != expectedSize {
-		return "", http.StatusBadRequest, fmt.Errorf("part %d size mismatch (%d vs %d)", partNum, size, expectedSize)
+		return "", http.StatusBadRequest, fmt.Errorf("%s: part %d size mismatch (%d vs %d)", lom.Cname(), partNum, size, expectedSize)
 	}
 
 	// 4. finalize the part (expecting the part's remote etag to be md5 checksum)

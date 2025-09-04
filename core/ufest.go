@@ -79,7 +79,7 @@ type (
 		path  string     // (may become v2 _remote location_)
 		cksum *cos.Cksum // nil means none; otherwise non-empty
 		num   uint16     // chunk/part number
-		flags uint16     // bit flags (future use)
+		flags uint16     // bit flags (compression; future use)
 		// S3/legacy (either/or)
 		MD5  []byte
 		ETag string
@@ -209,6 +209,7 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 }
 
 func (u *Ufest) Add(c *Uchunk, size, num int64) error {
+	// validate
 	if err := _nolom(u.lom); err != nil {
 		return err
 	}
@@ -224,11 +225,20 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	c.num = uint16(num)
 
 	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	// add
 	err := u._add(c)
+	if err != nil {
+		return err
+	}
 
-	// TODO: if store-every-so-often { u.StorePartial }
-
-	u.mu.Unlock()
+	// store
+	if n := lom.Bprops().Chunks.CheckpointEvery; n > 0 {
+		if u.count%uint16(n) == 0 {
+			err = u.StorePartial(lom, true)
+		}
+	}
 	return err
 }
 
