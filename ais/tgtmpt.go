@@ -96,15 +96,17 @@ func (ups *ups) loadPartial(id string, lom *core.LOM, add bool) (manifest *core.
 	lom.Lock(false)
 	defer lom.Unlock(false)
 	if err = manifest.LoadPartial(lom); err != nil {
-		manifest = nil
-	} else if add {
+		return nil, err
+	}
+
+	if add {
 		ups.Lock()
 		if _, ok := ups.m[id]; !ok {
-			ups._add(id, manifest, nil /*remote metadata <= LOM custom*/)
+			ups._add(id, manifest, nil /*remote metadata*/)
 		}
 		ups.Unlock()
 	}
-	return
+	return manifest, nil
 }
 
 func (ups *ups) abort(id string, lom *core.LOM) (ecode int, err error) {
