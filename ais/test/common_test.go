@@ -55,33 +55,42 @@ var (
 	fsOnce         sync.Once
 )
 
-type ioContext struct {
-	t                   *testing.T
-	smap                *meta.Smap
-	controlCh           chan struct{}
-	stopCh              chan struct{}
-	objNames            []string
-	bck                 cmn.Bck
-	fileSize            uint64
-	proxyURL            string
-	prefix              string
-	otherTasksToTrigger int
-	originalTargetCount int
-	originalProxyCount  int
-	num                 int
-	numGetsEachFile     int
-	nameLen             int
-	getErrIsFatal       bool
-	silent              bool
-	fixedSize           bool
-	deleteRemoteBckObjs bool
-	ordered             bool // true - object names make sequence, false - names are random
+type (
+	ioContext struct {
+		t                   *testing.T
+		smap                *meta.Smap
+		controlCh           chan struct{}
+		stopCh              chan struct{}
+		objNames            []string
+		bck                 cmn.Bck
+		fileSize            uint64
+		proxyURL            string
+		prefix              string
+		otherTasksToTrigger int
+		originalTargetCount int
+		originalProxyCount  int
+		num                 int
+		numGetsEachFile     int
+		nameLen             int
+		getErrIsFatal       bool
+		silent              bool
+		fixedSize           bool
+		deleteRemoteBckObjs bool
+		ordered             bool // true - object names make sequence, false - names are random
 
-	numGetErrs atomic.Uint64
-	numPutErrs int
+		numGetErrs atomic.Uint64
+		numPutErrs int
 
-	objIdx int // Used in `m.nextObjName`
-}
+		objIdx int // Used in `m.nextObjName`
+
+		// Chunks configuration
+		chunksConf ioCtxChunksConf
+	}
+	ioCtxChunksConf struct {
+		chunkSize cos.SizeIEC
+		multipart bool
+	}
+)
 
 func (m *ioContext) initAndSaveState(cleanup bool) {
 	m.init(cleanup)
@@ -224,9 +233,12 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		if k = m.prefix; k != "" {
 			k = "/" + k + "*"
 		}
+		if m.chunksConf.multipart {
+			s += fmt.Sprintf(" (chunked with chunk size %s)", m.chunksConf.chunkSize)
+		}
 		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck.String(), k)
 	}
-	m.objNames, m.numPutErrs, err = tools.PutRandObjs(tools.PutObjectsArgs{
+	putArgs := tools.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,
 		Bck:       m.bck,
 		ObjPath:   m.prefix,
@@ -238,7 +250,18 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		WorkerCnt: 0, // TODO: Should we set something custom?
 		IgnoreErr: ignoreErr,
 		Ordered:   m.ordered,
-	})
+	}
+	if m.chunksConf.multipart {
+		putArgs.MultipartChunkSize = uint64(m.chunksConf.chunkSize)
+		m.objNames, m.numPutErrs, err = tools.PutRandObjs(putArgs)
+
+		// verify objects are chunked
+		ls, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsChunked}, api.ListArgs{})
+		tassert.CheckFatal(m.t, err)
+		tassert.Fatalf(m.t, len(ls.Entries) == m.num, "expected %d objects, got %d", m.num, len(ls.Entries))
+	} else {
+		m.objNames, m.numPutErrs, err = tools.PutRandObjs(putArgs)
+	}
 	tassert.CheckFatal(m.t, err)
 }
 

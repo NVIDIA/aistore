@@ -363,6 +363,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if err = t.txns.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
+		// TODO: add `_reChunks` xaction here, triggered by `chunks` field in `BpropsToSet`
 		if _reMirror(bprops, nprops) {
 			n := int(nprops.Mirror.Copies)
 			rns := xreg.RenewBckMakeNCopies(c.bck, c.uuid, "mnc-setprops", n)

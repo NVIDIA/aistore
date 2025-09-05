@@ -59,6 +59,10 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 			num:       1000,
 			fileSize:  cos.KiB,
 			fixedSize: true,
+			chunksConf: ioCtxChunksConf{
+				multipart: true,
+				chunkSize: cos.KiB >> 2,
+			},
 		}
 
 		targets    = make(map[string]struct{})
@@ -743,6 +747,10 @@ func TestPrefetchList(t *testing.T) {
 			bck:      cliBck,
 			num:      100,
 			fileSize: cos.KiB,
+			chunksConf: ioCtxChunksConf{
+				multipart: true,
+				chunkSize: cos.KiB >> 2,
+			},
 		}
 		bck        = cliBck
 		proxyURL   = tools.RandomProxyURL(t)
