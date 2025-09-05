@@ -16,37 +16,61 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-// RESTful API: datapath query parameters
+// Data Path Query parameters (DPQ)
+
+// DPQ is, essentially, performance-motivated alternative to the conventional url.Query.
+// The parsing follows 6 distinct categories:
+//
+// 1. Bucket (provider, namespace) - receive special handling due to their
+//    fundamental role in bucket identification. Provider stays as-is, namespace
+//    gets URL-unescaped.
+//
+// 2. Archive fields (path, mime, regx, mode) - retain dedicated struct members and
+//    specialized parsing logic including validation.
+//
+// 3. Boolean fields (skipVC, isGFN, dontAddRemote, silent, et al.) -
+//    remain as struct members for zero memory cost, direct access
+//    performance, and type safety. No unescaping.
+//
+// 4. Special system fields (ptime, pid, uuid, owt, origURL, objto) - core system
+//    parameters that need direct struct access for performance and are used throughout
+//    the codebase. Some require URL unescaping.
+//
+// 5. Parameters that don't need unescaping (MptPartNo, FltPresence, BinfoWithOrWithoutRemote) -
+//    stored directly in the map as-is to avoid unnecessary processing.
+//
+// 6. All other parameters - stored in the map with URL unescaping applied by default.
+//    This includes ETL parameters, multipart upload parameters, append parameters,
+//    and any future additions. Exceptions are made for S3 headers (X-Amz-* prefix)
+//    and explicitly listed exceptions in the _except_ map.
+//
+// BEWARE:
+//
+// When adding a new query parameter, PLEASE DO NOT rely on the default (category 6).
+// Instead, explicitly add each new query parameter to the most appropriate category
+// 1 through 5 (above).
+
 type dpq struct {
 	bck struct {
 		provider, namespace string // bucket
 	}
-	apnd struct {
-		ty, hdl string // QparamAppendType, QparamAppendHandle
-	}
 	arch struct {
-		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below)
-	}
-	etl struct {
-		name, pipeline, targs string // QparamETLName, QparamETLPipeline, QparamETLTransformArgs
-	}
-	mpt struct {
-		uploadID string // QparamMptUploadID
-		partNo   int    // QparamMptPartNo
+		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below) - keep as-is
 	}
 
-	ptime       string // req timestamp at calling/redirecting proxy (QparamUnixTime)
-	pid         string // QparamPID
-	uuid        string // xaction
-	origURL     string // ht://url->
-	owt         string // object write transaction { OwtPut, ... }
-	fltPresence string // QparamFltPresence
-	binfo       string // bucket info, with or without requirement to summarize remote obj-s
-	objto       string // uname of the destination object
+	m     cos.StrKVs
+	count int
 
+	ptime   string // req timestamp at calling/redirecting proxy (QparamUnixTime)
+	pid     string // QparamPID
+	uuid    string // xaction
+	origURL string // ht://url->
+	owt     string // object write transaction { OwtPut, ... }
+	objto   string // uname of the destination object
+
+	// Boolean fields - keep as struct members
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
 	isGFN         bool // QparamIsGFNRequest
 	dontAddRemote bool // QparamDontAddRemote
@@ -76,39 +100,52 @@ var (
 	dpq0    dpq
 )
 
+const (
+	dpqIniCap = 8
+	dpqMaxCap = 100
+)
+
 func dpqAlloc() *dpq {
-	if v := dpqPool.Get(); v != nil {
-		return v.(*dpq)
+	v := dpqPool.Get()
+	if v == nil {
+		return &dpq{m: make(cos.StrKVs, dpqIniCap)}
 	}
-	return &dpq{}
+	dpq := v.(*dpq)
+	if dpq.m == nil { // (unlikely)
+		dpq.m = make(cos.StrKVs, dpqIniCap)
+	}
+	return dpq
 }
 
 func dpqFree(dpq *dpq) {
+	c := dpq.count
+	m := dpq.m
+	clear(m)
 	*dpq = dpq0
+	if c >= max(dpqMaxCap-16, dpqIniCap*4) {
+		dpq.m = make(cos.StrKVs, dpqIniCap)
+	} else {
+		dpq.m = m
+	}
 	dpqPool.Put(dpq)
 }
 
-// Data Path Query structure (dpq):
-// Parse URL query for a selected few parameters used in the datapath.
-// (This is a faster alternative to the conventional and RFC-compliant URL.Query()
-// to be used narrowly to handle those few (keys) and nothing else.)
-
-const maxNumQparams = 100
+func (dpq *dpq) get(qparam string) string { return dpq.m[qparam] }
 
 func (dpq *dpq) parse(rawQuery string) error {
 	var (
-		iters int
 		query = rawQuery // r.URL.RawQuery
+		iters int
 	)
-
-	for query != "" && iters < maxNumQparams {
+	dpq.count = 0
+	for query != "" && iters < dpqMaxCap {
 		var (
+			err   error
 			value string
 			key   = query
 		)
 		if i := strings.IndexByte(key, '&'); i >= 0 {
 			key, query = key[:i], key[i+1:]
-			iters++
 		} else {
 			query = "" // last iter
 		}
@@ -116,74 +153,24 @@ func (dpq *dpq) parse(rawQuery string) error {
 			key, value = k, v
 		}
 
-		// supported URL query parameters explicitly named below; attempt to parse anything
-		// outside this list will fail
 		switch key {
+		// 1. Bucket fields - special handling
 		case apc.QparamProvider:
 			dpq.bck.provider = value
 		case apc.QparamNamespace:
-			var err error
-			if dpq.bck.namespace, err = url.QueryUnescape(value); err != nil {
-				return err
-			}
-		case apc.QparamObjTo:
-			var err error
-			if dpq.objto, err = url.QueryUnescape(value); err != nil {
-				return err
-			}
-		case apc.QparamMptUploadID:
-			dpq.mpt.uploadID = value
-		case apc.QparamMptPartNo:
-			var err error
-			dpq.mpt.partNo, err = strconv.Atoi(value)
-			if err != nil {
-				return err
-			}
+			dpq.bck.namespace, err = _unescape(value)
+
+		// 2. Archive fields - special parsing likewise
+		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
+			err = dpq._arch(key, value)
+
+		// 3. All boolean fields are struct members
 		case apc.QparamSkipVC:
 			dpq.skipVC = cos.IsParseBool(value)
-		case apc.QparamUnixTime:
-			dpq.ptime = value
-		case apc.QparamPID:
-			dpq.pid = value
-		case apc.QparamUUID:
-			dpq.uuid = value
-		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
-			if err := dpq._arch(key, value); err != nil {
-				return err
-			}
 		case apc.QparamIsGFNRequest:
 			dpq.isGFN = cos.IsParseBool(value)
-		case apc.QparamOrigURL:
-			var err error
-			if dpq.origURL, err = url.QueryUnescape(value); err != nil {
-				return err
-			}
-		case apc.QparamAppendType:
-			dpq.apnd.ty = value
-		case apc.QparamAppendHandle:
-			var err error
-			if dpq.apnd.hdl, err = url.QueryUnescape(value); err != nil {
-				return err
-			}
-		case apc.QparamOWT:
-			dpq.owt = value
-
-		case apc.QparamFltPresence:
-			dpq.fltPresence = value
 		case apc.QparamDontAddRemote:
 			dpq.dontAddRemote = cos.IsParseBool(value)
-		case apc.QparamBinfoWithOrWithoutRemote:
-			dpq.binfo = value
-
-		case apc.QparamETLName:
-			dpq.etl.name = value
-		case apc.QparamETLPipeline:
-			var err error
-			if dpq.etl.pipeline, err = url.QueryUnescape(value); err != nil {
-				return err
-			}
-		case apc.QparamETLTransformArgs:
-			dpq.etl.targs = value
 		case apc.QparamSilent:
 			dpq.silent = cos.IsParseBool(value)
 		case apc.QparamLatestVer:
@@ -191,18 +178,48 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamSync:
 			dpq.sync = cos.IsParseBool(value)
 
-		default: // the key must be known or `_except`-ed
+		// 4. Special system fields that need to be member variables
+		case apc.QparamUnixTime:
+			dpq.ptime = value
+		case apc.QparamPID:
+			dpq.pid = value
+		case apc.QparamUUID:
+			dpq.uuid = value
+		case apc.QparamOWT:
+			dpq.owt = value
+		case apc.QparamOrigURL:
+			dpq.origURL, err = _unescape(value)
+		case apc.QparamObjTo:
+			dpq.objto, err = _unescape(value)
+
+			// 5. Parameters that don't need unescaping
+		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
+			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs:
+			dpq.m[key] = value
+			dpq.count++
+
+		// 6. Finally a) assorted named exceptions that we simply skip, and b) all the rest parameters
+		default:
+			// Check for exceptions first
 			if strings.HasPrefix(key, s3.HeaderPrefix) {
 				continue
 			}
-			if _, ok := _except[key]; !ok {
-				err := fmt.Errorf("invalid query parameter: %q (raw query: %q)", key, rawQuery)
-				nlog.Errorln(err)
-				return err
+			if _, ok := _except[key]; ok {
+				continue
 			}
+
+			// Default: unescape and store in map
+			dpq.m[key], err = _unescape(value)
+			dpq.count++
 		}
+
+		// common error return
+		if err != nil {
+			return err
+		}
+		iters++
 	}
-	if iters >= maxNumQparams {
+	if iters >= dpqMaxCap {
 		return errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
 	}
 
@@ -216,22 +233,29 @@ func _dpqKeqV(s string) (string, string, bool) {
 	return s, "", false
 }
 
+func _unescape(s string) (string, error) {
+	if !strings.ContainsAny(s, "%+") {
+		return s, nil
+	}
+	return url.QueryUnescape(s)
+}
+
 //
 // archive query
 //
 
-// parse & validate
+// parse & validate - keep existing logic
 func (dpq *dpq) _arch(key, val string) (err error) {
 	switch key {
 	case apc.QparamArchpath:
-		dpq.arch.path, err = url.QueryUnescape(val)
+		dpq.arch.path, err = _unescape(val)
 		if err == nil && dpq.arch.path != "" {
 			err = cos.ValidateArchpath(dpq.arch.path)
 		}
 	case apc.QparamArchmime:
-		dpq.arch.mime, err = url.QueryUnescape(val)
+		dpq.arch.mime, err = _unescape(val)
 	case apc.QparamArchregx:
-		dpq.arch.regx, err = url.QueryUnescape(val)
+		dpq.arch.regx, err = _unescape(val)
 	case apc.QparamArchmode:
 		dpq.arch.mmode, err = archive.ValidateMatchMode(val)
 	}

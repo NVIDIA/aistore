@@ -127,7 +127,7 @@ func (t *target) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 
 func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *core.LOM) {
 	started := mono.NanoTime()
-	comm, errN := etl.GetCommunicator(dpq.etl.name)
+	comm, errN := etl.GetCommunicator(dpq.get(apc.QparamETLName))
 	if errN != nil {
 		switch {
 		case cos.IsErrNotFound(errN):
@@ -147,8 +147,8 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 		pipeline apc.ETLPipeline
 		err      error
 	)
-	if dpq.etl.pipeline != "" {
-		pipeline, err = etl.GetPipeline(strings.Split(dpq.etl.pipeline, apc.ETLPipelineSeparator))
+	if etlPipeline := dpq.get(apc.QparamETLPipeline); etlPipeline != "" {
+		pipeline, err = etl.GetPipeline(strings.Split(etlPipeline, apc.ETLPipelineSeparator))
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -156,7 +156,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	}
 	size, ecode, err := comm.InlineTransform(w, r, lom, &etl.InlineTransArgs{
 		LatestVer:     dpq.latestVer,
-		TransformArgs: dpq.etl.targs,
+		TransformArgs: dpq.get(apc.QparamETLTransformArgs),
 		Pipeline:      pipeline,
 	})
 

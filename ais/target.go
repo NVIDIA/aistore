@@ -787,7 +787,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	}
 
 	// two special flows
-	if dpq.etl.name != "" {
+	if dpq.get(apc.QparamETLName) != "" {
 		t.inlineETL(w, r, dpq, lom)
 		return lom, nil
 	}
@@ -938,18 +938,21 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// do
 	var (
-		handle string
-		err    error
-		ecode  int
+		handle   string
+		err      error
+		ecode    int
+		dpq      = apireq.dpq
+		uploadID = dpq.get(apc.QparamMptUploadID)
+		apndTy   = dpq.get(apc.QparamAppendType)
 	)
 	switch {
-	case apireq.dpq.objto != "": // apc.QparamObjTo
+	case dpq.objto != "": // apc.QparamObjTo
 		var (
 			bck     *meta.Bck
 			objName string
 		)
 
-		bck, objName, err = meta.ParseUname(apireq.dpq.objto, true /*object name required*/)
+		bck, objName, err = meta.ParseUname(dpq.objto, true /*object name required*/)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -964,28 +967,33 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 				return
 			}
 		}
-		ecode, err = t.copyObject(lom, bck, objName, apireq.dpq, config) // lom is locked/unlocked during the call
-	case apireq.dpq.mpt.uploadID != "": // apc.QparamMptUploadID
-		_, ecode, err = t.putMptPart(r, lom, apireq.dpq.mpt.uploadID, apireq.dpq.mpt.partNo)
-	case apireq.dpq.arch.path != "": // apc.QparamArchpath
-		apireq.dpq.arch.mime, err = archive.MimeFQN(t.smm, apireq.dpq.arch.mime, lom.FQN)
+		ecode, err = t.copyObject(lom, bck, objName, dpq, config) // lom is locked/unlocked during the call
+	case uploadID != "":
+		partNo, e := strconv.Atoi(dpq.get(apc.QparamMptPartNo))
+		if e != nil {
+			t.writeErrf(w, r, "%s: invalid part number %q for uploadID %q", lom, dpq.get(apc.QparamMptPartNo), uploadID)
+			return
+		}
+		_, ecode, err = t.putMptPart(r, lom, uploadID, partNo)
+	case dpq.arch.path != "": // apc.QparamArchpath
+		dpq.arch.mime, err = archive.MimeFQN(t.smm, dpq.arch.mime, lom.FQN)
 		if err != nil {
 			break
 		}
 		// do
 		lom.Lock(true)
-		ecode, err = t.putApndArch(r, lom, started, apireq.dpq)
+		ecode, err = t.putApndArch(r, lom, started, dpq)
 		lom.Unlock(true)
-	case apireq.dpq.apnd.ty != "": // apc.QparamAppendType
+	case apndTy != "":
 		a := &apndOI{
 			started: started,
 			t:       t,
 			config:  config,
 			lom:     lom,
 			r:       r.Body,
-			op:      apireq.dpq.apnd.ty, // apc.QparamAppendType
+			op:      apndTy,
 		}
-		if err := a.parse(apireq.dpq.apnd.hdl /*apc.QparamAppendHandle*/); err != nil {
+		if err := a.parse(dpq.get(apc.QparamAppendHandle)); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -997,7 +1005,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 		t.statsT.IncWith(stats.ErrAppendCount, vlabs)
 	default:
-		ecode, err = t.putObject(w, r, apireq.dpq, lom, t2tput, config)
+		ecode, err = t.putObject(w, r, dpq, lom, t2tput, config)
 	}
 	if err != nil {
 		t.FSHC(err, lom.Mountpath(), "") // TODO: removed from the place where happened, fqn missing...
@@ -1144,7 +1152,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	case apc.ActMptComplete:
 		var (
 			mptCompletedParts apc.MptCompletedParts
-			uploadID          = apireq.dpq.mpt.uploadID
+			uploadID          = apireq.dpq.get(apc.QparamMptUploadID)
 		)
 		err = cos.MorphMarshal(msg.Value, &mptCompletedParts)
 		if err != nil {
@@ -1718,17 +1726,17 @@ func (t *target) copyObject(lom *core.LOM, bck *meta.Bck, objName string, dpq *d
 	if dpq != nil {
 		coiParams.LatestVer = dpq.latestVer
 		coiParams.Sync = dpq.sync
-		if dpq.etl.name != "" {
-			etlArgs := &core.ETLArgs{TransformArgs: dpq.etl.targs}
-			if dpq.etl.pipeline != "" {
-				etlArgs.Pipeline, err = etl.GetPipeline(strings.Split(dpq.etl.pipeline, apc.ETLPipelineSeparator))
+		if etlName := dpq.get(apc.QparamETLName); etlName != "" {
+			etlArgs := &core.ETLArgs{TransformArgs: dpq.get(apc.QparamETLTransformArgs)}
+			if etlPipeline := dpq.get(apc.QparamETLPipeline); etlPipeline != "" {
+				etlArgs.Pipeline, err = etl.GetPipeline(strings.Split(etlPipeline, apc.ETLPipelineSeparator))
 				if err != nil {
 					xs.FreeCOI(coiParams)
 					return 0, fmt.Errorf("%w [%s, %s]", err, t.si, lom)
 				}
 			}
 			coiParams.ETLArgs = etlArgs
-			coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(dpq.etl.name, nil /*xaction*/)
+			coiParams.GetROC, xetl, _, err = etl.GetOfflineTransform(etlName, nil /*xaction*/)
 			if err != nil {
 				xs.FreeCOI(coiParams)
 				return 0, fmt.Errorf("%w [%s, %s]", err, t.si, lom)

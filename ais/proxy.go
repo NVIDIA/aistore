@@ -794,21 +794,21 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if apireq.dpq.etl.name != "" { // apc.QparamEtlName
-		if err := p.etlExists(apireq.dpq.etl.name); err != nil {
+	if etlName := apireq.dpq.get(apc.QparamETLName); etlName != "" {
+		if err := p.etlExists(etlName); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 	}
-	appendTyProvided := apireq.dpq.apnd.ty != "" // apc.QparamAppendType
+	appendTyProvided := apireq.dpq.get(apc.QparamAppendType) != ""
 	if appendTyProvided {
 		verb = "APPEND"
 		perms = apc.AceAPPEND
 		errcnt = stats.ErrAppendCount
 		scnt = stats.AppendCount
 		vlabs = map[string]string{stats.VlabBucket: ""}
-		if apireq.dpq.apnd.hdl != "" {
-			items, err := preParse(apireq.dpq.apnd.hdl) // apc.QparamAppendHandle
+		if handle := apireq.dpq.get(apc.QparamAppendHandle); handle != "" {
+			items, err := preParse(handle)
 			if err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -1851,19 +1851,19 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		fltPresence int
 		status      int
 	)
-	if dpq.fltPresence != "" {
-		fltPresence, err = strconv.Atoi(dpq.fltPresence)
+	if flt := dpq.get(apc.QparamFltPresence); flt != "" {
+		fltPresence, err = strconv.Atoi(flt)
 		if err != nil {
 			p.writeErrf(w, r, "%s: parse 'flt-presence': %w", p, err)
 			return
 		}
 		bckArgs.dontHeadRemote = bckArgs.dontHeadRemote || apc.IsFltPresent(fltPresence)
 	}
-	if dpq.binfo != "" { // QparamBinfoWithOrWithoutRemote
+	if binfo := dpq.get(apc.QparamBinfoWithOrWithoutRemote); binfo != "" {
 		msg = apc.BsummCtrlMsg{
 			UUID:          dpq.uuid,
 			Prefix:        prefix,
-			ObjCached:     !cos.IsParseBool(dpq.binfo),
+			ObjCached:     !cos.IsParseBool(binfo),
 			BckPresent:    apc.IsFltPresent(fltPresence),
 			DontAddRemote: dpq.dontAddRemote,
 		}
@@ -1886,7 +1886,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if fltPresence == apc.FltExistsOutside {
 			nlog.Warningf("bucket %s is present, flt %d=\"outside\" not implemented yet", bck.Cname(""), fltPresence)
 		}
-		if dpq.binfo != "" {
+		if dpq.get(apc.QparamBinfoWithOrWithoutRemote) != "" {
 			info, status, err = p.bsummhead(bck, &msg)
 			if err != nil {
 				p.writeErr(w, r, err)
@@ -1920,7 +1920,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		bck.Props = bprops
 	} // otherwise, keep bck.Props as per (#18995)
 
-	if dpq.binfo != "" {
+	if dpq.get(apc.QparamBinfoWithOrWithoutRemote) != "" {
 		info, status, err = p.bsummhead(bck, &msg)
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -2096,8 +2096,8 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	}
 
 	// present-only filtering
-	if dpq.fltPresence != "" {
-		if v, err := strconv.Atoi(dpq.fltPresence); err == nil {
+	if flt := dpq.get(apc.QparamFltPresence); flt != "" {
+		if v, err := strconv.Atoi(flt); err == nil {
 			present = apc.IsFltPresent(v)
 		}
 	}
