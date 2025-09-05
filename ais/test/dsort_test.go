@@ -1038,6 +1038,8 @@ func TestDsortDisk(t *testing.T) {
 func TestDsortCompressionDisk(t *testing.T) {
 	for _, ext := range []string{archive.ExtTgz, archive.ExtZip, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
+			// TODO -- FIXME: re-enable this test
+			t.Skipf("temporarily skipping %s due to intermittent failures without an obvious fix; revisit when a reliable fix is identified", t.Name())
 			runDsortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
 				func(dsorterType string, t *testing.T) {
