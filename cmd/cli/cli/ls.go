@@ -274,6 +274,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	var (
 		msg          = &apc.LsoMsg{Prefix: prefix}
 		addCachedCol bool
+		allProps     bool
 	)
 	if bck.IsRemote() {
 		addCachedCol = true           // preliminary; may change below
@@ -397,6 +398,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	default:
 		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)
+			allProps = true
 		} else {
 			msg.AddProps(apc.GetPropsName)
 			msg.AddProps(props...)
@@ -406,6 +408,10 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	// addCachedCol: correction #2
 	if addCachedCol && (msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize)) {
 		addCachedCol = false
+	}
+
+	if flagIsSet(c, chunkedColumnFlag) && (msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize)) {
+		return fmt.Errorf("flag %s does not work when listing only names and/or sizes", qflprn(chunkedColumnFlag))
 	}
 
 	// when props are _not_ explicitly specified
@@ -475,7 +481,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 				toPrint = lst.Entries
 			}
 			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
-				pageCounter+1, addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
+				pageCounter+1, addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff), allProps)
 			if err != nil {
 				return err
 			}
@@ -525,7 +531,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		return nil
 	}
 	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now, 0, /*npage*/
-		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff))
+		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff), allProps)
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {
@@ -586,13 +592,14 @@ func setLsoPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, e
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
 func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, now int64, npage int,
-	addCachedCol, isRemote, addStatusCol bool) error {
+	addCachedCol, isRemote, addStatusCol, allProps bool) error {
 	var (
 		numCached      = -1
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		hideFooter     = flagIsSet(c, noFooterFlag)
 		matched, other = lstFilter.apply(entries)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
+		addChunkedCol  = allProps || flagIsSet(c, chunkedColumnFlag)
 	)
 	if errU != nil {
 		return errU
@@ -639,7 +646,7 @@ func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, prop
 	// * two related flags and semantics:
 	//   - https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
 
-	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol)
+	tmpl := teb.LsoTemplate(propsList, hideHeader, addCachedCol, addStatusCol, addChunkedCol)
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units, false /*incl. calendar date*/)}
 	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
@@ -708,7 +715,7 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 		if pt.IsPrefixOnly() {
 			prefix, pt.Prefix = pt.Prefix, "" // NOTE: when template is a "pure" prefix
 		} else {
-			matchingObjectNames := make(cos.StrSet)
+			matchingObjectNames := make(cos.StrSet, min(1000, pt.Count()))
 			pt.InitIter()
 			for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 				matchingObjectNames[objName] = struct{}{}
@@ -735,6 +742,8 @@ func (o *lstFilter) apply(entries cmn.LsoEntries) (matching, rest cmn.LsoEntries
 	if o._len() == 0 {
 		return entries, nil
 	}
+	matching = make(cmn.LsoEntries, 0, min(len(entries), 1000))
+	rest = make(cmn.LsoEntries, 0, min(len(entries), 1000))
 	for _, obj := range entries {
 		if o.and(obj) {
 			matching = append(matching, obj)

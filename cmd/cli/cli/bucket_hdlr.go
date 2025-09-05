@@ -182,6 +182,8 @@ var (
 		useInventoryFlag,
 		invNameFlag,
 		invIDFlag,
+		// 4.0
+		chunkedColumnFlag,
 	}
 
 	bucketCmdsFlags = map[string][]cli.Flag{

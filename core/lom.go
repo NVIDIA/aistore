@@ -218,8 +218,8 @@ func (lom *LOM) ObjectName() string       { return lom.ObjName }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
 
-func (lom *LOM) IsChunked() bool {
-	debug.Assertf(lom.loaded(), "cannot is-chunked() non-loaded %q", lom)
+func (lom *LOM) IsChunked(special ...bool) bool { // same convention as Lsize
+	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
 	return lom.md.lid.haslmfl(lmflChunk)
 }
 

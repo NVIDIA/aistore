@@ -12,10 +12,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// TODO: hardcoded; revisit when adding support for apc.GetPropsChunked
+const propChunked = "chunked"
+
 var (
 	// ObjectPropsMap matches ObjEntry field
 	ObjectPropsMap = map[string]string{
-		apc.GetPropsName:     "{{FormatNameDirArch $obj.Name $obj.Flags}}",
+		apc.GetPropsName:     "{{FormatEntryNameDAC $obj.Name $obj.Flags}}",
 		apc.GetPropsSize:     "{{FormatBytesSig2 $obj.Size 2 $obj.Flags}}",
 		apc.GetPropsChecksum: "{{$obj.Checksum}}",
 		apc.GetPropsAtime:    "{{$obj.Atime}}",
@@ -25,10 +28,12 @@ var (
 		apc.GetPropsStatus:   "{{FormatLsObjStatus $obj}}",
 		apc.GetPropsCopies:   "{{$obj.Copies}}",
 		apc.GetPropsCached:   "{{FormatLsObjIsCached $obj}}",
+		//
+		propChunked: "{{FormatIsChunked $obj.Flags}}",
 	}
 )
 
-func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol bool) string {
+func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol, addChunkedCol bool) string {
 	var (
 		headSb strings.Builder
 		bodySb strings.Builder
@@ -54,15 +59,20 @@ func LsoTemplate(propsList []string, hideHeader, addCachedCol, addStatusCol bool
 	}
 	if addCachedCol {
 		columnName := strings.ToUpper(apc.GetPropsCached)
-		format, ok := ObjectPropsMap[apc.GetPropsCached]
+		format := ObjectPropsMap[apc.GetPropsCached]
+		headSb.WriteString(columnName + "\t ")
+		bodySb.WriteString(format + "\t ")
+	}
+	if addChunkedCol {
+		columnName := strings.ToUpper(propChunked)
+		format, ok := ObjectPropsMap[propChunked]
 		debug.Assert(ok)
 		headSb.WriteString(columnName + "\t ")
 		bodySb.WriteString(format + "\t ")
 	}
 	if addStatusCol {
 		columnName := strings.ToUpper(apc.GetPropsStatus)
-		format, ok := ObjectPropsMap[apc.GetPropsStatus]
-		debug.Assert(ok)
+		format := ObjectPropsMap[apc.GetPropsStatus]
 		headSb.WriteString(columnName + "\t ")
 		bodySb.WriteString(format + "\t ")
 	}

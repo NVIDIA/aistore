@@ -91,6 +91,10 @@ func (wi *walkInfo) match(objName string) bool {
 func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 	en = &cmn.LsoEnt{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 
+	if lom.IsChunked(true /*allow not loaded*/) {
+		en.SetFlag(apc.EntryIsChunked)
+	}
+
 	if lom.IsFntl() {
 		orig := lom.OrigFntl()
 		if orig != nil {

@@ -96,7 +96,8 @@ var (
 		"FormatBool":           FmtBool,
 		"FormatBckName":        fmtBckName,
 		"FormatACL":            fmtACL,
-		"FormatNameDirArch":    fmtNameDirArch,
+		"FormatEntryNameDAC":   fmtEntryNameDAC,
+		"FormatIsChunked":      fmtIsChunked,
 		"FormatXactRunFinAbrt": FmtXactRunFinAbrt,
 		//  misc. helpers
 		"IsUnsetTime":      isUnsetTime,
@@ -469,21 +470,44 @@ func fmtACL(acl apc.AccessAttrs) string {
 	return acl.Describe(true /*incl. all*/)
 }
 
-// [NOTE]
-// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
-// * https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+// DAC for:
+// - virtual Directory
+// - Archived file (ie, a file inside a shard object)
+// - Chunked object
+// NOTE: all 3 are mutually exclusive
+//
+// in re: virtual directories, see further:
+// - `apc.LsNoDirs` and `apc.LsNoRecursion` and
+// - https://github.com/NVIDIA/aistore/blob/main/docs/howto_virt_dirs.md
+func fmtEntryNameDAC(val string, flags uint16) string {
+	switch {
+	case flags&apc.EntryInArch == apc.EntryInArch:
+		debug.Assert(flags&(apc.EntryIsChunked|apc.EntryIsDir) == 0)
+		return "    " + val
+	case flags&apc.EntryIsChunked == apc.EntryIsChunked:
+		debug.Assert(flags&(apc.EntryInArch|apc.EntryIsDir) == 0)
 
-func fmtNameDirArch(val string, flags uint16) string {
-	if flags&apc.EntryInArch == 0 {
-		if flags&apc.EntryIsDir != 0 {
-			if !cos.IsLastB(val, '/') {
-				val += "/"
-			}
-			return fgreen(val)
+		// TODO: ideally, am able to color this entry but... indentation
+		// see related fmtIsChunked() below
+		return val
+	case flags&apc.EntryIsDir == apc.EntryIsDir:
+		debug.Assert(flags&(apc.EntryInArch|apc.EntryIsChunked) == 0)
+		if !cos.IsLastB(val, '/') {
+			val += "/"
 		}
+		return fgreen(val)
+	default:
 		return val
 	}
-	return "    " + val
+}
+
+func fmtIsChunked(flags uint16) string {
+	if flags&apc.EntryIsChunked != 0 {
+		debug.Assert(flags&apc.EntryIsDir == 0)
+		debug.Assert(flags&apc.EntryInArch == 0)
+		return FmtBool(true) // (compare with CACHED column)
+	}
+	return ""
 }
 
 func dsortJobInfoStatus(j *dsort.JobInfo) string {

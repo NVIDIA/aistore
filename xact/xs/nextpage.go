@@ -173,6 +173,9 @@ func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 		npg.wi.setWanted(en, lom)
 		en.SetFlag(apc.EntryIsCached) // formerly, SetPresent
 
+		if lom.IsChunked() {
+			en.SetFlag(apc.EntryIsChunked)
+		}
 		if post != nil {
 			post(lom)
 		}

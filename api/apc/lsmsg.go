@@ -98,6 +98,13 @@ const (
 	MaxPageSizeOCI   = 1000
 )
 
+// cmn/objlist_utils
+const (
+	statusBits    = 5
+	LsoStatusMask = (1 << statusBits) - 1
+)
+
+// NOTE: approaching uint16 limit - bits 9,14,15 remaining
 const (
 	// location _status_
 	LocOK = iota
@@ -113,14 +120,9 @@ const (
 	EntryIsArchive  = 1 << (statusBits + 4)
 	EntryVerChanged = 1 << (statusBits + 5) // see also: QparamLatestVer, et al.
 	EntryVerRemoved = 1 << (statusBits + 6) // ditto
-	// added v3.26
-	EntryHeadFail = 1 << (statusBits + 7)
-)
-
-// cmn/objlist_utils
-const (
-	statusBits    = 5
-	LsoStatusMask = (1 << statusBits) - 1
+	EntryHeadFail   = 1 << (statusBits + 7)
+	// added v4.0
+	EntryIsChunked = 1 << (statusBits + 8) // see NOTE above
 )
 
 // LsoMsg and HEAD(object) enum
@@ -136,6 +138,9 @@ const (
 	GetPropsEC       = "ec"
 	GetPropsCustom   = "custom"
 	GetPropsLocation = "location" // advanced usage
+
+	// 4.0 and future use
+	GetPropsChunked = "chunked"
 )
 
 const GetPropsNameSize = GetPropsName + LsPropsSepa + GetPropsSize

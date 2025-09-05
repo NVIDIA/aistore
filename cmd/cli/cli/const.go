@@ -693,6 +693,12 @@ var (
 		Usage: "Print only the resulting number of listed objects and elapsed time",
 	}
 
+	// show CHUNKED column (manifest-backed objects)
+	chunkedColumnFlag = cli.BoolFlag{
+		Name:  "chunked",
+		Usage: "Include CHUNKED column indicating chunked storage. Also enabled by '--props all'.",
+	}
+
 	// bucket summary
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
