@@ -12,14 +12,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	stxFlags = unix.AT_STATX_DONT_SYNC | unix.AT_SYMLINK_NOFOLLOW
+	stxMask  = unix.STATX_MTIME
+)
+
 // return mtime time in UTC using statx(2)
-// (note flags)
 func MtimeUTC(path string) (time.Time, error) {
-	var (
-		stx   unix.Statx_t
-		flags = unix.AT_STATX_DONT_SYNC | unix.AT_SYMLINK_NOFOLLOW
-	)
-	if err := unix.Statx(unix.AT_FDCWD, path, flags, unix.STATX_MTIME, &stx); err != nil {
+	var stx unix.Statx_t
+	if err := unix.Statx(unix.AT_FDCWD, path, stxFlags, stxMask, &stx); err != nil {
 		return time.Time{}, err
 	}
 	t := time.Unix(stx.Mtime.Sec, int64(stx.Mtime.Nsec))
