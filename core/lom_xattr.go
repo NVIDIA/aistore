@@ -322,11 +322,7 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 }
 
 func (lom *LOM) flushAtime(atime time.Time) error {
-	_, _, mtime, err := lom.Fstat(false /*get-atime*/)
-	if err != nil {
-		return err
-	}
-	return os.Chtimes(lom.FQN, atime, mtime)
+	return fs.ChtimeOnly(lom.FQN, atime)
 }
 
 func (lom *LOM) pack() (buf []byte) {

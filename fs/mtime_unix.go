@@ -12,6 +12,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// return mtime time in UTC using statx(2)
+// (note flags)
 func MtimeUTC(path string) (time.Time, error) {
 	var (
 		stx   unix.Statx_t
@@ -22,4 +24,23 @@ func MtimeUTC(path string) (time.Time, error) {
 	}
 	t := time.Unix(stx.Mtime.Sec, int64(stx.Mtime.Nsec))
 	return t.UTC(), nil
+}
+
+// set atime and mtime via utimensat(2)
+// (a faster alternative to os.Chtimes())
+func Chtimes(path string, atime, mtime time.Time) error {
+	ts := []unix.Timespec{
+		unix.NsecToTimespec(atime.UnixNano()),
+		unix.NsecToTimespec(mtime.UnixNano()),
+	}
+	return unix.UtimesNanoAt(unix.AT_FDCWD, path, ts, unix.AT_SYMLINK_NOFOLLOW)
+}
+
+// as above but only atime
+func ChtimeOnly(path string, atime time.Time) error {
+	ts := []unix.Timespec{
+		unix.NsecToTimespec(atime.UnixNano()),
+		{Nsec: unix.UTIME_OMIT},
+	}
+	return unix.UtimesNanoAt(unix.AT_FDCWD, path, ts, unix.AT_SYMLINK_NOFOLLOW)
 }

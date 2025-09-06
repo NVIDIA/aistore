@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -362,8 +361,7 @@ func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (cs
 // other FQN access
 //
 
-func (lom *LOM) Chtimes(atime, mtime time.Time) (err error) { return os.Chtimes(lom.FQN, atime, mtime) }
-func (lom *LOM) GetXattr(buf []byte) ([]byte, error)        { return fs.GetXattrBuf(lom.FQN, xattrLOM, buf) }
-func (lom *LOM) GetXattrN(name string) ([]byte, error)      { return fs.GetXattr(lom.FQN, name) }
-func (lom *LOM) SetXattr(data []byte) error                 { return fs.SetXattr(lom.FQN, xattrLOM, data) }
-func (lom *LOM) SetXattrN(name string, data []byte) error   { return fs.SetXattr(lom.FQN, name, data) }
+func (lom *LOM) GetXattr(buf []byte) ([]byte, error)      { return fs.GetXattrBuf(lom.FQN, xattrLOM, buf) }
+func (lom *LOM) GetXattrN(name string) ([]byte, error)    { return fs.GetXattr(lom.FQN, name) }
+func (lom *LOM) SetXattr(data []byte) error               { return fs.SetXattr(lom.FQN, xattrLOM, data) }
+func (lom *LOM) SetXattrN(name string, data []byte) error { return fs.SetXattr(lom.FQN, name, data) }

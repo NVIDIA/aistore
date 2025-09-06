@@ -247,7 +247,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	if err == nil {
 		lom := ctx.Lom
 		if err = lom.RenameFinalize(wfqn); err == nil {
-			if err = lom.Chtimes(csv.mtime, csv.mtime); err == nil {
+			if err = fs.Chtimes(lom.FQN, csv.mtime, csv.mtime); err == nil {
 				nlog.Infoln("new", invTag+":", lom.Cname(), ctx.Schema)
 
 				lom.SetSize(ctx.Size)
