@@ -150,9 +150,9 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 	debug.AssertNoErr(err)
 }
 
-func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
+func (r *ListObjectResult) add(entry *cmn.LsoEnt) {
 	if entry.Flags&apc.EntryIsDir == 0 {
-		r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
+		r.Contents = append(r.Contents, entryToS3(entry))
 	} else {
 		prefix := entry.Name
 		if !cos.IsLastB(entry.Name, '/') {
@@ -162,13 +162,11 @@ func (r *ListObjectResult) Add(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) {
 	}
 }
 
-func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
-	// [NOTE]
-	// as we do not track mtime we choose to _prefer_ atime
-	// even when mtime (a.k.a. "LastModified") exists. Which is not always true (e.g.,
-	// when using S3 compatibility API to access non-S3 buckets)
-	// See related: `headObjS3`
-
+// Note: in S3 listings, xs/wanted_lso populates entry.Custom with ETag/LastModified
+// but only if the latter is (or are) missing
+// here, if Custom is empty, we fall back to Atime for LastModified and omit ETag
+// (see related: `apc.LsIsS3`)
+func entryToS3(entry *cmn.LsoEnt) (oi *ObjInfo) {
 	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
 
 	if entry.Custom != "" {
@@ -179,20 +177,15 @@ func entryToS3(entry *cmn.LsoEnt, lsmsg *apc.LsoMsg) (oi *ObjInfo) {
 		}
 		oi.ETag = md[cmn.ETag]
 	}
-
-	if oi.LastModified == "" && lsmsg.TimeFormat != "" {
-		oi.LastModified = cos.FormatNanoTime(0, lsmsg.TimeFormat) // 1970-01-01 epoch
-	}
-
 	return oi
 }
 
-func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, lsmsg *apc.LsoMsg) {
+func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes) {
 	r.KeyCount = len(lst.Entries)
 	r.IsTruncated = lst.ContinuationToken != ""
 	r.NextContinuationToken = lst.ContinuationToken
 	for _, e := range lst.Entries {
-		r.Add(e, lsmsg)
+		r.add(e)
 	}
 }
 
@@ -208,7 +201,7 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		} else if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
 			debug.Assert(cksum.Val()[0] != '"', cksum.Val())
 			// NOTE: could this object be multipart?
-			hdr.Set(cos.HdrETag, `"`+cksum.Value()+`"`)
+			hdr.Set(cos.HdrETag, cmn.MD5strToETag(cksum.Value()))
 		}
 	}
 

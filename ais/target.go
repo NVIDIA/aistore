@@ -1366,7 +1366,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 
 	if etag == "" {
 		debug.Assert(len(chunk.MD5) == 16)
-		etag = cmn.MD5ToETag(chunk.MD5)
+		etag = cmn.MD5hashToETag(chunk.MD5)
 	}
 
 	delta := mono.SinceNano(startTime)

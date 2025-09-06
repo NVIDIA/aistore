@@ -75,7 +75,7 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 		c := manifest.GetChunk(i+1, true)
 		etag := c.ETag
 		if etag == "" {
-			etag = cmn.MD5ToETag(c.MD5)
+			etag = cmn.MD5hashToETag(c.MD5)
 		}
 		parts = append(parts, types.CompletedPart{
 			ETag:       apc.Ptr(etag),

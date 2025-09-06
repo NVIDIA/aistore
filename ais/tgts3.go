@@ -232,7 +232,10 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, ecode)
 		return
 	}
+
+	// TODO -- FIXME: transition to dpq
 	q := r.URL.Query()
+
 	if len(items) == 1 && q.Has(s3.QparamMptUploads) {
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("listMptUploads", bck.String(), q)

@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -75,11 +77,50 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 			// en.Custom is set via one of the two alternative flows:
 			// - checkRemoteMD => HEAD(obj)
 			// - backend.List* api call
+			var md cos.StrKVs
 			if en.Custom == "" {
-				if md := lom.GetCustomMD(); len(md) > 0 {
+				if md = lom.GetCustomMD(); len(md) > 0 {
 					en.Custom = cmn.CustomMD2S(md)
 					checkVchanged = false
 				}
+			}
+
+			if !wi.msg.IsFlagSet(apc.LsIsS3) {
+				break
+			}
+
+			// synthesize S3-required fields
+			var added bool
+			if md == nil {
+				md = make(cos.StrKVs, 4)
+				if en.Custom != "" {
+					cmn.S2CustomMD(md, en.Custom, en.Version)
+				}
+			}
+			if _, ok := md[cmn.ETag]; !ok {
+				// TODO -- FIXME:
+				// when lom happens to be chunked could still go ahead and load its chunk manifest, etc...
+				// but that'd be just too much;
+				// long term solution: extend `cmn.LsoEnt` with the two fields
+				// (in essence, `api.ListObjectsV2`)
+
+				if !lom.IsChunked() {
+					if cksum := lom.Checksum(); !cos.NoneC(cksum) {
+						if cksum.Ty() == cos.ChecksumMD5 && cksum.Val() != "" {
+							md[cmn.ETag] = cmn.MD5strToETag(cksum.Val())
+							added = true
+						}
+					}
+				}
+			}
+			if _, ok := md[cmn.LsoLastModified]; !ok {
+				if mtime, err := lom.MtimeUTC(); err == nil {
+					md[cmn.LsoLastModified] = mtime.Format(time.RFC3339)
+					added = true
+				}
+			}
+			if added {
+				en.Custom = cmn.CustomMD2S(md)
 			}
 		default:
 			debug.Assert(false, name)

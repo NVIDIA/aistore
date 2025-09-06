@@ -24,8 +24,7 @@ import (
 // The parsing follows 6 distinct categories:
 //
 // 1. Bucket (provider, namespace) - receive special handling due to their
-//    fundamental role in bucket identification. Provider stays as-is, namespace
-//    gets URL-unescaped.
+//    fundamental role. Provider stays as-is, namespace gets URL-unescaped.
 //
 // 2. Archive fields (path, mime, regx, mode) - retain dedicated struct members and
 //    specialized parsing logic including validation.
@@ -46,11 +45,8 @@ import (
 //    and any future additions. Exceptions are made for S3 headers (X-Amz-* prefix)
 //    and explicitly listed exceptions in the _except_ map.
 //
-// BEWARE:
-//
-// When adding a new query parameter, PLEASE DO NOT rely on the default (category 6).
-// Instead, explicitly add each new query parameter to the most appropriate category
-// 1 through 5 (above).
+// Note: it's always a good idea to explicitly add each and every new query into one of the
+// non-default categories, potentially 3, 4, or 5.
 
 type dpq struct {
 	bck struct {
@@ -77,16 +73,20 @@ type dpq struct {
 	silent        bool // QparamSilent
 	latestVer     bool // QparamLatestVer
 	sync          bool // QparamSync
-	isS3          bool // special use: frontend S3 API
+
+	// Special use (internal context)
+	isS3 bool // frontend S3 API
 }
 
 var _except = map[string]bool{
 	apc.QparamDontHeadRemote: false,
 
 	// flows that utilize the following query parameters perform conventional r.URL.Query()
+	// TODO -- FIXME: multipart must definitely transition to dpq
 	s3.QparamMptUploadID: false,
 	s3.QparamMptUploads:  false,
 	s3.QparamMptPartNo:   false,
+
 	s3.QparamAccessKeyID: false,
 	s3.QparamExpires:     false,
 	s3.QparamSignature:   false,

@@ -6,6 +6,7 @@ package apc
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -86,6 +87,9 @@ const (
 
 	// do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries
 	LsNoDirs
+
+	// the caller is s3 compatibility API
+	LsIsS3
 )
 
 // max page sizes
@@ -231,34 +235,14 @@ func (lsmsg *LsoMsg) Str(cname string) string {
 		sb.WriteString(", props:")
 		sb.WriteString(lsmsg.Props)
 	}
-	if lsmsg.Flags == 0 {
-		return sb.String()
+	if fl := lsmsg.Flags; fl != 0 {
+		sb.WriteString(", flags: 0x")
+		sb.WriteString(strconv.FormatUint(fl, 16))
+		sb.WriteString(" (")
+		sb.WriteString(strconv.FormatUint(fl, 2))
+		sb.WriteString(")")
 	}
-
-	sb.WriteString(", flags:")
-	if lsmsg.IsFlagSet(LsCached) {
-		sb.WriteString("cached,")
-	}
-	if lsmsg.IsFlagSet(LsMissing) {
-		sb.WriteString("missing,")
-	}
-	if lsmsg.IsFlagSet(LsArchDir) {
-		sb.WriteString("arch,")
-	}
-	if lsmsg.IsFlagSet(LsBckPresent) {
-		sb.WriteString("bck-present,")
-	}
-	if lsmsg.IsFlagSet(LsDontAddRemote) {
-		sb.WriteString("skip-lookup,")
-	}
-	if lsmsg.IsFlagSet(LsNoRecursion) {
-		sb.WriteString("no-recurs,")
-	}
-	if lsmsg.IsFlagSet(LsDiff) {
-		sb.WriteString("diff,")
-	}
-	s := sb.String()
-	return s[:len(s)-1]
+	return sb.String()
 }
 
 // LsoMsg flags enum: LsCached, ...

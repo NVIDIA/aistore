@@ -736,7 +736,7 @@ func (u *Ufest) ETagS3() (string, error) {
 			if c.ETag != "" {
 				if bin, err := cmn.ETagToMD5(c.ETag); err == nil {
 					debug.Assert(bytes.Equal(bin, c.MD5),
-						"ETag/md5 mismatch: ", c.ETag, " vs ", cmn.MD5ToETag(c.MD5))
+						"ETag/md5 mismatch: ", c.ETag, " vs ", cmn.MD5hashToETag(c.MD5))
 				}
 			}
 		case c.ETag != "":
@@ -756,7 +756,7 @@ func (u *Ufest) ETagS3() (string, error) {
 	// (note: should there be a special case for u.count == 1?)
 	sum := h.Sum(nil)
 	s := hex.EncodeToString(sum)
-	return `"` + s + cmn.AwsMultipartDelim + strconv.Itoa(int(u.count)) + `"`, nil
+	return cmn.MD5strToETag(s + cmn.AwsMultipartDelim + strconv.Itoa(int(u.count))), nil
 }
 
 // reread all chunk payloads to compute a checksum of the given type

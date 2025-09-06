@@ -365,7 +365,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	}
 
 	// e.g. <LastModified>2009-10-12T17:50:30.000Z</LastModified>
-	lsmsg := &apc.LsoMsg{TimeFormat: time.RFC3339}
+	lsmsg := &apc.LsoMsg{TimeFormat: time.RFC3339, Flags: apc.LsIsS3}
 
 	//
 	// NOTE (s3 api limitation): hard-coded props w/ apc.GetPropsCustom always included
@@ -403,7 +403,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 
 	resp := s3.NewListObjectResult(bucket)
 	resp.ContinuationToken = lsmsg.ContinuationToken
-	resp.FromLsoResult(lst, lsmsg)
+	resp.FromLsoResult(lst)
 	sgl := p.gmm.NewSGL(0)
 	resp.MustMarshal(sgl)
 	w.Header().Set(cos.HdrContentType, cos.ContentXML)

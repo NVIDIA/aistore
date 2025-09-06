@@ -48,9 +48,8 @@ func UnquoteCEV(val string) string {
 }
 
 // S3 requires that the ETag header value should be enclosed in double quotes
-func MD5ToETag(md5hash []byte) string {
-	return `"` + hex.EncodeToString(md5hash) + `"`
-}
+func MD5hashToETag(md5hash []byte) string { return `"` + hex.EncodeToString(md5hash) + `"` }
+func MD5strToETag(md5val string) string   { return `"` + md5val + `"` }
 
 // NOTE: hex.DecodeString() won't complain on empty ("") etag - caller must validate
 func ETagToMD5(etag string) ([]byte, error) {

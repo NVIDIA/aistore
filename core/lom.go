@@ -141,6 +141,8 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 	return lom.md.Size
 }
 
+func (lom *LOM) MtimeUTC() (time.Time, error) { return fs.MtimeUTC(lom.FQN) }
+
 // low-level access to the os.FileInfo of a chunk or whole file
 func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
 	finfo, err := os.Lstat(lom.FQN)

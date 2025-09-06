@@ -4,8 +4,12 @@
  */
 package apc
 
-// see related "GET(what)" set of APIs: api/cluster and api/daemon
+//
+// NOTE: when adding new (or changing existing) query parameters, see ais/dpq.go comment on _categories_.
+//
+
 const (
+	// see related "GET(what)" set of APIs: api/cluster and api/daemon
 	QparamWhat = "what" // "smap" | "bmd" | "config" | "stats" | "xaction" ... (enum below)
 
 	QparamProps = "props" // e.g. "checksum, size"|"atime, size"|"cached"|"bucket, size"| ...
