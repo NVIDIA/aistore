@@ -9,6 +9,7 @@ package space
 import (
 	"container/heap"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -51,10 +52,9 @@ const (
 type (
 	IniLRU struct {
 		Xaction             *XactLRU
-		Config              *cmn.Config
 		StatsT              stats.Tracker
 		Buckets             []cmn.Bck // list of buckets to run LRU
-		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
+		GetFSUsedPercentage func(path string) (usedPercentage int64, err error)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 		WG                  *sync.WaitGroup
 		Force               bool // Ignore LRU prop when set to be true.
@@ -80,8 +80,8 @@ type (
 	// that traverses and evicts a single given mountpath.
 	lruJ struct {
 		// runtime
-		curSize   int64
 		totalSize int64 // difference between lowWM size and used size
+		capCheck  int64
 		newest    int64
 		heap      *minHeap
 		bck       cmn.Bck
@@ -93,8 +93,7 @@ type (
 		joggers map[string]*lruJ
 		mi      *fs.Mountpath
 		config  *cmn.Config
-		// runtime
-		throttle    bool
+		// more runtime
 		allowDelObj bool
 	}
 	lruFactory struct {
@@ -110,9 +109,9 @@ var (
 	_ core.Xact      = (*XactLRU)(nil)
 )
 
-////////////////
-// lruFactory //
-////////////////
+//
+// x-lru and its factory
+//
 
 func (*lruFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &lruFactory{RenewBase: xreg.RenewBase{Args: args}}
@@ -195,13 +194,16 @@ func (r *XactLRU) Snap() (snap *core.Snap) {
 	return
 }
 
-//////////////////////
-// mountpath jogger //
-//////////////////////
+//
+// lruJ: mountpath jogger
+//
 
 func (j *lruJ) String() string {
 	return fmt.Sprintf("%s: jog-%s", j.ini.Xaction, j.mi)
 }
+
+func (j *lruJ) batch() int64  { return j.config.LRU.BatchSize }
+func (j *lruJ) window() int64 { return min(j.config.LRU.BatchSize<<2, cmn.GCBatchSizeMax) }
 
 func (j *lruJ) stop() { j.stopCh <- struct{}{} }
 
@@ -265,12 +267,8 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) error {
 		}
 		j.allowDelObj = a || force
 
-		size, err := j.jogBck()
-		if err != nil {
+		if err := j.jogBck(); err != nil {
 			return err
-		}
-		if size < cos.KiB {
-			continue
 		}
 
 		// recompute size-to-evict
@@ -284,7 +282,7 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) error {
 	return nil
 }
 
-func (j *lruJ) jogBck() (size int64, err error) {
+func (j *lruJ) jogBck() error {
 	// 1. init per-bucket min-heap (and reuse the slice)
 	h := (*j.heap)[:0]
 	j.heap = &h
@@ -299,12 +297,12 @@ func (j *lruJ) jogBck() (size int64, err error) {
 		Sorted:   false,
 	}
 	j.now = time.Now().UnixNano()
-	if err = fs.Walk(opts); err != nil {
-		return
+	if err := fs.Walk(opts); err != nil {
+		return err
 	}
 	// 3. evict
-	size, err = j.evict()
-	return
+	j.evict(math.MaxInt64)
+	return nil
 }
 
 func (j *lruJ) visitLOM(parsedFQN *fs.ParsedFQN) {
@@ -312,34 +310,48 @@ func (j *lruJ) visitLOM(parsedFQN *fs.ParsedFQN) {
 		return
 	}
 	lom := core.AllocLOM(parsedFQN.ObjName)
-	if pushed := j._visit(lom); !pushed {
+	if pushed := j._visit(lom, parsedFQN); !pushed {
 		core.FreeLOM(lom)
 	}
 }
 
-func (j *lruJ) _visit(lom *core.LOM) (pushed bool) {
+func (j *lruJ) _visit(lom *core.LOM, parsedFQN *fs.ParsedFQN) (pushed bool) {
 	if err := lom.InitBck(&j.bck); err != nil {
-		return
+		xlru := j.ini.Xaction
+		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
+			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
+		} else {
+			err = fmt.Errorf("%s: unexpected lom-init fail [ %q, %w ]", j, parsedFQN.Bck.Cname(parsedFQN.ObjName), err)
+			nlog.Errorln(err)
+		}
+		xlru.Abort(err)
+		return false
 	}
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		return
+		return false
 	}
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
-		return
+		return false
 	}
 	if lom.HasCopies() && lom.IsCopy() {
-		return
+		return false
 	}
-	// do nothing if the heap's curSize >= totalSize and
-	// the file is more recent then the heap's newest.
-	if j.curSize >= j.totalSize && lom.AtimeUnix() > j.newest {
-		return
-	}
-	heap.Push(j.heap, lom)
-	j.curSize += lom.Lsize()
+
+	hlen := int64(j.heap.Len())
 	if lom.AtimeUnix() > j.newest {
+		// not adding - have a full batch already and this object is newer
+		if hlen >= j.batch() {
+			return false
+		}
 		j.newest = lom.AtimeUnix()
 	}
+	heap.Push(j.heap, lom) // note: free(this lom) upon heap.Pop
+
+	// evict entire oldest batch once per window; allow multiple if overshot
+	if hlen >= j.window() {
+		j.evict(j.batch())
+	}
+
 	return true
 }
 
@@ -348,10 +360,12 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if de.IsDir() {
 		return nil
 	}
-	if err := j.yieldTerm(); err != nil {
-		return err
+	if j.done() {
+		return nil
 	}
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
+		xlru := j.ini.Xaction
+		xlru.AddErr(err, 0)
 		return nil
 	}
 	if parsed.ContentType == fs.ObjCT {
@@ -361,76 +375,82 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-func (j *lruJ) evict() (size int64, err error) {
+func (j *lruJ) evict(batch int64) {
 	var (
-		fevicted, bevicted int64
-		capCheck           int64
-		h                  = j.heap
-		xlru               = j.ini.Xaction
+		fevicted int64
+		bevicted int64
+		h        = j.heap
+		xlru     = j.ini.Xaction
 	)
-
-	// evict(sic!) and house-keep
-	for h.Len() > 0 && j.totalSize > 0 {
+	for h.Len() > 0 && j.totalSize > 0 && fevicted < batch {
 		lom := heap.Pop(h).(*core.LOM)
-		if !j.evictObj(lom) {
-			core.FreeLOM(lom)
-			continue
-		}
-		objSize := lom.Lsize(true /*not loaded*/)
+		objSize := lom.Lsize()
+		ok := j.evictObj(lom)
 		core.FreeLOM(lom)
-		bevicted += objSize
-		size += objSize
-		fevicted++
-		if capCheck, err = j.postRemove(capCheck, objSize); err != nil {
-			return
+
+		if ok {
+			bevicted += objSize
+			fevicted++
+			j.capCheckAndThrottle(objSize)
+		}
+		if j.done() {
+			break
 		}
 	}
-	j.ini.StatsT.Add(stats.LruEvictSize, bevicted)
-	j.ini.StatsT.Add(stats.LruEvictCount, fevicted)
-	xlru.ObjsAdd(int(fevicted), bevicted)
-	return
+	if fevicted > 0 {
+		j.ini.StatsT.Add(stats.LruEvictSize, bevicted)
+		j.ini.StatsT.Add(stats.LruEvictCount, fevicted)
+		xlru.ObjsAdd(int(fevicted), bevicted)
+
+		// plus, once per batch
+		if fevicted >= batch {
+			usedPct, _ := j.ini.GetFSUsedPercentage(j.mi.Path)
+			j._throttle(usedPct)
+		}
+	}
 }
 
-func (j *lruJ) postRemove(prev, size int64) (capCheck int64, _ error) {
+func (j *lruJ) capCheckAndThrottle(size int64) {
 	j.totalSize -= size
-	capCheck = prev + size
-	if err := j.yieldTerm(); err != nil {
-		return capCheck, err
+	j.capCheck += size
+	if j.capCheck < capCheckThresh {
+		return
 	}
-	if capCheck < capCheckThresh {
-		return capCheck, nil
-	}
+
 	// init, recompute, and throttle - once per capCheckThresh
-	capCheck = 0
-	j.throttle = false
 	j.allowDelObj, _ = j.allow()
-	j.config = cmn.GCO.Get()
+	j.config = cmn.GCO.Get() // refresh
 	j.now = time.Now().UnixNano()
-	usedPct, ok := j.ini.GetFSUsedPercentage(j.mi.Path)
-	if ok && usedPct < j.config.Space.HighWM {
-		err := j._throttle(usedPct)
-		return capCheck, err
+	usedPct, err := j.ini.GetFSUsedPercentage(j.mi.Path)
+	if err != nil {
+		xlru := j.ini.Xaction
+		e := fmt.Errorf("%s: unexpected failure to check used%%: %v", j, err)
+		xlru.Abort(e)
+		return
 	}
-	return capCheck, nil
+	j._throttle(usedPct)
+	j.capCheck = 0
 }
 
-func (j *lruJ) _throttle(usedPct int64) error {
-	if u := j.mi.GetUtil(); u >= 0 && u < j.config.Disk.DiskUtilLowWM {
-		return nil
+func (j *lruJ) _throttle(usedPct int64) {
+	if usedPct >= j.config.Space.HighWM {
+		return
+	}
+	util := j.mi.GetUtil()
+	if util < j.config.Disk.DiskUtilLowWM {
+		return
 	}
 	var (
 		ratioCap  = cos.RatioPct(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
-		curr      = fs.GetMpathUtil(j.mi.Path)
-		ratioUtil = cos.RatioPct(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, curr)
+		ratioUtil = cos.RatioPct(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, util)
 	)
-	if ratioUtil > ratioCap {
-		if usedPct < (j.config.Space.LowWM+j.config.Space.HighWM)/2 {
-			j.throttle = true
+	if ratioUtil >= ratioCap {
+		if util > j.config.Disk.DiskUtilHighWM {
+			time.Sleep(fs.Throttle10ms)
+		} else {
+			time.Sleep(fs.Throttle1ms)
 		}
-		time.Sleep(fs.Throttle100ms)
-		return j.yieldTerm()
 	}
-	return nil
 }
 
 // remove local copies that "belong" to different LRU joggers (space accounting may be temporarily not precise)
@@ -439,7 +459,9 @@ func (j *lruJ) evictObj(lom *core.LOM) bool {
 	err := lom.RemoveObj()
 	lom.Unlock(true)
 	if err != nil {
-		nlog.Errorf("%s: failed to evict %s: %v", j, lom, err)
+		xlru := j.ini.Xaction
+		e := fmt.Errorf("failed to evict %s: %v", lom, err)
+		xlru.AddErr(e, 0)
 		return false
 	}
 	if cmn.Rom.FastV(5, cos.SmoduleSpace) {
@@ -467,23 +489,17 @@ func (j *lruJ) evictSize() error {
 	return nil
 }
 
-func (j *lruJ) yieldTerm() error {
+func (j *lruJ) done() bool {
 	xlru := j.ini.Xaction
 	select {
-	case errCause := <-xlru.ChanAbort():
-		return cmn.NewErrAborted(xlru.Name(), "", errCause)
+	case <-xlru.ChanAbort():
+		return true
 	case <-j.stopCh:
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
+		return true
 	default:
-		if j.throttle {
-			time.Sleep(fs.Throttle1ms)
-		}
 		break
 	}
-	if xlru.Finished() {
-		return cmn.NewErrAborted(xlru.Name(), "", nil)
-	}
-	return nil
+	return xlru.Finished()
 }
 
 // sort buckets by size

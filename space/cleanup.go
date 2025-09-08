@@ -675,7 +675,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 
 func (j *clnJ) rmAnyBatch(specifier int) {
 	batch := j.config.Space.BatchSize
-	debug.Assert(batch >= cmn.BatchSizeMin)
+	debug.Assert(batch >= cmn.GCBatchSizeMin)
 
 	switch specifier {
 	case flagRmOldWork:

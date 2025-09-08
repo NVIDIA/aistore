@@ -16,8 +16,8 @@ import (
 var _ = Describe("fsutils", func() {
 	Describe("GetFSUsedPercentage", func() {
 		It("should", func() {
-			percentage, ok := ios.GetFSUsedPercentage("/")
-			Expect(ok).To(BeTrue(), "Unable to retrieve FS used percentage!")
+			percentage, err := ios.GetFSUsedPercentage("/")
+			Expect(err).NotTo(HaveOccurred(), "Unable to retrieve FS used percentage!")
 			Expect(percentage).To(BeNumerically("<=", 100), "Invalid FS used percentage: %d", percentage)
 		})
 	})

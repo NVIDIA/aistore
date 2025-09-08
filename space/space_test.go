@@ -111,6 +111,9 @@ var _ = Describe("space evict/cleanup tests", func() {
 			})
 
 			It("should evict the oldest files", func() {
+				if testing.Short() {
+					Skip("skipping in short mode")
+				}
 				const numberOfFiles = 6
 
 				ini.GetFSStats = getMockGetFSStats(numberOfFiles)
@@ -300,8 +303,8 @@ func namesFromFilesMetadatas(fileMetadata []fileMetadata) []string {
 	return result
 }
 
-func mockGetFSUsedPercentage(string) (usedPrecentage int64, _ bool) {
-	return int64(initialDiskUsagePct * 100), true
+func mockGetFSUsedPercentage(string) (usedPrecentage int64, _ error) {
+	return int64(initialDiskUsagePct * 100), nil
 }
 
 func getMockGetFSStats(currentFilesNum int) func(string) (uint64, uint64, int64, error) {
@@ -348,7 +351,6 @@ func newIniLRU() *space.IniLRU {
 	xlru.InitBase(cos.GenUUID(), apc.ActLRU, "" /*ctlmsg*/, nil)
 	return &space.IniLRU{
 		Xaction:             xlru,
-		Config:              cmn.GCO.Get(),
 		StatsT:              mock.NewStatsTracker(),
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
 		GetFSStats:          getMockGetFSStats(numberOfCreatedFiles),

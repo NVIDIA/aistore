@@ -417,12 +417,19 @@ type (
 		// CapacityUpdTime denotes the frequency at which AIS targets update capacity (free/avail) utilization
 		CapacityUpdTime cos.Duration `json:"capacity_upd_time"`
 
+		// Specifies a unit of LRU eviction processing;
+		// Zero value _translates_ as a system default 32*1024 (objects to be evicted)
+		// See also:
+		// - LRUConf.Validate()
+		BatchSize int64 `json:"batch_size,omitempty"`
+
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
 	}
 	LRUConfToSet struct {
 		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty" swaggertype:"primitive,string"`
 		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty" swaggertype:"primitive,string"`
+		BatchSize       *int64        `json:"batch_size,omitempty"`
 		Enabled         *bool         `json:"enabled,omitempty"`
 	}
 
@@ -1248,10 +1255,13 @@ func (c *DiskConf) Validate() (err error) {
 const (
 	dontCleanupTimeDflt = 2 * time.Hour
 	dontCleanupTimeMin  = time.Hour
+)
 
-	BatchSizeMin  = 1024
-	batchSizeDflt = 32 * 1024
-	batchSizeMax  = 512 * 1024
+// common for both SpaceConf and LRUConf
+const (
+	GCBatchSizeMin  = 1024
+	GCBatchSizeDflt = 32 * 1024
+	GCBatchSizeMax  = 512 * 1024
 )
 
 func (c *SpaceConf) Validate() error {
@@ -1266,9 +1276,9 @@ func (c *SpaceConf) Validate() error {
 	}
 
 	if c.BatchSize == 0 {
-		c.BatchSize = batchSizeDflt
-	} else if n := c.BatchSize; n < BatchSizeMin || n > batchSizeMax {
-		return fmt.Errorf("invalid space.batch_size=%d (expecting range [%d - %d])", n, BatchSizeMin, batchSizeMax)
+		c.BatchSize = GCBatchSizeDflt
+	} else if n := c.BatchSize; n < GCBatchSizeMin || n > GCBatchSizeMax {
+		return fmt.Errorf("invalid space.batch_size=%d (expecting range [%d - %d])", n, GCBatchSizeMin, GCBatchSizeMax)
 	}
 	return nil
 }
@@ -1293,12 +1303,17 @@ func (c *LRUConf) String() string {
 	if !c.Enabled {
 		return confDisabled
 	}
-	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v", c.DontEvictTime, c.CapacityUpdTime)
+	return fmt.Sprintf("lru: dont_evict_time=%v, capacity_upd_time=%v, batch_size=%d", c.DontEvictTime, c.CapacityUpdTime, c.BatchSize)
 }
 
 func (c *LRUConf) Validate() (err error) {
 	if c.CapacityUpdTime.D() < capUpdTimeMin {
 		return fmt.Errorf("invalid %+v (expecting: lru.capacity_upd_time >= %v)", c, capUpdTimeMin)
+	}
+	if c.BatchSize == 0 {
+		c.BatchSize = GCBatchSizeDflt
+	} else if n := c.BatchSize; n < GCBatchSizeMin || n > GCBatchSizeMax {
+		return fmt.Errorf("invalid lru.batch_size=%d (expecting range [%d - %d])", n, GCBatchSizeMin, GCBatchSizeMax)
 	}
 	if c.DontEvictTime.D() < dontEvictTimeMin {
 		err = fmt.Errorf("invalid %+v (expecting: lru.dont_evict_time >= %v)", c, dontEvictTimeMin)
