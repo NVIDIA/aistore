@@ -637,14 +637,20 @@ func TestLRU(t *testing.T) {
 			t:      t,
 			bck:    cliBck,
 			num:    100,
-			prefix: t.Name(),
+			prefix: t.Name() + "_" + cos.GenTie(),
 		}
 	)
 
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, RequiredDeployment: tools.ClusterTypeLocal})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
+
+	// NOTE: cannot "fight" atimes here, need to unload all cached LOMs
+	err := api.ClearLcache(baseParams, "" /*all targets*/)
+	tassert.CheckFatal(t, err)
+
+	m.backdateLocalObjs(time.Hour * 3)
 
 	// Remember targets' watermarks
 	var (
@@ -678,7 +684,7 @@ func TestLRU(t *testing.T) {
 
 	// All targets: set new watermarks; restore upon exit
 	oconfig := tools.GetClusterConfig(t)
-	defer func() {
+	t.Cleanup(func() {
 		var (
 			cleanupWMStr, _ = cos.ConvertToString(oconfig.Space.CleanupWM)
 			lowWMStr, _     = cos.ConvertToString(oconfig.Space.LowWM)
@@ -691,7 +697,7 @@ func TestLRU(t *testing.T) {
 			"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
 			"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTime.String(),
 		})
-	}()
+	})
 
 	// Cluster-wide reduce dont-evict-time
 	cleanupWMStr, _ := cos.ConvertToString(cleanupWM)

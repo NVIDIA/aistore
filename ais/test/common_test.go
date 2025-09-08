@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	iofs "io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -288,7 +290,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects (size %s) => %s\n", objCnt, cos.ToSizeIEC(int64(m.fileSize), 0), m.bck.String())
+		tlog.Logf("remote PUT %d objects (size %s) => %s\n", objCnt, cos.ToSizeIEC(int64(m.fileSize), 0), m.bck.Cname(m.prefix))
 	}
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
@@ -340,6 +342,34 @@ func (m *ioContext) evict() {
 	tlog.Logf("evicting remote bucket %s...\n", m.bck.String())
 	err = api.EvictRemoteBucket(baseParams, m.bck, false)
 	tassert.CheckFatal(m.t, err)
+}
+
+// TODO: optionally, filter by content type as well
+// NOTE: assuming 'RequiredDeployment == tools.ClusterTypeLocal'
+func (m *ioContext) backdateLocalObjs(age time.Duration) {
+	var (
+		sep     = string(filepath.Separator)
+		old     = time.Now().Add(-age)
+		touched int
+	)
+	err := filepath.WalkDir(rootDir, func(path string, de iofs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if de.IsDir() {
+			return nil
+		}
+		if strings.HasPrefix(de.Name(), m.prefix) && strings.Contains(path, sep+m.bck.Name+sep) {
+			touched++
+			return os.Chtimes(path, old, old)
+		}
+		return nil
+	})
+	tassert.CheckFatal(m.t, err)
+
+	if touched != len(m.objNames) {
+		tlog.Logfln("Warning: touched %d != %d objnames", touched, len(m.objNames))
+	}
 }
 
 func (m *ioContext) remotePrefetch(prefetchCnt int) {
