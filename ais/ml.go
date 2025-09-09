@@ -56,6 +56,9 @@ func tmosspath(bucket, xid, wid string, nat int) string {
 	s := strconv.Itoa(nat)
 	// when parsed will contain tmosspathNumItems = 5 if bucket name provided
 	// otherwise 4 items
+	if bucket == "" {
+		return apc.URLPathML.Join(apc.Moss, xid, wid, s)
+	}
 	return apc.URLPathML.Join(apc.Moss, bucket, xid, wid, s)
 }
 
