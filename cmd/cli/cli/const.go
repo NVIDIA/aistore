@@ -618,15 +618,23 @@ var (
 			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
 	}
 
-	forceFlag    = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}
+	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}
+
+	// space cleanup
+
 	forceClnFlag = cli.BoolFlag{
 		Name: forceFlag.Name,
-		Usage: "Disregard interrupted rebalance and possibly other conditions preventing full cleanup\n" +
-			indent1 + "\t(tip: check 'ais config cluster lru.dont_evict_time' as well)",
+		Usage: "Proceed with removing misplaced objects even if global rebalance (or local resilver) is running or was interrupted,\n" +
+			indent1 + "\tor the node has recently restarted. Does not override the 'dont_cleanup_time' window or other flags",
 	}
 
-	// TODO: rm smaller than
 	rmZeroSizeFlag = cli.BoolFlag{Name: "rm-zero-size", Usage: "Remove zero size objects " + advancedUsageOnly}
+
+	keepMisplacedFlag = cli.BoolFlag{
+		Name: "keep-misplaced",
+		Usage: "Do not remove misplaced objects (default: remove after 'dont_cleanup_time' grace period)\n" +
+			indent1 + "\tTip: use 'ais config cluster log.modules space' to enable logging for dry-run visibility",
+	}
 
 	smallSizeFlag = cli.StringFlag{
 		Name:  "small-size",

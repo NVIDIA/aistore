@@ -50,10 +50,12 @@ const (
 )
 
 // ArgsMsg.Flags
+// note: for simplicity, keeping all custom x-flags in one place and one global enum for now
 const (
-	XrmZeroSize = 1 << iota // usage: x-cleanup (apc.ActStoreCleanup) to remove zero size objects
-	XrbLatestVer
-	XrbSync
+	FlagZeroSize = 1 << iota // usage: x-cleanup (apc.ActStoreCleanup) to remove zero size objects
+	FlagLatestVer
+	FlagSync
+	FlagKeepMisplaced // usage: x-cleanup to _not_ remove (ie, keep) misplaced objects
 )
 
 type (
@@ -66,7 +68,7 @@ type (
 		Bck         cmn.Bck       // bucket
 		Buckets     []cmn.Bck     // list of buckets (e.g., copy-bucket, lru-evict, etc.)
 		Timeout     time.Duration // max time to wait
-		Flags       uint32        `json:"flags,omitempty"` // enum (XrmZeroSize, ...) bitwise
+		Flags       uint32        `json:"flags,omitempty"` // enum (FlagZeroSize, ...) bitwise
 		Force       bool          // force
 		OnlyRunning bool          // only for running xactions
 	}

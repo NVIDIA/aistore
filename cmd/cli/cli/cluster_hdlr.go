@@ -575,11 +575,11 @@ func startRebHandler(c *cli.Context) (err error) {
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance}
 	if flagIsSet(c, latestVerFlag) {
-		xargs.Flags |= xact.XrbLatestVer
+		xargs.Flags |= xact.FlagLatestVer
 	}
 	if flagIsSet(c, syncFlag) {
-		xargs.Flags |= xact.XrbSync
-		if xargs.Flags&xact.XrbLatestVer != 0 {
+		xargs.Flags |= xact.FlagSync
+		if xargs.Flags&xact.FlagLatestVer != 0 {
 			warn := fmt.Sprintf("%s implies %s (the latter is redundant)", qflprn(syncFlag), qflprn(latestVerFlag))
 			actionWarn(c, warn)
 		}

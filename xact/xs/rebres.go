@@ -107,10 +107,10 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	if xreb.Args.Bck != nil {
 		ctlmsg = xreb.Args.Bck.Cname(xreb.Args.Prefix) + " "
 	}
-	if xreb.Args.Flags&xact.XrbLatestVer != 0 {
+	if xreb.Args.Flags&xact.FlagLatestVer != 0 {
 		ctlmsg += "--latest "
 	}
-	if xreb.Args.Flags&xact.XrbSync != 0 {
+	if xreb.Args.Flags&xact.FlagSync != 0 {
 		ctlmsg += "--sync"
 	} else {
 		ctlmsg = strings.TrimRight(ctlmsg, " ")

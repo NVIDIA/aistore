@@ -125,6 +125,7 @@ var (
 	cleanupFlags = []cli.Flag{
 		forceClnFlag,
 		rmZeroSizeFlag,
+		keepMisplacedFlag,
 		waitFlag,
 		waitJobXactFinishedFlag,
 	}
@@ -240,14 +241,24 @@ func cleanupStorageHandler(c *cli.Context) error {
 	// xargs
 	force := flagIsSet(c, forceClnFlag)
 	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck, Force: force}
+
 	if flagIsSet(c, rmZeroSizeFlag) {
-		xargs.Flags = xact.XrmZeroSize
+		xargs.Flags |= xact.FlagZeroSize
+	}
+	if flagIsSet(c, keepMisplacedFlag) {
+		xargs.Flags |= xact.FlagKeepMisplaced
 	}
 
 	// do
 	xid, err := xstart(c, &xargs, "")
 	if err != nil {
 		return err
+	}
+
+	if force {
+		warn := fmt.Sprintf("running with %s: will remove misplaced objects despite (possibly) ongoing or interrupted rebalance/resilver...\n",
+			qflprn(forceClnFlag))
+		actionWarn(c, warn)
 	}
 
 	xargs.ID = xid

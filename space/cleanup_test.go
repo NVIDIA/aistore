@@ -114,9 +114,6 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 	Describe("Misplaced object cleanup", func() {
 		It("should remove old misplaced objects", func() {
-			avail := fs.GetAvail()
-			Expect(len(avail)).To(BeNumerically(">=", 2))
-
 			objectName := "misplaced-object.txt"
 
 			// Create LOM for the object to find correct placement
@@ -124,17 +121,9 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			err := lom.InitBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
-			correctMpath := lom.Mountpath()
+			wrongMpath := findOtherMpath(lom.Mountpath())
 
 			// Find wrong mountpath for misplacement
-			var wrongMpath *fs.Mountpath
-			for _, mp := range avail {
-				if mp.Path != correctMpath.Path {
-					wrongMpath = mp
-					break
-				}
-			}
-			Expect(wrongMpath).NotTo(BeNil())
 
 			// Create misplaced object
 			wrongFQN := wrongMpath.MakePathFQN(&bck, fs.ObjCT, objectName)
@@ -152,6 +141,46 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 			// Verify misplaced object was removed
 			Expect(wrongFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("should respect --keep-misplaced flag", func() {
+			// Create misplaced object (old enough for removal)
+			objectName := "flagged-misplaced.txt"
+			lom := &core.LOM{ObjName: objectName}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			wrongMpath := findOtherMpath(lom.Mountpath())
+			wrongFQN := wrongMpath.MakePathFQN(&bck, fs.ObjCT, objectName)
+			oldTime := time.Now().Add(-3 * time.Hour)
+			createTestLOM(wrongFQN, 1024, oldTime)
+
+			// ask to keep it
+			ini.Args.Flags |= xact.FlagKeepMisplaced
+
+			space.RunCleanup(ini)
+
+			// misplaced object should exist
+			Expect(wrongFQN).To(BeAnExistingFile())
+		})
+
+		It("should remove zero-size objects when flag is set", func() {
+			objectName := "zero-size-object.txt"
+			lom := &core.LOM{ObjName: objectName}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldTime := time.Now().Add(-3 * time.Hour)
+			createTestLOM(lom.FQN, 0, oldTime) // zero size object
+
+			err = os.Chtimes(lom.FQN, oldTime, oldTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			ini.Args.Flags |= xact.FlagZeroSize
+
+			space.RunCleanup(ini)
+
+			Expect(lom.FQN).NotTo(BeAnExistingFile())
 		})
 
 		It("should preserve recent misplaced objects", func() {
@@ -455,4 +484,17 @@ func persist(lom *core.LOM) error {
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	return lom.Persist()
+}
+
+func findOtherMpath(mi *fs.Mountpath) *fs.Mountpath {
+	avail := fs.GetAvail()
+	Expect(len(avail)).To(BeNumerically(">=", 2))
+
+	for _, other := range avail {
+		if other.Path != mi.Path {
+			return other
+		}
+	}
+	Fail("No other mountpath found")
+	return nil
 }

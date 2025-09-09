@@ -291,9 +291,9 @@ rx:
 
 func _latestVer(conf cmn.VersionConf, flags uint32) (latestVer, sync bool) {
 	switch {
-	case (flags&xact.XrbSync != 0) || conf.Sync:
+	case (flags&xact.FlagSync != 0) || conf.Sync:
 		return true, true
-	case (flags&xact.XrbLatestVer != 0) || conf.ValidateWarmGet:
+	case (flags&xact.FlagLatestVer != 0) || conf.ValidateWarmGet:
 		return true, false
 	default:
 		return false, false

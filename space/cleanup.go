@@ -33,11 +33,16 @@ import (
 
 // stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
 
+// (batch sizing)
 const (
 	flagRmOldWork = 1 << iota
 	flagRmMisplacedLOMs
 	flagRmMisplacedEC
 	flagRmAll = flagRmOldWork | flagRmMisplacedLOMs | flagRmMisplacedEC
+)
+
+const (
+	sparseLogCnt = 100
 )
 
 type (
@@ -75,10 +80,12 @@ type (
 			loms []*core.LOM
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
-		bck     cmn.Bck
-		now     time.Time
+		bck cmn.Bck
+		now time.Time
+		// runtime counters
 		nvisits int64
 		norphan int64
+		nmisplc int64
 		// init-time
 		p       *clnP
 		ini     *IniCln
@@ -249,11 +256,17 @@ func (p *clnP) rmMisplaced() bool {
 func (j *clnJ) String() string {
 	var sb strings.Builder
 	sb.Grow(128)
-	sb.WriteString(j.ini.Xaction.String())
+	sb.WriteString(j.ini.Xaction.Name())
 	sb.WriteString(": jog-")
 	sb.WriteString(j.mi.String())
 	if j.ini.Args.Force {
-		sb.WriteString("-with-force")
+		sb.WriteString("-force")
+	}
+	if j.rmZeroSize() {
+		sb.WriteString("-rm-zero")
+	}
+	if _, ok := j.keepMisplaced(); ok {
+		sb.WriteString("-keep")
 	}
 	return sb.String()
 }
@@ -261,6 +274,15 @@ func (j *clnJ) String() string {
 func (j *clnJ) stop() { j.stopCh <- struct{}{} }
 
 func (j *clnJ) dont() time.Duration { return j.config.Space.DontCleanupTime.D() }
+
+func (j *clnJ) rmZeroSize() bool { return j.ini.Args.Flags&xact.FlagZeroSize != 0 }
+
+func (j *clnJ) keepMisplaced() (string, bool) {
+	if j.ini.Args.Flags&xact.FlagKeepMisplaced != 0 {
+		return "keeping", true
+	}
+	return "removing", false
+}
 
 func (j *clnJ) jog(providers []string) {
 	// globally
@@ -522,10 +544,6 @@ func (j *clnJ) visitPartial(fqn, uploadID string, lom *core.LOM) {
 	j.rmAnyBatch(flagRmOldWork)
 }
 
-const (
-	sparseOrphanLogCnt = 100
-)
-
 func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	lom.Lock(false)
 	id := j._getCompletedID(lom)
@@ -559,7 +577,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	// the chunk appears to be a) orphan and b) old enough (checked above)
 	// (sparse log; note total count log above)
 	j.norphan++
-	if j.norphan%sparseOrphanLogCnt == 1 {
+	if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(4, cos.SmoduleSpace) {
 		nlog.Warningln(j.String(), "removing orphan chunk:", uploadID, lom.Cname(), chunkFQN, j.norphan)
 	}
 	j.oldWork = append(j.oldWork, chunkFQN)
@@ -623,49 +641,54 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 
 	atime := lom.Atime()
-	if atime.Add(j.dont()).After(j.now) {
+	switch {
+	// too early atime-wise
+	case atime.Add(j.dont()).After(j.now):
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-cleanup", j.dont())
 		}
-		return
-	}
-	if lom.IsHRW() {
+	case lom.IsHRW():
+		// cleanup extra copies; rm zero size if requested
 		if lom.HasCopies() {
 			j.rmExtraCopies(lom)
 		}
-		if lom.Lsize() == 0 {
-			if j.ini.Args.Flags&xact.XrmZeroSize == xact.XrmZeroSize {
-				// remove in place
-				if ecode, err := core.T.DeleteObject(lom, false /*evict*/); err != nil {
-					nlog.Errorln("failed to remove zero size", lom.Cname(), "err: [", err, ecode, "]")
-				} else {
-					if lom.Bck().IsRemote() {
-						nlog.Warningln("removed zero size", lom.Cname(), "(both cluster and remote)")
-					} else {
-						nlog.Warningln("removed zero size", lom.Cname())
-					}
-					j.ini.StatsT.Inc(stats.CleanupStoreCount)
-				}
+		if lom.Lsize() == 0 && j.rmZeroSize() {
+			// remove in place
+			if err := lom.RemoveMain(); err != nil {
+				e := fmt.Errorf("%s rm zero-size %s: %v", j, lom, err)
+				xcln.AddErr(e, 0)
+			} else {
+				nlog.Warningln(j.String(), "removed zero-size", lom.Cname())
+				j.ini.StatsT.Inc(stats.CleanupStoreCount)
 			}
 		}
-		return
-	}
-	if lom.IsCopy() {
+	case lom.IsCopy():
 		// will be _visited_ separately (if not already)
-		return
-	}
-	if lom.ECEnabled() {
+	case lom.ECEnabled():
 		// misplaced EC
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaCT, "")
 		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, core.LOM2CT(lom, fs.ObjCT))
 			j.rmAnyBatch(flagRmMisplacedEC)
 		}
-	} else {
+	default:
 		// misplaced object
-		lom = lom.Clone()
-		j.misplaced.loms = append(j.misplaced.loms, lom)
-		j.rmAnyBatch(flagRmMisplacedLOMs)
+		j.nmisplc++
+		tag, keep := j.keepMisplaced()
+
+		// an unlikely corner case: taking precedence
+		if lom.Lsize() == 0 && j.rmZeroSize() {
+			tag, keep = "removing", false
+		}
+
+		if j.nmisplc%sparseLogCnt == 1 || cmn.Rom.FastV(4, cos.SmoduleSpace) {
+			nlog.Warningln(j.String(), tag, "misplaced object:", lom.Cname(), j.nmisplc)
+		}
+		if !keep {
+			lom = lom.Clone()
+			j.misplaced.loms = append(j.misplaced.loms, lom)
+			j.rmAnyBatch(flagRmMisplacedLOMs)
+		}
 	}
 }
 
