@@ -1321,6 +1321,8 @@ func (c *LRUConf) Validate() (err error) {
 	return
 }
 
+func (c *LRUConf) ValidateAsProps(...any) error { return c.Validate() }
+
 ///////////////
 // CksumConf //
 ///////////////

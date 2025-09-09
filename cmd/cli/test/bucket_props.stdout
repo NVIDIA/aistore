@@ -29,6 +29,7 @@ present	 	 yes
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
 PROPERTY                    VALUE
+lru.batch_size              32768
 lru.capacity_upd_time       10m
 lru.dont_evict_time         2h0m
 lru.enabled                 false

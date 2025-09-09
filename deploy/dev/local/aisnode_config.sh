@@ -77,6 +77,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"lru": {
 		"dont_evict_time":   "120m",
 		"capacity_upd_time": "10m",
+		"batch_size":        32768,
 		"enabled":           true
 	},
 	"disk":{

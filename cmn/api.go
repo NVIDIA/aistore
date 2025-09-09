@@ -239,7 +239,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 
 	// run assorted props validators
 	var softErr error
-	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy, &bp.RateLimit, &bp.Chunks} {
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy, &bp.RateLimit, &bp.Chunks, &bp.LRU} {
 		var err error
 		switch {
 		case pv == &bp.EC:
