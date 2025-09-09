@@ -216,7 +216,7 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 		return nil, os.NewSyscallError(getxattr, syscall.ENOENT)
 	}
 	if size < prefLen {
-		return nil, fmt.Errorf("%s: too short (%d)", badLmeta, size)
+		return nil, cmn.NewErrLmetaCorrupted(fmt.Errorf("%s: too short (%d)", badLmeta, size))
 	}
 
 	switch metaver := buf[0]; metaver {
@@ -234,7 +234,7 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 			md.lid = md.lid.setbid(lom.Bprops().BID)
 		}
 	default:
-		return nil, fmt.Errorf("%s: unknown LOM meta-version %d", badLmeta, metaver)
+		return nil, cmn.NewErrLmetaCorrupted(fmt.Errorf("%s: unknown LOM meta-version %d", badLmeta, metaver))
 	}
 
 	_mdsize(size, mdSize)

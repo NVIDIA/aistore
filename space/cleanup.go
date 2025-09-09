@@ -600,7 +600,9 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		}
 		return
 	}
-	// handle load err
+	// force md loading from disk
+	lom.Uncache()
+	// and load
 	if errLoad := lom.Load(false /*cache it*/, false /*locked*/); errLoad != nil {
 		if cmn.IsErrLmetaCorrupted(errLoad) {
 			if err := lom.RemoveMain(); err != nil {
@@ -620,8 +622,6 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		return
 	}
 
-	// TODO: switch
-	// too early; NOTE: default dont-cleanup = 2h
 	atime := lom.Atime()
 	if atime.Add(j.dont()).After(j.now) {
 		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
