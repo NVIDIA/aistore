@@ -443,6 +443,115 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(len(deletedFilesAfter)).To(Equal(0))
 		})
 	})
+
+	It("removes old orphan chunk with no partial or completed manifest", func() {
+		objName := "cleanup/orphan-no-manifest.bin"
+		lom := &core.LOM{ObjName: objName}
+		err := lom.InitBck(&bck)
+		Expect(err).NotTo(HaveOccurred())
+
+		// start a valid mpu session (auto-generated id)
+		u, err := core.NewUfest("", lom, false /*must-exist*/)
+		Expect(err).NotTo(HaveOccurred())
+
+		// create a real chunk
+		chunk, err := u.NewChunk(1, lom)
+		Expect(err).NotTo(HaveOccurred())
+		createTestFile(chunk.Path(), 64*cos.KiB) // any non-zero size
+
+		// age
+		old := time.Now().Add(-3 * time.Hour)
+		Expect(os.Chtimes(chunk.Path(), old, old)).NotTo(HaveOccurred())
+
+		// run cleanup
+		space.RunCleanup(ini)
+
+		// expect the orphan chunk to be removed
+		Expect(chunk.Path()).NotTo(BeAnExistingFile())
+	})
+
+	It("removes stray chunk with mismatched uploadID while keeping completed manifest (HRW-correct)", func() {
+		objName := "cleanup/completed-vs-stray.bin"
+		lom := core.AllocLOM(objName)
+		Expect(lom.InitBck(&bck)).NotTo(HaveOccurred())
+		defer core.FreeLOM(lom)
+
+		u2, err := core.NewUfest("", lom, false /*mustExist*/)
+		Expect(err).NotTo(HaveOccurred())
+
+		const (
+			chunkSize = 64 * cos.KiB
+			numChunks = 3
+		)
+		for part := 1; part <= numChunks; part++ {
+			ch, err := u2.NewChunk(part, lom)
+			Expect(err).NotTo(HaveOccurred())
+			createTestChunk(ch.Path(), chunkSize, nil)
+			Expect(u2.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
+		}
+		err = lom.CompleteUfest(u2)
+		Expect(err).NotTo(HaveOccurred())
+
+		uu, err := core.NewUfest("", lom, true /* must-exist */)
+		Expect(err).NotTo(HaveOccurred())
+
+		lom.Lock(false)
+		err = uu.LoadCompleted(lom)
+		lom.Unlock(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(uu.ID()).To(Equal(u2.ID())) // the completed ID should equal the one we just wrote
+
+		// create a stray chunk under a different uploadid (u1) ---
+		u1, err := core.NewUfest("", lom, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(u1.ID()).NotTo(Equal(u2.ID()))
+
+		stray, err := u1.NewChunk(1, lom)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cos.CreateDir(filepath.Dir(stray.Path()))).NotTo(HaveOccurred())
+		createTestChunk(stray.Path(), chunkSize, nil)
+
+		// make the stray chunk legitimate/discoverable
+		Expect(u1.Add(stray, chunkSize, 1)).NotTo(HaveOccurred())
+		// persist a partial for u1; current cleanup removes it too
+		err = u1.StorePartial(lom, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		// partial exists pre-cleanup
+		partialFQN := fs.CSM.Gen(lom, fs.ChunkMetaCT, u1.ID())
+		Expect(partialFQN).To(BeAnExistingFile())
+
+		// age the stray chunk well beyond dont_cleanup_time
+		old := time.Now().Add(-3 * time.Hour)
+		_ = os.Chtimes(stray.Path(), old, old)
+		_ = os.Chtimes(partialFQN, old, old)
+
+		// run cleanup
+		// TODO: try to initialize stats // before := ini.StatsT.Get(stats.CleanupStoreCount)
+		space.RunCleanup(ini)
+		// after := ini.StatsT.Get(stats.CleanupStoreCount)
+		// Expect(after - before).To(Equal(int64(2)))
+
+		// assert: stray chunk is removed
+		Expect(stray.Path()).NotTo(BeAnExistingFile())
+
+		// assert: partial manifest is removed
+		Expect(partialFQN).NotTo(BeAnExistingFile())
+
+		// completed must exist
+		uu2, err := core.NewUfest("", lom, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		lom.Lock(false)
+		err = uu2.LoadCompleted(lom)
+		lom.Unlock(false)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(uu2.ID()).To(Equal(u2.ID()))
+	})
+
 })
 
 //
@@ -510,4 +619,21 @@ func findOtherMpath(mi *fs.Mountpath) *fs.Mountpath {
 	}
 	Fail("No other mountpath found")
 	return nil
+}
+
+func createTestChunk(fqn string, size int, xxhash io.Writer) {
+	_ = os.Remove(fqn)
+	testFile, err := cos.CreateFile(fqn)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	if size > 0 {
+		mw := cos.IniWriterMulti(testFile, xxhash)
+		reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+		_, err := io.Copy(mw, reader)
+		_ = testFile.Close()
+
+		Expect(err).ShouldNot(HaveOccurred())
+	} else {
+		_ = testFile.Close()
+	}
 }
