@@ -44,6 +44,21 @@ func setBucket() (bck cmn.Bck, err error) {
 	return bck, nil
 }
 
+func setIOCtxChunksConf() (*ioCtxChunksConf, error) {
+	ioctx := os.Getenv("IOCTX_NUM_CHUNKS")
+	if ioctx == "" {
+		return nil, nil
+	}
+	n, err := strconv.Atoi(ioctx)
+	if err != nil || n <= 0 {
+		return nil, fmt.Errorf("failed to parse 'IOCTX_NUM_CHUNKS' env variable (must be positive integer), err: %v", err)
+	}
+	return &ioCtxChunksConf{
+		numChunks: n,
+		multipart: true,
+	}, nil
+}
+
 func waitForCluster() (primaryURL string, err error) {
 	const (
 		retryCount = 30
@@ -114,6 +129,11 @@ func TestMain(m *testing.M) {
 		primaryURL, err = waitForCluster()
 	}
 
+	if err != nil {
+		goto fail
+	}
+
+	cliIOCtxChunksConf, err = setIOCtxChunksConf()
 	if err != nil {
 		goto fail
 	}

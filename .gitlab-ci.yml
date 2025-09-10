@@ -401,6 +401,21 @@ test:short:minimal:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt $FS_CNT --deployment all
     - NUM_PROXY=1 NUM_TARGET=1 make test-short
 
+test:short:chunks:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://test"
+    IOCTX_NUM_CHUNKS: "4"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*chunks.*/'
+    - !reference [.test_short_skip_scheduled_template, rules]
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - make test-short
+
 test:short:s3-compat:
   <<: *test_short_def
   tags:
@@ -654,6 +669,21 @@ test:long:ishard:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
+
+test:long:chunks:
+  <<: *test_long_def
+  variables:
+    BUCKET: "ais://test"
+    IOCTX_NUM_CHUNKS: "4"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*chunks.*/'
+    - !reference [.test_long_skip_scheduled_template, rules]
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
+    - make test-long
 
 #
 # Kubernetes stages

@@ -30,7 +30,7 @@ run_tests() {
   # NOTE: cannot run tests in parallel (e.g. `-parallel 4`) because of ginkgo v2
   # ("Ginkgo detected configuration issues...")
   failed_tests=$(
-    BUCKET="${BUCKET}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
+    BUCKET="${BUCKET}" IOCTX_CHUNK_SIZE="${IOCTX_CHUNK_SIZE}" AIS_ENDPOINT="${AIS_ENDPOINT}" \
       go test -v -p 1 -tags debug -count 1 ${timeout} ${short} ${shuffle} ${re} "${tests_dir}" 2>&1 \
     | tee "${LOG_FILE}" | tee -a /dev/stderr \
     | grep -ae "^---FAIL: Bench\|^--- FAIL: Test\|^FAIL[[:space:]]github.com/NVIDIA/.*$"; \

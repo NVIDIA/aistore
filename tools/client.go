@@ -406,10 +406,6 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 		workerCnt = args.WorkerCnt
 	}
 	workerCnt = min(workerCnt, args.ObjCnt)
-	if args.MultipartChunkSize > 0 {
-		numParts := int(args.ObjSize+args.MultipartChunkSize-1) / int(args.MultipartChunkSize)
-		workerCnt /= numParts // delegate workers to upload parts
-	}
 
 	for i := range args.ObjCnt {
 		if args.Ordered {

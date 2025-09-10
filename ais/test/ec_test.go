@@ -2217,6 +2217,11 @@ func TestECBucketEncode(t *testing.T) {
 			t:        t,
 			num:      150,
 			proxyURL: proxyURL,
+			fileSize: cos.KiB,
+			chunksConf: &ioCtxChunksConf{
+				multipart: true,
+				numChunks: 4, // will create 4 chunks
+			},
 		}
 	)
 
@@ -2264,6 +2269,15 @@ func TestECBucketEncode(t *testing.T) {
 		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck.String(), m.num, len(lst.Entries))
 	}
 	tlog.Logf("Object counts after EC finishes: %d (%d)\n", len(lst.Entries), (parityCnt+1)*m.num)
+
+	// Validate object content after EC encoding
+	tlog.Logf("Validating object content after EC encoding\n")
+	m.gets(nil /*api.GetArgs*/, true /*withValidation*/)
+	if m.numGetErrs.Load() > 0 {
+		t.Fatalf("Content validation failed: %d GET errors after EC encoding", m.numGetErrs.Load())
+	}
+	tlog.Logf("Content validation successful: all %d objects verified\n", m.num)
+
 	//
 	// TODO: support querying bucket for total number of entries with respect to mirroring and EC
 	//
