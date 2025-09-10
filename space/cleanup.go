@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -38,7 +39,8 @@ const (
 	flagRmOldWork = 1 << iota
 	flagRmMisplacedLOMs
 	flagRmMisplacedEC
-	flagRmAll = flagRmOldWork | flagRmMisplacedLOMs | flagRmMisplacedEC
+	flagRmInvalid
+	flagRmAll = flagRmOldWork | flagRmMisplacedLOMs | flagRmMisplacedEC | flagRmInvalid
 )
 
 const (
@@ -76,6 +78,7 @@ type (
 	clnJ struct {
 		// runtime
 		oldWork   []string
+		invalid   []string
 		misplaced struct {
 			loms []*core.LOM
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
@@ -87,6 +90,7 @@ type (
 		norphan int64
 		nmisplc int64
 		// init-time
+		name    string
 		p       *clnP
 		ini     *IniCln
 		stopCh  chan struct{}
@@ -159,8 +163,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 	now := time.Now()
 	for mpath, mi := range avail {
-		joggers[mpath] = &clnJ{
+		j := &clnJ{
 			oldWork: make([]string, 0, 64),
+			invalid: make([]string, 0, 64),
 			stopCh:  make(chan struct{}, 1),
 			mi:      mi,
 			config:  config,
@@ -168,6 +173,8 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 			p:       parent,
 			now:     now,
 		}
+		j.name = j._str()
+		joggers[mpath] = j
 		joggers[mpath].misplaced.loms = make([]*core.LOM, 0, 64)
 		joggers[mpath].misplaced.ec = make([]*core.CT, 0, 64)
 	}
@@ -253,21 +260,24 @@ func (p *clnP) rmMisplaced() bool {
 // clnJ //
 //////////
 
-func (j *clnJ) String() string {
+func (j *clnJ) String() string { return j.name }
+
+func (j *clnJ) _str() string {
 	var sb strings.Builder
 	sb.Grow(128)
 	sb.WriteString(j.ini.Xaction.Name())
-	sb.WriteString(": jog-")
-	sb.WriteString(j.mi.String())
+	sb.WriteString("-j[")
+	sb.WriteString(j.mi.Path)
 	if j.ini.Args.Force {
-		sb.WriteString("-force")
+		sb.WriteString("--f") // force
 	}
 	if j.rmZeroSize() {
-		sb.WriteString("-rm-zero")
+		sb.WriteString("--z") // rm zero-size
 	}
 	if _, ok := j.keepMisplaced(); ok {
-		sb.WriteString("-keep")
+		sb.WriteString("--k") // keep misplaced
 	}
+	sb.WriteByte(']')
 	return sb.String()
 }
 
@@ -296,6 +306,7 @@ func (j *clnJ) jog(providers []string) {
 	}
 
 	j.oldWork = slices.Clip(j.oldWork)
+	j.invalid = slices.Clip(j.invalid)
 	j.misplaced.loms = slices.Clip(j.misplaced.loms)
 	j.misplaced.ec = slices.Clip(j.misplaced.ec)
 
@@ -382,7 +393,6 @@ func (j *clnJ) jogBck() {
 }
 
 func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
-	xcln := j.ini.Xaction
 	if de.IsDir() {
 		j.rmEmptyDir(fqn)
 		return nil
@@ -399,12 +409,17 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 	}
 
 	var parsed fs.ParsedFQN
-	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
-		xcln.AddErr(err, 0)
+	if err := parsed.Init(fqn); err != nil {
+		j.rmInvalidFQN(fqn, "", err)
 		return nil
 	}
 
-	debug.Assertf(parsed.Bck.Equal(&j.bck), "unexpected bucket mismatch: %s vs %s", parsed.Bck.String(), j.bck.String())
+	if !parsed.Bck.Equal(&j.bck) {
+		err := fmt.Errorf("%s: unexpected bucket mismatch: [%q, %s, %s]", j, fqn, parsed.Bck.String(), j.bck.String())
+		debug.AssertNoErr(err)
+		j.ini.Xaction.AddErr(err, 0)
+		return nil
+	}
 
 	if parsed.ContentType != fs.ObjCT {
 		j.visitCT(&parsed, fqn)
@@ -424,14 +439,35 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
+func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
+	if cmn.Rom.Features().IsSet(feat.KeepUnknownFQN) {
+		return
+	}
+
+	var e error
+	if err != nil {
+		e = fmt.Errorf("invalid fqn %q: %v", fqn, err)
+	} else {
+		e = fmt.Errorf("invalid %q fqn: %q", ctType, fqn)
+	}
+	xcln := j.ini.Xaction
+	xcln.AddErr(e)
+
+	nlog.Warningln(j.String(), "rm", e)
+	j.invalid = append(j.invalid, fqn)
+	j.rmAnyBatch(flagRmInvalid)
+}
+
 func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkCT:
 		_, ubase := filepath.Split(fqn)
 		contentResolver := fs.CSM.Resolver(fs.WorkCT)
 		contentInfo := contentResolver.ParseUbase(ubase)
-		// workfiles: remove old or do nothing
-		if contentInfo.Ok && contentInfo.Old {
+
+		if !contentInfo.Ok {
+			j.rmInvalidFQN(fqn, "work", nil)
+		} else if contentInfo.Old {
 			j.oldWork = append(j.oldWork, fqn)
 			j.rmAnyBatch(flagRmOldWork)
 		}
@@ -489,8 +525,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	case fs.ChunkCT:
 		contentInfo := fs.CSM.Resolver(fs.ChunkCT).ParseUbase(parsedFQN.ObjName)
 		if !contentInfo.Ok {
-			j.oldWork = append(j.oldWork, fqn)
-			j.rmAnyBatch(flagRmOldWork)
+			j.rmInvalidFQN(fqn, "chunk", nil)
 			return
 		}
 		uploadID := contentInfo.Extras[0]
@@ -502,20 +537,15 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	case fs.ChunkMetaCT:
 		contentInfo := fs.CSM.Resolver(fs.ChunkMetaCT).ParseUbase(parsedFQN.ObjName)
 		if !contentInfo.Ok {
-			j.oldWork = append(j.oldWork, fqn)
-			j.rmAnyBatch(flagRmOldWork)
+			j.rmInvalidFQN(fqn, "chunk-manifest", nil)
 			return
 		}
-		lom := core.AllocLOM(contentInfo.Base)
-
-		// TODO -- FIXME: completed manifests must be handled by visitObj()
-
-		if j.initCTLOM(lom, fqn) == nil {
-			if len(contentInfo.Extras) > 0 {
-				j.visitPartial(fqn, contentInfo.Extras[0] /*uploadID*/, lom)
-			}
+		if len(contentInfo.Extras) > 0 {
+			// old partial manifest
+			nlog.Warningln(j.String(), "rm old partial:", fqn, "[", contentInfo.Extras[0], j.bck.Cname(contentInfo.Base), "]")
+			j.oldWork = append(j.oldWork, fqn)
+			j.rmAnyBatch(flagRmOldWork)
 		}
-		core.FreeLOM(lom)
 
 	default:
 		debug.Assert(false, "Unsupported content type: ", parsedFQN.ContentType)
@@ -538,47 +568,42 @@ func (j *clnJ) initCTLOM(lom *core.LOM, fqn string) error {
 	return err
 }
 
-func (j *clnJ) visitPartial(fqn, uploadID string, lom *core.LOM) {
-	nlog.Warningln(j.String(), "removing old partial manifest:", uploadID, lom.Cname(), fqn)
-	j.oldWork = append(j.oldWork, fqn)
-	j.rmAnyBatch(flagRmOldWork)
-}
-
 func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	lom.Lock(false)
-	id := j._getCompletedID(lom)
+	completedID := j._getCompletedID(lom)
 	lom.Unlock(false)
 
-	if id != "" {
-		if id != uploadID {
-			if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-				nlog.Warningln(j.String(), "chunk ID vs completed manifest ID:", id, uploadID, lom.Cname())
+	// 1. have completed
+	if completedID != "" {
+		if completedID != uploadID {
+			j.norphan++
+			if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(5, cos.SmoduleSpace) {
+				nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "vs completed: [", completedID, lom.Cname(), j.norphan, "]")
 			}
-			// have completed manifest, can remove this stray chunk
 			j.oldWork = append(j.oldWork, chunkFQN)
 			j.rmAnyBatch(flagRmOldWork)
 		}
 		return
 	}
 
-	// partial manifest:
-	// - resolve and check if exists;
-	// - if it does: check its age and possibly remove the chunk
+	j.norphan++
+
+	// 2. resolve partial; if exists check its age
 	fqn := fs.CSM.Gen(lom, fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
 	if finfo, err := os.Lstat(fqn); err == nil {
 		if finfo.ModTime().Add(j.dont()).After(j.now) {
 			return
 		}
-		nlog.Warningln(j.String(), "removing old partial manifest:", uploadID, lom.Cname(), fqn)
+		if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(5, cos.SmoduleSpace) {
+			nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "from partial: [", fqn, lom.Cname(), j.norphan, "]")
+		}
 		j.oldWork = append(j.oldWork, chunkFQN)
 		j.rmAnyBatch(flagRmOldWork)
 	}
 
-	// the chunk appears to be a) orphan and b) old enough (checked above)
-	// (sparse log; note total count log above)
-	j.norphan++
+	// 3. no partial and no completed: the chunk appears to be orphan and old
 	if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(4, cos.SmoduleSpace) {
-		nlog.Warningln(j.String(), "removing orphan chunk:", uploadID, lom.Cname(), chunkFQN, j.norphan)
+		nlog.Warningln(j.String(), "orphan chunk w/ no manifests", chunkFQN, j.norphan)
 	}
 	j.oldWork = append(j.oldWork, chunkFQN)
 	j.rmAnyBatch(flagRmOldWork)
@@ -614,7 +639,8 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			nlog.Warningln(j.String(), "bucket gone - aborting:", err)
 			xcln.Abort(err)
 		} else {
-			nlog.Errorln(j.String(), "unexpected object fqn", fqn, err)
+			err := fmt.Errorf("%s: unexpected object fqn %q: %v", j, fqn, err)
+			xcln.AddErr(err, 0)
 		}
 		return
 	}
@@ -713,6 +739,10 @@ func (j *clnJ) rmAnyBatch(specifier int) {
 		if int64(len(j.misplaced.ec)) < batch {
 			return
 		}
+	case flagRmInvalid:
+		if int64(len(j.invalid)) < batch {
+			return
+		}
 	default:
 		debug.Assert(false, "invalid rm-batch specifier: ", specifier)
 		return
@@ -797,13 +827,24 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 	case nil:
 		// do nothing
 	case io.EOF:
-		// note: removing a child may render its parent empty as well, but we do not recurs
 		debug.Assert(len(names) == 0, names)
-		err := syscall.Rmdir(fqn)
-		debug.AssertNoErr(err)
-		if cmn.Rom.FastV(4, cos.SmoduleSpace) {
-			nlog.Infoln(j.String(), "rm empty dir:", fqn)
+
+		// note: removing a child may render its parent empty as well, but we do not recurs
+		if err := syscall.Rmdir(fqn); err == nil {
+			if cmn.Rom.FastV(4, cos.SmoduleSpace) {
+				nlog.Infoln(j.String(), "rm empty dir:", fqn)
+			}
+		} else if errno, ok := err.(syscall.Errno); ok {
+			switch errno {
+			case syscall.ENOENT, syscall.ENOTEMPTY, syscall.EBUSY, syscall.EEXIST, syscall.ENOTDIR:
+				// benign
+			default:
+				xcln.AddErr(fmt.Errorf("%s rmdir %q: %v", j, fqn, err), 0) // consider FSHC
+			}
+		} else {
+			xcln.AddErr(fmt.Errorf("%s rmdir %q: %v", j, fqn, err), 0) // ditto FSHC
 		}
+
 	default:
 		nlog.Warningf("%s read dir %q: %v", j, fqn, ern)
 	}
@@ -812,12 +853,10 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 func (j *clnJ) rmLeftovers(specifier int) {
 	var (
 		nfiles, nbytes int64
-		n              int64
 		xcln           = j.ini.Xaction
 	)
-	if cmn.Rom.FastV(4, cos.SmoduleSpace) {
-		nlog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
-	}
+	old, ml, me, inv := len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec), len(j.invalid)
+	nlog.Infoln(j.String(), "[ old:", old, "misplaced obj:", ml, "misplaced ec:", me, "invalid:", inv, "]")
 
 	// 1. rm older work
 	if specifier&flagRmOldWork != 0 {
@@ -825,13 +864,14 @@ func (j *clnJ) rmLeftovers(specifier int) {
 			finfo, erw := os.Lstat(workfqn)
 			if erw == nil {
 				if err := cos.RemoveFile(workfqn); err != nil {
-					e := fmt.Errorf("%s: rm old work %q: %v", j, workfqn, err)
+					e := fmt.Errorf("%s: rm old %q: %v", j, workfqn, err)
 					xcln.AddErr(e)
 				} else {
 					nfiles++
 					nbytes += finfo.Size()
+					j._throttle(nfiles)
 					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
-						nlog.Infof("%s: rm old work %q, size=%d", j, workfqn, finfo.Size())
+						nlog.Infoln(j.String(), "rm old", workfqn, "size", finfo.Size())
 					}
 				}
 			}
@@ -842,7 +882,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 
 	// 2. rm misplaced
 	if specifier&flagRmMisplacedLOMs != 0 {
-		if len(j.misplaced.loms) > 0 && j.p.rmMisplaced() {
+		if len(j.misplaced.loms) > 0 && j.p.rmMisplaced() /*note: caution*/ {
 			for _, mlom := range j.misplaced.loms {
 				var (
 					err     error
@@ -868,19 +908,13 @@ func (j *clnJ) rmLeftovers(specifier int) {
 
 				if removed {
 					nfiles++
-					nbytes += mlom.Lsize(true /*not loaded*/)
+					size := mlom.Lsize(true /*not loaded*/)
+					nbytes += size
 					if cmn.Rom.FastV(4, cos.SmoduleSpace) {
-						nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.Lsize(true /*not loaded*/))
+						nlog.Infoln(j.String(), "rm misplaced", mlom.String(), "size", size)
 					}
 
-					// throttle
-					n++
-					if fs.IsThrottleDflt(n) {
-						if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
-							time.Sleep(fs.Throttle10ms)
-						}
-					}
-
+					j._throttle(nfiles)
 					if j.done() {
 						return
 					}
@@ -902,14 +936,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 				nfiles++
 				nbytes += ct.Lsize()
 
-				// throttle
-				n++
-				if fs.IsThrottleDflt(n) {
-					if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
-						time.Sleep(fs.Throttle10ms)
-					}
-				}
-
+				j._throttle(nfiles)
 				if j.done() {
 					return
 				}
@@ -919,9 +946,39 @@ func (j *clnJ) rmLeftovers(specifier int) {
 		j.now = time.Now()
 	}
 
+	// 4. rm invalid FQNs - unrecognized or malformed content types
+	if specifier&flagRmInvalid != 0 {
+		for _, fqn := range j.invalid {
+			finfo, erw := os.Lstat(fqn)
+			if erw == nil {
+				if err := cos.RemoveFile(fqn); err != nil {
+					e := fmt.Errorf("%s: rm invalid %q: %v", j, fqn, err)
+					xcln.AddErr(e)
+				} else {
+					nfiles++
+					nbytes += finfo.Size()
+					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+						nlog.Infoln(j.String(), "rm invalid", fqn, "size", finfo.Size())
+					}
+					j._throttle(nfiles)
+				}
+			}
+		}
+		j.invalid = j.invalid[:0]
+		j.now = time.Now()
+	}
+
 	j.ini.StatsT.Add(stats.CleanupStoreSize, nbytes)
 	j.ini.StatsT.Add(stats.CleanupStoreCount, nfiles)
 	xcln.ObjsAdd(int(nfiles), nbytes)
+}
+
+func (*clnJ) _throttle(n int64) {
+	if fs.IsThrottleDflt(n) {
+		if pct, _, _ := fs.ThrottlePct(); pct >= fs.MaxThrottlePct {
+			time.Sleep(fs.Throttle10ms)
+		}
+	}
 }
 
 func (j *clnJ) done() bool {

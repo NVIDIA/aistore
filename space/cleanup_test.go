@@ -396,6 +396,19 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			// Recent chunk should be preserved
 			Expect(chunkFQN).To(BeAnExistingFile())
 		})
+
+		It("should keep finalized manifest", func() {
+			avail := fs.GetAvail()
+			mpath := avail[mpaths[1]]
+			fqnObj := mpath.MakePathFQN(&bck, fs.ObjCT, "largefile")
+			createTestLOM(fqnObj, 1234, time.Now().Add(-3*time.Hour))
+			ufest := filepath.Join(mpath.MakePathCT(&bck, fs.ChunkMetaCT), "largefile")
+			createTestFile(ufest, 900)
+			os.Chtimes(ufest, time.Now().Add(-3*time.Hour), time.Now().Add(-3*time.Hour))
+
+			space.RunCleanup(ini)
+			Expect(ufest).To(BeAnExistingFile()) // finalized manifest must stay
+		})
 	})
 
 	Describe("Deleted content cleanup", func() {

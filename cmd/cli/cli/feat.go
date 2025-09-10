@@ -49,6 +49,7 @@ var clusterFeatDesc = [...]string{
 	"include (bucket, xaction) Prometheus variable labels with every GET and PUT transaction",
 	"system-reserved (do not set: the flag may be redefined or removed at any time)",
 	"resume interrupted multipart uploads from persisted partial manifests",
+	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 
 	// "none" ====================
 }

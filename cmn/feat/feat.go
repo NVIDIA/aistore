@@ -45,6 +45,7 @@ const (
 	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET, PUT, and HEAD transaction
 	SystemReserved            // reserved; do not set: the flag may be redefined or removed at any time
 	ResumeInterruptedMPU      // resume interrupted multipart uploads from persisted partial manifests
+	KeepUnknownFQN            // do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
 )
 
 var Cluster = [...]string{
@@ -70,6 +71,7 @@ var Cluster = [...]string{
 	"Enable-Detailed-Prom-Metrics",
 	"System-Reserved",
 	"Resume-Interrupted-MPU",
+	"Keep-Unknown-FQN",
 
 	// "none" ====================
 }

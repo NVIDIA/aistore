@@ -130,8 +130,16 @@ var (
 		waitJobXactFinishedFlag,
 	}
 	cleanupCmd = cli.Command{
-		Name:         cmdStgCleanup,
-		Usage:        "Remove deleted objects and old/obsolete workfiles; remove misplaced objects; optionally, remove zero size objects",
+		Name: cmdStgCleanup,
+		Usage: "Remove:\n" +
+			indent4 + "\t- deleted objects and buckets;\n" +
+			indent4 + "\t- old/obsolete workfiles;\n" +
+			indent4 + "\t- misplaced objects (see command line option below);\n" +
+			indent4 + "\t- orphan chunks and partial chunk manifests;\n" +
+			indent4 + "\t- optionally, remove zero-size objects as well.\n" +
+			"\n" +
+			indent1 + "\tBy default, any stored content with invalid or unrecognized FQN is treated as obsolete and is removed.\n" +
+			indent1 + "\tTo preserve, use the cluster feature flag 'Keep-Unknown-FQN'.",
 		ArgsUsage:    lsAnyCommandArgument,
 		Flags:        sortFlags(cleanupFlags),
 		Action:       cleanupStorageHandler,
