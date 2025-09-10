@@ -2197,6 +2197,128 @@ func TestMultipartUploadAbort(t *testing.T) {
 	tlog.Logfln("multipart upload abort test completed successfully")
 }
 
+func TestMultipartUploadAndCopyBucket(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+		dstBck = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+
+		// Create 30 multipart objects
+		numObjects = 30
+
+		// Test data to upload in 3 parts per object
+		part1Data = []byte("This is the first part of the multipart upload test. ")
+		part2Data = []byte("This is the second part containing more test data. ")
+		part3Data = []byte("This is the final third part to complete the upload.")
+
+		// Complete expected content per object
+		expectedContent = append(append(part1Data, part2Data...), part3Data...)
+
+		// Track all created objects
+		createdObjects = make([]string, numObjects)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tlog.Logfln("Creating %d multipart objects in bucket: %s", numObjects, bck.Name)
+
+	// Step 1: Create 30 multipart objects
+	for i := range numObjects {
+		objName := fmt.Sprintf("test-multipart-object-%d", i)
+		createdObjects[i] = objName
+
+		// Create multipart upload
+		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, uploadID != "", "upload ID should not be empty for object %d", i)
+
+		// Upload three parts
+		testParts := []struct {
+			partNum int
+			data    []byte
+		}{
+			{1, part1Data},
+			{2, part2Data},
+			{3, part3Data},
+		}
+
+		var partNumbers []int
+		for _, part := range testParts {
+			putPartArgs := &api.PutPartArgs{
+				PutArgs: api.PutArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					ObjName:    objName,
+					Reader:     readers.NewBytes(part.data),
+					Size:       uint64(len(part.data)),
+				},
+				UploadID:   uploadID,
+				PartNumber: part.partNum,
+			}
+
+			err = api.UploadPart(putPartArgs)
+			tassert.CheckFatal(t, err)
+
+			partNumbers = append(partNumbers, part.partNum)
+		}
+
+		// Complete multipart upload
+		err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+		tassert.CheckFatal(t, err)
+	}
+
+	tlog.Logfln("Successfully created %d multipart objects", numObjects)
+
+	// Step 2: Copy bucket
+	tlog.Logfln("Copying bucket with %d chunked files: %s -> %s", numObjects, bck.Name, dstBck.Name)
+	xid, err := api.CopyBucket(baseParams, bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{}, ContinueOnError: true})
+	tassert.CheckFatal(t, err)
+
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
+
+	// Wait for copy to complete
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: 3 * time.Minute}
+	_, err = api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+
+	// Step 3: Verify all objects were copied correctly
+	tlog.Logfln("Verifying all %d copied objects in destination bucket", numObjects)
+
+	expectedSize := int64(len(expectedContent))
+	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+
+	for i, objName := range createdObjects {
+		// Check object exists in destination
+		objAttrs, err := api.HeadObject(baseParams, dstBck, objName, hargs)
+		tassert.CheckFatal(t, err)
+
+		// Verify size
+		tassert.Errorf(t, objAttrs.Size == expectedSize,
+			"object %d size mismatch: expected %d, got %d", i, expectedSize, objAttrs.Size)
+
+		// Download and verify content
+		writer := bytes.NewBuffer(nil)
+		getArgs := api.GetArgs{Writer: writer}
+		_, err = api.GetObject(baseParams, dstBck, objName, &getArgs)
+		tassert.CheckFatal(t, err)
+
+		downloadedContent := writer.Bytes()
+		tassert.Errorf(t, bytes.Equal(downloadedContent, expectedContent),
+			"object %d content mismatch", i)
+	}
+
+	tlog.Logfln("SUCCESS: All %d multipart chunked objects copied correctly", numObjects)
+}
+
 func TestOperationsWithRanges(t *testing.T) {
 	const (
 		objCnt  = 50 // NOTE: must by a multiple of 10

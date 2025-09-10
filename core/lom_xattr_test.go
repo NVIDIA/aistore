@@ -7,6 +7,7 @@ package core_test
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -235,6 +236,77 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
 				Expect(newLom.GetCustomMD()).To(HaveLen(3))
 				Expect(lom.GetCustomMD()).To(BeEquivalentTo(newLom.GetCustomMD()))
+			})
+
+			It("should copy chunked object with meta correctly", func() {
+				// Create chunked object similar to cached object test but with chunks
+				lom := createChunkedLOM(cachedFQN, 2)
+				lom.Lock(true)
+				defer lom.Unlock(true)
+
+				lom.SetVersion("chunked_version")
+				lom.SetCustomMD(cos.StrKVs{
+					cmn.SourceObjMD: apc.GCP,
+					cmn.ETag:        "chunked_etag",
+				})
+
+				Expect(persist(lom)).NotTo(HaveOccurred())
+				lom.UncacheUnless()
+
+				dst := newBasicLom(cachedFQN + "-chunked-copy")
+				dst.Lock(true)
+				defer dst.Unlock(true)
+
+				// Copy the chunked object
+				buf := make([]byte, cos.KiB)
+				newLom, err := lom.Copy2FQN(dst.FQN, buf)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify copied object
+				Expect(newLom.IsChunked()).To(BeTrue())
+				Expect(newLom.Load(false, false)).NotTo(HaveOccurred())
+				Expect(lom.Version()).To(BeEquivalentTo(newLom.Version()))
+				Expect(newLom.GetCustomMD()).To(HaveLen(2))
+				Expect(lom.GetCustomMD()).To(BeEquivalentTo(newLom.GetCustomMD()))
+
+				// Verify chunks were copied correctly
+				srcUfest, err := core.NewUfest("", lom, true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(srcUfest.LoadCompleted(lom)).NotTo(HaveOccurred())
+
+				dstUfest, err := core.NewUfest("", newLom, true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dstUfest.LoadCompleted(newLom)).NotTo(HaveOccurred())
+
+				Expect(srcUfest.Count()).To(Equal(dstUfest.Count()))
+
+				// Verify individual chunks were copied correctly
+				for i := 1; i <= srcUfest.Count(); i++ {
+					srcChunk := srcUfest.GetChunk(i, false)
+					dstChunk := dstUfest.GetChunk(i, false)
+					Expect(srcChunk).NotTo(BeNil())
+					Expect(dstChunk).NotTo(BeNil())
+					Expect(srcChunk.Path()).To(BeARegularFile())
+					Expect(dstChunk.Path()).To(BeARegularFile())
+				}
+
+				// Final validation: Compare full object content using lom.Open() readers
+				srcReader, err := lom.Open()
+				Expect(err).NotTo(HaveOccurred())
+				defer srcReader.Close()
+
+				dstReader, err := newLom.Open()
+				Expect(err).NotTo(HaveOccurred())
+				defer dstReader.Close()
+
+				// Read and compare entire content
+				srcContent, err := io.ReadAll(srcReader)
+				Expect(err).NotTo(HaveOccurred())
+				dstContent, err := io.ReadAll(dstReader)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(srcContent)).To(Equal(len(dstContent)))
+				Expect(srcContent).To(Equal(dstContent))
 			})
 
 			It("should override old values", func() {
@@ -485,3 +557,43 @@ var _ = Describe("LOM Xattributes", func() {
 		})
 	})
 })
+
+// createChunkedLOM helper for creating chunked objects in xattr tests
+func createChunkedLOM(fqn string, numChunks int) *core.LOM {
+	const chunkSize = 16 * cos.KiB
+
+	lom := &core.LOM{}
+	err := lom.InitFQN(fqn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	totalSize := int64(numChunks * chunkSize)
+	lom.SetSize(totalSize)
+
+	// Create main object file
+	createTestFile(fqn, int(totalSize))
+
+	// Create Ufest for chunked upload
+	ufest, err := core.NewUfest("", lom, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create chunks
+	for i := 1; i <= numChunks; i++ {
+		chunk, err := ufest.NewChunk(i, lom)
+		Expect(err).NotTo(HaveOccurred())
+
+		createTestFile(chunk.Path(), chunkSize)
+
+		err = ufest.Add(chunk, int64(chunkSize), int64(i))
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Complete the Ufest - this handles chunked flag setting and persistence internally
+	err = lom.CompleteUfest(ufest)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Reload to pick up chunked flag
+	lom.UncacheUnless()
+	Expect(lom.Load(false, false)).NotTo(HaveOccurred())
+	Expect(lom.IsChunked()).To(BeTrue())
+	return lom
+}

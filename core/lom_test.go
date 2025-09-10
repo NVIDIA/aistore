@@ -935,6 +935,71 @@ var _ = Describe("LOM", func() {
 				Expect(copyLOM.NumCopies()).To(Equal(lom.NumCopies()))
 				Expect(copyLOM.GetCopies()).To(Equal(lom.GetCopies()))
 			})
+
+			It("should successfully copy chunked object with all chunks", func() {
+				lom := prepareLOMChunked(copyFQNs[0], 3)
+
+				// Custom copy for chunked objects (prepareCopy expects testFileSize)
+				lom.Lock(true)
+				defer lom.Unlock(true)
+				copyLOM, err := lom.Copy2FQN(copyFQNs[1], make([]byte, 32*cos.KiB))
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(copyLOM.FQN).To(BeARegularFile())
+
+				// Reload copy to ensure fresh state
+				copyLOM = newBasicLom(copyLOM.FQN)
+				Expect(copyLOM.Load(false, true)).NotTo(HaveOccurred())
+
+				// Verify both source and destination are chunked
+				Expect(lom.IsChunked()).To(BeTrue())
+				Expect(copyLOM.IsChunked()).To(BeTrue())
+
+				// Verify destination has same number of chunks
+				srcUfest, err := core.NewUfest("", lom, true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(srcUfest.LoadCompleted(lom)).NotTo(HaveOccurred())
+
+				dstUfest, err := core.NewUfest("", copyLOM, true)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dstUfest.LoadCompleted(copyLOM)).NotTo(HaveOccurred())
+
+				Expect(srcUfest.Count()).To(Equal(dstUfest.Count()))
+
+				// Verify all chunks exist and have correct content
+				for i := 1; i <= srcUfest.Count(); i++ {
+					srcChunk := srcUfest.GetChunk(i, false)
+					dstChunk := dstUfest.GetChunk(i, false)
+					Expect(srcChunk).NotTo(BeNil())
+					Expect(dstChunk).NotTo(BeNil())
+
+					// Check chunk files exist
+					Expect(srcChunk.Path()).To(BeARegularFile())
+					Expect(dstChunk.Path()).To(BeARegularFile())
+
+					// Verify chunk content is identical
+					srcHash := getTestFileHash(srcChunk.Path())
+					dstHash := getTestFileHash(dstChunk.Path())
+					Expect(srcHash).To(Equal(dstHash))
+				}
+
+				// Final validation: Compare full object content using lom.Open() readers
+				srcReader, err := lom.Open()
+				Expect(err).NotTo(HaveOccurred())
+				defer srcReader.Close()
+
+				dstReader, err := copyLOM.Open()
+				Expect(err).NotTo(HaveOccurred())
+				defer dstReader.Close()
+
+				// Read and compare entire content
+				srcContent, err := io.ReadAll(srcReader)
+				Expect(err).NotTo(HaveOccurred())
+				dstContent, err := io.ReadAll(dstReader)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(len(srcContent)).To(Equal(len(dstContent)))
+				Expect(srcContent).To(Equal(dstContent))
+			})
 		})
 
 		Describe("DelCopies", func() {
@@ -1159,4 +1224,49 @@ func persist(lom *core.LOM) error {
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	return lom.Persist()
+}
+
+// prepareLOMChunked creates a chunked LOM with specified number of chunks
+func prepareLOMChunked(fqn string, numChunks int) *core.LOM {
+	const (
+		chunkSize      = 32 * cos.KiB
+		chunkedVersion = "test_chunked_v1"
+	)
+
+	// Create the main LOM and main object file
+	lom := &core.LOM{}
+	err := lom.InitFQN(fqn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	totalSize := int64(numChunks * chunkSize)
+	lom.SetSize(totalSize)
+	lom.SetVersion(chunkedVersion)
+
+	// Create main object file (combination of all chunks)
+	createTestFile(lom.FQN, int(totalSize))
+
+	// Create Ufest for chunked upload
+	ufest, err := core.NewUfest("", lom, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create chunks
+	for i := 1; i <= numChunks; i++ {
+		chunk, err := ufest.NewChunk(i, lom)
+		Expect(err).NotTo(HaveOccurred())
+
+		createTestFile(chunk.Path(), chunkSize)
+
+		err = ufest.Add(chunk, int64(chunkSize), int64(i))
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Complete the Ufest - this handles chunked flag setting and persistence internally
+	err = lom.CompleteUfest(ufest)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Reload to ensure fresh state and verify chunked flag
+	lom.UncacheUnless()
+	Expect(lom.Load(false, false)).NotTo(HaveOccurred())
+	Expect(lom.IsChunked()).To(BeTrue()) // Verify chunked flag is set
+	return lom
 }

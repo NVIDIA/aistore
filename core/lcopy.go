@@ -264,7 +264,7 @@ add:
 
 // copy object => any local destination
 // recommended for copying between different buckets (compare with lom.Copy() above)
-// NOTE: `lom` source must be w-locked
+// NOTE: `lom` source and `dst` must be w-locked
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	dst = lom.CloneTo(dstFQN)
 	if err = dst.InitFQN(dstFQN, nil); err == nil {
@@ -277,16 +277,83 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	return
 }
 
+// copyChunks handles copying all chunks and manifest from source to destination LOM
+// TODO -- FIXME: the implementation simply copies the chunks and manifest without respecting the destination bucket's chunks configuration
+// (this function is currently an experimental feature and will be refactored in the future)
+func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
+	// Load the completed Ufest manifest from source
+	srcUfest, err := NewUfest("", lom, true)
+	if err != nil {
+		return fmt.Errorf("failed to create Ufest for source %s: %w", lom.Cname(), err)
+	}
+
+	err = srcUfest.LoadCompleted(lom)
+	if err != nil {
+		return fmt.Errorf("failed to load completed manifest for %s: %w", lom.Cname(), err)
+	}
+
+	// Create a new Ufest for destination
+	dstUfest, err := NewUfest("", dst, false) // don't require existing
+	if err != nil {
+		return fmt.Errorf("failed to create Ufest for destination %s: %w", dst.Cname(), err)
+	}
+
+	// Copy each chunk from source to destination
+	srcUfest.Lock()
+	defer srcUfest.Unlock()
+
+	// TODO: goroutinizing this for loop with `cos.LimitedWaitGroup`
+	for _, srcChunk := range srcUfest.chunks {
+		dstChunk, err := dstUfest.NewChunk(int(srcChunk.Num()), dst)
+		if err != nil {
+			dstUfest.removeChunks(dst)
+			return fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err)
+		}
+
+		_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
+		if err != nil {
+			dstUfest.removeChunks(dst)
+			return fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
+				srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err)
+		}
+
+		if srcChunk.cksum != nil {
+			dstChunk.SetCksum(srcChunk.cksum.Clone())
+		}
+
+		err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
+		if err != nil {
+			dstUfest.removeChunks(dst)
+			return fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err)
+		}
+	}
+
+	// Compute the whole checksum for the destination manifest
+	wholeCksum := cos.NewCksumHash(dst.CksumConf().Type)
+	if err := dstUfest.ComputeWholeChecksum(wholeCksum); err != nil {
+		dstUfest.removeChunks(dst)
+		return fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err)
+	}
+	dst.SetCksum(&wholeCksum.Cksum)
+
+	// Store the completed manifest for destination
+	err = dstUfest.StoreCompleted(dst)
+	if err != nil {
+		dstUfest.removeChunks(dst)
+		return fmt.Errorf("failed to store completed manifest for destination %s: %w", dst.Cname(), err)
+	}
+
+	dst.setlmfl(lmflChunk)
+
+	return nil
+}
+
 func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	var (
-		dstCksum  *cos.CksumHash
-		dstFQN    = dst.FQN
-		srcCksum  = lom.Checksum()
-		cksumType = cos.ChecksumNone
+		dstCksum   *cos.CksumHash
+		dstFQN     = dst.FQN
+		dstCksumTy = dst.CksumType()
 	)
-	if !cos.NoneC(srcCksum) {
-		cksumType = srcCksum.Ty()
-	}
 	if dst.isMirror(lom) && lom.md.copies != nil {
 		dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
 		for fqn, mpi := range lom.md.copies {
@@ -299,7 +366,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	}
 
 	workFQN := fs.CSM.Gen(dst, fs.WorkCT, fs.WorkfileCopy)
-	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, cksumType)
+	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, dstCksumTy)
 	if err != nil {
 		return err
 	}
@@ -310,12 +377,15 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		}
 		return err
 	}
-
-	if cksumType != cos.ChecksumNone {
-		if !dstCksum.Equal(lom.Checksum()) {
-			return cos.NewErrDataCksum(&dstCksum.Cksum, lom.Checksum())
+	switch {
+	case lom.IsChunked():
+		if err := lom.copyChunks(dst, buf); err != nil {
+			return err
 		}
+	case dstCksumTy != cos.ChecksumNone:
 		dst.SetCksum(dstCksum.Clone())
+	default:
+		dst.SetCksum(cos.NoneCksum)
 	}
 
 	// persist

@@ -464,7 +464,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
-		params.Cksum = hdr.ObjAttrs.Cksum
+		params.Cksum = cos.NewCksum(lom.CksumType(), "") // respect the destination bucket checksum type
 		params.Xact = r
 		params.Size = hdr.ObjAttrs.Size
 		params.OWT = r.owt

@@ -5,7 +5,9 @@
 package mirror_test
 
 import (
+	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -45,6 +47,8 @@ var _ = Describe("Mirror", func() {
 	_, _ = fs.Add(mpath2, "daeID")
 	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
 	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
+	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 
 	var (
 		props = &cmn.Bprops{
@@ -126,6 +130,64 @@ var _ = Describe("Mirror", func() {
 			Expect(copyLOM.IsCopy()).To(BeTrue())
 			Expect(copyLOM.HasCopies()).To(BeTrue())
 		})
+
+		It("should correctly copy chunked mirror object", func() {
+			// Create chunked object
+			lom := createChunkedMirrorLOM(defaultObjFQN, 2)
+			Expect(lom.IsHRW()).To(BeTrue())
+			Expect(lom.IsChunked()).To(BeTrue())
+
+			// Make copy
+			lom.Lock(true)
+			defer lom.Unlock(true)
+			copyFQN := mi2.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+			clone, err := lom.Copy2FQN(copyFQN, nil)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(expectedCopyFQN).To(BeARegularFile())
+
+			// Verify chunked copy
+			Expect(clone.IsChunked()).To(BeTrue())
+			Expect(clone.IsCopy()).To(BeTrue())
+
+			// Verify chunks were copied
+			srcUfest, err := core.NewUfest("", lom, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(srcUfest.LoadCompleted(lom)).NotTo(HaveOccurred())
+
+			dstUfest, err := core.NewUfest("", clone, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dstUfest.LoadCompleted(clone)).NotTo(HaveOccurred())
+
+			Expect(srcUfest.Count()).To(Equal(dstUfest.Count()))
+
+			// Verify individual chunks were copied correctly
+			for i := 1; i <= srcUfest.Count(); i++ {
+				srcChunk := srcUfest.GetChunk(i, false)
+				dstChunk := dstUfest.GetChunk(i, false)
+				Expect(srcChunk).NotTo(BeNil())
+				Expect(dstChunk).NotTo(BeNil())
+				Expect(srcChunk.Path()).To(BeARegularFile())
+				Expect(dstChunk.Path()).To(BeARegularFile())
+			}
+
+			// Final validation: Compare full object content using lom.Open() readers
+			srcReader, err := lom.Open()
+			Expect(err).NotTo(HaveOccurred())
+			defer srcReader.Close()
+
+			dstReader, err := clone.Open()
+			Expect(err).NotTo(HaveOccurred())
+			defer dstReader.Close()
+
+			// Read and compare entire content
+			srcContent, err := io.ReadAll(srcReader)
+			Expect(err).NotTo(HaveOccurred())
+			dstContent, err := io.ReadAll(dstReader)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(srcContent)).To(Equal(len(dstContent)))
+			Expect(srcContent).To(Equal(dstContent))
+		})
 	})
 })
 
@@ -143,5 +205,50 @@ func newBasicLom(fqn string) *core.LOM {
 	err := lom.InitFQN(fqn, nil)
 	Expect(err).NotTo(HaveOccurred())
 	lom.UncacheUnless()
+	return lom
+}
+
+// createChunkedMirrorLOM helper for creating chunked mirror objects
+func createChunkedMirrorLOM(fqn string, numChunks int) *core.LOM {
+	const chunkSize = 20 * cos.KiB
+
+	lom := &core.LOM{}
+	err := lom.InitFQN(fqn, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	totalSize := int64(numChunks * chunkSize)
+	lom.SetSize(totalSize)
+	lom.SetAtimeUnix(time.Now().UnixNano())
+
+	// Create Ufest for chunked upload
+	ufest, err := core.NewUfest("", lom, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create chunks
+	for i := 1; i <= numChunks; i++ {
+		chunk, err := ufest.NewChunk(i, lom)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create chunk file directly
+		chunkFQN := chunk.Path()
+		err = cos.CreateDir(filepath.Dir(chunkFQN))
+		Expect(err).NotTo(HaveOccurred())
+
+		r, err := readers.NewRandFile(filepath.Dir(chunkFQN), filepath.Base(chunkFQN), chunkSize, cos.ChecksumNone)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(r.Close()).ShouldNot(HaveOccurred())
+
+		err = ufest.Add(chunk, int64(chunkSize), int64(i))
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Complete the Ufest - this handles chunked flag setting and persistence internally
+	err = lom.CompleteUfest(ufest)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Reload to pick up chunked flag
+	lom.UncacheUnless()
+	Expect(lom.Load(false, false)).NotTo(HaveOccurred())
+	Expect(lom.IsChunked()).To(BeTrue())
 	return lom
 }

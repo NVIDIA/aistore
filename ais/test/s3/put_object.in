@@ -22,6 +22,7 @@ rm $OBJECT.txt $OBJECT_copy.txt $OBJECT_new.txt $OBJECT_new_copy.txt // IGNORE
 
 ##Copy Object Testing
 s3cmd mb s3://$BUCKET-2 --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)"
+ais bucket props set ais://$BUCKET-2 checksum.type=md5 // IGNORE
 s3cmd cp s3://$BUCKET/$OBJECT s3://$BUCKET-2/$OBJECT --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
 s3cmd get s3://$BUCKET-2$OBJECT $OBJECT_cp.txt --host=$HOST $PARAMS --host-bucket="$HOST/%(bucket)" // IGNORE
 cat $OBJECT_cp.txt

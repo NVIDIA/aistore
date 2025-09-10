@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"sort"
@@ -2730,6 +2731,132 @@ func TestCopyBucket(t *testing.T) {
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestCopyBucketChecksumValidation(t *testing.T) {
+	tests := []struct {
+		srcCksum string
+		dstCksum string
+	}{
+		{srcCksum: cos.ChecksumNone, dstCksum: cos.ChecksumNone},
+		{srcCksum: cos.ChecksumNone, dstCksum: cos.ChecksumMD5},
+		{srcCksum: cos.ChecksumMD5, dstCksum: cos.ChecksumNone},
+		{srcCksum: cos.ChecksumMD5, dstCksum: cos.ChecksumSHA256},
+		{srcCksum: cos.ChecksumSHA512, dstCksum: cos.ChecksumSHA512},
+		{srcCksum: cos.ChecksumCesXxh, dstCksum: cos.ChecksumMD5},
+	}
+
+	for _, test := range tests {
+		testName := fmt.Sprintf("%s_to_%s", test.srcCksum, test.dstCksum)
+		t.Run(testName, func(t *testing.T) {
+			var (
+				proxyURL   = tools.RandomProxyURL(t)
+				baseParams = tools.BaseAPIParams(proxyURL)
+				objCnt     = 10
+				srcBck     = cmn.Bck{
+					Name:     "src_cksum_" + trand.String(6),
+					Provider: apc.AIS,
+				}
+				dstBck = cmn.Bck{
+					Name:     "dst_cksum_" + trand.String(6),
+					Provider: apc.AIS,
+				}
+				srcm = &ioContext{
+					t:        t,
+					num:      objCnt,
+					fileSize: cos.KiB,
+					bck:      srcBck,
+				}
+			)
+
+			// Initialize context and create source bucket
+			srcm.initAndSaveState(true /*cleanup*/)
+			srcm.expectTargets(1)
+			tools.CreateBucket(t, proxyURL, srcBck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
+					Type: apc.Ptr(test.srcCksum),
+				},
+			}, true)
+
+			// Create destination bucket and configure with specified checksum
+			tools.CreateBucket(t, proxyURL, dstBck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
+					Type: apc.Ptr(test.dstCksum),
+				},
+			}, true)
+
+			// Put objects to source bucket
+			srcm.puts()
+
+			// Get source bucket objects and their expected checksums
+			srcObjList, err := api.ListObjects(baseParams, srcBck, nil, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(srcObjList.Entries) == objCnt, "expected %d objects in source bucket, got %d", objCnt, len(srcObjList.Entries))
+
+			// Collect source object data and compute expected destination checksums
+			expectedCksums := make(map[string]*cos.Cksum)
+			for _, entry := range srcObjList.Entries {
+				objName := entry.Name
+				reader, _, err := api.GetObjectReader(baseParams, srcBck, objName, &api.GetArgs{})
+				tassert.CheckFatal(t, err)
+
+				objData, err := io.ReadAll(reader)
+				tassert.CheckFatal(t, err)
+				reader.Close()
+
+				var expectedCksum *cos.Cksum
+				if test.dstCksum != cos.ChecksumNone {
+					expectedCksum, err = cos.ChecksumBytes(objData, test.dstCksum)
+					tassert.CheckFatal(t, err)
+				} else {
+					expectedCksum = cos.NewCksum(cos.ChecksumNone, "")
+				}
+				expectedCksums[objName] = expectedCksum
+			}
+
+			// Copy bucket
+			cmsg := &apc.TCBMsg{
+				CopyBckMsg: apc.CopyBckMsg{Force: true},
+			}
+			uuid, err := api.CopyBucket(baseParams, srcBck, dstBck, cmsg)
+			tassert.CheckFatal(t, err)
+			tlog.Logf("copying %s => %s: %s\n", srcBck.String(), dstBck.String(), uuid)
+
+			args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout}
+			_, err = api.WaitForXactionIC(baseParams, &args)
+			tassert.CheckFatal(t, err)
+
+			// Validate destination bucket properties
+			dstBckProps, err := api.HeadBucket(baseParams, dstBck, true /* don't add */)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, dstBckProps.Cksum.Type == test.dstCksum,
+				"destination bucket checksum type should be %s but got %s",
+				test.dstCksum, dstBckProps.Cksum.Type)
+
+			// Validate each object's checksum in destination bucket
+			tlog.Logf("validating checksums of %d objects in destination bucket\n", objCnt)
+			for objName, expectedCksum := range expectedCksums {
+				objProps, err := api.HeadObject(baseParams, dstBck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
+				tassert.CheckFatal(t, err)
+
+				actualCksum := objProps.ObjAttrs.Checksum()
+
+				// Validate checksum type and value
+				if test.dstCksum == cos.ChecksumNone {
+					// When destination bucket has no checksum, the object should also have no checksum
+					tassert.Fatalf(t, cos.NoneC(actualCksum), "object %s should have no checksum but got %s", objName, actualCksum)
+				} else {
+					// When destination bucket has checksum, object should have matching checksum
+					tassert.Fatalf(t, !cos.NoneC(actualCksum), "object %s should have checksum type %s but has no checksum", objName, test.dstCksum)
+					tassert.Fatalf(t, actualCksum.Ty() == test.dstCksum, "object %s checksum type should be %s but got %s", objName, test.dstCksum, actualCksum.Ty())
+					tassert.Fatalf(t, actualCksum.Equal(expectedCksum), "object %s checksum value should be %s but got %s", objName, expectedCksum.Val(), actualCksum.Val())
+					tlog.Logf("✓ object %s has correct %s checksum: %s\n", objName, test.dstCksum, actualCksum.Val())
+				}
+			}
+
+			tlog.Logf("✓ Test %s completed successfully\n", testName)
 		})
 	}
 }
