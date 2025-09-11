@@ -39,7 +39,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 			LowWM: 75, HighWM: 90, OOS: 95,
 		}
 		config.LRU = cmn.LRUConf{
-			DontEvictTime: cos.Duration(time.Second), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
+			DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
 		}
 		cmn.GCO.CommitUpdate(config)
 		cfg = cmn.GCO.Get()
