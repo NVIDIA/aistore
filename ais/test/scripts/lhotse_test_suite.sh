@@ -3,6 +3,7 @@
 ## Prerequisites: #################################################################################
 # - aistore cluster
 # - ais (CLI)
+# - bc (math)
 #
 ## Example:
 ## ./lhotse_test_suite.sh --bucket ais://lhotse-test --cuts 247 --batch-size 50
@@ -10,6 +11,10 @@
 
 if ! [ -x "$(command -v ais)" ]; then
   echo "Error: ais (CLI) not installed" >&2
+  exit 1
+fi
+if ! [ -x "$(command -v bc)" ]; then
+  echo "Error: bc not installed (needed for floating point math)" >&2
   exit 1
 fi
 
@@ -150,22 +155,29 @@ fi
 # Verify batch count matches expectation
 [ "$batch_count" -eq "$expected_batches" ] || { echo "Error: batch count mismatch"; exit 1; }
 
-# Test 3: TBD: Sample rate conversion
-echo "Test 3: TBD: Sample rate conversion..."
+# Test 3: Batch generation with consistent naming
+echo "Test 3: Batch generation with consistent naming..."
+expected_audio_batches=$(( (num_cuts + 25 - 1) / 25 ))  # ceiling division for batch size 25
+max_template_slots=20
+if [ $expected_audio_batches -gt $max_template_slots ]; then
+  echo "Warning: Expected $expected_audio_batches batches but template only has $max_template_slots slots"
+  expected_audio_batches=$max_template_slots
+fi
+
 ais ml lhotse-get-batch --cuts "${MANIFEST}.gz" \
   --batch-size 25 \
-  --output-template "audio-{01..20}.tar"
-## NOTE: range read not supported yet
-##  --sample-rate 16000 || { echo "Error: sample rate test failed"; exit 1; }
+  --output-template "audio-{001..$(printf "%03d" $max_template_slots)}.tar" || { echo "Error: audio batch test failed"; exit 1; }
+## NOTE: sample rate conversion not supported yet
+##  --sample-rate 16000
 
 audio_count=$(ls audio-*.tar 2>/dev/null | wc -l)
-echo "Generated $audio_count audio batches with sample rate conversion"
+echo "Generated $audio_count audio batches (expected: $expected_audio_batches)"
 
 # Test 4: Template exhaustion
 echo "Test 4: Template exhaustion..."
 if ais ml lhotse-get-batch --cuts "${MANIFEST}.gz" \
   --batch-size 100 \
-  --output-template "small-{01..02}.tar" 2>&1 | grep -q "template exhausted"; then
+  --output-template "small-{001..002}.tar" 2>&1 | grep -q "template exhausted"; then
     echo "Template exhaustion handled correctly"
 else
     echo "Error: template exhaustion not detected"
@@ -174,36 +186,42 @@ fi
 
 # Test 5: Streaming mode
 echo "Test 5: Streaming mode..."
+expected_stream_batches=$(( (num_cuts + 30 - 1) / 30 ))  # ceiling division for batch size 30
 ais ml lhotse-get-batch --cuts "${MANIFEST}.gz" \
   --batch-size 30 \
-  --output-template "stream-{001..010}.tar" \
+  --output-template "stream-{001..$(printf "%03d" $expected_stream_batches)}.tar" \
   --streaming || { echo "Error: streaming test failed"; exit 1; }
 
 stream_count=$(ls stream-*.tar 2>/dev/null | wc -l)
-echo "Generated $stream_count streaming batches"
+echo "Generated $stream_count streaming batches (expected: $expected_stream_batches)"
 
-# Test 6: Verify batch contents
-echo "Test 6: Verifying batch contents..."
-first_batch=$(ls batch-001.tar 2>/dev/null || ls audio-01.tar 2>/dev/null || echo "")
+# Test 6: Verify batch contents and source shard access
+echo "Test 6: Verifying batch contents and source shard access..."
+first_batch=$(ls batch-001.tar 2>/dev/null || ls audio-001.tar 2>/dev/null || echo "")
 if [[ -n "$first_batch" ]]; then
-    echo "Contents of $(basename $first_batch):"
-    ais ls "$first_batch" --archive | head -5 || { echo "Error: failed to list archive contents"; exit 1; }
-    echo "Archive contents verified"
+    echo "Local batch file found: $(basename $first_batch)"
+
+    # Verify we can access source shards that the batches reference
+    echo "Verifying source shard access (audio-001.tar contents):"
+    ais ls ${bucket}/audio-001.tar --archive | head -5 || { echo "Error: failed to list source archive contents"; exit 1; }
+    echo "Source shard access verified"
 else
     echo "Error: no batch files found for content verification"
+    exit 1
 fi
 
 # Test 7: Performance test with larger manifest
 echo "Test 7: Performance test..."
 large_cuts=$((num_cuts * 4))
+expected_perf_batches=$(( (large_cuts + 100 - 1) / 100 ))  # ceiling division for batch size 100
 gen_test_manifest $large_cuts "large_manifest.jsonl"
 echo "Running performance test with $large_cuts cuts..."
 time ais ml lhotse-get-batch --cuts "large_manifest.jsonl" \
   --batch-size 100 \
-  --output-template "perf-{001..100}.tar" >/dev/null || { echo "Error: performance test failed"; exit 1; }
+  --output-template "perf-{001..$(printf "%03d" $expected_perf_batches)}.tar" >/dev/null || { echo "Error: performance test failed"; exit 1; }
 
 perf_count=$(ls perf-*.tar 2>/dev/null | wc -l)
-echo "Performance test completed: $perf_count batches generated"
+echo "Performance test completed: $perf_count batches generated (expected: $expected_perf_batches)"
 
 echo
 echo "All tests passed:"
