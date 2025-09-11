@@ -974,7 +974,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			t.writeErrf(w, r, "%s: invalid part number %q for uploadID %q", lom, dpq.get(apc.QparamMptPartNo), uploadID)
 			return
 		}
-		_, ecode, err = t.putMptPart(r, lom, uploadID, partNo)
+		_, ecode, err = t.putMptPart(r, lom, uploadID, partNo, false /*see also dpq.isS3*/)
 	case dpq.arch.path != "": // apc.QparamArchpath
 		dpq.arch.mime, err = archive.MimeFQN(t.smm, dpq.arch.mime, lom.FQN)
 		if err != nil {
@@ -1162,7 +1162,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break
 		}
-		_, ecode, err = t.completeMptUpload(r, lom, uploadID, nil /*body*/, mptCompletedParts)
+		_, ecode, err = t.completeMptUpload(r, lom, uploadID, nil /*body*/, mptCompletedParts, false /*see also dpq.isS3*/)
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])
 	default:
@@ -1198,7 +1198,7 @@ func (t *target) abortMptUpload(r *http.Request, lom *core.LOM, uploadID string)
 }
 
 func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID string, body []byte,
-	parts apc.MptCompletedParts) (eTag string, ecode int, err error) {
+	parts apc.MptCompletedParts, isS3 bool) (eTag string, ecode int, err error) {
 	manifest, remoteMeta := t.ups.get(uploadID, lom)
 	if manifest == nil {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
@@ -1207,7 +1207,7 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 	// validate/enforce parts, compute _whole" checksum and etag
 	var etag string
 	manifest.Lock()
-	etag, err = validateChecksumEtag(lom, manifest, parts)
+	etag, err = validateChecksumEtag(lom, manifest, parts, isS3)
 	manifest.Unlock()
 	if err != nil {
 		return "", http.StatusBadRequest, err
@@ -1260,13 +1260,13 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 	return etag, ecode, nil
 }
 
-func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, partNum int) (etag string, ecode int, err error) {
+func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, partNum int, isS3 bool) (etag string, ecode int, err error) {
 	var (
 		expectedSize int64
 		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
 		cksumSHA     *cos.CksumHash
-		cksumMD5     = &cos.CksumHash{}
+		cksumH       = &cos.CksumHash{}
 		remote       = lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
 		writers      = make([]io.Writer, 0, 3)
 		startTime    = mono.NanoTime()
@@ -1293,8 +1293,15 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 		writers = append(writers, cksumSHA.H)
 	}
 	if !remote {
-		cksumMD5 = cos.NewCksumHash(cos.ChecksumMD5)
-		writers = append(writers, cksumMD5.H)
+		if isS3 {
+			// NOTE [convention] for chunks `isS3` overrides bucket-configured checksum always requiring MD5
+			cksumH = cos.NewCksumHash(cos.ChecksumMD5)
+			writers = append(writers, cksumH.H)
+		} else if ty := lom.CksumType(); ty != cos.ChecksumNone {
+			debug.Assert(!checkPartSHA)
+			cksumH = cos.NewCksumHash(ty)
+			writers = append(writers, cksumH.H)
+		}
 	}
 	writers = append(writers, partFh)
 
@@ -1359,27 +1366,34 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 	}
 
 	chunk.SetETag(etag)
-	if cksumMD5.H != nil {
-		chunk.MD5 = cksumMD5.H.Sum(nil)
-		debug.Assert(len(chunk.MD5) == 16, len(chunk.MD5))
+	if cksumH.H != nil {
+		if isS3 {
+			debug.Assert(cksumH.Ty() == cos.ChecksumMD5) // see [convention] above
+			chunk.MD5 = cksumH.H.Sum(nil)
+			debug.Assert(len(chunk.MD5) == cos.LenMD5Hash, len(chunk.MD5))
+			if etag == "" {
+				etag = cmn.MD5hashToETag(chunk.MD5)
+			}
+		} else {
+			// NOTE: not populating chunk.MD5 even if bucket-configured checksum is md5
+			debug.Assert(!checkPartSHA)
+			cksumH.Finalize()
+			chunk.SetCksum(&cksumH.Cksum)
+		}
 	}
 	if checkPartSHA {
 		chunk.SetCksum(&cksumSHA.Cksum)
 	}
 
-	// - see NOTE above in re "active uploads in memory"
-	// - TODO: this is the place to call Ufest.Store(partial manifest)
 	if err := manifest.Add(chunk, size, int64(partNum)); err != nil {
 		return "", http.StatusInternalServerError, err
 	}
 
-	if etag == "" {
-		debug.Assert(len(chunk.MD5) == 16)
-		etag = cmn.MD5hashToETag(chunk.MD5)
-	}
-
 	delta := mono.SinceNano(startTime)
-	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
+	vlabs := stats.EmptyBckXlabs
+	if cmn.Rom.Features().IsSet(feat.EnableDetailedPromMetrics) {
+		vlabs = map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
+	}
 	t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},

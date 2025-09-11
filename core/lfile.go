@@ -326,23 +326,23 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 }
 
 //
-// archive
+// archive // TODO -- FIXME: test with chunked objects
 //
 
 // extract a single file from a (.tar, .tgz or .tar.gz, .zip, .tar.lz4) shard
 // uses the provided `mime` or lom.ObjName to detect formatting (empty = auto-detect)
-func (lom *LOM) NewArchpathReader(lmfh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
+func (lom *LOM) NewArchpathReader(lh cos.LomReader, archpath, mime string) (csl cos.ReadCloseSizer, err error) {
 	debug.Assert(archpath != "")
 	if err := cos.ValidateArchpath(archpath); err != nil {
 		return nil, err
 	}
-	mime, err = archive.MimeFile(lmfh, T.ByteMM(), mime, lom.ObjName)
+	mime, err = archive.MimeFile(lh, T.ByteMM(), mime, lom.ObjName)
 	if err != nil {
 		return nil, err
 	}
 
 	var ar archive.Reader
-	ar, err = archive.NewReader(mime, lmfh, lom.Lsize())
+	ar, err = archive.NewReader(mime, lh, lom.Lsize())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", lom.Cname(), err)
 	}

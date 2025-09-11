@@ -99,7 +99,7 @@ func (t *target) putMptPartS3(w http.ResponseWriter, r *http.Request, items []st
 		return
 	}
 
-	etag, ecode, err := t.putMptPart(r, lom, uploadID, int(partNum))
+	etag, ecode, err := t.putMptPart(r, lom, uploadID, int(partNum), true /*see also dpq.isS3*/)
 	// convert generic error to s3 error
 	if cos.IsErrNotFound(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
@@ -168,7 +168,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		partList = append(partList, mptPart)
 	}
 
-	etag, ecode, err := t.completeMptUpload(r, lom, uploadID, body, partList)
+	etag, ecode, err := t.completeMptUpload(r, lom, uploadID, body, partList, true /*see also dpq.isS3*/)
 	// convert generic error to s3 error
 	if cos.IsErrNotFound(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)

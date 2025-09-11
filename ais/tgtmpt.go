@@ -213,8 +213,7 @@ func (*ups) parsePartNum(s string) (int32, error) {
 }
 
 // (under manifest lock)
-// TODO: only for checking ETag and checksum for S3 backend, not needed for the native MPT APIs
-func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts) (string, error) {
+func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts, isS3 bool) (string, error) {
 	if err := manifest.Check(); err != nil {
 		return "", err
 	}
@@ -222,34 +221,32 @@ func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComp
 		return "", err
 	}
 
-	// compute "whole" checksum (TODO: sha256 may take precedence when implied by `partSHA`)
 	var (
-		wholeCksum *cos.CksumHash
-		bck        = lom.Bck()
-		remote     = bck.IsRemoteS3() || bck.IsRemoteOCI()
+		cksumH    *cos.CksumHash
+		bck       = lom.Bck()
+		remote    = bck.IsRemoteS3() || bck.IsRemoteOCI()
+		cksumType = lom.CksumType()
 	)
-	if remote && lom.CksumConf().Type != cos.ChecksumNone {
-		wholeCksum = cos.NewCksumHash(lom.CksumConf().Type)
-	} else {
-		wholeCksum = cos.NewCksumHash(cos.ChecksumMD5)
-	}
-	if wholeCksum != nil {
-		if err := manifest.ComputeWholeChecksum(wholeCksum); err != nil {
+	// always bucket policy (and see [convention] below)
+	if cksumType != cos.ChecksumNone {
+		cksumH = cos.NewCksumHash(cksumType)
+		if err := manifest.ComputeWholeChecksum(cksumH); err != nil {
 			return "", err
 		}
-		lom.SetCksum(&wholeCksum.Cksum)
+		lom.SetCksum(&cksumH.Cksum)
 	}
 
-	// compute multipart-compliant ETag if need be
-	var etag string
-	if !remote {
-		var err error
-		if etag, err = manifest.ETagS3(); err != nil {
-			return "", err
-		}
+	if remote /*computed by remote*/ || !isS3 /*native caller*/ {
+		return "" /*etag*/, nil
 	}
 
-	return etag, nil
+	// NOTE [convention]
+	// for chunks `isS3` overrides bucket-configured checksum always requiring MD5
+	// (see putMptPart)
+
+	debug.Assert(manifest.Count() == 0 || len(manifest.GetChunk(1, true).MD5) == cos.LenMD5Hash)
+
+	return manifest.ETagS3()
 }
 
 func enforceCompleteAllParts(parts apc.MptCompletedParts, count int) (int, error) {

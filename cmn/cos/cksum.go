@@ -38,6 +38,8 @@ const (
 	ChecksumSHA512 = "sha512" // crypto.SHA512 (SHA-2)
 )
 
+const LenMD5Hash = 16
+
 const (
 	badDataCksumPrefix = "BAD DATA CHECKSUM:"
 	badMetaCksumPrefix = "BAD META CHECKSUM:"

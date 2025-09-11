@@ -210,10 +210,26 @@ func (lom *LOM) Bprops() *cmn.Bprops            { return lom.bck.Props }
 func (lom *LOM) ECEnabled() bool                { return lom.Bprops().EC.Enabled }
 func (lom *LOM) IsFeatureSet(f feat.Flags) bool { return lom.Bprops().Features.IsSet(f) }
 func (lom *LOM) MirrorConf() *cmn.MirrorConf    { return &lom.Bprops().Mirror }
-func (lom *LOM) CksumConf() *cmn.CksumConf      { return lom.bck.CksumConf() }
-func (lom *LOM) CksumType() string              { return lom.bck.CksumConf().Type }
 func (lom *LOM) VersionConf() cmn.VersionConf   { return lom.bck.VersionConf() }
-func (lom *LOM) Location() string               { return T.String() + apc.LocationPropSepa + lom.mi.String() }
+func (lom *LOM) CksumConf() *cmn.CksumConf      { return lom.bck.CksumConf() }
+
+// more cksum conf
+func (lom *LOM) CksumType() string {
+	c := lom.bck.CksumConf()
+	if c.Type == "" || c.Type == cos.ChecksumNone {
+		return cos.ChecksumNone
+	}
+	return c.Type
+}
+func (lom *LOM) ValidateWarmGet() bool {
+	return lom.CksumType() != cos.ChecksumNone && lom.CksumConf().ValidateWarmGet
+}
+func (lom *LOM) ValidateColdGet() bool {
+	return lom.CksumType() != cos.ChecksumNone && lom.CksumConf().ValidateColdGet
+}
+
+// to report via list-objects and HEAD()
+func (lom *LOM) Location() string { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string       { return lom.ObjName }

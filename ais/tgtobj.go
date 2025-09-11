@@ -43,10 +43,6 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-const (
-	checksumRangeSizeThreshold = 4 * cos.MiB // see goi._txrng
-)
-
 //
 // PUT, GET, APPEND (to file | to archive), and COPY object
 //
@@ -672,7 +668,7 @@ do: // retry uplock or ec-recovery, the latter only once
 	}
 
 	// validate checksums and recover (a.k.a. self-heal) if corrupted
-	if !cold && goi.lom.CksumConf().ValidateWarmGet {
+	if !cold && goi.lom.ValidateWarmGet() {
 		cold, ecode, err = goi.validateRecover()
 		if err != nil {
 			if !cold {
@@ -760,9 +756,19 @@ func (goi *getOI) isStreamingColdGet() bool {
 	if !goi.lom.IsFeatureSet(feat.StreamingColdGET) {
 		return false
 	}
-	ckconf := goi.lom.CksumConf()
-	return goi.dpq.arch.path == "" && goi.dpq.arch.regx == "" && goi.ranges.Range == "" &&
-		(ckconf.Type == cos.ChecksumNone || !ckconf.ValidateColdGet)
+
+	// assorted limitations each of which (or all together) can be lifted if need be
+	switch {
+	case goi.dpq.arch.path != "" || goi.dpq.arch.regx != "":
+		return false
+	case goi.ranges.Range != "":
+		return false
+	case goi.lom.ValidateColdGet():
+		return false
+	case goi.lom.Bprops().Chunks.AutoEnabled():
+		return false
+	}
+	return true
 }
 
 func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
@@ -1075,24 +1081,34 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	return ecode, err
 }
 
+const (
+	checksumRangeSizeThreshold = 4 * cos.MiB // see goi._txrng
+)
+
+func (goi *getOI) _ckrange(hrng *htrange) bool {
+	// S3 GetObject does not support or define "range checksum"
+	if goi.dpq.isS3 || goi.lom.CksumType() == cos.ChecksumNone {
+		return false
+	}
+	return goi.lom.CksumConf().EnableReadRange && (hrng.Start > 0 || hrng.Length < goi.lom.Lsize())
+}
+
 func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng *htrange) error {
 	var (
-		r          io.Reader
-		sgl        *memsys.SGL
-		cksum      = goi.lom.Checksum()
-		ckconf     = goi.lom.CksumConf()
-		size       = hrng.Length
-		cksumRange = ckconf.Type != cos.ChecksumNone && ckconf.EnableReadRange && (hrng.Start > 0 || size < goi.lom.Lsize())
-		ra, ok     = lmfh.(io.ReaderAt)
+		r      io.Reader
+		sgl    *memsys.SGL
+		cksum  = goi.lom.Checksum()
+		size   = hrng.Length
+		ra, ok = lmfh.(io.ReaderAt)
 	)
 	debug.Assertf(ok, "expecting ReaderAt, got (%T)", lmfh) // m.b. fh or UfestReader
 
 	r = io.NewSectionReader(ra, hrng.Start, size)
 
-	if cksumRange {
-		if size <= checksumRangeSizeThreshold {
-			// small (pagecache)
-			_, cksumH, err := cos.CopyAndChecksum(io.Discard, r, nil, ckconf.Type)
+	if goi._ckrange(hrng) {
+		if !goi.lom.IsChunked() && size <= checksumRangeSizeThreshold {
+			// non-chunked object & relatively small range -- pagecache
+			_, cksumH, err := cos.CopyAndChecksum(io.Discard, r, nil, goi.lom.CksumType())
 			if err != nil {
 				goi.isIOErr = true
 				return err
@@ -1102,7 +1118,7 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 		} else {
 			// large (+ sgl)
 			sgl = goi.t.gmm.NewSGL(size)
-			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, ckconf.Type)
+			_, cksumH, err := cos.CopyAndChecksum(sgl /*as ReaderFrom*/, r, nil, goi.lom.CksumType())
 			if err != nil {
 				sgl.Free()
 				goi.isIOErr = true
@@ -1895,6 +1911,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 // PUT a new shard _or_ APPEND to an existing one (w/ read/write/list via cmn/archive)
 //
 
+// TODO -- FIXME: add support for chunks (lom.Open below)
 func (a *putA2I) do() (int, error) {
 	if a.filename == "" {
 		return 0, errors.New("archive path is not defined")

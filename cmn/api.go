@@ -259,7 +259,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
-	if bp.Mirror.Enabled && bp.Chunks.autoEnabled() {
+	if bp.Mirror.Enabled && bp.Chunks.AutoEnabled() {
 		return errors.New("n-way mirroring and chunking cannot be enabled at the same time on the same bucket (MPU chunking is still allowed)")
 	}
 

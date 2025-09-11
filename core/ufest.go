@@ -278,6 +278,7 @@ func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 		u.mu.Lock()
 		defer u.mu.Unlock()
 	}
+	debug.Assert(num > 0, num)
 	if num <= len(u.chunks) && u.chunks[num-1].num == uint16(num) {
 		return &u.chunks[num-1]
 	}
@@ -738,7 +739,7 @@ func (u *Ufest) ETagS3() (string, error) {
 			}
 		case c.ETag != "":
 			bin, err := cmn.ETagToMD5(c.ETag)
-			if err == nil && len(bin) == md5.Size {
+			if err == nil && len(bin) == cos.LenMD5Hash {
 				h.Write(bin)
 				continue
 			}
@@ -944,7 +945,7 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		if c.MD5, offset, err = _unpackBytes(data, offset); err != nil {
 			return err
 		}
-		if l := len(c.MD5); l != 0 && l != md5.Size {
+		if l := len(c.MD5); l != 0 && l != cos.LenMD5Hash {
 			return fmt.Errorf("invalid MD5 size %d", l)
 		}
 		if c.ETag, offset, err = _unpackStr(data, offset); err != nil {

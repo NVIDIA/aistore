@@ -12,6 +12,8 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -74,7 +76,8 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 	for i := range manifest.Count() {
 		c := manifest.GetChunk(i+1, true)
 		etag := c.ETag
-		if etag == "" {
+		if etag == "" && c.MD5 != nil {
+			debug.Assert(len(c.MD5) == cos.LenMD5Hash)
 			etag = cmn.MD5hashToETag(c.MD5)
 		}
 		parts = append(parts, types.CompletedPart{

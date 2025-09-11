@@ -1504,13 +1504,13 @@ const (
 	checkpointEveryMax = 1024
 )
 
-func (c *ChunksConf) autoEnabled() bool { return c.ObjSizeLimit > 0 }
+func (c *ChunksConf) AutoEnabled() bool { return c.ObjSizeLimit > 0 }
 
 func (c *ChunksConf) Validate() error {
 	if c.ObjSizeLimit < 0 {
 		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting a non-negative integer)", c.ObjSizeLimit)
 	}
-	if !c.autoEnabled() { // including v3.31 and prior buckets
+	if !c.AutoEnabled() { // including v3.31 and prior
 		return nil
 	}
 
@@ -1530,7 +1530,7 @@ func (c *ChunksConf) ValidateAsProps(...any) error {
 }
 
 func (c *ChunksConf) String() string {
-	if !c.autoEnabled() {
+	if !c.AutoEnabled() {
 		return "auto-chunking disabled"
 	}
 	var checkpoint string
