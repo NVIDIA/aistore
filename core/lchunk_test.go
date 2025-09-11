@@ -5,7 +5,9 @@
 package core_test
 
 import (
-	"encoding/hex"
+	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -27,14 +29,14 @@ import (
 var _ = Describe("Ufest Core Functionality", func() {
 	const (
 		tmpDir     = "/tmp/ufest_test"
-		xattrMpath = tmpDir + "/xattr"
+		oneMpath   = tmpDir + "/onempath"
 		bucketName = "UFEST_TEST_Bucket"
 	)
 
 	localBck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
 	var (
-		mix     = fs.Mountpath{Path: xattrMpath}
+		mix     = fs.Mountpath{Path: oneMpath}
 		bmdMock = mock.NewBaseBownerMock(
 			meta.NewBck(
 				bucketName, apc.AIS, cmn.NsGlobal,
@@ -44,8 +46,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 	)
 
 	BeforeEach(func() {
-		_ = cos.CreateDir(xattrMpath)
-		_, _ = fs.Add(xattrMpath, "daeID")
+		_ = cos.CreateDir(oneMpath)
+		_, _ = fs.Add(oneMpath, "daeID")
 		_ = mock.NewTarget(bmdMock)
 
 		// Register content resolvers
@@ -55,7 +57,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 	})
 
 	AfterEach(func() {
-		_, _ = fs.Remove(xattrMpath)
+		_, _ = fs.Remove(oneMpath)
 		_ = os.RemoveAll(tmpDir)
 	})
 
@@ -440,69 +442,6 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(clone.Completed()).To(BeFalse())
 		})
 
-		It("should store and load manifest correctly", func() {
-			totalSize := int64(0)
-			chunkSizes := []int64{cos.MiB, cos.MiB, cos.MiB}
-			md5str := "d41d8cd98f00b204e9800998ecf8427e"
-
-			for i, size := range chunkSizes {
-				// Create proper MD5 bytes
-				j := i % len(md5str)
-				s := md5str[j:] + md5str[:j]
-				md5bytes, _ := hex.DecodeString(s)
-
-				chunk, err := manifest.NewChunk(i+1, lom)
-				Expect(err).NotTo(HaveOccurred())
-
-				chunk.MD5 = md5bytes
-				chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "999c0ffee0ddf00d"))
-				err = manifest.Add(chunk, size, int64(i+1))
-				Expect(err).NotTo(HaveOccurred())
-				totalSize += size
-			}
-
-			lom.Lock(true)
-			lom.SetSize(totalSize)
-
-			err := manifest.StoreCompleted(lom, true) // testing=true to avoid file operations
-			Expect(err).NotTo(HaveOccurred())
-			Expect(manifest.Completed()).To(BeTrue())
-
-			loadedManifest, err := core.NewUfest("", lom, true) // mustExist=true for loading
-			Expect(err).NotTo(HaveOccurred())
-			err = loadedManifest.LoadCompleted(lom)
-			Expect(err).NotTo(HaveOccurred())
-			lom.Unlock(true)
-
-			Expect(loadedManifest.ID()).To(Equal(manifest.ID()))
-			Expect(loadedManifest.Completed()).To(BeTrue())
-
-			// Verify chunks
-			for i := 1; i <= 3; i++ {
-				originalChunk := manifest.GetChunk(i, false)
-				loadedChunk := loadedManifest.GetChunk(i, false)
-
-				Expect(loadedChunk).NotTo(BeNil())
-				Expect(loadedChunk.Num()).To(Equal(originalChunk.Num()))
-				Expect(loadedChunk.Path()).To(Equal(originalChunk.Path()))
-				Expect(loadedChunk.Size()).To(Equal(originalChunk.Size()))
-				Expect(loadedChunk.MD5).To(Equal(originalChunk.MD5))
-			}
-		})
-
-		It("should fail to store invalid manifest", func() {
-			chunk, err := manifest.NewChunk(1, lom)
-			Expect(err).NotTo(HaveOccurred())
-			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err = manifest.Add(chunk, cos.MiB, 1)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Try to store with mismatched size (LOM size doesn't match chunk total)
-			err = manifest.StoreCompleted(lom, true) // testing=true
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("size"))
-		})
-
 		It("should fail to load non-existent manifest", func() {
 			var err error
 			lom.Lock(false)
@@ -513,60 +452,93 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("should handle corrupted manifest data", func() {
-			// Store valid manifest first to xattr
-			chunk, err := manifest.NewChunk(1, lom)
-			Expect(err).NotTo(HaveOccurred())
-			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err = manifest.Add(chunk, cos.MiB, 1)
-			Expect(err).NotTo(HaveOccurred())
-
-			lom.Lock(true)
-			lom.SetSize(cos.MiB)
-			err = manifest.StoreCompleted(lom, true) // testing=true
-			Expect(err).NotTo(HaveOccurred())
-
-			// Verify that valid data can be loaded
-			corruptManifest, err := core.NewUfest("", lom, true)
-			Expect(err).NotTo(HaveOccurred())
-			err = corruptManifest.LoadCompleted(lom)
-			Expect(err).NotTo(HaveOccurred()) // Should succeed with valid data
-			lom.Unlock(true)
-
-			// TODO: add actual corruption testing when we have access to xattr manipulation
-		})
-	})
-
-	Describe("State Management", func() {
-		It("should track completion status correctly", func() {
-			testObjectName := "test-objects/state-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
-
-			_ = cos.CreateDir(filepath.Dir(localFQN))
+		It("persists and reloads manifest with identical ID and chunks", func() {
+			testObject := "mpu/manifest-roundtrip.bin"
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObject)
 
 			createTestFile(localFQN, 0)
+			lom := newBasicLom(localFQN)
 
-			lom := newBasicLom(localFQN, cos.MiB)
-			manifest, err := core.NewUfest("test-state-123", lom, false)
+			u, err := core.NewUfest("rt12345-"+cos.GenTie(), lom, false)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(manifest.Completed()).To(BeFalse())
+			// add a few chunks with MD5s
+			sizes := []int64{64 * cos.KiB, 33 * cos.KiB, 128 * cos.KiB}
+			var md5s [][]byte
+			for i, sz := range sizes {
+				c, err := u.NewChunk(i+1, lom)
+				Expect(err).NotTo(HaveOccurred())
+				m := creatChunkMD5andWhole(c.Path(), int(sz), nil) // writes file & returns MD5
+				c.MD5 = m
+				md5s = append(md5s, m)
+				Expect(u.Add(c, sz, int64(i+1))).NotTo(HaveOccurred())
+			}
 
-			chunk, err := manifest.NewChunk(1, lom)
-			Expect(err).NotTo(HaveOccurred())
-			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err = manifest.Add(chunk, cos.MiB, 1)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(lom.CompleteUfest(u)).NotTo(HaveOccurred())
 
-			lom.Lock(true)
-			defer lom.Unlock(true)
-			lom.SetSize(cos.MiB)
-			err = manifest.StoreCompleted(lom, true) // testing=true
+			// fresh manifest load
+			loaded, err := core.NewUfest("", lom, true /* must-exist */)
 			Expect(err).NotTo(HaveOccurred())
+			lom.Lock(false)
+			Expect(loaded.LoadCompleted(lom)).NotTo(HaveOccurred())
+			lom.Unlock(false)
 
-			// Should be completed after successful store
-			Expect(manifest.Completed()).To(BeTrue())
+			Expect(loaded.ID()).To(Equal(u.ID()))
+			Expect(loaded.Count()).To(Equal(len(sizes)))
+			Expect(loaded.Size()).To(Equal(u.Size()))
+			for i := 1; i <= len(sizes); i++ {
+				oc := u.GetChunk(i, false)
+				lc := loaded.GetChunk(i, false)
+				Expect(lc).NotTo(BeNil())
+				Expect(lc.Num()).To(Equal(oc.Num()))
+				Expect(lc.Size()).To(Equal(oc.Size()))
+				Expect(bytes.Equal(lc.MD5, md5s[i-1])).To(BeTrue())
+			}
 		})
+
+		It("classifies corrupted manifest as ErrLmetaCorrupted on load", func() {
+			testObject := "mpu/corrupted-manifest.bin"
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObject)
+			createTestFile(localFQN, 0)
+			lom := newBasicLom(localFQN)
+
+			u, err := core.NewUfest("corrupt-"+cos.GenTie(), lom, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := u.NewChunk(1, lom)
+			Expect(err).NotTo(HaveOccurred())
+			createTestChunk(c.Path(), 4*cos.KiB, nil)
+			Expect(u.Add(c, 4*cos.KiB, 1)).NotTo(HaveOccurred())
+			Expect(lom.CompleteUfest(u)).NotTo(HaveOccurred())
+
+			// Corrupt the stored manifest
+			mfqn := fs.CSM.Gen(lom, fs.ChunkMetaCT)
+
+			// 2) Corrupt it: flip a middle byte
+			buf, err := os.ReadFile(mfqn)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(buf)).To(BeNumerically(">", 8)) // sanity
+			buf[len(buf)/2] ^= 0x5A
+			Expect(os.WriteFile(mfqn, buf, 0o644)).NotTo(HaveOccurred())
+
+			// 3) Reload and expect classified corruption
+			loaded, err := core.NewUfest("", lom, true)
+			Expect(err).NotTo(HaveOccurred())
+			lom.Lock(false)
+			err = loaded.LoadCompleted(lom)
+			lom.Unlock(false)
+			Expect(err).To(HaveOccurred())
+
+			fmt.Fprintf(GinkgoWriter, ">>> corruption load error: %T | %v\n", err, err)
+
+			var (
+				lmerr *cmn.ErrLmetaCorrupted
+				bcerr *cos.ErrBadCksum
+			)
+			Expect(errors.As(err, &lmerr) || errors.As(err, &bcerr)).To(BeTrue(),
+				"expected ErrLmetaCorrupted or ErrBadCksum")
+		})
+
 	})
 
 	Describe("Locking Behavior", func() {

@@ -166,9 +166,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(ufest.Size()).To(Equal(int64(fileSize)))
 
 			// Store manifest (this will mark it as completed)
-			lom.Lock(true)
-			err = ufest.StoreCompleted(lom)
-			lom.Unlock(true)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
 
@@ -227,10 +225,8 @@ var _ = Describe("MPU-UfestRead", func() {
 			err = ufest.Add(chunk, 0, 1)
 			Expect(err).NotTo(HaveOccurred())
 
-			lom.Lock(true)
-			err = ufest.StoreCompleted(lom)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
-			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -276,11 +272,9 @@ var _ = Describe("MPU-UfestRead", func() {
 			err = ufest.Add(chunk, 200, 1)
 			Expect(err).NotTo(HaveOccurred())
 
-			lom.Lock(true)
 			lom.SetSize(200)
-			err = ufest.StoreCompleted(lom)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
-			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -323,10 +317,8 @@ var _ = Describe("MPU-UfestRead", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			lom.Lock(true)
-			err = ufest.StoreCompleted(lom)
+			err = lom.CompleteUfest(ufest)
 			Expect(err).NotTo(HaveOccurred())
-			lom.Unlock(true)
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())

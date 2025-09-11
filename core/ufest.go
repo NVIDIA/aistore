@@ -33,8 +33,6 @@ import (
 )
 
 // TODO:
-// - remove or isolate `testing` bits -- FIXME
-// - partial manifest is expected in memory; TODO: resume upon restart (can wait)
 // - add stats counters
 // - remove all debug.AssertFunc
 // - space cleanup; orphan chunks
@@ -366,8 +364,8 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 	if err != nil {
 		return u._errLoad(tag, lom.Cname(), err)
 	}
-	if err := u._load(lom, csgl); err != nil {
-		return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(lom.Cname()), err)
+	if err := u._load(lom, csgl, tag); err != nil {
+		return err
 	}
 	if size := lom.Lsize(true); size != u.size {
 		return fmt.Errorf("%s load size mismatch: %s manifest %d vs %d lom", u._itag(lom.Cname()), tag, u.size, size)
@@ -399,14 +397,14 @@ func (u *Ufest) LoadPartial(lom *LOM) error {
 	if err != nil {
 		return u._errLoad(tag, lom.Cname(), err)
 	}
-	if err := u._load(lom, csgl); err != nil {
-		return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(lom.Cname()), err)
+	if err := u._load(lom, csgl, tag); err != nil {
+		return err
 	}
 	debug.Assert(u.flags&flCompleted == 0)
 	return nil
 }
 
-func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL) error {
+func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL, tag string) error {
 	data := csgl.Bytes()
 
 	// validate and strip/remove the trailing checksum
@@ -426,12 +424,13 @@ func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL) error {
 	dslab.Free(dbuf)
 
 	if err != nil {
-		return err
+		e := fmt.Errorf("failed to load %s %s: %v", tag, u._utag(lom.Cname()), err)
+		return cmn.NewErrLmetaCorrupted(e)
 	}
 	debug.Assert(u.validNums() == nil)
 
 	if givenID != "" && givenID != u.id {
-		return fmt.Errorf("ID mismatch: given %q vs stored %q", givenID, u.id)
+		return fmt.Errorf("loaded %s %s has different ID: given %q vs stored %q", tag, u._utag(lom.Cname()), givenID, u.id)
 	}
 	u.lom = lom
 	return err
@@ -461,25 +460,29 @@ func (u *Ufest) _decompress(compressedData, buf []byte) error {
 	return nil
 }
 
+const _atid = ", id="
+
 func (u *Ufest) _errLoad(tag, cname string, err error) error {
 	return fmt.Errorf("failed to load %s %s: %w", tag, u._utag(cname), err)
 }
 
 func (u *Ufest) _utag(cname string) string {
-	return utag + "[" + cname + "@" + u.id + "]"
+	return utag + "[" + cname + _atid + u.id + "]"
 }
 
-func (u *Ufest) _itag(cnames ...string) string {
+func (u *Ufest) _itag(cname string) string {
+	return itag + "[" + cname + _atid + u.id + "]"
+}
+
+func (u *Ufest) _rtag() string {
 	var cname string
-	if len(cnames) > 0 {
-		cname = cnames[0]
-	} else if u.lom != nil {
+	if u.lom != nil {
 		cname = u.lom.Cname()
 	}
-	return itag + "[" + cname + "@" + u.id + "]"
+	return "chunked content[" + cname + _atid + u.id + "]"
 }
 
-func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
+func (u *Ufest) storeCompleted(lom *LOM) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -514,10 +517,8 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 		return e
 	}
 	orig := c.path
-	if len(testing) == 0 {
-		if err := lom.RenameFinalize(c.path); err != nil {
-			return err
-		}
+	if err := lom.RenameFinalize(c.path); err != nil {
+		return err
 	}
 	c.path = lom.FQN
 
@@ -541,13 +542,9 @@ func (u *Ufest) StoreCompleted(lom *LOM, testing ...bool) error {
 	// undo
 	u.flags &^= flCompleted // undo
 	u.completed.Store(false)
-	if len(testing) == 0 {
-		if nerr := cos.Rename(lom.FQN, orig); nerr != nil {
-			nlog.Errorf("failed to store %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
-			T.FSHC(err, lom.Mountpath(), lom.FQN)
-		} else {
-			c.path = orig
-		}
+	if nerr := cos.Rename(lom.FQN, orig); nerr != nil {
+		nlog.Errorf("failed to store %s: w/ nested error [%v, %v]", u._itag(lom.Cname()), err, nerr)
+		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		c.path = orig
 	}
@@ -568,11 +565,11 @@ func (u *Ufest) validNums() error {
 	for i := range u.chunks {
 		c := &u.chunks[i]
 		if c.num <= 0 || c.num > u.count {
-			return fmt.Errorf("chunk %d has invalid part number [%d, %d]", i, c.num, u.count)
+			return fmt.Errorf("chunk %d has invalid number (%d/%d)", i, c.num, u.count)
 		}
 		for j := range i {
 			if u.chunks[j].num == c.num {
-				return fmt.Errorf("duplicate chunk number: [%d, %d, %d]", c.num, i, j)
+				return fmt.Errorf("duplicate chunk number %d at positions %d and %d", c.num, i, j)
 			}
 		}
 	}
@@ -747,7 +744,7 @@ func (u *Ufest) ETagS3() (string, error) {
 			}
 			fallthrough
 		default:
-			err := fmt.Errorf("%s: invalid ETag for part %d: %q", u._itag(), i+1, c.ETag)
+			err := fmt.Errorf("%s: invalid ETag for chunk %d: %q", u._rtag(), i+1, c.ETag)
 			debug.AssertNoErr(err)
 			return "", err
 		}
@@ -786,7 +783,7 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 			return e
 		}
 		if nn != c.size {
-			return fmt.Errorf("%s: invalid size for part %d: got %d, want %d", u._itag(), c.num, nn, c.size)
+			return fmt.Errorf("%s chunk %d: invalid size: written %d, have %d", u._rtag(), c.num, nn, c.size)
 		}
 		written += nn
 	}
@@ -1011,8 +1008,8 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		return total == u.size
 	})
 
-	lom.SetSize(u.size) // StoreCompleted still performs non-debug validation
-	if err := u.StoreCompleted(lom); err != nil {
+	lom.SetSize(u.size) // note: storeCompleted still performs non-debug validation
+	if err := u.storeCompleted(lom); err != nil {
 		u.Abort(lom)
 		return err
 	}
@@ -1068,7 +1065,7 @@ func (lom *LOM) NewUfestReader() (cos.LomReader, error) {
 
 func (u *Ufest) NewReader() (*UfestReader, error) {
 	if !u.Completed() {
-		return nil, fmt.Errorf("%s: is incomplete - cannot be read", u._itag())
+		return nil, fmt.Errorf("%s: is incomplete - cannot be read", u._rtag())
 	}
 	return &UfestReader{u: u}, nil
 }
@@ -1088,7 +1085,7 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 			debug.Assert(r.coff == 0)
 			r.cfh, err = os.Open(c.path)
 			if err != nil {
-				return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), r.cidx+1, u.count)
+				return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._rtag(), r.cidx+1, u.count)
 			}
 		}
 
@@ -1111,7 +1108,7 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 		case io.EOF:
 			if r.coff < c.size {
 				return n, fmt.Errorf("%s: chunk (%d/%d) appears to be truncated (%d/%d): %v",
-					r.u._itag(), r.cidx+1, u.count, r.coff, c.size, io.ErrUnexpectedEOF)
+					r.u._rtag(), r.cidx+1, u.count, r.coff, c.size, io.ErrUnexpectedEOF)
 			}
 			err = nil
 		case nil:
@@ -1183,7 +1180,7 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		toRead := min(int64(total-n), c.size-chunkoff)
 		fh, err := os.Open(c.path)
 		if err != nil {
-			return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._itag(), idx+1, u.count)
+			return n, fmt.Errorf("%s: failed to open chunk (%d/%d)", r.u._rtag(), idx+1, u.count)
 		}
 
 		var m int
@@ -1193,7 +1190,7 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		n += m
 		if err != nil {
 			return n, fmt.Errorf("%s: failed to read chunk (%d/%d) at offset %d: %v",
-				r.u._itag(), idx+1, u.count, chunkoff, err)
+				r.u._rtag(), idx+1, u.count, chunkoff, err)
 		}
 
 		// 2nd, etc. chunks

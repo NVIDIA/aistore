@@ -337,7 +337,7 @@ func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	dst.SetCksum(&wholeCksum.Cksum)
 
 	// Store the completed manifest for destination
-	err = dstUfest.StoreCompleted(dst)
+	err = dstUfest.storeCompleted(dst)
 	if err != nil {
 		dstUfest.removeChunks(dst)
 		return fmt.Errorf("failed to store completed manifest for destination %s: %w", dst.Cname(), err)
