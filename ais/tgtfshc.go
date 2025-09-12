@@ -44,6 +44,13 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 		return
 	}
 
+	// fqn takes priority iff: provided and resolves => mountpath
+	if fqn != "" {
+		if fqnmi, _, err := fs.FQN2Mpath(fqn); err == nil {
+			mi = fqnmi
+		}
+	}
+
 	if !mi.IsAvail() {
 		nlog.Warningln(mi.String(), "is not available (possibly disabled or detached), skipping FSHC")
 		return

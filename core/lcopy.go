@@ -6,7 +6,9 @@ package core
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -417,31 +419,37 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	return err
 }
 
-// load-balanced GET
-func (lom *LOM) LBGet() (fqn string) {
-	if !lom.HasCopies() {
-		return lom.FQN
-	}
-	return lom.leastUtilCopy()
-}
+// load-balanced GET from replicated lom
+// - picks least-utilized mountpath
+// - returns (open reader + its FQN) or (nil, "")
+func (lom *LOM) OpenCopy() (cos.LomReader, string) {
+	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " is not locked")
+	debug.Assert(!lom.IsChunked())
 
-// NOTE: reconsider counting GETs (and the associated overhead)
-// vs ios.refreshIostatCache (and the associated delay)
-func (lom *LOM) leastUtilCopy() (fqn string) {
+	if !lom.HasCopies() {
+		return nil, ""
+	}
+
 	var (
-		mpathUtils = fs.GetAllMpathUtils()
-		minUtil    = mpathUtils.Get(lom.mi.Path)
-		copies     = lom.GetCopies()
+		fqn   = lom.FQN
+		utils = fs.GetAllMpathUtils()
+		curr  = utils.Get(lom.mi.Path)
 	)
-	fqn = lom.FQN
-	for copyFQN, copyMPI := range copies {
-		if copyFQN != lom.FQN {
-			if util := mpathUtils.Get(copyMPI.Path); util < minUtil {
-				fqn, minUtil = copyFQN, util
-			}
+	for cfqn, cmi := range lom.md.copies {
+		if cfqn == lom.FQN {
+			continue
+		}
+		if cutil := utils.Get(cmi.Path); cutil < curr {
+			fqn, curr = cfqn, cutil
 		}
 	}
-	return
+	if fqn == lom.FQN {
+		return nil, ""
+	}
+	if lh, err := os.Open(fqn); err == nil { // (compare w/ lom.Open())
+		return lh, fqn
+	}
+	return nil, ""
 }
 
 // returns the least-utilized mountpath that does _not_ have a copy of this `lom` yet

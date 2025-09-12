@@ -1036,14 +1036,21 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	var (
 		lmfh cos.LomReader
 		hrng *htrange
-		fqn  = goi.lom.FQN
+		fqn  string
 		dpq  = goi.dpq
 	)
-	if !goi.cold && !dpq.isGFN && !goi.lom.IsChunked() {
-		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
-	}
 	// open
-	lmfh, err = goi.lom.Open()
+	if cmn.Rom.Features().IsSet(feat.LoadBalanceGET) && !goi.cold && !dpq.isGFN && !goi.lom.IsChunked() {
+		// [feat] best-effort GET load balancing across mirrored copies
+		if lmfh, fqn = goi.lom.OpenCopy(); lmfh == nil {
+			fqn = goi.lom.FQN
+			lmfh, err = goi.lom.Open()
+		}
+	} else {
+		fqn = goi.lom.FQN
+		lmfh, err = goi.lom.Open()
+	}
+
 	if err != nil {
 		if cos.IsNotExist(err) {
 			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()
@@ -1571,7 +1578,8 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		return xs.CoiRes{Err: err}
 	}
 
-	daddr, err := url.Parse(cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname)))) // use escaped URL to simplify parsing on the ETL side)
+	// use escaped URL to simplify parsing on the ETL side)
+	daddr, err := url.Parse(cos.JoinPath(tsi.URL(cmn.NetIntraData), url.PathEscape(cos.UnsafeS(uname))))
 	if err != nil {
 		return xs.CoiRes{Err: err}
 	}
