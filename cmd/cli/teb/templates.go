@@ -70,8 +70,8 @@ const (
 	ObjLockTmpl      = objLockTmplHdr + ObjLockTmplNoHdr
 	ObjLockTmplNoHdr = "{{range $o := . }}" + "{{$o.Name}}\t {{$o.Status}}\n" + "{{end}}"
 
-	// w/ special arrangement for feature flags
-	FeatDescTmplHdr = "FEATURE\t DESCRIPTION\n"
+	// 3-column: FEATURE | TAGS | DESCRIPTION
+	FeatTagsDescTmplHdr = "FEATURE\t TAGS\t DESCRIPTION\n"
 
 	//
 	// special xactions & dsort

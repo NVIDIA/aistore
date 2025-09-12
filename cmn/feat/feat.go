@@ -6,6 +6,7 @@ package feat
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -39,13 +40,14 @@ const (
 	S3ReverseProxy            // intra-cluster communications: instead of regular HTTP redirects reverse-proxy S3 API calls to designated targets
 	S3UsePathStyle            // use older path-style addressing (as opposed to virtual-hosted style), e.g., https://s3.amazonaws.com/BUCKET/KEY
 	DontDeleteWhenRebalancing // disable lazy deletion during global rebalance: do not delete misplaced sources of the migrated objects
-	DontSetControlPlaneToS    // intra-cluster control plane: do not set IPv4 ToS field (to low-latency)
+	DontSetControlPlaneToS    // intra-cluster control plane: use default network priority (do not set IPv4 ToS to low-latency)
 	TrustCryptoSafeChecksums  // when checking whether objects are identical trust only cryptographically secure checksums
 	S3ListObjectVersions      // when versioning info is requested, use ListObjectVersions API (beware: extremely slow, versioned S3 buckets only)
 	EnableDetailedPromMetrics // include (bucket, xaction) Prometheus variable labels with every GET, PUT, and HEAD transaction
 	SystemReserved            // reserved; do not set: the flag may be redefined or removed at any time
 	ResumeInterruptedMPU      // resume interrupted multipart uploads from persisted partial manifests
 	KeepUnknownFQN            // do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')
+	LoadBalanceGET            // when bucket is n-way mirrored read object replica from the least-utilized mountpath
 )
 
 var Cluster = [...]string{
@@ -72,6 +74,7 @@ var Cluster = [...]string{
 	"System-Reserved",
 	"Resume-Interrupted-MPU",
 	"Keep-Unknown-FQN",
+	"Load-Balance-GET",
 
 	// "none" ====================
 }
@@ -88,6 +91,16 @@ var Bucket = [...]string{
 
 	// "none" ====================
 }
+
+// as cmn.Validator and cmn.PropsValidator
+func (f *Flags) Validate() error {
+	if f.IsSet(DisableColdGET) && f.IsSet(StreamingColdGET) {
+		return fmt.Errorf("feature flags %q and %q are mutually exclusive", DisableColdGET.name(), StreamingColdGET.name())
+	}
+	return nil
+}
+
+func (f *Flags) ValidateAsProps(...any) error { return f.Validate() }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }
 func (f Flags) Set(flags Flags) Flags { return Flags(cos.BitFlags(f).Set(cos.BitFlags(flags))) }
@@ -112,6 +125,15 @@ func CSV2Feat(s string) (Flags, error) {
 		}
 	}
 	return 0, errors.New("unknown feature flag '" + s + "'")
+}
+
+func (f Flags) name() string {
+	for i, n := range Cluster {
+		if f&(1<<i) != 0 {
+			return n
+		}
+	}
+	return ""
 }
 
 func (f Flags) Names() (names []string) {

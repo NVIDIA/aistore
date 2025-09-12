@@ -444,7 +444,7 @@ func (lom *LOM) leastUtilCopy() (fqn string) {
 	return
 }
 
-// returns the least utilized mountpath that does _not_ have a copy of this `lom` yet
+// returns the least-utilized mountpath that does _not_ have a copy of this `lom` yet
 // (compare with leastUtilCopy())
 func (lom *LOM) LeastUtilNoCopy() (mi *fs.Mountpath) {
 	var (

@@ -863,6 +863,8 @@ var (
 	_ Validator = (*WritePolicyConf)(nil)
 	_ Validator = (*TracingConf)(nil)
 
+	_ Validator = (*feat.Flags)(nil)
+
 	_ PropsValidator = (*CksumConf)(nil)
 	_ PropsValidator = (*SpaceConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
@@ -898,6 +900,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.LocalConfig.TestFSP.Validate(c); err != nil {
+		return err
+	}
+	if err := c.Features.Validate(); err != nil {
 		return err
 	}
 

@@ -239,7 +239,7 @@ func (bp *Bprops) Validate(targetCnt int) error {
 
 	// run assorted props validators
 	var softErr error
-	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy, &bp.RateLimit, &bp.Chunks, &bp.LRU} {
+	for _, pv := range []PropsValidator{&bp.Cksum, &bp.Mirror, &bp.EC, &bp.Extra, &bp.WritePolicy, &bp.RateLimit, &bp.Chunks, &bp.LRU, &bp.Features} {
 		var err error
 		switch {
 		case pv == &bp.EC:
@@ -256,6 +256,8 @@ func (bp *Bprops) Validate(targetCnt int) error {
 			softErr = err
 		}
 	}
+
+	// limitations
 	if bp.Mirror.Enabled && bp.EC.Enabled {
 		nlog.Warningln("n-way mirroring and EC are both enabled at the same time on the same bucket")
 	}
