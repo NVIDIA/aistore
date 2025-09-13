@@ -2097,17 +2097,16 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 		baseParams = tools.BaseAPIParams()
 		dstBck1    = cmn.Bck{
-			Name:     testBucketName + "_new1",
+			Name:     cos.GenTie() + "_new1",
 			Provider: apc.AIS,
 		}
 		dstBck2 = cmn.Bck{
-			Name:     testBucketName + "_new2",
+			Name:     cos.GenTie() + "_new2",
 			Provider: apc.AIS,
 		}
 	)
 
 	m.initAndSaveState(false /*cleanup*/)
-	m.proxyURL = tools.RandomProxyURL(t)
 	m.expectTargets(1)
 
 	srcBck := m.bck

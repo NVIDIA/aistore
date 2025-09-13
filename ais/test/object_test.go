@@ -1518,10 +1518,6 @@ func TestRangeRead(t *testing.T) {
 
 		m.init(true /*cleanup*/)
 
-		if m.chunksConf != nil {
-			t.Skipf("skipping %s: relies on 'initMountpaths/findObjOnDisk' which is incompatible with chunked objects", t.Name())
-		}
-
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1550,7 +1546,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, m.bck, propsToSet)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Clone(), cksumProps, m.fileSize, objName)
+		testValidCases(&m, bck.Clone(), cksumProps, m.fileSize, objName)
 
 		// Validate only that range checksum is being returned
 		tlog.Logln("Valid range with range checksum...")
@@ -1563,7 +1559,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Clone(), propsToSet)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, m.bck, cksumProps, m.fileSize, objName)
+		testValidCases(&m, m.bck, cksumProps, m.fileSize, objName)
 
 		tlog.Logln("Valid range query...")
 		verifyValidRangesQuery(t, proxyURL, m.bck, objName, "bytes=-1", 1)
@@ -1588,25 +1584,24 @@ func TestRangeRead(t *testing.T) {
 	})
 }
 
-func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cmn.CksumConf, fileSize uint64, objName string) {
+func testValidCases(m *ioContext, bck cmn.Bck, cksumConf *cmn.CksumConf, fileSize uint64, objName string) {
 	const byteRange = int64(500)
 	iterations := int64(fileSize) / byteRange
 	for j := range iterations {
 		off := j * byteRange
-		verifyValidRanges(t, proxyURL, bck, cksumConf, objName, off, byteRange, byteRange)
+		verifyValidRanges(m, bck, cksumConf, objName, off, byteRange, byteRange)
 	}
 	if rem := int64(fileSize) % byteRange; rem != 0 {
-		verifyValidRanges(t, proxyURL, bck, cksumConf, objName, iterations*byteRange, byteRange, rem)
+		verifyValidRanges(m, bck, cksumConf, objName, iterations*byteRange, byteRange, rem)
 	}
 }
 
-func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cmn.CksumConf, objName string, offset, length, expectedLength int64) {
+func verifyValidRanges(m *ioContext, bck cmn.Bck, cksumConf *cmn.CksumConf, objName string, offset, length, expectedLength int64) {
 	var (
 		w          = bytes.NewBuffer(nil)
 		rng        = cmn.MakeRangeHdr(offset, length)
 		hdr        = http.Header{cos.HdrRange: []string{rng}}
-		baseParams = tools.BaseAPIParams(proxyURL)
-		fqn        = findObjOnDisk(bck, objName)
+		baseParams = tools.BaseAPIParams(m.proxyURL)
 		args       = api.GetArgs{Writer: w, Header: hdr}
 		oah        api.ObjAttrs
 		err        error
@@ -1617,14 +1612,24 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cm
 	} else {
 		oah, err = api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	}
-	tassert.CheckError(t, err)
+	tassert.CheckError(m.t, err)
 	if oah.Size() != expectedLength {
-		t.Errorf("number of bytes received (%d) is different from expected (%d)", oah.Size(), expectedLength)
+		m.t.Errorf("number of bytes received (%d) is different from expected (%d)", oah.Size(), expectedLength)
+	}
+
+	//
+	// TODO -- FIXME: move getObjToTemp() into findObjOnDisk() to reuse across test cases (except those that corrupt bits)
+	//
+	var fqn string
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		fqn = getObjToTemp(m.t, m.proxyURL, m.bck, objName)
+	} else {
+		fqn = findObjOnDisk(bck, objName)
 	}
 
 	file, err := os.Open(fqn)
 	if err != nil {
-		t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
+		m.t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 	}
 	defer file.Close()
 	outputBytes := w.Bytes()
@@ -1632,19 +1637,19 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cm
 	expectedBytesBuffer := bytes.NewBuffer(nil)
 	_, err = expectedBytesBuffer.ReadFrom(sectionReader)
 	if err != nil {
-		t.Errorf("Unable to read the file %s, from offset: %d and length: %d. Error: %v", fqn, offset, length, err)
+		m.t.Errorf("Unable to read the file %s, from offset: %d and length: %d. Error: %v", fqn, offset, length, err)
 	}
 	expectedBytes := expectedBytesBuffer.Bytes()
 	if len(outputBytes) != len(expectedBytes) {
-		t.Errorf("Bytes length mismatch. Expected bytes: [%d]. Actual bytes: [%d]", len(expectedBytes), len(outputBytes))
+		m.t.Errorf("Bytes length mismatch. Expected bytes: [%d]. Actual bytes: [%d]", len(expectedBytes), len(outputBytes))
 	}
 	if int64(len(outputBytes)) != expectedLength {
-		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]",
+		m.t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]",
 			expectedLength, len(outputBytes))
 	}
 	for i := range expectedBytes {
 		if expectedBytes[i] != outputBytes[i] {
-			t.Errorf("Byte mismatch. Expected: %v, Actual: %v", string(expectedBytes), string(outputBytes))
+			m.t.Errorf("Byte mismatch. Expected: %v, Actual: %v", string(expectedBytes), string(outputBytes))
 		}
 	}
 }

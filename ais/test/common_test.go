@@ -1019,6 +1019,24 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 	return fqn
 }
 
+func getObjToTemp(t *testing.T, proxyURL string, bck cmn.Bck, objName string) string {
+	t.Helper()
+	dir := t.TempDir() // is auto-removed by stdlib
+	tmp := filepath.Join(dir, objName)
+
+	err := cos.CreateDir(filepath.Dir(tmp))
+	tassert.CheckFatal(t, err)
+
+	f, err := os.Create(tmp)
+	tassert.CheckFatal(t, err)
+	defer f.Close()
+
+	bp := tools.BaseAPIParams(proxyURL)
+	_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: f})
+	tassert.CheckFatal(t, err)
+	return tmp
+}
+
 func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 	for _, nbck := range newList {
 		found := false
