@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -949,7 +948,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	fqn := findObjOnDisk(m.bck, objName)
+	fqn := m.findObjOnDisk(m.bck, objName)
 	tools.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ := os.Stat(fqn)
 
@@ -961,7 +960,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	// Test when the xxHash of the file is changed
 	objName = m.nextObjName()
-	fqn = findObjOnDisk(m.bck, objName)
+	fqn = m.findObjOnDisk(m.bck, objName)
 	tools.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
@@ -972,7 +971,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	// Test for no checksum algo
 	objName = m.nextObjName()
-	fqn = findObjOnDisk(m.bck, objName)
+	fqn = m.findObjOnDisk(m.bck, objName)
 
 	if p.Cksum.Type != cos.ChecksumNone {
 		propsToSet := &cmn.BpropsToSet{
@@ -1011,6 +1010,9 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
+	}
+	if m.chunksConf != nil {
+		t.Skipf("skipping %s: relies on 'initMountpaths/findObjOnDisk' to modify content and cannot work with chunked objects", t.Name())
 	}
 
 	p, err := api.HeadBucket(baseParams, m.bck, false /*don't add*/)
@@ -1135,7 +1137,7 @@ func TestValidateOnWarmGetRemoteBucket(t *testing.T) {
 				objName := m.nextObjName()
 
 				// Modify local version.
-				fqn := findObjOnDisk(m.bck, objName)
+				fqn := m.findObjOnDisk(m.bck, objName)
 				tools.ModifyLOM(t, fqn, m.bck, test.modify)
 
 				// Make sure that object is not returned.
@@ -1447,7 +1449,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	// Test changing the file content.
 	objName := m.objNames[0]
-	fqn := findObjOnDisk(m.bck, objName)
+	fqn := m.findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err := os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
@@ -1455,7 +1457,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	// Test changing the file xattr.
 	objName = m.objNames[1]
-	fqn = findObjOnDisk(m.bck, objName)
+	fqn = m.findObjOnDisk(m.bck, objName)
 	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
 	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 	tassert.CheckError(t, err)
@@ -1463,7 +1465,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	// Test for none checksum algorithm.
 	objName = m.objNames[2]
-	fqn = findObjOnDisk(m.bck, objName)
+	fqn = m.findObjOnDisk(m.bck, objName)
 
 	if cksumConf.Type != cos.ChecksumNone {
 		propsToSet := &cmn.BpropsToSet{
@@ -1617,15 +1619,7 @@ func verifyValidRanges(m *ioContext, bck cmn.Bck, cksumConf *cmn.CksumConf, objN
 		m.t.Errorf("number of bytes received (%d) is different from expected (%d)", oah.Size(), expectedLength)
 	}
 
-	//
-	// TODO -- FIXME: move getObjToTemp() into findObjOnDisk() to reuse across test cases (except those that corrupt bits)
-	//
-	var fqn string
-	if m.chunksConf != nil && m.chunksConf.multipart {
-		fqn = getObjToTemp(m.t, m.proxyURL, m.bck, objName)
-	} else {
-		fqn = findObjOnDisk(bck, objName)
-	}
+	fqn := m.findObjOnDisk(bck, objName)
 
 	file, err := os.Open(fqn)
 	if err != nil {
@@ -1774,29 +1768,6 @@ func resetBucketProps(t *testing.T, proxyURL string, bck cmn.Bck) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	_, err := api.ResetBucketProps(baseParams, bck)
 	tassert.CheckError(t, err)
-}
-
-func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
-	var (
-		fqn     = findObjOnDisk(bck, objName)
-		fi, err = os.Stat(fqn)
-		b       = []byte{0}
-	)
-	tassert.CheckFatal(t, err)
-	off := rand.Int64N(fi.Size())
-	file, err := os.OpenFile(fqn, os.O_RDWR, cos.PermRWR)
-	tassert.CheckFatal(t, err)
-	_, err = file.Seek(off, 0)
-	tassert.CheckFatal(t, err)
-	_, err = file.Read(b)
-	tassert.CheckFatal(t, err)
-	bit := rand.IntN(8)
-	b[0] ^= 1 << bit
-	_, err = file.Seek(off, 0)
-	tassert.CheckFatal(t, err)
-	_, err = file.Write(b)
-	tassert.CheckFatal(t, err)
-	file.Close()
 }
 
 func TestPutObjectWithChecksum(t *testing.T) {

@@ -255,7 +255,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 	// Test corrupting the file contents.
 	objName := m.objNames[0]
-	fqn := findObjOnDisk(m.bck, objName)
+	fqn := m.findObjOnDisk(m.bck, objName)
 	tlog.Logf("Corrupting object data %q: %s\n", objName, fqn)
 	err := os.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)

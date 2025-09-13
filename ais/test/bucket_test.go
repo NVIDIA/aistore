@@ -3661,7 +3661,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
 				objName := bckObjs.Entries[j].Name
-				corruptSingleBitInFile(t, m.bck, objName)
+				corruptSingleBitInFile(&m, objName)
 				objCh <- objName
 			}
 		}()

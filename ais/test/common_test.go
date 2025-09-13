@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -118,6 +119,7 @@ func (m *ioContext) waitAndCheckCluState() {
 }
 
 func (m *ioContext) checkCluState(smap *meta.Smap) {
+	m.t.Helper()
 	proxyCount := smap.CountActivePs()
 	targetCount := smap.CountActiveTs()
 	if targetCount != m.originalTargetCount ||
@@ -191,6 +193,7 @@ func (m *ioContext) expectProxies(n int) {
 }
 
 func (m *ioContext) checkObjectDistribution(t *testing.T) {
+	m.t.Helper()
 	var (
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
@@ -216,6 +219,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 }
 
 func (m *ioContext) puts(ignoreErrs ...bool) {
+	m.t.Helper()
 	if !m.bck.IsAIS() {
 		m.remotePuts(false /*evict*/)
 		return
@@ -972,6 +976,7 @@ func initFS() {
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
+	t.Helper()
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 	fsOnce.Do(initFS)
 	baseParams := tools.BaseAPIParams(proxyURL)
@@ -988,7 +993,17 @@ func initMountpaths(t *testing.T, proxyURL string) {
 	}
 }
 
-func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
+// NOTE:
+// - do not fs.Walk if the bucket's content is chunked; instead GET to temp and return the latter
+// - this workaround won't work those tests that corrupt bits
+func (m *ioContext) findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
+	//
+	// TODO -- FIXME: this is _not_ the only condition indicating a chunked content
+	//
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		return getObjToTemp(m.t, m.proxyURL, bck, objName)
+	}
+
 	fsWalkFunc := func(path string, de fs.DirEntry) error {
 		if fqn != "" {
 			return filepath.SkipDir
@@ -1007,7 +1022,6 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 		}
 		return nil
 	}
-
 	fs.WalkBck(&fs.WalkBckOpts{
 		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
@@ -1035,6 +1049,36 @@ func getObjToTemp(t *testing.T, proxyURL string, bck cmn.Bck, objName string) st
 	_, err = api.GetObject(bp, bck, objName, &api.GetArgs{Writer: f})
 	tassert.CheckFatal(t, err)
 	return tmp
+}
+
+// TODO -- FIXME: this won't work for chunks
+func corruptSingleBitInFile(m *ioContext, objName string) {
+	m.t.Helper()
+	var (
+		fqn     = m.findObjOnDisk(m.bck, objName)
+		fi, err = os.Stat(fqn)
+		b       = []byte{0}
+	)
+	tassert.CheckFatal(m.t, err)
+	off := rand.Int64N(fi.Size())
+	file, err := os.OpenFile(fqn, os.O_RDWR, cos.PermRWR)
+	tassert.CheckFatal(m.t, err)
+
+	_, err = file.Seek(off, 0)
+	tassert.CheckFatal(m.t, err)
+
+	_, err = file.Read(b)
+	tassert.CheckFatal(m.t, err)
+
+	bit := rand.IntN(8)
+	b[0] ^= 1 << bit
+	_, err = file.Seek(off, 0)
+	tassert.CheckFatal(m.t, err)
+
+	_, err = file.Write(b)
+	tassert.CheckFatal(m.t, err)
+
+	file.Close()
 }
 
 func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {

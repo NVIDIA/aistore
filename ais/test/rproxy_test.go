@@ -138,7 +138,12 @@ retry:
 		tools.DestroyBucket(t, proxyURL, bck)
 	})
 
-	pathCached := findObjOnDisk(bck, gcsFilename)
+	m := ioContext{
+		t:        t,
+		bck:      bck,
+		proxyURL: proxyURL,
+	}
+	pathCached := m.findObjOnDisk(bck, gcsFilename)
 	tassert.Fatalf(t, pathCached != "", "object was not downloaded")
 	tlog.Logf("Downloaded as %q\n", pathCached)
 
