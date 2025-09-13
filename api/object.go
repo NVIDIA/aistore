@@ -221,6 +221,14 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 // Same as above with checksum validation.
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
+//
+// NOTE:
+// - Do not use for Read Range requests (`cos.HdrRange`) unless the bucket's
+//   checksum config has EnableReadRange=true (`enable_read_range = true`).
+// - When EnableReadRange=false, the server returns the FULL-OBJECT checksum
+//   even for a ranged GET; validating the range payload against that will fail
+//   with `cmn.ErrInvalidCksum`.
+
 func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
 	w, q, hdr := args.ret()
 	bp.Method = http.MethodGet

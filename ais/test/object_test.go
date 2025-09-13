@@ -1499,7 +1499,6 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 	}
 }
 
-// TODO: validate range checksums
 func TestRangeRead(t *testing.T) {
 	initMountpaths(t, tools.RandomProxyURL(t)) // to run findObjOnDisk() and validate range
 
@@ -1518,13 +1517,18 @@ func TestRangeRead(t *testing.T) {
 		)
 
 		m.init(true /*cleanup*/)
+
+		if m.chunksConf != nil {
+			t.Skipf("skipping %s: relies on 'initMountpaths/findObjOnDisk' which is incompatible with chunked objects", t.Name())
+		}
+
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
 		objName := m.objNames[0]
 
-		defer func() {
+		t.Cleanup(func() {
 			tlog.Logln("Cleaning up...")
 			propsToSet := &cmn.BpropsToSet{
 				Cksum: &cmn.CksumConfToSet{
@@ -1533,7 +1537,7 @@ func TestRangeRead(t *testing.T) {
 			}
 			_, err := api.SetBucketProps(baseParams, m.bck, propsToSet)
 			tassert.CheckError(t, err)
-		}()
+		})
 
 		tlog.Logln("Valid range with object checksum...")
 		// Validate that entire object checksum is being returned
@@ -1546,7 +1550,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, m.bck, propsToSet)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, bck.Clone(), cksumProps.Type, m.fileSize, objName, true)
+		testValidCases(t, proxyURL, bck.Clone(), cksumProps, m.fileSize, objName)
 
 		// Validate only that range checksum is being returned
 		tlog.Logln("Valid range with range checksum...")
@@ -1559,7 +1563,7 @@ func TestRangeRead(t *testing.T) {
 			_, err := api.SetBucketProps(baseParams, bck.Clone(), propsToSet)
 			tassert.CheckFatal(t, err)
 		}
-		testValidCases(t, proxyURL, m.bck, cksumProps.Type, m.fileSize, objName, false)
+		testValidCases(t, proxyURL, m.bck, cksumProps, m.fileSize, objName)
 
 		tlog.Logln("Valid range query...")
 		verifyValidRangesQuery(t, proxyURL, m.bck, objName, "bytes=-1", 1)
@@ -1584,22 +1588,19 @@ func TestRangeRead(t *testing.T) {
 	})
 }
 
-// TODO: validate range checksum if enabled
-func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumType string, fileSize uint64, objName string,
-	checkEntireObjCksum bool) {
-	// Range-Read the entire file in 500 increments
-	byteRange := int64(500)
+func testValidCases(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cmn.CksumConf, fileSize uint64, objName string) {
+	const byteRange = int64(500)
 	iterations := int64(fileSize) / byteRange
-	for i := int64(0); i < iterations; i += byteRange {
-		verifyValidRanges(t, proxyURL, bck, cksumType, objName, i, byteRange, byteRange, checkEntireObjCksum)
+	for j := range iterations {
+		off := j * byteRange
+		verifyValidRanges(t, proxyURL, bck, cksumConf, objName, off, byteRange, byteRange)
 	}
-
-	verifyValidRanges(t, proxyURL, bck, cksumType, objName, byteRange*iterations, byteRange,
-		int64(fileSize)%byteRange, checkEntireObjCksum)
+	if rem := int64(fileSize) % byteRange; rem != 0 {
+		verifyValidRanges(t, proxyURL, bck, cksumConf, objName, iterations*byteRange, byteRange, rem)
+	}
 }
 
-func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, objName string,
-	offset, length, expectedLength int64, checkEntireObjCksum bool) {
+func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumConf *cmn.CksumConf, objName string, offset, length, expectedLength int64) {
 	var (
 		w          = bytes.NewBuffer(nil)
 		rng        = cmn.MakeRangeHdr(offset, length)
@@ -1607,32 +1608,17 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 		baseParams = tools.BaseAPIParams(proxyURL)
 		fqn        = findObjOnDisk(bck, objName)
 		args       = api.GetArgs{Writer: w, Header: hdr}
+		oah        api.ObjAttrs
+		err        error
 	)
-
-	oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
-	if err != nil {
-		if !checkEntireObjCksum {
-			t.Errorf("Failed to GET %s: %v", bck.Cname(objName), err)
-		} else {
-			if ckErr, ok := err.(*cmn.ErrInvalidCksum); ok {
-				file, err := os.Open(fqn)
-				if err != nil {
-					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
-				}
-				defer file.Close()
-				_, cksum, err := cos.CopyAndChecksum(io.Discard, file, nil, cksumType)
-				if err != nil {
-					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, err)
-				}
-				if cksum.Value() != ckErr.Expected() {
-					t.Errorf("Expected entire object checksum [%s], checksum returned in response [%s]",
-						ckErr.Expected(), cksum)
-				}
-			} else {
-				t.Errorf("Unexpected error returned [%v].", err)
-			}
-		}
-	} else if oah.Size() != expectedLength {
+	isrng := offset > 0 || length != 0
+	if isrng && !cksumConf.EnableReadRange {
+		oah, err = api.GetObject(baseParams, bck, objName, &args)
+	} else {
+		oah, err = api.GetObjectWithValidation(baseParams, bck, objName, &args)
+	}
+	tassert.CheckError(t, err)
+	if oah.Size() != expectedLength {
 		t.Errorf("number of bytes received (%d) is different from expected (%d)", oah.Size(), expectedLength)
 	}
 
@@ -1671,8 +1657,6 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 	)
 	oah, err := api.GetObject(baseParams, bck, objName, &args)
 	tassert.CheckFatal(t, err)
-
-	tlog.Logf("rangeQuery=%s, n=%d\n", rangeQuery, oah.Size()) // DEBUG
 
 	// check size
 	tassert.Errorf(t, oah.Size() == expectedLength, "expected range length %d, got %d",
