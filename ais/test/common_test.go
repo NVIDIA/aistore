@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -59,12 +60,16 @@ var (
 
 type (
 	ioContext struct {
-		t                   *testing.T
-		smap                *meta.Smap
-		controlCh           chan struct{}
-		stopCh              chan struct{}
-		objNames            []string
-		bck                 cmn.Bck
+		t         *testing.T
+		smap      *meta.Smap
+		controlCh chan struct{}
+		stopCh    chan struct{}
+		objNames  []string
+		bck       cmn.Bck
+
+		// Chunks configuration
+		chunksConf *ioCtxChunksConf
+
 		fileSize            uint64
 		proxyURL            string
 		prefix              string
@@ -74,19 +79,17 @@ type (
 		num                 int
 		numGetsEachFile     int
 		nameLen             int
+		objIdx              int // Used in `m.nextObjName`
+		numPutErrs          int
+
+		numGetErrs atomic.Uint64
+
 		getErrIsFatal       bool
 		silent              bool
 		fixedSize           bool
 		deleteRemoteBckObjs bool
 		ordered             bool // true - object names make sequence, false - names are random
-
-		numGetErrs atomic.Uint64
-		numPutErrs int
-
-		objIdx int // Used in `m.nextObjName`
-
-		// Chunks configuration
-		chunksConf *ioCtxChunksConf
+		skipVC              bool // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
 	}
 	ioCtxChunksConf struct {
 		numChunks int // desired number of chunks
@@ -158,6 +161,9 @@ func (m *ioContext) init(cleanup bool) {
 	}
 	m.stopCh = make(chan struct{})
 
+	// NOTE: randomize skipVC (may need to assign explicitly in the future)
+	m.skipVC = mono.NanoTime()&1 == 0
+
 	if m.bck.IsRemote() {
 		if m.deleteRemoteBckObjs {
 			m.del(-1 /*delete all*/, 0 /* lsmsg.Flags */)
@@ -228,10 +234,6 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
 
-	var ignoreErr bool
-	if len(ignoreErrs) > 0 {
-		ignoreErr = ignoreErrs[0]
-	}
 	if !m.silent {
 		var s, k string
 		if m.fixedSize {
@@ -258,8 +260,9 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		FixedSize: m.fixedSize,
 		CksumType: p.Cksum.Type,
 		WorkerCnt: 0, // TODO: Should we set something custom?
-		IgnoreErr: ignoreErr,
+		IgnoreErr: len(ignoreErrs) > 0 && ignoreErrs[0],
 		Ordered:   m.ordered,
+		SkipVC:    m.skipVC,
 	}
 	if m.chunksConf != nil && m.chunksConf.multipart {
 		// Calculate chunk size based on object size and desired number of chunks

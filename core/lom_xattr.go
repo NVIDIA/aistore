@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -241,8 +242,19 @@ func (lom *LOM) unpack(buf []byte, mdSize int64, populate bool) (md *lmeta, _ er
 	return md, nil
 }
 
-func (lom *LOM) PersistMain() error {
+func (lom *LOM) PersistMain(isChunked bool) error {
 	debug.Assertf(lom.bid() == lom.Bprops().BID || lom.bid() == 0, "defunct %s: %x vs %x", lom, lom.bid(), lom.Bprops().BID)
+	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be wlocked (have %d)", lom.String(), lom.IsLocked())
+
+	// cleanup when transitioning from 'chunked' to 'monolithic'
+	if !isChunked && lom.IsChunked(true /*special*/) {
+		lom.clrlmfl(lmflChunk)
+		u, err := NewUfest("", lom, true /*must-exist*/)
+		debug.AssertNoErr(err)
+		if err := u.removeCompleted(true /*except first*/); err != nil {
+			nlog.Errorln("failed to remove", u._utag(lom.Cname()), "err:", err) // proceeding anyway
+		}
+	}
 
 	atime := lom.AtimeUnix()
 	debug.Assert(cos.IsValidAtime(atime))

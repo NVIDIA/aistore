@@ -26,15 +26,15 @@ const (
 
 var clusterFeatDesc = [...]string{
 	"enforce intra-cluster access",
-	"(*) skip loading existing object's metadata, Version and Checksum (VC) in particular",
+	"skip loading existing object's metadata, Version and Checksum (VC) in particular (advanced usage only)",
 	"do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS",
 	"handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)",
-	"(*) when finalizing PUT(object): fflush prior to (close, rename) sequence",
+	"when finalizing PUT(object): fflush prior to (close, rename) sequence",
 	".tar.lz4 format, lz4 compression: max uncompressed block size=1MB (default: 256K)",
 	"checksum lz4 frames (default: don't)",
 	"do not allow passing fully-qualified name of a locally stored object to (local) ETL containers",
 	"run in presence of _limited coexistence_ type conflicts (same as e.g. CopyBckMsg.Force but globally)",
-	"(*) pass-through client-signed (presigned) S3 requests for subsequent authentication by S3",
+	"pass-through client-signed (presigned) S3 requests for subsequent authentication by S3",
 	"when prefix doesn't end with '/' and is a subdirectory: don't assume there are no _prefixed_ obj names",
 	"disable cold-GET (from remote bucket)",
 	"write and transmit cold-GET content back to user in parallel, without _finalizing_ in-cluster object",

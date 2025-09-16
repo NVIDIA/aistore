@@ -64,13 +64,14 @@ type PutObjectsArgs struct {
 	ObjPath            string
 	CksumType          string
 	ObjSize            uint64
+	MultipartChunkSize uint64
 	ObjCnt             int
 	ObjNameLn          int
 	WorkerCnt          int
 	FixedSize          bool
 	Ordered            bool // true - object names make sequence, false - names are random
 	IgnoreErr          bool
-	MultipartChunkSize uint64
+	SkipVC             bool // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
 }
 
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
@@ -353,7 +354,7 @@ func putMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uin
 						Cksum:      partReader.Cksum(),
 						Reader:     partReader,
 						Size:       partSize,
-						SkipVC:     true,
+						SkipVC:     args.SkipVC,
 					},
 					UploadID:   uploadID,
 					PartNumber: partNum,
@@ -451,7 +452,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 							Cksum:      reader.Cksum(),
 							Reader:     reader,
 							Size:       size,
-							SkipVC:     true,
+							SkipVC:     args.SkipVC,
 						})
 					}
 					putCnt.Inc()

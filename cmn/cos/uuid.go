@@ -129,24 +129,26 @@ func GenTestingDaemonID(suffix string) string {
 //
 
 func ValidateManifestID(id string) error {
+	const utag = "chunk-manifest ID"
 	const (
 		lmin = 8
 		lmax = 128
 	)
 	l := len(id)
 	if l < lmin {
-		return fmt.Errorf("chunk manifest ID %q is too short (expecting >= %d)", id, lmin)
+		return fmt.Errorf("%s %q is too short (expecting >= %d chars)", utag, id, lmin)
 	}
 	if l > lmax {
-		return fmt.Errorf("chunk manifest ID %q is too long (expecting <= %d)", id, lmax)
+		return fmt.Errorf("%s %q is too long (expecting <= %d chars)", utag, id, lmax)
 	}
 	for i := range l {
 		c := id[i]
 		if c < 32 || c > 126 || c == '/' || c == '\\' || c == ' ' {
-			return fmt.Errorf("chunk manifest ID %q contains invalid character at position %d (expecting printable ASCII with no space and no slashes)", id, i)
+			return fmt.Errorf("%s %q contains invalid character at position %d (expecting printable ASCII with no space and no slashes)",
+				utag, id, i)
 		}
 		if c == '.' && i < l-1 && id[i+1] == '.' {
-			return fmt.Errorf("chunk manifest ID %q contains invalid \"..\" substring", id)
+			return fmt.Errorf("%s %q contains invalid \"..\" substring", utag, id)
 		}
 	}
 	return nil
@@ -160,6 +162,8 @@ func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
+func isNum(c byte) bool { return c >= '0' && c <= '9' }
+
 // letters and numbers w/ '-' and '_' permitted with limitations (see OnlyNice const)
 func IsAlphaNice(s string) bool {
 	l := len(s)
@@ -168,7 +172,7 @@ func IsAlphaNice(s string) bool {
 	}
 	for i := range l {
 		c := s[i]
-		if isAlpha(c) || (c >= '0' && c <= '9') {
+		if isAlpha(c) || isNum(c) {
 			continue
 		}
 		if c != '-' && c != '_' {
@@ -190,7 +194,7 @@ func CheckAlphaPlus(s, tag string) error {
 	}
 	for i := range l {
 		c := s[i]
-		if isAlpha(c) || (c >= '0' && c <= '9') || c == '-' || c == '_' {
+		if isAlpha(c) || isNum(c) || c == '-' || c == '_' {
 			continue
 		}
 		if c != '.' {
@@ -210,7 +214,7 @@ func isHexN(s string, n int) bool {
 	}
 	for i := range n {
 		c := s[i]
-		if c >= '0' && c <= '9' {
+		if isNum(c) {
 			continue
 		}
 		lc := c | 0x20 // lowercase

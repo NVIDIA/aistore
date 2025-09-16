@@ -290,12 +290,26 @@ func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 	return nil
 }
 
-func (u *Ufest) removeChunks(lom *LOM) {
-	for i := range u.chunks {
+func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
+	var (
+		ecnt int
+		j    int
+		l    = len(u.chunks)
+	)
+	if exceptFirst {
+		j = 1
+		if err := u.Check(); err != nil {
+			nlog.ErrorDepth(1, u._utag(lom.Cname()), err)
+			return
+		}
+	}
+	for i := j; i < l; i++ {
 		c := &u.chunks[i]
 		if err := cos.RemoveFile(c.path); err != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleCore) {
-				nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove chunk(s) [", c.path, err, "]")
+			ecnt++
+			if cmn.Rom.FastV(4, cos.SmoduleCore) || ecnt == 1 {
+				nlog.WarningDepth(1, u._utag(lom.Cname())+":",
+					"failed to remove chunk [", c.num, c.path, err, ecnt, "]")
 			}
 		}
 	}
@@ -305,7 +319,7 @@ func (u *Ufest) Abort(lom *LOM) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	u.removeChunks(lom)
+	u.removeChunks(lom, false /*except first*/)
 	if u.id == "" {
 		return
 	}
@@ -321,29 +335,22 @@ func (u *Ufest) Abort(lom *LOM) {
 	}
 }
 
-func (u *Ufest) removeCompleted(lom *LOM) error {
+func (u *Ufest) removeCompleted(exceptFirst bool) error {
+	lom := u.lom
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if err := u.LoadCompleted(lom); err != nil {
+	if err := u.LoadCompleted(lom, exceptFirst /*cleanup*/); err != nil {
 		return err
 	}
-	u.removeChunks(lom)
+	u.removeChunks(lom, exceptFirst)
 	fqn := u._fqns(lom, true)
-	err := cos.RemoveFile(fqn)
-	if err == nil {
-		return nil
-	}
-	if cmn.Rom.FastV(4, cos.SmoduleCore) {
-		nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove completed manifest [", err, "]")
-	}
-	return err
+	return cos.RemoveFile(fqn)
 }
 
-// must be called under lom rlock
-// not validating manifest ID since (GET) callers may use temporary/generated IDs when loading existing manifests
-func (u *Ufest) LoadCompleted(lom *LOM) error {
+// must be called under lom (r)lock
+func (u *Ufest) LoadCompleted(lom *LOM, exceptFirst ...bool) error {
 	const (
 		tag = "completed"
 	)
@@ -354,7 +361,7 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 	debug.Assert(u.lom == lom && lom != nil)
 	if u.id != "" {
 		if err := cos.ValidateManifestID(u.id); err != nil {
-			return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
+			return fmt.Errorf("%s %v: [%s]", tag, err, lom.Cname())
 		}
 	}
 
@@ -368,13 +375,18 @@ func (u *Ufest) LoadCompleted(lom *LOM) error {
 	if err := u._load(lom, csgl, tag); err != nil {
 		return err
 	}
-	if size := lom.Lsize(true); size != u.size {
-		return fmt.Errorf("%s load size mismatch: %s manifest %d vs %d lom", u._itag(lom.Cname()), tag, u.size, size)
+
+	// do not check respective sizes when overriding: PersistMain -> removeCompleted(true)
+	if len(exceptFirst) == 0 || !exceptFirst[0] {
+		if size := lom.Lsize(true); size != u.size {
+			return fmt.Errorf("%s load size mismatch: %s manifest-recorded size %d vs object size %d",
+				u._itag(lom.Cname()), tag, u.size, size)
+		}
 	}
 
 	if u.flags&flCompleted == 0 { // (unlikely)
 		debug.Assert(false)
-		return fmt.Errorf("%s %s: manifest not marked 'completed'", tag, u._utag(lom.Cname()))
+		return fmt.Errorf("%s %s: not marked 'completed'", tag, u._utag(lom.Cname()))
 	}
 	u.completed.Store(true)
 	return nil
@@ -1019,7 +1031,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 	lom.setlmfl(lmflChunk)
 	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
 
-	if err := lom.PersistMain(); err != nil {
+	if err := lom.PersistMain(true /*isChunked*/); err != nil {
 		lom.md.lid.clrlmfl(lmflChunk)
 		u.Abort(lom)
 		return err

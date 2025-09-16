@@ -429,7 +429,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
 		lom.SetAtimeUnix(poi.atime)
 	}
-	return 0, lom.PersistMain()
+	return 0, lom.PersistMain(false /*isChunked*/)
 }
 
 // via backend.PutObj()

@@ -213,7 +213,7 @@ func (lom *LOM) RemoveObj(force ...bool) (err error) {
 	if lom.IsChunked() {
 		u, e := NewUfest("", lom, true /*must-exist*/)
 		debug.AssertNoErr(e)
-		errN := u.removeCompleted(lom)
+		errN := u.removeCompleted(false /*except first*/)
 		if err == nil {
 			err = errN
 		}

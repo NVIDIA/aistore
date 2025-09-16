@@ -417,10 +417,8 @@ var _ = Describe("MPU-UfestRead", func() {
 			lom.SetSize(totalSize)
 			lom.SetAtimeUnix(time.Now().UnixNano())
 
-			// TODO -- FIXME: Manually set chunked flag and persist
 			lom.Lock(true)
-			// lom.SetLmfl(core.LmflChunk) // Manually set the flag
-			err := lom.PersistMain()
+			err := lom.PersistMain(true /*isChunked*/)
 			lom.Unlock(true)
 			Expect(err).NotTo(HaveOccurred())
 

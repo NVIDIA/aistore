@@ -187,9 +187,19 @@ func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
+// BID, `lomBID` (type), and the two MetaverLOM_V1 `lomFlags`
+
 func (lom *LOM) bid() uint64             { return lom.md.lid.bid() }
 func (lom *LOM) setbid(bpropsBID uint64) { lom.md.lid = lom.md.lid.setbid(bpropsBID) }
 func (lom *LOM) setlmfl(fl lomFlags)     { lom.md.lid = lom.md.lid.setlmfl(fl) }
+func (lom *LOM) clrlmfl(fl lomFlags)     { lom.md.lid = lom.md.lid.clrlmfl(fl) }
+
+func (lom *LOM) IsChunked(special ...bool) bool { // same convention as Lsize
+	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
+	return lom.md.lid.haslmfl(lmflChunk)
+}
+
+func (lom *LOM) IsFntl() bool { return lom.md.lid.haslmfl(lmflFntl) }
 
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
@@ -235,11 +245,6 @@ func (lom *LOM) Location() string { return T.String() + apc.LocationPropSepa + l
 func (lom *LOM) ObjectName() string       { return lom.ObjName }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
-
-func (lom *LOM) IsChunked(special ...bool) bool { // same convention as Lsize
-	debug.Assert(len(special) > 0 || lom.loaded(), lom.String())
-	return lom.md.lid.haslmfl(lmflChunk)
-}
 
 func ParseObjLoc(loc string) (tname, mpname string) {
 	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
@@ -696,10 +701,6 @@ func (lom *LOM) Unlock(exclusive bool) {
 //
 // file name too long (0x24) ----------------------------
 //
-
-func (lom *LOM) IsFntl() bool {
-	return lom.md.lid.haslmfl(lmflFntl)
-}
 
 // (compare with fs/content Gen())
 func (lom *LOM) ShortenFntl() []string {

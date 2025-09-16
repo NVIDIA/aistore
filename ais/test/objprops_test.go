@@ -5,7 +5,9 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"sync"
 	"testing"
@@ -21,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -306,13 +309,109 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 }
 
 func TestObjPropsVersion(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
-
 	for _, versioning := range []bool{false, true} {
 		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
 			propsVersionAllProviders(t, versioning)
 		})
 	}
+}
+
+func TestObjChunkedOverride(t *testing.T) {
+	var (
+		proxyURL = tools.RandomProxyURL()
+		// baseParams = tools.BaseAPIParams(proxyURL)
+		bck = cmn.Bck{
+			Name:     trand.String(15),
+			Provider: apc.AIS,
+		}
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// Test all 4 permutations of chunked vs normal uploads and overrides
+	testCases := []struct {
+		name              string
+		firstUploadChunks bool
+		overrideChunks    bool
+	}{
+		{"normal-to-normal", false, false},
+		{"chunked-to-normal", true, false},
+		{"normal-to-chunked", false, true},
+		{"chunked-to-chunked", true, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testChunkedOverride(t, baseParams, bck, tc.firstUploadChunks, tc.overrideChunks)
+		})
+	}
+}
+
+// testChunkedOverride tests object upload and override with different chunk configurations
+func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, firstChunked, overrideChunked bool) {
+	const (
+		objPrefix = "test-chunked-override"
+		numObjs   = 15
+	)
+
+	// Create ioContext for first upload with custom content
+	m := ioContext{
+		t:        t,
+		bck:      bck,
+		num:      numObjs,
+		prefix:   objPrefix + trand.String(10),
+		fileSize: cos.KiB,
+	}
+
+	// Set chunking configuration for first upload
+	if firstChunked {
+		m.chunksConf = &ioCtxChunksConf{
+			numChunks: 4, // Split into 4 chunks
+			multipart: true,
+		}
+	} else {
+		m.chunksConf = &ioCtxChunksConf{multipart: false} // explicitly disable chunking
+	}
+
+	m.init(true /*cleanup*/)
+	m.puts()
+
+	// Generate random data once and store it for comparison
+	r, _ := readers.NewRand(int64(m.fileSize), cos.ChecksumNone)
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("Failed to read random data: %v", err)
+	}
+
+	for _, objName := range m.objNames {
+		// TODO -- FIXME: if overrideChunked is true, override with multipart upload via another `ioContext`
+		// we currently only override it with normal PUT - need to extend ioContext to perform multipart upload to specific objects
+		putArgs := api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        m.bck,
+			ObjName:    objName,
+			Reader:     readers.NewBytes(data),
+			Size:       m.fileSize,
+		}
+		_, err := api.PutObject(&putArgs)
+		if err != nil {
+			t.Errorf("Failed to PUT new data to object %s: %v", bck.Cname(objName), err)
+		}
+	}
+
+	for _, objName := range m.objNames {
+		w := bytes.NewBuffer(nil)
+		getArgs := api.GetArgs{Writer: w}
+		_, err := api.GetObject(baseParams, bck, objName, &getArgs)
+		tassert.CheckFatal(t, err)
+
+		// Compare retrieved content with original data
+		tassert.Errorf(t, bytes.Equal(w.Bytes(), data),
+			"object %s content mismatch: expected %d bytes, got %d bytes",
+			objName, len(data), len(w.Bytes()))
+	}
+
+	tlog.Logf("Successfully completed test: first_chunked=%t, override_chunked=%t\n",
+		firstChunked, overrideChunked)
 }
 
 func propsVersionAllProviders(t *testing.T, versioning bool) {

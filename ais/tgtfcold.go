@@ -170,7 +170,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 			nlog.Errorln(err)
 		}
 	}
-	if err = lom.PersistMain(); err != nil {
+	if err = lom.PersistMain(false /*isChunked*/); err != nil {
 		const act = "(persist)"
 		errTx := newErrGetTxSevere(err, lom, act)
 		goi._cleanup(revert, lmfh, buf, slab, errTx, act)

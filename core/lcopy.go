@@ -280,8 +280,10 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 }
 
 // copyChunks handles copying all chunks and manifest from source to destination LOM
-// TODO -- FIXME: the implementation simply copies the chunks and manifest without respecting the destination bucket's chunks configuration
-// (this function is currently an experimental feature and will be refactored in the future)
+// TODO -- FIXME:
+// - copying the chunks and the manifest not respecting the destination bucket's chunks config
+// - writes chunks in parallel - use `cos.LimitedWaitGroup`
+
 func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	// Load the completed Ufest manifest from source
 	srcUfest, err := NewUfest("", lom, true)
@@ -304,19 +306,16 @@ func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	srcUfest.Lock()
 	defer srcUfest.Unlock()
 
-	// TODO: goroutinizing this for loop with `cos.LimitedWaitGroup`
 	for _, srcChunk := range srcUfest.chunks {
 		dstChunk, err := dstUfest.NewChunk(int(srcChunk.Num()), dst)
 		if err != nil {
-			dstUfest.removeChunks(dst)
-			return fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err)
+			return dstUfest._undoCopy(fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err))
 		}
 
 		_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
 		if err != nil {
-			dstUfest.removeChunks(dst)
-			return fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
-				srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err)
+			return dstUfest._undoCopy(fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
+				srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err))
 		}
 
 		if srcChunk.cksum != nil {
@@ -325,29 +324,30 @@ func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 
 		err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
 		if err != nil {
-			dstUfest.removeChunks(dst)
-			return fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err)
+			return dstUfest._undoCopy(fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err))
 		}
 	}
 
 	// Compute the whole checksum for the destination manifest
 	wholeCksum := cos.NewCksumHash(dst.CksumConf().Type)
 	if err := dstUfest.ComputeWholeChecksum(wholeCksum); err != nil {
-		dstUfest.removeChunks(dst)
-		return fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err)
+		return dstUfest._undoCopy(fmt.Errorf("failed to compute whole checksum for destination %s: %w", dst.Cname(), err))
 	}
 	dst.SetCksum(&wholeCksum.Cksum)
 
 	// Store the completed manifest for destination
 	err = dstUfest.storeCompleted(dst)
 	if err != nil {
-		dstUfest.removeChunks(dst)
-		return fmt.Errorf("failed to store completed manifest for destination %s: %w", dst.Cname(), err)
+		return dstUfest._undoCopy(fmt.Errorf("failed to store completed manifest for destination %s: %w", dst.Cname(), err))
 	}
 
 	dst.setlmfl(lmflChunk)
-
 	return nil
+}
+
+func (u *Ufest) _undoCopy(err error) error {
+	u.removeChunks(u.lom, false /*except first*/)
+	return err
 }
 
 func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
