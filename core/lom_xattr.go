@@ -247,13 +247,14 @@ func (lom *LOM) PersistMain(isChunked bool) error {
 	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be wlocked (have %d)", lom.String(), lom.IsLocked())
 
 	// cleanup when transitioning from 'chunked' to 'monolithic'
-	if !isChunked && lom.IsChunked(true /*special*/) {
+	if !isChunked && lom.IsChunked(true /*special: skipVC or not exist*/) {
 		lom.clrlmfl(lmflChunk)
 		u, err := NewUfest("", lom, true /*must-exist*/)
 		debug.AssertNoErr(err)
 		if err := u.removeCompleted(true /*except first*/); err != nil {
 			nlog.Errorln("failed to remove", u._utag(lom.Cname()), "err:", err) // proceeding anyway
 		}
+		debug.Assert(u.flags&flCompleted != 0, u._utag(lom.Cname()), " not marked 'completed'")
 	}
 
 	atime := lom.AtimeUnix()

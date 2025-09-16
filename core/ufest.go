@@ -69,6 +69,9 @@ const (
 	utag     = "chunk-manifest"
 	itag     = "invalid " + utag
 	tooShort = "failed to unpack: too short"
+
+	tagCompleted = "completed"
+	tagPartial   = "partial"
 )
 
 type (
@@ -293,18 +296,22 @@ func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
 func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
 	var (
 		ecnt int
-		j    int
-		l    = len(u.chunks)
+		skip uint16
 	)
 	if exceptFirst {
-		j = 1
-		if err := u.Check(); err != nil {
+		c, err := u.firstChunk()
+		if err != nil {
 			nlog.ErrorDepth(1, u._utag(lom.Cname()), err)
 			return
 		}
+		skip = c.num
+		debug.Assert(c.num == 1) // validated by u.firstChunk()
 	}
-	for i := j; i < l; i++ {
+	for i := range u.chunks {
 		c := &u.chunks[i]
+		if exceptFirst && c.num == skip {
+			continue
+		}
 		if err := cos.RemoveFile(c.path); err != nil {
 			ecnt++
 			if cmn.Rom.FastV(4, cos.SmoduleCore) || ecnt == 1 {
@@ -313,6 +320,7 @@ func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
 			}
 		}
 	}
+	clear(u.chunks)
 }
 
 func (u *Ufest) Abort(lom *LOM) {
@@ -335,13 +343,14 @@ func (u *Ufest) Abort(lom *LOM) {
 	}
 }
 
+// scenarios: a) remove-obj; b) update/overwrite (when exceptFirst = true)
 func (u *Ufest) removeCompleted(exceptFirst bool) error {
 	lom := u.lom
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if err := u.LoadCompleted(lom, exceptFirst /*cleanup*/); err != nil {
+	if err := u.load(true); err != nil {
 		return err
 	}
 	u.removeChunks(lom, exceptFirst)
@@ -350,74 +359,63 @@ func (u *Ufest) removeCompleted(exceptFirst bool) error {
 }
 
 // must be called under lom (r)lock
-func (u *Ufest) LoadCompleted(lom *LOM, exceptFirst ...bool) error {
-	const (
-		tag = "completed"
-	)
+func (u *Ufest) LoadCompleted(lom *LOM) error {
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
-	if u.lom == nil {
-		u.lom = lom
-	}
-	debug.Assert(u.lom == lom && lom != nil)
+	debug.Assert(u.lom == lom || u.lom == nil)
+	u.lom = lom
+
 	if u.id != "" {
 		if err := cos.ValidateManifestID(u.id); err != nil {
-			return fmt.Errorf("%s %v: [%s]", tag, err, lom.Cname())
+			return fmt.Errorf("%s %v: [%s]", tagCompleted, err, lom.Cname())
 		}
 	}
 
-	csgl := g.pmm.NewSGL(sizeLoad)
-	defer csgl.Free()
-
-	err := u.fread(lom, csgl, true)
-	if err != nil {
-		return u._errLoad(tag, lom.Cname(), err)
-	}
-	if err := u._load(lom, csgl, tag); err != nil {
+	if err := u.load(true); err != nil {
 		return err
 	}
 
-	// do not check respective sizes when overriding: PersistMain -> removeCompleted(true)
-	if len(exceptFirst) == 0 || !exceptFirst[0] {
-		if size := lom.Lsize(true); size != u.size {
-			return fmt.Errorf("%s load size mismatch: %s manifest-recorded size %d vs object size %d",
-				u._itag(lom.Cname()), tag, u.size, size)
-		}
+	if size := lom.Lsize(true); size != u.size {
+		return fmt.Errorf("%s load size mismatch: %s manifest-recorded size %d vs object size %d",
+			u._itag(lom.Cname()), tagCompleted, u.size, size)
 	}
 
 	if u.flags&flCompleted == 0 { // (unlikely)
 		debug.Assert(false)
-		return fmt.Errorf("%s %s: not marked 'completed'", tag, u._utag(lom.Cname()))
+		return fmt.Errorf("%s %s: not marked 'completed'", tagCompleted, u._utag(lom.Cname()))
 	}
 	u.completed.Store(true)
 	return nil
 }
 
 func (u *Ufest) LoadPartial(lom *LOM) error {
-	const (
-		tag = "partial"
-	)
 	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
 
 	if err := cos.ValidateManifestID(u.id); err != nil {
-		return fmt.Errorf("%s %s manifest: %v", tag, u._utag(lom.Cname()), err)
+		return fmt.Errorf("%s %s manifest: %v", tagPartial, u._utag(lom.Cname()), err)
 	}
 	debug.Assert(u.lom == lom)
+	u.lom = lom
 
+	err := u.load(false /*completed*/)
+	debug.Assert(u.flags&flCompleted == 0)
+	return err
+}
+
+func (u *Ufest) load(completed bool) error {
 	csgl := g.pmm.NewSGL(sizeLoad)
 	defer csgl.Free()
 
-	err := u.fread(lom, csgl, false)
-	if err != nil {
-		return u._errLoad(tag, lom.Cname(), err)
+	tag := tagPartial
+	if completed {
+		tag = tagCompleted
 	}
-	if err := u._load(lom, csgl, tag); err != nil {
-		return err
+	if err := u.fread(csgl, completed); err != nil {
+		return u._errLoad(tag, u.lom.Cname(), err)
 	}
-	debug.Assert(u.flags&flCompleted == 0)
-	return nil
+	return u._load(csgl, tag)
 }
 
-func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL, tag string) error {
+func (u *Ufest) _load(csgl *memsys.SGL, tag string) error {
 	data := csgl.Bytes()
 
 	// validate and strip/remove the trailing checksum
@@ -437,15 +435,15 @@ func (u *Ufest) _load(lom *LOM, csgl *memsys.SGL, tag string) error {
 	dslab.Free(dbuf)
 
 	if err != nil {
-		e := fmt.Errorf("failed to load %s %s: %v", tag, u._utag(lom.Cname()), err)
+		e := fmt.Errorf("failed to load %s %s: %v", tag, u._utag(u.lom.Cname()), err)
 		return cmn.NewErrLmetaCorrupted(e)
 	}
 	debug.Assert(u.validNums() == nil)
 
 	if givenID != "" && givenID != u.id {
-		return fmt.Errorf("loaded %s %s has different ID: given %q vs stored %q", tag, u._utag(lom.Cname()), givenID, u.id)
+		return fmt.Errorf("loaded %s %s has different ID: given %q vs stored %q", tag, u._utag(u.lom.Cname()), givenID, u.id)
 	}
-	u.lom = lom
+	debug.AssertNoErr(cos.ValidateManifestID(u.id))
 	return err
 }
 
@@ -685,10 +683,10 @@ func (u *Ufest) _fqns(lom *LOM, completed bool) string {
 	return fs.CSM.Gen(lom, fs.ChunkMetaCT, u.id)
 }
 
-func (u *Ufest) fread(lom *LOM, sgl *memsys.SGL, completed bool) error {
-	debug.Assert(lom.IsLocked() > apc.LockNone, "expecting locked", lom.Cname())
+func (u *Ufest) fread(sgl *memsys.SGL, completed bool) error {
+	debug.Assert(u.lom.IsLocked() > apc.LockNone, "expecting locked", u.lom.Cname())
 
-	fqn := u._fqns(lom, completed)
+	fqn := u._fqns(u.lom, completed)
 	fh, err := os.Open(fqn)
 	if err != nil {
 		return err
