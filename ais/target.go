@@ -1231,15 +1231,6 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 	}
 	lom.SetCustomKey(cmn.ETag, etag)
 
-	// ais versioning
-	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
-		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
-			if err = lom.IncVersion(); err != nil {
-				nlog.Errorln(err)
-			}
-		}
-	}
-
 	// atomically flip: persist manifest, mark chunked, persist main
 	if err = lom.CompleteUfest(manifest); err != nil {
 		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)

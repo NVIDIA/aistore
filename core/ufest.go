@@ -1019,6 +1019,25 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		return total == u.size
 	})
 
+	// Load LOM to determine if it was previously chunked; if so, remove old completed chunks before proceeding
+	err := lom.Load(false /*cache it*/, true /*locked*/)
+	if err == nil && lom.IsChunked() {
+		u, err := NewUfest("", lom, true /*must-exist*/)
+		debug.AssertNoErr(err)
+		if err := u.removeCompleted(true /*except first*/); err != nil {
+			nlog.Errorln("failed to remove", u._utag(lom.Cname()), "err:", err)
+		}
+	}
+
+	// update ais versioning after loading the previous LOM
+	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
+		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
+			if err = lom.IncVersion(); err != nil {
+				nlog.Errorln(err)
+			}
+		}
+	}
+
 	lom.SetSize(u.size) // note: storeCompleted still performs non-debug validation
 	if err := u.storeCompleted(lom); err != nil {
 		u.Abort(lom)

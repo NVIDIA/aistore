@@ -1028,6 +1028,7 @@ func initFS() {
 	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{})
 	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{})
 	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{})
+	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
@@ -1081,6 +1082,37 @@ func (m *ioContext) findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 		WalkOpts: fs.WalkOpts{
 			Bck:      bck,
 			CTs:      []string{fs.ObjCT},
+			Callback: fsWalkFunc,
+			Sorted:   true, // false is unsupported and asserts
+		},
+	})
+	return fqn
+}
+
+func (m *ioContext) findObjChunksOnDisk(bck cmn.Bck, objName string) (fqn []string) {
+	if m.chunksConf != nil {
+		fqn = make([]string, 0, m.chunksConf.numChunks)
+	} else {
+		fqn = make([]string, 0, 4)
+	}
+	fsWalkFunc := func(path string, de fs.DirEntry) error {
+		if de.IsDir() {
+			return nil
+		}
+
+		ct, err := core.NewCTFromFQN(path, nil)
+		if err != nil {
+			return nil
+		}
+		if strings.HasPrefix(ct.ObjectName(), objName) { // chunk files have the same prefix as the object
+			fqn = append(fqn, path)
+		}
+		return nil
+	}
+	fs.WalkBck(&fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
+			Bck:      bck,
+			CTs:      []string{fs.ChunkCT},
 			Callback: fsWalkFunc,
 			Sorted:   true, // false is unsupported and asserts
 		},
