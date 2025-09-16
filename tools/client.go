@@ -7,6 +7,7 @@ package tools
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"strconv"
@@ -71,7 +72,8 @@ type PutObjectsArgs struct {
 	FixedSize          bool
 	Ordered            bool // true - object names make sequence, false - names are random
 	IgnoreErr          bool
-	SkipVC             bool // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
+	SkipVC             bool           // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
+	Reader             readers.Reader // optional reader for multipart uploads - when provided, uploads sequentially
 }
 
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
@@ -318,20 +320,81 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 	}
 }
 
-func putMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uint64, args *PutObjectsArgs) error {
+func putMultipartObjectSequential(bp api.BaseParams, bck cmn.Bck, objName, uploadID string, size uint64, args *PutObjectsArgs) error {
+	numParts := (size + args.MultipartChunkSize - 1) / args.MultipartChunkSize
+	partNumbers := make([]int, int(numParts))
+
+	for partNum := 1; partNum <= int(numParts); partNum++ {
+		offset := uint64(partNum-1) * args.MultipartChunkSize
+		partSize := args.MultipartChunkSize
+		if offset+partSize > size {
+			partSize = size - offset
+		}
+
+		// Read chunk from input reader
+		buf := make([]byte, partSize)
+		n, err := args.Reader.Read(buf)
+		if err != nil && err != io.EOF {
+			if abortErr := api.AbortMultipartUpload(bp, bck, objName, uploadID); abortErr != nil {
+				return fmt.Errorf("failed to read part %d and failed to abort %s: read error: %w, abort error: %v", partNum, objName, err, abortErr)
+			}
+			return fmt.Errorf("failed to read part %d of %s: %w", partNum, objName, err)
+		}
+
+		// Create reader for this part
+		partReader := readers.NewBytes(buf[:n])
+
+		putPartArgs := &api.PutPartArgs{
+			PutArgs: api.PutArgs{
+				BaseParams: bp,
+				Bck:        bck,
+				ObjName:    objName,
+				Cksum:      partReader.Cksum(),
+				Reader:     partReader,
+				Size:       uint64(n),
+				SkipVC:     args.SkipVC,
+			},
+			UploadID:   uploadID,
+			PartNumber: partNum,
+		}
+
+		if err := api.UploadPart(putPartArgs); err != nil {
+			if abortErr := api.AbortMultipartUpload(bp, bck, objName, uploadID); abortErr != nil {
+				return fmt.Errorf("failed to upload part %d and failed to abort %s: upload error: %w, abort error: %v", partNum, objName, err, abortErr)
+			}
+			return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
+		}
+
+		partNumbers[partNum-1] = partNum
+	}
+
+	if err := api.CompleteMultipartUpload(bp, bck, objName, uploadID, partNumbers); err != nil {
+		if abortErr := api.AbortMultipartUpload(bp, bck, objName, uploadID); abortErr != nil {
+			return fmt.Errorf("failed to complete multipart upload and failed to abort %s: complete error: %w, abort error: %v", objName, err, abortErr)
+		}
+		return fmt.Errorf("failed to complete multipart upload for %s: %w", objName, err)
+	}
+	return nil
+}
+
+func PutMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uint64, args *PutObjectsArgs) error {
+	uploadID, err := api.CreateMultipartUpload(bp, bck, objName)
+	if err != nil {
+		return fmt.Errorf("failed to create multipart upload for %s: %w", objName, err)
+	}
+
+	// If reader is provided in args, upload parts sequentially
+	if args.Reader != nil {
+		return putMultipartObjectSequential(bp, bck, objName, uploadID, size, args)
+	}
+
+	// Otherwise, upload parts in parallel
 	var (
 		numParts    = (size + args.MultipartChunkSize - 1) / args.MultipartChunkSize
 		partNumbers = make([]int, int(numParts))
 		mu          = &sync.Mutex{}
 		group       = &errgroup.Group{}
 	)
-
-	uploadID, err := api.CreateMultipartUpload(bp, bck, objName)
-	if err != nil {
-		return fmt.Errorf("failed to create multipart upload for %s: %w", objName, err)
-	}
-
-	// Upload parts in parallel
 	for partNum := 1; partNum <= int(numParts); partNum++ {
 		group.Go(func(partNum int) func() error {
 			return func() error {
@@ -437,7 +500,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 
 					var err error
 					if args.MultipartChunkSize > 0 {
-						err = putMultipartObject(bp, args.Bck, objName, size, &args)
+						err = PutMultipartObject(bp, args.Bck, objName, size, &args)
 					} else {
 						reader, rerr := readers.NewRand(int64(size), args.CksumType)
 						cos.AssertNoErr(rerr)

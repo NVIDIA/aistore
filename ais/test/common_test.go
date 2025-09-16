@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -272,6 +273,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		}
 		putArgs.MultipartChunkSize = chunkSize
 		m.objNames, m.numPutErrs, err = tools.PutRandObjs(putArgs)
+		tassert.CheckFatal(m.t, err)
 
 		// verify objects are chunked
 		ls, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsChunked}, api.ListArgs{})
@@ -283,6 +285,56 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		m.objNames, m.numPutErrs, err = tools.PutRandObjs(putArgs)
 	}
 	tassert.CheckFatal(m.t, err)
+}
+
+func (m *ioContext) update(baseParams api.BaseParams, objName string, reader readers.Reader, size uint64) {
+	var err error
+	if m.chunksConf != nil && m.chunksConf.multipart && m.chunksConf.numChunks != 0 {
+		chunkSize := m.fileSize / uint64(m.chunksConf.numChunks)
+		if chunkSize == 0 {
+			chunkSize = 1 // minimum chunk size of 1 byte
+		}
+		err = tools.PutMultipartObject(baseParams, m.bck, objName, size, &tools.PutObjectsArgs{
+			ProxyURL:           m.proxyURL,
+			Bck:                m.bck,
+			ObjPath:            m.prefix,
+			ObjCnt:             m.num,
+			ObjNameLn:          m.nameLen,
+			Reader:             reader,
+			MultipartChunkSize: chunkSize,
+		})
+	} else {
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        m.bck,
+			ObjName:    objName,
+			Size:       size,
+			Reader:     reader,
+			Cksum:      reader.Cksum(),
+		})
+	}
+	tassert.CheckFatal(m.t, err)
+}
+
+func (m *ioContext) updateAndValidate(baseParams api.BaseParams, idx int, size uint64, cksumType string) {
+	if idx < 0 || idx >= len(m.objNames) {
+		m.t.Fatalf("index out of range: %d", idx)
+	}
+
+	r, err := readers.NewRand(int64(size), cksumType)
+	tassert.CheckFatal(m.t, err)
+	m.update(baseParams, m.objNames[idx], r, size)
+
+	// GET and validate the object with the pattern
+	w := bytes.NewBuffer(nil)
+	result, s, err := api.GetObjectReader(baseParams, m.bck, m.objNames[idx], &api.GetArgs{Writer: w})
+	tassert.CheckFatal(m.t, err)
+
+	// Compare retrieved content with original data
+	br, err := r.Open()
+	tassert.CheckFatal(m.t, err)
+	tassert.Fatalf(m.t, s == int64(size), "object %s size mismatch: expected %d, got %d", m.objNames[idx], size, s)
+	tassert.Fatalf(m.t, tools.ReaderEqual(br, result), "object %s content mismatch", m.objNames[idx])
 }
 
 // remotePuts by default empties remote bucket and puts new `m.num` objects

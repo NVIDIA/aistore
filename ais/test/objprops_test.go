@@ -5,9 +5,7 @@
 package integration_test
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"strconv"
 	"sync"
 	"testing"
@@ -309,6 +307,8 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 }
 
 func TestObjPropsVersion(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
 	for _, versioning := range []bool{false, true} {
 		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
 			propsVersionAllProviders(t, versioning)
@@ -353,7 +353,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 		numObjs   = 15
 	)
 
-	// Create ioContext for first upload with custom content
+	// Create ioContext for first upload
 	m := ioContext{
 		t:        t,
 		bck:      bck,
@@ -375,40 +375,16 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	m.init(true /*cleanup*/)
 	m.puts()
 
-	// Generate random data once and store it for comparison
-	r, _ := readers.NewRand(int64(m.fileSize), cos.ChecksumNone)
-	data, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("Failed to read random data: %v", err)
-	}
-
-	for _, objName := range m.objNames {
-		// TODO -- FIXME: if overrideChunked is true, override with multipart upload via another `ioContext`
-		// we currently only override it with normal PUT - need to extend ioContext to perform multipart upload to specific objects
-		putArgs := api.PutArgs{
-			BaseParams: baseParams,
-			Bck:        m.bck,
-			ObjName:    objName,
-			Reader:     readers.NewBytes(data),
-			Size:       m.fileSize,
+	if overrideChunked {
+		m.chunksConf = &ioCtxChunksConf{
+			numChunks: 4, // Split into 4 chunks
+			multipart: true,
 		}
-		_, err := api.PutObject(&putArgs)
-		if err != nil {
-			t.Errorf("Failed to PUT new data to object %s: %v", bck.Cname(objName), err)
-		}
+	} else {
+		m.chunksConf = &ioCtxChunksConf{multipart: false} // explicitly disable chunking
 	}
 
-	for _, objName := range m.objNames {
-		w := bytes.NewBuffer(nil)
-		getArgs := api.GetArgs{Writer: w}
-		_, err := api.GetObject(baseParams, bck, objName, &getArgs)
-		tassert.CheckFatal(t, err)
-
-		// Compare retrieved content with original data
-		tassert.Errorf(t, bytes.Equal(w.Bytes(), data),
-			"object %s content mismatch: expected %d bytes, got %d bytes",
-			objName, len(data), len(w.Bytes()))
-	}
+	m.updateAndValidate(baseParams, 0, m.fileSize, cos.ChecksumNone)
 
 	tlog.Logf("Successfully completed test: first_chunked=%t, override_chunked=%t\n",
 		firstChunked, overrideChunked)
