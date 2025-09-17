@@ -1137,14 +1137,27 @@ func getObjToTemp(t *testing.T, proxyURL string, bck cmn.Bck, objName string) st
 	return tmp
 }
 
-// TODO -- FIXME: this won't work for chunks
-func corruptSingleBitInFile(m *ioContext, objName string) {
+func corruptSingleBitInFile(m *ioContext, objName string, eced bool) {
 	m.t.Helper()
+
 	var (
-		fqn     = m.findObjOnDisk(m.bck, objName)
-		fi, err = os.Stat(fqn)
-		b       = []byte{0}
+		fqn string
+		b   = []byte{0}
 	)
+
+	switch {
+	case eced:
+		fqn = m.findObjOnDisk(m.bck, objName)
+	case m.chunksConf != nil && m.chunksConf.multipart:
+		fqns := m.findObjChunksOnDisk(m.bck, objName)
+		tassert.Fatalf(m.t, len(fqns) > 0, "no chunks found for %s", objName)
+		fqn = fqns[rand.IntN(len(fqns))]
+	default:
+		fqn = m.findObjOnDisk(m.bck, objName)
+	}
+
+	fi, err := os.Stat(fqn)
+
 	tassert.CheckFatal(m.t, err)
 	off := rand.Int64N(fi.Size())
 	file, err := os.OpenFile(fqn, os.O_RDWR, cos.PermRWR)

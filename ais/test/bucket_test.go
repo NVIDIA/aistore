@@ -3543,6 +3543,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	switch {
 	case mirrored:
+		if m.chunksConf != nil && m.chunksConf.multipart {
+			t.Skip("mirroring is not supported for chunked objects")
+		}
 		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
 			Cksum: &cmn.CksumConfToSet{
 				Type:            apc.Ptr(cksumType),
@@ -3660,7 +3663,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
 				objName := bckObjs.Entries[j].Name
-				corruptSingleBitInFile(&m, objName)
+				corruptSingleBitInFile(&m, objName, eced)
 				objCh <- objName
 			}
 		}()

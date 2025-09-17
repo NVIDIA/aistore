@@ -1448,56 +1448,79 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	}
 
 	// Test changing the file content.
-	objName := m.objNames[0]
-	fqn := m.findObjOnDisk(m.bck, objName)
+	var (
+		objName   = m.objNames[0]
+		fqn       string
+		isChunked = m.chunksConf != nil && m.chunksConf.multipart
+	)
+	if isChunked {
+		fqns := m.findObjChunksOnDisk(m.bck, objName)
+		tassert.Fatalf(t, len(fqns) > 0, "object should have chunks: %s", objName)
+		fqn = fqns[0]
+	} else {
+		fqn = m.findObjOnDisk(m.bck, objName)
+	}
+
 	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
 	err := os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
+	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, isChunked, t)
 
-	// Test changing the file xattr.
-	objName = m.objNames[1]
-	fqn = m.findObjOnDisk(m.bck, objName)
-	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
-	tassert.CheckError(t, err)
-	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, t)
+	// Skip xattr tests for chunked/multipart objects
+	if !isChunked {
+		// Test changing the file xattr.
+		objName = m.objNames[1]
+		fqn = m.findObjOnDisk(m.bck, objName)
+		tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+		err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
+		tassert.CheckError(t, err)
+		executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, isChunked, t)
 
-	// Test for none checksum algorithm.
-	objName = m.objNames[2]
-	fqn = m.findObjOnDisk(m.bck, objName)
+		// Test for none checksum algorithm.
+		objName = m.objNames[2]
+		fqn = m.findObjOnDisk(m.bck, objName)
 
-	if cksumConf.Type != cos.ChecksumNone {
-		propsToSet := &cmn.BpropsToSet{
-			Cksum: &cmn.CksumConfToSet{
-				Type: apc.Ptr(cos.ChecksumNone),
-			},
+		if cksumConf.Type != cos.ChecksumNone {
+			propsToSet := &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
+					Type: apc.Ptr(cos.ChecksumNone),
+				},
+			}
+			_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
+			tassert.CheckFatal(t, err)
 		}
-		_, err = api.SetBucketProps(baseParams, m.bck, propsToSet)
-		tassert.CheckFatal(t, err)
-	}
 
-	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
-	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
-	tassert.CheckError(t, err)
-	_, err = api.GetObject(baseParams, m.bck, objName, nil)
-	tassert.CheckError(t, err)
+		tlog.Logfln("Changing file xattr[%s]: %s", objName, fqn)
+		err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
+		tassert.CheckError(t, err)
+		_, err = api.GetObject(baseParams, m.bck, objName, nil)
+		tassert.CheckError(t, err)
+	}
 }
 
-func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, t *testing.T) {
+func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, isChunked bool, t *testing.T) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	_, err := api.GetObjectWithValidation(baseParams, bck, objName, nil)
-	if err == nil {
+	herr := cmn.UnwrapErrHTTP(err)
+	switch {
+	case herr == nil:
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	} else if !strings.Contains(err.Error(), "ErrBadCksum") {
-		t.Errorf("Expected bad checksum error on a GET for a corrupted object, got [%v]", err)
+	case isChunked && !strings.Contains(herr.Message, "truncated"): // TODO: create a new error type for it and replace it with generic `IsErr*` check
+		t.Errorf("Expected chunk truncated error on a GET for a corrupted object, got [%v]", herr)
+	case !isChunked && !cos.IsErrBadCksum(herr):
+		t.Errorf("Expected bad checksum error on a GET for a corrupted object, got [%v]", herr)
 	}
+
 	// Execute another GET to make sure that the object is deleted
 	_, err = api.GetObjectWithValidation(baseParams, bck, objName, nil)
-	if err == nil {
+	herr = cmn.UnwrapErrHTTP(err)
+	switch {
+	case herr == nil:
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	} else if !strings.Contains(err.Error(), "ErrNotFound") {
-		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%v]", err)
+	case isChunked && !strings.Contains(herr.Message, "truncated"):
+		t.Errorf("Expected chunk truncated error on a GET for a corrupted object, got [%v]", herr)
+	case !isChunked && !cos.IsErrNotFound(herr):
+		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%v]", herr)
 	}
 }
 

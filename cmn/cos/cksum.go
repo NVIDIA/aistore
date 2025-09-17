@@ -15,6 +15,7 @@ import (
 	"hash/crc32"
 	"io"
 	"sort"
+	"strings"
 
 	onexxh "github.com/OneOfOne/xxhash"
 	cesxxh "github.com/cespare/xxhash/v2"
@@ -367,6 +368,8 @@ func (e *ErrBadCksum) Error() string {
 }
 
 func IsErrBadCksum(err error) bool {
-	_, ok := err.(*ErrBadCksum)
-	return ok
+	if _, ok := err.(*ErrBadCksum); ok {
+		return true
+	}
+	return err != nil && (strings.Contains(err.Error(), badDataCksumPrefix) || strings.Contains(err.Error(), badMetaCksumPrefix))
 }

@@ -254,7 +254,14 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 	// Test corrupting the file contents.
 	objName := m.objNames[0]
-	fqn := m.findObjOnDisk(m.bck, objName)
+	var fqn string
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		fqns := m.findObjChunksOnDisk(m.bck, objName)
+		tassert.Fatalf(t, len(fqns) > 0, "object should have chunks: %s", objName)
+		fqn = fqns[0]
+	} else {
+		fqn = m.findObjOnDisk(m.bck, objName)
+	}
 	tlog.Logf("Corrupting object data %q: %s\n", objName, fqn)
 	err := os.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)
