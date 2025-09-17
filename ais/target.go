@@ -394,12 +394,6 @@ func (t *target) Run() error {
 		nlog.Errorln("")
 	}
 
-	// register object type and workfile type
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{})
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{})
-	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{})
-	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{})
-
 	t.ups.t = t
 
 	// Init meta-owners and load local instances

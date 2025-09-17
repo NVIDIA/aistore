@@ -67,12 +67,6 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		// register all content types
-		fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-		fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-		fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
-		fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
-
 		// bucket
 		bck = cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 

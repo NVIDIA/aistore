@@ -563,6 +563,10 @@ func (mi *Mountpath) _alert(config *cmn.Config, c Capacity) string {
 func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
 	mfs = &MFS{hc: fshc, fsIDs: make(map[cos.FsID]string, 10)}
 	mfs.ios, blockDevs = ios.New(num)
+
+	// init content spec mgr: reg content types and resolvers
+	_once.Do(initCSM)
+
 	return blockDevs
 }
 
@@ -576,6 +580,9 @@ func TestNew(iostater ios.IOS) {
 		mfs.ios = iostater
 	}
 	PutMPI(make(MPI, num), make(MPI, num))
+
+	// ditto
+	_once.Do(initCSM)
 }
 
 //

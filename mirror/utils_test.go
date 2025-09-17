@@ -45,10 +45,6 @@ var _ = Describe("Mirror", func() {
 	fs.TestNew(nil)
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 
 	var (
 		props = &cmn.Bprops{

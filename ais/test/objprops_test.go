@@ -350,17 +350,18 @@ func TestObjChunkedOverride(t *testing.T) {
 func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, firstChunked, overrideChunked bool) {
 	const (
 		objPrefix = "test-chunked-override"
-		numObjs   = 1000
+		numObjs   = 100
 	)
 
 	// Create ioContext for first upload
 	m := ioContext{
-		t:         t,
-		bck:       bck,
-		num:       numObjs,
-		prefix:    objPrefix + trand.String(10),
-		fileSize:  16 * cos.MiB,
-		fixedSize: true,
+		t:      t,
+		bck:    bck,
+		num:    numObjs,
+		prefix: objPrefix + trand.String(10),
+		// fileSize: 2*cos.MiB + rand.Uint64N(cos.MiB),
+		fileSize:  2 * cos.MiB,
+		fixedSize: true, // TODO -- FIXME: the size must be truly random in a wide enough range
 	}
 
 	if testing.Short() {

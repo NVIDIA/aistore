@@ -19,9 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
@@ -150,9 +148,6 @@ func Tinit(db kvdb.Driver, config *cmn.Config) {
 
 	debug.Assert(g.mem == nil) // only once
 	g.mem = core.T.PageMM()
-
-	fs.CSM.Reg(ct.DsortFileCT, &ct.DsortFile{})
-	fs.CSM.Reg(ct.DsortWorkCT, &ct.DsortFile{})
 
 	newBcastClient(config)
 }
@@ -638,6 +633,10 @@ func (m *Manager) setAbortedTo(aborted bool) {
 	m.Metrics.setAbortedTo(aborted)
 }
 
+const (
+	workfileRecvShard = "recv-shard"
+)
+
 func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
@@ -675,7 +674,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 
 	params := core.AllocPutParams()
 	{
-		params.WorkTag = ct.WorkfileRecvShard
+		params.WorkTag = workfileRecvShard
 		params.Reader = rc
 		params.Cksum = nil
 		params.Atime = started

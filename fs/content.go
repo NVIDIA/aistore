@@ -6,30 +6,17 @@ package fs
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
-
-/*
- * Besides objects we must deal with additional files like: workfiles, dsort
- * intermediate files (used when spilling to disk) or EC slices. These files can
- * have different rules of rebalancing, evicting and other processing. Each
- * content type needs to implement ContentRes to reflect the rules and
- * permission for different services. To see how the interface can be
- * implemented see: DefaultWorkfile implemention.
- *
- * When walking through the files we need to know if the file is an object or
- * other content. To do that we generate fqn with Gen. It adds short
- * prefix (or suffix) to the base name, which we believe is unique and will separate objects
- * from content files. We parse the file type to run ParseUbase (implemented
- * by this file type) on the rest of the base name.
- */
 
 const (
 	contentTypeLen = 2
@@ -40,6 +27,10 @@ const (
 	ECMetaCT    = "mt"
 	ChunkCT     = "ch"
 	ChunkMetaCT = "ut"
+
+	// ext
+	DsortFileCT = "ds"
+	DsortWorkCT = "dw"
 )
 
 const (
@@ -76,59 +67,82 @@ type (
 )
 
 type (
-	ObjectContentRes    struct{}
-	WorkContentRes      struct{}
-	ECSliceContentRes   struct{}
-	ECMetaContentRes    struct{}
-	ObjChunkContentRes  struct{}
-	ChunkMetaContentRes struct{}
+	objCR       struct{}
+	workCR      struct{}
+	ecSliceCR   struct{}
+	ecMetaCR    struct{}
+	objChunkCR  struct{}
+	chunkMetaCR struct{}
+	dsortCR     struct{}
 )
 
 const cttag = "content type"
 
-var CSM *contentSpecMgr
+var (
+	CSM *contentSpecMgr
+
+	pid  int64 = 0xDEADBEEF   // pid of the current process
+	spid       = "0xDEADBEEF" // string version of the pid
+
+	_once sync.Once
+)
 
 // interface guard
 var (
-	_ ContentRes = (*ObjectContentRes)(nil)
-	_ ContentRes = (*WorkContentRes)(nil)
-	_ ContentRes = (*ECSliceContentRes)(nil)
-	_ ContentRes = (*ECMetaContentRes)(nil)
-	_ ContentRes = (*ObjChunkContentRes)(nil)
-	_ ContentRes = (*ChunkMetaContentRes)(nil)
+	_ ContentRes = (*objCR)(nil)
+	_ ContentRes = (*workCR)(nil)
+	_ ContentRes = (*ecSliceCR)(nil)
+	_ ContentRes = (*ecMetaCR)(nil)
+	_ ContentRes = (*objChunkCR)(nil)
+	_ ContentRes = (*chunkMetaCR)(nil)
 )
 
+// register all content types
+func initCSM() {
+	CSM = &contentSpecMgr{m: make(map[string]ContentRes, 8)}
+
+	pid = int64(os.Getpid())
+	spid = strconv.FormatInt(pid, 16)
+
+	CSM.regAll()
+}
+
+func (f *contentSpecMgr) regAll() {
+	f._reg(ObjCT, &objCR{})
+	f._reg(WorkCT, &workCR{})
+	f._reg(ECSliceCT, &ecSliceCR{})
+	f._reg(ECMetaCT, &ecMetaCR{})
+	f._reg(ChunkCT, &objChunkCR{})
+	f._reg(ChunkMetaCT, &chunkMetaCR{})
+
+	f._reg(DsortFileCT, &dsortCR{})
+	f._reg(DsortWorkCT, &dsortCR{})
+}
+
+// register (content-type, resolver) pair
+func (f *contentSpecMgr) _reg(contentType string, spec ContentRes) {
+	if strings.ContainsRune(contentType, filepath.Separator) {
+		panic(fmt.Errorf("contentSpecMgr: %s %q cannot contain %q", cttag, contentType, filepath.Separator))
+	}
+	if len(contentType) != contentTypeLen {
+		panic(fmt.Errorf("contentSpecMgr: %s %q must have length %d", cttag, contentType, contentTypeLen))
+	}
+	if _, ok := f.m[contentType]; ok {
+		debug.AssertNoErr(fmt.Errorf("%s %q is already registered", cttag, contentType))
+	}
+	f.m[contentType] = spec
+}
+
+// usage: space cleanup
 func (f *contentSpecMgr) Resolver(contentType string) ContentRes {
+	debug.Assert(len(f.m) > 0, "not initialized")
 	r := f.m[contentType]
 	return r
 }
 
-// Reg registers new content type with a given content resolver.
-// NOTE: all content type registrations must happen at startup.
-func (f *contentSpecMgr) Reg(contentType string, spec ContentRes, unitTest ...bool) {
-	err := f._reg(contentType, spec)
-	if err != nil && len(unitTest) == 0 {
-		debug.AssertNoErr(err)
-		cos.ExitLog(err)
-	}
-}
-
-func (f *contentSpecMgr) _reg(contentType string, spec ContentRes) error {
-	if strings.ContainsRune(contentType, filepath.Separator) {
-		return fmt.Errorf("%s %q cannot contain %q", cttag, contentType, filepath.Separator)
-	}
-	if len(contentType) != contentTypeLen {
-		return fmt.Errorf("%s %q must have length %d", cttag, contentType, contentTypeLen)
-	}
-	if _, ok := f.m[contentType]; ok {
-		return fmt.Errorf("%s %q is already registered", cttag, contentType)
-	}
-	f.m[contentType] = spec
-	return nil
-}
-
-// Gen returns a new FQN generated from given parts.
+// generate FQN from given parts and optional extras
 func (f *contentSpecMgr) Gen(parts PartsFQN, contentType string, extras ...string) (fqn string) {
+	debug.Assert(len(f.m) > 0, "not initialized")
 	spec, ok := f.m[contentType]
 	debug.Assert(ok, contentType)
 
@@ -151,13 +165,13 @@ func (f *contentSpecMgr) Gen(parts PartsFQN, contentType string, extras ...strin
 // common content types (see also ext/dsort)
 //
 
-func (*ObjectContentRes) MakeUbase(base string, _ ...string) string { return base }
+func (*objCR) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ObjectContentRes) ParseUbase(base string) ContentInfo {
+func (*objCR) ParseUbase(base string) ContentInfo {
 	return ContentInfo{Base: base, Ok: true}
 }
 
-func (*WorkContentRes) MakeUbase(base string, extras ...string) string {
+func (*workCR) MakeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 1, extras)
 	var (
 		dir, fname = filepath.Split(base)
@@ -169,7 +183,7 @@ func (*WorkContentRes) MakeUbase(base string, extras ...string) string {
 	return base + ssepa + tieBreaker + ssepa + spid
 }
 
-func (*WorkContentRes) ParseUbase(base string) (ci ContentInfo) {
+func (*workCR) ParseUbase(base string) (ci ContentInfo) {
 	// remove original content type
 	cntIndex := strings.IndexByte(base, bsepa)
 	if cntIndex < 0 {
@@ -197,25 +211,25 @@ func (*WorkContentRes) ParseUbase(base string) (ci ContentInfo) {
 // complex filename parsing. They rely on directory structure (%ch/, %ec/, %mt/) rather
 // than filename encoding for organization:
 //
-// - ObjChunkContentRes: temporary chunk files during chunked uploads
+// - objChunkCR: temporary chunk files during chunked uploads
 //   Named by the chunk manifest (e.g., objectname.sessionID.0001)
 //   Cleaned up by session ID after upload completion/failure
 //
-// - ECSliceContentRes: erasure coding data slices (%ec/ directory)
+// - ecSliceCR: erasure coding data slices (%ec/ directory)
 //   Generated during EC encoding, cleaned up with the original object
 //
-// - ECMetaContentRes: erasure coding metadata (%mt/ directory)
+// - ecMetaCR: erasure coding metadata (%mt/ directory)
 //   Contains EC reconstruction information, lifecycle tied to EC slices
 //
 // All use pass-through MakeUbase/ParseUbase since the content type
 // in the path provides sufficient identification for cleanup and management.
 
-func (*ObjChunkContentRes) MakeUbase(base string, extras ...string) string {
+func (*objChunkCR) MakeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 2, "expecting uploadID and chunk number, got: ", extras)
 	return base + ssepa + extras[0] + ssepa + extras[1]
 }
 
-func (*ObjChunkContentRes) ParseUbase(base string) (ci ContentInfo) {
+func (*objChunkCR) ParseUbase(base string) (ci ContentInfo) {
 	// (chunk number)
 	i := strings.LastIndexByte(base, bsepa)
 	if i < 0 {
@@ -239,7 +253,7 @@ func (*ObjChunkContentRes) ParseUbase(base string) (ci ContentInfo) {
 	return ContentInfo{Base: base[:j], Extras: []string{uploadID, chunkNum}, Ok: true}
 }
 
-func (*ChunkMetaContentRes) MakeUbase(base string, extras ...string) string {
+func (*chunkMetaCR) MakeUbase(base string, extras ...string) string {
 	if len(extras) == 0 {
 		return base // completed
 	}
@@ -247,7 +261,7 @@ func (*ChunkMetaContentRes) MakeUbase(base string, extras ...string) string {
 	return base + ssepa + extras[0] // partial (with uploadID)
 }
 
-func (*ChunkMetaContentRes) ParseUbase(base string) ContentInfo {
+func (*chunkMetaCR) ParseUbase(base string) ContentInfo {
 	i := strings.LastIndexByte(base, bsepa)
 	if i < 0 {
 		return ContentInfo{Base: base, Ok: true} // completed
@@ -259,14 +273,20 @@ func (*ChunkMetaContentRes) ParseUbase(base string) ContentInfo {
 	return ContentInfo{Base: base[:i], Extras: []string{uploadID}, Ok: true} // partial
 }
 
-func (*ECSliceContentRes) MakeUbase(base string, _ ...string) string { return base }
+func (*ecSliceCR) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ECSliceContentRes) ParseUbase(base string) ContentInfo {
+func (*ecSliceCR) ParseUbase(base string) ContentInfo {
 	return ContentInfo{Base: base, Ok: true}
 }
 
-func (*ECMetaContentRes) MakeUbase(base string, _ ...string) string { return base }
+func (*ecMetaCR) MakeUbase(base string, _ ...string) string { return base }
 
-func (*ECMetaContentRes) ParseUbase(base string) ContentInfo {
+func (*ecMetaCR) ParseUbase(base string) ContentInfo {
+	return ContentInfo{Base: base, Ok: true}
+}
+
+func (*dsortCR) MakeUbase(base string, _ ...string) string { return base }
+
+func (*dsortCR) ParseUbase(base string) ContentInfo {
 	return ContentInfo{Base: base, Ok: true}
 }

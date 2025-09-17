@@ -351,6 +351,9 @@ func (u *Ufest) removeCompleted(exceptFirst bool) error {
 	defer u.mu.Unlock()
 
 	if err := u.load(true); err != nil {
+		if cos.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	u.removeChunks(lom, exceptFirst)
@@ -1025,11 +1028,11 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		u, err := NewUfest("", lom, true /*must-exist*/)
 		debug.AssertNoErr(err)
 		if err := u.removeCompleted(true /*except first*/); err != nil {
-			nlog.Errorln("failed to remove", u._utag(lom.Cname()), "err:", err)
+			nlog.Errorln("failed to remove previous", tagCompleted, u._utag(lom.Cname()), "err:", err)
 		}
 	}
 
-	// update ais versioning after loading the previous LOM
+	// ais versioning
 	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
 		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 			if err = lom.IncVersion(); err != nil {
@@ -1050,7 +1053,7 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 
 	if err := lom.PersistMain(true /*isChunked*/); err != nil {
 		lom.md.lid.clrlmfl(lmflChunk)
-		u.Abort(lom)
+		u.Abort(lom) // TODO -- FIXME: rollback u.removeCompleted (above)
 		return err
 	}
 

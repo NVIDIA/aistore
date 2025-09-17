@@ -71,11 +71,6 @@ var _ = Describe("MPU-UfestRead", func() {
 		_, _ = fs.Add(mpath, "daeID")
 	}
 
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
-
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
 			bucketLocalA, apc.AIS, cmn.NsGlobal,

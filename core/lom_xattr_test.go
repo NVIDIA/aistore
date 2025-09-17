@@ -43,11 +43,6 @@ var _ = Describe("LOM Xattributes", func() {
 	localBck := cmn.Bck{Name: bucketLocal, Provider: apc.AIS, Ns: cmn.NsGlobal}
 	cachedBck := cmn.Bck{Name: bucketCached, Provider: apc.AIS, Ns: cmn.NsGlobal}
 
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
-	fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
-
 	var (
 		copyMpathInfo *fs.Mountpath
 		mix           = fs.Mountpath{Path: xattrMpath}

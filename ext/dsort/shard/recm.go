@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 
@@ -248,7 +247,7 @@ func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName str
 		contentPath := genRecordUname(shardName, recordName) + recordExt
 		c, err := core.NewCTObjCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
-		return contentPath, c.Make(ct.DsortFileCT)
+		return contentPath, c.Make(fs.DsortFileCT)
 	default:
 		debug.Assert(false, storeType)
 		return "", ""
@@ -273,7 +272,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		contentPath := obj.ContentPath
 		c, err := core.NewCTObjCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
-		return c.Make(ct.DsortFileCT)
+		return c.Make(fs.DsortFileCT)
 	default:
 		debug.Assert(false, obj.StoreType)
 		return ""

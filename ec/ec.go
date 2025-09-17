@@ -202,9 +202,6 @@ func Init() {
 	g.pmm = core.T.PageMM()
 	g.smm = core.T.ByteMM()
 
-	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{})
-	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{})
-
 	xreg.RegBckXact(&getFactory{})
 	xreg.RegBckXact(&putFactory{})
 	xreg.RegBckXact(&rspFactory{})

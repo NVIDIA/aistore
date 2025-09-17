@@ -58,8 +58,6 @@ func TestMain(m *testing.M) {
 	cos.CreateDir(testMountpath)
 	defer os.RemoveAll(testMountpath)
 	fs.TestNew(nil)
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
 
 	// target
 	config := cmn.GCO.Get()

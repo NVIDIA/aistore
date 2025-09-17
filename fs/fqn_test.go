@@ -267,8 +267,6 @@ func TestParseFQN(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 			}
-			fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-			fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
 
 			var parsed fs.ParsedFQN
 			err := parsed.Init(tt.fqn)
@@ -361,9 +359,6 @@ func TestMakeAndParseFQN(t *testing.T) {
 			_, err := fs.Add(tt.mpath, "daeID")
 			tassert.CheckFatal(t, err)
 
-			fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-			fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-
 			mpaths := fs.GetAvail()
 			fqn := mpaths[tt.mpath].MakePathFQN(&tt.bck, tt.contentType, tt.objName)
 
@@ -403,7 +398,6 @@ func BenchmarkParseFQN(b *testing.B) {
 	cos.CreateDir(mpath)
 	defer os.RemoveAll(mpath)
 	fs.Add(mpath, "daeID")
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{})
 
 	mpaths := fs.GetAvail()
 	fqn := mpaths[mpath].MakePathFQN(&bck, fs.ObjCT, "super/long/name")

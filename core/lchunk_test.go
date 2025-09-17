@@ -49,11 +49,6 @@ var _ = Describe("Ufest Core Functionality", func() {
 		_ = cos.CreateDir(oneMpath)
 		_, _ = fs.Add(oneMpath, "daeID")
 		_ = mock.NewTarget(bmdMock)
-
-		// Register content resolvers
-		fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-		fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{}, true)
-		fs.CSM.Reg(fs.ChunkMetaCT, &fs.ChunkMetaContentRes{}, true)
 	})
 
 	AfterEach(func() {

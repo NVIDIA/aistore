@@ -167,11 +167,6 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 	mios := mock.NewIOS()
 	fs.TestNew(mios)
 
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{}, true)
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
-	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{}, true)
-	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{}, true)
-
 	dir := t.TempDir()
 
 	for range desc.MountpathsCnt {

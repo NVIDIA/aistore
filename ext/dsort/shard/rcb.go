@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -86,7 +85,7 @@ func (c *rcbCtx) xtar(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 		if err := c.tw.WriteHeader(header); err != nil {
 			return true, err
 		}
-		args.fileType = ct.DsortFileCT
+		args.fileType = fs.DsortFileCT
 		args.extractMethod.Set(ExtractToWriter)
 		args.w = c.tw
 	}
@@ -137,7 +136,7 @@ func (c *rcbCtx) xzip(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 
 // common method to extract compressed tar using `ar` (archive reader)
 func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
-	workFQN := fs.CSM.Gen(lom, ct.DsortFileCT, "") // tarFQN
+	workFQN := fs.CSM.Gen(lom, fs.DsortFileCT, "") // tarFQN
 	wfh, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return err

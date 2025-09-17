@@ -56,7 +56,7 @@ var (
 	cliBck             cmn.Bck
 	cliIOCtxChunksConf *ioCtxChunksConf
 	errObjectFound     = errors.New("found") // to interrupt fs.Walk when object found
-	fsOnce             sync.Once
+	_onceInit          sync.Once
 )
 
 type (
@@ -1007,7 +1007,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	}
 }
 
-func initFS() {
+func initOnce() {
 	proxyURL := tools.GetPrimaryURL()
 	primary, err := tools.GetPrimaryProxy(proxyURL)
 	if err != nil {
@@ -1023,20 +1023,16 @@ func initFS() {
 	config.TestFSP.Count = 1
 	config.Backend = cfg.Backend
 	cmn.GCO.CommitUpdate(config)
-
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{})
-	fs.CSM.Reg(fs.WorkCT, &fs.WorkContentRes{})
-	fs.CSM.Reg(fs.ECSliceCT, &fs.ECSliceContentRes{})
-	fs.CSM.Reg(fs.ECMetaCT, &fs.ECMetaContentRes{})
-	fs.CSM.Reg(fs.ChunkCT, &fs.ObjChunkContentRes{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
 	t.Helper()
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
-	fsOnce.Do(initFS)
-	baseParams := tools.BaseAPIParams(proxyURL)
+
 	fs.TestNew(nil)
+	_onceInit.Do(initOnce)
+
+	baseParams := tools.BaseAPIParams(proxyURL)
 	smap := tools.GetClusterMap(t, proxyURL)
 	for _, target := range smap.Tmap {
 		mpathList, err := api.GetMountpaths(baseParams, target)

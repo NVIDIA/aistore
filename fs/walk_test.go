@@ -37,7 +37,6 @@ func TestWalkBck(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fs.TestNew(mock.NewIOS())
-			fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
 
 			mpaths := make([]string, 0, test.mpathCnt)
 			defer func() {
@@ -123,7 +122,6 @@ func TestWalkBckSkipDir(t *testing.T) {
 	)
 
 	fs.TestNew(mock.NewIOS())
-	fs.CSM.Reg(fs.ObjCT, &fs.ObjectContentRes{}, true)
 
 	defer func() {
 		for mpath := range mpaths {
