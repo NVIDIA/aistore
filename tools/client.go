@@ -65,7 +65,8 @@ type PutObjectsArgs struct {
 	ObjPath            string
 	CksumType          string
 	ObjSize            uint64
-	MultipartChunkSize uint64
+	ObjSizeRange       [2]uint64
+	MultipartNumChunks int
 	ObjCnt             int
 	ObjNameLn          int
 	WorkerCnt          int
@@ -74,6 +75,26 @@ type PutObjectsArgs struct {
 	IgnoreErr          bool
 	SkipVC             bool           // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
 	Reader             readers.Reader // optional reader for multipart uploads - when provided, uploads sequentially
+}
+
+// TODO: need to be replaced with a global syncPool of random objects:
+// - the `cos.NowRand()` might not be thread-safe, but is currently used across goroutines in several tests
+// - performance-wise, syncPool is much faster than creating a new random object for each call
+var fileSizeRnd = cos.NowRand()
+
+func (args *PutObjectsArgs) GetSize() (size uint64) {
+	switch {
+	case args.ObjSizeRange[0] > 0 && args.ObjSizeRange[1] > 0:
+		// randomly sample a size within [args.ObjSizeRange[0], args.ObjSizeRange[1]]
+		size = args.ObjSizeRange[0] + fileSizeRnd.Uint64N(args.ObjSizeRange[1]-args.ObjSizeRange[0]+1)
+	case args.ObjSize == 0:
+		size = (fileSizeRnd.Uint64N(cos.KiB) + 1) * cos.KiB
+	case !args.FixedSize:
+		size = args.ObjSize + fileSizeRnd.Uint64N(cos.KiB)
+	default:
+		size = args.ObjSize
+	}
+	return size
 }
 
 func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
@@ -321,15 +342,15 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 }
 
 func putMultipartObjectSequential(bp api.BaseParams, bck cmn.Bck, objName, uploadID string, size uint64, args *PutObjectsArgs) error {
-	numParts := (size + args.MultipartChunkSize - 1) / args.MultipartChunkSize
-	partNumbers := make([]int, int(numParts))
+	partNumbers := make([]int, args.MultipartNumChunks)
 
-	for partNum := 1; partNum <= int(numParts); partNum++ {
-		offset := uint64(partNum-1) * args.MultipartChunkSize
-		partSize := args.MultipartChunkSize
-		if offset+partSize > size {
-			partSize = size - offset
-		}
+	for i := range args.MultipartNumChunks {
+		var (
+			partNum    = i + 1
+			offset     = uint64(partNum-1) * size / uint64(args.MultipartNumChunks)
+			nextOffset = uint64(partNum) * size / uint64(args.MultipartNumChunks)
+			partSize   = nextOffset - offset
+		)
 
 		// Read chunk from input reader
 		buf := make([]byte, partSize)
@@ -390,20 +411,19 @@ func PutMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uin
 
 	// Otherwise, upload parts in parallel
 	var (
-		numParts    = (size + args.MultipartChunkSize - 1) / args.MultipartChunkSize
-		partNumbers = make([]int, int(numParts))
+		partNumbers = make([]int, args.MultipartNumChunks)
 		mu          = &sync.Mutex{}
 		group       = &errgroup.Group{}
 	)
-	for partNum := 1; partNum <= int(numParts); partNum++ {
+	for i := range args.MultipartNumChunks {
+		var (
+			partNum    = i + 1
+			offset     = uint64(partNum-1) * size / uint64(args.MultipartNumChunks)
+			nextOffset = uint64(partNum) * size / uint64(args.MultipartNumChunks)
+			partSize   = nextOffset - offset
+		)
 		group.Go(func(partNum int) func() error {
 			return func() error {
-				offset := uint64(partNum-1) * args.MultipartChunkSize
-				partSize := args.MultipartChunkSize
-				if offset+partSize > size {
-					partSize = size - offset
-				}
-
 				partReader, err := readers.NewRand(int64(partSize), args.CksumType)
 				if err != nil {
 					return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
@@ -483,23 +503,15 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	for i := 0; i < len(objNames); i += chunkSize {
 		group.Go(func(start, end int) func() error {
 			return func() error {
-				rnd := cos.NowRand()
 				for _, objName := range objNames[start:end] {
-					size := args.ObjSize
-
-					// size not specified | size not fixed
-					if size == 0 {
-						size = (rnd.Uint64N(cos.KiB) + 1) * cos.KiB
-					} else if !args.FixedSize {
-						size += rnd.Uint64N(cos.KiB)
-					}
+					size := args.GetSize()
 
 					if args.CksumType == "" {
 						args.CksumType = cos.ChecksumNone
 					}
 
 					var err error
-					if args.MultipartChunkSize > 0 {
+					if args.MultipartNumChunks > 0 {
 						err = PutMultipartObject(bp, args.Bck, objName, size, &args)
 					} else {
 						reader, rerr := readers.NewRand(int64(size), args.CksumType)

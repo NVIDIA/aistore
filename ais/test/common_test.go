@@ -71,7 +71,11 @@ type (
 		// Chunks configuration
 		chunksConf *ioCtxChunksConf
 
-		fileSize            uint64
+		// File size configuration
+		fileSize      uint64
+		fixedSize     bool
+		fileSizeRange [2]uint64 // [min, max] size range; take precedence over `fileSize` and `fixedSize`
+
 		proxyURL            string
 		prefix              string
 		otherTasksToTrigger int
@@ -87,7 +91,6 @@ type (
 
 		getErrIsFatal       bool
 		silent              bool
-		fixedSize           bool
 		deleteRemoteBckObjs bool
 		ordered             bool // true - object names make sequence, false - names are random
 		skipVC              bool // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
@@ -142,8 +145,8 @@ func (m *ioContext) init(cleanup bool) {
 		// if random selection failed, use RO url
 		m.proxyURL = tools.GetPrimaryURL()
 	}
-	if m.fileSize == 0 {
-		m.fileSize = cos.KiB
+	if m.fileSize == 0 && m.fileSizeRange[0] == 0 && m.fileSizeRange[1] == 0 {
+		m.fileSizeRange[0], m.fileSizeRange[1] = cos.KiB, 4*cos.KiB
 	}
 	if m.num > 0 {
 		m.objNames = make([]string, 0, m.num)
@@ -237,41 +240,39 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 
 	if !m.silent {
 		var s, k string
-		if m.fixedSize {
+		switch {
+		case m.fileSizeRange[0] > 0 && m.fileSizeRange[1] > 0:
+			s = fmt.Sprintf(" (size %d - %d)", m.fileSizeRange[0], m.fileSizeRange[1])
+		case m.fixedSize:
 			s = fmt.Sprintf(" (size %d)", m.fileSize)
-		} else if m.fileSize > 0 {
+		case m.fileSize > 0:
 			s = fmt.Sprintf(" (approx. size %d)", m.fileSize)
 		}
 		if k = m.prefix; k != "" {
 			k = "/" + k + "*"
 		}
 		if m.chunksConf != nil && m.chunksConf.multipart {
-			chunkSize := m.fileSize / uint64(m.chunksConf.numChunks)
-			s += fmt.Sprintf(" (chunked into %d chunks, chunk size %s)", m.chunksConf.numChunks, cos.ToSizeIEC(int64(chunkSize), 0))
+			s += fmt.Sprintf(" (chunked into %d chunks)", m.chunksConf.numChunks)
 		}
 		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck.String(), k)
 	}
 	putArgs := tools.PutObjectsArgs{
-		ProxyURL:  m.proxyURL,
-		Bck:       m.bck,
-		ObjPath:   m.prefix,
-		ObjCnt:    m.num,
-		ObjNameLn: m.nameLen,
-		ObjSize:   m.fileSize,
-		FixedSize: m.fixedSize,
-		CksumType: p.Cksum.Type,
-		WorkerCnt: 0, // TODO: Should we set something custom?
-		IgnoreErr: len(ignoreErrs) > 0 && ignoreErrs[0],
-		Ordered:   m.ordered,
-		SkipVC:    m.skipVC,
+		ProxyURL:     m.proxyURL,
+		Bck:          m.bck,
+		ObjPath:      m.prefix,
+		ObjCnt:       m.num,
+		ObjNameLn:    m.nameLen,
+		ObjSizeRange: m.fileSizeRange, // take precedence over `ObjSize` and `FixedSize`
+		ObjSize:      m.fileSize,
+		FixedSize:    m.fixedSize,
+		CksumType:    p.Cksum.Type,
+		WorkerCnt:    0, // TODO: Should we set something custom?
+		IgnoreErr:    len(ignoreErrs) > 0 && ignoreErrs[0],
+		Ordered:      m.ordered,
+		SkipVC:       m.skipVC,
 	}
 	if m.chunksConf != nil && m.chunksConf.multipart {
-		// Calculate chunk size based on object size and desired number of chunks
-		chunkSize := m.fileSize / uint64(m.chunksConf.numChunks)
-		if chunkSize == 0 {
-			chunkSize = 1 // minimum chunk size of 1 byte
-		}
-		putArgs.MultipartChunkSize = chunkSize
+		putArgs.MultipartNumChunks = m.chunksConf.numChunks
 		m.objNames, m.numPutErrs, err = tools.PutRandObjs(putArgs)
 		tassert.CheckFatal(m.t, err)
 
@@ -287,22 +288,25 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 }
 
-func (m *ioContext) update(baseParams api.BaseParams, objName string, reader readers.Reader, size uint64) {
-	var err error
-	if m.chunksConf != nil && m.chunksConf.multipart && m.chunksConf.numChunks != 0 {
-		chunkSize := m.fileSize / uint64(m.chunksConf.numChunks)
-		if chunkSize == 0 {
-			chunkSize = 1 // minimum chunk size of 1 byte
-		}
-		err = tools.PutMultipartObject(baseParams, m.bck, objName, size, &tools.PutObjectsArgs{
+// update updates the object with a new random reader and returns the reader and the size; reader is used to validate the object after the update
+func (m *ioContext) update(baseParams api.BaseParams, objName, cksumType string) (readers.Reader, uint64) {
+	var (
+		putArgs = &tools.PutObjectsArgs{
 			ProxyURL:           m.proxyURL,
 			Bck:                m.bck,
 			ObjPath:            m.prefix,
 			ObjCnt:             m.num,
 			ObjNameLn:          m.nameLen,
-			Reader:             reader,
-			MultipartChunkSize: chunkSize,
-		})
+			MultipartNumChunks: m.chunksConf.numChunks,
+		}
+		size        = putArgs.GetSize()
+		reader, err = readers.NewRand(int64(size), cksumType)
+	)
+	tassert.CheckFatal(m.t, err)
+
+	if m.chunksConf != nil && m.chunksConf.multipart && m.chunksConf.numChunks != 0 {
+		putArgs.Reader = reader
+		err = tools.PutMultipartObject(baseParams, m.bck, objName, size, putArgs)
 	} else {
 		_, err = api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
@@ -314,16 +318,15 @@ func (m *ioContext) update(baseParams api.BaseParams, objName string, reader rea
 		})
 	}
 	tassert.CheckFatal(m.t, err)
+	return reader, size
 }
 
-func (m *ioContext) updateAndValidate(baseParams api.BaseParams, idx int, size uint64, cksumType string) {
+func (m *ioContext) updateAndValidate(baseParams api.BaseParams, idx int, cksumType string) {
 	if idx < 0 || idx >= len(m.objNames) {
 		m.t.Fatalf("index out of range: %d", idx)
 	}
 
-	r, err := readers.NewRand(int64(size), cksumType)
-	tassert.CheckFatal(m.t, err)
-	m.update(baseParams, m.objNames[idx], r, size)
+	r, size := m.update(baseParams, m.objNames[idx], cksumType)
 
 	// GET and validate the object with the pattern
 	w := bytes.NewBuffer(nil)

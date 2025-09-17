@@ -2763,10 +2763,9 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 					Provider: apc.AIS,
 				}
 				srcm = &ioContext{
-					t:        t,
-					num:      objCnt,
-					fileSize: cos.KiB,
-					bck:      srcBck,
+					t:   t,
+					num: objCnt,
+					bck: srcBck,
 				}
 			)
 

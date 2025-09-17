@@ -355,18 +355,16 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 
 	// Create ioContext for first upload
 	m := ioContext{
-		t:      t,
-		bck:    bck,
-		num:    numObjs,
-		prefix: objPrefix + trand.String(10),
-		// fileSize: 2*cos.MiB + rand.Uint64N(cos.MiB),
-		fileSize:  2 * cos.MiB,
-		fixedSize: true, // TODO -- FIXME: the size must be truly random in a wide enough range
+		t:             t,
+		bck:           bck,
+		num:           numObjs,
+		prefix:        objPrefix + trand.String(10),
+		fileSizeRange: [2]uint64{32 * cos.KiB, 8 * cos.MiB},
 	}
 
 	if testing.Short() {
 		m.num /= 10
-		m.fileSize /= 64
+		m.fileSizeRange[1] /= 64
 	}
 
 	// Set chunking configuration for first upload
@@ -396,7 +394,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	tassert.CheckFatal(t, err)
 
 	for i := range len(m.objNames) {
-		m.updateAndValidate(baseParams, i, m.fileSize, p.Cksum.Type)
+		m.updateAndValidate(baseParams, i, p.Cksum.Type)
 
 		// verify that the object's version is incremented after being overridden
 		op, err := api.HeadObject(baseParams, bck, m.objNames[i], api.HeadArgs{FltPresence: apc.FltPresent})
