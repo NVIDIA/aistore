@@ -228,6 +228,23 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	}
 }
 
+func (m *ioContext) sizesToString() (s string) {
+	siz0, siz1 := int64(m.fileSizeRange[0]), int64(m.fileSizeRange[1])
+	switch {
+	case siz0 >= 0 && siz1 > 0:
+		s = fmt.Sprintf(" (size %s - %s)", cos.ToSizeIEC(siz0, 0), cos.ToSizeIEC(siz1, 0))
+		debug.Assert(siz1 >= siz0, s)
+	case m.fixedSize:
+		s = fmt.Sprintf(" (size %d)", m.fileSize)
+	case m.fileSize > 0:
+		s = fmt.Sprintf(" (approx. size %d)", m.fileSize)
+	}
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		s += fmt.Sprintf(" (chunked into %d chunks)", m.chunksConf.numChunks)
+	}
+	return s
+}
+
 func (m *ioContext) puts(ignoreErrs ...bool) {
 	m.t.Helper()
 	if !m.bck.IsAIS() {
@@ -239,22 +256,8 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 
 	if !m.silent {
-		var s, k string
-		switch {
-		case m.fileSizeRange[0] > 0 && m.fileSizeRange[1] > 0:
-			s = fmt.Sprintf(" (size %d - %d)", m.fileSizeRange[0], m.fileSizeRange[1])
-		case m.fixedSize:
-			s = fmt.Sprintf(" (size %d)", m.fileSize)
-		case m.fileSize > 0:
-			s = fmt.Sprintf(" (approx. size %d)", m.fileSize)
-		}
-		if k = m.prefix; k != "" {
-			k = "/" + k + "*"
-		}
-		if m.chunksConf != nil && m.chunksConf.multipart {
-			s += fmt.Sprintf(" (chunked into %d chunks)", m.chunksConf.numChunks)
-		}
-		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck.String(), k)
+		s := m.sizesToString()
+		tlog.Logf("PUT %d objects%s => %s\n", m.num, s, m.bck.Cname(m.prefix))
 	}
 	putArgs := tools.PutObjectsArgs{
 		ProxyURL:     m.proxyURL,
@@ -388,7 +391,8 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	if !m.silent {
-		tlog.Logf("remote PUT %d objects (size %s) => %s\n", objCnt, cos.ToSizeIEC(int64(m.fileSize), 0), m.bck.Cname(m.prefix))
+		s := m.sizesToString()
+		tlog.Logf("remote PUT %d objects%s => %s\n", objCnt, s, m.bck.Cname(m.prefix))
 	}
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)

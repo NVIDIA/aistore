@@ -15,19 +15,19 @@ func TestSmoke(t *testing.T) { _wrd(t, 0) }
 func TestFntl(t *testing.T)  { _wrd(t, 280) }
 
 func _wrd(t *testing.T, nameLen int) {
-	objSizes := [...]uint64{3 * cos.KiB, 19 * cos.KiB, 77 * cos.KiB}
+	objSizes := [...]uint64{cos.KiB, 100 * cos.KiB, cos.MiB} // three ranges (below)
 
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		for _, chunked := range []bool{false, true} {
 			for _, objSize := range objSizes {
 				tname := "size:" + cos.ToSizeIEC(int64(objSize), 0)
 				m := ioContext{
-					t:        t,
-					bck:      bck.Clone(),
-					num:      100,
-					nameLen:  nameLen,
-					fileSize: objSize,
-					prefix:   "smoke/obj-",
+					t:             t,
+					bck:           bck.Clone(),
+					num:           100,
+					nameLen:       nameLen,
+					fileSizeRange: [2]uint64{objSize / 2, objSize * 4},
+					prefix:        "smoke/obj-",
 				}
 				if chunked {
 					m.chunksConf = &ioCtxChunksConf{

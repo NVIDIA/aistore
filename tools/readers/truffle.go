@@ -121,34 +121,34 @@ func _rfree(v *rand.Rand) {
 	rndPool.Put(v)
 }
 
-func newTruffle() (sr *truffleReader) {
+func newTruffle() (r *truffleReader) {
 	rnd := _ralloc()
 	defer _rfree(rnd)
 
 	var i int
-	sr = &truffleReader{gen: make([]byte, lent)}
+	r = &truffleReader{gen: make([]byte, lent)}
 	for i < lent {
 		val := rnd.Uint32()
-		binary.BigEndian.PutUint32(sr.gen[i:i+cos.SizeofI32], val)
+		binary.BigEndian.PutUint32(r.gen[i:i+cos.SizeofI32], val)
 		i += cos.SizeofI32
 	}
-	return sr
+	return r
 }
 
-func (sr *truffleReader) Open() *truffleReader {
+func (r *truffleReader) Open() *truffleReader {
 	dup := &truffleReader{}
-	dup.gen = sr.gen
+	dup.gen = r.gen
 	return dup
 }
 
-func (sr *truffleReader) setPos(u uint64) { sr.pos.Store(u) }
+func (r *truffleReader) setPos(u uint64) { r.pos.Store(u) }
 
-func (sr *truffleReader) Read(p []byte) (int, error) {
+func (r *truffleReader) Read(p []byte) (int, error) {
 	n := len(p)
 	for i := range n {
-		npos := sr.pos.Add(1)
+		npos := r.pos.Add(1)
 		rpos := int(npos) % lent
-		p[i] = truffle[rpos] ^ sr.gen[rpos]
+		p[i] = truffle[rpos] ^ r.gen[rpos]
 		p[i] ^= byte(npos&0xff) ^ byte((npos>>8)&0xff)
 	}
 	return n, nil
