@@ -20,7 +20,7 @@ TL;DR a simple demonstration that does exactly that (and see detailed comments i
 
 ![show performance and running jobs](/assets/tco-any-to-any/show-perf-job.png)
 
-But when the traffic is running and the parts are getting periodically killed and recovered in a variety of realistic ways - then you would maybe want to watch it via [Prometheus](https://aiatscale.org/docs/prometheus) or Graphite/Grafana. Or, at the very least, via 'ais show performance' - the poor man's choice that's always available.
+But when the traffic is running and the parts are getting periodically killed and recovered in a variety of realistic ways - then you would maybe want to watch it via [Prometheus](https://aistore.nvidia.com/docs/monitoring-prometheus) or Graphite/Grafana. Or, at the very least, via 'ais show performance' - the poor man's choice that's always available.
 
 > `ais show performance --help` for details
 

@@ -45,7 +45,7 @@ This message shows that your installation appears to be working correctly.
 ...
 ```
 
-The Docker image used to deploy AIS clusters in this guide is `aistorage/cluster-minimal:latest`, which can be found [here](https://hub.docker.com/repository/docker/aistorage/cluster-minimal) on Docker Hub. `aistorage/cluster-minimal:latest` is an all-in-one, custom Docker image with AIS resources pre-installed.
+The Docker image used to deploy AIS clusters in this guide is `aistorage/cluster-minimal:latest`, which can be found [here](https://hub.docker.com/r/aistorage/cluster-minimal) on Docker Hub. `aistorage/cluster-minimal:latest` is an all-in-one, custom Docker image with AIS resources pre-installed.
 
 ### <ins>CLI
 
