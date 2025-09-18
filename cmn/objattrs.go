@@ -159,6 +159,10 @@ func (oa *ObjAttrs) DelStdCustom() {
 	}
 }
 
+func (oa *ObjAttrs) DelCustomKey(k string) {
+	delete(oa.CustomMD, k)
+}
+
 // clone OAH => ObjAttrs (see also lom.CopyAttrs)
 func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Atime = oah.AtimeUnix()

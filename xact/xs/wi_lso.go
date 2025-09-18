@@ -98,6 +98,7 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 	if lom.IsFntl() {
 		orig := lom.OrigFntl()
 		if orig != nil {
+			// TODO: maybe use lom.DisplayName() instead or in addition
 			saved := lom.PushFntl(orig)
 			if wi.msg.IsFlagSet(apc.LsDiff) {
 				checkRemoteMD(lom, en)
@@ -110,14 +111,14 @@ func (wi *walkInfo) ls(lom *core.LOM, status uint16) (en *cmn.LsoEnt) {
 		checkRemoteMD(lom, en)
 	}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
-		return
+		return en
 	}
 
 	// fill out even more of `en`
 	wi.setWanted(en, lom)
 
 	wi.lomVisitedCb(lom)
-	return
+	return en
 }
 
 // NOTE: slow path if lom.Bck is remote

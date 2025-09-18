@@ -207,6 +207,7 @@ func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
 
 func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
 func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }
+func (lom *LOM) DelCustomKey(key string)                { lom.md.DelCustomKey(key) }
 
 // subj to resilvering
 func (lom *LOM) IsHRW() bool {
@@ -623,7 +624,7 @@ func (lom *LOM) FromFS() error {
 			// ditto
 			return cos.NewErrNotFound(T, lom.Cname())
 		}
-		lom.md.lid = lom.md.lid.clrlmfl(lmflFntl)
+		lom.clrlmfl(lmflFntl)
 		fallthrough
 	default:
 		err = os.NewSyscallError("stat", err)

@@ -143,6 +143,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		} else {
 			debug.Assert(!cos.IsErrFntl(err))
 			lom.PopFntl(saved)
+			lom.DelCustomKey(cmn.OrigFntl)
 		}
 		return fh, err
 	case !cos.IsNotExist(err):
@@ -298,31 +299,35 @@ func (lom *LOM) RenameFinalize(wfqn string) error {
 		nlog.Warningln(e, "(", bdir, ")")
 		return e
 	}
-	err := lom.RenameToMain(wfqn)
-	switch {
-	case err == nil:
-		return nil
-	case cos.IsErrMv(err):
-		return err
-	case cos.IsErrFntl(err):
-		// - when finalizing LOM: fixup fntl in place
-		var (
-			short = lom.ShortenFntl()
-			saved = lom.PushFntl(short)
-		)
-		err = lom.RenameToMain(wfqn)
-		if err == nil {
-			lom.setlmfl(lmflFntl)
-			lom.SetCustomKey(cmn.OrigFntl, saved[0])
-		} else {
-			debug.Assert(!cos.IsErrFntl(err))
-			lom.PopFntl(saved)
-		}
-		return err
-	default:
-		T.FSHC(err, lom.Mountpath(), wfqn)
-		return cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
+
+	// (handle proactively)
+	// note that generated work/chunk/etc. names are handled in fs.CSM.Gen();
+	// finalize is the last place that can still hit ENAMETOOLONG
+	var saved []string
+	if fs.IsFntl(lom.ObjName) {
+		short := lom.ShortenFntl()
+		saved = lom.PushFntl(short)
 	}
+
+	err := lom.RenameToMain(wfqn)
+	if err == nil {
+		if len(saved) > 0 {
+			if _, ok := lom.GetCustomKey(cmn.OrigFntl); !ok {
+				lom.SetCustomKey(cmn.OrigFntl, saved[0])
+			}
+			lom.setlmfl(lmflFntl)
+		}
+		return nil
+	}
+	debug.Assert(!cos.IsErrFntl(err))
+	if len(saved) > 0 {
+		lom.PopFntl(saved) // undo
+	}
+	if !cos.IsErrMv(err) {
+		T.FSHC(err, lom.Mountpath(), wfqn)
+		err = cmn.NewErrFailedTo(T, "finalize", lom.Cname(), err)
+	}
+	return err
 }
 
 //
