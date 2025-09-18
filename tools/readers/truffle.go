@@ -7,10 +7,14 @@ package readers
 import (
 	"encoding/binary"
 	"math/rand/v2"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+var rndPool sync.Pool
 
 var (
 	truffle = []byte{
@@ -90,17 +94,39 @@ var (
 	lent = len(truffle)
 )
 
-type seededReader struct {
+var (
+	globSeed atomic.Uint64
+	seedOnce sync.Once
+)
+
+type truffleReader struct {
 	gen []byte
 	pos atomic.Uint64
 }
 
-func newSeededReader(seed uint64) (sr *seededReader) {
-	var (
-		i   int
-		rnd = rand.New(cos.NewRandSource(seed))
-	)
-	sr = &seededReader{gen: make([]byte, lent)}
+func _ralloc() *rand.Rand {
+	seedOnce.Do(func() {
+		globSeed.Store(uint64(time.Now().UnixNano()))
+	})
+
+	v := rndPool.Get()
+	if v != nil {
+		return v.(*rand.Rand)
+	}
+	seed := globSeed.Add(1)
+	return rand.New(cos.NewRandSource(seed))
+}
+
+func _rfree(v *rand.Rand) {
+	rndPool.Put(v)
+}
+
+func newTruffle() (sr *truffleReader) {
+	rnd := _ralloc()
+	defer _rfree(rnd)
+
+	var i int
+	sr = &truffleReader{gen: make([]byte, lent)}
 	for i < lent {
 		val := rnd.Uint32()
 		binary.BigEndian.PutUint32(sr.gen[i:i+cos.SizeofI32], val)
@@ -109,7 +135,15 @@ func newSeededReader(seed uint64) (sr *seededReader) {
 	return sr
 }
 
-func (sr *seededReader) Read(p []byte) (int, error) {
+func (sr *truffleReader) Open() *truffleReader {
+	dup := &truffleReader{}
+	dup.gen = sr.gen
+	return dup
+}
+
+func (sr *truffleReader) setPos(u uint64) { sr.pos.Store(u) }
+
+func (sr *truffleReader) Read(p []byte) (int, error) {
 	n := len(p)
 	for i := range n {
 		npos := sr.pos.Add(1)

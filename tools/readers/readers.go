@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -38,14 +37,14 @@ type (
 	Reader interface {
 		cos.ReadOpenCloser
 		io.Seeker
+		Reset()
 		Cksum() *cos.Cksum
 	}
 	randReader struct {
-		seed   int64
-		rnd    *seededReader
-		size   int64
-		offset int64
-		cksum  *cos.Cksum
+		truffle *truffleReader
+		size    int64
+		offset  int64
+		cksum   *cos.Cksum
 	}
 	tarReader struct {
 		b []byte
@@ -53,7 +52,7 @@ type (
 		cksum *cos.Cksum
 	}
 	rrLimited struct {
-		random *seededReader
+		random *truffleReader
 		size   int64
 		off    int64
 	}
@@ -66,9 +65,10 @@ type (
 	sgReader struct {
 		memsys.Reader
 		cksum *cos.Cksum
+		sgl   *memsys.SGL
 	}
 	bytesReader struct {
-		*bytes.Buffer
+		*bytes.Reader
 		buf []byte
 	}
 
@@ -94,25 +94,23 @@ var (
 ////////////////
 
 func NewRand(size int64, cksumType string) (Reader, error) {
-	var (
-		cksum *cos.Cksum
-		seed  = mono.NanoTime()
-	)
-	rand1 := newSeededReader(uint64(seed))
+	truffle := newTruffle()
+
+	var cksum *cos.Cksum
 	if cksumType != cos.ChecksumNone {
-		rr := &rrLimited{rand1, size, 0}
+		rr := &rrLimited{truffle, size, 0}
 		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, cksumType)
 		if err != nil {
 			return nil, err
 		}
 		cksum = cksumHash.Clone()
+		truffle.setPos(0)
 	}
-	rand1dup := newSeededReader(uint64(seed))
+
 	return &randReader{
-		seed:  seed,
-		rnd:   rand1dup,
-		size:  size,
-		cksum: cksum,
+		truffle: truffle,
+		size:    size,
+		cksum:   cksum,
 	}, nil
 }
 
@@ -124,30 +122,27 @@ func (r *randReader) Read(buf []byte) (int, error) {
 
 	want := int64(len(buf))
 	n := min(want, available)
-	actual, err := r.rnd.Read(buf[:n])
+	actual, err := r.truffle.Read(buf[:n])
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 
 	r.offset += int64(actual)
 	return actual, nil
 }
 
-// Open implements the Reader interface.
-// Returns a new rand reader using the same seed.
 func (r *randReader) Open() (cos.ReadOpenCloser, error) {
 	return &randReader{
-		seed:  r.seed,
-		rnd:   newSeededReader(uint64(r.seed)),
-		size:  r.size,
-		cksum: r.cksum,
+		truffle: r.truffle.Open(),
+		size:    r.size,
+		cksum:   r.cksum,
 	}, nil
 }
 
-// Close implements the Reader interface.
 func (*randReader) Close() error { return nil }
 
-// Seek implements the Reader interface.
+func (r *randReader) Reset() { r.truffle.setPos(0) }
+
 func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	var abs int64
 
@@ -165,28 +160,16 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	if abs < 0 {
 		return 0, errors.New("negative offset position")
 	}
-
 	if abs >= r.size {
 		r.offset = r.size
 		return r.offset, nil
 	}
 
-	r.rnd = newSeededReader(uint64(r.seed))
-	r.offset = 0
-	actual, err := io.CopyN(io.Discard, r, abs)
-	if err != nil {
-		return 0, err
-	}
-
-	if actual != abs {
-		err := fmt.Errorf("failed to seek to %d, seeked to %d instead", offset, actual)
-		return 0, err
-	}
-
+	r.truffle.setPos(uint64(abs))
+	r.offset = abs
 	return abs, nil
 }
 
-// XXHash implements the Reader interface.
 func (r *randReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
@@ -262,10 +245,11 @@ func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
 	return NewRandFile(r.filePath, r.name, -1, cksumType)
 }
 
-// XXHash implements the Reader interface.
 func (r *fileReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
+
+func (r *fileReader) Reset() { r.File.Seek(0, io.SeekStart) }
 
 //////////////
 // sgReader //
@@ -284,24 +268,40 @@ func NewSG(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
 	}
 
 	r := memsys.NewReader(sgl)
-	return &sgReader{*r, cksum}, nil
+	return &sgReader{*r, cksum, sgl}, nil
 }
 
 func (r *sgReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
+func (r *sgReader) Reset() {
+	rr := memsys.NewReader(r.sgl)
+	r.Reader = *rr
+}
+
 /////////////////
 // bytesReader //
 /////////////////
 
-func NewBytes(buf []byte) Reader                    { return &bytesReader{bytes.NewBuffer(buf), buf} }
-func (*bytesReader) Close() error                   { return nil }
-func (*bytesReader) Cksum() *cos.Cksum              { return nil }
-func (*bytesReader) Seek(int64, int) (int64, error) { return 0, nil }
+func NewBytes(buf []byte) Reader {
+	return &bytesReader{
+		Reader: bytes.NewReader(buf),
+		buf:    buf,
+	}
+}
+
+// Seek is simply inherited
+
+func (*bytesReader) Close() error      { return nil }
+func (*bytesReader) Cksum() *cos.Cksum { return nil }
+func (r *bytesReader) Reset()          { r.Seek(0, io.SeekStart) }
 
 func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
-	return &bytesReader{bytes.NewBuffer(r.buf), r.buf}, nil
+	return &bytesReader{
+		Reader: bytes.NewReader(r.buf),
+		buf:    r.buf,
+	}, nil
 }
 
 ///////////////
@@ -331,6 +331,8 @@ func newTarReader(size int64, cksumType string) (r Reader, err error) {
 
 func (*tarReader) Close() error        { return nil }
 func (r *tarReader) Cksum() *cos.Cksum { return r.cksum }
+
+func (r *tarReader) Reset() { r.Reader.Seek(0, io.SeekStart) }
 
 func (r *tarReader) Open() (cos.ReadOpenCloser, error) {
 	return &tarReader{

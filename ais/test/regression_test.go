@@ -6,7 +6,6 @@ package integration_test
 
 import (
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -1080,7 +1079,7 @@ func TestStressDeleteRange(t *testing.T) {
 				if err != nil {
 					errCh <- err
 				}
-				reader.Seek(0, io.SeekStart)
+				reader.Reset()
 			}
 		}(i, reader)
 	}
