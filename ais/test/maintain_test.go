@@ -371,6 +371,81 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
+func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
+	var (
+		bck = cmn.Bck{Name: "maint-reb", Provider: apc.AIS}
+		m   = &ioContext{
+			t:               t,
+			num:             1000,
+			fileSizeRange:   [2]uint64{4 * cos.KiB, 4 * cos.MiB},
+			bck:             bck,
+			numGetsEachFile: 1,
+			proxyURL:        proxyURL,
+			chunksConf: &ioCtxChunksConf{
+				numChunks: 10,
+				multipart: true,
+			},
+		}
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+	)
+
+	if testing.Short() {
+		m.num /= 10
+		m.fileSizeRange[1] /= 8
+	}
+
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
+
+	m.puts()
+	tsi, _ := m.smap.GetRandTarget()
+	tlog.Logfln("Removing %s", tsi.StringEx())
+	rebID, err := api.StartMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+	tassert.CheckError(t, err)
+
+	maintenanceStopped := false
+	t.Cleanup(func() {
+		if !maintenanceStopped {
+			stopMaintenance(t, baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
+		}
+		tools.ClearMaintenance(baseParams, tsi)
+	})
+
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
+
+	smap, err := tools.WaitForClusterState(proxyURL, "target removed from the cluster", m.smap.Version, origProxyCnt, origTargetCount-1, tsi.ID())
+	tassert.CheckFatal(t, err)
+	m.smap = smap
+
+	m.gets(nil, true)
+	m.ensureNoGetErrors()
+
+	rebID, err = stopMaintenance(t, baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
+	tassert.CheckFatal(t, err)
+	maintenanceStopped = true
+
+	smap, err = tools.WaitForClusterState(proxyURL, "target joined", m.smap.Version, origProxyCnt, origTargetCount)
+	tassert.CheckFatal(t, err)
+	m.smap = smap
+
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
+}
+
+func stopMaintenance(t *testing.T, baseParams api.BaseParams, actVal *apc.ActValRmNode, proxyURL string, smapVersion int64, origProxyCnt, origTargetCount int) (string, error) {
+	rebID, err := api.StopMaintenance(baseParams, actVal)
+	if err != nil {
+		return "", err
+	}
+	_, err = tools.WaitForClusterState(proxyURL, "target joined (cleanup)", smapVersion, origProxyCnt, origTargetCount)
+	if err == nil {
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
+	}
+	return rebID, nil
+}
+
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (

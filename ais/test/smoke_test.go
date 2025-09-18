@@ -18,9 +18,9 @@ func _wrd(t *testing.T, nameLen int) {
 	objSizes := [...]uint64{3 * cos.KiB, 19 * cos.KiB, 77 * cos.KiB}
 
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
-		for _, objSize := range objSizes {
-			tname := "size:" + cos.ToSizeIEC(int64(objSize), 0)
-			t.Run(tname, func(t *testing.T) {
+		for _, chunked := range []bool{false, true} {
+			for _, objSize := range objSizes {
+				tname := "size:" + cos.ToSizeIEC(int64(objSize), 0)
 				m := ioContext{
 					t:        t,
 					bck:      bck.Clone(),
@@ -29,17 +29,25 @@ func _wrd(t *testing.T, nameLen int) {
 					fileSize: objSize,
 					prefix:   "smoke/obj-",
 				}
-
-				if bck.IsAIS() || bck.IsRemoteAIS() {
-					m.num = 1000
+				if chunked {
+					m.chunksConf = &ioCtxChunksConf{
+						numChunks: 10,
+						multipart: true,
+					}
+					tname += "/chunked"
 				}
+				t.Run(tname, func(_ *testing.T) {
+					if bck.IsAIS() || bck.IsRemoteAIS() {
+						m.num = 1000
+					}
 
-				m.init(true /*cleanup*/)
+					m.init(true /*cleanup*/)
 
-				m.puts()
-				m.gets(nil, false)
-				m.del()
-			})
+					m.puts()
+					m.gets(nil, false)
+					m.del()
+				})
+			}
 		}
 	})
 }
