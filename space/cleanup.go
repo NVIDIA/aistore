@@ -462,9 +462,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkCT:
 		_, ubase := filepath.Split(fqn)
-		contentResolver := fs.CSM.Resolver(fs.WorkCT)
-		contentInfo := contentResolver.ParseUbase(ubase)
-
+		contentInfo := fs.CSM.ParseUbase(ubase, fs.WorkCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "work", nil)
 		} else if contentInfo.Old {
@@ -523,7 +521,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		j.rmAnyBatch(flagRmOldWork)
 
 	case fs.ChunkCT:
-		contentInfo := fs.CSM.Resolver(fs.ChunkCT).ParseUbase(parsedFQN.ObjName)
+		contentInfo := fs.CSM.ParseUbase(parsedFQN.ObjName, fs.ChunkCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk", nil)
 			return
@@ -535,7 +533,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		}
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
-		contentInfo := fs.CSM.Resolver(fs.ChunkMetaCT).ParseUbase(parsedFQN.ObjName)
+		contentInfo := fs.CSM.ParseUbase(parsedFQN.ObjName, fs.ChunkMetaCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk-manifest", nil)
 			return

@@ -176,16 +176,6 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 }
 
 func (poi *putOI) putObject() (ecode int, err error) {
-	if lom := poi.lom; lom.IsFntl() {
-		// fixup fntl
-		var (
-			short = lom.ShortenFntl()
-			saved = lom.PushFntl(short)
-		)
-		lom.SetCustomKey(cmn.OrigFntl, saved[0])
-		poi.workFQN = fs.CSM.Gen(lom, fs.WorkCT, "fntl-0x24")
-	}
-
 	poi.ltime = mono.NanoTime()
 
 	// if checksums match PUT is a no-op

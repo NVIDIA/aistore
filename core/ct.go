@@ -121,6 +121,12 @@ func NewCTObjCT(bck *cmn.Bck, objName string) (ct *CT, err error) {
 	return
 }
 
+func newChunkCT(lom *LOM, mi *fs.Mountpath) (ct *CT) {
+	ct = &CT{objName: lom.ObjName, bck: lom.Bck(), contentType: fs.ChunkCT}
+	ct.mi = mi // instead of ct.init()
+	return
+}
+
 func NewCTFromBO(bck *meta.Bck, objName, ctType string, extras ...string) (ct *CT, err error) {
 	ct = &CT{objName: objName, bck: bck, contentType: ctType}
 	if err = ct.bck.Init(T.Bowner()); err != nil {

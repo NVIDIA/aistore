@@ -185,26 +185,31 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 		return nil, fmt.Errorf("%s: invalid chunk number (%d)", u._utag(lom.Cname()), num)
 	}
 
-	var (
-		contentResolver = fs.CSM.Resolver(fs.ChunkCT)
-		chname          = contentResolver.MakeUbase(lom.ObjName, u.id, fmt.Sprintf(fmtChunkNum, num))
-	)
+	var snum string
 	if num > 9999 {
-		chname = contentResolver.MakeUbase(lom.ObjName, u.id, strconv.Itoa(num))
+		snum = strconv.Itoa(num)
+	} else {
+		snum = fmt.Sprintf(fmtChunkNum, num)
 	}
 
+	// note first chunk's location
 	if num == 1 {
 		return &Uchunk{
-			path: lom.Mountpath().MakePathFQN(lom.Bucket(), fs.ChunkCT, chname),
+			path: fs.CSM.Gen(lom, fs.ChunkCT, u.id, snum),
 			num:  uint16(num),
 		}, nil
 	}
-	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(chname))
+
+	// all the rest chunks
+	hrwkey := u.id + snum
+	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(hrwkey))
 	if err != nil {
 		return nil, err
 	}
+
+	ct := newChunkCT(lom, mi)
 	return &Uchunk{
-		path: mi.MakePathFQN(lom.Bucket(), fs.ChunkCT, chname),
+		path: fs.CSM.Gen(ct, fs.ChunkCT, u.id, snum),
 		num:  uint16(num),
 	}, nil
 }
