@@ -245,7 +245,7 @@ func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName str
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := cosExt(recordName)
 		contentPath := genRecordUname(shardName, recordName) + recordExt
-		ct, err := core.NewCTObjCT(&recm.bck, contentPath)
+		ct, err := core.NewDsortCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
 		return contentPath, ct.GenFQN(fs.DsortFileCT)
 	default:
@@ -259,7 +259,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 	case OffsetStoreType:
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
-		ct, err := core.NewCTObjCT(&recm.bck, obj.ContentPath)
+		ct, err := core.NewDsortCT(&recm.bck, obj.ContentPath)
 		debug.AssertNoErr(err)
 		return ct.GenFQN(obj.ObjectFileType)
 	case SGLStoreType:
@@ -270,7 +270,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		ct, err := core.NewCTObjCT(&recm.bck, contentPath)
+		ct, err := core.NewDsortCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
 		return ct.GenFQN(fs.DsortFileCT)
 	default:

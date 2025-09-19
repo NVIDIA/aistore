@@ -487,7 +487,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	lom.Lock(false)
 	if args.Generation != 0 {
-		ctMeta := core.LOM2CT(lom, fs.ECMetaCT)
+		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
 			return nil
@@ -504,7 +504,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 	}
 
 	// meta
-	ctMeta := core.LOM2CT(lom, fs.ECMetaCT)
+	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaCT)
 	ctMeta.Lock(true)
 	err := ctMeta.Write(bytes.NewReader(args.MD), -1, "" /*work fqn*/)
 	if err == nil {

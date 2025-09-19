@@ -274,7 +274,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 			nlog.Warningf("%s: %s %v", xname, lom, err)
 			return nil
 		}
-		ct := core.LOM2CT(lom, fs.ObjCT)
+		ct := core.NewCTFromLOM(lom, fs.ObjCT)
 		// copy metafile
 		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.Mountpath(), parsed.Mountpath, buf)
 		if err != nil {

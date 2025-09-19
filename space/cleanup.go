@@ -32,7 +32,9 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
+// NOTE:
+// - for cleanup policies and implementation details, see README.md in this package
+// - report stats counters "cleanup.store.n" & "cleanup.store.size" (not to confuse with generic ""loc-objs", "in-objs", etc.)
 
 // (batch sizing)
 const (
@@ -364,15 +366,15 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) {
 			}
 			continue
 		}
-		j.jogBck()
+		j._jogBck()
 		if xcln.IsAborted() || j.done() {
 			return
 		}
 	}
 }
 
-// main method: walk and visit assorted content types (specified below)
-func (j *clnJ) jogBck() {
+// walk a given bucket and visit assorted content types (below)
+func (j *clnJ) _jogBck() {
 	xcln := j.ini.Xaction
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,
@@ -458,8 +460,8 @@ func (j *clnJ) rmInvalidFQN(fqn, ctType string, err error) {
 	j.rmAnyBatch(flagRmInvalid)
 }
 
-func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
-	switch parsedFQN.ContentType {
+func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
+	switch parsed.ContentType {
 	case fs.WorkCT:
 		_, ubase := filepath.Split(fqn)
 		contentInfo := fs.CSM.ParseUbase(ubase, fs.WorkCT)
@@ -470,58 +472,51 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 			j.rmAnyBatch(flagRmOldWork)
 		}
 
+	// EC enabled:
+	// - remove slices with missing metafiles
+	// - remove metafiles with missing slice _and_ replica
+	// EC disabled:
+	// - remove all slices and metafiles
 	case fs.ECSliceCT:
-		// EC slices:
-		// - EC enabled: remove only slices with missing metafiles
-		// - EC disabled: remove all slices
-		ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
-		if err != nil || !ct.Bck().Props.EC.Enabled {
+		if !j.bck.Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			j.rmAnyBatch(flagRmOldWork)
 			return
 		}
-		if err := ct.LoadSliceFromFS(); err != nil {
-			return
-		}
-		// Saving a CT is not atomic: first it saves CT, then its metafile
-		// follows. Ignore just updated CTs to avoid processing incomplete data.
-		mtime := time.Unix(0, ct.MtimeUnix())
-		if mtime.Add(j.dont()).After(j.now) {
-			return
-		}
+		ct := core.NewCTFromParsed(parsed, fqn)
 		metaFQN := ct.GenFQN(fs.ECMetaCT)
-		if cos.Stat(metaFQN) != nil {
-			j.misplaced.ec = append(j.misplaced.ec, ct)
-			j.rmAnyBatch(flagRmMisplacedEC)
+		if cos.Stat(metaFQN) == nil {
+			// metafile present, nothing to do
+			return
 		}
+		j.misplaced.ec = append(j.misplaced.ec, ct)
+		j.rmAnyBatch(flagRmMisplacedEC)
 	case fs.ECMetaCT:
-		// EC metafiles:
-		// - EC enabled: remove only without corresponding slice or replica
-		// - EC disabled: remove all metafiles
-		ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
-		if err != nil || !ct.Bck().Props.EC.Enabled {
+		if !j.bck.Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			j.rmAnyBatch(flagRmOldWork)
 			return
 		}
-		// Metafile is saved the last. If there is no corresponding replica or
-		// slice, it is safe to remove the stray metafile.
+		ct := core.NewCTFromParsed(parsed, fqn)
+
 		sliceCT := ct.Clone(fs.ECSliceCT)
 		if cos.Stat(sliceCT.FQN()) == nil {
+			// keep meta if any EC slice exists
+			return
+		}
+		replicaCT := ct.Clone(fs.ObjCT)
+		if cos.Stat(replicaCT.FQN()) == nil {
+			// keep meta if a local full replica (fs.ObjCT) exists
 			return
 		}
 
-		// TODO --  FIXME: does that work at all?
-
-		objCT := ct.Clone(fs.ObjCT)
-		if cos.Stat(objCT.FQN()) == nil {
-			return
-		}
+		// Metafile is saved the last. Since there is no corresponding replica and slice,
+		// it is safe to remove the meta.
 		j.oldWork = append(j.oldWork, fqn)
 		j.rmAnyBatch(flagRmOldWork)
 
 	case fs.ChunkCT:
-		contentInfo := fs.CSM.ParseUbase(parsedFQN.ObjName, fs.ChunkCT)
+		contentInfo := fs.CSM.ParseUbase(parsed.ObjName, fs.ChunkCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk", nil)
 			return
@@ -533,7 +528,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		}
 		core.FreeLOM(lom)
 	case fs.ChunkMetaCT:
-		contentInfo := fs.CSM.ParseUbase(parsedFQN.ObjName, fs.ChunkMetaCT)
+		contentInfo := fs.CSM.ParseUbase(parsed.ObjName, fs.ChunkMetaCT)
 		if !contentInfo.Ok {
 			j.rmInvalidFQN(fqn, "chunk-manifest", nil)
 			return
@@ -546,7 +541,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		}
 
 	default:
-		debug.Assert(false, "Unsupported content type: ", parsedFQN.ContentType)
+		debug.Assert(false, "Unsupported content type: ", parsed.ContentType)
 	}
 }
 
@@ -692,7 +687,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		// misplaced EC
 		metaFQN := lom.GenFQN(fs.ECMetaCT)
 		if cos.Stat(metaFQN) != nil {
-			j.misplaced.ec = append(j.misplaced.ec, core.LOM2CT(lom, fs.ObjCT))
+			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjCT))
 			j.rmAnyBatch(flagRmMisplacedEC)
 		}
 	default:

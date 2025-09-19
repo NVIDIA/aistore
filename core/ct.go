@@ -78,7 +78,14 @@ func (ct *CT) Unlock(exclusive bool) {
 	nlc.Unlock(*uname, exclusive)
 }
 
-// TODO: likely redundant (review)
+//
+// begin: CT constructors (flavors) -----------------------------------------------------
+//
+
+// full construction and init, including:
+// - parse fqn
+// - init bucket
+// - HRW
 func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	var (
 		hrwFQN string
@@ -102,19 +109,60 @@ func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	return ct, err
 }
 
-// FIXME: obsolete, dsort only
-func NewCTObjCT(bck *cmn.Bck, objName string) (ct *CT, err error) {
+// usage: dsort only
+func NewDsortCT(bck *cmn.Bck, objName string) (ct *CT, err error) {
 	ct = &CT{objName: objName, bck: meta.CloneBck(bck), contentType: fs.ObjCT}
 	err = ct.init()
 	return
 }
 
+// bare minimum: from fs.ParsedFQN
+func NewCTFromParsed(parsed *fs.ParsedFQN, fqn string) *CT {
+	return &CT{
+		fqn:         fqn,
+		objName:     parsed.ObjName,
+		contentType: parsed.ContentType,
+		bck:         meta.CloneBck(&parsed.Bck),
+		mi:          parsed.Mountpath,
+		digest:      parsed.Digest,
+	}
+}
+
+// bare minimum: from LOM
+func NewCTFromLOM(lom *LOM, ctType string, extras ...string) (ct *CT) {
+	ct = &CT{
+		objName:     lom.ObjName,
+		contentType: ctType,
+		bck:         lom.Bck(),
+		mi:          lom.mi,
+		digest:      lom.digest,
+	}
+	ct.fqn = ct.GenFQN("", extras...)
+	return ct
+}
+
+// same as above but with a designated mountpath
 func newChunkCT(lom *LOM, mi *fs.Mountpath) (ct *CT) {
 	ct = &CT{objName: lom.ObjName, bck: lom.Bck(), contentType: fs.ChunkCT}
 	ct.mi = mi // instead of ct.init()
 	return
 }
 
+// bare minimum: from CT
+func (ct *CT) Clone(ctType string) (clone *CT) {
+	clone = &CT{
+		objName:     ct.objName,
+		contentType: ctType,
+		bck:         ct.bck,
+		mi:          ct.mi,
+		digest:      ct.digest,
+	}
+	clone.fqn = clone.GenFQN("")
+	return clone
+}
+
+// costruct, init bucket and compute HRW
+// (similar to lom.InitBck())
 func NewCTFromBO(bck *meta.Bck, objName, ctType string, extras ...string) (ct *CT, err error) {
 	ct = &CT{objName: objName, bck: bck, contentType: ctType}
 	if err = ct.bck.Init(T.Bowner()); err != nil {
@@ -135,30 +183,9 @@ func (ct *CT) init(extras ...string) error {
 	return nil
 }
 
-func LOM2CT(lom *LOM, ctType string, extras ...string) (ct *CT) {
-	ct = &CT{
-		objName:     lom.ObjName,
-		contentType: ctType,
-		bck:         lom.Bck(),
-		mi:          lom.mi,
-		digest:      lom.digest,
-	}
-	ct.fqn = ct.GenFQN("", extras...)
-	return ct
-}
-
-// Clone CT and change ContentType and FQN
-func (ct *CT) Clone(ctType string) (clone *CT) {
-	clone = &CT{
-		objName:     ct.objName,
-		contentType: ctType,
-		bck:         ct.bck,
-		mi:          ct.mi,
-		digest:      ct.digest,
-	}
-	clone.fqn = clone.GenFQN("")
-	return clone
-}
+//
+// end: CT constructors (flavors) -----------------------------------------------------
+//
 
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,
 // save to workFQN; second, rename workFQN to ct.fqn. If unset, it writes
