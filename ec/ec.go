@@ -467,7 +467,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 			return nil
 		}
 	}
-	tmpFQN := ct.Make(fs.WorkCT)
+	tmpFQN := ct.GenFQN(fs.WorkCT, "w-slice-meta")
 	if err := ct.Write(args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}

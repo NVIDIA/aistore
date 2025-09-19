@@ -149,7 +149,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 		poi.oreq = r
 		poi.r = r.Body
 		poi.resphdr = resphdr
-		poi.workFQN = fs.CSM.Gen(poi.lom, fs.WorkCT, fs.WorkfilePut)
+		poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
 		poi.cksumToUse = poi.lom.ObjAttrs().FromHeader(r.Header)
 		poi.owt = cmn.OwtPut // default
 	}
@@ -772,7 +772,7 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 		poi.config = cmn.GCO.Get()
 		poi.r = res.R
 		poi.size = res.Size
-		poi.workFQN = fs.CSM.Gen(lom, fs.WorkCT, fs.WorkfileColdget)
+		poi.workFQN = lom.GenFQN(fs.WorkCT, fs.WorkfileColdget)
 		poi.atime = goi.atime
 		poi.owt = cmn.OwtGet
 		poi.cksumToUse = res.ExpCksum // expected checksum (to validate if the bucket's `validate_cold_get == true`)
@@ -995,7 +995,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	}
 
 	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
-	workFQN := fs.CSM.Gen(lom, fs.WorkCT, fs.WorkfileRemote)
+	workFQN := lom.GenFQN(fs.WorkCT, fs.WorkfileRemote)
 	poi := allocPOI()
 	{
 		poi.t = goi.t
@@ -1440,7 +1440,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 		workFQN = a.hdl.workFQN
 	)
 	if workFQN == "" {
-		workFQN = fs.CSM.Gen(a.lom, fs.WorkCT, fs.WorkfileAppend)
+		workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend)
 		a.lom.Lock(false)
 		if a.lom.Load(false /*cache it*/, false /*locked*/) == nil {
 			_, a.hdl.partialCksum, err = cos.CopyFile(a.lom.FQN, workFQN, buf, a.lom.CksumType())
@@ -1688,7 +1688,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string, args *core.ETLArgs) (re
 }
 
 func (coi *coi) _writer(t *target, lom, dst *core.LOM, args *core.ETLArgs) (res xs.CoiRes) {
-	workFQN := fs.CSM.Gen(dst, fs.WorkCT, fs.WorkfileTransform)
+	workFQN := dst.GenFQN(fs.WorkCT, fs.WorkfileTransform)
 	lomWriter, err := dst.CreateWork(workFQN) // closed in the `coi.PutWOC` call
 	if err != nil {
 		return xs.CoiRes{Err: err}
@@ -1734,7 +1734,7 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 		poi.config = coi.Config
 		poi.r = resp.R
 		poi.xctn = coi.Xact // on behalf of
-		poi.workFQN = fs.CSM.Gen(dst, fs.WorkCT, "copy-dp")
+		poi.workFQN = dst.GenFQN(fs.WorkCT, "copy-dp")
 		poi.atime = resp.OAH.AtimeUnix()
 		poi.cksumToUse = resp.OAH.Checksum()
 
@@ -1923,7 +1923,7 @@ func (a *putA2I) do() (int, error) {
 			offset    int64
 			size      int64
 			tarFormat tar.Format
-			workFQN   = fs.CSM.Gen(a.lom, fs.WorkCT, fs.WorkfileAppendToArch)
+			workFQN   = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppendToArch)
 		)
 		if err = a.lom.RenameMainTo(workFQN); err != nil {
 			return http.StatusInternalServerError, err
@@ -1960,7 +1960,7 @@ cpap: // copy + append
 		cksum    cos.CksumHashSize
 		aw       archive.Writer
 	)
-	workFQN = fs.CSM.Gen(a.lom, fs.WorkCT, fs.WorkfileAppendToArch)
+	workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppendToArch)
 	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err != nil {
 		return http.StatusInternalServerError, err

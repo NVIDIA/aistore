@@ -159,7 +159,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
 
 	wi := &archwi{r: r, msg: msg, archlom: archlom, tarFormat: tar.FormatUnknown}
-	wi.fqn = fs.CSM.Gen(wi.archlom, fs.WorkCT, fs.WorkfileCreateArch)
+	wi.fqn = wi.archlom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)
 	wi.cksum.Init(archlom.CksumType())
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)

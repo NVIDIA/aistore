@@ -367,7 +367,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		dst.SetVersion(lomInitialVersion)
 	}
 
-	workFQN := fs.CSM.Gen(dst, fs.WorkCT, fs.WorkfileCopy)
+	workFQN := dst.GenFQN(fs.WorkCT, fs.WorkfileCopy)
 	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, dstCksumTy)
 	if err != nil {
 		return err

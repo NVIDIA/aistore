@@ -188,7 +188,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 		DaemonID: core.T.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
-			ObjectFileType: args.fileType,
+			ObjectFileType: args.fileType, // FIXME: rename as ContentType
 			StoreType:      storeType,
 			Offset:         args.offset,
 			MetadataSize:   mdSize,
@@ -245,9 +245,9 @@ func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName str
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := cosExt(recordName)
 		contentPath := genRecordUname(shardName, recordName) + recordExt
-		c, err := core.NewCTObjCT(&recm.bck, contentPath)
+		ct, err := core.NewCTObjCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
-		return contentPath, c.Make(fs.DsortFileCT)
+		return contentPath, ct.GenFQN(fs.DsortFileCT)
 	default:
 		debug.Assert(false, storeType)
 		return "", ""
@@ -261,7 +261,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// full FQN.
 		ct, err := core.NewCTObjCT(&recm.bck, obj.ContentPath)
 		debug.AssertNoErr(err)
-		return ct.Make(obj.ObjectFileType)
+		return ct.GenFQN(obj.ObjectFileType)
 	case SGLStoreType:
 		// To convert contentPath to fullContentPath we need to add record
 		// object extension.
@@ -270,9 +270,9 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		c, err := core.NewCTObjCT(&recm.bck, contentPath)
+		ct, err := core.NewCTObjCT(&recm.bck, contentPath)
 		debug.AssertNoErr(err)
-		return c.Make(fs.DsortFileCT)
+		return ct.GenFQN(fs.DsortFileCT)
 	default:
 		debug.Assert(false, obj.StoreType)
 		return ""

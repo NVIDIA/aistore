@@ -189,10 +189,10 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 	return err
 }
 
-// Used when slice conflict is detected: a target receives a new slice and it already
-// has a slice of the same generation with different ID
+// Used when slice conflict is detected: target receives a new slice when it already
+// has one of the same generation but with a different ID
 func (*Reb) renameAsWorkFile(ct *core.CT) (string, error) {
-	fqn := ct.Make(fs.WorkCT)
+	fqn := ct.GenFQN(fs.WorkCT, "reb-slice-conflict")
 	// Using os.Rename is safe as both CT and Workfile on the same mountpath
 	if err := os.Rename(ct.FQN(), fqn); err != nil {
 		return "", err
@@ -324,9 +324,9 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	isReplica := md.SliceID == 0
 	var fileFQN string
 	if isReplica {
-		fileFQN = ct.Make(fs.ObjCT)
+		fileFQN = ct.GenFQN(fs.ObjCT)
 	} else {
-		fileFQN = ct.Make(fs.ECSliceCT)
+		fileFQN = ct.GenFQN(fs.ECSliceCT)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
 		nlog.Warningf("%s no CT for metadata[%d]: %s", core.T, md.SliceID, fileFQN)

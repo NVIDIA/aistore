@@ -154,7 +154,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		ct.Lock(false)
 		defer ct.Unlock(false)
 		fqn = ct.FQN()
-		metaFQN = ct.Make(fs.ECMetaCT)
+		metaFQN = ct.GenFQN(fs.ECMetaCT)
 		if md, err = LoadMetadata(metaFQN); err != nil {
 			return err
 		}

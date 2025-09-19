@@ -273,7 +273,7 @@ func (c *getJogger) restoreReplicaFromDsk(ctx *restoreCtx) error {
 		size   int64
 	)
 	// for each target: check for the ctx.lom replica, break loop if found
-	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkCT, "ec-restore-repl")
+	tmpFQN := ctx.lom.GenFQN(fs.WorkCT, "ec-restore-repl")
 
 loop: //nolint:gocritic // keeping label for readability
 	for node := range ctx.nodes {
@@ -380,7 +380,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		var writer *slice
 		if ctx.toDisk {
 			prefix := fmt.Sprintf("ec-restore-%d", v.SliceID)
-			fqn := fs.CSM.Gen(ctx.lom, fs.WorkCT, prefix)
+			fqn := ctx.lom.GenFQN(fs.WorkCT, prefix)
 			fh, err := ctx.lom.CreateSlice(fqn)
 			if err != nil {
 				return err
@@ -438,7 +438,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	cksums []*cos.CksumHash, cksumType string, idx int, sliceSize int64) error {
 	if ctx.toDisk {
 		prefix := fmt.Sprintf("ec-rebuild-%d", idx)
-		fqn := fs.CSM.Gen(ctx.lom, fs.WorkCT, prefix)
+		fqn := ctx.lom.GenFQN(fs.WorkCT, prefix)
 		file, err := ctx.lom.CreateSlice(fqn)
 		if err != nil {
 			return err

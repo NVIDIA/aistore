@@ -1923,7 +1923,7 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	if params.WriteSGL == nil {
 		// regular lom save (custom writer not present)
-		wfqn := fs.CSM.Gen(params.Lom, fs.WorkCT, "blob-dl")
+		wfqn := params.Lom.GenFQN(fs.WorkCT, "blob-dl")
 		lmfh, err := params.Lom.CreateWork(wfqn)
 		if err != nil {
 			return "", nil, err

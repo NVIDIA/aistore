@@ -538,7 +538,7 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt 
 func damageMetadataCksum(t *testing.T, slicePath string) {
 	ct, err := core.NewCTFromFQN(slicePath, nil)
 	tassert.CheckFatal(t, err)
-	metaFQN := ct.Make(fs.ECMetaCT)
+	metaFQN := ct.GenFQN(fs.ECMetaCT)
 	md, err := ec.LoadMetadata(metaFQN)
 	tassert.CheckFatal(t, err)
 	md.CksumValue = "01234"
@@ -709,7 +709,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 	ct, err := core.NewCTFromFQN(mainObjPath, nil)
 	tassert.CheckFatal(t, err)
-	metafile := ct.Make(fs.ECMetaCT)
+	metafile := ct.GenFQN(fs.ECMetaCT)
 	tlog.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, metafile)
 	tassert.CheckFatal(t, cos.RemoveFile(metafile))
 	if delSlice {
@@ -734,7 +734,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 
 		ct, err := core.NewCTFromFQN(sliceToDel, nil)
 		tassert.CheckFatal(t, err)
-		metafile := ct.Make(fs.ECMetaCT)
+		metafile := ct.GenFQN(fs.ECMetaCT)
 		if doEC {
 			tlog.LogfCond(!o.silent, "Removing slice meta %s\n", metafile)
 		} else {
@@ -1548,7 +1548,7 @@ func TestECXattrs(t *testing.T) {
 
 		ct, err := core.NewCTFromFQN(mainObjPath, nil)
 		tassert.CheckFatal(t, err)
-		metafile := ct.Make(fs.ECMetaCT)
+		metafile := ct.GenFQN(fs.ECMetaCT)
 		tlog.Logfln("Damaging %s [removing %s]", objPath, metafile)
 		tassert.CheckFatal(t, cos.RemoveFile(metafile))
 

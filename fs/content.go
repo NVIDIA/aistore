@@ -54,12 +54,6 @@ type (
 		parseUbase(ubase string) ContentInfo
 	}
 
-	PartsFQN interface {
-		ObjectName() string
-		Bucket() *cmn.Bck
-		Mountpath() *Mountpath
-	}
-
 	contentSpecMgr struct {
 		m map[string]contentRes
 	}
@@ -75,7 +69,10 @@ type (
 	dsortCR     struct{}
 )
 
-const cttag = "content type"
+const (
+	cttag  = "content type"
+	csmtag = "content-spec"
+)
 
 var (
 	CSM *contentSpecMgr
@@ -106,64 +103,61 @@ func initCSM() {
 	CSM.regAll()
 }
 
-func (f *contentSpecMgr) regAll() {
-	f._reg(ObjCT, &objCR{})
-	f._reg(WorkCT, &workCR{})
-	f._reg(ECSliceCT, &ecSliceCR{})
-	f._reg(ECMetaCT, &ecMetaCR{})
-	f._reg(ChunkCT, &objChunkCR{})
-	f._reg(ChunkMetaCT, &chunkMetaCR{})
+func (csm *contentSpecMgr) regAll() {
+	csm._reg(ObjCT, &objCR{})
+	csm._reg(WorkCT, &workCR{})
+	csm._reg(ECSliceCT, &ecSliceCR{})
+	csm._reg(ECMetaCT, &ecMetaCR{})
+	csm._reg(ChunkCT, &objChunkCR{})
+	csm._reg(ChunkMetaCT, &chunkMetaCR{})
 
-	f._reg(DsortFileCT, &dsortCR{})
-	f._reg(DsortWorkCT, &dsortCR{})
+	csm._reg(DsortFileCT, &dsortCR{})
+	csm._reg(DsortWorkCT, &dsortCR{})
 }
 
 // register (content-type, resolver) pair
-func (f *contentSpecMgr) _reg(contentType string, cr contentRes) {
-	if strings.ContainsRune(contentType, filepath.Separator) {
-		panic(fmt.Errorf("contentSpecMgr: %s %q cannot contain %q", cttag, contentType, filepath.Separator))
+func (csm *contentSpecMgr) _reg(cttype string, cr contentRes) {
+	if strings.ContainsRune(cttype, filepath.Separator) {
+		panic(fmt.Errorf("%s: %s %q cannot contain %q", csmtag, cttag, cttype, filepath.Separator))
 	}
-	if len(contentType) != contentTypeLen {
-		panic(fmt.Errorf("contentSpecMgr: %s %q must have length %d", cttag, contentType, contentTypeLen))
+	if len(cttype) != contentTypeLen {
+		panic(fmt.Errorf("%s: %s %q must have length %d", csmtag, cttag, cttype, contentTypeLen))
 	}
-	if _, ok := f.m[contentType]; ok {
-		debug.AssertNoErr(fmt.Errorf("%s %q is already registered", cttag, contentType))
+	if _, ok := csm.m[cttype]; ok {
+		debug.AssertNoErr(fmt.Errorf("%s: %s %q is already registered", csmtag, cttag, cttype))
 	}
-	f.m[contentType] = cr
+	csm.m[cttype] = cr
 }
 
 // generate FQN from given parts and optional extras
-func (f *contentSpecMgr) Gen(parts PartsFQN, contentType string, extras ...string) (fqn string) {
-	debug.Assert(len(f.m) > 0, "not initialized")
-	cr, ok := f.m[contentType]
-	debug.Assert(ok, contentType)
+func (csm *contentSpecMgr) Gen(objName, cttype string, bck *cmn.Bck, mi *Mountpath, extras ...string) (fqn string) {
+	debug.Assert(len(csm.m) > 0, "not initialized")
+	cr, ok := csm.m[cttype]
+	debug.Assert(ok, cttype)
 
-	// make new (and unique) base
-	objName := parts.ObjectName()
-
-	// Ensure that generated FQN never exceeds NAME_MAX.
+	// Make sure that generated FQN never exceeds NAME_MAX.
 	// On Linux, syscall.ENAMETOOLONG (0x24) is raised if *any* path component is > 255 chars.
 	// - bucket names are already validated (≤64), and our "extras" are short markers
 	//   like PID, uploadID and chunk number, etc.
 	// - the only unbounded input is the user-provided object name, so we shorten it
 	//   here if needed.
 	// See also: core/lom for "fntl"/"Fntl"
-
+	var oname = objName
 	if IsFntl(objName) {
-		objName = ShortenFntl(objName)
+		oname = ShortenFntl(objName)
 	}
 
-	ubase := cr.makeUbase(objName, extras...)
-	debug.Assertf(!IsFntl(ubase), "ubase too long [%q (%q, %q) %v]", // (unlikely)
-		contentType, objName, parts.ObjectName(), extras)
+	// new (and unique) base
+	ubase := cr.makeUbase(oname, extras...)
+	debug.Assertf(!IsFntl(ubase), "ubase too long [%q (%q, %q) %v]", cttype, oname, objName, extras) // (unlikely)
 
-	return parts.Mountpath().MakePathFQN(parts.Bucket(), contentType, ubase)
+	return mi.MakePathFQN(bck, cttype, ubase)
 }
 
 // parse content info back from provided `ubase` (see respective makeUbase())
-func (f *contentSpecMgr) ParseUbase(ubase, contentType string) ContentInfo {
-	cr, ok := f.m[contentType]
-	debug.Assert(ok, contentType)
+func (csm *contentSpecMgr) ParseUbase(ubase, cttype string) ContentInfo {
+	cr, ok := csm.m[cttype]
+	debug.Assert(ok, cttype)
 	return cr.parseUbase(ubase)
 }
 
@@ -180,6 +174,7 @@ func (*objCR) parseUbase(base string) ContentInfo {
 
 func (*workCR) makeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 1, extras)
+	debug.Assert(extras[0] != "", "work prefix cannot be empty")
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
@@ -233,6 +228,8 @@ func (*workCR) parseUbase(base string) (ci ContentInfo) {
 
 func (*objChunkCR) makeUbase(base string, extras ...string) string {
 	debug.Assert(len(extras) == 2, "expecting uploadID and chunk number, got: ", extras)
+	debug.Assert(cos.ValidateManifestID(extras[0]) == nil, "uploadID must be valid")
+	debug.Assert(extras[1] != "", "chunk number must be non-empty")
 	return base + ssepa + extras[0] + ssepa + extras[1]
 }
 
@@ -265,6 +262,7 @@ func (*chunkMetaCR) makeUbase(base string, extras ...string) string {
 		return base // completed
 	}
 	debug.Assert(len(extras) == 1, extras)
+	debug.Assert(cos.ValidateManifestID(extras[0]) == nil, "uploadID must be valid")
 	return base + ssepa + extras[0] // partial (with uploadID)
 }
 

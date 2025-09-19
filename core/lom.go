@@ -91,7 +91,6 @@ var (
 // interface guard
 var (
 	_ cos.OAH     = (*LOM)(nil)
-	_ fs.PartsFQN = (*LOM)(nil)
 	_ lifUnlocker = (*LOM)(nil)
 )
 

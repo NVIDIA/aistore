@@ -477,7 +477,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 
 	cksumType := ctx.lom.CksumType()
 	for i := range ctx.paritySlices {
-		workFQN := fs.CSM.Gen(ctx.lom, fs.WorkCT, fmt.Sprintf("ec-write-%d", i))
+		workFQN := ctx.lom.GenFQN(fs.WorkCT, fmt.Sprintf("ec-write-%d", i))
 		writer, err := ctx.lom.CreateSlice(workFQN)
 		if err != nil {
 			return err

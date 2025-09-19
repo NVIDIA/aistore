@@ -97,7 +97,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 		revert string
 	)
 	if goi.verchanged {
-		revert = fs.CSM.Gen(lom, fs.WorkCT, fs.WorkfileColdget)
+		revert = lom.GenFQN(fs.WorkCT, fs.WorkfileColdget)
 		if err := lom.RenameMainTo(revert); err != nil {
 			nlog.Errorln("failed to rename prev. version - proceeding anyway", lom.FQN, "=>", revert)
 			revert = ""

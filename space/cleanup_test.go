@@ -226,7 +226,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "test-work-tag"
-			workFQN := fs.CSM.Gen(lom, fs.WorkCT, workTag)
+			workFQN := lom.GenFQN(fs.WorkCT, workTag)
 
 			// force different PID
 			i := strings.LastIndexByte(workFQN, '.')
@@ -255,7 +255,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "recent-work-tag"
-			workFQN := fs.CSM.Gen(lom, fs.WorkCT, workTag)
+			workFQN := lom.GenFQN(fs.WorkCT, workTag)
 
 			createTestFile(workFQN, 256)
 
@@ -514,7 +514,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// partial exists pre-cleanup
-		partialFQN := fs.CSM.Gen(lom, fs.ChunkMetaCT, u1.ID())
+		partialFQN := lom.GenFQN(fs.ChunkMetaCT, u1.ID())
 		Expect(partialFQN).To(BeAnExistingFile())
 
 		// age the stray chunk well beyond dont_cleanup_time

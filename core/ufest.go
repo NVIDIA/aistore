@@ -195,7 +195,7 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 	// note first chunk's location
 	if num == 1 {
 		return &Uchunk{
-			path: fs.CSM.Gen(lom, fs.ChunkCT, u.id, snum),
+			path: lom.GenFQN(fs.ChunkCT, u.id, snum),
 			num:  uint16(num),
 		}, nil
 	}
@@ -209,7 +209,7 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 
 	ct := newChunkCT(lom, mi)
 	return &Uchunk{
-		path: fs.CSM.Gen(ct, fs.ChunkCT, u.id, snum),
+		path: ct.GenFQN("", u.id, snum),
 		num:  uint16(num),
 	}, nil
 }
@@ -682,13 +682,13 @@ func (u *Ufest) Check() error {
 
 func (u *Ufest) _fqns(lom *LOM, completed bool) string {
 	if completed {
-		return fs.CSM.Gen(lom, fs.ChunkMetaCT)
+		return lom.GenFQN(fs.ChunkMetaCT)
 	}
 	debug.Func(func() {
 		err := cos.ValidateManifestID(u.id)
 		debug.AssertNoErr(err)
 	})
-	return fs.CSM.Gen(lom, fs.ChunkMetaCT, u.id)
+	return lom.GenFQN(fs.ChunkMetaCT, u.id)
 }
 
 func (u *Ufest) fread(sgl *memsys.SGL, completed bool) error {

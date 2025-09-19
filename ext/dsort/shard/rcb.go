@@ -136,7 +136,7 @@ func (c *rcbCtx) xzip(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 
 // common method to extract compressed tar using `ar` (archive reader)
 func (c *rcbCtx) extract(lom *core.LOM, ar archive.Reader) error {
-	workFQN := fs.CSM.Gen(lom, fs.DsortFileCT, "") // tarFQN
+	workFQN := lom.GenFQN(fs.DsortFileCT) // tarFQN
 	wfh, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return err

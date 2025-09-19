@@ -507,7 +507,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(lom.CompleteUfest(u)).NotTo(HaveOccurred())
 
 			// Corrupt the stored manifest
-			mfqn := fs.CSM.Gen(lom, fs.ChunkMetaCT)
+			mfqn := lom.GenFQN(fs.ChunkMetaCT)
 
 			// 2) Corrupt it: flip a middle byte
 			buf, err := os.ReadFile(mfqn)

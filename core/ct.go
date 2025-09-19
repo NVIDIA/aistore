@@ -34,9 +34,6 @@ type CT struct {
 	mtime       int64
 }
 
-// interface guard
-var _ fs.PartsFQN = (*CT)(nil)
-
 func (ct *CT) FQN() string              { return ct.fqn }
 func (ct *CT) ObjectName() string       { return ct.objName }
 func (ct *CT) ContentType() string      { return ct.contentType }
@@ -81,16 +78,7 @@ func (ct *CT) Unlock(exclusive bool) {
 	nlc.Unlock(*uname, exclusive)
 }
 
-// e.g.: generate workfile FQN from object FQN:
-//  ct, err := NewCTFromFQN(fqn, nil)
-//  if err != nil { ... }
-//  fqn := ct.Make(fs.WorkCT)
-//
-// e.g.: generate EC metafile FQN from bucket name, backend provider and object name:
-//  ct, err := NewCTFromBO(bckName, bckProvider, objName, nil)
-//  if err != nil { ... }
-//  fqn := ct.Make(fs.ECMetaCT)
-
+// TODO: likely redundant (review)
 func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	var (
 		hrwFQN string
@@ -143,36 +131,33 @@ func (ct *CT) init(extras ...string) error {
 		return err
 	}
 	ct.mi, ct.digest = mi, digest
-	ct.fqn = fs.CSM.Gen(ct, ct.contentType, extras...)
+	ct.fqn = ct.GenFQN("", extras...)
 	return nil
 }
 
-func LOM2CT(lom *LOM, ctType string, extras ...string) *CT {
-	return &CT{
-		fqn:         fs.CSM.Gen(lom, ctType, extras...),
+func LOM2CT(lom *LOM, ctType string, extras ...string) (ct *CT) {
+	ct = &CT{
 		objName:     lom.ObjName,
 		contentType: ctType,
 		bck:         lom.Bck(),
 		mi:          lom.mi,
 		digest:      lom.digest,
 	}
+	ct.fqn = ct.GenFQN("", extras...)
+	return ct
 }
 
 // Clone CT and change ContentType and FQN
-func (ct *CT) Clone(ctType string) *CT {
-	return &CT{
-		fqn:         fs.CSM.Gen(ct, ctType, ""),
+func (ct *CT) Clone(ctType string) (clone *CT) {
+	clone = &CT{
 		objName:     ct.objName,
 		contentType: ctType,
 		bck:         ct.bck,
 		mi:          ct.mi,
 		digest:      ct.digest,
 	}
-}
-
-func (ct *CT) Make(toType string) string {
-	debug.Assert(toType != "")
-	return fs.CSM.Gen(ct, toType, "")
+	clone.fqn = clone.GenFQN("")
+	return clone
 }
 
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,
@@ -204,4 +189,34 @@ func (ct *CT) saveAndRename(tmpfqn string, reader io.Reader, buf []byte, cksumTy
 		}
 	}
 	return
+}
+
+// Content FQN makers
+//
+// Both LOM and CT provide convenience methods to generate a fully qualified name (FQN)
+// for any derived piece of content (workfiles, EC slices, chunks, etc.).
+// Internally both delegate to fs.CSM.Gen, which applies type-specific naming rules
+// (shortening long object names, attaching tie-breakers, etc.).
+//
+// - LOM.GenFQN(cttype, extras...)
+//   Use when you have an initialized (not necessarily loaded) LOM.
+//  `cttype` must be one of the `fs` declated constants (WorkCT, ChunkCT, ChunkMetaCT, ...).
+//
+// - CT.GenFQN(cttype, extras...)
+//   Same as above but for an existing CT. If `cttype` is empty, the CT's own
+//   content type is reused.
+//
+// - `extras` provide disambiguation (e.g., work tag, uploadID, chunk number).
+
+func (lom *LOM) GenFQN(cttype string, extras ...string) string {
+	debug.Assert(lom.mi != nil)
+	return fs.CSM.Gen(lom.ObjName, cttype, lom.Bucket(), lom.mi, extras...)
+}
+
+func (ct *CT) GenFQN(cttype string, extras ...string) string {
+	if cttype == "" {
+		cttype = ct.contentType
+	}
+	debug.Assert(cttype != "")
+	return fs.CSM.Gen(ct.objName, cttype, ct.Bucket(), ct.Mountpath(), extras...)
 }

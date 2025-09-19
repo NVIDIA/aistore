@@ -489,7 +489,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		if mtime.Add(j.dont()).After(j.now) {
 			return
 		}
-		metaFQN := fs.CSM.Gen(ct, fs.ECMetaCT, "")
+		metaFQN := ct.GenFQN(fs.ECMetaCT)
 		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, ct)
 			j.rmAnyBatch(flagRmMisplacedEC)
@@ -587,7 +587,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	j.norphan++
 
 	// 2. resolve partial; if exists check its age
-	fqn := fs.CSM.Gen(lom, fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
+	fqn := lom.GenFQN(fs.ChunkMetaCT, uploadID) // (compare with Ufest._fqns())
 	if finfo, err := os.Lstat(fqn); err == nil {
 		if finfo.ModTime().Add(j.dont()).After(j.now) {
 			return
@@ -690,7 +690,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 		// will be _visited_ separately (if not already)
 	case lom.ECEnabled():
 		// misplaced EC
-		metaFQN := fs.CSM.Gen(lom, fs.ECMetaCT, "")
+		metaFQN := lom.GenFQN(fs.ECMetaCT)
 		if cos.Stat(metaFQN) != nil {
 			j.misplaced.ec = append(j.misplaced.ec, core.LOM2CT(lom, fs.ObjCT))
 			j.rmAnyBatch(flagRmMisplacedEC)
@@ -926,7 +926,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 	// 3. rm EC slices and replicas that are still without corresponding metafile
 	if specifier&flagRmMisplacedEC != 0 {
 		for _, ct := range j.misplaced.ec {
-			metaFQN := fs.CSM.Gen(ct, fs.ECMetaCT, "")
+			metaFQN := ct.GenFQN(fs.ECMetaCT)
 			if cos.Stat(metaFQN) == nil {
 				continue
 			}
