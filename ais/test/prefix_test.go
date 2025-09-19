@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -81,7 +81,7 @@ func prefixLookup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string
 }
 
 func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []string) {
-	tlog.Logf("Looking up for files in alphabetic order\n")
+	tlog.Logfln("Looking up for files in alphabetic order")
 
 	var (
 		letters    = "abcdefghijklmnopqrstuvwxyz"
@@ -102,13 +102,13 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
-				tlog.Logf("Found %v files starting with %q\n", numFiles, key)
+				tlog.Logfln("Found %v files starting with %q", numFiles, key)
 			}
 		} else {
 			t.Errorf("Expected number of files with prefix %q is %v but found %v files", key, realNumFiles, numFiles)
-			tlog.Logf("Objects returned:\n")
+			tlog.Logfln("Objects returned:")
 			for id, oo := range lst.Entries {
-				tlog.Logf("    %d[%d]. %s\n", i, id, oo.Name)
+				tlog.Logfln("    %d[%d]. %s", i, id, oo.Name)
 			}
 		}
 	}
@@ -155,7 +155,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 			}
 		}
 
-		tlog.Logf("%d. Prefix: %s [%s]\n", idx, test.title, fullPrefix)
+		tlog.Logfln("%d. Prefix: %s [%s]", idx, test.title, fullPrefix)
 		msg := &apc.LsoMsg{Prefix: fullPrefix}
 		lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		if err != nil {
@@ -207,7 +207,7 @@ func prefixCleanup(t *testing.T, proxyURL string, bck cmn.Bck, fileNames []strin
 
 	select {
 	case e := <-errCh:
-		tlog.Logf("Failed to DEL: %s\n", e)
+		tlog.Logfln("Failed to DEL: %s", e)
 		t.Fail()
 	default:
 	}

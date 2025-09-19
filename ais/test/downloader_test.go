@@ -51,7 +51,7 @@ func clearDownloadList(t *testing.T) {
 
 	for _, v := range listDownload {
 		if v.JobRunning() {
-			tlog.Logf("Canceling: %v...\n", v.ID)
+			tlog.Logfln("Canceling: %v...", v.ID)
 			err := api.AbortDownload(tools.BaseAPIParams(), v.ID)
 			tassert.CheckFatal(t, err)
 		}
@@ -73,7 +73,7 @@ func clearDownloadList(t *testing.T) {
 	}
 
 	for _, v := range listDownload {
-		tlog.Logf("Removing: %v...\n", v.ID)
+		tlog.Logfln("Removing: %v...", v.ID)
 		err := api.RemoveDownload(tools.BaseAPIParams(), v.ID)
 		tassert.CheckFatal(t, err)
 	}
@@ -124,7 +124,7 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 			return
 		}
 		if total == 5*time.Second {
-			tlog.Logf("still waiting for download [%s] to finish\n", what)
+			tlog.Logfln("still waiting for download [%s] to finish", what)
 			sleep *= 2
 		}
 		if total >= timeout && !aborted {
@@ -185,7 +185,7 @@ func downloadObjectRemote(t *testing.T, body dload.BackendBody, expectedFinished
 	tassert.CheckFatal(t, err)
 
 	if resp.FinishedCnt > expectedFinished {
-		tlog.Logf("Warning: the bucket has extra (leftover?) objects (got: %d, expected: %d)\n", resp.FinishedCnt, expectedFinished)
+		tlog.Logfln("Warning: the bucket has extra (leftover?) objects (got: %d, expected: %d)", resp.FinishedCnt, expectedFinished)
 	} else {
 		tassert.Errorf(t, resp.FinishedCnt == expectedFinished,
 			"num objects mismatch (got: %d, expected: %d)", resp.FinishedCnt, expectedFinished)
@@ -208,7 +208,7 @@ func abortDownload(t *testing.T, id string) {
 
 	if !status.JobFinished() {
 		// TODO -- FIXME: ext/dload to fix
-		tlog.Logf("job [%s] hasn't finished - retrying api.AbortDownload  ************* (TODO)\n", status.Job.String())
+		tlog.Logfln("job [%s] hasn't finished - retrying api.AbortDownload  ************* (TODO)", status.Job.String())
 
 		err := api.AbortDownload(baseParams, id)
 		tassert.CheckFatal(t, err)
@@ -531,7 +531,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
-			tlog.Logf("putting %d objects into remote bucket %s...\n", fileCnt, test.srcBck.String())
+			tlog.Logfln("putting %d objects into remote bucket %s...", fileCnt, test.srcBck.String())
 
 			expectedObjs := make([]string, 0, fileCnt)
 			for i := range fileCnt {
@@ -550,7 +550,7 @@ func TestDownloadRemote(t *testing.T) {
 				expectedObjs = append(expectedObjs, objName)
 			}
 
-			tlog.Logf("(1) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck.String())
+			tlog.Logfln("(1) evicting a _list_ of objects from remote bucket %s...", test.srcBck.String())
 			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: expectedObjs}}
 			xid, err := api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
@@ -563,7 +563,7 @@ func TestDownloadRemote(t *testing.T) {
 				tools.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
-			tlog.Logf("starting remote download => %s...\n", test.dstBck.String())
+			tlog.Logfln("starting remote download => %s...", test.dstBck.String())
 			id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
 				Base: dload.Base{
 					Bck:         test.dstBck,
@@ -577,13 +577,13 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logln("waiting for remote download...")
 			waitForDownload(t, id, time.Minute)
 
-			tlog.Logf("listing %s...\n", test.dstBck.String())
+			tlog.Logfln("listing %s...", test.dstBck.String())
 			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0, true /*cached*/)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
 			// Test cancellation
-			tlog.Logf("(2) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck.String())
+			tlog.Logfln("(2) evicting a _list_ of objects from remote bucket %s...", test.srcBck.String())
 			xid, err = api.EvictMultiObj(baseParams, test.srcBck, evdMsg)
 			tassert.CheckFatal(t, err)
 			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
@@ -666,10 +666,10 @@ func TestDownloadStatus(t *testing.T) {
 
 	// TODO -- FIXME: see NOTE above
 	if resp.FinishedCnt != 1 {
-		tlog.Logf("Warning: expected the short file to be downloaded (%d)\n", resp.FinishedCnt)
+		tlog.Logfln("Warning: expected the short file to be downloaded (%d)", resp.FinishedCnt)
 	}
 	if len(resp.CurrentTasks) != 1 {
-		tlog.Logf("Warning: did not expect the long file to be already downloaded (%d)\n", len(resp.CurrentTasks))
+		tlog.Logfln("Warning: did not expect the long file to be already downloaded (%d)", len(resp.CurrentTasks))
 	} else {
 		tassert.Fatalf(
 			t, resp.CurrentTasks[0].Name == longFileName,
@@ -885,7 +885,7 @@ func TestDownloadMountpath(t *testing.T) {
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Started very large download job %s (intended to be aborted)\n", id1)
+	tlog.Logfln("Started very large download job %s (intended to be aborted)", id1)
 
 	// Abort just in case something goes wrong.
 	t.Cleanup(func() {
@@ -904,12 +904,12 @@ func TestDownloadMountpath(t *testing.T) {
 
 	mpathID := cos.NowRand().IntN(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tlog.Logf("Disabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
+	tlog.Logfln("Disabling mountpath %q at %s", removeMpath, selectedTarget.StringEx())
 	err = api.DisableMountpath(baseParams, selectedTarget, removeMpath, true /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		tlog.Logf("Enabling mountpath %q at %s\n", removeMpath, selectedTarget.StringEx())
+		tlog.Logfln("Enabling mountpath %q at %s", removeMpath, selectedTarget.StringEx())
 		err = api.EnableMountpath(baseParams, selectedTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
@@ -919,17 +919,17 @@ func TestDownloadMountpath(t *testing.T) {
 
 	// Downloader finished on the target `selectedTarget`, safe to abort the rest.
 	time.Sleep(time.Second)
-	tlog.Logf("Aborting download job %s\n", id1)
+	tlog.Logfln("Aborting download job %s", id1)
 	abortDownload(t, id1)
 
-	tlog.Logf("Listing %s\n", bck.String())
+	tlog.Logfln("Listing %s", bck.String())
 	objs, err := tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == 0, "objects should not have been downloaded, download should have been aborted\n")
 
 	id2, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, m)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
+	tlog.Logfln("Started download job %s, waiting for it to finish", id2)
 
 	time.Sleep(3 * time.Second)
 	waitForDownload(t, id2, time.Minute)
@@ -1261,7 +1261,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	})
 
 	time.Sleep(2 * time.Second)
-	tlog.Logf("download %q: checking num current tasks\n", id)
+	tlog.Logfln("download %q: checking num current tasks", id)
 	for totalWait < maxWait {
 		status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
@@ -1293,7 +1293,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			if l := len(status.Errs); l > 0 {
 				errs = fmt.Sprintf(", errs=%v", status.Errs[:min(2, l)])
 			}
-			tlog.Logf("download %q: num-tasks %d <= %d num-targets, job [%s]%s\n",
+			tlog.Logfln("download %q: num-tasks %d <= %d num-targets, job [%s]%s",
 				id, len(status.CurrentTasks), targetCnt, status.Job.String(), errs)
 		}
 	}

@@ -227,15 +227,15 @@ func StopAndDeleteETL(t *testing.T, bp api.BaseParams, etlName string) {
 				tlog.Logln(headETLLogs(etlLogs, 10*cos.KiB))
 			}
 		} else {
-			tlog.Logf("Error retrieving ETL[%s] logs: %v\n", etlName, err)
+			tlog.Logfln("Error retrieving ETL[%s] logs: %v", etlName, err)
 		}
 	}
-	tlog.Logf("Stopping ETL[%s]\n", etlName)
+	tlog.Logfln("Stopping ETL[%s]", etlName)
 
 	if err := api.ETLStop(bp, etlName); err != nil {
-		tlog.Logf("Stopping ETL[%s] failed; err %v\n", etlName, err)
+		tlog.Logfln("Stopping ETL[%s] failed; err %v", etlName, err)
 	} else {
-		tlog.Logf("ETL[%s] stopped\n", etlName)
+		tlog.Logfln("ETL[%s] stopped", etlName)
 	}
 	err := api.ETLDelete(bp, etlName)
 	tassert.CheckFatal(t, err)
@@ -284,7 +284,7 @@ func WaitForETLAborted(t *testing.T, bp api.BaseParams, etlNames ...string) {
 			break
 		}
 
-		tlog.Logf("ETLs %+v not fully aborted, waiting %s...\n", etls, interval)
+		tlog.Logfln("ETLs %+v not fully aborted, waiting %s...", etls, interval)
 		time.Sleep(interval)
 	}
 
@@ -293,7 +293,7 @@ func WaitForETLAborted(t *testing.T, bp api.BaseParams, etlNames ...string) {
 }
 
 func WaitForAborted(bp api.BaseParams, xid, kind string, timeout time.Duration) error {
-	tlog.Logf("Waiting for ETL x-%s[%s] to abort...\n", kind, xid)
+	tlog.Logfln("Waiting for ETL x-%s[%s] to abort...", kind, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(bp, &args)
 	if err == nil {
@@ -302,9 +302,9 @@ func WaitForAborted(bp api.BaseParams, xid, kind string, timeout time.Duration) 
 		}
 		return err
 	}
-	tlog.Logf("Aborting ETL x-%s[%s]\n", kind, xid)
+	tlog.Logfln("Aborting ETL x-%s[%s]", kind, xid)
 	if abortErr := api.AbortXaction(bp, &args); abortErr != nil {
-		tlog.Logf("Nested error: failed to abort upon api.wait failure: %v\n", abortErr)
+		tlog.Logfln("Nested error: failed to abort upon api.wait failure: %v", abortErr)
 	}
 	return err
 }
@@ -312,7 +312,7 @@ func WaitForAborted(bp api.BaseParams, xid, kind string, timeout time.Duration) 
 // NOTE: relies on x-kind to choose the waiting method
 // TODO -- FIXME: remove and simplify - here and everywhere
 func WaitForFinished(bp api.BaseParams, xid, kind string, timeout time.Duration) (err error) {
-	tlog.Logf("Waiting for ETL x-%s[%s] to finish...\n", kind, xid)
+	tlog.Logfln("Waiting for ETL x-%s[%s] to finish...", kind, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
 	if xact.IdlesBeforeFinishing(kind) {
 		err = api.WaitForXactionIdle(bp, &args)
@@ -322,10 +322,10 @@ func WaitForFinished(bp api.BaseParams, xid, kind string, timeout time.Duration)
 	if err == nil {
 		return
 	}
-	tlog.Logf("error waiting for xaction to finish: %v\n", err)
-	tlog.Logf("Aborting ETL x-%s[%s]\n", kind, xid)
+	tlog.Logfln("error waiting for xaction to finish: %v", err)
+	tlog.Logfln("Aborting ETL x-%s[%s]", kind, xid)
 	if abortErr := api.AbortXaction(bp, &args); abortErr != nil {
-		tlog.Logf("Nested error: failed to abort upon api.wait failure: %v\n", abortErr)
+		tlog.Logfln("Nested error: failed to abort upon api.wait failure: %v", abortErr)
 	}
 	return nil
 }
@@ -343,16 +343,16 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 				// Check number of objects transformed.
 				xs, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
 				if err != nil {
-					tlog.Logf("Failed to get x-etl[%s] stats: %v\n", xid, err)
+					tlog.Logfln("Failed to get x-etl[%s] stats: %v", xid, err)
 					continue
 				}
 				locObjs, outObjs, inObjs := xs.ObjCounts(xid)
-				tlog.Logf("ETL[%s] progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects\n",
+				tlog.Logfln("ETL[%s] progress: (objs=%d, outObjs=%d, inObjs=%d) out of %d objects",
 					xid, locObjs, outObjs, inObjs, totalObj)
 				locBytes, outBytes, inBytes := xs.ByteCounts(xid)
 				bps := float64(locBytes+outBytes) / time.Since(xactStart).Seconds()
 				bpsStr := cos.ToSizeIEC(int64(bps), 2) + "/s"
-				tlog.Logf("ETL[%s] progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps\n",
+				tlog.Logfln("ETL[%s] progress: (bytes=%d, outBytes=%d, inBytes=%d), %sBps",
 					xid, locBytes, outBytes, inBytes, bpsStr)
 			case <-stopCh.Listen():
 				return
@@ -362,7 +362,7 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 }
 
 func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string, replaceArgs ...string) (msg etl.InitMsg) {
-	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, commType)
+	tlog.Logfln("InitSpec ETL[%s], communicator %s", etlName, commType)
 	spec, err := GetTransformYaml(etlName, replaceArgs...)
 	tassert.CheckFatal(t, err)
 
@@ -398,7 +398,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 	details, err := api.ETLGetDetail(bp, etlName, "")
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
+	tlog.Logfln("ETL %q: running x-etl-spec[%s]", etlName, xid)
 
 	tassert.Errorf(t, details.InitMsg.Name() == etlName, "expected etlName %s, got %s", etlName, details.InitMsg.Name())
 	tassert.Errorf(t, details.InitMsg.CommType() == commType, "expected communicator type %s, got %s", commType, details.InitMsg.CommType())
@@ -426,7 +426,7 @@ func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bc
 		tools.DestroyBucket(t, bp.URL, bckTo)
 	})
 
-	tlog.Logf("ETL[%s]: running %s => %s xaction %q\n",
+	tlog.Logfln("ETL[%s]: running %s => %s xaction %q",
 		msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""), xid)
 	return xid
 }
@@ -436,7 +436,7 @@ func ETLBucketWithCmp(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, m
 	err := WaitForFinished(bp, xid, apc.ActETLBck, 3*time.Minute)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("ETL[%s]: comparing buckets, %s vs %s\n", msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""))
+	tlog.Logfln("ETL[%s]: comparing buckets, %s vs %s", msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""))
 
 	objeList, err := api.ListObjects(bp, bckFrom, &apc.LsoMsg{}, api.ListArgs{})
 	tassert.CheckFatal(t, err)

@@ -519,7 +519,7 @@ func TestS3MultipartPartOperations(t *testing.T) {
 		Reader:     reader,
 	})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Created large object %s (%s)\n", objName, cos.SizeIEC(objSize))
+	tlog.Logfln("Created large object %s (%s)", objName, cos.SizeIEC(objSize))
 
 	// Use S3 client for reading
 	s3Client := s3.New(s3.Options{

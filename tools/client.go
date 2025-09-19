@@ -102,7 +102,7 @@ func Del(proxyURL string, bck cmn.Bck, object string, wg *sync.WaitGroup, errCh 
 		defer wg.Done()
 	}
 	if !silent {
-		tlog.Logf("DEL: %s\n", object)
+		tlog.Logfln("DEL: %s", object)
 	}
 	bp := BaseAPIParams(proxyURL)
 	err := api.DeleteObject(bp, bck, object)
@@ -134,7 +134,7 @@ func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, er
 		return
 	}
 	if errCh == nil {
-		tlog.Logf("Failed to PUT %s: %v (nil error channel)\n", bck.Cname(objName), err)
+		tlog.Logfln("Failed to PUT %s: %v (nil error channel)", bck.Cname(objName), err)
 	} else {
 		errCh <- err
 	}
@@ -176,7 +176,7 @@ func GetPrimaryURL() string {
 	if err == nil {
 		return primary.URL(cmn.NetPublic)
 	}
-	tlog.Logf("Warning: GetPrimaryProxy [%v] - retrying once...\n", err)
+	tlog.Logfln("Warning: GetPrimaryProxy [%v] - retrying once...", err)
 	if currSmap == nil {
 		time.Sleep(time.Second)
 		primary, err = GetPrimaryProxy(proxyURLReadOnly)
@@ -189,7 +189,7 @@ func GetPrimaryURL() string {
 		}
 	}
 	if err != nil {
-		tlog.Logf("Warning: GetPrimaryProxy [%v] - returning global %q\n", err, proxyURLReadOnly)
+		tlog.Logfln("Warning: GetPrimaryProxy [%v] - returning global %q", err, proxyURLReadOnly)
 		return proxyURLReadOnly
 	}
 	return primary.URL(cmn.NetPublic)
@@ -585,7 +585,7 @@ func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFo
 // WaitForDsortToFinish waits until all dSorts jobs finished without failure or
 // all jobs abort.
 func WaitForDsortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
-	tlog.Logf("waiting for dsort[%s]\n", managerUUID)
+	tlog.Logfln("waiting for dsort[%s]", managerUUID)
 
 	bp := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(DsortFinishTimeout)
@@ -630,7 +630,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, prefix string) {
 	bp := BaseAPIParams(proxyURL)
 	msg := &apc.EvdMsg{ListRange: apc.ListRange{Template: prefix}}
-	tlog.Logf("evicting %s\n", bck.Cname(prefix))
+	tlog.Logfln("evicting %s", bck.Cname(prefix))
 	xid, err := api.EvictMultiObj(bp, bck, msg)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed: %v", bck.String(), err)
@@ -659,7 +659,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	if nat := smap.CountActiveTs(); nat < 1 {
 		// NOTE in re nat == 1: single remaining target vs. graceful shutdown and such
 		s := "No targets"
-		tlog.Logf("%s, %s - cannot rebalance\n", s, smap)
+		tlog.Logfln("%s, %s - cannot rebalance", s, smap)
 		_waitResil(t, bp, controlPlaneSleep)
 		return
 	}
@@ -669,7 +669,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	tlog.Logf("Waiting for rebalance and resilver to complete (timeout %v)\n", timeout)
+	tlog.Logfln("Waiting for rebalance and resilver to complete (timeout %v)", timeout)
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
@@ -734,7 +734,7 @@ func WaitForRebalanceByID(t *testing.T, bp api.BaseParams, rebID string, timeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
-	tlog.Logf("Wait for rebalance %s\n", rebID)
+	tlog.Logfln("Wait for rebalance %s", rebID)
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 	_, err := api.WaitForXactionIC(bp, &xargs)
 	tassert.CheckFatal(t, err)
@@ -758,7 +758,7 @@ func _waitReToStart(bp api.BaseParams) {
 		}
 		time.Sleep(xactPollSleep)
 	}
-	tlog.Logf("Warning: timed out (%v) waiting for rebalance or resilver to start\n", timeout)
+	tlog.Logfln("Warning: timed out (%v) waiting for rebalance or resilver to start", timeout)
 }
 
 func GetClusterStats(t *testing.T, proxyURL string) stats.Cluster {
@@ -863,7 +863,7 @@ func waitForStartup(bp api.BaseParams, ts ...testing.TB) (*meta.Smap, error) {
 				continue
 			}
 
-			tlog.Logf("Unable to get usable cluster map: %v\n", err)
+			tlog.Logfln("Unable to get usable cluster map: %v", err)
 			if len(ts) > 0 {
 				tassert.CheckFatal(ts[0], err)
 			}

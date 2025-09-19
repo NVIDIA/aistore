@@ -86,7 +86,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 			t.Fatalf("%s: version is empty", bck.Cname(m.Name))
 		}
 	}
-	tlog.Logf("All %d object versions updated\n", len(reslist.Entries))
+	tlog.Logfln("All %d object versions updated", len(reslist.Entries))
 
 	return
 }
@@ -103,7 +103,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, lst map[string
 	}
 	versChangedFinal, bytesChangedFinal := propsStats(t, proxyURL)
 	if versChangedFinal-versChanged > 0 {
-		tlog.Logf("Versions changed: %d (%s)\n", versChangedFinal-versChanged, cos.ToSizeIEC(bytesChangedFinal-bytesChanged, 1))
+		tlog.Logfln("Versions changed: %d (%s)", versChangedFinal-versChanged, cos.ToSizeIEC(bytesChangedFinal-bytesChanged, 1))
 	}
 	if versChanged != versChangedFinal || bytesChanged != bytesChangedFinal {
 		t.Fatalf("All objects must be retrieved from the cache but cold get happened: %d times (%d bytes)",
@@ -119,12 +119,12 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	}
 	toEvictList := make([]string, 0, toEvict)
 	evictMap := make(map[string]bool, toEvict)
-	tlog.Logf("Evicting %v objects:\n", toEvict)
+	tlog.Logfln("Evicting %v objects:", toEvict)
 
 	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
-		tlog.Logf("    %s\n", bck.Cname(fname))
+		tlog.Logfln("    %s", bck.Cname(fname))
 		if len(toEvictList) >= toEvict {
 			break
 		}
@@ -140,7 +140,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Reading object list...\n")
+	tlog.Logfln("Reading object list...")
 
 	// read a new object list and check that evicted objects do not have atime and cached==false
 	// version must be the same
@@ -154,7 +154,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tlog.Logf("%s: fl [%d], cached [%t], atime [%v], version [%s]\n", bck.Cname(m.Name), m.Flags, m.IsPresent(), m.Atime, m.Version)
+		tlog.Logfln("%s: fl [%d], cached [%t], atime [%v], version [%s]", bck.Cname(m.Name), m.Flags, m.IsPresent(), m.Atime, m.Version)
 
 		// e.g. misplaced replica
 		if !m.IsStatusOK() {
@@ -183,10 +183,10 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 }
 
 func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *apc.LsoMsg, versionEnabled bool) {
-	tlog.Logf("Reading...\n")
+	tlog.Logfln("Reading...")
 	propsReadObjects(t, proxyURL, bck, objs)
 
-	tlog.Logf("Listing objects...\n")
+	tlog.Logfln("Listing objects...")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck.String())
 
@@ -194,7 +194,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 		version string
 		ok      bool
 	)
-	tlog.Logf("Checking object properties...\n")
+	tlog.Logfln("Checking object properties...")
 	for _, m := range reslist.Entries {
 		if version, ok = objs[m.Name]; !ok {
 			continue
@@ -257,7 +257,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tassert.CheckFatal(t, err)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
-	tlog.Logf("Listing objects...\n")
+	tlog.Logfln("Listing objects...")
 	reslist := testListObjects(t, proxyURL, bck, msg)
 	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck.String())
 
@@ -266,7 +266,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		ok       bool
 		objFound int
 	)
-	tlog.Logf("Checking object properties...\n")
+	tlog.Logfln("Checking object properties...")
 	for _, m := range reslist.Entries {
 		if version, ok = newobjs[m.Name]; !ok {
 			continue
@@ -408,7 +408,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 		}
 	}
 
-	tlog.Logf("Successfully completed test: first_chunked=%t, override_chunked=%t\n", firstChunked, overrideChunked)
+	tlog.Logfln("Successfully completed test: first_chunked=%t, override_chunked=%t", firstChunked, overrideChunked)
 }
 
 func propsVersionAllProviders(t *testing.T, versioning bool) {
@@ -497,7 +497,7 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 	// PUT objects must have all properties set: atime, cached, version
 	filesList := make(map[string]string)
 	for _, m := range reslist.Entries {
-		tlog.Logf("%s initial version:\t%q\n", bck.Cname(m.Name), m.Version)
+		tlog.Logfln("%s initial version:\t%q", bck.Cname(m.Name), m.Version)
 
 		if !m.IsPresent() && bck.IsRemote() {
 			t.Errorf("%s: not marked as _cached_", bck.Cname(m.Name))
@@ -638,7 +638,7 @@ func TestObjProps(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			for _, objName := range m.objNames {
-				tlog.Logf("checking %s props...\n", m.bck.Cname(objName))
+				tlog.Logfln("checking %s props...", m.bck.Cname(objName))
 
 				flt := apc.FltPresent
 				if test.checkPresent {
@@ -724,11 +724,11 @@ func TestObjProps(t *testing.T) {
 func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg) *cmn.LsoRes {
 	switch {
 	case msg == nil:
-		tlog.Logf("LIST %s []\n", bck.String())
+		tlog.Logfln("LIST %s []", bck.String())
 	case msg.Prefix == "" && msg.PageSize == 0 && msg.ContinuationToken == "":
-		tlog.Logf("LIST %s [cached: %t]\n", bck.String(), msg.IsFlagSet(apc.LsCached))
+		tlog.Logfln("LIST %s [cached: %t]", bck.String(), msg.IsFlagSet(apc.LsCached))
 	default:
-		tlog.Logf("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]\n",
+		tlog.Logfln("LIST %s [prefix: %q, page_size: %d, cached: %t, token: %q]",
 			bck.String(), msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsCached), msg.ContinuationToken)
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)

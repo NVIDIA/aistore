@@ -106,13 +106,13 @@ func TestRProxyGCS(t *testing.T) {
 
 retry:
 	cmdline := genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
-	tlog.Logf("First time download via XML API: %s\n", cmdline)
+	tlog.Logfln("First time download via XML API: %s", cmdline)
 	out, err := exec.Command("curl", cmdline...).CombinedOutput()
 	tlog.Logln("\n" + string(out))
 	tassert.CheckFatal(t, err)
 
 	speedCold := extractSpeed(out)
-	tlog.Logf("Cold download speed:   %s\n", cos.ToSizeIEC(speedCold, 1))
+	tlog.Logfln("Cold download speed:   %s", cos.ToSizeIEC(speedCold, 1))
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect cold download speed")
 
 	// at less than 100KBps we likely failed to download
@@ -122,7 +122,7 @@ retry:
 			tools.ShortSkipf(t, fmt, cos.ToSizeIEC(speedCold, 1))
 		}
 		if maxRetries > 0 {
-			tlog.Logf("Warning: will retry (%d)\n", maxRetries)
+			tlog.Logfln("Warning: will retry (%d)", maxRetries)
 			time.Sleep(15 * time.Second)
 			tlog.Logln("Warning: retrying...")
 			maxRetries--
@@ -145,9 +145,9 @@ retry:
 	}
 	pathCached := m.findObjOnDisk(bck, gcsFilename)
 	tassert.Fatalf(t, pathCached != "", "object was not downloaded")
-	tlog.Logf("Downloaded as %q\n", pathCached)
+	tlog.Logfln("Downloaded as %q", pathCached)
 
-	tlog.Logf("HTTP download\n")
+	tlog.Logfln("HTTP download")
 	cmdline = genCURLCmdLine(t, resURL, proxyURL, smap.Tmap)
 	out, err = exec.Command("curl", cmdline...).CombinedOutput()
 	tlog.Logln(string(out))
@@ -158,7 +158,7 @@ retry:
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tlog.Logf("HTTPS download\n")
+		tlog.Logfln("HTTPS download")
 		cmdline = genCURLCmdLine(true, true, proxyURL, smap.Tmap)
 		out, err = exec.Command("curl", cmdline...).CombinedOutput()
 		tlog.Logln(string(out))
@@ -172,9 +172,9 @@ retry:
 		tassert.CheckFatal(t, err)
 		defer tools.DestroyBucket(t, proxyURL, bckHTTPS)
 
-		tlog.Logf("Check via JSON API\n")
+		tlog.Logfln("Check via JSON API")
 		cmdline = genCURLCmdLine(false, false, proxyURL, smap.Tmap)
-		tlog.Logf("JSON: %s\n", cmdline)
+		tlog.Logfln("JSON: %s", cmdline)
 		out, err = exec.Command("curl", cmdline...).CombinedOutput()
 		t.Log(string(out))
 		tassert.CheckFatal(t, err)
@@ -182,19 +182,19 @@ retry:
 		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tlog.Logf("Cold download speed:   %s\n", cos.ToSizeIEC(speedCold, 1))
-	tlog.Logf("HTTP download speed:   %s\n", cos.ToSizeIEC(speedHTTP, 1))
+	tlog.Logfln("Cold download speed:   %s", cos.ToSizeIEC(speedCold, 1))
+	tlog.Logfln("HTTP download speed:   %s", cos.ToSizeIEC(speedHTTP, 1))
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tlog.Logf("HTTPS download speed:  %s\n", cos.ToSizeIEC(speedHTTPS, 1))
-		tlog.Logf("JSON download speed:   %s\n", cos.ToSizeIEC(speedJSON, 1))
+		tlog.Logfln("HTTPS download speed:  %s", cos.ToSizeIEC(speedHTTPS, 1))
+		tlog.Logfln("JSON download speed:   %s", cos.ToSizeIEC(speedJSON, 1))
 	*/
 	ratio := float64(speedHTTP) / float64(speedCold)
 	if ratio < 0.8 {
-		tlog.Logf("Cached download is %.1f slower than Cold\n", ratio)
+		tlog.Logfln("Cached download is %.1f slower than Cold", ratio)
 	} else if ratio > 1.2 {
-		tlog.Logf("HTTP is %.1f faster than Cold\n", ratio)
+		tlog.Logfln("HTTP is %.1f faster than Cold", ratio)
 	}
 }
 

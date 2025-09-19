@@ -68,7 +68,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 
 	md.init()
 	md.numObjs = 20 * len(md.mpList)
-	tlog.Logf("Create %d objects[%d mountpaths] for test\n", md.numObjs, len(md.mpList))
+	tlog.Logfln("Create %d objects[%d mountpaths] for test", md.numObjs, len(md.mpList))
 
 	return md
 }
@@ -78,10 +78,10 @@ func (md *checkerMD) init() {
 	md.smap = tools.GetClusterMap(md.t, md.proxyURL)
 
 	for targetID, tsi := range md.smap.Tmap {
-		tlog.Logf("Target: %s\n", targetID)
+		tlog.Logfln("Target: %s", targetID)
 		lst, err := api.GetMountpaths(md.baseParams, tsi)
 		tassert.CheckFatal(md.t, err)
-		tlog.Logf("    Mountpaths: %v\n", lst)
+		tlog.Logfln("    Mountpaths: %v", lst)
 
 		for _, mpath := range lst.Available {
 			si, ok := md.mpList[mpath]
@@ -143,7 +143,7 @@ func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string
 				Size:       uint64(md.fileSize),
 			})
 			if err != nil {
-				tlog.Logf("%s: %v\n", objName, err)
+				tlog.Logfln("%s: %v", objName, err)
 			}
 		}
 	case http.MethodGet:
@@ -183,10 +183,10 @@ func waitForMountpathChanges(t *testing.T, target *meta.Snode, availLen, disable
 		time.Sleep(time.Millisecond * 100)
 	}
 	detectTime := time.Since(detectStart)
-	tlog.Logf("passed %v\n", detectTime)
+	tlog.Logfln("passed %v", detectTime)
 
 	if len(newMpaths.Disabled) == disabledLen && len(newMpaths.Available) == availLen {
-		tlog.Logf("Check is successful in %v\n", detectTime)
+		tlog.Logfln("Check is successful in %v", detectTime)
 		return true
 	}
 
@@ -194,7 +194,7 @@ func waitForMountpathChanges(t *testing.T, target *meta.Snode, availLen, disable
 		return false
 	}
 
-	tlog.Logf("Current mpath list: %v\n", newMpaths)
+	tlog.Logfln("Current mpath list: %v", newMpaths)
 	if len(newMpaths.Disabled) != disabledLen {
 		t.Errorf("Disabled mpath count mismatch, old count: %v, new list: %v",
 			disabledLen, newMpaths.Disabled)
@@ -274,7 +274,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tlog.Logf("Testing mpath fail detection on %s\n", op)
+	tlog.Logfln("Testing mpath fail detection on %s", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
 	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
@@ -338,7 +338,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 
 	tools.CreateBucket(t, md.proxyURL, md.bck, nil, true /*cleanup*/)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
-	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
+	tlog.Logfln("mountpath %s of %s is selected for the test", selectedMpath, selectedTarget.StringEx())
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)
@@ -361,7 +361,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	md.runTestAsync(http.MethodGet, selectedTarget, selectedMpath, selectedMpathList, suffix)
 
 	// Checking that reading "bad" objects does not disable mpath if the mpath is OK
-	tlog.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
+	tlog.Logfln("Reading non-existing objects: read is expected to fail but mountpath must be available")
 	for n := 1; n < 10; n++ {
 		objName := fmt.Sprintf("%s/o%d", fshcDir, n)
 		if _, err := api.GetObject(md.baseParams, md.bck, objName, nil); err == nil {
@@ -389,12 +389,12 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tlog.Logf("*** Testing with disabled FSHC***\n")
+	tlog.Logfln("*** Testing with disabled FSHC***")
 	tools.SetClusterConfig(t, cos.StrKVs{"fshc.enabled": "false"})
 	defer tools.SetClusterConfig(t, cos.StrKVs{"fshc.enabled": "true"})
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
-	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
+	tlog.Logfln("mountpath %s of %s is selected for the test", selectedMpath, selectedTarget.StringEx())
 	tools.CreateBucket(t, md.proxyURL, md.bck, nil, true /*cleanup*/)
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
@@ -436,10 +436,10 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 	)
 
 	for targetID, tsi := range smap.Tmap {
-		tlog.Logf("Target: %s\n", targetID)
+		tlog.Logfln("Target: %s", targetID)
 		lst, err := api.GetMountpaths(baseParams, tsi)
 		tassert.CheckFatal(t, err)
-		tlog.Logf("    Mountpaths: %v\n", lst)
+		tlog.Logfln("    Mountpaths: %v", lst)
 
 		for _, mpath := range lst.Available {
 			mpList[mpath] = tsi
@@ -510,7 +510,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 		t.Fatalf("Target %s does not have mountpaths", target)
 	}
 
-	tlog.Logf("Removing all mountpaths from target: %s\n", target.StringEx())
+	tlog.Logfln("Removing all mountpaths from target: %s", target.StringEx())
 	for _, mpath := range oldMpaths.Available {
 		err = api.DisableMountpath(baseParams, target, mpath, true /*dont-resil*/)
 		tassert.CheckFatal(t, err)
@@ -518,12 +518,12 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 
 	smap, err = tools.WaitForClusterState(proxyURL, "all mountpaths disabled", smap.Version, proxyCnt, targetCnt-1)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n",
+	tlog.Logfln("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)",
 		target.StringEx())
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 
-	tlog.Logf("Restoring target %s mountpaths\n", target.ID())
+	tlog.Logfln("Restoring target %s mountpaths", target.ID())
 	for _, mpath := range oldMpaths.Available {
 		err = api.EnableMountpath(baseParams, target, mpath)
 		tassert.CheckFatal(t, err)
@@ -532,7 +532,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	_, err = tools.WaitForClusterState(proxyURL, "all mountpaths enabled", smap.Version, proxyCnt, targetCnt)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
+	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 
@@ -561,7 +561,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	numMpaths := len(oldMpaths.Available)
 	tassert.Fatalf(t, numMpaths != 0, "target %s doesn't have mountpaths", target.StringEx())
 
-	tlog.Logf("Adding mountpath to %s\n", target.StringEx())
+	tlog.Logfln("Adding mountpath to %s", target.StringEx())
 	err = api.AttachMountpath(baseParams, target, tmpMpath)
 	tassert.CheckFatal(t, err)
 
@@ -581,7 +581,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 		"should add new mountpath - available %d!=%d", numMpaths+1, len(newMpaths.Available))
 
 	// Kill and restore target
-	tlog.Logf("Killing %s\n", target.StringEx())
+	tlog.Logfln("Killing %s", target.StringEx())
 	tcmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "target removed", smap.Version, proxyCnt, targetCnt-1)
@@ -594,7 +594,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 	if _, ok := smap.Tmap[target.ID()]; !ok {
 		t.Fatal("Removed target didn't rejoin")
 	}
-	tlog.Logf("Wait for rebalance\n")
+	tlog.Logfln("Wait for rebalance")
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 
@@ -633,12 +633,12 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	oldMpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	mpathCnt := len(oldMpaths.Available)
-	tlog.Logf("Target %s has %d mountpaths\n", target.ID(), mpathCnt)
+	tlog.Logfln("Target %s has %d mountpaths", target.ID(), mpathCnt)
 
 	// Disable, temporarily, all mountpaths except 1.
 	mpaths := oldMpaths.Available[:mpathCnt-1]
 	for _, mpath := range mpaths {
-		tlog.Logf("Disable mountpath %q at %s\n", mpath, target.StringEx())
+		tlog.Logfln("Disable mountpath %q at %s", mpath, target.StringEx())
 		err = api.DisableMountpath(baseParams, target, mpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
@@ -659,7 +659,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	})
 
 	// Kill and restore target
-	tlog.Logf("Killing target %s\n", target.StringEx())
+	tlog.Logfln("Killing target %s", target.StringEx())
 	tcmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "remove target", smap.Version, proxyCnt, targetCnt-1)

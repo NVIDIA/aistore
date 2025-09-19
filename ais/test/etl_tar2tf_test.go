@@ -46,7 +46,7 @@ func startTar2TfTransformer(t *testing.T) (etlName string) {
 	xid, err := api.ETLInit(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
+	tlog.Logfln("ETL %q: running x-etl-spec[%s]", etlName, xid)
 	return
 }
 

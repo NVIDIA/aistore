@@ -353,7 +353,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		numConcurrentCalls = 2
 	}
 
-	tlog.Logf("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t\n",
+	tlog.Logfln("GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t",
 		len(mossIn), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
 
 	// Prepare apc.MossReq
@@ -409,7 +409,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	for i, result := range results {
 		if result.err != nil {
 			errorCount++
-			tlog.Logf("  Call %d: ERROR in %v - %v\n", i, result.duration, result.err)
+			tlog.Logfln("  Call %d: ERROR in %v - %v", i, result.duration, result.err)
 		} else {
 			successCount++
 			totalTarSize += int64(result.tarSize)
@@ -426,9 +426,9 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	tassert.Fatalf(t, successCount > 0, "Expected at least some GetBatch calls to succeed (multipart mode)")
 
 	avgDuration := sumDuration / time.Duration(successCount)
-	tlog.Logf("GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v\n",
+	tlog.Logfln("GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v",
 		totalDuration, minDuration, maxDuration, avgDuration)
-	tlog.Logf("Success: %d/%d calls, Total TAR: %s\n",
+	tlog.Logfln("Success: %d/%d calls, Total TAR: %s",
 		successCount, numConcurrentCalls, cos.ToSizeIEC(totalTarSize, 2))
 
 	// Find first successful result for validation
@@ -470,7 +470,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	if test.withMissing && test.continueOnErr {
 		tassert.Fatalf(t, objErrorCount > 0, "Expected some object errors but got none")
 		tassert.Fatalf(t, objSuccessCount > 0, "Expected some object successes but got none")
-		tlog.Logf("Object results: %d success, %d errors\n", objSuccessCount, objErrorCount)
+		tlog.Logfln("Object results: %d success, %d errors", objSuccessCount, objErrorCount)
 	} else {
 		// No missing files expected - all should succeed
 		for i, objResult := range firstSuccess.resp.Out {
@@ -518,7 +518,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 		numConcurrentCalls = 2
 	}
 
-	tlog.Logf("Streaming GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t\n",
+	tlog.Logfln("Streaming GetBatch: %d objects, %d concurrent calls, continueOnErr=%t, onlyObjName=%t, withMissing=%t",
 		len(mossIn), numConcurrentCalls, test.continueOnErr, test.onlyObjName, test.withMissing)
 
 	var (
@@ -572,7 +572,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	for i, result := range results {
 		if result.err != nil {
 			errorCount++
-			tlog.Logf("  Streaming Call %d: ERROR in %v - %v\n", i, result.duration, result.err)
+			tlog.Logfln("  Streaming Call %d: ERROR in %v - %v", i, result.duration, result.err)
 		} else {
 			successCount++
 			totalTarSize += int64(result.tarSize)
@@ -589,9 +589,9 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	tassert.Fatalf(t, successCount > 0, "Expected at least some GetBatch calls to succeed (streaming mode)")
 	avgDuration := sumDuration / time.Duration(successCount)
 
-	tlog.Logf("Streaming GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v\n",
+	tlog.Logfln("Streaming GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v",
 		totalDuration, minDuration, maxDuration, avgDuration)
-	tlog.Logf("Streaming Success: %d/%d calls, Total TAR: %s\n",
+	tlog.Logfln("Streaming Success: %d/%d calls, Total TAR: %s",
 		successCount, numConcurrentCalls, cos.ToSizeIEC(totalTarSize, 2))
 
 	// Validate results
@@ -712,7 +712,7 @@ func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.Mo
 			mossOut      = &resp.Out[i]
 			tarEntry     = &callback.entries[i]
 		)
-		// tlog.Logf("DEBUG: mossOut.Bucket = %q, ObjName = %q\n", mossOut.Bucket, mossOut.ObjName)
+		// tlog.Logfln("DEBUG: mossOut.Bucket = %q, ObjName = %q", mossOut.Bucket, mossOut.ObjName)
 
 		// Calculate expected name based on onlyObjName setting
 		if req.OnlyObjName {
@@ -764,7 +764,7 @@ func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.Mo
 			mossOut.ObjName, cos.BHead(mossOut.Opaque), cos.BHead(mossIn.Opaque))
 	}
 
-	tlog.Logf("Archive validation passed: %d entries, correct order and naming (format: %s)\n",
+	tlog.Logfln("Archive validation passed: %d entries, correct order and naming (format: %s)",
 		len(callback.entries), format)
 }
 
@@ -836,6 +836,6 @@ func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *apc.MossRe
 			"Streaming order violation at position %d: expected '%s', got '%s'", i, expectedName, actualName)
 	}
 
-	tlog.Logf("Streaming archive validation passed: %d entries, correct order (format: %s)\n",
+	tlog.Logfln("Streaming archive validation passed: %d entries, correct order (format: %s)",
 		len(callback.entries), format)
 }

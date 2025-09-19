@@ -86,13 +86,13 @@ func TestListBuckets(t *testing.T) {
 	for provider := range apc.Providers {
 		qbck := cmn.QueryBcks{Provider: provider}
 		bcks := bcks.Select(qbck)
-		tlog.Logf("%s:\t%2d bucket%s\n", apc.ToScheme(provider), len(bcks), cos.Plural(len(bcks)))
+		tlog.Logfln("%s:\t%2d bucket%s", apc.ToScheme(provider), len(bcks), cos.Plural(len(bcks)))
 		pnums[provider] = bcks
 	}
 
 	backends, err := api.GetConfiguredBackends(baseParams)
 	tassert.CheckFatal(t, err)
-	tlog.Logf("configured backends: %v\n", backends)
+	tlog.Logfln("configured backends: %v", backends)
 
 	// tests: vs configured backend vs count
 	for provider := range apc.Providers {
@@ -135,12 +135,12 @@ func TestListBuckets(t *testing.T) {
 				i = rand.IntN(len(bcks))
 			}
 			pbck := bcks[i]
-			tlog.Logf("lookup and add '%s'\n", pbck.String())
+			tlog.Logfln("lookup and add '%s'", pbck.String())
 			_, err := api.HeadBucket(baseParams, pbck, false /* don't add */)
 			if err != nil {
 				// TODO: extend api.HeadBucket to return status as well(?)
 				if _, ok := err.(*cmn.ErrHTTP); ok && cos.IsErrNotFound(err) {
-					tlog.Logf("Warning: cannot HEAD(%s): not permitted(?)\n", pbck.String())
+					tlog.Logfln("Warning: cannot HEAD(%s): not permitted(?)", pbck.String())
 					continue
 				}
 			}
@@ -149,11 +149,11 @@ func TestListBuckets(t *testing.T) {
 			presbcks, err = api.ListBuckets(baseParams, qbck, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 
-			tlog.Logf("bucket %s is now in BMD\n", pbck.String())
+			tlog.Logfln("bucket %s is now in BMD", pbck.String())
 			t.Cleanup(func() {
 				err = api.EvictRemoteBucket(baseParams, pbck, false /*keep md*/)
 				tassert.CheckFatal(t, err)
-				tlog.Logf("[cleanup] %s evicted\n", pbck.String())
+				tlog.Logfln("[cleanup] %s evicted", pbck.String())
 			})
 		}
 
@@ -217,7 +217,7 @@ func TestGetBucketInfo(t *testing.T) {
 	}
 	for _, fltPresence := range fltPresentEnum {
 		text := fltPresentText[fltPresence]
-		tlog.Logf("%q %s\n", text, strings.Repeat("-", 60-len(text)))
+		tlog.Logfln("%q %s", text, strings.Repeat("-", 60-len(text)))
 		args := api.BinfoArgs{
 			UUID:        "",
 			FltPresence: fltPresence,
@@ -242,13 +242,13 @@ func TestGetBucketInfo(t *testing.T) {
 			if props != nil {
 				ps = fmt.Sprintf("bucket-props(mirror) %+v", props.Mirror)
 			}
-			tlog.Logf("%s: %s\n", bck.Cname(""), ps)
+			tlog.Logfln("%s: %s", bck.Cname(""), ps)
 
 			is := "bucket-summary = nil"
 			if info != nil {
 				is = fmt.Sprintf("bucket-summary %+v", info.BsummResult)
 			}
-			tlog.Logf("x-%s[%s] %s: %s\n", apc.ActSummaryBck, xid, bck.Cname(""), is)
+			tlog.Logfln("x-%s[%s] %s: %s", apc.ActSummaryBck, xid, bck.Cname(""), is)
 		}
 		if bck.IsRemote() && !isPresent {
 			// undo the side effect of calling api.GetBucketInfo
@@ -385,7 +385,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 	err = api.DestroyBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("%s destroyed\n", bck.Cname(""))
+	tlog.Logfln("%s destroyed", bck.Cname(""))
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(bck)), "expected bucket to not be listed")
@@ -428,7 +428,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 		l := len(mpList.Available)
 		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
 	}
-	tlog.Logf("Create %s(mirrored, write-policy-md=%s)\n", m.bck.String(), mdwrite)
+	tlog.Logfln("Create %s(mirrored, write-policy-md=%s)", m.bck.String(), mdwrite)
 	propsToSet := &cmn.BpropsToSet{
 		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Ptr(true)},
 		WritePolicy: &cmn.WritePolicyConfToSet{
@@ -442,14 +442,14 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 
 	// NOTE: not waiting here for apc.ActPutCopies
 
-	tlog.Logf("List %s\n", m.bck.String())
+	tlog.Logfln("List %s", m.bck.String())
 	msg := &apc.LsoMsg{Props: apc.GetPropsName}
 	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "expecting %d entries, have %d",
 		m.num, len(lst.Entries))
 
-	tlog.Logf("Overwrite %s objects with newer versions\n", m.bck.String())
+	tlog.Logfln("Overwrite %s objects with newer versions", m.bck.String())
 	nsize := int64(m.fileSize) * 10
 	for _, en := range lst.Entries {
 		reader, err := readers.NewRand(nsize, cos.ChecksumNone)
@@ -466,7 +466,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	args := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck}
 	api.WaitForXactionIdle(baseParams, &args)
 
-	tlog.Logf("List %s new versions\n", m.bck.String())
+	tlog.Logfln("List %s new versions", m.bck.String())
 	msg = &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsAll...)
 	lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
@@ -687,13 +687,13 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 	m.puts()
 
-	tlog.Logf("Listing %q objects\n", m.bck.String())
+	tlog.Logfln("Listing %q objects", m.bck.String())
 	msg := &apc.LsoMsg{Prefix: m.prefix}
 	msg.AddProps(apc.GetPropsVersion, apc.GetPropsSize)
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Checking %q object versions [total: %d]\n", m.bck.String(), len(bckObjs.Entries))
+	tlog.Logfln("Checking %q object versions [total: %d]", m.bck.String(), len(bckObjs.Entries))
 	for _, en := range bckObjs.Entries {
 		tassert.Errorf(t, en.Size != 0, "object %s does not have size", en.Name)
 		tassert.Errorf(t, en.Version != "", "object %s does not have version", en.Name)
@@ -721,7 +721,7 @@ func TestListObjectsSmoke(t *testing.T) {
 		m.puts()
 
 		// Run couple iterations to see that we get deterministic results.
-		tlog.Logf("run %d list objects iterations\n", iters)
+		tlog.Logfln("run %d list objects iterations", iters)
 		for iter := range iters {
 			lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -879,7 +879,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		middleObjName := lst.Entries[m.num/2-1].Name
-		tlog.Logf("start listing bucket after: %q...\n", middleObjName)
+		tlog.Logfln("start listing bucket after: %q...", middleObjName)
 
 		msg := &apc.LsoMsg{PageSize: 10, StartAfter: middleObjName}
 		lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
@@ -894,7 +894,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 			)
 		case err != nil:
 			herr := cmn.UnwrapErrHTTP(err)
-			tlog.Logf("Error is expected here, got %q\n", herr)
+			tlog.Logfln("Error is expected here, got %q", herr)
 		default:
 			tassert.Errorf(t, false, "expected an error, got nil")
 		}
@@ -930,7 +930,7 @@ func TestListObjectsProps(t *testing.T) {
 			if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
 				s = "enabled"
 			}
-			tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
+			tlog.Logfln("%s: versioning is %s", m.bck.Cname(""), s)
 		}
 		checkProps := func(props []string, f func(en *cmn.LsoEnt)) {
 			msg := &apc.LsoMsg{PageSize: 100}
@@ -947,7 +947,7 @@ func TestListObjectsProps(t *testing.T) {
 			}
 		}
 
-		tlog.Logf("trying empty (minimal) subset of props...\n")
+		tlog.Logfln("trying empty (minimal) subset of props...")
 		checkProps([]string{}, func(en *cmn.LsoEnt) {
 			tassert.Errorf(t, en.Name != "", "name is not set")
 			tassert.Errorf(t, en.Size != 0, "size is not set")
@@ -957,7 +957,7 @@ func TestListObjectsProps(t *testing.T) {
 			tassert.Errorf(t, en.Copies == 0, "copies is set")
 		})
 
-		tlog.Logf("trying ais-default subset of props...\n")
+		tlog.Logfln("trying ais-default subset of props...")
 		checkProps(apc.GetPropsDefaultAIS, func(en *cmn.LsoEnt) {
 			tassert.Errorf(t, en.Size != 0, "size is not set")
 			tassert.Errorf(t, en.Checksum != "", "checksum is not set")
@@ -967,7 +967,7 @@ func TestListObjectsProps(t *testing.T) {
 			tassert.Errorf(t, en.Copies == 0, "copies is set")
 		})
 
-		tlog.Logf("trying cloud-default subset of props...\n")
+		tlog.Logfln("trying cloud-default subset of props...")
 		checkProps(apc.GetPropsDefaultCloud, func(en *cmn.LsoEnt) {
 			tassert.Errorf(t, en.Size != 0, "size is not set")
 			tassert.Errorf(t, en.Checksum != "", "checksum is not set")
@@ -980,7 +980,7 @@ func TestListObjectsProps(t *testing.T) {
 			tassert.Errorf(t, en.Copies == 0, "copies is set")
 		})
 
-		tlog.Logf("trying specific subset of props...\n")
+		tlog.Logfln("trying specific subset of props...")
 		checkProps(
 			[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEnt) {
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
@@ -993,7 +993,7 @@ func TestListObjectsProps(t *testing.T) {
 				tassert.Errorf(t, en.Location == "", "target location is set %q", en.Location)
 			})
 
-		tlog.Logf("trying small subset of props...\n")
+		tlog.Logfln("trying small subset of props...")
 		checkProps([]string{apc.GetPropsSize}, func(en *cmn.LsoEnt) {
 			tassert.Errorf(t, en.Size != 0, "size is not set")
 
@@ -1002,7 +1002,7 @@ func TestListObjectsProps(t *testing.T) {
 			tassert.Errorf(t, en.Copies == 0, "copies is set")
 		})
 
-		tlog.Logf("trying all props...\n")
+		tlog.Logfln("trying all props...")
 		checkProps(apc.GetPropsAll, func(en *cmn.LsoEnt) {
 			tassert.Errorf(t, en.Size != 0, "size is not set")
 			if bck.IsAIS() || remoteVersioning {
@@ -1037,12 +1037,12 @@ func TestListObjectsRemoteCached(t *testing.T) {
 	if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
 		s = "enabled"
 	}
-	tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
+	tlog.Logfln("%s: versioning is %s", m.bck.Cname(""), s)
 
 	m.init(true /*cleanup*/)
 
 	for _, evict := range []bool{false, true} {
-		tlog.Logf("list remote objects with evict=%t\n", evict)
+		tlog.Logfln("list remote objects with evict=%t", evict)
 		m.remotePuts(evict)
 
 		msg := &apc.LsoMsg{PageSize: 10, Flags: apc.LsCached}
@@ -1213,7 +1213,7 @@ func TestListObjects(t *testing.T) {
 
 			totalObjects := 0
 			for iter := 1; iter <= iterations; iter++ {
-				tlog.Logf("listing iteration: %d/%d (total_objs: %d)\n", iter, iterations, totalObjects)
+				tlog.Logfln("listing iteration: %d/%d (total_objs: %d)", iter, iterations, totalObjects)
 				objectCount := rand.IntN(800) + 1010
 				totalObjects += objectCount
 				for wid := range workerCount {
@@ -1351,7 +1351,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				tassert.CheckFatal(t, err)
 				customPage = bckProp.Provider != apc.Azure
 
-				tlog.Logf("Cleaning up the remote bucket %s\n", bck.String())
+				tlog.Logfln("Cleaning up the remote bucket %s", bck.String())
 				lst, err := api.ListObjects(baseParams, bck, nil, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				for _, en := range lst.Entries {
@@ -1433,11 +1433,11 @@ func TestListObjectsPrefix(t *testing.T) {
 
 			for _, test := range tests {
 				if test.pageSize != 0 && !customPage {
-					tlog.Logf("Bucket %s does not support custom paging, skipping...\n", bck.String())
+					tlog.Logfln("Bucket %s does not support custom paging, skipping...", bck.String())
 					continue
 				}
 				t.Run(test.name, func(t *testing.T) {
-					tlog.Logf("Prefix: %q, Expected objects: %d\n", test.prefix, test.expected)
+					tlog.Logfln("Prefix: %q, Expected objects: %d", test.prefix, test.expected)
 					msg := &apc.LsoMsg{PageSize: test.pageSize, Prefix: test.prefix}
 					tlog.Logf(
 						"list_objects %s [prefix: %q, page_size: %d]\n",
@@ -1447,7 +1447,7 @@ func TestListObjectsPrefix(t *testing.T) {
 					lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{Limit: test.limit})
 					tassert.CheckFatal(t, err)
 
-					tlog.Logf("list_objects output: %d objects\n", len(lst.Entries))
+					tlog.Logfln("list_objects output: %d objects", len(lst.Entries))
 
 					if len(lst.Entries) != test.expected {
 						t.Errorf("returned %d objects instead of %d", len(lst.Entries), test.expected)
@@ -1533,13 +1533,13 @@ func TestListObjectsWithRebalance(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range 15 {
-			tlog.Logf("listing all objects, iter: %d\n", i)
+			tlog.Logfln("listing all objects, iter: %d", i)
 			lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			if lst.Flags == 0 {
 				tassert.Errorf(t, len(lst.Entries) == m.num, "entries mismatch (%d vs %d)", len(lst.Entries), m.num)
 			} else if len(lst.Entries) != m.num {
-				tlog.Logf("List objects while rebalancing: %d vs %d\n", len(lst.Entries), m.num)
+				tlog.Logfln("List objects while rebalancing: %d vs %d", len(lst.Entries), m.num)
 			}
 
 			time.Sleep(time.Second)
@@ -1570,7 +1570,7 @@ func TestBucketSingleProp(t *testing.T) {
 
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
-	tlog.Logf("Changing bucket %q properties...\n", m.bck.String())
+	tlog.Logfln("Changing bucket %q properties...", m.bck.String())
 
 	// Enabling EC should set default value for number of slices if it is 0
 	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
@@ -1829,7 +1829,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 }
 
 func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies int) {
-	tlog.Logf("Set copies = %d\n", ncopies)
+	tlog.Logfln("Set copies = %d", ncopies)
 
 	xid, err := api.MakeNCopies(baseParams, bck, ncopies)
 	tassert.CheckFatal(t, err)
@@ -1952,7 +1952,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Rename it
-	tlog.Logf("rename %s => %s\n", srcBck.String(), dstBck.String())
+	tlog.Logfln("rename %s => %s", srcBck.String(), dstBck.String())
 	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
@@ -2015,7 +2015,7 @@ func TestRenameBucketWithRandomMirrorEnable(t *testing.T) {
 	m.puts()
 
 	// Rename it
-	tlog.Logf("rename %s => %s\n", srcBck.String(), dstBck.String())
+	tlog.Logfln("rename %s => %s", srcBck.String(), dstBck.String())
 	m.bck = dstBck
 	xid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
@@ -2065,7 +2065,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 	tools.CreateBucket(t, m.proxyURL, tmpBck, nil, true /*cleanup*/)
 
 	// rename
-	tlog.Logf("try rename %s => %s (that already exists)\n", m.bck.String(), tmpBck.String())
+	tlog.Logfln("try rename %s => %s (that already exists)", m.bck.String(), tmpBck.String())
 	if _, err := api.RenameBucket(baseParams, m.bck, tmpBck); err == nil {
 		t.Fatal("expected an error renaming already existing bucket")
 	}
@@ -2128,11 +2128,11 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(summaries) > 0, "source bucket summary not found")
 	srcSummary = summaries[0]
-	tlog.Logf("Source bucket summary: %d objects, %d bytes\n",
+	tlog.Logfln("Source bucket summary: %d objects, %d bytes",
 		srcSummary.ObjCount.Present, srcSummary.TotalSize.PresentObjs)
 
 	// Rename to first destination
-	tlog.Logf("rename %s => %s\n", srcBck.String(), dstBck1.String())
+	tlog.Logfln("rename %s => %s", srcBck.String(), dstBck1.String())
 	xid, err := api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// can retry
@@ -2141,17 +2141,17 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress
-	tlog.Logf("try renaming %s => %s\n", srcBck.String(), dstBck1.String())
+	tlog.Logfln("try renaming %s => %s", srcBck.String(), dstBck1.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
-	tlog.Logf("error: %v\n", err)
+	tlog.Logfln("error: %v", err)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
 	}
 
 	// Try to rename to second destination - this should fail
-	tlog.Logf("try rename %s => %s\n", srcBck.String(), dstBck2.String())
+	tlog.Logfln("try rename %s => %s", srcBck.String(), dstBck2.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
-	tlog.Logf("error: %v\n", err)
+	tlog.Logfln("error: %v", err)
 	if err == nil {
 		t.Error("multiple rename operations on same bucket should fail")
 	}
@@ -2187,7 +2187,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	tassert.Fatalf(t, len(dstSummaries) > 0, "destination bucket summary not found")
 
 	dstSummary := dstSummaries[0]
-	tlog.Logf("Destination bucket summary: %d objects, %d bytes\n",
+	tlog.Logfln("Destination bucket summary: %d objects, %d bytes",
 		dstSummary.ObjCount.Present, dstSummary.TotalSize.PresentObjs)
 
 	// Compare key summary metrics
@@ -2235,16 +2235,16 @@ func TestRenameBucketAbort(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(summaries) > 0, "source bucket summary not found")
 	srcSummary := summaries[0]
-	tlog.Logf("Source bucket summary before rename: %d objects, %d bytes\n",
+	tlog.Logfln("Source bucket summary before rename: %d objects, %d bytes",
 		srcSummary.ObjCount.Present, srcSummary.TotalSize.PresentObjs)
 
 	// Start rename operation
-	tlog.Logf("Starting rename %s => %s\n", srcBck.String(), dstBck.String())
+	tlog.Logfln("Starting rename %s => %s", srcBck.String(), dstBck.String())
 	xid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
 	// Immediately abort the rename operation
-	tlog.Logf("Aborting rename operation %s\n", xid)
+	tlog.Logfln("Aborting rename operation %s", xid)
 	err = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckFatal(t, err)
 
@@ -2255,9 +2255,9 @@ func TestRenameBucketAbort(t *testing.T) {
 	tassert.Fatalf(t, aborted || finished, "expecting rename operation %q to abort or finish", xid)
 
 	if finished {
-		tlog.Logf("Rename operation %s finished before abort\n", xid)
+		tlog.Logfln("Rename operation %s finished before abort", xid)
 	} else {
-		tlog.Logf("Rename operation %s successfully aborted\n", xid)
+		tlog.Logfln("Rename operation %s successfully aborted", xid)
 	}
 
 	// Validate destination bucket was not created
@@ -2284,7 +2284,7 @@ func TestRenameBucketAbort(t *testing.T) {
 	tassert.Fatalf(t, len(summariesAfter) > 0, "source bucket summary not found after abort")
 
 	srcSummaryAfter := summariesAfter[0]
-	tlog.Logf("Source bucket summary after aborted rename: %d objects, %d bytes\n",
+	tlog.Logfln("Source bucket summary after aborted rename: %d objects, %d bytes",
 		srcSummaryAfter.ObjCount.Present, srcSummaryAfter.TotalSize.PresentObjs)
 
 	// Compare summaries to ensure they are identical
@@ -2592,7 +2592,7 @@ func TestCopyBucket(t *testing.T) {
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				if test.evictRemoteSrc {
-					tlog.Logf("evicting %s\n", srcm.bck.String())
+					tlog.Logfln("evicting %s", srcm.bck.String())
 					//
 					// evict all _cached_ data from the "local" cluster
 					// keep the src bucket in the "local" BMD though
@@ -2621,7 +2621,7 @@ func TestCopyBucket(t *testing.T) {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg)
 				}
 				tassert.CheckFatal(t, err)
-				tlog.Logf("copying %s => %s: %s\n", srcm.bck.String(), dstm.bck.String(), uuid)
+				tlog.Logfln("copying %s => %s: %s", srcm.bck.String(), dstm.bck.String(), uuid)
 				if uuids := strings.Split(uuid, xact.SepaID); len(uuids) > 1 {
 					for _, u := range uuids {
 						tassert.Fatalf(t, xact.IsValidUUID(u), "invalid UUID %q", u)
@@ -2648,7 +2648,7 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 				total, err := snaps.TotalRunningTime(uuid)
 				tassert.CheckFatal(t, err)
-				tlog.Logf("copy-bucket[%s] with %d workers took %v\n", uuid, test.numWorkers, total)
+				tlog.Logfln("copy-bucket[%s] with %d workers took %v", uuid, test.numWorkers, total)
 			}
 
 			for _, dstm := range dstms {
@@ -2656,7 +2656,7 @@ func TestCopyBucket(t *testing.T) {
 					continue
 				}
 
-				tlog.Logf("checking and comparing bucket %s props\n", dstm.bck.String())
+				tlog.Logfln("checking and comparing bucket %s props", dstm.bck.String())
 				dstProps, err := api.HeadBucket(baseParams, dstm.bck, true /* don't add */)
 				tassert.CheckFatal(t, err)
 
@@ -2686,7 +2686,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, dstm := range dstms {
-				tlog.Logf("checking and comparing objects of bucket %s\n", dstm.bck.String())
+				tlog.Logfln("checking and comparing objects of bucket %s", dstm.bck.String())
 				expectedObjCount := srcm.num
 				if test.dstBckHasObjects {
 					expectedObjCount += dstm.num
@@ -2710,7 +2710,7 @@ func TestCopyBucket(t *testing.T) {
 						dstm.bck.Cname(""), len(dstBckList.Entries), expectedObjCount, srcm.bck.Cname(""))
 				}
 
-				tlog.Logf("verifying that %d copied objects have identical props\n", expectedObjCount)
+				tlog.Logfln("verifying that %d copied objects have identical props", expectedObjCount)
 				for _, a := range srcBckList.Entries {
 					var found bool
 					for _, b := range dstBckList.Entries {
@@ -2820,7 +2820,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 			}
 			uuid, err := api.CopyBucket(baseParams, srcBck, dstBck, cmsg)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("copying %s => %s: %s\n", srcBck.String(), dstBck.String(), uuid)
+			tlog.Logfln("copying %s => %s: %s", srcBck.String(), dstBck.String(), uuid)
 
 			args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout}
 			_, err = api.WaitForXactionIC(baseParams, &args)
@@ -2834,7 +2834,7 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 				test.dstCksum, dstBckProps.Cksum.Type)
 
 			// Validate each object's checksum in destination bucket
-			tlog.Logf("validating checksums of %d objects in destination bucket\n", objCnt)
+			tlog.Logfln("validating checksums of %d objects in destination bucket", objCnt)
 			for objName, expectedCksum := range expectedCksums {
 				objProps, err := api.HeadObject(baseParams, dstBck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
 				tassert.CheckFatal(t, err)
@@ -2850,11 +2850,11 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 					tassert.Fatalf(t, !cos.NoneC(actualCksum), "object %s should have checksum type %s but has no checksum", objName, test.dstCksum)
 					tassert.Fatalf(t, actualCksum.Ty() == test.dstCksum, "object %s checksum type should be %s but got %s", objName, test.dstCksum, actualCksum.Ty())
 					tassert.Fatalf(t, actualCksum.Equal(expectedCksum), "object %s checksum value should be %s but got %s", objName, expectedCksum.Val(), actualCksum.Val())
-					tlog.Logf("✓ object %s has correct %s checksum: %s\n", objName, test.dstCksum, actualCksum.Val())
+					tlog.Logfln("✓ object %s has correct %s checksum: %s", objName, test.dstCksum, actualCksum.Val())
 				}
 			}
 
-			tlog.Logf("✓ Test %s completed successfully\n", testName)
+			tlog.Logfln("✓ Test %s completed successfully", testName)
 		})
 	}
 }
@@ -2883,7 +2883,7 @@ func TestCopyBucketSync(t *testing.T) {
 	m.puts()
 	tassert.Errorf(t, len(m.objNames) == m.num, "expected %d in the source bucket, got %d", m.num, len(m.objNames))
 
-	tlog.Logf("list source %s objects\n", cliBck.Cname(""))
+	tlog.Logfln("list source %s objects", cliBck.Cname(""))
 	msg := &apc.LsoMsg{Prefix: m.prefix, Flags: apc.LsCached}
 	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -2891,7 +2891,7 @@ func TestCopyBucketSync(t *testing.T) {
 
 	// 2. copy cliBck => dstBck
 	dstBck := cmn.Bck{Name: "dst-" + cos.GenTie(), Provider: apc.AIS}
-	tlog.Logf("first copy %s => %s\n", m.bck.Cname(""), dstBck.Cname(""))
+	tlog.Logfln("first copy %s => %s", m.bck.Cname(""), dstBck.Cname(""))
 	xid, err := api.CopyBucket(baseParams, m.bck, dstBck, &apc.TCBMsg{})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
@@ -2901,7 +2901,7 @@ func TestCopyBucketSync(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("list destination %s objects\n", dstBck.Cname(""))
+	tlog.Logfln("list destination %s objects", dstBck.Cname(""))
 	lst, err = api.ListObjects(baseParams, dstBck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "expected %d in the destination bucket, got %d", m.num, len(lst.Entries))
@@ -2921,7 +2921,7 @@ func TestCopyBucketSync(t *testing.T) {
 	}
 
 	// 4. use remais to out-of-band delete nam2del...
-	tlog.Logf("use remote cluster '%s' to out-of-band delete %d objects from %s (source)\n",
+	tlog.Logfln("use remote cluster '%s' to out-of-band delete %d objects from %s (source)",
 		tools.RemoteCluster.Alias, len(nam2del), m.bck.Cname(""))
 	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
 	for _, name := range nam2del {
@@ -2930,14 +2930,14 @@ func TestCopyBucketSync(t *testing.T) {
 	}
 
 	// 5. copy --sync (and note that prior to this step destination has all m.num)
-	tlog.Logf("second copy %s => %s with '--sync' option\n", m.bck.Cname(""), dstBck.Cname(""))
+	tlog.Logfln("second copy %s => %s with '--sync' option", m.bck.Cname(""), dstBck.Cname(""))
 	xid, err = api.CopyBucket(baseParams, m.bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Sync: true}})
 	tassert.CheckFatal(t, err)
 	args.ID = xid
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("list post-sync destination %s\n", dstBck.Cname(""))
+	tlog.Logfln("list post-sync destination %s", dstBck.Cname(""))
 	lst, err = api.ListObjects(baseParams, dstBck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(lst.Entries) == m.num-len(nam2del), "expected %d objects in the (sync-ed) destination, got %d",
@@ -2960,7 +2960,7 @@ func TestCopyBucketSimple(t *testing.T) {
 		m.num /= 10
 	}
 
-	tlog.Logf("Preparing source bucket %s\n", srcBck.String())
+	tlog.Logfln("Preparing source bucket %s", srcBck.String())
 	tools.CreateBucket(t, proxyURL, srcBck, nil, true /*cleanup*/)
 	m.initAndSaveState(true /*cleanup*/)
 
@@ -3008,9 +3008,9 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.Errorf(t, objs == int64(m.num), "expected %d objects copied, got (objs=%d, outObjs=%d, inObjs=%d)",
 		m.num, objs, outObjs, inObjs)
 	if outObjs != inObjs {
-		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
+		tlog.Logfln("Warning: (sent objects) %d != %d (received objects)", outObjs, inObjs)
 	} else {
-		tlog.Logf("Num sent/received objects: %d\n", outObjs)
+		tlog.Logfln("Num sent/received objects: %d", outObjs)
 	}
 	expectedBytesCnt := int64(m.fileSize * uint64(m.num))
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
@@ -3031,7 +3031,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+	tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -3056,7 +3056,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+	tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -3080,7 +3080,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.
 
 	time.Sleep(sleep)
 
-	tlog.Logf("Aborting x-%s[%s]\n", apc.ActCopyBck, xid)
+	tlog.Logfln("Aborting x-%s[%s]", apc.ActCopyBck, xid)
 	err = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckError(t, err)
 
@@ -3091,7 +3091,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.
 	tassert.Errorf(t, aborted || finished, "expecting copy-bucket %q to abort or finish", xid)
 
 	if finished {
-		tlog.Logf("%s[%s] already finished\n", apc.ActCopyBck, xid)
+		tlog.Logfln("%s[%s] already finished", apc.ActCopyBck, xid)
 	}
 
 	err = tools.WaitForCondition(
@@ -3132,7 +3132,7 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Waiting for x-%s[%s]\n", apc.ActCopyBck, xid)
+	tlog.Logfln("Waiting for x-%s[%s]", apc.ActCopyBck, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -3176,7 +3176,7 @@ func testCopyBucketMultiWorker(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 				tools.DestroyBucket(t, proxyURL, dstBck)
 			})
 
-			tlog.Logf("Waiting for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
+			tlog.Logfln("Waiting for x-%s[%s] %s => %s", apc.ActCopyBck, xid, srcBck.String(), dstBck.String())
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 			_, err = api.WaitForXactionIC(baseParams, &args)
 			tassert.CheckFatal(t, err)
@@ -3185,7 +3185,7 @@ func testCopyBucketMultiWorker(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 			tassert.CheckFatal(t, err)
 			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Copying bucket %s with %d workers took %v\n", srcBck.Cname(""), numWorkers, total)
+			tlog.Logfln("Copying bucket %s with %d workers took %v", srcBck.Cname(""), numWorkers, total)
 
 			list, err := api.ListObjects(baseParams, dstBck, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
@@ -3226,32 +3226,32 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	m.puts()
 
 	// Rename as dst1
-	tlog.Logf("Rename %s => %s\n", src.String(), dst1.String())
+	tlog.Logfln("Rename %s => %s", src.String(), dst1.String())
 	xid, err := api.RenameBucket(baseParams, src, dst1)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// retry just once
 		xid, err = api.RenameBucket(baseParams, src, dst1)
 	}
 	tassert.CheckFatal(t, err)
-	tlog.Logf("x-%s[%s] in progress...\n", apc.ActMoveBck, xid)
+	tlog.Logfln("x-%s[%s] in progress...", apc.ActMoveBck, xid)
 
 	// Try to copy src to dst1 - and note that rename src => dst1 in progress
-	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", src.String(), dst1.String())
+	tlog.Logfln("Copy %s => %s (note: expecting to fail)", src.String(), dst1.String())
 	_, err = api.CopyBucket(baseParams, src, dst1, nil)
 	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail", src.String(), dst1.String())
 
 	// Try to copy bucket that is being renamed
-	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", src.String(), dst2.String())
+	tlog.Logfln("Copy %s => %s (note: expecting to fail)", src.String(), dst2.String())
 	_, err = api.CopyBucket(baseParams, src, dst2, nil)
 	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail", src.String(), dst2.String())
 
 	// Try to copy from dst1 to dst1
-	tlog.Logf("Copy %s => %s (note: expecting to fail)\n", dst1.String(), dst2.String())
+	tlog.Logfln("Copy %s => %s (note: expecting to fail)", dst1.String(), dst2.String())
 	_, err = api.CopyBucket(baseParams, src, dst1, nil)
 	tassert.Fatalf(t, err != nil, "expected copy %s => %s to fail (as %s is the renaming destination)", dst1.String(), dst2.String(), dst1.String())
 
 	// Wait for rename to finish
-	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xid)
+	tlog.Logfln("Waiting for x-%s[%s] to finish", apc.ActMoveBck, xid)
 	time.Sleep(2 * time.Second)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -3315,26 +3315,26 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	m.puts()
 
 	// Rename to first destination
-	tlog.Logf("copy %s => %s\n", srcBck.String(), dstBck1.String())
+	tlog.Logfln("copy %s => %s", srcBck.String(), dstBck1.String())
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck1, nil)
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination - copy in progress, both for srcBck and dstBck1
-	tlog.Logf("try rename %s => %s\n", srcBck.String(), dstBck1.String())
+	tlog.Logfln("try rename %s => %s", srcBck.String(), dstBck1.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename to second destination - copy in progress for srcBck
-	tlog.Logf("try rename %s => %s\n", srcBck.String(), dstBck2.String())
+	tlog.Logfln("try rename %s => %s", srcBck.String(), dstBck2.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck2)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
 	}
 
 	// Try to rename from dstBck1 to dstBck1 - rename in progress for dstBck1
-	tlog.Logf("try rename %s => %s\n", dstBck1.String(), dstBck2.String())
+	tlog.Logfln("try rename %s => %s", dstBck1.String(), dstBck2.String())
 	_, err = api.RenameBucket(baseParams, srcBck, dstBck1)
 	if err == nil {
 		t.Error("renaming bucket that is under coping did not fail")
@@ -3496,7 +3496,7 @@ func TestAllChecksums(t *testing.T) {
 			t.Run(tag, func(t *testing.T) {
 				started := time.Now()
 				testWarmValidation(t, cksumType, mirrored, false)
-				tlog.Logf("Time: %v\n", time.Since(started))
+				tlog.Logfln("Time: %v", time.Since(started))
 			})
 		}
 	}
@@ -3511,7 +3511,7 @@ func TestAllChecksums(t *testing.T) {
 
 			started := time.Now()
 			testWarmValidation(t, cksumType, false, true)
-			tlog.Logf("Time: %v\n", time.Since(started))
+			tlog.Logfln("Time: %v", time.Since(started))
 		})
 	}
 }
@@ -3616,9 +3616,9 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	// read all
 	if cksumType != cos.ChecksumNone {
-		tlog.Logf("Reading %q objects with checksum validation\n", m.bck.String())
+		tlog.Logfln("Reading %q objects with checksum validation", m.bck.String())
 	} else {
-		tlog.Logf("Reading %q objects\n", m.bck.String())
+		tlog.Logfln("Reading %q objects", m.bck.String())
 	}
 	m.gets(nil, false)
 
@@ -3631,7 +3631,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	if cksumType != cos.ChecksumNone {
-		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck.String(), cksumType)
+		tlog.Logfln("Reading %d objects from %s with end-to-end %s validation", len(bckObjs.Entries), m.bck.String(), cksumType)
 		wg := cos.NewLimitedWaitGroup(20, 0)
 
 		for _, en := range bckObjs.Entries {
@@ -3647,7 +3647,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	}
 
 	if docker.IsRunning() {
-		tlog.Logf("skipping %s object corruption (docker is not supported)\n", t.Name())
+		tlog.Logfln("skipping %s object corruption (docker is not supported)", t.Name())
 		return
 	}
 
@@ -3659,7 +3659,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			i -= numCorrupted
 		}
 		objCh := make(chan string, numCorrupted)
-		tlog.Logf("Corrupting %d objects\n", numCorrupted)
+		tlog.Logfln("Corrupting %d objects", numCorrupted)
 		go func() {
 			for j := i; j < i+numCorrupted; j++ {
 				objName := bckObjs.Entries[j].Name
@@ -3756,7 +3756,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			case m.bck.IsRemote():
 				m.bck = cliBck
 				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-				tlog.Logf("remote %s\n", m.bck.Cname(""))
+				tlog.Logfln("remote %s", m.bck.Cname(""))
 				m.del(-1 /* delete all */)
 
 				m.num /= 10
@@ -3859,10 +3859,10 @@ func TestListObjectsNoRecursion(t *testing.T) {
 		if tst.count == len(lst.Entries) {
 			continue
 		}
-		tlog.Logf("Failed test #%d (prefix %s). Expected %d, got %d\n",
+		tlog.Logfln("Failed test #%d (prefix %s). Expected %d, got %d",
 			idx, tst.prefix, tst.count, len(lst.Entries))
 		for idx, en := range lst.Entries {
-			tlog.Logf("%d. %s (%v)\n", idx, en.Name, en.Flags)
+			tlog.Logfln("%d. %s (%v)", idx, en.Name, en.Flags)
 		}
 		tassert.Errorf(t, false, "[%s] Invalid number of objects %d (expected %d)", tst.prefix, len(lst.Entries), tst.count)
 	}

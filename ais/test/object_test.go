@@ -155,7 +155,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				})
 				if err == nil {
 					oa := oah.Attrs()
-					tlog.Logf("PUT(%s) attrs %s\n", bck.Cname(object), oa.String())
+					tlog.Logfln("PUT(%s) attrs %s", bck.Cname(object), oa.String())
 				}
 			case getOP:
 				if test.exists {
@@ -412,7 +412,7 @@ func TestSameBucketName(t *testing.T) {
 	}
 
 	// PUT/GET/DEL Without ais bucket
-	tlog.Logf("Validating responses for non-existent ais bucket...\n")
+	tlog.Logfln("Validating responses for non-existent ais bucket...")
 	_, err := api.PutObject(&putArgsLocal)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
@@ -436,7 +436,7 @@ func TestSameBucketName(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
-	tlog.Logf("PrefetchList num=%d\n", len(files))
+	tlog.Logfln("PrefetchList num=%d", len(files))
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = files
@@ -447,7 +447,7 @@ func TestSameBucketName(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tlog.Logf("PrefetchRange %s\n", objRange)
+	tlog.Logfln("PrefetchRange %s", objRange)
 	{
 		var msg apc.PrefetchMsg
 		msg.Template = objRange
@@ -470,7 +470,7 @@ func TestSameBucketName(t *testing.T) {
 	err = api.DeleteObject(baseParams, bckRemote, fileName1)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("EvictList %v\n", files)
+	tlog.Logfln("EvictList %v", files)
 	evdListMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files}}
 	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
@@ -498,10 +498,10 @@ func TestSameBucketName(t *testing.T) {
 		}
 	}
 
-	tlog.Logf("Received expected evict status error: %s\n", statusErr)
+	tlog.Logfln("Received expected evict status error: %s", statusErr)
 	tassert.Errorf(t, statusErr != "", "expecting errors when not finding listed objects")
 
-	tlog.Logf("EvictRange\n")
+	tlog.Logfln("EvictRange")
 	evdRangeMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: objRange}}
 	evictRangeID, err := api.EvictMultiObj(baseParams, bckRemote, evdRangeMsg)
 	tassert.CheckFatal(t, err)
@@ -512,7 +512,7 @@ func TestSameBucketName(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 
 	// PUT
-	tlog.Logf("PUT %s and %s -> both buckets...\n", fileName1, fileName2)
+	tlog.Logfln("PUT %s and %s -> both buckets...", fileName1, fileName2)
 	_, err = api.PutObject(&putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.ObjName = fileName2
@@ -528,7 +528,7 @@ func TestSameBucketName(t *testing.T) {
 	hargs := api.HeadArgs{FltPresence: apc.FltPresent}
 
 	// Check that ais bucket has 2 objects
-	tlog.Logf("Validating that ais bucket contains %s and %s ...\n", fileName1, fileName2)
+	tlog.Logfln("Validating that ais bucket contains %s and %s ...", fileName1, fileName2)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
 	tassert.CheckFatal(t, err)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
@@ -552,7 +552,7 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Delete from cloud bucket
-	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
+	tlog.Logfln("Deleting %s and %s from cloud bucket ...", fileName1, fileName2)
 	deleteID, err := api.DeleteMultiObj(baseParams, bckRemote, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
@@ -560,7 +560,7 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Delete from ais bucket
-	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
+	tlog.Logfln("Deleting %s and %s from ais bucket ...", fileName1, fileName2)
 	deleteID, err = api.DeleteMultiObj(baseParams, bckLocal, evdListMsg)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
@@ -618,7 +618,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	bucketPropsRemote := &cmn.BpropsToSet{}
 
 	// Put
-	tlog.Logf("PUT %s => %s\n", fileName, bckLocal.String())
+	tlog.Logfln("PUT %s => %s", fileName, bckLocal.String())
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
@@ -631,7 +631,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("PUT %s => %s\n", fileName, bckRemote.String())
+	tlog.Logfln("PUT %s => %s", fileName, bckRemote.String())
 	putArgs = api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
@@ -782,7 +782,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start := time.Now()
 	m.gets(nil /*api.GetArgs*/, false /*withValidation*/)
-	tlog.Logf("GET %s without MD5 validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
+	tlog.Logfln("GET %s without MD5 validation: %v", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -797,7 +797,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start = time.Now()
 	m.gets(nil /*api.GetArgs*/, true /*withValidation*/)
-	tlog.Logf("GET %s with MD5 validation:    %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
+	tlog.Logfln("GET %s with MD5 validation:    %v", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 
 func TestHeadBucket(t *testing.T) {
@@ -953,7 +953,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	oldFileInfo, _ := os.Stat(fqn)
 
 	// Test when the contents of the file are changed
-	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
+	tlog.Logfln("Changing contents of the file [%s]: %s", objName, fqn)
 	err = os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
@@ -964,7 +964,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	tools.CheckPathExists(t, fqn, false /*dir*/)
 	oldFileInfo, _ = os.Stat(fqn)
 
-	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logfln("Changing file xattr[%s]: %s", objName, fqn)
 	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 	tassert.CheckError(t, err)
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, objName, fqn, oldFileInfo)
@@ -983,7 +983,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+	tlog.Logfln("Changing file xattr[%s]: %s", objName, fqn)
 	err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "badc0ffee0ddf00d"))
 	tassert.CheckError(t, err)
 
@@ -1461,7 +1461,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		fqn = m.findObjOnDisk(m.bck, objName)
 	}
 
-	tlog.Logf("Changing contents of the file [%s]: %s\n", objName, fqn)
+	tlog.Logfln("Changing contents of the file [%s]: %s", objName, fqn)
 	err := os.WriteFile(fqn, []byte("Contents of this file have been changed."), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 	executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, isChunked, t)
@@ -1471,7 +1471,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		// Test changing the file xattr.
 		objName = m.objNames[1]
 		fqn = m.findObjOnDisk(m.bck, objName)
-		tlog.Logf("Changing file xattr[%s]: %s\n", objName, fqn)
+		tlog.Logfln("Changing file xattr[%s]: %s", objName, fqn)
 		err = tools.SetXattrCksum(fqn, m.bck, cos.NewCksum(cos.ChecksumCesXxh, "deadbeefcafebabe"))
 		tassert.CheckError(t, err)
 		executeTwoGETsForChecksumValidation(proxyURL, m.bck, objName, isChunked, t)
@@ -1759,7 +1759,7 @@ func Test_checksum(t *testing.T) {
 
 	start := time.Now()
 	m.gets(nil /*api.GetArgs*/, false /*withValidate*/)
-	tlog.Logf("GET %s without any checksum validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
+	tlog.Logfln("GET %s without any checksum validation: %v", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -1774,7 +1774,7 @@ func Test_checksum(t *testing.T) {
 
 	start = time.Now()
 	m.gets(nil /*api.GetArgs*/, true /*withValidate*/)
-	tlog.Logf("GET %s and validate checksum: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
+	tlog.Logfln("GET %s and validate checksum: %v", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 
 func validateBucketProps(t *testing.T, expected *cmn.BpropsToSet, actual *cmn.Bprops) {
@@ -2386,7 +2386,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				for idx, test := range tests {
-					tlog.Logf("%d. %s; range: [%s]\n", idx+1, test.name, test.rangeStr)
+					tlog.Logfln("%d. %s; range: [%s]", idx+1, test.name, test.rangeStr)
 
 					var (
 						err    error
@@ -2425,14 +2425,14 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 
-					tlog.Logf("  %d objects have been deleted/evicted\n", test.delta)
+					tlog.Logfln("  %d objects have been deleted/evicted", test.delta)
 				}
 
 				msg := &apc.LsoMsg{Prefix: "test/"}
 				lst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
-				tlog.Logf("Cleaning up remaining objects...\n")
+				tlog.Logfln("Cleaning up remaining objects...")
 				for _, obj := range lst.Entries {
 					err := tools.Del(proxyURL, b, obj.Name, nil, nil, true /*silent*/)
 					tassert.CheckError(t, err)

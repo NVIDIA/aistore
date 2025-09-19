@@ -54,14 +54,14 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	}
 	objList := make([]string, 0, objCnt)
-	tlog.Logf("exists = %t\n", exists)
+	tlog.Logfln("exists = %t", exists)
 
 	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
 	for i := range objCnt {
 		objList = append(objList, fmt.Sprintf("test/a-%04d", i))
 	}
 	for range 5 {
-		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.Cname(""))
+		tlog.Logfln("PUT %d => %s", len(objList), bckFrom.Cname(""))
 		for _, objName := range objList {
 			r, _ := readers.NewRand(objSize, cksumType)
 			_, err := api.PutObject(&api.PutArgs{
@@ -76,7 +76,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 
 		rangeStart := 10 // rand.IntN(objCnt - copyCnt - 1)
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
-		tlog.Logf("[%s] %s => %s\n", template, bckFrom.Cname(""), bckTo.Cname(""))
+		tlog.Logfln("[%s] %s => %s", template, bckFrom.Cname(""), bckTo.Cname(""))
 
 		msg := cmn.TCOMsg{ToBck: bckTo}
 		msg.Template = template
@@ -97,7 +97,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		objName := fmt.Sprintf("test/a-%04d", i)
 		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
-		tlog.Logf("%s\n", bckTo.Cname(objName))
+		tlog.Logfln("%s", bckTo.Cname(objName))
 	}
 }
 
@@ -172,7 +172,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			m.puts()
 
 			if m.bck.IsRemote() && test.evictRemoteSrc {
-				tlog.Logf("evicting %s\n", m.bck.String())
+				tlog.Logfln("evicting %s", m.bck.String())
 				//
 				// evict all _cached_ data from the "local" cluster
 				// keep the src bucket in the "local" BMD though
@@ -181,7 +181,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 				tassert.CheckFatal(t, err)
 			}
 
-			tlog.Logf("%s: %s => %s %d objects\n", t.Name(), m.bck.String(), bckTo.String(), numToCopy)
+			tlog.Logfln("%s: %s => %s %d objects", t.Name(), m.bck.String(), bckTo.String(), numToCopy)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
@@ -201,7 +201,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						if err != nil {
 							erv.Store(err)
 						} else {
-							tlog.Logf("[%s] %2d: cp list %d objects\n", xid, i, numToCopy)
+							tlog.Logfln("[%s] %2d: cp list %d objects", xid, i, numToCopy)
 						}
 					}
 					for range numToCopy {
@@ -235,7 +235,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						if err != nil {
 							erv.Store(err)
 						} else {
-							tlog.Logf("[%s] %2d: cp range [%s]\n", xid, i, template)
+							tlog.Logfln("[%s] %2d: cp range [%s]", xid, i, template)
 						}
 					}
 					if !test.createDst && i == 0 {
@@ -257,7 +257,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", bckTo.String(), m.prefix, len(objList.Entries))
+			tlog.Logfln("Total (`ls %s/%s*`): %d objects", bckTo.String(), m.prefix, len(objList.Entries))
 		})
 	}
 }

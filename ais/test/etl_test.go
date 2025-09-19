@@ -108,7 +108,7 @@ func (tbc *testBucketConfig) setupBckFrom(t *testing.T, prefix string, objCnt in
 		tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	}
 
-	tlog.Logf("populating source bucket %s\n", bckFrom.Cname(prefix))
+	tlog.Logfln("populating source bucket %s", bckFrom.Cname(prefix))
 	var (
 		wg    = cos.NewLimitedWaitGroup(sys.MaxParallelism(), 0)
 		errCh = make(chan error, objCnt)
@@ -148,7 +148,7 @@ func (tbc *testBucketConfig) setupBckTo(t *testing.T, prefix string, objCnt int)
 		bckTo = cmn.Bck{Name: "etldst_" + cos.GenUUID(), Provider: apc.AIS}
 		// NOTE: ais will create dst bucket on the fly
 		t.Cleanup(func() {
-			tlog.Logf("destroy destination bucket %s\n", bckTo.Cname(prefix))
+			tlog.Logfln("destroy destination bucket %s", bckTo.Cname(prefix))
 			tools.DestroyBucket(t, proxyURL, bckTo)
 		})
 	}
@@ -286,7 +286,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLon
 	tassert.CheckFatal(t, err)
 
 	if !cached {
-		tlog.Logf("Evicting object %s\n", bck.Cname(objName))
+		tlog.Logfln("Evicting object %s", bck.Cname(objName))
 		err := api.EvictObject(baseParams, bck, objName)
 		tassert.CheckFatal(t, err)
 	}
@@ -298,7 +298,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLon
 	}()
 
 	bf := bytes.NewBuffer(nil)
-	tlog.Logf("Use ETL[%s] to read transformed object\n", etlName)
+	tlog.Logfln("Use ETL[%s] to read transformed object", etlName)
 	etl := &api.ETL{ETLName: etlName, TransformArgs: args}
 	_, err = api.ETLObject(baseParams, etl, bck, objName, bf)
 	tassert.CheckFatal(t, err)
@@ -330,12 +330,12 @@ func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCn
 	localObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 
 	if localObjs+outObjs != int64(expectedObjCnt) {
-		tlog.Logf("Warning: expected %d objects, got %d (where sent %d, received %d)\n", expectedObjCnt, localObjs, outObjs, inObjs)
+		tlog.Logfln("Warning: expected %d objects, got %d (where sent %d, received %d)", expectedObjCnt, localObjs, outObjs, inObjs)
 	}
 	if outObjs != inObjs {
-		tlog.Logf("Warning: (sent objects) %d != %d (received objects)\n", outObjs, inObjs)
+		tlog.Logfln("Warning: (sent objects) %d != %d (received objects)", outObjs, inObjs)
 	} else {
-		tlog.Logf("Num sent/received objects: %d, local objects: %d\n", outObjs, localObjs)
+		tlog.Logfln("Num sent/received objects: %d, local objects: %d", outObjs, localObjs)
 	}
 
 	if skipByteStats {
@@ -345,7 +345,7 @@ func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCn
 
 	// TODO -- FIXME: validate transformed bytes as well, make sure `expectedBytesCnt` is correct
 
-	tlog.Logf("Byte counts: expected %d, got (original %d, sent %d, received %d)\n", expectedBytesCnt,
+	tlog.Logfln("Byte counts: expected %d, got (original %d, sent %d, received %d)", expectedBytesCnt,
 		bytes, outBytes, inBytes)
 }
 
@@ -597,7 +597,7 @@ func TestETLBucketTransformParallel(t *testing.T) {
 						CopyBckMsg: apc.CopyBckMsg{Force: true},
 					}
 
-					tlog.Logf("dispatch %dth ETL bucket transform, from %s to %s\n", i, bckFrom.Cname(""), bckTo.Cname(""))
+					tlog.Logfln("dispatch %dth ETL bucket transform, from %s to %s", i, bckFrom.Cname(""), bckTo.Cname(""))
 					tetl.ETLBucketWithCmp(t, baseParams, bckFrom, bckTo, msg, tools.ReaderEqual)
 				}(i)
 			}
@@ -684,7 +684,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 				NumWorkers: numWorkers,
 			}
 
-			tlog.Logf("Start ETL[%s]: %s => %s ...\n", etlName, bckFrom.Cname(""), bckTo.Cname(""))
+			tlog.Logfln("Start ETL[%s]: %s => %s ...", etlName, bckFrom.Cname(""), bckTo.Cname(""))
 			if bcktest.evictRemoteSrc {
 				tools.EvictObjects(t, proxyURL, bckFrom, prefix)
 				kind = apc.ActETLObjects // TODO -- FIXME: remove/simplify-out the reliance on x-kind
@@ -695,7 +695,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 			}
 			tassert.CheckFatal(t, err)
 
-			tlog.Logf("ETL[%s]: running %s => %s x-etl[%s]\n", etlName, bckFrom.Cname(""), bckTo.Cname(""), xid)
+			tlog.Logfln("ETL[%s]: running %s => %s x-etl[%s]", etlName, bckFrom.Cname(""), bckTo.Cname(""), xid)
 
 			err = tetl.WaitForFinished(bp, xid, kind, timeout)
 			tassert.CheckFatal(t, err)
@@ -704,7 +704,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 			tassert.CheckFatal(t, err)
 			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Transforming bucket %s with %d workers took %v\n", bckFrom.Cname(""), numWorkers, total)
+			tlog.Logfln("Transforming bucket %s with %d workers took %v", bckFrom.Cname(""), numWorkers, total)
 
 			err = tetl.ListObjectsWithRetry(bp, bckTo, prefix, objCnt, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
@@ -717,7 +717,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName, prefix string, bckF
 
 				for i, en := range objeList.Entries { // TODO: introudce goroutines to speed up the content check
 					if i > 0 && i%max(1, objCnt/10) == 0 {
-						tlog.Logf("Verified %d/%d objects\n", i, objCnt)
+						tlog.Logfln("Verified %d/%d objects", i, objCnt)
 					}
 					err := tools.WaitForCondition(func() bool {
 						r1, _, err := api.GetObjectReader(bp, bckFrom, en.Name, &api.GetArgs{})
@@ -864,13 +864,13 @@ func TestETLStopAndRestartETL(t *testing.T) {
 	tetl.ETLCheckStage(t, baseParams, msg.Name(), etl.Running)
 
 	// 2. Stop ETL and verify it stopped successfully
-	tlog.Logf("stopping ETL[%s]\n", msg.Name())
+	tlog.Logfln("stopping ETL[%s]", msg.Name())
 	err := api.ETLStop(baseParams, msg.Name())
 	tassert.CheckFatal(t, err)
 	tetl.ETLCheckStage(t, baseParams, msg.Name(), etl.Aborted)
 
 	// 3. Start ETL and verify it is in running state
-	tlog.Logf("restarting ETL[%s]\n", msg.Name())
+	tlog.Logfln("restarting ETL[%s]", msg.Name())
 	err = api.ETLStart(baseParams, msg.Name())
 	tassert.CheckFatal(t, err)
 	tetl.ETLCheckStage(t, baseParams, msg.Name(), etl.Running)
@@ -1007,7 +1007,7 @@ func TestETLHealth(t *testing.T) {
 		healths, err = api.ETLHealth(baseParams, etlName)
 		if err == nil {
 			if len(healths) > 0 {
-				tlog.Logf("Successfully received health data after %s\n", now.Sub(start))
+				tlog.Logfln("Successfully received health data after %s", now.Sub(start))
 				break
 			}
 			tlog.Logln("Unexpected empty health messages without error, retrying...")
@@ -1016,7 +1016,7 @@ func TestETLHealth(t *testing.T) {
 
 		herr, ok := err.(*cmn.ErrHTTP)
 		tassert.Errorf(t, ok && herr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
-		tlog.Logf("ETL[%s] not found in metrics, retrying...\n", etlName)
+		tlog.Logfln("ETL[%s] not found in metrics, retrying...", etlName)
 		time.Sleep(10 * time.Second)
 	}
 
@@ -1055,7 +1055,7 @@ func TestETLMetrics(t *testing.T) {
 		metrics, err = api.ETLMetrics(baseParams, etlName)
 		if err == nil {
 			if len(metrics) > 0 {
-				tlog.Logf("Successfully received metrics after %s\n", now.Sub(start))
+				tlog.Logfln("Successfully received metrics after %s", now.Sub(start))
 				break
 			}
 			tlog.Logln("Unexpected empty metrics messages without error, retrying...")
@@ -1064,7 +1064,7 @@ func TestETLMetrics(t *testing.T) {
 
 		herr, ok := err.(*cmn.ErrHTTP)
 		tassert.Errorf(t, ok && herr.Status == http.StatusNotFound, "Unexpected error %v, expected 404", err)
-		tlog.Logf("ETL[%s] not found in metrics, retrying...\n", etlName)
+		tlog.Logfln("ETL[%s] not found in metrics, retrying...", etlName)
 		time.Sleep(10 * time.Second)
 	}
 

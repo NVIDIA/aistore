@@ -68,7 +68,7 @@ func WaitNodePubAddrNotInUse(si *meta.Snode, timeout time.Duration) error {
 		addr     = si.PubNet.TCPEndpoint()
 		interval = controlPlaneSleep
 	)
-	tlog.Logf("Waiting for %s to shutdown (and stop listening)\n", si.StringEx())
+	tlog.Logfln("Waiting for %s to shutdown (and stop listening)", si.StringEx())
 	time.Sleep(interval) // not immediate
 	for elapsed := time.Duration(0); elapsed < timeout; elapsed += interval {
 		if _, err := net.DialTimeout("tcp4", addr, interval); err != nil {
@@ -90,7 +90,7 @@ func JoinCluster(proxyURL string, node *meta.Snode) (string, error) {
 // Smap and canceling maintenance gets the node back.
 func RestoreTarget(t *testing.T, proxyURL string, target *meta.Snode) (rebID string, newSmap *meta.Smap) {
 	smap := GetClusterMap(t, proxyURL)
-	tlog.Logf("Joining target %s (current %s)\n", target.StringEx(), smap.StringEx())
+	tlog.Logfln("Joining target %s (current %s)", target.StringEx(), smap.StringEx())
 	val := &apc.ActValRmNode{DaemonID: target.ID()}
 	rebID, err := api.StopMaintenance(BaseAPIParams(proxyURL), val)
 	tassert.CheckFatal(t, err)
@@ -215,15 +215,15 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 	)
 	if expPrx == 0 && expTgt == 0 {
 		if origVer > 0 {
-			tlog.Logf("Waiting for %q (Smap > v%d)\n", reason, origVer)
+			tlog.Logfln("Waiting for %q (Smap > v%d)", reason, origVer)
 		} else {
-			tlog.Logf("Waiting for %q\n", reason)
+			tlog.Logfln("Waiting for %q", reason)
 		}
 	} else {
 		if origVer > 0 {
-			tlog.Logf("Waiting for %q (p%d, t%d, Smap > v%d)\n", reason, expPrx, expTgt, origVer)
+			tlog.Logfln("Waiting for %q (p%d, t%d, Smap > v%d)", reason, expPrx, expTgt, origVer)
 		} else {
-			tlog.Logf("Waiting for %q (p%d, t%d)\n", reason, expPrx, expTgt)
+			tlog.Logfln("Waiting for %q (p%d, t%d)", reason, expPrx, expTgt)
 		}
 	}
 	started := time.Now()
@@ -238,7 +238,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			if !cos.IsRetriableConnErr(err) {
 				return nil, err
 			}
-			tlog.Logf("%v\n", err)
+			tlog.Logfln("%v", err)
 			goto next
 		}
 		ok = expTgt.satisfied(smap.CountActiveTs()) && expPrx.satisfied(smap.CountActivePs()) &&
@@ -252,9 +252,9 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			if time.Since(started) > maxSleep {
 				pid := pidFromURL(smap, proxyURL)
 				if expPrx == 0 && expTgt == 0 {
-					tlog.Logf("Polling %s(%s) for (Smap > v%d)\n", meta.Pname(pid), smap.StringEx(), origVer)
+					tlog.Logfln("Polling %s(%s) for (Smap > v%d)", meta.Pname(pid), smap.StringEx(), origVer)
 				} else {
-					tlog.Logf("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)\n",
+					tlog.Logfln("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)",
 						meta.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
 				}
 			}
@@ -273,7 +273,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			idsToIgnore.Add(ignoreIDs...)
 			err = waitSmapSync(bp, deadline, syncedSmap, origVer, idsToIgnore)
 			if err != nil {
-				tlog.Logf("Failed waiting for cluster state condition: %v (%s, %s, %v, %v)\n",
+				tlog.Logfln("Failed waiting for cluster state condition: %v (%s, %s, %v, %v)",
 					err, smap, syncedSmap, origVer, idsToIgnore)
 				return nil, err
 			}
@@ -319,7 +319,7 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {
 		tid, xsnap, err := snaps.RunningTarget("")
 		tassert.CheckFatal(t, err)
 		if tid != "" {
-			tlog.Logf("t[%s]: x-%s[%s] is running\n", tid, xsnap.Kind, xsnap.ID)
+			tlog.Logfln("t[%s]: x-%s[%s] is running", tid, xsnap.Kind, xsnap.ID)
 			return false, false
 		}
 		return true, true
@@ -368,7 +368,7 @@ func killProxyOrTargetK8s(bp api.BaseParams, node *meta.Snode, namespace ...stri
 			return false
 		}
 		if phase != string(corev1.PodRunning) {
-			tlog.Logf("Pod %s is not running, phase: %s\n", ds.K8sPodName, phase)
+			tlog.Logfln("Pod %s is not running, phase: %s", ds.K8sPodName, phase)
 			return false
 		}
 		return true
@@ -376,7 +376,7 @@ func killProxyOrTargetK8s(bp api.BaseParams, node *meta.Snode, namespace ...stri
 	if err != nil {
 		return err
 	}
-	tlog.Logf("Joining node %s (current %s)\n", node.StringEx(), smap.StringEx())
+	tlog.Logfln("Joining node %s (current %s)", node.StringEx(), smap.StringEx())
 	// In K8s deployments, the StatefulSet may restart the target so quickly that the kalive ping doesn't miss it and the cluster map version may not increment.
 	_, err = WaitForClusterState(bp.URL, "cluster to stabilize", 0, smap.CountActivePs(), smap.CountActiveTs())
 	return err
@@ -396,7 +396,7 @@ func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {
 	case isK8s:
 		return cmd, killProxyOrTargetK8s(bp, node, DefaultNamespace)
 	case docker.IsRunning():
-		tlog.Logf("Stopping container %s\n", daemonID)
+		tlog.Logfln("Stopping container %s", daemonID)
 		err := docker.Stop(daemonID)
 		return cmd, err
 	default: // local deployment
@@ -405,7 +405,7 @@ func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {
 		})
 		cmd.Node = node
 		if docker.IsRunning() {
-			tlog.Logf("Stopping container %s\n", daemonID)
+			tlog.Logfln("Stopping container %s", daemonID)
 			err := docker.Stop(daemonID)
 			return cmd, err
 		}
@@ -454,10 +454,10 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, c
 		daemonID = node.ID()
 		port     = node.PubNet.Port
 	)
-	tlog.Logf("Shutting down %s\n", node.StringEx())
+	tlog.Logfln("Shutting down %s", node.StringEx())
 	cmd.Node = node
 	if docker.IsRunning() {
-		tlog.Logf("Stopping container %s\n", daemonID)
+		tlog.Logfln("Stopping container %s", daemonID)
 		err = docker.Stop(daemonID)
 		return
 	}
@@ -474,7 +474,7 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, c
 
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 	if docker.IsRunning() {
-		tlog.Logf("Restarting %s container [%s %s]\n", tag, cmd.Node.ID(), cmd.Cmd)
+		tlog.Logfln("Restarting %s container [%s %s]", tag, cmd.Node.ID(), cmd.Cmd)
 		return docker.Restart(cmd.Node.ID())
 	}
 
@@ -482,7 +482,7 @@ func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {
 		cmd.Args = append(cmd.Args, "-daemon_id="+cmd.Node.ID())
 	}
 
-	tlog.Logf("Restoring %s: %s %+v\n", tag, cmd.Cmd, cmd.Args)
+	tlog.Logfln("Restoring %s: %s %+v", tag, cmd.Cmd, cmd.Args)
 	pid, err := startNode(&cmd, asPrimary)
 	if err == nil && pid <= 0 {
 		err = fmt.Errorf("RestoreNode: invalid process ID %d", pid)
@@ -630,7 +630,7 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 func WaitForPID(pid int) error {
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		tlog.Logf("Warning: PID %d already terminated: %v\n", pid, err)
+		tlog.Logfln("Warning: PID %d already terminated: %v", pid, err)
 		return nil
 	}
 
@@ -639,7 +639,7 @@ func WaitForPID(pid int) error {
 		ctx    = context.Background()
 		done   = make(chan error)
 	)
-	tlog.Logf("Waiting for PID %d to terminate\n", pid)
+	tlog.Logfln("Waiting for PID %d to terminate", pid)
 
 	const (
 		timeout = 4 * time.Second
@@ -863,15 +863,15 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 		if err == nil && newSmap.Version > ver {
 			ignore.Add(sid)
 			if newSmap.Version > smap.Version {
-				tlog.Logf("Updating %s to %s from %s\n", smap, newSmap.StringEx(), sname)
+				tlog.Logfln("Updating %s to %s from %s", smap, newSmap.StringEx(), sname)
 				cos.CopyStruct(smap, newSmap)
 			}
 			if newSmap.Version > ver+1 {
 				// reset
 				if ver <= 0 {
-					tlog.Logf("Received %s from %s\n", newSmap.StringEx(), sname)
+					tlog.Logfln("Received %s from %s", newSmap.StringEx(), sname)
 				} else {
-					tlog.Logf("Received newer %s from %s, updated wait-for condition (%d => %d)\n",
+					tlog.Logfln("Received newer %s from %s, updated wait-for condition (%d => %d)",
 						newSmap.StringEx(), sname, ver, newSmap.Version)
 				}
 				ver = newSmap.Version - 1
@@ -885,10 +885,10 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 		}
 		if newSmap != nil {
 			if snode := newSmap.GetNode(sid); snode != nil {
-				tlog.Logf("Waiting for %s(%s) to sync Smap > v%d\n", snode.StringEx(), newSmap, ver)
+				tlog.Logfln("Waiting for %s(%s) to sync Smap > v%d", snode.StringEx(), newSmap, ver)
 			} else {
-				tlog.Logf("Waiting for %s(%s) to sync Smap > v%d\n", sname, newSmap, ver)
-				tlog.Logf("(Warning: %s hasn't joined yet - not present)\n", sname)
+				tlog.Logfln("Waiting for %s(%s) to sync Smap > v%d", sname, newSmap, ver)
+				tlog.Logfln("(Warning: %s hasn't joined yet - not present)", sname)
 			}
 		}
 		prevSid = sid
@@ -912,7 +912,7 @@ func _removeNodeFromSmap(proxyURL, sid string, timeout time.Duration) error {
 	if node != nil && smap.IsPrimary(node) {
 		return errors.New("unregistering primary proxy is not allowed")
 	}
-	tlog.Logf("Remove %s from %s\n", node.StringEx(), smap)
+	tlog.Logfln("Remove %s from %s", node.StringEx(), smap)
 
 	err = api.RemoveNodeUnsafe(bp, sid)
 	if err != nil {

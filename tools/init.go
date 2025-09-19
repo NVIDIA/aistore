@@ -160,21 +160,21 @@ func InitLocalCluster() {
 		initRemAis() // remote AIS that optionally may be run locally as well and used for testing
 		return
 	}
-	tlog.Logf("Error: %s\n\n", strings.TrimSuffix(err.Error(), "\n"))
+	tlog.Logfln("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
 
 	switch {
 	case strings.Contains(err.Error(), "token"):
-		tlog.Logf("Hint: make sure to provide access token via %s environment or the default config location\n",
+		tlog.Logfln("Hint: make sure to provide access token via %s environment or the default config location",
 			env.AisAuthTokenFile)
 	case strings.Contains(err.Error(), "unreachable"):
-		tlog.Logf("Hint: make sure that cluster is running and/or specify its endpoint via %s environment\n",
+		tlog.Logfln("Hint: make sure that cluster is running and/or specify its endpoint via %s environment",
 			env.AisEndpoint)
 	default:
-		tlog.Logf("Hint: check api/env/*.go environment and, in particular %s=%s\n", env.AisEndpoint, os.Getenv(env.AisEndpoint))
+		tlog.Logfln("Hint: check api/env/*.go environment and, in particular %s=%s", env.AisEndpoint, os.Getenv(env.AisEndpoint))
 		if len(envVars) > 0 {
 			fmt.Println("Docker Environment:")
 			for k, v := range envVars {
-				tlog.Logf("\t%s:\t%s\n", k, v)
+				tlog.Logfln("\t%s:\t%s", k, v)
 			}
 		}
 	}

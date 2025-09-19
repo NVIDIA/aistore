@@ -36,7 +36,7 @@ func TestGetWarmValidateS3UsingScript(t *testing.T) {
 		bucketName = cliBck.Cname("")
 		cmd        = exec.Command("./scripts/s3-get-validate.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s %s'\n", cmd.Path, strings.Join(cmd.Args, " "))
+	tlog.Logfln("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -49,21 +49,21 @@ func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
 
 	bck := cliBck
 	if bck.IsRemoteAIS() {
-		tlog.Logf("using existing %s ...\n", bck.Cname(""))
+		tlog.Logfln("using existing %s ...", bck.Cname(""))
 	} else {
 		bck = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 			Ns:       cmn.Ns{UUID: tools.RemoteCluster.Alias},
 		}
-		tlog.Logf("using temp bucket %s ...\n", bck.Cname(""))
+		tlog.Logfln("using temp bucket %s ...", bck.Cname(""))
 	}
 
 	var (
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-get-validate.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s'\n", cmd.String())
+	tlog.Logfln("Running '%s'", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -86,7 +86,7 @@ func TestPrefetchLatestS3UsingScript(t *testing.T) {
 		bucketName = cliBck.Cname("")
 		cmd        = exec.Command("./scripts/s3-prefetch-latest-prefix.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s'\n", cmd.String())
+	tlog.Logfln("Running '%s'", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -99,21 +99,21 @@ func TestPrefetchLatestRemaisUsingScript(t *testing.T) {
 
 	bck := cliBck
 	if bck.IsRemoteAIS() {
-		tlog.Logf("using existing %s ...\n", bck.Cname(""))
+		tlog.Logfln("using existing %s ...", bck.Cname(""))
 	} else {
 		bck = cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 			Ns:       cmn.Ns{UUID: tools.RemoteCluster.Alias},
 		}
-		tlog.Logf("using temp bucket %s ...\n", bck.Cname(""))
+		tlog.Logfln("using temp bucket %s ...", bck.Cname(""))
 	}
 
 	var (
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-prefetch-latest.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s'\n", cmd.String())
+	tlog.Logfln("Running '%s'", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -134,7 +134,7 @@ func TestCopySyncRemaisUsingScript(t *testing.T) {
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/cp-sync-remais-out-of-band.sh", "--bucket", bucketName)
 	)
-	tlog.Logf("Running '%s'\n", cmd.String())
+	tlog.Logfln("Running '%s'", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -164,7 +164,7 @@ func TestMPU_1_UsingScript(t *testing.T) {
 
 	cmd := exec.Command(args[0], args[1:]...)
 
-	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
+	tlog.Logfln("Running '%s' (this may take a while...)", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -176,7 +176,7 @@ func TestMPU_2_UsingScript(t *testing.T) {
 	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 	cmd := exec.Command("./scripts/multipart-smoke.sh", "--bucket", bck.Cname(""))
 
-	tlog.Logf("Running '%s'...)\n", cmd.String())
+	tlog.Logfln("Running '%s'...)", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -206,7 +206,7 @@ func TestRemaisBlobDownloadUsingScript(t *testing.T) {
 	// "--numworkers", "5"
 	cmd := exec.Command("./scripts/remais-blob-download.sh", "--bucket", name)
 
-	tlog.Logf("Running '%s' (this may take a while...)\n", cmd.String())
+	tlog.Logfln("Running '%s' (this may take a while...)", cmd.String())
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -297,7 +297,7 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 			sorted = append(sorted, ln[len(prefix):])
 		}
 	}
-	tlog.Logf("## objects deleted out-of-band:\t%d\n", scnt)
+	tlog.Logfln("## objects deleted out-of-band:\t%d", scnt)
 
 	defer func() {
 		if t.Failed() && verbose {
@@ -329,7 +329,7 @@ func TestRemaisDeleteUsingScript(t *testing.T) {
 		err := fmt.Errorf("deleted out-of-band (%d) != (%d) list-objects version-removed", scnt, lcnt)
 		tassert.CheckFatal(t, err)
 	}
-	tlog.Logf("## list-objects version-removed:\t%d\n", lcnt)
+	tlog.Logfln("## list-objects version-removed:\t%d", lcnt)
 }
 
 // rate-limit-frontend-test.sh

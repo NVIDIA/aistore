@@ -93,7 +93,7 @@ func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, file
 		tcomsg.ListRange.Template = fileRange
 	}
 
-	tlog.Logf("Starting multi-object ETL[%s] ...\n", etlName)
+	tlog.Logfln("Starting multi-object ETL[%s] ...", etlName)
 	if bcktest.evictRemoteSrc {
 		tools.EvictObjects(t, proxyURL, bckFrom, prefix)
 		xid, err = api.ETLMultiObj(baseParams, bckFrom, &tcomsg, apc.FltExists)
@@ -102,7 +102,7 @@ func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, file
 	}
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Running x-etl[%s]: %s => %s ...\n", xid, bckFrom.Cname(""), bckTo.Cname(""))
+	tlog.Logfln("Running x-etl[%s]: %s => %s ...", xid, bckFrom.Cname(""), bckTo.Cname(""))
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, &wargs)
@@ -114,7 +114,7 @@ func testETLMultiObj(t *testing.T, etlName, prefix string, bckFrom cmn.Bck, file
 		tlog.Logfln("Verifying %d object content", objCnt)
 		for i, objName := range lst {
 			if i > 0 && i%max(1, objCnt/10) == 0 {
-				tlog.Logf("Verified %d/%d objects\n", i, objCnt)
+				tlog.Logfln("Verified %d/%d objects", i, objCnt)
 			}
 			err := tools.WaitForCondition(func() bool {
 				r1, _, err := api.GetObjectReader(baseParams, bckFrom, objName, &api.GetArgs{})

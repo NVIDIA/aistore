@@ -329,9 +329,9 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 
 			if i%10 == 0 {
 				if doEC {
-					tlog.Logf("Object %s, size %9d[%9d]\n", objName, objSize, sliceSize)
+					tlog.Logfln("Object %s, size %9d[%9d]", objName, objSize, sliceSize)
 				} else {
-					tlog.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
+					tlog.Logfln("Object %s, size %9d[%9s]", objName, objSize, "-")
 				}
 			}
 
@@ -465,14 +465,14 @@ func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, 
 	proxyURL := tools.RandomProxyURL()
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	tlog.Logf("Changing EC %d:%d, objLimit [%d] [ seed = %d ], concurrent: %d\n",
+	tlog.Logfln("Changing EC %d:%d, objLimit [%d] [ seed = %d ], concurrent: %d",
 		o.dataCnt, o.parityCnt, o.objSizeLimit, o.seed, o.concurrency)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
 }
 
 func setBucketECProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps *cmn.BpropsToSet) {
-	tlog.Logf("Changing EC %d:%d\n", *bckProps.EC.DataSlices, *bckProps.EC.ParitySlices)
+	tlog.Logfln("Changing EC %d:%d", *bckProps.EC.DataSlices, *bckProps.EC.ParitySlices)
 	_, err := api.SetBucketProps(baseParams, bck, bckProps)
 	tassert.CheckFatal(t, err)
 }
@@ -622,13 +622,13 @@ func createECReplicas(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objN
 
 	objPath := ecTestDir + objName
 
-	tlog.Logf("Creating %s, size %8d\n", objPath, objSize)
+	tlog.Logfln("Creating %s, size %8d", objPath, objSize)
 	r, err := readers.NewRand(objSize, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("waiting for %s\n", objPath)
+	tlog.Logfln("waiting for %s", objPath)
 	foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, false, bck, objPath)
 
 	ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
@@ -746,9 +746,9 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	partsAfterRemove, _ := ecGetAllSlices(t, bck, objPath)
 	_, ok := partsAfterRemove[mainObjPath]
 	if ok || len(partsAfterRemove) != len(foundParts)-deletedFiles*2 {
-		tlog.Logf("Files are not deleted [%d - %d], leftovers:\n", len(foundParts), len(partsAfterRemove))
+		tlog.Logfln("Files are not deleted [%d - %d], leftovers:", len(foundParts), len(partsAfterRemove))
 		for k := range partsAfterRemove {
-			tlog.Logf("     %s\n", k)
+			tlog.Logfln("     %s", k)
 		}
 		// Not an error as a directory can contain leftovers
 		tlog.Logln("Some slices were not deleted")
@@ -758,7 +758,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tlog.LogfCond(!o.silent, "Restoring %s\n", objPath)
 	_, err = api.GetObject(baseParams, bck, objPath, nil)
 	if err != nil {
-		tlog.Logf("... retrying %s\n", objPath)
+		tlog.Logfln("... retrying %s", objPath)
 		time.Sleep(time.Second)
 		_, err = api.GetObject(baseParams, bck, objPath, nil)
 	}
@@ -1001,7 +1001,7 @@ func TestECChecksum(t *testing.T) {
 	objPath2 := ecTestDir + objName2
 	foundParts2, mainObjPath2 := createECFile(t, baseParams, bck, objName2, o)
 
-	tlog.Logf("Removing main object %s\n", mainObjPath1)
+	tlog.Logfln("Removing main object %s", mainObjPath1)
 	tassert.CheckFatal(t, os.Remove(mainObjPath1))
 
 	// Corrupt just one slice, EC should be able to restore the original object
@@ -1018,7 +1018,7 @@ func TestECChecksum(t *testing.T) {
 	_, err := api.GetObject(baseParams, bck, objPath1, nil)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Removing main object %s\n", mainObjPath2)
+	tlog.Logfln("Removing main object %s", mainObjPath2)
 	tassert.CheckFatal(t, os.Remove(mainObjPath2))
 
 	// Corrupt all slices, EC should not be able to restore
@@ -1208,14 +1208,14 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	tlog.Logf("Disabling EC for the bucket %s\n", bck.String())
+	tlog.Logfln("Disabling EC for the bucket %s", bck.String())
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(false)},
 	})
 	tassert.CheckError(t, err)
 
 	time.Sleep(15 * time.Millisecond)
-	tlog.Logf("Enabling EC for the bucket %s\n", bck.String())
+	tlog.Logfln("Enabling EC for the bucket %s", bck.String())
 	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{Enabled: apc.Ptr(true)},
 	})
@@ -1431,9 +1431,9 @@ func ecStressCore(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 			totalCnt, objSize, sliceSize, doEC := randObjectSize(i, smallEvery, o)
 			objPath := ecTestDir + objName
 			if doEC {
-				tlog.Logf("Object %s, size %9d[%9d]\n", objName, objSize, sliceSize)
+				tlog.Logfln("Object %s, size %9d[%9d]", objName, objSize, sliceSize)
 			} else {
-				tlog.Logf("Object %s, size %9d[%9s]\n", objName, objSize, "-")
+				tlog.Logfln("Object %s, size %9d[%9s]", objName, objSize, "-")
 			}
 			r, err := readers.NewRand(objSize, cos.ChecksumNone)
 			tassert.Errorf(t, err == nil, "Failed to create reader: %v", err)
@@ -1529,13 +1529,13 @@ func TestECXattrs(t *testing.T) {
 		if doEC {
 			ecStr = "EC"
 		}
-		tlog.Logf("Creating %s, size %8d [%2s] [%s]\n", objPath, objSize, ecStr, delStr)
+		tlog.Logfln("Creating %s, size %8d [%2s] [%s]", objPath, objSize, ecStr, delStr)
 		r, err := readers.NewRand(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
 		tassert.CheckFatal(t, err)
 
-		tlog.Logf("waiting for %s\n", objPath)
+		tlog.Logfln("waiting for %s", objPath)
 		foundParts, mainObjPath := waitForECFinishes(t, totalCnt, objSize, sliceSize, doEC, bck, objPath)
 
 		ecCheckSlices(t, foundParts, bck, objPath, objSize, sliceSize, totalCnt)
@@ -1543,13 +1543,13 @@ func TestECXattrs(t *testing.T) {
 			t.Fatal("Full copy is not found")
 		}
 
-		tlog.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
+		tlog.Logfln("Damaging %s [removing %s]", objPath, mainObjPath)
 		tassert.CheckFatal(t, os.Remove(mainObjPath))
 
 		ct, err := core.NewCTFromFQN(mainObjPath, nil)
 		tassert.CheckFatal(t, err)
 		metafile := ct.Make(fs.ECMetaCT)
-		tlog.Logf("Damaging %s [removing %s]\n", objPath, metafile)
+		tlog.Logfln("Damaging %s [removing %s]", objPath, metafile)
 		tassert.CheckFatal(t, cos.RemoveFile(metafile))
 
 		partsAfterRemove, _ := ecGetAllSlices(t, bck, objPath)
@@ -1558,10 +1558,10 @@ func TestECXattrs(t *testing.T) {
 			t.Fatalf("Files are not deleted [%d - %d]: %#v", len(foundParts), len(partsAfterRemove), partsAfterRemove)
 		}
 
-		tlog.Logf("Restoring %s\n", objPath)
+		tlog.Logfln("Restoring %s", objPath)
 		_, err = api.GetObject(baseParams, bck, objPath, nil)
 		if err != nil {
-			tlog.Logf("... retrying %s\n", objPath)
+			tlog.Logfln("... retrying %s", objPath)
 			time.Sleep(time.Second)
 			_, err = api.GetObject(baseParams, bck, objPath, nil)
 		}
@@ -1653,7 +1653,7 @@ func TestECDestroyBucket(t *testing.T) {
 
 			objName := fmt.Sprintf(o.pattern, i)
 			if i%10 == 0 {
-				tlog.Logf("PUT %s\n", bck.Cname(objName))
+				tlog.Logfln("PUT %s", bck.Cname(objName))
 			}
 			if putECFile(baseParams, bck, objName) != nil {
 				errCnt.Inc()
@@ -1672,14 +1672,14 @@ func TestECDestroyBucket(t *testing.T) {
 					wg.Done()
 				}()
 
-				tlog.Logf("Destroying bucket %s\n", bck.String())
+				tlog.Logfln("Destroying bucket %s", bck.String())
 				tools.DestroyBucket(t, proxyURL, bck)
 			}()
 		}
 	}
 
 	wg.Wait()
-	tlog.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
+	tlog.Logfln("EC put files resulted in error in %d out of %d files", errCnt.Load(), o.objCount)
 	args := xact.ArgsMsg{Kind: apc.ActECPut}
 	api.WaitForXactionIC(baseParams, &args)
 
@@ -1756,7 +1756,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		if doEC {
 			ecStr = "EC"
 		}
-		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
+		tlog.Logfln("Creating %s, size %8d [%2s]", objPath, objSize, ecStr)
 		r, err := readers.NewRand(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
@@ -2007,7 +2007,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		if doEC {
 			ecStr = "EC"
 		}
-		tlog.Logf("Creating %s, size %8d [%2s]\n", objPath, objSize, ecStr)
+		tlog.Logfln("Creating %s, size %8d [%2s]", objPath, objSize, ecStr)
 		r, err := readers.NewRand(objSize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
 		_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objPath, Reader: r})
@@ -2034,14 +2034,14 @@ func TestECEmergencyMountpath(t *testing.T) {
 	// 2. Disable a random mountpath
 	mpathID := o.rnd.IntN(len(mpathList.Available))
 	removeMpath := mpathList.Available[mpathID]
-	tlog.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.ID())
+	tlog.Logfln("Disabling a mountpath %s at target: %s", removeMpath, removeTarget.ID())
 	err = api.DisableMountpath(baseParams, removeTarget, removeMpath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 
 	tools.WaitForResilvering(t, baseParams, removeTarget)
 
 	defer func() {
-		tlog.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.ID())
+		tlog.Logfln("Enabling mountpath %s at target %s...", removeMpath, removeTarget.ID())
 		err = api.EnableMountpath(baseParams, removeTarget, removeMpath)
 		tassert.CheckFatal(t, err)
 
@@ -2053,7 +2053,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 	objectsExist(t, baseParams, bck, o.pattern, o.objCount)
 
 	// 4. Check that ListObjects returns correct number of items
-	tlog.Logf("DONE\nReading bucket list...\n")
+	tlog.Logfln("DONE\nReading bucket list...")
 	msg := &apc.LsoMsg{Props: "size,status,version"}
 	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -2160,7 +2160,7 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
 	oldObjList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects created, starting rebalance\n", len(oldObjList.Entries))
+	tlog.Logfln("%d objects created, starting rebalance", len(oldObjList.Entries))
 
 	removedTarget, err := o.smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
@@ -2240,12 +2240,12 @@ func TestECBucketEncode(t *testing.T) {
 
 	lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Object count: %d\n", len(lst.Entries))
+	tlog.Logfln("Object count: %d", len(lst.Entries))
 	if len(lst.Entries) != m.num {
 		t.Fatalf("list_objects %s invalid number of files %d, expected %d", m.bck.String(), len(lst.Entries), m.num)
 	}
 
-	tlog.Logf("Enabling EC\n")
+	tlog.Logfln("Enabling EC")
 	bckPropsToUpate := &cmn.BpropsToSet{
 		EC: &cmn.ECConfToSet{
 			Enabled:      apc.Ptr(true),
@@ -2257,7 +2257,7 @@ func TestECBucketEncode(t *testing.T) {
 	xid, err := api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Wait for ec-bucket[%s] %s\n", xid, m.bck.String())
+	tlog.Logfln("Wait for ec-bucket[%s] %s", xid, m.bck.String())
 	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
@@ -2268,15 +2268,15 @@ func TestECBucketEncode(t *testing.T) {
 	if len(lst.Entries) != m.num {
 		t.Fatalf("bucket %s: expected %d objects, got %d", m.bck.String(), m.num, len(lst.Entries))
 	}
-	tlog.Logf("Object counts after EC finishes: %d (%d)\n", len(lst.Entries), (parityCnt+1)*m.num)
+	tlog.Logfln("Object counts after EC finishes: %d (%d)", len(lst.Entries), (parityCnt+1)*m.num)
 
 	// Validate object content after EC encoding
-	tlog.Logf("Validating object content after EC encoding\n")
+	tlog.Logfln("Validating object content after EC encoding")
 	m.gets(nil /*api.GetArgs*/, true /*withValidation*/)
 	if m.numGetErrs.Load() > 0 {
 		t.Fatalf("Content validation failed: %d GET errors after EC encoding", m.numGetErrs.Load())
 	}
-	tlog.Logf("Content validation successful: all %d objects verified\n", m.num)
+	tlog.Logfln("Content validation successful: all %d objects verified", m.num)
 
 	//
 	// TODO: support querying bucket for total number of entries with respect to mirroring and EC
@@ -2334,7 +2334,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
 
-	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
+	tlog.Logfln("Put %s in maintenance (no rebalance)", tgtLost.StringEx())
 	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2379,10 +2379,10 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tassert.CheckFatal(t, err)
 	resRegOld, err := api.ListObjects(baseParams, bckReg, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
+	tlog.Logfln("Created %d objects in %s, %d objects in %s. Starting rebalance",
 		len(resECOld.Entries), bckEC.String(), len(resRegOld.Entries), bckReg.String())
 
-	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
+	tlog.Logfln("Take %s out of maintenance mode ...", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2392,11 +2392,11 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tlog.Logln("list objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after rebalance\n",
+	tlog.Logfln("%d objects in %s after rebalance",
 		len(resECNew.Entries), bckEC.String())
 	resRegNew, err := api.ListObjects(baseParams, bckReg, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after rebalance\n",
+	tlog.Logfln("%d objects in %s after rebalance",
 		len(resRegNew.Entries), bckReg.String())
 
 	tlog.Logln("Test object readability after rebalance")
@@ -2482,7 +2482,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		}(i)
 	}
 	wg.Wait()
-	tlog.Logf("Created %d objects\n", o.objCount)
+	tlog.Logfln("Created %d objects", o.objCount)
 
 	err = api.AttachMountpath(baseParams, tgtLost, lostPath)
 	tassert.CheckFatal(t, err)
@@ -2496,7 +2496,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
 	resEC, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after rebalance\n", len(resEC.Entries), bck.String())
+	tlog.Logfln("%d objects in %s after rebalance", len(resEC.Entries), bck.String())
 	if len(resEC.Entries) != o.objCount {
 		t.Errorf("Expected %d objects after rebalance, found %d", o.objCount, len(resEC.Entries))
 	}
@@ -2575,7 +2575,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tgtLost := tgtList[0]
 	tgtGone := tgtList[1]
 
-	tlog.Logf("Put %s in maintenance (no rebalance)\n", tgtLost.StringEx())
+	tlog.Logfln("Put %s in maintenance (no rebalance)", tgtLost.StringEx())
 	args := &apc.ActValRmNode{DaemonID: tgtLost.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2615,9 +2615,9 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	msg := &apc.LsoMsg{}
 	resECOld, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC.String())
+	tlog.Logfln("Created %d objects in %s - starting global rebalance...", len(resECOld.Entries), bckEC.String())
 
-	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
+	tlog.Logfln("Take %s out of maintenance mode ...", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2653,7 +2653,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tools.WaitForRebalAndResil(t, baseParams)
 	tassert.CheckError(t, err)
 
-	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())
+	tlog.Logfln("Put %s in maintenance", tgtGone.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtGone.ID()}
 	rebID, err := api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2675,7 +2675,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tlog.Logln("list objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after rebalance\n",
+	tlog.Logfln("%d objects in %s after rebalance",
 		len(resECNew.Entries), bckEC.String())
 	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Error("The number of objects before and after rebalance mismatches")
@@ -2690,7 +2690,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tlog.Logln("list objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects in %s after reading\n",
+	tlog.Logfln("%d objects in %s after reading",
 		len(resECNew.Entries), bckEC.String())
 	if len(resECNew.Entries) != len(resECOld.Entries) {
 		t.Errorf("Incorrect number of objects: %d (expected %d)",
@@ -2726,7 +2726,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
 	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("%d objects created, removing %d mountpaths\n", len(lst.Entries), o.parityCnt)
+	tlog.Logfln("%d objects created, removing %d mountpaths", len(lst.Entries), o.parityCnt)
 
 	allMpaths := tools.GetTargetsMountpaths(t, o.smap, baseParams)
 	removed := make(map[string]*removedMpath, o.parityCnt)
@@ -2750,7 +2750,7 @@ func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		rmMpath := &removedMpath{si: tsi, mpath: mpath}
 		removed[uid] = rmMpath
 		i++
-		tlog.Logf("%d. Disabled %s : %s\n", i, tsi.StringEx(), mpath)
+		tlog.Logfln("%d. Disabled %s : %s", i, tsi.StringEx(), mpath)
 		if i >= o.parityCnt {
 			break
 		}
@@ -2933,11 +2933,11 @@ func TestECBckEncodeRecover(t *testing.T) {
 						if !strings.Contains(k, tp) {
 							continue
 						}
-						tlog.Logf("1. %s - deleting slice/object %s\n", objName, k)
+						tlog.Logfln("1. %s - deleting slice/object %s", objName, k)
 						os.Remove(k)
 						damaged[objName] = true
 						mdFile := strings.Replace(k, tp, "%mt", 1)
-						tlog.Logf("2. %s - deleting its MD %s\n", objName, mdFile)
+						tlog.Logfln("2. %s - deleting its MD %s", objName, mdFile)
 						tassert.CheckFatal(t, os.Remove(mdFile))
 						break
 					}
@@ -2971,7 +2971,7 @@ func TestECBckEncodeRecover(t *testing.T) {
 						if _, err := os.Stat(k); err == nil {
 							continue
 						}
-						tlog.Logf("Slice/MD of object %s: %s is not found\n", objName, k)
+						tlog.Logfln("Slice/MD of object %s: %s is not found", objName, k)
 						errStr = "Some objects were not recovered"
 					}
 				}

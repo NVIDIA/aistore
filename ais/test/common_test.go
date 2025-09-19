@@ -110,7 +110,7 @@ func (m *ioContext) saveCluState(proxyURL string) {
 	m.smap = tools.GetClusterMap(m.t, proxyURL)
 	m.originalTargetCount = m.smap.CountActiveTs()
 	m.originalProxyCount = m.smap.CountActivePs()
-	tlog.Logf("targets: %d, proxies: %d\n", m.originalTargetCount, m.originalProxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", m.originalTargetCount, m.originalProxyCount)
 }
 
 func (m *ioContext) waitAndCheckCluState() {
@@ -208,7 +208,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
 	)
-	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck.String())
+	tlog.Logfln("Checking if each target has a required number of object in bucket %s...", m.bck.String())
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Props: apc.GetPropsLocation}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -257,7 +257,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 
 	if !m.silent {
 		s := m.sizesToString()
-		tlog.Logf("PUT %d objects%s => %s\n", m.num, s, m.bck.Cname(m.prefix))
+		tlog.Logfln("PUT %d objects%s => %s", m.num, s, m.bck.Cname(m.prefix))
 	}
 	putArgs := tools.PutObjectsArgs{
 		ProxyURL:     m.proxyURL,
@@ -392,7 +392,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	)
 	if !m.silent {
 		s := m.sizesToString()
-		tlog.Logf("remote PUT %d objects%s => %s\n", objCnt, s, m.bck.Cname(m.prefix))
+		tlog.Logfln("remote PUT %d objects%s => %s", objCnt, s, m.bck.Cname(m.prefix))
 	}
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(m.t, err)
@@ -422,7 +422,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	}
 	wg.Wait()
 	tassert.SelectErr(m.t, errCh, "put", true)
-	tlog.Logf("remote bucket %s: %d cached objects\n", m.bck.String(), m.num)
+	tlog.Logfln("remote bucket %s: %d cached objects", m.bck.String(), m.num)
 
 	if evict {
 		m.evict()
@@ -441,7 +441,7 @@ func (m *ioContext) evict() {
 		m.t.Fatalf("list_objects err: %d != %d", len(lst.Entries), m.num)
 	}
 
-	tlog.Logf("evicting remote bucket %s...\n", m.bck.String())
+	tlog.Logfln("evicting remote bucket %s...", m.bck.String())
 	err = api.EvictRemoteBucket(baseParams, m.bck, false)
 	tassert.CheckFatal(m.t, err)
 }
@@ -483,7 +483,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
-	tlog.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
+	tlog.Logfln("remote PREFETCH %d objects...", prefetchCnt)
 
 	wg := &sync.WaitGroup{}
 	for idx, obj := range lst.Entries {
@@ -525,10 +525,10 @@ func (m *ioContext) del(opts ...int) {
 	if isContextDeadline(err) {
 		if m.bck.IsRemote() {
 			time.Sleep(time.Second)
-			tlog.Logf("Warning: 2nd attempt to query buckets %q\n", cmn.QueryBcks(m.bck))
+			tlog.Logfln("Warning: 2nd attempt to query buckets %q", cmn.QueryBcks(m.bck))
 			exists, err = api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltExists)
 			if isContextDeadline(err) {
-				tlog.Logf("Error: failing to query buckets %q: %v - proceeding anyway...\n", cmn.QueryBcks(m.bck), err)
+				tlog.Logfln("Error: failing to query buckets %q: %v - proceeding anyway...", cmn.QueryBcks(m.bck), err)
 				exists, err = false, nil
 			}
 		}
@@ -576,7 +576,7 @@ func (m *ioContext) del(opts ...int) {
 	if l == 0 {
 		return
 	}
-	tlog.Logf("deleting %d object%s from %s\n", l, cos.Plural(l), m.bck.Cname(lsmsg.Prefix))
+	tlog.Logfln("deleting %d object%s from %s", l, cos.Plural(l), m.bck.Cname(lsmsg.Prefix))
 	var (
 		errCnt atomic.Int64
 		wg     = cos.NewLimitedWaitGroup(16, l)
@@ -632,7 +632,7 @@ func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt *
 	}
 	errCnt.Inc()
 	if m.bck.IsCloud() && errCnt.Load() < 5 {
-		tlog.Logf("Warning: failed to cleanup %s: %v\n", m.bck.Cname(""), err)
+		tlog.Logfln("Warning: failed to cleanup %s: %v", m.bck.Cname(""), err)
 	}
 	tassert.CheckError(m.t, err)
 }
@@ -658,9 +658,9 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 	}
 	if idx > 0 && idx%5000 == 0 && !m.silent {
 		if totalGets > 0 {
-			tlog.Logf(" %d/%d GET requests completed...\n", idx, totalGets)
+			tlog.Logfln(" %d/%d GET requests completed...", idx, totalGets)
 		} else {
-			tlog.Logf(" %d GET requests completed...\n", idx)
+			tlog.Logfln(" %d GET requests completed...", idx)
 		}
 	}
 
@@ -679,9 +679,9 @@ func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 	)
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
-			tlog.Logf("GET %d objects from %s\n", m.num, m.bck.String())
+			tlog.Logfln("GET %d objects from %s", m.num, m.bck.String())
 		} else {
-			tlog.Logf("GET %d objects %d times from %s\n", m.num, m.numGetsEachFile, m.bck.String())
+			tlog.Logfln("GET %d objects %d times from %s", m.num, m.numGetsEachFile, m.bck.String())
 		}
 	}
 	wg := cos.NewLimitedWaitGroup(20, 0)
@@ -750,7 +750,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 			copiesToNumObjects[int(entry.Copies)]++
 		}
 	}
-	tlog.Logf("objects (total, copies) = (%d, %v)\n", total, copiesToNumObjects)
+	tlog.Logfln("objects (total, copies) = (%d, %v)", total, copiesToNumObjects)
 	if total != m.num {
 		m.t.Errorf("list_objects: expecting %d objects, got %d", m.num, total)
 	}
@@ -846,7 +846,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 
 func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
 	target, _ := m.smap.GetRandTarget()
-	tlog.Logf("Put %s in maintenance\n", target.StringEx())
+	tlog.Logfln("Put %s in maintenance", target.StringEx())
 	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
 	_, err := api.StartMaintenance(tools.BaseAPIParams(m.proxyURL), args)
 	tassert.CheckFatal(m.t, err)
@@ -862,7 +862,7 @@ func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
 }
 
 func (m *ioContext) stopMaintenance(target *meta.Snode) string {
-	tlog.Logf("Take %s out of maintenance mode...\n", target.StringEx())
+	tlog.Logfln("Take %s out of maintenance mode...", target.StringEx())
 	bp := tools.BaseAPIParams(m.proxyURL)
 	rebID, err := api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: target.ID()})
 	tassert.CheckFatal(m.t, err)

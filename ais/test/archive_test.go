@@ -146,7 +146,7 @@ func TestGetFromArch(t *testing.T) {
 					)
 					if test.autodetect && corruptAutoDetectOnce.Inc() == 1 {
 						corrupted = true
-						tlog.Logf("============== damaging %s - overwriting w/ random data\n", archName)
+						tlog.Logfln("============== damaging %s - overwriting w/ random data", archName)
 						reader, err = readers.NewRandFile(filepath.Dir(archName),
 							filepath.Base(archName), 1024, cos.ChecksumNone)
 					} else {
@@ -170,7 +170,7 @@ func TestGetFromArch(t *testing.T) {
 						}
 						oah, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
 						if sparsePrint.Inc()%13 == 0 {
-							tlog.Logf("%s?%s=%s(%dB)\n", m.bck.Cname(objname), apc.QparamArchpath,
+							tlog.Logfln("%s?%s=%s(%dB)", m.bck.Cname(objname), apc.QparamArchpath,
 								randomName, oah.Size())
 						}
 						if corrupted {
@@ -178,7 +178,7 @@ func TestGetFromArch(t *testing.T) {
 							break
 						}
 						if err != nil {
-							tlog.Logf("Error reading %s?%s=%s(%dB), where randomName=%q, objname=%q, mime=%q, archName=%q\n",
+							tlog.Logfln("Error reading %s?%s=%s(%dB), where randomName=%q, objname=%q, mime=%q, archName=%q",
 								m.bck.Cname(objname), apc.QparamArchpath, randomName, oah.Size(),
 								randomName, objname, mime, archName)
 							tassert.CheckFatal(t, err)
@@ -324,7 +324,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
-						tlog.Logf("[%s] %2d: arch list %d objects %s => %s\n", xids, i, len(list), m.bck.String(), bckTo.String())
+						tlog.Logfln("[%s] %2d: arch list %d objects %s => %s", xids, i, len(list), m.bck.String(), bckTo.String())
 					}(archName, list, i)
 				}
 			} else {
@@ -341,7 +341,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
-						tlog.Logf("[%s] %2d: arch range %s %s => %s\n",
+						tlog.Logfln("[%s] %2d: arch range %s %s => %s",
 							xids, i, msg.ListRange.Template, m.bck.String(), bckTo.String())
 					}(archName, start, i)
 				}
@@ -358,17 +358,17 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			for ii := range 2 {
 				api.WaitForXactionIdle(baseParams, &flt)
 
-				tlog.Logf("List %s\n", bckTo.String())
+				tlog.Logfln("List %s", bckTo.String())
 				msg := &apc.LsoMsg{Prefix: "test_"}
 				msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 				lst, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				for _, en := range lst.Entries {
-					tlog.Logf("%s: %dB\n", en.Name, en.Size)
+					tlog.Logfln("%s: %dB", en.Name, en.Size)
 				}
 				num := len(lst.Entries)
 				if num < numArchs && ii == 0 {
-					tlog.Logf("Warning: expected %d, have %d - retrying...\n", numArchs, num)
+					tlog.Logfln("Warning: expected %d, have %d - retrying...", numArchs, num)
 					time.Sleep(7 * time.Second) // TODO: ditto
 					continue
 				}
@@ -403,7 +403,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
-						tlog.Logf("[%s] APPEND %s/%s => %s/%s\n",
+						tlog.Logfln("[%s] APPEND %s/%s => %s/%s",
 							xids, m.bck.String(), msg.ListRange.Template, bckTo.String(), archName)
 					}(e.Name, start)
 				}
@@ -556,7 +556,7 @@ func TestAppendToArch(t *testing.T) {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				if test.multi {
 					if i%sparcePrint == 0 {
-						tlog.Logf("APPEND multi-obj %s => %s/%s\n", bckFrom.String(), bckTo.String(), archName)
+						tlog.Logfln("APPEND multi-obj %s => %s/%s", bckFrom.String(), bckTo.String(), archName)
 					}
 					list := make([]string, 0, numAdd)
 					for range numAdd {
@@ -589,7 +589,7 @@ func TestAppendToArch(t *testing.T) {
 							Flags:    apc.ArchAppend, // existence required
 						}
 						if i%sparcePrint == 0 && j == 0 {
-							tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo.String(), archName, archpath)
+							tlog.Logfln("APPEND local rand => %s/%s/%s", bckTo.String(), archName, archpath)
 						}
 						err = api.PutApndArch(&appendArchArgs)
 						tassert.CheckError(t, err)
@@ -609,7 +609,7 @@ func TestAppendToArch(t *testing.T) {
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)
 
 			if num < expectedNum && test.multi && expectedNum-num < 10 {
-				tlog.Logf("Warning: expected %d, have %d\n", expectedNum, num) // TODO -- FIXME: remove
+				tlog.Logfln("Warning: expected %d, have %d", expectedNum, num) // TODO -- FIXME: remove
 			} else {
 				tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
 			}

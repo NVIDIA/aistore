@@ -208,7 +208,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Restart and check that config persisted
-	tlog.Logf("Killing %s\n", proxy.StringEx())
+	tlog.Logfln("Killing %s", proxy.StringEx())
 	cmd, err := tools.KillNode(baseParams, proxy)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
@@ -242,7 +242,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Killing %s\n", proxy.StringEx())
+	tlog.Logfln("Killing %s", proxy.StringEx())
 	cmd, err := tools.KillNode(baseParams, proxy)
 	tassert.CheckFatal(t, err)
 
@@ -263,7 +263,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 
 	// 2. After proxy is killed, update cluster configuration
 	newECEnabled := !config.EC.Enabled
-	tlog.Logf("Globally changing ec.enabled to %t (%s)\n", newECEnabled, smap.StringEx())
+	tlog.Logfln("Globally changing ec.enabled to %t (%s)", newECEnabled, smap.StringEx())
 	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled": strconv.FormatBool(newECEnabled),
 	})

@@ -103,13 +103,13 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 		oldPrimaryID  = smap.Primary.ID()
 	)
 
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), proxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), proxyCount)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 	newPrimary := smap.GetProxy(newPrimaryID)
 
-	tlog.Logf("New primary: %s --> %s\n", newPrimaryID, newPrimaryURL)
-	tlog.Logf("Killing primary: %s --> %s\n", oldPrimaryURL, oldPrimaryID)
+	tlog.Logfln("New primary: %s --> %s", newPrimaryID, newPrimaryURL)
+	tlog.Logfln("Killing primary: %s --> %s", oldPrimaryURL, oldPrimaryID)
 
 	// cmd and args are the original command line of how the proxy is started
 	cmd, err := tools.KillNode(baseParams, smap.Primary)
@@ -118,7 +118,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	smap, err = tools.WaitForClusterState(newPrimaryURL, "new primary elected", smap.Version,
 		smap.CountActivePs()-1, smap.CountActiveTs())
 	tassert.CheckFatal(t, err)
-	tlog.Logf("New primary elected: %s\n", newPrimaryID)
+	tlog.Logfln("New primary elected: %s", newPrimaryID)
 
 	tassert.Errorf(t, smap.Primary.ID() == newPrimaryID, "Wrong primary proxy: %s, expecting: %s", smap.Primary.ID(), newPrimaryID)
 
@@ -177,7 +177,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 
 killRestore:
 	cfg := tools.GetDaemonConfig(t, node)
-	tlog.Logf("Killing %s\n", node.StringEx())
+	tlog.Logfln("Killing %s", node.StringEx())
 	cmd, err := tools.KillNode(baseParams, node)
 	tassert.CheckFatal(t, err)
 
@@ -233,13 +233,13 @@ func primaryAndTargetCrash(t *testing.T) {
 
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
 	oldPrimaryURL := smap.Primary.URL(cmn.NetPublic)
-	tlog.Logf("Killing proxy %s - %s\n", oldPrimaryURL, smap.Primary.ID())
+	tlog.Logfln("Killing proxy %s - %s", oldPrimaryURL, smap.Primary.ID())
 	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
@@ -256,7 +256,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	targetURL = targetNode.URL(cmn.NetPublic)
 	targetID = targetNode.ID()
 
-	tlog.Logf("Killing target: %s - %s\n", targetURL, targetID)
+	tlog.Logfln("Killing target: %s - %s", targetURL, targetID)
 	tcmd, err := tools.KillNode(baseParams, targetNode)
 	tassert.CheckFatal(t, err)
 
@@ -287,15 +287,15 @@ func proxyCrash(t *testing.T) {
 	smap := tools.GetClusterMap(t, proxyURL)
 	origProxyCount := smap.CountActivePs()
 	origTargetCount := smap.CountActiveTs()
-	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", origTargetCount, origProxyCount)
 
 	primaryURL := smap.Primary.URL(cmn.NetPublic)
-	tlog.Logf("Primary: %s\n", smap.Primary.StringEx())
+	tlog.Logfln("Primary: %s", smap.Primary.StringEx())
 
 	secondNode, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Killing non-primary %s\n", secondNode.StringEx())
+	tlog.Logfln("Killing non-primary %s", secondNode.StringEx())
 	secondCmd, err := tools.KillNode(baseParams, secondNode)
 	tassert.CheckFatal(t, err)
 
@@ -420,12 +420,12 @@ func primaryAndProxyCrash(t *testing.T) {
 		secondNode                  *meta.Snode
 		secondID                    string
 	)
-	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", origTargetCount, origProxyCount)
 
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Killing primary: %s - %s\n", oldPrimaryURL, oldPrimaryID)
+	tlog.Logfln("Killing primary: %s - %s", oldPrimaryURL, oldPrimaryID)
 	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
@@ -443,7 +443,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	n := cos.NowRand().IntN(20)
 	time.Sleep(time.Duration(n+1) * time.Second)
 
-	tlog.Logf("Killing non-primary: %s\n", secondNode.StringEx())
+	tlog.Logfln("Killing non-primary: %s", secondNode.StringEx())
 	secondCmd, err := tools.KillNode(baseParams, secondNode)
 	tassert.CheckFatal(t, err)
 
@@ -487,11 +487,11 @@ func targetRejoin(t *testing.T) {
 		origProxyCount  = smap.CountActivePs()
 		origTargetCount = smap.CountActiveTs()
 	)
-	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", origTargetCount, origProxyCount)
 
 	node, err := smap.GetRandTarget()
 	if err != nil {
-		tlog.Logf("Warning: %v\n", err)
+		tlog.Logfln("Warning: %v", err)
 		tlog.Logln("Waiting for a while and retrying...")
 		// retry once
 		time.Sleep(25 * time.Second)
@@ -534,13 +534,13 @@ func crashAndFastRestore(t *testing.T) {
 		origTargetCount = smap.CountActiveTs()
 	)
 
-	tlog.Logf("targets: %d, proxies: %d\n", origTargetCount, origProxyCount)
+	tlog.Logfln("targets: %d, proxies: %d", origTargetCount, origProxyCount)
 
 	// Make sure proxyURL is not primary URL.
 	_, randProxyURL, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 	oldPrimaryID := smap.Primary.ID()
-	tlog.Logf("The current primary %s, Smap version %d\n", oldPrimaryID, smap.Version)
+	tlog.Logfln("The current primary %s, Smap version %d", oldPrimaryID, smap.Version)
 
 	cmd, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
@@ -550,7 +550,7 @@ func crashAndFastRestore(t *testing.T) {
 	err = tools.RestoreNode(cmd, true, "proxy (primary)")
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("The %s is currently restarting\n", oldPrimaryID)
+	tlog.Logfln("The %s is currently restarting", oldPrimaryID)
 
 	// NOTE:
 	// using (version - 1) because the primary will restart with its old version,
@@ -580,7 +580,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 			errCh:          errCh,
 		}
 	)
-	tlog.Logf("targets: %d, proxies: %d\n", oldTargetCnt, oldProxyCnt)
+	tlog.Logfln("targets: %d, proxies: %d", oldTargetCnt, oldProxyCnt)
 
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
@@ -645,7 +645,7 @@ func majorityTargetMapVersionMismatch(t *testing.T) {
 // wait for the new leader to come online
 func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
 	smap := tools.GetClusterMap(t, proxyURL)
-	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
 
 	smap.Version++
 	jsonMap, err := jsoniter.Marshal(smap)
@@ -677,7 +677,7 @@ func concurrentPutGetDel(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		randProxyURL := tools.RandomProxyURL(t)
 		smap := tools.GetClusterMap(t, randProxyURL)
-		tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
+		tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
 
 		var (
 			wg        = &sync.WaitGroup{}
@@ -870,7 +870,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 		}
 		if si.HasURL(config.Proxy.DiscoveryURL) {
 			pcnt++
-			tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
+			tlog.Logfln("Kill #%d: %s", pcnt+tcnt, si.StringEx())
 			cmd, err := tools.KillNode(baseParams, si)
 			tassert.CheckFatal(t, err)
 			restoreCmd = append(restoreCmd, cmd)
@@ -884,7 +884,7 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 
 		// Kill a random non primary proxy
 		pcnt++
-		tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, si.StringEx())
+		tlog.Logfln("Kill #%d: %s", pcnt+tcnt, si.StringEx())
 		cmd, err := tools.KillNode(baseParams, si)
 		tassert.CheckFatal(t, err)
 		restoreCmd = append(restoreCmd, cmd)
@@ -895,14 +895,14 @@ func discoveryAndOrigPrimaryProxiesCrash(t *testing.T) {
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	tcnt++
-	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, target.StringEx())
+	tlog.Logfln("Kill #%d: %s", pcnt+tcnt, target.StringEx())
 	cmd, err := tools.KillNode(baseParams, target)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
 
 	// Kill original primary
 	pcnt++
-	tlog.Logf("Kill #%d: %s\n", pcnt+tcnt, smap.Primary.StringEx())
+	tlog.Logfln("Kill #%d: %s", pcnt+tcnt, smap.Primary.StringEx())
 	cmd, err = tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 	restoreCmd = append(restoreCmd, cmd)
@@ -1003,7 +1003,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toI
 	}
 
 	baseParams := tools.BaseAPIParams(directURL)
-	tlog.Logf("Setting primary from %s to %s\n", smap.Primary.ID(), toID)
+	tlog.Logfln("Setting primary from %s to %s", smap.Primary.ID(), toID)
 	err := api.SetPrimary(baseParams, toID, "" /*toURL*/, false /*force*/)
 	tassert.CheckFatal(t, err)
 
@@ -1071,7 +1071,7 @@ func networkFailureTarget(t *testing.T) {
 	target, _ := smap.GetRandTarget()
 	targetID := target.ID()
 
-	tlog.Logf("Disconnecting target: %s\n", targetID)
+	tlog.Logfln("Disconnecting target: %s", targetID)
 	oldNetworks, err := docker.Disconnect(targetID)
 	tassert.CheckFatal(t, err)
 
@@ -1084,7 +1084,7 @@ func networkFailureTarget(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Connecting target %s to networks again\n", targetID)
+	tlog.Logfln("Connecting target %s to networks again", targetID)
 	err = docker.Connect(targetID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
@@ -1108,7 +1108,7 @@ func networkFailureProxy(t *testing.T) {
 	proxyID, _, err := chooseNextProxy(smap)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Disconnecting proxy: %s\n", proxyID)
+	tlog.Logfln("Disconnecting proxy: %s", proxyID)
 	oldNetworks, err := docker.Disconnect(proxyID)
 	tassert.CheckFatal(t, err)
 
@@ -1121,7 +1121,7 @@ func networkFailureProxy(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Connecting proxy %s to networks again\n", proxyID)
+	tlog.Logfln("Connecting proxy %s to networks again", proxyID)
 	err = docker.Connect(proxyID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
@@ -1153,7 +1153,7 @@ func networkFailurePrimary(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Disconnect primary
-	tlog.Logf("Disconnecting primary %s from all networks\n", oldPrimaryID)
+	tlog.Logfln("Disconnecting primary %s from all networks", oldPrimaryID)
 	oldNetworks, err := docker.Disconnect(oldPrimaryID)
 	tassert.CheckFatal(t, err)
 
@@ -1173,7 +1173,7 @@ func networkFailurePrimary(t *testing.T) {
 	}
 
 	// Connect again
-	tlog.Logf("Connecting primary %s to networks again\n", oldPrimaryID)
+	tlog.Logfln("Connecting primary %s to networks again", oldPrimaryID)
 	err = docker.Connect(oldPrimaryID, oldNetworks)
 	tassert.CheckFatal(t, err)
 
@@ -1192,7 +1192,7 @@ func networkFailurePrimary(t *testing.T) {
 	// the original primary still thinks that it is the primary, so its smap
 	// should not change after the network is back
 	if oldSmap.Primary.ID() != oldPrimaryID {
-		tlog.Logf("Old primary changed its smap. Its current primary: %s (expected %s - self)\n",
+		tlog.Logfln("Old primary changed its smap. Its current primary: %s (expected %s - self)",
 			oldSmap.Primary.ID(), oldPrimaryID)
 	}
 
@@ -1250,12 +1250,12 @@ func primaryAndNextCrash(t *testing.T) {
 
 	// kill the current primary
 	oldPrimaryURL, oldPrimaryID := smap.Primary.URL(cmn.NetPublic), smap.Primary.ID()
-	tlog.Logf("Killing primary proxy: %s - %s\n", oldPrimaryURL, oldPrimaryID)
+	tlog.Logfln("Killing primary proxy: %s - %s", oldPrimaryURL, oldPrimaryID)
 	cmdFirst, err := tools.KillNode(baseParams, smap.Primary)
 	tassert.CheckFatal(t, err)
 
 	// kill the next primary
-	tlog.Logf("Killing next to primary proxy: %s - %s\n", firstPrimaryID, firstPrimaryURL)
+	tlog.Logfln("Killing next to primary proxy: %s - %s", firstPrimaryID, firstPrimaryURL)
 	cmdSecond, errSecond := tools.KillNode(baseParams, firstPrimary)
 	// if kill fails it does not make sense to wait for the cluster is stable
 	if errSecond == nil {
@@ -1266,7 +1266,7 @@ func primaryAndNextCrash(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tlog.Logf("Checking current primary, %s\n", smap.StringEx())
+	tlog.Logfln("Checking current primary, %s", smap.StringEx())
 	if smap.Primary.ID() != finalPrimaryID {
 		t.Errorf("Expected primary %s but real primary is %s", finalPrimaryID, smap.Primary.ID())
 	}
@@ -1663,14 +1663,14 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 		t.Errorf("failed to start http server for mock target: %v", err)
 		return
 	}
-	tlog.Logf("t[%s] is up\n", tools.MockDaemonID)
+	tlog.Logfln("t[%s] is up", tools.MockDaemonID)
 
 	<-stopch
 
-	tlog.Logf("started unsafe removal of t[%s]\n", tools.MockDaemonID)
+	tlog.Logfln("started unsafe removal of t[%s]", tools.MockDaemonID)
 	err = tools.RemoveNodeUnsafe(proxyURL, tools.MockDaemonID)
 	if err != nil {
-		tlog.Logf("Error: failed to unsafely remove t[%s]: %v\n", tools.MockDaemonID, err)
+		tlog.Logfln("Error: failed to unsafely remove t[%s]: %v", tools.MockDaemonID, err)
 	}
 	s.Shutdown(t.Context())
 }

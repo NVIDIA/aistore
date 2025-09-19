@@ -30,8 +30,7 @@ func Logf(f string, a ...any) {
 
 func Logfln(f string, a ...any) {
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, prependTime(f), a...)
-		fmt.Fprintln(os.Stdout)
+		fmt.Fprintf(os.Stdout, prependTime(f)+"\n", a...)
 	}
 }
 

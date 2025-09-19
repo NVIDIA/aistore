@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -64,10 +64,10 @@ func TestXactionAllStatus(t *testing.T) {
 			var aborted nl.StatusVec
 			for _, ns := range vec {
 				if ns.AbortedX {
-					tlog.Logf("%q is aborted but hasn't finished yet\n", ns.String())
+					tlog.Logfln("%q is aborted but hasn't finished yet", ns.String())
 					aborted = append(aborted, ns)
 				} else if ns.EndTimeX != 0 {
-					tlog.Logf("Warning: must've %q already finished (non-zero fin time=%v)\n",
+					tlog.Logfln("Warning: must've %q already finished (non-zero fin time=%v)",
 						ns.String(), time.Unix(0, ns.EndTimeX))
 
 					// un-race

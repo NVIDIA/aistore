@@ -178,7 +178,7 @@ func TestNamespace(t *testing.T) {
 
 			origBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltExists)
 			if len(origBuckets) > 0 {
-				tlog.Logf("orig buckets %+v\n", origBuckets)
+				tlog.Logfln("orig buckets %+v", origBuckets)
 			}
 			err := api.CreateBucket(baseParams, m1.bck, nil)
 			tassert.CheckFatal(t, err)
@@ -196,7 +196,7 @@ func TestNamespace(t *testing.T) {
 
 			// Test listing buckets
 			newBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltExists)
-			tlog.Logf("created %+v\n", newBuckets)
+			tlog.Logfln("created %+v", newBuckets)
 			tassert.Errorf(
 				t, len(newBuckets)-len(origBuckets) == 2,
 				"number of buckets (%d) should be %d", len(newBuckets), len(origBuckets)+2,
@@ -208,7 +208,7 @@ func TestNamespace(t *testing.T) {
 			// Now remote bucket(s) must be present
 			locBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltPresent)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("present in BMD %+v\n", locBuckets)
+			tlog.Logfln("present in BMD %+v", locBuckets)
 			tassert.Errorf(
 				t, len(locBuckets) == len(newBuckets), "number of buckets (%d: %v) should be (%d: %v)\n",
 				len(locBuckets), locBuckets, len(newBuckets), newBuckets,

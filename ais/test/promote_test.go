@@ -97,7 +97,7 @@ for i in {1..5}; do echo $b --- $b; done > %s/%s/$f.test.test;
 done`
 
 func (test *prmTests) generate(t *testing.T, from, to int, tempdir, subdir string) {
-	tlog.Logf("Generating %d (%d + %d) files...\n", test.num*2, test.num, test.num)
+	tlog.Logfln("Generating %d (%d + %d) files...", test.num*2, test.num, test.num)
 	cmd := fmt.Sprintf(genfiles, from, to, tempdir, tempdir, subdir)
 	_, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	tassert.CheckFatal(t, err)
@@ -154,7 +154,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	var target *meta.Snode
 	if test.singleTarget {
 		target, _ = m.smap.GetRandTarget()
-		tlog.Logf("Promoting via %s\n", target.StringEx())
+		tlog.Logfln("Promoting via %s", target.StringEx())
 		args.DaemonID = target.ID()
 	}
 
@@ -229,7 +229,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 			idx = l - numDel
 		}
 	}
-	tlog.Logf("Deleting %d random objects\n", numDel)
+	tlog.Logfln("Deleting %d random objects", numDel)
 	for i := range numDel {
 		name := list.Entries[idx+i].Name
 		err := api.DeleteObject(baseParams, m.bck, name)
@@ -280,19 +280,19 @@ func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode
 	// wait "cases" 1. through 3.
 	switch {
 	case xid != "" && !test.singleTarget: // 1. cluster-wide xaction
-		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck.String())
+		tlog.Logfln("Waiting for global %s(%s=>%s)", xname, tempdir, m.bck.String())
 		notifStatus, err := api.WaitForXactionIC(baseParams, &xargs)
 		tassert.CheckFatal(t, err)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
-			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
+			tlog.Logfln("Warning: notif-status: %+v", notifStatus)
 		}
 	case xid != "" && test.singleTarget: // 2. single-target xaction
 		xargs.DaemonID = target.ID()
-		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck.String(), target.StringEx())
+		tlog.Logfln("Waiting for %s(%s=>%s) at %s", xname, tempdir, m.bck.String(), target.StringEx())
 		err := api.WaitForXactionNode(baseParams, &xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
 	default: // 3. synchronous execution
-		tlog.Logf("Promoting without xaction (%s=>%s)\n", tempdir, m.bck.String())
+		tlog.Logfln("Promoting without xaction (%s=>%s)", tempdir, m.bck.String())
 	}
 
 	// collect stats
@@ -300,13 +300,13 @@ func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode
 	tassert.CheckFatal(t, err)
 	if xid != "" {
 		locObjs, outObjs, inObjs = xs.ObjCounts(xid)
-		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xid, locObjs, outObjs, inObjs)
+		tlog.Logfln("%s[%s]: (loc, out, in) = (%d, %d, %d)", xname, xid, locObjs, outObjs, inObjs)
 		return
 	}
 	uuids := xs.GetUUIDs()
 	for _, xid := range uuids {
 		locObjs, outObjs, inObjs = xs.ObjCounts(xid)
-		tlog.Logf("%s[%s]: (loc, out, in) = (%d, %d, %d)\n", xname, xid, locObjs, outObjs, inObjs)
+		tlog.Logfln("%s[%s]: (loc, out, in) = (%d, %d, %d)", xname, xid, locObjs, outObjs, inObjs)
 	}
 	return 0, 0, 0
 }

@@ -36,7 +36,7 @@ func TestETLBucketAbort(t *testing.T) {
 
 	_, xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
-	tlog.Logf("Aborting etl[%s]\n", xid)
+	tlog.Logfln("Aborting etl[%s]", xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}
 	err := api.AbortXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
@@ -201,7 +201,7 @@ func TestETLBigBucket(t *testing.T) {
 		}
 	)
 
-	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.ToSizeIEC(int64(m.fileSize), 2))
+	tlog.Logfln("Preparing source bucket (%d objects, %s each)", m.num, cos.ToSizeIEC(int64(m.fileSize), 2))
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	m.initAndSaveState(true /*cleanup*/)
 
@@ -223,7 +223,7 @@ func TestETLBigBucket(t *testing.T) {
 				tetl.WaitForETLAborted(t, baseParams)
 			})
 
-			tlog.Logf("Start offline ETL[%s]\n", etlName)
+			tlog.Logfln("Start offline ETL[%s]", etlName)
 			msg := &apc.TCBMsg{
 				Transform: apc.Transform{
 					Name:    etlName,
@@ -243,7 +243,7 @@ func TestETLBigBucket(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
+			tlog.Logfln("Transforming bucket %s took %v", bckFrom.Cname(""), total)
 
 			err = tetl.ListObjectsWithRetry(baseParams, bckTo, "" /*prefix*/, m.num, tools.WaitRetryOpts{MaxRetries: 5, Interval: time.Second * 3})
 			tassert.CheckFatal(t, err)
@@ -259,7 +259,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (name,
 	)
 	m.bck = bckFrom
 
-	tlog.Logf("Preparing source bucket %s\n", bckFrom.Cname(""))
+	tlog.Logfln("Preparing source bucket %s", bckFrom.Cname(""))
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	m.initAndSaveState(true /*cleanup*/)
 
@@ -270,7 +270,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (name,
 		tetl.StopAndDeleteETL(t, baseParams, initMsg.Name())
 	})
 
-	tlog.Logf("Start offline %s => %s\n", initMsg.Cname(), bckTo.Cname(""))
+	tlog.Logfln("Start offline %s => %s", initMsg.Cname(), bckTo.Cname(""))
 	msg := &apc.TCBMsg{Transform: apc.Transform{Name: initMsg.Name()}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
 	xid = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 	return initMsg.Name(), xid
