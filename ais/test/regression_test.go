@@ -143,10 +143,11 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 func TestListObjectsCloudGetLocation(t *testing.T) {
 	var (
 		m = ioContext{
-			t:        t,
-			bck:      cliBck,
-			num:      100,
-			fileSize: cos.KiB,
+			t:         t,
+			bck:       cliBck,
+			num:       100,
+			fileSize:  cos.KiB,
+			fixedSize: true,
 		}
 		targets    = make(map[string]struct{})
 		bck        = cliBck
@@ -835,7 +836,7 @@ func TestDeleteList(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				tools.Put(proxyURL, b, keyname, r, errCh)
+				tools.Put(proxyURL, b, keyname, r, fileSize /*size*/, 0 /*numChunks*/, errCh)
 			}()
 			files = append(files, keyname)
 		}
@@ -978,7 +979,7 @@ func TestDeleteRange(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				tools.Put(proxyURL, b, fmt.Sprintf("%s%04d", prefix, i), r, errCh)
+				tools.Put(proxyURL, b, fmt.Sprintf("%s%04d", prefix, i), r, fileSize, 0 /*numChunks*/, errCh)
 			}(i)
 		}
 		wg.Wait()

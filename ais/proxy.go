@@ -1781,10 +1781,6 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if err := p.checkAccess(w, r, bck, apc.AccessRW); err != nil {
 			return
 		}
-		if bck.IsCloud() {
-			p.writeErr(w, r, cmn.NewErrNotImpl("multipart upload for", bck.Provider+"(cloud) bucket"))
-			return
-		}
 		p.redirectAction(w, r, bck, apireq.items[1], msg)
 	case apc.ActCheckLock:
 		if err := p.checkAccess(w, r, bck, apc.AccessRO); err != nil {

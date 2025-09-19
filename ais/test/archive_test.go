@@ -154,7 +154,7 @@ func TestGetFromArch(t *testing.T) {
 					}
 					tassert.CheckFatal(t, err)
 
-					tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
+					tools.Put(m.proxyURL, m.bck, objname, reader, 0 /*size*/, 0 /*numChunks*/, errCh)
 					tassert.SelectErr(t, errCh, "put", true)
 
 					for _, randomName := range randomNames {

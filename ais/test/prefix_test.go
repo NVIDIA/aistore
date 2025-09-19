@@ -49,7 +49,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tools.Put(proxyURL, bck, keyName, r, errCh)
+			tools.Put(proxyURL, bck, keyName, r, fileSize, 0 /*numChunks*/, errCh)
 		}()
 		fileNames = append(fileNames, fileName)
 	}
@@ -65,7 +65,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tools.Put(proxyURL, bck, keyName, r, errCh)
+			tools.Put(proxyURL, bck, keyName, r, fileSize, 0 /*numChunks*/, errCh)
 		}()
 		fileNames = append(fileNames, fName)
 	}

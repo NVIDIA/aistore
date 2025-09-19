@@ -465,6 +465,12 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 	// call remote
 	remote := lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
 	if remote {
+		for i := range parts {
+			if parts[i].ETag == "" {
+				parts[i].ETag = manifest.GetChunk(parts[i].PartNumber, true).ETag
+			}
+		}
+
 		tag, ecode, err := ups._completeRemote(r, lom, uploadID, body, parts)
 		if err != nil {
 			return "", ecode, err

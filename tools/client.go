@@ -82,17 +82,17 @@ type PutObjectsArgs struct {
 // - performance-wise, syncPool is much faster than creating a new random object for each call
 var fileSizeRnd = cos.NowRand()
 
-func (args *PutObjectsArgs) GetSize() (size uint64) {
+func GetRandSize(objSizeRange [2]uint64, objSize uint64, fixedSize bool) (size uint64) {
 	switch {
-	case args.ObjSizeRange[0] > 0 && args.ObjSizeRange[1] > 0:
+	case objSizeRange[0] > 0 && objSizeRange[1] > 0:
 		// randomly sample a size within [args.ObjSizeRange[0], args.ObjSizeRange[1]]
-		size = args.ObjSizeRange[0] + fileSizeRnd.Uint64N(args.ObjSizeRange[1]-args.ObjSizeRange[0]+1)
-	case args.ObjSize == 0:
+		size = objSizeRange[0] + fileSizeRnd.Uint64N(objSizeRange[1]-objSizeRange[0]+1)
+	case objSize == 0:
 		size = (fileSizeRnd.Uint64N(cos.KiB) + 1) * cos.KiB
-	case !args.FixedSize:
-		size = args.ObjSize + fileSizeRnd.Uint64N(cos.KiB)
+	case !fixedSize:
+		size = objSize + fileSizeRnd.Uint64N(cos.KiB)
 	default:
-		size = args.ObjSize
+		size = objSize
 	}
 	return size
 }
@@ -120,16 +120,23 @@ func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
 }
 
 // Put sends a PUT request to the given URL
-func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, errCh chan error) {
-	bp := BaseAPIParams(proxyURL)
-	putArgs := api.PutArgs{
-		BaseParams: bp,
-		Bck:        bck,
-		ObjName:    objName,
-		Cksum:      reader.Cksum(),
-		Reader:     reader,
+func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, size uint64, numChunks int, errCh chan error) {
+	var err error
+	if numChunks > 0 {
+		err = PutMultipartObject(BaseAPIParams(proxyURL), bck, objName, size, &PutObjectsArgs{Reader: reader, MultipartNumChunks: numChunks})
+	} else {
+		bp := BaseAPIParams(proxyURL)
+		putArgs := api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    objName,
+			Cksum:      reader.Cksum(),
+			Reader:     reader,
+			Size:       size,
+		}
+		_, err = api.PutObject(&putArgs)
 	}
-	_, err := api.PutObject(&putArgs)
+
 	if err == nil {
 		return
 	}
@@ -141,12 +148,12 @@ func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, er
 }
 
 // PutObject sends a PUT request to the given URL.
-func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader) {
+func PutObject(t *testing.T, bck cmn.Bck, objName string, reader readers.Reader, size uint64) {
 	var (
 		proxyURL = RandomProxyURL()
 		errCh    = make(chan error, 1)
 	)
-	Put(proxyURL, bck, objName, reader, errCh)
+	Put(proxyURL, bck, objName, reader, size, 0 /*numChunks*/, errCh)
 	tassert.SelectErr(t, errCh, "put", true)
 }
 
@@ -504,7 +511,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 		group.Go(func(start, end int) func() error {
 			return func() error {
 				for _, objName := range objNames[start:end] {
-					size := args.GetSize()
+					size := GetRandSize(args.ObjSizeRange, args.ObjSize, args.FixedSize)
 
 					if args.CksumType == "" {
 						args.CksumType = cos.ChecksumNone

@@ -328,7 +328,7 @@ func (df *dsortFramework) createInputShards() {
 			tassert.CheckFatal(df.m.t, err)
 
 			objName := filepath.Base(tarName)
-			tools.Put(df.m.proxyURL, df.m.bck, objName, reader, errCh)
+			tools.Put(df.m.proxyURL, df.m.bck, objName, reader, 0 /*size*/, 0 /*numChunks*/, errCh)
 
 			mu.Lock()
 			df.inputShards = append(df.inputShards, objName)

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -128,11 +129,14 @@ func GenTestingDaemonID(suffix string) string {
 // chunk manifest ID
 //
 
+// TODO: validation does not work for backend provider generated upload IDs (may contain invalid ".." characters)
 func ValidateManifestID(id string) error {
-	const utag = "chunk-manifest ID"
 	const (
+		utag = "chunk-manifest ID"
 		lmin = 8
 		lmax = 128
+		inv1 = "../"
+		inv2 = "~/"
 	)
 	l := len(id)
 	if l < lmin {
@@ -141,14 +145,14 @@ func ValidateManifestID(id string) error {
 	if l > lmax {
 		return fmt.Errorf("%s %q is too long (expecting <= %d chars)", utag, id, lmax)
 	}
+	if strings.Contains(id, inv1) || strings.Contains(id, inv2) {
+		return fmt.Errorf("%s %q contains invalid substring %q or %q", utag, id, inv1, inv2)
+	}
 	for i := range l {
 		c := id[i]
 		if c < 32 || c > 126 || c == '/' || c == '\\' || c == ' ' {
 			return fmt.Errorf("%s %q contains invalid character at position %d (expecting printable ASCII with no space and no slashes)",
 				utag, id, i)
-		}
-		if c == '.' && i < l-1 && id[i+1] == '.' {
-			return fmt.Errorf("%s %q contains invalid \"..\" substring", utag, id)
 		}
 	}
 	return nil

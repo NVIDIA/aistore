@@ -122,7 +122,7 @@ func (tbc *testBucketConfig) setupBckFrom(t *testing.T, prefix string, objCnt in
 			defer wg.Done()
 			r, err := readers.NewRand(int64(fileSize), p.Cksum.Type)
 			tassert.CheckFatal(t, err)
-			tools.Put(proxyURL, bckFrom, objName, r, errCh)
+			tools.Put(proxyURL, bckFrom, objName, r, fileSize, 0 /*numChunks*/, errCh)
 		}(objName)
 	}
 	wg.Wait()
@@ -238,7 +238,7 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	tlog.Logln("PUT object")
 	reader, err := readers.NewExistingFile(inputFilePath, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	tools.PutObject(t, bck, objName, reader)
+	tools.PutObject(t, bck, objName, reader, 0 /*size*/)
 
 	fho, err := cos.CreateFile(outputFileName)
 	tassert.CheckFatal(t, err)

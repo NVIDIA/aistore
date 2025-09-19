@@ -293,46 +293,31 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 }
 
 // update updates the object with a new random reader and returns the reader and the size; reader is used to validate the object after the update
-func (m *ioContext) update(baseParams api.BaseParams, objName, cksumType string) (readers.Reader, uint64) {
+func (m *ioContext) update(objName, cksumType string) (readers.Reader, uint64) {
 	var (
-		putArgs = &tools.PutObjectsArgs{
-			ProxyURL:           m.proxyURL,
-			Bck:                m.bck,
-			ObjPath:            m.prefix,
-			ObjCnt:             m.num,
-			ObjNameLn:          m.nameLen,
-			MultipartNumChunks: m.chunksConf.numChunks,
-		}
-		size        = putArgs.GetSize()
-		reader, err = readers.NewRand(int64(size), cksumType)
+		size      = tools.GetRandSize(m.fileSizeRange, m.fileSize, m.fixedSize)
+		errCh     = make(chan error, 1)
+		numChunks int
 	)
-	tassert.CheckFatal(m.t, err)
-
-	if m.chunksConf != nil && m.chunksConf.multipart && m.chunksConf.numChunks != 0 {
-		putArgs.Reader = reader
-		err = tools.PutMultipartObject(baseParams, m.bck, objName, size, putArgs)
-	} else {
-		_, err = api.PutObject(&api.PutArgs{
-			BaseParams: baseParams,
-			Bck:        m.bck,
-			ObjName:    objName,
-			Size:       size,
-			Reader:     reader,
-			Cksum:      reader.Cksum(),
-		})
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		numChunks = m.chunksConf.numChunks
 	}
+	r, err := readers.NewRand(int64(size), cksumType)
 	tassert.CheckFatal(m.t, err)
-	return reader, size
+	tools.Put(m.proxyURL, m.bck, objName, r, size, numChunks, errCh)
+	tassert.SelectErr(m.t, errCh, "put", true)
+
+	return r, size
 }
 
 func (m *ioContext) updateAndValidate(baseParams api.BaseParams, idx int, cksumType string) {
 	if idx < 0 || idx >= len(m.objNames) {
-		m.t.Fatalf("index out of range: %d", idx)
+		m.t.Fatalf("index out of range: %d, len(objNames): %d", idx, len(m.objNames))
 	}
 
-	r, size := m.update(baseParams, m.objNames[idx], cksumType)
+	r, size := m.update(m.objNames[idx], cksumType)
 
-	// GET and validate the object with the pattern
+	// GET and validate the object
 	w := bytes.NewBuffer(nil)
 	result, s, err := api.GetObjectReader(baseParams, m.bck, m.objNames[idx], &api.GetArgs{Writer: w})
 	tassert.CheckFatal(m.t, err)
@@ -357,6 +342,15 @@ func (m *ioContext) remotePuts(evict bool, overrides ...bool) {
 		// Cleanup the remote bucket.
 		m.del()
 		m.objNames = m.objNames[:0]
+	}
+
+	if m.chunksConf != nil && m.chunksConf.multipart {
+		// increase the object size to avoid aws[EntityTooSmall] errors, since each part in a multipart upload to AWS must be at least 5MB.
+		if m.bck.Provider == apc.AWS || (m.bck.Backend() != nil && m.bck.Backend().Provider == apc.AWS) {
+			minTotalSize := 5 * cos.MiB * uint64(m.chunksConf.numChunks)
+			m.fileSizeRange = [2]uint64{minTotalSize, minTotalSize * 2}
+			tlog.Logfln("AWS bucket detected, increase file size range to %s - %s to avoid aws[EntityTooSmall] errors", cos.ToSizeIEC(int64(m.fileSizeRange[0]), 0), cos.ToSizeIEC(int64(m.fileSizeRange[1]), 0))
+		}
 	}
 
 	m._remoteFill(m.num, evict, override)
@@ -399,10 +393,11 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	tassert.CheckFatal(m.t, err)
 
 	for i := range objCnt {
-		r, err := readers.NewRand(int64(m.fileSize), p.Cksum.Type)
-		tassert.CheckFatal(m.t, err)
-
-		var objName string
+		var (
+			objName   string
+			numChunks int
+			size      = tools.GetRandSize(m.fileSizeRange, m.fileSize, m.fixedSize)
+		)
 		switch {
 		case override:
 			objName = m.objNames[i]
@@ -412,11 +407,19 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 			objName = fmt.Sprintf("%s%s-%d", m.prefix, trand.String(8), i)
 		}
 
+		if m.chunksConf != nil && m.chunksConf.multipart {
+			numChunks = m.chunksConf.numChunks
+		}
+
 		wg.Add(1)
-		go func() {
+		go func(size uint64, objName string, cksumType string) {
 			defer wg.Done()
-			tools.Put(m.proxyURL, m.bck, objName, r, errCh)
-		}()
+
+			r, err := readers.NewRand(int64(size), cksumType)
+			tassert.CheckFatal(m.t, err)
+			tools.Put(m.proxyURL, m.bck, objName, r, size, numChunks, errCh)
+		}(size, objName, p.Cksum.Type)
+
 		if !override {
 			m.objNames = append(m.objNames, objName)
 		}

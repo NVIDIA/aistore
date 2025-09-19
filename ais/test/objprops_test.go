@@ -317,16 +317,6 @@ func TestObjPropsVersion(t *testing.T) {
 }
 
 func TestObjChunkedOverride(t *testing.T) {
-	var (
-		proxyURL = tools.RandomProxyURL()
-		// baseParams = tools.BaseAPIParams(proxyURL)
-		bck = cmn.Bck{
-			Name:     trand.String(15),
-			Provider: apc.AIS,
-		}
-	)
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-
 	// Test all 4 permutations of chunked vs monolithic uploads and overrides
 	testCases := []struct {
 		name              string
@@ -341,7 +331,9 @@ func TestObjChunkedOverride(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			testChunkedOverride(t, baseParams, bck, tc.firstUploadChunks, tc.overrideChunks)
+			runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
+				testChunkedOverride(t, baseParams, bck.Clone(), tc.firstUploadChunks, tc.overrideChunks)
+			})
 		})
 	}
 }
@@ -351,6 +343,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	const (
 		objPrefix = "test-chunked-override"
 		numObjs   = 100
+		numChunks = 4
 	)
 
 	// Create ioContext for first upload
@@ -360,6 +353,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 		num:           numObjs,
 		prefix:        objPrefix + trand.String(10),
 		fileSizeRange: [2]uint64{32 * cos.KiB, 8 * cos.MiB},
+		getErrIsFatal: true,
 	}
 
 	if testing.Short() {
@@ -370,7 +364,7 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	// Set chunking configuration for first upload
 	if firstChunked {
 		m.chunksConf = &ioCtxChunksConf{
-			numChunks: 4, // Split into 4 chunks
+			numChunks: numChunks,
 			multipart: true,
 		}
 	} else {
@@ -379,11 +373,14 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 
 	m.init(true /*cleanup*/)
 	initMountpaths(t, proxyURL)
+	tlog.Logfln("First upload...")
 	m.puts()
+
+	m.gets(nil, true)
 
 	if overrideChunked {
 		m.chunksConf = &ioCtxChunksConf{
-			numChunks: 4, // Split into 4 chunks
+			numChunks: numChunks,
 			multipart: true,
 		}
 	} else {
@@ -393,13 +390,16 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
+	tlog.Logfln("Override upload...")
 	for i := range len(m.objNames) {
 		m.updateAndValidate(baseParams, i, p.Cksum.Type)
 
 		// verify that the object's version is incremented after being overridden
 		op, err := api.HeadObject(baseParams, bck, m.objNames[i], api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.CheckFatal(t, err)
-		tassert.Fatalf(t, op.Version() == "2", "Expected version 2 for %s, got %s", m.objNames[i], op.Version())
+
+		// TODO: revisit versioning for remote buckets with multipart uploads
+		tassert.Fatalf(t, bck.IsRemote() || op.Version() == "2", "Expected version 2 for %s, got %s", m.objNames[i], op.Version())
 
 		// after update, we should have exactly `numChunks-1` number of chunks on disk; previous chunks associated with this object should be cleaned up
 		if overrideChunked {

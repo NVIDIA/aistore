@@ -135,7 +135,7 @@ func TestETLPipelineNotFound(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	r, err := readers.NewRand(int64(fileSize), cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
-	tools.PutObject(t, bck, objName, r)
+	tools.PutObject(t, bck, objName, r, fileSize)
 	etlPipeline := &api.ETL{ETLName: etlNames[0]}
 	for _, name := range etlNames[1:] {
 		etlPipeline = etlPipeline.Chain(&api.ETL{ETLName: name})
@@ -163,7 +163,7 @@ func TestETLPipelineChain(t *testing.T) {
 
 	originalData := []byte("Test data for ETL pipeline transformation")
 	r := readers.NewBytes(originalData)
-	tools.PutObject(t, bck, objName, r)
+	tools.PutObject(t, bck, objName, r, uint64(len(originalData)))
 
 	// Test 3-stage pipeline (MD5 -> Echo -> MD5)
 	etlA := &api.ETL{ETLName: etlNames[0]}

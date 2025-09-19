@@ -491,6 +491,7 @@ test:short:aws:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "aws://ais-cicd"
+  timeout: 1h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual
