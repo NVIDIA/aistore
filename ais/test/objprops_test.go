@@ -408,6 +408,9 @@ func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, f
 		}
 	}
 
+	m.gets(nil, true)
+	m.ensureNoGetErrors()
+
 	tlog.Logfln("Successfully completed test: first_chunked=%t, override_chunked=%t", firstChunked, overrideChunked)
 }
 

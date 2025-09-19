@@ -1028,19 +1028,22 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 	})
 
 	// Load LOM to determine if it was previously chunked; if so, remove old completed chunks before proceeding
-	err := lom.Load(false /*cache it*/, true /*locked*/)
-	if err == nil && lom.IsChunked() {
-		u, err := NewUfest("", lom, true /*must-exist*/)
+	// NOTE: at this point, `lom` already holds updated ufest metadata and checksum that need to be persisted
+	// Loading `lom` from disk would overwrite these. Need to clone and load it as another LOM variable instead
+	prevLom := lom.Clone()
+	if prevLom.Load(false /*cache it*/, true /*locked*/) == nil && prevLom.IsChunked() {
+		u, err := NewUfest("", prevLom, true /*must-exist*/)
 		debug.AssertNoErr(err)
 		if err := u.removeCompleted(true /*except first*/); err != nil {
-			nlog.Errorln("failed to remove previous", tagCompleted, u._utag(lom.Cname()), "err:", err)
+			nlog.Errorln("failed to remove previous", tagCompleted, u._utag(prevLom.Cname()), "err:", err)
 		}
 	}
 
 	// ais versioning
 	if lom.Bck().IsAIS() && lom.VersionConf().Enabled {
 		if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
-			if err = lom.IncVersion(); err != nil {
+			lom.CopyVersion(prevLom)
+			if err := lom.IncVersion(); err != nil {
 				nlog.Errorln(err)
 			}
 		}
