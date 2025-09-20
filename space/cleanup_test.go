@@ -6,6 +6,7 @@ package space_test
 
 import (
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,9 +50,11 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		mpaths []string
 		bck    cmn.Bck
 		ini    *space.IniCln
+		now    time.Time
 	)
 
 	BeforeEach(func() {
+		now = time.Now()
 		// mountpaths
 		mpaths = make([]string, 0, numMpaths)
 		for range numMpaths {
@@ -121,7 +124,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 			// Create misplaced object
 			wrongFQN := wrongMpath.MakePathFQN(&bck, fs.ObjCT, objectName)
-			oldTime := time.Now().Add(-3 * time.Hour)
+			oldTime := now.Add(-3 * time.Hour)
 			createTestLOM(wrongFQN, 1024, oldTime)
 
 			// Backdate
@@ -146,7 +149,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 			wrongMpath := findOtherMpath(lom.Mountpath())
 			wrongFQN := wrongMpath.MakePathFQN(&bck, fs.ObjCT, objectName)
-			oldTime := time.Now().Add(-3 * time.Hour)
+			oldTime := now.Add(-3 * time.Hour)
 			createTestLOM(wrongFQN, 1024, oldTime)
 
 			// ask to keep it
@@ -164,7 +167,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			err := lom.InitBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
-			oldTime := time.Now().Add(-3 * time.Hour)
+			oldTime := now.Add(-3 * time.Hour)
 			createTestLOM(lom.FQN, 0, oldTime) // zero size object
 
 			err = os.Chtimes(lom.FQN, oldTime, oldTime)
@@ -206,7 +209,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Keep recent timestamp
-			recentTime := time.Now().Add(-30 * time.Minute)
+			recentTime := now.Add(-30 * time.Minute)
 			err = os.Chtimes(wrongFQN, recentTime, recentTime)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -235,7 +238,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestFile(workFQN, 256)
 
 			// backdate workfile
-			oldTime := time.Now().Add(-3 * time.Hour)
+			oldTime := now.Add(-3 * time.Hour)
 			err = os.Chtimes(workFQN, oldTime, oldTime)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -260,7 +263,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestFile(workFQN, 256)
 
 			// Keep recent timestamp
-			recentTime := time.Now().Add(-30 * time.Minute)
+			recentTime := now.Add(-30 * time.Minute)
 			err = os.Chtimes(workFQN, recentTime, recentTime)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -278,7 +281,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestFile(objFQN, 1024)
 
 			// Backdate file so it’s beyond dont_cleanup_time
-			old := time.Now().Add(-3 * time.Hour)
+			old := now.Add(-3 * time.Hour)
 			Expect(os.Chtimes(objFQN, old, old)).To(Succeed())
 			Expect(objFQN).To(BeAnExistingFile())
 
@@ -304,7 +307,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(persist(lom)).To(Succeed())
 
 			// make it old
-			old := time.Now().Add(-3 * time.Hour)
+			old := now.Add(-3 * time.Hour)
 			lom.SetAtimeUnix(old.UnixNano())
 			Expect(persist(lom)).To(Succeed())
 			Expect(os.Chtimes(fqn, old, old)).To(Succeed())
@@ -323,7 +326,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			mi := avail[mpaths[0]]
 
 			fqn := filepath.Join(mi.MakePathCT(&bck, fs.ObjCT), "corrupt-xattr.bin")
-			old := time.Now().Add(-3 * time.Hour)
+			old := now.Add(-3 * time.Hour)
 			createTestLOM(fqn, 2000, old)
 
 			// Corrupt object metadata
@@ -355,7 +358,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestFile(chunkFQN, 1024)
 
 			// Backdate chunk
-			oldTime := time.Now().Add(-3 * time.Hour)
+			oldTime := now.Add(-3 * time.Hour)
 			err = os.Chtimes(chunkFQN, oldTime, oldTime)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -381,7 +384,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestFile(chunkFQN, 1024)
 
 			// Keep recent timestamp
-			recentTime := time.Now().Add(-30 * time.Minute)
+			recentTime := now.Add(-30 * time.Minute)
 			err = os.Chtimes(chunkFQN, recentTime, recentTime)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -395,10 +398,10 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			avail := fs.GetAvail()
 			mpath := avail[mpaths[1]]
 			fqnObj := mpath.MakePathFQN(&bck, fs.ObjCT, "largefile")
-			createTestLOM(fqnObj, 1234, time.Now().Add(-3*time.Hour))
+			createTestLOM(fqnObj, 1234, now.Add(-3*time.Hour))
 			ufest := filepath.Join(mpath.MakePathCT(&bck, fs.ChunkMetaCT), "largefile")
 			createTestFile(ufest, 900)
-			os.Chtimes(ufest, time.Now().Add(-3*time.Hour), time.Now().Add(-3*time.Hour))
+			os.Chtimes(ufest, now.Add(-3*time.Hour), now.Add(-3*time.Hour))
 
 			space.RunCleanup(ini)
 			Expect(ufest).To(BeAnExistingFile()) // finalized manifest must stay
@@ -424,7 +427,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			Expect(len(deletedFiles)).To(Equal(1))
 
 			// Even if we make it very recent, it should be cleaned up
-			recentTime := time.Now().Add(-5 * time.Minute)
+			recentTime := now.Add(-5 * time.Minute)
 			deletedPath := filepath.Join(mi.DeletedRoot(), deletedFiles[0].Name())
 			err = os.Chtimes(deletedPath, recentTime, recentTime)
 			Expect(err).NotTo(HaveOccurred())
@@ -454,7 +457,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		createTestFile(chunk.Path(), 64*cos.KiB) // any non-zero size
 
 		// age
-		old := time.Now().Add(-3 * time.Hour)
+		old := now.Add(-3 * time.Hour)
 		Expect(os.Chtimes(chunk.Path(), old, old)).NotTo(HaveOccurred())
 
 		// run cleanup
@@ -518,7 +521,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		Expect(partialFQN).To(BeAnExistingFile())
 
 		// age the stray chunk well beyond dont_cleanup_time
-		old := time.Now().Add(-3 * time.Hour)
+		old := now.Add(-3 * time.Hour)
 		_ = os.Chtimes(stray.Path(), old, old)
 		_ = os.Chtimes(partialFQN, old, old)
 
@@ -544,6 +547,215 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(uu2.ID()).To(Equal(u2.ID()))
+	})
+
+	It("should remove files with malformed FQNs", func() {
+		mi := fs.GetAvail()[mpaths[0]]
+		invalidFQN := filepath.Join(mi.MakePathCT(&bck, fs.WorkCT), "invalid..filename")
+		createTestFile(invalidFQN, 512)
+
+		old := now.Add(-3 * time.Hour)
+		os.Chtimes(invalidFQN, old, old)
+
+		space.RunCleanup(ini)
+		Expect(invalidFQN).NotTo(BeAnExistingFile())
+	})
+
+	Describe("Empty directory cleanup", func() {
+		It("should remove already-empty directories during walk", func() {
+			lom := &core.LOM{ObjName: "dir1/dir2/temp-for-empty-dir.txt"}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			createTestLOM(lom.FQN, 512)
+			err = os.Remove(lom.FQN)
+			Expect(err).NotTo(HaveOccurred())
+
+			dir2 := filepath.Dir(lom.FQN)
+			Expect(dir2).To(BeADirectory())
+			dir1 := filepath.Dir(dir2)
+			Expect(dir1).To(BeADirectory())
+
+			// one (nested dir) at a time
+			space.RunCleanup(ini)
+			Expect(dir2).NotTo(BeADirectory())
+
+			space.RunCleanup(ini)
+			Expect(dir1).NotTo(BeADirectory())
+		})
+
+		It("should preserve directories with content", func() {
+			lom := &core.LOM{ObjName: "recent-object-in-subdir.txt"}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			subDir := filepath.Join(filepath.Dir(lom.FQN), "subdir-with-content")
+			err = cos.CreateDir(subDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			recentFQN := filepath.Join(subDir, "recent-object.txt")
+			createTestLOM(recentFQN, 512, now.Add(-30*time.Minute))
+
+			space.RunCleanup(ini)
+
+			Expect(recentFQN).To(BeAnExistingFile())
+			Expect(subDir).To(BeADirectory())
+		})
+	})
+
+	Describe("Global recency guard edge cases", func() {
+		It("should handle the case when object may disappear during cleanup walk", func() {
+			lom := &core.LOM{ObjName: "test-disappearing-object.txt"}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			lom.SetAtimeUnix(now.UnixNano())
+			createTestFile(lom.FQN, 512)
+
+			lom.IncVersion()
+			err = persist(lom)
+			Expect(err).NotTo(HaveOccurred())
+
+			go func() { // _may_
+				time.Sleep(time.Duration(rand.IntN(8)+1) * time.Millisecond)
+				err = cos.RemoveFile(lom.FQN)
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			space.RunCleanup(ini)
+
+			Expect(ini.Xaction.Finished()).To(BeTrue())
+		})
+
+		It("should handle misplaced at threshold timing", func() {
+			lom := &core.LOM{ObjName: "threshold-timing.txt"}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			// other
+			mi := findOtherMpath(lom.Mountpath())
+			objFQN := filepath.Join(mi.MakePathCT(&bck, fs.ObjCT), "threshold-timing.txt")
+
+			config := cmn.GCO.Get()
+			pastThresholdTime := now.Add(-config.Space.DontCleanupTime.D() - time.Millisecond)
+
+			createTestLOM(objFQN, 512, pastThresholdTime)
+			err = os.Chtimes(objFQN, pastThresholdTime, pastThresholdTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(objFQN).NotTo(BeAnExistingFile())
+		})
+
+		It("should preserve files just under threshold", func() {
+			avail := fs.GetAvail()
+			mi := avail[mpaths[0]]
+
+			objFQN := filepath.Join(mi.MakePathCT(&bck, fs.ObjCT), "just-under-threshold.txt")
+
+			// Set file time just 1 minute under the threshold
+			config := cmn.GCO.Get()
+			justUnderTime := now.Add(-config.Space.DontCleanupTime.D() + time.Minute)
+
+			createTestLOM(objFQN, 512, justUnderTime)
+			err := os.Chtimes(objFQN, justUnderTime, justUnderTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			// Just under threshold should be preserved
+			Expect(objFQN).To(BeAnExistingFile())
+		})
+	})
+
+	// TODO "Bucket mismatch detection"
+
+	Describe("Workfile variations", func() {
+		It("should remove workfiles with invalid encoding", func() {
+			lom := &core.LOM{ObjName: "object-for-invalid-workfiles.txt"}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			workDir := filepath.Dir(lom.GenFQN(fs.WorkCT, "dummy"))
+			err = cos.CreateDir(workDir)
+			Expect(err).NotTo(HaveOccurred())
+
+			invalidWorkFiles := []string{
+				"object-name.",                 // empty tag
+				"object-name..",                // double dot
+				"object-name",                  // no tag at all
+				".invalid-prefix",              // starts with dot
+				"obj.tag.",                     // ends with dot after tag
+				"nodotsatall",                  // no separators at all
+				"obj.tag.tiebreaker.nothexpid", // invalid hex pid
+			}
+
+			for _, invalidName := range invalidWorkFiles {
+				workFQN := filepath.Join(workDir, invalidName)
+				createTestFile(workFQN, 256)
+
+				oldTime := now.Add(-3 * time.Hour)
+				err = os.Chtimes(workFQN, oldTime, oldTime)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(workFQN).To(BeAnExistingFile())
+			}
+
+			space.RunCleanup(ini)
+
+			for _, invalidName := range invalidWorkFiles {
+				workFQN := filepath.Join(workDir, invalidName)
+				Expect(workFQN).NotTo(BeAnExistingFile())
+			}
+		})
+
+		It("should preserve workfiles with valid encoding but current PID", func() {
+			objectName := "test-object-for-current-workfile.txt"
+			lom := &core.LOM{ObjName: objectName}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			workTag := "current-work-tag"
+			workFQN := lom.GenFQN(fs.WorkCT, workTag)
+
+			createTestFile(workFQN, 256)
+
+			// Even if it's old, current PID workfiles should be preserved
+			oldTime := now.Add(-3 * time.Hour)
+			err = os.Chtimes(workFQN, oldTime, oldTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			space.RunCleanup(ini)
+
+			Expect(workFQN).To(BeAnExistingFile())
+		})
+
+		It("should remove workfiles from different PID", func() {
+			objectName := "a/b/c/test-object-for-old-pid-workfile.txt"
+			lom := &core.LOM{ObjName: objectName}
+			err := lom.InitBck(&bck)
+			Expect(err).NotTo(HaveOccurred())
+
+			workTag := "old-pid-work-tag"
+			workFQN := lom.GenFQN(fs.WorkCT, workTag)
+
+			i := strings.LastIndexByte(workFQN, '.')
+			oldPidWorkFQN := workFQN[:i] + ".999999999" // definitely not current PID
+
+			createTestFile(oldPidWorkFQN, 256)
+
+			oldTime := now.Add(-3 * time.Hour)
+			err = os.Chtimes(oldPidWorkFQN, oldTime, oldTime)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(oldPidWorkFQN).To(BeAnExistingFile())
+
+			space.RunCleanup(ini)
+
+			// Old PID workfile should be removed
+			Expect(oldPidWorkFQN).NotTo(BeAnExistingFile())
+		})
 	})
 
 })
@@ -579,8 +791,6 @@ func createTestLOM(fqn string, size int, atime ...time.Time) {
 
 func createTestFile(fqn string, size int) {
 	_ = os.Remove(fqn)
-	err := cos.CreateDir(filepath.Dir(fqn))
-	Expect(err).NotTo(HaveOccurred())
 
 	testFile, err := cos.CreateFile(fqn)
 	Expect(err).ShouldNot(HaveOccurred())
