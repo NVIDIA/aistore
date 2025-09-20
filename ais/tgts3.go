@@ -48,7 +48,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		q := r.URL.Query()
 		if q.Has(s3.QparamMptUploadID) {
-			t.abortMpt(w, r, apiItems, q)
+			t.abortMptS3(w, r, apiItems, q)
 		} else {
 			t.delObjS3(w, r, apiItems)
 		}
@@ -82,9 +82,9 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 			return
 		}
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
-			nlog.Infoln("putMptPart", bck.String(), items, q)
+			nlog.Infoln("putPartMpt", bck.String(), items, q)
 		}
-		t.putMptPartS3(w, r, items, q, bck)
+		t.putPartMptS3(w, r, items, q, bck)
 	case r.Header.Get(cos.S3HdrObjSrc) == "":
 		objName := s3.ObjName(items)
 		lom := core.AllocLOM(objName)
@@ -238,9 +238,9 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 	if len(items) == 1 && q.Has(s3.QparamMptUploads) {
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
-			nlog.Infoln("listMptUploads", bck.String(), q)
+			nlog.Infoln("listUploadsMpt", bck.String(), q)
 		}
-		t.listMptUploads(w, bck, q)
+		t.listUploadsMptS3(w, bck, q)
 		return
 	}
 	if len(items) < 2 {
@@ -254,16 +254,16 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 			nlog.Infoln("getMptPart", bck.String(), objName, q)
 		}
 		lom := core.AllocLOM(objName)
-		t.getMptPart(w, r, bck, lom, q)
+		t.getPartMptS3(w, r, bck, lom, q)
 		core.FreeLOM(lom)
 		return
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID != "" {
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
-			nlog.Infoln("listMptParts", bck.String(), objName, q)
+			nlog.Infoln("listPartsMpt", bck.String(), objName, q)
 		}
-		t.listMptParts(w, r, bck, objName, q)
+		t.listPartsMptS3(w, r, bck, objName, q)
 		return
 	}
 
@@ -387,14 +387,14 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
-		t.startMpt(w, r, items, bck)
+		t.startMptS3(w, r, items, bck)
 		return
 	}
 	if q.Has(s3.QparamMptUploadID) {
 		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("completeMpt", bck.String(), items, q)
 		}
-		t.completeMpt(w, r, items, q, bck)
+		t.completeMptS3(w, r, items, q, bck)
 		return
 	}
 	err = fmt.Errorf("set query parameter %q to start multipart upload or %q to complete the upload",

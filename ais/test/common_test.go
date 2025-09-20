@@ -240,7 +240,7 @@ func (m *ioContext) sizesToString() (s string) {
 		s = fmt.Sprintf(" (approx. size %d)", m.fileSize)
 	}
 	if m.chunksConf != nil && m.chunksConf.multipart {
-		s += fmt.Sprintf(" (chunked into %d chunks)", m.chunksConf.numChunks)
+		s += fmt.Sprintf(" (%d chunks)", m.chunksConf.numChunks)
 	}
 	return s
 }

@@ -4,18 +4,6 @@
  */
 package ais
 
-// 1. in-memory state
-//    - active uploads kept purely in-memory (ups map)
-//    - no support for target restart recovery during active uploads
-//      (if target restarts during upload, client must restart the entire upload)
-//
-// 2. t.completeMpt() locks/unlocks two times - consider CoW
-//
-// 3. TODO cleanup; orphan chunks, abandoned (partial) manifests
-//
-// 4. parts ordering
-//    - Add(chunk) keeps chunks ("parts") sorted
-
 import (
 	"errors"
 	"fmt"
@@ -35,11 +23,15 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+//
+// S3 multipart upload API impl.: all method names with "MptS3" suffix
+//
+
 // Initialize multipart upload.
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
+func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
 	var (
 		objName = s3.ObjName(items)
 		lom     = &core.LOM{ObjName: objName}
@@ -50,7 +42,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 
-	uploadID, err := t.createMptUpload(r, lom)
+	uploadID, err := t.ups.start(r, lom)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -73,7 +65,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putMptPartS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
+func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
 	// 1. parse/validate
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
@@ -99,8 +91,15 @@ func (t *target) putMptPartS3(w http.ResponseWriter, r *http.Request, items []st
 		return
 	}
 
-	etag, ecode, err := t.putMptPart(r, lom, uploadID, int(partNum), true /*see also dpq.isS3*/)
-	// convert generic error to s3 error
+	args := partArgs{
+		r:        r,
+		lom:      lom,
+		uploadID: uploadID,
+		partNum:  int(partNum),
+		isS3:     true,
+	}
+	etag, ecode, err := t.ups.putPart(&args)
+	// convert to s3 error
 	if cos.IsErrNotFound(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
 		return
@@ -122,7 +121,7 @@ func (t *target) putMptPartS3(w http.ResponseWriter, r *http.Request, items []st
 // 2. Merge all parts into a single file and calculate its ETag
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
-func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
+func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
 	// parse/validate
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
@@ -168,7 +167,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		partList = append(partList, mptPart)
 	}
 
-	etag, ecode, err := t.completeMptUpload(r, lom, uploadID, body, partList, true /*see also dpq.isS3*/)
+	etag, ecode, err := t.ups.complete(r, lom, uploadID, body, partList, true /*see also dpq.isS3*/)
 	// convert generic error to s3 error
 	if cos.IsErrNotFound(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
@@ -195,7 +194,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 // 2. Remove all temporary files
 // 3. Remove all info from in-memory structs
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_AbortMultipartUpload.html
-func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
+func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values) {
 	bck, ecode, err := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, ecode)
@@ -209,7 +208,7 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 	}
 
 	uploadID := q.Get(s3.QparamMptUploadID)
-	ecode, err = t.abortMptUpload(r, lom, uploadID)
+	ecode, err = t.ups.abort(r, lom, uploadID)
 	if err != nil {
 		s3.WriteMptErr(w, r, err, ecode, lom, uploadID)
 		return
@@ -224,7 +223,7 @@ func (t *target) abortMpt(w http.ResponseWriter, r *http.Request, items []string
 // s3cmd is OK to receive an empty body in response with status=200. In this
 // case s3cmd sends all parts.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
-func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
+func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	lom := &core.LOM{ObjName: objName}
@@ -256,7 +255,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 // max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
-func (t *target) listMptUploads(w http.ResponseWriter, bck *meta.Bck, q url.Values) {
+func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, q url.Values) {
 	var (
 		maxUploads int
 		idMarker   string
@@ -281,7 +280,7 @@ func (t *target) listMptUploads(w http.ResponseWriter, bck *meta.Bck, q url.Valu
 // The object must have been multipart-uploaded beforehand.
 // See:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
-func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, q url.Values) {
+func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, q url.Values) {
 	startTime := mono.NanoTime()
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
