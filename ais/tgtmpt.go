@@ -217,7 +217,7 @@ func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComp
 	if err := manifest.Check(); err != nil {
 		return "", err
 	}
-	if _, err := enforceCompleteAllParts(parts, manifest.Count()); err != nil {
+	if _, err := _checkParts(parts, manifest.Count()); err != nil {
 		return "", err
 	}
 
@@ -249,7 +249,8 @@ func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComp
 	return manifest.ETagS3()
 }
 
-func enforceCompleteAllParts(parts apc.MptCompletedParts, count int) (int, error) {
+// make sure that we have all parts in the right order
+func _checkParts(parts apc.MptCompletedParts, count int) (int, error) {
 	if parts == nil {
 		return http.StatusBadRequest, errors.New("nil parts list")
 	}

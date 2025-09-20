@@ -1235,8 +1235,8 @@ func (t *target) completeMptUpload(r *http.Request, lom *core.LOM, uploadID stri
 
 	nlog.Infoln(uploadID, "completed")
 
-	// stats
-	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
+	// stats (note that size is already counted via putMptPart)
+	vlabs := xvlabs(lom.Bck())
 	t.statsT.IncWith(stats.PutCount, vlabs)
 	if remote {
 		t.statsT.IncWith(t.Backend(lom.Bck()).MetricName(stats.PutCount), vlabs)
@@ -1375,10 +1375,7 @@ func (t *target) putMptPart(r *http.Request, lom *core.LOM, uploadID string, par
 	}
 
 	delta := mono.SinceNano(startTime)
-	vlabs := stats.EmptyBckXlabs
-	if cmn.Rom.Features().IsSet(feat.EnableDetailedPromMetrics) {
-		vlabs = map[string]string{stats.VlabBucket: lom.Bck().Cname(""), stats.VlabXkind: ""}
-	}
+	vlabs := xvlabs(lom.Bck())
 	t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.PutSize, Value: size, VarLabs: vlabs},
 		cos.NamedVal64{Name: stats.PutLatency, Value: delta, VarLabs: vlabs},
@@ -1564,16 +1561,8 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 	})
 	debug.AssertNoErr(errIter)
 
-	var (
-		vlabs = stats.EmptyBckVlabs
-		fl    = cmn.Rom.Features()
-		cname string
-	)
-	if fl.IsSet(feat.EnableDetailedPromMetrics) {
-		cname = bck.Cname("")
-		vlabs = map[string]string{stats.VlabBucket: cname}
-	}
 	delta := mono.SinceNano(started)
+	vlabs := bvlabs(bck)
 	t.statsT.IncWith(stats.HeadCount, vlabs)
 	t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: delta, VarLabs: vlabs},
@@ -1701,7 +1690,7 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	}
 
 	// stats
-	vlabs := map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
+	vlabs := bvlabs(lom.Bck())
 	switch {
 	case err == nil:
 		t.statsT.IncWith(stats.DeleteCount, vlabs)

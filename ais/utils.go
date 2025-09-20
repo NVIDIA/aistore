@@ -18,9 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 const (
@@ -448,4 +450,22 @@ func preParse(packedHdl string) (items []string, err error) {
 		err = fmt.Errorf("invalid APPEND handle: %q", packedHdl)
 	}
 	return
+}
+
+//
+// conditionally empty vlabs
+//
+
+func bvlabs(bck *meta.Bck) map[string]string {
+	if cmn.Rom.Features().IsSet(feat.EnableDetailedPromMetrics) {
+		return map[string]string{stats.VlabBucket: bck.Cname("")}
+	}
+	return stats.EmptyBckVlabs
+}
+
+func xvlabs(bck *meta.Bck) map[string]string {
+	if cmn.Rom.Features().IsSet(feat.EnableDetailedPromMetrics) {
+		return map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
+	}
+	return stats.EmptyBckXlabs
 }

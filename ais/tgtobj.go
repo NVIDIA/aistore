@@ -1295,14 +1295,8 @@ func (goi *getOI) stats(written int64) {
 	var (
 		bck   = goi.lom.Bck()
 		delta = mono.SinceNano(goi.ltime)
-		vlabs = stats.EmptyBckVlabs
-		fl    = cmn.Rom.Features()
-		cname string
+		vlabs = bvlabs(bck)
 	)
-	if fl.IsSet(feat.EnableDetailedPromMetrics) {
-		cname = bck.Cname("")
-		vlabs = map[string]string{stats.VlabBucket: cname}
-	}
 	goi.t.statsT.IncWith(stats.GetCount, vlabs)
 	goi.t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.GetSize, Value: written, VarLabs: vlabs},
@@ -1316,12 +1310,12 @@ func (goi *getOI) stats(written int64) {
 		return
 	}
 
-	backend := goi.t.Backend(bck)
-	if !fl.IsSet(feat.EnableDetailedPromMetrics) {
-		// always provide for backend stats
-		cname = bck.Cname("")
+	// always provide non-empty vlabs for backend stats
+	cname := bck.Cname("")
+	if vlabs[stats.VlabBucket] == "" { // i.e. stats.EmptyBckVlabs
 		vlabs = map[string]string{stats.VlabBucket: cname}
 	}
+	backend := goi.t.Backend(bck)
 	goi.t.rgetstats(backend, cname, "" /*xkind*/, written, delta)
 
 	if !goi.verchanged {
