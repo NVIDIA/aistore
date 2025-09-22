@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -512,7 +513,12 @@ func isContextDeadline(err error) bool {
 // is called in a variety of ways including (post-test) t.Cleanup => _cleanup()
 // and (pre-test) via deleteRemoteBckObjs
 
-const maxDelObjErrCount = 100
+const (
+	maxDelObjErrCount = 10
+	sleepDelObj       = 2 * time.Second
+	maxSleepDelObj    = 10 * time.Second
+	limitDelObjGor    = 8
+)
 
 func (m *ioContext) del(opts ...int) {
 	var (
@@ -579,7 +585,8 @@ func (m *ioContext) del(opts ...int) {
 	tlog.Logfln("deleting %d object%s from %s", l, cos.Plural(l), m.bck.Cname(lsmsg.Prefix))
 	var (
 		errCnt atomic.Int64
-		wg     = cos.NewLimitedWaitGroup(16, l)
+		sleep  = atomic.NewInt64(int64(sleepDelObj))
+		wg     = cos.NewLimitedWaitGroup(min(limitDelObjGor, sys.MaxParallelism()), l)
 	)
 	for _, obj := range toRemove {
 		if errCnt.Load() > maxDelObjErrCount {
@@ -588,42 +595,47 @@ func (m *ioContext) del(opts ...int) {
 		}
 		wg.Add(1)
 		go func(obj *cmn.LsoEnt) {
-			m._delOne(baseParams, obj, &errCnt)
+			m._delOne(baseParams, obj, &errCnt, sleep)
 			wg.Done()
 		}(obj)
 	}
 	wg.Wait()
 }
 
-func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt *atomic.Int64) {
+// TODO: rid of strings.Contains
+func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt, sleep *atomic.Int64) {
 	err := api.DeleteObject(baseParams, m.bck, obj.Name)
 	if err == nil {
 		return
 	}
-	//
-	// excepting benign (TODO: rid of strings.Contains)
-	//
-	const sleepRetry = 2 * time.Second
-	e := strings.ToLower(err.Error())
+
+	var (
+		e = strings.ToLower(err.Error())
+		d = time.Duration(sleep.Load())
+		b bool
+	)
 	switch {
 	case cmn.IsErrObjNought(err):
 		return
 	case strings.Contains(e, "server closed idle connection"):
 		return // see (unexported) http.exportErrServerClosedIdle in the Go source
 	case cos.IsErrConnectionNotAvail(err):
-		errCnt.Add(maxDelObjErrCount/10 - 1)
+		errCnt.Add(max(2, maxDelObjErrCount/10-1))
 	// retry
 	case m.bck.IsCloud() && (cos.IsErrConnectionReset(err) || strings.Contains(e, "reset by peer")):
-		time.Sleep(sleepRetry)
+		time.Sleep(d)
 		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+		b = true
 	case m.bck.IsCloud() && strings.Contains(e, "try again"):
 		// aws-error[InternalError: We encountered an internal error. Please try again.]
-		time.Sleep(sleepRetry)
+		time.Sleep(d)
 		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+		b = true
 	case m.bck.IsCloud() && apc.ToScheme(m.bck.Provider) == apc.GSScheme &&
 		strings.Contains(e, "gateway") && strings.Contains(e, "timeout"):
 		// e.g:. "googleapi: Error 504: , gatewayTimeout" (where the gateway is in fact LB)
-		time.Sleep(sleepRetry)
+		time.Sleep(d)
+		b = true
 		err = api.DeleteObject(baseParams, m.bck, obj.Name)
 	}
 
@@ -631,6 +643,12 @@ func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt *
 		return
 	}
 	errCnt.Inc()
+	if b {
+		time.Sleep(d)
+		a := sleep.Load()
+		a += a >> 1
+		sleep.Store(min(int64(maxSleepDelObj), a))
+	}
 	if m.bck.IsCloud() && errCnt.Load() < 5 {
 		tlog.Logfln("Warning: failed to cleanup %s: %v", m.bck.Cname(""), err)
 	}
