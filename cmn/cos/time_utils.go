@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // in addition to standard layouts at /usr/local/go/src/time/format.go
@@ -52,6 +54,15 @@ func ProbingFrequency(dur time.Duration) time.Duration {
 	sleep := min(dur>>3, time.Second)
 	sleep = max(dur>>6, sleep)
 	return max(sleep, 100*time.Millisecond)
+}
+
+// constrain duration `d` to the closed interval [mind, maxd]
+func ClampDuration(d, mind, maxd time.Duration) time.Duration {
+	debug.Assert(mind <= maxd, mind, " vs ", maxd)
+	if d < mind {
+		return mind
+	}
+	return min(d, maxd)
 }
 
 // FormatMilli returns a duration formatted as milliseconds. For values bigger

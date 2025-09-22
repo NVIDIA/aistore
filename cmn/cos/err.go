@@ -219,7 +219,29 @@ func IsErrConnectionReset(err error) (yes bool)   { return errors.Is(err, syscal
 func IsErrBrokenPipe(err error) (yes bool)        { return errors.Is(err, syscall.EPIPE) }
 
 func IsRetriableConnErr(err error) (yes bool) {
-	return IsErrConnectionRefused(err) || IsErrConnectionReset(err) || IsErrBrokenPipe(err)
+	// 1. url.Error with Timeout()
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		if uerr.Timeout() {
+			return true
+		}
+		err = uerr.Err
+	}
+
+	// 2. net.Error with Timeout()
+	var nerr net.Error
+	if errors.As(err, &nerr) && nerr.Timeout() {
+		return true
+	}
+
+	// 3. canonical retry-ables
+	return errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.ECONNABORTED)
+
+	// TODO: 4. consider retrying io.ErrUnexpectedEOF
 }
 
 func IsErrOOS(err error) bool {

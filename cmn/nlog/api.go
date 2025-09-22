@@ -20,15 +20,15 @@ const (
 var LogToStderr bool
 var MaxSize int64 = 4 * 1024 * 1024 // usually, config.log.max_size
 
-func InfoDepth(depth int, args ...any)    { log(sevInfo, depth, "", args...) }
-func Infoln(args ...any)                  { log(sevInfo, 0, "", args...) }
-func Infof(format string, args ...any)    { log(sevInfo, 0, format, args...) }
-func WarningDepth(depth int, args ...any) { log(sevWarn, depth, "", args...) }
-func Warningln(args ...any)               { log(sevWarn, 0, "", args...) }
-func Warningf(format string, args ...any) { log(sevWarn, 0, format, args...) }
-func ErrorDepth(depth int, args ...any)   { log(sevErr, depth, "", args...) }
-func Errorln(args ...any)                 { log(sevErr, 0, "", args...) }
-func Errorf(format string, args ...any)   { log(sevErr, 0, format, args...) }
+func InfoDepth(depth int, args ...any)    { logf(sevInfo, depth, "", args...) }
+func Infoln(args ...any)                  { logf(sevInfo, 0, "", args...) }
+func Infof(format string, args ...any)    { logf(sevInfo, 0, format, args...) }
+func WarningDepth(depth int, args ...any) { logf(sevWarn, depth, "", args...) }
+func Warningln(args ...any)               { logf(sevWarn, 0, "", args...) }
+func Warningf(format string, args ...any) { logf(sevWarn, 0, format, args...) }
+func ErrorDepth(depth int, args ...any)   { logf(sevErr, depth, "", args...) }
+func Errorln(args ...any)                 { logf(sevErr, 0, "", args...) }
+func Errorf(format string, args ...any)   { logf(sevErr, 0, format, args...) }
 
 func SetPre(dir, role string) {
 	logDir, aisrole = dir, role

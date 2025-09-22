@@ -145,8 +145,8 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	s.cmplCh = make(chan cmpl, chsize) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)
-	go s.sendLoop(dryrun()) // handle SQ
-	go s.cmplLoop()         // handle SCQ
+	go s.sendLoop(extra.Config, dryrun()) // handle SQ
+	go s.cmplLoop()                       // handle SCQ
 
 	gc.ctrlCh <- ctrl{&s.streamBase, true /* collect */}
 	return

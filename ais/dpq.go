@@ -101,18 +101,18 @@ var (
 )
 
 const (
-	dpqIniCap = 8
-	dpqMaxCap = 100
+	iniDpqCap = 8
+	maxDpqCap = 100
 )
 
 func dpqAlloc() *dpq {
 	v := dpqPool.Get()
 	if v == nil {
-		return &dpq{m: make(cos.StrKVs, dpqIniCap)}
+		return &dpq{m: make(cos.StrKVs, iniDpqCap)}
 	}
 	dpq := v.(*dpq)
 	if dpq.m == nil { // (unlikely)
-		dpq.m = make(cos.StrKVs, dpqIniCap)
+		dpq.m = make(cos.StrKVs, iniDpqCap)
 	}
 	return dpq
 }
@@ -122,8 +122,8 @@ func dpqFree(dpq *dpq) {
 	m := dpq.m
 	clear(m)
 	*dpq = dpq0
-	if c >= max(dpqMaxCap-16, dpqIniCap*4) {
-		dpq.m = make(cos.StrKVs, dpqIniCap)
+	if c >= max(maxDpqCap-16, iniDpqCap*4) {
+		dpq.m = make(cos.StrKVs, iniDpqCap)
 	} else {
 		dpq.m = m
 	}
@@ -138,7 +138,7 @@ func (dpq *dpq) parse(rawQuery string) error {
 		iters int
 	)
 	dpq.count = 0
-	for query != "" && iters < dpqMaxCap {
+	for query != "" && iters < maxDpqCap {
 		var (
 			err   error
 			value string
@@ -219,7 +219,7 @@ func (dpq *dpq) parse(rawQuery string) error {
 		}
 		iters++
 	}
-	if iters >= dpqMaxCap {
+	if iters >= maxDpqCap {
 		return errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
 	}
 

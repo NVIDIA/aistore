@@ -37,6 +37,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -94,6 +96,10 @@ func TestMain(t *testing.M) {
 	cmn.GCO.CommitUpdate(config)
 	sc := transport.Init(&dummyStatsTracker{})
 	go sc.Run()
+
+	tMock := mock.NewTarget(nil)
+	tMock.SO = &sowner{}
+	core.T = tMock
 
 	objmux = mux.NewServeMux(false /*enableTracing*/)
 	path := transport.ObjURLPath("")

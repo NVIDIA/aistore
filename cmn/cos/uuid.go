@@ -135,8 +135,6 @@ func ValidateManifestID(id string) error {
 		utag = "chunk-manifest ID"
 		lmin = 8
 		lmax = 128
-		inv1 = "../"
-		inv2 = "~/"
 	)
 	l := len(id)
 	if l < lmin {

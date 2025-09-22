@@ -22,7 +22,7 @@ type (
 		add bool
 	}
 	collector struct {
-		streams map[string]*streamBase
+		streams map[int64]*streamBase // by session ID
 		ticker  *time.Ticker
 		stopCh  cos.StopCh
 		ctrlCh  chan ctrl
@@ -91,10 +91,10 @@ func (gc *collector) run() {
 				return
 			}
 			s, add := ctrl.s, ctrl.add
-			_, ok = gc.streams[s.lid]
+			_, ok = gc.streams[s.sessID]
 			if add {
-				debug.Assert(!ok, s.lid)
-				gc.streams[s.lid] = s
+				debug.Assert(!ok, s.String())
+				gc.streams[s.sessID] = s
 				heap.Push(gc, s)
 				if gc.none.CAS(true, false) {
 					gc.ticker.Reset(dfltTick)
@@ -161,7 +161,7 @@ func (gc *collector) Pop() any {
 
 // collector's main method
 func (gc *collector) do() {
-	for lid, s := range gc.streams {
+	for sessID, s := range gc.streams {
 		if s.IsTerminated() {
 			_, err := s.TermInfo()
 			if s.time.inSend.Swap(false) {
@@ -172,7 +172,7 @@ func (gc *collector) do() {
 
 			s.time.ticks--
 			if s.time.ticks <= 0 {
-				delete(gc.streams, lid)
+				delete(gc.streams, sessID)
 				if len(gc.streams) == 0 {
 					gc.ticker.Reset(dfltTickIdle)
 					debug.Assert(!gc.none.Load())

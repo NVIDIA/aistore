@@ -50,7 +50,7 @@ type (
 )
 
 // main function
-func log(sev severity, depth int, format string, args ...any) {
+func logf(sev severity, depth int, format string, args ...any) {
 	onceInitFiles.Do(initFiles)
 
 	switch {

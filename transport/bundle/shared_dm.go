@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-const iniCapSDM = 16
+const iniSdmCap = 16
 
 // [TODO]
 // - Close() vs usage (when len(receivers) > 0); provide xctn.onFinished() => UnregRecv
@@ -75,7 +75,7 @@ func (sdm *sharedDM) Open() error {
 	}
 
 	sdm.rxmu.Lock()
-	sdm.receivers = make(map[string]transport.Receiver, iniCapSDM)
+	sdm.receivers = make(map[string]transport.Receiver, iniSdmCap)
 	sdm.rxmu.Unlock()
 
 	if err := sdm.dm.RegRecv(); err != nil {

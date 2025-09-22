@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,7 +48,6 @@ const (
 	endOfStream   = "end-of-stream"
 	reasonStopped = "stopped"
 
-	connErrWait = time.Second // ECONNREFUSED | ECONNRESET | EPIPE
 	termErrWait = time.Second
 )
 
@@ -77,8 +77,8 @@ type (
 		trname   string        // http endpoint: (trname, dstURL, dstID)
 		dstURL   string
 		dstID    string
-		lid      string // log prefix
-		maxhdr   []byte // header buf must be large enough to accommodate max-size for this stream
+		loghdr   string // log prefix
+		maxhdr   []byte // transport header buf must be large enough to accommodate max-size for this stream
 		header   []byte // object header (slice of the maxhdr with bucket/objName, etc. fields packed/serialized)
 		term     struct {
 			err    error
@@ -144,7 +144,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
-	s._lid(sid, dstID, extra)
+	s._loghdr(sid, dstID, extra)
 
 	s.maxhdr, _ = g.mm.AllocSize(_sizeHdr(extra.Config, int64(extra.MaxHdrSize)))
 
@@ -152,7 +152,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	return s
 }
 
-func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
+func (s *streamBase) _loghdr(sid, dstID string, extra *Extra) {
 	var (
 		sb strings.Builder
 		l  = 2 + len(s.trname) + len(sid) + 32 + len(dstID)
@@ -163,14 +163,14 @@ func (s *streamBase) _lid(sid, dstID string, extra *Extra) {
 	sb.WriteString(s.trname)
 	sb.WriteString(sid)
 	sb.WriteByte('[')
-	sb.WriteString(strconv.FormatInt(s.sessID, 10))
+	sb.WriteString(core.T.SID()) // (consider adding back session ID, as in: [node-ID/110])
 
 	extra.Lid(&sb) // + compressed
 
 	sb.WriteString("]=>")
 	sb.WriteString(dstID)
 
-	s.lid = sb.String() // "s-%s%s[%d]=>%s"
+	s.loghdr = sb.String() // looks like: s-<trname><sid>[<sender-id>]=><dest-id>
 }
 
 // (used on the receive side as well)
@@ -206,8 +206,8 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 
 func (s *streamBase) Stop()               { s.stopCh.Close() }
 func (s *streamBase) URL() string         { return s.dstURL }
-func (s *streamBase) ID() (string, int64) { return s.trname, s.sessID }
-func (s *streamBase) String() string      { return s.lid }
+func (s *streamBase) ID() (string, int64) { return s.trname, s.sessID } // usage: test only
+func (s *streamBase) String() string      { return s.loghdr }
 
 func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
 
@@ -270,26 +270,39 @@ func (s *streamBase) deactivate() (n int, err error) {
 	return
 }
 
-func (s *streamBase) sendLoop(dryrun bool) {
+func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 	var (
-		err     error
-		reason  string
-		retried bool
+		err    error
+		reason string
+		retry  *rtry
 	)
+
+	// main loop
 	for {
 		if s.sessST.Load() == active {
 			if dryrun {
 				s.streamer.dryrun()
-			} else if errR := s.streamer.doRequest(); errR != nil {
-				if !cos.IsRetriableConnErr(err) || retried {
+			} else {
+				err = s.streamer.doRequest()
+			}
+			if err == nil {
+				if retry != nil {
+					retry.oklog()
+					retry = nil
+				}
+			} else {
+				retriable := cos.IsRetriableConnErr(err)
+				if retriable && retry == nil {
+					retry = newRtry(config, s.String())
+				}
+				if !retriable || retry.timeout(err) {
 					reason = reasonError
-					err = errR
 					s.streamer.errCmpl(err)
 					break
 				}
-				retried = true
-				nlog.Errorln(s.String(), "err: ", errR, "- retrying...")
-				time.Sleep(connErrWait)
+
+				retry.sleep(err)
+				err = nil
 			}
 		}
 		if reason = s.isNextReq(); reason != "" {
@@ -300,7 +313,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	reason, err = s.streamer.terminate(err, reason)
 	s.wg.Done()
 
-	if reason == endOfStream {
+	if reason == endOfStream { // ok (via hdr.Opcode = opcFin => lastCh.Close)
 		return
 	}
 
@@ -309,7 +322,8 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	if reason != reasonStopped {
 		errExt := fmt.Errorf("%s[term-reason: %s, err: %w]", s, reason, err)
 		nlog.Errorln(errExt)
-		// NOTE: abort grandparent xaction
+
+		// NOTE: aborting grandparent xaction
 		if s.xctn != nil {
 			s.xctn.Abort(errExt)
 		}
@@ -321,6 +335,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
+	// count and log chanFull
 	if cnt := s.chanFull.Load(); cnt > 0 {
 		if (cnt >= 10 && cnt <= 20) || cmn.Rom.FastV(4, cos.SmoduleTransport) {
 			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
@@ -362,4 +377,51 @@ func dryrun() (dryrun bool) {
 		}
 	}
 	return
+}
+
+//////////
+// rtry //
+//////////
+
+type rtry struct {
+	config   *cmn.Config
+	sname    string
+	total    time.Duration
+	nxtSleep time.Duration
+	maxSleep time.Duration
+	cnt      int
+}
+
+func newRtry(config *cmn.Config, sname string) *rtry {
+	ini := cos.ClampDuration(config.Timeout.CplaneOperation.D()/2, 100*time.Millisecond, 2*time.Second)
+	return &rtry{
+		config:   config,
+		sname:    sname,
+		nxtSleep: ini,
+		maxSleep: cos.ClampDuration(config.Timeout.MaxKeepalive.D(), 2*time.Second, 5*time.Second),
+	}
+}
+
+func (r *rtry) sleep(err error) {
+	r.cnt++
+	nlog.WarningDepth(1, "retry", r.sname, "[", err, r.cnt, r.total, "]")
+	time.Sleep(r.nxtSleep)
+	r.total += r.nxtSleep
+	r.nxtSleep = min(r.nxtSleep+r.nxtSleep>>1, r.maxSleep)
+	if r.cnt > 1 {
+		// poor-man's jitter
+		runtime.Gosched()
+	}
+}
+
+func (r *rtry) timeout(err error) bool {
+	if r.total < min(r.maxSleep*3, 10*time.Second) {
+		return false
+	}
+	nlog.ErrorDepth(1, "retry timeout", r.sname, "[", err, r.cnt, r.total, "]")
+	return true
+}
+
+func (r *rtry) oklog() {
+	nlog.InfoDepth(1, "retry success", r.sname, "[", r.cnt, r.total, "]")
 }
