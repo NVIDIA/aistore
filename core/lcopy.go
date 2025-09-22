@@ -5,6 +5,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/sys"
 )
 
 //
@@ -282,7 +284,6 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 // copyChunks handles copying all chunks and manifest from source to destination LOM
 // TODO -- FIXME:
 // - copying the chunks and the manifest not respecting the destination bucket's chunks config
-// - writes chunks in parallel - use `cos.LimitedWaitGroup`
 
 func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	// Load the completed Ufest manifest from source
@@ -306,26 +307,60 @@ func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	srcUfest.Lock()
 	defer srcUfest.Unlock()
 
-	for _, srcChunk := range srcUfest.chunks {
-		dstChunk, err := dstUfest.NewChunk(int(srcChunk.Num()), dst)
-		if err != nil {
-			return dstUfest._undoCopy(fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err))
-		}
+	var (
+		wg = cos.NewLimitedWaitGroup(min(sys.MaxParallelism(), 4), srcUfest.Count())
+		// errs  = cos.NewErrs(srcUfest.Count())
+		errCh = make(chan error, srcUfest.Count())
+	)
 
-		_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
-		if err != nil {
-			return dstUfest._undoCopy(fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
-				srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err))
-		}
+	for i := range srcUfest.chunks {
+		wg.Add(1)
+		go func(srcChunk Uchunk) {
+			defer wg.Done()
 
-		if srcChunk.cksum != nil {
-			dstChunk.SetCksum(srcChunk.cksum.Clone())
-		}
+			dstChunk, err := dstUfest.NewChunk(int(srcChunk.Num()), dst)
+			if err != nil {
+				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to create destination chunk %d: %w", srcChunk.Num(), err))
+				return
+			}
 
-		err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
-		if err != nil {
-			return dstUfest._undoCopy(fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err))
+			_, _, err = cos.CopyFile(srcChunk.Path(), dstChunk.Path(), buf, srcChunk.cksum.Type())
+			if err != nil {
+				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to copy chunk %d from %s to %s: %w",
+					srcChunk.Num(), srcChunk.Path(), dstChunk.Path(), err))
+				return
+			}
+
+			if srcChunk.cksum != nil {
+				dstChunk.SetCksum(srcChunk.cksum.Clone())
+			}
+
+			err = dstUfest.Add(dstChunk, srcChunk.Size(), int64(srcChunk.Num()))
+			if err != nil {
+				errCh <- dstUfest._undoCopy(fmt.Errorf("failed to add chunk %d to destination manifest: %w", srcChunk.Num(), err))
+				return
+			}
+		}(srcUfest.chunks[i])
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	// collect up to 4 errors and join them (allocate only if needed)
+	var errs []error
+	for err := range errCh {
+		if err == nil {
+			continue
 		}
+		if errs == nil {
+			errs = make([]error, 0, 4)
+		}
+		if len(errs) < 4 {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return dstUfest._undoCopy(errors.Join(errs...))
 	}
 
 	// Compute the whole checksum for the destination manifest
