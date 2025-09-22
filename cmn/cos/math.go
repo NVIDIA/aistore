@@ -38,3 +38,12 @@ func RatioPct(high, low, curr int64) int64 {
 	}
 	return (curr - low) * 100 / (high - low)
 }
+
+// (see also: ClampDuration)
+func ClampInt(i, mini, maxi int) int {
+	debug.Assert(mini <= maxi, mini, " vs ", maxi)
+	if i < mini {
+		return mini
+	}
+	return min(i, maxi)
+}

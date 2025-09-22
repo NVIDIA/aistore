@@ -7,6 +7,7 @@ package cos
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
@@ -198,9 +199,13 @@ func (arl *AdaptRateLim) Acquire() error {
 			arl.mu.Unlock()
 			return fmt.Errorf("%s: failed to acquire (%d, %v)", arltag, i, sleep)
 		}
-		sleep = min(max(sleep+sleep>>1, arl.minBtwn), arl.minBtwn<<2)
+		sleep = ClampDuration(sleep+sleep>>1, arl.minBtwn, arl.minBtwn<<2)
 		arl.mu.Unlock()
 		time.Sleep(sleep)
+		if i > 0 {
+			// poor-man's jitter
+			runtime.Gosched()
+		}
 	}
 }
 

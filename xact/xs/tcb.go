@@ -187,7 +187,8 @@ func (r *XactTCB) _iniNwp(numWorkers int) {
 	for range numWorkers {
 		r.nwp.workers = append(r.nwp.workers, tcbworker{r})
 	}
-	r.nwp.workCh = make(chan core.LIF, max(min(numWorkers*nwpBurstMult, nwpBurstMax), r.Config.TCB.Burst))
+	chsize := cos.ClampInt(numWorkers*nwpBurstMult, r.Config.TCB.Burst, nwpBurstMax)
+	r.nwp.workCh = make(chan core.LIF, chsize)
 	r.nwp.stopCh = cos.NewStopCh()
 	nlog.Infoln(r.Name(), "workers:", numWorkers)
 }
@@ -380,7 +381,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 }
 
 func (r *XactTCB) qival() time.Duration {
-	return min(max(r.Config.Timeout.MaxHostBusy.D(), 10*time.Second), time.Minute)
+	return cos.ClampDuration(r.Config.Timeout.MaxHostBusy.D(), 10*time.Second, time.Minute)
 }
 
 func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {

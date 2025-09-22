@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -818,6 +819,7 @@ func DoWithRetry(client *http.Client, cb newRequestCB, reqArgs *cmn.HreqArgs) (r
 		if !_retry(doErr, resp) {
 			goto exit
 		}
+		runtime.Gosched() // poor man's jitter
 	}
 exit:
 	if err == nil {

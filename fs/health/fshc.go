@@ -155,7 +155,7 @@ func (f *FSHC) run(mi *fs.Mountpath, fqn string) {
 		}
 		// repeat just once
 		if i == 0 {
-			numFiles = max(min(numFiles*2, maxNumFiles), numFiles+2)
+			numFiles = cos.ClampInt(numFiles*2, numFiles+2, maxNumFiles)
 			if numFiles >= 2*cfg.TestFileCount {
 				maxerrs++
 			}

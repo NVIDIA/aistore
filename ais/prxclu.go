@@ -1678,7 +1678,6 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 	tout := cmn.Rom.CplaneOperation()
 	if _, status, err := p.reqHealth(si, tout, nil, smap, false /*retry pub-addr*/); err != nil {
-		// TODO: use cmn.KeepaliveRetryDuration()
 		sleep, retries := tout/2, 4
 
 		time.Sleep(sleep)

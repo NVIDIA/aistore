@@ -57,6 +57,7 @@ func ProbingFrequency(dur time.Duration) time.Duration {
 }
 
 // constrain duration `d` to the closed interval [mind, maxd]
+// (see also: ClampInt)
 func ClampDuration(d, mind, maxd time.Duration) time.Duration {
 	debug.Assert(mind <= maxd, mind, " vs ", maxd)
 	if d < mind {

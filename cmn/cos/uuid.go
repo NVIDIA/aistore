@@ -129,7 +129,6 @@ func GenTestingDaemonID(suffix string) string {
 // chunk manifest ID
 //
 
-// TODO: validation does not work for backend provider generated upload IDs (may contain invalid ".." characters)
 func ValidateManifestID(id string) error {
 	const (
 		utag = "chunk-manifest ID"

@@ -2097,17 +2097,12 @@ const uplockWarn = "conflict getting remote"
 
 func (goi *getOI) uplock(c *cmn.Config) (u *_uplock) {
 	u = &_uplock{sleep: cmn.ColdGetConflictMin}
+
 	// jitter
-	switch goi.ltime & 0x3 {
-	case 0:
-		u.sleep += 3 * time.Millisecond
-	case 0x1:
-		u.sleep += 7 * time.Millisecond
-	case 0x2:
-		u.sleep -= 7 * time.Millisecond
-	case 0x3:
-		u.sleep -= 3 * time.Millisecond
-	}
+	j := (goi.ltime & 0x7) - 3
+	jitter := time.Millisecond * time.Duration(j<<1)
+	u.sleep += jitter
+
 	u.timeout = cos.NonZero(c.Timeout.ColdGetConflict.D(), cmn.ColdGetConflictDflt)
 	return u
 }
