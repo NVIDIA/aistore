@@ -62,10 +62,10 @@ other-targets (T1..Tn)
 // - range read (can wait)
 // - finer grained abort: one work item (can wait)
 
-// tunables
+// Rx time constants
 const (
-	iniwait = time.Second
-	maxwait = time.Minute
+	iniwait = time.Second      // to backoff from
+	maxwait = 30 * time.Second // "hole" timeout
 )
 
 type (
@@ -119,6 +119,14 @@ type (
 		smm      *memsys.MMSA
 		pending  sync.Map // [wid => *basewi]
 		activeWG sync.WaitGroup
+	}
+)
+
+type (
+	_archSentCmpl struct {
+		lom *core.LOM
+		lh  cos.LomReader
+		buf []byte
 	}
 )
 
@@ -419,11 +427,14 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
-// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
-func (r *XactMoss) regSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
+func (r *XactMoss) regSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
 	opaque, ok := arg.([]byte)
 	debug.Assert(ok)
 	r.smm.Free(opaque)
+
+	if hdr.ObjAttrs.Size > 0 {
+		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
+	}
 }
 
 func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, archpath string, index int) error {
@@ -466,24 +477,25 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		hdr.Opaque = opaque
 	}
 	o.Callback = r.archSent
-	o.CmplArg = &struct {
-		lom *core.LOM
-		buf []byte
-	}{lom, opaque}
+	o.CmplArg = &_archSentCmpl{lom, lh, opaque}
 
 	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
-// TODO -- FIXME: stats: add objSentCB to count OutObjsAdd(1, hdr.ObjAttrs.Size)
-func (r *XactMoss) archSent(_ *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
-	ctx, ok := arg.(*struct {
-		lom *core.LOM
-		buf []byte
-	})
+func (r *XactMoss) archSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
+	ctx, ok := arg.(*_archSentCmpl)
 	debug.Assert(ok)
 	debug.Assert(ctx.lom.IsLocked() == apc.LockRead)
+
+	if ctx.lh != nil {
+		cos.Close(ctx.lh)
+	}
 	ctx.lom.Unlock(false)
 	r.smm.Free(ctx.buf)
+
+	if hdr.ObjAttrs.Size > 0 {
+		r.OutObjsAdd(1, hdr.ObjAttrs.Size) // counting archived file as an "object"
+	}
 }
 
 func (r *XactMoss) packOpaque(data *mossOpaque) []byte {
@@ -690,7 +702,18 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mo
 add:
 	wi.recv.mtx.Lock()
 	entry := &wi.recv.m[index]
-	debug.Assertf(entry.sgl == nil && entry.nameInArch == "", "duplicated receive[%d]: %q vs %q", index, hdr.ObjName, entry.nameInArch) // TODO -- FIXME: + abort
+
+	if !entry.isEmpty() {
+		wi.recv.mtx.Unlock()
+		if sgl != nil {
+			sgl.Free()
+		}
+		err = fmt.Errorf("%s %s duplicate recv idx=%d from %s — dropping", wi.r.Name(), core.T.String(), index, meta.Tname(hdr.SID))
+		debug.AssertNoErr(err)
+		nlog.Warningln(err)
+		return nil
+	}
+
 	wi.recv.m[index] = rxentry{
 		sgl:        sgl,
 		bucket:     cos.StrDup(hdr.Bck.Name),
@@ -771,10 +794,13 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 				return nil
 			}
 
-			// TODO -- FIXME: [resilience] timeout must trigger a "pointed" retry (re-send)
+			//
+			// TODO -- FIXME: add GFN resilience
+			//
 			if total > maxwait {
-				return fmt.Errorf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
+				s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
 					wi.r.Name(), index, core.T.String(), wi.wid, total)
+				return &errHole{s}
 			}
 
 			if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
@@ -815,7 +841,12 @@ func (wi *basewi) next(i int) (int, error) {
 			return 0, err
 		}
 
-		return wi.waitFlushRx(i)
+		nextIdx, err := wi.waitFlushRx(i)
+		if err == nil || (isErrHole(err) && !wi.req.ContinueOnErr) {
+			return nextIdx, err
+		}
+
+		// NOTE: proceed anyway w/ IsNotExist (upon _write() -> Load()) handled as "missing"
 	}
 
 	bck := lom.Bck()
@@ -1190,4 +1221,19 @@ func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	}
 	o.Missing, err = unpacker.ReadBool()
 	return err
+}
+
+/////////////
+// errHole //
+/////////////
+
+type errHole struct {
+	msg string
+}
+
+func (e *errHole) Error() string { return e.msg }
+
+func isErrHole(err error) bool {
+	_, ok := err.(*errHole)
+	return ok
 }
