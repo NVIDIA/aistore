@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
 func listAllBuckets(t *testing.T, baseParams api.BaseParams, includeRemote bool, fltPresence int) cmn.Bcks {
@@ -59,11 +60,11 @@ func TestNamespace(t *testing.T) {
 			name:   "global_and_local_namespace",
 			remote: false,
 			bck1: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 			},
 			bck2: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: "",
@@ -75,7 +76,7 @@ func TestNamespace(t *testing.T) {
 			name:   "two_local_namespaces",
 			remote: false,
 			bck1: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: "",
@@ -83,7 +84,7 @@ func TestNamespace(t *testing.T) {
 				},
 			},
 			bck2: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: "",
@@ -95,11 +96,11 @@ func TestNamespace(t *testing.T) {
 			name:   "global_namespaces_with_remote_cluster",
 			remote: true,
 			bck1: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 			},
 			bck2: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: tools.RemoteCluster.Alias,
@@ -111,7 +112,7 @@ func TestNamespace(t *testing.T) {
 			name:   "namespaces_with_remote_cluster",
 			remote: true,
 			bck1: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: "",
@@ -119,7 +120,7 @@ func TestNamespace(t *testing.T) {
 				},
 			},
 			bck2: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: tools.RemoteCluster.Alias,
@@ -131,7 +132,7 @@ func TestNamespace(t *testing.T) {
 			name:   "namespaces_with_only_remote_cluster",
 			remote: true,
 			bck1: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: tools.RemoteCluster.Alias,
@@ -139,7 +140,7 @@ func TestNamespace(t *testing.T) {
 				},
 			},
 			bck2: cmn.Bck{
-				Name:     "tmp",
+				Name:     "tmp" + trand.String(10),
 				Provider: apc.AIS,
 				Ns: cmn.Ns{
 					UUID: tools.RemoteCluster.Alias,
@@ -180,19 +181,9 @@ func TestNamespace(t *testing.T) {
 			if len(origBuckets) > 0 {
 				tlog.Logfln("orig buckets %+v", origBuckets)
 			}
-			err := api.CreateBucket(baseParams, m1.bck, nil)
-			tassert.CheckFatal(t, err)
-			defer func() {
-				err = api.DestroyBucket(baseParams, m1.bck)
-				tassert.CheckFatal(t, err)
-			}()
 
-			err = api.CreateBucket(baseParams, m2.bck, nil)
-			tassert.CheckFatal(t, err)
-			defer func() {
-				err := api.DestroyBucket(baseParams, m2.bck)
-				tassert.CheckFatal(t, err)
-			}()
+			tools.CreateBucket(t, m1.proxyURL, m1.bck, nil, true)
+			tools.CreateBucket(t, m2.proxyURL, m2.bck, nil, true)
 
 			// Test listing buckets
 			newBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltExists)
@@ -207,7 +198,6 @@ func TestNamespace(t *testing.T) {
 
 			// Now remote bucket(s) must be present
 			locBuckets := listAllBuckets(t, baseParams, test.remote, apc.FltPresent)
-			tassert.CheckFatal(t, err)
 			tlog.Logfln("present in BMD %+v", locBuckets)
 			tassert.Errorf(
 				t, len(locBuckets) == len(newBuckets), "number of buckets (%d: %v) should be (%d: %v)\n",

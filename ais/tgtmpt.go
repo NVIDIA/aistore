@@ -312,7 +312,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
 		cksumSHA     *cos.CksumHash
 		cksumH       = &cos.CksumHash{}
-		remote       = lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
+		remote       = lom.Bck().IsRemote()
 		writers      = make([]io.Writer, 0, 3)
 		startTime    = mono.NanoTime()
 	)
@@ -463,11 +463,14 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 	}
 
 	// call remote
-	remote := lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI()
+	remote := lom.Bck().IsRemote()
 	if remote {
-		for i := range parts {
-			if parts[i].ETag == "" {
-				parts[i].ETag = manifest.GetChunk(parts[i].PartNumber, true).ETag
+		// NOTE: only OCI and AWS backends require ETag in the part list
+		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() {
+			for i := range parts {
+				if parts[i].ETag == "" {
+					parts[i].ETag = manifest.GetChunk(parts[i].PartNumber, true).ETag
+				}
 			}
 		}
 
