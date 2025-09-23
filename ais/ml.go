@@ -225,10 +225,15 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			smap = t.owner.smap.get()
 			nat  = smap.CountActiveTs()
 		)
+		if ecode, err := t.ensureSameSmap(r.Header, smap); err != nil {
+			t.writeErr(w, r, err, ecode)
+			return
+		}
 		if nat != ctx.nat {
 			t.writeErrf(w, r, "moss: expecting %d targets, have %d", nat, ctx.nat)
 			return
 		}
+
 		tsi := smap.GetTarget(ctx.tid)
 		if tsi == nil {
 			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "moss", ctx.tid}) // TODO: unify errs

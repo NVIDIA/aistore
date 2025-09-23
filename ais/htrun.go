@@ -2260,6 +2260,31 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 // intra-cluster request validations and helpers
 //
 
+func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
+	var (
+		callerID   = hdr.Get(apc.HdrCallerID)
+		callerName = hdr.Get(apc.HdrCallerName)
+		callerSver = hdr.Get(apc.HdrCallerSmapVer)
+	)
+	if !h.ClusterStarted() {
+		return http.StatusServiceUnavailable, errors.New("not ready yet")
+	}
+	if ok := callerID != "" && callerName != ""; !ok {
+		return 0, errIntraControl
+	}
+	if err := smap.validate(); err != nil {
+		return 0, err
+	}
+	caller := smap.GetNode(callerID)
+	if caller == nil {
+		return http.StatusConflict, fmt.Errorf("%s: caller %s (%s) not present in the local %s", h, callerID, callerName, smap.StringEx())
+	}
+	if callerSver != smap.vstr {
+		return http.StatusConflict, fmt.Errorf("%s: different Smap version from %s(%s): %q vs local %s", h, callerID, callerName, callerSver, smap.StringEx())
+	}
+	return 0, nil
+}
+
 func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	var (
 		smap       = h.owner.smap.get()
