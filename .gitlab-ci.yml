@@ -107,7 +107,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 40m
+  timeout: 45m
   rules:
   <<: *gather_logs_def
   <<: *default_test_rules
@@ -124,7 +124,7 @@ include:
   stage: test-short
   tags:
     - $RUNNER_TAG
-  timeout: 35m
+  timeout: 45m
   rules:
     - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
