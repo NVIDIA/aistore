@@ -1106,6 +1106,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 
 	var ecode int
+	// TODO: consolidate lom and bucket initialization and error handling across all actions
 	switch msg.Action {
 	case apc.ActRenameObject:
 		lom := &core.LOM{ObjName: apireq.items[1]}
@@ -1142,7 +1143,13 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	case apc.ActMptUpload:
 		lom := &core.LOM{ObjName: apireq.items[1]}
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
-			break
+			if cmn.IsErrRemoteBckNotFound(err) {
+				t.BMDVersionFixup(r)
+				err = lom.InitBck(apireq.bck.Bucket())
+			}
+			if err != nil {
+				break
+			}
 		}
 		var uploadID string
 		if uploadID, err = t.ups.start(r, lom); err == nil {
@@ -1159,7 +1166,13 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 		lom := &core.LOM{ObjName: apireq.items[1]}
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
-			break
+			if cmn.IsErrRemoteBckNotFound(err) {
+				t.BMDVersionFixup(r)
+				err = lom.InitBck(apireq.bck.Bucket())
+			}
+			if err != nil {
+				break
+			}
 		}
 		_, ecode, err = t.ups.complete(r, lom, uploadID, nil /*body*/, mptCompletedParts, false /*see also dpq.isS3*/)
 	case apc.ActCheckLock:
