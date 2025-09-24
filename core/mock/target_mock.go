@@ -87,3 +87,7 @@ func (*TargetMock) Health(*meta.Snode, time.Duration, url.Values) ([]byte, int, 
 func (*TargetMock) ECRestoreReq(*core.CT, *meta.Snode, string) error {
 	return nil
 }
+
+func (*TargetMock) GetFromNeighbor(*core.LOM, *meta.Snode, *cmn.Config, int64) (*http.Response, error) {
+	return nil, nil
+}

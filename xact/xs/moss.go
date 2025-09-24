@@ -65,7 +65,7 @@ other-targets (T1..Tn)
 // Rx time constants
 const (
 	iniwait = time.Second      // to backoff from
-	maxwait = 30 * time.Second // "hole" timeout
+	maxwait = 30 * time.Second // "hole" timeout // TODO: make it configurable
 )
 
 type (
@@ -92,7 +92,7 @@ type (
 		resp *apc.MossResp
 		sgl  *memsys.SGL // multipart (buffered) only
 		wid  string      // work item ID
-		size int64
+		size int64       // --/-- (cumulative)
 		cnt  int
 		// Rx
 		recv struct {
@@ -349,7 +349,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // send all requested local data => DT (tsi)
 // (phase 2)
 
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid string) error {
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string) error {
 	// to receive opAbort
 	bundle.SDM.RegRecv(r)
 
@@ -365,12 +365,12 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 		if err := _assertNoRange(in); err != nil {
 			return err
 		}
-		lom, local, err := r._lom(in, smap)
+		lom, tsi, err := r._lom(in, smap)
 		if err != nil {
 			return err
 		}
-		if !local {
-			continue // skip
+		if tsi != nil {
+			continue // other target must have it
 		}
 
 		var (
@@ -379,9 +379,9 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, tsi *meta.Snode, wid 
 		lom.Lock(false)
 
 		if in.ArchPath == "" {
-			err = r._sendreg(tsi, lom, wid, nameInArch, i)
+			err = r._sendreg(dt, lom, wid, nameInArch, i)
 		} else {
-			err = r._sendarch(tsi, lom, wid, nameInArch, in.ArchPath, i)
+			err = r._sendarch(dt, lom, wid, nameInArch, in.ArchPath, i)
 		}
 		if err != nil {
 			return err
@@ -527,6 +527,12 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		nlog.Errorln(err)
 		return err
 	}
+	if r.IsAborted() || r.Finished() {
+		if reader != nil && !hdr.IsHeaderOnly() {
+			io.Copy(io.Discard, reader)
+		}
+		return nil
+	}
 
 	// control
 	if hdr.Opcode != 0 {
@@ -545,6 +551,9 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		nlog.Errorln(r.Name(), core.T.String(), "RecvObj:", err)
 		r.BcastAbort(err)
 		r.Abort(err)
+	}
+	if hdr.ObjAttrs.Size > 0 {
+		r.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
 	return nil
 }
@@ -579,18 +588,22 @@ func (r *XactMoss) Snap() (snap *core.Snap) {
 	return
 }
 
-func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, local bool, err error) {
+func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, tsi *meta.Snode, err error) {
 	bck, err := r._bucket(in)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	lom = &core.LOM{ObjName: in.ObjName}
 	if err := lom.InitBck(bck); err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
-	_, local, err = lom.HrwTarget(smap)
+	var local bool
+	tsi, local, err = lom.HrwTarget(smap)
+	if local {
+		tsi = nil
+	}
 	return
 }
 
@@ -760,52 +773,21 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 		timer = time.NewTimer(sleep)
 	)
 	defer timer.Stop()
+
 	for {
 		select {
 		case <-timer.C:
-			var (
-				entry     *rxentry
-				index     int
-				entryDone bool
-			)
 			total += sleep
 			if cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid, total)
+				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid, total, "at index:", wi.recv.next)
 			}
-
-			wi.recv.mtx.Lock() // -----------
-			index = wi.recv.next
-			if index < l {
-				entry = &wi.recv.m[index]
-				entryDone = entry.isLocal() || !entry.isEmpty()
-			} else {
-				entryDone = true
-			}
-			wi.recv.mtx.Unlock() // -----------
-
-			if cmn.Rom.FastV(5, cos.SmoduleXs) {
-				if entry != nil {
-					nlog.Infoln("\t\t>>>>> next:", wi.wid, index, entry.nameInArch, entry.local)
-				} else {
-					nlog.Infoln("\t\t>>>>> done:", wi.wid, index, len(wi.recv.m), entryDone)
-				}
-			}
-			if entryDone {
+			if wi.holeFilled(l) {
 				return nil
 			}
-
-			//
-			// TODO -- FIXME: add GFN resilience
-			//
 			if total > maxwait {
-				s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
-					wi.r.Name(), index, core.T.String(), wi.wid, total)
-				return &errHole{s}
+				return wi.makeHoleTimeoutError(total)
 			}
-
-			if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
-				sleep = min(sleep<<1, maxwait>>3)
-			}
+			sleep = _backoff(total, sleep)
 			timer.Reset(sleep)
 
 		case _, ok := <-wi.recv.ch:
@@ -820,6 +802,33 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 	}
 }
 
+func (wi *basewi) holeFilled(l int) bool {
+	wi.recv.mtx.Lock()
+	defer wi.recv.mtx.Unlock()
+
+	index := wi.recv.next
+	if index < l {
+		entry := &wi.recv.m[index]
+		return entry.isLocal() || !entry.isEmpty()
+	}
+	return true
+}
+
+func (wi *basewi) makeHoleTimeoutError(total time.Duration) error {
+	index := wi.recv.next // Safe to read without lock here
+	s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
+		wi.r.Name(), index, core.T.String(), wi.wid, total)
+	return &errHole{s}
+}
+
+// simple time-based exponential, with a clamp
+func _backoff(total, sleep time.Duration) time.Duration {
+	if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
+		return min(sleep<<1, maxwait>>3)
+	}
+	return sleep
+}
+
 func (wi *basewi) next(i int) (int, error) {
 	var (
 		r  = wi.r
@@ -829,12 +838,12 @@ func (wi *basewi) next(i int) (int, error) {
 		return 0, err
 	}
 
-	lom, local, err := r._lom(in, wi.smap)
+	lom, tsi, err := r._lom(in, wi.smap)
 	if err != nil {
 		return 0, err
 	}
 
-	if !local {
+	if tsi != nil {
 		if !wi.receiving() {
 			err := fmt.Errorf("%s: unexpected non-local %s when _not_ receiving [%s, %s]", wi.r.Name(), lom.Cname(), wi.wid, wi.smap)
 			debug.AssertNoErr(err)
@@ -842,11 +851,9 @@ func (wi *basewi) next(i int) (int, error) {
 		}
 
 		nextIdx, err := wi.waitFlushRx(i)
-		if err == nil || (isErrHole(err) && !wi.req.ContinueOnErr) {
+		if err == nil || !isErrHole(err) {
 			return nextIdx, err
 		}
-
-		// NOTE: proceed anyway w/ IsNotExist (upon _write() -> Load()) handled as "missing"
 	}
 
 	bck := lom.Bck()
@@ -858,7 +865,39 @@ func (wi *basewi) next(i int) (int, error) {
 		Opaque:   in.Opaque,
 	}
 	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
-	err = wi.write(lom, in.ArchPath, &out, nameInArch, wi.req.ContinueOnErr)
+
+	if isErrHole(err) {
+		debug.Assert(tsi != nil)
+		resp, errN := core.T.GetFromNeighbor(lom, tsi, nil, wi.avgSize()) //nolint:bodyclose // closed below
+
+		switch {
+		case errN != nil:
+			if wi.req.ContinueOnErr {
+				// TODO -- FIXME: _and_ limit the number of such empty returns to a certain small percentage
+				err = wi.write(lom, in.ArchPath, &out, nameInArch, true)
+			}
+			// else: keep the original hole error for abort
+
+		case in.ArchPath != "":
+			// TODO -- FIXME: add support for archived reads
+			cos.DrainReader(resp.Body)
+			cos.Close(resp.Body)
+			if wi.req.ContinueOnErr {
+				// TODO -- FIXME: _and_ limit the number (ditto)
+				err = wi.write(lom, in.ArchPath, &out, nameInArch, true)
+			}
+
+		default:
+			// GFN succeeded + regular object - use the retrieved data
+			err = wi._txreg(lom, resp.Body, &out, nameInArch)
+			if err != nil {
+				cos.DrainReader(resp.Body)
+			}
+			cos.Close(resp.Body)
+		}
+	} else {
+		err = wi.write(lom, in.ArchPath, &out, nameInArch, wi.req.ContinueOnErr)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -883,6 +922,17 @@ func (wi *basewi) next(i int) (int, error) {
 		wi.recv.mtx.Unlock()
 	}
 	return i + 1, nil
+}
+
+func (wi *basewi) avgSize() (size int64) {
+	cnt := len(wi.resp.Out)
+	if cnt == 0 {
+		return 0
+	}
+	for i := range wi.resp.Out {
+		size += wi.resp.Out[i].Size
+	}
+	return size / int64(cnt)
 }
 
 func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
@@ -919,7 +969,7 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 	return err
 }
 
-func (wi *basewi) _txreg(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, nameInArch string) error {
+func (wi *basewi) _txreg(lom *core.LOM, lmfh io.Reader, out *apc.MossOut, nameInArch string) error {
 	if err := wi.aw.Write(nameInArch, lom, lmfh); err != nil {
 		return err
 	}

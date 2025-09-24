@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -195,4 +196,32 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 		)
 	}
 	return oa, ecode, err
+}
+
+func (t *target) GetFromNeighbor(lom *core.LOM, tsi *meta.Snode, config *cmn.Config, size int64) (*http.Response, error) {
+	query := lom.Bck().NewQuery()
+	query.Set(apc.QparamIsGFNRequest, "true")
+	reqArgs := cmn.AllocHra()
+	{
+		reqArgs.Method = http.MethodGet
+		reqArgs.Base = tsi.URL(cmn.NetIntraData)
+		reqArgs.Header = http.Header{
+			apc.HdrCallerID:   []string{t.SID()},
+			apc.HdrCallerName: []string{t.String()},
+		}
+		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
+		reqArgs.Query = query
+	}
+	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(config, size))
+	if err != nil {
+		cmn.FreeHra(reqArgs)
+		return nil, err
+	}
+	defer cancel()
+
+	resp, err := g.client.data.Do(req)
+	cmn.FreeHra(reqArgs)
+	cmn.HreqFree(req)
+
+	return resp, err
 }

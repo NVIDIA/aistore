@@ -100,7 +100,6 @@ type htrun struct {
 var _ core.Node = (*htrun)(nil)
 
 func (h *htrun) Snode() *meta.Snode { return h.si }
-func (h *htrun) callerName() string { return h.si.String() }
 func (h *htrun) SID() string        { return h.si.ID() }
 func (h *htrun) String() string     { return h.si.String() }
 

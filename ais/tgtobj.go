@@ -546,6 +546,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 	}
 
 	// not ok
+	cos.DrainReader(poi.r)
 	poi.r.Close()
 	if lmfh != nil {
 		if nerr := lmfh.Close(); nerr != nil {
@@ -964,31 +965,8 @@ gfn:
 }
 
 func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
-	query := lom.Bck().NewQuery()
-	query.Set(apc.QparamIsGFNRequest, "true")
-	reqArgs := cmn.AllocHra()
-	{
-		reqArgs.Method = http.MethodGet
-		reqArgs.Base = tsi.URL(cmn.NetIntraData)
-		reqArgs.Header = http.Header{
-			apc.HdrCallerID:   []string{goi.t.SID()},
-			apc.HdrCallerName: []string{goi.t.callerName()},
-		}
-		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
-		reqArgs.Query = query
-	}
 	config := cmn.GCO.Get()
-	req, _, cancel, err := reqArgs.ReqWith(config.Timeout.SendFile.D())
-	if err != nil {
-		debug.AssertNoErr(err)
-		return false
-	}
-	defer cancel()
-
-	resp, err := g.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
-	cmn.FreeHra(reqArgs)
-	cmn.HreqFree(req)
-
+	resp, err := goi.t.GetFromNeighbor(lom, tsi, config, lom.Lsize(true)) //nolint:bodyclose // closed by poi.put()
 	if err != nil {
 		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
 		return false
@@ -1865,8 +1843,9 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.NewQuery()
+		size  = sargs.objAttrs.Lsize(true)
 	)
-	cmn.ToHeader(sargs.objAttrs, hdr, sargs.objAttrs.Lsize(true))
+	cmn.ToHeader(sargs.objAttrs, hdr, size)
 	hdr.Set(apc.HdrT2TPutterID, t.SID())
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
@@ -1880,7 +1859,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, errN := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
+	req, _, cancel, errN := reqArgs.ReqWith(sendFileTimeout(coi.Config, size))
 	if errN != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)

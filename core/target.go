@@ -110,5 +110,7 @@ type (
 		ECRestoreReq(ct *CT, si *meta.Snode, uuid string) error
 
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
+
+		GetFromNeighbor(lom *LOM, tsi *meta.Snode, config *cmn.Config, size int64) (*http.Response, error)
 	}
 )
