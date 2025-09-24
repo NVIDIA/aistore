@@ -99,7 +99,6 @@ type (
 		inputExt        string
 		outputExt       string
 		alg             *dsort.Algorithm
-		missingKeys     bool
 		EKMMissingKey   string
 		outputShardSize string
 		maxMemUsage     string
@@ -110,6 +109,9 @@ type (
 
 		baseParams  api.BaseParams
 		managerUUID string
+
+		missingKeys bool
+		exactSize   bool
 	}
 
 	shardRecords struct {
@@ -311,16 +313,16 @@ func (df *dsortFramework) createInputShards() {
 			switch {
 			case df.alg.Kind == dsort.Content:
 				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys)
+					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys, df.exactSize)
 			case df.recordNames != nil:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, duplication, true, df.recordExts, df.recordNames)
+					df.fileSz, df.recordExts, df.recordNames, duplication, true, df.exactSize)
 			case df.inputExt == archive.ExtTar:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, duplication, false, df.recordExts, nil)
+					df.fileSz, df.recordExts, nil, duplication, false, df.exactSize)
 			default:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
-					df.fileSz, duplication, false, nil, nil)
+					df.fileSz, nil, nil, duplication, false, df.exactSize)
 			}
 			tassert.CheckFatal(df.m.t, err)
 
@@ -727,6 +729,7 @@ func testDsort(t *testing.T, ext, lr string) {
 					shardCnt:      500,
 					filesPerShard: 100,
 					maxMemUsage:   "99%",
+					exactSize:     true,
 				}
 			)
 			if testing.Short() {
@@ -968,6 +971,7 @@ func TestDsortShuffle(t *testing.T) {
 					shardCnt:      500,
 					filesPerShard: 10,
 					maxMemUsage:   "99%",
+					exactSize:     true,
 				}
 			)
 
@@ -1006,6 +1010,7 @@ func TestDsortDisk(t *testing.T) {
 					shardCnt:      100,
 					filesPerShard: 10,
 					maxMemUsage:   "1KB",
+					exactSize:     true,
 				}
 			)
 
@@ -1731,6 +1736,7 @@ func TestDsortMetricsAfterFinish(t *testing.T) {
 					outputTempl:   "output-{0..1000}",
 					shardCnt:      50,
 					filesPerShard: 10,
+					exactSize:     true,
 				}
 			)
 

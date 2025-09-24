@@ -128,10 +128,11 @@ func TestGetFromArch(t *testing.T) {
 						test.ext,
 						numArchived,
 						fsize,
-						false,       // duplication
-						false,       // random dir prefix
 						nil,         // record extensions
 						randomNames, // pregenerated filenames
+						false,       // duplication
+						false,       // random dir prefix
+						false,       // exact size
 					)
 					tassert.CheckFatal(t, err)
 

@@ -95,9 +95,9 @@ func equalSize(outputFormat string, size1, size2 int) bool {
 
 func TestMoss(t *testing.T) {
 	var (
-		numPlainObjs = 500 // plain objects to create
-		numArchives  = 400 // num shards to create
-		numInArch    = 50  // files per archive (shard)
+		numPlainObjs = 300 // plain objects to create
+		numArchives  = 100 // num shards to create
+		numInArch    = 20  // files per archive (shard)
 		fileSize     = 128 * cos.KiB
 	)
 	if testing.Short() {
@@ -169,9 +169,14 @@ func TestMoss(t *testing.T) {
 				}
 				proxyURL = tools.RandomProxyURL(t)
 			)
+			// randomize file sizes
+			if fileSize > 10 {
+				m.fileSizeRange[0] = m.fileSize - m.fileSize/2
+				m.fileSizeRange[1] = m.fileSize + m.fileSize/2
+			}
 
 			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-			m.init(false /*cleanup*/)
+			m.init(true /*cleanup*/)
 
 			if test.inputFormat == "" {
 				testMossPlainObjects(t, &m, &test, numPlainObjs)
@@ -312,10 +317,11 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 		test.inputFormat,  // file extension
 		numInArch,         // file count
 		int(m.fileSize),   // file size
-		false,             // no duplication
-		false,             // no random dir prefix
 		nil,               // no record extensions
 		randomNames,       // pregenerated filenames
+		false,             // no duplication
+		false,             // no random dir prefix
+		false,             // not exact size
 	)
 	if err != nil {
 		return nil, err

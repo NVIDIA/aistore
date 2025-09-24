@@ -314,7 +314,7 @@ func newTarReader(size int64, cksumType string) (r Reader, err error) {
 		buff           = bytes.NewBuffer(nil)
 	)
 	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, max(int(size/singleFileSize), 1),
-		int(singleFileSize), shard.ContentKeyInt, ".cls", true)
+		int(singleFileSize), shard.ContentKeyInt, ".cls", true /*missing keys*/, false /*exact size*/)
 	if err != nil {
 		return nil, err
 	}
