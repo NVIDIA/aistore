@@ -1015,7 +1015,7 @@ func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error
 // LOM: chunk persistence ------------------------------------------------------
 //
 
-func (lom *LOM) CompleteUfest(u *Ufest) error {
+func (lom *LOM) CompleteUfest(u *Ufest) (err error) {
 	lom.Lock(true)
 	defer lom.Unlock(true)
 
@@ -1027,15 +1027,22 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 		return total == u.size
 	})
 
-	// Load LOM to determine if it was previously chunked; if so, remove old completed chunks before proceeding
+	// Load LOM to determine if it was previously chunked and load old ufest for cleanup
 	// NOTE: at this point, `lom` already holds updated ufest metadata and checksum that need to be persisted
 	// Loading `lom` from disk would overwrite these. Need to clone and load it as another LOM variable instead
-	prevLom := lom.Clone()
+	var (
+		prevLom   = lom.Clone()
+		prevUfest *Ufest
+	)
 	if prevLom.Load(false /*cache it*/, true /*locked*/) == nil && prevLom.IsChunked() {
-		u, err := NewUfest("", prevLom, true /*must-exist*/)
+		prevUfest, err = NewUfest("", prevLom, true /*must-exist*/)
 		debug.AssertNoErr(err)
-		if err := u.removeCompleted(true /*except first*/); err != nil {
-			nlog.Errorln("failed to remove previous", tagCompleted, u._utag(prevLom.Cname()), "err:", err)
+		if err == nil {
+			// Load old ufest for cleaning up old chunks after successful completion
+			if errLoad := prevUfest.load(true); errLoad != nil {
+				nlog.Errorln("failed to load previous", tagCompleted, prevUfest._utag(prevLom.Cname()), "err:", errLoad)
+				prevUfest = nil
+			}
 		}
 	}
 
@@ -1045,6 +1052,25 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 			lom.CopyVersion(prevLom)
 			if err := lom.IncVersion(); err != nil {
 				nlog.Errorln(err)
+			}
+		}
+	}
+
+	// (in the extremely unlikely case we need to rollback)
+	var (
+		wfqnMeta, wfqnFirst string
+		completedFQN        string
+	)
+	if prevUfest != nil {
+		completedFQN = prevLom.GenFQN(fs.ChunkMetaCT)
+		debug.Assert(completedFQN == lom.GenFQN(fs.ChunkMetaCT))
+
+		wfqnMeta = prevLom.GenFQN(fs.ChunkMetaCT, u.id)
+		if _renameWarn(completedFQN, wfqnMeta) == nil {
+			wfqnFirst = prevLom.GenFQN(fs.WorkCT, u.id)
+			if _renameWarn(prevLom.FQN, wfqnFirst) != nil {
+				_renameWarn(wfqnMeta, completedFQN)
+				wfqnMeta, wfqnFirst = "", ""
 			}
 		}
 	}
@@ -1060,12 +1086,35 @@ func (lom *LOM) CompleteUfest(u *Ufest) error {
 	debug.Assert(lom.md.lid.haslmfl(lmflChunk))
 
 	if err := lom.PersistMain(true /*isChunked*/); err != nil {
-		lom.md.lid.clrlmfl(lmflChunk)
-		u.Abort(lom) // TODO -- FIXME: rollback u.removeCompleted (above)
+		if prevUfest == nil {
+			lom.md.lid.clrlmfl(lmflChunk)
+		} else if wfqnFirst != "" && wfqnMeta != "" {
+			// rollback
+			_renameWarn(wfqnFirst, prevLom.FQN)
+			_renameWarn(wfqnMeta, completedFQN)
+		}
+		u.Abort(lom)
 		return err
 	}
 
+	if prevUfest != nil {
+		if wfqnMeta != "" {
+			os.Remove(wfqnMeta)
+		}
+		if wfqnFirst != "" {
+			os.Remove(wfqnFirst)
+		}
+		prevUfest.removeChunks(prevLom, true /*except first*/)
+	}
+
 	return nil
+}
+
+func _renameWarn(src, dst string) (err error) {
+	if err = os.Rename(src, dst); err != nil {
+		nlog.WarningDepth(1, "nested err:", err)
+	}
+	return
 }
 
 /////////////////
