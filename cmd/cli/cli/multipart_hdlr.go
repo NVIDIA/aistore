@@ -213,7 +213,7 @@ func mptCompleteHandler(c *cli.Context) error {
 		return fmt.Errorf("failed to complete multipart upload: %v", err)
 	}
 
-	actionDone(c, "Successfully completed multipart upload for %s"+bck.Cname(objName))
+	actionDone(c, "Successfully completed multipart upload for "+bck.Cname(objName))
 	return nil
 }
 

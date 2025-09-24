@@ -75,6 +75,7 @@ var (
 		"put":      "object put",
 		"rmo":      "object rm",
 		"prefetch": "object prefetch", // same as "job start prefetch"
+		"mpu":      "object multipart-upload",
 		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",
