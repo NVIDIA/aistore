@@ -74,10 +74,14 @@ const (
 	AllowAllAccess = "su"
 
 	// read-only and read-write access to bucket
-	AccessRO             = AceGET | AceObjHEAD | AceListBuckets | AceBckHEAD | AceObjLIST
+	AccessRO             = AceGET | AceObjHEAD | AceBckHEAD | AceObjLIST
 	AllowReadOnlyAccess  = "ro"
 	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE
 	AllowReadWriteAccess = "rw"
+
+	// read-only and read-write access to cluster
+	ClusterAccessRO = AceListBuckets | AceShowCluster
+	ClusterAccessRW = ClusterAccessRO | AceCreateBucket | AceDestroyBucket | AceMoveBucket
 
 	AccessNone = AccessAttrs(0)
 )

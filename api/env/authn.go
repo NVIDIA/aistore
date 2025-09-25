@@ -22,6 +22,7 @@ const (
 	AisAuthServerCrt     = "AIS_SERVER_CRT"
 	AisAuthServerKey     = "AIS_SERVER_KEY"
 	AisAuthSecretKey     = "AIS_AUTHN_SECRET_KEY"
+	AisAuthPublicKey     = "AIS_AUTHN_PUBLIC_KEY" // for asymmetric tokens
 	AisAuthAdminUsername = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword = "AIS_AUTHN_SU_PASS"
 )

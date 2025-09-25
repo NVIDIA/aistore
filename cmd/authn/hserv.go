@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -174,7 +173,7 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := Conf.Secret()
-	if _, err := tok.DecryptToken(msg.Token, secret); err != nil {
+	if _, err := tok.ValidateToken(msg.Token, secret, nil); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -305,11 +304,11 @@ func getToken(r *http.Request) (*tok.Token, error) {
 		return nil, err
 	}
 	secret := Conf.Secret()
-	tk, err := tok.DecryptToken(tokenStr, secret)
+	tk, err := tok.ValidateToken(tokenStr, secret, nil)
 	if err != nil {
 		return nil, err
 	}
-	if tk.Expires.Before(time.Now()) {
+	if tk.IsExpired(nil) {
 		return nil, fmt.Errorf("not authorized (token expired): %s", tk)
 	}
 	return tk, nil

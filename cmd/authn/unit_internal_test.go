@@ -207,7 +207,7 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := tok.DecryptToken(token, secret)
+	info, err := tok.ValidateToken(token, secret, nil)
 	if err != nil {
 		t.Fatalf("Failed to decrypt token %v: %v", token, err)
 	}
@@ -224,11 +224,9 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	tk, err := tok.DecryptToken(token, secret)
+	tk, err := tok.ValidateToken(token, secret, nil)
 	tassert.CheckFatal(t, err)
-	if tk.Expires.After(time.Now()) {
-		t.Fatalf("Token must be expired: %s", token)
-	}
+	tassert.Fatalf(t, tk.IsExpired(nil), "Token must be expired: %s", token)
 }
 
 func TestMergeCluACLS(t *testing.T) {

@@ -5,6 +5,9 @@
 package ais
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,6 +39,8 @@ type (
 		revokedTokens map[string]bool
 		// signing key secret
 		secret string
+		// public key for validating tokens
+		rsaPubKey *rsa.PublicKey
 		// latest revoked version
 		version int64
 		// lock
@@ -48,12 +53,37 @@ type (
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
+	rsaPubKey, err := parsePubKey(cos.Right(config.Auth.PubKey, os.Getenv(env.AisAuthPublicKey)))
+	if err != nil {
+		cos.ExitLogf("Failed to parse RSA public key: %v", err)
+	}
 	return &authManager{
 		tkList:        make(tkList),
 		revokedTokens: make(map[string]bool), // TODO: preallocate
 		version:       1,
 		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey)), // environment override
+		rsaPubKey:     rsaPubKey,
 	}
+}
+
+func parsePubKey(str string) (*rsa.PublicKey, error) {
+	if str == "" {
+		return nil, nil
+	}
+	// Parse b64-encoded RSA public key from string
+	derBytes, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := x509.ParsePKIXPublicKey(derBytes)
+	if err != nil {
+		return nil, err
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("not an RSA public key")
+	}
+	return rsaPub, nil
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.
@@ -86,9 +116,9 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	now := time.Now()
 
 	for token := range a.revokedTokens {
-		tk, err := tok.DecryptToken(token, a.secret)
+		tk, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
 		debug.AssertNoErr(err)
-		if tk.Expires.Before(now) {
+		if tk.IsExpired(&now) {
 			delete(a.revokedTokens, token)
 		} else {
 			allRevoked.Tokens = append(allRevoked.Tokens, token)
@@ -126,7 +156,7 @@ func (a *authManager) validateToken(token string) (tk *tok.Token, err error) {
 	if _, ok := a.revokedTokens[token]; ok {
 		tk, err = nil, fmt.Errorf("%v: %s", tok.ErrTokenRevoked, tk)
 	} else {
-		tk, err = a.validateAddRm(token, time.Now())
+		tk, err = a.validateAddRm(token)
 	}
 	a.Unlock()
 	return
@@ -134,17 +164,18 @@ func (a *authManager) validateToken(token string) (tk *tok.Token, err error) {
 
 // Decrypts and validates token. Adds it to authManager.token if not found. Removes if expired.
 // Must be called under lock.
-func (a *authManager) validateAddRm(token string, now time.Time) (*tok.Token, error) {
+func (a *authManager) validateAddRm(token string) (*tok.Token, error) {
 	tk, ok := a.tkList[token]
+	debug.Assert(!ok || tk != nil)
 	if !ok || tk == nil {
 		var err error
-		if tk, err = tok.DecryptToken(token, a.secret); err != nil {
+		if tk, err = tok.ValidateToken(token, a.secret, a.rsaPubKey); err != nil {
 			nlog.Errorln(err)
 			return nil, tok.ErrInvalidToken
 		}
 		a.tkList[token] = tk
 	}
-	if tk.Expires.Before(now) {
+	if tk.IsExpired(nil) {
 		delete(a.tkList, token)
 		return nil, fmt.Errorf("%v: %s", tok.ErrTokenExpired, tk)
 	}
@@ -174,7 +205,7 @@ func (t *tokenList) String() string    { return fmt.Sprintf("TokenList v%d", t.V
 func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		p.validateSecret(w, r)
+		p.validateKey(w, r)
 	case http.MethodDelete:
 		p.delToken(w, r)
 	default:
@@ -182,19 +213,37 @@ func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
+// Given a secret key or a public key, validate if that key is valid for requests to this cluster
+func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, apc.URLPathTokens.L, 0, false); err != nil {
 		return
 	}
 
-	cluConf := &authn.ServerConf{}
-	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
+	reqConf := &authn.ServerConf{}
+	if err := cmn.ReadJSON(w, r, reqConf); err != nil {
 		return
 	}
 
-	cksumVal := cos.ChecksumB2S(cos.UnsafeB(p.authn.secret), cos.ChecksumSHA256)
-	if cksumVal != cluConf.Secret {
-		p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(cluConf.Secret))
+	if reqConf.Secret == "" && reqConf.PubKey == nil {
+		p.writeErrf(w, r, "no secret or public key provided to validate")
+		return
+	}
+	if reqConf.Secret != "" {
+		cksumVal := cos.ChecksumB2S(cos.UnsafeB(p.authn.secret), cos.ChecksumSHA256)
+		if cksumVal != reqConf.Secret {
+			p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(reqConf.Secret))
+		}
+	}
+	if reqConf.PubKey != nil {
+		reqKey, err := parsePubKey(*reqConf.PubKey)
+		if err != nil {
+			p.writeErrf(w, r, "%s: invalid public key (%q)", p, cos.SHead(*reqConf.PubKey))
+			return
+		}
+		if !reqKey.Equal(p.authn.rsaPubKey) {
+			p.writeErrf(w, r, "%s: provided public key (%q) does not match cluster's public key", p, cos.SHead(*reqConf.PubKey))
+			return
+		}
 	}
 }
 

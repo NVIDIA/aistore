@@ -466,12 +466,12 @@ func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
 	revokeList := make([]string, 0, len(tokens))
 	secret := Conf.Secret()
 	for _, token := range tokens {
-		tk, err := tok.DecryptToken(token, secret)
+		tk, err := tok.ValidateToken(token, secret, nil)
 		if err != nil {
 			m.db.Delete(revokedCollection, token)
 			continue
 		}
-		if tk.Expires.Before(now) {
+		if tk.IsExpired(&now) {
 			nlog.Infof("removing %s", tk)
 			m.db.Delete(revokedCollection, token)
 			continue

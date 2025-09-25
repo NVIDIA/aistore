@@ -637,10 +637,12 @@ type (
 	AuthConf struct {
 		Secret  string `json:"secret"`
 		Enabled bool   `json:"enabled"`
+		PubKey  string `json:"public_key"`
 	}
 	AuthConfToSet struct {
 		Secret  *string `json:"secret,omitempty"`
 		Enabled *bool   `json:"enabled,omitempty"`
+		PubKey  string  `json:"public_key,omitempty"`
 	}
 
 	// keepalive

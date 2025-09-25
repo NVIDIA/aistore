@@ -42,6 +42,7 @@ type (
 		pexpire *cos.Duration `json:"-"`
 		Secret  string        `json:"secret"`
 		Expire  cos.Duration  `json:"expiration_time"`
+		PubKey  *string       `json:"public_key"`
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`

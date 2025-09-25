@@ -6,6 +6,7 @@
 package tok
 
 import (
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 
 type Token struct {
 	UserID      string          `json:"username"`
+	Expiry      time.Time       `json:"exp"`
 	Expires     time.Time       `json:"expires"`
 	Token       string          `json:"token"`
 	ClusterACLs []*authn.CluACL `json:"clusters"`
@@ -73,12 +75,25 @@ func ExtractToken(hdr http.Header) (string, error) {
 	return s[idx+1:], nil
 }
 
-func DecryptToken(tokenStr, secret string) (*Token, error) {
-	jwtToken, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
+// Based on the token provided, return the key for the jwt library to use to verify the signature
+func parseJWTKey(t *jwt.Token, secret string, pubKey *rsa.PublicKey) (any, error) {
+	switch t.Method.(type) {
+	case *jwt.SigningMethodHMAC:
 		return []byte(secret), nil
+	case *jwt.SigningMethodRSA:
+		return pubKey, nil
+	default:
+		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", t.Method, t.Header["alg"])
+	}
+}
+
+// ValidateToken verifies JWT signature and extracts token claims
+// (supporting both HMAC (HS256) and RSA (RS256) signing methods)
+// - HS256: validates with secret (symmetric)
+// - RS256: validates with pubKey (asymmetric)
+func ValidateToken(tokenStr, secret string, pubKey *rsa.PublicKey) (*Token, error) {
+	jwtToken, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+		return parseJWTKey(t, secret, pubKey)
 	})
 	if err != nil {
 		return nil, err
@@ -99,7 +114,23 @@ func DecryptToken(tokenStr, secret string) (*Token, error) {
 ///////////
 
 func (tk *Token) String() string {
-	return fmt.Sprintf("user %s, %s", tk.UserID, expiresIn(tk.Expires))
+	return fmt.Sprintf("user %s, %s", tk.UserID, expiresIn(tk.getExpiry()))
+}
+
+// Supports both our old `expires` and standard `exp` fields, with `exp` taking precedence
+func (tk *Token) getExpiry() time.Time {
+	if !tk.Expiry.IsZero() {
+		return tk.Expiry
+	}
+	return tk.Expires
+}
+
+// IsExpired Check if this token's expiry is after the time provided. If not provided, compare against time.Now.
+func (tk *Token) IsExpired(now *time.Time) bool {
+	if now != nil {
+		return tk.getExpiry().Before(*now)
+	}
+	return tk.getExpiry().Before(time.Now())
 }
 
 // A user has two-level permissions: cluster-wide and on per bucket basis.
@@ -118,8 +149,6 @@ func (tk *Token) String() string {
 //
 // If there are no defined ACL found at any step, any access is denied.
 
-const accessCluster = apc.AceListBuckets | apc.AceCreateBucket | apc.AceDestroyBucket | apc.AceMoveBucket | apc.AceShowCluster | apc.AceAdmin
-
 func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
 	if tk.IsAdmin {
 		return nil
@@ -127,8 +156,8 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	if perms == 0 {
 		return errors.New("empty permissions requested")
 	}
-	cluPerms := perms & accessCluster
-	objPerms := perms &^ accessCluster
+	cluPerms := perms & apc.ClusterAccessRW
+	objPerms := perms & apc.AccessRW
 	cluACL, cluOk := tk.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
