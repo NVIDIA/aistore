@@ -250,6 +250,9 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 	case apc.QparamArchpath:
 		dpq.arch.path, err = _unescape(val)
 		if err == nil && dpq.arch.path != "" {
+			if dpq.arch.path[0] == '/' {
+				dpq.arch.path = dpq.arch.path[1:]
+			}
 			err = cos.ValidateArchpath(dpq.arch.path)
 		}
 	case apc.QparamArchmime:

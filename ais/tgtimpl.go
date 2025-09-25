@@ -200,15 +200,20 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 }
 
 func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error) {
-	lom := params.Lom
-	query := lom.Bck().NewQuery()
+	var (
+		lom      = params.Lom
+		query    = lom.Bck().NewQuery()
+		archived bool
+	)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	if params.ArchPath != "" {
 		// (compare w/ t.getObject)
 		debug.Assertf(!strings.HasPrefix(params.ArchPath, lom.ObjName),
 			"expecting archpath _in_ archive, got (%q, %q)", params.ArchPath, lom.ObjName)
 		query.Set(apc.QparamArchpath, params.ArchPath)
+		archived = true
 	}
+
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodGet
@@ -220,7 +225,11 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
 		reqArgs.Query = query
 	}
-	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(params.Config, params.Size))
+
+	if params.Config == nil {
+		params.Config = cmn.GCO.Get()
+	}
+	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(params.Config, params.Size, archived))
 	if err != nil {
 		cmn.FreeHra(reqArgs)
 		return nil, err

@@ -887,7 +887,7 @@ func (wi *basewi) next(i int) (int, error) {
 	if isErrHole(err) {
 		err = wi.gfn(lom, tsi, in, &out, nameInArch, err)
 	} else {
-		err = wi.write(lom, in.ArchPath, &out, nameInArch)
+		err = wi.write(lom, in, &out, nameInArch)
 	}
 	if err != nil {
 		return 0, err
@@ -928,7 +928,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	if err != nil {
 		wi.r.gfn.fail.Inc()
 		if wi.req.ContinueOnErr {
-			return wi.write(lom, in.ArchPath, out, nameInArch)
+			return wi.write(lom, in, out, nameInArch)
 		}
 		return errHole // remains orig err
 	}
@@ -937,8 +937,8 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	if in.ArchPath == "" {
 		err = wi._txreg(lom, resp.Body, out, nameInArch)
 	} else {
-		nameInArch += cos.PathSeparator + in.ArchPath
-		debug.Assert(resp.ContentLength > 0) // --------------------  TODO: aw.Write to return `written`
+		debug.Assert(resp.ContentLength >= 0, "GFN(arch): negative Content-Length for ", lom.Cname()+"/"+in.ArchPath)
+		nameInArch = _withArchpath(nameInArch, in.ArchPath)
 		err = wi._txarch(resp.Body, out, nameInArch, resp.ContentLength)
 	}
 	if err != nil {
@@ -959,15 +959,15 @@ func (wi *basewi) avgSize() (size int64) {
 	return size / int64(cnt)
 }
 
-func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string) error {
+func (wi *basewi) write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
 	lom.Lock(false)
-	err := wi._write(lom, archpath, out, nameInArch)
+	err := wi._write(lom, in, out, nameInArch)
 	lom.Unlock(false)
 	return err
 }
 
 // (under rlock)
-func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string) error {
+func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 			err = wi.addMissing(err, nameInArch, out)
@@ -984,10 +984,10 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 	}
 
 	switch {
-	case archpath != "":
-		nameInArch += cos.PathSeparator + archpath
+	case in.ArchPath != "":
+		nameInArch = _withArchpath(nameInArch, in.ArchPath)
 		var csl cos.ReadCloseSizer
-		csl, err = lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
+		csl, err = lom.NewArchpathReader(lmfh, in.ArchPath, "" /*mime*/)
 		if err != nil {
 			if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 				err = wi.addMissing(err, nameInArch, out)
@@ -1001,6 +1001,13 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 	}
 	cos.Close(lmfh)
 	return err
+}
+
+func _withArchpath(nameInArch, archpath string) string {
+	if archpath[0] == '/' {
+		return nameInArch + archpath
+	}
+	return nameInArch + cos.PathSeparator + archpath
 }
 
 func (wi *basewi) _txreg(lom *core.LOM, reader io.Reader, out *apc.MossOut, nameInArch string) error {

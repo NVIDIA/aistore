@@ -726,11 +726,11 @@ do: // retry uplock or ec-recovery, the latter only once
 
 	// read locally and stream back
 fin:
-	ecode, err = goi.txfini()
+	var fqn string
+	fqn, ecode, err = goi.txfini()
 	if err == nil {
-		return 0, nil
-	}
-	if goi.retry {
+		err = goi.expostfacto(fqn)
+	} else if goi.retry {
 		goi.retry = false
 		if !retried {
 			goi.lom.UncacheDel()
@@ -741,6 +741,31 @@ fin:
 		}
 	}
 	return ecode, err
+}
+
+func (goi *getOI) expostfacto(fqn string) error {
+	lom := goi.lom
+
+	// apc.QparamIsGFNRequest: update GFN filter to skip _rebalancing_ this one
+	if goi.dpq.isGFN {
+		bname := cos.UnsafeBptr(lom.UnamePtr())
+		goi.t.reb.FilterAdd(*bname)
+		return nil
+	}
+	if goi.cold || goi.rget { // GFN & cold-GET: must be already loaded w/ atime set
+		return nil
+	}
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if !cmn.IsErrObjNought(err) {
+			fs.CleanPathErr(err)
+			goi.isIOErr = true
+			goi.t.FSHC(err, lom.Mountpath(), fqn)
+		}
+		return cmn.ErrGetTxBenign
+	}
+	lom.SetAtimeUnix(goi.atime)
+	lom.Recache()
+	return nil
 }
 
 func (goi *getOI) isStreamingColdGet() bool {
@@ -1006,36 +1031,36 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	return false
 }
 
-func (goi *getOI) txfini() (ecode int, err error) {
+func (goi *getOI) txfini() (fqn string, ecode int, err error) {
 	var (
 		lmfh cos.LomReader
 		hrng *htrange
-		fqn  string
 		dpq  = goi.dpq
+		lom  = goi.lom
 	)
 	// open
-	if cmn.Rom.Features().IsSet(feat.LoadBalanceGET) && !goi.cold && !dpq.isGFN && !goi.lom.IsChunked() {
+	if cmn.Rom.Features().IsSet(feat.LoadBalanceGET) && !goi.cold && !dpq.isGFN && !lom.IsChunked() {
 		// [feat] best-effort GET load balancing across mirrored copies
-		if lmfh, fqn = goi.lom.OpenCopy(); lmfh == nil {
-			fqn = goi.lom.FQN
-			lmfh, err = goi.lom.Open()
+		if lmfh, fqn = lom.OpenCopy(); lmfh == nil {
+			fqn = lom.FQN
+			lmfh, err = lom.Open()
 		}
 	} else {
-		fqn = goi.lom.FQN
-		lmfh, err = goi.lom.Open()
+		fqn = lom.FQN
+		lmfh, err = lom.Open()
 	}
 
 	if err != nil {
 		if cos.IsNotExist(err) {
 			// NOTE: retry only once and only when ec-enabled - see goi.restoreFromAny()
 			ecode = http.StatusNotFound
-			goi.retry = goi.lom.ECEnabled()
+			goi.retry = lom.ECEnabled()
 		} else {
-			goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
+			goi.t.FSHC(err, lom.Mountpath(), fqn)
 			ecode = http.StatusInternalServerError
-			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", goi.lom.Cname(), err, ecode)
+			err = cmn.NewErrFailedTo(goi.t, "goi-finalize", lom.Cname(), err, ecode)
 		}
-		return ecode, err
+		return fqn, ecode, err
 	}
 
 	whdr := goi.w.Header()
@@ -1044,7 +1069,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	switch {
 	case goi.ranges.Range != "":
 		debug.Assert(!dpq.isArch())
-		rsize := goi.lom.Lsize()
+		rsize := lom.Lsize()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
@@ -1059,7 +1084,7 @@ func (goi *getOI) txfini() (ecode int, err error) {
 	}
 
 	cos.Close(lmfh)
-	return ecode, err
+	return fqn, ecode, err
 }
 
 const (
@@ -1124,6 +1149,9 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 
 // buffer sizing for range and arch reads (compare w/ txreg)
 func _txsize(size int64) int64 {
+	if size <= 0 {
+		return memsys.PageSize
+	}
 	if size >= 256*cos.KiB {
 		return memsys.MaxPageSlabSize
 	}
@@ -1166,9 +1194,16 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 			return err
 		}
 		// found
+		var (
+			size = csl.Size()
+		)
+		debug.Assert(size >= 0, "negative archive entry size for", lom.Cname(), "/", dpq.arch.path)
+		// (compare w/ goi.setwhdr)
 		whdr.Set(cos.HdrContentType, cos.ContentBinary)
-		buf, slab := goi.t.gmm.AllocSize(_txsize(csl.Size()))
-		err = goi.transmit(csl, buf, fqn, csl.Size())
+		whdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
+
+		buf, slab := goi.t.gmm.AllocSize(_txsize(size))
+		err = goi.transmit(csl, buf, fqn, size)
 		slab.Free(buf)
 		csl.Close()
 		return err
@@ -1205,7 +1240,6 @@ func (goi *getOI) _txarch(fqn string, lmfh cos.LomReader, whdr http.Header) erro
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) error {
 	var (
 		errTx error
-		lom   = goi.lom
 	)
 	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil || written != size {
@@ -1215,27 +1249,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, size int64) erro
 		return errTx
 	}
 
-	// apc.QparamIsGFNRequest: update GFN filter to skip _rebalancing_ this one
-	if goi.dpq.isGFN {
-		bname := cos.UnsafeBptr(lom.UnamePtr())
-		goi.t.reb.FilterAdd(*bname)
-	} else if !goi.cold { // GFN & cold-GET: must be already loaded w/ atime set
-		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			if !cmn.IsErrObjNought(err) {
-				fs.CleanPathErr(err)
-				goi.isIOErr = true
-				goi.t.FSHC(err, goi.lom.Mountpath(), fqn)
-			}
-			return cmn.ErrGetTxBenign
-		}
-		lom.SetAtimeUnix(goi.atime)
-		lom.Recache()
-	}
 	//
 	// stats
 	//
 	goi.stats(written)
-	return errTx
+	return nil
 }
 
 func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
@@ -1865,7 +1883,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, errN := reqArgs.ReqWith(sendFileTimeout(coi.Config, size))
+	req, _, cancel, errN := reqArgs.ReqWith(sendFileTimeout(coi.Config, size, false /*archived*/))
 	if errN != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
