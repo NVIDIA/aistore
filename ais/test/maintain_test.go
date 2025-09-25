@@ -615,6 +615,9 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	}
 }
 
+// TODO -- FIXME: pass with chunked objects
+// Currently, rebalance transfers objects to another target node as a whole, even if objects were originally chunked.
+// As a result, after rebalance, objects lose their chunked state and the `chunked` flag no longer matches.
 func TestShutdownListObjects(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
