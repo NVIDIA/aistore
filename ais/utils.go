@@ -13,13 +13,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -470,17 +468,4 @@ func xvlabs(bck *meta.Bck) map[string]string {
 		return map[string]string{stats.VlabBucket: bck.Cname(""), stats.VlabXkind: ""}
 	}
 	return stats.EmptyBckXlabs
-}
-
-//
-// override intra-cluster (target-to-target) SendFile timeout
-//
-
-func sendFileTimeout(config *cmn.Config, size int64, archived bool) time.Duration {
-	debug.Assert(config != nil)
-	tout := config.Timeout.SendFile.D()
-	if size > cos.GiB || size < 0 || archived { // (heuristic)
-		return tout
-	}
-	return min(tout, time.Minute)
 }

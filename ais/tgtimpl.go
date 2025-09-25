@@ -201,9 +201,8 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 
 func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error) {
 	var (
-		lom      = params.Lom
-		query    = lom.Bck().NewQuery()
-		archived bool
+		lom   = params.Lom
+		query = lom.Bck().NewQuery()
 	)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	if params.ArchPath != "" {
@@ -211,7 +210,6 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		debug.Assertf(!strings.HasPrefix(params.ArchPath, lom.ObjName),
 			"expecting archpath _in_ archive, got (%q, %q)", params.ArchPath, lom.ObjName)
 		query.Set(apc.QparamArchpath, params.ArchPath)
-		archived = true
 	}
 
 	reqArgs := cmn.AllocHra()
@@ -226,19 +224,28 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		reqArgs.Query = query
 	}
 
-	if params.Config == nil {
-		params.Config = cmn.GCO.Get()
-	}
-	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(params.Config, params.Size, archived))
+	req, err := reqArgs.Req()
 	if err != nil {
 		cmn.FreeHra(reqArgs)
 		return nil, err
 	}
-	defer cancel()
+
+	var tout time.Duration
+	if params.Config == nil {
+		tout = cmn.GCO.Get().Timeout.SendFile.D()
+	} else {
+		tout = params.Config.Timeout.SendFile.D()
+	}
+	if params.ArchPath != "" {
+		tout = cos.ClampDuration(tout, 10*time.Second, time.Minute)
+	}
+	_, cancel := context.WithTimeout(context.Background(), tout)
 
 	resp, err := g.client.data.Do(req)
+
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
+	cancel()
 
 	return resp, err
 }

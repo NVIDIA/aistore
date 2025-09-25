@@ -393,7 +393,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		var (
 			nameInArch = in.NameInRespArch(lom.Bck().Name, req.OnlyObjName)
 		)
-		lom.Lock(false)
+		lom.Lock(false) // (always unlocked by _sendreg/_sendarch)
 
 		if in.ArchPath == "" {
 			err = r._sendreg(dt, lom, wid, nameInArch, i)
@@ -803,7 +803,7 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 				return nil
 			}
 			if total > maxwait {
-				return wi.makeHoleTimeoutError(total)
+				return wi.newErrHole(total)
 			}
 			sleep = _backoff(total, sleep)
 			timer.Reset(sleep)
@@ -832,7 +832,7 @@ func (wi *basewi) holeFilled(l int) bool {
 	return true
 }
 
-func (wi *basewi) makeHoleTimeoutError(total time.Duration) error {
+func (wi *basewi) newErrHole(total time.Duration) error {
 	index := wi.recv.next // Safe to read without lock here
 	s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
 		wi.r.Name(), index, core.T.String(), wi.wid, total)
@@ -868,7 +868,8 @@ func (wi *basewi) next(i int) (int, error) {
 			return 0, err
 		}
 
-		nextIdx, err := wi.waitFlushRx(i)
+		var nextIdx int
+		nextIdx, err = wi.waitFlushRx(i)
 		if err == nil || !isErrHole(err) {
 			return nextIdx, err
 		}
@@ -923,7 +924,12 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		ArchPath: in.ArchPath,
 		Size:     wi.avgSize(),
 	}
+
 	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
+
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		nlog.Infoln(wi.r.Name(), "GFN", lom.Cname(), err, in.ArchPath)
+	}
 
 	if err != nil {
 		wi.r.gfn.fail.Inc()
@@ -935,7 +941,8 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 
 	wi.r.gfn.ok.Inc()
 	if in.ArchPath == "" {
-		err = wi._txreg(lom, resp.Body, out, nameInArch)
+		oah := cos.SimpleOAH{Size: resp.ContentLength}
+		err = wi._txreg(oah, resp.Body, out, nameInArch)
 	} else {
 		debug.Assert(resp.ContentLength >= 0, "GFN(arch): negative Content-Length for ", lom.Cname()+"/"+in.ArchPath)
 		nameInArch = _withArchpath(nameInArch, in.ArchPath)
@@ -1010,11 +1017,11 @@ func _withArchpath(nameInArch, archpath string) string {
 	return nameInArch + cos.PathSeparator + archpath
 }
 
-func (wi *basewi) _txreg(lom *core.LOM, reader io.Reader, out *apc.MossOut, nameInArch string) error {
-	if err := wi.aw.Write(nameInArch, lom, reader); err != nil {
+func (wi *basewi) _txreg(oah cos.OAH, reader io.Reader, out *apc.MossOut, nameInArch string) error {
+	if err := wi.aw.Write(nameInArch, oah, reader); err != nil {
 		return err
 	}
-	out.Size = lom.Lsize()
+	out.Size = oah.Lsize()
 	return nil
 }
 

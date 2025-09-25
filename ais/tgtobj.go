@@ -1883,7 +1883,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, errN := reqArgs.ReqWith(sendFileTimeout(coi.Config, size, false /*archived*/))
+	req, _, cancel, errN := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
 	if errN != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
