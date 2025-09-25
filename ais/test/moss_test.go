@@ -38,13 +38,14 @@ const (
 )
 
 type mossConfig struct {
-	inputFormat   string // AIStore to read (and serialize) plain objects or sharded files ("" defaults to plain)
-	outputFormat  string // AIStore to return result as TAR or any other supported serialization format ("" defaults to TAR)
-	continueOnErr bool   // GetBatch ContinueOnErr flag
-	onlyObjName   bool   // GetBatch OnlyObjName flag
-	withMissing   bool   // inject missing objects
-	nested        bool   // subdirs in archives
-	streaming     bool   // streaming GET (w/ no out-of-band apc.MossResp metadata)
+	inputFormat        string // AIStore to read (and serialize) plain objects or sharded files ("" defaults to plain)
+	outputFormat       string // AIStore to return result as TAR or any other supported serialization format ("" defaults to TAR)
+	continueOnErr      bool   // GetBatch ContinueOnErr flag
+	onlyObjName        bool   // GetBatch OnlyObjName flag
+	withMissing        bool   // inject missing objects
+	nested             bool   // subdirs in archives
+	streaming          bool   // streaming GET (w/ no out-of-band apc.MossResp metadata)
+	emptyDefaultBucket bool   // use empty default bucket, specify bucket (or multiple different buckets) explicitly via `apc.MossIn` entries
 }
 
 func (c *mossConfig) name() (s string) {
@@ -66,6 +67,9 @@ func (c *mossConfig) name() (s string) {
 	}
 	if c.nested {
 		s += "/nested"
+	}
+	if c.emptyDefaultBucket {
+		s += "/empty-default-bck"
 	}
 	if c.outputFormat != "" {
 		s += "=>" + c.outputFormat
@@ -91,6 +95,14 @@ func equalSize(outputFormat string, size1, size2 int) bool {
 	default:
 		return size1 == size2
 	}
+}
+
+// Helper function to get the default bucket for API calls
+func getDefaultBucket(m *ioContext, test *mossConfig) cmn.Bck {
+	if test.emptyDefaultBucket {
+		return cmn.Bck{} // Empty bucket
+	}
+	return m.bck // Use the existing bucket
 }
 
 func TestMoss(t *testing.T) {
@@ -154,28 +166,41 @@ func TestMoss(t *testing.T) {
 		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTgz, streaming: true},
 		{inputFormat: archive.ExtTar, outputFormat: archive.ExtTarLz4, continueOnErr: true, withMissing: true, streaming: true},
 		{inputFormat: archive.ExtTarLz4, outputFormat: archive.ExtZip, continueOnErr: true, onlyObjName: true, withMissing: true, streaming: true},
+
+		// NEW: Test case - empty default bucket with explicit bucket specification in each entry
+		{inputFormat: "", continueOnErr: false, onlyObjName: false, emptyDefaultBucket: true},
+		{inputFormat: "", continueOnErr: true, onlyObjName: false, emptyDefaultBucket: true},
+		{inputFormat: "", continueOnErr: true, onlyObjName: true, emptyDefaultBucket: true},
+		{inputFormat: "", continueOnErr: true, onlyObjName: false, withMissing: true, emptyDefaultBucket: true},
+
+		// Test with archives too
+		{inputFormat: archive.ExtTar, continueOnErr: false, onlyObjName: false, emptyDefaultBucket: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, emptyDefaultBucket: true},
+
+		// Streaming with empty default bucket
+		{inputFormat: "", streaming: true, emptyDefaultBucket: true},
+		{inputFormat: "", continueOnErr: true, withMissing: true, streaming: true, emptyDefaultBucket: true},
+		{inputFormat: archive.ExtTar, streaming: true, emptyDefaultBucket: true},
+		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true, emptyDefaultBucket: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
-			var (
-				bck = cmn.Bck{Name: trand.String(15), Provider: apc.AIS}
-				m   = ioContext{
-					t:        t,
-					bck:      bck,
-					fileSize: uint64(fileSize),
-					prefix:   "moss/",
-					ordered:  true,
-				}
-				proxyURL = tools.RandomProxyURL(t)
-			)
+			m := ioContext{
+				t:        t,
+				bck:      cmn.Bck{Name: trand.String(15), Provider: apc.AIS},
+				fileSize: uint64(fileSize),
+				prefix:   "moss/",
+				ordered:  true,
+			}
+
 			// randomize file sizes
 			if fileSize > 10 {
 				m.fileSizeRange[0] = m.fileSize - m.fileSize/2
 				m.fileSizeRange[1] = m.fileSize + m.fileSize/2
 			}
 
-			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			m.init(true /*cleanup*/)
 
 			if test.inputFormat == "" {
@@ -194,10 +219,17 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	// Build MossIn
 	mossIn := make([]apc.MossIn, 0, numObjs)
 	for i := range numObjs {
-		mossIn = append(mossIn, apc.MossIn{
+		entry := apc.MossIn{
 			ObjName: m.objNames[i],
 			Opaque:  []byte(cos.GenTie()),
-		})
+		}
+
+		if test.emptyDefaultBucket {
+			entry.Bucket = m.bck.Name
+			entry.Provider = m.bck.Provider
+		}
+
+		mossIn = append(mossIn, entry)
 	}
 
 	// Inject missing objects if requested
@@ -208,9 +240,15 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 		for i, entry := range originalEntries {
 			mossIn = append(mossIn, entry)
 			if i%3 == 0 {
-				mossIn = append(mossIn, apc.MossIn{
+				missingEntry := apc.MossIn{
 					ObjName: mossMissingPrefix + trand.String(8),
-				})
+				}
+				// same as above
+				if test.emptyDefaultBucket {
+					missingEntry.Bucket = m.bck.Name
+					missingEntry.Provider = m.bck.Provider
+				}
+				mossIn = append(mossIn, missingEntry)
 			}
 		}
 	}
@@ -272,11 +310,18 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 		// Add a few files from each archive
 		numToRequest := min(len(archInfo.filePaths), max(numInArch/5, 3))
 		for j := range numToRequest {
-			mossIn = append(mossIn, apc.MossIn{
+			entry := apc.MossIn{
 				ObjName:  archInfo.name,
 				ArchPath: archInfo.filePaths[j],
 				Opaque:   []byte(cos.GenTie()),
-			})
+			}
+
+			if test.emptyDefaultBucket {
+				entry.Bucket = m.bck.Name
+				entry.Provider = m.bck.Provider
+			}
+
+			mossIn = append(mossIn, entry)
 		}
 	}
 
@@ -386,7 +431,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 				callStart = mono.NanoTime()
 				buf       strings.Builder
 			)
-			resp, err := api.GetBatch(baseParams, m.bck, req, &buf)
+			resp, err := api.GetBatch(baseParams, getDefaultBucket(m, test), req, &buf)
 			callDuration := mono.Since(callStart)
 
 			tarData := []byte(buf.String())
@@ -550,7 +595,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 				callStart = mono.NanoTime()
 				buf       bytes.Buffer
 			)
-			_, err := api.GetBatch(baseParams, m.bck, req, &buf)
+			_, err := api.GetBatch(baseParams, getDefaultBucket(m, test), req, &buf)
 			callDuration := mono.Since(callStart)
 
 			tarData := buf.Bytes()
