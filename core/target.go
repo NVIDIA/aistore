@@ -55,6 +55,14 @@ type (
 		Msg      *apc.BlobMsg
 		Wfqn     string
 	}
+
+	GfnParams struct {
+		Lom      *LOM
+		Tsi      *meta.Snode
+		Config   *cmn.Config
+		ArchPath string
+		Size     int64
+	}
 )
 
 type (
@@ -111,6 +119,6 @@ type (
 
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 
-		GetFromNeighbor(lom *LOM, tsi *meta.Snode, config *cmn.Config, size int64) (*http.Response, error)
+		GetFromNeighbor(params *GfnParams) (*http.Response, error)
 	}
 )

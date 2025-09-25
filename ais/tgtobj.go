@@ -966,7 +966,13 @@ gfn:
 
 func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	config := cmn.GCO.Get()
-	resp, err := goi.t.GetFromNeighbor(lom, tsi, config, lom.Lsize(true)) //nolint:bodyclose // closed by poi.put()
+	params := &core.GfnParams{
+		Lom:    lom,
+		Tsi:    tsi,
+		Config: config,
+		Size:   lom.Lsize(true),
+	}
+	resp, err := goi.t.GetFromNeighbor(params) //nolint:bodyclose // closed by poi.put()
 	if err != nil {
 		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
 		return false

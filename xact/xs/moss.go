@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -55,12 +56,15 @@ other-targets (T1..Tn)
 // needed since UnregRecv is permissive no-op when not registered.
 
 // TODO:
-// - test: inject/simulate random aborts
 // - ctlmsg
+// - add stats: (total count; count per wi; wi latency); optionally: gfn
+// - limit the number of GFN-failure-stimulated empty returns
 // - soft errors other than not-found; unified error formatting
 // - mem-pool: basewi; apc.MossReq; apc.MossResp
-// - range read (can wait)
-// - finer grained abort: one work item (can wait)
+// ---------- (can wait) ------------------
+// - test random aborts
+// - range read
+// - finer-grained wi abort
 
 // Rx time constants
 const (
@@ -92,8 +96,10 @@ type (
 		resp *apc.MossResp
 		sgl  *memsys.SGL // multipart (buffered) only
 		wid  string      // work item ID
-		size int64       // --/-- (cumulative)
-		cnt  int
+		// stats
+		size    int64 // (cumulative)
+		started int64 // (mono)
+		cnt     int
 		// Rx
 		recv struct {
 			ch   chan int
@@ -115,9 +121,13 @@ type (
 type (
 	XactMoss struct {
 		xact.DemandBase
-		gmm      *memsys.MMSA
-		smm      *memsys.MMSA
-		pending  sync.Map // [wid => *basewi]
+		gmm     *memsys.MMSA
+		smm     *memsys.MMSA
+		pending sync.Map // [wid => *basewi]
+		gfn     struct { // counts
+			ok   atomic.Int32
+			fail atomic.Int32
+		}
 		activeWG sync.WaitGroup
 	}
 )
@@ -251,6 +261,11 @@ func (r *XactMoss) cleanup(key, value any) bool {
 
 // terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(int64) (d time.Duration) {
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if ok, fail := r.gfn.ok.Load(), r.gfn.fail.Load(); ok+fail > 0 {
+			nlog.Infoln(r.Name(), "GFN: [", ok, fail, "]")
+		}
+	}
 	switch {
 	case r.IsAborted() || r.Finished():
 		return hk.UnregInterval
@@ -277,6 +292,8 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 	if receiving {
 		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.RegRecv(r)
+
+		wi.started = mono.NanoTime()
 
 		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
@@ -407,7 +424,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	if err != nil {
 		mopaque.Missing = true
 		mopaque.Emsg = err.Error()
-		nameInArch = apc.MossMissingDir + "/" + nameInArch
+		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 		oah = &cmn.ObjAttrs{}
 		roc = nil
 	}
@@ -452,11 +469,11 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 	if err != nil {
 		mopaque.Missing = true
 		mopaque.Emsg = err.Error()
-		nameInArch = apc.MossMissingDir + "/" + nameInArch
+		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 	} else {
 		csl, err := lom.NewArchpathReader(lh, archpath, "" /*mime*/)
 		if err != nil {
-			nameInArch = apc.MossMissingDir + "/" + nameInArch
+			nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 			mopaque.Missing = true
 			mopaque.Emsg = err.Error()
 		} else {
@@ -679,8 +696,9 @@ func (wi *basewi) cleanup() {
 	wi.recv.m = nil
 	wi.recv.mtx.Unlock()
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "cleanup: done", wi.wid)
+	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		nlog.Infoln(r.Name(), core.T.String(), "cleanup: done", wi.wid,
+			"stats [ cnt:", wi.cnt, "size:", wi.size, "lat:", mono.Since(wi.started), "]")
 	}
 }
 
@@ -867,36 +885,9 @@ func (wi *basewi) next(i int) (int, error) {
 	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
 
 	if isErrHole(err) {
-		debug.Assert(tsi != nil)
-		resp, errN := core.T.GetFromNeighbor(lom, tsi, nil, wi.avgSize()) //nolint:bodyclose // closed below
-
-		switch {
-		case errN != nil:
-			if wi.req.ContinueOnErr {
-				// TODO -- FIXME: _and_ limit the number of such empty returns to a certain small percentage
-				err = wi.write(lom, in.ArchPath, &out, nameInArch, true)
-			}
-			// else: keep the original hole error for abort
-
-		case in.ArchPath != "":
-			// TODO -- FIXME: add support for archived reads
-			cos.DrainReader(resp.Body)
-			cos.Close(resp.Body)
-			if wi.req.ContinueOnErr {
-				// TODO -- FIXME: _and_ limit the number (ditto)
-				err = wi.write(lom, in.ArchPath, &out, nameInArch, true)
-			}
-
-		default:
-			// GFN succeeded + regular object - use the retrieved data
-			err = wi._txreg(lom, resp.Body, &out, nameInArch)
-			if err != nil {
-				cos.DrainReader(resp.Body)
-			}
-			cos.Close(resp.Body)
-		}
+		err = wi.gfn(lom, tsi, in, &out, nameInArch, err)
 	} else {
-		err = wi.write(lom, in.ArchPath, &out, nameInArch, wi.req.ContinueOnErr)
+		err = wi.write(lom, in.ArchPath, &out, nameInArch)
 	}
 	if err != nil {
 		return 0, err
@@ -924,6 +915,39 @@ func (wi *basewi) next(i int) (int, error) {
 	return i + 1, nil
 }
 
+func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.MossOut, nameInArch string, errHole error) error {
+	debug.Assert(tsi != nil)
+	params := &core.GfnParams{
+		Lom:      lom,
+		Tsi:      tsi,
+		ArchPath: in.ArchPath,
+		Size:     wi.avgSize(),
+	}
+	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
+
+	if err != nil {
+		wi.r.gfn.fail.Inc()
+		if wi.req.ContinueOnErr {
+			return wi.write(lom, in.ArchPath, out, nameInArch)
+		}
+		return errHole // remains orig err
+	}
+
+	wi.r.gfn.ok.Inc()
+	if in.ArchPath == "" {
+		err = wi._txreg(lom, resp.Body, out, nameInArch)
+	} else {
+		nameInArch += cos.PathSeparator + in.ArchPath
+		debug.Assert(resp.ContentLength > 0) // --------------------  TODO: aw.Write to return `written`
+		err = wi._txarch(resp.Body, out, nameInArch, resp.ContentLength)
+	}
+	if err != nil {
+		cos.DrainReader(resp.Body)
+	}
+	cos.Close(resp.Body)
+	return err
+}
+
 func (wi *basewi) avgSize() (size int64) {
 	cnt := len(wi.resp.Out)
 	if cnt == 0 {
@@ -935,17 +959,17 @@ func (wi *basewi) avgSize() (size int64) {
 	return size / int64(cnt)
 }
 
-func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
+func (wi *basewi) write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string) error {
 	lom.Lock(false)
-	err := wi._write(lom, archpath, out, nameInArch, contOnErr)
+	err := wi._write(lom, archpath, out, nameInArch)
 	lom.Unlock(false)
 	return err
 }
 
 // (under rlock)
-func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string, contOnErr bool) error {
+func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameInArch string) error {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if cos.IsNotExist(err) && contOnErr {
+		if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
@@ -953,7 +977,7 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 
 	lmfh, err := lom.Open()
 	if err != nil {
-		if cos.IsNotExist(err) && contOnErr {
+		if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
 		return err
@@ -961,7 +985,17 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 
 	switch {
 	case archpath != "":
-		err = wi._txarch(lom, lmfh, out, nameInArch, archpath, contOnErr)
+		nameInArch += cos.PathSeparator + archpath
+		var csl cos.ReadCloseSizer
+		csl, err = lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
+		if err != nil {
+			if cos.IsNotExist(err) && wi.req.ContinueOnErr {
+				err = wi.addMissing(err, nameInArch, out)
+			}
+		} else {
+			err = wi._txarch(csl, out, nameInArch, csl.Size())
+			csl.Close()
+		}
 	default:
 		err = wi._txreg(lom, lmfh, out, nameInArch)
 	}
@@ -969,31 +1003,17 @@ func (wi *basewi) _write(lom *core.LOM, archpath string, out *apc.MossOut, nameI
 	return err
 }
 
-func (wi *basewi) _txreg(lom *core.LOM, lmfh io.Reader, out *apc.MossOut, nameInArch string) error {
-	if err := wi.aw.Write(nameInArch, lom, lmfh); err != nil {
+func (wi *basewi) _txreg(lom *core.LOM, reader io.Reader, out *apc.MossOut, nameInArch string) error {
+	if err := wi.aw.Write(nameInArch, lom, reader); err != nil {
 		return err
 	}
 	out.Size = lom.Lsize()
 	return nil
 }
 
-// (compare w/ goi._txarch and r._sendarch above)
-func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, nameInArch, archpath string, contOnErr bool) error {
-	nameInArch += "/" + archpath
-
-	csl, err := lom.NewArchpathReader(lmfh, archpath, "" /*mime*/)
-	if err != nil {
-		if cos.IsNotExist(err) && contOnErr {
-			return wi.addMissing(err, nameInArch, out)
-		}
-		return err
-	}
-
-	oah := cos.SimpleOAH{Size: csl.Size()}
-	err = wi.aw.Write(nameInArch, &oah, csl)
-	csl.Close()
-
-	if err != nil {
+func (wi *basewi) _txarch(reader io.Reader, out *apc.MossOut, nameInArch string, size int64) error {
+	oah := cos.SimpleOAH{Size: size}
+	if err := wi.aw.Write(nameInArch, &oah, reader); err != nil {
 		return err
 	}
 	out.Size = oah.Size
@@ -1002,7 +1022,7 @@ func (wi *basewi) _txarch(lom *core.LOM, lmfh cos.LomReader, out *apc.MossOut, n
 
 func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) error {
 	var (
-		missingName = apc.MossMissingDir + "/" + nameInArch
+		missingName = apc.MossMissingDir + cos.PathSeparator + nameInArch
 		oah         = cos.SimpleOAH{Size: 0}
 		roc         = nopROC{}
 	)

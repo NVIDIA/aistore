@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -198,13 +199,20 @@ func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttr
 	return oa, ecode, err
 }
 
-func (t *target) GetFromNeighbor(lom *core.LOM, tsi *meta.Snode, config *cmn.Config, size int64) (*http.Response, error) {
+func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error) {
+	lom := params.Lom
 	query := lom.Bck().NewQuery()
 	query.Set(apc.QparamIsGFNRequest, "true")
+	if params.ArchPath != "" {
+		// (compare w/ t.getObject)
+		debug.Assertf(!strings.HasPrefix(params.ArchPath, lom.ObjName),
+			"expecting archpath _in_ archive, got (%q, %q)", params.ArchPath, lom.ObjName)
+		query.Set(apc.QparamArchpath, params.ArchPath)
+	}
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodGet
-		reqArgs.Base = tsi.URL(cmn.NetIntraData)
+		reqArgs.Base = params.Tsi.URL(cmn.NetIntraData)
 		reqArgs.Header = http.Header{
 			apc.HdrCallerID:   []string{t.SID()},
 			apc.HdrCallerName: []string{t.String()},
@@ -212,7 +220,7 @@ func (t *target) GetFromNeighbor(lom *core.LOM, tsi *meta.Snode, config *cmn.Con
 		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
 		reqArgs.Query = query
 	}
-	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(config, size))
+	req, _, cancel, err := reqArgs.ReqWith(sendFileTimeout(params.Config, params.Size))
 	if err != nil {
 		cmn.FreeHra(reqArgs)
 		return nil, err
