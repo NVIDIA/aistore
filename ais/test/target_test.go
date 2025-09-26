@@ -57,7 +57,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		KeepInitialConfig: true,
 	}
 	tlog.Logfln("Decommission invalid node %s (expecting to fail)", val.DaemonID)
-	if _, err := api.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
+	if _, err := tools.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
 		t.Error("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

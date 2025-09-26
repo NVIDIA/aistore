@@ -105,10 +105,39 @@ func RestoreTarget(t *testing.T, proxyURL string, target *meta.Snode) (rebID str
 	return rebID, newSmap
 }
 
+func PromptWaitOnHerr(herr *cmn.ErrHTTP) {
+	const sleep = 10 * time.Second
+	tlog.Logfln("Warning: %v", herr)
+	tlog.Logfln("Warning: waiting %v and retrying...", sleep)
+	time.Sleep(sleep)
+}
+
+func StartMaintenance(bp api.BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
+	xid, err = api.StartMaintenance(bp, actValue)
+	if err == nil {
+		return
+	}
+	herr, ok := err.(*cmn.ErrHTTP)
+	if !ok {
+		return
+	}
+	if herr.TypeCode != "ErrLimitedCoexistence" {
+		return
+	}
+
+	PromptWaitOnHerr(herr)
+	return api.StartMaintenance(bp, actValue)
+}
+
 func ClearMaintenance(bp api.BaseParams, tsi *meta.Snode) {
 	val := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
 	_, _ = api.StopMaintenance(bp, val)
+}
+
+// TODO: to handle ErrLimitedCoexistence add PromptWaitOnHerr + retry
+func DecommissionNode(bp api.BaseParams, actValue *apc.ActValRmNode) (xid string, err error) {
+	return api.DecommissionNode(bp, actValue)
 }
 
 func RandomProxyURL(ts ...*testing.T) (url string) {
@@ -459,17 +488,20 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, c
 	if docker.IsRunning() {
 		tlog.Logfln("Stopping container %s", daemonID)
 		err = docker.Stop(daemonID)
-		return
+		return pid, cmd, "", err
 	}
 
 	pid, cmd.Cmd, cmd.Args, err = getProcess(port)
 	if err != nil {
-		return
+		return pid, cmd, "", err
 	}
 
 	actValue := &apc.ActValRmNode{DaemonID: daemonID}
 	rebID, err = api.ShutdownNode(bp, actValue)
-	return
+
+	// TODO: to handle ErrLimitedCoexistence add PromptWaitOnHerr + retry
+
+	return pid, cmd, rebID, err
 }
 
 func RestoreNode(cmd RestoreCmd, asPrimary bool, tag string) error {

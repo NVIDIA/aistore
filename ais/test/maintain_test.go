@@ -33,13 +33,13 @@ func TestMaintenanceOnOff(t *testing.T) {
 
 	// Invalid target case
 	msg := &apc.ActValRmNode{DaemonID: "fakeID", SkipRebalance: true}
-	_, err := api.StartMaintenance(baseParams, msg)
+	_, err := tools.StartMaintenance(baseParams, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
 	mntTarget, _ := smap.GetRandTarget()
 	msg.DaemonID = mntTarget.ID()
 	baseParams := tools.BaseAPIParams(proxyURL)
-	_, err = api.StartMaintenance(baseParams, msg)
+	_, err = tools.StartMaintenance(baseParams, msg)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
@@ -90,7 +90,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tsi, _ := m.smap.GetRandTarget()
 	tlog.Logfln("Put target %s in maintenance mode", tsi.StringEx())
 	actVal := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
-	rebID, err := api.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
@@ -149,7 +149,7 @@ func TestMaintenanceMD(t *testing.T) {
 	tlog.Logfln("Decommission %s", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true, KeepInitialConfig: true}
-	_, err := api.DecommissionNode(baseParams, msg)
+	_, err := tools.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(),
@@ -222,7 +222,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tlog.Logfln("Decommission %s", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true, KeepInitialConfig: true}
-	rebID, err := api.DecommissionNode(baseParams, msg)
+	rebID, err := tools.DecommissionNode(baseParams, msg)
 	tassert.CheckError(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned",
 		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
@@ -328,7 +328,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tlog.Logfln("Removing %s", tsi.StringEx())
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := api.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(baseParams, actVal)
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
@@ -403,7 +403,7 @@ func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
 	m.puts()
 	tsi, _ := m.smap.GetRandTarget()
 	tlog.Logfln("Removing %s", tsi.StringEx())
-	rebID, err := api.StartMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+	rebID, err := tools.StartMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
 	tassert.CheckError(t, err)
 
 	maintenanceStopped := false
@@ -476,7 +476,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tlog.Logfln("Removing %s", tsi.StringEx())
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := api.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		if !stopped {

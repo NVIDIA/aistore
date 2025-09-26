@@ -853,12 +853,12 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	if !ok {
 		return false
 	}
-	// TODO: improve checking for cmn.ErrLimitedCoexistence
-	if !strings.Contains(herr.Message, "is currently running,") {
+	if herr.TypeCode != "ErrLimitedCoexistence" {
 		return false
 	}
-	tlog.Logln("Warning: wait for unfinished rebalance(?)")
-	time.Sleep(5 * time.Second)
+
+	tools.PromptWaitOnHerr(herr)
+
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 	time.Sleep(5 * time.Second)

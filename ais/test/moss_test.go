@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // [TODO]
@@ -184,6 +186,8 @@ func TestMoss(t *testing.T) {
 		{inputFormat: archive.ExtTar, continueOnErr: true, onlyObjName: false, withMissing: true, streaming: true, emptyDefaultBucket: true},
 	}
 
+	t.Cleanup(stopMossJobs) // in re: ErrLimitedCoexistence
+
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
 			m := ioContext{
@@ -210,6 +214,15 @@ func TestMoss(t *testing.T) {
 			}
 		})
 	}
+}
+
+func stopMossJobs() {
+	time.Sleep(time.Second >> 1)
+	flt := xact.ArgsMsg{Kind: apc.ActGetBatch}
+	fmt.Fprintln(os.Stdout)
+	tlog.Logfln("Stopping all (idle) '%s' jobs...", apc.ActGetBatch)
+	api.AbortXaction(baseParams, &flt)
+	time.Sleep(time.Second >> 1)
 }
 
 func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs int) {
