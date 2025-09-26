@@ -230,14 +230,13 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		return nil, err
 	}
 
-	var tout time.Duration
-	if params.Config == nil {
-		tout = cmn.GCO.Get().Timeout.SendFile.D()
-	} else {
-		tout = params.Config.Timeout.SendFile.D()
+	config := params.Config
+	if config == nil {
+		config = cmn.GCO.Get()
 	}
-	if params.ArchPath != "" {
-		tout = cos.ClampDuration(tout, 10*time.Second, time.Minute)
+	tout := config.Timeout.SendFile.D()
+	if params.ArchPath == "" {
+		tout = cos.ClampDuration(tout, config.Client.Timeout.D(), time.Minute)
 	}
 	_, cancel := context.WithTimeout(context.Background(), tout)
 
