@@ -458,14 +458,15 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 	var (
 		roc     cos.ReadOpenCloser
 		oah     cos.SimpleOAH
-		lh, err = lom.NewHandle(false /*loaded*/)
+		mopaque = &mossOpaque{
+			WID:   wid,
+			Oname: lom.ObjName + "/" + archpath,
+			Index: int32(index),
+		}
 	)
-	mopaque := &mossOpaque{
-		WID:   wid,
-		Oname: lom.ObjName + "/" + archpath,
-		Index: int32(index),
-	}
-	nameInArch += "/" + archpath
+	nameInArch += cos.PathSeparator + archpath
+
+	lh, err := lom.NewHandle(false /*loaded*/)
 	if err != nil {
 		mopaque.Missing = true
 		mopaque.Emsg = err.Error()
@@ -476,6 +477,8 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 			nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 			mopaque.Missing = true
 			mopaque.Emsg = err.Error()
+			cos.Close(lh)
+			lh = nil
 		} else {
 			// csl is cos.ReadCloseSizer; see transport/bundle/shared_dm for InitSDM
 			roc = cos.NopOpener(csl)
@@ -504,8 +507,8 @@ func (r *XactMoss) archSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, _ e
 	debug.Assert(ok)
 	debug.Assert(ctx.lom.IsLocked() == apc.LockRead)
 
-	if ctx.lh != nil {
-		cos.Close(ctx.lh)
+	if lh, ok := ctx.lh.(*core.LomHandle); ok && lh != nil {
+		cos.Close(lh)
 	}
 	ctx.lom.Unlock(false)
 	r.smm.Free(ctx.buf)
@@ -705,26 +708,22 @@ func (wi *basewi) cleanup() {
 // handle receive for this work item
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mopaque *mossOpaque) (err error) {
-	if index < 0 || index >= len(wi.recv.m) {
-		err := fmt.Errorf("%s: out-of-bounds index %d (recv'd len=%d, wid=%s)",
-			wi.r.Name(), index, len(wi.recv.m), wi.wid)
-		debug.AssertNoErr(err)
-		return err
-	}
 	var (
 		sgl  *memsys.SGL
 		size int64
+		r    = wi.r
 	)
 	if hdr.IsHeaderOnly() {
 		debug.Assert(hdr.ObjAttrs.Size == 0, hdr.ObjName, " size: ", hdr.ObjAttrs.Size)
 		goto add
 	}
 
-	sgl = wi.r.gmm.NewSGL(0)
+	sgl = r.gmm.NewSGL(0)
 	size, err = io.Copy(sgl, reader)
+
 	if err != nil {
 		sgl.Free()
-		err = fmt.Errorf("failed to receive %s: %w", hdr.ObjName, err)
+		err = fmt.Errorf("%s %s failed to receive %s from %s: %w", r.Name(), core.T.String(), hdr.ObjName, meta.Tname(hdr.SID), err)
 		nlog.Warningln(err)
 		return err
 	}
@@ -732,6 +731,15 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mo
 
 add:
 	wi.recv.mtx.Lock()
+
+	if index < 0 || index >= len(wi.recv.m) {
+		sgl.Free()
+		if r.IsAborted() || r.Finished() {
+			return nil
+		}
+		return fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
+	}
+
 	entry := &wi.recv.m[index]
 
 	if !entry.isEmpty() {
@@ -739,7 +747,7 @@ add:
 		if sgl != nil {
 			sgl.Free()
 		}
-		err = fmt.Errorf("%s %s duplicate recv idx=%d from %s — dropping", wi.r.Name(), core.T.String(), index, meta.Tname(hdr.SID))
+		err = fmt.Errorf("%s %s duplicate recv idx=%d from %s — dropping", r.Name(), core.T.String(), index, meta.Tname(hdr.SID))
 		debug.AssertNoErr(err)
 		nlog.Warningln(err)
 		return nil
@@ -756,7 +764,7 @@ add:
 	wi.recv.ch <- index
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
+		nlog.Infoln(r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
 	}
 	return nil
 }
