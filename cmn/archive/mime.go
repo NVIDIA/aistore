@@ -13,8 +13,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -117,35 +115,22 @@ func byExt(filename string) (string, error) {
 	return "", newErrUnknownFileExt(filename, "")
 }
 
-// NOTE convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
-func MimeFile(file cos.LomReader, smm *memsys.MMSA, mime, archname string) (m string, err error) {
+func MimeFile(lh cos.LomReader, smm *memsys.MMSA, mime, archname string) (m string, err error) {
 	m, err = Mime(mime, archname)
 	if err == nil || IsErrUnknownMime(err) {
 		return
 	}
+	// NOTE convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
 	if smm == nil {
 		err = newErrUnknownFileExt(archname, "not reading file magic")
 		return
 	}
+
 	// by magic
-	var (
-		n         int
-		buf, slab = smm.AllocSize(sizeDetectMime)
-	)
-	m, n, err = _detect(file, archname, m, buf)
-	if n > 0 {
-		fh, ok := file.(*os.File)
-		cos.Assertf(ok, "expecting os.File, got %T", file)
-		_, errV := fh.Seek(0, io.SeekStart)
-		debug.AssertNoErr(errV)
-		if err == nil {
-			err = errV
-		}
-		if err == nil {
-			nlog.Infoln("archname", archname, "is in fact", m, "(via magic sign)")
-		}
-	}
+	buf, slab := smm.AllocSize(sizeDetectMime)
+	m, err = _detect(lh, archname, m, buf)
 	slab.Free(buf)
+
 	return
 }
 
@@ -166,37 +151,37 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 		return "", err
 	}
 	buf, slab := smm.AllocSize(sizeDetectMime)
-	m, _, err = _detect(fh, archname, m, buf)
+	m, err = _detect(fh, archname, m, buf)
 	slab.Free(buf)
 	cos.Close(fh)
 	return
 }
 
-func _detect(lh cos.LomReader, archname, mime string, buf []byte) (string, int, error) {
-	n, err := lh.Read(buf)
-	if err != nil {
-		return "", 0, err
+func _detect(lh cos.LomReader, archname, mime string, buf []byte) (string, error) {
+	n, err := lh.ReadAt(buf, 0)
+	if err != nil && err != io.EOF {
+		return "", err
 	}
 	switch mime {
 	case ExtTar:
 		if n < sizeDetectMime {
-			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTar, sizeDetectMime))
+			return "", newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTar, sizeDetectMime))
 		}
 	case ExtTarGz:
 		if l := magicGzip.offset + len(magicGzip.sig) + 4; n < l {
-			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+			return "", newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
 		}
 	case ExtTarLz4:
 		if l := magicLz4.offset + len(magicLz4.sig) + 4; n < l {
-			return "", n, newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarGz, l))
+			return "", newErrUnknownFileExt(archname, fmt.Sprintf(fmtErrTooShort, ExtTarLz4, l))
 		}
 	}
 	for _, magic := range allMagics {
-		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
-			return magic.mime, n, nil
+		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:n], magic.sig) {
+			return magic.mime, nil
 		}
 	}
-	return "", n, fmt.Errorf("unrecognized or unsupported file format: %q", archname)
+	return "", fmt.Errorf("unrecognized or unsupported file format: %q", archname)
 }
 
 // inspect the first bytes of r and return a compression
