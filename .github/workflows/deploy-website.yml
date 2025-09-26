@@ -61,5 +61,5 @@ jobs:
           bundle exec jekyll build
           # ── deploy from repo root ───────────────
           cd "$GITHUB_WORKSPACE"
-          npm install -g netlify-cli
+          npm install -g netlify-cli@23.7.3
           netlify deploy --dir=docs/_site --prod
