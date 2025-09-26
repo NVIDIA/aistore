@@ -356,6 +356,8 @@ func TestRateLimitBackendUsingScript(t *testing.T) {
 
 // as in: `ais ml lhotse-get-batch`
 func TestLhotseManifestBatch(t *testing.T) {
+	t.Cleanup(stopMossJobs) // in re: ErrLimitedCoexistence
+
 	cmd := exec.Command("./scripts/lhotse_test_suite.sh")
 
 	out, err := cmd.CombinedOutput()

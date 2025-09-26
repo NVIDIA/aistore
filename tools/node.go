@@ -474,7 +474,27 @@ func KillNode(bp api.BaseParams, node *meta.Snode) (cmd RestoreCmd, err error) {
 	return cmd, err
 }
 
-func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
+func ShutdownNode(bp api.BaseParams, node *meta.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
+	pid, cmd, rebID, err = _shutdownNode(bp, node)
+
+	if err == nil {
+		return
+	}
+	herr, ok := err.(*cmn.ErrHTTP)
+	if !ok {
+		return
+	}
+	if herr.TypeCode != "ErrLimitedCoexistence" {
+		return
+	}
+
+	PromptWaitOnHerr(herr)
+
+	pid, cmd, rebID, err = _shutdownNode(bp, node)
+	return
+}
+
+func _shutdownNode(bp api.BaseParams, node *meta.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -498,8 +518,6 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, c
 
 	actValue := &apc.ActValRmNode{DaemonID: daemonID}
 	rebID, err = api.ShutdownNode(bp, actValue)
-
-	// TODO: to handle ErrLimitedCoexistence add PromptWaitOnHerr + retry
 
 	return pid, cmd, rebID, err
 }

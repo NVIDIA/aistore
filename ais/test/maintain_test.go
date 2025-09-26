@@ -565,7 +565,8 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	// 1. Shutdown a random node.
-	_, cmd, rebID, err := tools.ShutdownNode(t, baseParams, node)
+	_, cmd, rebID, err := tools.ShutdownNode(baseParams, node)
+
 	tassert.CheckFatal(t, err)
 	if nodeType == apc.Target && origTargetCount > 1 {
 		time.Sleep(time.Second)
@@ -653,7 +654,7 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// 2. Shut down a random target.
 	tsi, _ := m.smap.GetRandTarget()
-	_, cmd, rebID, err := tools.ShutdownNode(t, baseParams, tsi)
+	_, cmd, rebID, err := tools.ShutdownNode(baseParams, tsi)
 	tassert.CheckFatal(t, err)
 
 	// Restore target after test is over.
