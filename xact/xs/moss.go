@@ -7,6 +7,7 @@ package xs
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -66,10 +67,11 @@ other-targets (T1..Tn)
 // - range read
 // - finer-grained wi abort
 
-// Rx time constants
+// TODO: "hole" waiting timeout = max(max-host-busy, 30s)
+// 30s chosen for inter-target (ML-type) data transfer
+// (existing config timeouts are mostly - except send-file - control-plane focused)
 const (
-	iniwait = time.Second      // to backoff from
-	maxwait = 30 * time.Second // "hole" timeout // TODO: make it configurable
+	maxwait = 30 * time.Second
 )
 
 type (
@@ -123,6 +125,7 @@ type (
 		xact.DemandBase
 		gmm     *memsys.MMSA
 		smm     *memsys.MMSA
+		config  *cmn.Config
 		pending sync.Map // [wid => *basewi]
 		gfn     struct { // counts
 			ok   atomic.Int32
@@ -199,8 +202,9 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
-		gmm: memsys.PageMM(),
-		smm: memsys.ByteMM(),
+		gmm:    memsys.PageMM(),
+		smm:    memsys.ByteMM(),
+		config: cmn.GCO.Get(),
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
@@ -770,57 +774,75 @@ add:
 }
 
 func (wi *basewi) waitFlushRx(i int) (int, error) {
+	var (
+		elapsed        time.Duration
+		start          = mono.NanoTime()
+		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
+		timeout        = max(maxwait, wi.r.config.Timeout.MaxHostBusy.D())
+	)
 	for {
-		err := wi.waitAnyRx(iniwait)
-		if err != nil {
-			return 0, err
-		}
-
-		var j int
 		wi.recv.mtx.Lock()
-		err = wi.flushRx()
-		j = wi.recv.next
+		err := wi.flushRx()
+		next := wi.recv.next
 		wi.recv.mtx.Unlock()
 
 		if err != nil {
 			return 0, err
 		}
-		if j <= i {
-			continue // hole `i` remains
+		if next > i {
+			return next, nil
 		}
-		return j, nil
+
+		var received bool
+	inner:
+		for range recvDrainBurst {
+			select {
+			case _, ok := <-wi.recv.ch:
+				if !ok {
+					return 0, errStopped
+				}
+				received = true
+			default:
+				break inner
+			}
+		}
+		if received {
+			continue
+		}
+
+		if elapsed >= timeout {
+			return 0, wi.newErrHole(timeout)
+		}
+		if err := wi.waitAnyRx(timeout - elapsed); err != nil {
+			if err == context.DeadlineExceeded {
+				return 0, wi.newErrHole(timeout)
+			}
+			return 0, err
+		}
+		elapsed = mono.Since(start)
 	}
 }
 
-func (wi *basewi) waitAnyRx(sleep time.Duration) error {
-	var (
-		total time.Duration
-		l     = len(wi.recv.m)
-		timer = time.NewTimer(sleep)
-	)
-	defer timer.Stop()
+// in parallel with RecvObj() inserting new entries..
+func (wi *basewi) waitAnyRx(timeout time.Duration) error {
+	select {
+	case <-wi.r.ChanAbort():
+		return errStopped
+	default:
+	}
 
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	for {
 		select {
-		case <-timer.C:
-			total += sleep
-			if cmn.Rom.FastV(5, cos.SmoduleXs) {
-				nlog.Infoln(wi.r.Name(), core.T.String(), ">>>>> waitRx tick", wi.wid, total, "at index:", wi.recv.next)
-			}
-			if wi.holeFilled(l) {
-				return nil
-			}
-			if total > maxwait {
-				return wi.newErrHole(total)
-			}
-			sleep = _backoff(total, sleep)
-			timer.Reset(sleep)
-
 		case _, ok := <-wi.recv.ch:
 			if !ok {
 				return errStopped
 			}
 			return nil
+
+		case <-timer.C:
+			return context.DeadlineExceeded
 
 		case <-wi.r.ChanAbort():
 			return errStopped
@@ -828,31 +850,11 @@ func (wi *basewi) waitAnyRx(sleep time.Duration) error {
 	}
 }
 
-func (wi *basewi) holeFilled(l int) bool {
-	wi.recv.mtx.Lock()
-	defer wi.recv.mtx.Unlock()
-
-	index := wi.recv.next
-	if index < l {
-		entry := &wi.recv.m[index]
-		return entry.isLocal() || !entry.isEmpty()
-	}
-	return true
-}
-
 func (wi *basewi) newErrHole(total time.Duration) error {
 	index := wi.recv.next // Safe to read without lock here
 	s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
 		wi.r.Name(), index, core.T.String(), wi.wid, total)
 	return &errHole{s}
-}
-
-// simple time-based exponential, with a clamp
-func _backoff(total, sleep time.Duration) time.Duration {
-	if n := int64(total / iniwait); n == 8 || n == 16 || n == 24 {
-		return min(sleep<<1, maxwait>>3)
-	}
-	return sleep
 }
 
 func (wi *basewi) next(i int) (int, error) {

@@ -325,6 +325,8 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(ok, xctn.Name())
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
+			bundle.SDM.UnregRecv(xmoss.ID()) // drop all Rx earlier
+
 			xmoss.BcastAbort(err)
 			xmoss.Abort(err)
 			if err == cmn.ErrGetTxBenign {
