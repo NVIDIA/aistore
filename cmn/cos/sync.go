@@ -169,6 +169,8 @@ func (sch *StopCh) Close() {
 	}
 }
 
+func (sch *StopCh) Stopped() bool { return sch.stopped.Load() }
+
 ///////////////
 // Semaphore //
 ///////////////

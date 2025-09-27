@@ -12,6 +12,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,10 +25,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/cmn/work"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -57,10 +60,11 @@ other-targets (T1..Tn)
 // needed since UnregRecv is permissive no-op when not registered.
 
 // TODO:
-// - ctlmsg
-// - add stats: (total count; count per wi; wi latency); optionally: gfn
+// - stats: currently just logging periodically; need Prometheus metrics
+// - log: sparse more (currently mossLogStats = 0x7 mask)
 // - limit the number of GFN-failure-stimulated empty returns
 // - soft errors other than not-found; unified error formatting
+// - ctlmsg
 // - mem-pool: basewi; apc.MossReq; apc.MossResp
 // ---------- (can wait) ------------------
 // - test random aborts
@@ -72,6 +76,15 @@ other-targets (T1..Tn)
 // (existing config timeouts are mostly - except send-file - control-plane focused)
 const (
 	maxwait = 30 * time.Second
+)
+
+// pagecache (read-ahead) warm-up: one small-size worker pool per XactMoss instance
+// [NOTE]
+// - bewarm pool is created once at x-moss initialization based on current system load;
+// - it stays enabled/disabled for the entire lifetime of this xaction instance across all work items
+const (
+	bewarmCnt  = 2
+	bewarmSize = cos.MiB
 )
 
 type (
@@ -101,7 +114,8 @@ type (
 		// stats
 		size    int64 // (cumulative)
 		started int64 // (mono)
-		cnt     int
+		waitRx  int64 // total wait-for-receive time
+		cnt     int   // number of processed MossReq entries (m.b. eq len(MossIn))
 		// Rx
 		recv struct {
 			ch   chan int
@@ -131,6 +145,12 @@ type (
 			ok   atomic.Int32
 			fail atomic.Int32
 		}
+		bewarm *work.Pool
+		// stats
+		size   atomic.Int64 // (cumulative)
+		cnt    atomic.Int64 // ditto
+		waitRx atomic.Int64 // total wait-for-receive time (= sum(work-items))
+		// when pending
 		activeWG sync.WaitGroup
 	}
 )
@@ -145,6 +165,8 @@ type (
 
 const (
 	mossIdleTime = xact.IdleDefault
+
+	mossLogStats = 0x7 // log sampling rate
 )
 
 // interface guard
@@ -166,9 +188,7 @@ func (p *mossFactory) Start() error {
 	debug.Assert(cos.IsValidUUID(p.Args.UUID), p.Args.UUID)
 
 	p.xctn = newMoss(p)
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(core.T.String(), "factory.Start:", p.xctn.String())
-	}
+
 	return nil
 }
 
@@ -208,6 +228,19 @@ func newMoss(p *mossFactory) *XactMoss {
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
+	// best-effort `bewarm` for pagecache warming-up
+	load, isExtreme := sys.MaxLoad2()
+	s := "without"
+	if !isExtreme {
+		ncpu := sys.NumCPU()
+		highcpu := ncpu * sys.HighLoad / 100
+		if load < float64(highcpu) {
+			r.bewarm = work.New(bewarmCnt, bewarmCnt, r.bewarmFQN, r.ChanAbort())
+			s = "with"
+		}
+	}
+
+	nlog.Infoln(core.T.String(), "run:", r.Name(), s, "\"bewarm\"")
 	return r
 }
 
@@ -242,6 +275,9 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
+	nlog.Infoln(r.Name(), "aborting")
+	r.logStats()
+
 	// make sure all asm() and Send() exited
 	r.activeWG.Wait()
 
@@ -252,6 +288,7 @@ func (r *XactMoss) Abort(err error) bool {
 	// see "Shared-DM registration lifecycle" note above
 	bundle.SDM.UnregRecv(r.ID())
 
+	r.bewarmStop()
 	return true
 }
 
@@ -277,13 +314,42 @@ func (r *XactMoss) fini(int64) (d time.Duration) {
 		return mossIdleTime
 	default:
 		nlog.Infoln(r.Name(), "idle expired - finishing")
+		r.logStats()
 
 		r.pending.Range(r.cleanup)
 
 		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.UnregRecv(r.ID())
+
+		r.bewarmStop()
 		r.Finish()
 		return hk.UnregInterval
+	}
+}
+
+func (r *XactMoss) bewarmStop() {
+	if r.bewarm != nil {
+		r.bewarm.Stop()
+		nlog.Infoln(r.Name(), "bewarm count:", r.bewarm.NumDone())
+		r.bewarm.Wait()
+	}
+}
+
+func (r *XactMoss) logStats() {
+	const (
+		mincnt  = 10
+		minwait = 10 * time.Millisecond
+	)
+	cnt := r.cnt.Load()
+	if cnt < mincnt {
+		return
+	}
+	nlog.Infoln(r.Name(), "stats: [ count:", cnt, "size:", r.size.Load(), "]")
+
+	waitRx := time.Duration(r.waitRx.Load())
+	if waitRx > minwait {
+		avg := waitRx / time.Duration(cnt)
+		nlog.Infoln("\t\twait-receive: [ total:", waitRx, "avg: ", avg, "]")
 	}
 }
 
@@ -663,6 +729,13 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 	return bck, nil
 }
 
+func (*XactMoss) bewarmFQN(fqn string) {
+	if f, err := os.Open(fqn); err == nil {
+		io.CopyN(io.Discard, f, bewarmSize)
+		f.Close()
+	}
+}
+
 ////////////
 // basewi //
 ////////////
@@ -674,6 +747,16 @@ func (wi *basewi) cleanup() {
 		return
 	}
 	r := wi.r
+
+	// accumulate
+	r.size.Add(wi.size)
+	cnt := r.cnt.Add(int64(wi.cnt))
+	r.waitRx.Add(wi.waitRx)
+
+	if cnt&mossLogStats == mossLogStats {
+		r.logStats()
+	}
+
 	if wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
 		wi.aw = nil
@@ -790,6 +873,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			return 0, err
 		}
 		if next > i {
+			wi.waitRx += elapsed.Nanoseconds()
 			return next, nil
 		}
 
@@ -825,12 +909,19 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 
 // in parallel with RecvObj() inserting new entries..
 func (wi *basewi) waitAnyRx(timeout time.Duration) error {
+	// fast path
 	select {
+	case _, ok := <-wi.recv.ch:
+		if !ok {
+			return errStopped
+		}
+		return nil
 	case <-wi.r.ChanAbort():
 		return errStopped
 	default:
 	}
 
+	// wait
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	for {
@@ -872,10 +963,26 @@ func (wi *basewi) next(i int) (int, error) {
 	}
 
 	if tsi != nil {
+		// TODO: remove this code after a while, leave debug.Assert
 		if !wi.receiving() {
-			err := fmt.Errorf("%s: unexpected non-local %s when _not_ receiving [%s, %s]", wi.r.Name(), lom.Cname(), wi.wid, wi.smap)
+			err := fmt.Errorf("%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
 			debug.AssertNoErr(err)
 			return 0, err
+		}
+
+		// prior to starting to wait on Rx:
+		// best-effort non-blocking (look-ahead + `bewarm`)
+		if r.bewarm != nil && !r.bewarm.IsBusy() {
+			for j := i + 1; j < len(wi.req.In); j++ {
+				inJ := &wi.req.In[j]
+				lomJ, tsiJ, errJ := r._lom(inJ, wi.smap)
+				if errJ == nil && tsiJ == nil {
+					// note: breaking regardless
+					// of whether TrySubmit returns true or false
+					r.bewarm.TrySubmit(lomJ.FQN)
+					break
+				}
+			}
 		}
 
 		var nextIdx int
@@ -914,7 +1021,7 @@ func (wi *basewi) next(i int) (int, error) {
 	wi.size += out.Size
 
 	if cmn.Rom.FastV(5, cos.SmoduleXs) {
-		nlog.Infoln(wi.r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
+		nlog.Infoln(r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
 	if wi.receiving() {
 		wi.recv.mtx.Lock()
