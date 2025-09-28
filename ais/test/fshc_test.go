@@ -44,8 +44,8 @@ type checkerMD struct {
 	origAvail  int
 	fileSize   int64
 	baseParams api.BaseParams
-	chstop     chan struct{}
-	chfail     chan struct{}
+	stopCh     chan struct{}
+	failCh     chan struct{}
 	wg         *sync.WaitGroup
 }
 
@@ -61,8 +61,8 @@ func newCheckerMD(t *testing.T) *checkerMD {
 		fileSize: 64 * cos.KiB,
 		mpList:   make(meta.NodeMap, 10),
 		allMps:   make(map[string]*apc.MountpathList, 10),
-		chstop:   make(chan struct{}),
-		chfail:   make(chan struct{}),
+		stopCh:   make(chan struct{}),
+		failCh:   make(chan struct{}),
 		wg:       &sync.WaitGroup{},
 	}
 
@@ -110,14 +110,14 @@ func (md *checkerMD) randomTargetMpath() (target *meta.Snode, mpath string, mpat
 
 func (md *checkerMD) runTestAsync(method string, target *meta.Snode, mpath string, mpathList *apc.MountpathList, suffix string) {
 	md.wg.Add(1)
-	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, suffix)
+	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.failCh, md.stopCh, suffix)
 	// let the job run for a while and then make a mountpath broken
 	time.Sleep(2 * time.Second)
-	md.chfail <- struct{}{}
+	md.failCh <- struct{}{}
 	if detected := waitForMountpathChanges(md.t, target, len(mpathList.Available)-1, len(mpathList.Disabled)+1, true); detected {
 		// let the job run for a while with broken mountpath, so FSHC detects the trouble
 		time.Sleep(2 * time.Second)
-		md.chstop <- struct{}{}
+		md.stopCh <- struct{}{}
 	}
 	md.wg.Wait()
 
@@ -264,8 +264,8 @@ func repairMountpath(t *testing.T, target *meta.Snode, mpath string, availLen, d
 	}
 }
 
-func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
-	chstop chan struct{}, suffix string) {
+func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string, filelist []string, failCh,
+	stopCh chan struct{}, suffix string) {
 	defer wg.Done()
 
 	const fileSize = 64 * cos.KiB
@@ -286,9 +286,9 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 
 		for _, fname := range filelist {
 			select {
-			case <-chfail:
+			case <-failCh:
 				breakMountpath(t, mpath, suffix)
-			case <-chstop:
+			case <-stopCh:
 				return
 			default:
 				// do nothing and just start the next loop

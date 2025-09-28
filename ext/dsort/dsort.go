@@ -129,7 +129,7 @@ func (m *Manager) start() (err error) {
 	// Wait for signal to start shard creations. This will happen when manager
 	// notice that the specification for shards to be created locally was received.
 	select {
-	case <-m.startShardCreation:
+	case <-m.createShardCh:
 		break
 	case <-m.listenAborted():
 		return m.newErrAborted()

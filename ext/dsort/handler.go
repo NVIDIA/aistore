@@ -580,7 +580,7 @@ func (mg *managerGroup) shardsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.creationPhase.metadata = *tmpMetadata
-	m.startShardCreation <- struct{}{}
+	m.createShardCh <- struct{}{}
 }
 
 // recordsHandler is the handler /v1/sort/records.

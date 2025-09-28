@@ -253,7 +253,7 @@ func (r *LsoXact) stop() {
 
 				if r.walk.this {
 					debug.Assert(r.remtCh == nil)
-					close(r.msgCh)
+					cos.DrainAnyChan(r.msgCh)
 					r.p.dm.UnregRecv()
 				} else if r.p.dm != nil {
 					// postpone unreg
@@ -312,9 +312,9 @@ func (r *LsoXact) fcleanup(int64) (d time.Duration) {
 	} else {
 		d = hk.UnregInterval
 		if r.remtCh != nil {
-			close(r.remtCh)
+			cos.DrainAnyChan(r.remtCh)
 		}
-		close(r.msgCh)
+		cos.DrainAnyChan(r.msgCh)
 		r.p.dm.UnregRecv()
 	}
 	return d

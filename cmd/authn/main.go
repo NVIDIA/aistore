@@ -124,10 +124,10 @@ func updateLogOptions() error {
 }
 
 func installSignalHandler() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-c
+		<-sigCh
 		os.Exit(0)
 	}()
 }

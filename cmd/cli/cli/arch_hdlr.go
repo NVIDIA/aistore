@@ -559,13 +559,13 @@ func genShardsHandler(c *cli.Context) error {
 	}
 
 	var (
-		shardNum      int
-		progress      = mpb.New(mpb.WithWidth(barWidth))
-		concLimit     = parseIntFlag(c, numGenShardWorkersFlag)
-		concSemaphore = make(chan struct{}, concLimit)
-		group, ctx    = errgroup.WithContext(context.Background())
-		text          = "Shards created: "
-		options       = make([]mpb.BarOption, 0, 6)
+		shardNum   int
+		progress   = mpb.New(mpb.WithWidth(barWidth))
+		concLimit  = parseIntFlag(c, numGenShardWorkersFlag)
+		semaCh     = make(chan struct{}, concLimit)
+		group, ctx = errgroup.WithContext(context.Background())
+		text       = "Shards created: "
+		options    = make([]mpb.BarOption, 0, 6)
 	)
 	// progress bar
 	options = append(options, mpb.PrependDecorators(
@@ -580,7 +580,7 @@ func genShardsHandler(c *cli.Context) error {
 loop:
 	for shardName, hasNext := pt.Next(); hasNext; shardName, hasNext = pt.Next() {
 		select {
-		case concSemaphore <- struct{}{}:
+		case semaCh <- struct{}{}:
 		case <-ctx.Done():
 			break loop
 		}
@@ -588,7 +588,7 @@ loop:
 			return func() error {
 				defer func() {
 					bar.Increment()
-					<-concSemaphore
+					<-semaCh
 				}()
 
 				name := fmt.Sprintf("%s%s", name, ext)

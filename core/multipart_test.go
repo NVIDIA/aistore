@@ -764,7 +764,7 @@ var _ = Describe("MPU-UfestRead", func() {
 	It("should handle concurrent uploads with unique IDs and serialized completion", func() {
 		const numUploads = 4
 
-		results := make(chan error, numUploads)
+		resultsCh := make(chan error, numUploads)
 
 		for i := range numUploads {
 			go func(idx int) {
@@ -776,32 +776,32 @@ var _ = Describe("MPU-UfestRead", func() {
 
 				manifest, err := core.NewUfest(fmt.Sprintf("upload-%d", idx), lom, false)
 				if err != nil {
-					results <- err
+					resultsCh <- err
 					return
 				}
 
 				// Write and add chunk - size accumulates automatically
 				chunk, err := manifest.NewChunk(1, lom)
 				if err != nil {
-					results <- err
+					resultsCh <- err
 					return
 				}
 				createTestChunk(chunk.Path(), int(cos.MiB), nil)
 
 				err = manifest.Add(chunk, cos.MiB, 1)
 				if err != nil {
-					results <- err
+					resultsCh <- err
 					return
 				}
 
 				// Complete via LOM - this is the correct interface
-				results <- lom.CompleteUfest(manifest)
+				resultsCh <- lom.CompleteUfest(manifest)
 			}(i)
 		}
 
 		// Verify all completed successfully
 		for range numUploads {
-			Expect(<-results).NotTo(HaveOccurred())
+			Expect(<-resultsCh).NotTo(HaveOccurred())
 		}
 
 		By("All concurrent completions succeeded")
@@ -817,7 +817,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			err          error
 		}
 
-		results := make(chan uploadInfo, numUploads)
+		resultsCh := make(chan uploadInfo, numUploads)
 
 		var wg sync.WaitGroup
 		wg.Add(numUploads)
@@ -834,7 +834,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 				manifest, err := core.NewUfest(fmt.Sprintf("upload-%d", idx), lom, false)
 				if err != nil {
-					results <- uploadInfo{lom: lom, err: err}
+					resultsCh <- uploadInfo{lom: lom, err: err}
 					return
 				}
 
@@ -847,7 +847,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				for chunkNum := 1; chunkNum <= numChunks; chunkNum++ {
 					chunk, err := manifest.NewChunk(chunkNum, lom)
 					if err != nil {
-						results <- uploadInfo{lom: lom, err: err}
+						resultsCh <- uploadInfo{lom: lom, err: err}
 						return
 					}
 
@@ -856,7 +856,7 @@ var _ = Describe("MPU-UfestRead", func() {
 					allChunkData = append(allChunkData, chunkData...)
 
 					if err := manifest.Add(chunk, int64(chunkSize), int64(chunkNum)); err != nil {
-						results <- uploadInfo{lom: lom, err: err}
+						resultsCh <- uploadInfo{lom: lom, err: err}
 						return
 					}
 				}
@@ -869,7 +869,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 				// complete
 				err = lom.CompleteUfest(manifest)
-				results <- uploadInfo{
+				resultsCh <- uploadInfo{
 					lom:          lom,
 					expectedSize: expectedSize,
 					expectedMD5:  expectedMD5,
@@ -880,16 +880,16 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		go func() {
 			wg.Wait()
-			close(results)
+			close(resultsCh)
 		}()
 
 		// collect and verify completions
 		var completedUploads []uploadInfo
-		for u := range results {
+		for u := range resultsCh {
 			Expect(u.err).NotTo(HaveOccurred(), "complete should succeed for %q", u.lom.Cname())
 			completedUploads = append(completedUploads, u)
 		}
-		Expect(len(completedUploads)).To(Equal(numUploads), "should receive all results")
+		Expect(len(completedUploads)).To(Equal(numUploads), "should receive all resultsCh")
 
 		By("All concurrent completions succeeded — verifying on-disk objects")
 
@@ -945,7 +945,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		objFQN := mis[0].MakePathFQN(&localBckB, fs.ObjCT, objName)
 		lom := newBasicLom(objFQN, 0)
 
-		results := make(chan workerResult, numWorkers)
+		resultsCh := make(chan workerResult, numWorkers)
 
 		var wg sync.WaitGroup
 		wg.Add(numWorkers)
@@ -958,7 +958,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				uploadID := fmt.Sprintf("complete-manifest-race-%d", worker)
 				manifest, err := core.NewUfest(uploadID, lom, false)
 				if err != nil {
-					results <- workerResult{err: err}
+					resultsCh <- workerResult{err: err}
 					return
 				}
 
@@ -970,7 +970,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				for part := 1; part <= numChunks; part++ {
 					chunk, err := manifest.NewChunk(part, lom)
 					if err != nil {
-						results <- workerResult{err: err}
+						resultsCh <- workerResult{err: err}
 						return
 					}
 					seed := int64(worker*1000 + part)
@@ -978,7 +978,7 @@ var _ = Describe("MPU-UfestRead", func() {
 					allData = append(allData, data...)
 
 					if err := manifest.Add(chunk, int64(chunkSize), int64(part)); err != nil {
-						results <- workerResult{err: err}
+						resultsCh <- workerResult{err: err}
 						return
 					}
 				}
@@ -991,7 +991,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				// complete (API should serialize)
 				err = lom.CompleteUfest(manifest)
 
-				results <- workerResult{
+				resultsCh <- workerResult{
 					expectedSize: expSize,
 					expectedMD5:  expMD5,
 					err:          err,
@@ -999,15 +999,15 @@ var _ = Describe("MPU-UfestRead", func() {
 			}(i)
 		}
 
-		go func() { wg.Wait(); close(results) }()
+		go func() { wg.Wait(); close(resultsCh) }()
 
 		// collect and assert all completions succeeded
 		var wrs []workerResult
-		for r := range results {
+		for r := range resultsCh {
 			Expect(r.err).NotTo(HaveOccurred(), "each CompleteUfest should succeed")
 			wrs = append(wrs, r)
 		}
-		Expect(len(wrs)).To(Equal(numWorkers), "should receive all worker results")
+		Expect(len(wrs)).To(Equal(numWorkers), "should receive all worker resultsCh")
 
 		By("All concurrent completions succeeded — verifying final on-disk object matches one of the contenders")
 

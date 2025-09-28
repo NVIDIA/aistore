@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -124,13 +123,8 @@ func (w *worker) do() error {
 			} else {
 				core.FreeLOM(lom)
 			}
-		case <-w.stopCh.Listen(): // ABORT
-			close(w.workCh)
-
-			// `workCh` must be empty (if it is not, workers were not aborted correctly!)
-			_, ok := <-w.workCh
-			debug.Assert(!ok)
-
+		case <-w.stopCh.Listen():
+			_ = core.DrainLIF(w.workCh)
 			return cmn.NewErrAborted(w.String(), "mpath-work", nil)
 		}
 	}

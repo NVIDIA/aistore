@@ -65,8 +65,8 @@ type (
 		m             *Manager
 		streams       dsortStreams
 		creationPhase struct {
-			connector       *rwConnector // used to connect readers (streams, local data) with writers (shards)
-			requestedShards chan string
+			connector   *rwConnector // used to connect readers (streams, local data) with writers (shards)
+			reqShardsCh chan string
 
 			adjuster struct {
 				read  *concAdjuster
@@ -181,7 +181,7 @@ func (*dsorterMem) name() string { return MemType }
 
 func (ds *dsorterMem) init(config *cmn.Config) error {
 	ds.creationPhase.connector = newRWConnector(ds.m)
-	ds.creationPhase.requestedShards = make(chan string, max(1024, config.Dsort.Burst))
+	ds.creationPhase.reqShardsCh = make(chan string, max(1024, config.Dsort.Burst))
 
 	ds.creationPhase.adjuster.read = newConcAdjuster(
 		ds.m.Pars.CreateConcMaxLimit,
@@ -247,7 +247,7 @@ func (*dsorterMem) cleanup() {}
 
 func (ds *dsorterMem) finalCleanup() error {
 	err := ds.cleanupStreams()
-	close(ds.creationPhase.requestedShards)
+	close(ds.creationPhase.reqShardsCh)
 	ds.creationPhase.connector.free()
 	ds.creationPhase.connector = nil
 	return err
@@ -266,7 +266,7 @@ func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error
 			return err
 		}
 	}
-	ds.creationPhase.requestedShards <- shardName // we also need to inform ourselves
+	ds.creationPhase.reqShardsCh <- shardName // we also need to inform ourselves
 	ds.creationPhase.adjuster.write.acquireSema(mi)
 	return nil
 }
@@ -357,7 +357,7 @@ outer:
 		}
 
 		select {
-		case shardName := <-ds.creationPhase.requestedShards:
+		case shardName := <-ds.creationPhase.reqShardsCh:
 			shard, ok := phaseInfo.metadata.SendOrder[shardName]
 			if !ok {
 				break
@@ -517,7 +517,7 @@ func (ds *dsorterMem) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err er
 		return ds.m.newErrAborted()
 	}
 
-	ds.creationPhase.requestedShards <- req.shardName
+	ds.creationPhase.reqShardsCh <- req.shardName
 	return nil
 }
 

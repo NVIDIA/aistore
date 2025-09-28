@@ -687,7 +687,7 @@ func WaitForPID(pid int) error {
 	var (
 		cancel context.CancelFunc
 		ctx    = context.Background()
-		done   = make(chan error)
+		doneCh = make(chan error)
 	)
 	tlog.Logfln("Waiting for PID %d to terminate", pid)
 
@@ -699,12 +699,12 @@ func WaitForPID(pid int) error {
 
 	go func() {
 		_, erw := process.Wait() // wait with no timeout
-		done <- erw
+		doneCh <- erw
 	}()
 
 	for {
 		select {
-		case <-done:
+		case <-doneCh:
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()

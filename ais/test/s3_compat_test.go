@@ -521,23 +521,22 @@ func TestS3MultipartPartOperations(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("Created large object %s (%s)", objName, cos.SizeIEC(objSize))
 
-	// Use S3 client for reading
-	s3Client := s3.New(s3.Options{
-		HTTPClient:   newS3Client(true /*pathStyle*/),
-		Region:       "us-east-1",
-		BaseEndpoint: aws.String(proxyURL),
-		UsePathStyle: true,
-		Credentials:  aws.AnonymousCredentials{},
-	})
-
 	const (
 		numConcurrentReaders   = 8
 		numIterationsPerReader = 3
 	)
-
-	var wg sync.WaitGroup
-	errors := make(chan error, numConcurrentReaders*numIterationsPerReader*2)
-
+	// Use S3 client for reading
+	var (
+		s3Client = s3.New(s3.Options{
+			HTTPClient:   newS3Client(true /*pathStyle*/),
+			Region:       "us-east-1",
+			BaseEndpoint: aws.String(proxyURL),
+			UsePathStyle: true,
+			Credentials:  aws.AnonymousCredentials{},
+		})
+		errorsCh = make(chan error, numConcurrentReaders*numIterationsPerReader*2)
+		wg       sync.WaitGroup
+	)
 	tlog.Logfln("Starting concurrent rlock test on multipart object: %d readers × %d iterations × 2 operations = %d total operations",
 		numConcurrentReaders, numIterationsPerReader, numConcurrentReaders*numIterationsPerReader*2)
 
@@ -558,19 +557,19 @@ func TestS3MultipartPartOperations(t *testing.T) {
 					Range:  aws.String(fmt.Sprintf("bytes=%d-%d", startByte, endByte)),
 				})
 				if err != nil {
-					errors <- fmt.Errorf("reader %d iteration %d GetObject range failed: %v", id, iteration, err)
+					errorsCh <- fmt.Errorf("reader %d iteration %d GetObject range failed: %v", id, iteration, err)
 					return
 				}
 
 				data, err := io.ReadAll(getOutput.Body)
 				getOutput.Body.Close()
 				if err != nil {
-					errors <- fmt.Errorf("reader %d iteration %d: failed to read range body: %v", id, iteration, err)
+					errorsCh <- fmt.Errorf("reader %d iteration %d: failed to read range body: %v", id, iteration, err)
 					return
 				}
 
 				if len(data) != 1024 {
-					errors <- fmt.Errorf("reader %d iteration %d: expected 1024 bytes, got %d", id, iteration, len(data))
+					errorsCh <- fmt.Errorf("reader %d iteration %d: expected 1024 bytes, got %d", id, iteration, len(data))
 					return
 				}
 
@@ -580,7 +579,7 @@ func TestS3MultipartPartOperations(t *testing.T) {
 					Key:    aws.String(objName),
 				})
 				if err != nil {
-					errors <- fmt.Errorf("reader %d iteration %d HeadObject failed: %v", id, iteration, err)
+					errorsCh <- fmt.Errorf("reader %d iteration %d HeadObject failed: %v", id, iteration, err)
 					return
 				}
 			}
@@ -589,10 +588,10 @@ func TestS3MultipartPartOperations(t *testing.T) {
 
 	// Wait for all concurrent operations to complete
 	wg.Wait()
-	close(errors)
+	close(errorsCh)
 
-	// Check for any race condition errors
-	for err := range errors {
+	// Check for any race condition errorsCh
+	for err := range errorsCh {
 		tassert.CheckFatal(t, err)
 	}
 }

@@ -1,6 +1,6 @@
 // Package frandread is a file-reading benchmark that makes a special effort to visit the files randomly and equally.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -46,9 +46,9 @@ type (
 	}
 
 	bench struct {
-		sema chan struct{}
-		wg   *sync.WaitGroup
-		rnd  *rand.Rand
+		semaCh chan struct{}
+		wg     *sync.WaitGroup
+		rnd    *rand.Rand
 
 		fileNames []string
 		perm      []int
@@ -167,9 +167,9 @@ func newBench(fileNames []string) *bench {
 	}
 	rnd := rand.New(cos.NewRandSource(uint64(cliv.seed)))
 	return &bench{
-		rnd:  rnd,
-		sema: make(chan struct{}, cliv.numWorkers),
-		wg:   &sync.WaitGroup{},
+		rnd:    rnd,
+		semaCh: make(chan struct{}, cliv.numWorkers),
+		wg:     &sync.WaitGroup{},
 
 		fileNames: fileNames,
 	}
@@ -203,10 +203,10 @@ func (b *bench) epoch() {
 	for _, idx := range b.perm {
 		fname := b.fileNames[idx]
 		b.wg.Add(1)
-		b.sema <- struct{}{}
+		b.semaCh <- struct{}{}
 		go func(fname string) {
 			defer func() {
-				<-b.sema
+				<-b.semaCh
 				b.wg.Done()
 			}()
 

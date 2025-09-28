@@ -80,14 +80,14 @@ type (
 		Metrics     *Metrics       `json:"metrics"`
 		Pars        *parsedReqSpec `json:"pars"`
 
-		mg                 *managerGroup // parent
-		mu                 sync.Mutex
-		smap               *meta.Smap
-		recm               *shard.RecordManager
-		shardRW            shard.RW
-		startShardCreation chan struct{}
-		client             *http.Client // Client for sending records metadata
-		compression        struct {
+		mg            *managerGroup // parent
+		mu            sync.Mutex
+		smap          *meta.Smap
+		recm          *shard.RecordManager
+		shardRW       shard.RW
+		createShardCh chan struct{}
+		client        *http.Client // Client for sending records metadata
+		compression   struct {
 			totalShardSize     atomic.Int64
 			totalExtractedSize atomic.Int64
 		}
@@ -178,7 +178,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 
 	m.Pars = pars
 	m.Metrics = newMetrics(pars.Description)
-	m.startShardCreation = make(chan struct{}, 1)
+	m.createShardCh = make(chan struct{}, 1)
 
 	if err := m.setDsorter(); err != nil {
 		return err

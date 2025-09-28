@@ -104,16 +104,16 @@ func (is *ISharder) archive(n *dirNode, path string) (parentRecords *shard.Recor
 		}(recs, is.currentShardSize)
 	}
 
-	done := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
 		wg.Wait()
-		close(done)
+		close(doneCh)
 	}()
 
 	select {
 	case err := <-errCh:
 		return nil, 0, err
-	case <-done:
+	case <-doneCh:
 		return recs, is.currentShardSize, nil
 	}
 }

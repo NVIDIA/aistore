@@ -315,7 +315,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 	)
 
 	wg := &sync.WaitGroup{}
-	sizes := make(chan int64, o.objCount)
+	sizesCh := make(chan int64, o.objCount)
 
 	for idx := range o.objCount {
 		wg.Add(1)
@@ -323,7 +323,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 
 		go func(i int) {
 			totalCnt, objSize, sliceSize, doEC := randObjectSize(i, smallEvery, o)
-			sizes <- objSize
+			sizesCh <- objSize
 			objName := fmt.Sprintf(objPatt, bck.Name, i)
 			objPath := ecTestDir + objName
 
@@ -425,11 +425,11 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 	}
 
 	wg.Wait()
-	close(sizes)
+	close(sizesCh)
 
 	szTotal := int64(0)
-	szLen := len(sizes)
-	for sz := range sizes {
+	szLen := len(sizesCh)
+	for sz := range sizesCh {
 		szTotal += sz
 	}
 	if szLen != 0 {
