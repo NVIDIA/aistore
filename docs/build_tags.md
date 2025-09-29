@@ -23,11 +23,7 @@ Here's the current list, grouped by category.
 
 ## StatsD
 
-> **Deprecation notice:** StatsD is deprecated. All support for StatsD will be **completely removed** by Fall 2025.
-
-| build tag | comment |
-| --- | --- |
-| `statsd`| **Deprecated**: build with legacy StatsD support instead of Prometheus |
+> StatsD was deprecated in v3.28 (Spring 2025) and completely removed in v4.0 (September 2025).
 
 ## Open telemetry
 

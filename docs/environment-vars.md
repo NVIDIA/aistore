@@ -34,6 +34,7 @@ and so on.
 
 The remainder of this text groups aistore environment variables by their respective usages, and is structured as follows:
 
+- [Build Tags](#build-tags)
 - [Primary](#primary)
 - [Network](#network)
 - [Node](#node)
@@ -51,6 +52,31 @@ separately, there's authentication server config:
 
 and finally:
 - [References](#references)
+
+
+## Build Tags
+
+Different AIS builds may (or may not) require different environment vars. For complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md). Here's a very brief and non-exhaustive intro:
+
+```console
+# 1) no build tags, no debug
+MODE="" make node
+
+# 2) no build tags, debug
+MODE="debug" make node
+
+# 3) cloud backends, no debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
+
+# 4) cloud backends, debug
+AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
+
+# 5) cloud backends, debug
+TAGS="aws azure gcp debug" make node
+
+# 6) debug, nethttp (note that fasthttp is used by default)
+TAGS="nethttp debug" make node
+```
 
 ## Primary
 
@@ -223,41 +249,7 @@ See also:
 
 AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/).
 
-In addition and separately, AIStore supports [StatsD](https://github.com/statsd/statsd), and via StatsD - Graphite (collection) and Grafana (graphics).
-
-The corresponding binary choice between StatsD and Prometheus is a **build-time** switch controlled by a single build tag: **statsd**.
-
-> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
-
-> As a side note, the entire assortment of supported build tags is demonstrated by the following `aisnode` building examples:
-
-```console
-# 1) no build tags, no debug
-MODE="" make node
-
-# 2) no build tags, debug
-MODE="debug" make node
-
-# 3) cloud backends, no debug
-AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
-
-# 4) cloud backends, debug
-AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="debug" make node
-
-# 5) cloud backends, debug, statsd
-# (build with StatsD, and note that Prometheus is the default choice when `statsd` tag is not defined)
-TAGS="aws azure gcp statsd debug" make node
-
-# 6) statsd, debug, nethttp (note that fasthttp is used by default)
-TAGS="nethttp statsd debug" make node
-```
-
-As far as, specifically, StatsD alternative, additional environment includes:
-
-| name | comment |
-| ---- | ------- |
-| `AIS_STATSD_PORT` | use it to override the default `8125` (see https://github.com/etsy/statsd) |
-| `AIS_STATSD_PROBE` | a startup option that, when true, tells an ais node to _probe_ whether StatsD server exists (and responds); if the probe fails, the node will disable its StatsD functionality completely - i.e., will not be sending any metrics to the StatsD port (above) |
+> StatsD was deprecated in v3.28 (Spring 2025) and completely removed in v4.0 (September 2025).
 
 ## Package: memsys
 

@@ -1,11 +1,28 @@
 version: '3'
 services:
-  graphite:
-    image: graphiteapp/graphite-statsd
   grafana:
     image: grafana/grafana
     ports:
       - "3000:3000"
+    networks:
+      - docker_default
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./provisioning/grafana:/etc/grafana/provisioning
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    volumes:
+      - ./provisioning/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - docker_default
   proxy:
     build:
       context: .

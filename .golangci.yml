@@ -223,7 +223,7 @@ run:
 
     # NOTE: these are the default build tags for the linter;
     # use `TAGS=... make lint` to check that the corresponding alternative sources do lint correctly;
-    # e.g. `TAGS=statsd make lint`
+    # e.g. `TAGS=aws make lint`
   build-tags:
     - hrw
     - aws
@@ -231,5 +231,3 @@ run:
     - gcp
     - oci
     # - nethttp
-    # - statsd
-

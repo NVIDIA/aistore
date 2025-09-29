@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with the cluster.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 

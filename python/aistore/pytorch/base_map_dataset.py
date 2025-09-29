@@ -1,7 +1,7 @@
 """
 Base class for AIS Map Style Datasets
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from typing import List, Union, Dict

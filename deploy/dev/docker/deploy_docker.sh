@@ -16,9 +16,9 @@ usage() {
     echo "  -p=NUM or --proxy=NUM                   : where NUM is the number of proxies"
     echo "  -s or --single                          : use a single network"
     echo "  -t=NUM or --target=NUM                  : where NUM is the number of targets"
-    echo "  -qs=AWS_DIR or --quickstart=AWS_DIR     : deploys a quickstart version of AIS with one proxy, one targe and one local file system"
+    echo "  -qs=AWS_DIR or --quickstart=AWS_DIR     : deploys a quickstart version of AIS with one proxy, one target and one local file system"
     echo "  -nocloud                                : to deploy AIS without any 3rd party backend provider"
-    echo "  -grafana                                : starts Graphite and Grafana containers"
+    echo "  -grafana                                : starts Grafana container"
     echo "  -nodiskio=BOOL                          : run Dry-Run mode with disk IO is disabled (default = false)"
     echo "  -dryobjsize=SIZE                        : size of an object when a source is a 'fake' one."
     echo "                                            'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'"
@@ -62,9 +62,6 @@ save_env() {
 
     echo "NODISKIO=${NODISKIO-false}" >> ${TMP_ENV}
     echo "DRYOBJSIZE=${DRYOBJSIZE-8m}" >> ${TMP_ENV}
-
-    echo "GRAPHITE_PORT=${GRAPHITE_PORT}" >> ${TMP_ENV}
-    echo "GRAPHITE_SERVER=${GRAPHITE_SERVER}" >> ${TMP_ENV}
 
     echo "PUB_SUBNET=${PUB_SUBNET}" >> ${TMP_ENV}
     echo "INT_CONTROL_SUBNET=${INT_CONTROL_SUBNET}" >> ${TMP_ENV}
@@ -395,13 +392,7 @@ cp $DIR/../../conf/limits.conf limits.conf
 
 docker network create docker_default || true
 if [ "$GRAFANA" == true ]; then
-    GRAPHITE_PORT=2003
-    GRAPHITE_SERVER="graphite"
-    docker-compose -f ${composer_file} up --build -d graphite
     docker-compose -f ${composer_file} up --build -d grafana
-else
-    GRAPHITE_PORT=2003
-    GRAPHITE_SERVER="localhost"
 fi
 
 PORT_INTRA_CONTROL=9080
@@ -470,7 +461,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     sleep 2 # give primary proxy some room to breathe
     echo Starting cluster ..
     PRIMARY_IP=$(docker inspect -f "{{ .NetworkSettings.Networks.ais${i}_public.IPAddress }}" ais${i}_proxy_1)
-    PRIMARY_IP=${PRIMARY_IP} docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --scale graphite=0 --no-recreate
+    PRIMARY_IP=${PRIMARY_IP} docker-compose -p ais${i} -f ${composer_file} up -d --scale proxy=${PROXY_CNT} --scale target=$TARGET_CNT --scale grafana=0 --no-recreate
 done
 
 sleep 5
@@ -492,11 +483,6 @@ if [ "$CLUSTER_CNT" -gt 1 ] && [ "${NETWORK}" = "multi" ]; then
             fi
         done
     done
-fi
-
-if [ "$GRAFANA" == true ]; then
-    # Set up Graphite datasource
-    curl -d '{"name":"Graphite","type":"graphite","url":"http://graphite:80","access":"proxy","basicAuth":false,"isDefault":true}' -H "Content-Type: application/json" -X POST http://admin:admin@localhost:3000/api/datasources > /dev/null 2>&1
 fi
 
 # Consider moving these to a folder instead of deleting - for future reference

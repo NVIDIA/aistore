@@ -26,7 +26,7 @@ For usage examples, please see:
 
 Base class for AIS Map Style Datasets
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 
 <a id="base_map_dataset.AISBaseMapDataset"></a>
 
@@ -62,7 +62,7 @@ Getter for internal object data list.
 
 Base class for AIS Iterable Style Datasets
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 
 <a id="base_iter_dataset.AISBaseIterDataset"></a>
 
@@ -138,7 +138,7 @@ If `etl_name` is provided, that ETL must already exist on the AIStore cluster.
 
 Iterable Dataset for AIS
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 
 <a id="iter_dataset.AISIterDataset"></a>
 
@@ -170,7 +170,7 @@ AIS Shard Reader for PyTorch
 
 PyTorch Dataset and DataLoader for AIS.
 
-Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 
 <a id="shard_reader.AISShardReader"></a>
 

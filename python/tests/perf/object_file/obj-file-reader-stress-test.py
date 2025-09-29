@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
 # This script tests AIStore's ObjectFileReader and its ability to resume object reading with interruptions

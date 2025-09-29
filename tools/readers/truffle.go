@@ -1,6 +1,6 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package readers
 

@@ -39,14 +39,9 @@ RUN curl -LO https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
-# Install statsd
-RUN git clone https://github.com/etsy/statsd.git
-
 ENV AIS_CONF_DIR /tmp/.conf
 ENV AIS_CONF_FILE ${AIS_CONF_DIR}/ais.json
 ENV AIS_LOCAL_CONF_FILE ${AIS_CONF_DIR}/ais_local.json
-ENV COLLECTD_CONF_FILE ${AIS_CONF_DIR}/collectd.conf
-ENV STATSD_CONF_FILE ${AIS_CONF_DIR}/statsd.conf
 
 ENV MOUNTPATH /tmp/ais
 

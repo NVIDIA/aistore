@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 

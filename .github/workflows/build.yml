@@ -34,13 +34,11 @@ jobs:
           AIS_BACKEND_PROVIDERS="aws azure gcp" MODE="" make node
           # 4) all cloud backends, debug
           AIS_BACKEND_PROVIDERS="aws azure gcp oci" MODE="debug" make node
-          # 5) statsd #### TODO: delete after v3.30 (by Fall 2025)
-          TAGS="statsd debug" make node
-          # 6) oteltracing, debug, nethttp (note that fasthttp is used by default)
+          # 5) oteltracing, debug, nethttp (note that fasthttp is used by default)
           TAGS="oteltracing nethttp debug" make node
-          # 7) w/ mem profile (see cmd/aisnodeprofile)
+          # 6) w/ mem profile (see cmd/aisnodeprofile)
           MEM_PROFILE="/tmp/mem" CPU_PROFILE="/tmp/cpu" make node
-          # 8) authn, cli, aisloader
+          # 7) authn, cli, aisloader
           make authn
           make cli
           make aisloader

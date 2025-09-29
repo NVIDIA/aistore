@@ -1,5 +1,5 @@
 // Package stats provides methods and functionality to register, track, log,
-// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
+// and export metrics that, for the most part, include "counter" and "latency" kinds.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -683,8 +683,6 @@ func (r *runner) Stop(err error) {
 	nlog.Infoln("Stopping", r.Name(), "err:", err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
-
-	r.closeStatsD()
 }
 
 // [log] serialize itself (slightly more efficiently than JSON)

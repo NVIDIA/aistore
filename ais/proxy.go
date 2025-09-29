@@ -244,6 +244,8 @@ func (p *proxy) Run() error {
 
 		// S3 compatibility, depending on feature flag
 		{r: "/", h: p.rootHandler, net: accessNetPublic},
+
+		// plus, PromHandler() at "/metrics" (see ais/htrun)
 	}
 	p.regNetHandlers(networkHandlers)
 

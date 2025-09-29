@@ -1,6 +1,6 @@
 // Package ishard provides utility for shard the initial dataset and integration with dsort
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package ishard
 

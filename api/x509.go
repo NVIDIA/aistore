@@ -1,6 +1,6 @@
 // Package api provides native Go-based API/SDK over HTTP(S).
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package api
 

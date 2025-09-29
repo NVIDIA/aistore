@@ -1,5 +1,3 @@
-//go:build !statsd
-
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
@@ -253,5 +251,3 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 func (*runner) PromHandler() http.Handler {
 	return promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{})
 }
-
-func (*runner) closeStatsD() {} // build tag "statsd" stub

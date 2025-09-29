@@ -15,9 +15,7 @@ AIStore (AIS) exposes metrics in [Prometheus](https://prometheus.io) format via 
   - [CLI Monitoring](#cli-monitoring)
   - [Prometheus Queries](#prometheus-queries)
   - [Grafana Alerting](#grafana-alerting)
-- [StatsD Alternative](#statsd-alternative)
-  - [StatsD Exporter for Prometheus](#statsd-exporter-for-prometheus)
-  - [Setup and Configuration](#setup-and-configuration)
+- [StatsD is no longer supported](#statsd-is-no-longer-supported)
 - [Best Practices](#best-practices)
 - [References](#references)
 - [Related Documentation](#related-documentation)
@@ -38,7 +36,6 @@ Full observability is supported using multiple complementary tools:
 * [CLI](/docs/cli.md) for interactive monitoring, specifically the [`ais show cluster stats`](/docs/cli/cluster.md) command
 * Monitoring backends:
   * [Prometheus](https://prometheus.io/) (recommended)
-  * [StatsD](https://github.com/etsy/statsd) with any compliant backend (e.g., Graphite/Grafana)
 
 > For information on load testing metrics, please refer to [AIS Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
 
@@ -75,11 +72,10 @@ This layout provides:
 
 AIS is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/) that natively supports metric collection without additional components. Key integration points:
 
-1. **Configuration**: No special configuration is required - simply build AIS **without** the `statsd` build tag to enable Prometheus support
+1. **Configuration**: No special configuration is required to enable Prometheus support
 2. **Metric Registration**: When starting, each AIS node (gateway or storage target) automatically:
    - Registers all metric descriptions (names, labels, and help text) with Prometheus
    - Exposes the HTTP endpoint `/metrics` for Prometheus scraping
-3. **Build Selection**: The choice between StatsD and Prometheus is a **build-time** decision controlled by the `statsd` build tag
 
 > For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
 
@@ -269,64 +265,9 @@ ais_target_state_flags{node_id=~"$node"} > 0 and (
 
 This alerting system provides comprehensive visibility into the operational state of your AIStore cluster and helps detect issues before they impact performance or availability.
 
-## StatsD Alternative
+## StatsD is no longer supported
 
-> **Important**: StatsD is deprecated. All support for StatsD will be **completely removed** by Fall 2025.
-
-### StatsD Exporter for Prometheus
-
-If specific requirements necessitate using StatsD, you can still integrate with Prometheus using its [statsd_exporter](https://github.com/prometheus/statsd_exporter) component that translates StatsD metrics to Prometheus format on-the-fly.
-
-> **Note**: Native Prometheus integration is the preferred option. StatsD exporter should only be considered for deployments with special requirements.
-
-Architecture with StatsD exporter:
-
-![AIStore monitoring with Prometheus](images/statsd-exporter.png)
-
-In this configuration:
-- AIS nodes send StatsD metrics to a UDP endpoint
-- The statsd_exporter receives these metrics and converts them to Prometheus format
-- Prometheus scrapes the exporter's HTTP endpoint
-- Grafana queries Prometheus for visualization
-
-### Setup and Configuration
-
-To deploy the StatsD exporter:
-
-1. Use the [prebuilt container image](https://quay.io/repository/prometheus/statsd-exporter), or
-2. Install from source:
-   ```console
-   $ go install github.com/prometheus/statsd_exporter@latest
-   ```
-
-For testing without Prometheus, run with debug logging:
-
-```console
-$ statsd_exporter --statsd.listen-udp localhost:8125 --log.level debug
-```
-
-Example debug output:
-
-```console
-level=info ts=2021-05-13T15:30:22.251Z caller=main.go:321 msg="Starting StatsD -> Prometheus Exporter" version="(version=, branch=, revision=)"
-level=info ts=2021-05-13T15:30:22.251Z caller=main.go:322 msg="Build context" context="(go=go1.16.3, user=, date=)"
-level=info ts=2021-05-13T15:30:22.251Z caller=main.go:361 msg="Accepting StatsD Traffic" udp=localhost:8125 tcp=:9125 unixgram=
-level=info ts=2021-05-13T15:30:22.251Z caller=main.go:362 msg="Accepting Prometheus Requests" addr=:9102
-level=debug ts=2021-05-13T15:30:27.811Z caller=listener.go:73 msg="Incoming line" proto=udp line=aistarget.pakftUgh.kalive.latency:1|ms
-level=debug ts=2021-05-13T15:30:29.891Z caller=listener.go:73 msg="Incoming line" proto=udp line=aisproxy.qYyhpllR.pst.count:77|c
-```
-
-Finally, configure Prometheus to scrape the exporter's metrics endpoint (default port **9102**).
-
-Default port configuration:
-- StatsD UDP input: **8125**
-- Prometheus HTTP endpoint: **9102**
-
-To see all configuration options:
-
-```console
-$ statsd_exporter --help
-```
+> StatsD support was removed in v4.0 (September 2025).
 
 ## Best Practices
 
@@ -352,7 +293,6 @@ To maximize the value of AIStore's Prometheus integration:
 * [Prometheus Exporters](https://prometheus.io/docs/instrumenting/writing_exporters/)
 * [Prometheus Data Model](https://prometheus.io/docs/concepts/data_model/)
 * [Prometheus Metric Types](https://prometheus.io/docs/concepts/metric_types/)
-* [StatsD Exporter](https://github.com/prometheus/statsd_exporter)
 
 ## Related Documentation
 

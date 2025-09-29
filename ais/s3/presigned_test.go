@@ -1,6 +1,6 @@
 // Package s3 provides Amazon S3 compatibility layer
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package s3 //nolint:testpackage // We use private functions here...
 

@@ -1,6 +1,6 @@
 // Package main for the `ishard` executable.
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 

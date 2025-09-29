@@ -7,8 +7,6 @@ function start_node {
   export AIS_CONF_DIR=/etc/aisnode/$1
   export AIS_CONF_FILE=${AIS_CONF_DIR}/ais.json
   export AIS_LOCAL_CONF_FILE=${AIS_CONF_DIR}/ais_local.json
-  export COLLECTD_CONF_FILE=${AIS_CONF_DIR}/collectd.conf
-  export STATSD_CONF_FILE=${AIS_CONF_DIR}/statsd.conf
 
   export PORT=$2
   export AIS_PRIMARY_URL="http://$(hostname -i):51080"

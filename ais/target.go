@@ -581,6 +581,8 @@ func (t *target) initRecvHandlers() {
 
 		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
 		{r: "/", h: t.errURL, net: accessNetAll},
+
+		// plus, PromHandler() at "/metrics" (see ais/htrun)
 	}
 	t.regNetHandlers(networkHandlers)
 }
