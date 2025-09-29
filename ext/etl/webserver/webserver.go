@@ -45,7 +45,6 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 	base := &etlServerBase{
 		endpoint:     fmt.Sprintf("%s:%d", ipAddress, port),
 		aisTargetURL: aisTargetURL,
-		argType:      os.Getenv("ARG_TYPE"),
 		client:       &http.Client{},
 		ETLServer:    etlSvr,
 	}
@@ -65,7 +64,6 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 type etlServerBase struct {
 	ETLServer
 	aisTargetURL string
-	argType      string
 	endpoint     string
 	client       *http.Client
 }
@@ -94,21 +92,19 @@ func (base *etlServerBase) handler(w http.ResponseWriter, r *http.Request) {
 // PUT /
 func (base *etlServerBase) putHandler(w http.ResponseWriter, r *http.Request) {
 	var (
+		fqn       = r.URL.Query().Get(apc.QparamETLFQN)
 		objReader io.ReadCloser
 		err       error
 	)
 
-	switch base.argType {
-	case etl.ArgTypeDefault, etl.ArgTypeURL:
-		objReader = r.Body
-	case etl.ArgTypeFQN:
-		objReader, err = base.getFQNReader(r.URL.Path)
+	if fqn != "" {
+		objReader, err = base.getFQNReader(fqn)
 		if err != nil {
 			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from FQN failed", err))
 			return
 		}
-	default:
-		cmn.WriteErrMsg(w, r, "invalid arg_type: "+base.argType)
+	} else {
+		objReader = r.Body
 	}
 
 	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
@@ -150,10 +146,18 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
+		fqn       = r.URL.Query().Get(apc.QparamETLFQN)
 		objReader io.ReadCloser
+		err       error
 	)
-	switch base.argType {
-	case etl.ArgTypeDefault, etl.ArgTypeURL:
+
+	if fqn != "" {
+		objReader, err = base.getFQNReader(fqn)
+		if err != nil {
+			cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "GET from FQN failed", err))
+			return
+		}
+	} else {
 		u := base.aisTargetURL + "/" + p
 		req, e := http.NewRequestWithContext(context.Background(), http.MethodGet, u, http.NoBody)
 		if e != nil {
@@ -167,15 +171,6 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		objReader = resp.Body
-	case etl.ArgTypeFQN:
-		reader, err := base.getFQNReader(r.URL.Path)
-		if err != nil {
-			cmn.WriteErr(w, r, fmt.Errorf("GET(FQN) failed: %v", err))
-			return
-		}
-		objReader = reader
-	default:
-		cmn.WriteErrMsg(w, r, "invalid arg_type: "+base.argType)
 	}
 
 	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
@@ -225,12 +220,7 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 		}
 
 		if ctrl.FQN != "" {
-			fqn, err := url.PathUnescape(ctrl.FQN)
-			if err != nil {
-				nlog.Errorln("failed to unescape", err)
-				break
-			}
-			reader, err = base.getFQNReader(fqn)
+			reader, err = base.getFQNReader(ctrl.FQN)
 			if err != nil {
 				nlog.Errorln("failed to read FQN", err)
 				break
@@ -333,8 +323,12 @@ func (base *etlServerBase) downloadHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {
-	fqn := cos.JoinWords(urlPath)
-	return os.Open(fqn)
+	fqn, err := url.PathUnescape(urlPath)
+	if err != nil {
+		return nil, fmt.Errorf("[%s] %w", "failed to unescape FQN", err)
+	}
+
+	return os.Open(cos.JoinWords(fqn))
 }
 
 func (base *etlServerBase) handleDirectPut(directPutURL string, r io.ReadCloser) error {

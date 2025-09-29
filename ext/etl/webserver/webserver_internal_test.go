@@ -51,7 +51,6 @@ func TestETLServerPutHandler(t *testing.T) {
 
 		svr = &etlServerBase{
 			aisTargetURL: host + secretPrefix,
-			argType:      etl.ArgTypeDefault,
 			endpoint:     host + ":" + port,
 			client:       &http.Client{},
 			ETLServer:    &EchoServer{},
@@ -76,7 +75,6 @@ func TestETLServerPutHandler(t *testing.T) {
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
-			svr.argType = etl.ArgTypeFQN
 			file, content := createFQNFile(t)
 			defer os.Remove(file)
 
@@ -84,8 +82,10 @@ func TestETLServerPutHandler(t *testing.T) {
 				path = "/" + url.PathEscape(file)
 				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
 				w    = httptest.NewRecorder()
+				q    = req.URL.Query()
 			)
-
+			q.Set(apc.QparamETLFQN, file)
+			req.URL.RawQuery = q.Encode()
 			svr.putHandler(w, req)
 
 			resp := w.Result()
@@ -106,7 +106,6 @@ func TestETLServerPutHandler(t *testing.T) {
 		defer directPutTargetServer.Close()
 
 		t.Run("argType=default", func(t *testing.T) {
-			svr.argType = etl.ArgTypeDefault
 			var (
 				content = []byte("test bytes")
 				req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
@@ -125,7 +124,6 @@ func TestETLServerPutHandler(t *testing.T) {
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
-			svr.argType = etl.ArgTypeFQN
 			file, _ := createFQNFile(t)
 			defer os.Remove(file)
 
@@ -133,7 +131,10 @@ func TestETLServerPutHandler(t *testing.T) {
 				path = "/" + url.PathEscape(file)
 				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
 				w    = httptest.NewRecorder()
+				q    = req.URL.Query()
 			)
+			q.Set(apc.QparamETLFQN, file)
+			req.URL.RawQuery = q.Encode()
 			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
 
 			svr.putHandler(w, req)
@@ -156,7 +157,6 @@ func TestETLServerPutHandler(t *testing.T) {
 		defer directPutTargetServer.Close()
 
 		t.Run("argType=default", func(t *testing.T) {
-			svr.argType = etl.ArgTypeDefault
 			var (
 				content = []byte("test bytes")
 				req     = httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(content))
@@ -173,7 +173,6 @@ func TestETLServerPutHandler(t *testing.T) {
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
-			svr.argType = etl.ArgTypeFQN
 			file, _ := createFQNFile(t)
 			defer os.Remove(file)
 
@@ -181,7 +180,10 @@ func TestETLServerPutHandler(t *testing.T) {
 				path = "/" + url.PathEscape(file)
 				req  = httptest.NewRequest(http.MethodPut, path, http.NoBody)
 				w    = httptest.NewRecorder()
+				q    = req.URL.Query()
 			)
+			q.Set(apc.QparamETLFQN, file)
+			req.URL.RawQuery = q.Encode()
 			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
 
 			svr.putHandler(w, req)
@@ -214,7 +216,6 @@ func TestEchoServerGetHandler(t *testing.T) {
 
 	svr := &etlServerBase{
 		aisTargetURL: localTargetServer.URL + secretPrefix,
-		argType:      etl.ArgTypeDefault,
 		endpoint:     host + ":" + port,
 		client:       &http.Client{},
 		ETLServer:    &EchoServer{},
@@ -222,7 +223,6 @@ func TestEchoServerGetHandler(t *testing.T) {
 
 	t.Run("directPut=none", func(t *testing.T) {
 		t.Run("argType=default", func(t *testing.T) {
-			svr.argType = etl.ArgTypeDefault
 			var (
 				req = httptest.NewRequest(http.MethodGet, "/"+objUname, http.NoBody)
 				w   = httptest.NewRecorder()
@@ -238,7 +238,6 @@ func TestEchoServerGetHandler(t *testing.T) {
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
-			svr.argType = etl.ArgTypeFQN
 			file, content := createFQNFile(t)
 			defer os.Remove(file)
 
@@ -246,8 +245,10 @@ func TestEchoServerGetHandler(t *testing.T) {
 				path = "/" + url.PathEscape(file)
 				req  = httptest.NewRequest(http.MethodGet, path, http.NoBody)
 				w    = httptest.NewRecorder()
+				q    = req.URL.Query()
 			)
-
+			q.Set(apc.QparamETLFQN, file)
+			req.URL.RawQuery = q.Encode()
 			svr.getHandler(w, req)
 
 			resp := w.Result()
@@ -269,7 +270,6 @@ func TestEchoServerGetHandler(t *testing.T) {
 		defer directPutTargetServer.Close()
 
 		t.Run("argType=default", func(t *testing.T) {
-			svr.argType = etl.ArgTypeDefault
 			var (
 				req = httptest.NewRequest(http.MethodGet, "/"+objUname, http.NoBody)
 				w   = httptest.NewRecorder()
@@ -287,7 +287,6 @@ func TestEchoServerGetHandler(t *testing.T) {
 		})
 
 		t.Run("argType=fqn", func(t *testing.T) {
-			svr.argType = etl.ArgTypeFQN
 			file, _ := createFQNFile(t)
 			defer os.Remove(file)
 
@@ -295,7 +294,10 @@ func TestEchoServerGetHandler(t *testing.T) {
 				path = "/" + url.PathEscape(file)
 				req  = httptest.NewRequest(http.MethodGet, path, http.NoBody)
 				w    = httptest.NewRecorder()
+				q    = req.URL.Query()
 			)
+			q.Set(apc.QparamETLFQN, file)
+			req.URL.RawQuery = q.Encode()
 			req.Header = http.Header{apc.HdrNodeURL: []string{cos.JoinPath(directPutTargetServer.URL, url.PathEscape(directPutPath))}}
 
 			svr.getHandler(w, req)
@@ -333,7 +335,6 @@ func TestWebSocketHandler(t *testing.T) {
 		if r.URL.Path == "/ws" {
 			base := &etlServerBase{
 				aisTargetURL: host + secretPrefix,
-				argType:      etl.ArgTypeDefault,
 				endpoint:     host + ":" + port,
 				client:       &http.Client{},
 				ETLServer:    &EchoServer{},

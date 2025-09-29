@@ -23,6 +23,7 @@ const (
 	QparamETLName          = "etl_name"
 	QparamETLPipeline      = "etl_pipeline"
 	QparamETLTransformArgs = "etl_args"
+	QparamETLFQN           = "etl_fqn"
 	QparamETLSecret        = "etl_secret" // secret generated during ETL init to validate directly target access from trusted ETL
 
 	QparamRegex      = "regex"       // dsort: list regex
