@@ -361,8 +361,8 @@ func ReportXactionStatus(bp api.BaseParams, xid string, stopCh *cos.StopCh, inte
 	}()
 }
 
-func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string, replaceArgs ...string) (msg etl.InitMsg) {
-	tlog.Logfln("InitSpec ETL[%s], communicator %s", etlName, commType)
+func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType string, replaceArgs ...string) (msg etl.InitMsg) {
+	tlog.Logf("InitSpec ETL[%s], communicator %s\n", etlName, commType)
 	spec, err := GetTransformYaml(etlName, replaceArgs...)
 	tassert.CheckFatal(t, err)
 
@@ -374,13 +374,11 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, commType, argType string
 	if err := yaml.Unmarshal(spec, &etlSpec); err == nil && etlSpec.Validate() == nil {
 		etlSpec.EtlName = etlName
 		etlSpec.CommTypeX = commType
-		etlSpec.ArgTypeX = argType
 		etlSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 		msg = &etlSpec
 	} else {
 		initSpec.EtlName = etlName
 		initSpec.CommTypeX = commType
-		initSpec.ArgTypeX = argType
 		initSpec.InitTimeout = cos.Duration(time.Minute * 2) // manually increase timeout in testing environment
 		initSpec.Spec = spec
 		msg = &initSpec

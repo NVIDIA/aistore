@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 
@@ -275,17 +276,22 @@ func (wss *wsSession) createTask(lom *core.LOM, latestVer, sync bool, woc io.Wri
 
 	task.w = woc
 	task.ctrlmsg.Path = lom.ObjName
-	switch wss.msg.ArgType() {
-	case ArgTypeDefault, ArgTypeURL:
+	switch {
+	case latestVer, sync, cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL): // TODO -- FIXME: consider chunked case
 		srcResp := lom.GetROC(latestVer, sync)
 		if srcResp.Err != nil {
-			cos.Close(woc)
+			if woc != nil {
+				cos.Close(woc)
+			}
 			return nil, 0, srcResp.Err
 		}
 		task.r = srcResp.R
-	case ArgTypeFQN:
+	default:
+		// default to FQN
 		if ecode, err := lomLoad(lom, wss.txctn.Kind()); err != nil {
-			cos.Close(woc)
+			if woc != nil {
+				cos.Close(woc)
+			}
 			return nil, ecode, err
 		}
 		task.ctrlmsg.FQN = url.PathEscape(lom.FQN)

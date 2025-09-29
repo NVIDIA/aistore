@@ -17,7 +17,7 @@ ais://$BUCKET_1/object_2.txt
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 communication_type: hpush://
-arg_type: fqn
+arg_type:
 Hello World!
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$

@@ -192,7 +192,7 @@ func TestETLPipelineChain(t *testing.T) {
 func initPipelineETLs(t *testing.T, baseParams api.BaseParams, pipeline, commTypes []string) []string {
 	etlNames := make([]string, 0, len(pipeline))
 	for i, transformer := range pipeline {
-		msg := tetl.InitSpec(t, baseParams, transformer, commTypes[i], etl.ArgTypeDefault)
+		msg := tetl.InitSpec(t, baseParams, transformer, commTypes[i])
 		if i != 0 { // the first ETL will be cleaned up by testETLBucket
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, msg.Name()) })
 		}

@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 
 	jsoniter "github.com/json-iterator/go"
@@ -36,7 +35,6 @@ const (
 	// common fields
 	Name              = "name"
 	CommunicationType = "communication_type"
-	ArgType           = "arg_type"
 	DirectPut         = "direct_put"
 
 	// `InitSpecMsg` fields
@@ -95,13 +93,6 @@ const (
 	WebSocket = "ws://"
 )
 
-// enum arg types (`argTypes`)
-const (
-	ArgTypeDefault = ""
-	ArgTypeURL     = "url"
-	ArgTypeFQN     = "fqn"
-)
-
 type (
 	InitMsg interface {
 		Name() string
@@ -109,7 +100,6 @@ type (
 		PodName(tid string) string // ETL pod name on the given target
 		MsgType() string
 		CommType() string
-		ArgType() string
 		Validate() error
 		IsDirectPut() bool
 		ParsePodSpec() (*corev1.Pod, error)
@@ -123,7 +113,6 @@ type (
 	InitMsgBase struct {
 		EtlName          string          `json:"name" yaml:"name"`
 		CommTypeX        string          `json:"communication" yaml:"communication"`
-		ArgTypeX         string          `json:"argument" yaml:"argument"`
 		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty" swaggertype:"primitive,string"`
 		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty" swaggertype:"primitive,string"`
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
@@ -216,10 +205,7 @@ type (
 	}
 )
 
-var (
-	commTypes = []string{Hpush, Hpull, HpushStdin, WebSocket}    // NOTE: must contain all
-	argTypes  = []string{ArgTypeDefault, ArgTypeURL, ArgTypeFQN} // ditto
-)
+var commTypes = []string{Hpush, Hpull, HpushStdin, WebSocket} // NOTE: must contain all
 
 ////////////////
 // InitMsg*** //
@@ -232,7 +218,6 @@ var (
 )
 
 func (m *InitMsgBase) CommType() string          { return m.CommTypeX }
-func (m *InitMsgBase) ArgType() string           { return m.ArgTypeX }
 func (m *InitMsgBase) Name() string              { return m.EtlName }
 func (m *InitMsgBase) Cname() string             { return "ETL[" + m.EtlName + "]" }
 func (m *InitMsgBase) PodName(tid string) string { return m.EtlName + "-" + strings.ToLower(tid) }
@@ -247,11 +232,11 @@ func (*InitSpecMsg) MsgType() string { return SpecType }
 func (*ETLSpecMsg) MsgType() string  { return ETLSpecType }
 
 func (m *InitSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s], timeout=(%v, %v)", SpecType, m.Name(), m.CommType(), m.ArgType(), m.InitTimeout.D(), m.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s], timeout=(%v, %v)", SpecType, m.Name(), m.CommType(), m.InitTimeout.D(), m.ObjTimeout.D())
 }
 
 func (e *ETLSpecMsg) String() string {
-	return fmt.Sprintf("init-%s[%s-%s-%s], env=%s, timeout=(%v, %v)", ETLSpecType, e.Name(), e.CommType(), e.ArgType(), e.FormatEnv(), e.InitTimeout.D(), e.ObjTimeout.D())
+	return fmt.Sprintf("init-%s[%s-%s], env=%s, timeout=(%v, %v)", ETLSpecType, e.Name(), e.CommType(), e.FormatEnv(), e.InitTimeout.D(), e.ObjTimeout.D())
 }
 
 func UnmarshalInitMsg(b []byte) (InitMsg, error) {
@@ -285,33 +270,6 @@ func (m *InitMsgBase) Validate(detail string) error {
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
 	if m.CommTypeX != "" && !cos.StringInSlice(m.CommTypeX, commTypes) {
 		err := fmt.Errorf("unknown comm-type %q", m.CommTypeX)
-		return cmn.NewErrETLf(errCtx, ferr, err, detail)
-	}
-
-	if !cos.StringInSlice(m.ArgTypeX, argTypes) {
-		err := fmt.Errorf("unsupported arg-type %q", m.ArgTypeX)
-		return cmn.NewErrETLf(errCtx, ferr, err, detail)
-	}
-
-	//
-	// not-implemented-yet type limitations:
-	//
-	if m.ArgTypeX == ArgTypeURL && m.CommTypeX != Hpull {
-		err := fmt.Errorf("arg-type %q requires comm-type %q (%q is not supported yet)", m.ArgTypeX, Hpull, m.CommTypeX)
-		return cmn.NewErrETLf(errCtx, ferr, err, detail)
-	}
-	if m.ArgTypeX == ArgTypeFQN && m.CommTypeX != Hpull && m.CommTypeX != Hpush && m.CommTypeX != WebSocket {
-		err := fmt.Errorf("arg-type %q requires comm-type (%q or %q or %q) - %q is not supported yet",
-			m.ArgTypeX, Hpull, Hpush, WebSocket, m.CommTypeX)
-		return cmn.NewErrETLf(errCtx, ferr, err, detail)
-	}
-
-	//
-	// ArgTypeFQN ("fqn") can also be globally disallowed
-	//
-	if m.ArgTypeX == ArgTypeFQN && cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL) {
-		err := fmt.Errorf("arg-type %q is not permitted by the configured feature flags (%s)",
-			m.ArgTypeX, cmn.Rom.Features().String())
 		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}
 

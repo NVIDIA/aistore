@@ -217,7 +217,7 @@ func TestETLBigBucket(t *testing.T) {
 				etlDoneCh      = cos.NewStopCh()
 				requestTimeout = 30 * time.Second
 			)
-			initMsg := tetl.InitSpec(t, baseParams, etlName, etl.Hpush, etl.ArgTypeDefault)
+			initMsg := tetl.InitSpec(t, baseParams, etlName, etl.Hpush)
 			t.Cleanup(func() {
 				tetl.StopAndDeleteETL(t, baseParams, initMsg.Name())
 				tetl.WaitForETLAborted(t, baseParams)
@@ -265,7 +265,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (name,
 
 	m.puts()
 
-	initMsg := tetl.InitSpec(t, baseParams, etlName, comm, etl.ArgTypeDefault)
+	initMsg := tetl.InitSpec(t, baseParams, etlName, comm)
 	t.Cleanup(func() {
 		tetl.StopAndDeleteETL(t, baseParams, initMsg.Name())
 	})

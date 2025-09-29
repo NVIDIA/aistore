@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
@@ -329,32 +330,26 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 		return core.ReadResp{Err: err}
 	}
 	var (
-		path    string
 		getBody getBodyFunc
 
+		path  = lom.Bck().Name + "/" + lom.ObjName
 		oah   = &cos.SimpleOAH{Atime: time.Now().UnixNano()}
-		query = make(url.Values, 2)
+		query = make(url.Values, 3)
 	)
 
-	switch pc.msg.ArgType() {
-	case ArgTypeDefault, ArgTypeURL:
+	switch {
+	case latestVer, sync, cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL): // TODO -- FIXME: consider chunked case
 		// [TODO] to remove the following assert (and the corresponding limitation):
 		// - container must be ready to receive complete bucket name including namespace
 		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
 		debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname(""), " - bucket with namespace")
-		path = lom.Bck().Name + "/" + lom.ObjName
 		getBody = func() core.ReadResp { return lom.GetROC(latestVer, sync) }
-	case ArgTypeFQN:
+	default:
+		// default to FQN
 		if ecode, err := lomLoad(lom, pc.xctn.Kind()); err != nil {
 			return core.ReadResp{Err: err, Ecode: ecode}
 		}
-
-		// body = http.NoBody
-		path = url.PathEscape(lom.FQN)
-	default:
-		e := fmt.Errorf("%s: unexpected argument type %q", pc.msg, pc.msg.ArgType())
-		debug.AssertNoErr(e) // is validated at construction time
-		nlog.Errorln(e)
+		query.Set(apc.QparamETLFQN, url.PathEscape(lom.FQN))
 	}
 
 	if len(pc.command) != 0 { // HpushStdin case
@@ -454,23 +449,16 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 // TODO: support `sync` option as well
-func (rc *redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (path string, query url.Values) {
-	query = make(url.Values)
-	switch rc.msg.ArgType() {
-	case ArgTypeDefault, ArgTypeURL:
-		path = url.PathEscape(lom.Uname())
-	case ArgTypeFQN:
-		path = url.PathEscape(lom.FQN)
-	default:
-		err := fmt.Errorf("%s: unexpected argument type %q", rc.msg, rc.msg.ArgType())
-		debug.AssertNoErr(err)
-		nlog.Errorln(err)
+func (*redirectComm) redirectArgs(lom *core.LOM, latestVer bool) (string, url.Values) {
+	query := make(url.Values, 4)
+	if !cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL) {
+		// TODO -- FIXME: consider chunked case
+		query.Set(apc.QparamETLFQN, url.PathEscape(lom.FQN))
 	}
-
 	if latestVer {
 		query.Set(apc.QparamLatestVer, "true")
 	}
-	return path, query
+	return url.PathEscape(lom.Uname()), query
 }
 
 func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args *core.ETLArgs) core.ReadResp {

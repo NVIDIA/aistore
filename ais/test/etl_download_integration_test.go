@@ -31,8 +31,8 @@ var squadRequiredFields = []string{`"id"`, `"title"`, `"context"`, `"question"`,
 
 // TestETLDownloadIntegration tests ETL download: parquet->JSON transformation with squad dataset
 func TestETLDownloadIntegration(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
-
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
+	// TODO: resolve the error: "429 Too Many Requests We had to rate limit your IP"
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -43,7 +43,7 @@ func TestETLDownloadIntegration(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// Use parquet-parser ETL to transform squad dataset
-	etlMsg := tetl.InitSpec(t, baseParams, tetl.ParquetParser, etl.Hpush, etl.ArgTypeDefault)
+	etlMsg := tetl.InitSpec(t, baseParams, tetl.ParquetParser, etl.Hpush)
 	etlName := etlMsg.Name()
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })
 

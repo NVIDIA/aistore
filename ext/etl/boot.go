@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -84,11 +83,9 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 		return err
 	}
 
-	if b.msg.ArgType() == ArgTypeFQN {
-		if err = b._setVol(); err != nil {
-			nlog.Errorln(err)
-			return err
-		}
+	if err = b._setVol(); err != nil {
+		nlog.Errorln(err)
+		return err
 	}
 
 	if err = b._setImagePullSecrets(); err != nil {
@@ -344,14 +341,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
 			Value: core.T.Snode().URL(cmn.NetIntraData) + apc.URLPathETLObject.Join(b.msg.Name(), b.secret),
-		})
-		if b.msg.ArgType() == ArgTypeFQN {
-			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
-				Name:  strings.ToUpper(ArgType), // transformers expect upper case `ARG_TYPE` env var
-				Value: ArgTypeFQN,
-			})
-		}
-		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
+		}, corev1.EnvVar{
 			Name:  DirectPut,
 			Value: strconv.FormatBool(b.msg.IsDirectPut()),
 		})
