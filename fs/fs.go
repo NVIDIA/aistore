@@ -752,7 +752,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMi *Mount
 			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMi = mi
 			putAvailMPI(availableCopy)
-		} else if cmn.Rom.FastV(4, cos.SmoduleFS) {
+		} else if cmn.Rom.V(4, cos.ModFS) {
 			nlog.Infof("%s: %s is already available, nothing to do", tid, mi)
 		}
 		return enabledMi, nil
@@ -1160,7 +1160,7 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 	for _, mi := range avail {
 		sz, err := mi.onDiskSize(bck, prefix)
 		if err != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleFS) {
+			if cmn.Rom.V(4, cos.ModFS) {
 				nlog.Warningln("failed to calculate size on disk:", err, "["+mi.String(), bck.String(), prefix+"]")
 			}
 			return 0

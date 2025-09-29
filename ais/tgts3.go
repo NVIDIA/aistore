@@ -29,7 +29,7 @@ const fmtErrBckObj = "invalid %s request: expecting bucket and object (names) in
 
 // [METHOD] /s3
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("s3Handler", t.String(), r.Method, r.URL)
 	}
 	apiItems, err := t.parseURL(w, r, apc.URLPathS3.L, 0, true)
@@ -81,7 +81,7 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 			s3.WriteErr(w, r, errors.New("UploadPartCopy not implemented yet"), http.StatusNotImplemented)
 			return
 		}
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("putPartMpt", bck.String(), items, q)
 		}
 		t.putPartMptS3(w, r, items, q, bck)
@@ -110,7 +110,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	if err != nil {
 		nlog.Errorf("Warning: failed to unescape '%s=%s' header: %v", cos.S3HdrObjSrc, src, err)
 	} else if src != srcUnescaped {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("Warning: header", cos.S3HdrObjSrc, "is double-escaped - unescaping from", src, "to", srcUnescaped)
 		}
 		src = srcUnescaped
@@ -237,7 +237,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	q := r.URL.Query()
 
 	if len(items) == 1 && q.Has(s3.QparamMptUploads) {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("listUploadsMpt", bck.String(), q)
 		}
 		t.listUploadsMptS3(w, bck, q)
@@ -250,7 +250,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	objName := s3.ObjName(items)
 	if q.Has(s3.QparamMptPartNo) {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("getMptPart", bck.String(), objName, q)
 		}
 		lom := core.AllocLOM(objName)
@@ -260,7 +260,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID != "" {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("listPartsMpt", bck.String(), objName, q)
 		}
 		t.listPartsMptS3(w, r, bck, objName, q)
@@ -384,14 +384,14 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	q := r.URL.Query()
 	if q.Has(s3.QparamMptUploads) {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
 		t.startMptS3(w, r, items, bck)
 		return
 	}
 	if q.Has(s3.QparamMptUploadID) {
-		if cmn.Rom.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.V(5, cos.ModS3) {
 			nlog.Infoln("completeMpt", bck.String(), items, q)
 		}
 		t.completeMptS3(w, r, items, q, bck)

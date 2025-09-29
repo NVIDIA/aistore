@@ -797,7 +797,7 @@ func hkLogs(int64) time.Duration {
 		n       = len(dentries)
 		nn      = n - n>>2
 		finfos  = make([]iofs.FileInfo, 0, nn)
-		verbose = cmn.Rom.FastV(4, cos.SmoduleStats)
+		verbose = cmn.Rom.V(4, cos.ModStats)
 	)
 	for i, logtype := range []string{".INFO.", ".ERROR."} {
 		finfos, tot = _sizeLogs(dentries, logtype, finfos)
@@ -849,7 +849,7 @@ func _rmLogs(tot, maxtotal int64, logdir, logtype string, finfos []iofs.FileInfo
 		return finfos[i].ModTime().Before(finfos[j].ModTime())
 	}
 	l := len(finfos)
-	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
+	verbose := cmn.Rom.V(4, cos.ModStats)
 	if verbose {
 		nlog.Infoln(gcLogs, logtype, "total:", tot, "max:", maxtotal, "num:", l)
 	}

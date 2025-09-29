@@ -209,7 +209,7 @@ func (lpi *Iter) _cb(fqn, rel string, lom *core.LOM) (err error) {
 	return nil
 
 rerr:
-	if cmn.Rom.FastV(4, cos.SmoduleFS) {
+	if cmn.Rom.V(4, cos.ModFS) {
 		nlog.Warningln(lom.String(), "[", err, "]")
 	}
 	return nil

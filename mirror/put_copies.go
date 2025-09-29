@@ -134,7 +134,7 @@ func (r *XactPut) do(lom *core.LOM, buf []byte) {
 	lom.Unlock(true)
 
 	if err != nil {
-		r.AddErr(err, 5, cos.SmoduleMirror)
+		r.AddErr(err, 5, cos.ModMirror)
 	} else {
 		r.ObjsAdd(1, size)
 	}

@@ -165,14 +165,14 @@ func (c *baseComm) setupConnection(schema, podAddr string) (ecode int, err error
 	// the pod must be reachable via its tcp addr
 	c.podAddr = podAddr
 	if ecode, err = c.dial(); err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		if cmn.Rom.V(4, cos.ModETL) {
 			nlog.Warningf("%s: failed to dial %s", c.msg.Cname(), c.podAddr)
 		}
 		return ecode, err
 	}
 
 	c.podURI = schema + c.podAddr
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("%s: setup connection to %s", c.msg.Cname(), c.podURI)
 	}
 	return 0, nil
@@ -277,7 +277,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 		return core.ReadResp{R: nil, OAH: oah, Err: cmn.ErrSkip, Ecode: http.StatusNoContent}
 	default:
 		if ecode >= 400 {
-			if cmn.Rom.FastV(5, cos.SmoduleETL) {
+			if cmn.Rom.V(5, cos.ModETL) {
 				nlog.Warningln("unexpected ecode from etl:", ecode, oah, err)
 			}
 			debug.Assert(r != nil)
@@ -385,7 +385,7 @@ func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(Hpush, lom.Cname(), args.Pipeline.String(), err, ecode)
 	}
 
@@ -398,7 +398,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 	if resp.Err != nil {
 		return 0, resp.Ecode, resp.Err
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err)
 	}
 
@@ -417,7 +417,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, lom 
 
 func (pc *pushComm) OfflineTransform(lom *core.LOM, latestVer, sync bool, args *core.ETLArgs) core.ReadResp {
 	resp := pc.doRequest(lom, args, latestVer, sync)
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(Hpush, lom.Cname(), resp.Err, resp.Ecode)
 	}
 	return handleRespEcode(resp.Ecode, resp.OAH, resp.R, resp.Err)
@@ -447,7 +447,7 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	url := cos.JoinQuery(cos.JoinPath(rc.podURI, path), query)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(Hpull, lom.Cname())
 	}
 	return cos.ContentLengthUnknown, 0, nil // TODO: stats inline transform size for hpull
@@ -504,7 +504,7 @@ func (rc *redirectComm) OfflineTransform(lom *core.LOM, latestVer, _ bool, args 
 		return core.ReadResp{Err: err, Ecode: ecode}
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(Hpull, clone.Cname(), args.Pipeline.String(), err, ecode)
 	}
 	clone.SetSize(r.Size())

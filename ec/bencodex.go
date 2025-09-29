@@ -331,7 +331,7 @@ func (r *XactBckEncode) setLast(lom *core.LOM, err error) {
 	case errSkipped:
 		// do nothing
 	default:
-		r.AddErr(err, 4, cos.SmoduleEC)
+		r.AddErr(err, 4, cos.ModEC)
 	}
 }
 

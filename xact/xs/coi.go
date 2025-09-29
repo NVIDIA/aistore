@@ -97,7 +97,7 @@ type (
 
 func (tc *copier) prepare(lom *core.LOM, bckTo *meta.Bck, msg *apc.TCBMsg, config *cmn.Config, buf []byte, owt cmn.OWT) (a *CoiParams, err error) {
 	toName := msg.ToName(lom.ObjName)
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(tc.r.Name(), lom.Cname(), "=>", bckTo.Cname(toName))
 	}
 
@@ -171,7 +171,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		err = res.Err
 		tc.r.Abort(err)
 	default:
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Warningln(tc.r.Name(), lom.Cname(), res.Err)
 		}
 		if tc.xetl != nil {
@@ -182,7 +182,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 			})
 		}
 		if contOnErr {
-			tc.r.AddErr(res.Err, 5, cos.SmoduleXs)
+			tc.r.AddErr(res.Err, 5, cos.ModXs)
 		} else {
 			err = res.Err
 			tc.r.Abort(err)

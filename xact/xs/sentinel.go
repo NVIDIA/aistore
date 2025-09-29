@@ -89,7 +89,7 @@ func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 	case err != nil:
 		nlog.WarningDepth(1, s.r.Name(), err)
 	default:
-		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Infoln(s.r.Name(), "done")
 		}
 	}
@@ -196,7 +196,7 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 		s.pend.n.Dec()
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.InfoDepth(1, s.r.Name(), "recv 'done' from:", meta.Tname(hdr.SID), s.pend.n.Load())
 	}
 }
@@ -226,7 +226,7 @@ func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {
 		apair.last.Store(mono.NanoTime())
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.InfoDepth(1, s.r.Name(), "recv 'progress'", numvis, "from:", meta.Tname(hdr.SID), "pending:", s.pend.n.Load())
 	}
 }

@@ -319,7 +319,7 @@ func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
 		}
 		if err := cos.RemoveFile(c.path); err != nil {
 			ecnt++
-			if cmn.Rom.FastV(4, cos.SmoduleCore) || ecnt == 1 {
+			if cmn.Rom.V(4, cos.ModCore) || ecnt == 1 {
 				nlog.WarningDepth(1, u._utag(lom.Cname())+":",
 					"failed to remove chunk [", c.num, c.path, err, ecnt, "]")
 			}
@@ -342,7 +342,7 @@ func (u *Ufest) Abort(lom *LOM) {
 	})
 	partial := u._fqns(lom, false)
 	if err := cos.RemoveFile(partial); err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleCore) {
+		if cmn.Rom.V(4, cos.ModCore) {
 			nlog.Warningln("abort", u._utag(lom.Cname()), "- failed to remove partial manifest [", err, "]")
 		}
 	}

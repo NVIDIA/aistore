@@ -134,7 +134,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *core.LOM) error {
 		r.Abort(err)
 		return err
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
 	}
 	if req.rebuild {
@@ -170,7 +170,7 @@ func (r *XactPut) mainLoop(ticker *time.Ticker) {
 	for {
 		select {
 		case <-ticker.C:
-			if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			if cmn.Rom.V(4, cos.ModEC) {
 				if s := fmt.Sprintf("%v", r.Snap()); s != "" {
 					nlog.Infoln(s)
 				}

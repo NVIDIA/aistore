@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -155,7 +155,7 @@ func (r *MMSA) freeIdle() (total int64) {
 			continue
 		}
 		total += freed
-		if freed > 0 && cmn.Rom.FastV(5, cos.SmoduleMemsys) {
+		if freed > 0 && cmn.Rom.V(5, cos.ModMemsys) {
 			nlog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
 		}
 	}

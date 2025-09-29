@@ -239,7 +239,7 @@ repeat:
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
-		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Infoln(s.String(), "stopped [", s.numCur, s.stats.Num.Load(), "]")
 		}
 		return 0, io.EOF
@@ -261,7 +261,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	} else {
 		s.sendoff.ins = inData
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleTransport) && s.numCur&0x3f == 2 {
+	if cmn.Rom.V(5, cos.ModTransport) && s.numCur&0x3f == 2 {
 		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, s.stats.Num.Load(), "]")
 	}
 	s.sendoff.off = 0
@@ -321,7 +321,7 @@ func (s *Stream) eoObj(err error) {
 	s.stats.Size.Add(objSize)
 	s.numCur++
 	s.stats.Num.Inc()
-	if cmn.Rom.FastV(5, cos.SmoduleTransport) && s.numCur&0x3f == 3 {
+	if cmn.Rom.V(5, cos.ModTransport) && s.numCur&0x3f == 3 {
 		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, s.stats.Num.Load(), "]")
 	}
 
@@ -399,7 +399,7 @@ func (s *Stream) closeAndFree() {
 func (s *Stream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
 		s.workCh <- &Obj{Hdr: ObjHdr{Opcode: opcIdleTick}}
-		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Infoln(s.String(), "active => inactive")
 		}
 	}

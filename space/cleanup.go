@@ -570,7 +570,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	if completedID != "" {
 		if completedID != uploadID {
 			j.norphan++
-			if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(5, cos.SmoduleSpace) {
+			if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(5, cos.ModSpace) {
 				nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "vs completed: [", completedID, lom.Cname(), j.norphan, "]")
 			}
 			j.oldWork = append(j.oldWork, chunkFQN)
@@ -587,7 +587,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 		if finfo.ModTime().Add(j.dont()).After(j.now) {
 			return
 		}
-		if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(5, cos.SmoduleSpace) {
+		if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(5, cos.ModSpace) {
 			nlog.Warningln(j.String(), "orphan chunk", chunkFQN, "from partial: [", fqn, lom.Cname(), j.norphan, "]")
 		}
 		j.oldWork = append(j.oldWork, chunkFQN)
@@ -595,7 +595,7 @@ func (j *clnJ) visitChunk(chunkFQN string, lom *core.LOM, uploadID string) {
 	}
 
 	// 3. no partial and no completed: the chunk appears to be orphan and old
-	if j.norphan%sparseLogCnt == 1 || cmn.Rom.FastV(4, cos.SmoduleSpace) {
+	if j.norphan%sparseLogCnt == 1 || cmn.Rom.V(4, cos.ModSpace) {
 		nlog.Warningln(j.String(), "orphan chunk w/ no manifests", chunkFQN, j.norphan)
 	}
 	j.oldWork = append(j.oldWork, chunkFQN)
@@ -663,7 +663,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	switch {
 	// too early atime-wise
 	case atime.Add(j.dont()).After(j.now):
-		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+		if cmn.Rom.V(5, cos.ModSpace) {
 			nlog.Infoln("too early for", lom.String(), "atime", lom.Atime().String(), "dont-cleanup", j.dont())
 		}
 	case lom.IsHRW():
@@ -700,7 +700,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 			tag, keep = "removing", false
 		}
 
-		if j.nmisplc%sparseLogCnt == 1 || cmn.Rom.FastV(4, cos.SmoduleSpace) {
+		if j.nmisplc%sparseLogCnt == 1 || cmn.Rom.V(4, cos.ModSpace) {
 			nlog.Warningln(j.String(), tag, "misplaced object:", lom.Cname(), j.nmisplc)
 		}
 		if !keep {
@@ -788,7 +788,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	}
 	if _, err := lom.DelExtraCopies(); err != nil {
 		e := fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
-		xcln.AddErr(e, 5, cos.SmoduleSpace)
+		xcln.AddErr(e, 5, cos.ModSpace)
 	}
 }
 
@@ -824,7 +824,7 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 
 		// note: removing a child may render its parent empty as well, but we do not recurs
 		if err := syscall.Rmdir(fqn); err == nil {
-			if cmn.Rom.FastV(4, cos.SmoduleSpace) {
+			if cmn.Rom.V(4, cos.ModSpace) {
 				nlog.Infoln(j.String(), "rm empty dir:", fqn)
 			}
 		} else if errno, ok := err.(syscall.Errno); ok {
@@ -863,7 +863,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 					nfiles++
 					nbytes += finfo.Size()
 					j._throttle(nfiles)
-					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+					if cmn.Rom.V(5, cos.ModSpace) {
 						nlog.Infoln(j.String(), "rm old", workfqn, "size", finfo.Size())
 					}
 				}
@@ -903,7 +903,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 					nfiles++
 					size := mlom.Lsize(true /*not loaded*/)
 					nbytes += size
-					if cmn.Rom.FastV(4, cos.SmoduleSpace) {
+					if cmn.Rom.V(4, cos.ModSpace) {
 						nlog.Infoln(j.String(), "rm misplaced", mlom.String(), "size", size)
 					}
 
@@ -950,7 +950,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 				} else {
 					nfiles++
 					nbytes += finfo.Size()
-					if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+					if cmn.Rom.V(5, cos.ModSpace) {
 						nlog.Infoln(j.String(), "rm invalid", fqn, "size", finfo.Size())
 					}
 					j._throttle(nfiles)

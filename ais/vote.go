@@ -325,7 +325,7 @@ func (p *proxy) electPhase1(vr *VoteRecord) (winner bool, errors cos.StrSet) {
 			}
 			n++
 		} else {
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infof("Node %s responded with (winner: %t)", res.daemonID, res.yes)
 			}
 			if res.yes {
@@ -663,7 +663,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
 	if !h.keepalive.timeToPing(currPrimaryID) {
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
 		return false, nil
@@ -679,7 +679,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	}
 
 	vote := nextPrimaryProxy.ID() == daemonID
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("%s: voting '%t' for %s", h, vote, daemonID)
 	}
 	return vote, nil

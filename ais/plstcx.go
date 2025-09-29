@@ -77,7 +77,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	} else {
 		ok = p.writeJS(w, r, lst, lsotag)
 	}
-	if !ok && cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if !ok && cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Errorln("failed to transmit list-objects page (TCP RST?)")
 	}
 
@@ -139,7 +139,7 @@ func (p *proxy) lsPage(bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, hdr h
 				lsotag, lsmsg.StartAfter, bck)
 		}
 		// verbose log
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.V(4, cos.ModAIS) {
 			var s string
 			if lsmsg.ContinuationToken != "" {
 				s = " cont=" + lsmsg.ContinuationToken

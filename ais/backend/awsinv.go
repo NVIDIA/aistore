@@ -172,7 +172,7 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 		return time.Time{}, false
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln(core.T.String(), "checking", ctx.Lom.String())
 	}
 	abs := _sinceAbs(mtime, latest)
@@ -225,7 +225,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	// run x-blob-downloader with default (num-readers, chunk-size) tunables
 	xblob, err = s3bp.t.GetColdBlob(params, lom.ObjAttrs())
 	if err == nil {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln("started", xblob.String(), "->", wfqn)
 		}
 		gzr, err = gzip.NewReader(r)
@@ -255,7 +255,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 				if errN := lom.PersistMain(false /*isChunked*/); errN != nil {
 					debug.AssertNoErr(errN) // (unlikely)
 					nlog.Errorln("failed to persist", lom.Cname(), "err:", errN, "- proceeding anyway...")
-				} else if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+				} else if cmn.Rom.V(4, cos.ModBackend) {
 					nlog.Infoln("done", xblob.String(), "->", lom.Cname(), ctx.Size)
 				}
 				return nil
@@ -437,7 +437,7 @@ func (s3bp *s3bp) _getManifest(cloudBck *cmn.Bck, svc *s3.Client, mname, csvname
 	if err != nil || fileSchema == "" {
 		err = _parseErr(cname, sgl, lbuf, err)
 	} else {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln("parsed manifest", cname, fileSchema, "compressed size", size)
 		}
 		// e.g. "Bucket, Key, Size, ETag"

@@ -101,7 +101,7 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 
 	b._setPodEnv()
 
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("prep pod spec: %s, %+v", b.msg.String(), b.errCtx)
 	}
 	return err
@@ -206,7 +206,7 @@ func (b *etlBootstrapper) createEntity(entity string) (err error) {
 func (b *etlBootstrapper) waitPodReady(podCtx context.Context) error {
 	initTimeout, _ := b.msg.Timeouts()
 	interval := cos.ProbingFrequency(initTimeout.D())
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("waiting pod %q ready (%+v, %s) initTimeout=%v ival=%v",
 			b.pod.Name, b.msg.String(), b.errCtx, initTimeout, interval)
 	}

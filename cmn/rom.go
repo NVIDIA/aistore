@@ -43,7 +43,7 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	rom.features = cfg.Features
 	rom.authEnabled = cfg.Auth.Enabled
 
-	// pre-parse for FastV (below)
+	// pre-parse for V (below)
 	rom.level, rom.modules = cfg.Log.Level.Parse()
 }
 
@@ -54,6 +54,6 @@ func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
 
-func (rom *readMostly) FastV(verbosity, fl int) bool {
+func (rom *readMostly) V(verbosity, fl int) bool {
 	return rom.level >= verbosity || rom.modules&fl != 0
 }

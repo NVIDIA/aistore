@@ -353,7 +353,7 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 		errOut = cmn.NewErrFailedTo(nil, "oci-backend: "+op, path, errIn)
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.InfoDepth(1, "begin "+ociErrPrefix+" =========================")
 		nlog.InfoDepth(1, errOut)
 		nlog.InfoDepth(1, "end "+ociErrPrefix+" ===========================")

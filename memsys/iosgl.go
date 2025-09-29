@@ -153,7 +153,7 @@ func (z *SGL) WriteTo2(dst io.Writer) error {
 		written, err := dst.Write(buf[:l])
 		rem -= l
 		if err != nil {
-			if cmn.Rom.FastV(5, cos.SmoduleMemsys) {
+			if cmn.Rom.V(5, cos.ModMemsys) {
 				nlog.Errorln(err)
 			}
 			return err
@@ -186,7 +186,7 @@ func (z *SGL) WriteTo(dst io.Writer) (n int64, _ error) {
 			err = io.ErrShortWrite
 		}
 		if err != nil {
-			if cmn.Rom.FastV(5, cos.SmoduleMemsys) {
+			if cmn.Rom.V(5, cos.ModMemsys) {
 				nlog.Errorln(err)
 			}
 			return n, err

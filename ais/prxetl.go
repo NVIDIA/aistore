@@ -127,7 +127,7 @@ func (p *proxy) httpetlput(w http.ResponseWriter, r *http.Request) {
 	// TODO: introduce 2PC and move the following calls to the commit phase
 	p.startETL(w, r, initMsg)
 
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infoln(p.String() + ": " + initMsg.String())
 	}
 }

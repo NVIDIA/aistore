@@ -464,7 +464,7 @@ func (j *lruJ) evictObj(lom *core.LOM) bool {
 		xlru.AddErr(e, 0)
 		return false
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleSpace) {
+	if cmn.Rom.V(5, cos.ModSpace) {
 		nlog.Infof("%s: evicted %s, size=%d", j, lom, lom.Lsize(true /*not loaded*/))
 	}
 	return true

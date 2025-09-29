@@ -76,7 +76,7 @@ func (task *singleTask) download(lom *core.LOM) {
 		return
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleDload) {
+	if cmn.Rom.V(4, cos.ModDload) {
 		nlog.Infof("Starting download for %v", task)
 	}
 

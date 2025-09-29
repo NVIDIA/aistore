@@ -638,7 +638,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cos.IsNotExist(err) {
-					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+					if cmn.Rom.V(5, cos.ModReb) {
 						nlog.Infoln(loghdr, lom.Cname(), "not found")
 					}
 				} else {
@@ -650,7 +650,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 			}
 			tsi, _ := rargs.smap.HrwHash2T(lom.Digest())
 			if core.T.HeadObjT2T(lom, tsi) {
-				if cmn.Rom.FastV(4, cos.SmoduleReb) {
+				if cmn.Rom.V(4, cos.ModReb) {
 					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
 				delete(lomAck.q, uname)
@@ -662,7 +662,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 				err = rj.doSend(lom, tsi, roc)
 			}
 			if err == nil {
-				if cmn.Rom.FastV(4, cos.SmoduleReb) {
+				if cmn.Rom.V(4, cos.ModReb) {
 					nlog.Infof("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
 				}
 				cnt++
@@ -786,7 +786,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 	}
 
 	// err
-	if cmn.Rom.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
+	if cmn.Rom.V(4, cos.ModReb) || !cos.IsRetriableConnErr(err) {
 		switch {
 		case bundle.IsErrDestinationMissing(err):
 			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.rargs.smap.StringEx())
@@ -841,7 +841,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 			//
 			i := strings.IndexByte(lom.ObjName, filepath.Separator)
 			if i > 0 && !cmn.DirHasOrIsPrefix(lom.ObjName[:i], rj.rargs.prefix) {
-				if cmn.Rom.FastV(4, cos.SmoduleReb) {
+				if cmn.Rom.V(4, cos.ModReb) {
 					nlog.Warningln(rj.rargs.logHdr, "skip-dir", lom.ObjName, "prefix", rj.rargs.prefix)
 				}
 				return filepath.SkipDir

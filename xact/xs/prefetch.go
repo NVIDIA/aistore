@@ -141,7 +141,7 @@ func (r *prefetch) Run(wg *sync.WaitGroup) {
 
 	err := r.lrit.run(r, core.T.Sowner().Get(), false /*prealloc buf*/)
 	if err != nil {
-		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
+		r.AddErr(err, 5, cos.ModXs) // duplicated?
 	}
 	r.lrit.wait()
 
@@ -178,7 +178,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		if lrit.lrp != lrpList {
 			return // deleted or not found remotely, prefix or range
 		}
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 		return
 	case oa != nil:
 		// not latest
@@ -186,7 +186,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	case err == nil:
 		return // nothing to do
 	case !cmn.IsErrObjNought(err):
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	}
 
 	if err == nil {
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Infoln(r.Name(), lom.Cname())
 		}
 		return
@@ -214,12 +214,12 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	switch {
 	case cos.IsNotExist(err, ecode) || cmn.IsErrBusy(err) || err == cmn.ErrSkip:
 		if lrit.lrp == lrpList {
-			r.AddErr(err, 5, cos.SmoduleXs)
+			r.AddErr(err, 5, cos.ModXs)
 		}
 	case cos.IsErrOOS(err):
 		r.Abort(err)
 	default:
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 	}
 }
 
@@ -364,7 +364,7 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 	case aborted || err != nil:
 		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
 	default:
-		if xblob.Size() >= cos.GiB/2 || cmn.Rom.FastV(4, cos.SmoduleXs) {
+		if xblob.Size() >= cos.GiB/2 || cmn.Rom.V(4, cos.ModXs) {
 			if n > 0 {
 				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(int(n)), ")")
 			} else {

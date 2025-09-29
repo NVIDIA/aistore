@@ -36,7 +36,7 @@ var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
 		// log modules
-		confLogModules: append(cos.Smodules[:], apc.NilValue),
+		confLogModules: append(cos.Mods[:], apc.NilValue),
 		// checksums
 		apc.HdrObjCksumType: cos.SupportedChecksums(),
 		// access

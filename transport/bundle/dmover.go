@@ -238,7 +238,7 @@ func (dm *DM) Quiesce(d time.Duration) core.QuiRes {
 
 func (dm *DM) Close(err error) {
 	if dm == nil {
-		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Warningln("Warning: DM is <nil>") // e.g., single-node cluster
 		}
 		return

@@ -272,7 +272,7 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 
 // handleETLObjectDownload processes individual object download requests from ETL communicator
 func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *http.Request, etlArgs, objName, link string) {
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("Processing ETL object download: %s from %s", objName, link)
 	}
 
@@ -305,7 +305,7 @@ func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("Successfully streamed ETL transformed object: %s", objName)
 	}
 }
@@ -325,7 +325,7 @@ func (base *etlServerBase) downloadHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("ETL pod processing object: %s from %s", objName, link)
 	}
 

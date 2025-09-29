@@ -329,7 +329,7 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 		now := mono.NanoTime()
 		pkr.statsT.Add(stats.KeepAliveLatency, now-started)
 		pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
-		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+		if cmn.Rom.V(5, cos.ModKalive) {
 			nlog.Infoln(pname, "slow-kalive", sname, "OK after the first attempt")
 		}
 		return true, false

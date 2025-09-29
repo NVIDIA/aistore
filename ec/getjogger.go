@@ -239,7 +239,7 @@ func (c *getJogger) restoreReplicaFromMem(ctx *restoreCtx) error {
 		}
 		w.Free()
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
 	}
 
@@ -315,13 +315,13 @@ loop: //nolint:gocritic // keeping label for readability
 
 	if writer == nil {
 		err := errors.New("failed to discover " + ctx.lom.Cname())
-		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		if cmn.Rom.V(4, cos.ModEC) {
 			nlog.Errorln(err)
 		}
 		return err
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infoln("found meta -> obj get", ctx.lom.Cname())
 	}
 	if err := ctx.lom.RenameFinalize(tmpFQN); err != nil {
@@ -374,7 +374,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 			continue
 		}
 
-		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		if cmn.Rom.V(4, cos.ModEC) {
 			nlog.Infof("Slice %s[%d] requesting from %s", ctx.lom, v.SliceID, k)
 		}
 		var writer *slice
@@ -419,7 +419,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	o.Hdr = hdr
 
 	// Broadcast slice request and wait for targets to respond
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Requesting daemons %v for slices of %s", daemons, ctx.lom)
 	}
 	if err := c.parent.sendByDaemonID(daemons, o, nil, true); err != nil {
@@ -506,7 +506,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	// Allocate resources for reconstructed(missing) slices.
 	for i, sl := range ctx.slices {
 		if sl != nil && sl.writer != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			if cmn.Rom.V(4, cos.ModEC) {
 				nlog.Infof("Got slice %d size %d (want %d) of %s", i+1, sl.n, sliceSize, ctx.lom)
 			}
 			if sl.n == 0 {
@@ -557,7 +557,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		return restored, err
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Reconstructing %s", ctx.lom)
 	}
 	stream, err := reedsolomon.NewStreamC(ctx.meta.Data, ctx.meta.Parity, true, true)
@@ -631,7 +631,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	}
 
 	src := newMultiReader(srcReaders...)
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Saving main object %s to %q", ctx.lom, ctx.lom.FQN)
 	}
 
@@ -691,7 +691,7 @@ func (*getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 		}
 		empty = append(empty, t.ID())
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Empty nodes for %s are %#v", ctx.lom, empty)
 	}
 	return empty, nil
@@ -756,7 +756,7 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 			reqType:  reqPut,
 		}
 
-		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		if cmn.Rom.V(4, cos.ModEC) {
 			nlog.Infof("Sending slice %s[%d] to %s", ctx.lom, sliceMeta.SliceID, tid)
 		}
 
@@ -796,7 +796,7 @@ func (c *getJogger) freeDownloaded(ctx *restoreCtx) {
 
 // Main function that starts restoring an object that was encoded
 func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infoln("Starting EC restore", ctx.lom.Cname())
 	}
 
@@ -821,7 +821,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	// main replica is ready to download by a client.
 	if err := c.uploadRestoredSlices(ctx, restored); err != nil {
 		nlog.Errorf("failed to upload restored slices of %s: %v", ctx.lom, err)
-	} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	} else if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("restored %s slices", ctx.lom)
 	}
 
@@ -835,11 +835,11 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 		return ErrorECDisabled
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Restoring %s", ctx.lom)
 	}
 	err := c.requestMeta(ctx)
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Found meta for %s: %d, err: %v", ctx.lom, len(ctx.nodes), err)
 	}
 	if err != nil {
@@ -934,7 +934,7 @@ func (ctx *restoreCtx) requestMeta(si *meta.Snode, c *getJogger, mtx *sync.Mutex
 		warn := fmt.Sprintf("%s: %s failed request-meta(%s) request: %v", core.T, ctx.lom.Cname(), si, err)
 		if mdExists {
 			nlog.Warningln(warn)
-		} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		} else if cmn.Rom.V(4, cos.ModEC) {
 			nlog.Infoln(warn)
 		}
 		return

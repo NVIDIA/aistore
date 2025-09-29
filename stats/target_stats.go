@@ -666,7 +666,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	s.updateUptime(uptime)
 	idle := s.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 
-	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
+	verbose := cmn.Rom.V(4, cos.ModStats)
 	if (!idle && now >= r.next) || verbose {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.write(s.sgl, true /*target*/, idle)

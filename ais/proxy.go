@@ -768,7 +768,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("GET", bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
@@ -871,7 +871,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	}
 
 	// verbose
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
@@ -916,7 +916,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("DELETE", bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
@@ -1172,7 +1172,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if err := p.pready(smap, true); err != nil {
-				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				if cmn.Rom.V(5, cos.ModAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
@@ -2040,7 +2040,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -2073,7 +2073,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -2214,7 +2214,7 @@ func (p *proxy) redirectAction(w http.ResponseWriter, r *http.Request, bck *meta
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(msg.Action, bck.Cname(objName), "=>", si.StringEx())
 	}
 
@@ -2699,7 +2699,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("[HTTP CLOUD] RevProxy handler:", baseURL, "-->", r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {

@@ -187,17 +187,17 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 				case oa.CheckEq(&hdr.ObjAttrs) == nil:
 					goto rx // receiving latest-ver from tsid (the sender)
 				case oa.CheckEq(lom.ObjAttrs()) == nil:
-					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+					if cmn.Rom.V(5, cos.ModReb) {
 						nlog.Infof("%s g[%d]: sender stale (%s), keeping local == latest %s", core.T, xreb.ID(), hdr.Cname(), lom.Cname())
 					}
 					goto drainOk
 				default:
-					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+					if cmn.Rom.V(5, cos.ModReb) {
 						nlog.Infoln("cold-get latest (when VC differs)", xreb.ID(), lom.Cname())
 					}
 					ecodeCold, errCold := core.T.GetCold(context.Background(), lom, xreb.Kind(), cmn.OwtGetTryLock)
 					if errCold == nil {
-						if cmn.Rom.FastV(5, cos.SmoduleReb) {
+						if cmn.Rom.V(5, cos.ModReb) {
 							nlog.Infoln("cold-get ok")
 						}
 						goto drainOk // ok
@@ -220,7 +220,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 					// TODO -- FIXME: optimize vlabs out
 					vlabs := map[string]string{"bucket": lom.Bck().Cname("")}
 					core.T.StatsUpdater().IncWith(stats.RemoteDeletedDelCount, vlabs)
-					if cmn.Rom.FastV(5, cos.SmoduleReb) {
+					if cmn.Rom.V(5, cos.ModReb) {
 						nlog.Infof("%s g[%d]: sync-deleted %s", core.T, reb.RebID(), lom)
 					}
 				}

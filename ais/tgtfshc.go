@@ -38,7 +38,7 @@ func (t *target) FSHC(err error, mi *fs.Mountpath, fqn string) {
 
 	// NOTE: filter-out non-IO errors
 	if !t.fshc.IsErr(err) {
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Warningln(err, "is not one of the error types to trigger FSHC, ignoring...")
 		}
 		return

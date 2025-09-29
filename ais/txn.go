@@ -183,7 +183,7 @@ func (txns *txns) begin(txn txn, nlps ...core.NLP) (err error) {
 	txns.m[txn.uuid()] = txn
 	txns.mtx.Unlock()
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("%s begin: %s", txns.t, txn)
 	}
 	return
@@ -212,7 +212,7 @@ func (txns *txns) term(uuid, act string) {
 	} else {
 		txn.unlock()
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infof("%s %s: %s", txns.t, act, txn)
 	}
 }

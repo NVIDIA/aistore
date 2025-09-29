@@ -67,7 +67,7 @@ type (
 var js = jsoniter.ConfigFastest
 
 func (m *Manager) finish() {
-	if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+	if cmn.Rom.V(4, cos.ModDsort) {
 		nlog.Infof("%s: %s finished", core.T, m.ManagerUUID)
 	}
 	m.lock()
@@ -95,7 +95,7 @@ func (m *Manager) start() (err error) {
 
 	s := binary.BigEndian.Uint64(m.Pars.TargetOrderSalt)
 	targetOrder := _torder(s, m.smap.Tmap)
-	if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+	if cmn.Rom.V(4, cos.ModDsort) {
 		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", core.T, m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
@@ -111,7 +111,7 @@ func (m *Manager) start() (err error) {
 	if curTargetIsFinal {
 		// assuming uniform distribution estimate avg. output shard size
 		ratio := m.compressionRatio()
-		if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+		if cmn.Rom.V(4, cos.ModDsort) {
 			nlog.Infof("%s [dsort] %s phase3: ratio=%f", core.T, m.ManagerUUID, ratio)
 		}
 		debug.Assertf(shard.IsCompressed(m.Pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
@@ -931,7 +931,7 @@ func (es *extractShard) do() (err error) {
 		ext, errV := archive.Mime("", es.name) // from filename
 		if errV == nil {
 			if !archive.EqExt(ext, m.Pars.InputExtension) {
-				if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+				if cmn.Rom.V(4, cos.ModDsort) {
 					nlog.Infof("%s: %s skipping %s: %q vs %q", core.T, m.ManagerUUID,
 						es.name, ext, m.Pars.InputExtension)
 				}

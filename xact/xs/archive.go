@@ -153,7 +153,7 @@ func (p *archFactory) Start() (err error) {
 
 func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
 	if err := archlom.InitBck(&msg.ToBck); err != nil {
-		r.AddErr(err, 4, cos.SmoduleXs)
+		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
@@ -171,7 +171,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 
 	wi.tsi, err = r.smap.HrwName2T(msg.ToBck.MakeUname(msg.ArchName))
 	if err != nil {
-		r.AddErr(err, 4, cos.SmoduleXs)
+		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
 
@@ -220,7 +220,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		if err != nil {
 			return err
 		}
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
 		}
 
@@ -372,7 +372,7 @@ func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 		return err
 	}
 
@@ -412,7 +412,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 	}
 	return nil
 }
@@ -422,7 +422,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	q := wi.quiesce()
 	if q == core.QuiTimeout {
 		err := fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
-		r.AddErr(err, 4, cos.SmoduleXs)
+		r.AddErr(err, 4, cos.ModXs)
 	}
 
 	r.pending.mtx.Lock()
@@ -432,7 +432,7 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	ecode, err := r._fini(wi)
 	r.DecPending()
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		var s string
 		if err != nil {
 			s = fmt.Sprintf(": %v(%d)", err, ecode)
@@ -445,7 +445,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	debug.Assert(q != core.QuiAborted)
 
 	wi.cleanup()
-	r.AddErr(err, 5, cos.SmoduleXs)
+	r.AddErr(err, 5, cos.ModXs)
 }
 
 func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
@@ -641,13 +641,13 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cos.IsNotExist(err) {
-			wi.r.AddErr(err, 5, cos.SmoduleXs)
+			wi.r.AddErr(err, 5, cos.ModXs)
 			return
 		}
 		if coldGet = lom.Bck().IsRemote(); !coldGet {
 			if lrit.lrp == lrpList {
 				// listed, not found
-				wi.r.AddErr(err, 5, cos.SmoduleXs)
+				wi.r.AddErr(err, 5, cos.ModXs)
 			}
 			return
 		}
@@ -659,7 +659,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 			if lrit.lrp != lrpList && cos.IsNotExist(err, ecode) {
 				return // range or prefix, not found
 			}
-			wi.r.AddErr(err, 5, cos.SmoduleXs)
+			wi.r.AddErr(err, 5, cos.ModXs)
 			return
 		}
 	}
@@ -668,7 +668,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	lh, err := lom.NewHandle(false /*loaded*/)
 	if err != nil {
 		lom.Unlock(false)
-		wi.r.AddErr(err, 5, cos.SmoduleXs)
+		wi.r.AddErr(err, 5, cos.ModXs)
 		return
 	}
 	if core.T.SID() != wi.tsi.ID() {
@@ -690,7 +690,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		wi.r.AddErr(err, 5, cos.SmoduleXs)
+		wi.r.AddErr(err, 5, cos.ModXs)
 	}
 }
 

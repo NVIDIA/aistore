@@ -102,7 +102,7 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 	if err != nil {
 		return nil, 0, err
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln("[head_bucket]", cloudBck.Name)
 	}
 	if sessConf.region == "" {
@@ -111,7 +111,7 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 			ecode, err = awsErrorToAISError(err, cloudBck, "")
 			return nil, ecode, err
 		}
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln("get-bucket-location", cloudBck.Name, "region", region)
 		}
 		svc, err = sessConf.s3client(gotBucketLocation)
@@ -335,7 +335,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 
 	resp, err := svc.ListObjectsV2(context.Background(), params)
 	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln(tag, cloudBck.Name, err)
 		}
 		ecode, err = awsErrorToAISError(err, cloudBck, "")
@@ -378,13 +378,13 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 	}
 
 	if len(lst.Entries) == 0 || !versioning {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln(tag, cloudBck.Name, len(lst.Entries))
 		}
 		return 0, nil
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infoln(tag, cloudBck.Name, "proceed to list", len(lst.Entries), "versions")
 	}
 	// [slow path] for each already listed object:
@@ -413,7 +413,7 @@ func (*s3bp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode
 			}
 		}
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infoln(tag, cloudBck.Name, len(lst.Entries), num)
 	}
 	return 0, nil
@@ -441,7 +441,7 @@ func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
 
 	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
-		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln("[bucket_names]", aws.ToString(bck.Name), "created", *bck.CreationDate)
 		}
 		bcks[idx] = cmn.Bck{
@@ -528,7 +528,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	}
 
 exit:
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln(tag, cloudBck.Cname(lom.ObjName))
 	}
 	return oa, 0, nil
@@ -568,7 +568,7 @@ finalize:
 	params := allocPutParams(res, owt)
 	err := s3bp.t.PutObject(lom, params)
 	core.FreePutParams(params)
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -738,7 +738,7 @@ setmd:
 			}
 		}
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln(tag, lom.String())
 	}
 	return 0, nil
@@ -772,7 +772,7 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln(tag, lom.String())
 	}
 	return
@@ -825,14 +825,14 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	// - gotBucketLocation special case
 	// - otherwise, not caching s3 client for an unknown or missing region
 	if sessConf.region == "" && tag != gotBucketLocation {
-		if tag != "" && cmn.Rom.FastV(4, cos.SmoduleBackend) {
+		if tag != "" && cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Warningln(tag, "no region for bucket", sessConf.bck.Cname(""))
 		}
 		return svc, nil
 	}
 
 	// cache (without recomputing _cid and possibly an empty region)
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infoln("add s3client for tuple (profile, region, endpoint):", cid)
 	}
 	clients.Store(cid, svc) // race or no race, no particular reason to do LoadOrStore
@@ -960,7 +960,7 @@ func getBucketLocation(svc *s3.Client, bckName string) (region string, err error
 
 // For reference see https://github.com/aws/aws-sdk-go-v2/issues/1110#issuecomment-1054643716.
 func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, error) {
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.InfoDepth(1, "begin "+aiss3.ErrPrefix+" =========================")
 		nlog.InfoDepth(1, awsError)
 		nlog.InfoDepth(1, "end "+aiss3.ErrPrefix+" ===========================")

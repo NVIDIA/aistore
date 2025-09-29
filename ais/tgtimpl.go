@@ -123,7 +123,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, xkind string, owt c
 	switch owt {
 	case cmn.OwtGetTryLock: // e.g., downloader
 		if !lom.TryLock(true) {
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Warningln(t.String(), lom.String(), owt.String(), "is busy")
 			}
 			return 0, cmn.ErrSkip // TODO: must be cmn.ErrBusy

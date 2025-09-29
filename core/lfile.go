@@ -173,7 +173,7 @@ func (lom *LOM) _checkBdir() (err error) {
 	if _, present := bmd.Get(&lom.bck); present {
 		err = fmt.Errorf("%w [%v]", syscall.ENOTDIR, err)
 		nlog.Warningln(err, "(", bdir, bmd.String(), ")")
-	} else if cmn.Rom.FastV(4, cos.SmoduleCore) {
+	} else if cmn.Rom.V(4, cos.ModCore) {
 		nlog.Warningln(err, "- benign: bucket does not exist (", bdir, bmd.String(), ")")
 	}
 	return err

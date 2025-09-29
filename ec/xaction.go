@@ -245,7 +245,7 @@ func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request [
 	sw.twg.Add(1)
 	r.regWriter(uname, sw)
 
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, o, nil, true); err != nil {
@@ -261,7 +261,7 @@ func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request [
 	}
 	r.unregWriter(uname)
 
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Received object %s from %s", lom, daemonID)
 	}
 	if sw.version != "" {

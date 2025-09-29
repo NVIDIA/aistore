@@ -141,11 +141,11 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	dst.Unlock(true)
 
 	if err == nil {
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Infoln(rp.r.Name(), dst.Cname())
 		}
 	} else if !cmn.IsErrObjNought(err) && !cmn.IsErrBucketNought(err) {
-		rp.r.AddErr(err, 4, cos.SmoduleXs)
+		rp.r.AddErr(err, 4, cos.ModXs)
 	}
 	return nil
 }

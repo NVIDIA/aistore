@@ -294,7 +294,7 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 	if !exists {
 		// Generally should not happen but it is not proven that it cannot.
 		// There is nothing wrong with just returning here though.
-		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO: FastV
+		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO: V
 		return 0
 	}
 

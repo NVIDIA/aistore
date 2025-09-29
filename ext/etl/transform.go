@@ -88,7 +88,7 @@ func Init(msg InitMsg, xid, secret string) (core.Xact, PodInfo, error) {
 		return nil, podInfo, err
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("started etl[%s], msg %s, podInfo %v", msg.Name(), msg, podInfo)
 	}
 	return xctn, podInfo, nil
@@ -213,7 +213,7 @@ func Stop(etlName string, errCause error) (err error) {
 		return err
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("Stopping ETL: %s, %v", etlName, errCause)
 	}
 
@@ -273,7 +273,7 @@ func GetPipeline(etlNames []string) (apc.ETLPipeline, error) {
 		}
 		pipeline.Join(boot.schema + addr)
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("etlNames: %v => pipeline: %s", etlNames, pipeline.String())
 	}
 	return pipeline, nil

@@ -2100,7 +2100,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 				nlog.Errorln(emsg)
 			}
 		case apc.ActRmNodeUnsafe:
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Errorln(emsg)
 			}
 		default:

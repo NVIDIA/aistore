@@ -379,7 +379,7 @@ outer:
 				debug.Assertf(r.woff == r.fullSize, "%d > %d", r.woff, r.fullSize)
 				goto fin
 			}
-			if eof && cmn.Rom.FastV(5, cos.SmoduleXs) {
+			if eof && cmn.Rom.V(5, cos.ModXs) {
 				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d", r.Name(), r.woff, r.nextRoff, r.fullSize)
 				for i := len(pending) - 1; i >= 0; i-- {
 					nlog.Errorf("   roff %d", pending[i].roff)
@@ -481,7 +481,7 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 	sgl.Reset()
 
 	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Errorf("%s: failed to write (woff=%d, next=%d, sgl-size=%d): %v",
 				r.Name(), r.woff, r.nextRoff, size, err)
 		}

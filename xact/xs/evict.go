@@ -94,7 +94,7 @@ func (r *evictDelete) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	err := r.lrit.run(r, core.T.Sowner().Get(), false /*prealloc buf*/)
 	if err != nil {
-		r.AddErr(err, 5, cos.SmoduleXs) // duplicated?
+		r.AddErr(err, 5, cos.ModXs) // duplicated?
 	}
 	r.lrit.wait()
 	r.Finish()
@@ -113,7 +113,7 @@ func (r *evictDelete) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		return
 	}
 eret:
-	r.AddErr(err, 5, cos.SmoduleXs)
+	r.AddErr(err, 5, cos.ModXs)
 }
 
 func (r *evictDelete) Snap() (snap *core.Snap) {

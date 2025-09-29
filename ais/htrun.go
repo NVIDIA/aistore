@@ -337,7 +337,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	}
 
 	if l := len(addrList); l > 1 {
-		if config.HostNet.Hostname == "" || cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		if config.HostNet.Hostname == "" || cmn.Rom.V(4, cos.ModAIS) {
 			nlog.Infoln(l, "local unicast IPs:")
 			for _, addr := range addrList {
 				nlog.Infoln("\t", addr.String())
@@ -1393,7 +1393,7 @@ func (h *htrun) reqHealth(si *meta.Snode, tout time.Duration, q url.Values, smap
 
 	if err != nil {
 		ni, no := h.si.String(), si.StringEx()
-		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+		if cmn.Rom.V(5, cos.ModKalive) {
 			nlog.Warningln(ni, "failed req-health:", no, "tout", tout, "err: [", err, status, "]")
 		}
 		if retry {
@@ -1577,7 +1577,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (*globalConfig, 
 		}
 	}
 	config := cmn.GCO.Get()
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		logmsync(config.Version, newConfig, msg, caller, newConfig.String(), config.UUID)
 	}
 	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
@@ -1613,7 +1613,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (*etlMD, *actMsgE
 	}
 
 	etlMD := h.owner.etl.get()
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		logmsync(etlMD.Version, newMD, msg, caller)
 	}
 	if newMD.version() <= etlMD.version() && msg.Action != apc.ActPrimaryForce {
@@ -1680,7 +1680,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		return newSmap, msg, err // FATAL: cluster integrity error
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		logmsync(smap.Version, newSmap, msg, caller, newSmap.String(), smap.UUID)
 	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
@@ -1766,7 +1766,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (*bucketMD, *actMsg
 	}
 
 	bmd := h.owner.bmd.get()
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
@@ -2236,7 +2236,7 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 	// TODO: check receiving on PubNet
 	// NOTE: always ready for K8s
 	if callerID == "" && caller == "" {
-		if cmn.Rom.FastV(5, cos.SmoduleKalive) {
+		if cmn.Rom.V(5, cos.ModKalive) {
 			readiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
 			nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, readiness, "[", r.URL.RawQuery, "]")
 		}

@@ -129,7 +129,7 @@ const (
 )
 
 func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, error) {
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.InfoDepth(1, "begin azure error =========================")
 		nlog.InfoDepth(1, azureError)
 		nlog.InfoDepth(1, "end azure error ===========================")
@@ -139,7 +139,7 @@ func azureErrorToAISError(azureError error, bck *cmn.Bck, objName string) (int, 
 	if !errors.As(azureError, &stgErr) {
 		return http.StatusInternalServerError, azureError
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.InfoDepth(1, "ErrorCode:", stgErr.ErrorCode, "StatusCode:", stgErr.StatusCode)
 	}
 
@@ -259,7 +259,7 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, "")
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
@@ -314,7 +314,7 @@ func (azbp *azbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 	if resp.NextMarker != nil {
 		lst.ContinuationToken = *resp.NextMarker
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infof("[list_objects] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
 	}
 	return 0, nil
@@ -344,7 +344,7 @@ func (azbp *azbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
 			})
 		}
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
+	if cmn.Rom.V(4, cos.ModBackend) {
 		nlog.Infof("[list_buckets] count %d", len(bcks))
 	}
 	return bcks, 0, nil
@@ -394,7 +394,7 @@ func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 		// - only shown via list-objects and HEAD when not present
 		oa.SetCustomKey(cos.HdrContentType, *v)
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[head_object] %s", lom)
 	}
 	return oa, 0, nil
@@ -413,7 +413,7 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	params := allocPutParams(res, owt)
 	err := azbp.t.PutObject(lom, params)
 	core.FreePutParams(params)
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -505,7 +505,7 @@ func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 		lom.SetCustomKey(cmn.LsoLastModified, fmtLsoTime(*v))
 		lom.SetCustomKey(cos.HdrLastModified, fmtHdrTime(*v))
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[put_object] %s", lom)
 	}
 	return http.StatusOK, nil

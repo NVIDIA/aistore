@@ -182,7 +182,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 	case err != nil:
 		nlog.WarningDepth(1, r.String(), err)
 	default:
-		if cmn.Rom.FastV(4, cos.SmoduleXs) {
+		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Infoln(r.Name(), "done")
 		}
 	}

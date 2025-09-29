@@ -120,7 +120,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: not checking `xargs.Buckets` vs `xargs.Bck` and not initializing the former :NOTE
 
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln(msg.Action, xargs.String())
 	}
 	switch msg.Action {

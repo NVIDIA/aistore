@@ -505,7 +505,7 @@ func (lom *LOM) _checkBucket() error {
 		return nil
 	}
 	err := cmn.NewErrObjDefunct(lom.String(), lom.bid(), bprops.BID)
-	if cmn.Rom.FastV(4, cos.SmoduleCore) {
+	if cmn.Rom.V(4, cos.ModCore) {
 		nlog.Warningln(err)
 	}
 	lom.UncacheDel()
@@ -538,7 +538,7 @@ func (lom *LOM) Recache() {
 }
 
 func (lom *LOM) _collide(lmd *lmeta) {
-	if cmn.Rom.FastV(4, cos.SmoduleCore) || lom.digest&0xf == 5 {
+	if cmn.Rom.V(4, cos.ModCore) || lom.digest&0xf == 5 {
 		nlog.InfoDepth(1, LcacheCollisionCount, lom.digest, "[", *lmd.uname, "]", *lom.md.uname, lom.Cname())
 	}
 	T.StatsUpdater().Inc(LcacheCollisionCount)

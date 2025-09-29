@@ -251,7 +251,7 @@ func (wss *wsSession) transform(lom *core.LOM, latestVer, sync bool, woc io.Writ
 		}
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.V(5, cos.ModETL) {
 		nlog.Infoln(WebSocket, lom.Cname(), args.Pipeline.String(), err, ecode)
 	}
 

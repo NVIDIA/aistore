@@ -211,7 +211,7 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 		debug.Assert(false)
 		return xreg.WprKeepAndStartNew, nil
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(core.T.String(), "DT prev:", r.Name(), "curr:", p.UUID(), "- using prev...")
 	}
 	// reset DemandBase.last timestamp to prevent idle timeout between now and Assemble()
@@ -265,7 +265,7 @@ func (r *XactMoss) BcastAbort(err error) {
 	o.Hdr.Demux = r.ID()
 	o.Hdr.ObjName = err.Error()
 	e := bundle.SDM.Bcast(o, nil /*roc*/) // receive via sntl.rxAbort
-	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "bcast abort [", err, e, "]")
 	}
 }
@@ -302,7 +302,7 @@ func (r *XactMoss) cleanup(key, value any) bool {
 
 // terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(int64) (d time.Duration) {
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		if ok, fail := r.gfn.ok.Load(), r.gfn.fail.Load(); ok+fail > 0 {
 			nlog.Infoln(r.Name(), "GFN: [", ok, fail, "]")
 		}
@@ -410,7 +410,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 		wi.aw = archive.NewWriter(req.OutputFormat, w, nil /*checksum*/, &opts)
 		wi.awfin.Store(false)
 		err := wi.asm(w)
-		if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.V(5, cos.ModXs) {
 			nlog.Infoln(r.Name(), core.T.String(), "done streaming Assemble", basewi.wid, "err", err)
 		}
 		return err
@@ -427,7 +427,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	wi.awfin.Store(false)
 	err := wi.asm(w)
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "done multipart Assemble", basewi.wid, "err", err)
 	}
 	return err
@@ -475,7 +475,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 		}
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "done Send", wid)
 	}
 	return nil
@@ -761,7 +761,7 @@ func (wi *basewi) cleanup() {
 		err := wi.aw.Fini()
 		wi.aw = nil
 		if err != nil {
-			if cmn.Rom.FastV(5, cos.SmoduleXs) {
+			if cmn.Rom.V(5, cos.ModXs) {
 				nlog.Warningln(r.Name(), core.T.String(), "cleanup: err fini()", wi.wid, err)
 			}
 		}
@@ -786,7 +786,7 @@ func (wi *basewi) cleanup() {
 	wi.recv.m = nil
 	wi.recv.mtx.Unlock()
 
-	if cmn.Rom.FastV(4, cos.SmoduleXs) {
+	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "cleanup: done", wi.wid,
 			"stats [ cnt:", wi.cnt, "size:", wi.size, "lat:", mono.Since(wi.started), "]")
 	}
@@ -850,7 +850,7 @@ add:
 
 	wi.recv.ch <- index
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
 	}
 	return nil
@@ -1020,7 +1020,7 @@ func (wi *basewi) next(i int) (int, error) {
 	wi.cnt++
 	wi.size += out.Size
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
 	}
 	if wi.receiving() {
@@ -1044,7 +1044,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 
 	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "GFN", lom.Cname(), err, in.ArchPath)
 	}
 
@@ -1285,7 +1285,7 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	wi.sgl.Reset()
 	wi.r.ObjsAdd(wi.cnt, wi.size)
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
 	}
 	return nil
@@ -1333,7 +1333,7 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 
 	wi.r.ObjsAdd(wi.cnt, wi.size)
 
-	if cmn.Rom.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", wi.req.OutputFormat, "]")
 	}
 	return nil

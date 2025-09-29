@@ -209,7 +209,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
 			nlog.Infoln(p.String(), "forwarding [", msg.Action, s, "] to the primary", pname)

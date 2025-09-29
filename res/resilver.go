@@ -184,7 +184,7 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	if srcMetaFQN == "" {
 		return
 	}
-	if cmn.Rom.FastV(4, cos.SmoduleReb) {
+	if cmn.Rom.V(4, cos.ModReb) {
 		nlog.Infof("%s: moving %q -> %q", core.T, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {

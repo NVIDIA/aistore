@@ -163,7 +163,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 
 	path := tmosspath(bucket, xid, wid, nat)
 	hreq.Path = path
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(p.String(), apc.Moss, "DT", tsi.String(), "xid", xid, "wid", wid, "[", hreq.Path, hreq.Method, "]")
 	}
 	// phase 2: async broadcast -> all except DT
@@ -192,7 +192,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 	r.URL.Path = path
 	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
 
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -279,7 +279,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln(t.String(), "x-moss renewed:", xctn.Name(), "was running:", rns.IsRunning())
 		}
 
@@ -330,7 +330,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			xmoss.BcastAbort(err)
 			xmoss.Abort(err)
 			if err == cmn.ErrGetTxBenign {
-				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+				if cmn.Rom.V(5, cos.ModAIS) {
 					nlog.Warningln(err)
 				}
 			} else {
@@ -350,7 +350,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 	if items, err = t.parseURL(w, r, apc.URLPathML.L, 4, true); err != nil {
 		return ctx, err
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(t.String(), "mossparse", r.Method, "items", items)
 	}
 	if len(items) > tmosspathNumItems {
@@ -407,7 +407,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 		}
 		ctx.req.OutputFormat = f
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(t.String(), "mossparse", "ctx [", ctx.bck.String(), ctx.tid, ctx.xid, ctx.wid, "]")
 	}
 	return ctx, nil

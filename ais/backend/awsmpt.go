@@ -56,7 +56,7 @@ func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, 
 		}
 	)
 	svc, errN := sessConf.s3client("[start_mpt]")
-	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Warningln(errN)
 	}
 	out, err := svc.CreateMultipartUpload(context.Background(), &input)
@@ -98,7 +98,7 @@ func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uplo
 		}
 	)
 	svc, errN := sessConf.s3client("[put_mpt_part]")
-	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Warningln(errN)
 	}
 
@@ -145,7 +145,7 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 		}
 	)
 	svc, errN := sessConf.s3client("[complete_mpt]")
-	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Warningln(errN)
 	}
 
@@ -193,7 +193,7 @@ func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode
 		}
 	)
 	svc, errN := sessConf.s3client("[abort_mpt]")
-	if errN != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
+	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Warningln(errN)
 	}
 	if _, err = svc.AbortMultipartUpload(context.Background(), &input); err != nil {

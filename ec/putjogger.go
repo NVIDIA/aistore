@@ -112,7 +112,7 @@ func (c *putJogger) freeResources() {
 func (c *putJogger) do(req *request) {
 	lom, err := req.LIF.LOM()
 	if err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleEC) {
+		if cmn.Rom.V(4, cos.ModEC) {
 			nlog.Warningln(err)
 		}
 		return
@@ -131,7 +131,7 @@ func (c *putJogger) do(req *request) {
 func (c *putJogger) _do(req *request, lom *core.LOM) {
 	if req.Action == ActSplit {
 		if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-			if cmn.Rom.FastV(4, cos.SmoduleEC) {
+			if cmn.Rom.V(4, cos.ModEC) {
 				nlog.Warningln(err)
 			}
 			return
@@ -215,7 +215,7 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *request, lom *core.LOM) error {
-	if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("Encoding %q...", lom)
 	}
 	var (
@@ -568,7 +568,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 		nlog.Errorf("Error while copying (data=%d, parity=%d) for %q: %v",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName, copyErr)
 		err = errSliceSendFailed
-	} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
+	} else if cmn.Rom.V(4, cos.ModEC) {
 		nlog.Infof("EC created (data=%d, parity=%d) for %q",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName)
 	}

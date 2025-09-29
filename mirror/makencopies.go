@@ -146,7 +146,7 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 		return err
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleMirror) {
+	if cmn.Rom.V(5, cos.ModMirror) {
 		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, copies, size)
 	}
 	r.ObjsAdd(1, size)

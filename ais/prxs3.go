@@ -36,7 +36,7 @@ var (
 
 // [METHOD] /s3
 func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("s3Handler", p.String(), r.Method, r.URL)
 	}
 
@@ -385,7 +385,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	s3.FillLsoMsg(q, lsmsg)
 
 	lst, err := p.lsAllPagesS3(bck, amsg, lsmsg, r.Header)
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("lsoS3", bck.Cname(""), len(lst.Entries), err)
 	}
 	if err != nil {
@@ -495,7 +495,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, tsi.StringEx())
 	}
 	started := time.Now()
@@ -530,7 +530,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
@@ -570,7 +570,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
@@ -652,7 +652,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
@@ -692,7 +692,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.Rom.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()

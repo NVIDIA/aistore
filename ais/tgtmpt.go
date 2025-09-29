@@ -497,7 +497,9 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 
 	ups.del(uploadID)
 
-	nlog.Infoln(uploadID, "completed")
+	if cmn.Rom.V(4, cos.ModAIS) {
+		nlog.Infoln(uploadID, "completed")
+	}
 
 	// stats (note that size is already counted via putPart)
 	vlabs := xvlabs(lom.Bck())

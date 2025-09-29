@@ -158,7 +158,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	streams := sb.get()
 
 	if err := sb._validate(obj, streams, nodes); err != nil {
-		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Warningln(err)
 		}
 		// compare w/ transport doCmpl()

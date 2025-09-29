@@ -197,7 +197,7 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
-		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Infoln(s.String(), "inactive => active")
 		}
 	}
@@ -241,20 +241,20 @@ func (s *streamBase) isNextReq() (reason string) {
 	for {
 		select {
 		case <-s.lastCh.Listen():
-			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "end-of-stream")
 			}
 			reason = endOfStream
 			return
 		case <-s.stopCh.Listen():
-			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "stopped")
 			}
 			reason = reasonStopped
 			return
 		case <-s.postCh:
 			s.sessST.Store(active)
-			if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "active <- posted")
 			}
 			return
@@ -264,7 +264,7 @@ func (s *streamBase) isNextReq() (reason string) {
 
 func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
-	if cmn.Rom.FastV(5, cos.SmoduleTransport) {
+	if cmn.Rom.V(5, cos.ModTransport) {
 		nlog.Infoln(s.String(), "connection teardown: [", s.numCur, s.stats.Num.Load(), "]")
 	}
 	return
@@ -337,7 +337,7 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 
 	// count and log chanFull
 	if cnt := s.chanFull.Load(); cnt > 0 {
-		if (cnt >= 10 && cnt <= 20) || cmn.Rom.FastV(4, cos.SmoduleTransport) {
+		if (cnt >= 10 && cnt <= 20) || cmn.Rom.V(4, cos.ModTransport) {
 			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
 		}
 	}

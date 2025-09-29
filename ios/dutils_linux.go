@@ -104,7 +104,7 @@ func fs2disks(mpath, fsname string, label cos.MountpathLabel, blockDevs BlockDev
 		return disks, nil // unit tests
 	}
 
-	if cmn.Rom.FastV(4, cos.SmoduleIOS) {
+	if cmn.Rom.V(4, cos.ModIOS) {
 		_dump(blockDevs)
 	}
 

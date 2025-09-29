@@ -156,7 +156,7 @@ func (j *jogger) abortJob(id string) {
 
 	j.mtx.Unlock()
 
-	if task != nil && cmn.Rom.FastV(4, cos.SmoduleDload) /*verbose*/ {
+	if task != nil && cmn.Rom.V(4, cos.ModDload) /*verbose*/ {
 		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", core.T.String(), id, j.mpath, j.task.String())
 	}
 }

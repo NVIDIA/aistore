@@ -107,7 +107,7 @@ func (milpi *milpi) run(bck *cmn.Bck, lastName, tag string) {
 	// next local page "until"
 	lpiMsg := Msg{EOP: eop}
 	if err := milpi.it.Next(lpiMsg, milpi.page); err != nil {
-		if cmn.Rom.FastV(4, cos.SmoduleFS) {
+		if cmn.Rom.V(4, cos.ModFS) {
 			nlog.Warningln(tag, err)
 		}
 	}

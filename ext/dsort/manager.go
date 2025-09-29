@@ -439,7 +439,7 @@ func (m *Manager) abort(err error) {
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
 	if inProgress {
-		if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+		if cmn.Rom.V(4, cos.ModDsort) {
 			nlog.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
 		}
 		// Wait for dsorter to initialize all the resources.
@@ -447,7 +447,7 @@ func (m *Manager) abort(err error) {
 
 		m.dsorter.onAbort()
 		m.waitForFinish()
-		if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+		if cmn.Rom.V(4, cos.ModDsort) {
 			nlog.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
 		}
 	}
@@ -660,7 +660,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 			//
 			// compare with: coi.isNOP, "PUT is a no-op", and reb/recv.go no-op
 			//
-			if cmn.Rom.FastV(4, cos.SmoduleDsort) {
+			if cmn.Rom.V(4, cos.ModDsort) {
 				nlog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
 					m.ManagerUUID, lom)
 			}

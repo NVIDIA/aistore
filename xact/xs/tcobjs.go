@@ -367,7 +367,7 @@ func (r *XactTCO) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 ex:
-	if err != nil && cmn.Rom.FastV(4, cos.SmoduleXs) {
+	if err != nil && cmn.Rom.V(4, cos.ModXs) {
 		nlog.Errorln(err)
 	}
 	return err
@@ -432,8 +432,8 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 	core.FreePutParams(params)
 
 	if err != nil {
-		r.AddErr(err, 5, cos.SmoduleXs)
-	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
+		r.AddErr(err, 5, cos.ModXs)
+	} else if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
 	return
@@ -460,7 +460,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 
 	err = r.copier.do(a, lom, r.p.dm)
 	if cos.IsNotExist(err) && lrit.lrp == lrpList {
-		r.AddErr(err, 5, cos.SmoduleXs)
+		r.AddErr(err, 5, cos.ModXs)
 	}
 }
 

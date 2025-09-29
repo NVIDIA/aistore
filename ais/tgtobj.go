@@ -181,7 +181,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	// if checksums match PUT is a no-op
 	if !poi.skipVC && !poi.coldGET {
 		if poi.lom.EqCksum(poi.cksumToUse) {
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}
 			cos.DrainReader(poi.r)
@@ -220,7 +220,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 		}
 	}
 
-	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(poi.loghdr())
 	}
 	return 0, nil
@@ -231,7 +231,7 @@ rerr:
 
 		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsRetriableConnErr(err) && !cos.IsErrMv(err) {
 			poi.t.statsT.IncWith(stats.IOErrPutCount, vlabs)
-			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Warningln("io-error [", err, "]", poi.loghdr())
 			}
 		}
@@ -359,7 +359,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	if bck.IsRemote() && poi.owt < cmn.OwtRebalance {
 		ecode, err = poi.putRemote()
 		if err != nil {
-			if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+			if cmn.Rom.V(5, cos.ModAIS) {
 				loghdr := poi.loghdr()
 				nlog.Errorln("PUT [", loghdr, err, ecode, "]")
 			}
@@ -1022,7 +1022,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	ecode, erp := poi.putObject()
 	freePOI(poi)
 	if erp == nil {
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln(goi.t.String(), "gfn", goi.lom.String(), "<=", tsi.StringEx())
 		}
 		return true
@@ -1276,12 +1276,12 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 	// [failure to transmit] return cmn.ErrGetTxBenign
 	switch {
 	case cos.IsRetriableConnErr(err):
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
 		}
 	case cmn.IsErrObjNought(err):
 		lom.UncacheDel()
-		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.V(4, cos.ModAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
 		}
 	default: // notwithstanding
@@ -1474,7 +1474,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 	a.t.statsT.AddWith(
 		cos.NamedVal64{Name: stats.AppendLatency, Value: lat, VarLabs: vlabs},
 	)
-	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.V(4, cos.ModAIS) {
 		nlog.Infoln("APPEND", a.lom.String(), time.Duration(lat))
 	}
 	return packedHdl, nil
@@ -1610,7 +1610,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	switch {
 	// no-op
 	case coi.isNOP(lom, dst, dm):
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op: destination exists and is identical")
 		}
 	case coi.PutWOC != nil: // take precedence over GetROC, if any
@@ -1625,7 +1625,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 			res.Err = cos.NewErrNotFound(t, res.Err.Error())
 		}
 	case lom.FQN == dst.FQN:
-		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op (resilvering with a single mountpath?)")
 		}
 	default:
