@@ -248,6 +248,28 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 	r.core.Tracker[name] = v
 }
 
+// PromHandler exposes AIS metrics at /metrics endpoint
+// and instruments the scrape itself.
+//
+// In addition to AIS metrics, Prometheus will now also see `promhttp_*` metrics:
+// - requests_in_flight   (current scrapes in progress)
+// - requests_total{code} (scrape outcomes by HTTP status)
+// - duration_seconds_*   (histogram of scrape latency)
+//
+// Note the default previously used code:
+//   - promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{})
+// Other non-default options are commented below.
+
 func (*runner) PromHandler() http.Handler {
-	return promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{})
+	opts := promhttp.HandlerOpts{
+		ErrorHandling: promhttp.ContinueOnError, // quote "Ignore errors and try to serve as many metrics as possible"
+		// --------------------------- other options to consider ------------------------
+		// EnableOpenMetrics: true,                  // see "OpenMetrics"
+		// MaxRequestsInFlight: 4,                   // consider a small cap
+		// Timeout: 5 * time.Second,                 // 5s must be generous but still, at the risk of spurious..
+		// DisableCompression: false,                // default: compress if client accepts
+		// ErrorLog:           logger,               // provide Println() method to route errors
+	}
+	handler := promhttp.HandlerFor(promRegistry, opts)
+	return promhttp.InstrumentMetricHandler(promRegistry, handler)
 }

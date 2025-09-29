@@ -7,7 +7,7 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/stats/statsd"
+	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats/statsd"
 )
 
 const (
