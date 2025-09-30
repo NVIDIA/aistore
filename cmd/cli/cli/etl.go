@@ -30,6 +30,19 @@ const etlShowErrorsUsage = "Show ETL job errors.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME>': display errors for inline object transformation failures.\n" +
 	indent1 + "\t- 'ais etl show errors <ETL_NAME> <JOB-ID>': display errors for a specific offline (bucket-to-bucket) transform job."
 
+const etlInitUsage = "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais etl init -f my-etl.yaml'\t deploy ETL from a local YAML file;\n" +
+	indent1 + "\t- 'ais etl init -f https://example.com/etl.yaml'\t deploy ETL from a remote YAML file;\n" +
+	indent1 + "\t- 'ais etl init -f multi-etl.yaml'\t deploy multiple ETLs from a single file (separated by '---');\n" +
+	indent1 + "\t- 'ais etl init -f spec.yaml --name my-custom-etl'\t override ETL name from command line;\n" +
+	indent1 + "\t- 'ais etl init -f spec.yaml --comm-type hpull'\t override communication type;\n" +
+	indent1 + "\t- 'ais etl init -f spec.yaml --object-timeout 30s'\t set custom object transformation timeout.\n" +
+	indent1 + "\t- 'ais etl init --spec <file|URL>'\t deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.\n" +
+	indent1 + "\nAdditional Info:\n" +
+	indent1 + "- You may define multiple ETLs in a single spec file using YAML document separators ('---').\n" +
+	indent1 + "- CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.\n"
+
 const etlStartUsage = "Start ETL.\n" +
 	indent1 + "Examples:\n" +
 	indent1 + "\t- 'ais etl start my-etl'\t start the specified ETL (transitions from stopped to running state);\n" +
@@ -99,7 +112,6 @@ var (
 			specFlag,
 			etlNameFlag,
 			commTypeFlag,
-			argTypeFlag,
 			waitPodReadyTimeoutFlag,
 			etlObjectRequestTimeout,
 		},
@@ -178,19 +190,8 @@ var (
 		Flags:        sortFlags(etlSubFlags[commandRemove]),
 	}
 	initCmdETL = cli.Command{
-		Name: cmdInit,
-		Usage: "Initialize ETL using a runtime spec or full Kubernetes Pod spec YAML file (local or remote).\n" +
-			indent1 + "Examples:\n" +
-			indent1 + "\t- 'ais etl init -f my-etl.yaml'\t deploy ETL from a local YAML file;\n" +
-			indent1 + "\t- 'ais etl init -f https://example.com/etl.yaml'\t deploy ETL from a remote YAML file;\n" +
-			indent1 + "\t- 'ais etl init -f multi-etl.yaml'\t deploy multiple ETLs from a single file (separated by '---');\n" +
-			indent1 + "\t- 'ais etl init -f spec.yaml --name my-custom-etl'\t override ETL name from command line;\n" +
-			indent1 + "\t- 'ais etl init -f spec.yaml --comm-type hpull'\t override communication type;\n" +
-			indent1 + "\t- 'ais etl init -f spec.yaml --object-timeout 30s'\t set custom object transformation timeout.\n" +
-			indent1 + "\t- 'ais etl init --spec <file|URL>'\t deploy ETL jobs from a local spec file, remote URL, or multi-ETL YAML.\n" +
-			indent1 + "\nAdditional Info:\n" +
-			indent1 + "- You may define multiple ETLs in a single spec file using YAML document separators ('---').\n" +
-			indent1 + "- CLI flags like '--name' or '--comm-type' can override values in the spec, but not when multiple ETLs are defined.\n",
+		Name:   cmdInit,
+		Usage:  etlInitUsage,
 		Action: etlInitSpecHandler,
 		Flags:  sortFlags(etlSubFlags[cmdSpec]),
 		Subcommands: []cli.Command{
@@ -293,7 +294,6 @@ func checkOverrideFlags(c *cli.Context, nodes []*yaml.Node) error {
 		}{
 			{etlNameFlag.GetName(), flagIsSet(c, etlNameFlag)},
 			{commTypeFlag.GetName(), flagIsSet(c, commTypeFlag)},
-			{argTypeFlag.GetName(), flagIsSet(c, argTypeFlag)},
 			{waitPodReadyTimeoutFlag.GetName(), flagIsSet(c, waitPodReadyTimeoutFlag)},
 			{etlObjectRequestTimeout.GetName(), flagIsSet(c, etlObjectRequestTimeout)},
 		}
@@ -484,9 +484,6 @@ func showETLJobDetails(c *cli.Context, etlInfo *etl.Info) {
 	if commType := msg.CommType(); commType != "" {
 		options = append(options, "comm-type: "+commType)
 	}
-	if argType := msg.ArgType(); argType != "" {
-		options = append(options, "arg-type: "+argType)
-	}
 
 	if initMsg, ok := msg.(*etl.ETLSpecMsg); ok {
 		options = append(options, "image: "+initMsg.Runtime.Image)
@@ -564,7 +561,6 @@ func etlPrintDetails(c *cli.Context, id string) error {
 func printETLDetailsFromMsg(c *cli.Context, msg etl.InitMsg) error {
 	fmt.Fprintln(c.App.Writer, fblue(etl.Name+": "), msg.Name())
 	fmt.Fprintln(c.App.Writer, fblue(etl.CommunicationType+": "), msg.CommType())
-	fmt.Fprintln(c.App.Writer, fblue(etl.ArgType+": "), msg.ArgType())
 
 	switch initMsg := msg.(type) {
 	case *etl.InitSpecMsg:
@@ -890,16 +886,13 @@ func populateCommonFields(c *cli.Context, initMsg etl.InitMsg) error {
 	return nil
 }
 
-// populates `commTypeFlag`, `argTypeFlag`, `waitPodReadyTimeoutFlag`, `etlObjectRequestTimeout`
+// populates `commTypeFlag`, `waitPodReadyTimeoutFlag`, `etlObjectRequestTimeout`
 func _populate(c *cli.Context, base *etl.InitMsgBase) {
 	if flagIsSet(c, etlNameFlag) {
 		base.EtlName = parseStrFlag(c, etlNameFlag)
 	}
 	if flagIsSet(c, commTypeFlag) {
 		base.CommTypeX = parseStrFlag(c, commTypeFlag)
-	}
-	if flagIsSet(c, argTypeFlag) {
-		base.ArgTypeX = parseStrFlag(c, argTypeFlag)
 	}
 	if flagIsSet(c, waitPodReadyTimeoutFlag) {
 		base.InitTimeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))

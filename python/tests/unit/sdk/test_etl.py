@@ -45,7 +45,6 @@ class TestEtl(
             "communication": "hpush://",
             "init_timeout": DEFAULT_ETL_TIMEOUT,
             "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
-            "argument": "",
         }
         self.init_spec_exec_assert(expected_action)
 
@@ -61,7 +60,6 @@ class TestEtl(
             "communication": f"{communication_type}://",
             "init_timeout": init_timeout,
             "obj_timeout": obj_timeout,
-            "argument": "",
         }
         self.init_spec_exec_assert(
             expected_action, init_timeout=init_timeout, obj_timeout=obj_timeout
@@ -148,7 +146,6 @@ class TestEtl(
         self.assertEqual(init_kwargs["comm_type"], ETL_COMM_HPUSH)
         self.assertEqual(init_kwargs["init_timeout"], DEFAULT_ETL_TIMEOUT)
         self.assertEqual(init_kwargs["obj_timeout"], DEFAULT_ETL_OBJ_TIMEOUT)
-        self.assertEqual(init_kwargs["arg_type"], "")
         self.assertTrue(init_kwargs["direct_put"])
 
         # The serialized class must match what our util would produce
@@ -172,7 +169,6 @@ class TestEtl(
             comm_type=ETL_COMM_HPULL,
             init_timeout="2m",
             obj_timeout="10s",
-            arg_type="fqn",
             direct_put=True,
             CUSTOM="value",
         )
@@ -186,7 +182,6 @@ class TestEtl(
         self.assertEqual(init_kwargs["comm_type"], ETL_COMM_HPULL)
         self.assertEqual(init_kwargs["init_timeout"], "2m")
         self.assertEqual(init_kwargs["obj_timeout"], "10s")
-        self.assertEqual(init_kwargs["arg_type"], "fqn")
         self.assertTrue(init_kwargs["direct_put"])
         self.assertEqual(init_kwargs["CUSTOM"], "value")
 
@@ -282,7 +277,6 @@ class TestEtl(
             "communication": f"{ETL_COMM_HPUSH}://",
             "init_timeout": DEFAULT_ETL_TIMEOUT,
             "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
-            "argument": "",
             "support_direct_put": False,
             "runtime": {
                 "image": image,
@@ -310,7 +304,6 @@ class TestEtl(
             "communication": f"{ETL_COMM_HPUSH}://",
             "init_timeout": DEFAULT_ETL_TIMEOUT,
             "obj_timeout": DEFAULT_ETL_OBJ_TIMEOUT,
-            "argument": "",
             "support_direct_put": False,
             "runtime": {
                 "image": image,
@@ -338,7 +331,6 @@ class TestEtl(
         comm_type = ETL_COMM_HPULL
         init_t = "10m"
         obj_t = "30s"
-        arg_t = "url"
         direct = True
 
         expected_action = {
@@ -346,7 +338,6 @@ class TestEtl(
             "communication": f"{comm_type}://",
             "init_timeout": init_t,
             "obj_timeout": obj_t,
-            "argument": arg_t,
             "support_direct_put": direct,
             "runtime": {
                 "image": image,
@@ -365,7 +356,6 @@ class TestEtl(
             comm_type=comm_type,
             init_timeout=init_t,
             obj_timeout=obj_t,
-            arg_type=arg_t,
             direct_put=direct,
             BAZ="QUX",
         )

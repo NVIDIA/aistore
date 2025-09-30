@@ -7,7 +7,6 @@ Running
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
 communication_type: hpush://
-arg_type:
 Hello World!
 ^ETL\[etl.*\]stopped$
 Aborted
@@ -17,17 +16,14 @@ ais://$BUCKET_1/object_2.txt
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 communication_type: hpush://
-arg_type:
 Hello World!
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 communication_type: hpush://
-arg_type:
 05967d5390ac53b0
 ^ETL\[etl.*\]stopped$
 ^ETL\[etl.*\] successfully deleted$
 communication_type: hpush://
-arg_type:
 ^ETL\[etl.*\]: .*/object_1.txt => .*/transformed_object.txt$
 ^ETL\[etl.*\]: .*/object_1.txt => .*/object_1.txt$
 5328b3c272b5aab0

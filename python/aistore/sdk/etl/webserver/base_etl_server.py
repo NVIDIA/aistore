@@ -26,7 +26,6 @@ class ETLServer(ABC):
 
         Sets up:
         - `host_target`: AIS target URL from the `AIS_TARGET_URL` environment variable.
-        - `arg_type`: Determines how to interpret the input path ("fqn", "url", or "").
         - `logger`: A class-specific logger configured to output to stdout.
 
         Subclasses can extend this method to initialize any transformation-specific

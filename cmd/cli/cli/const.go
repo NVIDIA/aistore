@@ -1264,14 +1264,6 @@ var (
 			indent4 + "\t For more details, see https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms",
 	}
 
-	argTypeFlag = cli.StringFlag{
-		Name: "arg-type",
-		Usage: "Specifies _how_ an object to transform gets passed from aistore to ETL container:\n" +
-			indent4 + "\t - \"\" - The default option (that can be omitted), whereby ETL container receives an entire payload (bytes) to transform\n" +
-			indent4 + "\t - url - URL that points towards the data to transform (the support is currently limited to '--comm-type=hpull')\n" +
-			indent4 + "\t - fqn - Fully-qualified name (FQN) of a locally stored object (requires trusted ETL container, might not be always available)",
-	}
-
 	// Node
 	roleFlag = cli.StringFlag{
 		Name: "role", Required: true,

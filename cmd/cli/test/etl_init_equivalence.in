@@ -16,9 +16,6 @@ ais etl show | grep $ETL_NAME-implicit | awk '{print $2}'
 ais etl show $ETL_NAME-explicit | grep -m1 "communication_type"
 ais etl show $ETL_NAME-implicit | grep -m1 "communication_type"
 
-ais etl show $ETL_NAME-explicit | grep -m1 "arg_type"
-ais etl show $ETL_NAME-implicit | grep -m1 "arg_type"
-
 # Clean up
 ais etl stop $ETL_NAME-explicit // IGNORE
 ais etl rm $ETL_NAME-explicit // IGNORE

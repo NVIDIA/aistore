@@ -23,7 +23,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Removed
 
 - Remove 'deserialize_class' function from ETL Webserver Utils and clean imports.
-- Remove `arg_type` environment variable configuration for all ETL web servers; FQN path is now specified per request via query parameter.
+- Remove `arg_type` environment variable configuration for all ETL web servers, types, and documents; FQN path is now specified per request via query parameter.
 
 ## [1.15.1] - 2025-08-11
 

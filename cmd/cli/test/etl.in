@@ -2,7 +2,7 @@
 curl https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml -o /tmp/e2e.hello_world_init_spec.yaml -s // IGNORE
 ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-1 // IGNORE
 ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
-ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 --arg-type="fqn" // IGNORE
+ais etl init spec --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-2 // IGNORE
 ais etl show | grep $ETL_NAME-2 | awk '{print $2}'
 ais etl init --spec="/tmp/e2e.hello_world_init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME-main // IGNORE
 ais etl show | grep $ETL_NAME-main | awk '{print $2}'
@@ -22,7 +22,6 @@ ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
 rm -f $OBJECT_1.txt // IGNORE
 
 ais etl show $ETL_NAME-1 | grep -m1 "communication_type"
-ais etl show $ETL_NAME-1 | grep -m1 "arg_type"
 ais etl object $ETL_NAME-1 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-1
 ais etl show | grep $ETL_NAME-1 | awk '{print $2}'
@@ -34,20 +33,17 @@ ais etl stop $ETL_NAME-1
 ais etl rm $ETL_NAME-1
 
 ais etl show $ETL_NAME-2 | grep -m1 "communication_type"
-ais etl show $ETL_NAME-2 | grep -m1 "arg_type"
 ais etl object $ETL_NAME-2 ais://$BUCKET_1/object_1.txt -
 ais etl stop $ETL_NAME-2
 ais etl rm $ETL_NAME-2
 
 # Test URL-loaded ETL
 ais etl show $ETL_NAME-url | grep -m1 "communication_type"
-ais etl show $ETL_NAME-url | grep -m1 "arg_type"
 ais etl object $ETL_NAME-url ais://$BUCKET_1/object_1.txt - --args=url-test
 ais etl stop $ETL_NAME-url
 ais etl rm $ETL_NAME-url
 
 ais etl show $ETL_NAME-3 | grep -m1 "communication_type"
-ais etl show $ETL_NAME-3 | grep -m1 "arg_type"
 
 
 # Test etl object cp (copy with transformation)

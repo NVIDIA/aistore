@@ -102,4 +102,3 @@ ais etl bucket my-echo ais://<src-bucket> ais://<dst-bucket>
 ## Notes
 
 - Direct PUT is supported: when AIS sends the `ais-node-url` header, the transformed result will be streamed directly to the destination.
-- FQN input is supported when `ARG_TYPE=fqn` is set.

@@ -86,8 +86,6 @@ class TestETLPipelineOps(unittest.TestCase):
         self._etl_names.append(etl.name)
         return etl
 
-    # TODO: add tests for FQN arg_types (wip in MR !8591)
-    # For now, any intermediate ETLs configured with FQN won't work in the pipeline.
     @pytest.mark.etl
     @cases(
         (

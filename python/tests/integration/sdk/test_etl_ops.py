@@ -110,7 +110,7 @@ class TestETLOps(unittest.TestCase):
         self.assertEqual(obj, self._calculate_md5(bytes(self.content)))
 
     @pytest.mark.etl
-    def test_init_etl_class_xxhash_arg_type(self):
+    def test_init_etl_class_xxhash(self):
 
         etl = self.client.etl(self.etl_name)
 

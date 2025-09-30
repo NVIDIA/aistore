@@ -118,7 +118,6 @@ class Etl:
         communication_type: str = DEFAULT_ETL_COMM,
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
-        arg_type: str = "",
     ) -> str:
         """
         Initializes ETL based on Kubernetes pod spec template.
@@ -130,7 +129,6 @@ class Etl:
             communication_type (str): Communication type of the ETL (options: hpull, hpush)
             init_timeout (str, optional): Timeout of the ETL job (e.g., "5m" for 5 minutes). Default is "5m".
             obj_timeout (str, optional): Timeout for transforming a single object (e.g., "45s"). Default is "45s".
-            arg_type (str, optional): Additional argument type for the ETL. Default is an empty string.
 
         Returns:
             str: Job ID string associated with this ETL
@@ -148,7 +146,6 @@ class Etl:
             comm_type=communication_type,
             init_timeout=init_timeout,
             obj_timeout=obj_timeout,
-            arg_type=arg_type,
         ).as_dict()
 
         return self._client.request(
@@ -165,7 +162,6 @@ class Etl:
         comm_type: str = DEFAULT_ETL_COMM,
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
-        arg_type: str = "",
         direct_put: bool = False,
         **kwargs,
     ) -> str:
@@ -178,7 +174,6 @@ class Etl:
             comm_type (str, optional): Communication type (hpull, hpush, ws).
             init_timeout (str, optional): ETL job timeout (e.g., "5m").
             obj_timeout (str, optional): Per-object transform timeout (e.g., "45s").
-            arg_type (str, optional): Type of argument passed to transform (default raw bytes).
             direct_put (bool, optional): Enable direct-put optimization.
             **kwargs: Additional key-value pairs → env vars in the ETL container.
 
@@ -208,7 +203,6 @@ class Etl:
             comm_type=comm_type,
             init_timeout=init_timeout,
             obj_timeout=obj_timeout,
-            arg_type=arg_type,
             direct_put=direct_put,
             runtime=runtime,
         )
@@ -231,7 +225,6 @@ class Etl:
         comm_type: str = DEFAULT_ETL_COMM,
         init_timeout: str = DEFAULT_ETL_TIMEOUT,
         obj_timeout: str = DEFAULT_ETL_OBJ_TIMEOUT,
-        arg_type: str = "",
         direct_put: bool = True,
         **kwargs,
     ):
@@ -263,12 +256,6 @@ class Etl:
             obj_timeout (str, optional):
                 How long each individual object-transform call can run (e.g. `"45s"` for 45 seconds).
                 Defaults to `"45s"`.
-            arg_type (str, optional):
-                What form AIS should pass the object to your `transform` method. If `""`,
-                you get the raw bytes. If `"fqn"`, you get a fully-qualified local path.
-                If the ETL is used as an intermediate stage in a pipeline, `"fqn"` will be skipped and
-                raw bytes will be passed instead.
-                Defaults to `""`.
             direct_put (bool, optional):
                 When doing a bucket-to-bucket transform, set to `True` to enable “direct put”
                 optimization. Defaults to `True`.
@@ -307,7 +294,6 @@ class Etl:
                 comm_type=comm_type,
                 init_timeout=init_timeout,
                 obj_timeout=obj_timeout,
-                arg_type=arg_type,
                 direct_put=direct_put,
                 **env_kwargs,
             )

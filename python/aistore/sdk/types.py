@@ -320,7 +320,6 @@ class InitETLArgs(BaseModel):
     comm_type: str
     init_timeout: Optional[str]
     obj_timeout: Optional[str]
-    arg_type: str = ""
     direct_put: bool = False
 
 
@@ -375,7 +374,6 @@ class ETLSpecMsg(InitETLArgs):
             "communication": f"{self.comm_type}://",
             "init_timeout": self.init_timeout,
             "obj_timeout": self.obj_timeout,
-            "argument": self.arg_type,
             "support_direct_put": self.direct_put,
             "runtime": self.runtime.as_dict(),
         }
@@ -395,7 +393,6 @@ class InitSpecETLArgs(InitETLArgs):
             "obj_timeout": self.obj_timeout,
             "communication": f"{self.comm_type}://",
             "spec": self.spec,
-            "argument": self.arg_type,
         }
 
 
@@ -406,7 +403,6 @@ class ETLInitMsg(BaseModel):
 
     name: str
     communication: str
-    argument: str = ""
     init_timeout: Optional[str]
     obj_timeout: Optional[str]
     code: Optional[bytes]

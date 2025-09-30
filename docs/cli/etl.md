@@ -190,7 +190,6 @@ $ ais etl init -f <URL>
 $ ais etl init -f <URL> \
   --name=ETL_NAME \
   --comm-type=COMMUNICATION_TYPE \
-  --arg-type=ARGUMENT_TYPE \
   --init-timeout=TIMEOUT \
   --obj-timeout=TIMEOUT
 ```
@@ -247,7 +246,7 @@ $ ais etl init -f pod_spec.yaml --name transformer-md5
     image: aistorage/transformer_md5:latest
   ```
 
-* You may override fields in the spec using CLI flags such as `--name`, `--comm-type`, `--arg-type`, etc.
+* You may override fields in the spec using CLI flags such as `--name`, `--comm-type`, etc.
 
   **However**, if your YAML file contains multiple ETL definitions, override flags **cannot** be used and will result in an error.
 
@@ -288,7 +287,6 @@ This command displays detailed attributes of each ETL, including:
 
 * **ETL Name**
 * **Communication Type**
-* **Argument Type** (e.g., "" or "fqn"(fully qualified path))
 * **Runtime Configuration**
   * Container image
   * Command

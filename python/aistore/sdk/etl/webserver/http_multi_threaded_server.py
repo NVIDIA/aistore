@@ -117,7 +117,7 @@ class HTTPMultiThreadedServer(ETLServer):
 
         def _get_fqn_content(self, path: str) -> bytes:
             """
-            Parses and safely reads a file when using arg_type == 'fqn'.
+            Parses and safely reads a file when using FQN (fully qualified name) input.
             """
             decoded_path = unquote(path)
             safe_path = os.path.normpath(os.path.join("/", decoded_path.lstrip("/")))

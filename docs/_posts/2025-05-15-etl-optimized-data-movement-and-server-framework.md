@@ -69,7 +69,7 @@ In offline transformations, the destination target for a transformed object usua
 
 Now that we've introduced the ETL server framework, `direct put` optimization and websocket streaming, the next logical step is to see how they actually perform in a real-world scenario.
 
-To evaluate AIStore’s ETL throughput, scalability, and impact of features like [`direct_put`](#direct-put-optimization-faster-bucket-to-bucket-etl-transformation) and [`fqn`](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#argument-types-1), we designed a benchmark using **[FFmpeg](https://ffmpeg.org/)**—a popular open-source tool for audio and video processing. This benchmark simulates a practical workload and helps highlight how different implementation choices affect performance.
+To evaluate AIStore's ETL throughput, scalability, and impact of features like [`direct_put`](#direct-put-optimization-faster-bucket-to-bucket-etl-transformation), we designed a benchmark using **[FFmpeg](https://ffmpeg.org/)**—a popular open-source tool for audio and video processing. This benchmark simulates a practical workload and helps highlight how different implementation choices affect performance.
 
 The transformation pipeline converts `.flac` files to `.wav`, with tunable parameters for **Audio Channels (AC)** and **Audio Rate (AR)**.
 

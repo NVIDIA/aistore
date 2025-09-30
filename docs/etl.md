@@ -38,7 +38,6 @@ It supports both **inline transformations** (real-time processing via GET reques
   * [Using `init_class` (Python SDK Only)](#using-init_class-python-sdk-only)
 * [Configuration Options](#configuration-options)
   * [Communication Mechanisms](#communication-mechanisms)
-  * [Argument Types](#argument-types)
   * [Direct Put Optimization](#direct-put-optimization)
   * [Timeouts](#timeouts)
   * [Resource Limits](#resource-limits)
@@ -236,7 +235,7 @@ You can build this server using the [AIS ETL Webserver Framework](#ais-etl-webse
 
 #### 1. Runtime Specification (Recommended)
 
-The preferred method of initialization is through a runtime YAML spec, which defines the ETL’s configuration, including [communication method](#communication-mechanisms), [argument type](#argument-types), [timeouts](#timeouts), [support for direct writes](#direct-put-optimization), and [resource limit](#resource-limits).
+The preferred method of initialization is through a runtime YAML spec, which defines the ETL's configuration, including [communication method](#communication-mechanisms), [timeouts](#timeouts), [support for direct writes](#direct-put-optimization), and [resource limit](#resource-limits).
 
 Example `etl_spec.yaml`:
 
@@ -342,15 +341,6 @@ Users can choose and specify any of the following:
 
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
-
-### Argument Types
-
-When initializing an ETL using `ais etl init`, the `arg_type` parameter controls **how object data is passed** from AIStore to the ETL container. AIStore supports two `arg_type` values:
-
-| `arg_type` Value | Description |
-| ---- | ------------- |
-| `""` (Empty String) *(default)* | The object is passed as **raw bytes** to the ETL container. This is the default behavior and requires no explicit `arg_type` specification. The ETL framework handles the object stream directly, making it simple and efficient for most use cases.                                                                                                                                                                                                                              |
-| `"fqn"` *(recommended)* | **Fully Qualified Name**: Instead of passing the object content, AIStore provides the absolute file path to the object on disk. The ETL container (running on the same node) is mounted with the same persistent volumes, so it can access the object locally. The ETL logic must read the file, process it, and return the result. This method can yield better performance for large datasets or high object counts. |
 
 ### Direct Put Optimization
 
