@@ -662,7 +662,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		s.set(r.nameUtil(disk), stats.Util)
 	}
 
-	// 2 copy stats, reset latencies, send via StatsD if configured
+	// 2 copy stats, reset latencies
 	s.updateUptime(uptime)
 	idle := s.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 

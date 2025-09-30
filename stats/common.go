@@ -42,11 +42,6 @@ import (
 //
 // all error counters must have "err_" prefix (see `errPrefix`)
 
-// Linkage:
-// - this source is common for both Prometheus (common_prom.go) and StatsD (common_statsd.go)
-// - one of the two pairs (common, common_prom) OR (common, common_statsd) gets compiled with
-//   both Proxy (proxy_stats.go) and Target (target_stats.go)
-
 // defaults and tunables
 const (
 	dfltKaliveClearAlert  = 5 * time.Minute      // clear `cos.KeepAliveErrors` alert when `ErrKaliveCount` doesn't inc that much time
@@ -472,9 +467,6 @@ waitStartup:
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
 	r.ticker = time.NewTicker(statsTime)
 	r.startedUp.Store(true)
-
-	// one StatsD or Prometheus (depending on the build tag)
-	r.core.initStarted(r.node.Snode())
 
 	var (
 		lastNgr           int64

@@ -1,5 +1,5 @@
 // Package stats provides methods and functionality to register, track, log,
-// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
+// and export metrics that, for the most part, include "counter" and "latency" kinds.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 
@@ -52,8 +51,6 @@ func initProm(snode *meta.Snode) {
 
 	staticLabs[ConstlabNode] = strings.ReplaceAll(snode.ID(), ".", "_")
 }
-
-func (*coreStats) initStarted(*meta.Snode) { nlog.Infoln("Using Prometheus") }
 
 // usage: log resulting `copyValue` numbers:
 func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {

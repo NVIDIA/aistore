@@ -15,6 +15,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// NOTE on `iprom` _fat interface_ and why we keep it ======================================
+//
+// The idea to split it as (ipromVec | ipromVal) comes with a cost and an extra code (churn).
+//
+// * direct cost: +16 bytes in every `statsValue`
+//
+// * indirect cost: special-cases (latency, throughput) that may be
+//   registered with (e.g., `put.ns`) or without (e.g., `kalive.ns`) variable labels,
+//   which complicates wiring ==============================================================
+
 type (
 	iprom interface {
 		inc(parent *statsValue)
@@ -133,7 +143,7 @@ func (v gaugeVec) addWith(parent *statsValue, nv cos.NamedVal64) {
 	v.With(nv.VarLabs).Add(float64(nv.Value))
 }
 
-// illegal; TODO: simplify and reduce once (deprecated) StatsD is removed
+// illegal impl. placeholders - see "fat interface" note above
 
 func (counter) incWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
 func (counter) addWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
