@@ -45,8 +45,9 @@ import (
 const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
-	prefixDir     = "filter"
-	largeFileSize = 4 * cos.MiB
+	prefixDir      = "filter"
+	largeFileSize  = 4 * cos.MiB
+	awsMinPartSize = 5 * cos.MiB
 
 	workerCnt = 10
 )
@@ -292,8 +293,29 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 	tassert.CheckFatal(m.t, err)
 }
 
+// adjustFileSizeRange adjusts the file size range to avoid aws[EntityTooSmall] errors
+func (m *ioContext) adjustFileSizeRange(minSize uint64) {
+	m.t.Helper()
+
+	if m.chunksConf == nil || !m.chunksConf.multipart {
+		return
+	}
+
+	minTotalSize := minSize * uint64(m.chunksConf.numChunks)
+
+	if m.fileSizeRange[0] >= minTotalSize && m.fileSizeRange[1] >= minTotalSize {
+		return
+	}
+
+	m.fileSizeRange = [2]uint64{minTotalSize, minTotalSize * 2}
+	tlog.Logfln("AWS bucket detected, increase file size range to %s - %s to avoid aws[EntityTooSmall] errors", cos.ToSizeIEC(int64(m.fileSizeRange[0]), 0), cos.ToSizeIEC(int64(m.fileSizeRange[1]), 0))
+}
+
 // update updates the object with a new random reader and returns the reader and the size; reader is used to validate the object after the update
 func (m *ioContext) update(objName, cksumType string) (readers.Reader, uint64) {
+	if m.bck.Provider == apc.AWS || (m.bck.Backend() != nil && m.bck.Backend().Provider == apc.AWS) {
+		m.adjustFileSizeRange(awsMinPartSize)
+	}
 	var (
 		size      = tools.GetRandSize(m.fileSizeRange, m.fileSize, m.fixedSize)
 		errCh     = make(chan error, 1)
@@ -344,13 +366,9 @@ func (m *ioContext) remotePuts(evict bool, overrides ...bool) {
 		m.objNames = m.objNames[:0]
 	}
 
-	if m.chunksConf != nil && m.chunksConf.multipart {
+	if m.bck.Provider == apc.AWS || (m.bck.Backend() != nil && m.bck.Backend().Provider == apc.AWS) {
 		// increase the object size to avoid aws[EntityTooSmall] errors, since each part in a multipart upload to AWS must be at least 5MB.
-		if m.bck.Provider == apc.AWS || (m.bck.Backend() != nil && m.bck.Backend().Provider == apc.AWS) {
-			minTotalSize := 5 * cos.MiB * uint64(m.chunksConf.numChunks)
-			m.fileSizeRange = [2]uint64{minTotalSize, minTotalSize * 2}
-			tlog.Logfln("AWS bucket detected, increase file size range to %s - %s to avoid aws[EntityTooSmall] errors", cos.ToSizeIEC(int64(m.fileSizeRange[0]), 0), cos.ToSizeIEC(int64(m.fileSizeRange[1]), 0))
-		}
+		m.adjustFileSizeRange(awsMinPartSize)
 	}
 
 	m._remoteFill(m.num, evict, override)
