@@ -147,10 +147,12 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		cargs.req = hreq
 	}
 	res := p.call(cargs, smap)
+	err = res.err
 	xid = res.header.Get(apc.HdrXactionID)
 	freeCargs(cargs)
 	freeCR(res)
-	if err := res.err; err != nil {
+
+	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

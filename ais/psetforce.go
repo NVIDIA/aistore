@@ -458,7 +458,7 @@ func (p *proxy) _cluJoinSelf(npsi *meta.Snode, nurl string) error {
 	if e == nil {
 		return nil
 	}
-	nlog.Errorln(res.toErr())
+	nlog.Errorln(eh)
 	if joinURL != secondURL {
 		nlog.Warningln("2nd attempt via", secondURL)
 		runtime.Gosched()
@@ -765,7 +765,7 @@ func (h *htrun) _commitForceJoin(w http.ResponseWriter, r *http.Request, msg *ac
 	// retry once
 	if joinURL != secondURL {
 		time.Sleep(time.Second)
-		nlog.Errorln(tag, res.toErr(), "- 2nd attempt via", secondURL)
+		nlog.Errorln(tag, eh, "- 2nd attempt via", secondURL)
 		res = h.regTo(secondURL, npsi, apc.DefaultTimeout, nil, false)
 		eh = res.toErr()
 		freeCR(res)
