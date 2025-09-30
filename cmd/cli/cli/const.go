@@ -288,6 +288,8 @@ const (
 	archExts    = "(" + archFormats + ")"
 )
 
+const etlPipelineSeparator = ">>"
+
 // `ArgsUsage`: argument placeholders in help messages
 const (
 	// Job IDs (download, dsort)

@@ -290,18 +290,31 @@ func etlBucketHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	etlName := c.Args().Get(0)
+	etlNameOrPipeline := c.Args().Get(0)
 	bckFrom, bckTo, objFrom, _, err := parseFromToURIs(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true, false /*optional src, dst oname*/)
 
 	if err != nil {
 		return err
 	}
-	return copyTransform(c, etlName, objFrom, bckFrom, bckTo)
+	return copyTransform(c, etlNameOrPipeline, objFrom, bckFrom, bckTo)
 }
 
-func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
+func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck) error {
+	// Parse pipeline or single ETL name
+	var transform apc.Transform
+	etlNames, err := parseETLNames(etlNameOrPipeline)
+	if err != nil {
+		return err
+	}
+	transform = apc.Transform{
+		Name: etlNames[0], // First ETL in the pipeline
+	}
+	if len(etlNames) > 1 {
+		transform.Pipeline = etlNames[1:] // Only populate pipeline if more than one ETL
+	}
+
 	var msg = apc.TCBMsg{
-		Transform: apc.Transform{Name: etlName},
+		Transform: transform,
 	}
 	if err := _iniTCBMsg(c, &msg); err != nil {
 		return err
@@ -336,7 +349,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	}
 
 	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)
-	if errV := handleETLHTTPError(err, etlName); errV != nil {
+	if errV := handleETLHTTPError(err, transform.Name); errV != nil {
 		return errV
 	}
 

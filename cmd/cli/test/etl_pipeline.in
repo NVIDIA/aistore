@@ -1,0 +1,46 @@
+// RUN k8s
+# Test ETL Pipeline functionality with >> operator
+# Initialize individual ETLs
+ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/hello_world/pod.yaml --name=hello-etl --comm-type hpush:// // IGNORE
+ais etl init -f https://raw.githubusercontent.com/NVIDIA/ais-etl/main/transformers/md5/pod.yaml --name=md5-etl --comm-type hpush:// // IGNORE
+
+# Verify ETLs are initialized
+ais etl show | grep hello-etl | awk '{print $2}'
+ais etl show | grep md5-etl | awk '{print $2}'
+
+# Create test data
+echo "test data for pipeline" > test_data.txt
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais object put test_data.txt ais://$BUCKET_1/pipeline_test.txt // IGNORE
+ais get ais://$BUCKET_1/pipeline_test.txt -
+rm -f test_data.txt // IGNORE
+
+# Test single ETL operations first (baseline)
+ais etl object hello-etl ais://$BUCKET_1/pipeline_test.txt -
+ais etl object md5-etl ais://$BUCKET_1/pipeline_test.txt -
+
+# Test ETL Pipeline - Object Operations
+echo "Testing ETL pipeline with object operations..."
+ais etl object "hello-etl>>md5-etl" ais://$BUCKET_1/pipeline_test.txt -
+
+# Test ETL Pipeline - Object Copy Operations  
+ais bucket create ais://$BUCKET_2 // IGNORE
+ais etl object "hello-etl>>md5-etl" cp ais://$BUCKET_1/pipeline_test.txt ais://$BUCKET_2/pipeline_result.txt // IGNORE
+ais get ais://$BUCKET_2/pipeline_result.txt - 
+
+# Test ETL Pipeline - Bucket Operations
+ais bucket create ais://$BUCKET_3 // IGNORE
+ais etl bucket "hello-etl>>md5-etl" ais://$BUCKET_1 ais://$BUCKET_3 --wait // IGNORE
+ais object get ais://$BUCKET_3/pipeline_test.txt -
+
+# Test 3-stage pipeline
+ais etl object "hello-etl>>md5-etl>>hello-etl" ais://$BUCKET_1/pipeline_test.txt -
+
+# Test pipeline with spaces (should be trimmed)
+ais etl object "hello-etl >> md5-etl >> hello-etl" ais://$BUCKET_1/pipeline_test.txt -
+
+# Test Error Conditions
+# Non-exisiting
+ais etl object "hello-etl >> md5-etl >> non-exisiting" ais://$BUCKET_1/pipeline_test.txt - // FAIL "entry not found"
+# Empty
+ais etl object "hello-etl >> >> hello-etl" ais://$BUCKET_1/pipeline_test.txt -  // FAIL "failed to parse ETL name or pipeline"

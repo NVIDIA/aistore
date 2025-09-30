@@ -1130,3 +1130,18 @@ func openFileOrURL(source string) (io.ReadCloser, error) {
 	// Read from local file
 	return os.Open(source)
 }
+
+func parseETLNames(etlNameOrPipeline string) ([]string, error) {
+	etlNames := strings.Split(etlNameOrPipeline, etlPipelineSeparator)
+
+	// Trim whitespace from each ETL name
+	for i, name := range etlNames {
+		etlNames[i] = strings.TrimSpace(name)
+	}
+
+	if len(etlNames) == 0 || (len(etlNames) == 1 && etlNames[0] == "") {
+		return nil, errors.New("ETL name cannot be empty")
+	}
+
+	return etlNames, nil
+}

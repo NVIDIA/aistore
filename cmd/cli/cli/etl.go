@@ -86,15 +86,18 @@ const etlObjectUsage = "Transform an object.\n" +
 	indent1 + "\t- 'ais etl object my-etl ais://src/image.jpg /tmp/output.jpg'\t transform object and save to file;\n" +
 	indent1 + "\t- 'ais etl object my-etl ais://src/data.json -'\t transform and output to stdout;\n" +
 	indent1 + "\t- 'ais etl object my-etl ais://src/doc.pdf /dev/null'\t transform and discard output;\n" +
+	indent1 + "\t- 'ais etl object \"etl-1>>etl-2>>etl-3\" ais://src/data.txt output.txt'\t transform object using multiple ETLs run in a pipeline;\n" +
 	indent1 + "\t- 'ais etl object my-etl cp ais://src/image.jpg ais://dst/'\t transform and copy to another bucket;\n" +
+	indent1 + "\t- 'ais etl object \"etl-1>>etl-2\" cp ais://src/data ais://dst/'\t transform and copy object using multiple ETLs run in a pipeline;\n" +
 	indent1 + "\t- 'ais etl object my-etl ais://src/data.xml output.json --args \"format=json\"'\t transform with custom arguments."
 
 const etlBucketUsage = "Transform entire bucket or selected objects (to select, use '--list', '--template', or '--prefix').\n" +
 	indent1 + "Examples:\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst'\t transform all objects from source to destination bucket;\n" +
+	indent1 + "\t- 'ais etl bucket \"etl-1>>etl-2>>etl-3\" ais://src ais://dst'\t transform all objects from source to destination bucket using multiple ETLs run in a pipeline;\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --prefix images/'\t transform objects with prefix 'images/';\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --template \"shard-{0001..0999}.tar\"'\t transform objects matching the template;\n" +
-	indent1 + "\t- 'ais etl bucket my-etl s3://remote-src ais://dst --all'\t transform all objects including non-cached ones;\n" +
+	indent1 + "\t- 'ais etl bucket \"etl-1>>etl-2\" s3://remote-src ais://dst --all'\t transform all objects including non-cached ones using multiple ETLs run in a pipeline;\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --dry-run'\t preview transformation without executing;\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --num-workers 8'\t use 8 concurrent workers for transformation;\n" +
 	indent1 + "\t- 'ais etl bucket my-etl ais://src ais://dst --prepend processed/'\t add prefix to transformed object names."
@@ -770,6 +773,25 @@ func etlRemoveHandler(c *cli.Context) (err error) {
 	return nil
 }
 
+// parseETLPipeline creates an ETL pipeline from a string containing '>>' operators
+// or returns a single ETL if no pipeline syntax is detected
+func parseETLPipeline(etlNameOrPipeline string) (*api.ETL, error) {
+	etlNames, err := parseETLNames(etlNameOrPipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build pipeline by chaining ETLs
+	etl := &api.ETL{ETLName: etlNames[0]}
+	for i, name := range etlNames[1:] {
+		if name == "" {
+			return nil, fmt.Errorf("empty ETL name at position %d in pipeline", i+2)
+		}
+		etl = etl.Chain(&api.ETL{ETLName: name})
+	}
+	return etl, nil
+}
+
 func etlObjectHandler(c *cli.Context) error {
 	// Check if this is a copy operation
 	if c.NArg() >= 2 && c.Args().Get(1) == "cp" {
@@ -785,16 +807,21 @@ func etlObjectHandler(c *cli.Context) error {
 	}
 
 	var (
-		etlName    = c.Args().Get(0)
-		uri        = c.Args().Get(1)
-		outputDest = c.Args().Get(2)
+		etlNameOrPipeline = c.Args().Get(0)
+		uri               = c.Args().Get(1)
+		outputDest        = c.Args().Get(2)
 	)
 	bck, objName, errV := parseBckObjURI(c, uri, false)
 	if errV != nil {
 		return errV
 	}
 
-	etlArgs := &api.ETL{ETLName: etlName}
+	// Parse ETL pipeline or single ETL
+	etlArgs, err := parseETLPipeline(etlNameOrPipeline)
+	if err != nil {
+		return fmt.Errorf("failed to parse ETL name or pipeline: %v", err)
+	}
+
 	if transformArgs := parseStrFlag(c, etlTransformArgsFlag); transformArgs != "" {
 		etlArgs.TransformArgs = transformArgs
 	}
@@ -816,20 +843,26 @@ func etlObjectHandler(c *cli.Context) error {
 			}
 		}
 	}
-	return handleETLHTTPError(err, etlName)
+	return handleETLHTTPError(err, etlNameOrPipeline)
 }
 
 func etlObjectCopyHandler(c *cli.Context) error {
-	// Handle: ais etl object <ETL_NAME> cp <SRC> <DST>
+	// Handle: ais etl object <ETL_NAME_OR_PIPELINE> cp <SRC> <DST>
 	if c.NArg() < 4 {
-		return missingArgumentsError(c, "<ETL_NAME> cp <SRC_BUCKET/OBJECT> <DST_BUCKET[/OBJECT]>")
+		return missingArgumentsError(c, "<ETL_NAME_OR_PIPELINE> cp <SRC_BUCKET/OBJECT> <DST_BUCKET[/OBJECT]>")
 	}
 
-	etlName := c.Args().Get(0)
+	etlNameOrPipeline := c.Args().Get(0)
 	// Skip index 1 which is "cp"
 	srcBck, dstBck, srcObjName, dstObjName, err := parseFromToURIs(c, objectArgument, bucketDstArgument, 2, true, true)
 	if err != nil {
 		return err
+	}
+
+	// Parse ETL pipeline or single ETL
+	etlArgs, err := parseETLPipeline(etlNameOrPipeline)
+	if err != nil {
+		return fmt.Errorf("failed to parse ETL pipeline: %v", err)
 	}
 
 	// Call the transform API
@@ -840,15 +873,15 @@ func etlObjectCopyHandler(c *cli.Context) error {
 			ToBck:       dstBck,
 			ToObjName:   dstObjName,
 		},
-		ETL: api.ETL{ETLName: etlName},
+		ETL: *etlArgs,
 	})
 
 	if err != nil {
-		return handleETLHTTPError(err, etlName)
+		return handleETLHTTPError(err, etlNameOrPipeline)
 	}
 
 	dstObjName = cos.Left(dstObjName, srcObjName)
-	fmt.Fprintf(c.App.Writer, "ETL[%s]: %s => %s\n", etlName, srcBck.Cname(srcObjName), dstBck.Cname(dstObjName))
+	fmt.Fprintf(c.App.Writer, "ETL[%s]: %s => %s\n", etlNameOrPipeline, srcBck.Cname(srcObjName), dstBck.Cname(dstObjName))
 	return nil
 }
 
