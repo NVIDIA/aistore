@@ -6,8 +6,6 @@
 package cli
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -101,112 +99,6 @@ func isRebalancing(tstatusMap teb.StstMap) bool {
 		}
 	}
 	return false
-}
-
-func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstMap) bool {
-	const fmtEmptyVer = "empty version from %s (in maintenance mode?)"
-
-	longParams := getLongRunParams(c)
-	if longParams != nil && longParams.iters > 0 {
-		return false // already warned once, nothing to do
-	}
-
-	expected := mmc[0] + versionSepa + mmc[1]
-	minc, err := strconv.Atoi(mmc[1])
-	if err != nil {
-		warn := fmt.Sprintf("unexpected aistore version format: %v", mmc)
-		fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
-		debug.Assert(false)
-		return false
-	}
-	for _, ds := range stmap {
-		if ds.Version == "" {
-			if ds.Node.Snode.InMaintOrDecomm() {
-				continue
-			}
-			warn := fmt.Sprintf(fmtEmptyVer, ds.Node.Snode.StringEx())
-			actionWarn(c, warn)
-			continue
-		}
-		mmx := strings.Split(ds.Version, versionSepa)
-		if _, err := strconv.Atoi(mmx[0]); err != nil {
-			warn := fmt.Sprintf("%s: unexpected version format: %s, %v", ds.Node.Snode.StringEx(), ds.Version, mmx)
-			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
-			debug.Assert(false)
-			continue
-		}
-		// major
-		if mmc[0] != mmx[0] {
-			// count more of the same
-			var cnt int
-			for _, ds2 := range stmap {
-				if ds.Node.Snode.ID() != ds2.Node.Snode.ID() {
-					mmx2 := strings.Split(ds2.Version, versionSepa)
-					if mmc[0] != mmx2[0] {
-						cnt++
-					}
-				}
-			}
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, true)
-			return false
-		}
-		// minor
-		minx, err := strconv.Atoi(mmx[1])
-		debug.AssertNoErr(err)
-		if minc != minx {
-			incompat := minc-minx > 1 || minc-minx < -1
-			// ditto
-			var cnt int
-			for _, ds2 := range stmap {
-				if ds2.Node.Snode.InMaintOrDecomm() {
-					continue
-				}
-				if ds2.Version == "" {
-					warn := fmt.Sprintf(fmtEmptyVer, ds2.Node.Snode.StringEx())
-					actionWarn(c, warn)
-					continue
-				}
-				if ds.Node.Snode.ID() != ds2.Node.Snode.ID() {
-					mmx2 := strings.Split(ds2.Version, versionSepa)
-					minx2, _ := strconv.Atoi(mmx2[1])
-					if minc != minx2 {
-						cnt++
-					}
-				}
-			}
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, incompat)
-			return false
-		}
-	}
-	return true
-}
-
-func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, cnt int, incompat bool) {
-	var (
-		sname, warn, s1, s2 string
-	)
-	if role == apc.Proxy {
-		sname = meta.Pname(snode.ID())
-	} else {
-		sname = meta.Tname(snode.ID())
-	}
-	s2 = "s"
-	if cnt > 0 {
-		s2 = ""
-		s1 = fmt.Sprintf(" and %d other node%s", cnt, cos.Plural(cnt))
-	}
-	if incompat {
-		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which is not compatible with the CLI (expecting v%s)",
-			sname, s1, s2, version, expected)
-	} else {
-		if flagIsSet(c, nonverboseFlag) {
-			return
-		}
-		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which may not be fully compatible with the CLI (expecting v%s)",
-			sname, s1, s2, version, expected)
-	}
-
-	actionWarn(c, warn+"\n")
 }
 
 func daeStatus(nodeMap meta.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex) {
