@@ -32,12 +32,41 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
-// TODO:
-// - add stats counters
-// - remove all debug.AssertFunc
-// - space cleanup; orphan chunks
-// - err-busy
-// - warn if bucket.mirror.enabled
+// The `Ufest` structure (below) is the persistent manifest for a chunked object.
+// It records an ordered list of chunks (`Uchunk`) with their respective sizes,
+// paths, checksums, and optional S3-compat fields (MD5/ETag).
+//
+// Like all persistent metadata in AIStore, each manifest is meta-versioned
+// and checksummed (with the checksum written last). On disk, manifests are
+// also lz4-compressed (in memory they, of course, remain uncompressed).
+//
+// Lifecycle:
+//   * Partial manifests are created during upload and checkpointed every N
+//     chunks (configurable). Multiple parallel uploads are supported, each with
+//     its own manifest ID.
+//   * Once all chunks are present, `CompleteUfest()` atomically finalizes the
+//     manifest, marks the LOM as chunked, and persists the association.
+//   * At any time there is only one "completed" manifest per object. Old
+//     manifests and orphaned chunks are cleaned up automatically (or by
+//     CLI `space-cleanup`).
+//
+// Guarantees:
+//   * Strong numbering (added chunks strictly ordered).
+//   * No limit on number of chunks.
+//   * Whole-object checksum and S3 multipart ETag derivable from chunks.
+//   * Chunked and monolithic formats are transparently interchangeable for
+//     reads, including range reads and archive reads.
+//
+// Concurrency / locking:
+//   * Each manifest instance has its own binary mutex (not RW), used to facilitate
+//     concurrent access vs internal state changes.
+//   * LOM locks are always outermost; manifest locks nest inside. For example,
+//     `CompleteUfest` =>  `storeCompleted` holds object wlock, then manifest mutex.
+//   * Readers (`UfestReader` below) and writers coordinate via these locks.
+//
+// See methods: Add(), StorePartial(), LoadCompleted(), NewUfestReader().
+//
+// TODO: add stats counters; (eventually) remove debug.AssertFunc, (try-lock + err-busy)
 
 const (
 	umetaver = 1
