@@ -112,6 +112,8 @@ type (
 		putPct               int // % of PUTs, rest are GETs
 		statsShowInterval    int
 		statsdPort           int
+		multipartChunks      int // number of chunks for multipart upload (0 - disabled, >0 - enabled)
+		multipartPct         int // percentage of PUTs that use multipart upload (0-100)
 		putShards            uint64
 		maxputs              uint64
 		loaderCnt            uint64
@@ -144,6 +146,7 @@ type (
 		put       stats.HTTPReq
 		get       stats.HTTPReq
 		getConfig stats.HTTPReq
+		putMPU    stats.HTTPReq // multipart upload operations
 	}
 
 	jsonStats struct {
@@ -500,6 +503,25 @@ Done:
 
 	finalizeStats(statsWriter)
 	fmt.Printf("Stats written to %s\n", statsWriter.Name())
+
+	// Verify chunked objects if multipart upload was used
+	if runParams.multipartChunks > 0 && runParams.putPct > 0 {
+		chunkedLs, err := api.ListObjects(runParams.bp, runParams.bck, &apc.LsoMsg{Props: apc.GetPropsChunked}, api.ListArgs{})
+		if err != nil {
+			fmt.Println("failed to list chunked objects: ", err)
+		} else {
+			var actualChunked int64
+			for _, entry := range chunkedLs.Entries {
+				if entry.Flags&apc.EntryIsChunked != 0 {
+					actualChunked++
+				}
+			}
+			if actualChunked != accumulatedStats.putMPU.Total() {
+				fmt.Printf("WARNING: Expected %d chunked objects but found %d\n", accumulatedStats.putMPU.Total(), actualChunked)
+			}
+		}
+	}
+
 	if runParams.cleanUp.Val {
 		cleanup()
 	}
@@ -536,6 +558,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 	f.IntVar(&p.numWorkers, "numworkers", 10, "number of goroutine workers operating on AIS in parallel")
 	f.IntVar(&p.putPct, "pctput", 0, "percentage of PUTs in the aisloader-generated workload")
+	f.IntVar(&p.multipartChunks, "multipart-chunks", 0, "number of chunks for multipart upload (0 - disabled, >0 - use multipart upload with specified number of chunks)")
+	f.IntVar(&p.multipartPct, "pctmultipart", 0, "percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0)")
 
 	// see also: opUpdateExisting
 	f.IntVar(&p.updateExistingPct, "pctupdate", 0,
@@ -706,6 +730,16 @@ func _init(p *params) (err error) {
 		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.putPct)
 	}
 
+	if p.multipartChunks < 0 {
+		return fmt.Errorf("invalid option: multipart-chunks %d (must be >= 0)", p.multipartChunks)
+	}
+	if p.multipartPct < 0 || p.multipartPct > 100 {
+		return fmt.Errorf("invalid option: pctmultipart %d (must be 0-100)", p.multipartPct)
+	}
+	if p.multipartChunks == 0 && p.multipartPct != 0 {
+		fmt.Printf("Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
+	}
+
 	if p.skipList {
 		if p.fileList != "" {
 			fmt.Println("Warning: '-skiplist' is redundant (implied) when '-filelist' is specified")
@@ -736,6 +770,9 @@ func _init(p *params) (err error) {
 		}
 		if p.readOffStr != "" || p.readLenStr != "" {
 			return errors.New("direct S3 access via '-s3endpoint': Read range is not supported yet")
+		}
+		if p.multipartChunks > 0 {
+			return errors.New("direct S3 access via '-s3endpoint': multipart upload is not supported yet")
 		}
 	}
 
@@ -975,6 +1012,7 @@ func newStats(t time.Time) sts {
 		put:       stats.NewHTTPReq(t),
 		get:       stats.NewHTTPReq(t),
 		getConfig: stats.NewHTTPReq(t),
+		putMPU:    stats.NewHTTPReq(t),
 		statsd:    stats.NewStatsdMetrics(t),
 	}
 }
@@ -984,6 +1022,7 @@ func (s *sts) aggregate(other *sts) {
 	s.get.Aggregate(other.get)
 	s.put.Aggregate(other.put)
 	s.getConfig.Aggregate(other.getConfig)
+	s.putMPU.Aggregate(other.putMPU)
 }
 
 func setupBucket(runParams *params, created *bool) error {

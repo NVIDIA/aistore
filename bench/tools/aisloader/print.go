@@ -243,6 +243,18 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 			errs)
 	}
 	errs = "-"
+	if t.putMPU.TotalErrs() != 0 {
+		errs = pn(s.putMPU.TotalErrs()) + " (" + pn(t.putMPU.TotalErrs()) + ")"
+	}
+	if s.putMPU.Total() != 0 {
+		p(to, statsPrintHeader, pt(), "MPU",
+			pn(s.putMPU.Total())+" ("+pn(t.putMPU.Total())+")",
+			pb(s.putMPU.TotalBytes())+" ("+pb(t.putMPU.TotalBytes())+")",
+			pl(s.putMPU.MinLatency(), s.putMPU.AvgLatency(), s.putMPU.MaxLatency()),
+			ps(s.putMPU.Throughput(s.putMPU.Start(), time.Now()))+" ("+ps(t.putMPU.Throughput(t.putMPU.Start(), time.Now()))+")",
+			errs)
+	}
+	errs = "-"
 	if t.get.TotalErrs() != 0 {
 		errs = pn(s.get.TotalErrs()) + " (" + pn(t.get.TotalErrs()) + ")"
 	}
@@ -281,6 +293,15 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 			pl(sput.MinLatency(), sput.AvgLatency(), sput.MaxLatency()),
 			ps(sput.Throughput(sput.Start(), time.Now())),
 			pn(sput.TotalErrs()))
+	}
+	smpu := &t.putMPU
+	if smpu.Total() > 0 {
+		p(to, statsPrintHeader, pt(), "MPU",
+			pn(smpu.Total()),
+			pb(smpu.TotalBytes()),
+			pl(smpu.MinLatency(), smpu.AvgLatency(), smpu.MaxLatency()),
+			ps(smpu.Throughput(smpu.Start(), time.Now())),
+			pn(smpu.TotalErrs()))
 	}
 	sget := &t.get
 	if sget.Total() > 0 {
@@ -332,6 +353,8 @@ func printRunParams(p *params) {
 		MaxSize       int64  `json:"maximum object size (bytes)"`
 		NumWorkers    int    `json:"# workers"`
 		PutPct        int    `json:"% PUT"`
+		UpdatePct     int    `json:"% Update Existing"`
+		MultipartPct  int    `json:"% Multipart PUT"`
 		Seed          int64  `json:"seed,string"`
 		Cleanup       bool   `json:"cleanup"`
 	}{
@@ -343,6 +366,8 @@ func printRunParams(p *params) {
 		Duration:      d,
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,
+		UpdatePct:     p.updateExistingPct,
+		MultipartPct:  p.multipartPct,
 		MinSize:       p.minSize,
 		MaxSize:       p.maxSize,
 		NumWorkers:    p.numWorkers,

@@ -13,6 +13,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -21,11 +22,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/tools/readers"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"golang.org/x/sync/errgroup"
 )
 
 const longListTime = 10 * time.Second // list-objects progress
@@ -226,6 +229,89 @@ func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader 
 	)
 	_, err = api.PutObject(&args)
 	return
+}
+
+// putMultipart performs multipart upload for the given object
+func putMultipart(proxyURL string, bck cmn.Bck, objName string, size int64, numChunks int, cksumType string) error {
+	baseParams := api.BaseParams{
+		Client: runParams.bp.Client,
+		URL:    proxyURL,
+		Token:  loggedUserToken,
+		UA:     ua,
+	}
+
+	// Create multipart upload
+	uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+	if err != nil {
+		return fmt.Errorf("failed to create multipart upload for %s: %w", objName, err)
+	}
+
+	// Upload parts in parallel
+	var (
+		partNumbers = make([]int, numChunks)
+		mu          = &sync.Mutex{}
+		group       = &errgroup.Group{}
+	)
+
+	for i := range numChunks {
+		var (
+			partNum    = i + 1
+			offset     = uint64(partNum-1) * uint64(size) / uint64(numChunks)
+			nextOffset = uint64(partNum) * uint64(size) / uint64(numChunks)
+			partSize   = nextOffset - offset
+		)
+		group.Go(func(partNum int) func() error {
+			return func() error {
+				// Create reader for this part (simplified - just use random data)
+				partReader, err := readers.NewRand(int64(partSize), cksumType)
+				if err != nil {
+					return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
+				}
+
+				putPartArgs := &api.PutPartArgs{
+					PutArgs: api.PutArgs{
+						BaseParams: baseParams,
+						Bck:        bck,
+						ObjName:    objName,
+						Cksum:      partReader.Cksum(),
+						Reader:     partReader,
+						Size:       partSize,
+						SkipVC:     true,
+					},
+					UploadID:   uploadID,
+					PartNumber: partNum,
+				}
+
+				if err := api.UploadPart(putPartArgs); err != nil {
+					return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
+				}
+
+				mu.Lock()
+				partNumbers[partNum-1] = partNum
+				mu.Unlock()
+
+				return nil
+			}
+		}(partNum))
+	}
+
+	// Wait for all parts to complete
+	if err := group.Wait(); err != nil {
+		if abortErr := api.AbortMultipartUpload(baseParams, bck, objName, uploadID); abortErr != nil {
+			return fmt.Errorf("failed to upload parts and failed to abort upload %s: upload error: %w, abort error: %v", objName, err, abortErr)
+		}
+		return fmt.Errorf("failed to upload parts of %s: %w", objName, err)
+	}
+
+	// Complete multipart upload
+	if err := api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers); err != nil {
+		if abortErr := api.AbortMultipartUpload(baseParams, bck, objName, uploadID); abortErr != nil {
+			return fmt.Errorf("failed to complete multipart upload and failed to abort %s: complete error: %w, abort error: %v", objName, err, abortErr)
+		}
+		return fmt.Errorf("failed to complete multipart upload for %s: %w", objName, err)
+	}
+
+	return nil
 }
 
 // PUT with HTTP trace

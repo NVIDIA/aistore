@@ -30,6 +30,7 @@ const (
 	opGet
 	opUpdateExisting // {GET followed by PUT(same name, same size)} combo
 	opConfig
+	opPutMultipart // multipart upload operation
 )
 
 type (
@@ -55,31 +56,20 @@ func postNewWorkOrder() (err error) {
 		return nil
 	}
 
-	var (
-		pct = runParams.putPct
-		put bool
-	)
-	switch pct {
-	case 0:
-	case 25:
-		put = mono.NanoTime()&0x3 == 0x3
-	case 50:
-		put = mono.NanoTime()&1 == 1
-	case 75:
-		put = mono.NanoTime()&0x3 > 0
-	case 100:
-		put = true
-	default:
-		put = pct > rnd.IntN(100)
-	}
+	put := shouldUsePercentage(runParams.putPct)
 
 	var wo *workOrder
 	if put {
-		wo, err = newPutWorkOrder()
+		// Decide between regular PUT and multipart PUT
+		if runParams.multipartChunks > 0 && shouldUsePercentage(runParams.multipartPct) {
+			wo, err = newMultipartWorkOrder()
+		} else {
+			wo, err = newPutWorkOrder()
+		}
 	} else {
 		var op = opGet
-		if pct = runParams.updateExistingPct; pct > 0 {
-			if pct > rnd.IntN(100) {
+		if runParams.updateExistingPct > 0 {
+			if shouldUsePercentage(runParams.updateExistingPct) {
 				op = opUpdateExisting
 			}
 		}
@@ -195,6 +185,23 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			fmt.Println("get-config failed:", wo.err)
 			intervalStats.getConfig.AddErr()
 		}
+	case opPutMultipart:
+		if delta <= 0 {
+			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
+			return
+		}
+		putPending--
+		intervalStats.statsd.Put.AddPending(putPending)
+		if wo.err == nil {
+			bucketObjsNames.AddObjName(wo.objName)
+			intervalStats.putMPU.Add(wo.size, delta)
+			intervalStats.statsd.Put.Add(wo.size, delta)
+		} else {
+			fmt.Println("Multipart PUT failed:", wo.err)
+			intervalStats.putMPU.AddErr()
+			intervalStats.statsd.Put.AddErr()
+		}
+		// No SGL cleanup needed for multipart operations
 	default:
 		debug.Assert(false, wo.op)
 	}
@@ -244,6 +251,22 @@ func doPut(wo *workOrder) {
 		r.Close()
 		os.Remove(path.Join(runParams.tmpDir, wo.objName))
 	}
+}
+
+func doMultipart(wo *workOrder) {
+	var url = wo.proxyURL
+
+	if runParams.randomProxy {
+		debug.Assert(!isDirectS3())
+		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
+		if err != nil {
+			fmt.Printf("Multipart PUT(wo): %v\n", err)
+			os.Exit(1)
+		}
+		url = psi.URL(cmn.NetPublic)
+	}
+
+	wo.err = putMultipart(url, wo.bck, wo.objName, wo.size, runParams.multipartChunks, wo.cksumType)
 }
 
 func doGet(wo *workOrder) {
@@ -304,6 +327,8 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			}
 		case opConfig:
 			doGetConfig(wo)
+		case opPutMultipart:
+			doMultipart(wo)
 		default:
 			debug.Assert(false, wo.op)
 		}
@@ -332,6 +357,27 @@ func newPutWorkOrder() (*workOrder, error) {
 		proxyURL:  runParams.proxyURL,
 		bck:       runParams.bck,
 		op:        opPut,
+		objName:   objName,
+		size:      size,
+		cksumType: runParams.cksumType,
+	}, nil
+}
+
+func newMultipartWorkOrder() (*workOrder, error) {
+	objName, err := _genObjName()
+	if err != nil {
+		return nil, err
+	}
+	size := runParams.minSize
+	if runParams.maxSize != runParams.minSize {
+		d := rnd.Int64N(runParams.maxSize + 1 - runParams.minSize)
+		size = runParams.minSize + d
+	}
+	putPending++
+	return &workOrder{
+		proxyURL:  runParams.proxyURL,
+		bck:       runParams.bck,
+		op:        opPutMultipart,
 		objName:   objName,
 		size:      size,
 		cksumType: runParams.cksumType,
@@ -412,4 +458,22 @@ func (wo *workOrder) String() string {
 
 	return fmt.Sprintf("WO: %s/%s, duration %s, size: %d, type: %s%s",
 		wo.bck.String(), wo.objName, time.Duration(wo.end-wo.start), wo.size, opName, errstr)
+}
+
+// shouldUsePercentage returns true based on the given percentage (0-100)
+func shouldUsePercentage(pct int) bool {
+	switch pct {
+	case 0:
+		return false
+	case 25:
+		return mono.NanoTime()&0x3 == 0x3
+	case 50:
+		return mono.NanoTime()&1 == 1
+	case 75:
+		return mono.NanoTime()&0x3 > 0
+	case 100:
+		return true
+	default:
+		return pct > rnd.IntN(100)
+	}
 }
