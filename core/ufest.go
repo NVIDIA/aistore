@@ -60,8 +60,8 @@ import (
 // Completion:
 //   * Completion rules follow S3 semantics with one clarification: we require
 //     the complete `[1..count]` set to finalize.
-//   * Chunks (a.k.a., parts) may arrive **unordered**, duplicates are tolerated,
-//     and the most recent copy of a given `partNumber` (chunk mumber) wins.
+//   * Chunks (a.k.a., parts) may arrive **unordered**; duplicates are tolerated,
+//     and the most recent copy of a given `partNumber` (chunk number) wins.
 //   * Partial completion is rejected.
 //
 // Concurrency / locking:
