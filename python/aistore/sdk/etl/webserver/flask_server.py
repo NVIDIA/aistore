@@ -61,7 +61,7 @@ class FlaskServer(ETLServer):
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
                     status_code, transformed, direct_put_length = self._direct_put(
-                        first_url, transformed, remaining_pipeline
+                        first_url, transformed, remaining_pipeline, path
                     )
                     return Response(
                         response=transformed,
@@ -138,7 +138,11 @@ class FlaskServer(ETLServer):
             return f.read()
 
     def _direct_put(
-        self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+        self,
+        direct_put_url: str,
+        data: bytes,
+        remaining_pipeline: str = "",
+        path: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -149,12 +153,12 @@ class FlaskServer(ETLServer):
             direct_put_url: The first URL in the ETL pipeline
             data: The transformed data to send
             remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
-
+            path: The path of the object.
         Returns:
             status code, transformed data, length of the transformed data (if any)
         """
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target)
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
             headers = {}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline

@@ -82,7 +82,11 @@ class HTTPMultiThreadedServer(ETLServer):
             pass
 
         def _direct_put(
-            self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+            self,
+            direct_put_url: str,
+            data: bytes,
+            remaining_pipeline: str = "",
+            path: str = "",
         ) -> Tuple[int, bytes, int]:
             """
             Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -93,13 +97,13 @@ class HTTPMultiThreadedServer(ETLServer):
                 direct_put_url: The first URL in the ETL pipeline
                 data: The transformed data to send
                 remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
-
+                path: The path of the object.
             Returns:
                 status code of the direct put request, transformed data, length of the transformed data (if any)
             """
             try:
                 url = compose_etl_direct_put_url(
-                    direct_put_url, self.server.etl_server.host_target
+                    direct_put_url, self.server.etl_server.host_target, path
                 )
                 headers = {}
                 if remaining_pipeline:
@@ -127,20 +131,21 @@ class HTTPMultiThreadedServer(ETLServer):
             with open(safe_path, "rb") as f:
                 return f.read()
 
-        def _send_with_pipeline(self, transformed: bytes):
+        def _send_with_pipeline(self, transformed: bytes, path: str):
             """
             Forward transformed data to the next ETL stage if a pipeline header exists;
             otherwise, respond directly with the transformed data.
 
             Args:
                 transformed (bytes): The transformed data to be sent.
+                path (str): The path of the object.
             """
             pipeline_header = self.headers.get(HEADER_NODE_URL)
             if pipeline_header:
                 first_url, remaining_pipeline = parse_etl_pipeline(pipeline_header)
                 if first_url:
                     status_code, transformed, direct_put_length = self._direct_put(
-                        first_url, transformed, remaining_pipeline
+                        first_url, transformed, remaining_pipeline, path
                     )
                     self._set_headers(
                         status_code=status_code,
@@ -213,7 +218,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     content, raw_path, etl_args
                 )
 
-                self._send_with_pipeline(transformed)
+                self._send_with_pipeline(transformed, raw_path)
 
             except InvalidPipelineError as e:
                 self.server.etl_server.logger.error(
@@ -269,7 +274,7 @@ class HTTPMultiThreadedServer(ETLServer):
                     content, raw_path, etl_args
                 )
 
-                self._send_with_pipeline(transformed)
+                self._send_with_pipeline(transformed, raw_path)
 
             except InvalidPipelineError as e:
                 self.server.etl_server.logger.error(
