@@ -136,7 +136,7 @@ class FastAPIServer(ETLServer):
                 if first_url:
                     status_code, transformed, direct_put_length = (
                         await self._direct_put(
-                            first_url, transformed, remaining_pipeline
+                            first_url, transformed, remaining_pipeline, path
                         )
                     )
                     self.logger.debug("status_code: %r", status_code)
@@ -214,7 +214,11 @@ class FastAPIServer(ETLServer):
         return response.content
 
     async def _direct_put(
-        self, direct_put_url: str, data: bytes, remaining_pipeline: str = ""
+        self,
+        direct_put_url: str,
+        data: bytes,
+        remaining_pipeline: str = "",
+        path: str = "",
     ) -> Tuple[int, bytes, int]:
         """
         Sends the transformed object directly to the specified AIS node (`direct_put_url`),
@@ -225,15 +229,16 @@ class FastAPIServer(ETLServer):
             direct_put_url: The first URL in the ETL pipeline
             data: The transformed data to send
             remaining_pipeline: Comma-separated remaining pipeline stages to pass as header
-
+            path: The path of the object.
         Returns:
             status code, transformed data, length of the transformed data (if any)
         """
         try:
-            url = compose_etl_direct_put_url(direct_put_url, self.host_target)
+            url = compose_etl_direct_put_url(direct_put_url, self.host_target, path)
             headers = {}
             if remaining_pipeline:
                 headers[HEADER_NODE_URL] = remaining_pipeline
+            # TODO: add etl_args to qparams if present
 
             resp = await self.client.put(url, content=data, headers=headers)
             return self.handle_direct_put_response(resp, data)
@@ -275,7 +280,7 @@ class FastAPIServer(ETLServer):
                 if first_url:
                     status_code, transformed, direct_put_length = (
                         await self._direct_put(
-                            first_url, transformed, remaining_pipeline
+                            first_url, transformed, remaining_pipeline, path
                         )
                     )
                     if status_code == STATUS_OK:

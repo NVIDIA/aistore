@@ -32,25 +32,39 @@ def serialize_class(cls: Type[ETLServer], encoding: str = UTF_ENCODING) -> str:
     return base64.b64encode(pickled).decode(encoding)
 
 
-def compose_etl_direct_put_url(direct_put_url: str, host_target: str) -> str:
+def compose_etl_direct_put_url(
+    direct_put_url: str, host_target: str, obj_path: str
+) -> str:
     """
-    Compose a direct PUT URL by taking the scheme and netloc from `direct_put_url`
-    and the path from `host_target`.
+    Compose the final direct PUT URL by combining components from multiple URLs.
+
+    Scenarios:
+    1) Pipeline stage: direct_put_url has no path → append object path.
+    2) Offline transform: direct_put_url has a path → prepend host_target path
+       (e.g. "/v1/etl/_object/<etl-name>/<etl-secret>/") to validate request.
 
     Args:
-        direct_put_url (str): The destination node's direct PUT URL, including path and query.
-        host_target (str): The base AIS target URL used as the scheme and path base.
-
+        direct_put_url (str): Destination node's direct PUT URL, possibly with path/query.
+        host_target (str): Base AIS target URL used for scheme and base path.
+        obj_path (str): Path of the object to PUT.
     Returns:
-        str: A complete direct PUT URL targeting the appropriate AIS node.
+        str: Complete direct PUT URL targeting the correct AIS node.
     """
-    parsed_target = urlparse(direct_put_url)
-    parsed_host = urlparse(host_target)
+    direct = urlparse(direct_put_url)
+    host = urlparse(host_target)
+
+    if direct.path:
+        # Case 2: offline transform → prepend host target's path
+        final_path = host.path + direct.path
+    else:
+        # Case 1: pipeline stage → append object path
+        final_path = obj_path
+
     return urlunparse(
-        parsed_host._replace(
-            netloc=parsed_target.netloc,
-            path=parsed_host.path + parsed_target.path,
-            query=parsed_target.query,  # pass xid on direct put for statistics
+        host._replace(
+            netloc=direct.netloc,
+            path=final_path,
+            query=direct.query,  # keep xid or stats query params
         )
     )
 

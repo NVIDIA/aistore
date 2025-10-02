@@ -9,6 +9,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Changed
 
 - Move cold get retry delay logic into the tenacity `before_sleep` option and improve logging.
+- Add path parameter to `direct_put` methods across all webserver.
 
 ## [1.15.2] - 2025-08-18
 
