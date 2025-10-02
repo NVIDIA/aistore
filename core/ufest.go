@@ -50,12 +50,19 @@ import (
 //     manifests and orphaned chunks are cleaned up automatically (or by
 //     CLI `space-cleanup`).
 //
-// Guarantees:
-//   * Strong numbering (added chunks strictly ordered).
-//   * No limit on number of chunks.
+// Chunks:
+//   * Strong numbering (numbered chunks can be added in any order)
+//   * No limit on number of chunks (maximum size is 5GiB).
 //   * Whole-object checksum and S3 multipart ETag derivable from chunks.
 //   * Chunked and monolithic formats are transparently interchangeable for
 //     reads, including range reads and archive reads.
+//
+// Completion:
+//   * Completion rules follow S3 semantics with one clarification: we require
+//     the complete `[1..count]` set to finalize.
+//   * Chunks (a.k.a., parts) may arrive **unordered**, duplicates are tolerated,
+//     and the most recent copy of a given `partNumber` (chunk mumber) wins.
+//   * Partial completion is rejected.
 //
 // Concurrency / locking:
 //   * Each manifest instance has its own binary mutex (not RW), used to facilitate
