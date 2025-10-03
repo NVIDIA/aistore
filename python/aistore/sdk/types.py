@@ -739,3 +739,15 @@ class BlobMsg(BaseModel):
         if self.num_workers:
             dict_rep["num-workers"] = self.num_workers
         return dict_rep
+
+
+class MptCompletedPart(BaseModel):
+    """
+    Represents a part of a multipart upload
+    """
+
+    part_number: int
+    etag: str = ""
+
+    def as_dict(self):
+        return {"part-number": self.part_number, "etag": self.etag}

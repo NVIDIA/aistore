@@ -43,6 +43,7 @@ from aistore.sdk.provider import Provider
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.obj.object_writer import ObjectWriter
+from aistore.sdk.obj.multipart_upload import MultipartUpload
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
@@ -425,6 +426,15 @@ class Object:
             An ObjectWriter which can be used to write to an object's contents and attributes.
         """
         return ObjectWriter(self._client, self._object_path, self.query_params)
+
+    def multipart_upload(self) -> MultipartUpload:
+        """
+        Create a multipart upload for this object.
+
+        Returns:
+            MultipartUpload: A multipart upload instance for this object.
+        """
+        return MultipartUpload(self._client, self._object_path, self.query_params)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def promote(

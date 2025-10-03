@@ -76,6 +76,9 @@ QPARAM_UUID = "uuid"
 QPARAM_LATEST = "latest-ver"
 QPARAM_SYNC = "synchronize"
 QPARAM_NEW_CUSTOM = "set-new-custom"
+# multipart upload
+QPARAM_MPT_UPLOAD_ID = "uploadId"
+QPARAM_MPT_PART_NO = "partNumber"
 # etl
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_ETL_ARGS = "etl_args"
@@ -142,6 +145,10 @@ ACT_TRANSFORM_OBJECTS = "etl-listrange"
 ACT_ARCHIVE_OBJECTS = "archive"
 # Job actions
 ACT_START = "start"
+# Multipart upload actions
+ACT_MPT_UPLOAD = "mpt-upload"
+ACT_MPT_COMPLETE = "mpt-complete"
+ACT_MPT_ABORT = "mpt-abort"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32 * KIB
