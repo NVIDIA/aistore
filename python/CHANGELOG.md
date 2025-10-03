@@ -6,6 +6,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.16.0] - 2025-10-03
+
+### Added
+
+- Add multipart upload support for objects.
+  - Introduce `MultipartUpload` class with `create()`, `add_part()`, `complete()`, and `abort()` methods.
+  - Add `Object.multipart_upload()` method to create multipart upload sessions.
+
 ### Changed
 
 - Move cold get retry delay logic into the tenacity `before_sleep` option and improve logging.
@@ -15,9 +23,6 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Added
 
-- Add multipart upload support for objects.
-  - Introduce `MultipartUpload` class with `create()`, `add_part()`, `complete()`, and `abort()` methods.
-  - Add `Object.multipart_upload()` method to create multipart upload sessions.
 - Add functionality to pipeline multiple ETLs.
   - Add `>>` operator for combining multiple ETLs into a pipeline.
   - Introduce `QPARAM_ETL_PIPELINE` constant for ETL pipeline configuration and object inline transformation.
