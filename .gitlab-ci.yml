@@ -28,12 +28,6 @@ stages:
   - build
   - test-short
   - test-long
-  - security
-
-include:
-  - project: pstooling/gitlab-templates
-    ref: main
-    file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
 
 
 # Rules
@@ -176,6 +170,26 @@ build:linux:
     - make authn
     - make cli
     - make aisloader
+
+build:sonarqube:
+  stage: build
+  tags:
+    - $RUNNER_TAG
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - !reference [.default_run_rules, rules]
+  script:
+    - sonar-scanner -Dsonar.qualitygate.wait=true
 
 build:k8s:
   stage: build
@@ -855,9 +869,3 @@ test:long:k8s:all:
         result=$((result + exit_code))
         echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
       done
-
-checkmarx-scan-csv:
-  stage: security
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-      allow_failure: true
