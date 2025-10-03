@@ -835,7 +835,7 @@ func (*LocalConfig) JspOpts() jsp.Options   { return jsp.Plain() }
 func (*ClusterConfig) JspOpts() jsp.Options { return _jspOpts() }
 func (*ConfigToSet) JspOpts() jsp.Options   { return _jspOpts() }
 
-// interface guard
+// interface guard: config validators
 var (
 	_ Validator = (*BackendConf)(nil)
 	_ Validator = (*CksumConf)(nil)
@@ -864,14 +864,25 @@ var (
 	_ Validator = (*TracingConf)(nil)
 
 	_ Validator = (*feat.Flags)(nil)
+)
 
+// interface guard: bucket-level validators-as-props
+var (
 	_ PropsValidator = (*CksumConf)(nil)
-	_ PropsValidator = (*SpaceConf)(nil)
 	_ PropsValidator = (*MirrorConf)(nil)
 	_ PropsValidator = (*ECConf)(nil)
-	_ PropsValidator = (*ChunksConf)(nil)
-	_ PropsValidator = (*WritePolicyConf)(nil)
 
+	_ PropsValidator = (*ExtraProps)(nil)
+	_ PropsValidator = (*feat.Flags)(nil)
+
+	_ PropsValidator = (*WritePolicyConf)(nil)
+	_ PropsValidator = (*RateLimitConf)(nil)
+	_ PropsValidator = (*ChunksConf)(nil)
+	_ PropsValidator = (*LRUConf)(nil)
+)
+
+// interface guard: special (un)marshaling
+var (
 	_ json.Marshaler   = (*BackendConf)(nil)
 	_ json.Unmarshaler = (*BackendConf)(nil)
 	_ json.Marshaler   = (*FSPConf)(nil)
@@ -1287,8 +1298,6 @@ func (c *SpaceConf) Validate() error {
 	}
 	return nil
 }
-
-func (c *SpaceConf) ValidateAsProps(...any) error { return c.Validate() }
 
 func (c *SpaceConf) String() string {
 	return fmt.Sprintf("space config: cleanup=%d%%, low=%d%%, high=%d%%, OOS=%d%%",
@@ -2252,6 +2261,7 @@ func (*RateLimitConf) verbs(tag, name, value string) error {
 	return nil
 }
 
+// NOTE: separately, frontend-rate-limiter validation in `makeNewBckProps`
 func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
 
 //

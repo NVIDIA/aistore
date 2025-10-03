@@ -41,7 +41,6 @@ const (
 const (
 	rltag  = "rate-limiter"
 	arltag = "adaptive-rate-limiter"
-	brltag = "bursty-rate-limiter"
 )
 
 // reason
@@ -301,17 +300,17 @@ func (arl *AdaptRateLim) _str() string {
 // BurstRateLim //
 //////////////////
 
-func NewBurstRateLim(maxTokens, burstSize int, tokenIval time.Duration) (*BurstRateLim, error) {
+func NewBurstRateLim(tag string, maxTokens, burstSize int, tokenIval time.Duration) (*BurstRateLim, error) {
 	if burstSize <= 0 || burstSize > maxTokens*DfltRateMaxBurstPct/100 {
 		return nil, fmt.Errorf("%s: invalid burst size %d (expecting positive integer <= (%d%% of maxTokens %d)",
-			brltag, burstSize, DfltRateMaxBurstPct, maxTokens)
+			tag, burstSize, DfltRateMaxBurstPct, maxTokens)
 	}
 	brl := &BurstRateLim{
 		origTokens: maxTokens,
 		burstSize:  burstSize,
 	}
 	brl.stats.burstLeft = burstSize
-	return brl, brl.RateLim.init(brltag, maxTokens, tokenIval)
+	return brl, brl.RateLim.init(tag+" (bursty rate)", maxTokens, tokenIval)
 }
 
 func (brl *BurstRateLim) TryAcquire() bool {

@@ -106,6 +106,13 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	var lsflags uint64
 	r = &prefetch{config: cmn.GCO.Get(), msg: msg}
 
+	smap := core.T.Sowner().Get()
+	nat := smap.CountActiveTs()
+	r.brl, err = bck.NewFrontendRateLim(nat) // TODO: support RateLimitConf.Verbs - here and elsewhere; `nat` vs num-workers
+	if err != nil {
+		return nil, err
+	}
+
 	if msg.NonRecurs {
 		lsflags = apc.LsNoRecursion
 	}
@@ -115,10 +122,6 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	}
 	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
-
-	smap := core.T.Sowner().Get()
-	nat := smap.CountActiveTs()
-	r.brl = bck.NewFrontendRateLim(nat) // TODO: support RateLimitConf.Verbs - here and elsewhere; `nat` vs num-workers
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{

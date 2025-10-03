@@ -282,23 +282,33 @@ func (b *Bck) MaxPageSize() int64 {
 // rate limits: frontend, backend with respect to `nat` (number active targets)
 //
 
-func (b *Bck) NewFrontendRateLim(na int) *cos.BurstRateLim {
+func (b *Bck) NewFrontendRateLim(na int) (*cos.BurstRateLim, error) {
 	conf := b.Props.RateLimit.Frontend
 	if !conf.Enabled {
-		return nil
+		return nil, nil
+	}
+	if na <= 0 {
+		err := cmn.NewErrNoNodes(apc.Proxy, 0)
+		debug.Assert(false, err, " ", na)
+		return nil, err
 	}
 	maxTokens := cos.DivRound(conf.MaxTokens, na)
-	brl, err := cos.NewBurstRateLim(maxTokens, conf.Size, conf.Interval.D())
+	brl, err := cos.NewBurstRateLim(b.Cname(""), maxTokens, conf.Size, conf.Interval.D())
 	if err != nil {
-		nlog.ErrorDepth(1, err)
-		debug.AssertNoErr(err)
+		nlog.ErrorDepth(1, err, "[num active nodes:", na, "]")
+		return nil, err
 	}
-	return brl
+	return brl, nil
 }
 
 func (b *Bck) NewBackendRateLim(nat int) *cos.AdaptRateLim {
 	conf := b.Props.RateLimit.Backend
 	if !conf.Enabled {
+		return nil
+	}
+	if nat <= 0 {
+		err := cmn.NewErrNoNodes(apc.Target, 0)
+		debug.Assert(false, err, " ", nat)
 		return nil
 	}
 	if b.IsCloud() && conf.NumRetries < 3 {

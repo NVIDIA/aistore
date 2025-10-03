@@ -112,7 +112,7 @@ func TestBurstRateLim(t *testing.T) {
 	for _, test := range tests {
 		tname := fmt.Sprintf("tokens_%d:burst_%d:%v", test.maxTokens, test.burstSize, test.tokenIval)
 		t.Run(tname, func(t *testing.T) {
-			brl, err := cos.NewBurstRateLim(test.maxTokens, test.burstSize, test.tokenIval)
+			brl, err := cos.NewBurstRateLim("no-bucket", test.maxTokens, test.burstSize, test.tokenIval)
 			if err != nil {
 				t.Fatal(err)
 			}

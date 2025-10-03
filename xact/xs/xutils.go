@@ -61,9 +61,16 @@ type tcrate struct {
 }
 
 func (rate *tcrate) init(src, dst *meta.Bck, nat int) {
-	rate.src = src.NewFrontendRateLim(nat)
-	if dst.Props != nil { // destination may not exist
-		rate.dst = dst.NewFrontendRateLim(nat)
+	var err error
+	rate.src, err = src.NewFrontendRateLim(nat)
+	if err == nil {
+		if dst.Props != nil { // destination may not exist
+			rate.dst, err = dst.NewFrontendRateLim(nat)
+			if err != nil {
+				rate.src = nil
+				rate.dst = nil
+			}
+		}
 	}
 }
 

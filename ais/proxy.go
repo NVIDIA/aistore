@@ -758,8 +758,8 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelimit(bck, http.MethodGet, smap); err != nil {
-		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
+	if ecode, err := p.ratelimit(bck, http.MethodGet, smap); err != nil {
+		p.writeErr(w, r, err, ecode, Silent)
 		return
 	}
 
@@ -838,8 +838,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 
 	// 3. rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelimit(bck, http.MethodPut, smap); err != nil {
-		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
+	if ecode, err := p.ratelimit(bck, http.MethodPut, smap); err != nil {
+		p.writeErr(w, r, err, ecode, Silent)
 		return
 	}
 
@@ -907,8 +907,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 	// rate limit
 	smap := p.owner.smap.get()
-	if err := p.ratelimit(bck, http.MethodDelete, smap); err != nil {
-		p.writeErr(w, r, err, http.StatusTooManyRequests, Silent)
+	if ecode, err := p.ratelimit(bck, http.MethodDelete, smap); err != nil {
+		p.writeErr(w, r, err, ecode, Silent)
 		return
 	}
 
@@ -3094,9 +3094,9 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 // rate limit on the front
 //
 
-func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
+func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) (ecode int, err error) {
 	if !bck.Props.RateLimit.Frontend.Enabled {
-		return nil
+		return 0, nil
 	}
 	var (
 		brl   *cos.BurstRateLim // bursty
@@ -3107,11 +3107,14 @@ func (p *proxy) ratelimit(bck *meta.Bck, verb string, smap *smapX) error {
 	if ok {
 		brl = v.(*cos.BurstRateLim)
 	} else {
-		brl = bck.NewFrontendRateLim(smap.CountActivePs())
+		brl, err = bck.NewFrontendRateLim(smap.CountActivePs())
+		if err != nil {
+			return 0, err
+		}
 		rl.Store(uhash, brl)
 	}
 	if !brl.TryAcquire() {
-		return cmn.NewErrRateLimitFrontend()
+		return http.StatusTooManyRequests, cmn.NewErrRateLimitFrontend()
 	}
-	return nil
+	return 0, nil
 }

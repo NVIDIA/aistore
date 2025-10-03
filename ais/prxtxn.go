@@ -1117,10 +1117,21 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet, c
 	}
 
 	// cannot have re-mirroring and erasure coding on the same bucket at the same time
-	remirror := _reMirror(bprops, nprops)
-	targetCnt, reec := _reEC(bprops, nprops, bck, p.owner.smap.get())
+	var (
+		smap            = p.owner.smap.get()
+		remirror        = _reMirror(bprops, nprops)
+		targetCnt, reec = _reEC(bprops, nprops, bck, smap)
+	)
 	if len(creating) == 0 && remirror && reec {
 		return nil, cmn.NewErrBusy("bucket", bck.Cname(""))
+	}
+
+	if nprops.RateLimit.Frontend.Enabled {
+		b := *bck
+		b.Props = nprops
+		if _, err := b.NewFrontendRateLim(smap.CountActivePs()); err != nil {
+			return nil, err
+		}
 	}
 
 	err := nprops.Validate(targetCnt)
