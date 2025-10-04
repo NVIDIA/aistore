@@ -172,9 +172,10 @@ build:linux:
     - make aisloader
 
 build:sonarqube:
-  stage: test-long
+  stage: build
   tags:
     - $RUNNER_TAG
+    - gp-vm
   image:
     name: sonarsource/sonar-scanner-cli:latest
     entrypoint: [""]
