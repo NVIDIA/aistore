@@ -172,7 +172,7 @@ build:linux:
     - make aisloader
 
 build:sonarqube:
-  stage: build
+  stage: test-long
   tags:
     - $RUNNER_TAG
   image:
