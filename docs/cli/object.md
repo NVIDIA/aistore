@@ -1398,7 +1398,7 @@ $ ais object promote /target/1014646t8081/nonexistent/dir/ ais://testbucket --ta
 Multipart upload allows you to upload large objects by breaking them into smaller, manageable parts. This provides several benefits:
 
 * **Improved performance**: Parts can be uploaded in parallel
-* **Reliability**: Failed part uploads can be retried without affecting other parts  
+* **Reliability**: Failed part uploads can be retried without affecting other parts
 * **Flexibility**: Parts can be uploaded in any order
 * **Resume capability**: Ability to abort and restart uploads
 
@@ -1410,33 +1410,36 @@ The multipart upload process consists of three main steps:
 ## Options
 
 ```console
-$ ais object mpu --help
+$ ais mpu --help
 
 NAME:
-   ais object multipart-upload - Multipart upload operations: create, put parts, complete, and abort
+   ais mpu - (alias for "object multipart-upload") Multipart upload operations: create, put-part, complete, and abort
 
 USAGE:
-   ais object multipart-upload command [arguments...]  [command options]
+   ais mpu command [arguments...]  [command options]
 
 COMMANDS:
-   create    Create a multipart upload session for large objects.
-             Returns an upload ID that must be used for subsequent part uploads and completion, e.g.:
-               - 'mpu create ais://bucket/large-file.dat'           - create session for large-file.dat;
-               - 'mpu create ais://bucket/video.mp4 --verbose'    - create with verbose output.
-   put-part  Upload individual parts for a multipart upload session.
-             Parts can be uploaded in parallel and in any order, e.g.:
-               - 'mpu put-part ais://bucket/large-file uploadID 1 /path/part1.dat'                            - upload part 1;
-               - 'mpu put-part ais://bucket/large-file uploadID 2 /path/part2.dat --verbose'                  - upload part 2 with progress;
-               - 'mpu put-part ais://bucket/large-file --upload-id uploadID --part-number 3 /path/part3.dat'  - using flags.
+   create  Create a multipart upload session for large objects.
+      Returns an UPLOAD_ID that must be used for subsequent part uploads and completion, e.g.:
+             - 'mpu create ais://bck/large.dat'            - create MPU session for 'large.dat';
+             - 'mpu create ais://bck/video.mp4 --verbose'  - create multipart upload with verbose output.
+   put-part  Upload individual parts for a multipart upload session with a given UPLOAD_ID (returned by 'mpu create').
+      Parts can be uploaded in parallel and in any order, e.g.:
+        - 'mpu put-part ais://bck/large UPLOAD_ID 2 /path/part2.dat --verbose'                  - upload part 2 with progress;
+        - 'mpu put-part ais://bck/large UPLOAD_ID 1 /path/part1.dat'                            - upload part 1;
+        - 'mpu put-part ais://bck/large --upload-id UPLOAD_ID --part-number 3 /path/part3.dat'  - using flags
+      (for UPLOAD_ID use the value previously returned by 'mpu create' command).
    complete  Complete a multipart upload by assembling all uploaded parts into the final object.
-             Parts are assembled in the order specified by part numbers, e.g.:
-               - 'mpu complete ais://bucket/large-file uploadID 1,2,3,4,5'                    - assemble 5 parts in order;
-               - 'mpu complete ais://bucket/large-file --upload-id uploadID --part-numbers 1,2,3'  - using flags;
-               - 'mpu complete ais://bucket/large-file uploadID "1,2,3" --verbose'            - with completion progress.
-   abort     Abort a multipart upload session and clean up any uploaded parts.
-             All uploaded parts are discarded and the object is not created, e.g.:
-               - 'mpu abort ais://bucket/large-file uploadID'                       - abort upload session;
-               - 'mpu abort ais://bucket/large-file --upload-id uploadID --verbose' - abort with verbose output.
+      Parts are assembled in the order specified by part numbers, e.g.:
+        - 'mpu complete ais://bck/large UPLOAD_ID 1,2,3,4,5'                         - assemble 5 parts in order;
+        - 'mpu complete ais://bck/large --upload-id UPLOAD_ID --part-numbers 1,2,3'  - using flags;
+        - 'mpu complete ais://bck/large UPLOAD_ID "1,2,3" --verbose'                 - with completion progress
+      (for UPLOAD_ID use the value previously returned by 'mpu create' command).
+   abort  Abort a multipart upload session and clean up any uploaded parts.
+      All uploaded parts are discarded and the object is not created, e.g.:
+        - 'mpu abort ais://bck/large UPLOAD_ID'                        - abort upload session;
+        - 'mpu abort ais://bck/large --upload-id UPLOAD_ID --verbose'  - abort with verbose output
+      (for UPLOAD_ID use the value previously returned by 'mpu create' command).
 
 OPTIONS:
    --help, -h  Show help
@@ -1473,7 +1476,7 @@ $ ais object mpu put-part ais://mybucket/large-video.mp4 abc123def456 1 /tmp/vid
 Uploading part 1 from /tmp/video-part1.mp4 (524.29MiB)...
 Uploaded part 1 for ais://mybucket/large-video.mp4 (upload ID: abc123def456)
 
-# Upload part 2  
+# Upload part 2
 $ ais object mpu put-part ais://mybucket/large-video.mp4 abc123def456 2 /tmp/video-part2.mp4 --verbose
 Uploading part 2 from /tmp/video-part2.mp4 (524.29MiB)...
 Uploaded part 2 for ais://mybucket/large-video.mp4 (upload ID: abc123def456)
@@ -1495,7 +1498,7 @@ $ ais object mpu put-part ais://mybucket/large-file.dat uploadID 1 /tmp/part1.da
 # Terminal 2 (running simultaneously)
 $ ais object mpu put-part ais://mybucket/large-file.dat uploadID 2 /tmp/part2.dat
 
-# Terminal 3 (running simultaneously)  
+# Terminal 3 (running simultaneously)
 $ ais object mpu put-part ais://mybucket/large-file.dat uploadID 3 /tmp/part3.dat
 ```
 

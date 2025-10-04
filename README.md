@@ -37,12 +37,13 @@ AIS includes an integrated, scriptable [CLI](/docs/cli.md) for managing clusters
 ```console
 $ ais <TAB-TAB>
 
-advanced         cluster          etl              ls               remote-cluster   space-cleanup
-alias            config           evict            ml               rmb              start
-archive          cp               get              object           rmo              stop
-auth             create           help             performance      scrub            storage
-blob-download    download         job              prefetch         search           tls
-bucket           dsort            log              put              show             wait
+advanced         config           get              object           scrub            tls
+alias            cp               help             performance      search           wait
+archive          create           job              prefetch         show
+auth             download         log              put              space-cleanup
+blob-download    dsort            ls               remote-cluster   start
+bucket           etl              ml               rmb              stop
+cluster          evict            mpu              rmo              storage
 ```
 
 ## Developer Tools

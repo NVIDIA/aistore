@@ -75,26 +75,29 @@ const concatUsage = "Append a file, a directory, or multiple files and/or direct
 
 // Multipart upload usage strings
 const mptCreateUsage = "Create a multipart upload session for large objects.\n" +
-	indent1 + "Returns an upload ID that must be used for subsequent part uploads and completion, e.g.:\n" +
-	indent1 + "\t- 'mpu create ais://bucket/large-file.dat'\t\t\t- create session for large-file.dat;\n" +
-	indent1 + "\t- 'mpu create ais://bucket/video.mp4 --verbose'\t\t- create with verbose output."
+	indent2 + "Returns an UPLOAD_ID that must be used for subsequent part uploads and completion, e.g.:\n" +
+	indent2 + "\t- 'mpu create ais://bck/large.dat'\t- create MPU session for 'large.dat';\n" +
+	indent2 + "\t- 'mpu create ais://bck/video.mp4 --verbose'\t- create multipart upload with verbose output."
 
-const mptPutUsage = "Upload individual parts for a multipart upload session.\n" +
-	indent1 + "Parts can be uploaded in parallel and in any order, e.g.:\n" +
-	indent1 + "\t- 'mpu put-part ais://bucket/large-file uploadID 1 /path/part1.dat'\t- upload part 1;\n" +
-	indent1 + "\t- 'mpu put-part ais://bucket/large-file uploadID 2 /path/part2.dat --verbose'\t- upload part 2 with progress;\n" +
-	indent1 + "\t- 'mpu put-part ais://bucket/large-file --upload-id uploadID --part-number 3 /path/part3.dat'\t- using flags."
+const mptPutUsage = "Upload individual parts for a multipart upload session with a given UPLOAD_ID (returned by 'mpu create').\n" +
+	indent2 + "Parts can be uploaded in parallel and in any order, e.g.:\n" +
+	indent2 + "\t- 'mpu put-part ais://bck/large UPLOAD_ID 2 /path/part2.dat --verbose'\t- upload part 2 with progress;\n" +
+	indent2 + "\t- 'mpu put-part ais://bck/large UPLOAD_ID 1 /path/part1.dat'\t- upload part 1;\n" +
+	indent2 + "\t- 'mpu put-part ais://bck/large --upload-id UPLOAD_ID --part-number 3 /path/part3.dat'\t- using flags\n" +
+	indent2 + "(for UPLOAD_ID use the value previously returned by 'mpu create' command)."
 
 const mptCompleteUsage = "Complete a multipart upload by assembling all uploaded parts into the final object.\n" +
-	indent1 + "Parts are assembled in the order specified by part numbers, e.g.:\n" +
-	indent1 + "\t- 'mpu complete ais://bucket/large-file uploadID 1,2,3,4,5'\t\t- assemble 5 parts in order;\n" +
-	indent1 + "\t- 'mpu complete ais://bucket/large-file --upload-id uploadID --part-numbers 1,2,3'\t- using flags;\n" +
-	indent1 + "\t- 'mpu complete ais://bucket/large-file uploadID \"1,2,3\" --verbose'\t\t- with completion progress."
+	indent2 + "Parts are assembled in the order specified by part numbers, e.g.:\n" +
+	indent2 + "\t- 'mpu complete ais://bck/large UPLOAD_ID 1,2,3,4,5'\t- assemble 5 parts in order;\n" +
+	indent2 + "\t- 'mpu complete ais://bck/large --upload-id UPLOAD_ID --part-numbers 1,2,3'\t- using flags;\n" +
+	indent2 + "\t- 'mpu complete ais://bck/large UPLOAD_ID \"1,2,3\" --verbose'\t- with completion progress\n" +
+	indent2 + "(for UPLOAD_ID use the value previously returned by 'mpu create' command)."
 
 const mptAbortUsage = "Abort a multipart upload session and clean up any uploaded parts.\n" +
-	indent1 + "All uploaded parts are discarded and the object is not created, e.g.:\n" +
-	indent1 + "\t- 'mpu abort ais://bucket/large-file uploadID'\t\t\t- abort upload session;\n" +
-	indent1 + "\t- 'mpu abort ais://bucket/large-file --upload-id uploadID --verbose'\t- abort with verbose output."
+	indent2 + "All uploaded parts are discarded and the object is not created, e.g.:\n" +
+	indent2 + "\t- 'mpu abort ais://bck/large UPLOAD_ID'\t- abort upload session;\n" +
+	indent2 + "\t- 'mpu abort ais://bck/large --upload-id UPLOAD_ID --verbose'\t- abort with verbose output\n" +
+	indent2 + "(for UPLOAD_ID use the value previously returned by 'mpu create' command)."
 
 const setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 	indent1 + "mykey1=value1 mykey2=value2 OR (same) '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
@@ -325,7 +328,7 @@ var (
 			{
 				Name:    commandMptUpload,
 				Aliases: []string{"mpu"},
-				Usage:   "Multipart upload operations: create, put parts, complete, and abort",
+				Usage:   "Multipart upload operations: create, put-part, complete, and abort",
 				Subcommands: []cli.Command{
 					{
 						Name:         cmdMptCreate,
