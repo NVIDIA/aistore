@@ -24,7 +24,7 @@ from aistore.sdk.const import (
     XX_HASH_SEED,
     QPARAM_PROVIDER,
 )
-from aistore.sdk.provider import Provider
+from aistore.sdk.provider import Provider, provider_aliases
 
 T = TypeVar("T")
 MASK = 0xFFFFFFFFFFFFFFFF  # 64-bit mask
@@ -34,6 +34,13 @@ CONST1 = 0xbf58476d1ce4e5b9
 CONST2 = 0x94d049bb133111eb
 # fmt: on
 ROTATION_BITS = 7
+
+# URL parsing regex components
+URL_PROVIDERS = "|".join([p.value for p in Provider] + list(provider_aliases))
+MAX_BUCKET_PART_LEN = (
+    132  # Accommodates constraint of @uuid(32)#namespace(32)/bucket(64)
+)
+BUCKET_CHARS = r"[A-Za-z0-9@#._-]"
 
 
 class HttpError(BaseModel):
@@ -179,25 +186,24 @@ def parse_url(url: str) -> Tuple[str, str, str]:
 
 def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:
     """
-    Extract provider, bucket, and object from raw string.
+    Extract provider, bucket, and whether an object is present from raw string.
 
     Args:
         msg (str): Any string that may contain an AIS FQN.
 
     Returns:
-        Optional[Tuple[str, str, bool]]: (prov, bck, obj) if a FQN is found, otherwise None.
+        Optional[Tuple[str, str, bool]]: (prov, bck, has_obj) if a FQN is found, otherwise None.
     """
-    pattern = r"([a-z0-9]+)://([A-Za-z0-9@._-]+)(/.*)?"
+    pattern = rf"({URL_PROVIDERS})://({BUCKET_CHARS}{{1,{MAX_BUCKET_PART_LEN}}})(?:(/)|(?!{BUCKET_CHARS}))"
     match = re.search(pattern, msg)
-
     if not match:
         return None
 
     prov = match.group(1)
     bck = match.group(2)
-    obj = match.group(3)  # Not None if `/` after bucket
+    has_obj = bool(match.group(3))
 
-    return prov, bck, obj
+    return prov, bck, has_obj
 
 
 def get_logger(name: str, log_format: str = DEFAULT_LOG_FORMAT):

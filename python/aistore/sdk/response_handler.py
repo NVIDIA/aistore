@@ -82,7 +82,7 @@ class AISResponseHandler(ResponseHandler):
             ErrETLNotFound: If the error message indicates a missing ETL.
         """
         status, message, req_url = r.status_code, r.text, r.request.url
-        prov, bck, obj = extract_and_parse_url(message) or (None, None, None)
+        prov, bck, has_obj = extract_and_parse_url(message) or (None, None, False)
 
         if prov is not None:
             try:
@@ -97,9 +97,9 @@ class AISResponseHandler(ResponseHandler):
 
         exc = self.exc_class
         if status == 404:
-            exc = self._parse_404(is_etl_err, is_remote_bck, prov, obj) or exc
+            exc = self._parse_404(is_etl_err, is_remote_bck, prov, has_obj) or exc
         elif status == 409:
-            exc = self._parse_409(is_etl_err, is_get_request, prov, obj) or exc
+            exc = self._parse_409(is_etl_err, is_get_request, prov, has_obj) or exc
         return exc(status, message, req_url or "", r.request)
 
     @staticmethod
@@ -107,12 +107,12 @@ class AISResponseHandler(ResponseHandler):
         is_etl_err: bool,
         is_remote_bck: Optional[bool] = None,
         provider: Optional[Provider] = None,
-        obj: Optional[bool] = None,
+        has_obj: bool = False,
     ) -> Optional[Type[AISError]]:
         if is_etl_err:
             return ErrETLNotFound
         if provider:
-            if obj is not None:
+            if has_obj:
                 return ErrObjNotFound
             if is_remote_bck:
                 return ErrRemoteBckNotFound
@@ -124,12 +124,12 @@ class AISResponseHandler(ResponseHandler):
         is_etl_err: bool,
         is_get_request: bool,
         provider: Optional[Provider] = None,
-        obj: Optional[bool] = None,
+        has_obj: bool = False,
     ) -> Optional[Type[AISError]]:
         if is_get_request:
             return ErrGETConflict
         if is_etl_err:
             return ErrETLAlreadyExists
-        if provider and obj is None:
+        if provider and not has_obj:
             return ErrBckAlreadyExists
         return None

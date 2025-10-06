@@ -28,6 +28,7 @@ from aistore.sdk.utils import (
     xoshiro256_hash,
     get_digest,
     get_provider_from_request,
+    extract_and_parse_url,
 )
 from tests.const import PREFIX_NAME
 from tests.utils import cases
@@ -173,3 +174,22 @@ class TestUtils(unittest.TestCase):
     def test_get_provider_from_request_invalid(self, req):
         with self.assertRaises(ValueError):
             get_provider_from_request(req)
+
+    @cases(
+        ("bucket 'ais://bucket' does not exist", ("ais", "bucket", False)),
+        ("object 'ais://bucket/object.txt' does not exist", ("ais", "bucket", True)),
+        ("bucket 'aws://bucket' does not exist", ("aws", "bucket", False)),
+        ("bucket 's3://bucket' does not exist", ("s3", "bucket", False)),
+        ("bucket 'gcp://bucket' does not exist", ("gcp", "bucket", False)),
+        ("object 'gs://bucket/obj' does not exist", ("gs", "bucket", True)),
+        ("bucket 'azure://b' does not exist", ("azure", "b", False)),
+        ("object 'ht://b/o' does not exist", ("ht", "b", True)),
+        ("object 'oci://bucket/obj' does not exist", ("oci", "bucket", True)),
+        ("bucket 'abc://bucket' does not exist", None),
+        ("object 'abc://bucket/obj' does not exist", None),
+        (f"bucket 'ais://{'a'*133}' does not exist", None),
+        (f"object 'ais://{'a'*133}/obj' does not exist", None),
+    )
+    def test_extract_and_parse_url(self, test_case):
+        url_or_msg, expected = test_case
+        self.assertEqual(expected, extract_and_parse_url(url_or_msg))

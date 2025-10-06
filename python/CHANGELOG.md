@@ -17,6 +17,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Transformation handling: Removed per-request thread creation and now rely on the existing executor loop for CPU-bound transforms, reducing thread overhead and overall CPU usage.
 - Updated the SDK to utilize `MossIn` and `MossOut` types for better metadata handling (Match Go API 1:1).
 
+### Fixed
+
+- Optimize error message URL parsing regex by bounding quantifiers and removing greedy patterns.
+
 ### Removed
 
 - Removed `BatchLoader` and `BatchRequest` classes.
