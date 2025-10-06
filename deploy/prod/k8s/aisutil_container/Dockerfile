@@ -11,15 +11,21 @@ WORKDIR /go/src/aistore/aistore
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} make cli xmeta aisloader
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} make cli xmeta aisloader
 
 RUN mv cmd/cli/autocomplete /tmp/autocomplete
 
-FROM ubuntu:24.04 as base
+FROM ubuntu:24.04 AS base
 
 RUN apt-get update -yq && \
+    apt-get install -y python3 python3-pip python3.12-venv && \
     apt-get install -y wget sysstat curl git iputils-ping make coreutils net-tools iproute2 tcptrack vim \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /venv \
+    && /venv/bin/pip install --upgrade pip \
+    && /venv/bin/pip install --no-cache-dir aistore
+ENV PATH="/venv/bin:$PATH"
 
 # Copy over the binaries
 COPY --from=builder /go/bin /usr/bin/
