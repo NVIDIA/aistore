@@ -12,9 +12,10 @@ The command has the following subcommands:
 ```console
 $ ais cluster <TAB-TAB>
 
-show                   rebalance              shutdown               reset-stats
-remote-attach          set-primary            decommission           drop-lcache
-remote-detach          download-logs          add-remove-nodes       reload-backend-creds
+show                   rebalance              decommission           reload-backend-creds
+dashboard              set-primary            add-remove-nodes
+remote-attach          download-logs          reset-stats
+remote-detach          shutdown               drop-lcache
 ```
 
 > **Important:** with the single exception of [`add-remove-nodes`](#adding-removing-nodes), all the other the commands listed above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
@@ -89,6 +90,7 @@ COMMANDS:
 ```
 
 ## Table of Contents
+- [Cluster Dashboard](#cluster-dashboard)
 - [Cluster and Node status](#cluster-and-node-status)
 - [Show cluster map](#show-cluster-map)
 - [Show cluster stats](#show-cluster-stats)
@@ -105,12 +107,142 @@ COMMANDS:
 - [Reload backend credentials](#reload-backend-credentials)
 - [Download log archive](#download-log-archive)
 
+## Cluster Dashboard
+
+`ais show dashboard` (alias: `ais cluster dashboard`) provides an at-a-glance view of cluster health, performance, and configuration. The dashboard consolidates the most important operational metrics into a single command, making it ideal for quick status checks and continuous monitoring.
+
+### Command Overview
+
+```console
+$ ais show dashboard --help
+NAME:
+   ais show dashboard - Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
+
+USAGE:
+   ais show dashboard [NODE_ID] [command options]
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --verbose, -v     verbose output
+   --json, -j        json input/output
+   --no-headers, -H  display tables without headers
+   --help, -h        show help
+```
+
+### Output Sections
+
+The dashboard displays two main sections:
+
+**Performance and Health:**
+
+| Metric | Description |
+|--------|-------------|
+| State | Overall cluster operational status (Operational, Critical, Maintenance, etc.) |
+| Throughput | Current read/write throughput rates (shown only when active) |
+| I/O Errors | Total disk I/O errors across all nodes |
+| Load Avg | 1-minute load average (avg, min, max across all nodes) |
+| Disk Usage | Average, minimum, and maximum disk usage percentages |
+| Network | Network health status |
+| Storage | Total mountpaths and their health status |
+| Filesystems | Types and counts of filesystems in use |
+| Running Jobs | Currently active job types (if any) |
+
+**Cluster:**
+
+| Metric | Description |
+|--------|-------------|
+| Endpoint | Cluster endpoint URL |
+| Proxies | Number of proxy nodes and electability status |
+| Targets | Number of target nodes and total disks |
+| Capacity | Used and available storage with percentages |
+| Cluster Map | Version, UUID, and primary node information |
+| Software | Version and build information |
+| Backend | Configured backend provider(s) |
+| Deployment | Deployment type (K8s, standalone, etc.) |
+| Status | Online node count |
+| Rebalance | Current rebalance status |
+| Authentication | Whether AuthN is enabled |
+| Version/Build | Software version and build timestamp |
+
+### Examples
+
+**Basic dashboard view:**
+
+```console
+$ ais show dashboard
+
+Performance and Health:
+   State:               Operational
+   Throughput:          Read 9.5GiB/s, Write 0B/s (1s avg)
+   I/O Errors:          0
+   Load Avg:            avg 2.1, min 1.6, max 2.7 (1m)
+   Disk Usage:          avg 19.3%, min 18.8%, max 20.1%
+   Network:             healthy
+   Storage:             192 mountpaths (all healthy)
+   Filesystems:         xfs(192)
+   Running Jobs:        None
+
+Cluster:
+   Endpoint:            https://asr.aistore.nvidia.com:51080
+   Proxies:             16 (all electable)
+   Targets:             16 (total disks: 192)
+   Capacity:            used 591.40TiB (49%), available 595.89TiB
+   Cluster Map:         version 103, UUID cwV4IkK3k, primary p[Euc2iyom3zhi6]
+   Software:            3.31.a210cc0 (build: 2025-07-25T22:44:30+0000)
+   Backend:             AWS
+   Deployment:          K8s
+   Status:              32 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.31.a210cc0
+   Build:               2025-07-25T22:44:30+0000
+```
+
+**Continuous (Throughput) monitoring:**
+
+```console
+# Compute cluster throughput numbers over 30s intervals; refresh every 30 seconds
+$ ais show dashboard --refresh 30
+
+# Same as above but run 10 times (6m total)
+$ ais show dashboard --refresh 30 --count 10
+```
+
+**JSON output:**
+
+```console
+$ ais show dashboard --json
+```
+
+**Verbose mode (shows detailed issue breakdown when problems detected):**
+
+```console
+$ ais show dashboard --verbose
+
+Performance and Health:
+   State:               Multiple issues (6 node(s) affected: 2 maintenance, 4 rebalancing)
+   ...
+
+CLUSTER HEALTH DETAILS:
+Maintenance (2/6):   t[FFIt8090], t[zHut8091]
+Rebalancing (4/6):   t[ZHHt8087], t[atEt8086], t[UTat8088], t[xgAt8089]
+```
+
+### Related Commands
+
+- [`ais show cluster`](#cluster-and-node-status) - Detailed node-by-node status
+- [`ais show performance`](/docs/cli/show.md#ais-show-performance) - Detailed performance metrics
+- [`ais show storage`](/docs/cli/show.md#ais-show-storage) - Storage-specific details
+
 ## Cluster and Node status
 
 The command has a rather long(ish) short description and multiple subcommands:
 
 ```console
 $ ais show cluster --help
+
 NAME:
    ais show cluster - main dashboard: cluster at-a-glance (nodes, software versions, utilization, capacity, memory and more)
 
