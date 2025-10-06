@@ -18,7 +18,7 @@ Inputs may mix plain objects with any of the four supported shard formats (.tar,
 
 Ordering is strict: ask for data items named `A, B, C` - and the resulting batch will contain `A`, then `B`, then `C`.
 
-> Items A, B, C, etc. can reference plain objects or shards, stored locally or in remote cloud buckets.
+> Items A, B, C, etc. can reference plain objects or sharded files, stored locally or in remote cloud buckets.
 
 Two delivery modes are available. The **streaming** path starts sending as the resulting payload is assembled. The **multipart** path returns two parts: a small JSON header (`apc.MossOut`) with per-item status and sizes, followed by the archive payload.
 
@@ -28,6 +28,6 @@ Get-Batch provides the largest gains for small-to-medium object sizes, where it 
 
 Fig. 1. Up to 25x single-worker speed-up in early benchmarks.
 
-The graph plots speed-up factor (Y-axis) against object size (X-axis), showing how batch size (100|1000|10000 objects per batch) and object size affect performance. Each test used 10k objects on a 3-node AIStore cluster (48 CPUs, 187 GiB RAM, 10x9.1 TiB disks per node). The gains come from reducing per-request TCP overhead and parallelizing object fetches.
+The graph plots speed-up factor (Y-axis) against object size (X-axis), showing how batch size (**100, 1K, 10K** objects per batch) and object size affect performance. Each test used 10k objects on a 3-node AIStore cluster (48 CPUs, 187 GiB RAM, 10×9.1 TiB disks per node). The gains come from reducing per-request TCP overhead and parallelizing object fetches.
 
 PS. Cluster-wide multi-worker benchmarks are in progress and will be shared soon.
