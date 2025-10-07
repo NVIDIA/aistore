@@ -18,7 +18,9 @@ Detailed protocol-level tracing statistics are also available - see [HTTP tracin
 
 ---
 
-**May 2025 UPDATE**: `aisloader`/StatsD integration and associated capabilities described in this document are _obsolete_. The corresponding functionality is not supported and most likely will be eventually completely removed.
+**October 2025 update:** aisloader retains its StatsD integration for operational and benchmarking use cases. While AIStore itself now uses Prometheus exclusively, aisloader (for now) continues to emit its runtime metrics via StatsD — allowing DevOps to collect and visualize performance data from large aisloader fleets.
+
+To integrate aisloader with Prometheus-based observability stacks, run the official Prometheus StatsD Exporter (which would translate aisloader’s StatsD metrics into Prometheus format).
 
 ---
 
