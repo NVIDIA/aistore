@@ -36,6 +36,7 @@ type etlBootstrapper struct {
 
 	// runtime
 	schema          string // http:// or https://
+	addr            string
 	k8sClient       k8s.Client
 	pw              *podWatcher
 	pod             *corev1.Pod
@@ -157,23 +158,24 @@ func (b *etlBootstrapper) createServiceSpec() {
 	b.errCtx.SvcName = b.svc.Name
 }
 
-func (b *etlBootstrapper) getPodAddr() (string, error) {
+func (b *etlBootstrapper) setPodAddr() error {
 	// Retrieve host IP of the pod.
 	var (
 		hostIP string
 		err    error
 	)
 	if hostIP, err = b._getHost(); err != nil {
-		return "", err
+		return err
 	}
 
 	// Retrieve assigned port by the service.
 	var nodePort int
 	if nodePort, err = b._getPort(); err != nil {
-		return "", err
+		return err
 	}
 
-	return hostIP + ":" + strconv.Itoa(nodePort), nil
+	b.addr = hostIP + ":" + strconv.Itoa(nodePort)
+	return nil
 }
 
 func (b *etlBootstrapper) createEntity(entity string) (err error) {

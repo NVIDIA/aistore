@@ -119,10 +119,9 @@ func CleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * err - any error occurred that should be passed on.
 func start(msg InitMsg, xid, secret string, config *cmn.Config) (podInfo PodInfo, xctn core.Xact, err error) {
 	var (
-		comm    Communicator
-		podAddr string
-		errCtx  = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
-		boot    = &etlBootstrapper{
+		comm   Communicator
+		errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.Name()}
+		boot   = &etlBootstrapper{
 			msg:    msg,
 			errCtx: errCtx,
 			config: config,
@@ -172,15 +171,15 @@ func start(msg InitMsg, xid, secret string, config *cmn.Config) (podInfo PodInfo
 		goto cleanup
 	}
 
-	if podAddr, err = boot.getPodAddr(); err != nil {
+	if err = boot.setPodAddr(); err != nil {
 		goto cleanup
 	}
-	if _, err = comm.setupConnection(boot.schema, podAddr); err != nil {
+	if _, err = comm.setupConnection(boot.schema, boot.addr); err != nil {
 		goto cleanup
 	}
 
 	nlog.Infof("pod %q is running, %+v, %s", boot.pod.GetName(), msg, boot.errCtx)
-	podInfo.PodName, podInfo.SvcName, podInfo.URI = boot.pod.GetName(), boot.svc.GetName(), podAddr
+	podInfo.PodName, podInfo.SvcName, podInfo.URI = boot.pod.GetName(), boot.svc.GetName(), boot.addr
 
 	return podInfo, comm.Xact(), nil
 
@@ -267,11 +266,7 @@ func GetPipeline(etlNames []string) (apc.ETLPipeline, error) {
 				ETLName: name,
 			}, "entry not found in the target", http.StatusNotFound)
 		}
-		addr, err := boot.getPodAddr()
-		if err != nil {
-			return nil, err
-		}
-		pipeline.Join(boot.schema + addr)
+		pipeline.Join(boot.schema + boot.addr)
 	}
 	if cmn.Rom.V(4, cos.ModETL) {
 		nlog.Infof("etlNames: %v => pipeline: %s", etlNames, pipeline.String())
