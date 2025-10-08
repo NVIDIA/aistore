@@ -27,13 +27,13 @@ type EchoServer struct {
 	ETLServer
 }
 
-func (*EchoServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, error) {
+func (*EchoServer) Transform(input io.ReadCloser, _, _ string) (io.ReadCloser, int64, error) {
 	data, err := io.ReadAll(input)
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 	input.Close()
-	return io.NopCloser(bytes.NewReader(data)), nil
+	return io.NopCloser(bytes.NewReader(data)), int64(len(data)), nil
 }
 
 func TestInvalidETLServer(t *testing.T) {

@@ -118,7 +118,8 @@ const (
 	HdrPromoteNamesNum  = aisPrefix + "Promote-Names-Num"
 
 	// ETL
-	HdrETLPodInfo = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
+	HdrETLPodInfo      = aisPrefix + "ETL-Pod-Info" // serialized etl.Info
+	HdrDirectPutLength = aisPrefix + "Direct-Put-Length"
 
 	// shared streams
 	HdrActiveEC = aisPrefix + "Ec"

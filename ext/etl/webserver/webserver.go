@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -30,7 +30,7 @@ import (
 ///////////////////////
 
 type ETLServer interface {
-	Transform(input io.ReadCloser, path, etlArgs string) (io.ReadCloser, error)
+	Transform(input io.ReadCloser, path, etlArgs string) (reader io.ReadCloser, size int64, err error)
 }
 
 func Run(etlSvr ETLServer, ipAddress string, port int) error {
@@ -45,8 +45,15 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 	base := &etlServerBase{
 		endpoint:     fmt.Sprintf("%s:%d", ipAddress, port),
 		aisTargetURL: aisTargetURL,
-		client:       &http.Client{},
-		ETLServer:    etlSvr,
+		client: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        0,
+				MaxIdleConnsPerHost: 32,
+				WriteBufferSize:     4 * cos.KiB,
+				ReadBufferSize:      4 * cos.KiB,
+			},
+		},
+		ETLServer: etlSvr,
 	}
 	http.HandleFunc("/", base.handler)
 	http.HandleFunc("/health", base.healthHandler)
@@ -61,12 +68,20 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 // internal implementations //
 //////////////////////////////
 
-type etlServerBase struct {
-	ETLServer
-	aisTargetURL string
-	endpoint     string
-	client       *http.Client
-}
+type (
+	etlServerBase struct {
+		ETLServer
+		aisTargetURL string
+		endpoint     string
+		client       *http.Client
+	}
+	directPutResponse struct {
+		StatusCode      int
+		Size            int64
+		DirectPutLength int64
+		Body            io.ReadCloser
+	}
+)
 
 func (*etlServerBase) healthHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -107,30 +122,7 @@ func (base *etlServerBase) putHandler(w http.ResponseWriter, r *http.Request) {
 		objReader = r.Body
 	}
 
-	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
-	if err != nil {
-		cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "failed to transform", err))
-		return
-	}
-	objReader.Close() // objReader is supposed to be fully consumed by the custom transform function - safe to close at this point
-
-	if directPutURL := r.Header.Get(apc.HdrNodeURL); directPutURL != "" {
-		err := base.handleDirectPut(directPutURL, transformedReader)
-		if err != nil {
-			// Note: r.Body (objReader) is consumed during direct put and cannot be restored afterward.
-			// Therefore, if direct put fails, we cannot safely fall back to the normal response flow.
-			// We enforce that direct put must succeed; otherwise, return HTTP 400.
-			w.WriteHeader(http.StatusBadRequest)
-		} else {
-			setResponseHeaders(w.Header(), 0)
-			w.WriteHeader(http.StatusNoContent)
-		}
-		return
-	}
-
-	if _, err := io.Copy(w, transformedReader); err != nil {
-		cmn.WriteErr(w, r, err)
-	}
+	base.handleRequest(objReader, w, r)
 }
 
 // GET /
@@ -173,7 +165,11 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 		objReader = resp.Body
 	}
 
-	transformedReader, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
+	base.handleRequest(objReader, w, r)
+}
+
+func (base *etlServerBase) handleRequest(objReader io.ReadCloser, w http.ResponseWriter, r *http.Request) {
+	transformedReader, size, err := base.Transform(objReader, r.URL.Path, r.URL.Query().Get(apc.QparamETLTransformArgs))
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("[%s] %w", "failed to transform", err))
 		return
@@ -181,18 +177,23 @@ func (base *etlServerBase) getHandler(w http.ResponseWriter, r *http.Request) {
 	objReader.Close() // objReader is supposed to be fully consumed by the custom transform function - safe to close at this point
 
 	if directPutURL := r.Header.Get(apc.HdrNodeURL); directPutURL != "" {
-		if err := base.handleDirectPut(directPutURL, transformedReader); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-		} else {
-			setResponseHeaders(w.Header(), 0)
-			w.WriteHeader(http.StatusNoContent)
-		}
+		base.handleDirectPut(w, transformedReader, size, r.URL.Path, directPutURL)
 		return
 	}
 
-	if _, err := io.Copy(w, transformedReader); err != nil {
+	// no next stage (empty directPutURL): return transformed content directly
+	setResponseHeaders(w.Header(), size)
+	w.WriteHeader(http.StatusOK)
+	_, err = io.Copy(w, transformedReader)
+	if err != nil {
 		cmn.WriteErr(w, r, err)
 	}
+}
+
+// isWebsocketCloseErr returns true if the error is a benign websocket close error
+func isWebsocketCloseErr(err error) bool {
+	return websocket.IsCloseError(err, websocket.CloseNormalClosure,
+		websocket.CloseGoingAway, websocket.CloseServiceRestart)
 }
 
 func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -206,57 +207,110 @@ func (base *etlServerBase) websocketHandler(w http.ResponseWriter, r *http.Reque
 	}
 	defer conn.Close()
 
+	var ctrl etl.WebsocketCtrlMsg
 	for {
-		var (
-			ctrl   etl.WebsocketCtrlMsg
-			reader io.Reader
-		)
-		if err := conn.ReadJSON(&ctrl); err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				break
+		if err = conn.ReadJSON(&ctrl); err != nil {
+			if isWebsocketCloseErr(err) {
+				return // graceful exit
 			}
-			nlog.Errorln("error reading control message", err)
-			break
+			nlog.Errorln("error reading control message:", err)
+			return
 		}
 
-		if ctrl.FQN != "" {
-			reader, err = base.getFQNReader(ctrl.FQN)
-			if err != nil {
-				nlog.Errorln("failed to read FQN", err)
-				break
+		if err = base.handleWebsocketMessage(conn, ctrl); err != nil {
+			if isWebsocketCloseErr(err) {
+				return
 			}
-		} else {
-			_, reader, err = conn.NextReader()
-			if err != nil {
-				nlog.Errorln("failed to read binary", err)
-				break
-			}
+			nlog.Errorln("error handling websocket message:", err)
+			return
 		}
+	}
+}
 
-		transformed, err := base.Transform(io.NopCloser(reader), ctrl.Path, ctrl.Targs)
+func (base *etlServerBase) handleWebsocketMessage(conn *websocket.Conn, ctrl etl.WebsocketCtrlMsg) error {
+	var (
+		reader io.ReadCloser
+		err    error
+	)
+	if ctrl.FQN != "" {
+		reader, err = base.getFQNReader(ctrl.FQN)
 		if err != nil {
-			nlog.Errorln("transform error", err)
-			break
+			return err
 		}
-
-		if ctrl.Pipeline != "" {
-			err := base.handleDirectPut(ctrl.Pipeline, transformed)
-			if err == nil {
-				conn.WriteMessage(websocket.TextMessage, cos.UnsafeB("direct put success"))
-				continue
-			}
-			nlog.Errorln("direct put failed", err)
-		}
-
-		writer, err := conn.NextWriter(websocket.BinaryMessage)
+	} else {
+		_, r, err := conn.NextReader()
 		if err != nil {
-			nlog.Errorln("write error", err)
-			break
+			return err
 		}
-		if _, err := io.Copy(writer, transformed); err != nil {
-			nlog.Errorln("copy error", err)
+		reader = io.NopCloser(r)
+	}
+
+	transformed, size, err := base.Transform(reader, ctrl.Path, ctrl.Targs)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	return base.handleWebsocketPipeline(conn, transformed, size, ctrl.Path, ctrl.Pipeline)
+}
+
+func (base *etlServerBase) handleWebsocketPipeline(conn *websocket.Conn, transformed io.ReadCloser, size int64, objPath, pipeline string) (err error) {
+	// No pipeline, send transformed data
+	if pipeline == "" {
+		writer, _ := conn.NextWriter(websocket.BinaryMessage)
+		_, err = io.Copy(writer, transformed)
+		if err != nil {
+			return err
+		}
+		return writer.Close()
+	}
+
+	firstURL, remainingPipeline := parsePipelineURL(pipeline)
+	dresp, err := base.directPut(firstURL, transformed, size, objPath, remainingPipeline)
+	if err != nil {
+		writer, _ := conn.NextWriter(websocket.TextMessage)
+		writer.Write([]byte(err.Error()))
+		writer.Close()
+		return err
+	}
+
+	if dresp.StatusCode == http.StatusOK {
+		// from other ETL server, forward the content back
+		writer, _ := conn.NextWriter(websocket.BinaryMessage)
+		if dresp.Size > 0 && dresp.Body != nil {
+			if _, err := io.Copy(writer, dresp.Body); err != nil {
+				return err
+			}
+			dresp.Body.Close()
 		}
 		writer.Close()
+	} else {
+		// from target, no content
+		writer, _ := conn.NextWriter(websocket.TextMessage)
+		_, err = writer.Write([]byte("direct put success"))
+		if err != nil {
+			return err
+		}
+		writer.Close()
+	}
+	return nil
+}
+
+func (base *etlServerBase) handleDirectPut(w http.ResponseWriter, transformedReader io.ReadCloser, size int64, objPath, directPutURL string) {
+	firstURL, remainingPipeline := parsePipelineURL(directPutURL)
+	dresp, err := base.directPut(firstURL, transformedReader, size, objPath, remainingPipeline)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(dresp.StatusCode)
+	if dresp.Size > 0 && dresp.Body != nil {
+		setResponseHeaders(w.Header(), dresp.Size)
+		_, err := io.Copy(w, dresp.Body)
+		if err != nil {
+			nlog.Errorln("copy error", err)
+		}
+		dresp.Body.Close()
 	}
 }
 
@@ -281,7 +335,7 @@ func (base *etlServerBase) handleETLObjectDownload(w http.ResponseWriter, r *htt
 	defer resp.Body.Close()
 
 	// Transform the downloaded data
-	transformedReader, err := base.Transform(resp.Body, objName, etlArgs)
+	transformedReader, _, err := base.Transform(resp.Body, objName, etlArgs)
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("failed to transform downloaded data: %w", err))
 		return
@@ -331,29 +385,82 @@ func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {
 	return os.Open(cos.JoinWords(fqn))
 }
 
-func (base *etlServerBase) handleDirectPut(directPutURL string, r io.ReadCloser) error {
-	parsedTarget, err := url.Parse(directPutURL)
+func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size int64, objPath, remainingPipelineURL string) (*directPutResponse, error) {
+	direct, err := url.Parse(directPutURL)
 	if err != nil {
 		r.Close()
-		return err
+		return nil, err
 	}
-	parsedHost, err := url.Parse(base.aisTargetURL)
+	host, err := url.Parse(base.aisTargetURL)
 	if err != nil {
 		r.Close()
-		return err
+		return nil, err
 	}
-	parsedHost.Host = parsedTarget.Host
-	parsedHost.Path = path.Join(parsedHost.Path, parsedTarget.Path)
-	parsedHost.RawQuery = parsedTarget.RawQuery
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, parsedHost.String(), r)
+	finalURL := *host
+	finalURL.Host = direct.Host
+	finalURL.RawQuery = direct.RawQuery
+	if direct.Path != "" {
+		finalURL.Path = cos.JoinPath(host.Path, direct.Path)
+	} else {
+		finalURL.Path = objPath
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, finalURL.String(), r)
 	if err != nil {
 		r.Close()
-		return err
+		return nil, err
+	}
+	if size > cos.ContentLengthUnknown {
+		req.ContentLength = size
+	}
+	if remainingPipelineURL != "" {
+		req.Header.Set(apc.HdrNodeURL, remainingPipelineURL)
 	}
 	resp, err := wrapHTTPError(base.client.Do(req)) //nolint:bodyclose // closed below
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return resp.Body.Close()
+
+	length := cos.ContentLengthUnknown
+	directPutLength, err := strconv.Atoi(resp.Header.Get(apc.HdrDirectPutLength))
+	if err == nil {
+		length = directPutLength
+	}
+
+	// delivered to target, no content
+	if resp.StatusCode == http.StatusNoContent {
+		return &directPutResponse{
+			StatusCode:      http.StatusNoContent,
+			DirectPutLength: int64(length),
+			Body:            nil,
+		}, nil
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		// from other ETL server, forward the content back
+		if resp.ContentLength > 0 {
+			return &directPutResponse{
+				StatusCode:      resp.StatusCode,
+				Size:            resp.ContentLength,
+				DirectPutLength: 0,
+				Body:            resp.Body,
+			}, nil
+		}
+		// from target, no content
+		return &directPutResponse{
+			StatusCode:      http.StatusNoContent,
+			Size:            0,
+			DirectPutLength: size,
+			Body:            nil,
+		}, nil
+	}
+
+	// error
+	return &directPutResponse{
+		StatusCode:      resp.StatusCode,
+		Size:            resp.ContentLength,
+		DirectPutLength: 0,
+		Body:            resp.Body,
+	}, nil
 }
