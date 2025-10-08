@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- FastAPI ETL Webserver: Introduced HTTP connection pooling via `httpx.Limits` to manage maximum concurrent and keep-alive connections, improving network efficiency under load.
+- Transformation handling: Removed per-request thread creation and now rely on the existing executor loop for CPU-bound transforms, reducing thread overhead and overall CPU usage.
+
 ## [1.16.0] - 2025-10-03
 
 ### Added

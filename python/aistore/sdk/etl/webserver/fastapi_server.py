@@ -37,11 +37,16 @@ from aistore.sdk.const import (
     STATUS_INTERNAL_SERVER_ERROR,
 )
 
+HTTP_LIMITS = httpx.Limits(
+    max_connections=int(os.getenv("MAX_CONN", "256")),
+    max_keepalive_connections=int(os.getenv("MAX_KEEPALIVE_CONN", "128")),
+    keepalive_expiry=int(os.getenv("KEEPALIVE_EXPIRY", "30")),
+)
+
 
 class FastAPIServer(ETLServer):
     """
     FastAPI server implementation for ETL transformations.
-    Utilizes async/await and threading for optimal request handling.
     """
 
     def __init__(self, host: str = "0.0.0.0", port: int = 8000):
@@ -97,7 +102,7 @@ class FastAPIServer(ETLServer):
 
     async def startup_event(self):
         """Initialize resources on server startup."""
-        self.client = httpx.AsyncClient(timeout=None)
+        self.client = httpx.AsyncClient(timeout=None, limits=HTTP_LIMITS)
         self.logger.info("Server starting up")
 
     async def shutdown_event(self):
@@ -124,9 +129,7 @@ class FastAPIServer(ETLServer):
                 content = await request.body()
 
             # Transform the content
-            transformed = await asyncio.to_thread(
-                self.transform, content, path, etl_args
-            )
+            transformed = self.transform(content, path, etl_args)
 
             # Handle pipeline if present
             pipeline_header = request.headers.get(HEADER_NODE_URL)
