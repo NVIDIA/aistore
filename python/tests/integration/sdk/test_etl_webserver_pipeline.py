@@ -302,6 +302,7 @@ class TestPipelineParsing(TestPipelineBase):
         self.assertIn("Invalid pipeline", response.text)
 
     @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @pytest.mark.etl
     def test_fastapi_server_invalid_pipeline_validation(self):
         """Test FastAPI server properly validates malformed pipeline headers."""
 
