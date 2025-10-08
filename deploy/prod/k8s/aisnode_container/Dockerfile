@@ -3,7 +3,7 @@
 #
 
 ARG INSTALLER_IMAGE=debian:bookworm
-ARG BUILDER_IMAGE=golang:1.24
+ARG BUILDER_IMAGE=golang:1.25
 ARG BASE_IMAGE=gcr.io/distroless/base-debian12
 
 

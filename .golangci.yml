@@ -216,7 +216,7 @@ formatters:
       # test/testdata
 
 run:
-  go: '1.24'
+  go: '1.25'
   tests: true # Enable linting test files.
   concurrency: 8
   timeout: 8m

@@ -14,7 +14,7 @@ jobs:
     name: Build and Upload CLI Release Assets
     strategy:
       matrix:
-        go-version: ['1.24.x']
+        go-version: ['1.25.x']
         os: [
           ubuntu-latest,  # for linux builds
           macos-latest,   # for macOS arm64 builds

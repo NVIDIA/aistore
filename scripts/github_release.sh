@@ -59,5 +59,4 @@ fi
 
 
 upload ais "ais-${os}-${arch}.tar.gz"
-upload authn "authn-${os}-${arch}.tar.gz"
 upload aisloader "aisloader-${os}-${arch}.tar.gz"
