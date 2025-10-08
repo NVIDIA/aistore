@@ -242,6 +242,7 @@ lint:go:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
+    - make lint-update # TODO: Remove
     - make lint
 
 lint:python:
@@ -264,6 +265,7 @@ lint:tags:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
+    - make lint-update # TODO: Remove
     - TAGS="nethttp debug oteltracing oci aws gcp azure" make lint-scoped
 
 build:gendocs:

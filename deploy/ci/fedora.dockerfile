@@ -1,6 +1,6 @@
 FROM quay.io/podman/stable:latest
 
-ARG GO_VERSION=1.24.2
+ARG GO_VERSION=1.25
 
 RUN dnf -y update && \
     dnf -y install \
