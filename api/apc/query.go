@@ -152,6 +152,7 @@ const (
 	// Request to restore an object
 	QparamECObject = "object"
 
+	QparamMptUploads  = "uploads"    // Start multipart upload
 	QparamMptUploadID = "uploadId"   // Complete, abort, or list parts of specific multipart upload
 	QparamMptPartNo   = "partNumber" // Part number for multipart upload
 )

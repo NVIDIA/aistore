@@ -34,6 +34,7 @@ import (
 )
 
 const (
+	gcpXMLEndpoint  = "https://storage.googleapis.com"
 	gcpChecksumType = "x-goog-meta-ais-cksum-type"
 	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
@@ -44,8 +45,9 @@ const (
 
 type (
 	gsbp struct {
-		t         core.TargetPut
-		projectID string
+		t          core.TargetPut
+		projectID  string
+		httpClient *http.Client // for raw requests
 		base
 	}
 )
@@ -112,7 +114,9 @@ func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
 		}
 		return nil, cmn.NewErrFailedTo(nil, "gcp-backend: create", "http transport", err)
 	}
-	opts = append(opts, option.WithHTTPClient(tracing.NewTraceableClient(&http.Client{Transport: transport})))
+	// Store authenticated HTTP client for raw requests (e.g., multipart uploads)
+	gsbp.httpClient = tracing.NewTraceableClient(&http.Client{Transport: transport})
+	opts = append(opts, option.WithHTTPClient(gsbp.httpClient))
 	// create HTTP client
 	client, err := storage.NewClient(ctx, opts...)
 	if err != nil {

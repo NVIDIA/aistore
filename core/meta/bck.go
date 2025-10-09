@@ -81,6 +81,14 @@ func (b *Bck) IsRemoteOCI() bool {
 	return backend != nil && backend.Provider == apc.OCI
 }
 
+func (b *Bck) IsRemoteGCP() bool {
+	if b.Provider == apc.GCP {
+		return true
+	}
+	backend := b.Backend()
+	return backend != nil && backend.Provider == apc.GCP
+}
+
 // TODO: mem-pool
 func (b *Bck) NewQuery() (q url.Values) {
 	q = make(url.Values, 4)

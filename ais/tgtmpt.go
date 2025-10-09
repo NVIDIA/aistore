@@ -465,8 +465,8 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 	// call remote
 	remote := lom.Bck().IsRemote()
 	if remote {
-		// NOTE: only OCI and AWS backends require ETag in the part list
-		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() {
+		// NOTE: only OCI, AWS and GCP backends require ETag in the part list
+		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() || lom.Bck().IsRemoteGCP() {
 			for i := range parts {
 				if parts[i].ETag == "" {
 					parts[i].ETag = manifest.GetChunk(parts[i].PartNumber, true).ETag
