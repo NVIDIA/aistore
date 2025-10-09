@@ -1,5 +1,3 @@
-//go:build linux
-
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
