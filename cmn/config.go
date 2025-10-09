@@ -133,6 +133,7 @@ type (
 		Backend     *BackendConf          `json:"backend,omitempty"`
 		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
 		EC          *ECConfToSet          `json:"ec,omitempty"`
+		Chunks      *ChunksConfToSet      `json:"chunks,omitempty"`
 		Log         *LogConfToSet         `json:"log,omitempty"`
 		Periodic    *PeriodConfToSet      `json:"periodic,omitempty"`
 		Tracing     *TracingConfToSet     `json:"tracing,omitempty"`
@@ -224,10 +225,25 @@ type (
 		// ObjSizeLimit is the object size threshold that triggers auto-chunking.
 		//  0   : never auto-chunk;
 		//  > 0 : auto-chunk using the configured ChunkSize if object size >= limit.
-		// [NOTE]
-		// multipart uploads (MPU) always result in chunked storage using
-		// the client-specified part size, regardless of the ObjSizeLimit and/or ChunkSize.
+		//
+		// ObjSizeLimit is a **soft limit** (user preference).
+		//
+		// Multipart uploads (MPU) always result in chunked storage using
+		// the client-specified part sizes, regardless of the ObjSizeLimit and/or ChunkSize.
 		ObjSizeLimit cos.SizeIEC `json:"objsize_limit"`
+
+		// The maximum size for storing objects as single contiguous files.
+		//
+		// This is a **hard limit** that cannot be disabled and protects the
+		// cluster from issues with extremely large monolithic objects.
+		//
+		// Validation:
+		// - objsize_limit <= max_monolithic_size (when objsize_limit enabled)
+		// - when specified (ie., non-zero) allowed range is [1GiB, 1TiB]
+		//
+		// See also:
+		// - constants minMaxMonolithicSize and MaxMonolithicSize below.
+		MaxMonolithicSize cos.SizeIEC `json:"max_monolithic_size,omitempty"`
 
 		// Default chunk size (aka "part size") used for auto-chunking (see above);
 		// 0 (zero) means default; Validate() sets it to chunkSizeDflt (1GiB).
@@ -243,10 +259,11 @@ type (
 	}
 
 	ChunksConfToSet struct {
-		ObjSizeLimit    *cos.SizeIEC `json:"objsize_limit,omitempty"`
-		ChunkSize       *cos.SizeIEC `json:"chunk_size,omitempty"`
-		CheckpointEvery *int         `json:"checkpoint_every,omitempty"`
-		Flags           *uint64      `json:"flags,omitempty"`
+		ObjSizeLimit      *cos.SizeIEC `json:"objsize_limit,omitempty"`
+		MaxMonolithicSize *cos.SizeIEC `json:"max_monolithic_size,omitempty"`
+		ChunkSize         *cos.SizeIEC `json:"chunk_size,omitempty"`
+		CheckpointEvery   *int         `json:"checkpoint_every,omitempty"`
+		Flags             *uint64      `json:"flags,omitempty"`
 	}
 
 	LogConf struct {
@@ -1511,6 +1528,9 @@ func (c *ECConf) RequiredRestoreTargets() int {
 ////////////////
 
 const (
+	MaxMonolithicSize    = cos.TiB
+	minMaxMonolithicSize = cos.GiB
+
 	chunkSizeMin  = cos.KiB
 	chunkSizeDflt = cos.GiB
 	chunkSizeMax  = 5 * cos.GiB
@@ -1521,18 +1541,39 @@ const (
 func (c *ChunksConf) AutoEnabled() bool { return c.ObjSizeLimit > 0 }
 
 func (c *ChunksConf) Validate() error {
-	if c.ObjSizeLimit < 0 {
-		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting a non-negative integer)", c.ObjSizeLimit)
+	switch {
+	case c.MaxMonolithicSize < 0:
+		return fmt.Errorf("invalid chunks.max_monolithic_size: %d (expecting a non-negative integer)", c.MaxMonolithicSize)
+	case c.MaxMonolithicSize == 0:
+		c.MaxMonolithicSize = MaxMonolithicSize
+	default:
+		if c.MaxMonolithicSize < minMaxMonolithicSize || c.MaxMonolithicSize > MaxMonolithicSize {
+			return fmt.Errorf("invalid chunks.max_monolithic_size: %d (%s) (must be in range [%s, %s])",
+				c.MaxMonolithicSize, cos.ToSizeIEC(int64(c.MaxMonolithicSize), 0),
+				cos.ToSizeIEC(minMaxMonolithicSize, 0), cos.ToSizeIEC(MaxMonolithicSize, 0))
+		}
 	}
-	if !c.AutoEnabled() { // including v3.31 and prior
+
+	switch {
+	case c.ObjSizeLimit < 0:
+		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting a non-negative integer)", c.ObjSizeLimit)
+	case c.ObjSizeLimit > c.MaxMonolithicSize:
+		return fmt.Errorf("invalid chunks.objsize_limit %d (%s): cannot be greater than chunks.max_monolithic_size %d (%s)",
+			c.ObjSizeLimit, cos.ToSizeIEC(int64(c.ObjSizeLimit), 0),
+			c.MaxMonolithicSize, cos.ToSizeIEC(int64(c.MaxMonolithicSize), 0))
+	}
+
+	if !c.AutoEnabled() { // including v4.0 and prior
 		return nil
 	}
 
 	if c.ChunkSize == 0 {
 		c.ChunkSize = chunkSizeDflt
 	} else if c.ChunkSize < chunkSizeMin || c.ChunkSize > chunkSizeMax {
-		return fmt.Errorf("expecting chunks.chunk_size in the range [%d, %d] (got %d)", chunkSizeMin, chunkSizeMax, c.ChunkSize)
+		return fmt.Errorf("expecting chunks.chunk_size in the range [%s, %s], got %d (%s)",
+			cos.ToSizeIEC(chunkSizeMin, 0), cos.ToSizeIEC(chunkSizeMax, 0), c.ChunkSize, cos.ToSizeIEC(int64(c.ChunkSize), 0))
 	}
+
 	if c.CheckpointEvery < 0 || c.CheckpointEvery > checkpointEveryMax {
 		return fmt.Errorf("chunks.checkpoint_every must be an integer in the range [0, %d] (got %d)", checkpointEveryMax, c.CheckpointEvery)
 	}
