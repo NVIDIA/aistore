@@ -89,6 +89,14 @@ func (b *Bck) IsRemoteGCP() bool {
 	return backend != nil && backend.Provider == apc.GCP
 }
 
+func (b *Bck) IsRemoteAzure() bool {
+	if b.Provider == apc.Azure {
+		return true
+	}
+	backend := b.Backend()
+	return backend != nil && backend.Provider == apc.Azure
+}
+
 // TODO: mem-pool
 func (b *Bck) NewQuery() (q url.Values) {
 	q = make(url.Values, 4)

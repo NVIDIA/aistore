@@ -30,6 +30,7 @@ var (
 
 	_ cos.ReadOpenCloser = (*SGL)(nil)
 	_ cos.ReadOpenCloser = (*Reader)(nil)
+	_ io.ReadSeekCloser  = (*Reader)(nil)
 )
 
 type (

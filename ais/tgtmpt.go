@@ -353,6 +353,19 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		buf, slab := t.gmm.AllocSize(r.ContentLength)
 		expectedSize, err = io.CopyBuffer(mw, r.Body, buf)
 		slab.Free(buf)
+	case lom.Bck().IsRemoteAzure():
+		// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
+		backend = t.Backend(lom.Bck())
+		sgl := t.gmm.NewSGL(r.ContentLength)
+		mw.Append(sgl)
+		reader := memsys.NewReader(sgl)
+		expectedSize, err = io.Copy(mw, r.Body)
+		if err == nil {
+			remoteStart := mono.NanoTime()
+			etag, ecode, err = backend.PutMptPart(lom, reader, r, uploadID, expectedSize, int32(args.partNum))
+			remotePutLatency = mono.SinceNano(remoteStart)
+		}
+		sgl.Free()
 	case t.gmm.Pressure() < memsys.PressureHigh:
 		// write 1) locally + sgl + checksums; 2) write sgl => backend
 		backend = t.Backend(lom.Bck())
