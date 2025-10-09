@@ -31,7 +31,7 @@ func BenchmarkWRF(b *testing.B) {
 		{128},
 	}
 	for _, test := range tests {
-		name := cos.ToSizeIEC(test.payloadSz, 0)
+		name := cos.IEC(test.payloadSz, 0)
 		b.Run(name, func(b *testing.B) { wrf(b, test.payloadSz) })
 	}
 }

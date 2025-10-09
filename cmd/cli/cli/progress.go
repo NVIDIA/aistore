@@ -89,5 +89,5 @@ func (*progIndicator) stop()  { fmt.Println("") }
 
 func (pi *progIndicator) printProgress(incr int64) {
 	fmt.Print("\033[u\033[K")
-	fmt.Printf("Uploaded %s: %s", pi.objName, cos.ToSizeIEC(pi.sizeTransferred.Add(incr), 2))
+	fmt.Printf("Uploaded %s: %s", pi.objName, cos.IEC(pi.sizeTransferred.Add(incr), 2))
 }

@@ -156,7 +156,7 @@ func (r *MMSA) freeIdle() (total int64) {
 		}
 		total += freed
 		if freed > 0 && cmn.Rom.V(5, cos.ModMemsys) {
-			nlog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
+			nlog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.IEC(freed, 1))
 		}
 	}
 	return

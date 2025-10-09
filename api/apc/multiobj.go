@@ -78,7 +78,7 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	if msg.BlobThreshold > 0 {
 		msg.delim(&sb)
 		sb.WriteString("blob-threshold: ")
-		sb.WriteString(cos.ToSizeIEC(msg.BlobThreshold, 0))
+		sb.WriteString(cos.IEC(msg.BlobThreshold, 0))
 	}
 	if msg.NumWorkers > 0 {
 		msg.delim(&sb)

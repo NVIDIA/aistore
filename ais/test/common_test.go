@@ -234,7 +234,7 @@ func (m *ioContext) sizesToString() (s string) {
 	siz0, siz1 := int64(m.fileSizeRange[0]), int64(m.fileSizeRange[1])
 	switch {
 	case siz0 >= 0 && siz1 > 0:
-		s = fmt.Sprintf(" (size %s - %s)", cos.ToSizeIEC(siz0, 0), cos.ToSizeIEC(siz1, 0))
+		s = fmt.Sprintf(" (size %s - %s)", cos.IEC(siz0, 0), cos.IEC(siz1, 0))
 		debug.Assert(siz1 >= siz0, s)
 	case m.fixedSize:
 		s = fmt.Sprintf(" (size %d)", m.fileSize)
@@ -319,7 +319,7 @@ func (m *ioContext) adjustFileSizeRange() {
 
 	m.fileSizeRange = [2]uint64{minTotalSize, minTotalSize * 2}
 	tlog.Logfln("%s backend detected, increase file size range to %s - %s to avoid [EntityTooSmall] errors",
-		provider, cos.ToSizeIEC(int64(m.fileSizeRange[0]), 0), cos.ToSizeIEC(int64(m.fileSizeRange[1]), 0))
+		provider, cos.IEC(int64(m.fileSizeRange[0]), 0), cos.IEC(int64(m.fileSizeRange[1]), 0))
 }
 
 // update updates the object with a new random reader and returns the reader and the size; reader is used to validate the object after the update

@@ -124,7 +124,7 @@ func (m *multipartUpload) uploadChunk(c *cli.Context, partNum int, offset, size 
 
 	if flagIsSet(c, verboseFlag) {
 		fmt.Printf("  Uploaded part %d: offset=%s, size=%s\n",
-			partNum, cos.ToSizeIEC(offset, 0), cos.ToSizeIEC(size, 0))
+			partNum, cos.IEC(offset, 0), cos.IEC(size, 0))
 	}
 }
 
@@ -161,8 +161,8 @@ func uploadFileInChunks(c *cli.Context, filePath string, fileSize, chunkSize int
 // - If shouldChunk=true, use chunkSize for splitting the file
 func promptForChunking(c *cli.Context, fileSize int64, fileName string) (int64, bool, error) {
 	// Show file size and default chunk size in human readable format
-	fileSizeStr := cos.ToSizeIEC(fileSize, 2)
-	defaultChunkStr := cos.ToSizeIEC(dfltChunkSize, 0)
+	fileSizeStr := cos.IEC(fileSize, 2)
+	defaultChunkStr := cos.IEC(dfltChunkSize, 0)
 
 	fmt.Fprintf(c.App.Writer, "\nLarge file detected: %s (%s)\n", fileName, fileSizeStr)
 	fmt.Fprintln(c.App.Writer, "This file will be split into chunks for concurrent upload.")
@@ -190,15 +190,15 @@ func promptForChunking(c *cli.Context, fileSize int64, fileName string) (int64, 
 	// Try to parse as custom chunk size
 	if chunkSize, err := cos.ParseSize(input, cos.UnitsIEC); err == nil {
 		if chunkSize > fileSize {
-			return 0, false, fmt.Errorf("chunk size (%s) larger than file size (%s)", cos.ToSizeIEC(chunkSize, 0), fileSizeStr)
+			return 0, false, fmt.Errorf("chunk size (%s) larger than file size (%s)", cos.IEC(chunkSize, 0), fileSizeStr)
 		}
 		if chunkSize < chunkSizeMin {
-			return 0, false, fmt.Errorf("chunk size (%s) smaller than minimum (%s)", cos.ToSizeIEC(chunkSize, 0), cos.ToSizeIEC(chunkSizeMin, 0))
+			return 0, false, fmt.Errorf("chunk size (%s) smaller than minimum (%s)", cos.IEC(chunkSize, 0), cos.IEC(chunkSizeMin, 0))
 		}
 		if chunkSize > chunkSizeMax {
-			return 0, false, fmt.Errorf("chunk size (%s) larger than maximum (%s)", cos.ToSizeIEC(chunkSize, 0), cos.ToSizeIEC(chunkSizeMax, 0))
+			return 0, false, fmt.Errorf("chunk size (%s) larger than maximum (%s)", cos.IEC(chunkSize, 0), cos.IEC(chunkSizeMax, 0))
 		}
-		fmt.Fprintf(c.App.Writer, "Using custom chunk size: %s\n", cos.ToSizeIEC(chunkSize, 0))
+		fmt.Fprintf(c.App.Writer, "Using custom chunk size: %s\n", cos.IEC(chunkSize, 0))
 		return chunkSize, true, nil
 	}
 

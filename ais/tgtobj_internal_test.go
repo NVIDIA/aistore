@@ -101,7 +101,7 @@ func BenchmarkObjPut(b *testing.B) {
 		{16 * cos.MiB},
 	}
 	for _, bench := range benches {
-		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.IEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := core.AllocLOM("objname")
 			defer core.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
@@ -148,7 +148,7 @@ func BenchmarkObjAppend(b *testing.B) {
 
 	buf := make([]byte, 16*cos.KiB)
 	for _, bench := range benches {
-		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.IEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := core.AllocLOM("objname")
 			defer core.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
@@ -207,7 +207,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 	}
 
 	for _, bench := range benches {
-		benchName := cos.ToSizeIEC(bench.fileSize, 2)
+		benchName := cos.IEC(bench.fileSize, 2)
 		if bench.chunked {
 			benchName += "-chunked"
 		}

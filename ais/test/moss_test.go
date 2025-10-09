@@ -493,7 +493,7 @@ func testMossMultipart(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	tlog.Logfln("GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v",
 		totalDuration, minDuration, maxDuration, avgDuration)
 	tlog.Logfln("Success: %d/%d calls, Total TAR: %s",
-		successCount, numConcurrentCalls, cos.ToSizeIEC(totalTarSize, 2))
+		successCount, numConcurrentCalls, cos.IEC(totalTarSize, 2))
 
 	// Find first successful result for validation
 	var firstSuccess *result
@@ -656,7 +656,7 @@ func testMossStreaming(t *testing.T, m *ioContext, test *mossConfig, mossIn []ap
 	tlog.Logfln("Streaming GetBatch micro-bench: total=%v, min=%v, max=%v, avg=%v",
 		totalDuration, minDuration, maxDuration, avgDuration)
 	tlog.Logfln("Streaming Success: %d/%d calls, Total TAR: %s",
-		successCount, numConcurrentCalls, cos.ToSizeIEC(totalTarSize, 2))
+		successCount, numConcurrentCalls, cos.IEC(totalTarSize, 2))
 
 	// Validate results
 	switch {
@@ -740,7 +740,7 @@ func (cb *tarValidationCallback) Call(filename string, reader cos.ReadCloseSizer
 
 // Enhanced TAR validation for multipart
 func validateTarMultipartWithArchive(t *testing.T, req *apc.MossReq, resp apc.MossResp, tarReader io.Reader, tarSize int) {
-	tlog.Logln("Validating TAR contents with archive package: " + cos.ToSizeIEC(int64(tarSize), 2))
+	tlog.Logln("Validating TAR contents with archive package: " + cos.IEC(int64(tarSize), 2))
 
 	// Determine archive format - default to plain TAR if not specified
 	format := req.OutputFormat

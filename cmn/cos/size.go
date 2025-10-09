@@ -44,6 +44,8 @@ var unitx = [...]string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "KI"
 
 type SizeIEC int64
 
+func IEC[T int | int64 | SizeIEC](v T, digits int) string { return ToSizeIEC(int64(v), digits) }
+
 func (siz SizeIEC) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(siz.String()) }
 func (siz SizeIEC) String() string               { return ToSizeIEC(int64(siz), 0) }
 

@@ -31,7 +31,7 @@ func TestSizeToStr(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		s := cos.ToSizeIEC(tst.val, tst.num)
+		s := cos.IEC(tst.val, tst.num)
 		if s != tst.str {
 			t.Errorf("Expected %s got %s", tst.str, s)
 		}

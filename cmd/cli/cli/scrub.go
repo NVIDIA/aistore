@@ -148,7 +148,7 @@ func scrubHandler(c *cli.Context) (err error) {
 		}
 	}
 	if ctx.small < 0 {
-		return fmt.Errorf("%s (%s) cannot be negative", qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
+		return fmt.Errorf("%s (%s) cannot be negative", qflprn(smallSizeFlag), cos.IEC(ctx.small, 0))
 	}
 
 	ctx.large = 5 * cos.GiB
@@ -160,8 +160,8 @@ func scrubHandler(c *cli.Context) (err error) {
 	}
 	if ctx.large <= ctx.small {
 		return fmt.Errorf("%s (%s) must be greater than %s (%s)",
-			qflprn(largeSizeFlag), cos.ToSizeIEC(ctx.large, 0),
-			qflprn(smallSizeFlag), cos.ToSizeIEC(ctx.small, 0))
+			qflprn(largeSizeFlag), cos.IEC(ctx.large, 0),
+			qflprn(smallSizeFlag), cos.IEC(ctx.small, 0))
 	}
 
 	bcks, errN := ctx.lsBcks()

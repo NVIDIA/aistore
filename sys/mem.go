@@ -35,14 +35,14 @@ func (mem *MemStat) Get() error {
 
 func (mem *MemStat) Str(sb *strings.Builder) {
 	sb.WriteString("used ")
-	sb.WriteString(cos.ToSizeIEC(int64(mem.Used), 0))
+	sb.WriteString(cos.IEC(int64(mem.Used), 0))
 	sb.WriteString(", ")
 	sb.WriteString("free ")
-	sb.WriteString(cos.ToSizeIEC(int64(mem.Free), 0))
+	sb.WriteString(cos.IEC(int64(mem.Free), 0))
 	sb.WriteString(", ")
 	sb.WriteString("buffcache ")
-	sb.WriteString(cos.ToSizeIEC(int64(mem.BuffCache), 0))
+	sb.WriteString(cos.IEC(int64(mem.BuffCache), 0))
 	sb.WriteString(", ")
 	sb.WriteString("actfree ")
-	sb.WriteString(cos.ToSizeIEC(int64(mem.ActualFree), 0))
+	sb.WriteString(cos.IEC(int64(mem.ActualFree), 0))
 }

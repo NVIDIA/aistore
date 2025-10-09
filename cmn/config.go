@@ -1508,7 +1508,7 @@ func (c *ECConf) String() string {
 	if objSizeLimit == ObjSizeToAlwaysReplicate {
 		return fmt.Sprintf("no EC - always producing %d total replicas", c.ParitySlices+1)
 	}
-	return fmt.Sprintf("%d:%d (objsize limit %s)", c.DataSlices, c.ParitySlices, cos.ToSizeIEC(objSizeLimit, 0))
+	return fmt.Sprintf("%d:%d (objsize limit %s)", c.DataSlices, c.ParitySlices, cos.IEC(objSizeLimit, 0))
 }
 
 func (c *ECConf) numRequiredTargets() int {
@@ -1538,29 +1538,33 @@ const (
 	checkpointEveryMax = 1024
 )
 
+const (
+	chunksmms = "chunks.max_monolithic_size"
+	chunksosl = "chunks.objsize_limit"
+)
+
 func (c *ChunksConf) AutoEnabled() bool { return c.ObjSizeLimit > 0 }
 
 func (c *ChunksConf) Validate() error {
 	switch {
 	case c.MaxMonolithicSize < 0:
-		return fmt.Errorf("invalid chunks.max_monolithic_size: %d (expecting a non-negative integer)", c.MaxMonolithicSize)
+		return fmt.Errorf("invalid %s: %d (expecting a non-negative integer)", chunksmms, c.MaxMonolithicSize)
 	case c.MaxMonolithicSize == 0:
 		c.MaxMonolithicSize = MaxMonolithicSize
 	default:
 		if c.MaxMonolithicSize < minMaxMonolithicSize || c.MaxMonolithicSize > MaxMonolithicSize {
-			return fmt.Errorf("invalid chunks.max_monolithic_size: %d (%s) (must be in range [%s, %s])",
-				c.MaxMonolithicSize, cos.ToSizeIEC(int64(c.MaxMonolithicSize), 0),
-				cos.ToSizeIEC(minMaxMonolithicSize, 0), cos.ToSizeIEC(MaxMonolithicSize, 0))
+			return fmt.Errorf("invalid %s: %d (%s) - must be in range [%s, %s]",
+				chunksmms, c.MaxMonolithicSize, c.MaxMonolithicSize,
+				cos.IEC(minMaxMonolithicSize, 0), cos.IEC(MaxMonolithicSize, 0))
 		}
 	}
 
 	switch {
 	case c.ObjSizeLimit < 0:
-		return fmt.Errorf("invalid chunks.objsize_limit: %d (expecting a non-negative integer)", c.ObjSizeLimit)
+		return fmt.Errorf("invalid %s %d (expecting a non-negative integer)", chunksosl, c.ObjSizeLimit)
 	case c.ObjSizeLimit > c.MaxMonolithicSize:
-		return fmt.Errorf("invalid chunks.objsize_limit %d (%s): cannot be greater than chunks.max_monolithic_size %d (%s)",
-			c.ObjSizeLimit, cos.ToSizeIEC(int64(c.ObjSizeLimit), 0),
-			c.MaxMonolithicSize, cos.ToSizeIEC(int64(c.MaxMonolithicSize), 0))
+		return fmt.Errorf("invalid %s %d (%s) - cannot be greater than %s %d (%s)",
+			chunksosl, c.ObjSizeLimit, c.ObjSizeLimit, chunksmms, c.MaxMonolithicSize, c.MaxMonolithicSize)
 	}
 
 	if !c.AutoEnabled() { // including v4.0 and prior
@@ -1571,7 +1575,7 @@ func (c *ChunksConf) Validate() error {
 		c.ChunkSize = chunkSizeDflt
 	} else if c.ChunkSize < chunkSizeMin || c.ChunkSize > chunkSizeMax {
 		return fmt.Errorf("expecting chunks.chunk_size in the range [%s, %s], got %d (%s)",
-			cos.ToSizeIEC(chunkSizeMin, 0), cos.ToSizeIEC(chunkSizeMax, 0), c.ChunkSize, cos.ToSizeIEC(int64(c.ChunkSize), 0))
+			cos.IEC(chunkSizeMin, 0), cos.IEC(chunkSizeMax, 0), c.ChunkSize, c.ChunkSize)
 	}
 
 	if c.CheckpointEvery < 0 || c.CheckpointEvery > checkpointEveryMax {

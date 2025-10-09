@@ -174,7 +174,7 @@ func (r *MMSA) String() string {
 
 func (r *MMSA) Str(mem *sys.MemStat) string {
 	if r.info == "" {
-		r.info = "(min-free " + cos.ToSizeIEC(int64(r.MinFree), 0) + ", low-wm " + cos.ToSizeIEC(int64(r.lowWM), 0)
+		r.info = "(min-free " + cos.IEC(int64(r.MinFree), 0) + ", low-wm " + cos.IEC(int64(r.lowWM), 0)
 	}
 
 	var (

@@ -380,7 +380,7 @@ func showBMDHandler(c *cli.Context) error {
 						ec = fmt.Sprintf("%d-way replication", props.EC.ParitySlices+1)
 					} else {
 						ec = fmt.Sprintf("D=%d, P=%d (size limit %s)", props.EC.DataSlices,
-							props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
+							props.EC.ParitySlices, cos.IEC(props.EC.ObjSizeLimit, 0))
 					}
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",

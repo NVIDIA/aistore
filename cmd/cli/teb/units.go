@@ -75,7 +75,7 @@ func ValidateUnits(units string) error {
 func FmtSize(size int64, units string, digits int) string {
 	switch units {
 	case "", cos.UnitsIEC:
-		return cos.ToSizeIEC(size, digits)
+		return cos.IEC(size, digits)
 	case cos.UnitsSI:
 		return toSizeSI(size, digits)
 	case cos.UnitsRaw:
@@ -131,9 +131,9 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 	case "", cos.UnitsIEC:
 		switch kind {
 		case stats.KindSize:
-			return cos.ToSizeIEC(value, 2)
+			return cos.IEC(value, 2)
 		case stats.KindThroughput, stats.KindComputedThroughput:
-			return cos.ToSizeIEC(value, 2) + "/s"
+			return cos.IEC(value, 2) + "/s"
 		default:
 			return strconv.FormatInt(value, 10)
 		}

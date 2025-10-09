@@ -84,7 +84,7 @@ func NewShardFactory(baseParams api.BaseParams, fromBck, toBck cmn.Bck, ext, sha
 		sb.WriteString("{{end}}{{end}}")
 
 		sf.CLItemplate = template.Must(template.New("shard").Funcs(template.FuncMap{
-			"formatSize":  func(size int64) string { return cos.ToSizeIEC(size, 2) },
+			"formatSize":  func(size int64) string { return cos.IEC(size, 2) },
 			"sampleKey":   func(sampleKey string) string { return "[" + sampleKey + "]" },
 			"contentPath": func(shardName, objContentPath string) string { return filepath.Join(shardName, objContentPath) },
 			"appendExt":   func(shardName string) string { return shardName + ext },

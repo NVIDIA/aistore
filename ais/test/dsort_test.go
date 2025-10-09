@@ -239,7 +239,7 @@ func (df *dsortFramework) init() {
 		df.outputShardCnt = int(pt.Count())
 	} else {
 		outputShardSize := int64(10 * df.filesPerShard * df.fileSz)
-		df.outputShardSize = cos.ToSizeIEC(outputShardSize, 0)
+		df.outputShardSize = cos.IEC(outputShardSize, 0)
 		df.outputShardCnt = (df.shardCnt * df.shardSize) / int(outputShardSize)
 	}
 
@@ -1114,7 +1114,7 @@ func TestDsortMemDisk(t *testing.T) {
 	// Get current memory
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+500*cos.MiB), 2)
+	df.maxMemUsage = cos.IEC(int64(mem.ActualUsed+500*cos.MiB), 2)
 
 	tlog.Logfln("starting dsort with memory and disk (max mem usage: %s)... (%d/%d)", df.maxMemUsage,
 		df.shardCnt, df.filesPerShard)
@@ -1187,7 +1187,7 @@ func minMemCompression(t *testing.T, ext, maxMem string) {
 	// Get current memory
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+300*cos.MiB), 2)
+	df.maxMemUsage = cos.IEC(int64(mem.ActualUsed+300*cos.MiB), 2)
 
 	tlog.Logfln("starting dsort with memory, disk, and compression (max mem usage: %s) ... %d/%d, %s",
 		df.maxMemUsage, df.shardCnt, df.filesPerShard, df.inputExt)

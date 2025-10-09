@@ -112,14 +112,14 @@ retry:
 	tassert.CheckFatal(t, err)
 
 	speedCold := extractSpeed(out)
-	tlog.Logfln("Cold download speed:   %s", cos.ToSizeIEC(speedCold, 1))
+	tlog.Logfln("Cold download speed:   %s", cos.IEC(speedCold, 1))
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect cold download speed")
 
 	// at less than 100KBps we likely failed to download
 	if speedCold < 100*cos.KiB {
 		if testing.Short() {
 			fmt := "cold download speed %s is way too low indicating potential timeout"
-			tools.ShortSkipf(t, fmt, cos.ToSizeIEC(speedCold, 1))
+			tools.ShortSkipf(t, fmt, cos.IEC(speedCold, 1))
 		}
 		if maxRetries > 0 {
 			tlog.Logfln("Warning: will retry (%d)", maxRetries)
@@ -182,13 +182,13 @@ retry:
 		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tlog.Logfln("Cold download speed:   %s", cos.ToSizeIEC(speedCold, 1))
-	tlog.Logfln("HTTP download speed:   %s", cos.ToSizeIEC(speedHTTP, 1))
+	tlog.Logfln("Cold download speed:   %s", cos.IEC(speedCold, 1))
+	tlog.Logfln("HTTP download speed:   %s", cos.IEC(speedHTTP, 1))
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tlog.Logfln("HTTPS download speed:  %s", cos.ToSizeIEC(speedHTTPS, 1))
-		tlog.Logfln("JSON download speed:   %s", cos.ToSizeIEC(speedJSON, 1))
+		tlog.Logfln("HTTPS download speed:  %s", cos.IEC(speedHTTPS, 1))
+		tlog.Logfln("JSON download speed:   %s", cos.IEC(speedJSON, 1))
 	*/
 	ratio := float64(speedHTTP) / float64(speedCold)
 	if ratio < 0.8 {

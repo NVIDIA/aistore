@@ -79,7 +79,7 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *prfFactory) Start() (err error) {
 	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < minBlobDlPrefetch {
-		a, b := cos.ToSizeIEC(p.msg.BlobThreshold, 0), cos.ToSizeIEC(minBlobDlPrefetch, 0)
+		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(minBlobDlPrefetch, 0)
 		nlog.Warningln("blob-threshold (", a, ") is too small, must be at least", b, "- updating...")
 		p.msg.BlobThreshold = minBlobDlPrefetch
 	}
@@ -231,7 +231,7 @@ func (r *prefetch) _whinge(lom *core.LOM, size int64) {
 	sb.Grow(256)
 	sb.WriteString(r.Name())
 	sb.WriteString(": prefetching large size ")
-	sb.WriteString(cos.ToSizeIEC(size, 1))
+	sb.WriteString(cos.IEC(size, 1))
 	sb.WriteString(" with blob-downloading disabled [")
 	sb.WriteString(lom.Cname())
 	sb.WriteByte(']')

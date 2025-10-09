@@ -47,5 +47,5 @@ func (r *MMSA) freeMemToOS(mingc int64, p int, forces ...bool) {
 		return
 	}
 	togc := r.toGC.Swap(0)
-	nlog.Warningln(r.String(), "free mem to OS(pressure,force,togc,load) [", p, force, cos.ToSizeIEC(togc, 1), load, "]")
+	nlog.Warningln(r.String(), "free mem to OS(pressure,force,togc,load) [", p, force, cos.IEC(togc, 1), load, "]")
 }

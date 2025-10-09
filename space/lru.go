@@ -219,7 +219,7 @@ func (j *lruJ) run(providers []string) {
 		return
 	}
 	if len(j.ini.Buckets) != 0 {
-		nlog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
+		nlog.Infof("%s: freeing-up %s", j, cos.IEC(j.totalSize, 2))
 		err = j.jogBcks(j.ini.Buckets, j.ini.Force)
 	} else {
 		err = j.jog(providers)
@@ -232,7 +232,7 @@ ex:
 }
 
 func (j *lruJ) jog(providers []string) (err error) {
-	nlog.Infoln(j.String()+":", "freeing-up", cos.ToSizeIEC(j.totalSize, 2))
+	nlog.Infoln(j.String()+":", "freeing-up", cos.IEC(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck

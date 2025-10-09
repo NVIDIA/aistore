@@ -1021,7 +1021,7 @@ func (wi *basewi) next(i int) (int, error) {
 	wi.size += out.Size
 
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.ToSizeIEC(out.Size, 2), "]")
+		nlog.Infoln(r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.IEC(out.Size, 2), "]")
 	}
 	if wi.receiving() {
 		wi.recv.mtx.Lock()

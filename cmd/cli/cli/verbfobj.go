@@ -71,7 +71,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		cptn                string
 		totalSize, extSizes = groupByExt(fobjs)
 		units, errU         = parseUnitsFlag(c, unitsFlag)
-		tmpl                = teb.MultiPutTmpl + strconv.Itoa(l) + "\t " + cos.ToSizeIEC(totalSize, 2) + "\n"
+		tmpl                = teb.MultiPutTmpl + strconv.Itoa(l) + "\t " + cos.IEC(totalSize, 2) + "\n"
 		opts                = teb.Opts{AltMap: teb.FuncMapUnits(units, false /*incl. calendar date*/)}
 	)
 	if errU != nil {
@@ -413,7 +413,7 @@ func (u *uctx) fini(c *cli.Context, p *uparams, f fobj) {
 	if !u.showProgress && time.Since(u.lastReport) > u.reportEvery {
 		fmt.Fprintf(
 			c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
-			total, 100*total/len(p.fobjs), cos.ToSizeIEC(size, 1), 100*size/p.totalSize,
+			total, 100*total/len(p.fobjs), cos.IEC(size, 1), 100*size/p.totalSize,
 		)
 		u.lastReport = time.Now()
 	}

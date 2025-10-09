@@ -578,8 +578,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 5: Log rebalance stats
-	tlog.Logfln("Rebalance sent     %s in %d files", cos.ToSizeIEC(bytesSent, 2), filesSent)
-	tlog.Logfln("Rebalance received %s in %d files", cos.ToSizeIEC(bytesRecv, 2), filesRecv)
+	tlog.Logfln("Rebalance sent     %s in %d files", cos.IEC(bytesSent, 2), filesSent)
+	tlog.Logfln("Rebalance received %s in %d files", cos.IEC(bytesRecv, 2), filesRecv)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -734,7 +734,7 @@ func TestLRU(t *testing.T) {
 		diffBytesEvicted := tools.GetNamedStatsVal(v, "lru.evict.size") - bytesEvicted[k]
 		tlog.Logf(
 			"Target %s: evicted %d objects - %s (%dB) total\n",
-			k, diffFilesEvicted, cos.ToSizeIEC(diffBytesEvicted, 2), diffBytesEvicted,
+			k, diffFilesEvicted, cos.IEC(diffBytesEvicted, 2), diffBytesEvicted,
 		)
 
 		if diffFilesEvicted == 0 {

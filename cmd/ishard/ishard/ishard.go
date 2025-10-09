@@ -188,7 +188,7 @@ func (is *ISharder) Start() error {
 		}
 
 		if is.cfg.Progress {
-			fmt.Printf("\rSource Objects: %s", cos.ToSizeIEC(objTotalSize, 2))
+			fmt.Printf("\rSource Objects: %s", cos.IEC(objTotalSize, 2))
 		}
 
 		if objListPage.ContinuationToken == "" {

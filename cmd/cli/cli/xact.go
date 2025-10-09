@@ -204,7 +204,7 @@ func flattenXactStats(snap *core.Snap, units string) nvpairList {
 			if strings.HasSuffix(k, ".size") {
 				val := v.(string)
 				if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-					value = cos.ToSizeIEC(i, 2)
+					value = cos.IEC(i, 2)
 				}
 			}
 			if value == "" { // not ".size"

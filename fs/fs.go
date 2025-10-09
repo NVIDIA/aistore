@@ -1390,8 +1390,8 @@ func (cs *CapStatus) IsNil() bool { return cs.TotalUsed == 0 && cs.TotalAvail ==
 func (cs *CapStatus) String() string {
 	var (
 		sb         strings.Builder
-		totalUsed  = cos.ToSizeIEC(int64(cs.TotalUsed), 1)
-		totalAvail = cos.ToSizeIEC(int64(cs.TotalAvail), 1)
+		totalUsed  = cos.IEC(int64(cs.TotalUsed), 1)
+		totalAvail = cos.IEC(int64(cs.TotalAvail), 1)
 	)
 	sb.Grow(80)
 	sb.WriteString("cap(used ")

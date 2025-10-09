@@ -201,7 +201,7 @@ func TestETLBigBucket(t *testing.T) {
 		}
 	)
 
-	tlog.Logfln("Preparing source bucket (%d objects, %s each)", m.num, cos.ToSizeIEC(int64(m.fileSize), 2))
+	tlog.Logfln("Preparing source bucket (%d objects, %s each)", m.num, cos.IEC(int64(m.fileSize), 2))
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	m.initAndSaveState(true /*cleanup*/)
 

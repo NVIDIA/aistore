@@ -903,7 +903,7 @@ func checkOutputShards(t *testing.T, baseParams api.BaseParams, bucket cmn.Bck, 
 	if !dropout {
 		tassert.Fatalf(t, totalFileNum == expectedNumFiles, "The total number of files in output shards (%d) doesn't match to the initially generated amount (%d)", totalFileNum, expectedNumFiles)
 	}
-	fmt.Printf("finished ishard, archived %d files with total size %s\n", expectedNumFiles, cos.ToSizeIEC(totalSize, 2))
+	fmt.Printf("finished ishard, archived %d files with total size %s\n", expectedNumFiles, cos.IEC(totalSize, 2))
 }
 
 func getShardContents(baseParams api.BaseParams, bucket cmn.Bck) (map[string][]string, error) {

@@ -874,7 +874,7 @@ func startDownloadHandler(c *cli.Context) error {
 		if blobThreshold > 0 {
 			individualJobs := len(allJobIDs) - 1
 			if individualJobs > 0 {
-				fmt.Fprintf(c.App.Writer, "Created %d individual jobs for files >= %s\n", individualJobs, cos.ToSizeIEC(blobThreshold, 0))
+				fmt.Fprintf(c.App.Writer, "Created %d individual jobs for files >= %s\n", individualJobs, cos.IEC(blobThreshold, 0))
 			}
 		}
 	}

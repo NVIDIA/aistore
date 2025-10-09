@@ -812,7 +812,7 @@ func (r *Trunner) logCapacity(now int64) {
 				sb.WriteString(strconv.Itoa(int(cdf.Capacity.PctUsed)))
 				sb.WriteByte('%')
 				sb.WriteString(", avail ")
-				sb.WriteString(cos.ToSizeIEC(int64(cdf.Capacity.Avail), 2))
+				sb.WriteString(cos.IEC(int64(cdf.Capacity.Avail), 2))
 			}
 
 			r.lines = append(r.lines, sb.String())
@@ -830,10 +830,10 @@ func (r *Trunner) logDiskStats(verbose bool) {
 			continue
 		}
 
-		rbps := cos.ToSizeIEC(stats.RBps, 0)
-		wbps := cos.ToSizeIEC(stats.WBps, 0)
-		ravg := cos.ToSizeIEC(stats.Ravg, 0)
-		wavg := cos.ToSizeIEC(stats.Wavg, 0)
+		rbps := cos.IEC(stats.RBps, 0)
+		wbps := cos.IEC(stats.WBps, 0)
+		ravg := cos.IEC(stats.Ravg, 0)
+		wavg := cos.IEC(stats.Wavg, 0)
 		l := len(disk) + len(rbps) + len(wbps) + len(ravg) + len(wavg) + 64
 		buf := make([]byte, 0, l)
 		buf = append(buf, disk...)

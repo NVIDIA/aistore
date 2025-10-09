@@ -103,7 +103,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, lst map[string
 	}
 	versChangedFinal, bytesChangedFinal := propsStats(t, proxyURL)
 	if versChangedFinal-versChanged > 0 {
-		tlog.Logfln("Versions changed: %d (%s)", versChangedFinal-versChanged, cos.ToSizeIEC(bytesChangedFinal-bytesChanged, 1))
+		tlog.Logfln("Versions changed: %d (%s)", versChangedFinal-versChanged, cos.IEC(bytesChangedFinal-bytesChanged, 1))
 	}
 	if versChanged != versChangedFinal || bytesChanged != bytesChangedFinal {
 		t.Fatalf("All objects must be retrieved from the cache but cold get happened: %d times (%d bytes)",

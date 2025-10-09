@@ -482,11 +482,11 @@ func printDownloadStatus(c *cli.Context, d *dload.StatusResp, verbose bool) {
 			for _, task := range d.CurrentTasks {
 				fmt.Fprintf(w, "\t%s: ", task.Name)
 				if task.Total == 0 {
-					fmt.Fprintln(w, cos.ToSizeIEC(task.Downloaded, 2))
+					fmt.Fprintln(w, cos.IEC(task.Downloaded, 2))
 				} else {
 					pctDownloaded := 100 * float64(task.Downloaded) / float64(task.Total)
 					fmt.Fprintf(w, "%s/%s (%.2f%%)\n",
-						cos.ToSizeIEC(task.Downloaded, 2), cos.ToSizeIEC(task.Total, 2), pctDownloaded)
+						cos.IEC(task.Downloaded, 2), cos.IEC(task.Total, 2), pctDownloaded)
 				}
 			}
 		}

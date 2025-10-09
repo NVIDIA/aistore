@@ -360,7 +360,7 @@ func (extra *Extra) Compressed() bool {
 func (extra *Extra) Lid(sb *strings.Builder) {
 	if extra.Compressed() {
 		sb.WriteByte('[')
-		sb.WriteString(cos.ToSizeIEC(int64(extra.Config.Transport.LZ4BlockMaxSize), 0))
+		sb.WriteString(extra.Config.Transport.LZ4BlockMaxSize.String())
 		sb.WriteByte(']')
 	}
 }

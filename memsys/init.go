@@ -200,7 +200,7 @@ func (r *MMSA) Init(maxUse int64) {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
-			tag:     r.Name + "." + cos.ToSizeIEC(bufSize, 0),
+			tag:     r.Name + "." + cos.IEC(bufSize, 0),
 			bufSize: bufSize,
 			idx:     i,
 			get:     make([][]byte, 0, optDepth),

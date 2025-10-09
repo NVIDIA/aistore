@@ -20,7 +20,7 @@ func _wrd(t *testing.T, nameLen int) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		for _, chunked := range []bool{false, true} {
 			for _, objSize := range objSizes {
-				tname := "size:" + cos.ToSizeIEC(int64(objSize), 0)
+				tname := "size:" + cos.IEC(int64(objSize), 0)
 				m := ioContext{
 					t:             t,
 					bck:           bck.Clone(),

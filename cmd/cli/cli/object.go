@@ -376,7 +376,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string, _ error) {
 	case apc.GetPropsName:
 		v = op.Bck.Cname(op.Name)
 	case apc.GetPropsSize:
-		v = cos.ToSizeIEC(op.Size, 2)
+		v = cos.IEC(op.Size, 2)
 	case apc.GetPropsChecksum:
 		v = op.Cksum.String()
 	case apc.GetPropsAtime:
