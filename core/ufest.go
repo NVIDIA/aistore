@@ -112,27 +112,25 @@ const (
 
 type (
 	Uchunk struct {
-		size  int64      // this chunk size
-		path  string     // (may become v2 _remote location_)
 		cksum *cos.Cksum // nil means none; otherwise non-empty
+		path  string     // (may become v2 _remote location_)
+		ETag  string     // S3/legacy
+		MD5   []byte     // ditto
+		size  int64      // this chunk size
 		num   uint16     // chunk/part number
 		flags uint16     // bit flags (compression; future use)
-		// S3/legacy (either/or)
-		MD5  []byte
-		ETag string
 	}
 	Ufest struct {
-		id      string    // upload/manifest ID
 		created time.Time // creation time
-		count   uint16    // number of chunks (so far)
-		flags   uint16    // bit flags { completed, ...}
-		chunks  []Uchunk
+		lom     *LOM      // parent lom (runtime)
+		id      string    // upload/manifest ID
+		chunks  []Uchunk  // all chunks
 
-		// runtime state
-		lom       *LOM
-		size      int64
-		completed atomic.Bool
-		mu        sync.Mutex
+		size      int64       // total
+		mu        sync.Mutex  // protect
+		completed atomic.Bool // in-sync with lmflChunk
+		count     uint16      // number of chunks (so far)
+		flags     uint16      // bit flags { completed, ...}
 	}
 )
 
@@ -876,6 +874,7 @@ func (u *Ufest) pack(w io.Writer) {
 	w.Write(b16[:])
 
 	// chunks
+	debug.Assert(int(u.count) == len(u.chunks))
 	for _, c := range u.chunks {
 		// chunk size
 		binary.BigEndian.PutUint64(b64[:], uint64(c.size))

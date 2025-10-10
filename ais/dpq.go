@@ -49,15 +49,13 @@ import (
 // non-default categories, potentially 3, 4, or 5.
 
 type dpq struct {
-	bck struct {
-		provider, namespace string // bucket
-	}
+	m    cos.StrKVs
 	arch struct {
 		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below) - keep as-is
 	}
-
-	m     cos.StrKVs
-	count int
+	bck struct {
+		provider, namespace string // bucket
+	}
 
 	ptime   string // req timestamp at calling/redirecting proxy (QparamUnixTime)
 	pid     string // QparamPID
@@ -65,6 +63,8 @@ type dpq struct {
 	origURL string // ht://url->
 	owt     string // object write transaction { OwtPut, ... }
 	objto   string // uname of the destination object
+
+	count int
 
 	// Boolean fields - keep as struct members
 	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)

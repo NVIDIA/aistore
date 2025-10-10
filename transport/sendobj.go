@@ -22,13 +22,13 @@ import (
 // object stream & private types
 type (
 	Stream struct {
-		workCh   chan *Obj // aka SQ: next object to stream
-		cmplCh   chan cmpl // aka SCQ; note that SQ and SCQ together form a FIFO
-		callback ObjSentCB // to free SGLs, close files, etc.
+		workCh   chan *Obj // send queue (SQ): next object to stream
+		cmplCh   chan cmpl // SCQ (note: SQ and SCQ form a FIFO)
+		callback ObjSentCB // to free SGLs, close files, etc. cleanup
 		lz4s     *lz4Stream
 		sendoff  sendoff
-		chanFull cos.ChanFull
 		streamBase
+		chanFull cos.ChanFull
 	}
 	lz4Stream struct {
 		s             *Stream

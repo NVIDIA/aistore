@@ -44,8 +44,8 @@ type (
 		// - this field might not be any longer required
 		Ext cos.StrKVs `json:"ext"`
 
-		Transform
 		CopyBckMsg
+		Transform
 
 		// user-defined number of concurrent workers:
 		// * 0:  number of mountpaths (default)
@@ -60,8 +60,8 @@ type (
 	// swagger:model
 	TCOMsg struct {
 		TxnUUID string // (plstcx client; one control message)
-		TCBMsg
 		ListRange
+		TCBMsg
 	}
 )
 

@@ -36,13 +36,13 @@ type (
 		parentCB hk.HKCB
 		ticks    *cos.StopCh
 		hkName   string
-		idle     struct {
-			d    atomic.Int64 // duration hk idle
-			last atomic.Int64 // mono.NanoTime
-		}
 
 		Base
 
+		idle struct {
+			d    atomic.Int64 // duration hk idle
+			last atomic.Int64 // mono.NanoTime
+		}
 		pending atomic.Int64
 	}
 )

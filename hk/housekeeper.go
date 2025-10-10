@@ -42,11 +42,11 @@ type (
 	timedActions []timedAction
 
 	hk struct {
-		stopCh  cos.StopCh
 		sigCh   chan os.Signal
 		actions *timedActions
 		timer   *time.Timer
 		workCh  chan op
+		stopCh  cos.StopCh
 		running atomic.Bool
 	}
 )

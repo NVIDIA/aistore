@@ -36,16 +36,18 @@ const (
 
 type (
 	nlog struct {
-		file           *os.File
-		pw, buf1, buf2 *fixed
-		line           fixed
-		toFlush        []*fixed
-		last           atomic.Int64
-		written        atomic.Int64
-		sev            severity
-		oob            atomic.Bool
-		erred          atomic.Bool
-		mw             sync.Mutex
+		file    *os.File
+		pw      *fixed
+		buf1    *fixed
+		buf2    *fixed
+		toFlush []*fixed
+		line    fixed
+		last    atomic.Int64
+		written atomic.Int64
+		sev     severity
+		mw      sync.Mutex
+		oob     atomic.Bool
+		erred   atomic.Bool
 	}
 )
 

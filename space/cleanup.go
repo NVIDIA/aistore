@@ -65,44 +65,43 @@ type (
 type (
 	// parent (contains mpath joggers)
 	clnP struct {
-		wg      sync.WaitGroup
-		joggers map[string]*clnJ
 		ini     IniCln
+		joggers map[string]*clnJ
 		cs      struct {
 			a fs.CapStatus // initial
-			b fs.CapStatus // capacity after removing 'deleted'
+			b fs.CapStatus // after removing 'deleted'
 			c fs.CapStatus // upon finishing
 		}
-		jcnt atomic.Int32
+		wg   sync.WaitGroup
+		jcnt atomic.Int32 // initial
+		// upon finishing
 	}
 	// clnJ represents a single cleanup context and a single /jogger/
 	// that traverses and evicts a single given mountpath.
 	clnJ struct {
-		// runtime
-		oldWork   []string
-		invalid   []string
+		now       time.Time
+		p         *clnP
+		config    *cmn.Config
+		mi        *fs.Mountpath
+		joggers   map[string]*clnJ
+		stopCh    chan struct{}
+		ini       *IniCln
+		bck       cmn.Bck
+		name      string
 		misplaced struct {
 			loms []*core.LOM
 			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
-		bck cmn.Bck
-		now time.Time
-		// runtime counters
-		nvisits int64
-		norphan int64
+		oldWork []string // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
+
+		invalid []string
 		nmisplc int64
-		// init-time
-		name    string
-		p       *clnP
-		ini     *IniCln
-		stopCh  chan struct{}
-		joggers map[string]*clnJ
-		mi      *fs.Mountpath
-		config  *cmn.Config
+		norphan int64
+		nvisits int64
 	}
 	clnFactory struct {
-		xreg.RenewBase
 		xctn *XactCln
+		xreg.RenewBase
 	}
 )
 

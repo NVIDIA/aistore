@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -18,12 +18,11 @@ import (
 
 type (
 	Config struct {
-		Log     LogConf     `json:"log"`
-		Net     NetConf     `json:"net"`
-		Server  ServerConf  `json:"auth"`
-		Timeout TimeoutConf `json:"timeout"`
-		// private
-		mu sync.RWMutex `json:"-"`
+		Server  ServerConf   `json:"auth"`
+		Log     LogConf      `json:"log"`
+		Net     NetConf      `json:"net"`
+		Timeout TimeoutConf  `json:"timeout"`
+		mu      sync.RWMutex `json:"-"`
 	}
 	LogConf struct {
 		Dir   string `json:"dir"`
@@ -39,11 +38,10 @@ type (
 		UseHTTPS    bool   `json:"use_https"`
 	}
 	ServerConf struct {
-		Secret string       `json:"secret"`
-		Expire cos.Duration `json:"expiration_time"`
-		// private
 		psecret *string       `json:"-"`
 		pexpire *cos.Duration `json:"-"`
+		Secret  string        `json:"secret"`
+		Expire  cos.Duration  `json:"expiration_time"`
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`

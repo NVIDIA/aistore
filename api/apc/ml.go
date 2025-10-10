@@ -56,18 +56,18 @@ type (
 	MossIn struct {
 		ObjName string `json:"objname"`
 		// optional fields
-		Opaque   []byte `json:"opaque,omitempty"`   // user-provided identifier - e.g., to maintain one-to-many
 		Bucket   string `json:"bucket,omitempty"`   // if present, overrides cmn.Bck from the GetBatch request
 		Provider string `json:"provider,omitempty"` // e.g. "s3", "ais", etc.
 		Uname    string `json:"uname,omitempty"`    // per-object, fully qualified - defines the entire (bucket, provider, objname) triplet, and more
 		ArchPath string `json:"archpath,omitempty"` // extract the specified file from an object ("shard") formatted as: .tar, .tgz or .tar.gz, .zip, .tar.lz4;
+		Opaque   []byte `json:"opaque,omitempty"`   // user-provided identifier - e.g., to maintain one-to-many
 		Start    int64  `json:"start,omitempty"`
 		Length   int64  `json:"length,omitempty"`
 	}
 	// swagger:model
 	MossReq struct {
-		In            []MossIn `json:"in"`             // of arbitrary size >= 1
 		OutputFormat  string   `json:"mime,omitempty"` // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
+		In            []MossIn `json:"in"`             // of arbitrary size >= 1
 		ContinueOnErr bool     `json:"coer,omitempty"` // primary usage: ignore missing files and/or objects - include them under "__404__/" prefix and keep going
 		OnlyObjName   bool     `json:"onob"`           // name-in-archive: default naming convention is <Bucket>/<ObjName>; set this flag to have <ObjName> only
 		StreamingGet  bool     `json:"strm"`           // stream resulting archive prior to finalizing it in memory
@@ -78,14 +78,14 @@ type (
 		ArchPath string `json:"archpath,omitempty"` // ditto
 		Bucket   string `json:"bucket"`             // ditto
 		Provider string `json:"provider"`           // ditto
+		ErrMsg   string `json:"err_msg,omitempty"`  // e.g., when missing
 		Opaque   []byte `json:"opaque,omitempty"`   // from the corresponding MossIn; multi-objname logic on the client side
-		ErrMsg   string `json:"err_msg,omitempty"`
 		Size     int64  `json:"size"`
 	}
 	// swagger:model
 	MossResp struct {
-		Out  []MossOut `json:"out"`
 		UUID string    `json:"uuid"`
+		Out  []MossOut `json:"out"`
 	}
 )
 

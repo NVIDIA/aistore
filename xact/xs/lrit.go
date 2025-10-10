@@ -66,22 +66,18 @@ type (
 	lrit struct {
 		parent lrxact
 		bck    *meta.Bck
-		// [--- traverse
-		msg     *apc.ListRange
-		pt      *cos.ParsedTemplate
-		prefix  string // bucket/prefix
-		lsflags uint64 // assorted lsmsg flags (`LsNoRecursion`)
-		// --- traverse]
-		buf []byte // when (prealloc && no-workers)
-		// nwp: num-workers parallelism
-		// (these are _not_ joggers)
-		nwp struct {
+		msg    *apc.ListRange      // traverse: msg
+		pt     *cos.ParsedTemplate // traverse: template
+		prefix string              // traverse: bucket/prefix
+		buf    []byte              // when (prealloc && no-workers)
+		nwp    struct {            // nwp: num-workers parallelism (these are _not_ joggers)
 			workCh   chan lrpair
 			workers  []*lrworker
 			chanFull cos.ChanFull
 			wg       sync.WaitGroup
 		}
-		lrp int // enum { lrpList, ... }
+		lsflags uint64 // traverse: assorted lsmsg flags (`LsNoRecursion`)
+		lrp     int    // enum { lrpList, ... }
 	}
 )
 

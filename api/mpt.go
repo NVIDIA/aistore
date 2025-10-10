@@ -15,8 +15,8 @@ import (
 
 type (
 	PutPartArgs struct {
-		PutArgs
 		UploadID   string // QparamMptUploadID
+		PutArgs           // regular PUT args
 		PartNumber int    // QparamMptPartNo
 	}
 )

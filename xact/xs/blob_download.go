@@ -90,9 +90,9 @@ type (
 		code int
 	}
 	blobFactory struct {
-		xreg.RenewBase
 		pre  *XactBlobDl
 		xctn *XactBlobDl
+		xreg.RenewBase
 	}
 )
 

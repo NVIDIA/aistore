@@ -113,10 +113,10 @@ type (
 	InitMsgBase struct {
 		EtlName          string          `json:"name" yaml:"name"`
 		CommTypeX        string          `json:"communication" yaml:"communication"`
+		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
 		InitTimeout      cos.Duration    `json:"init_timeout,omitempty" yaml:"init_timeout,omitempty" swaggertype:"primitive,string"`
 		ObjTimeout       cos.Duration    `json:"obj_timeout,omitempty" yaml:"obj_timeout,omitempty" swaggertype:"primitive,string"`
 		SupportDirectPut bool            `json:"support_direct_put,omitempty" yaml:"support_direct_put,omitempty"`
-		Env              []corev1.EnvVar `json:"env,omitempty" yaml:"env,omitempty" swaggertype:"array,object"`
 	}
 
 	// swagger:model

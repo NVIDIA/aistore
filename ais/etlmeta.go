@@ -27,8 +27,8 @@ var etlMDImmSize int64
 
 type (
 	etlMD struct {
-		etl.MD
 		cksum *cos.Cksum
+		etl.MD
 	}
 
 	etlOwner interface {
@@ -43,13 +43,14 @@ type (
 	}
 
 	etlMDModifier struct {
+		msg etl.InitMsg // interface
+
 		pre   func(ctx *etlMDModifier, clone *etlMD) (err error)
 		final func(ctx *etlMDModifier, clone *etlMD)
 
-		msg     etl.InitMsg
-		stage   etl.Stage
 		podMap  etl.PodMap
 		etlName string
+		stage   etl.Stage
 		wait    bool
 	}
 

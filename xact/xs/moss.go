@@ -89,8 +89,8 @@ const (
 
 type (
 	mossFactory struct {
+		xctn *XactMoss
 		xreg.RenewBase
-		xctn       *XactMoss
 		designated bool
 	}
 )
@@ -104,27 +104,25 @@ type (
 		local      bool
 	}
 	basewi struct {
-		aw   archive.Writer
-		r    *XactMoss
-		smap *meta.Smap
-		req  *apc.MossReq
-		resp *apc.MossResp
-		sgl  *memsys.SGL // multipart (buffered) only
-		wid  string      // work item ID
-		// stats
-		size    int64 // (cumulative)
-		started int64 // (mono)
-		waitRx  int64 // total wait-for-receive time
-		cnt     int   // number of processed MossReq entries (m.b. eq len(MossIn))
-		// Rx
 		recv struct {
 			ch   chan int
 			m    []rxentry
 			next int
 			mtx  *sync.Mutex
 		}
-		clean atomic.Bool
-		awfin atomic.Bool
+		aw      archive.Writer
+		r       *XactMoss
+		smap    *meta.Smap
+		req     *apc.MossReq
+		resp    *apc.MossResp
+		sgl     *memsys.SGL // multipart (buffered) only
+		wid     string      // work item ID
+		started int64       // (mono)
+		waitRx  int64       // total wait-for-receive time
+		size    int64       // (cumulative)
+		cnt     int         // number of processed MossReq entries (m.b. eq len(MossIn))
+		clean   atomic.Bool
+		awfin   atomic.Bool
 	}
 	buffwi struct {
 		*basewi
@@ -136,22 +134,20 @@ type (
 
 type (
 	XactMoss struct {
-		xact.DemandBase
 		gmm     *memsys.MMSA
 		smm     *memsys.MMSA
 		config  *cmn.Config
+		bewarm  *work.Pool
 		pending sync.Map // [wid => *basewi]
-		gfn     struct { // counts
+		xact.DemandBase
+		activeWG sync.WaitGroup // when pending
+		size     atomic.Int64   // (cumulative across work items)
+		cnt      atomic.Int64   // ditto
+		waitRx   atomic.Int64   // total wait-for-receive time (= sum(work-items))
+		gfn      struct {       // counts
 			ok   atomic.Int32
 			fail atomic.Int32
 		}
-		bewarm *work.Pool
-		// stats
-		size   atomic.Int64 // (cumulative)
-		cnt    atomic.Int64 // ditto
-		waitRx atomic.Int64 // total wait-for-receive time (= sum(work-items))
-		// when pending
-		activeWG sync.WaitGroup
 	}
 )
 

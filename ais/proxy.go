@@ -55,14 +55,18 @@ type (
 
 	// proxy runner
 	proxy struct {
-		htrun
+		ic         ic
 		authn      *authManager
 		metasyncer *metasyncer
-		ic         ic
-		rproxy     reverseProxy
-		notifs     notifs
 		lstca      lstca
-		reg        struct {
+		rproxy     reverseProxy
+		ec         ecToggle
+		dm         dmToggle
+
+		htrun // common w/ target
+
+		notifs notifs
+		reg    struct {
 			pool nodeRegPool
 			mu   sync.RWMutex
 		}
@@ -72,8 +76,6 @@ type (
 			mu sync.RWMutex
 			in atomic.Bool
 		}
-		ec                ecToggle
-		dm                dmToggle
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}

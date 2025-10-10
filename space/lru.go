@@ -51,13 +51,13 @@ const (
 
 type (
 	IniLRU struct {
-		Xaction             *XactLRU
 		StatsT              stats.Tracker
-		Buckets             []cmn.Bck // list of buckets to run LRU
+		Xaction             *XactLRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, err error)
 		GetFSStats          func(path string) (blocks, bavail uint64, bsize int64, err error)
 		WG                  *sync.WaitGroup
-		Force               bool // Ignore LRU prop when set to be true.
+		Buckets             []cmn.Bck
+		Force               bool
 	}
 	XactLRU struct {
 		xact.Base
@@ -71,34 +71,31 @@ type (
 
 	// parent (contains mpath joggers)
 	lruP struct {
-		wg      sync.WaitGroup
 		joggers map[string]*lruJ
 		ini     IniLRU
+		wg      sync.WaitGroup
 	}
 
 	// lruJ represents a single LRU context and a single /jogger/
 	// that traverses and evicts a single given mountpath.
 	lruJ struct {
-		// runtime
-		totalSize int64 // difference between lowWM size and used size
-		capCheck  int64
-		newest    int64
-		heap      *minHeap
-		bck       cmn.Bck
-		now       int64
-		// init-time
-		p       *lruP
-		ini     *IniLRU
-		stopCh  chan struct{}
-		joggers map[string]*lruJ
-		mi      *fs.Mountpath
-		config  *cmn.Config
-		// more runtime
+		p           *lruP    // parent
+		heap        *minHeap // sorted
+		ini         *IniLRU  // init params
+		stopCh      chan struct{}
+		joggers     map[string]*lruJ
+		mi          *fs.Mountpath // the mountpath
+		config      *cmn.Config   // to refresh independently
+		bck         cmn.Bck
+		capCheck    int64
+		newest      int64
+		now         int64
+		totalSize   int64 // difference between lowWM size and used size
 		allowDelObj bool
 	}
 	lruFactory struct {
-		xreg.RenewBase
 		xctn *XactLRU
+		xreg.RenewBase
 	}
 	TestFactory = lruFactory // unit tests only
 )

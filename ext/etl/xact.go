@@ -20,20 +20,19 @@ import (
 
 type (
 	factory struct {
-		xreg.RenewBase
 		xctn *XactETL
+		xreg.RenewBase
 	}
 
 	// represents `apc.ActETLInline` kind of xaction (`apc.ActETLBck`/`apc.ActETLObject` kinds are managed by tcb/tcobjs)
 	// responsible for triggering global abort on error to ensure all related ETL resources are cleaned up across all targets.
 	XactETL struct {
-		InlineObjErrs cos.Errs
-		Vlabs         map[string]string
-		msg           InitMsg
-		xact.Base
-
+		msg            InitMsg
+		Vlabs          map[string]string
 		offlineObjErrs map[string]*cos.Errs // xid of TCB/TCB => errors encountered during offline transformation
-		m              sync.Mutex           // protects offlineErrs
+		InlineObjErrs  cos.Errs
+		xact.Base
+		m sync.Mutex // protects offlineErrs
 	}
 )
 

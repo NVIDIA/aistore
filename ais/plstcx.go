@@ -444,21 +444,21 @@ type (
 		mu sync.Mutex
 	}
 	lstcx struct {
-		p *proxy
+		hdr http.Header // arg
+		p   *proxy
 		// arg
 		bckFrom *meta.Bck
 		bckTo   *meta.Bck
 		amsg    *apc.ActMsg // orig
 		config  *cmn.Config
 		smap    *smapX
-		hdr     http.Header
 		// work
 		tsi     *meta.Snode
 		xid     string // x-tco
-		cnt     int
 		lsmsg   apc.LsoMsg
 		altmsg  apc.ActMsg
 		tcomsg  cmn.TCOMsg
+		cnt     int
 		stopped atomic.Bool
 	}
 )

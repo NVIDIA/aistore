@@ -31,8 +31,8 @@ type (
 	// - `Aborted`: Kubernetes resources (pod/service) are cleaned up.
 	ETLEntity struct {
 		InitMsg InitMsg `json:"init_msg"`
-		Stage   Stage   `json:"stage"`
 		PodMap  PodMap  `json:"pod_map"`
+		Stage   Stage   `json:"stage"`
 	}
 	ETLs map[string]ETLEntity
 
@@ -76,7 +76,7 @@ func (e *MD) Add(msg InitMsg, stage Stage, podMap PodMap) error {
 	if _, ok := e.ETLs[msg.Name()]; !ok && stage == Aborted {
 		return fmt.Errorf("cannot add %s to stage %s: not exists", msg.Cname(), stage)
 	}
-	e.ETLs[msg.Name()] = ETLEntity{msg, stage, podMap}
+	e.ETLs[msg.Name()] = ETLEntity{InitMsg: msg, Stage: stage, PodMap: podMap}
 	return nil
 }
 func (*MD) JspOpts() jsp.Options { return etlMDJspOpts }

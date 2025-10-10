@@ -114,8 +114,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, ecode int) {
 }
 
 type errNoSuchUpload struct {
-	uploadID string
 	err      error
+	uploadID string
 }
 
 func NewErrNoSuchUpload(uploadID string, err error) error {

@@ -27,8 +27,8 @@ const iniSdmCap = 16
 // - limitation: hdr.Opaque is exclusively reserved xaction ID
 
 type sharedDM struct {
-	dm        DM
 	receivers map[string]transport.Receiver
+	dm        DM
 	ocmu      sync.Mutex
 	rxmu      sync.Mutex
 }

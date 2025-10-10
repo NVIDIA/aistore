@@ -79,46 +79,45 @@ type (
 	 */
 
 	webSocketComm struct {
-		baseComm
 		commCtx       context.Context
-		sessions      map[string]Session // includes inlineSession
 		inlineSession Session
+		sessions      map[string]Session // includes inlineSession
 		commCtxCancel context.CancelFunc
-		m             sync.Mutex
+		baseComm
+		m sync.Mutex
 	}
 
 	wsSession struct {
 		msg              InitMsg
-		txctn            core.Xact // tcb/tcobjs xaction that uses this session to perform transformatio
+		txctn            core.Xact // tcb/tcobjs xaction that uses this session to perform transformation
 		sessionCtx       context.Context
 		workCh           chan *transformTask
 		sessionCtxCancel context.CancelFunc
+		fincb            func() // callback to self-remove this session from the communicator's session list
 		connections      []*wsConnCtx
 		chanFull         cos.ChanFull
-		fincb            func() // callback to self-remove this session from the communicator' session list
 		finished         atomic.Bool
 	}
 
 	wsConnCtx struct {
-		etlxctn           *XactETL  // parent xaction of the underlying ETL pod (`xs.xactETL` type)
-		txctn             core.Xact // tcb/tcobjs xaction that uses this session to perform transformatio
+		txctn             core.Xact // tcb/tcobjs xaction that uses this session to perform transformation
 		ctx               context.Context
+		etlxctn           *XactETL // parent xaction of the underlying ETL pod (`xs.xactETL` type)
 		conn              *websocket.Conn
 		workCh            chan *transformTask // outbound messages of the original objects to send to ETL pod
 		transformCh       chan *transformTask // inbound (post-transform) messages from ETL pod
-		transformChanFull cos.ChanFull
 		eg                *errgroup.Group
 		name              string
+		transformChanFull cos.ChanFull
 	}
 
 	transformTask struct {
+		rwpair
+		err     error
+		txctn   core.Xact
 		ctrlmsg WebsocketCtrlMsg
 		wg      sync.WaitGroup // used to wait for the task to finish
 		written int64
-		err     error
-		rwpair
-
-		txctn core.Xact // reference to the TCB/TCO job that created this task
 	}
 
 	rwpair struct {

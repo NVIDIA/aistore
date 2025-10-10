@@ -38,9 +38,9 @@ import (
 
 type (
 	prfFactory struct {
-		xreg.RenewBase
 		xctn *prefetch
 		msg  *apc.PrefetchMsg
+		xreg.RenewBase
 	}
 	pebl struct {
 		parent  *prefetch

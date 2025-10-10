@@ -38,8 +38,8 @@ type (
 	// - `etl.HTTPCommunicator.OfflineTransform`: fetches transformed object from ETL pod through HTTP response
 	// - `etl.statefulCommnicator.Transform`: fetches transformed object from ETL pod through WebSocket message
 	ETLArgs struct {
-		Pipeline      apc.ETLPipeline // intermediate ETL pod's address or destination target's address for direct put
 		TransformArgs string          // optional and ETL-specific; can be used to indicate transformation on a per-object basis
+		Pipeline      apc.ETLPipeline // intermediate ETL pod's address or destination target's address for direct put
 	}
 	GetROC func(lom *LOM, latestVer, sync bool, args *ETLArgs) ReadResp
 

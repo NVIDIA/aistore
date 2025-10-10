@@ -64,16 +64,16 @@ type (
 	rlbackends map[string]*rlbackend
 	// main
 	target struct {
-		htrun
 		bps      backends
 		rlbps    rlbackends
 		fshc     *health.FSHC
-		fsprg    fsprungroup
 		reb      *reb.Reb
 		res      *res.Res
+		fsprg    fsprungroup
 		txns     txns
-		regstate regstate
 		ups      ups
+		htrun    // common w/ proxy
+		regstate regstate
 	}
 )
 

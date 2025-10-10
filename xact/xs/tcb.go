@@ -59,10 +59,10 @@ type (
 		// copying parallelism
 		nwp struct {
 			workCh   chan core.LIF
-			chanFull cos.ChanFull
 			stopCh   *cos.StopCh
 			workers  []tcbworker
 			wg       sync.WaitGroup
+			chanFull cos.ChanFull
 		}
 		// function: coordinate finish, abort, progress
 		sntl sentinel

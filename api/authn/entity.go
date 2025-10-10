@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -26,8 +26,8 @@ type (
 	CluACL struct {
 		ID     string          `json:"id"`
 		Alias  string          `json:"alias,omitempty"`
-		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 		URLs   []string        `json:"urls,omitempty"`
+		Access apc.AccessAttrs `json:"perm,string,omitempty"`
 	}
 
 	BckACL struct {
@@ -40,8 +40,8 @@ type (
 	}
 
 	LoginMsg struct {
-		Password  string         `json:"password"`
 		ExpiresIn *time.Duration `json:"expires_in"`
+		Password  string         `json:"password"`
 	}
 
 	RegisteredClusters struct {

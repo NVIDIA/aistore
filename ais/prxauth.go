@@ -25,17 +25,19 @@ import (
 )
 
 type (
-	tokenList   authn.TokenList       // token strings
-	tkList      map[string]*tok.Token // tk structs
+	tokenList authn.TokenList       // token strings
+	tkList    map[string]*tok.Token // tk structs
+
 	authManager struct {
 		// cache of decrypted tokens
 		tkList tkList
 		// list of invalid tokens(revoked or of deleted users)
 		// Authn sends these tokens to primary for broadcasting
 		revokedTokens map[string]bool
-		version       int64
 		// signing key secret
 		secret string
+		// latest revoked version
+		version int64
 		// lock
 		sync.Mutex
 	}

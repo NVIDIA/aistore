@@ -44,9 +44,9 @@ type (
 	}
 	certLoader struct {
 		tstats   cos.StatsUpdater
+		xcert    atomic.Pointer[xcert]
 		certFile string
 		keyFile  string
-		xcert    atomic.Pointer[xcert]
 	}
 
 	// tls.Config.GetCertificate

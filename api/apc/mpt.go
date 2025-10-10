@@ -6,8 +6,8 @@ package apc
 
 type (
 	MptCompletedPart struct {
-		PartNumber int    `json:"part-number"`
 		ETag       string `json:"etag"`
+		PartNumber int    `json:"part-number"`
 	}
 	MptCompletedParts []MptCompletedPart
 )

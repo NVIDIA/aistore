@@ -110,20 +110,20 @@ type (
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		EC          ECConf          `json:"ec" allow:"cluster"`
-		Chunks      ChunksConf      `json:"chunks" allow:"cluster"`
 		Net         NetConf         `json:"net"`
 		Timeout     TimeoutConf     `json:"timeout"`
+		Space       SpaceConf       `json:"space"`
 		Transport   TransportConf   `json:"transport"`
 		Memsys      MemsysConf      `json:"memsys"`
-		FSHC        FSHCConf        `json:"fshc"`
 		Disk        DiskConf        `json:"disk"`
-		Space       SpaceConf       `json:"space"`
-		Periodic    PeriodConf      `json:"periodic"`
+		FSHC        FSHCConf        `json:"fshc"`
+		Chunks      ChunksConf      `json:"chunks" allow:"cluster"`
+		LRU         LRUConf         `json:"lru"`
 		Client      ClientConf      `json:"client"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		LRU         LRUConf         `json:"lru"`
+		Periodic    PeriodConf      `json:"periodic"`
 		Downloader  DownloaderConf  `json:"downloader"`
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // enumerated features to flip assorted global defaults (cmn/feat/feat.go)
+		Features    feat.Flags      `json:"features,string" allow:"cluster"` // enumerated features to flip assorted global defaults (cmn/feat/feat and docs/feat*)
 		Version     int64           `json:"config_version,string"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
@@ -675,14 +675,14 @@ type (
 	}
 
 	DsortConf struct {
+		DuplicatedRecords   string `json:"duplicated_records"`
+		MissingShards       string `json:"missing_shards"` // cmn.SupportedReactions enum
+		EKMMalformedLine    string `json:"ekm_malformed_line"`
+		EKMMissingKey       string `json:"ekm_missing_key"`
+		DefaultMaxMemUsage  string `json:"default_max_mem_usage"`
+		DsorterMemThreshold string `json:"dsorter_mem_threshold"`
 		XactConf
-		DuplicatedRecords   string       `json:"duplicated_records"`
-		MissingShards       string       `json:"missing_shards"` // cmn.SupportedReactions enum
-		EKMMalformedLine    string       `json:"ekm_malformed_line"`
-		EKMMissingKey       string       `json:"ekm_missing_key"`
-		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
-		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
-		CallTimeout         cos.Duration `json:"call_timeout" swaggertype:"primitive,integer"`
+		CallTimeout cos.Duration `json:"call_timeout" swaggertype:"primitive,integer"`
 	}
 	DsortConfToSet struct {
 		XactConfToSet
@@ -1835,29 +1835,30 @@ func (c *DsortConf) Validate() (err error) {
 }
 
 func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
-	checkReaction := func(reaction string) bool {
-		return cos.StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
+	f := func(reaction string) bool {
+		return ((allowEmpty && reaction == "") || cos.StringInSlice(reaction, SupportedReactions))
 	}
 
-	if !checkReaction(c.DuplicatedRecords) {
-		return fmt.Errorf(_idsort+"duplicated_records: %s (expecting one of: %s)", c.DuplicatedRecords, SupportedReactions)
+	const s = "expecting one of:"
+	if !f(c.DuplicatedRecords) {
+		return fmt.Errorf(_idsort+"duplicated_records: %s (%s %v)", c.DuplicatedRecords, s, SupportedReactions)
 	}
-	if !checkReaction(c.MissingShards) {
-		return fmt.Errorf(_idsort+"missing_shards: %s (expecting one of: %s)", c.MissingShards, SupportedReactions)
+	if !f(c.MissingShards) {
+		return fmt.Errorf(_idsort+"missing_shards: %s (%s %v)", c.MissingShards, s, SupportedReactions)
 	}
-	if !checkReaction(c.EKMMalformedLine) {
-		return fmt.Errorf(_idsort+"ekm_malformed_line: %s (expecting one of: %s)", c.EKMMalformedLine, SupportedReactions)
+	if !f(c.EKMMalformedLine) {
+		return fmt.Errorf(_idsort+"ekm_malformed_line: %s (%s %v)", c.EKMMalformedLine, s, SupportedReactions)
 	}
-	if !checkReaction(c.EKMMissingKey) {
-		return fmt.Errorf(_idsort+"ekm_missing_key: %s (expecting one of: %s)", c.EKMMissingKey, SupportedReactions)
+	if !f(c.EKMMissingKey) {
+		return fmt.Errorf(_idsort+"ekm_missing_key: %s (%s %v)", c.EKMMissingKey, s, SupportedReactions)
 	}
 	if !allowEmpty {
 		if _, err := cos.ParseQuantity(c.DefaultMaxMemUsage); err != nil {
-			return fmt.Errorf(_idsort+"default_max_mem_usage: %s (err: %s)", c.DefaultMaxMemUsage, err)
+			return fmt.Errorf(_idsort+"default_max_mem_usage: %s (err: %v)", c.DefaultMaxMemUsage, err)
 		}
 	}
 	if _, err := cos.ParseSize(c.DsorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DsorterMemThreshold != "") {
-		return fmt.Errorf(_idsort+"dsorter_mem_threshold: %s (err: %s)", c.DsorterMemThreshold, err)
+		return fmt.Errorf(_idsort+"dsorter_mem_threshold: %s (err: %v)", c.DsorterMemThreshold, err)
 	}
 	return nil
 }
