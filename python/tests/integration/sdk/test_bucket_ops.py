@@ -220,7 +220,9 @@ class TestBucketOps(ParallelTestBase):
     def test_copy_sync_flag(self):
         to_bck = self._create_bucket()
         num_obj = OBJECT_COUNT
-        obj_names = self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME)
+        obj_names = list(
+            self._create_objects(num_obj=num_obj, suffix=SUFFIX_NAME).keys()
+        )
 
         obj_group = self.bucket.objects(obj_names=obj_names)
 
@@ -387,7 +389,7 @@ class TestBucketOps(ParallelTestBase):
         self.assertEqual(OBJECT_COUNT, len(objects))
 
     def test_list_object_iter(self):
-        obj_names = set(self._create_objects())
+        obj_names = set(self._create_objects().keys())
 
         # Empty iterator if there are no objects matching the prefix.
         obj_iter = self.bucket.list_objects_iter(prefix="invalid-obj-")

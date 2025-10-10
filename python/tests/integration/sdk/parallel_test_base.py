@@ -2,7 +2,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import unittest
 import boto3
 
@@ -140,23 +140,25 @@ class ParallelTestBase(unittest.TestCase):
 
     def _create_objects(
         self, num_obj=OBJECT_COUNT, suffix="", obj_size=SMALL_FILE_SIZE
-    ):
+    ) -> Dict[str, bytes]:
         """
         Create a list of objects using a unique test prefix and track them for later cleanup
         Args:
             num_obj: Number of objects to create
             suffix: Optional suffix for each object name
         """
+        res = {}
         obj_names = [self.obj_prefix + str(i) + suffix for i in range(num_obj)]
         for obj_name in obj_names:
-            create_and_put_object(
+            _, content = create_and_put_object(
                 self.client,
                 bck=self.bucket.as_model(),
                 obj_name=obj_name,
                 obj_size=obj_size,
             )
+            res[obj_name] = content
         self._register_for_post_test_cleanup(names=obj_names, is_bucket=False)
-        return obj_names
+        return res
 
     def _check_all_objects_cached(self, num_obj, expected_cached):
         """

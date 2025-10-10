@@ -328,7 +328,7 @@ class TestObjectOps(ParallelTestBase):
         bucket_size = 10
         delete_cnt = 7
 
-        obj_names = self._create_objects(num_obj=bucket_size)
+        obj_names = list(self._create_objects(num_obj=bucket_size).keys())
         objects = self.bucket.list_objects()
         self.assertEqual(len(objects.entries), bucket_size)
 

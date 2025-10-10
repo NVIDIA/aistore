@@ -19,7 +19,7 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         self.assertNotEqual(0, self.client.job(job_id=job_id).status().end_time)
 
     def test_job_wait_for_idle(self):
-        obj_names = self._create_objects()
+        obj_names = list(self._create_objects().keys())
         existing_names = {
             obj.name for obj in self.bucket.list_objects(prefix=self.obj_prefix).entries
         }
@@ -38,7 +38,7 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_async_job_wait_for_idle(self):
-        obj_names = self._create_objects()
+        obj_names = list(self._create_objects().keys())
         obj_group = self.bucket.objects(obj_names=obj_names)
         job_id = obj_group.evict()
         self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
@@ -48,7 +48,7 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         self._check_all_objects_cached(OBJECT_COUNT, True)
 
     def test_job_wait(self):
-        object_names = self._create_objects()
+        object_names = list(self._create_objects().keys())
         # Delete does not idle when finished
         job_id = self.bucket.objects(obj_names=object_names).delete()
         self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT)

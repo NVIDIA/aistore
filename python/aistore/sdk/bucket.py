@@ -917,7 +917,7 @@ class Bucket(AISSource):
 
     def objects(
         self,
-        obj_names: List = None,
+        obj_names: List[str] = None,
         obj_range: ObjectRange = None,
         obj_template: str = None,
     ) -> ObjectGroup:
@@ -925,7 +925,7 @@ class Bucket(AISSource):
         Factory constructor for multiple objects belonging to this bucket.
 
         Args:
-            obj_names (list): Names of objects to include in the group
+            obj_names (List[str]): Names of objects to include in the group
             obj_range (ObjectRange): Range of objects to include in the group
             obj_template (str): String template defining objects to include in the group
 
