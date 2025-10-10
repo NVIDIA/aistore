@@ -1718,7 +1718,14 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 	bck := apireq.bck
 	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AccessNone /* access checked below */, bck: bck}
 	bckArgs.createAIS = false
-	bckArgs.dontHeadRemote = true
+
+	// for actions that either don't support remote buckets, or don't require that the target remote bucket exists in the cluster,
+	// set dontHeadRemote to skip adding remote bucket.
+	switch msg.Action {
+	case apc.ActRenameObject, apc.ActCheckLock:
+		bckArgs.dontHeadRemote = true
+	}
+
 	if _, err := bckArgs.initAndTry(); err != nil {
 		return
 	}
