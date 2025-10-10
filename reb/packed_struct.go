@@ -74,7 +74,7 @@ func (rack *regularAck) Pack(packer *cos.BytePack) {
 func (rack *regularAck) NewPack() []byte {
 	l := rebMsgKindSize + rack.PackedSize()
 	packer := cos.NewPacker(nil, l)
-	packer.WriteByte(rebMsgRegular)
+	packer.WriteUint8(rebMsgRegular)
 	packer.WriteAny(rack)
 	return packer.Bytes()
 }
@@ -104,7 +104,7 @@ func (eack *ecAck) Pack(packer *cos.BytePack) {
 func (eack *ecAck) NewPack() []byte {
 	l := rebMsgKindSize + eack.PackedSize()
 	packer := cos.NewPacker(nil, l)
-	packer.WriteByte(rebMsgEC)
+	packer.WriteUint8(rebMsgEC)
 	packer.WriteAny(eack)
 	return packer.Bytes()
 }
@@ -128,9 +128,9 @@ func (ntfn *stageNtfn) Pack(packer *cos.BytePack) {
 	packer.WriteUint32(ntfn.stage)
 	packer.WriteString(ntfn.daemonID)
 	if ntfn.md == nil {
-		packer.WriteByte(0)
+		packer.WriteUint8(0)
 	} else {
-		packer.WriteByte(1)
+		packer.WriteUint8(1)
 		packer.WriteAny(ntfn.md)
 	}
 }
@@ -138,7 +138,7 @@ func (ntfn *stageNtfn) Pack(packer *cos.BytePack) {
 func (ntfn *stageNtfn) NewPack(kind byte) []byte {
 	l := rebMsgKindSize + ntfn.PackedSize()
 	packer := cos.NewPacker(nil, l)
-	packer.WriteByte(kind)
+	packer.WriteUint8(kind)
 	packer.WriteAny(ntfn)
 	return packer.Bytes()
 }

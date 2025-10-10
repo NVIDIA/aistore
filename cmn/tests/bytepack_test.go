@@ -31,9 +31,9 @@ func (p *pck) Pack(wr *cos.BytePack) {
 	// A marker trick: before saving inner structure, put a boolean
 	// marker that indicates if unpacker should skip reading inner struct
 	if p.parent == nil {
-		wr.WriteByte(0)
+		wr.WriteUint8(0)
 	} else {
-		wr.WriteByte(1)
+		wr.WriteUint8(1)
 		wr.WriteAny(p.parent)
 	}
 }

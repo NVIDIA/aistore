@@ -66,7 +66,7 @@ func (p *putFactory) _tag(bck *meta.Bck) []byte {
 		pack  = cos.NewPacker(nil, l)
 	)
 	pack.WriteString(p.Kind())
-	pack.WriteByte('|')
+	pack.WriteUint8('|')
 	pack.WriteBytes(uname)
 	return pack.Bytes()
 }

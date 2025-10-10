@@ -318,7 +318,7 @@ func unique(prefix string, bck *meta.Bck, objName string) string {
 		pack  = cos.NewPacker(nil, l)
 	)
 	pack.WriteString(prefix)
-	pack.WriteByte(filepath.Separator)
+	pack.WriteUint8(filepath.Separator)
 	pack.WriteBytes(uname)
 	b := pack.Bytes()
 	debug.Assert(len(b) == l, len(b), " vs ", l)

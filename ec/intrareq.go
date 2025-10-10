@@ -84,9 +84,9 @@ func (r *intraReq) Pack(packer *cos.BytePack) {
 	packer.WriteBool(r.isSlice)
 	packer.WriteUint64(r.bid)
 	if r.meta == nil {
-		packer.WriteByte(0)
+		packer.WriteUint8(0)
 	} else {
-		packer.WriteByte(1)
+		packer.WriteUint8(1)
 		packer.WriteAny(r.meta)
 	}
 }

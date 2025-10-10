@@ -228,7 +228,7 @@ func (br *ByteUnpack) Len() int { return len(br.b) - br.off }
 // Packer
 //
 
-func (bw *BytePack) WriteByte(b byte) {
+func (bw *BytePack) WriteUint8(b byte) {
 	bw.b[bw.off] = b
 	bw.off++
 }
