@@ -457,6 +457,7 @@ MainLoop:
 			break MainLoop
 		case wo := <-resCh:
 			completeWorkOrder(wo, false)
+			freeWO(wo)
 			if runParams.statsShowInterval == 0 && runParams.putSizeUpperBound != 0 {
 				accumulatedStats.aggregate(&intervalStats)
 				intervalStats = newStats(time.Now())

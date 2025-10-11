@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	opPut = iota
+	opFree = iota
+	opPut
 	opGet
 	opUpdateExisting // {GET followed by PUT(same name, same size)} combo
 	opConfig
@@ -49,6 +50,31 @@ type (
 		startPut  int64 // PUT in `opUpdateExisting`
 	}
 )
+
+var (
+	woPool sync.Pool
+	wo0    workOrder
+)
+
+func allocWO(op int) *workOrder {
+	v := woPool.Get()
+	if v == nil {
+		return &workOrder{op: op}
+	}
+	wo := v.(*workOrder)
+	debug.Assert(wo.op == opFree)
+	wo.op = op
+	return wo
+}
+
+func freeWO(wo *workOrder) {
+	// - work orders with SGLs are freed via wo2Free
+	// - opFree when already freed
+	if wo.sgl == nil && wo.op != opFree {
+		*wo = wo0
+		woPool.Put(wo)
+	}
+}
 
 func postNewWorkOrder() (err error) {
 	if runParams.getConfig {
@@ -171,6 +197,8 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 			}
 			if w.sgl != nil && !w.sgl.IsNil() {
 				w.sgl.Free()
+				w.sgl = nil
+				freeWO(w)
 				copy(wo2Free[i:], wo2Free[i+1:])
 				i--
 				l--
@@ -347,6 +375,10 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 ///////////////
 
 func newPutWorkOrder() (*workOrder, error) {
+	return newPutWO(opPut)
+}
+
+func newPutWO(op int) (*workOrder, error) {
 	objName, err := _genObjName()
 	if err != nil {
 		return nil, err
@@ -357,35 +389,20 @@ func newPutWorkOrder() (*workOrder, error) {
 		size = runParams.minSize + d
 	}
 	putPending++
-	return &workOrder{
-		proxyURL:  runParams.proxyURL,
-		bck:       runParams.bck,
-		op:        opPut,
-		objName:   objName,
-		size:      size,
-		cksumType: runParams.cksumType,
-	}, nil
+
+	wo := allocWO(op)
+	{
+		wo.proxyURL = runParams.proxyURL
+		wo.bck = runParams.bck
+		wo.objName = objName
+		wo.size = size
+		wo.cksumType = runParams.cksumType
+	}
+	return wo, nil
 }
 
 func newMultipartWorkOrder() (*workOrder, error) {
-	objName, err := _genObjName()
-	if err != nil {
-		return nil, err
-	}
-	size := runParams.minSize
-	if runParams.maxSize != runParams.minSize {
-		d := rnd.Int64N(runParams.maxSize + 1 - runParams.minSize)
-		size = runParams.minSize + d
-	}
-	putPending++
-	return &workOrder{
-		proxyURL:  runParams.proxyURL,
-		bck:       runParams.bck,
-		op:        opPutMultipart,
-		objName:   objName,
-		size:      size,
-		cksumType: runParams.cksumType,
-	}, nil
+	return newPutWO(opPutMultipart)
 }
 
 func _genObjName() (string, error) {
@@ -423,17 +440,19 @@ func _genObjName() (string, error) {
 }
 
 func newGetWorkOrder(op int) (*workOrder, error) {
+	debug.Assert(op == opGet || op == opUpdateExisting, op)
 	if objnameGetter.Len() == 0 {
 		return nil, errors.New("no objects in bucket")
 	}
 
 	getPending++
-	return &workOrder{
-		proxyURL: runParams.proxyURL,
-		bck:      runParams.bck,
-		op:       op,
-		objName:  objnameGetter.Pick(),
-	}, nil
+	wo := allocWO(op)
+	{
+		wo.proxyURL = runParams.proxyURL
+		wo.bck = runParams.bck
+		wo.objName = objnameGetter.Pick()
+	}
+	return wo, nil
 }
 
 func newGetConfigWorkOrder() *workOrder {
