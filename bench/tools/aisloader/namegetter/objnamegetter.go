@@ -9,9 +9,8 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
-
-// TODO -- FIXME: not thread-safe; must be: (Dynamic) per worker
 
 type (
 	// base interface for read-only name selection
@@ -143,9 +142,7 @@ func (rng *Random) Add(objName string) {
 
 func (rng *Random) Pick() string {
 	n := len(rng.names)
-	if n == 0 {
-		return ""
-	}
+	debug.Assert(n > 0) // see objnameGetter.Len() here and elsewhere
 	idx := rng.rnd.IntN(n)
 	return rng.names[idx]
 }
@@ -172,9 +169,7 @@ func (rng *RandomUnique) Add(objName string) {
 
 func (rng *RandomUnique) Pick() string {
 	n := len(rng.names)
-	if n == 0 {
-		return ""
-	}
+	debug.Assert(n > 0)
 	if rng.tracker.needsReset(n) {
 		rng.tracker.reset()
 	}
@@ -208,9 +203,7 @@ func (rng *RandomUniqueIter) Add(objName string) {
 
 func (rng *RandomUniqueIter) Pick() string {
 	n := len(rng.names)
-	if n == 0 {
-		return ""
-	}
+	debug.Assert(n > 0)
 	if rng.tracker.needsReset(n) {
 		rng.tracker.reset()
 	}
@@ -253,9 +246,7 @@ func (*Permutation) Add(string) {
 
 func (rng *Permutation) Pick() string {
 	n := len(rng.names)
-	if n == 0 {
-		return ""
-	}
+	debug.Assert(n > 0)
 	if rng.permidx == n {
 		rng.permidx = 0
 		rng.perm = rng.rnd.Perm(n)
@@ -266,7 +257,7 @@ func (rng *Permutation) Pick() string {
 }
 
 /////////////////////////
-// PermutationImproved // TODO -- FIXME: not thread-safe but a simple mu.Lock() wouldn't work here
+// PermutationImproved //
 /////////////////////////
 
 // interface guard
@@ -287,9 +278,7 @@ func (*PermutationImproved) Add(string) {
 
 func (rng *PermutationImproved) Pick() string {
 	n := len(rng.names)
-	if n == 0 {
-		return ""
-	}
+	debug.Assert(n > 0)
 	if rng.permidx == n {
 		rng.nextReady.Wait()
 		rng.perm, rng.permNext = rng.permNext, rng.perm
