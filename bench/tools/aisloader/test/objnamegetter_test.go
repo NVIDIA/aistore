@@ -40,72 +40,72 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkRandomUniqueNameGetter(b *testing.B) {
-	ng := &namegetter.RandomUniqueNameGetter{}
+	ng := &namegetter.RandomUnique{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
-		ng.ObjName()
+		ng.Pick()
 	}
 }
 
 func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
-	ng := &namegetter.RandomUniqueIterNameGetter{}
+	ng := &namegetter.RandomUniqueIter{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
-		ng.ObjName()
+		ng.Pick()
 	}
 }
 
 func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
-	ng := &namegetter.PermutationUniqueNameGetter{}
+	ng := &namegetter.Permutation{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
-		ng.ObjName()
+		ng.Pick()
 	}
 }
 
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
-	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
+	ng := &namegetter.PermutationImproved{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
-		ng.ObjName()
+		ng.Pick()
 	}
 }
 
 func TestRandomUniqueNameGetter(t *testing.T) {
-	ng := &namegetter.RandomUniqueNameGetter{}
+	ng := &namegetter.RandomUnique{}
 
-	checkGetsAllObjNames(t, ng, "RandomUniqueNameGetter")
-	checkSmallSampleRandomness(t, ng, "RandomUniqueNameGetter")
+	checkGetsAllObjNames(t, ng, "RandomUnique")
+	checkSmallSampleRandomness(t, ng, "RandomUnique")
 }
 
 func TestRandomUniqueIterNameGetter(t *testing.T) {
-	ng := &namegetter.RandomUniqueIterNameGetter{}
+	ng := &namegetter.RandomUniqueIter{}
 
-	checkGetsAllObjNames(t, ng, "RandomUniqueIterNameGetter")
-	checkSmallSampleRandomness(t, ng, "RandomUniqueIterNameGetter")
+	checkGetsAllObjNames(t, ng, "RandomUniqueIter")
+	checkSmallSampleRandomness(t, ng, "RandomUniqueIter")
 }
 
 func TestPermutationUniqueNameGetter(t *testing.T) {
-	ng := &namegetter.PermutationUniqueNameGetter{}
+	ng := &namegetter.Permutation{}
 
-	checkGetsAllObjNames(t, ng, "PermutationUniqueNameGetter")
-	checkSmallSampleRandomness(t, ng, "PermutationUniqueNameGetter")
+	checkGetsAllObjNames(t, ng, "Permutation")
+	checkSmallSampleRandomness(t, ng, "Permutation")
 }
 
 func TestPermutationUniqueImprovedNameGetter(t *testing.T) {
-	ng := &namegetter.PermutationUniqueImprovedNameGetter{}
+	ng := &namegetter.PermutationImproved{}
 
-	checkGetsAllObjNames(t, ng, "PermutationUniqueImprovedNameGetter")
-	checkSmallSampleRandomness(t, ng, "PermutationUniqueImprovedNameGetter")
+	checkGetsAllObjNames(t, ng, "PermutationImproved")
+	checkSmallSampleRandomness(t, ng, "PermutationImproved")
 }
 
-func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
+func checkGetsAllObjNames(t *testing.T, getter namegetter.Basic, name string) {
 	getter.Init(objNames, cos.NowRand())
 	m := make(map[string]struct{})
 
 	// Should visit every objectName once
 	for range objNamesSize {
-		m[getter.ObjName()] = struct{}{}
+		m[getter.Pick()] = struct{}{}
 	}
 
 	tassert.Fatalf(t, len(m) == objNamesSize,
@@ -114,13 +114,13 @@ func checkGetsAllObjNames(t *testing.T, getter namegetter.ObjectNameGetter, name
 	// Check that starting operation for the beginning still works as expected
 	m = make(map[string]struct{})
 	for range objNamesSize {
-		m[getter.ObjName()] = struct{}{}
+		m[getter.Pick()] = struct{}{}
 	}
 	tassert.Fatalf(t, len(m) == objNamesSize,
 		"%s has not visited every element for second time; got %d, expected %d", name, len(m), objNamesSize)
 }
 
-func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter, name string) {
+func checkSmallSampleRandomness(t *testing.T, getter namegetter.Basic, name string) {
 	s1 := make([]string, smallSampleSize)
 	s2 := make([]string, smallSampleSize)
 
@@ -128,11 +128,11 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.ObjectNameGetter
 
 	getter.Init(objNames, rnd)
 	for i := range smallSampleSize {
-		s1[i] = getter.ObjName()
+		s1[i] = getter.Pick()
 	}
 	getter.Init(objNames, rnd)
 	for i := range smallSampleSize {
-		s2[i] = getter.ObjName()
+		s2[i] = getter.Pick()
 	}
 
 	tassert.Fatal(t, !reflect.DeepEqual(s1, s2), name+" is not random!")

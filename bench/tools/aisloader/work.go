@@ -142,7 +142,9 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
 			if wo.op != opUpdateExisting {
-				bucketObjsNames.AddObjName(wo.objName)
+				if !stopping.Load() {
+					objnameGetter.Add(wo.objName)
+				}
 			}
 			intervalStats.put.Add(wo.size, delta)
 			intervalStats.statsd.Put.Add(wo.size, delta)
@@ -193,7 +195,9 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
-			bucketObjsNames.AddObjName(wo.objName)
+			if !stopping.Load() {
+				objnameGetter.Add(wo.objName)
+			}
 			intervalStats.putMPU.Add(wo.size, delta)
 			intervalStats.statsd.Put.Add(wo.size, delta)
 		} else {
@@ -419,7 +423,7 @@ func _genObjName() (string, error) {
 }
 
 func newGetWorkOrder(op int) (*workOrder, error) {
-	if bucketObjsNames.Len() == 0 {
+	if objnameGetter.Len() == 0 {
 		return nil, errors.New("no objects in bucket")
 	}
 
@@ -428,7 +432,7 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 		proxyURL: runParams.proxyURL,
 		bck:      runParams.bck,
 		op:       op,
-		objName:  bucketObjsNames.ObjName(),
+		objName:  objnameGetter.Pick(),
 	}, nil
 }
 

@@ -167,7 +167,7 @@ var (
 	rnd              *rand.Rand
 	intervalStats    sts
 	accumulatedStats sts
-	bucketObjsNames  namegetter.ObjectNameGetter
+	objnameGetter    namegetter.Dynamic
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC          *statsd.Client
 	getPending       int64
@@ -302,14 +302,14 @@ func Start(version, buildtime string) (err error) {
 		if runParams.putPct < 100 {
 			return errors.New("new bucket, expecting 100% PUT")
 		}
-		bucketObjsNames = &namegetter.RandomNameGetter{}
-		bucketObjsNames.Init([]string{}, rnd)
+		objnameGetter = &namegetter.Random{}
+		objnameGetter.Init([]string{}, rnd)
 	case !runParams.getConfig && !runParams.skipList:
 		if err := listObjects(); err != nil {
 			return err
 		}
 
-		objsLen := bucketObjsNames.Len()
+		objsLen := objnameGetter.Len()
 		if runParams.putPct == 0 && objsLen == 0 {
 			if runParams.subDir == "" {
 				return errors.New("the bucket is empty, cannot run 100% read benchmark")
@@ -319,8 +319,8 @@ func Start(version, buildtime string) (err error) {
 
 		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(objsLen), cos.Plural(objsLen))
 	default:
-		bucketObjsNames = &namegetter.RandomNameGetter{}
-		bucketObjsNames.Init([]string{}, rnd)
+		objnameGetter = &namegetter.Random{}
+		objnameGetter.Init([]string{}, rnd)
 	}
 
 	printRunParams(runParams)
@@ -437,7 +437,7 @@ func Start(version, buildtime string) (err error) {
 MainLoop:
 	for runParams.putSizeUpperBound == 0 || accumulatedStats.put.TotalBytes() < runParams.putSizeUpperBound {
 		if runParams.numEpochs > 0 { // if defined
-			if numGets.Load() > int64(runParams.numEpochs)*int64(bucketObjsNames.Len()) {
+			if numGets.Load() > int64(runParams.numEpochs)*int64(objnameGetter.Len()) {
 				break
 			}
 		}
@@ -450,7 +450,6 @@ MainLoop:
 			sendStatsdStats(&intervalStats)
 			intervalStats = newStats(time.Now())
 		default:
-			break
 		}
 
 		select {
@@ -1133,21 +1132,21 @@ func cleanup() {
 	stopping.Store(true)
 	time.Sleep(time.Second)
 	fmt.Println(now() + " Cleaning up...")
-	if bucketObjsNames != nil {
-		// `bucketObjsNames` has been actually assigned to/initialized.
+	if objnameGetter != nil {
+		// `objnameGetter` has been actually assigned to/initialized.
 		var (
 			w       = runParams.numWorkers
-			objsLen = bucketObjsNames.Len()
+			objsLen = objnameGetter.Len()
 			n       = objsLen / w
 			wg      = &sync.WaitGroup{}
 		)
 		for i := range w {
 			wg.Add(1)
-			go cleanupObjs(bucketObjsNames.Names()[i*n:(i+1)*n], wg)
+			go cleanupObjs(objnameGetter.Names()[i*n:(i+1)*n], wg)
 		}
 		if objsLen%w != 0 {
 			wg.Add(1)
-			go cleanupObjs(bucketObjsNames.Names()[n*w:], wg)
+			go cleanupObjs(objnameGetter.Names()[n*w:], wg)
 		}
 		wg.Wait()
 	}
@@ -1242,22 +1241,22 @@ func listObjects() error {
 	}
 
 	if !runParams.uniqueGETs {
-		bucketObjsNames = &namegetter.RandomNameGetter{}
+		objnameGetter = &namegetter.Random{}
 	} else {
-		bucketObjsNames = &namegetter.RandomUniqueNameGetter{}
+		objnameGetter = &namegetter.RandomUnique{}
 
 		// Permutation strategies seem to be always better (they use more memory though)
 		if runParams.putPct == 0 {
-			bucketObjsNames = &namegetter.PermutationUniqueNameGetter{}
+			objnameGetter = &namegetter.Permutation{}
 
 			// Number from benchmarks: aisloader/tests/objnamegetter_test.go
 			// After 50k overhead on new goroutine and WaitGroup becomes smaller than benefits
 			if len(names) > 50000 {
-				bucketObjsNames = &namegetter.PermutationUniqueImprovedNameGetter{}
+				objnameGetter = &namegetter.PermutationImproved{}
 			}
 		}
 	}
-	bucketObjsNames.Init(names, rnd)
+	objnameGetter.Init(names, rnd)
 	return err
 }
 

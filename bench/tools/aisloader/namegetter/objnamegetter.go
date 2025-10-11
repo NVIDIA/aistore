@@ -1,6 +1,6 @@
 // Package namegetter is utility to generate filenames for aisloader PUT requests
 /*
-* Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package namegetter
 
@@ -11,212 +11,301 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// TODO -- FIXME: not thread-safe; must be: (Dynamic) per worker
+
 type (
-	ObjectNameGetter interface {
-		ObjName() string
-		AddObjName(objName string)
+	// base interface for read-only name selection
+	Basic interface {
 		Init(names []string, rnd *rand.Rand)
+		// runtime
+		Pick() string
 		Names() []string
 		Len() int
 	}
-	RandomNameGetter struct {
+
+	// extend Basic with ability to add names
+	Dynamic interface {
+		Basic
+		Add(objName string)
+	}
+
+	// track indices used for unique selection
+	bitmaskTracker struct {
+		mask []uint64
+		used int
+	}
+
+	base struct {
+		names []string
+	}
+
+	Random struct {
+		base
 		rnd *rand.Rand
-		BaseNameGetter
 	}
-	RandomUniqueNameGetter struct {
-		BaseNameGetter
+
+	RandomUnique struct {
+		base
 		rnd     *rand.Rand
-		bitmask []uint64
-		used    int
+		tracker bitmaskTracker
 	}
-	RandomUniqueIterNameGetter struct {
-		BaseNameGetter
+
+	RandomUniqueIter struct {
+		base
 		rnd     *rand.Rand
-		bitmask []uint64
-		used    int
+		tracker bitmaskTracker
 	}
-	PermutationUniqueNameGetter struct {
-		BaseNameGetter
+
+	Permutation struct {
+		base
 		rnd     *rand.Rand
 		perm    []int
 		permidx int
 	}
-	PermutationUniqueImprovedNameGetter struct {
-		BaseNameGetter
+
+	PermutationImproved struct {
+		base
 		rnd       *rand.Rand
 		perm      []int
 		permNext  []int
 		permidx   int
 		nextReady sync.WaitGroup
 	}
-	BaseNameGetter struct {
-		names []string
-	}
 )
 
-// RandomNameGetter //
+////////////////////
+// bitmaskTracker //
+////////////////////
 
-func (rung *RandomNameGetter) Init(names []string, rnd *rand.Rand) {
-	rung.names = names
-	rung.rnd = rnd
+func (bt *bitmaskTracker) init(size int) {
+	words := (size + 63) >> 6 // ceil(size/64)
+	bt.mask = make([]uint64, words)
+	bt.used = 0
 }
 
-func (rung *RandomNameGetter) AddObjName(objName string) {
-	rung.names = append(rung.names, objName)
+func (bt *bitmaskTracker) grow() {
+	bt.mask = append(bt.mask, 0)
 }
 
-func (rung *RandomNameGetter) ObjName() string {
-	idx := rung.rnd.IntN(len(rung.names))
-	return rung.names[idx]
-}
-
-// RandomUniqueNameGetter //
-
-func (rung *RandomUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
-	rung.names = names
-	rung.rnd = rnd
-
-	lenBitmask := len(names) / 64
-	if len(names)%64 != 0 {
-		lenBitmask++
+// fast path
+func (bt *bitmaskTracker) tryMark(idx int) bool {
+	w := idx >> 6                // idx / 64
+	b := uint64(1) << (idx & 63) // 1 << (idx % 64)
+	if bt.mask[w]&b != 0 {
+		return false
 	}
-
-	rung.bitmask = make([]uint64, lenBitmask)
+	bt.mask[w] |= b
+	bt.used++
+	return true
 }
 
-func (rung *RandomUniqueNameGetter) AddObjName(objName string) {
-	if len(rung.names)%64 == 0 {
-		rung.bitmask = append(rung.bitmask, uint64(0))
+func (bt *bitmaskTracker) reset() {
+	for i := range bt.mask {
+		bt.mask[i] = 0
 	}
-	rung.names = append(rung.names, objName)
+	bt.used = 0
 }
 
-func (rung *RandomUniqueNameGetter) ObjName() string {
-	if rung.used == len(rung.names) {
-		for i := range rung.bitmask {
-			rung.bitmask[i] = 0
-		}
-		rung.used = 0
-	}
-
-	for {
-		idx := rung.rnd.IntN(len(rung.names))
-		bitmaskID := idx / 64
-		bitmaskBit := uint64(1) << uint64(idx%64)
-		if rung.bitmask[bitmaskID]&bitmaskBit == 0 {
-			rung.used++
-			rung.bitmask[bitmaskID] |= bitmaskBit
-			return rung.names[idx]
-		}
-	}
+func (bt *bitmaskTracker) needsReset(totalSize int) bool {
+	return bt.used >= totalSize
 }
 
-// RandomUniqueIterNameGetter //
+//////////
+// base //
+//////////
 
-func (ruing *RandomUniqueIterNameGetter) Init(names []string, rnd *rand.Rand) {
-	ruing.names = names
-	ruing.rnd = rnd
-
-	lenBitmask := len(names) / 64
-	if len(names)%64 != 0 {
-		lenBitmask++
-	}
-
-	ruing.bitmask = make([]uint64, lenBitmask)
-}
-
-func (ruing *RandomUniqueIterNameGetter) AddObjName(objName string) {
-	if len(ruing.names)%64 == 0 {
-		ruing.bitmask = append(ruing.bitmask, uint64(0))
-	}
-	ruing.names = append(ruing.names, objName)
-}
-
-func (ruing *RandomUniqueIterNameGetter) ObjName() string {
-	if ruing.used == len(ruing.names) {
-		for i := range ruing.bitmask {
-			ruing.bitmask[i] = 0
-		}
-		ruing.used = 0
-	}
-
-	namesLen := len(ruing.names)
-	idx := ruing.rnd.IntN(namesLen)
-
-	for {
-		bitmaskID := idx / 64
-		bitmaskBit := uint64(1) << uint64(idx%64)
-		if ruing.bitmask[bitmaskID]&bitmaskBit == 0 {
-			ruing.bitmask[bitmaskID] |= bitmaskBit
-			ruing.used++
-			return ruing.names[idx]
-		}
-		idx = (idx + 1) % namesLen
-	}
-}
-
-// PermutationUniqueNameGetter //
-
-func (pung *PermutationUniqueNameGetter) Init(names []string, rnd *rand.Rand) {
-	pung.names = names
-	pung.rnd = rnd
-	pung.perm = pung.rnd.Perm(len(names))
-}
-
-func (*PermutationUniqueNameGetter) AddObjName(string) {
-	cos.AssertMsg(false, "can't add object once PermutationUniqueNameGetter is initialized")
-}
-
-func (pung *PermutationUniqueNameGetter) ObjName() string {
-	if pung.permidx == len(pung.names) {
-		pung.permidx = 0
-		pung.perm = pung.rnd.Perm(len(pung.names))
-	}
-	objName := pung.names[pung.perm[pung.permidx]]
-	pung.permidx++
-	return objName
-}
-
-// PermutationUniqueImprovedNameGetter //
-
-func (pung *PermutationUniqueImprovedNameGetter) Init(names []string, rnd *rand.Rand) {
-	pung.nextReady.Wait() // in case someone called Init twice, wait until initializing pung.permNext in ObjName() has finished
-	pung.names = names
-	pung.rnd = rnd
-	pung.perm = pung.rnd.Perm(len(names))
-	pung.permNext = pung.rnd.Perm(len(names))
-}
-
-func (*PermutationUniqueImprovedNameGetter) AddObjName(string) {
-	cos.AssertMsg(false, "can't add object once PermutationUniqueImprovedNameGetter is initialized")
-}
-
-func (pung *PermutationUniqueImprovedNameGetter) ObjName() string {
-	if pung.permidx == len(pung.names) {
-		pung.nextReady.Wait()
-		pung.perm, pung.permNext = pung.permNext, pung.perm
-		pung.permidx = 0
-
-		pung.nextReady.Add(1)
-		go func() {
-			pung.permNext = pung.rnd.Perm(len(pung.names))
-			pung.nextReady.Done()
-		}()
-	}
-	objName := pung.names[pung.perm[pung.permidx]]
-	pung.permidx++
-	return objName
-}
-
-// BaseNameGetter //
-
-func (bng *BaseNameGetter) Names() []string {
+func (bng *base) Names() []string {
 	return bng.names
 }
 
-func (bng *BaseNameGetter) Len() int {
+func (bng *base) Len() int {
 	if bng == nil || bng.names == nil {
 		return 0
 	}
 	return len(bng.names)
+}
+
+////////////
+// Random //
+////////////
+
+// interface guard
+var _ Dynamic = (*Random)(nil)
+
+func (rng *Random) Init(names []string, rnd *rand.Rand) {
+	rng.names = names
+	rng.rnd = rnd
+}
+
+func (rng *Random) Add(objName string) {
+	rng.names = append(rng.names, objName)
+}
+
+func (rng *Random) Pick() string {
+	n := len(rng.names)
+	if n == 0 {
+		return ""
+	}
+	idx := rng.rnd.IntN(n)
+	return rng.names[idx]
+}
+
+//////////////////
+// RandomUnique //
+//////////////////
+
+// interface guard
+var _ Dynamic = (*RandomUnique)(nil)
+
+func (rng *RandomUnique) Init(names []string, rnd *rand.Rand) {
+	rng.names = names
+	rng.rnd = rnd
+	rng.tracker.init(len(names))
+}
+
+func (rng *RandomUnique) Add(objName string) {
+	if len(rng.names)%64 == 0 {
+		rng.tracker.grow()
+	}
+	rng.names = append(rng.names, objName)
+}
+
+func (rng *RandomUnique) Pick() string {
+	n := len(rng.names)
+	if n == 0 {
+		return ""
+	}
+	if rng.tracker.needsReset(n) {
+		rng.tracker.reset()
+	}
+	for {
+		idx := rng.rnd.IntN(n)
+		if rng.tracker.tryMark(idx) {
+			return rng.names[idx]
+		}
+	}
+}
+
+//////////////////////
+// RandomUniqueIter //
+//////////////////////
+
+// interface guard
+var _ Dynamic = (*RandomUniqueIter)(nil)
+
+func (rng *RandomUniqueIter) Init(names []string, rnd *rand.Rand) {
+	rng.names = names
+	rng.rnd = rnd
+	rng.tracker.init(len(names))
+}
+
+func (rng *RandomUniqueIter) Add(objName string) {
+	if len(rng.names)%64 == 0 {
+		rng.tracker.grow()
+	}
+	rng.names = append(rng.names, objName)
+}
+
+func (rng *RandomUniqueIter) Pick() string {
+	n := len(rng.names)
+	if n == 0 {
+		return ""
+	}
+	if rng.tracker.needsReset(n) {
+		rng.tracker.reset()
+	}
+
+	start := rng.rnd.IntN(n)
+	for i := range n {
+		idx := start + i
+		if idx >= n {
+			idx -= n
+		}
+		if rng.tracker.tryMark(idx) {
+			return rng.names[idx]
+		}
+	}
+
+	// everything was marked; reset and take one
+	rng.tracker.reset()
+	idx := rng.rnd.IntN(n)
+	_ = rng.tracker.tryMark(idx)
+	return rng.names[idx]
+}
+
+/////////////////
+// Permutation //
+/////////////////
+
+// interface guard
+var _ Basic = (*Permutation)(nil)
+
+func (rng *Permutation) Init(names []string, rnd *rand.Rand) {
+	rng.names = names
+	rng.rnd = rnd
+	rng.perm = rnd.Perm(len(names))
+	rng.permidx = 0
+}
+
+func (*Permutation) Add(string) {
+	cos.AssertMsg(false, "can't add object once Permutation is initialized")
+}
+
+func (rng *Permutation) Pick() string {
+	n := len(rng.names)
+	if n == 0 {
+		return ""
+	}
+	if rng.permidx == n {
+		rng.permidx = 0
+		rng.perm = rng.rnd.Perm(n)
+	}
+	objName := rng.names[rng.perm[rng.permidx]]
+	rng.permidx++
+	return objName
+}
+
+/////////////////////////
+// PermutationImproved // TODO -- FIXME: not thread-safe but a simple mu.Lock() wouldn't work here
+/////////////////////////
+
+// interface guard
+var _ Basic = (*PermutationImproved)(nil)
+
+func (rng *PermutationImproved) Init(names []string, rnd *rand.Rand) {
+	rng.nextReady.Wait() // handle double Init() edge case
+	rng.names = names
+	rng.rnd = rnd
+	rng.perm = rnd.Perm(len(names))
+	rng.permNext = rnd.Perm(len(names))
+	rng.permidx = 0
+}
+
+func (*PermutationImproved) Add(string) {
+	cos.AssertMsg(false, "can't add object once PermutationImproved is initialized")
+}
+
+func (rng *PermutationImproved) Pick() string {
+	n := len(rng.names)
+	if n == 0 {
+		return ""
+	}
+	if rng.permidx == n {
+		rng.nextReady.Wait()
+		rng.perm, rng.permNext = rng.permNext, rng.perm
+		rng.permidx = 0
+
+		// Pre-generate next permutation in background
+		rng.nextReady.Add(1)
+		go func() {
+			// use independent rand
+			r := cos.NowRand()
+			rng.permNext = r.Perm(n)
+			rng.nextReady.Done()
+		}()
+	}
+
+	objName := rng.names[rng.perm[rng.permidx]]
+	rng.permidx++
+	return objName
 }
