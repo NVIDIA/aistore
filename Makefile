@@ -60,17 +60,29 @@ ifdef CPU_PROFILE
 	BUILD_SRC = $(BUILD_DIR)/aisnodeprofile/main.go
 endif
 
-# Intra-cluster networking: two alternative ways to build AIS `transport` package:
-# 1) using Go net/http, or
-# 2) with a 3rd party github.com/valyala/fasthttp aka "fasthttp"
+# Developer Notes:
 #
-# The second option is the current default.
-# To build with net/http, use `nethttp` build tag, for instance:
-# TAGS=nethttp make deploy <<< $'5\n5\n4\ny\ny\nn\n'
+# The following variables and flags are useful for debugging and profiling.
+#
+# 1. Race Detector:
+#    Finds data races in your code. The GORACE variable enables it and controls its output.
+#    Example: Find races and log reports to `/tmp/race/report`.
+#    $ GORACE='log_path=/tmp/race/report' make deploy
+#    or
+#    $ GORACE='log_path=/tmp/race' MODE=debug make test-aisloader
+#
+# 2. Go Compiler Flags (gcflags):
+#    Pass flags directly to the Go compiler.
+#    These are automatically applied when using `MODE=debug`.
+#    Example:
+#    -gcflags="all=-N -l":
+#      -N: Disable all compiler optimizations.
+#      -l: Disable function inlining.
+#      Important for getting accurate stack traces and a predictable debugging experience with tools like Delve.
 
 ifeq ($(MODE),debug)
 	# Debug mode
-	GCFLAGS = -gcflags="all=-N -l"
+	GCFLAGS = -gcflags="all=-N -l" # alternatively: -gcflags="all=-d=checkptr=1" for stricter pointer checks
 	LDFLAGS = -ldflags "-X 'main.build=$(VERSION)' -X 'main.buildtime=$(BUILD)'"
 	BUILD_TAGS += debug
 	GOFLAGS =
@@ -137,13 +149,19 @@ aisloader: build-aisloader ## Build aisloader
 xmeta: build-xmeta         ## Build xmeta
 aisinit: build-aisinit     ## Build aisinit
 
+#
+# Build standalone utilities and servers (authn, aisloader, xmeta, aisinit)
+#
 build-%:
 	@echo -n "Building $*... "
+ifdef WRD
+	@echo "(with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>)"
+endif
 ifdef CROSS_COMPILE
-	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@mv ./$* $(BUILD_DEST)/.
 else
-	@go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@$(WRD) go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 endif
 	@echo "done."
 
@@ -351,6 +369,7 @@ help:
 		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
 		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
+		"GORACE='log_path=/tmp/race' make aisloader test-aisloader" "Build and test aisloader with race detection" \
 
 .PHONY: restful-api-doc
 

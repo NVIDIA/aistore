@@ -13,7 +13,12 @@ Package `transport` provides streaming object-based transport over HTTP for mass
 
 ## Build
 
-The package includes build-time support for two alternative http clients:
+There are two alternative ways to build `transport` package for intra-cluster networking:
+
+1. using Go net/http, or
+2. with a 3rd party github.com/valyala/fasthttp aka "fasthttp" (default)
+
+Respectively, the `transport` package includes build-time support for two alternative http clients:
 
 * standard [net/http](https://golang.org/pkg/net/http/)
 * 3rd party [github.com/valyala/fasthttp](https://github.com/valyala/fasthttp) aka "fasthttp"
@@ -24,6 +29,8 @@ The following is a quick summary:
 |--- | --- | --- | ---|
 | `net/http` | [golang.org/pkg/net/http](https://golang.org/pkg/net/http/) | `nethttp` | no |
 | `fasthttp` | [github.com/valyala/fasthttp](https://github.com/valyala/fasthttp) | n/a  | yes |
+
+> For details, please see [build-tags](https://github.com/NVIDIA/aistore/blob/main/docs/build_tags.md) and top-level [Makefile](https://github.com/NVIDIA/aistore/blob/main/Makefile)
 
 To test with net/http, run:
 

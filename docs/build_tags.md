@@ -33,6 +33,13 @@ Here's the current list, grouped by category.
 
 ## Intra-cluster transport
 
+There are two alternative ways to build `transport` package for intra-cluster networking:
+
+1. using Go net/http, or
+2. with a 3rd party github.com/valyala/fasthttp aka "fasthttp"
+
+The second option is the current default.
+
 | build tag | comment |
 | --- | --- |
 | `nethttp`| Use [net/http](https://pkg.go.dev/net/http) for intra-cluster transport (the default is [fasthttp](https://github.com/valyala/fasthttp)) |
