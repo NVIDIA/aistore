@@ -7,6 +7,7 @@ package tests_test
 import (
 	"reflect"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -349,3 +350,33 @@ var _ = Describe("IterFields", func() {
 		})
 	})
 })
+
+func TestCopyProps_EmbeddedPromotion(t *testing.T) {
+	type XactConf struct{ Compression string }
+	type XactConfToSet struct{ Compression *string }
+	type Dst struct{ XactConf }      // embedded
+	type Src struct{ XactConfToSet } // embedded (different type name)
+
+	want := "never"
+	s := Src{XactConfToSet: XactConfToSet{Compression: &want}}
+	d := Dst{}
+	if err := cmn.CopyProps(s, &d, apc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	if d.Compression != want {
+		t.Fatalf("got %q", d.Compression)
+	}
+}
+
+func TestCopyProps_InterfaceLeaf(t *testing.T) {
+	type Dst struct{ Mode string }
+	var v any = "always"
+	s := struct{ Mode *any }{Mode: &v}
+	d := Dst{}
+	if err := cmn.CopyProps(s, &d, apc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	if d.Mode != "always" {
+		t.Fatalf("got %v", d.Mode)
+	}
+}
