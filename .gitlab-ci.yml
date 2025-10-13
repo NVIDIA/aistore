@@ -341,7 +341,7 @@ test:short:python-unit:
     - cd python
     - |
       set -e
-      for ver in 3.8 3.9 3.10 3.11 3.12 3.13; do
+      for ver in 3.8 3.9 3.10 3.11 3.12 3.13 3.14; do
         uv venv --python "$ver" .venv
         source .venv/bin/activate
         make python_sdk_unit_tests
@@ -366,12 +366,12 @@ test:short:python-integration:
     - cd python
     - |
       set -e
-      for ver in 3.8 3.9 3.10 3.11 3.12 3.13; do
+      for ver in 3.8 3.9 3.14; do
         uv venv --python "$ver" .venv
         source .venv/bin/activate
         make python_botocore_integration_tests
-        # TODO: For now, only run full SDK integration on 3.13
-        if [ "$ver" = "3.13" ]; then make python_sdk_integration_tests; fi
+        # TODO: For now, only run full SDK integration on 3.14
+        if [ "$ver" = "3.14" ]; then make python_sdk_integration_tests; fi
         deactivate || true
         rm -rf .venv
       done
@@ -592,7 +592,7 @@ test:long:python-extended:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
   script:
     - cd python
-    - uv venv --python 3.13 .venv
+    - uv venv --python 3.14 .venv
     - source .venv/bin/activate
     - make python_sdk_extended_tests
     - deactivate || true

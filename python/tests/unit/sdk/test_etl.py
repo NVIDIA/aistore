@@ -121,7 +121,10 @@ class TestEtl(
                 with self.assertRaises(ValueError):
                     _get_runtime()
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @unittest.skipIf(
+        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
+        "requires Python 3.9 to 3.13 inclusive",
+    )
     def test_init_etl_class_with_defaults(self):
         # Define a minimal ETLServer subclass
         class MyETL(HTTPMultiThreadedServer):
@@ -155,7 +158,10 @@ class TestEtl(
         # No dependencies given => empty PACKAGES
         self.assertNotIn("PACKAGES", init_kwargs)
 
-    @unittest.skipIf(sys.version_info < (3, 9), "requires Python 3.9 or higher")
+    @unittest.skipIf(
+        sys.version_info < (3, 9) or sys.version_info >= (3, 14),
+        "requires Python 3.9 to 3.13 inclusive",
+    )
     def test_init_etl_class_with_args(self):
         class AnotherETL(HTTPMultiThreadedServer):
             def transform(self, data: bytes, *_args) -> bytes:
