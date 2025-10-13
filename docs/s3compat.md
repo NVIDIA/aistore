@@ -193,12 +193,27 @@ The optimal chunk size depends on your network conditions and file size, but 8-1
 
 ### Authentication (JWT) tips
 
-If AIS Authentication is enabled, you'll need to attach a JWT token manually because `s3cmd`'s signer overwrites the `--add-header` option:
+When **AIStore Authentication** is enabled, each request must include a **JWT Bearer token** in the `Authorization` header.
+However, `s3cmd`’s built-in AWS signer overwrites any `--add-header` values, so you need to patch the client directly.
+
+Edit the `sign()` method of the `S3Request` class in [`s3cmd/S3/S3.py`](https://github.com/s3tools/s3cmd/blob/master/S3/S3.py).
+
+Add the following line to override the `Authorization` header:
 
 ```diff
-# s3cmd/S3/S3.py (single‑line patch)
--        pass
-+        self.headers["Authorization"] = "Bearer <token>"
+$ git diff
+diff --git a/S3/S3.py b/S3/S3.py
+index 26c516f..1a0d5e7 100644
+--- a/S3/S3.py
++++ b/S3/S3.py
+@@ -199,6 +199,7 @@ class S3Request(object):
+             ## Sign the data.
+             self.headers = sign_request_v4(self.method_string, hostname, resource_uri, self.params,
+                                           bucket_region, self.headers, self.body)
++        self.headers["Authorization"] = "Bearer <TOKEN>"
+ 
+     def get_triplet(self):
+         self.update_timestamp()
 ```
 
 Replace `<token>` with your actual JWT token. This modification ensures the token is included in every request.
