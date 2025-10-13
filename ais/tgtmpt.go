@@ -40,14 +40,26 @@ type (
 		sync.RWMutex
 	}
 	partArgs struct {
-		r        *http.Request
+		req      *http.Request
+		reader   io.ReadCloser
 		lom      *core.LOM
 		manifest *core.Ufest
 		chunk    *core.Uchunk
 		fh       io.WriteCloser
 		uploadID string
 		partNum  int
+		size     int64 // take precedence over req.ContentLength
 		isS3     bool
+		coldGET  bool
+	}
+	completeArgs struct {
+		r        *http.Request
+		lom      *core.LOM
+		uploadID string
+		body     []byte
+		parts    apc.MptCompletedParts
+		isS3     bool
+		coldGET  bool
 	}
 )
 
@@ -246,17 +258,18 @@ slow:
 // upload API verbs: (start | putPart | complete | abort)
 //
 
-func (ups *ups) start(r *http.Request, lom *core.LOM) (uploadID string, err error) {
-	uploadID, metadata, err := ups._start(r, lom)
+func (ups *ups) start(r *http.Request, lom *core.LOM, coldGET bool) (uploadID string, err error) {
+	uploadID, metadata, err := ups._start(r, lom, coldGET)
 	if err != nil {
 		return
 	}
 	return uploadID, ups.init(uploadID, lom, metadata)
 }
 
-func (ups *ups) _start(r *http.Request, lom *core.LOM) (uploadID string, metadata map[string]string, err error) {
+func (ups *ups) _start(r *http.Request, lom *core.LOM, coldGET bool) (uploadID string, metadata map[string]string, err error) {
 	bck := lom.Bck()
-	if bck.IsRemote() {
+	if bck.IsRemote() && !coldGET {
+		// coldGET implies no need to write to backend
 		switch {
 		case bck.IsRemoteS3():
 			metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
@@ -307,15 +320,21 @@ func (ups *ups) putPart(args *partArgs) (etag string, ecode int, err error) {
 func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	var (
 		lom          = args.lom
-		r            = args.r
-		partSHA      = r.Header.Get(cos.S3HdrContentSHA256)
-		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
+		req          = args.req
+		reader       = args.reader
+		rsize        = args.size
 		cksumSHA     *cos.CksumHash
 		cksumH       = &cos.CksumHash{}
 		remote       = lom.Bck().IsRemote()
 		writers      = make([]io.Writer, 0, 3)
 		startTime    = mono.NanoTime()
+		partSHA      string
+		checkPartSHA bool
 	)
+	if req != nil {
+		partSHA = req.Header.Get(cos.S3HdrContentSHA256)
+		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
+	}
 	if checkPartSHA {
 		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
 		writers = append(writers, cksumSHA.H)
@@ -333,8 +352,8 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	}
 	writers = append(writers, args.fh)
 
-	if r.ContentLength <= 0 {
-		return "", http.StatusBadRequest, fmt.Errorf("%s: put-part invalid size (%d)", lom.Cname(), r.ContentLength)
+	if rsize <= 0 {
+		return "", http.StatusBadRequest, fmt.Errorf("%s: put-part invalid size (%d)", lom.Cname(), rsize)
 	}
 
 	// write
@@ -349,42 +368,44 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		mw               = cos.IniWriterMulti(writers...)
 	)
 	switch {
-	case !remote:
-		buf, slab := t.gmm.AllocSize(r.ContentLength)
-		expectedSize, err = io.CopyBuffer(mw, r.Body, buf)
+	case !remote || args.coldGET:
+		// no need to write to backend
+		buf, slab := t.gmm.AllocSize(rsize)
+		expectedSize, err = io.CopyBuffer(mw, reader, buf)
 		slab.Free(buf)
 	case lom.Bck().IsRemoteAzure():
-		// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
 		backend = t.Backend(lom.Bck())
-		sgl := t.gmm.NewSGL(r.ContentLength)
+		sgl := t.gmm.NewSGL(rsize)
 		mw.Append(sgl)
-		reader := memsys.NewReader(sgl)
-		expectedSize, err = io.Copy(mw, r.Body)
+		expectedSize, err = io.Copy(mw, reader)
+
+		// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
+		seekableReader := memsys.NewReader(sgl)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, reader, r, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(lom, seekableReader, req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
 	case t.gmm.Pressure() < memsys.PressureHigh:
 		// write 1) locally + sgl + checksums; 2) write sgl => backend
 		backend = t.Backend(lom.Bck())
-		sgl := t.gmm.NewSGL(r.ContentLength)
+		sgl := t.gmm.NewSGL(rsize)
 		mw.Append(sgl)
-		expectedSize, err = io.Copy(mw, r.Body)
+		expectedSize, err = io.Copy(mw, reader)
 		if err == nil {
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, sgl, r, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(lom, sgl, req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
 	default:
 		// utilize TeeReader to simultaneously write => backend
 		backend = t.Backend(lom.Bck())
-		expectedSize = r.ContentLength
-		tr := io.NopCloser(io.TeeReader(r.Body, mw))
+		expectedSize = rsize
+		tr := io.NopCloser(io.TeeReader(reader, mw))
 		remoteStart := mono.NanoTime()
-		etag, ecode, err = backend.PutMptPart(lom, tr, r, uploadID, expectedSize, int32(args.partNum))
+		etag, ecode, err = backend.PutMptPart(lom, tr, req, uploadID, expectedSize, int32(args.partNum))
 		remotePutLatency = mono.SinceNano(remoteStart)
 	}
 
@@ -460,8 +481,12 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	return etag, ecode, nil
 }
 
-func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body []byte, parts apc.MptCompletedParts, isS3 bool) (string, int, error) {
-	t := ups.t
+func (ups *ups) complete(args *completeArgs) (string, int, error) {
+	var (
+		lom      = args.lom
+		uploadID = args.uploadID
+		t        = ups.t
+	)
 	manifest, remoteMeta := ups.get(uploadID, lom)
 	if manifest == nil {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
@@ -469,7 +494,7 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 
 	// validate/enforce parts, compute whole-object checksum and etag
 	manifest.Lock()
-	etag, err := validateChecksumEtag(lom, manifest, parts, isS3)
+	etag, err := validateChecksumEtag(lom, manifest, args.parts, args.isS3)
 	manifest.Unlock()
 	if err != nil {
 		return "", http.StatusBadRequest, err
@@ -477,17 +502,17 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 
 	// call remote
 	remote := lom.Bck().IsRemote()
-	if remote {
+	if remote && !args.coldGET { // coldGET implies no need to write to backend
 		// NOTE: only OCI, AWS and GCP backends require ETag in the part list
 		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() || lom.Bck().IsRemoteGCP() {
-			for i := range parts {
-				if parts[i].ETag == "" {
-					parts[i].ETag = manifest.GetChunk(parts[i].PartNumber, true).ETag
+			for i := range args.parts {
+				if args.parts[i].ETag == "" {
+					args.parts[i].ETag = manifest.GetChunk(args.parts[i].PartNumber, true).ETag
 				}
 			}
 		}
 
-		tag, ecode, err := ups._completeRemote(r, lom, uploadID, body, parts)
+		tag, ecode, err := ups._completeRemote(args.r, lom, uploadID, args.body, args.parts)
 		if err != nil {
 			return "", ecode, err
 		}
@@ -503,7 +528,9 @@ func (ups *ups) complete(r *http.Request, lom *core.LOM, uploadID string, body [
 	lom.SetCustomKey(cmn.ETag, etag)
 
 	// atomically flip: persist manifest, mark chunked, persist main
-	if err = lom.CompleteUfest(manifest); err != nil {
+	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
+	debug.Assertf(!args.coldGET || lom.IsLocked() == apc.LockWrite, "expecting wlock, have %d", lom.IsLocked())
+	if err = lom.CompleteUfest(manifest, args.coldGET); err != nil {
 		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
 		return "", http.StatusInternalServerError, err
 	}

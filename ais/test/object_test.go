@@ -800,6 +800,125 @@ func Test_coldgetmd5(t *testing.T) {
 	tlog.Logfln("GET %s with MD5 validation:    %v", cos.IEC(totalSize, 0), time.Since(start))
 }
 
+func TestColdGetChunked(t *testing.T) {
+	const (
+		chunkSize   = 16 * cos.MiB
+		maxMonoSize = 1 * cos.GiB
+	)
+
+	tests := []struct {
+		name          string
+		objSize       uint64 // object size
+		sourceChunked bool   // use chunksConf when provisioning source
+		evict         bool   // evict after provision
+		longOnly      bool   // run only with long tests
+	}{
+		// Cold GET scenarios (evicted): chunking based on size limit
+		{name: "chunked-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: true, longOnly: true},     // exceeds limit => chunks
+		{name: "chunked-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: true, evict: true, longOnly: true},      // doesn't exceed => monolithic
+		{name: "monolithic-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: false, evict: true, longOnly: true}, // exceeds limit => chunks
+		{name: "monolithic-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: false, evict: true, longOnly: true},  // doesn't exceed => monolithic
+
+		// Warm GET scenarios (not evicted): object stays as provisioned
+		{name: "chunked-src-no-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: false, longOnly: true},     // source chunked => chunks
+		{name: "chunked-src-no-evict-small", objSize: 48 * cos.MiB, sourceChunked: true, evict: false, longOnly: true},      // source chunked => chunks
+		{name: "monolithic-src-no-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: false, evict: false, longOnly: true}, // source monolithic => monolithic
+		{name: "monolithic-src-no-evict-small", objSize: 48 * cos.MiB, sourceChunked: false, evict: false, longOnly: true},  // source monolithic => monolithic
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				numObjs  = 1
+				proxyURL = tools.RandomProxyURL(t)
+			)
+
+			m := ioContext{
+				t:             t,
+				bck:           cliBck,
+				num:           numObjs,
+				fileSizeRange: [2]uint64{tt.objSize + 1, tt.objSize + chunkSize - 1}, // range within chunkSize for predictable chunk count
+				prefix:        "coldget-chunked/" + tt.name + trand.String(5),
+				getErrIsFatal: true,
+			}
+
+			tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, Long: tt.longOnly})
+
+			// Configure source provisioning
+			if tt.sourceChunked {
+				m.chunksConf = &ioCtxChunksConf{
+					numChunks: int(tt.objSize / chunkSize),
+					multipart: true,
+				}
+			}
+
+			m.init(true /*cleanup*/)
+			initMountpaths(t, proxyURL)
+			baseParams := tools.BaseAPIParams(proxyURL)
+
+			// Provision objects to remote backend
+			tlog.Logfln("Provisioning %d objects (chunked=%v, size=%s, evict=%v)...", numObjs, tt.sourceChunked, cos.ToSizeIEC(int64(tt.objSize), 0), tt.evict)
+			m.remotePuts(tt.evict)
+
+			// Save original bucket props for cleanup
+			p, err := api.HeadBucket(baseParams, m.bck, false)
+			tassert.CheckFatal(t, err)
+
+			// Configure bucket chunking properties
+			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+				Chunks: &cmn.ChunksConfToSet{
+					MaxMonolithicSize: apc.Ptr(cos.SizeIEC(maxMonoSize)),
+					ChunkSize:         apc.Ptr(cos.SizeIEC(chunkSize)),
+				},
+			})
+			tassert.CheckFatal(t, err)
+
+			t.Cleanup(func() {
+				_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+					Chunks: &cmn.ChunksConfToSet{
+						MaxMonolithicSize: apc.Ptr(p.Chunks.MaxMonolithicSize),
+						ChunkSize:         apc.Ptr(p.Chunks.ChunkSize),
+					},
+				})
+				tassert.CheckError(t, err)
+			})
+
+			if tt.evict {
+				tlog.Logln("Performing cold GET...")
+			} else {
+				tlog.Logln("Performing warm GET...")
+			}
+			m.gets(nil, true)
+
+			// Determine expected chunking outcome
+			// Cold GET (evicted): chunks if size > limit
+			// Warm GET (not evicted): stays as provisioned
+			expectChunked := (tt.evict && tt.objSize > maxMonoSize) || (!tt.evict && tt.sourceChunked)
+
+			// Verify chunks on disk only if expected to be chunked
+			if expectChunked {
+				tlog.Logfln("Verifying objects are chunked")
+				ls, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsChunked}, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, len(ls.Entries) == m.num, "expected %d objects, got %d", m.num, len(ls.Entries))
+
+				tlog.Logfln("Verifying chunks are persisted on disk...")
+				expectedChunkCount := int(tt.objSize / chunkSize)
+				for _, objName := range m.objNames {
+					if tt.sourceChunked && !tt.evict {
+						// stay as provisioned
+						expectedChunkCount = m.chunksConf.numChunks - 1
+					}
+					chunks := m.findObjChunksOnDisk(m.bck, objName)
+					tassert.Fatalf(t, len(chunks) == expectedChunkCount, "expected %d chunk files for %s, found %d", expectedChunkCount, objName, len(chunks))
+				}
+			}
+
+			tlog.Logfln("Test case '%s' completed successfully!", tt.name)
+		})
+	}
+}
+
 func TestHeadBucket(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)

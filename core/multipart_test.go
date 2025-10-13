@@ -161,7 +161,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(ufest.Size()).To(Equal(int64(fileSize)))
 
 			// Store manifest (this will mark it as completed)
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
 
@@ -220,7 +220,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			err = ufest.Add(chunk, 0, 1)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()
@@ -268,7 +268,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			lom.SetSize(200)
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()
@@ -312,7 +312,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			reader, err := ufest.NewReader()
@@ -377,7 +377,7 @@ var _ = Describe("MPU-UfestRead", func() {
 			}
 
 			// Complete the MPU - this should set the chunked flag
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked immediately after CompleteUfest")
 
@@ -443,7 +443,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			ufest.Add(chunk, chunkSize, 1)
 
-			err = lom.CompleteUfest(ufest)
+			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lom.IsChunked()).To(BeTrue())
 
@@ -541,7 +541,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		lom.SetCksum(&wholeCksum.Cksum)
 		lom.SetCustomKey(cmn.ETag, etag)
 
-		err = lom.CompleteUfest(manifest)
+		err = lom.CompleteUfest(manifest, false)
 		Expect(err).NotTo(HaveOccurred(), "CompleteUfest should succeed")
 
 		By("Step 7: Verify post-completion state")
@@ -620,7 +620,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		}
 
 		// complete
-		err = chunkedLom.CompleteUfest(manifest)
+		err = chunkedLom.CompleteUfest(manifest, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Step 2: Create identical monolithic object")
@@ -795,7 +795,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				}
 
 				// Complete via LOM - this is the correct interface
-				resultsCh <- lom.CompleteUfest(manifest)
+				resultsCh <- lom.CompleteUfest(manifest, false)
 			}(i)
 		}
 
@@ -868,7 +868,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				expectedMD5 := h.Sum(nil)
 
 				// complete
-				err = lom.CompleteUfest(manifest)
+				err = lom.CompleteUfest(manifest, false)
 				resultsCh <- uploadInfo{
 					lom:          lom,
 					expectedSize: expectedSize,
@@ -989,7 +989,7 @@ var _ = Describe("MPU-UfestRead", func() {
 				expSize := int64(len(allData))
 
 				// complete (API should serialize)
-				err = lom.CompleteUfest(manifest)
+				err = lom.CompleteUfest(manifest, false)
 
 				resultsCh <- workerResult{
 					expectedSize: expSize,

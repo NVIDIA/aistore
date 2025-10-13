@@ -1050,9 +1050,11 @@ func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error
 // LOM: chunk persistence ------------------------------------------------------
 //
 
-func (lom *LOM) CompleteUfest(u *Ufest) (err error) {
-	lom.Lock(true)
-	defer lom.Unlock(true)
+func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
+	if !locked {
+		lom.Lock(true)
+		defer lom.Unlock(true)
+	}
 
 	debug.AssertFunc(func() bool {
 		var total int64

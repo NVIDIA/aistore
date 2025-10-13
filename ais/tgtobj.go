@@ -175,7 +175,82 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 	return poi.putObject()
 }
 
+func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
+	var (
+		lom      = poi.lom
+		uploadID string
+	)
+
+	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.coldGET); err != nil {
+		poi.t.ups.abort(poi.oreq, lom, uploadID)
+		return http.StatusInternalServerError, err
+	}
+
+	// Loop through poi.r and divide it into chunks
+	var (
+		total          int64
+		partNum        = 1
+		completedParts = make(apc.MptCompletedParts, 0, poi.size/chunkSize)
+	)
+	for total < poi.size {
+		// Determine how many bytes to read for this part
+		remainingBytes := poi.size - total
+		thisChunkSize := min(chunkSize, remainingBytes)
+
+		// Create a limited reader for this chunk
+		limitedReader := &io.LimitedReader{
+			R: poi.r,
+			N: thisChunkSize,
+		}
+		chunkReader := io.NopCloser(limitedReader)
+
+		args := partArgs{
+			reader:   chunkReader,
+			size:     thisChunkSize,
+			lom:      lom,
+			uploadID: uploadID,
+			partNum:  partNum,
+			coldGET:  poi.coldGET,
+		}
+		etag, ec, er := poi.t.ups.putPart(&args)
+		if er != nil {
+			poi.t.ups.abort(poi.oreq, lom, uploadID)
+			return ec, er
+		}
+
+		// Calculate actual bytes read
+		total += thisChunkSize
+
+		// Track completed part
+		completedParts = append(completedParts, apc.MptCompletedPart{
+			ETag:       etag,
+			PartNumber: partNum,
+		})
+
+		partNum++
+	}
+
+	_, ecode, err = poi.t.ups.complete(&completeArgs{
+		r:        poi.oreq,
+		lom:      lom,
+		uploadID: uploadID,
+		body:     nil,
+		parts:    completedParts,
+		isS3:     false,
+		coldGET:  poi.coldGET,
+	})
+	return ecode, err
+}
+
 func (poi *putOI) putObject() (ecode int, err error) {
+	maxMonoSize := int64(poi.lom.Bprops().Chunks.MaxMonolithicSize)
+	// NOTE: if `poi.size` is not set, don't trigger chunking
+	if maxMonoSize > 0 && poi.size > maxMonoSize {
+		if cmn.Rom.V(5, cos.ModAIS) {
+			nlog.Infoln("PUT", poi.lom.Cname(), "size", poi.size, "exceeds object size limit, PUT as chunks")
+		}
+		return poi.chunk(int64(poi.lom.Bprops().Chunks.ChunkSize))
+	}
 	poi.ltime = mono.NanoTime()
 
 	// if checksums match PUT is a no-op

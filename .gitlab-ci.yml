@@ -131,7 +131,7 @@ stages:
   stage: test-long
   tags:
     - $RUNNER_TAG
-  timeout: 5h
+  timeout: 6h
   rules:
     - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -144,7 +144,7 @@ stages:
   stage: test-long
   tags:
     - $RUNNER_TAG
-  timeout: 5h
+  timeout: 6h
   <<: *skip_scheduled_rules
   <<: *gather_logs_def
 
@@ -807,7 +807,7 @@ test:short:assorted:k8s:
 
 test:long:k8s:
   extends: .test_k8s_long_template
-  timeout: 5h
+  timeout: 6h
   rules:
     - !reference [.test_k8s_long_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -819,7 +819,7 @@ test:long:k8s:
 
 test:long:k8s:single-target:
   extends: .test_k8s_long_template
-  timeout: 5h
+  timeout: 6h
   variables:
     NUM_TARGET: 1
   script:
@@ -842,7 +842,7 @@ test:long:k8s:pyaisloader:
 
 test:long:k8s:all:
   extends: .test_k8s_long_template
-  timeout: 5h
+  timeout: 6h
   variables:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:

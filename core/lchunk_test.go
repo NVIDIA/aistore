@@ -469,7 +469,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 				Expect(u.Add(c, sz, int64(i+1))).NotTo(HaveOccurred())
 			}
 
-			Expect(lom.CompleteUfest(u)).NotTo(HaveOccurred())
+			Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
 
 			// fresh manifest load
 			loaded, err := core.NewUfest("", lom, true /* must-exist */)
@@ -504,7 +504,7 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 			createTestChunk(c.Path(), 4*cos.KiB, nil)
 			Expect(u.Add(c, 4*cos.KiB, 1)).NotTo(HaveOccurred())
-			Expect(lom.CompleteUfest(u)).NotTo(HaveOccurred())
+			Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
 
 			// Corrupt the stored manifest
 			mfqn := lom.GenFQN(fs.ChunkMetaCT)

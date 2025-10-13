@@ -970,7 +970,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			return
 		}
 		args := partArgs{
-			r:        r,
+			req:      r,
+			size:     r.ContentLength,
+			reader:   r.Body,
 			lom:      lom,
 			uploadID: uploadID,
 			partNum:  partNo,
@@ -1154,7 +1156,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			}
 		}
 		var uploadID string
-		if uploadID, err = t.ups.start(r, lom); err == nil {
+		if uploadID, err = t.ups.start(r, lom, false /*coldGET*/); err == nil {
 			writeXid(w, uploadID)
 		}
 	case apc.ActMptComplete:
@@ -1176,7 +1178,13 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 				break
 			}
 		}
-		_, ecode, err = t.ups.complete(r, lom, uploadID, nil /*body*/, mptCompletedParts, false /*see also dpq.isS3*/)
+		_, ecode, err = t.ups.complete(&completeArgs{
+			r:        r,
+			lom:      lom,
+			uploadID: uploadID,
+			body:     nil,
+			parts:    mptCompletedParts,
+		})
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])
 	default:

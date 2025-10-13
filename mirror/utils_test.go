@@ -239,7 +239,7 @@ func createChunkedMirrorLOM(fqn string, numChunks int) *core.LOM {
 	}
 
 	// Complete the Ufest - this handles chunked flag setting and persistence internally
-	err = lom.CompleteUfest(ufest)
+	err = lom.CompleteUfest(ufest, false)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Reload to pick up chunked flag

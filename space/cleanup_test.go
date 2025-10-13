@@ -486,7 +486,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			createTestChunk(ch.Path(), chunkSize, nil)
 			Expect(u2.Add(ch, chunkSize, int64(part))).NotTo(HaveOccurred())
 		}
-		err = lom.CompleteUfest(u2)
+		err = lom.CompleteUfest(u2, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		uu, err := core.NewUfest("", lom, true /* must-exist */)

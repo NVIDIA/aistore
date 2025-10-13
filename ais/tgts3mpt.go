@@ -42,7 +42,7 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	uploadID, err := t.ups.start(r, lom)
+	uploadID, err := t.ups.start(r, lom, false /*coldGET*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -92,7 +92,9 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	}
 
 	args := partArgs{
-		r:        r,
+		req:      r,
+		size:     r.ContentLength,
+		reader:   r.Body,
 		lom:      lom,
 		uploadID: uploadID,
 		partNum:  int(partNum),
@@ -167,7 +169,14 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 		partList = append(partList, mptPart)
 	}
 
-	etag, ecode, err := t.ups.complete(r, lom, uploadID, body, partList, true /*see also dpq.isS3*/)
+	etag, ecode, err := t.ups.complete(&completeArgs{
+		r:        r,
+		lom:      lom,
+		uploadID: uploadID,
+		body:     body,
+		parts:    partList,
+		isS3:     true,
+	})
 	// convert generic error to s3 error
 	if cos.IsErrNotFound(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
