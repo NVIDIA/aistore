@@ -15,7 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
 	github.com/aws/smithy-go v1.23.0
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/json-iterator/go v1.1.12
 	github.com/karrick/godirwalk v1.17.0
