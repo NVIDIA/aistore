@@ -1,4 +1,4 @@
-// Package namegetter is utility to generate filenames for aisloader PUT requests
+// Package namegetter is a utility to generate filenames for aisloader PUT/GET requests
 /*
 * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -18,6 +18,9 @@ type (
 		Init(names []string, rnd *rand.Rand)
 		// runtime
 		Pick() string
+		// PickBatch returns up to n unique names (within the returned batch).
+		// The result is capped to min(n, len(names)).
+		PickBatch(int, []string) []string
 		Names() []string
 		Len() int
 	}
@@ -28,30 +31,27 @@ type (
 		Add(objName string)
 	}
 
-	// track indices used for unique selection
-	bitmaskTracker struct {
-		mask []uint64
-		used int
-	}
-
 	base struct {
 		names []string
 	}
 
 	Random struct {
 		base
-		rnd *rand.Rand
+		rnd  *rand.Rand
+		seen bitSet // batch-level unqueness (here and elsewhere)
 	}
 
 	RandomUnique struct {
 		base
 		rnd     *rand.Rand
-		tracker bitmaskTracker
+		seen    bitSet
+		tracker bitmaskTracker // unqueness across epochs (here and elsewhere)
 	}
 
 	RandomUniqueIter struct {
 		base
 		rnd     *rand.Rand
+		seen    bitSet
 		tracker bitmaskTracker
 	}
 
@@ -71,43 +71,6 @@ type (
 		nextReady sync.WaitGroup
 	}
 )
-
-////////////////////
-// bitmaskTracker //
-////////////////////
-
-func (bt *bitmaskTracker) init(size int) {
-	words := (size + 63) >> 6 // ceil(size/64)
-	bt.mask = make([]uint64, words)
-	bt.used = 0
-}
-
-func (bt *bitmaskTracker) grow() {
-	bt.mask = append(bt.mask, 0)
-}
-
-// fast path
-func (bt *bitmaskTracker) tryMark(idx int) bool {
-	w := idx >> 6                // idx / 64
-	b := uint64(1) << (idx & 63) // 1 << (idx % 64)
-	if bt.mask[w]&b != 0 {
-		return false
-	}
-	bt.mask[w] |= b
-	bt.used++
-	return true
-}
-
-func (bt *bitmaskTracker) reset() {
-	for i := range bt.mask {
-		bt.mask[i] = 0
-	}
-	bt.used = 0
-}
-
-func (bt *bitmaskTracker) needsReset(totalSize int) bool {
-	return bt.used >= totalSize
-}
 
 //////////
 // base //
@@ -147,6 +110,22 @@ func (rng *Random) Pick() string {
 	return rng.names[idx]
 }
 
+// with-replacement for single Pick(), but strictly unique within a batch
+func (rng *Random) PickBatch(n int, in []string) []string {
+	total := len(rng.names)
+	n = min(total, n)
+
+	rng.seen.reinit(total)
+	for len(in) < n {
+		idx := rng.rnd.IntN(total)
+		if !rng.seen.testAndSet(idx) {
+			continue
+		}
+		in = append(in, rng.names[idx])
+	}
+	return in
+}
+
 //////////////////
 // RandomUnique //
 //////////////////
@@ -179,6 +158,39 @@ func (rng *RandomUnique) Pick() string {
 			return rng.names[idx]
 		}
 	}
+}
+
+// strictly unique within the returned batch; still advances the epoch tracker
+func (rng *RandomUnique) PickBatch(n int, in []string) []string {
+	total := len(rng.names)
+	n = min(total, n)
+
+	rng.seen.reinit(total)
+	if rng.tracker.needsReset(total) {
+		rng.tracker.reset()
+	}
+	for len(in) < n {
+		if rng.tracker.needsReset(total) {
+			rng.tracker.reset()
+		}
+		for {
+			idx := rng.rnd.IntN(total)
+			if !rng.tracker.tryMark(idx) {
+				// exhausted or collision; maybe epoch is done
+				if rng.tracker.needsReset(total) {
+					rng.tracker.reset()
+				}
+				continue
+			}
+			if !rng.seen.testAndSet(idx) {
+				// already in this batch; keep going
+				continue
+			}
+			in = append(in, rng.names[idx])
+			break
+		}
+	}
+	return in
 }
 
 //////////////////////
@@ -226,6 +238,36 @@ func (rng *RandomUniqueIter) Pick() string {
 	return rng.names[idx]
 }
 
+// strictly unique within the returned batch; iterates in cyclic order from random start
+func (rng *RandomUniqueIter) PickBatch(n int, in []string) []string {
+	total := len(rng.names)
+	n = min(total, n)
+
+	rng.seen.reinit(total)
+	if rng.tracker.needsReset(total) {
+		rng.tracker.reset()
+	}
+	start := rng.rnd.IntN(total)
+	for len(in) < n {
+		// single pass over corpus
+		for i := 0; i < total && len(in) < n; i++ {
+			idx := start + i
+			if idx >= total {
+				idx -= total
+			}
+			if rng.tracker.tryMark(idx) && rng.seen.testAndSet(idx) {
+				in = append(in, rng.names[idx])
+			}
+		}
+		// epoch exhausted; reset and choose a new start if still need more
+		if len(in) < n {
+			rng.tracker.reset()
+			start = rng.rnd.IntN(total)
+		}
+	}
+	return in
+}
+
 /////////////////
 // Permutation //
 /////////////////
@@ -254,6 +296,31 @@ func (rng *Permutation) Pick() string {
 	objName := rng.names[rng.perm[rng.permidx]]
 	rng.permidx++
 	return objName
+}
+
+// consecutive window from current permutation; unique in-batch
+func (rng *Permutation) PickBatch(n int, in []string) []string {
+	total := len(rng.names)
+	n = min(total, n)
+	remaining := n
+	for remaining > 0 {
+		left := total - rng.permidx
+		if left == 0 {
+			rng.permidx = 0
+			rng.perm = rng.rnd.Perm(total)
+			left = total
+		}
+		take := left
+		if remaining < take {
+			take = remaining
+		}
+		for i := range take {
+			in = append(in, rng.names[rng.perm[rng.permidx+i]])
+		}
+		rng.permidx += take
+		remaining -= take
+	}
+	return in
 }
 
 /////////////////////////
@@ -297,4 +364,39 @@ func (rng *PermutationImproved) Pick() string {
 	objName := rng.names[rng.perm[rng.permidx]]
 	rng.permidx++
 	return objName
+}
+
+// consecutive window with pre-generated wrap
+func (rng *PermutationImproved) PickBatch(n int, in []string) []string {
+	total := len(rng.names)
+	n = min(total, n)
+
+	for remaining := n; remaining > 0; {
+		left := total - rng.permidx
+		if left == 0 {
+			// swap in pre-generated next permutation
+			rng.nextReady.Wait()
+			rng.perm, rng.permNext = rng.permNext, rng.perm
+			rng.permidx = 0
+
+			// pre-generate the next one in background
+			rng.nextReady.Add(1)
+			go func(nLocal int) {
+				r := cos.NowRand() // independent rng
+				rng.permNext = r.Perm(nLocal)
+				rng.nextReady.Done()
+			}(total)
+			left = total
+		}
+		take := left
+		if remaining < take {
+			take = remaining
+		}
+		for i := range take {
+			in = append(in, rng.names[rng.perm[rng.permidx+i]])
+		}
+		rng.permidx += take
+		remaining -= take
+	}
+	return in
 }

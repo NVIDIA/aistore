@@ -202,7 +202,6 @@ func writeStatsJSON(to io.Writer, s *sts, withcomma ...bool) {
 	}{
 		Get: jsonStatsFromReq(s.get),
 		Put: jsonStatsFromReq(s.put),
-		Cfg: jsonStatsFromReq(s.getConfig),
 	}
 
 	jsonOutput, err := json.MarshalIndent(jStats, "", "  ")
@@ -266,14 +265,6 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 			ps(s.get.Throughput(s.get.Start(), time.Now()))+" ("+ps(t.get.Throughput(t.get.Start(), time.Now()))+")",
 			errs)
 	}
-	if s.getConfig.Total() != 0 {
-		p(to, statsPrintHeader, pt(), "CFG",
-			pn(s.getConfig.Total())+" ("+pn(t.getConfig.Total())+")",
-			pb(s.getConfig.TotalBytes())+" ("+pb(t.getConfig.TotalBytes())+")",
-			pl(s.getConfig.MinLatency(), s.getConfig.AvgLatency(), s.getConfig.MaxLatency()),
-			ps(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+" ("+ps(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
-			pn(s.getConfig.TotalErrs())+" ("+pn(t.getConfig.TotalErrs())+")")
-	}
 }
 
 func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
@@ -312,15 +303,6 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 			ps(sget.Throughput(sget.Start(), time.Now())),
 			pn(sget.TotalErrs()))
 	}
-	sconfig := &t.getConfig
-	if sconfig.Total() > 0 {
-		p(to, statsPrintHeader, pt(), "CFG",
-			pn(sconfig.Total()),
-			pb(sconfig.TotalBytes()),
-			pl(sconfig.MinLatency(), sconfig.AvgLatency(), sconfig.MaxLatency()),
-			pb(sconfig.Throughput(sconfig.Start(), time.Now())),
-			pn(sconfig.TotalErrs()))
-	}
 }
 
 // writeStatus writes stats to the specified io.Writer.
@@ -341,37 +323,33 @@ func printRunParams(p *params) {
 		d = "-"
 	}
 	b, err := jsoniter.MarshalIndent(struct {
-		StatsInterval string `json:"stats interval"`
 		URL           string `json:"proxy"`
 		Bucket        string `json:"bucket"`
-		Provider      string `json:"provider"`
-		Namespace     string `json:"namespace"`
 		Duration      string `json:"duration"`
-		Backing       string `json:"backed by"`
-		MaxPutBytes   int64  `json:"PUT upper bound,string"`
-		MinSize       int64  `json:"minimum object size (bytes)"`
-		MaxSize       int64  `json:"maximum object size (bytes)"`
 		NumWorkers    int    `json:"# workers"`
-		PutPct        int    `json:"% PUT"`
-		UpdatePct     int    `json:"% Update Existing"`
-		MultipartPct  int    `json:"% Multipart PUT"`
-		Seed          int64  `json:"seed,string"`
+		StatsInterval string `json:"stats interval"`
+		PutPct        int    `json:"% PUT,omitempty"`
+		UpdatePct     int    `json:"% Update Existing,omitempty"`
+		MultipartPct  int    `json:"% Multipart PUT,omitempty"`
+		GetBatchSize  int    `json:"GET(batch): batch size,omitempty"`
+		MinSize       int64  `json:"minimum object size (bytes),omitempty"`
+		MaxSize       int64  `json:"maximum object size (bytes),omitempty"`
+		MaxPutBytes   int64  `json:"PUT upper bound,string,omitempty"`
+		Backing       string `json:"reader-type,omitempty"`
 		Cleanup       bool   `json:"cleanup"`
 	}{
-		Seed:          p.seed,
 		URL:           p.proxyURL,
-		Bucket:        p.bck.Name,
-		Provider:      p.bck.Provider,
-		Namespace:     p.bck.Ns.String(),
+		Bucket:        p.bck.Cname(""),
 		Duration:      d,
-		MaxPutBytes:   p.putSizeUpperBound,
+		NumWorkers:    p.numWorkers,
+		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		PutPct:        p.putPct,
 		UpdatePct:     p.updateExistingPct,
 		MultipartPct:  p.multipartPct,
+		GetBatchSize:  p.getBatchSize,
 		MinSize:       p.minSize,
 		MaxSize:       p.maxSize,
-		NumWorkers:    p.numWorkers,
-		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
+		MaxPutBytes:   p.putSizeUpperBound,
 		Backing:       p.readerType,
 		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")

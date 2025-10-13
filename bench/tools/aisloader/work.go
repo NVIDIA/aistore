@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -25,22 +26,49 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 )
 
+// GET(batch): an operation that gets a batch of objects (or archived files) in one shot.
+//
+// TODO: stats
+// - Track batch-specific latency (entire batch completion time)
+// - detailed HTTP tracing for batch operations
+//
+// TODO: features (via additional command line)
+// - multipart mode (whereby streaming mode is aisloader's default)
+// - continue-on-error
+// - multiple buckets
+// - other supported input and output formats (other than TAR)
+//
+// TODO: optimize
+// - mem-pool apc.MossReq
+// - read/discard resulting TAR
+//
+// TODO: mutual exclusion and validation
+// - Get(batch) vs other command line (verifyHash, readOff/readLen, etl, etc.)
+// - Direct S3 support for batch operations - not available of course
+//
+// TODO: short:test pipeline
+// - extend test-aisloader target - add GET(batch)
+//
+// TODO: documentation
+// - add usage examples to examples.go
+// - update docs/aisloader.md
+// ---------------------------------------------------------------------------------------
+
 const (
 	opFree = iota
 	opPut
 	opGet
 	opUpdateExisting // {GET followed by PUT(same name, same size)} combo
-	opConfig
-	opPutMultipart // multipart upload operation
+	opPutMultipart   // multipart upload operation
+	opGetBatch       // get-batch
 )
 
 type (
 	workOrder struct {
 		err       error
 		sgl       *memsys.SGL
-		bck       cmn.Bck
-		proxyURL  string
-		objName   string // virtual-dir + "/" + objName
+		batch     []string // []{ objName } to perform GET(batch)
+		objName   string
 		cksumType string
 		latencies httpLatencies
 		op        int
@@ -68,39 +96,52 @@ func allocWO(op int) *workOrder {
 }
 
 func freeWO(wo *workOrder) {
-	// - work orders with SGLs are freed via wo2Free
-	// - opFree when already freed
-	if wo.sgl == nil && wo.op != opFree {
-		*wo = wo0
-		woPool.Put(wo)
+	// work orders with SGLs are freed via wo2Free
+	if wo.sgl != nil || wo.op == opFree {
+		return
 	}
+
+	var batch []string
+	if wo.op == opGetBatch {
+		batch = wo.batch[:0]
+	}
+
+	*wo = wo0
+	wo.batch = batch
+	woPool.Put(wo)
 }
 
 func postNewWorkOrder() (err error) {
-	if runParams.getConfig {
-		workCh <- newGetConfigWorkOrder()
-		return nil
-	}
-
-	put := shouldUsePercentage(runParams.putPct)
-
-	var wo *workOrder
-	if put {
-		// Decide between regular PUT and multipart PUT
+	// operation
+	op := opGet
+	switch {
+	case shouldUsePercentage(runParams.putPct):
+		// when a certain percentage of PUTs becomes PUT(multi-part)
+		op = opPut
 		if runParams.multipartChunks > 0 && shouldUsePercentage(runParams.multipartPct) {
-			wo, err = newMultipartWorkOrder()
-		} else {
-			wo, err = newPutWorkOrder()
+			op = opPutMultipart
 		}
-	} else {
-		var op = opGet
-		if runParams.updateExistingPct > 0 {
-			if shouldUsePercentage(runParams.updateExistingPct) {
-				op = opUpdateExisting
-			}
-		}
-		wo, err = newGetWorkOrder(op)
+	case runParams.getBatchSize > 0:
+		// when GET becomes GET(batch)
+		op = opGetBatch
+	case runParams.updateExistingPct > 0 && shouldUsePercentage(runParams.updateExistingPct):
+		// when a percentage of GET(foo) is followed up by PUT(foo)
+		op = opUpdateExisting
 	}
+
+	// work order
+	var wo *workOrder
+	switch op {
+	case opPut:
+		wo, err = newPutWorkOrder()
+	case opPutMultipart:
+		wo, err = newMultipartWorkOrder()
+	case opGet, opUpdateExisting:
+		wo, err = newGetWorkOrder(op)
+	default:
+		wo, err = newGetBatchWorkOrder()
+	}
+
 	if err == nil {
 		workCh <- wo
 	}
@@ -131,39 +172,37 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 	}
 
-	delta := time.Duration(wo.end - wo.start)
+	elapsed := time.Duration(wo.end - wo.start)
+	if elapsed <= 0 {
+		err := fmt.Errorf("unexpected: non-positive latency %v: %s", elapsed, wo.String())
+		debug.AssertNoErr(err)
+		elapsed = 0
+	}
 
 	switch wo.op {
 	case opUpdateExisting:
-		delta = time.Duration(wo.startPut - wo.start)
+		elapsed = time.Duration(wo.startPut - wo.start)
+		debug.Assert(elapsed >= 0)
 		fallthrough
 	case opGet:
-		if delta <= 0 {
-			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
-			return
-		}
 		getPending--
 		intervalStats.statsd.Get.AddPending(getPending)
 		if wo.err != nil {
-			fmt.Println("GET failed:", wo.err) // TODO: not necessarily when opGetPutNewVer
+			fmt.Fprintln(os.Stderr, "GET failed:", wo.err)
 			intervalStats.statsd.Get.AddErr()
 			intervalStats.get.AddErr()
 			return
 		}
-		intervalStats.get.Add(wo.size, delta)
-		intervalStats.statsd.Get.Add(wo.size, delta)
+		intervalStats.get.Add(wo.size, elapsed)
+		intervalStats.statsd.Get.Add(wo.size, elapsed)
 		if wo.op == opGet {
 			return
 		}
 
-		delta = time.Duration(wo.end - wo.startPut)
+		elapsed = time.Duration(wo.end - wo.startPut)
 		putPending++
 		fallthrough
 	case opPut:
-		if delta <= 0 {
-			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
-			return
-		}
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
@@ -172,10 +211,10 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 					objnameGetter.Add(wo.objName)
 				}
 			}
-			intervalStats.put.Add(wo.size, delta)
-			intervalStats.statsd.Put.Add(wo.size, delta)
+			intervalStats.put.Add(wo.size, elapsed)
+			intervalStats.statsd.Put.Add(wo.size, elapsed)
 		} else {
-			fmt.Println("PUT failed:", wo.err)
+			fmt.Fprintln(os.Stderr, "PUT failed:", wo.err)
 			intervalStats.put.AddErr()
 			intervalStats.statsd.Put.AddErr()
 		}
@@ -184,7 +223,8 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 
 		now, l := mono.NanoTime(), len(wo2Free)
-		// free previously executed PUT SGLs
+
+		// cleanup: free previously executed PUT SGLs
 		for i := 0; i < l; i++ {
 			if terminating {
 				return
@@ -207,33 +247,36 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 		// append to free later
 		wo2Free = append(wo2Free, wo)
-	case opConfig:
-		if wo.err == nil {
-			intervalStats.getConfig.Add(1, delta)
-			intervalStats.statsd.Config.Add(delta, wo.latencies.Proxy, wo.latencies.ProxyConn)
-		} else {
-			fmt.Println("get-config failed:", wo.err)
-			intervalStats.getConfig.AddErr()
-		}
 	case opPutMultipart:
-		if delta <= 0 {
-			fmt.Fprintf(os.Stderr, "[ERROR] %s has the same start time as end time", wo)
-			return
-		}
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
 			if !stopping.Load() {
 				objnameGetter.Add(wo.objName)
 			}
-			intervalStats.putMPU.Add(wo.size, delta)
-			intervalStats.statsd.Put.Add(wo.size, delta)
+			intervalStats.putMPU.Add(wo.size, elapsed)
+			intervalStats.statsd.Put.Add(wo.size, elapsed)
 		} else {
-			fmt.Println("Multipart PUT failed:", wo.err)
+			fmt.Fprintln(os.Stderr, "Multipart PUT failed:", wo.err)
 			intervalStats.putMPU.AddErr()
 			intervalStats.statsd.Put.AddErr()
 		}
 		// No SGL cleanup needed for multipart operations
+
+	case opGetBatch:
+		getPending-- // TODO: revisit
+		intervalStats.statsd.Get.AddPending(getPending)
+		if wo.err == nil {
+			// TODO: decide how to count - as 1 batch or N objects?
+			// For now, count as single operation with aggregate size
+			intervalStats.get.Add(wo.size, elapsed)
+			intervalStats.statsd.Get.Add(wo.size, elapsed)
+		} else {
+			fmt.Fprintln(os.Stderr, "GetBatch failed:", wo.err)
+			intervalStats.get.AddErr()
+			intervalStats.statsd.Get.AddErr()
+		}
+
 	default:
 		debug.Assert(false, wo.op)
 	}
@@ -242,7 +285,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 func doPut(wo *workOrder) {
 	var (
 		sgl *memsys.SGL
-		url = wo.proxyURL
+		url = runParams.proxyURL
 	)
 	if runParams.readerType == readers.TypeSG {
 		sgl = gmm.NewSGL(wo.size)
@@ -264,20 +307,20 @@ func doPut(wo *workOrder) {
 		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
-			fmt.Printf("PUT(wo): %v\n", err)
+			fmt.Fprintln(os.Stderr, "PUT(wo) err:", err, wo.String())
 			os.Exit(1)
 		}
 		url = psi.URL(cmn.NetPublic)
 	}
 	if !traceHTTPSig.Load() {
 		if isDirectS3() {
-			wo.err = s3put(wo.bck, wo.objName, r)
+			wo.err = s3put(runParams.bck, wo.objName, r)
 		} else {
-			wo.err = put(url, wo.bck, wo.objName, r.Cksum(), r)
+			wo.err = put(url, runParams.bck, wo.objName, r.Cksum(), r)
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.err = putWithTrace(url, wo.bck, wo.objName, &wo.latencies, r.Cksum(), r)
+		wo.err = putWithTrace(url, runParams.bck, wo.objName, &wo.latencies, r.Cksum(), r)
 	}
 	if runParams.readerType == readers.TypeFile {
 		r.Close()
@@ -286,50 +329,72 @@ func doPut(wo *workOrder) {
 }
 
 func doMultipart(wo *workOrder) {
-	var url = wo.proxyURL
+	var url = runParams.proxyURL
 
 	if runParams.randomProxy {
 		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
-			fmt.Printf("Multipart PUT(wo): %v\n", err)
+			fmt.Fprintln(os.Stderr, "Multipart PUT(wo) err:", err, wo.String())
 			os.Exit(1)
 		}
 		url = psi.URL(cmn.NetPublic)
 	}
 
-	wo.err = putMultipart(url, wo.bck, wo.objName, wo.size, runParams.multipartChunks, wo.cksumType)
+	wo.err = putMultipart(url, runParams.bck, wo.objName, wo.size, runParams.multipartChunks, wo.cksumType)
 }
 
 func doGet(wo *workOrder) {
 	var (
-		url = wo.proxyURL
+		url = runParams.proxyURL
 	)
 	if runParams.randomProxy {
 		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
-			fmt.Printf("GET(wo): %v\n", err)
+			fmt.Fprintln(os.Stderr, "GET(wo) err:", err, wo.String())
 			os.Exit(1)
 		}
 		url = psi.URL(cmn.NetPublic)
 	}
 	if !traceHTTPSig.Load() {
 		if isDirectS3() {
-			wo.size, wo.err = s3getDiscard(wo.bck, wo.objName)
+			wo.size, wo.err = s3getDiscard(runParams.bck, wo.objName)
 		} else {
-			wo.size, wo.err = getDiscard(url, wo.bck,
+			wo.size, wo.err = getDiscard(url, runParams.bck,
 				wo.objName, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.size, wo.err = getTraceDiscard(url, wo.bck,
+		wo.size, wo.err = getTraceDiscard(url, runParams.bck,
 			wo.objName, &wo.latencies, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
 	}
 }
 
-func doGetConfig(wo *workOrder) {
-	wo.latencies, wo.err = getConfig(wo.proxyURL)
+func doGetBatch(wo *workOrder) {
+	var url = runParams.proxyURL
+
+	if runParams.randomProxy {
+		debug.Assert(!isDirectS3())
+		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "GetBatch(wo):", err, wo.String())
+			os.Exit(1)
+		}
+		url = psi.URL(cmn.NetPublic)
+	}
+
+	// build GetBatch request from wo.batch
+	// (earlier objnameGetter.PickBatch())
+	mossIn := make([]apc.MossIn, len(wo.batch))
+	for i, objName := range wo.batch {
+		mossIn[i] = apc.MossIn{ObjName: objName}
+	}
+	req := &apc.MossReq{
+		In:           mossIn,
+		StreamingGet: true, // default to streaming // TODO: command line
+	}
+	wo.size, wo.err = getBatchDiscard(url, runParams.bck, req)
 }
 
 func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {
@@ -357,10 +422,10 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 				wo.startPut = mono.NanoTime()
 				doPut(wo)
 			}
-		case opConfig:
-			doGetConfig(wo)
 		case opPutMultipart:
 			doMultipart(wo)
+		case opGetBatch:
+			doGetBatch(wo)
 		default:
 			debug.Assert(false, wo.op)
 		}
@@ -374,11 +439,10 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 // workOrder //
 ///////////////
 
-func newPutWorkOrder() (*workOrder, error) {
-	return newPutWO(opPut)
-}
+func newPutWorkOrder() (*workOrder, error)       { return _newPutWO(opPut) }
+func newMultipartWorkOrder() (*workOrder, error) { return _newPutWO(opPutMultipart) }
 
-func newPutWO(op int) (*workOrder, error) {
+func _newPutWO(op int) (*workOrder, error) {
 	objName, err := _genObjName()
 	if err != nil {
 		return nil, err
@@ -392,17 +456,11 @@ func newPutWO(op int) (*workOrder, error) {
 
 	wo := allocWO(op)
 	{
-		wo.proxyURL = runParams.proxyURL
-		wo.bck = runParams.bck
 		wo.objName = objName
 		wo.size = size
 		wo.cksumType = runParams.cksumType
 	}
 	return wo, nil
-}
-
-func newMultipartWorkOrder() (*workOrder, error) {
-	return newPutWO(opPutMultipart)
 }
 
 func _genObjName() (string, error) {
@@ -447,40 +505,37 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 
 	getPending++
 	wo := allocWO(op)
-	{
-		wo.proxyURL = runParams.proxyURL
-		wo.bck = runParams.bck
-		wo.objName = objnameGetter.Pick()
-	}
+	wo.objName = objnameGetter.Pick()
 	return wo, nil
 }
 
-func newGetConfigWorkOrder() *workOrder {
-	return &workOrder{
-		proxyURL: runParams.proxyURL,
-		op:       opConfig,
+func newGetBatchWorkOrder() (*workOrder, error) {
+	if objnameGetter.Len() == 0 {
+		return nil, errors.New("no objects in bucket")
 	}
+
+	getPending++ // TODO: revisit
+	wo := allocWO(opGetBatch)
+	wo.batch = objnameGetter.PickBatch(runParams.getBatchSize, wo.batch)
+	return wo, nil
 }
 
 func (wo *workOrder) String() string {
-	var errstr, opName string
+	var opName string
 	switch wo.op {
 	case opPut:
 		opName = http.MethodPut
 	case opGet:
 		opName = http.MethodGet
+	case opPutMultipart:
+		opName = "PUT(multipart)"
 	case opUpdateExisting:
 		opName = "GET-PUT(new-version)"
-	case opConfig:
-		opName = "CONFIG"
+	case opGetBatch:
+		opName = "GET(batch)"
 	}
-
-	if wo.err != nil {
-		errstr = ", error: " + wo.err.Error()
-	}
-
-	return fmt.Sprintf("WO: %s/%s, duration %s, size: %d, type: %s%s",
-		wo.bck.String(), wo.objName, time.Duration(wo.end-wo.start), wo.size, opName, errstr)
+	return fmt.Sprintf("wo[%s %s, %v, size: %d]",
+		opName, runParams.bck.Cname(wo.objName), time.Duration(wo.end-wo.start), wo.size)
 }
 
 // shouldUsePercentage returns true based on the given percentage (0-100)

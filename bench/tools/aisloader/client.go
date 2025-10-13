@@ -6,6 +6,7 @@
 package aisloader
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -497,29 +498,17 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *ht
 	return n, err
 }
 
-// getConfig sends a {what:config} request to the url and discard the message
-// For testing purpose only
-func getConfig(proxyURL string) (httpLatencies, error) {
-	tctx := newTraceCtx(proxyURL)
-
-	url := proxyURL + apc.URLPathDae.S
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
-	req.URL.RawQuery = api.GetWhatRawQuery(apc.WhatNodeConfig, "")
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
-
-	resp, err := tctx.tracedClient.Do(req)
-	if err != nil {
-		return httpLatencies{}, err
+// TODO: revisit; consume/discard TAR
+func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, error) {
+	var buf bytes.Buffer
+	bp := api.BaseParams{
+		URL:    proxyURL,
+		Client: runParams.bp.Client,
+		Token:  runParams.bp.Token,
+		UA:     runParams.bp.UA,
 	}
-	defer resp.Body.Close()
-
-	_, _, err = readDiscard(resp, "GetConfig", "" /*cksum type*/)
-
-	l := httpLatencies{
-		ProxyConn: timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
-		Proxy:     time.Since(tctx.tr.tsProxyConn),
-	}
-	return l, err
+	_, err := api.GetBatch(bp, bck, req, &buf)
+	return int64(buf.Len()), err
 }
 
 func listObjCallback(ctx *api.LsoCounter) {

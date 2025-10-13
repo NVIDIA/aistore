@@ -31,9 +31,15 @@ if [[ -z ${bucket_name} ]]; then
 fi
 
 if [ "$etl" = true ]; then
-  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=100 -provider=ais -maxsize=10MiB -minsize=1MiB -totalputsize=5GiB -cleanup=false -numworkers=8 -readertype=tar
-  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=10 -provider=ais  -maxsize=10MiB -minsize=1MiB -totalputsize=5GiB -cleanup=true  -numworkers=8 -readertype=tar -etl=tar2tf
+  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=100 -provider=ais -maxsize=10MiB -minsize=1MiB -totalputsize=5GiB -cleanup=false -numworkers=8 -readertype=tar --quiet
+  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=10 -provider=ais  -maxsize=10MiB -minsize=1MiB -totalputsize=5GiB -cleanup=false -numworkers=8 -readertype=tar -etl=tar2tf --quiet
+
+  # GET(batch) smoke test
+  aisloader -bucket="${bucket_name}" -duration=30s -pctput=0 -provider=ais -cleanup=true -numworkers=4 -get-batchsize=32 --quiet
 else
-  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=100 -provider=ais -maxsize=10MiB -minsize=1MiB -totalputsize=10GiB -cleanup=false -numworkers=8
-  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=10 -provider=ais  -maxsize=10MiB -minsize=1MiB -totalputsize=10GiB -cleanup=true  -numworkers=8
+  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=100 -provider=ais -maxsize=10MiB -minsize=1MiB -totalputsize=10GiB -cleanup=false -numworkers=8 --quiet
+  aisloader -bucket="${bucket_name}" -duration="$duration" -pctput=10 -provider=ais  -maxsize=10MiB -minsize=1MiB -totalputsize=10GiB -cleanup=false -numworkers=8 --quiet
+
+  # GET(batch) smoke test
+  aisloader -bucket="${bucket_name}" -duration=45s -pctput=0 -provider=ais -cleanup=true -numworkers=4 -get-batchsize=64 --quiet
 fi

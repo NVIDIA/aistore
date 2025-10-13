@@ -787,7 +787,7 @@ func showSectionNotFoundError(c *cli.Context, section string, config any, helpCm
 // extractAvailableSections extracts root-level configuration sections from any config structure
 func extractAvailableSections(config any) []string {
 	var availableSections []string
-	seen := make(map[string]bool)
+	seen := make(map[string]bool, 16)
 
 	cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
 		root := strings.Split(tag, ".")[0]

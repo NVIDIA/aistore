@@ -3,9 +3,10 @@
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 
-// AIS loader (aisloader) is a tool to measure storage performance. It's a load
+// `aisloader` is a benchmarking tool to measure storage performance. It's a load
 // generator that can be used to benchmark and stress-test AIStore
 // or any S3-compatible backend.
+//
 // In fact, aisloader can list, write, and read S3(*) buckets _directly_, which
 // makes it quite useful, convenient, and easy to use benchmark tool to compare
 // storage performance with aistore in front of S3 vs _without_.
@@ -18,7 +19,7 @@
 // avoiding compute-side bottlenecks and the associated complexity (to analyze those).
 //
 // For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`,
-// or see examples.go.
+// or see examples.go in this package.
 
 package aisloader
 
@@ -103,7 +104,7 @@ type (
 		etlSpecPath          string // ETL spec pathname to apply to each object.
 		bProps               cmn.Bprops
 		duration             DurationExt // stop after the run for at least that much
-		batchSize            int         // used for: bootstrap(list) and delete
+		evictBatchSize       int         // used for: bootstrap(list) and delete
 		numEpochs            uint
 		loaderIDHashLen      uint
 		seed                 int64 // random seed; UnixNano() if omitted
@@ -114,6 +115,7 @@ type (
 		statsdPort           int
 		multipartChunks      int // number of chunks for multipart upload (0 - disabled, >0 - enabled)
 		multipartPct         int // percentage of PUTs that use multipart upload (0-100)
+		getBatchSize         int // when defined use api.GetBatch() instead of api.GetObject()
 		putShards            uint64
 		maxputs              uint64
 		loaderCnt            uint64
@@ -130,7 +132,6 @@ type (
 		uniqueGETs           bool
 		skipList             bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
 		verifyHash           bool // verify xxhash during get
-		getConfig            bool // when true, execute control plane requests (read cluster configuration)
 		jsonFormat           bool
 		stoppable            bool // when true, terminate by Ctrl-C
 		dryRun               bool // print configuration and parameters that aisloader will use at runtime
@@ -142,11 +143,10 @@ type (
 
 	// sts records accumulated puts/gets information.
 	sts struct {
-		statsd    stats.Metrics
-		put       stats.HTTPReq
-		get       stats.HTTPReq
-		getConfig stats.HTTPReq
-		putMPU    stats.HTTPReq // multipart upload operations
+		statsd stats.Metrics
+		put    stats.HTTPReq
+		get    stats.HTTPReq
+		putMPU stats.HTTPReq // multipart upload operations
 	}
 
 	jsonStats struct {
@@ -280,10 +280,8 @@ func Start(version, buildtime string) (err error) {
 	runParams.bp.UA = ua
 
 	var created bool
-	if !runParams.getConfig {
-		if err := setupBucket(runParams, &created); err != nil {
-			return err
-		}
+	if err := setupBucket(runParams, &created); err != nil {
+		return err
 	}
 
 	if isDirectS3() {
@@ -304,7 +302,7 @@ func Start(version, buildtime string) (err error) {
 		}
 		objnameGetter = &namegetter.Random{}
 		objnameGetter.Init([]string{}, rnd)
-	case !runParams.getConfig && !runParams.skipList:
+	case !runParams.skipList:
 		if err := listObjects(); err != nil {
 			return err
 		}
@@ -409,7 +407,7 @@ func Start(version, buildtime string) (err error) {
 	if runParams.statsOutput != "" {
 		f, err := cos.CreateFile(runParams.statsOutput)
 		if err != nil {
-			fmt.Println("Failed to create stats out file")
+			fmt.Fprintf(os.Stderr, "Failed to create stats-out %q: %v\n", runParams.statsOutput, err)
 		}
 
 		statsWriter = f
@@ -561,6 +559,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.multipartChunks, "multipart-chunks", 0, "number of chunks for multipart upload (0 - disabled, >0 - use multipart upload with specified number of chunks)")
 	f.IntVar(&p.multipartPct, "pctmultipart", 0, "percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0)")
 
+	f.IntVar(&p.getBatchSize, "get-batchsize", 0, "GetBatch (ML endpoint)")
+
 	// see also: opUpdateExisting
 	f.IntVar(&p.updateExistingPct, "pctupdate", 0,
 		"percentage of GET requests that are followed by a PUT \"update\" (i.e., creation of a new version of the object)")
@@ -584,7 +584,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.statsdProbe, "test-probe StatsD server prior to benchmarks", false, "when enabled probes StatsD server prior to running (NOTE: deprecated)")
 
 	f.StringVar(&p.tokenFile, "tokenfile", "", "authentication token (FQN)") // see also: AIS_AUTHN_TOKEN_FILE
-	f.IntVar(&p.batchSize, "batchsize", 100, "batch size to list and delete")
+	f.IntVar(&p.evictBatchSize, "evict-batchsize", 1000, "batch size to list and evict the _next_ batch of remote objects")
 	f.StringVar(&p.bPropsStr, "bprops", "", "JSON string formatted as per the SetBucketProps API and containing bucket properties to apply")
 	f.Int64Var(&p.seed, "seed", 0, "random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
 	f.BoolVar(&p.jsonFormat, "json", false, "when true, print output in JSON format")
@@ -620,8 +620,6 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	//
 	// advanced usage
 	//
-	f.BoolVar(&p.getConfig, "getconfig", false,
-		"when true, generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path)")
 	f.StringVar(&p.statsOutput, "stats-output", "", "filename to log statistics (empty string translates as standard output (default))")
 	f.BoolVar(&p.stoppable, "stoppable", false, "when true, stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "when true, show the configuration and parameters that aisloader will use for benchmark")
@@ -773,6 +771,25 @@ func _init(p *params) (err error) {
 		}
 		if p.multipartChunks > 0 {
 			return errors.New("direct S3 access via '-s3endpoint': multipart upload is not supported yet")
+		}
+	}
+
+	if p.getBatchSize != 0 {
+		const s = "'--get-batchsize'"
+		if p.getBatchSize < 1 || p.getBatchSize > 1000 {
+			return fmt.Errorf("invalid %s value %d (must be 1-1000)", s, p.getBatchSize)
+		}
+		if p.readOff != 0 || p.readLen != 0 {
+			return fmt.Errorf("option %s cannot be used with readoff/readlen", s)
+		}
+		if p.verifyHash {
+			return fmt.Errorf("option %s cannot be used with verifyhash", s)
+		}
+		if p.etlName != "" || p.etlSpecPath != "" {
+			return fmt.Errorf("option %s cannot be used with ETL", s)
+		}
+		if isDirectS3() {
+			return fmt.Errorf("option %s requires AIStore (S3 does not provide GetBatch)", s)
 		}
 	}
 
@@ -1009,11 +1026,10 @@ func printArguments(set *flag.FlagSet) {
 // newStats returns a new stats object with given time as the starting point
 func newStats(t time.Time) sts {
 	return sts{
-		put:       stats.NewHTTPReq(t),
-		get:       stats.NewHTTPReq(t),
-		getConfig: stats.NewHTTPReq(t),
-		putMPU:    stats.NewHTTPReq(t),
-		statsd:    stats.NewStatsdMetrics(t),
+		put:    stats.NewHTTPReq(t),
+		get:    stats.NewHTTPReq(t),
+		putMPU: stats.NewHTTPReq(t),
+		statsd: stats.NewStatsdMetrics(t),
 	}
 }
 
@@ -1021,7 +1037,6 @@ func newStats(t time.Time) sts {
 func (s *sts) aggregate(other *sts) {
 	s.get.Aggregate(other.get)
 	s.put.Aggregate(other.put)
-	s.getConfig.Aggregate(other.getConfig)
 	s.putMPU.Aggregate(other.putMPU)
 }
 
@@ -1168,18 +1183,18 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 
 	// Only delete objects if it's not an AIS bucket (because otherwise we just go ahead
 	// and remove the bucket itself)
-	if !runParams.bck.IsAIS() {
-		b := min(t, runParams.batchSize)
+	if runParams.bck.IsRemote() {
+		b := min(t, runParams.evictBatchSize)
 		n := t / b
 		for i := range n {
 			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[i*b : (i+1)*b]}}
 			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
 			if err != nil {
-				fmt.Println("delete err ", err)
+				fmt.Fprintln(os.Stderr, "delete multi-obj err:", err)
 			}
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
 			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
-				fmt.Println("wait for xaction err ", err)
+				fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
 			}
 		}
 
@@ -1187,11 +1202,11 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[n*b:]}}
 			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
 			if err != nil {
-				fmt.Println("delete err ", err)
+				fmt.Fprintln(os.Stderr, "delete err:", err)
 			}
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
 			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
-				fmt.Println("wait for xaction err ", err)
+				fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
 			}
 		}
 	}
@@ -1199,7 +1214,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	if runParams.readerType == readers.TypeFile {
 		for _, obj := range objs {
 			if err := os.Remove(runParams.tmpDir + "/" + obj); err != nil {
-				fmt.Println("delete local file err ", err)
+				fmt.Println("delete local file err:", err)
 			}
 		}
 	}
