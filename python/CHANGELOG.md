@@ -6,10 +6,21 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+
+- Introduced a new `Batch` class to handle GetBatch requests, replacing the old `BatchLoader`.
+- Added support for creating batches with multiple objects.
+
 ### Changed
 
 - FastAPI ETL Webserver: Introduced HTTP connection pooling via `httpx.Limits` to manage maximum concurrent and keep-alive connections, improving network efficiency under load.
 - Transformation handling: Removed per-request thread creation and now rely on the existing executor loop for CPU-bound transforms, reducing thread overhead and overall CPU usage.
+- Updated the SDK to utilize `MossIn` and `MossOut` types for better metadata handling (Match Go API 1:1).
+
+### Removed
+
+- Removed `BatchLoader` and `BatchRequest` classes.
+
 
 ## [1.16.0] - 2025-10-03
 

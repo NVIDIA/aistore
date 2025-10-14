@@ -3,17 +3,14 @@
 #
 
 import tarfile
-from typing import Generator, Tuple, Union, Any, Optional
+from typing import Any, Generator, Optional, Tuple, Union
 from io import BytesIO
-from requests import Response
-from overrides import override
 
+from overrides import override
+from requests import Response
+
+from aistore.sdk.batch.types import MossOut, MossReq, MossResp
 from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamExtractor
-from aistore.sdk.batch.batch_response import (
-    BatchResponse,
-    BatchResponseItem,
-)
-from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk.const import EXT_TARGZ, EXT_TGZ, EXT_TAR
 from aistore.sdk.utils import get_logger
 
@@ -35,71 +32,55 @@ class TarStreamExtractor(ArchiveStreamExtractor):
         self,
         response: Response,
         data_stream: Union[BytesIO, Any],
-        batch_request: BatchRequest,
-        batch_response: Optional[BatchResponse] = None,
-    ) -> Generator[Tuple[BatchResponseItem, bytes], None, None]:
+        moss_req: MossReq,
+        moss_resp: Optional[MossResp] = None,
+    ) -> Generator[Tuple[MossOut, bytes], None, None]:
         """
-        Extract from tar archive stream and yield individual file contents.
-
-        Sequentially reads the tar archive to avoid memory-intensive buffering.
-        See https://docs.python.org/3/library/tarfile.html#tarfile.open
+        Extract from tar archive stream.
 
         Args:
-            response (Response): HTTP response object containing connection for stream
-            data_stream (Union[BytesIO, Any]): Tar archive data stream or bytes
-            batch_request (BatchRequest): Request that fetched the tar
-            batch_response (Optional[BatchResponse]): Provided if request is not streaming
+            response (Response): HTTP response
+            data_stream (Union[BytesIO, Any]): Archive data
+            moss_req (MossReq): Original request
+            moss_resp (Optional[MossResp]): Response metadata (None for streaming)
 
         Yields:
-            Tuple[BatchResponseItem, bytes]: Response and file content in bytes
-
-        Raises:
-            RuntimeError: If tar stream extraction or file extraction fails
+            Tuple[MossOut, bytes]: (MossOut, content) tuples
         """
-        resp_index = 0
+        index = 0
         try:
-            with tarfile.open(fileobj=data_stream, mode="r|*") as tar_file:
-                for tarinfo in tar_file:
-
+            with tarfile.open(fileobj=data_stream, mode="r|*") as tar:
+                for tarinfo in tar:
                     if not tarinfo.isfile():
                         continue
 
                     try:
-                        with tar_file.extractfile(tarinfo) as file:
+                        with tar.extractfile(tarinfo) as file:
+                            content = file.read()
 
-                            # Get response item (metadata)
-                            response_item = BatchResponseItem.from_request_or_response(
-                                index=resp_index,
-                                batch_request=batch_request,
-                                batch_response=batch_response,
+                            # Get MossOut (from response or build from request)
+                            moss_out = self._get_moss_out(
+                                index, len(content), moss_req, moss_resp
                             )
 
-                            # Check for missing files
-                            response_item.is_missing = response_item.is_file_missing(
-                                filename=tarinfo.name
-                            )
+                            # Check for missing
+                            # TODO: FIXME: what to do with missing files?
+                            # moss_out.is_missing = tarinfo.name.startswith(GB_MISSING_FILES_DIR)
 
-                            # Update item index in batch
-                            resp_index += 1
+                            index += 1
+                            yield moss_out, content
 
-                            # Finally, yield response and file contents
-                            yield response_item, file.read()
-
-                    except tarfile.TarError as exception:
-
-                        if batch_request.continue_on_err:
-                            logger.error(
-                                "Failed to extract %s: %s", tarinfo.name, exception
-                            )
-                            continue
-
-                        raise RuntimeError(
-                            f"Failed to extract file {tarinfo.name}: {exception}"
-                        ) from exception
+                    except (tarfile.TarError, OSError) as e:
+                        # Handle individual file extraction errors
+                        self._handle_extraction_error(
+                            tarinfo.name, e, moss_req, EXT_TAR
+                        )
+                        index += 1
+                        continue
 
         except tarfile.TarError as e:
-            raise RuntimeError(f"Failed to extract tar stream: {e}") from e
-
+            # Handle tar stream errors (corrupt archive, etc.)
+            logger.error("Failed to read tar archive: %s", str(e))
+            raise RuntimeError("Failed to read tar archive stream") from e
         finally:
-            # Finally, if we are done yielding all items or error, close connection
             response.close()

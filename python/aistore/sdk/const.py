@@ -232,7 +232,7 @@ WIN_LINE_END = b"\r\n\r\n"
 UNIX_LINE_END = b"\n\n"
 
 # BatchLoader constants
-MISSING_DATA_PREFIX = "__404__"
+GB_MISSING_FILES_DIR = "__404__"
 
 # GetBatch (GB) API Constants (see api/ml.go and api/apc/ml.go)
 

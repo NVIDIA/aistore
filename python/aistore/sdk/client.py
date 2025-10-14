@@ -1,14 +1,14 @@
 #
 # Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 import os
 import warnings
 from urllib3 import Retry
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.provider import Provider
-from aistore.sdk.const import AIS_AUTHN_TOKEN
+from aistore.sdk.const import AIS_AUTHN_TOKEN, EXT_TAR
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.dsort import Dsort
 from aistore.sdk.request_client import RequestClient
@@ -20,7 +20,7 @@ from aistore.sdk.utils import parse_url
 from aistore.sdk.obj.object import Object
 from aistore.sdk.errors import InvalidURLException
 from aistore.sdk.retry_config import RetryConfig
-from aistore.sdk.batch.batch_loader import BatchLoader
+from aistore.sdk.batch.batch import Batch
 
 
 class Client:
@@ -181,17 +181,6 @@ class Client:
         """
         return Dsort(client=self._request_client, dsort_id=dsort_id)
 
-    def batch_loader(self):
-        """
-        Factory constructor for BatchLoader object.
-        Contains APIs related to AIStore GetBatch operations.
-        Does not make any HTTP requests, only creates BatchLoader.
-
-        Returns:
-            BatchLoader: The BatchLoader created
-        """
-        return BatchLoader(self._request_client)
-
     def fetch_object_by_url(self, url: str) -> Object:
         """
         Deprecated: Use `get_object_from_url` instead.
@@ -236,3 +225,26 @@ class Client:
             return self.bucket(bck_name, provider=provider).object(obj_name)
         except InvalidURLException as err:
             raise err
+
+    def batch(
+        self,
+        objects: Union[List[Object], Object, str, List[str]] = None,
+        bucket: Optional[Bucket] = None,
+        output_format: str = EXT_TAR,
+        cont_on_err: bool = True,
+        only_obj_name: bool = False,
+        streaming_get: bool = True,
+    ):
+        """
+        Factory constructor for Get-Batch.
+        Contains APIs related to AIStore Get-Batch operations.
+        """
+        return Batch(
+            self._request_client,
+            objects,
+            bucket,
+            output_format,
+            cont_on_err,
+            only_obj_name,
+            streaming_get,
+        )
