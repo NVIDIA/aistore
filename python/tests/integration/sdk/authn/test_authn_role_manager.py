@@ -80,19 +80,21 @@ class TestAuthNRoleManager(AuthNTestBase):
         )
 
         bck_perms = self.role_manager.get(role_name=self.role.name).buckets
-        combined_perms = (
-            AccessAttr.GET.value
-            | AccessAttr.OBJ_HEAD.value
-            | AccessAttr.LIST_BUCKETS.value
-            | AccessAttr.BCK_HEAD.value
-            | AccessAttr.OBJ_LIST.value
+        combined_perms = str(
+            (
+                AccessAttr.GET.value
+                | AccessAttr.OBJ_HEAD.value
+                | AccessAttr.LIST_BUCKETS.value
+                | AccessAttr.BCK_HEAD.value
+                | AccessAttr.OBJ_LIST.value
+            )
         )
-        self.assertEqual(combined_perms, AccessAttr.ACCESS_RO)
+        self.assertEqual(combined_perms, str(AccessAttr.ACCESS_RO))
 
         self.assertIn("test-bucket", [perm.bck.name for perm in bck_perms])
         for bck_perm in bck_perms:
             if bck_perm.bck.name == "test-bucket":
-                self.assertEqual(combined_perms, int(bck_perm.perm))
+                self.assertEqual(combined_perms, bck_perm.perm)
 
     @pytest.mark.authn
     def test_role_perms_cluster_update(self):
@@ -107,11 +109,13 @@ class TestAuthNRoleManager(AuthNTestBase):
         )
 
         clusters = self.role_manager.get(role_name=self.role.name).clusters
-        combined_perms = (
-            AccessAttr.LIST_BUCKETS.value
-            | AccessAttr.CREATE_BUCKET.value
-            | AccessAttr.DESTROY_BUCKET.value
+        combined_perms = str(
+            (
+                AccessAttr.LIST_BUCKETS.value
+                | AccessAttr.CREATE_BUCKET.value
+                | AccessAttr.DESTROY_BUCKET.value
+            )
         )
 
         self.assertEqual(self.uuid, clusters[0].id)
-        self.assertEqual(combined_perms, int(clusters[0].perm))
+        self.assertEqual(combined_perms, clusters[0].perm)

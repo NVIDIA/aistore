@@ -137,7 +137,7 @@ class TestAuthNRoleManager(unittest.TestCase):
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_POST,
             path=URL_PATH_AUTHN_ROLES,
-            json=role_info.dict(),
+            json=role_info.model_dump(),
         )
 
     @patch("aistore.sdk.authn.cluster_manager.ClusterManager.get")
@@ -176,5 +176,5 @@ class TestAuthNRoleManager(unittest.TestCase):
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_PUT,
             path=f"{URL_PATH_AUTHN_ROLES}/{role_name}",
-            json=expected_updated_role_info.dict(),
+            json=expected_updated_role_info.model_dump(),
         )

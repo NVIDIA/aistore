@@ -54,8 +54,8 @@ class TestAuthNUserManager(AuthNTestBase):
     def test_list_users(self):
         # List all users and check if the user exists
         users = self.user_manager.list()
-        self.assertIn(self.user, users)
-        self.assertEqual(users[self.user.id].roles, self.user.roles)
+        self.assertIn(self.user.id, users)
+        self.assertEqual(self.user, users[self.user.id])
 
         # Delete the user and check if it exists in the list
         self.user_manager.delete(username=self.user.id)

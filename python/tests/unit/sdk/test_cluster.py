@@ -75,7 +75,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             HTTP_METHOD_GET,
             path=URL_PATH_BUCKETS,
             res_model=List[BucketModel],
-            json=ActionMsg(action=ACT_LIST).dict(),
+            json=ActionMsg(action=ACT_LIST).model_dump(),
             params=expected_params,
         )
 

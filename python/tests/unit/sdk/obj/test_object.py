@@ -289,7 +289,7 @@ class TestObject(unittest.TestCase):
 
     def test_set_custom_props(self):
         custom_metadata = {"key1": "value1", "key2": "value2"}
-        expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
+        expected_json_val = ActionMsg(action="", value=custom_metadata).model_dump()
 
         self.object.get_writer().set_custom_props(custom_metadata)
 
@@ -303,7 +303,7 @@ class TestObject(unittest.TestCase):
     def test_set_custom_props_with_replace_existing(self):
         custom_metadata = {"key1": "value1", "key2": "value2"}
         self.expected_params[QPARAM_NEW_CUSTOM] = "true"
-        expected_json_val = ActionMsg(action="", value=custom_metadata).dict()
+        expected_json_val = ActionMsg(action="", value=custom_metadata).model_dump()
 
         self.object.get_writer().set_custom_props(
             custom_metadata, replace_existing=True
@@ -351,7 +351,7 @@ class TestObject(unittest.TestCase):
         request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
         expected_json = ActionMsg(
             action=ACT_PROMOTE, name=filename, value=expected_value.as_dict()
-        ).dict()
+        ).model_dump()
         self.object.promote(filename, **kwargs)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
@@ -375,7 +375,7 @@ class TestObject(unittest.TestCase):
         ).as_dict()
         expected_json = ActionMsg(
             action=ACT_BLOB_DOWNLOAD, name=OBJ_NAME, value=expected_blob_msg
-        ).dict()
+        ).model_dump()
         self.object.blob_download()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
@@ -396,7 +396,7 @@ class TestObject(unittest.TestCase):
         ).as_dict()
         expected_json = ActionMsg(
             action=ACT_BLOB_DOWNLOAD, name=OBJ_NAME, value=expected_blob_msg
-        ).dict()
+        ).model_dump()
         self.object.blob_download(
             num_workers=num_workers, chunk_size=chunk_size, latest=latest
         )

@@ -6,7 +6,7 @@
 
 
 from typing import List, Optional
-from aistore.sdk.authn.types import UserInfo, RolesList, UsersList
+from aistore.sdk.authn.types import UserInfo, RolesList, UserMap
 from aistore.sdk.authn.errors import ErrUserNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.authn.role_manager import RoleManager
@@ -104,8 +104,8 @@ class UserManager:
             AISError: If the user creation request fails.
         """
         logger.info("Creating user with ID: %s", username)
-        roles = self._get_roles_from_names(roles)
-        user_info = UserInfo(id=username, password=password, roles=roles)
+        role_list = self._get_roles_from_names(roles)
+        user_info = UserInfo(id=username, password=password, roles=role_list)
         self._client.request(
             HTTP_METHOD_POST,
             path=URL_PATH_AUTHN_USERS,
@@ -114,12 +114,12 @@ class UserManager:
 
         return self.get(username)
 
-    def list(self):
+    def list(self) -> UserMap:
         """
-        List all users in the AuthN Server.
+        Get all users in the AuthN Server.
 
         Returns:
-            str: The list of users in the AuthN Server.
+            UserMap: A map of user IDs to their info in the AuthN Server.
 
         Raises:
             AISError: If the user list request fails.
@@ -128,7 +128,7 @@ class UserManager:
         response = self._client.request_deserialize(
             HTTP_METHOD_GET,
             path=URL_PATH_AUTHN_USERS,
-            res_model=UsersList,
+            res_model=UserMap,
         )
 
         return response
@@ -157,10 +157,12 @@ class UserManager:
         if not (password or roles):
             raise ValueError("You must change either the password or roles for a user.")
 
-        roles = self._get_roles_from_names(roles) if roles else []
+        role_list = (
+            self._get_roles_from_names(roles) if roles else RolesList.model_validate([])
+        )
 
         logger.info("Updating user with ID: %s", username)
-        user_info = UserInfo(id=username, password=password, roles=roles)
+        user_info = UserInfo(id=username, password=password, roles=role_list)
         self._client.request(
             HTTP_METHOD_PUT,
             path=f"{URL_PATH_AUTHN_USERS}/{username}",
@@ -186,4 +188,4 @@ class UserManager:
         for name in role_names:
             role = self._role_manager.get(name)
             roles.append(role)
-        return roles
+        return RolesList.model_validate(roles)

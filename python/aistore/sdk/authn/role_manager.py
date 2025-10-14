@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
-from typing import List
+from typing import List, Optional
 
 from aistore.sdk.provider import Provider
 from aistore.sdk.request_client import RequestClient
@@ -93,7 +93,7 @@ class RoleManager:
         desc: str,
         cluster_alias: str,
         perms: List[AccessAttr],
-        bucket_name: str = None,
+        bucket_name: Optional[str] = None,
     ) -> RoleInfo:
         """
         Creates a new role.
@@ -113,7 +113,7 @@ class RoleManager:
             requests.RequestException: If the HTTP request fails.
         """
         # Convert the list of AccessAttr to an integer representing the permissions
-        perm_value = sum(perm.value for perm in perms)
+        perm_value = str(sum(perm.value for perm in perms))
 
         cluster_uuid = ClusterManager(self.client).get(cluster_alias=cluster_alias).id
         role_info = RoleInfo(name=name, desc=desc)
@@ -135,7 +135,7 @@ class RoleManager:
         self.client.request(
             HTTP_METHOD_POST,
             path=URL_PATH_AUTHN_ROLES,
-            json=role_info.dict(),
+            json=role_info.model_dump(),
         )
 
         return self.get(role_name=name)
@@ -143,11 +143,11 @@ class RoleManager:
     def update(
         self,
         name: str,
-        desc: str = None,
-        cluster_alias: str = None,
-        perms: List[AccessAttr] = None,
-        bucket_name: str = None,
-    ) -> RoleInfo:
+        desc: Optional[str] = None,
+        cluster_alias: Optional[str] = None,
+        perms: Optional[List[AccessAttr]] = None,
+        bucket_name: Optional[str] = None,
+    ) -> None:
         """
         Updates an existing role.
 
@@ -193,7 +193,9 @@ class RoleManager:
             cluster_uuid = (
                 ClusterManager(self.client).get(cluster_alias=cluster_alias).id
             )
-            perm_value = sum(perm.value for perm in perms)
+            perm_value = (
+                str(sum(perm.value for perm in perms)) if perms else str(AccessAttr)
+            )
 
             if bucket_name:
                 logger.info(
@@ -222,7 +224,7 @@ class RoleManager:
         self.client.request(
             HTTP_METHOD_PUT,
             path=f"{URL_PATH_AUTHN_ROLES}/{name}",
-            json=role_info.dict(),
+            json=role_info.model_dump(),
         )
 
     def delete(self, name: str, missing_ok: bool = False) -> None:

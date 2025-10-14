@@ -54,8 +54,8 @@ class MidStreamDropper:
 
 
 class TestStreamingColdGet(unittest.TestCase):
-    bucket: Optional[Bucket] = None
-    object: Optional[Object] = None
+    bucket: Optional[Bucket]
+    object: Optional[Object]
     OBJECT_NAME = f"TestStreamingColdGet-{random_string(6)}"
     OBJECT_SIZE = GIB  # 1 GiB object for testing
 
@@ -146,7 +146,7 @@ class TestStreamingColdGet(unittest.TestCase):
         chunk = (
             self.object.get_reader()
             .raw()
-            .read(MIB)  # Read the first 1 MB chunk directly using raw
+            .raw.read(MIB)  # Read the first 1 MB chunk directly using raw
         )
         self.assertEqual(len(chunk), MIB, "No initial chunk received.")
 

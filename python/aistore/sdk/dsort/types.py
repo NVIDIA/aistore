@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 from aistore.sdk.types import BucketModel
 
@@ -47,7 +47,7 @@ class PhaseInfo(BaseModel):
 
     started_time: str
     end_time: str
-    elapsed: str
+    elapsed: int
     running: bool
     finished: bool
 
@@ -63,7 +63,7 @@ class LocalExtraction(PhaseInfo):
     extracted_record_count: str
     extracted_to_disk_count: str
     extracted_to_disk_size: str
-    single_shard_stats: DetailedStats = None
+    single_shard_stats: Optional[DetailedStats] = None
 
 
 class MetaSorting(PhaseInfo):
@@ -71,8 +71,8 @@ class MetaSorting(PhaseInfo):
     Metrics for second phase of dSort
     """
 
-    sent_stats: TimeStats = None
-    recv_stats: TimeStats = None
+    sent_stats: Optional[TimeStats] = None
+    recv_stats: Optional[TimeStats] = None
 
 
 class ShardCreation(PhaseInfo):
@@ -83,11 +83,11 @@ class ShardCreation(PhaseInfo):
     to_create: str
     created_count: str
     moved_shard_count: str
-    req_stats: TimeStats = None
-    resp_stats: TimeStats = None
-    local_send_stats: DetailedStats = None
-    local_recv_stats: DetailedStats = None
-    single_shard_stats: DetailedStats = None
+    req_stats: Optional[TimeStats] = None
+    resp_stats: Optional[TimeStats] = None
+    local_send_stats: Optional[DetailedStats] = None
+    local_recv_stats: Optional[DetailedStats] = None
+    single_shard_stats: Optional[DetailedStats] = None
 
 
 class DsortMetrics(BaseModel):
@@ -98,12 +98,12 @@ class DsortMetrics(BaseModel):
     local_extraction: LocalExtraction
     meta_sorting: MetaSorting
     shard_creation: ShardCreation
-    aborted: bool = None
-    archived: bool = None
-    description: str = None
-    warnings: List[str] = None
-    errors: List[str] = None
-    extended: bool = None
+    aborted: Optional[bool] = None
+    archived: Optional[bool] = None
+    description: Optional[str] = None
+    warnings: Optional[List[str]] = None
+    errors: Optional[List[str]] = None
+    extended: Optional[bool] = None
 
 
 class JobInfo(BaseModel):
@@ -114,17 +114,20 @@ class JobInfo(BaseModel):
     id: str
     src_bck: BucketModel = Field(alias="src-bck")
     dst_bck: BucketModel = Field(alias="dst-bck")
-    started_time: str = None
-    finish_time: str = None
-    extracted_duration: str = Field(alias="started_meta_sorting", default=None)
-    sorting_duration: str = Field(alias="started_shard_creation", default=None)
-    creation_duration: str = Field(alias="finished_shard_creation", default=None)
-    objects: int = Field(alias="loc-objs")
-    bytes: int = Field(alias="loc-bytes")
+    started_time: Optional[str] = None
+    finish_time: Optional[str] = None
+    extracted_duration: Optional[int] = Field(
+        alias="started_meta_sorting", default=None
+    )
+    sorting_duration: Optional[int] = Field(
+        alias="started_shard_creation", default=None
+    )
+    creation_duration: Optional[int] = Field(
+        alias="finished_shard_creation", default=None
+    )
+    objects: str = Field(alias="loc-objs")
+    bytes: str = Field(alias="loc-bytes")
     metrics: DsortMetrics = Field(alias="Metrics")
     aborted: bool
     archived: bool
-
-    # pylint: disable=missing-class-docstring
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}

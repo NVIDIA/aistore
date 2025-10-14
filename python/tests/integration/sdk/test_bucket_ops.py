@@ -434,7 +434,9 @@ class TestBucketOps(ParallelTestBase):
         # Upload objects to the bucket with different prefixes
         obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1", "prefix2_obj2"]
         for obj_name in obj_names:
-            summ_test_bck.object(obj_name).get_writer().put_content(OBJ_CONTENT)
+            summ_test_bck.object(obj_name).get_writer().put_content(
+                OBJ_CONTENT.encode(UTF_ENCODING)
+            )
 
         # Verify the info with no prefix (should include all objects)
         bck_summ = summ_test_bck.summary()
@@ -475,7 +477,9 @@ class TestBucketOps(ParallelTestBase):
         # Upload objects to the bucket with different prefixes
         obj_names = ["prefix1_obj1", "prefix1_obj2", "prefix2_obj1"]
         for obj_name in obj_names:
-            info_test_bck.object(obj_name).get_writer().put_content(OBJ_CONTENT)
+            info_test_bck.object(obj_name).get_writer().put_content(
+                OBJ_CONTENT.encode(UTF_ENCODING)
+            )
 
         # Verify the info with no prefix (should include all objects)
         _, bck_info = info_test_bck.info()

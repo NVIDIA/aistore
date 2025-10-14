@@ -14,7 +14,7 @@ import requests
 import xxhash
 
 from msgspec import msgpack
-from pydantic.v1 import BaseModel, parse_raw_as
+from pydantic import BaseModel, TypeAdapter
 from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from aistore.sdk.const import (
@@ -89,7 +89,7 @@ def _check_path_exists(path: Path) -> None:
         raise ValueError(f"Path: {path} does not exist")
 
 
-def validate_file(path: str or Path) -> None:
+def validate_file(path: Union[str, Path]) -> None:
     """
     Validate that a file exists and is a file
     Args:
@@ -106,7 +106,7 @@ def validate_file(path: str or Path) -> None:
         raise ValueError(f"Path: {path} is a directory, not a file")
 
 
-def validate_directory(path: str or Path) -> None:
+def validate_directory(path: Union[str, Path]) -> None:
     """
     Validate that a directory exists and is a directory
     Args:
@@ -166,7 +166,7 @@ def decode_response(
     """
     if resp.headers.get(HEADER_CONTENT_TYPE) == MSGPACK_CONTENT_TYPE:
         return msgpack.decode(resp.content, type=res_model)
-    return parse_raw_as(res_model, resp.text)
+    return TypeAdapter(res_model).validate_json(resp.text)
 
 
 def parse_url(url: str) -> Tuple[str, str, str]:

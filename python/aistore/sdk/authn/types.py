@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 from typing import Optional, Union, Dict, List
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.const import NANOSECONDS_IN_SECOND
 from aistore.sdk.types import BucketModel
@@ -35,7 +35,7 @@ class LoginMsg(BaseModel):
             Dict[str, Union[str, int]]: The dict representation of the login message.
         """
 
-        data = self.dict()
+        data = self.model_dump()
         if self.expires_in is not None:
             data["expires_in"] = int(
                 self.expires_in * NANOSECONDS_IN_SECOND
@@ -124,8 +124,8 @@ class RoleInfo(BaseModel):
 
     name: str
     desc: str
-    clusters: List[ClusterPermission] = None
-    buckets: List[BucketPermission] = None
+    clusters: Optional[List[ClusterPermission]] = None
+    buckets: Optional[List[BucketPermission]] = None
     admin: bool = False
 
     def __str__(self) -> str:
@@ -145,31 +145,23 @@ class RoleInfo(BaseModel):
         )
 
 
-class RolesList(BaseModel):
+class RolesList(RootModel[List[RoleInfo]]):
     """
     Represents a list of roles.
 
-    Attributes:
-        __root__ (List[RoleInfo]): List of roles.
     """
 
-    __root__: List[RoleInfo]
-
     def __iter__(self):
-        return iter(self.__root__)
+        return iter(self.root)
 
     def __getitem__(self, item):
-        return self.__root__[item]
+        return self.root[item]
 
     def __len__(self):
-        return len(self.__root__)
-
-    @property
-    def roles(self):
-        return self.__root__
+        return len(self.root)
 
     def __str__(self) -> str:
-        return "\n".join(str(role) for role in self.__root__)
+        return "\n".join(str(role) for role in self.root)
 
 
 class UserInfo(BaseModel):
@@ -193,34 +185,28 @@ class UserInfo(BaseModel):
         Returns:
             Dict[str, Union[str, RolesList]]: The dict representation of the user information.
         """
-        user_dict = super().dict(**kwargs)
+        user_dict = super().model_dump(**kwargs)
         if "password" in user_dict and user_dict["password"] is not None:
             user_dict["pass"] = user_dict.pop("password")
         return user_dict
 
 
-class UsersList(BaseModel):
+class UserMap(RootModel[Dict[str, UserInfo]]):
     """
-    Represents a list of users.
-
-    Attributes:
-        __root__ (Dict[str, UserInfo]): Dictionary of user names/IDs to UserInfo objects.
+    Represents a map of usernames to their info.
     """
 
-    __root__: Dict[str, UserInfo]
+    def items(self):
+        return self.root.items()
 
     def __iter__(self):
-        return iter(self.__root__.values())
+        return iter(self.root)
 
     def __getitem__(self, item):
-        return self.__root__[item]
+        return self.root[item]
 
     def __len__(self):
-        return len(self.__root__)
-
-    @property
-    def users(self):
-        return self.__root__
+        return len(self.root)
 
     def __str__(self) -> str:
-        return "\n".join(str(user) for user in self.__root__)
+        return "\n".join(str(user) for user in self.root.values())

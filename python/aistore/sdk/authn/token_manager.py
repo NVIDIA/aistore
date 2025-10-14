@@ -51,5 +51,5 @@ class TokenManager:  # pylint: disable=duplicate-code
         self.client.request(
             method=HTTP_METHOD_DELETE,
             path=f"{URL_PATH_AUTHN_TOKENS}",
-            json=TokenMsg(token=token).dict(),
+            json=TokenMsg(token=token).model_dump(),
         )

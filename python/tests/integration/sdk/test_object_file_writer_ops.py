@@ -13,8 +13,8 @@ from tests.utils import random_string
 class TestObjectFileWriterOps(unittest.TestCase):
     BUCKET_NAME = f"test-bucket-{random_string(8)}"
     OBJECT_NAME = "test-object"
-    client: Client = None
-    bucket: Bucket = None
+    client: Client
+    bucket: Bucket
     data_to_write = [b"new-data1", b"new-data2", b"new-data3"]
 
     @classmethod

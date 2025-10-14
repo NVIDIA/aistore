@@ -82,7 +82,7 @@ class Object:
         client: RequestClient,
         bck_details: BucketDetails,
         name: str,
-        props: ObjectProps = None,
+        props: Optional[ObjectProps] = None,
     ):
         self._client = client
         self._bck_details = bck_details
@@ -134,6 +134,8 @@ class Object:
             ObjectProps: The latest object properties from the server.
         """
         self.head()
+        # Head must always set _props
+        assert self._props is not None
         return self._props
 
     @property
@@ -284,13 +286,13 @@ class Object:
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def get(
         self,
-        archive_config: ArchiveConfig = None,
-        blob_download_config: BlobDownloadConfig = None,
+        archive_config: Optional[ArchiveConfig] = None,
+        blob_download_config: Optional[BlobDownloadConfig] = None,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl: ETLConfig = None,
-        writer: BufferedWriter = None,
+        etl: Optional[ETLConfig] = None,
+        writer: Optional[BufferedWriter] = None,
         latest: bool = False,
-        byte_range: str = None,
+        byte_range: Optional[str] = None,
     ) -> ObjectReader:
         """
         Deprecated: Use 'get_reader' instead.
@@ -346,7 +348,7 @@ class Object:
 
         return f"{self.bucket_provider.value}://{self.bucket_name}/{self._name}"
 
-    def get_url(self, archpath: str = "", etl: ETLConfig = None) -> str:
+    def get_url(self, archpath: str = "", etl: Optional[ETLConfig] = None) -> str:
         """
         Get the full url to the object including base url and any query parameters
 
@@ -479,7 +481,7 @@ class Object:
             delete_source=delete_source,
             src_not_file_share=src_not_file_share,
         ).as_dict()
-        json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).dict()
+        json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).model_dump()
 
         return self._client.request(
             HTTP_METHOD_POST,
@@ -587,7 +589,7 @@ class Object:
         ).as_dict()
         json_val = ActionMsg(
             action=ACT_BLOB_DOWNLOAD, value=value, name=self.name
-        ).dict()
+        ).model_dump()
         return self._client.request(
             HTTP_METHOD_POST, path=self._bck_path, params=params, json=json_val
         ).text

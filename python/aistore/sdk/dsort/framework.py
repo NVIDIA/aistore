@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import yaml
 
-from pydantic.v1 import BaseModel, root_validator
+from pydantic import BaseModel, model_validator
 
 from aistore.sdk.types import BucketModel
 from aistore.sdk.multiobj import ObjectNames, ObjectRange
@@ -65,32 +65,27 @@ class DsortAlgorithm(BaseModel):
     extension: Optional[str] = None
     content_key_type: Optional[Literal["int", "float", "string"]] = None
 
-    # pylint: disable=no-self-argument
-    @root_validator
-    def validate_content_fields(cls, values):
+    @model_validator(mode="after")
+    def validate_content_fields(self):
         """
         Validates required key fields
         """
-        kind = values.get("kind")
-        extension = values.get("extension")
-        content_key_type = values.get("content_key_type")
-
-        if kind == "content":
-            if not extension:
+        if self.kind == "content":
+            if not self.extension:
                 raise ValueError(
                     'For kind="content", the "extension" field is required.'
                 )
-            if not content_key_type:
+            if not self.content_key_type:
                 raise ValueError(
                     'For kind="content", the "content_key_type" field is required.'
                 )
         else:
-            if extension or content_key_type:
+            if self.extension or self.content_key_type:
                 raise ValueError(
                     'The "extension" and "content_key_type" fields are only allowed for kind="content".'
                 )
 
-        return values
+        return self
 
     def as_dict(self):
         """
@@ -113,7 +108,7 @@ class DsortFramework:
         self,
         input_shards: DsortShardsGroup,
         output_shards: DsortShardsGroup,
-        algorithm: DsortAlgorithm = None,
+        algorithm: Optional[DsortAlgorithm] = None,
         description=None,
         output_shard_size=None,
     ) -> None:

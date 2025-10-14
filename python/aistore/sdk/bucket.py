@@ -9,9 +9,9 @@ import logging
 import os
 from pathlib import Path
 import time
-from typing import Dict, List, NewType, Iterable, Union, Optional
+from typing import Dict, List, Iterable, Union, Optional
 import requests
-from requests import structures
+from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
@@ -77,8 +77,6 @@ from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
 from aistore.sdk.obj.object_props import ObjectProps
 
-Header = NewType("Header", structures.CaseInsensitiveDict)
-
 
 # pylint: disable=too-many-public-methods,too-many-lines
 class Bucket(AISSource):
@@ -95,17 +93,17 @@ class Bucket(AISSource):
     def __init__(
         self,
         name: str,
-        client: RequestClient = None,
+        client: RequestClient,
         provider: Union[Provider, str] = Provider.AIS,
-        namespace: Namespace = None,
+        namespace: Optional[Namespace] = None,
     ):
         self._client = client
         self._name = name
         self._provider = Provider.parse(provider)
         self._namespace = namespace
         self._qparam = {QPARAM_PROVIDER: self.provider.value}
-        if self.namespace:
-            self._qparam[QPARAM_NAMESPACE] = namespace.get_path()
+        if self._namespace:
+            self._qparam[QPARAM_NAMESPACE] = self._namespace.get_path()
 
     @property
     def client(self) -> RequestClient:
@@ -133,7 +131,7 @@ class Bucket(AISSource):
         return self._name
 
     @property
-    def namespace(self) -> Namespace:
+    def namespace(self) -> Optional[Namespace]:
         """The namespace for this bucket."""
         return self._namespace
 
@@ -247,8 +245,8 @@ class Bucket(AISSource):
         """
         self._verify_ais_bucket()
         params = self.qparam.copy()
-        params[QPARAM_BCK_TO] = Bucket(
-            name=to_bck_name, namespace=self.namespace
+        params[QPARAM_BCK_TO] = BucketModel(
+            name=to_bck_name, namespace=self.namespace, provider=self.provider.value
         ).get_path()
         resp = self.make_request(HTTP_METHOD_POST, ACT_MOVE_BCK, params=params)
         self._name = to_bck_name
@@ -277,7 +275,7 @@ class Bucket(AISSource):
         params[QPARAM_KEEP_REMOTE] = str(keep_md)
         self.make_request(HTTP_METHOD_DELETE, ACT_EVICT_REMOTE_BCK, params=params)
 
-    def head(self) -> Header:
+    def head(self) -> CaseInsensitiveDict:
         """
         Requests bucket properties.
 
@@ -334,7 +332,7 @@ class Bucket(AISSource):
             HTTP_METHOD_GET,
             ACT_SUMMARY_BCK,
             params=self.qparam,
-            value=bsumm_ctrl_msg.dict(),
+            value=bsumm_ctrl_msg.model_dump(),
         )
 
         # Initial response status code should be 202
@@ -355,7 +353,7 @@ class Bucket(AISSource):
                 HTTP_METHOD_GET,
                 ACT_SUMMARY_BCK,
                 params=self.qparam,
-                value=bsumm_ctrl_msg.dict(),
+                value=bsumm_ctrl_msg.model_dump(),
             )
 
             # If task completed successfully, break the loop
@@ -543,7 +541,7 @@ class Bucket(AISSource):
         page_size: int = 0,
         uuid: str = "",
         continuation_token: str = "",
-        flags: List[ListObjectFlag] = None,
+        flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
     ) -> BucketList:
         """
@@ -588,7 +586,7 @@ class Bucket(AISSource):
             flags=[] if flags is None else flags,
             target=target,
         ).as_dict()
-        action = ActionMsg(action=ACT_LIST, value=value).dict()
+        action = ActionMsg(action=ACT_LIST, value=value).model_dump()
 
         bucket_list = self.client.request_deserialize(
             HTTP_METHOD_GET,
@@ -608,7 +606,7 @@ class Bucket(AISSource):
         prefix: str = "",
         props: str = "",
         page_size: int = 0,
-        flags: List[ListObjectFlag] = None,
+        flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
     ) -> ObjectIterator:
         """
@@ -658,7 +656,7 @@ class Bucket(AISSource):
         prefix: str = "",
         props: str = "",
         page_size: int = 0,
-        flags: List[ListObjectFlag] = None,
+        flags: Optional[List[ListObjectFlag]] = None,
         target: str = "",
     ) -> List[BucketEntry]:
         """
@@ -768,7 +766,7 @@ class Bucket(AISSource):
         sync: bool = False,
         num_workers: Optional[int] = 0,
         cont_on_err: bool = False,
-        etl_pipeline: List[str] = None,
+        etl_pipeline: Optional[List[str]] = None,
     ) -> str:
         """
         Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -820,11 +818,11 @@ class Bucket(AISSource):
 
     def put_files(
         self,
-        path: str,
+        path: Union[str, Path],
         prefix_filter: str = "",
         pattern: str = "*",
         basename: bool = False,
-        prepend: str = None,
+        prepend: Optional[str] = None,
         recursive: bool = False,
         dry_run: bool = False,
         verbose: bool = True,
@@ -833,7 +831,7 @@ class Bucket(AISSource):
         Puts files found in a given filepath as objects to a bucket in AIS storage.
 
         Args:
-            path (str): Local filepath, can be relative or absolute
+            path (str or Path): Local filepath, can be relative or absolute
             prefix_filter (str, optional): Only put files with names starting with this prefix
             pattern (str, optional): Shell-style wildcard pattern to filter files
             basename (bool, optional): Whether to use the file names only as object names and omit the path information
@@ -894,7 +892,7 @@ class Bucket(AISSource):
     def object(
         self,
         obj_name: str,
-        props: ObjectProps = None,
+        props: Optional[ObjectProps] = None,
     ) -> Object:
         """
         Factory constructor for an object in this bucket.
@@ -917,9 +915,9 @@ class Bucket(AISSource):
 
     def objects(
         self,
-        obj_names: List[str] = None,
-        obj_range: ObjectRange = None,
-        obj_template: str = None,
+        obj_names: Optional[List[str]] = None,
+        obj_range: Optional[ObjectRange] = None,
+        obj_template: Optional[str] = None,
     ) -> ObjectGroup:
         """
         Factory constructor for multiple objects belonging to this bucket.
@@ -943,8 +941,8 @@ class Bucket(AISSource):
         self,
         method: str,
         action: str,
-        value: Dict = None,
-        params: Dict = None,
+        value: Optional[Dict] = None,
+        params: Optional[Dict] = None,
     ) -> requests.Response:
         """
         Use the bucket's client to make a request to the bucket endpoint on the AIS server
@@ -952,7 +950,7 @@ class Bucket(AISSource):
         Args:
             method (str): HTTP method to use, e.g. POST/GET/DELETE
             action (str): Action string used to create an ActionMsg to pass to the server
-            value (dict): Additional value parameter to pass in the ActionMsg
+            value (dict, optional): Additional value parameter to pass in the ActionMsg
             params (dict, optional): Optional parameters to pass in the request
 
         Returns:
@@ -964,7 +962,7 @@ class Bucket(AISSource):
                 "Bucket requires a client to use functions. Try defining a client and accessing this bucket with "
                 "client.bucket()"
             )
-        json_val = ActionMsg(action=action, value=value).dict()
+        json_val = ActionMsg(action=action, value=value).model_dump()
         return self._client.request(
             method,
             path=f"{URL_PATH_BUCKETS}/{self.name}",
@@ -990,8 +988,7 @@ class Bucket(AISSource):
         """
         Get the path representation of this bucket
         """
-        namespace_path = self.namespace.get_path() if self.namespace else "@#"
-        return f"{ self.provider.value }/{ namespace_path }/{ self.name }/"
+        return self.as_model().get_path()
 
     def as_model(self) -> BucketModel:
         """

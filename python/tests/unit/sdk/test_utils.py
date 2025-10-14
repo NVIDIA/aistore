@@ -107,19 +107,23 @@ class TestUtils(unittest.TestCase):
             with self.assertRaises(expected_error):
                 expand_braces(input_str)
 
-    @patch("aistore.sdk.utils.parse_raw_as")
-    def test_decode_response_json(self, mock_parse):
+    @patch("aistore.sdk.utils.TypeAdapter")
+    def test_decode_response_json(self, mock_adapter):
         response_content = "text content"
         parsed_content = "parsed content"
         mock_response = Mock(Response)
         mock_response.headers = {}
         mock_response.text = response_content
-        mock_parse.return_value = parsed_content
+
+        mock_validator = Mock()
+        mock_adapter.return_value = mock_validator
+        mock_validator.validate_json.return_value = parsed_content
 
         res = decode_response(str, mock_response)
 
         self.assertEqual(parsed_content, res)
-        mock_parse.assert_called_with(str, response_content)
+        mock_adapter.assert_called_with(str)
+        mock_validator.validate_json.assert_called_with(response_content)
 
     def test_decode_response_msgpack(self):
         unpacked_content = {"content key": "content value"}

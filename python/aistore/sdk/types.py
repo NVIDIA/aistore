@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any, Mapping, List, Optional, Dict, Union
 import msgspec
-from pydantic.v1 import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, RootModel
 from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.errors import NoTargetError
@@ -57,9 +57,9 @@ class Snode(BaseModel):
 
     daemon_id: str
     daemon_type: str
-    public_net: NetInfo = None
-    intra_control_net: NetInfo = None
-    intra_data_net: NetInfo = None
+    public_net: Optional[NetInfo] = None
+    intra_control_net: Optional[NetInfo] = None
+    intra_data_net: Optional[NetInfo] = None
     flags: int = 0
     id_digest: int = 0
 
@@ -197,7 +197,7 @@ class BucketList(msgspec.Struct):
     UUID: str
     ContinuationToken: str
     Flags: int
-    Entries: List[BucketEntry] = None
+    Entries: Optional[List[BucketEntry]] = None
 
     @property
     def uuid(self):
@@ -229,13 +229,17 @@ class BucketModel(BaseModel):
 
     name: str
     provider: str
-    namespace: Namespace = None
+    namespace: Optional[Namespace] = None
 
     def as_dict(self):
-        dict_rep = {"name": self.name, "provider": self.provider}
-        if self.namespace:
-            dict_rep["namespace"] = self.namespace
-        return dict_rep
+        return self.model_dump(exclude_none=True)
+
+    def get_path(self) -> str:
+        """
+        Get the path representation of this bucket
+        """
+        namespace_path = self.namespace.get_path() if self.namespace else "@#"
+        return f"{ self.provider }/{ namespace_path }/{ self.name }/"
 
 
 class BsummCtrlMsg(BaseModel):
@@ -257,8 +261,8 @@ class JobArgs(BaseModel):
     id: str = ""
     kind: str = ""
     daemon_id: str = ""
-    bucket: BucketModel = None
-    buckets: List[BucketModel] = None
+    bucket: Optional[BucketModel] = None
+    buckets: Optional[List[BucketModel]] = None
 
     def as_dict(self):
         return {
@@ -331,6 +335,11 @@ class EnvVar(BaseModel):
     name: str
     value: str
 
+    # pylint: disable=no-self-argument
+    @field_validator("value", mode="before")
+    def convert_to_str(cls, v):
+        return str(v)
+
     def as_dict(self):
         return {
             "name": self.name,
@@ -347,8 +356,8 @@ class ETLRuntimeSpec(BaseModel):
     command: Optional[List[str]] = None
     env: Optional[List[EnvVar]] = None
 
-    def as_dict(self):
-        data = {"image": self.image}
+    def as_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"image": self.image}
 
         # only include if user passed a command
         if self.command is not None:
@@ -403,21 +412,21 @@ class ETLInitMsg(BaseModel):
 
     name: str
     communication: str
-    init_timeout: Optional[str]
-    obj_timeout: Optional[str]
-    code: Optional[bytes]
-    spec: Optional[bytes]
-    dependencies: Optional[bytes]
+    init_timeout: Optional[str] = None
+    obj_timeout: Optional[str] = None
+    code: Optional[bytes] = None
+    spec: Optional[bytes] = None
+    dependencies: Optional[bytes] = None
     chunk_size: int = 0
-    runtime: Optional[Union[str, ETLRuntimeSpec]]
+    runtime: Optional[Union[str, ETLRuntimeSpec]] = None
 
-    @validator("code")
+    @field_validator("code")
     def set_code(cls, code):  # pylint: disable=no-self-argument
         if code is not None:
             code = base64.b64decode(code)
         return code
 
-    @validator("spec")
+    @field_validator("spec")
     def set_spec(cls, spec):  # pylint: disable=no-self-argument
         if spec is not None:
             spec = base64.b64decode(spec)
@@ -440,7 +449,7 @@ class ETLDetails(BaseModel):
     """
 
     init_msg: ETLInitMsg
-    obj_errors: Optional[List[ETLObjError]]
+    obj_errors: Optional[List[ETLObjError]] = None
 
 
 class PromoteAPIArgs(BaseModel):
@@ -480,15 +489,15 @@ class JobStats(BaseModel):
     out_bytes: int = Field(default=0, alias="out-bytes")
     in_objects: int = Field(default=0, alias="in-objs")
     in_bytes: int = Field(default=0, alias="in-bytes")
-
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 
 class JobSnap(BaseModel):
     """
     Represents a snapshot of a job on a target node.
     """
+
+    model_config = {"populate_by_name": True}
 
     id: str = Field(default="")
     kind: str = Field(default="")
@@ -505,9 +514,6 @@ class JobSnap(BaseModel):
         default=0, alias="glob.id"
     )  # Bitwise representation of the number of joggers, workers, and channel full status
 
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
-
     def unpack_glob_id(self) -> tuple[int, int, int]:
         """
         Unpack the `glob_id` into (njoggers, nworkers, chan_full).
@@ -519,36 +525,22 @@ class JobSnap(BaseModel):
         return njoggers, nworkers, chbuf_cnt
 
 
-class AggregatedJobSnap(BaseModel):
+class AggregatedJobSnap(RootModel[Dict[str, List[JobSnap]]]):
     """
     Represents job snapshots grouped by target ID.
-
-    Under the hood this is a root model (mapping node IDs →
-    lists of JobSnapshot), but we expose it via the `snapshots`
-    property so that static checkers don’t get confused.
     """
-
-    __root__: Dict[str, List[JobSnap]] = Field(default_factory=dict)
-
-    @property
-    def snapshots(self) -> Dict[str, List[JobSnap]]:
-        """
-        Return the underlying dict of nodeID → [JobSnapshot,...].
-        """
-        # __root__ in __dict__ is the real dict, not a FieldInfo
-        return self.__dict__.get("__root__", {})
 
     def list_snapshots(self) -> List[JobSnap]:
         """
-        Return a flat list of all JobSnapshot instances.
+        Returns a flat list of all job snapshots across all target nodes.
         """
-        return [snap for snaps in self.snapshots.values() for snap in snaps]
+        return [snap for snaps in self.root.values() for snap in snaps]
 
     def get_num_workers(self) -> int:
         """
         Return the nworkers from any one snapshot (as all are the same).
         """
-        for snaps in self.snapshots.values():
+        for snaps in self.root.values():
             if snaps:
                 # unpack() → (njoggers, nworkers, chan_full)
                 return snaps[0].unpack_glob_id()[1]
@@ -609,7 +601,7 @@ class TransformBckMsg(BaseModel):
     """
 
     etl_name: str
-    etl_pipeline: List[str] = None
+    etl_pipeline: Optional[List[str]] = None
     timeout: str
 
     def as_dict(self):
@@ -626,10 +618,10 @@ class TCBckMsg(BaseModel):
     Can be used on its own for an entire bucket or encapsulated in TCMultiObj to apply only to a selection of objects
     """
 
-    ext: Dict[str, str] = None
-    copy_msg: CopyBckMsg = None
-    transform_msg: TransformBckMsg = None
-    num_workers: int = None
+    ext: Optional[Dict[str, str]] = None
+    copy_msg: Optional[CopyBckMsg] = None
+    transform_msg: Optional[TransformBckMsg] = None
+    num_workers: Optional[int] = None
     cont_on_err: bool = False
 
     def as_dict(self):
@@ -657,8 +649,8 @@ class PrefetchMsg(BaseModel):
     object_selection: Dict
     continue_on_err: bool
     latest: bool
-    blob_threshold: int = None
-    num_workers: int = None
+    blob_threshold: Optional[int] = None
+    num_workers: Optional[int] = None
 
     def as_dict(self):
         dict_rep = self.object_selection
@@ -677,17 +669,17 @@ class TCMultiObj(BaseModel):
     """
 
     to_bck: BucketModel
-    tc_msg: TCBckMsg = None
+    tc_msg: Optional[TCBckMsg] = None
     continue_on_err: bool
     object_selection: Dict
-    num_workers: int = None
+    num_workers: Optional[int] = None
 
     def as_dict(self):
         dict_rep = self.object_selection
         if self.tc_msg:
             for key, val in self.tc_msg.as_dict().items():
                 dict_rep[key] = val
-        dict_rep["tobck"] = self.to_bck.as_dict()
+        dict_rep["tobck"] = self.to_bck.model_dump()
         dict_rep["coer"] = self.continue_on_err
         if self.num_workers:
             dict_rep["num-workers"] = self.num_workers
@@ -701,10 +693,10 @@ class ArchiveMultiObj(BaseModel):
 
     archive_name: str
     to_bck: BucketModel
-    mime: str = None
-    include_source_name = False
-    allow_append = False
-    continue_on_err = False
+    mime: Optional[str] = None
+    include_source_name: bool = False
+    allow_append: bool = False
+    continue_on_err: bool = False
     object_selection: Dict
 
     def as_dict(self):
@@ -716,7 +708,7 @@ class ArchiveMultiObj(BaseModel):
         if self.mime:
             dict_rep["mime"] = self.mime
         if self.to_bck:
-            dict_rep["tobck"] = self.to_bck.as_dict()
+            dict_rep["tobck"] = self.to_bck.model_dump()
         return dict_rep
 
 
@@ -726,8 +718,8 @@ class BlobMsg(BaseModel):
     and provides conversion to the expected json format
     """
 
-    chunk_size: int = None
-    num_workers: int = None
+    chunk_size: Optional[int] = None
+    num_workers: Optional[int] = None
     latest: bool
 
     def as_dict(self):

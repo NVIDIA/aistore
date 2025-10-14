@@ -185,7 +185,7 @@ class Job:
         self,
         daemon_id: str = "",
         force: bool = False,
-        buckets: List[Bucket] = None,
+        buckets: Optional[List[Bucket]] = None,
     ) -> str:
         """
         Start a job and return its ID.
@@ -219,7 +219,7 @@ class Job:
             else:
                 job_args.buckets = bucket_models
         params = {QPARAM_FORCE: "true"} if force else {}
-        action = ActionMsg(action=ACT_START, value=job_args.as_dict()).dict()
+        action = ActionMsg(action=ACT_START, value=job_args.as_dict()).model_dump()
 
         resp = self._client.request(
             HTTP_METHOD_PUT, path=URL_PATH_CLUSTER, json=action, params=params
@@ -242,7 +242,7 @@ class Job:
         Raises:
             JobInfoNotFound: Raised when no relevant job info is found.
         """
-        snapshots = self._get_all_snapshots()
+        snapshots = self.get_details().list_snapshots()
         jobs_found = []
         for snapshot in snapshots:
             if snapshot.id == self.job_id or snapshot.kind == self.job_kind:
@@ -284,7 +284,7 @@ class Job:
         Returns:
             Optional[timedelta]: The total duration of the job, or None if incomplete.
         """
-        snapshots = self._get_all_snapshots()
+        snapshots = self.get_details().list_snapshots()
 
         try:
             if not snapshots:
@@ -320,17 +320,6 @@ class Job:
             return None
         except IndexError:
             return None  # No valid timestamps
-
-    def _get_all_snapshots(self) -> List[JobSnap]:
-        """
-        Returns a flat list of all job snapshots across all target nodes.
-
-        Returns:
-            List[JobSnapshot]: A combined list of snapshots.
-        """
-        details = self.get_details()
-        # Access the __root__ dictionary and chain its values
-        return details.list_snapshots()
 
     def _check_snapshot_finished(self, snapshots):
         job_found = False
@@ -375,7 +364,7 @@ class Job:
         sleep_time = probing_frequency(timeout)
 
         while True:
-            snapshots = self._get_all_snapshots()
+            snapshots = self.get_details().list_snapshots()
             try:
                 if condition_fn(snapshots):
                     return

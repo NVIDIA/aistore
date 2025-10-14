@@ -120,7 +120,7 @@ class ObjectWriter:
         if replace_existing:
             params[QPARAM_NEW_CUSTOM] = "true"
 
-        json_val = ActionMsg(action="", value=custom_metadata).dict()
+        json_val = ActionMsg(action="", value=custom_metadata).model_dump()
 
         return self._client.request(
             HTTP_METHOD_PATCH, path=self._object_path, params=params, json=json_val

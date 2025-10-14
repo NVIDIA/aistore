@@ -37,8 +37,11 @@ class TestObjectGroup(unittest.TestCase):
             name=self.mock_bck.name, provider=self.mock_bck.provider
         )
         self.mock_bck.as_model.return_value = self.mock_bck_model
+        self.mock_client = Mock()
         namespace = Namespace(name="ns-name", uuid="ns-id")
-        self.dest_bucket = Bucket(name="to-bucket", namespace=namespace)
+        self.dest_bucket = Bucket(
+            client=self.mock_client, name="to-bucket", namespace=namespace
+        )
 
         self.obj_names = ["obj-1", "obj-2"]
         self.object_group = ObjectGroup(self.mock_bck, obj_names=self.obj_names)
@@ -142,7 +145,7 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["prepend"] = ""
         self.expected_value["dry_run"] = False
         self.expected_value["force"] = False
-        self.expected_value["tobck"] = self.dest_bucket.as_model()
+        self.expected_value["tobck"] = self.dest_bucket.as_model().model_dump()
         self.expected_value["coer"] = False
         self.expected_value["latest-ver"] = False
         self.expected_value["synchronize"] = False
@@ -196,7 +199,7 @@ class TestObjectGroup(unittest.TestCase):
         self.expected_value["id"] = ETL_NAME
         self.expected_value["pipeline"] = None
         self.expected_value["request_timeout"] = DEFAULT_ETL_TIMEOUT
-        self.expected_value["tobck"] = self.dest_bucket.as_model()
+        self.expected_value["tobck"] = self.dest_bucket.as_model().model_dump()
         self.expected_value["coer"] = False
         self.expected_value["latest-ver"] = False
         self.expected_value["synchronize"] = False
@@ -271,7 +274,10 @@ class TestObjectGroup(unittest.TestCase):
         archive_name = "test-arch"
         namespace = Namespace(name="ns-name", uuid="ns-id")
         to_bck = Bucket(
-            name="dest-bck-name", namespace=namespace, provider=Provider.AMAZON
+            client=self.mock_client,
+            name="dest-bck-name",
+            namespace=namespace,
+            provider=Provider.AMAZON,
         )
         mime = "text"
         include_source = True

@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- Update to Pydantic v2 for all API type parsing.
+- Improved type hinting with more explicit Optionals
+
 ## [1.17.0] - 2025-10-16
 
 ### Added

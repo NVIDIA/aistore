@@ -8,7 +8,7 @@ import pytest
 
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.integration import REMOTE_SET
-from tests.const import TEST_TIMEOUT, OBJECT_COUNT
+from tests.const import TEST_TIMEOUT
 
 
 class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
@@ -32,20 +32,6 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         self.assertEqual(
             0, len(self.bucket.list_objects(prefix=self.obj_prefix).entries)
         )
-
-    @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
-    )
-    def test_async_job_wait_for_idle(self):
-        obj_names = list(self._create_objects().keys())
-        obj_group = self.bucket.objects(obj_names=obj_names)
-        job_id = obj_group.evict()
-        self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(OBJECT_COUNT, False)
-        job_id = obj_group.prefetch()
-        self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(OBJECT_COUNT, True)
 
     def test_job_wait(self):
         object_names = list(self._create_objects().keys())

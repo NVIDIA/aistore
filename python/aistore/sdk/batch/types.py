@@ -6,7 +6,7 @@ import base64
 import binascii
 from typing import Optional, List, Dict
 
-from pydantic.v1 import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from aistore.sdk.const import (
     GB_ERR_MSG,
@@ -57,11 +57,10 @@ class MossIn(BaseModel):
         default=None, alias=GB_LENGTH
     )  # length of the data to be extracted
 
-    def dict(self, *_args, **_kwargs) -> Dict:
-        return super().dict(by_alias=True, exclude_defaults=True)
+    model_config = {"populate_by_name": True}
 
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
+    def dict(self, *_args, **_kwargs) -> Dict:
+        return self.model_dump(by_alias=True, exclude_defaults=True)
 
 
 # pylint: disable=too-few-public-methods
@@ -78,11 +77,13 @@ class MossOut(BaseModel):
     err_msg: Optional[str] = Field(default=None, alias=GB_ERR_MSG)
     size: int = Field(default=0, alias=GB_SIZE)
 
+    model_config = {"populate_by_name": True}
+
     def dict(self, *_args, **_kwargs) -> Dict:
-        return super().dict(by_alias=True, exclude_defaults=True)
+        return self.model_dump(by_alias=True, exclude_defaults=True)
 
     # pylint: disable=no-self-argument
-    @validator("opaque", pre=True)
+    @field_validator("opaque", mode="before")
     def decode_opaque(cls, opaque_val):
         """
         Automatically decode base64 encoded opaque field back to bytes.
@@ -107,9 +108,6 @@ class MossOut(BaseModel):
                 return None
         return None
 
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
-
 
 # pylint: disable=too-few-public-methods
 class MossReq(BaseModel):
@@ -130,8 +128,10 @@ class MossReq(BaseModel):
         default=None, alias=GB_STRM_GET
     )  # stream resulting archive prior to finalizing it in memory
 
+    model_config = {"populate_by_name": True}
+
     def dict(self, *_args, **_kwargs) -> Dict:
-        return super().dict(by_alias=True, exclude_defaults=True)
+        return self.model_dump(by_alias=True, exclude_defaults=True)
 
     def add(self, moss_in: MossIn) -> "MossReq":
         """
@@ -159,9 +159,6 @@ class MossReq(BaseModel):
         self.moss_in.extend(moss_ins)  # pylint: disable=no-member
         return self
 
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
-
 
 # pylint: disable=too-few-public-methods
 class MossResp(BaseModel):
@@ -170,5 +167,4 @@ class MossResp(BaseModel):
     out: List[MossOut] = Field(default_factory=list, alias=GB_OUT)
     uuid: str = Field(default="", alias=GB_UUID)
 
-    class Config:  # pylint: disable=missing-class-docstring
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}

@@ -25,5 +25,5 @@ class TestAuthNTokenManager(unittest.TestCase):
         self.mock_client.request.assert_called_once_with(
             method=HTTP_METHOD_DELETE,
             path=f"{URL_PATH_AUTHN_TOKENS}",
-            json=TokenMsg(token=token).dict(),
+            json=TokenMsg(token=token).model_dump(),
         )

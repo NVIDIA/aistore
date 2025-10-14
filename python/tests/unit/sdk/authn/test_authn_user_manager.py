@@ -9,7 +9,8 @@ from aistore.sdk.authn.types import (
     ClusterPermission,
     RoleInfo,
     UserInfo,
-    UsersList,
+    UserMap,
+    RolesList,
 )
 from aistore.sdk.authn.access_attr import AccessAttr
 from aistore.sdk.authn.user_manager import UserManager
@@ -31,20 +32,19 @@ class TestAuthNUserManager(unittest.TestCase):
         # pylint: disable=protected-access
         self.user_manager._role_manager = self.mock_role_manager
 
-        self.mock_role_info = RoleInfo(
+        role_info = RoleInfo(
             name="test-role",
             desc="Test Description",
-            clusters=[
-                ClusterPermission(id="test-cluster", perm=str(AccessAttr.GET.value))
-            ],
+            clusters=[ClusterPermission(id="test-cluster", perm=AccessAttr.GET)],
             buckets=[
                 BucketPermission(
                     bck=BucketModel(name="test-bucket", provider=Provider.AIS.value),
-                    perm=str(AccessAttr.GET.value),
+                    perm=AccessAttr.GET,
                 )
             ],
         )
-        self.mock_role_manager.get.return_value = self.mock_role_info
+        self.role_list = RolesList.model_validate([role_info])
+        self.mock_role_manager.get.return_value = role_info
 
     def test_user_delete(self):
         self.user_manager.delete(username="test-user")
@@ -56,7 +56,7 @@ class TestAuthNUserManager(unittest.TestCase):
     def test_user_get(self):
         mock_user_info = UserInfo(
             id="test-user",
-            roles=[self.mock_role_info],
+            roles=self.role_list,
         )
 
         self.mock_client.request_deserialize.return_value = mock_user_info
@@ -72,7 +72,7 @@ class TestAuthNUserManager(unittest.TestCase):
 
     def test_user_create(self):
         mock_user_info = UserInfo(
-            id="test-user", roles=[self.mock_role_info], password="test-password"
+            id="test-user", roles=self.role_list, password="test-password"
         )
 
         self.mock_client.request_deserialize.return_value = mock_user_info
@@ -100,7 +100,7 @@ class TestAuthNUserManager(unittest.TestCase):
 
     def test_user_update(self):
         mock_user_info = UserInfo(
-            id="test-user", roles=[self.mock_role_info], password="new-password"
+            id="test-user", roles=self.role_list, password="new-password"
         )
 
         self.mock_client.request_deserialize.return_value = mock_user_info
@@ -130,11 +130,11 @@ class TestAuthNUserManager(unittest.TestCase):
         mock_users_list = [
             UserInfo(
                 id="test-user-1",
-                roles=[self.mock_role_info],
+                roles=self.role_list,
             ),
             UserInfo(
                 id="test-user-2",
-                roles=[self.mock_role_info],
+                roles=self.role_list,
             ),
         ]
 
@@ -146,5 +146,5 @@ class TestAuthNUserManager(unittest.TestCase):
         self.mock_client.request_deserialize.assert_called_once_with(
             HTTP_METHOD_GET,
             path=URL_PATH_AUTHN_USERS,
-            res_model=UsersList,
+            res_model=UserMap,
         )

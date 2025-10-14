@@ -55,7 +55,7 @@ class TestMultipartUpload(unittest.TestCase):
             HTTP_METHOD_POST,
             path=OBJECT_PATH,
             params=None,
-            json=ActionMsg(action=ACT_MPT_UPLOAD).dict(),
+            json=ActionMsg(action=ACT_MPT_UPLOAD).model_dump(),
         )
 
         # Verify the upload_id was set and self was returned
@@ -146,7 +146,9 @@ class TestMultipartUpload(unittest.TestCase):
         result = self.multipart_upload.complete()
 
         # Verify the request was made correctly
-        expected_json = ActionMsg(action=ACT_MPT_COMPLETE, value=[]).dict()  # No parts
+        expected_json = ActionMsg(
+            action=ACT_MPT_COMPLETE, value=[]
+        ).model_dump()  # No parts
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_POST,
@@ -174,7 +176,9 @@ class TestMultipartUpload(unittest.TestCase):
             MptCompletedPart(part_number=2, etag="").as_dict(),
             MptCompletedPart(part_number=3, etag="").as_dict(),
         ]
-        expected_json = ActionMsg(action=ACT_MPT_COMPLETE, value=expected_parts).dict()
+        expected_json = ActionMsg(
+            action=ACT_MPT_COMPLETE, value=expected_parts
+        ).model_dump()
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_POST,
@@ -223,7 +227,7 @@ class TestMultipartUpload(unittest.TestCase):
         result = self.multipart_upload.abort()
 
         # Verify the request was made correctly
-        expected_json = ActionMsg(action=ACT_MPT_ABORT).dict()
+        expected_json = ActionMsg(action=ACT_MPT_ABORT).model_dump()
 
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_DELETE,
@@ -271,7 +275,7 @@ class TestMultipartUpload(unittest.TestCase):
         self.assertEqual(create_call[0], (HTTP_METHOD_POST,))
         self.assertEqual(create_call[1]["path"], OBJECT_PATH)
         self.assertEqual(
-            create_call[1]["json"], ActionMsg(action=ACT_MPT_UPLOAD).dict()
+            create_call[1]["json"], ActionMsg(action=ACT_MPT_UPLOAD).model_dump()
         )
 
         # Verify complete request
@@ -303,7 +307,9 @@ class TestMultipartUpload(unittest.TestCase):
         self.assertEqual(abort_call[0], (HTTP_METHOD_DELETE,))
         self.assertEqual(abort_call[1]["path"], OBJECT_PATH)
         self.assertEqual(abort_call[1]["params"], {QPARAM_MPT_UPLOAD_ID: UPLOAD_ID})
-        self.assertEqual(abort_call[1]["json"], ActionMsg(action=ACT_MPT_ABORT).dict())
+        self.assertEqual(
+            abort_call[1]["json"], ActionMsg(action=ACT_MPT_ABORT).model_dump()
+        )
 
     @patch("aistore.sdk.obj.object.MultipartUpload")
     def test_object_integration(self, mock_multipart_class):

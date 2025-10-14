@@ -23,7 +23,7 @@ from aistore.sdk.etl.etl_const import (
     ETL_STAGE_ABORTED,
 )
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
-from aistore.sdk.types import EnvVar
+from aistore.sdk.types import EnvVar, ETLRuntimeSpec
 
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import (
@@ -231,7 +231,8 @@ class TestETLOps(unittest.TestCase):
         # Transform w/ non-existent ETL name raises exception
         with self.assertRaises(AISError):
             self.bucket.transform(
-                etl_name="faulty-name", to_bck=Bucket(random_string())
+                etl_name="faulty-name",
+                to_bck=Bucket(random_string(), self.bucket.client),
             )
 
         temp_bck2.delete(missing_ok=True)
@@ -254,7 +255,8 @@ class TestETLOps(unittest.TestCase):
                 return hashlib.md5(data).hexdigest().encode()
 
         job_id = self.bucket.transform(
-            etl_name=md5_hpush_etl.name, to_bck=Bucket("transformed-etl-hpush")
+            etl_name=md5_hpush_etl.name,
+            to_bck=Bucket("transformed-etl-hpush", self.bucket.client),
         )
         self.client.job(job_id).wait()
 
@@ -440,8 +442,11 @@ class TestETLOps(unittest.TestCase):
         etl_details = etl.view()
         self.assertIsNotNone(etl_details)
         self.assertEqual(etl_details.init_msg.name, self.etl_name)
+        runtime = etl_details.init_msg.runtime
+        self.assertIsNotNone(runtime)
+        self.assertIsInstance(runtime, ETLRuntimeSpec)
         self.assertEqual(
-            etl_details.init_msg.runtime.image,
+            runtime.image,
             "aistorage/transformer_hash_with_args:latest",
         )
         self.assertEqual(etl_details.init_msg.runtime.command, FASTAPI_CMD)
@@ -592,7 +597,7 @@ class TestETLOps(unittest.TestCase):
 
         @etl.init_class()
         class PodFailureServer(FastAPIServer):
-            def transform(self, data: bytes, *_args) -> bytes:
+            def transform(self, data: bytes, *_args):
                 os.kill(1, signal.SIGTERM)  # Intentionally terminate the pod
 
         # Attempt to read the object through the ETL, which should cause the pod to terminate

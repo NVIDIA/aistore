@@ -3,7 +3,7 @@
 #
 
 from io import BufferedIOBase
-from typing import Optional, Generator
+from typing import Optional, Generator, Any
 
 import requests
 
@@ -82,12 +82,12 @@ class ObjectReader:
         """
         return self._make_request(stream=False).content
 
-    def raw(self) -> requests.Response:
+    def raw(self) -> Any:
         """
-        Return the raw byte stream of object content.
+        Return the raw byte stream of the object content.
 
         Returns:
-            requests.Response: Raw byte stream of the object content.
+            requests.Response.raw: Raw byte stream of the object content.
         """
         return self._make_request(stream=True).raw
 

@@ -7,7 +7,7 @@ import json
 import tarfile
 import random
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional, Dict
 
 import pytest
 import yaml
@@ -29,9 +29,6 @@ MIN_SHARD_SIZE = 50 * KB
 
 
 class TestDsortOps(ParallelTestBase):
-    def _upload_dir(self, dir_name, bck):
-        bck.put_files(dir_name)
-
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _generate_tar(
         self,
@@ -40,7 +37,7 @@ class TestDsortOps(ParallelTestBase):
         tar_format,
         num_files,
         key_extension=None,
-        key_type: Literal["int", "float", "string"] = None,
+        key_type: Optional[Literal["int", "float", "string"]] = None,
     ):
         with tarfile.open(filename, "w|", format=tar_format) as tar:
             for i in range(num_files):
@@ -77,7 +74,7 @@ class TestDsortOps(ParallelTestBase):
         num_shards,
         num_files,
         key_extension=None,
-        key_type: Literal["int", "float", "string"] = None,
+        key_type: Optional[Literal["int", "float", "string"]] = None,
     ):
         shard_names = []
         out_dir = self.local_test_files.joinpath(bck.name)
@@ -89,21 +86,24 @@ class TestDsortOps(ParallelTestBase):
                 filename, shard_index, tar_enum, num_files, key_extension, key_type
             )
             shard_names.append(name)
-        bck.put_files(str(out_dir))
+        bck.put_files(out_dir)
         return shard_names
 
-    @staticmethod
-    def _get_object_content_map(bck, object_names):
+    def _get_object_content_map(self, bck, object_names):
         expected_contents = {}
         for obj in object_names:
             output_bytes = bck.object(obj).get_reader().read_all()
-            output = io.BytesIO(output_bytes)
-            with tarfile.open(fileobj=output) as result_tar:
-                for tar in result_tar:
-                    expected_contents[tar.name] = result_tar.extractfile(
-                        tar.name
-                    ).read()
+            self._update_result_with_tar(expected_contents, io.BytesIO(output_bytes))
         return expected_contents
+
+    @staticmethod
+    def _update_result_with_tar(result_dict: Dict, tar_file: io.BytesIO):
+        with tarfile.open(fileobj=tar_file) as result_tar:
+            for tar in result_tar:
+                file_obj = result_tar.extractfile(tar.name)
+                if file_obj is None:
+                    continue
+                result_dict[tar.name] = file_obj.read()
 
     # pylint: disable=too-many-locals
     @pytest.mark.nonparallel("potentially causes resilver")
@@ -153,12 +153,8 @@ class TestDsortOps(ParallelTestBase):
 
         dsort.wait(timeout=TEST_TIMEOUT)
         output_bytes = out_bck.object("out-shard-0.tar").get_reader().read_all()
-        output = io.BytesIO(output_bytes)
         result_contents = {}
-        with tarfile.open(fileobj=output) as result_tar:
-            for tar in result_tar:
-                result_contents[tar.name] = result_tar.extractfile(tar.name).read()
-
+        self._update_result_with_tar(result_contents, io.BytesIO(output_bytes))
         self.assertEqual(expected_contents, result_contents)
 
     @pytest.mark.nonparallel("potentially causes resilver")

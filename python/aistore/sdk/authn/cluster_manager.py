@@ -175,7 +175,7 @@ class ClusterManager:
         self.client.request(
             HTTP_METHOD_PUT,
             path=f"{URL_PATH_AUTHN_CLUSTERS}/{cluster_id}",
-            json=cluster_info.dict(),
+            json=cluster_info.model_dump(),
         )
         return self.get(cluster_id=cluster_id)
 

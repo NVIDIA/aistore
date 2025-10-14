@@ -48,7 +48,7 @@ class MultipartUpload:
             HTTP_METHOD_POST,
             path=self.object_path,
             params=self.params,
-            json=ActionMsg(action=ACT_MPT_UPLOAD).dict(),
+            json=ActionMsg(action=ACT_MPT_UPLOAD).model_dump(),
         ).text
         return self
 
@@ -99,7 +99,7 @@ class MultipartUpload:
                     MptCompletedPart(part_number=part_number, etag="").as_dict()
                     for part_number in self.parts
                 ],
-            ).dict(),
+            ).model_dump(),
         )
 
     def abort(self) -> Response:
@@ -114,5 +114,5 @@ class MultipartUpload:
             HTTP_METHOD_DELETE,
             path=self.object_path,
             params={**params, QPARAM_MPT_UPLOAD_ID: self.upload_id},
-            json=ActionMsg(action=ACT_MPT_ABORT).dict(),
+            json=ActionMsg(action=ACT_MPT_ABORT).model_dump(),
         )

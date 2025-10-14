@@ -48,9 +48,9 @@ class ObjectGroup(AISSource):
     def __init__(
         self,
         bck: "Bucket",
-        obj_names: List = None,
-        obj_range: ObjectRange = None,
-        obj_template: str = None,
+        obj_names: Optional[List] = None,
+        obj_range: Optional[ObjectRange] = None,
+        obj_template: Optional[str] = None,
     ):
         self.bck = bck
         num_args = sum(
@@ -67,7 +67,7 @@ class ObjectGroup(AISSource):
             self._obj_collection = obj_range
         elif obj_names:
             self._obj_collection = ObjectNames(obj_names)
-        else:
+        elif obj_template:
             self._obj_collection = ObjectTemplate(obj_template)
 
     @property
@@ -76,7 +76,7 @@ class ObjectGroup(AISSource):
         return self.bck.client
 
     @client.setter
-    def client(self, client) -> RequestClient:
+    def client(self, client):
         """Update the client bound to the bucket used by the ObjectGroup."""
         self.bck.client = client
 
@@ -187,8 +187,8 @@ class ObjectGroup(AISSource):
 
     def prefetch(
         self,
-        blob_threshold: int = None,
-        num_workers: int = None,
+        blob_threshold: Optional[int] = None,
+        num_workers: Optional[int] = None,
         latest: bool = False,
         continue_on_error: bool = False,
     ):
@@ -308,14 +308,14 @@ class ObjectGroup(AISSource):
         etl_name: str,
         timeout: str = DEFAULT_ETL_TIMEOUT,
         prepend: str = "",
-        ext: Dict[str, str] = None,
+        ext: Optional[Dict[str, str]] = None,
         continue_on_error: bool = False,
         dry_run: bool = False,
         force: bool = False,
         latest: bool = False,
         sync: bool = False,
-        num_workers: int = None,
-        etl_pipeline: List[str] = None,
+        num_workers: Optional[int] = None,
+        etl_pipeline: Optional[List[str]] = None,
     ):
         """
         Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
