@@ -5,6 +5,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,34 +49,81 @@ import (
 //     - but when read range is defined: MossOut.Size = (length of this range)
 
 func GetBatch(bp BaseParams, bck cmn.Bck, req *apc.MossReq, w io.Writer) (resp apc.MossResp, err error) {
-	bp.Method = http.MethodGet
-
-	q, path := _optionalBucket(&bck)
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = path
-		reqParams.Body = cos.MustMarshal(req)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = q
-	}
+	rp, q := _makeMossReq(bp, bck, req)
 	if req.StreamingGet {
 		var wresp *wrappedResp
-		wresp, err = reqParams.doWriter(w)
+		wresp, err = rp.doWriter(w)
 		if err == nil {
-			ct := wresp.Header.Get(cos.HdrContentType)
-			if !strings.HasPrefix(ct, "application/") {
-				err = fmt.Errorf("unexpected Content-Type %q", ct)
-			}
+			err = _checkMossResp(wresp.Header)
 		}
 	} else {
-		_, err = reqParams.readMultipart(&resp, w)
+		_, err = rp.readMultipart(&resp, w)
 	}
-	FreeRp(reqParams)
+	FreeRp(rp)
 	if q != nil {
 		qfree(q)
 	}
 	return resp, err
+}
+
+// GetBatchStream starts a streaming GetBatch and returns the response body _as is_
+// and response headers:
+// - the returned body is forward-only (non-seekable)
+// - supported streaming formats: .tar/.tgz/.tar.lz4; zip is excepted as non-streamable
+// - it is the caller's responsibility to close the body
+// - compare with GetBatch() above
+
+const zipext = ".zip"
+
+func GetBatchStream(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (io.ReadCloser, http.Header, error) {
+	if !req.StreamingGet {
+		return nil, nil, errors.New("GetBatchStream: expecting req.StreamingGet to be set")
+	}
+	if req.OutputFormat != "" {
+		if req.OutputFormat == zipext || strings.Contains(req.OutputFormat, zipext[1:]) {
+			return nil, nil, fmt.Errorf("GetBatchStream: output format %q is not streamable", req.OutputFormat)
+		}
+	}
+	rp, q := _makeMossReq(bp, bck, req)
+
+	wresp, body, err := rp.doStream()
+	FreeRp(rp)
+	if q != nil {
+		qfree(q)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := _checkMossResp(wresp.Header); err != nil {
+		body.Close()
+		return nil, nil, err
+	}
+	return body, wresp.Header, nil
+}
+
+//
+// misc. helpers
+//
+
+// not a very strict check for: application/x-tar | application/gzip (tgz) | application/x-gtar | ...
+func _checkMossResp(hdr http.Header) error {
+	ct := hdr.Get(cos.HdrContentType)
+	if !strings.HasPrefix(ct, "application/") {
+		return fmt.Errorf("unexpected Content-Type %q", ct)
+	}
+	return nil
+}
+
+func _makeMossReq(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (*ReqParams, url.Values) {
+	bp.Method = http.MethodGet
+	q, path := _optionalBucket(&bck)
+	rp := AllocRp()
+	rp.BaseParams = bp
+	rp.Path = path
+	rp.Body = cos.MustMarshal(req)
+	rp.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
+	rp.Query = q
+	return rp, q
 }
 
 func _optionalBucket(bck *cmn.Bck) (q url.Values, path string) {

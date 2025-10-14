@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
@@ -21,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
+	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
@@ -326,4 +328,61 @@ func newBuf32k() (buf []byte) {
 
 func freeBuf32k(buf []byte) {
 	pool32k.Put(&buf)
+}
+
+///////////
+// Drain //
+///////////
+
+type (
+	Drain struct {
+		Total int64
+		Num   int
+	}
+
+	DrainVerify struct {
+		t         *testing.T
+		wantNames []string
+		wantSizes []int64
+		i         int
+		total     int64
+	}
+)
+
+func (drain *Drain) Call(_ string, r cos.ReadCloseSizer, _ any) (bool, error) {
+	n, err := io.Copy(io.Discard, r)
+	drain.Total += n
+	_ = r.Close()
+	if err == nil {
+		drain.Num++
+	}
+	return false, err
+}
+
+func NewDrainVerify(t *testing.T, wantNames []string, wantSizes []int64) *DrainVerify {
+	return &DrainVerify{
+		t:         t,
+		wantNames: wantNames,
+		wantSizes: wantSizes,
+	}
+}
+
+func (drain *DrainVerify) Call(name string, r cos.ReadCloseSizer, hdr any) (bool, error) {
+	tarhdr, ok := hdr.(*tar.Header)
+	if !ok {
+		tassert.Fatalf(drain.t, false, "expected *tar.Header, got %T", hdr)
+	}
+	expSize := drain.wantSizes[drain.i]
+	tassert.Errorf(drain.t, tarhdr.Size == expSize, "entry[%d] size mismatch: hdr=%d exp=%d", drain.i, tarhdr.Size, expSize)
+
+	expName := drain.wantNames[drain.i]
+	tassert.Errorf(drain.t, name == expName, "entry[%d] name mismatch: got %q exp %q", drain.i, name, expName)
+
+	n, err := io.Copy(io.Discard, r)
+	drain.total += n
+	_ = r.Close()
+	tassert.Errorf(drain.t, n == tarhdr.Size, "entry[%d] drained %d bytes != hdr.Size %d", drain.i, n, tarhdr.Size)
+
+	drain.i++
+	return false, err
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -902,4 +903,57 @@ func validateTarStreamingWithArchive(t *testing.T, m *ioContext, req *apc.MossRe
 
 	tlog.Logfln("Streaming archive validation passed: %d entries, correct order (format: %s)",
 		len(callback.entries), format)
+}
+
+func TestGetBatchStream_DrainTar(t *testing.T) {
+	proxyURL := tools.GetPrimaryURL()
+	bp := tools.BaseAPIParams(proxyURL)
+
+	bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// few objects
+	names := []string{"s1", "s2", "sbig", "s3"}
+	sizes := []int64{8*cos.KiB + 123, 12*cos.KiB + 456, 3*cos.MiB + 789, 4*cos.KiB + 0xabc}
+	for i, n := range names {
+		reader, err := readers.NewRand(sizes[i], cos.ChecksumNone)
+		tassert.CheckFatal(t, err)
+
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    n,
+			Reader:     reader,
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	// Build Moss request (streaming tar).
+	in := make([]apc.MossIn, 0, len(names))
+	for _, n := range names {
+		in = append(in, apc.MossIn{ObjName: n})
+	}
+	req := &apc.MossReq{In: in, StreamingGet: true}
+
+	rc, _, err := api.GetBatchStream(bp, bck, req)
+	tassert.CheckFatal(t, err)
+	defer rc.Close()
+
+	// TAR is the default output format
+	ar, err := archive.NewReader(archive.ExtTar, rc)
+	tassert.CheckFatal(t, err)
+
+	// prep. tarch.DrainVerify
+	var (
+		wantNames = make([]string, len(in))
+		sum       int64
+	)
+	for i, n := range names {
+		wantNames[i] = path.Join(bck.Name, n) // NOTE: must be api/ml.go documented naming
+		sum += sizes[i]
+	}
+
+	drain := tarch.NewDrainVerify(t, wantNames, sizes)
+	err = ar.ReadUntil(drain, "" /*match all*/, cos.EmptyMatchAll)
+	tassert.CheckFatal(t, err)
 }

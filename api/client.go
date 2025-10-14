@@ -155,10 +155,8 @@ func (reqParams *ReqParams) doReqStr(out *string) (int, error) {
 	return resp.StatusCode, err
 }
 
-// Makes request via do() and uses provided writer to write `resp.Body`
-// (which is also closes)
-//
-// Returns the entire wrapped response.
+// do() and use provided writer (to write `resp.Body`)
+// return the entire wrapped response
 func (reqParams *ReqParams) doWriter(w io.Writer) (wresp *wrappedResp, err error) {
 	var resp *http.Response
 	resp, err = reqParams.do()
@@ -169,6 +167,20 @@ func (reqParams *ReqParams) doWriter(w io.Writer) (wresp *wrappedResp, err error
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	return
+}
+
+// do() and return a checked response *with* the `resp.Body` as is
+// and *without*  draining or closing the latter
+func (reqParams *ReqParams) doStream() (wresp *wrappedResp, body io.ReadCloser, err error) {
+	resp, err := reqParams.do()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = reqParams.checkResp(resp); err != nil {
+		resp.Body.Close()
+		return nil, nil, err
+	}
+	return &wrappedResp{Response: resp}, resp.Body, nil
 }
 
 // same as above except that it returns response body (as io.ReadCloser) for subsequent reading
