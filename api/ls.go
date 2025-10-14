@@ -19,8 +19,6 @@ import (
 
 const (
 	maxListPageRetries = 3
-
-	msgpBufSize = 16 * cos.KiB
 )
 
 type (

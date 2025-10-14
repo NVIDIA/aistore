@@ -28,8 +28,15 @@ var (
 )
 
 var (
-	pool sync.Pool // bytes.Buffer mem pool (errors and warnings only)
+	// of `fixed` bufs
+	pool = sync.Pool{
+		New: func() any {
+			return &fixed{buf: make([]byte, extraSize)}
+		},
+	}
+)
 
+var (
 	nlogs [3]*nlog
 
 	logDir  string

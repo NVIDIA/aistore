@@ -79,38 +79,6 @@ type (
 	}
 )
 
-var (
-	woPool sync.Pool
-	wo0    workOrder
-)
-
-func allocWO(op int) *workOrder {
-	v := woPool.Get()
-	if v == nil {
-		return &workOrder{op: op}
-	}
-	wo := v.(*workOrder)
-	debug.Assert(wo.op == opFree)
-	wo.op = op
-	return wo
-}
-
-func freeWO(wo *workOrder) {
-	// work orders with SGLs are freed via wo2Free
-	if wo.sgl != nil || wo.op == opFree {
-		return
-	}
-
-	var batch []string
-	if wo.op == opGetBatch {
-		batch = wo.batch[:0]
-	}
-
-	*wo = wo0
-	wo.batch = batch
-	woPool.Put(wo)
-}
-
 func postNewWorkOrder() (err error) {
 	// operation
 	op := opGet

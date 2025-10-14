@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -456,37 +455,3 @@ func (rr *reqResp) call() (status int, err error) {
 	}
 	return status, err
 }
-
-//
-// mem-pools
-//
-
-var (
-	reqParamPool sync.Pool
-	reqParams0   ReqParams
-
-	msgpPool sync.Pool
-)
-
-func AllocRp() *ReqParams {
-	if v := reqParamPool.Get(); v != nil {
-		return v.(*ReqParams)
-	}
-	return &ReqParams{}
-}
-
-func FreeRp(reqParams *ReqParams) {
-	*reqParams = reqParams0
-	reqParamPool.Put(reqParams)
-}
-
-func allocMbuf() (buf []byte) {
-	if v := msgpPool.Get(); v != nil {
-		buf = *(v.(*[]byte))
-	} else {
-		buf = make([]byte, msgpBufSize)
-	}
-	return
-}
-
-func freeMbuf(buf []byte) { msgpPool.Put(&buf) }

@@ -55,16 +55,14 @@ type bctx struct {
 ////////////////
 
 var (
-	ibargsPool sync.Pool
-	ib0        bctx
+	ibargsPool = sync.Pool{
+		New: func() any { return new(bctx) },
+	}
+	ib0 bctx
 )
 
-func allocBctx() (a *bctx) {
-	if v := ibargsPool.Get(); v != nil {
-		a = v.(*bctx)
-		return
-	}
-	return &bctx{}
+func allocBctx() *bctx {
+	return ibargsPool.Get().(*bctx)
 }
 
 func freeBctx(a *bctx) {

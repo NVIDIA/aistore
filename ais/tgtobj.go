@@ -2172,19 +2172,17 @@ func (c *rcbCtx) fini() {
 //
 
 var (
-	goiPool, poiPool, sndPool sync.Pool
+	goiPool = sync.Pool{New: func() any { return new(getOI) }}
+	poiPool = sync.Pool{New: func() any { return new(putOI) }}
+	sndPool = sync.Pool{New: func() any { return new(sendArgs) }}
 
 	goi0 getOI
 	poi0 putOI
 	snd0 sendArgs
 )
 
-func allocGOI() (a *getOI) {
-	if v := goiPool.Get(); v != nil {
-		a = v.(*getOI)
-		return
-	}
-	return &getOI{}
+func allocGOI() *getOI {
+	return goiPool.Get().(*getOI)
 }
 
 func freeGOI(a *getOI) {
@@ -2192,12 +2190,8 @@ func freeGOI(a *getOI) {
 	goiPool.Put(a)
 }
 
-func allocPOI() (a *putOI) {
-	if v := poiPool.Get(); v != nil {
-		a = v.(*putOI)
-		return
-	}
-	return &putOI{}
+func allocPOI() *putOI {
+	return poiPool.Get().(*putOI)
 }
 
 func freePOI(a *putOI) {
@@ -2205,12 +2199,8 @@ func freePOI(a *putOI) {
 	poiPool.Put(a)
 }
 
-func allocSnda() (a *sendArgs) {
-	if v := sndPool.Get(); v != nil {
-		a = v.(*sendArgs)
-		return
-	}
-	return &sendArgs{}
+func allocSnda() *sendArgs {
+	return sndPool.Get().(*sendArgs)
 }
 
 func freeSnda(a *sendArgs) {

@@ -96,8 +96,10 @@ var _except = map[string]bool{
 }
 
 var (
-	dpqPool sync.Pool
-	dpq0    dpq
+	dpqPool = sync.Pool{
+		New: func() any { return &dpq{m: make(cos.StrKVs, iniDpqCap)} },
+	}
+	dpq0 dpq
 )
 
 const (
@@ -105,29 +107,23 @@ const (
 	maxDpqCap = 100
 )
 
-func dpqAlloc() *dpq {
-	v := dpqPool.Get()
-	if v == nil {
-		return &dpq{m: make(cos.StrKVs, iniDpqCap)}
-	}
-	dpq := v.(*dpq)
-	if dpq.m == nil { // (unlikely)
-		dpq.m = make(cos.StrKVs, iniDpqCap)
-	}
-	return dpq
+func dpqAlloc() (d *dpq) {
+	d = dpqPool.Get().(*dpq)
+	return
 }
 
-func dpqFree(dpq *dpq) {
-	c := dpq.count
-	m := dpq.m
+func dpqFree(d *dpq) {
+	c := d.count
+	m := d.m
+
 	clear(m)
-	*dpq = dpq0
+	*d = dpq0
 	if c >= max(maxDpqCap-16, iniDpqCap*4) {
-		dpq.m = make(cos.StrKVs, iniDpqCap)
+		d.m = make(cos.StrKVs, iniDpqCap) // gc & new
 	} else {
-		dpq.m = m
+		d.m = m // reuse
 	}
-	dpqPool.Put(dpq)
+	dpqPool.Put(d)
 }
 
 func (dpq *dpq) get(qparam string) string { return dpq.m[qparam] }

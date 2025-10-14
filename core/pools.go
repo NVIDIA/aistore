@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -11,11 +11,15 @@ import (
 )
 
 var (
-	lomPool sync.Pool
-	lom0    LOM
+	lomPool = sync.Pool{
+		New: func() any { return new(LOM) },
+	}
+	lom0 LOM
 
-	putObjPool sync.Pool
-	putObj0    PutParams
+	putObjPool = sync.Pool{
+		New: func() any { return new(PutParams) },
+	}
+	putObj0 PutParams
 )
 
 /////////////
@@ -24,9 +28,6 @@ var (
 
 func AllocLOM(objName string) *LOM {
 	v := lomPool.Get()
-	if v == nil {
-		return &LOM{ObjName: objName}
-	}
 	lom := v.(*LOM)
 	debug.Assert(lom.ObjName == "" && lom.FQN == "")
 	lom.ObjName = objName
@@ -34,7 +35,7 @@ func AllocLOM(objName string) *LOM {
 }
 
 func FreeLOM(lom *LOM) {
-	debug.Assertf(lom.ObjName != "" || lom.FQN != "", "%q, %q", lom.ObjName, lom.FQN)
+	debug.Assert(lom.ObjName != "" || lom.FQN != "", "FreeLOM: empty LOM")
 	*lom = lom0
 	lomPool.Put(lom)
 }
@@ -44,11 +45,9 @@ func FreeLOM(lom *LOM) {
 //
 
 func AllocPutParams() (a *PutParams) {
-	if v := putObjPool.Get(); v != nil {
-		a = v.(*PutParams)
-		return
-	}
-	return &PutParams{}
+	v := putObjPool.Get()
+	a = v.(*PutParams)
+	return
 }
 
 func FreePutParams(a *PutParams) {

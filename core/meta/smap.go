@@ -742,16 +742,18 @@ func mapsEq(a, b NodeMap) bool {
 // mem-pool of Nodes (slices)
 //
 
-var nodesPool sync.Pool
+var nodesPool = sync.Pool{
+	New: func() any { return new(Nodes) },
+}
 
+// note: ec is the only user
 func AllocNodes(capacity int) (nodes Nodes) {
-	if v := nodesPool.Get(); v != nil {
-		pnodes := v.(*Nodes)
-		nodes = *pnodes
-		debug.Assert(nodes != nil && len(nodes) == 0)
-	} else {
-		debug.Assert(capacity > 0)
+	p := nodesPool.Get().(*Nodes)
+	nodes = *p
+	if cap(nodes) < capacity {
 		nodes = make(Nodes, 0, capacity)
+	} else {
+		nodes = nodes[:0]
 	}
 	return
 }

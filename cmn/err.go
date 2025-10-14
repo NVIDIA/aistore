@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -1313,52 +1312,4 @@ func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 	} else {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 	}
-}
-
-//
-// 1) ErrHTTP struct pool
-// 2) bytes.Buffer pool
-//
-
-const maxBuffer = 4 * cos.KiB
-
-var (
-	errPool sync.Pool
-	bufPool sync.Pool
-
-	err0 ErrHTTP
-)
-
-func allocHterr() (a *ErrHTTP) {
-	if v := errPool.Get(); v != nil {
-		a = v.(*ErrHTTP)
-		return
-	}
-	return &ErrHTTP{}
-}
-
-func FreeHterr(a *ErrHTTP) {
-	trace := a.trace
-	*a = err0
-	if trace != nil {
-		a.trace = trace[:0]
-	}
-	errPool.Put(a)
-}
-
-func NewBuffer() (buf *bytes.Buffer) {
-	if v := bufPool.Get(); v != nil {
-		buf = v.(*bytes.Buffer)
-	} else {
-		buf = bytes.NewBuffer(nil)
-	}
-	return
-}
-
-func FreeBuffer(buf *bytes.Buffer) {
-	if buf.Cap() > maxBuffer {
-		return
-	}
-	buf.Reset()
-	bufPool.Put(buf)
 }

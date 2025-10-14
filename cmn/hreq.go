@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -31,30 +30,6 @@ type HreqArgs struct {
 	Base     string // base URL, e.g. http://xyz.abc
 	Path     string // path URL, e.g. /x/y/z
 	Body     []byte
-}
-
-var (
-	hraPool sync.Pool
-	hra0    HreqArgs
-)
-
-var (
-	hpool sync.Pool
-	hmap  sync.Map
-	req0  http.Request
-)
-
-func AllocHra() (a *HreqArgs) {
-	if v := hraPool.Get(); v != nil {
-		a = v.(*HreqArgs)
-		return
-	}
-	return &HreqArgs{}
-}
-
-func FreeHra(a *HreqArgs) {
-	*a = hra0
-	hraPool.Put(a)
 }
 
 func (u *HreqArgs) URL() string {
@@ -193,20 +168,4 @@ func newRequest(method, surl string) (*http.Request, error) {
 	req.Host = u.Host
 
 	return req, nil
-}
-
-func hreqAlloc() *http.Request {
-	r := hpool.Get()
-	if r != nil {
-		return r.(*http.Request)
-	}
-	return &http.Request{}
-}
-
-func HreqFree(r *http.Request) {
-	hdr := r.Header
-	*r = req0
-	clear(hdr)
-	r.Header = hdr
-	hpool.Put(r)
 }

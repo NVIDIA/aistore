@@ -17,20 +17,17 @@ import (
 //////////////
 
 var (
-	sendPool sync.Pool
-	sobj0    Obj
+	sendPool = sync.Pool{
+		New: func() any { return new(Obj) },
+	}
+	sobj0 Obj
 )
 
-func AllocSend() (obj *Obj) {
-	if v := sendPool.Get(); v != nil {
-		obj = v.(*Obj)
-	} else {
-		obj = &Obj{}
-	}
-	return
+func AllocSend() *Obj {
+	return sendPool.Get().(*Obj)
 }
 
-func freeSend(obj *Obj) { // <== sendobj & stream_bundle
+func freeSend(obj *Obj) { // sendobj & stream_bundle
 	*obj = sobj0
 	sendPool.Put(obj)
 }
@@ -40,17 +37,14 @@ func freeSend(obj *Obj) { // <== sendobj & stream_bundle
 //////////////
 
 var (
-	recvPool sync.Pool
-	robj0    objReader
+	recvPool = sync.Pool{
+		New: func() any { return new(objReader) },
+	}
+	robj0 objReader
 )
 
-func allocRecv() (obj *objReader) {
-	if v := recvPool.Get(); v != nil {
-		obj = v.(*objReader)
-	} else {
-		obj = &objReader{}
-	}
-	return
+func allocRecv() *objReader {
+	return recvPool.Get().(*objReader)
 }
 
 func FreeRecv(object io.Reader) {

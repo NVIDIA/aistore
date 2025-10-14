@@ -317,14 +317,10 @@ func _whileStopping(p []byte) {
 // - none of the "fixed" ones available
 // - alsoToStderr
 
-func alloc() (fb *fixed) {
-	if v := pool.Get(); v != nil {
-		fb = v.(*fixed)
-		fb.reset()
-	} else {
-		fb = &fixed{buf: make([]byte, extraSize)}
-	}
-	return
+func alloc() *fixed {
+	fb := pool.Get().(*fixed)
+	fb.reset()
+	return fb
 }
 
 func free(fb *fixed) {

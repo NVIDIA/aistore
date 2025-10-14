@@ -6,8 +6,6 @@
 package xs
 
 import (
-	"sync"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,29 +53,6 @@ type (
 var (
 	gcoi COI
 )
-
-// mem pool
-var (
-	coiPool sync.Pool
-	coi0    CoiParams
-)
-
-//
-// CoiParams pool
-//
-
-func AllocCOI() (a *CoiParams) {
-	if v := coiPool.Get(); v != nil {
-		a = v.(*CoiParams)
-		return
-	}
-	return &CoiParams{}
-}
-
-func FreeCOI(a *CoiParams) {
-	*a = coi0
-	coiPool.Put(a)
-}
 
 //
 // tcb/tcobjs common part (internal)

@@ -308,34 +308,28 @@ func (e *errNotPrimary) Error() string {
 ///////////////
 
 var (
-	bargsPool, cargsPool sync.Pool
-	bargs0               bcastArgs
-	cargs0               callArgs
+	bargsPool = sync.Pool{New: func() any { return new(bcastArgs) }}
+	cargsPool = sync.Pool{New: func() any { return new(callArgs) }}
+
+	bargs0 bcastArgs
+	cargs0 callArgs
 )
 
-func allocBcArgs() (a *bcastArgs) {
-	if v := bargsPool.Get(); v != nil {
-		a = v.(*bcastArgs)
-		return
-	}
-	return &bcastArgs{}
+func allocBcArgs() *bcastArgs {
+	return bargsPool.Get().(*bcastArgs)
 }
 
 func freeBcArgs(a *bcastArgs) {
 	sel := a.selected
 	*a = bargs0
 	if sel != nil {
-		a.selected = sel[:0]
+		a.selected = sel[:0] // keep capacity
 	}
 	bargsPool.Put(a)
 }
 
-func allocCargs() (a *callArgs) {
-	if v := cargsPool.Get(); v != nil {
-		a = v.(*callArgs)
-		return
-	}
-	return &callArgs{}
+func allocCargs() *callArgs {
+	return cargsPool.Get().(*callArgs)
 }
 
 func freeCargs(a *callArgs) {
@@ -358,18 +352,19 @@ func (cresmGeneric[T]) newV() any                              { return new(T) }
 func (c cresmGeneric[T]) read(res *callResult, body io.Reader) { res.v = c.newV(); res.mread(body) }
 
 var (
-	resultsPool sync.Pool
-	callResPool sync.Pool
-	callRes0    callResult
+	resultsPool = sync.Pool{
+		New: func() any { return new(sliceResults) },
+	}
+	callResPool = sync.Pool{
+		New: func() any { return new(callResult) },
+	}
+	callRes0 callResult
 )
 
-func allocCR() (a *callResult) {
-	if v := callResPool.Get(); v != nil {
-		a = v.(*callResult)
-		debug.Assert(a.si == nil)
-		return
-	}
-	return &callResult{}
+func allocCR() *callResult {
+	a := callResPool.Get().(*callResult)
+	debug.Assert(a.si == nil)
+	return a
 }
 
 func freeCR(res *callResult) {
@@ -378,18 +373,20 @@ func freeCR(res *callResult) {
 }
 
 func allocBcastRes(n int) sliceResults {
-	if v := resultsPool.Get(); v != nil {
-		a := v.(*sliceResults)
-		return *a
+	a := resultsPool.Get().(*sliceResults)
+	sr := *a
+	if cap(sr) < n {
+		sr = make(sliceResults, 0, n)
 	}
-	return make(sliceResults, 0, n)
+	sr = sr[:0]
+	return sr
 }
 
 func freeBcastRes(results sliceResults) {
 	for _, res := range results {
 		freeCR(res)
 	}
-	results = results[:0]
+	results = results[:0] // to reuse
 	resultsPool.Put(&results)
 }
 

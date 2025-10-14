@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -15,15 +15,27 @@ import (
 const maxEntries = apc.MaxPageSizeAIS
 
 var (
-	lstPool sync.Pool
-	entry0  cmn.LsoEnt
+	lstPool = sync.Pool{
+		New: func() any {
+			return new(cmn.LsoEntries)
+		},
+	}
+	entry0 cmn.LsoEnt
 )
 
-func allocLsoEntries() (entries cmn.LsoEntries) {
-	if v := lstPool.Get(); v != nil {
-		entries = *v.(*cmn.LsoEntries)
+var (
+	coiPool = sync.Pool{
+		New: func() any {
+			return new(CoiParams)
+		},
 	}
-	return
+	coi0 CoiParams
+)
+
+func allocLsoEntries() cmn.LsoEntries {
+	p := lstPool.Get().(*cmn.LsoEntries)
+	entries := *p
+	return entries
 }
 
 func freeLsoEntries(entries cmn.LsoEntries) {
@@ -41,4 +53,13 @@ func freeLsoEntries(entries cmn.LsoEntries) {
 	}
 	// recycle
 	lstPool.Put(&entries)
+}
+
+func AllocCOI() *CoiParams {
+	return coiPool.Get().(*CoiParams)
+}
+
+func FreeCOI(a *CoiParams) {
+	*a = coi0
+	coiPool.Put(a)
 }
