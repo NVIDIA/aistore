@@ -379,9 +379,9 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		mw.Append(sgl)
 		expectedSize, err = io.Copy(mw, reader)
 
-		// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
-		seekableReader := memsys.NewReader(sgl)
 		if err == nil {
+			// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
+			seekableReader := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
 			etag, ecode, err = backend.PutMptPart(lom, seekableReader, req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
