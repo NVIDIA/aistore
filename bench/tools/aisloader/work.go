@@ -27,31 +27,17 @@ import (
 
 // GET(batch): an operation that gets a batch of objects (or archived files) in one shot.
 //
-// TODO: stats
-// - Track batch-specific latency (entire batch completion time)
-// - detailed HTTP tracing for batch operations
-//
-// TODO: features - add command line
-// - plain vs archive
-// - multipart mode (whereby streaming mode is aisloader's default)
-// - continue-on-error
-// - multiple buckets
-// - supported input and output formats (other than TAR)
-//
-// TODO: optimize
-// - mem-pool apc.MossReq
-// - read/discard resulting TAR
-//
-// TODO: mutual exclusion and validation
-// - Get(batch) vs other command line (verifyHash, readOff/readLen, etl, etc.)
-// - Direct S3 support for batch operations - not available of course
-//
-// TODO: short:test pipeline
-// - extend test-aisloader target - add GET(batch)
-//
-// TODO: documentation
-// - add usage examples to examples.go
-// - update docs/aisloader.md
+// TODO:
+// * stats - to compare get-batch vs GET
+// * features
+//   - plain vs archive
+//   - multipart mode (w/ streaming default)
+//   - continue-on-error
+//   - multiple buckets
+//   - supported input and output formats (other than TAR)
+// * mem-pool apc.MossReq
+// * documentation
+//   - update docs/aisloader.md; add usage examples
 // ---------------------------------------------------------------------------------------
 
 const (

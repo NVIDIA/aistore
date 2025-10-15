@@ -220,3 +220,41 @@ func EqExt(ext1, ext2 string) bool {
 	}
 	return false
 }
+
+//
+// to/from HTTP ContentType (while trying to respect IANA and de-facto conventions)
+//
+
+func ExtFromContentType(ct string) string {
+	ct = strings.ToLower(strings.TrimSpace(ct))
+	if idx := strings.IndexByte(ct, ';'); idx > 0 {
+		ct = ct[:idx] // strip params
+	}
+	switch {
+	case strings.HasPrefix(ct, "application/tar") || strings.HasPrefix(ct, cos.ContentTar):
+		return ExtTar
+	case strings.HasPrefix(ct, cos.ContentGzip) || strings.HasPrefix(ct, "application/x-gzip"):
+		return ExtTgz
+	case strings.HasPrefix(ct, "application/x-lz4") || strings.HasPrefix(ct, "application/lz4"):
+		return ExtTarLz4
+	case strings.HasPrefix(ct, cos.ContentZip):
+		return ExtZip
+	default:
+		return "" // unknown or missing
+	}
+}
+
+func ContentTypeFromExt(ext string) string {
+	switch ext {
+	case "", ExtTar:
+		return cos.ContentTar // not IANA-registered
+	case ExtTgz, ExtTarGz:
+		return cos.ContentGzip // widely used for .tar.gz / .tgz
+	case ExtTarLz4:
+		return "application/x-lz4" // unofficial but conventional
+	case ExtZip:
+		return cos.ContentZip // IANA-registered
+	default:
+		return cos.ContentBinary
+	}
+}

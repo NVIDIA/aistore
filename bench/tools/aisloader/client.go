@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools/readers"
 
@@ -498,7 +499,6 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *ht
 	return n, err
 }
 
-// TODO: revisit; consume/discard TAR
 func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, error) {
 	bp := api.BaseParams{
 		URL:    proxyURL,
@@ -507,7 +507,7 @@ func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, err
 		UA:     runParams.bp.UA,
 	}
 	// do
-	rc, _, err := api.GetBatchStream(bp, bck, req)
+	rc, hdr, err := api.GetBatchStream(bp, bck, req)
 	if err != nil {
 		return 0, err
 	}
@@ -518,8 +518,14 @@ func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, err
 	var (
 		drain archive.Drain
 		ar    archive.Reader
+		ctype = hdr.Get(cos.HdrContentType)
+		mime  = archive.ExtFromContentType(ctype)
 	)
-	ar, err = archive.NewReader(archive.ExtTar, rc)
+	if mime == "" { // (unlikely)
+		debug.Assert(false, "missing or unknown Content-Type for get-batch: ", ctype)
+		mime = archive.ExtTar
+	}
+	ar, err = archive.NewReader(mime, rc)
 	if err != nil {
 		return 0, err
 	}

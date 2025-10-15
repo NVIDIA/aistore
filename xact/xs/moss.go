@@ -1311,7 +1311,7 @@ func (wi *buffwi) multipart(mpw *multipart.Writer, resp *apc.MossResp) (int64, e
 
 func (wi *streamwi) asm(w http.ResponseWriter) error {
 	debug.Assert(wi.req.StreamingGet)
-	w.Header().Set(cos.HdrContentType, _ctype(wi.req.OutputFormat))
+	w.Header().Set(cos.HdrContentType, archive.ContentTypeFromExt(wi.req.OutputFormat))
 	if err := wi.basewi.asm(); err != nil {
 		nlog.Warningln(wi.r.Name(), cmn.ErrGetTxBenign, "[", err, "]")
 		return cmn.ErrGetTxBenign
@@ -1333,22 +1333,6 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", wi.req.OutputFormat, "]")
 	}
 	return nil
-}
-
-func _ctype(outputFormat string) string {
-	switch outputFormat {
-	case "" /*default*/, archive.ExtTar:
-		return cos.ContentTar // not IANA-registered
-	case archive.ExtTgz, archive.ExtTarGz:
-		return cos.ContentGzip // not registered; widely used for .tar.gz and .tgz
-	case archive.ExtTarLz4:
-		return "application/x-lz4" // not registered but consistent with .lz4; alternative: "application/octet-stream"
-	case archive.ExtZip:
-		return cos.ContentZip // IANA-registered
-	default:
-		debug.Assert(false, outputFormat)
-		return cos.ContentBinary
-	}
 }
 
 func _assertNoRange(in *apc.MossIn) (err error) {

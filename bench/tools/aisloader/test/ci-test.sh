@@ -95,7 +95,7 @@ aisloader -bucket="${bucket_name}" \
     ${quiet_flag}
 
 echo ""
-echo "=== Stage 2/5: Mixed MPU (100% PUT, 30% chunked, 5GiB) [${stage2_dur}] ========"
+echo "=== Stage 2/5: Mixed PUT/MPU (100% PUT, 30% chunked, 5GiB) [${stage2_dur}] ======"
 aisloader -bucket="${bucket_name}" \
     -duration="${stage2_dur}" \
     -pctput=100 \
@@ -110,7 +110,7 @@ aisloader -bucket="${bucket_name}" \
     ${quiet_flag}
 
 echo ""
-echo "=== Stage 3/5: Mixed Workload (10% PUT, 90% GET) [${stage3_dur}] =============="
+echo "=== Stage 3/5: Mixed PUT/GET (10% PUT, 90% GET) [${stage3_dur}] =================="
 aisloader -bucket="${bucket_name}" \
     -duration="${stage3_dur}" \
     -pctput=10 \
@@ -122,7 +122,7 @@ aisloader -bucket="${bucket_name}" \
     ${quiet_flag}
 
 echo ""
-echo "=== Stage 4/5: GET-Batch (batch=32) [${stage4_dur}] ==========================="
+echo "=== Stage 4/5: GetBatch (num=32) [${stage4_dur}] ================================"
 aisloader -bucket="${bucket_name}" \
     -duration="${stage4_dur}" \
     -pctput=0 \
@@ -133,7 +133,7 @@ aisloader -bucket="${bucket_name}" \
     ${quiet_flag}
 
 echo ""
-echo "=== Stage 5/5: GET-Batch + Cleanup (batch=64) [${stage5_dur}] ================"
+echo "=== Stage 5/5: GetBatch (num=64) + cleanup [${stage5_dur}] ====================="
 aisloader -bucket="${bucket_name}" \
     -duration="${stage5_dur}" \
     -pctput=0 \
