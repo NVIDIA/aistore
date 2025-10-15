@@ -23,6 +23,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	opLabelPut = "PUT"
+	opLabelGet = "GET"
+	opLabelMPU = "MPU"
+	opLabelGBT = "GBT"
+)
+
 var examples = `# 1. Cleanup (i.e., destroy) an existing bucket:
      $ aisloader -bucket=ais://abc -duration 0s -totalputsize=0 -cleanup=true
      $ aisloader -bucket=mybucket -provider=aws -cleanup=true -duration 0s -totalputsize=0
@@ -196,12 +203,13 @@ func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
 
 func writeStatsJSON(to io.Writer, s *sts, withcomma ...bool) {
 	jStats := struct {
-		Get *jsonStats `json:"get"`
-		Put *jsonStats `json:"put"`
-		Cfg *jsonStats `json:"cfg"`
+		Get      *jsonStats `json:"get"`
+		Put      *jsonStats `json:"put"`
+		GetBatch *jsonStats `json:"get_batch"`
 	}{
-		Get: jsonStatsFromReq(s.get),
-		Put: jsonStatsFromReq(s.put),
+		Get:      jsonStatsFromReq(s.get),
+		Put:      jsonStatsFromReq(s.put),
+		GetBatch: jsonStatsFromReq(s.getBatch),
 	}
 
 	jsonOutput, err := json.MarshalIndent(jStats, "", "  ")
@@ -234,7 +242,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 		errs = pn(s.put.TotalErrs()) + " (" + pn(t.put.TotalErrs()) + ")"
 	}
 	if s.put.Total() != 0 {
-		p(to, statsPrintHeader, pt(), "PUT",
+		p(to, statsPrintHeader, pt(), opLabelPut,
 			pn(s.put.Total())+" ("+pn(t.put.Total())+" "+pn(putPending)+" "+pn(workOrderResLen)+")",
 			pb(s.put.TotalBytes())+" ("+pb(t.put.TotalBytes())+")",
 			pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
@@ -246,7 +254,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 		errs = pn(s.putMPU.TotalErrs()) + " (" + pn(t.putMPU.TotalErrs()) + ")"
 	}
 	if s.putMPU.Total() != 0 {
-		p(to, statsPrintHeader, pt(), "MPU",
+		p(to, statsPrintHeader, pt(), opLabelMPU,
 			pn(s.putMPU.Total())+" ("+pn(t.putMPU.Total())+")",
 			pb(s.putMPU.TotalBytes())+" ("+pb(t.putMPU.TotalBytes())+")",
 			pl(s.putMPU.MinLatency(), s.putMPU.AvgLatency(), s.putMPU.MaxLatency()),
@@ -258,11 +266,23 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 		errs = pn(s.get.TotalErrs()) + " (" + pn(t.get.TotalErrs()) + ")"
 	}
 	if s.get.Total() != 0 {
-		p(to, statsPrintHeader, pt(), "GET",
+		p(to, statsPrintHeader, pt(), opLabelGet,
 			pn(s.get.Total())+" ("+pn(t.get.Total())+" "+pn(getPending)+" "+pn(workOrderResLen)+")",
 			pb(s.get.TotalBytes())+" ("+pb(t.get.TotalBytes())+")",
 			pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
 			ps(s.get.Throughput(s.get.Start(), time.Now()))+" ("+ps(t.get.Throughput(t.get.Start(), time.Now()))+")",
+			errs)
+	}
+	errs = "-"
+	if t.getBatch.TotalErrs() != 0 {
+		errs = pn(s.getBatch.TotalErrs()) + " (" + pn(t.getBatch.TotalErrs()) + ")"
+	}
+	if s.getBatch.Total() != 0 {
+		p(to, statsPrintHeader, pt(), opLabelGBT,
+			pn(s.getBatch.Total())+" ("+pn(t.getBatch.Total())+")",
+			pb(s.getBatch.TotalBytes())+" ("+pb(t.getBatch.TotalBytes())+")",
+			pl(s.getBatch.MinLatency(), s.getBatch.AvgLatency(), s.getBatch.MaxLatency()),
+			ps(s.getBatch.Throughput(s.getBatch.Start(), time.Now()))+" ("+ps(t.getBatch.Throughput(t.getBatch.Start(), time.Now()))+")",
 			errs)
 	}
 }
@@ -278,7 +298,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 
 	sput := &t.put
 	if sput.Total() > 0 {
-		p(to, statsPrintHeader, pt(), "PUT",
+		p(to, statsPrintHeader, pt(), opLabelPut,
 			pn(sput.Total()),
 			pb(sput.TotalBytes()),
 			pl(sput.MinLatency(), sput.AvgLatency(), sput.MaxLatency()),
@@ -287,7 +307,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 	}
 	smpu := &t.putMPU
 	if smpu.Total() > 0 {
-		p(to, statsPrintHeader, pt(), "MPU",
+		p(to, statsPrintHeader, pt(), opLabelMPU,
 			pn(smpu.Total()),
 			pb(smpu.TotalBytes()),
 			pl(smpu.MinLatency(), smpu.AvgLatency(), smpu.MaxLatency()),
@@ -296,12 +316,21 @@ func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 	}
 	sget := &t.get
 	if sget.Total() > 0 {
-		p(to, statsPrintHeader, pt(), "GET",
+		p(to, statsPrintHeader, pt(), opLabelGet,
 			pn(sget.Total()),
 			pb(sget.TotalBytes()),
 			pl(sget.MinLatency(), sget.AvgLatency(), sget.MaxLatency()),
 			ps(sget.Throughput(sget.Start(), time.Now())),
 			pn(sget.TotalErrs()))
+	}
+	sgbatch := &t.getBatch
+	if sgbatch.Total() > 0 {
+		p(to, statsPrintHeader, pt(), opLabelGBT,
+			pn(sgbatch.Total()),
+			pb(sgbatch.TotalBytes()),
+			pl(sgbatch.MinLatency(), sgbatch.AvgLatency(), sgbatch.MaxLatency()),
+			ps(sgbatch.Throughput(sgbatch.Start(), time.Now())),
+			pn(sgbatch.TotalErrs()))
 	}
 }
 

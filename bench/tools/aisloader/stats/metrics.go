@@ -13,7 +13,7 @@ import (
 const (
 	get              = "get"
 	put              = "put"
-	getConfig        = "getconfig"
+	getBatch         = "getbatch"
 	throughput       = "throughput"
 	latency          = "latency"
 	latencyProxy     = "latency.proxy"
@@ -38,33 +38,21 @@ type (
 	}
 	MetricLatAgg struct {
 		BaseMetricAgg
-		latency time.Duration // Accumulated request latency
+		latency time.Duration // accumulated request latency
 
-		// self maintained fields
+		// self-maintained fields
 		minLatency time.Duration
 		maxLatency time.Duration
-	}
-	MetricConfigAgg struct {
-		BaseMetricAgg
-		latency             time.Duration
-		minLatency          time.Duration
-		maxLatency          time.Duration
-		proxyLatency        time.Duration
-		minProxyLatency     time.Duration
-		maxProxyLatency     time.Duration
-		proxyConnLatency    time.Duration
-		minProxyConnLatency time.Duration
-		maxProxyConnLatency time.Duration
 	}
 	MetricLatsAgg struct {
 		metrics map[string]*MetricLatAgg
 	}
 	Metrics struct {
-		Put    MetricAgg
-		Get    MetricAgg
-		Config MetricConfigAgg
-		PutLat MetricLatsAgg
-		GetLat MetricLatsAgg
+		Put      MetricAgg
+		Get      MetricAgg
+		GetBatch MetricAgg
+		PutLat   MetricLatsAgg
+		GetLat   MetricLatsAgg
 	}
 )
 
@@ -72,7 +60,7 @@ func NewStatsdMetrics(start time.Time) Metrics {
 	m := Metrics{}
 	m.Get.start = start
 	m.Put.start = start
-	m.Config.start = start
+	m.GetBatch.start = start
 	return m
 }
 
@@ -84,8 +72,10 @@ func (ma *MetricAgg) Add(size int64, lat time.Duration) {
 	ma.maxLatency = max(ma.maxLatency, lat)
 }
 
-func (ma *MetricAgg) AddPending(pending int64) {
-	ma.pending += pending
+// Note: this aggregates pending values (to be averaged at send time).
+// If you ever want "last pending" semantics, change this to assignment.
+func (ma *MetricAgg) AddPending(p int64) {
+	ma.pending += p
 }
 
 func (ma *MetricAgg) AddErr() {
@@ -103,10 +93,9 @@ func (ma *MetricAgg) Throughput(end time.Time) int64 {
 	if ma.cnt == 0 {
 		return 0
 	}
-	if end == ma.start { //nolint:staticcheck // "Two times can be equal even if they are in different locations."
+	if end == ma.start { //nolint:staticcheck // equal times can have different locations
 		return 0
 	}
-
 	return int64(float64(ma.bytes) / end.Sub(ma.start).Seconds())
 }
 
@@ -122,7 +111,6 @@ func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
 				cnt:   1,
 				name:  name,
 			},
-
 			latency:    lat,
 			minLatency: lat,
 			maxLatency: lat,
@@ -135,36 +123,24 @@ func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
 	}
 }
 
-func (mcg *MetricConfigAgg) Add(lat, _, _ time.Duration) {
-	mcg.cnt++
-
-	mcg.latency += lat
-	mcg.minLatency = min(mcg.minLatency, lat)
-	mcg.maxLatency = max(mcg.maxLatency, lat)
-
-	mcg.proxyLatency += lat
-	mcg.minProxyLatency = min(mcg.minProxyLatency, lat)
-	mcg.maxProxyLatency = max(mcg.maxProxyLatency, lat)
-
-	mcg.proxyConnLatency += lat
-	mcg.minProxyConnLatency = min(mcg.minProxyConnLatency, lat)
-	mcg.maxProxyConnLatency = max(mcg.maxProxyConnLatency, lat)
-}
-
 func (ma *MetricAgg) Send(c *statsd.Client, mType string, general []statsd.Metric, genAggCnt int64) {
 	endTime := time.Now()
+
+	// Always send count (even when zero) to make downstream dashboards stable.
 	c.Send(mType, 1, statsd.Metric{
 		Type:  statsd.Counter,
 		Name:  count,
 		Value: ma.cnt,
 	})
-	// don't send anything when cnt == 0 -> no data aggregated
+
+	// Don't send the rest if no activity.
 	if ma.cnt > 0 {
 		c.Send(mType, ma.cnt, statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  pending,
-			Value: ma.pending / ma.cnt,
+			Value: ma.pending / ma.cnt, // average pending across events
 		})
+
 		c.Send(mType, ma.cnt,
 			statsd.Metric{
 				Type:  statsd.Timer,
@@ -182,45 +158,18 @@ func (ma *MetricAgg) Send(c *statsd.Client, mType string, general []statsd.Metri
 				Value: float64(ma.maxLatency / time.Millisecond),
 			},
 		)
+
 		c.Send(mType, ma.cnt, statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  throughput,
 			Value: ma.Throughput(endTime),
 		})
 	}
+
+	// Optional per-name latency aggregates (GET/PUT have them today).
 	if len(general) != 0 && genAggCnt > 0 {
 		c.Send(mType, genAggCnt, general...)
 	}
-}
-
-func (mcg *MetricConfigAgg) Send(c *statsd.Client) {
-	// don't send anything when cnt == 0 -> no data aggregated
-	if mcg.cnt == 0 {
-		return
-	}
-	c.Send(getConfig, 1,
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  count,
-			Value: mcg.cnt,
-		})
-	c.Send(getConfig, mcg.cnt,
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  latency,
-			Value: float64(mcg.latency/time.Millisecond) / float64(mcg.cnt),
-		},
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  latencyProxyConn,
-			Value: float64(mcg.proxyConnLatency/time.Millisecond) / float64(mcg.cnt),
-		},
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  latencyProxy,
-			Value: float64(mcg.proxyLatency/time.Millisecond) / float64(mcg.cnt),
-		},
-	)
 }
 
 func (m *Metrics) SendAll(c *statsd.Client) {
@@ -229,29 +178,33 @@ func (m *Metrics) SendAll(c *statsd.Client) {
 		generalMetricsGet    = make([]statsd.Metric, 0, len(m.GetLat.metrics))
 		generalMetricsPut    = make([]statsd.Metric, 0, len(m.PutLat.metrics))
 	)
-	for _, m := range m.GetLat.metrics {
+
+	for _, mm := range m.GetLat.metrics {
 		generalMetricsGet = append(generalMetricsGet, statsd.Metric{
 			Type:  statsd.Timer,
-			Name:  m.name,
-			Value: float64(m.latency/time.Millisecond) / float64(m.cnt),
+			Name:  mm.name,
+			Value: float64(mm.latency/time.Millisecond) / float64(mm.cnt),
 		})
-		// m.cnt is the same for all aggregated metrics
-		aggCntGet = m.cnt
-	}
-	for _, m := range m.PutLat.metrics {
-		generalMetricsPut = append(generalMetricsPut, statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  m.name,
-			Value: float64(m.latency/time.Millisecond) / float64(m.cnt),
-		})
-		// m.cnt is the same for all aggregated metrics
-		aggCntPut = m.cnt
+		// mm.cnt is the same for all aggregated metrics
+		aggCntGet = mm.cnt
 	}
 
+	for _, mm := range m.PutLat.metrics {
+		generalMetricsPut = append(generalMetricsPut, statsd.Metric{
+			Type:  statsd.Timer,
+			Name:  mm.name,
+			Value: float64(mm.latency/time.Millisecond) / float64(mm.cnt),
+		})
+		// mm.cnt is the same for all aggregated metrics
+		aggCntPut = mm.cnt
+	}
+
+	// Emit series
 	m.Get.Send(c, get, generalMetricsGet, aggCntGet)
 	m.Put.Send(c, put, generalMetricsPut, aggCntPut)
 
-	m.Config.Send(c)
+	// GetBatch has its own series; no per-name latencies yet (TODO)
+	m.GetBatch.Send(c, getBatch, nil, 0)
 }
 
 func ResetMetricsGauges(c *statsd.Client) {
@@ -260,20 +213,37 @@ func ResetMetricsGauges(c *statsd.Client) {
 			Type:  statsd.Gauge,
 			Name:  throughput,
 			Value: 0,
-		}, statsd.Metric{
+		},
+		statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  pending,
 			Value: 0,
-		})
+		},
+	)
 
 	c.Send(put, 1,
 		statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  throughput,
 			Value: 0,
-		}, statsd.Metric{
+		},
+		statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  pending,
 			Value: 0,
-		})
+		},
+	)
+
+	c.Send(getBatch, 1,
+		statsd.Metric{
+			Type:  statsd.Gauge,
+			Name:  throughput,
+			Value: 0,
+		},
+		statsd.Metric{
+			Type:  statsd.Gauge,
+			Name:  pending,
+			Value: 0,
+		},
+	)
 }

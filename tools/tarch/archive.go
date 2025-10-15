@@ -331,15 +331,10 @@ func freeBuf32k(buf []byte) {
 }
 
 ///////////
-// Drain //
+// DrainVerify (compare w/ Drain{} in cmn/archive)
 ///////////
 
 type (
-	Drain struct {
-		Total int64
-		Num   int
-	}
-
 	DrainVerify struct {
 		t         *testing.T
 		wantNames []string
@@ -348,16 +343,6 @@ type (
 		total     int64
 	}
 )
-
-func (drain *Drain) Call(_ string, r cos.ReadCloseSizer, _ any) (bool, error) {
-	n, err := io.Copy(io.Discard, r)
-	drain.Total += n
-	_ = r.Close()
-	if err == nil {
-		drain.Num++
-	}
-	return false, err
-}
 
 func NewDrainVerify(t *testing.T, wantNames []string, wantSizes []int64) *DrainVerify {
 	return &DrainVerify{

@@ -143,10 +143,11 @@ type (
 
 	// sts records accumulated puts/gets information.
 	sts struct {
-		statsd stats.Metrics
-		put    stats.HTTPReq
-		get    stats.HTTPReq
-		putMPU stats.HTTPReq // multipart upload operations
+		statsd   stats.Metrics
+		put      stats.HTTPReq
+		get      stats.HTTPReq
+		getBatch stats.HTTPReq
+		putMPU   stats.HTTPReq // multipart upload operations
 	}
 
 	jsonStats struct {
@@ -172,6 +173,7 @@ var (
 	statsdC          *statsd.Client
 	getPending       int64
 	putPending       int64
+	getBatchPending  int64
 	traceHTTPSig     atomic.Bool
 
 	flagUsage   bool
@@ -1026,9 +1028,11 @@ func printArguments(set *flag.FlagSet) {
 // newStats returns a new stats object with given time as the starting point
 func newStats(t time.Time) sts {
 	return sts{
-		put:    stats.NewHTTPReq(t),
-		get:    stats.NewHTTPReq(t),
-		putMPU: stats.NewHTTPReq(t),
+		put:      stats.NewHTTPReq(t),
+		get:      stats.NewHTTPReq(t),
+		putMPU:   stats.NewHTTPReq(t),
+		getBatch: stats.NewHTTPReq(t),
+		// StatsD is deprecated
 		statsd: stats.NewStatsdMetrics(t),
 	}
 }
@@ -1038,6 +1042,7 @@ func (s *sts) aggregate(other *sts) {
 	s.get.Aggregate(other.get)
 	s.put.Aggregate(other.put)
 	s.putMPU.Aggregate(other.putMPU)
+	s.getBatch.Aggregate(other.getBatch)
 }
 
 func setupBucket(runParams *params, created *bool) error {

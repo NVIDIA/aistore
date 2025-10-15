@@ -8,7 +8,6 @@ package aisloader
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -32,11 +31,12 @@ import (
 // - Track batch-specific latency (entire batch completion time)
 // - detailed HTTP tracing for batch operations
 //
-// TODO: features (via additional command line)
+// TODO: features - add command line
+// - plain vs archive
 // - multipart mode (whereby streaming mode is aisloader's default)
 // - continue-on-error
 // - multiple buckets
-// - other supported input and output formats (other than TAR)
+// - supported input and output formats (other than TAR)
 //
 // TODO: optimize
 // - mem-pool apc.MossReq
@@ -232,17 +232,17 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		// No SGL cleanup needed for multipart operations
 
 	case opGetBatch:
-		getPending-- // TODO: revisit
-		intervalStats.statsd.Get.AddPending(getPending)
+		getBatchPending--
+		intervalStats.statsd.GetBatch.AddPending(getBatchPending)
 		if wo.err == nil {
-			// TODO: decide how to count - as 1 batch or N objects?
-			// For now, count as single operation with aggregate size
-			intervalStats.get.Add(wo.size, elapsed)
-			intervalStats.statsd.Get.Add(wo.size, elapsed)
+			intervalStats.getBatch.Add(wo.size, elapsed)
+			intervalStats.statsd.GetBatch.Add(wo.size, elapsed)
+
+			// TODO: possibly, check unusually long `elapsed`
 		} else {
 			fmt.Fprintln(os.Stderr, "GetBatch failed:", wo.err)
-			intervalStats.get.AddErr()
-			intervalStats.statsd.Get.AddErr()
+			intervalStats.getBatch.AddErr()
+			intervalStats.statsd.GetBatch.AddErr()
 		}
 
 	default:
@@ -479,31 +479,37 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 
 func newGetBatchWorkOrder() (*workOrder, error) {
 	if objnameGetter.Len() == 0 {
-		return nil, errors.New("no objects in bucket")
+		err := errors.New("no objects in bucket")
+		fmt.Fprintln(os.Stderr, "newGetBatchWorkOrder:", err)
+		return nil, err
 	}
 
-	getPending++ // TODO: revisit
+	getBatchPending++
 	wo := allocWO(opGetBatch)
 	wo.batch = objnameGetter.PickBatch(runParams.getBatchSize, wo.batch)
+
 	return wo, nil
 }
 
 func (wo *workOrder) String() string {
-	var opName string
+	var opName, s string
 	switch wo.op {
 	case opPut:
-		opName = http.MethodPut
+		opName = opLabelPut
 	case opGet:
-		opName = http.MethodGet
+		opName = opLabelGet
 	case opPutMultipart:
-		opName = "PUT(multipart)"
+		opName = opLabelMPU
 	case opUpdateExisting:
 		opName = "GET-PUT(new-version)"
 	case opGetBatch:
-		opName = "GET(batch)"
+		opName = opLabelGBT
+		if n := len(wo.batch); n > 0 {
+			s = ", batch " + strconv.Itoa(n)
+		}
 	}
-	return fmt.Sprintf("wo[%s %s, %v, size: %d]",
-		opName, runParams.bck.Cname(wo.objName), time.Duration(wo.end-wo.start), wo.size)
+	return fmt.Sprintf("wo[%s %s, %v, size: %d%s]",
+		opName, runParams.bck.Cname(wo.objName), time.Duration(wo.end-wo.start), wo.size, s)
 }
 
 // shouldUsePercentage returns true based on the given percentage (0-100)

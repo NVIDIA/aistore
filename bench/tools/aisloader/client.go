@@ -6,7 +6,6 @@
 package aisloader
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -21,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -500,15 +500,39 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *ht
 
 // TODO: revisit; consume/discard TAR
 func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, error) {
-	var buf bytes.Buffer
 	bp := api.BaseParams{
 		URL:    proxyURL,
 		Client: runParams.bp.Client,
 		Token:  runParams.bp.Token,
 		UA:     runParams.bp.UA,
 	}
-	_, err := api.GetBatch(bp, bck, req, &buf)
-	return int64(buf.Len()), err
+	// do
+	rc, _, err := api.GetBatchStream(bp, bck, req)
+	if err != nil {
+		return 0, err
+	}
+	defer rc.Close()
+
+	// read every single archived file in a streaming mode
+	// (while the data arrives)
+	var (
+		drain archive.Drain
+		ar    archive.Reader
+	)
+	ar, err = archive.NewReader(archive.ExtTar, rc)
+	if err != nil {
+		return 0, err
+	}
+	err = ar.ReadUntil(&drain, "" /*match all*/, cos.EmptyMatchAll)
+	if err != nil {
+		return 0, err
+	}
+	size, num := drain.Totals()
+	if batchSize := int64(len(req.In)); num != batchSize {
+		err = fmt.Errorf("expected to drain %d files (got %d), total size: %s",
+			batchSize, num, cos.ToSizeIEC(size, 2))
+	}
+	return size, err
 }
 
 func listObjCallback(ctx *api.LsoCounter) {

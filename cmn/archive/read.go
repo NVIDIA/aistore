@@ -63,6 +63,10 @@ type (
 
 type ErrMatchMode struct{ mmode string }
 
+type Drain struct {
+	size, num int64
+}
+
 // private
 type (
 	matcher struct {
@@ -387,3 +391,19 @@ func ValidateMatchMode(mmode string) (_ string, err error) {
 	}
 	return "", &ErrMatchMode{mmode}
 }
+
+///////////
+// Drain: read/discard every single file, keep counts
+///////////
+
+func (drain *Drain) Call(_ string, r cos.ReadCloseSizer, _ any) (bool, error) {
+	n, err := io.Copy(io.Discard, r)
+	drain.size += n
+	_ = r.Close()
+	if err == nil {
+		drain.num++
+	}
+	return false, err
+}
+
+func (drain *Drain) Totals() (size, num int64) { return drain.size, drain.num }
