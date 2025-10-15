@@ -45,9 +45,9 @@ class Batch:
         objects: Optional[Union[List[Object], Object, str, List[str]]] = None,
         bucket: Optional[Bucket] = None,
         output_format: str = EXT_TAR,
-        cont_on_err: bool = False,
+        cont_on_err: bool = True,
         only_obj_name: bool = False,
-        streaming_get: bool = False,
+        streaming_get: bool = True,
     ):
         """
         Initialize Batch request.
@@ -64,9 +64,9 @@ class Batch:
                 Note: if objects are specified as raw names (str or list of str), bucket must be provided
             bucket (Bucket): Default bucket for all objects
             output_format (str): Archive format (tar, tgz, zip)
-            cont_on_err (bool): Continue on errors (missing files under __404__/)
-            only_obj_name (bool): Use only obj name in archive path
-            streaming_get (bool): Stream resulting archive prior to finalizing it in memory
+            cont_on_err (bool): Continue on errors (missing files under __404__/). Defaults to True
+            only_obj_name (bool): Use only obj name in archive path. Defaults to False
+            streaming_get (bool): Stream resulting archive prior to finalizing it in memory. Defaults to True
 
         Example:
             # Quick batch with string names

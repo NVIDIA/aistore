@@ -10,7 +10,6 @@ import json
 from dataclasses import dataclass, asdict
 from typing import List
 from aistore import Client
-from aistore.sdk.batch.batch_request import BatchRequest
 
 
 @dataclass
@@ -131,7 +130,6 @@ def benchmark_get_batch(
     # print(f"Starting batch read of {num_objects} objects in chunks of {batch_size}, streaming={streaming}...")
 
     bucket = client.bucket(bucket_name)
-    batch_loader = client.batch_loader()
     total_bytes = 0
     successful_reads = 0
     failed_reads = 0
@@ -148,27 +146,29 @@ def benchmark_get_batch(
 
         # print(f"Processing batch {batch_start//batch_size + 1}: objects {batch_start} to {batch_end-1}")
 
-        # Create batch request for current chunk
-        batch_req = BatchRequest(
-            output_format=".tar",
-            continue_on_err=True,
-            only_obj_name=False,
-            streaming=streaming,
-        )
-
-        # Add objects in current batch
+        # Create list of objects for current batch
+        batch_objects = []
         for i in range(batch_start, batch_end):
             obj_name = f"benchmark_obj_{i:06d}.txt"
             obj = bucket.object(obj_name)
-            batch_req.add_object_request(obj=obj)
+            batch_objects.append(obj)
 
         try:
-            # Execute batch request
-            batch = batch_loader.get_batch(batch_req)
+            # Create and execute batch request using new Batch API
+            batch = client.batch(
+                objects=batch_objects,
+                bucket=bucket,
+                output_format=".tar",
+                cont_on_err=True,
+                only_obj_name=False,
+                streaming_get=streaming,
+            )
+
+            batch_iter = batch.get()
 
             # Process results
             batch_successful = 0
-            for _, data in batch:
+            for _, data in batch_iter:
                 total_bytes += len(data)
                 batch_successful += 1
 

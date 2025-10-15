@@ -22,7 +22,7 @@ class TarStreamExtractor(ArchiveStreamExtractor):
     """
     Class for extracting batch .tar, .tar.gz, and .tgz streams from AIStore.
 
-    Integrates with BatchRequest/BatchResponse objects to provide proper metadata mapping.
+    Integrates with Batch API (MossReq/MossResp) to provide proper metadata mapping.
     """
 
     _supported_fmts = (EXT_TARGZ, EXT_TGZ, EXT_TAR)

@@ -236,8 +236,41 @@ class Client:
         streaming_get: bool = True,
     ):
         """
-        Factory constructor for Get-Batch.
-        Contains APIs related to AIStore Get-Batch operations.
+        Factory constructor for Get-Batch API (MOSS - Multi-Object Streaming Service).
+
+        Efficiently retrieve multiple objects, archive files, or byte ranges in a single request,
+        reducing network overhead and improving throughput for ML training workloads.
+
+        Args:
+            objects (Optional[Union[List[Object], Object, str, List[str]]]): Objects to retrieve. Can be:
+                - Single object name: "file.txt"
+                - List of names: ["file1.txt", "file2.txt"]
+                - Single Object instance
+                - List of Object instances
+                - None (add objects later via batch.add())
+                Note: if objects are specified as raw names (str or list of str), bucket must be provided
+            bucket (Optional[Bucket]): Default bucket for all objects
+            output_format (str): Archive format (tar, tgz, zip). Defaults to ".tar"
+            cont_on_err (bool): Continue on errors (missing files under __404__/). Defaults to True
+            only_obj_name (bool): Use only obj name in archive path. Defaults to False
+            streaming_get (bool): Stream resulting archive prior to finalizing it in memory. Defaults to True
+
+        Returns:
+            Batch: Batch object for building and executing Get-Batch requests
+
+        Example:
+            # Quick batch with string names
+            batch = client.batch(["file1.txt", "file2.txt"], bucket=bucket)
+            for obj_info, data in batch.get():
+                print(f"Object: {obj_info.obj_name}, Size: {len(data)}")
+
+            # Build batch incrementally with advanced options
+            batch = client.batch(bucket=bucket)
+            batch.add("simple.txt")
+            batch.add("archive.tar", archpath="images/photo.jpg")  # extract from archive
+            batch.add("tracked.txt", opaque=b"user-id-123")  # with tracking data
+            for obj_info, data in batch.get():
+                print(f"Object: {obj_info.obj_name}")
         """
         return Batch(
             self._request_client,

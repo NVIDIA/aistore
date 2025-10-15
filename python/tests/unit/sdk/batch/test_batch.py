@@ -622,7 +622,10 @@ class TestBatch(unittest.TestCase):
         """Test cont_on_err option."""
         # Default should be False
         batch1 = Batch(
-            self.mock_request_client, objects=["file.txt"], bucket=self.mock_bucket
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            cont_on_err=False,
         )
         self.assertFalse(batch1.request.cont_on_err)
 

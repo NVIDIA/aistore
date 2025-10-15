@@ -5,7 +5,6 @@ Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 from aistore.pytorch import AISBaseIterDataset
-from aistore.sdk.batch.batch_request import BatchRequest
 from aistore.sdk import Client, AISSource
 from typing import Iterator, Tuple, List, Dict, Union
 from alive_progress import alive_it
@@ -41,7 +40,6 @@ class AISBatchIterDataset(AISBaseIterDataset):
         self.max_batch_size = max_batch_size
         self.output_format = output_format
         self.streaming = streaming
-        self._batch_loader = self.client.batch_loader()
         self._show_progress = show_progress
 
     def __iter__(self) -> Iterator[Tuple[str, bytes]]:
@@ -87,21 +85,16 @@ class AISBatchIterDataset(AISBaseIterDataset):
         Yields:
             Tuple[str, bytes]: Object name and content pairs
         """
-        # Create batch request
-        batch_req = BatchRequest(
+        # Create and execute batch request using the new Batch API
+        batch = self.client.batch(
+            objects=batch_objects,
             output_format=self.output_format,
-            continue_on_err=True,
-            only_obj_name=False,
-            streaming=self.streaming,
+            streaming_get=self.streaming,
         )
 
-        # Add objects to batch request
-        for obj in batch_objects:
-            batch_req.add_object_request(obj=obj)
-
-        # Execute batch request
-        batch_response = self._batch_loader.get_batch(batch_req)
+        # Execute batch request and yield individual samples
+        batch_response = batch.get()
 
         # Yield individual samples from batch response
-        for resp_item, data in batch_response:
-            yield resp_item.obj_name, data
+        for obj_info, data in batch_response:
+            yield obj_info.obj_name, data
