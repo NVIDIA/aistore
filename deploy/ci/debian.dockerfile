@@ -33,4 +33,4 @@ RUN git clone --depth=1 https://github.com/NVIDIA/ais-k8s.git && cd ais-k8s/oper
 
 # Install `uv` and Python versions to test
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-RUN uv python install 3.8 3.9 3.10 3.11 3.12 3.13
+RUN uv python install 3.8 3.9 3.10 3.11 3.12 3.13 3.14

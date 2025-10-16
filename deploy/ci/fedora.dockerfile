@@ -96,7 +96,7 @@ COPY operator-test.tar operator-test.tar
 
 # Install `uv` and multiple Python versions for testing
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-RUN uv python install 3.8 3.9 3.10 3.11 3.12 3.13
+RUN uv python install 3.8 3.9 3.10 3.11 3.12 3.13 3.14
 
 # Create a directory for K8s logs
 RUN mkdir -p /ais/log
