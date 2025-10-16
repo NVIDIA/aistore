@@ -1,61 +1,28 @@
 #
 # Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
-
-# pylint: disable=duplicate-code
-
-import unittest
-
 import pytest
 
-from aistore.sdk.authn.authn_client import AuthNClient
-from aistore.sdk.client import Client
-from tests.integration import (
-    AIS_AUTHN_SU_NAME,
-    AIS_AUTHN_SU_PASS,
-    AUTHN_ENDPOINT,
-    CLUSTER_ENDPOINT,
-)
+from aistore.sdk.authn.access_attr import AccessAttr
+from tests.integration.sdk.authn.authn_test_base import AuthNTestBase
 from tests.utils import random_string
 
 
-class TestAuthNTokenManager(
-    unittest.TestCase
-):  # pylint: disable=too-many-instance-attributes
-    def setUp(self) -> None:
-        # AuthN Client
-        self.authn_client = AuthNClient(AUTHN_ENDPOINT)
-        self.token = self.authn_client.login(AIS_AUTHN_SU_NAME, AIS_AUTHN_SU_PASS)
-
-        # AIS Client
-        self._create_ais_client()
-        self.uuid = self.ais_client.cluster().get_uuid()
-
-        # Register the AIS Cluster
-        self.cluster_alias = "Test-Cluster" + random_string()
-        self.cluster_manager = self.authn_client.cluster_manager()
-        self.cluster_info = self.cluster_manager.register(
-            self.cluster_alias, [CLUSTER_ENDPOINT]
-        )
-
-        self.token_manager = self.authn_client.token_manager()
-
-    def tearDown(self) -> None:
-        self.authn_client.login(AIS_AUTHN_SU_NAME, AIS_AUTHN_SU_PASS)
-        self._create_ais_client()
-        self.cluster_manager.delete(cluster_id=self.uuid)
-
-    def _create_ais_client(self):
-        self.ais_client = Client(CLUSTER_ENDPOINT, token=self.authn_client.client.token)
-
+class TestAuthNTokenManager(AuthNTestBase):
     @pytest.mark.authn
     def test_revoke_token(self):
+        # Create a user with a token
+        list_bck_role = self._create_role([AccessAttr.LIST_BUCKETS])
+        user_pw = random_string()
+        user = self._create_user(roles=[list_bck_role.name], password=user_pw)
+        token = self.authn_client.login(user.id, user_pw)
+
+        client = self._create_ais_client(token)
         # Assert token is valid and working
-        self.ais_client.cluster().list_buckets()
+        client.cluster().list_buckets()
 
         # Revoke the token
-        self.token_manager.revoke(self.token)
+        self.authn_client.token_manager().revoke(token)
 
         # Attempt to use the token after revoking it
-        with self.assertRaises(Exception):
-            self.ais_client.cluster().list_buckets()
+        self._assert_not_authorized(client.cluster().list_buckets)

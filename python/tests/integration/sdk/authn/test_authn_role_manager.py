@@ -1,52 +1,20 @@
 #
 # Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
-
-import unittest
-
 import pytest
 
-from aistore.sdk.authn.authn_client import AuthNClient
 from aistore.sdk.authn.access_attr import AccessAttr
-from aistore.sdk.client import Client
 from aistore.sdk.authn.errors import ErrRoleNotFound
-from tests.integration import (
-    AIS_AUTHN_SU_NAME,
-    AIS_AUTHN_SU_PASS,
-    AUTHN_ENDPOINT,
-    CLUSTER_ENDPOINT,
-)
-
-from tests.utils import random_string
+from tests.integration.sdk.authn.authn_test_base import AuthNTestBase
 
 
-class TestAuthNRoleManager(
-    unittest.TestCase
-):  # pylint: disable=too-many-instance-attributes
+class TestAuthNRoleManager(AuthNTestBase):
     def setUp(self) -> None:
-        self.authn_client = AuthNClient(AUTHN_ENDPOINT)
-        self.authn_client.login(AIS_AUTHN_SU_NAME, AIS_AUTHN_SU_PASS)
-        self.cluster_manager = self.authn_client.cluster_manager()
-        self.cluster_alias = "Test-Cluster-" + random_string()
-        self.cluster_info = self.cluster_manager.register(
-            self.cluster_alias, [CLUSTER_ENDPOINT]
+        super().setUp()
+        self.role = self._create_role(
+            access_attrs=[AccessAttr.GET], bucket_name=self.bck.name
         )
         self.role_manager = self.authn_client.role_manager()
-        self.role = self._create_role()
-        self.ais_client = Client(CLUSTER_ENDPOINT, token=self.authn_client.client.token)
-        self.uuid = self.ais_client.cluster().get_uuid()
-
-    def tearDown(self) -> None:
-        self.cluster_manager.delete(cluster_id=self.uuid)
-        self.role_manager.delete(name=self.role.name, missing_ok=True)
-
-    def _create_role(self):
-        return self.role_manager.create(
-            name="Test-Role-" + random_string(),
-            desc="Test Description",
-            cluster_alias=self.cluster_info.alias,
-            perms=[AccessAttr.GET],
-        )
 
     @pytest.mark.authn
     def test_role_get(self):
@@ -111,7 +79,7 @@ class TestAuthNRoleManager(
             perms=[AccessAttr.ACCESS_RO],
         )
 
-        buckets = self.role_manager.get(role_name=self.role.name).buckets
+        bck_perms = self.role_manager.get(role_name=self.role.name).buckets
         combined_perms = (
             AccessAttr.GET.value
             | AccessAttr.OBJ_HEAD.value
@@ -119,11 +87,12 @@ class TestAuthNRoleManager(
             | AccessAttr.BCK_HEAD.value
             | AccessAttr.OBJ_LIST.value
         )
+        self.assertEqual(combined_perms, AccessAttr.ACCESS_RO)
 
-        self.assertTrue(
-            buckets[0].bck.name == "test-bucket"
-            and int(buckets[0].perm) == combined_perms == AccessAttr.ACCESS_RO
-        )
+        self.assertIn("test-bucket", [perm.bck.name for perm in bck_perms])
+        for bck_perm in bck_perms:
+            if bck_perm.bck.name == "test-bucket":
+                self.assertEqual(combined_perms, int(bck_perm.perm))
 
     @pytest.mark.authn
     def test_role_perms_cluster_update(self):
@@ -144,6 +113,5 @@ class TestAuthNRoleManager(
             | AccessAttr.DESTROY_BUCKET.value
         )
 
-        self.assertTrue(
-            clusters[0].id == self.uuid and int(clusters[0].perm) == combined_perms
-        )
+        self.assertEqual(self.uuid, clusters[0].id)
+        self.assertEqual(combined_perms, int(clusters[0].perm))
