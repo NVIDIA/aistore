@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.17.0] - 2025-10-16
+
 ### Added
 
 - Introduced a new `Batch` class to handle GetBatch requests, replacing the old `BatchLoader`.
