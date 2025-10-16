@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -16,11 +17,17 @@ type (
 	// base interface for read-only name selection
 	Basic interface {
 		Init(names []string, rnd *rand.Rand)
-		// runtime
+
+		// pick a random name
 		Pick() string
-		// PickBatch returns up to n unique names (within the returned batch).
-		// The result is capped to min(n, len(names)).
-		PickBatch(int, []string) []string
+
+		// return up to len([]apc.MossIn) unique names
+		// - caller must pre-size `in` to the desired batch size
+		// - if fewer names are available than the batch size, the result will be shorter
+		PickBatch(in []apc.MossIn) []apc.MossIn
+
+		// all known names and the number of thereof
+		// (note: both methods not thread-safe)
 		Names() []string
 		Len() int
 	}
@@ -111,19 +118,23 @@ func (rng *Random) Pick() string {
 }
 
 // with-replacement for single Pick(), but strictly unique within a batch
-func (rng *Random) PickBatch(n int, in []string) []string {
-	total := len(rng.names)
-	n = min(total, n)
-
+func (rng *Random) PickBatch(in []apc.MossIn) []apc.MossIn {
+	var (
+		total = len(rng.names)
+		n     = min(total, len(in))
+		i     int
+	)
+	debug.Assert(n > 0)
 	rng.seen.reinit(total)
-	for len(in) < n {
+	for i < n {
 		idx := rng.rnd.IntN(total)
 		if !rng.seen.testAndSet(idx) {
 			continue
 		}
-		in = append(in, rng.names[idx])
+		in[i].ObjName = rng.names[idx]
+		i++
 	}
-	return in
+	return in[:n]
 }
 
 //////////////////
@@ -161,15 +172,18 @@ func (rng *RandomUnique) Pick() string {
 }
 
 // strictly unique within the returned batch; still advances the epoch tracker
-func (rng *RandomUnique) PickBatch(n int, in []string) []string {
-	total := len(rng.names)
-	n = min(total, n)
-
+func (rng *RandomUnique) PickBatch(in []apc.MossIn) []apc.MossIn {
+	var (
+		total = len(rng.names)
+		n     = min(total, len(in))
+		i     int
+	)
+	debug.Assert(n > 0)
 	rng.seen.reinit(total)
 	if rng.tracker.needsReset(total) {
 		rng.tracker.reset()
 	}
-	for len(in) < n {
+	for i < n {
 		if rng.tracker.needsReset(total) {
 			rng.tracker.reset()
 		}
@@ -183,14 +197,14 @@ func (rng *RandomUnique) PickBatch(n int, in []string) []string {
 				continue
 			}
 			if !rng.seen.testAndSet(idx) {
-				// already in this batch; keep going
 				continue
 			}
-			in = append(in, rng.names[idx])
+			in[i].ObjName = rng.names[idx]
+			i++
 			break
 		}
 	}
-	return in
+	return in[:n]
 }
 
 //////////////////////
@@ -239,33 +253,36 @@ func (rng *RandomUniqueIter) Pick() string {
 }
 
 // strictly unique within the returned batch; iterates in cyclic order from random start
-func (rng *RandomUniqueIter) PickBatch(n int, in []string) []string {
-	total := len(rng.names)
-	n = min(total, n)
-
+func (rng *RandomUniqueIter) PickBatch(in []apc.MossIn) []apc.MossIn {
+	var (
+		total = len(rng.names)
+		n     = min(total, len(in))
+		i     int
+	)
+	debug.Assert(n > 0)
 	rng.seen.reinit(total)
 	if rng.tracker.needsReset(total) {
 		rng.tracker.reset()
 	}
 	start := rng.rnd.IntN(total)
-	for len(in) < n {
-		// single pass over corpus
-		for i := 0; i < total && len(in) < n; i++ {
-			idx := start + i
+	for i < n {
+		for j := 0; j < total && i < n; j++ {
+			idx := start + j
 			if idx >= total {
 				idx -= total
 			}
 			if rng.tracker.tryMark(idx) && rng.seen.testAndSet(idx) {
-				in = append(in, rng.names[idx])
+				in[i].ObjName = rng.names[idx]
+				i++
 			}
 		}
 		// epoch exhausted; reset and choose a new start if still need more
-		if len(in) < n {
+		if i < n {
 			rng.tracker.reset()
 			start = rng.rnd.IntN(total)
 		}
 	}
-	return in
+	return in[:n]
 }
 
 /////////////////
@@ -299,28 +316,23 @@ func (rng *Permutation) Pick() string {
 }
 
 // consecutive window from current permutation; unique in-batch
-func (rng *Permutation) PickBatch(n int, in []string) []string {
-	total := len(rng.names)
-	n = min(total, n)
-	remaining := n
-	for remaining > 0 {
-		left := total - rng.permidx
-		if left == 0 {
-			rng.permidx = 0
+func (rng *Permutation) PickBatch(in []apc.MossIn) []apc.MossIn {
+	var (
+		total = len(rng.names)
+		n     = min(total, len(in))
+		i     int
+	)
+	debug.Assert(n > 0)
+	for i < n {
+		if rng.permidx == len(rng.perm) {
 			rng.perm = rng.rnd.Perm(total)
-			left = total
+			rng.permidx = 0
 		}
-		take := left
-		if remaining < take {
-			take = remaining
-		}
-		for i := range take {
-			in = append(in, rng.names[rng.perm[rng.permidx+i]])
-		}
-		rng.permidx += take
-		remaining -= take
+		in[i].ObjName = rng.names[rng.perm[rng.permidx]]
+		i++
+		rng.permidx++
 	}
-	return in
+	return in[:n]
 }
 
 /////////////////////////
@@ -367,11 +379,13 @@ func (rng *PermutationImproved) Pick() string {
 }
 
 // consecutive window with pre-generated wrap
-func (rng *PermutationImproved) PickBatch(n int, in []string) []string {
-	total := len(rng.names)
-	n = min(total, n)
-
-	for remaining := n; remaining > 0; {
+func (rng *PermutationImproved) PickBatch(in []apc.MossIn) []apc.MossIn {
+	var (
+		total = len(rng.names)
+		n     = min(total, len(in))
+		i     int
+	)
+	for i < n {
 		left := total - rng.permidx
 		if left == 0 {
 			// swap in pre-generated next permutation
@@ -379,24 +393,29 @@ func (rng *PermutationImproved) PickBatch(n int, in []string) []string {
 			rng.perm, rng.permNext = rng.permNext, rng.perm
 			rng.permidx = 0
 
-			// pre-generate the next one in background
+			// pre-generate the next one in background; use independent rng
 			rng.nextReady.Add(1)
-			go func(nLocal int) {
-				r := cos.NowRand() // independent rng
-				rng.permNext = r.Perm(nLocal)
+			go func(num int) {
+				r := cos.NowRand()
+				rng.permNext = r.Perm(num)
 				rng.nextReady.Done()
 			}(total)
 			left = total
 		}
-		take := left
-		if remaining < take {
-			take = remaining
+
+		// number of items to emit from current permutation window
+		var (
+			win = min(n-i, left)
+			src = rng.perm[rng.permidx : rng.permidx+win]
+			dst = in[i : i+win]
+		)
+		for j := range win {
+			dst[j].ObjName = rng.names[src[j]]
 		}
-		for i := range take {
-			in = append(in, rng.names[rng.perm[rng.permidx+i]])
-		}
-		rng.permidx += take
-		remaining -= take
+
+		rng.permidx += win
+		i += win
 	}
-	return in
+
+	return in[:n]
 }

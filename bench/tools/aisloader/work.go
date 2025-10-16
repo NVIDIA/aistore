@@ -35,7 +35,6 @@ import (
 //   - continue-on-error
 //   - multiple buckets
 //   - supported input and output formats (other than TAR)
-// * mem-pool apc.MossReq
 // * documentation
 //   - update docs/aisloader.md; add usage examples
 // ---------------------------------------------------------------------------------------
@@ -53,7 +52,7 @@ type (
 	workOrder struct {
 		err       error
 		sgl       *memsys.SGL
-		batch     []string // []{ objName } to perform GET(batch)
+		moss      *apc.MossReq // <= name-getter.PickBatch()
 		objName   string
 		cksumType string
 		latencies httpLatencies
@@ -93,6 +92,7 @@ func postNewWorkOrder() (err error) {
 	case opGet, opUpdateExisting:
 		wo, err = newGetWorkOrder(op)
 	default:
+		debug.Assert(op == opGetBatch, op)
 		wo, err = newGetBatchWorkOrder()
 	}
 
@@ -340,15 +340,13 @@ func doGetBatch(wo *workOrder) {
 
 	// build GetBatch request from wo.batch
 	// (earlier objnameGetter.PickBatch())
-	mossIn := make([]apc.MossIn, len(wo.batch))
-	for i, objName := range wo.batch {
-		mossIn[i] = apc.MossIn{ObjName: objName}
-	}
-	req := &apc.MossReq{
-		In:           mossIn,
-		StreamingGet: true, // default to streaming // TODO: command line
-	}
-	wo.size, wo.err = getBatchDiscard(url, runParams.bck, req)
+	debug.Assert(wo.moss != nil && len(wo.moss.In) > 0)
+
+	// TODO: command-line to support multipart
+	wo.moss.StreamingGet = true
+
+	// do
+	wo.size, wo.err = getBatchDiscard(url, runParams.bck, wo.moss)
 }
 
 func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {
@@ -471,8 +469,8 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 	}
 
 	getBatchPending++
-	wo := allocWO(opGetBatch)
-	wo.batch = objnameGetter.PickBatch(runParams.getBatchSize, wo.batch)
+	wo := allocGetBatchWO(runParams.getBatchSize)
+	objnameGetter.PickBatch(wo.moss.In)
 
 	return wo, nil
 }
@@ -490,12 +488,16 @@ func (wo *workOrder) String() string {
 		opName = "GET-PUT(new-version)"
 	case opGetBatch:
 		opName = opLabelGBT
-		if n := len(wo.batch); n > 0 {
-			s = ", batch " + strconv.Itoa(n)
+		if wo.moss != nil && len(wo.moss.In) > 0 {
+			s = ", batch " + strconv.Itoa(len(wo.moss.In))
 		}
 	}
-	return fmt.Sprintf("wo[%s %s, %v, size: %d%s]",
-		opName, runParams.bck.Cname(wo.objName), time.Duration(wo.end-wo.start), wo.size, s)
+	cname := runParams.bck.Cname(wo.objName)
+	if wo.start == 0 {
+		return fmt.Sprintf("wo[%s %s%s]", opName, cname, s)
+	}
+	lat := time.Duration(wo.end - wo.start)
+	return fmt.Sprintf("wo[%s %s, %v, size: %d%s]", opName, cname, lat, wo.size, s)
 }
 
 // shouldUsePercentage returns true based on the given percentage (0-100)
