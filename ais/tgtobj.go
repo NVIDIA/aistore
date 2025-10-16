@@ -181,6 +181,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		uploadID string
 	)
 
+	debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname())
 	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.coldGET); err != nil {
 		poi.t.ups.abort(poi.oreq, lom, uploadID)
 		return http.StatusInternalServerError, err
@@ -1681,6 +1682,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	if err := dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return xs.CoiRes{Err: err}
 	}
+	dstMaxMonoSize := dst.Bprops().Chunks.MaxMonolithicSize
 
 	switch {
 	// no-op
@@ -1703,6 +1705,9 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln("copying", lom.String(), "=>", dst.String(), "is a no-op (resilvering with a single mountpath?)")
 		}
+	case lom.Bprops().Chunks.MaxMonolithicSize != dstMaxMonoSize && lom.Lsize() > int64(dstMaxMonoSize):
+		// source and destination buckets have different chunks config => rechunk if the source exceeds the destination's limit
+		res = coi._chunk(t, lom, dst, int64(dst.Bprops().Chunks.ChunkSize))
 	default:
 		// fast path: destination is _this_ target
 		// (note coi.send(=> another target) above)
@@ -1793,6 +1798,7 @@ func (coi *coi) _writer(t *target, lom, dst *core.LOM, args *core.ETLArgs) (res 
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core.ETLArgs) (res xs.CoiRes) {
+	debug.Assertf(coi.GetROC != nil, "coi.GetROC is nil in _reader, object name: %s", coi.ObjnameTo)
 	resp := coi.GetROC(lom, coi.LatestVer, coi.Sync, args)
 	if resp.Err != nil {
 		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
@@ -1861,6 +1867,31 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiR
 	if dst2 != nil {
 		core.FreeLOM(dst2)
 	}
+	return res
+}
+
+func (coi *coi) _chunk(t *target, lom, dst *core.LOM, dstChunkSize int64) (res xs.CoiRes) {
+	resp := lom.GetROC(coi.LatestVer, coi.Sync)
+	if resp.Err != nil {
+		return xs.CoiRes{Ecode: resp.Ecode, Err: resp.Err}
+	}
+	poi := allocPOI()
+	defer freePOI(poi)
+	{
+		poi.t = t
+		poi.lom = dst
+		poi.r = resp.R
+		poi.size = lom.Lsize()
+		poi.xctn = coi.Xact // on behalf of
+		poi.owt = coi.OWT
+		poi.config = coi.Config
+	}
+	ecode, err := poi.chunk(dstChunkSize)
+	if err != nil {
+		return xs.CoiRes{Ecode: ecode, Err: err}
+	}
+	res.Lsize = poi.lom.Lsize()
+
 	return res
 }
 
