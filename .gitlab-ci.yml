@@ -298,8 +298,20 @@ test:short:
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
-    - FLAGS="--duration=10s" make test-aisloader
     - make test-tracing-unit
+
+test:short:aisloader:
+  <<: *test_short_def
+  timeout: 30m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
+      when: manual
+      allow_failure: true
+    - !reference [.default_run_rules, rules]
+  script:
+    - make aisloader
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - FLAGS="--duration=2m" make test-aisloader
 
 test:short:python-changelog-check:
   <<: *test_short_def
