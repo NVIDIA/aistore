@@ -67,7 +67,7 @@ var examples = `# 1. Cleanup (i.e., destroy) an existing bucket:
      $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid	# 0xdb
 # 12. Timed 100% GET _directly_ from S3 bucket (notice '-s3endpoint' command line):
      $ aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
-# 13. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults (NOTE: aistore is not being used):
+# 13. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults (NOTE: AIStore is not being used):
      $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
 `
 

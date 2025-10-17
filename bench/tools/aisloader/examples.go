@@ -29,10 +29,10 @@ package aisloader
 //    aisloader -loaderid=10 -getloaderid (0xa)
 //    aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 // ====================
-// 10. Timed 100% GET from s3 bucket directly (NOTE: aistore is not being used here):
+// 10. Timed 100% GET from s3 bucket directly (NOTE: AIStore is not being used here):
 //    aisloader -bucket=s3://xyz -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
 // 11. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults
-//     (NOTE: aistore is not being used):
+//     (NOTE: AIStore is not being used):
 // aisloader -bucket=s3://xyz -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
 // =====================
 // 12. Generate a list of object names (once), and then run aisloader without executing list-objects
