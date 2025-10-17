@@ -34,6 +34,11 @@ case $i in
 esac
 done
 
+if ! [ -x "$(command -v aisloader)" ]; then
+  echo "Error: aisloader is not available in PATH" >&2
+  exit 1
+fi
+
 # Generate random bucket name if not provided
 if [[ -z ${bucket_name} ]]; then
   bucket_name="$(tr -dc 'a-z0-9' </dev/urandom | head -c 12)"

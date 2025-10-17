@@ -47,24 +47,8 @@ func BenchmarkRandomUniqueNameGetter(b *testing.B) {
 	}
 }
 
-func BenchmarkRandomUniqueIterNameGetter(b *testing.B) {
-	ng := &namegetter.RandomUniqueIter{}
-	ng.Init(objNames, cos.NowRand())
-	for b.Loop() {
-		ng.Pick()
-	}
-}
-
-func BenchmarkPermutationUniqueNameGetter(b *testing.B) {
-	ng := &namegetter.Permutation{}
-	ng.Init(objNames, cos.NowRand())
-	for b.Loop() {
-		ng.Pick()
-	}
-}
-
 func BenchmarkPermutationImprovedUniqueNameGetter(b *testing.B) {
-	ng := &namegetter.PermutationImproved{}
+	ng := &namegetter.PermShuffle{}
 	ng.Init(objNames, cos.NowRand())
 	for b.Loop() {
 		ng.Pick()
@@ -78,25 +62,11 @@ func TestRandomUniqueNameGetter(t *testing.T) {
 	checkSmallSampleRandomness(t, ng, "RandomUnique")
 }
 
-func TestRandomUniqueIterNameGetter(t *testing.T) {
-	ng := &namegetter.RandomUniqueIter{}
-
-	checkGetsAllObjNames(t, ng, "RandomUniqueIter")
-	checkSmallSampleRandomness(t, ng, "RandomUniqueIter")
-}
-
-func TestPermutationUniqueNameGetter(t *testing.T) {
-	ng := &namegetter.Permutation{}
-
-	checkGetsAllObjNames(t, ng, "Permutation")
-	checkSmallSampleRandomness(t, ng, "Permutation")
-}
-
 func TestPermutationUniqueImprovedNameGetter(t *testing.T) {
-	ng := &namegetter.PermutationImproved{}
+	ng := &namegetter.PermShuffle{}
 
-	checkGetsAllObjNames(t, ng, "PermutationImproved")
-	checkSmallSampleRandomness(t, ng, "PermutationImproved")
+	checkGetsAllObjNames(t, ng, "PermShuffle")
+	checkSmallSampleRandomness(t, ng, "PermShuffle")
 }
 
 func checkGetsAllObjNames(t *testing.T, getter namegetter.Basic, name string) {

@@ -18,6 +18,10 @@ type (
 	Basic interface {
 		Init(names []string, rnd *rand.Rand)
 
+		// when mixed read/write
+		// `Random` and `RandomUnique` implement Add()
+		Add(objName string)
+
 		// pick a random name
 		Pick() string
 
@@ -32,12 +36,6 @@ type (
 		Len() int
 	}
 
-	// extend Basic with ability to add names
-	Dynamic interface {
-		Basic
-		Add(objName string)
-	}
-
 	base struct {
 		names []string
 	}
@@ -45,37 +43,32 @@ type (
 	Random struct {
 		base
 		rnd  *rand.Rand
-		seen bitSet // batch-level unqueness (here and elsewhere)
+		seen bitSet // batch-level uniqueness (here and elsewhere)
 	}
 
 	RandomUnique struct {
 		base
 		rnd     *rand.Rand
 		seen    bitSet
-		tracker bitmaskTracker // unqueness across epochs (here and elsewhere)
+		tracker bitmaskTracker // uniqueness across epochs (here and elsewhere)
 	}
 
-	RandomUniqueIter struct {
-		base
-		rnd     *rand.Rand
-		seen    bitSet
-		tracker bitmaskTracker
-	}
-
-	Permutation struct {
-		base
-		rnd     *rand.Rand
-		perm    []int
-		permidx int
-	}
-
-	PermutationImproved struct {
+	PermShuffle struct {
 		base
 		rnd       *rand.Rand
-		perm      []int
-		permNext  []int
-		permidx   int
+		perm      []uint32
+		permNext  []uint32
+		permidx   uint32
 		nextReady sync.WaitGroup
+	}
+
+	PermAffinePrime struct {
+		base
+		rnd  *rand.Rand
+		n, p int // n=len(names), p=nextPrimeGE(n) >= 2
+		a, b int // multiplier (1..p-1) and offset (0..p-1)
+		out  int // how many outputs emitted in current epoch [0..n]
+		curY int // current position in affine sequence
 	}
 )
 
@@ -83,15 +76,17 @@ type (
 // base //
 //////////
 
-func (bng *base) Names() []string {
-	return bng.names
-}
+func (rng *base) Names() []string { return rng.names }
 
-func (bng *base) Len() int {
-	if bng == nil || bng.names == nil {
+func (rng *base) Len() int {
+	if rng == nil {
 		return 0
 	}
-	return len(bng.names)
+	return len(rng.names)
+}
+
+func (rng *base) Add(string) {
+	cos.Assertf(false, "this name-getter type %T cannot add names at runtime", rng)
 }
 
 ////////////
@@ -99,7 +94,7 @@ func (bng *base) Len() int {
 ////////////
 
 // interface guard
-var _ Dynamic = (*Random)(nil)
+var _ Basic = (*Random)(nil)
 
 func (rng *Random) Init(names []string, rnd *rand.Rand) {
 	rng.names = names
@@ -142,7 +137,7 @@ func (rng *Random) PickBatch(in []apc.MossIn) []apc.MossIn {
 //////////////////
 
 // interface guard
-var _ Dynamic = (*RandomUnique)(nil)
+var _ Basic = (*RandomUnique)(nil)
 
 func (rng *RandomUnique) Init(names []string, rnd *rand.Rand) {
 	rng.names = names
@@ -207,156 +202,25 @@ func (rng *RandomUnique) PickBatch(in []apc.MossIn) []apc.MossIn {
 	return in[:n]
 }
 
-//////////////////////
-// RandomUniqueIter //
-//////////////////////
-
-// interface guard
-var _ Dynamic = (*RandomUniqueIter)(nil)
-
-func (rng *RandomUniqueIter) Init(names []string, rnd *rand.Rand) {
-	rng.names = names
-	rng.rnd = rnd
-	rng.tracker.init(len(names))
-}
-
-func (rng *RandomUniqueIter) Add(objName string) {
-	if len(rng.names)%64 == 0 {
-		rng.tracker.grow()
-	}
-	rng.names = append(rng.names, objName)
-}
-
-func (rng *RandomUniqueIter) Pick() string {
-	n := len(rng.names)
-	debug.Assert(n > 0)
-	if rng.tracker.needsReset(n) {
-		rng.tracker.reset()
-	}
-
-	start := rng.rnd.IntN(n)
-	for i := range n {
-		idx := start + i
-		if idx >= n {
-			idx -= n
-		}
-		if rng.tracker.tryMark(idx) {
-			return rng.names[idx]
-		}
-	}
-
-	// everything was marked; reset and take one
-	rng.tracker.reset()
-	idx := rng.rnd.IntN(n)
-	_ = rng.tracker.tryMark(idx)
-	return rng.names[idx]
-}
-
-// strictly unique within the returned batch; iterates in cyclic order from random start
-func (rng *RandomUniqueIter) PickBatch(in []apc.MossIn) []apc.MossIn {
-	var (
-		total = len(rng.names)
-		n     = min(total, len(in))
-		i     int
-	)
-	debug.Assert(n > 0)
-	rng.seen.reinit(total)
-	if rng.tracker.needsReset(total) {
-		rng.tracker.reset()
-	}
-	start := rng.rnd.IntN(total)
-	for i < n {
-		for j := 0; j < total && i < n; j++ {
-			idx := start + j
-			if idx >= total {
-				idx -= total
-			}
-			if rng.tracker.tryMark(idx) && rng.seen.testAndSet(idx) {
-				in[i].ObjName = rng.names[idx]
-				i++
-			}
-		}
-		// epoch exhausted; reset and choose a new start if still need more
-		if i < n {
-			rng.tracker.reset()
-			start = rng.rnd.IntN(total)
-		}
-	}
-	return in[:n]
-}
-
 /////////////////
-// Permutation //
+// PermShuffle //
 /////////////////
 
 // interface guard
-var _ Basic = (*Permutation)(nil)
+var _ Basic = (*PermShuffle)(nil)
 
-func (rng *Permutation) Init(names []string, rnd *rand.Rand) {
-	rng.names = names
-	rng.rnd = rnd
-	rng.perm = rnd.Perm(len(names))
-	rng.permidx = 0
-}
-
-func (*Permutation) Add(string) {
-	cos.AssertMsg(false, "can't add object once Permutation is initialized")
-}
-
-func (rng *Permutation) Pick() string {
-	n := len(rng.names)
-	debug.Assert(n > 0)
-	if rng.permidx == n {
-		rng.permidx = 0
-		rng.perm = rng.rnd.Perm(n)
-	}
-	objName := rng.names[rng.perm[rng.permidx]]
-	rng.permidx++
-	return objName
-}
-
-// consecutive window from current permutation; unique in-batch
-func (rng *Permutation) PickBatch(in []apc.MossIn) []apc.MossIn {
-	var (
-		total = len(rng.names)
-		n     = min(total, len(in))
-		i     int
-	)
-	debug.Assert(n > 0)
-	for i < n {
-		if rng.permidx == len(rng.perm) {
-			rng.perm = rng.rnd.Perm(total)
-			rng.permidx = 0
-		}
-		in[i].ObjName = rng.names[rng.perm[rng.permidx]]
-		i++
-		rng.permidx++
-	}
-	return in[:n]
-}
-
-/////////////////////////
-// PermutationImproved //
-/////////////////////////
-
-// interface guard
-var _ Basic = (*PermutationImproved)(nil)
-
-func (rng *PermutationImproved) Init(names []string, rnd *rand.Rand) {
+func (rng *PermShuffle) Init(names []string, rnd *rand.Rand) {
 	rng.nextReady.Wait() // handle double Init() edge case
 	rng.names = names
 	rng.rnd = rnd
-	rng.perm = rnd.Perm(len(names))
-	rng.permNext = rnd.Perm(len(names))
+	n := uint32(len(names))
+	rng.perm = _shuffle(rnd, n)
+	rng.permNext = _shuffle(rnd, n)
 	rng.permidx = 0
 }
 
-func (*PermutationImproved) Add(string) {
-	cos.AssertMsg(false, "can't add object once PermutationImproved is initialized")
-}
-
-func (rng *PermutationImproved) Pick() string {
-	n := len(rng.names)
+func (rng *PermShuffle) Pick() string {
+	n := uint32(len(rng.names))
 	debug.Assert(n > 0)
 	if rng.permidx == n {
 		rng.nextReady.Wait()
@@ -365,12 +229,11 @@ func (rng *PermutationImproved) Pick() string {
 
 		// Pre-generate next permutation in background
 		rng.nextReady.Add(1)
-		go func() {
-			// use independent rand
+		go func(num uint32) {
 			r := cos.NowRand()
-			rng.permNext = r.Perm(n)
+			rng.permNext = _shuffle(r, num)
 			rng.nextReady.Done()
-		}()
+		}(n)
 	}
 
 	objName := rng.names[rng.perm[rng.permidx]]
@@ -379,11 +242,11 @@ func (rng *PermutationImproved) Pick() string {
 }
 
 // consecutive window with pre-generated wrap
-func (rng *PermutationImproved) PickBatch(in []apc.MossIn) []apc.MossIn {
+func (rng *PermShuffle) PickBatch(in []apc.MossIn) []apc.MossIn {
 	var (
-		total = len(rng.names)
-		n     = min(total, len(in))
-		i     int
+		i     uint32
+		total = uint32(len(rng.names))
+		n     = min(uint32(len(in)), total)
 	)
 	for i < n {
 		left := total - rng.permidx
@@ -393,24 +256,23 @@ func (rng *PermutationImproved) PickBatch(in []apc.MossIn) []apc.MossIn {
 			rng.perm, rng.permNext = rng.permNext, rng.perm
 			rng.permidx = 0
 
-			// pre-generate the next one in background; use independent rng
+			// pre-generate the next one in background
 			rng.nextReady.Add(1)
-			go func(num int) {
+			go func(num uint32) {
 				r := cos.NowRand()
-				rng.permNext = r.Perm(num)
+				rng.permNext = _shuffle(r, num)
 				rng.nextReady.Done()
 			}(total)
 			left = total
 		}
 
 		// number of items to emit from current permutation window
-		var (
-			win = min(n-i, left)
-			src = rng.perm[rng.permidx : rng.permidx+win]
-			dst = in[i : i+win]
-		)
+		win := min(n-i, left)
+
+		// copy window of names
 		for j := range win {
-			dst[j].ObjName = rng.names[src[j]]
+			idx := rng.perm[rng.permidx+j]
+			in[i+j].ObjName = rng.names[idx]
 		}
 
 		rng.permidx += win
@@ -418,4 +280,195 @@ func (rng *PermutationImproved) PickBatch(in []apc.MossIn) []apc.MossIn {
 	}
 
 	return in[:n]
+}
+
+// generate uint32 permutation
+func _shuffle(rnd *rand.Rand, n uint32) []uint32 {
+	perm := make([]uint32, n)
+	for i := range n {
+		perm[i] = i
+	}
+	// Fisher-Yates shuffle
+	for i := n - 1; i > 0; i-- {
+		j := uint32(rnd.Int64N(int64(i + 1)))
+		perm[i], perm[j] = perm[j], perm[i]
+	}
+	return perm
+}
+
+/////////////////////
+// PermAffinePrime //
+/////////////////////
+
+const AffineMinN = 10 // avoid tiny datasets and related corners
+
+var _ Basic = (*PermAffinePrime)(nil)
+
+// Init: ensure n>0 and p>=2 once
+func (pp *PermAffinePrime) Init(names []string, rnd *rand.Rand) {
+	pp.names = names
+	pp.rnd = rnd
+	pp.n = len(names)
+	pp.p = nextPrimeGE(pp.n)
+	debug.Assert(pp.n > AffineMinN, "use a different name-getter for tiny datasets")
+	pp.newEpoch()
+}
+
+// New epoch: pick a,b and seed current y; no max(1,p-1) needed now
+func (pp *PermAffinePrime) newEpoch() {
+	pp.out = 0
+	pp.a = 1 + pp.rnd.IntN(pp.p-1)
+	pp.b = pp.rnd.IntN(pp.p)
+	pp.curY = pp.b
+}
+
+// Pick: increment y with add+wrap; no mul/mod in the hot path
+func (pp *PermAffinePrime) Pick() string {
+	n, p := pp.n, pp.p
+	if pp.out == n {
+		pp.newEpoch()
+	}
+	for {
+		y := pp.curY
+		// advance for next time
+		ny := y + pp.a
+		if ny >= p {
+			ny -= p
+		}
+		pp.curY = ny
+
+		if y < n {
+			pp.out++
+			return pp.names[y]
+		}
+	}
+}
+
+func (pp *PermAffinePrime) PickBatch(in []apc.MossIn) []apc.MossIn {
+	n := pp.n
+	k := min(len(in), n-pp.out)
+	if k <= 0 {
+		// start a new epoch so callers don't send an empty request
+		pp.newEpoch()
+		k = min(len(in), n-pp.out)
+	}
+
+	p := pp.p
+	a := pp.a
+	y := pp.curY
+	emitted := 0
+
+	for emitted < k {
+		if y < n {
+			in[emitted].ObjName = pp.names[y]
+			emitted++
+		}
+		// advance y = (y + a) mod p without %/mul
+		y += a
+		if y >= p {
+			y -= p
+		}
+	}
+
+	pp.curY = y
+	pp.out += emitted
+	return in[:emitted]
+}
+
+// --- primes ---
+
+// a simple wheel (mod 30) sieve to find next prime >= n
+// https://en.wikipedia.org/wiki/Wheel_factorization
+func nextPrimeGE(n int) int {
+	debug.Assert(n > AffineMinN)
+	if n%2 == 0 {
+		n++
+	}
+	for n%3 == 0 || n%5 == 0 {
+		n += 2
+	}
+
+	// find the index in the residues cycle to start stepping from
+	res := n % 30
+	idx := 0
+	switch res {
+	case 1:
+		idx = 0
+	case 7:
+		idx = 1
+	case 11:
+		idx = 2
+	case 13:
+		idx = 3
+	case 17:
+		idx = 4
+	case 19:
+		idx = 5
+	case 23:
+		idx = 6
+	case 29:
+		idx = 7
+	default:
+		// move forward to the next allowed residue (keeps n odd)
+		// simple linear scan up to 29 is cheap; runs at most 29/2 times
+		for {
+			n += 2
+			r := n % 30
+			if r == 1 || r == 7 || r == 11 || r == 13 || r == 17 || r == 19 || r == 23 || r == 29 {
+				switch r {
+				case 1:
+					idx = 0
+				case 7:
+					idx = 1
+				case 11:
+					idx = 2
+				case 13:
+					idx = 3
+				case 17:
+					idx = 4
+				case 19:
+					idx = 5
+				case 23:
+					idx = 6
+				case 29:
+					idx = 7
+				}
+				break
+			}
+		}
+	}
+
+	steps := [...]int{6, 4, 2, 4, 2, 4, 6, 2}
+	for {
+		if isPrime30(n) {
+			return n
+		}
+		n += steps[idx]
+		idx++
+		if idx == len(steps) {
+			idx = 0
+		}
+	}
+}
+
+// assume n >= 11 and odd (see AffineMinN)
+func isPrime30(n int) bool {
+	if n%3 == 0 || n%5 == 0 {
+		return false
+	}
+	// start at 7; stride pattern visits 30k ± {1,7,11,13,17,19,23,29}
+	for i := 7; i <= n/i; i += 30 {
+		// unrolled checks for the 8 residues per 30
+		if n%i == 0 ||
+			n%(i+4) == 0 ||
+			n%(i+6) == 0 ||
+			n%(i+10) == 0 ||
+			n%(i+12) == 0 ||
+			n%(i+16) == 0 ||
+			n%(i+22) == 0 ||
+			n%(i+24) == 0 {
+			return false
+		}
+	}
+	return true
 }

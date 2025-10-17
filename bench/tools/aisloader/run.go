@@ -105,40 +105,44 @@ type (
 		bProps               cmn.Bprops
 		duration             DurationExt // stop after the run for at least that much
 		evictBatchSize       int         // used for: bootstrap(list) and delete
-		numEpochs            uint
-		loaderIDHashLen      uint
-		seed                 int64 // random seed; UnixNano() if omitted
-		numWorkers           int
-		updateExistingPct    int // % of updates (GET, PUT over)combo
-		putPct               int // % of PUTs, rest are GETs
-		statsShowInterval    int
-		statsdPort           int
-		multipartChunks      int // number of chunks for multipart upload (0 - disabled, >0 - enabled)
-		multipartPct         int // percentage of PUTs that use multipart upload (0-100)
-		getBatchSize         int // when defined use api.GetBatch() instead of api.GetObject()
-		putShards            uint64
-		maxputs              uint64
-		loaderCnt            uint64
-		readLen              int64 // read length
-		readOff              int64 // read offset
-		maxSize              int64
-		minSize              int64
-		putSizeUpperBound    int64
-		cleanUp              BoolExt // cleanup i.e. remove and destroy everything created during bench
-		statsdProbe          bool
-		getLoaderID          bool
-		randomObjName        bool
-		randomProxy          bool
-		uniqueGETs           bool
-		skipList             bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
-		verifyHash           bool // verify xxhash during get
-		jsonFormat           bool
-		stoppable            bool // when true, terminate by Ctrl-C
-		dryRun               bool // print configuration and parameters that aisloader will use at runtime
-		traceHTTP            bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
-		latest               bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
-		cached               bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
-		listDirs             bool // do list virtual subdirectories (applies to remote buckets only)
+
+		// name-getter selection
+		numEpochs      uint // when non-zero and 100% read workload: use permutation-based name-getter
+		permShuffleMax uint // threshold for switching to affine name-getter
+
+		loaderIDHashLen   uint
+		seed              int64 // random seed; UnixNano() if omitted
+		numWorkers        int
+		updateExistingPct int // % of updates (GET, PUT over)combo
+		putPct            int // % of PUTs, rest are GETs
+		statsShowInterval int
+		statsdPort        int
+		multipartChunks   int // number of chunks for multipart upload (0 - disabled, >0 - enabled)
+		multipartPct      int // percentage of PUTs that use multipart upload (0-100)
+		getBatchSize      int // when defined use api.GetBatch() instead of api.GetObject()
+		putShards         uint64
+		maxputs           uint64
+		loaderCnt         uint64
+		readLen           int64 // read length
+		readOff           int64 // read offset
+		maxSize           int64
+		minSize           int64
+		putSizeUpperBound int64
+		cleanUp           BoolExt // cleanup i.e. remove and destroy everything created during bench
+		statsdProbe       bool
+		getLoaderID       bool
+		randomObjName     bool
+		randomProxy       bool
+		uniqueGETs        bool
+		skipList          bool // when true, skip listing objects before running 100% PUT workload (see also fileList)
+		verifyHash        bool // verify xxhash during get
+		jsonFormat        bool
+		stoppable         bool // when true, terminate by Ctrl-C
+		dryRun            bool // print configuration and parameters that aisloader will use at runtime
+		traceHTTP         bool // trace http latencies as per httpLatencies & https://golang.org/pkg/net/http/httptrace
+		latest            bool // check in-cluster metadata and possibly GET the latest object version from the associated remote bucket
+		cached            bool // list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")
+		listDirs          bool // do list virtual subdirectories (applies to remote buckets only)
 	}
 
 	// sts records accumulated puts/gets information.
@@ -168,7 +172,7 @@ var (
 	rnd              *rand.Rand
 	intervalStats    sts
 	accumulatedStats sts
-	objnameGetter    namegetter.Dynamic
+	objnameGetter    namegetter.Basic
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC          *statsd.Client
 	getPending       int64
@@ -358,7 +362,7 @@ func Start(version, buildtime string) (err error) {
 
 	config := &cmn.Config{}
 	config.Log.Level = "3"
-	memsys.Init(prefixC, prefixC, config)
+	// memsys.Init(prefixC, prefixC, config) // TODO: revisit
 	gmm = memsys.PageMM()
 	gmm.RegWithHK()
 
@@ -593,7 +597,10 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.readOffStr, "readoff", "", "read range offset (can contain multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readLenStr, "readlen", "", "read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "maximum number of objects to PUT")
+
 	f.UintVar(&p.numEpochs, "epochs", 0, "number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
+	f.UintVar(&p.permShuffleMax, "perm-shuffle-max", 100_000, "max names for shuffle-based name-getter (above this uses O(1) memory affine)")
+
 	f.BoolVar(&p.skipList, "skiplist", false, "when true, skip listing objects in a bucket before running 100% PUT workload")
 	f.StringVar(&p.fileList, "filelist", "", "local or locally-accessible text file containing object names (for subsequent reading)")
 
@@ -1261,24 +1268,30 @@ func listObjects() error {
 		return err
 	}
 
-	if !runParams.uniqueGETs {
+	newNameGetter(names)
+	return nil
+}
+
+func newNameGetter(names []string) {
+	var (
+		readOnly  = runParams.putPct == 0
+		epoching  = runParams.numEpochs > 0
+		threshold = runParams.permShuffleMax
+		n         = len(names)
+	)
+	switch {
+	case !readOnly && !epoching:
 		objnameGetter = &namegetter.Random{}
-	} else {
+	case !readOnly && epoching:
 		objnameGetter = &namegetter.RandomUnique{}
-
-		// Permutation strategies seem to be always better (they use more memory though)
-		if runParams.putPct == 0 {
-			objnameGetter = &namegetter.Permutation{}
-
-			// Number from benchmarks: aisloader/tests/objnamegetter_test.go
-			// After 50k overhead on new goroutine and WaitGroup becomes smaller than benefits
-			if len(names) > 50000 {
-				objnameGetter = &namegetter.PermutationImproved{}
-			}
-		}
+	case n > int(threshold) && n > namegetter.AffineMinN:
+		// O(1) memory, strict per-epoch
+		objnameGetter = &namegetter.PermAffinePrime{}
+	default:
+		// Fisher-Yates shuffle: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+		objnameGetter = &namegetter.PermShuffle{}
 	}
 	objnameGetter.Init(names, rnd)
-	return err
 }
 
 // returns smallest number divisible by `align` that is greater or equal `val`

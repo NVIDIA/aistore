@@ -158,10 +158,10 @@ ifdef WRD
 	@echo "(with race detector, writing reports to $(subst log_path=,,$(GORACE)).<pid>)"
 endif
 ifdef CROSS_COMPILE
-	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@$(CROSS_COMPILE) go build -o ./$* $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 	@mv ./$* $(BUILD_DEST)/.
 else
-	@$(WRD) go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
+	@$(WRD) go build -o $(BUILD_DEST)/$* $(BUILD_FLAGS) -tags="$(BUILD_TAGS)" $(GCFLAGS) $(GOFLAGS) $(LDFLAGS) $(BUILD_DIR)/$*/*.go
 endif
 	@echo "done."
 

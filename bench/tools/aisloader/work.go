@@ -470,7 +470,7 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 
 	getBatchPending++
 	wo := allocGetBatchWO(runParams.getBatchSize)
-	objnameGetter.PickBatch(wo.moss.In)
+	wo.moss.In = objnameGetter.PickBatch(wo.moss.In)
 
 	return wo, nil
 }

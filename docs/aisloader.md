@@ -45,7 +45,11 @@ To get started, go to root directory and run:
 $ make aisloader
 ```
 
-For usage, run: `aisloader` or `aisloader usage` or `aisloader --help`.
+For usage, run: `aisloader`, `aisloader usage`, or `aisloader --help`.
+
+See the following [script](https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh) for usage examples and extended commentary:
+
+* https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh
 
 ## Command-line Options
 

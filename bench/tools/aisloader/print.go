@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -364,7 +365,8 @@ func printRunParams(p *params) {
 		MinSize       int64  `json:"minimum object size (bytes),omitempty"`
 		MaxSize       int64  `json:"maximum object size (bytes),omitempty"`
 		MaxPutBytes   int64  `json:"PUT upper bound,string,omitempty"`
-		Backing       string `json:"reader-type,omitempty"`
+		NameGetter    string `json:"name-getter"`
+		ReaderType    string `json:"reader-type,omitempty"`
 		Cleanup       bool   `json:"cleanup"`
 	}{
 		URL:           p.proxyURL,
@@ -379,10 +381,28 @@ func printRunParams(p *params) {
 		MinSize:       p.minSize,
 		MaxSize:       p.maxSize,
 		MaxPutBytes:   p.putSizeUpperBound,
-		Backing:       p.readerType,
+		NameGetter:    ngLabel(),
+		ReaderType:    p.readerType,
 		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")
 	cos.AssertNoErr(err)
 
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
+}
+
+func ngLabel() string {
+	switch objnameGetter.(type) {
+	case *namegetter.Random:
+		return "random non-unique"
+	case *namegetter.RandomUnique:
+		return "random unique"
+	case *namegetter.PermShuffle:
+		return "unique sequential"
+	case *namegetter.PermAffinePrime:
+		return "unique epoch-based"
+	default:
+		s := fmt.Sprintf("%T", objnameGetter)
+		debug.Assert(false, s)
+		return s
+	}
 }
