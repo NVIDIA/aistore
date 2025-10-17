@@ -49,7 +49,8 @@ var (
 )
 
 func InitShortID(seed uint64) {
-	sid = shortid.MustNew(4 /*worker*/, uuidABC, seed)
+	worker := uint8(seed & 0x1f) // must be < 32
+	sid = shortid.MustNew(worker, uuidABC, seed)
 }
 
 //
@@ -58,18 +59,30 @@ func InitShortID(seed uint64) {
 
 // compare with xreg.GenBEID
 // (see also: bench/micro/uuid/genid_test.go)
-func GenUUID() (uuid string) {
-	var h, t string
-	uuid = sid.MustGenerate()
-	if c := uuid[0]; c == 'g' || !isAlpha(c) { // see also: `xact.RebID2S`
+
+func GenUUID() string {
+	var (
+		h, t string
+		uuid = sid.MustGenerate()
+	)
+	if c := uuid[0]; (c == 'g' && looksLikeReb(uuid)) || !isAlpha(c) { // cosmetic prefix
 		tie := int(rtie.Add(1))
 		h = string(rune('A' + tie%26))
 	}
-	if c := uuid[len(uuid)-1]; c == '-' || c == '_' {
+	if c := uuid[len(uuid)-1]; c == '-' || c == '_' { // cosmetic suffix
 		tie := int(rtie.Add(1))
 		t = string(rune('a' + tie%26))
 	}
 	return h + uuid + t
+}
+
+func looksLikeReb(id string) bool {
+	for i := 1; i < len(id); i++ {
+		if !isNum(id[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // "best-effort ID" - to independently and locally generate globally unique ID
