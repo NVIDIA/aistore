@@ -89,7 +89,7 @@ class TestAuthNRoleManager(AuthNTestBase):
                 | AccessAttr.OBJ_LIST.value
             )
         )
-        self.assertEqual(combined_perms, str(AccessAttr.ACCESS_RO))
+        self.assertEqual(combined_perms, str(AccessAttr.ACCESS_RO.value))
 
         self.assertIn("test-bucket", [perm.bck.name for perm in bck_perms])
         for bck_perm in bck_perms:
