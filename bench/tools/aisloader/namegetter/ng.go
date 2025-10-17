@@ -53,6 +53,9 @@ type (
 		tracker bitmaskTracker // uniqueness across epochs (here and elsewhere)
 	}
 
+	// PermShuffle generates repeated random permutations of an open interval [0..n)
+	// NOTE: PickBatch can cross a permutation boundary - if that happens
+	// the returned batch (of names) may contain duplicates (extended comment below)
 	PermShuffle struct {
 		base
 		rnd       *rand.Rand
@@ -62,6 +65,9 @@ type (
 		nextReady sync.WaitGroup
 	}
 
+	// epoch-based affine sequence over nextPrimeGE(n);
+	// each epoch emits exactly n unique indices; PickBatch never crosses epochs,
+	// so duplicates within a single batch are impossible
 	PermAffinePrime struct {
 		base
 		rnd  *rand.Rand
@@ -241,6 +247,17 @@ func (rng *PermShuffle) Pick() string {
 	return objName
 }
 
+// NOTE: =====================================================================
+// * A single PickBatch can legitimately **straddle two permutations**.
+//   When that happens, the same name can appear twice within one batch
+//   (tail of previous permutation + head of the next).
+//   In other words, uniqueness is guaranteed
+//   only per permutation (epoch), not per individual PickBatch call.
+// * Callers that require strictly unique names within each batch must either
+//   (a) set batch size <= remaining items in the current permutation, or
+//   (b) detect and skip duplicates at the boundary.
+// ============================================================================
+
 // consecutive window with pre-generated wrap
 func (rng *PermShuffle) PickBatch(in []apc.MossIn) []apc.MossIn {
 	var (
@@ -377,8 +394,6 @@ func (pp *PermAffinePrime) PickBatch(in []apc.MossIn) []apc.MossIn {
 
 // --- primes ---
 
-// a simple wheel (mod 30) sieve to find next prime >= n
-// https://en.wikipedia.org/wiki/Wheel_factorization
 func nextPrimeGE(n int) int {
 	debug.Assert(n > AffineMinN)
 	if n%2 == 0 {
@@ -388,57 +403,30 @@ func nextPrimeGE(n int) int {
 		n += 2
 	}
 
-	// find the index in the residues cycle to start stepping from
-	res := n % 30
-	idx := 0
-	switch res {
-	case 1:
-		idx = 0
-	case 7:
-		idx = 1
-	case 11:
-		idx = 2
-	case 13:
-		idx = 3
-	case 17:
-		idx = 4
-	case 19:
-		idx = 5
-	case 23:
-		idx = 6
-	case 29:
-		idx = 7
-	default:
-		// move forward to the next allowed residue (keeps n odd)
-		// simple linear scan up to 29 is cheap; runs at most 29/2 times
+	var (
+		// store rid+1; 0 means not found
+		residueIndex = [30]int{1: 1, 7: 2, 11: 3, 13: 4, 17: 5, 19: 6, 23: 7, 29: 8}
+		res          = n % 30
+		rid          = residueIndex[res]
+	)
+	if rid == 0 {
+		// advance to next allowed residue without modulo
 		for {
 			n += 2
-			r := n % 30
-			if r == 1 || r == 7 || r == 11 || r == 13 || r == 17 || r == 19 || r == 23 || r == 29 {
-				switch r {
-				case 1:
-					idx = 0
-				case 7:
-					idx = 1
-				case 11:
-					idx = 2
-				case 13:
-					idx = 3
-				case 17:
-					idx = 4
-				case 19:
-					idx = 5
-				case 23:
-					idx = 6
-				case 29:
-					idx = 7
-				}
+			res += 2
+			if res >= 30 {
+				res -= 30
+			}
+			if rid = residueIndex[res]; rid != 0 {
 				break
 			}
 		}
 	}
 
-	steps := [...]int{6, 4, 2, 4, 2, 4, 6, 2}
+	var (
+		idx   = rid - 1
+		steps = [...]int{6, 4, 2, 4, 2, 4, 6, 2}
+	)
 	for {
 		if isPrime30(n) {
 			return n
@@ -451,12 +439,13 @@ func nextPrimeGE(n int) int {
 	}
 }
 
-// assume n >= 11 and odd (see AffineMinN)
+// a simple wheel (mod 30) sieve to find next prime >= n
+// https://en.wikipedia.org/wiki/Wheel_factorization
+// n > AffineMinN and odd
 func isPrime30(n int) bool {
 	if n%3 == 0 || n%5 == 0 {
 		return false
 	}
-	// start at 7; stride pattern visits 30k ± {1,7,11,13,17,19,23,29}
 	for i := 7; i <= n/i; i += 30 {
 		// unrolled checks for the 8 residues per 30
 		if n%i == 0 ||
