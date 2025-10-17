@@ -32,7 +32,7 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test user role and permissions
         client.cluster().list_buckets()
-        bck = self._assert_not_authorized(client.bucket("any").create)
+        bck = self._assert_forbidden(client.bucket("any").create)
         # Mark for cleanup if creation did succeed
         if bck:
             self.buckets.append(bck)
@@ -88,7 +88,7 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test updated user role and permissions
         self.buckets.append(client.bucket(random_string()).create())
-        self._assert_not_authorized(client.cluster().list_buckets)
+        self._assert_forbidden(client.cluster().list_buckets)
 
     @pytest.mark.authn
     def test_update_user_no_roles(self):
@@ -113,7 +113,7 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test updated user role and permissions
         client.cluster().list_buckets()
-        bck = self._assert_not_authorized(client.bucket(random_string()).create)
+        bck = self._assert_forbidden(client.bucket(random_string()).create)
         # Mark for cleanup if creation did succeed
         if bck:
             self.buckets.append(bck)
@@ -144,4 +144,4 @@ class TestAuthNUserManager(AuthNTestBase):
 
         # Test updated user role and permissions
         self.buckets.append(client.bucket(random_string()).create())
-        self._assert_not_authorized(client.cluster().list_buckets)
+        self._assert_forbidden(client.cluster().list_buckets)

@@ -7,6 +7,8 @@ package tok
 
 import (
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,24 +18,41 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type AISClaims struct {
-	// Deprecated: Use RegisteredClaims.Subject instead, mapped to 'sub' claim.
-	UserID string `json:"username"`
-	// Deprecated: Use RegisteredClaims.ExpiresAt instead, mapped to 'exp' claim.
-	Expires     time.Time       `json:"expires"`
-	ClusterACLs []*authn.CluACL `json:"clusters"`
-	BucketACLs  []*authn.BckACL `json:"buckets,omitempty"`
-	IsAdmin     bool            `json:"admin"`
-	jwt.RegisteredClaims
-}
+type (
+	AISClaims struct {
+		// Deprecated: Use RegisteredClaims.Subject instead, mapped to 'sub' claim.
+		UserID string `json:"username"`
+		// Deprecated: Use RegisteredClaims.ExpiresAt instead, mapped to 'exp' claim.
+		Expires     time.Time       `json:"expires"`
+		ClusterACLs []*authn.CluACL `json:"clusters"`
+		BucketACLs  []*authn.BckACL `json:"buckets,omitempty"`
+		IsAdmin     bool            `json:"admin"`
+		jwt.RegisteredClaims
+	}
+
+	TokenParser struct {
+		// signing key secret
+		secret string
+		// public key for validating tokens
+		rsaPubKey *rsa.PublicKey
+		// options for the jwt parser to use
+		parseOpts []jwt.ParserOption
+	}
+
+	RequiredClaims struct {
+		Aud []string
+	}
+)
 
 var (
 	ErrNoPermissions        = errors.New("insufficient permissions")
 	ErrInvalidToken         = errors.New("invalid token")
+	ErrNoSubject            = errors.New("missing 'sub' or 'username' claims")
 	ErrNoToken              = errors.New("token required")
 	ErrNoBearerToken        = errors.New("invalid token: no bearer")
 	ErrTokenExpired         = errors.New("token expired")
@@ -53,22 +72,24 @@ func CreateRSATokenStr(c jwt.Claims, rsaKey *rsa.PrivateKey) (string, error) {
 	return t.SignedString(rsaKey)
 }
 
-func StandardClaims(expires time.Time, userID string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
+func StandardClaims(expires time.Time, userID, aud string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
 	return &AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expires),
 			Subject:   userID,
+			Audience:  []string{aud},
 		},
 		BucketACLs:  bucketACLs,
 		ClusterACLs: clusterACLs,
 	}
 }
 
-func AdminClaims(expires time.Time, userID string) *AISClaims {
+func AdminClaims(expires time.Time, userID, aud string) *AISClaims {
 	return &AISClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expires),
 			Subject:   userID,
+			Audience:  []string{aud},
 		},
 		IsAdmin: true,
 	}
@@ -87,36 +108,78 @@ func ExtractToken(hdr http.Header) (string, error) {
 	return s[idx+1:], nil
 }
 
-// Based on the token provided, return the key for the jwt library to use to verify the signature
-func parseJWTKey(t *jwt.Token, secret string, pubKey *rsa.PublicKey) (any, error) {
-	switch t.Method.(type) {
-	case *jwt.SigningMethodHMAC:
-		return []byte(secret), nil
-	case *jwt.SigningMethodRSA:
-		return pubKey, nil
-	default:
-		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", t.Method, t.Header["alg"])
+/////////////////
+// TokenParser //
+/////////////////
+
+func NewTokenParser(secret string, rsaPubKey *rsa.PublicKey, reqClaims *RequiredClaims) *TokenParser {
+	return &TokenParser{
+		secret:    secret,
+		rsaPubKey: rsaPubKey,
+		parseOpts: buildParseOptions(reqClaims),
 	}
+}
+
+func buildParseOptions(reqClaims *RequiredClaims) []jwt.ParserOption {
+	opts := []jwt.ParserOption{
+		jwt.WithValidMethods(supportedSigningMethods),
+	}
+	if reqClaims != nil && len(reqClaims.Aud) > 0 {
+		opts = append(opts, jwt.WithAudience(reqClaims.Aud...))
+	}
+	return opts
+}
+
+// Based on the token provided, return the key for the jwt library to use to verify the signature
+func (tm *TokenParser) parseJWTKey(tok *jwt.Token) (any, error) {
+	switch tok.Method.(type) {
+	case *jwt.SigningMethodHMAC:
+		return []byte(tm.secret), nil
+	case *jwt.SigningMethodRSA:
+		return tm.rsaPubKey, nil
+	default:
+		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", tok.Method, tok.Header["alg"])
+	}
+}
+
+func ParsePubKey(str string) (*rsa.PublicKey, error) {
+	if str == "" {
+		return nil, nil
+	}
+	// Parse b64-encoded RSA public key from string
+	derBytes, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return nil, err
+	}
+	pub, err := x509.ParsePKIXPublicKey(derBytes)
+	if err != nil {
+		return nil, err
+	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("not an RSA public key")
+	}
+	return rsaPub, nil
 }
 
 // ValidateToken verifies JWT signature and extracts token claims
 // (supporting both HMAC (HS256) and RSA (RS256) signing methods)
 // - HS256: validates with secret (symmetric)
 // - RS256: validates with pubKey (asymmetric)
-func ValidateToken(tokenStr, secret string, pubKey *rsa.PublicKey) (*AISClaims, error) {
+func (tm *TokenParser) ValidateToken(tokenStr string) (*AISClaims, error) {
 	jwtToken, err := jwt.ParseWithClaims(
 		tokenStr,
 		&AISClaims{},
 		func(t *jwt.Token) (any, error) {
-			return parseJWTKey(t, secret, pubKey)
+			return tm.parseJWTKey(t)
 		},
-		jwt.WithValidMethods(supportedSigningMethods),
+		tm.parseOpts...,
 	)
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, fmt.Errorf("%w [err: %v]", ErrTokenExpired, err)
+			return nil, fmt.Errorf("%w [err: %w]", ErrInvalidToken, ErrTokenExpired)
 		}
-		return nil, fmt.Errorf("%w [err: %v]", ErrInvalidToken, err)
+		return nil, fmt.Errorf("%w [err: %w]", ErrInvalidToken, err)
 	}
 	claims, ok := jwtToken.Claims.(*AISClaims)
 	if !ok || !jwtToken.Valid {
@@ -125,9 +188,31 @@ func ValidateToken(tokenStr, secret string, pubKey *rsa.PublicKey) (*AISClaims, 
 	return claims, nil
 }
 
-///////////
+// IsSecretCksumValid Checks if a provided secret checksum is valid for signing requests to be parsed by this cluster
+func (tm *TokenParser) IsSecretCksumValid(cksumVal string) bool {
+	return cos.ChecksumB2S(cos.UnsafeB(tm.secret), cos.ChecksumSHA256) == cksumVal
+}
+
+// IsPublicKeyValid Checks if a provided public key matches what this cluster will use to validate tokens
+func (tm *TokenParser) IsPublicKeyValid(pubKeyStr string) (bool, error) {
+	reqKey, err := ParsePubKey(pubKeyStr)
+	if err != nil {
+		return false, err
+	}
+	return tm.rsaPubKey.Equal(reqKey), nil
+}
+
+///////////////
 // AISClaims //
-///////////
+///////////////
+
+// Validate implements Claims interface to add extra claims validation after parsing a token
+func (c *AISClaims) Validate() error {
+	if sub, err := c.GetSubject(); err != nil || sub == "" {
+		return ErrNoSubject
+	}
+	return nil
+}
 
 // GetExpirationTime implements Claims interface with backwards-compatible support for 'expires'
 func (c *AISClaims) GetExpirationTime() (*jwt.NumericDate, error) {

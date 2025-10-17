@@ -5,9 +5,6 @@
 package ais
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,15 +28,13 @@ type (
 	tokenMap  map[string]*tok.AISClaims // map token strings to claim structs
 
 	authManager struct {
+		// used for parsing and validating claims from token strings
+		tokenParser *tok.TokenParser
 		// cache of decrypted token claims
 		tokenMap tokenMap
 		// list of invalid tokens(revoked or of deleted users)
 		// Authn sends these tokens to primary for broadcasting
 		revokedTokens map[string]bool
-		// signing key secret
-		secret string
-		// public key for validating tokens
-		rsaPubKey *rsa.PublicKey
 		// latest revoked version
 		version int64
 		// lock
@@ -52,37 +47,20 @@ type (
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
-	rsaPubKey, err := parsePubKey(cos.Right(config.Auth.PubKey, os.Getenv(env.AisAuthPublicKey)))
+	rsaPubKey, err := tok.ParsePubKey(cos.Right(config.Auth.PubKey, os.Getenv(env.AisAuthPublicKey)))
 	if err != nil {
 		cos.ExitLogf("Failed to parse RSA public key: %v", err)
+	}
+	secret := cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey))
+	requiredClaims := &tok.RequiredClaims{
+		Aud: config.Auth.Aud,
 	}
 	return &authManager{
 		tokenMap:      make(tokenMap),
 		revokedTokens: make(map[string]bool), // TODO: preallocate
 		version:       1,
-		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey)), // environment override
-		rsaPubKey:     rsaPubKey,
+		tokenParser:   tok.NewTokenParser(secret, rsaPubKey, requiredClaims),
 	}
-}
-
-func parsePubKey(str string) (*rsa.PublicKey, error) {
-	if str == "" {
-		return nil, nil
-	}
-	// Parse b64-encoded RSA public key from string
-	derBytes, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		return nil, err
-	}
-	pub, err := x509.ParsePKIXPublicKey(derBytes)
-	if err != nil {
-		return nil, err
-	}
-	rsaPub, ok := pub.(*rsa.PublicKey)
-	if !ok {
-		return nil, errors.New("not an RSA public key")
-	}
-	return rsaPub, nil
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.
@@ -113,7 +91,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 
 	// Clean up expired tokens from the revoked list.
 	for token := range a.revokedTokens {
-		_, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
+		_, err := a.tokenParser.ValidateToken(token)
 		switch {
 		case errors.Is(err, tok.ErrTokenExpired):
 			delete(a.revokedTokens, token)
@@ -147,36 +125,32 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 // Checks if a token is valid:
 //   - must not be revoked one
 //   - must not be expired
-//   - must have all mandatory fields: userID, creds, issued, expires
+//   - must have valid JWT claims or equivalent: sub, iss, aud, exp
 //
-// Returns decoded token claims if it is valid
-func (a *authManager) validateToken(token string) (claims *tok.AISClaims, err error) {
+// Caches and returns decoded token claims if it is valid
+func (a *authManager) validateToken(token string) (*tok.AISClaims, error) {
 	a.Lock()
+	defer a.Unlock()
 	if _, ok := a.revokedTokens[token]; ok {
-		claims, err = nil, fmt.Errorf("%v: %s", tok.ErrTokenRevoked, token)
-	} else {
-		claims, err = a.validateAddRm(token)
+		return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenRevoked, token)
 	}
-	a.Unlock()
-	return
-}
-
-// If token not found in authManager.tokenMap, decrypts token, validates claims, and caches it
-// Removes expired tokens from authManager.tokenMap.
-// Must be called under lock.
-func (a *authManager) validateAddRm(token string) (*tok.AISClaims, error) {
 	claims, ok := a.tokenMap[token]
 	debug.Assert(!ok || claims != nil)
 	// If token string exists in cache, only need to check claim expiry
 	if ok && claims != nil {
 		if claims.IsExpired() {
 			delete(a.tokenMap, token)
-			return nil, fmt.Errorf("%v: %q", tok.ErrTokenExpired, token)
+			return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenExpired, token)
 		}
 		return claims, nil
 	}
-	// New token string, so extract the claims and cache it
-	claims, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
+	return a.cacheNewToken(token)
+}
+
+// Take a token string, validate the signature and claims, and add to the authManager cache
+func (a *authManager) cacheNewToken(token string) (claims *tok.AISClaims, err error) {
+	// Validate token signature and extract
+	claims, err = a.tokenParser.ValidateToken(token)
 	if err != nil {
 		nlog.Infof("Received invalid token, error: %v", err)
 		return nil, err
@@ -232,18 +206,17 @@ func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if reqConf.Secret != "" {
-		cksumVal := cos.ChecksumB2S(cos.UnsafeB(p.authn.secret), cos.ChecksumSHA256)
-		if cksumVal != reqConf.Secret {
+		if !p.authn.tokenParser.IsSecretCksumValid(reqConf.Secret) {
 			p.writeErrf(w, r, "%s: invalid secret sha256(%q)", p, cos.SHead(reqConf.Secret))
 		}
 	}
 	if reqConf.PubKey != nil {
-		reqKey, err := parsePubKey(*reqConf.PubKey)
+		valid, err := p.authn.tokenParser.IsPublicKeyValid(*reqConf.PubKey)
 		if err != nil {
 			p.writeErrf(w, r, "%s: invalid public key (%q)", p, cos.SHead(*reqConf.PubKey))
 			return
 		}
-		if !reqKey.Equal(p.authn.rsaPubKey) {
+		if !valid {
 			p.writeErrf(w, r, "%s: provided public key (%q) does not match cluster's public key", p, cos.SHead(*reqConf.PubKey))
 			return
 		}
@@ -302,7 +275,7 @@ func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 func aceErrToCode(err error) (status int) {
 	switch {
 	case err == nil:
-	case errors.Is(err, tok.ErrNoToken) || errors.Is(err, tok.ErrInvalidToken) || errors.Is(err, tok.ErrTokenExpired):
+	case errors.Is(err, tok.ErrNoToken) || errors.Is(err, tok.ErrInvalidToken):
 		status = http.StatusUnauthorized
 	default:
 		status = http.StatusForbidden

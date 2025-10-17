@@ -4,7 +4,7 @@ from typing import List, Optional, Callable, Any
 from aistore import Client
 from aistore.sdk import AuthNClient
 from aistore.sdk.authn.access_attr import AccessAttr
-from aistore.sdk.const import STATUS_UNAUTHORIZED
+from aistore.sdk.const import STATUS_UNAUTHORIZED, STATUS_FORBIDDEN
 from aistore.sdk.errors import AISError
 from tests.integration import (
     AUTHN_ENDPOINT,
@@ -93,7 +93,14 @@ class AuthNTestBase(unittest.TestCase):
         self.user_names.append(user.id)
         return user
 
-    def _assert_not_authorized(self, func: Callable[[], Any]):
+    def _assert_forbidden(self, func: Callable[[], Any]):
+        with self.assertRaises(AISError) as e:
+            # Return result to use for cleanup if call does succeed
+            return func()
+        self.assertEqual(STATUS_FORBIDDEN, e.exception.status_code)
+        return None
+
+    def _assert_unauthorized(self, func: Callable[[], Any]):
         with self.assertRaises(AISError) as e:
             # Return result to use for cleanup if call does succeed
             return func()

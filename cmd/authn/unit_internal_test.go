@@ -180,9 +180,9 @@ func TestToken(t *testing.T) {
 		t.Skipf("skipping %s in short mode", t.Name())
 	}
 	var (
-		err    error
-		token  string
-		secret = Conf.Secret()
+		err      error
+		token    string
+		tkParser = tok.NewTokenParser(Conf.Secret(), nil, nil)
 	)
 
 	driver := mock.NewDBDriver()
@@ -208,7 +208,7 @@ func TestToken(t *testing.T) {
 	if err != nil || token == "" {
 		t.Errorf("Failed to generate token for %s: %v", users[1], err)
 	}
-	info, err := tok.ValidateToken(token, secret, nil)
+	info, err := tkParser.ValidateToken(token)
 	if err != nil {
 		t.Fatalf("Failed to decrypt token %v: %v", token, err)
 	}
@@ -227,7 +227,7 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	_, err = tok.ValidateToken(token, secret, nil)
+	_, err = tkParser.ValidateToken(token)
 	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenExpired), "Token must be expired: %s", token)
 }
 

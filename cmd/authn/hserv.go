@@ -172,8 +172,8 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "empty token")
 		return
 	}
-	secret := Conf.Secret()
-	if _, err := tok.ValidateToken(msg.Token, secret, nil); err != nil {
+	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
+	if _, err := tkParser.ValidateToken(msg.Token); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -303,8 +303,8 @@ func getToken(r *http.Request) (*tok.AISClaims, error) {
 	if err != nil {
 		return nil, err
 	}
-	secret := Conf.Secret()
-	claims, err := tok.ValidateToken(tokenStr, secret, nil)
+	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
+	claims, err := tkParser.ValidateToken(tokenStr)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
 			return nil, fmt.Errorf("not authorized (token expired): %q", tokenStr)

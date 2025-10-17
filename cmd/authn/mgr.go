@@ -411,11 +411,13 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 	// If a user is a super user, it is enough to pass only isAdmin marker
 	expires := time.Now().UTC().Add(expDelta)
 	uid := uInfo.ID
+	// TODO: parse from ACLs and/or LoginMsg
+	aud := ""
 	if uInfo.IsAdmin() {
-		return tok.CreateHMACTokenStr(tok.AdminClaims(expires, uid), Conf.Secret())
+		return tok.CreateHMACTokenStr(tok.AdminClaims(expires, uid, aud), Conf.Secret())
 	}
 	m.fixClusterIDs(cluACLs)
-	return tok.CreateHMACTokenStr(tok.StandardClaims(expires, uid, bckACLs, cluACLs), Conf.Secret())
+	return tok.CreateHMACTokenStr(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs), Conf.Secret())
 }
 
 // Before putting a list of cluster permissions to a token, cluster aliases
@@ -461,9 +463,9 @@ func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
 	}
 
 	revokeList := make([]string, 0, len(tokens))
-	secret := Conf.Secret()
+	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
 	for _, token := range tokens {
-		_, err = tok.ValidateToken(token, secret, nil)
+		_, err = tkParser.ValidateToken(token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)

@@ -1,6 +1,6 @@
 // RUN authn
 echo "/tmp/auth-token.$RANDOM.adm" > /tmp/e2e.admin.rand
-tf=`cat /tmp/e2e.admin.rand`; ais auth login admin -p admin -f $tf // IGNORE
+tf=`cat /tmp/e2e.admin.rand`; ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS -f $tf // IGNORE
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth show cluster
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais show auth cluster // IGNORE
 AIS_AUTHN_TOKEN_FILE=`cat /tmp/e2e.admin.rand` ais auth add cluster srv1
