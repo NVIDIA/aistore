@@ -211,6 +211,13 @@ class Batch:
         """
         Execute the Get-Batch request.
 
+        Note:
+            When 'streaming_get' is True (default), the server returns a pure archive stream
+            for optimal performance. Object metadata (MossOut) is derived from the request
+            specification rather than from server-provided metadata in the response. To receive
+            complete server-side metadata (e.g., actual file sizes, errors), set 'streaming_get=False'
+            during initialization, which returns a multipart response with both metadata and data.
+
         Args:
             raw (bool): Return raw HTTP response stream. User must close the stream
             decode_as_stream (bool): Stream multipart decoding (memory efficient)

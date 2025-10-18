@@ -91,9 +91,9 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [job](#client.Client.job)
     * [etl](#client.Client.etl)
     * [dsort](#client.Client.dsort)
-    * [batch\_loader](#client.Client.batch_loader)
     * [fetch\_object\_by\_url](#client.Client.fetch_object_by_url)
     * [get\_object\_from\_url](#client.Client.get_object_from_url)
+    * [batch](#client.Client.batch)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -162,6 +162,7 @@ or see [https://github.com/NVIDIA/aistore/tree/main/python/aistore](https://gith
     * [put\_content](#obj.object.Object.put_content)
     * [put\_file](#obj.object.Object.put_file)
     * [get\_writer](#obj.object.Object.get_writer)
+    * [multipart\_upload](#obj.object.Object.multipart_upload)
     * [promote](#obj.object.Object.promote)
     * [delete](#obj.object.Object.delete)
     * [copy](#obj.object.Object.copy)
@@ -270,7 +271,7 @@ Logs in to the AuthN Server and returns an authorization token.
 **Raises**:
 
 - `ValueError` - If the password is empty or consists only of spaces.
-- `AISError` - If the login request fails.
+- `Exception` - If the login request fails or any other error occurs.
 
 <a id="authn.authn_client.AuthNClient.logout"></a>
 
@@ -284,7 +285,8 @@ Logs out and revokes current token from the AuthN Server.
 
 **Raises**:
 
-- `AISError` - If the logout request fails.
+- `ValueError` - If no token is available (not logged in).
+- `Exception` - If the logout request fails or any other error occurs.
 
 <a id="authn.authn_client.AuthNClient.cluster_manager"></a>
 
@@ -646,9 +648,9 @@ Deletes a role.
 
 **Raises**:
 
+- `ErrRoleNotFound` - If the role does not exist and missing_ok is False.
 - `aistore.sdk.errors.AISError` - All other types of errors with AIStore.
 - `requests.RequestException` - If the HTTP request fails.
-- `ValueError` - If the role does not exist.
 
 <a id="authn.token_manager.TokenManager"></a>
 
@@ -765,6 +767,7 @@ Delete an existing user from the AuthN Server.
 
 **Raises**:
 
+- `ErrUserNotFound` - If the user does not exist and missing_ok is False.
 - `AISError` - If the user deletion request fails.
 
 <a id="authn.user_manager.UserManager.create"></a>
@@ -838,6 +841,7 @@ Update an existing user's information in the AuthN Server.
 
 **Raises**:
 
+- `ValueError` - If neither password nor roles are provided.
 - `AISError` - If the user update request fails.
 
 <a id="authn.access_attr.AccessAttr"></a>
@@ -963,9 +967,9 @@ Generates full URLs for all objects in the bucket that match the specified prefi
   will include ETL processing parameters. Defaults to None.
   
 
-**Returns**:
+**Yields**:
 
-- `Iterable[str]` - An iterator yielding full URLs of all objects matching the prefix.
+- `str` - Full URLs of all objects matching the prefix.
 
 <a id="bucket.Bucket.list_all_objects_iter"></a>
 
@@ -986,9 +990,9 @@ of all the objects in this bucket matching the specified prefix.
 - `Properties` - "name", "size", "atime", "version", "checksum", "target_url", "copies".
   
 
-**Returns**:
+**Yields**:
 
-  Iterator of all object URLs matching the prefix
+- `Object` - Objects matching the prefix with the specified properties.
 
 <a id="bucket.Bucket.create"></a>
 
@@ -1151,6 +1155,7 @@ Returns bucket summary (starts xaction job and polls for results).
 
 **Raises**:
 
+- `UnexpectedHTTPStatusCode` - If the response status code is not as expected
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -1189,6 +1194,7 @@ Returns bucket summary and information/properties.
 
 **Raises**:
 
+- `UnexpectedHTTPStatusCode` - If the response status code is not as expected
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.exceptions.HTTPError` - Service unavailable
@@ -1436,7 +1442,8 @@ def transform(etl_name: str,
               latest: bool = False,
               sync: bool = False,
               num_workers: Optional[int] = 0,
-              cont_on_err: bool = False) -> str
+              cont_on_err: bool = False,
+              etl_pipeline: List[str] = None) -> str
 ```
 
 Visits all selected objects in the source bucket and for each object, puts the transformed
@@ -1459,6 +1466,7 @@ result to the destination bucket
   - 0 (default): number of mountpaths
   - -1: single thread, serial execution
 - `cont_on_err` - (bool): If True, continue processing objects even if some of them fail
+- `etl_pipeline` _List[str], optional_ - List of ETL names to be used for the transformation pipeline
   
 
 **Returns**:
@@ -1534,7 +1542,7 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 ### objects
 
 ```python
-def objects(obj_names: List = None,
+def objects(obj_names: List[str] = None,
             obj_range: ObjectRange = None,
             obj_template: str = None) -> ObjectGroup
 ```
@@ -1543,7 +1551,7 @@ Factory constructor for multiple objects belonging to this bucket.
 
 **Arguments**:
 
-- `obj_names` _list_ - Names of objects to include in the group
+- `obj_names` _List[str]_ - Names of objects to include in the group
 - `obj_range` _ObjectRange_ - Range of objects to include in the group
 - `obj_template` _str_ - String template defining objects to include in the group
   
@@ -1762,22 +1770,6 @@ Does not make any HTTP request, only instantiates a dSort object.
 
   dSort object created
 
-<a id="client.Client.batch_loader"></a>
-
-### batch\_loader
-
-```python
-def batch_loader()
-```
-
-Factory constructor for BatchLoader object.
-Contains APIs related to AIStore GetBatch operations.
-Does not make any HTTP requests, only creates BatchLoader.
-
-**Returns**:
-
-- `BatchLoader` - The BatchLoader created
-
 <a id="client.Client.fetch_object_by_url"></a>
 
 ### fetch\_object\_by\_url
@@ -1826,6 +1818,22 @@ This method does not make any HTTP requests.
 **Raises**:
 
 - `InvalidURLException` - If the URL is invalid.
+
+<a id="client.Client.batch"></a>
+
+### batch
+
+```python
+def batch(objects: Union[List[Object], Object, str, List[str]] = None,
+          bucket: Optional[Bucket] = None,
+          output_format: str = EXT_TAR,
+          cont_on_err: bool = True,
+          only_obj_name: bool = False,
+          streaming_get: bool = True)
+```
+
+Factory constructor for Get-Batch.
+Contains APIs related to AIStore Get-Batch operations.
 
 <a id="cluster.Cluster"></a>
 
@@ -2065,11 +2073,12 @@ Return status of a job
 
 **Returns**:
 
-  The job status including id, finish time, and error info.
+- `JobStatus` - The job status including id, finish time, and error info
   
 
 **Raises**:
 
+- `ValueError` - If the job does not have an assigned ID
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
@@ -2089,11 +2098,6 @@ Wait for a job to finish
 
 - `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
-  
-
-**Returns**:
-
-  None
   
 
 **Raises**:
@@ -2121,11 +2125,6 @@ Wait for a job to reach an idle state
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
   
 
-**Returns**:
-
-  None
-  
-
 **Raises**:
 
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
@@ -2150,11 +2149,6 @@ Wait for a job running on a single node
 
 - `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
 - `verbose` _bool, optional_ - Whether to log wait status to standard output
-  
-
-**Returns**:
-
-  None
   
 
 **Raises**:
@@ -2386,9 +2380,9 @@ of full URLs to every object in this bucket matching the specified prefix
   will include ETL processing parameters. Defaults to None.
   
 
-**Returns**:
+**Yields**:
 
-  Iterator of all object URLs in the group
+- `str` - Full URLs of objects in the group.
 
 <a id="multiobj.object_group.ObjectGroup.list_all_objects_iter"></a>
 
@@ -2409,9 +2403,9 @@ of all the objects in this bucket matching the specified prefix.
   Pass in None to skip and avoid the extra API call.
   
 
-**Returns**:
+**Yields**:
 
-  Iterator of all the objects in the group
+- `Object` - Objects in the group matching the specified prefix.
 
 <a id="multiobj.object_group.ObjectGroup.delete"></a>
 
@@ -2562,7 +2556,8 @@ def transform(to_bck: "Bucket",
               force: bool = False,
               latest: bool = False,
               sync: bool = False,
-              num_workers: int = None)
+              num_workers: int = None,
+              etl_pipeline: List[str] = None)
 ```
 
 Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
@@ -2584,6 +2579,7 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 - `num_workers` _int, optional_ - Number of concurrent workers (readers). Defaults to the number of target
   mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
   execution). Any positive value will be adjusted not to exceed the number of target CPUs.
+- `etl_pipeline` _List[str], optional_ - List of ETL names to be used for the transformation pipeline.
   
 
 **Raises**:
@@ -3050,6 +3046,20 @@ Create an ObjectWriter to write to object contents and attributes.
 
   An ObjectWriter which can be used to write to an object's contents and attributes.
 
+<a id="obj.object.Object.multipart_upload"></a>
+
+### multipart\_upload
+
+```python
+def multipart_upload() -> MultipartUpload
+```
+
+Create a multipart upload for this object.
+
+**Returns**:
+
+- `MultipartUpload` - A multipart upload instance for this object.
+
 <a id="obj.object.Object.promote"></a>
 
 ### promote
@@ -3119,7 +3129,10 @@ Delete an object from a bucket.
 ### copy
 
 ```python
-def copy(to_obj: "Object", etl: Optional[ETLConfig] = None) -> Response
+def copy(to_obj: "Object",
+         etl: Optional[ETLConfig] = None,
+         latest: bool = False,
+         sync: bool = False) -> Response
 ```
 
 Copy this object to another object (which specifies the destination bucket and name),
@@ -3129,6 +3142,8 @@ optionally with ETL transformation.
 
 - `to_obj` _Object_ - Destination object specifying both the target bucket and object name
 - `etl` _ETLConfig, optional_ - ETL configuration for transforming the object during copy
+- `latest` _bool, optional_ - GET the latest object version from the associated remote bucket.
+- `sync` _bool, optional_ - In addition to the latest, also entails removing remotely deleted objects
   
 
 **Returns**:
