@@ -58,3 +58,11 @@ func RenewBckSummary(bck *meta.Bck, msg *apc.BsummCtrlMsg) RenewRes {
 	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{UUID: msg.UUID, Custom: msg}, bck)
 	return dreg.renew(e, bck)
 }
+
+func RenewGetBatch(bck *meta.Bck, uuid string, designated bool) RenewRes {
+	e := dreg.nonbckXacts[apc.ActGetBatch].New(Args{UUID: uuid, Custom: designated}, bck)
+	if designated {
+		return dreg.renew(e, bck)
+	}
+	return dreg.renewByID(e, bck)
+}

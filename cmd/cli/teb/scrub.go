@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -55,7 +56,7 @@ type (
 		Prefix string
 		Stats  [ScrNumStats]CntSiz
 		// work
-		Line  Sbuilder
+		Line  cos.Sbuilder
 		Cname string
 	}
 	ScrubHelper struct {

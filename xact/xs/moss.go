@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,18 +41,20 @@ import (
 )
 
 /*
-client → proxy → designated-target (TD)
+client →  any proxy →  randomly selected designated-target (DT (= T0))
                    │
-                   ├── basewi.next()      ← local HRW entries
+                   ├── basewi.next()      ←  local data-items
                    │
-                   ├── shared-dm.recvd[i] = ...     ← entries from other targets via recv()
+                   ├── shared-dm.recvd[i] = ...     ←  data-items from other targets via recv()
                    │
-                   └── stream TAR         ← in-order via flushRx()
+                   └── stream TAR         ←  in-order via flushRx()
 
-other-targets (T1..Tn)
-    └── Send(req, smap, TD)
-           └── for i where HRW(i) == self:
-                    shared-dm.Send(obj_i, hdr.Opaque = TD.UUID + i) → TD
+senders (T1..Tn)
+    └── shared-DM.Send(req, smap, DT)
+           └── for locality(data-item) == self:
+                    shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
+
+where data-item = (object | archived file) // range read TBD
 */
 
 // Shared-DM registration lifecycle: xaction registers once with shared-dm transport
@@ -60,26 +63,20 @@ other-targets (T1..Tn)
 // needed since UnregRecv is permissive no-op when not registered.
 
 // TODO:
-// - stats: currently just logging periodically; need Prometheus metrics
-// - log: sparse more (currently mossLogStats = 0x7 mask)
+// - stats: (files, objects) separately; Prometheus metrics
 // - limit the number of GFN-failure-stimulated empty returns
 // - soft errors other than not-found; unified error formatting
-// - ctlmsg
 // - mem-pool: basewi; apc.MossReq; apc.MossResp
 // ---------- (can wait) ------------------
-// - test random aborts
+// - speed-up via selecting multiple files from a given archive
 // - range read
 // - finer-grained wi abort
 
-// TODO: "hole" waiting timeout = max(max-host-busy, 30s)
-// 30s chosen for inter-target (ML-type) data transfer
-// (existing config timeouts are mostly - except send-file - control-plane focused)
-const (
-	maxwait = 30 * time.Second
-)
+// TODO configurable "hole-plug" waiting timeout: max(host-busy, 30s)
+const maxwait = 30 * time.Second
 
-// pagecache (read-ahead) warm-up: one small-size worker pool per XactMoss instance
-// [NOTE]
+// TODO configurable pagecache (read-ahead) warm-up:
+// - one small-size worker pool per XactMoss instance
 // - bewarm pool is created once at x-moss initialization based on current system load;
 // - it stays enabled/disabled for the entire lifetime of this xaction instance across all work items
 const (
@@ -148,6 +145,11 @@ type (
 			ok   atomic.Int32
 			fail atomic.Int32
 		}
+		// ctlmsg builder (reused)
+		ctl struct {
+			sb cos.Sbuilder
+			mu sync.Mutex
+		}
 	}
 )
 
@@ -193,12 +195,6 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 		return xreg.WprUse, nil
 	}
 
-	// sender
-	if !p.designated {
-		return xreg.WprKeepAndStartNew, nil
-	}
-
-	// DT: use previous
 	xprev := prev.Get()
 	r, ok := xprev.(*XactMoss)
 	if !ok || !cos.IsValidUUID(xprev.ID()) {
@@ -291,18 +287,48 @@ func (r *XactMoss) Abort(err error) bool {
 // a callback to cleanup all pending work items
 func (r *XactMoss) cleanup(key, value any) bool {
 	wi := value.(*basewi)
-	wi.cleanup()
-	r.pending.Delete(key)
+	if wi.cleanup() {
+		r.pending.Delete(key)
+	}
 	return true
 }
 
+func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
+	var (
+		iters  int
+		tout   = max(mossIdleTime, 2*time.Minute)
+		cutoff = now - tout.Nanoseconds()
+	)
+	debug.Assert(maxIters > 0)
+	r.pending.Range(func(k, v any) bool {
+		iters++
+		cont := iters < maxIters
+		wi := v.(*basewi)
+		// old enough and not cleaned-up
+		if wi.started != 0 && wi.started < cutoff {
+			if wi.cleanup() {
+				// not r.DecPending here (these wi-s never incremented)
+				r.pending.Delete(k)
+				if cmn.Rom.V(4, cos.ModXs) {
+					nlog.Infof("%s: GC abandoned wi %q", r.Name(), wi.wid)
+				}
+			}
+		}
+		return cont
+	})
+}
+
 // terminate via (<-- xact.Demand <-- hk)
-func (r *XactMoss) fini(int64) (d time.Duration) {
+func (r *XactMoss) fini(now int64) (d time.Duration) {
 	if cmn.Rom.V(5, cos.ModXs) {
 		if ok, fail := r.gfn.ok.Load(), r.gfn.fail.Load(); ok+fail > 0 {
 			nlog.Infoln(r.Name(), "GFN: [", ok, fail, "]")
 		}
 	}
+
+	// cleanup abandoned wi-s
+	r.gcAbandoned(now, 32 /*max-iters*/)
+
 	switch {
 	case r.IsAborted() || r.Finished():
 		return hk.UnregInterval
@@ -355,16 +381,20 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		resp = &apc.MossResp{UUID: r.ID()}
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
+
+	// for receiving (DT) and GC (all)
+	wi.started = mono.NanoTime()
+
 	if receiving {
 		// see "Shared-DM registration lifecycle" note above
 		bundle.SDM.RegRecv(r)
-
-		wi.started = mono.NanoTime()
 
 		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
 		wi.recv.mtx = &sync.Mutex{}
+
+		r.updateCtlMsg()
 	}
 
 	if _, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
@@ -389,11 +419,17 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	wi := a.(*basewi)
 	debug.Assert(wid == wi.wid)
 
+	if wi.clean.Load() {
+		return fmt.Errorf("%s: work item %q is no longer available (stale)", r.Name(), wid)
+	}
+
 	r.IncPending()
+	r.updateCtlMsg()
 	err := r.asm(req, w, wi)
 	wi.cleanup()
 
 	r.DecPending()
+	r.updateCtlMsg()
 	return err
 }
 
@@ -655,9 +691,27 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	}
 	a, loaded := r.pending.Load(mopaque.WID)
 	if !loaded {
-		return fmt.Errorf("work item %q not found", mopaque.WID)
+		// stale or unknown WID: drop quietly
+		if reader != nil && !hdr.IsHeaderOnly() {
+			io.Copy(io.Discard, reader)
+		}
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Infof("%s: wi %q not pending - dropping", r.Name(), mopaque.WID)
+		}
+		return nil
 	}
 	wi := a.(*basewi)
+
+	// already cleaned-up via gcAbandoned()? drop as well
+	if wi.clean.Load() {
+		if reader != nil && !hdr.IsHeaderOnly() {
+			io.Copy(io.Discard, reader)
+		}
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Name(), wi.wid)
+		}
+		return nil
+	}
 
 	debug.Assert(mopaque.WID == wi.wid)
 	debug.Assert(wi.receiving())
@@ -732,15 +786,49 @@ func (*XactMoss) bewarmFQN(fqn string) {
 	}
 }
 
+// single writer: DT only
+func (r *XactMoss) updateCtlMsg() {
+	pending := r.Pending()
+	objs := r.cnt.Load()
+	sz := r.size.Load()
+
+	var avgStr string
+	if objs > 0 {
+		avg := time.Duration(r.waitRx.Load()) / time.Duration(objs)
+		avgStr = avg.String()
+	} else {
+		avgStr = "-"
+	}
+
+	// build + publish under a short critical section
+	// (e.g.: pending:2 objs/files:391284 total-size:3.70GiB waitrx.avg:2.3ms wid:AcPWK8PX bewarm:on)
+	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
+
+	r.ctl.mu.Lock()
+	r.ctl.sb.Reset(min(128, r.ctl.sb.Len()))
+	r.ctl.sb.WriteString("pending:")
+	r.ctl.sb.WriteString(strconv.FormatInt(pending, 10))
+	r.ctl.sb.WriteString(" data-items:")
+	r.ctl.sb.WriteString(strconv.FormatInt(objs, 10))
+	r.ctl.sb.WriteString(" total-size:")
+	r.ctl.sb.WriteString(cos.IEC(sz, 2))
+	r.ctl.sb.WriteString(" avg-wait:")
+	r.ctl.sb.WriteString(avgStr)
+	r.ctl.sb.WriteString(" bewarm:")
+	r.ctl.sb.WriteString(bewarm)
+	r.SetCtlMsg(r.ctl.sb.String())
+	r.ctl.mu.Unlock()
+}
+
 ////////////
 // basewi //
 ////////////
 
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
-func (wi *basewi) cleanup() {
+func (wi *basewi) cleanup() bool {
 	if !wi.clean.CAS(false, true) {
-		return
+		return false
 	}
 	r := wi.r
 
@@ -763,7 +851,7 @@ func (wi *basewi) cleanup() {
 		}
 	}
 	if !wi.receiving() {
-		return
+		return true
 	}
 	if !wi.req.StreamingGet && wi.sgl != nil { // wi.sgl nil upon early term (e.g. invalid bucket)
 		wi.sgl.Free()
@@ -786,6 +874,8 @@ func (wi *basewi) cleanup() {
 		nlog.Infoln(r.Name(), core.T.String(), "cleanup: done", wi.wid,
 			"stats [ cnt:", wi.cnt, "size:", wi.size, "lat:", mono.Since(wi.started), "]")
 	}
+
+	return true
 }
 
 // handle receive for this work item

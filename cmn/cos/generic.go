@@ -35,3 +35,10 @@ func NonZero[T any](left, right T) (value T) {
 	}
 	return value
 }
+
+func Ternary[T any](cond bool, a, b T) T {
+	if cond {
+		return a
+	}
+	return b
+}

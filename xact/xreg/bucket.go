@@ -121,8 +121,3 @@ func RenewLso(bck *meta.Bck, uuid string, msg *apc.LsoMsg, hdr http.Header) Rene
 	e := dreg.bckXacts[apc.ActList].New(Args{UUID: uuid, Custom: custom}, bck)
 	return dreg.renewByID(e, bck)
 }
-
-func RenewGetBatch(bck *meta.Bck, uuid string, designated bool) RenewRes {
-	e := dreg.bckXacts[apc.ActGetBatch].New(Args{UUID: uuid, Custom: designated}, bck)
-	return dreg.renewByID(e, bck)
-}

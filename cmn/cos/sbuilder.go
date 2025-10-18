@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */
-package teb
+package cos
 
 import (
 	"unsafe"
@@ -37,6 +37,6 @@ func (b *Sbuilder) Reset(size int) {
 func (b *Sbuilder) Len() int { return len(b.buf) }
 func (b *Sbuilder) Cap() int { return cap(b.buf) }
 
-func (b *Sbuilder) WriteByte(c byte) { b.buf = append(b.buf, c) }
+func (b *Sbuilder) WriteUint8(c byte) { b.buf = append(b.buf, c) }
 
 func (b *Sbuilder) WriteString(s string) { b.buf = append(b.buf, s...) }

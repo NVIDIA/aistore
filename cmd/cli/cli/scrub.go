@@ -78,7 +78,7 @@ type (
 		total atomic.Int64
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
-		progLine   teb.Sbuilder
+		progLine   cos.Sbuilder
 		numBcks    int
 		pid        int
 		haveRemote atomic.Bool
@@ -405,7 +405,7 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 
 	sb.WriteString(scr.Cname)
 	if scr.Prefix != "" {
-		sb.WriteByte(filepath.Separator)
+		sb.WriteUint8(filepath.Separator)
 		sb.WriteString(scr.Prefix)
 	}
 	sb.WriteString(": scrubbed ")
@@ -416,23 +416,23 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 	for i := 1; i < len(scr.Stats); i++ { // skipping listed objects (same as elsewhere)
 		if cnt := scr.Stats[i].Cnt; cnt != 0 {
 			if !found {
-				sb.WriteByte(' ')
-				sb.WriteByte('{')
+				sb.WriteUint8(' ')
+				sb.WriteUint8('{')
 				found = true
 			} else {
-				sb.WriteByte(' ')
+				sb.WriteUint8(' ')
 			}
 			sb.WriteString(strings.ToLower(teb.ScrCols[i]))
-			sb.WriteByte(':')
+			sb.WriteUint8(':')
 			sb.WriteString(strconv.FormatInt(cnt, 10))
 		}
 	}
 	if found {
-		sb.WriteByte('}')
+		sb.WriteUint8('}')
 	}
 
 	for range min(sb.Cap()-sb.Len(), 8) {
-		sb.WriteByte(' ')
+		sb.WriteUint8(' ')
 	}
 
 	fmt.Fprintf(ctx.c.App.Writer, "\r%s", sb.String())
@@ -528,7 +528,7 @@ func (scr *scrBp) log(parent *scrCtx, en *cmn.LsoEnt, i int) {
 func (scr *scrBp) cname(objname string) {
 	sb := &scr.Line
 	sb.WriteString(scr.Cname)
-	sb.WriteByte(filepath.Separator)
+	sb.WriteUint8(filepath.Separator)
 	sb.WriteString(objname)
 }
 
@@ -540,13 +540,13 @@ func (scr *scrBp) cname(objname string) {
 func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
 	sb.Reset(logMaxLn)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
 
 	sb.WriteString(logDelim)
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
 }
@@ -555,7 +555,7 @@ func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
 func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
 	sb.Reset(logMaxLn)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
 
@@ -563,7 +563,7 @@ func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
 	sb.WriteString(logDelim)
 	sb.WriteString(en.Custom)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
 }
@@ -572,7 +572,7 @@ func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
 	sb.Reset(logMaxLn)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
 
@@ -582,7 +582,7 @@ func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 	sb.WriteString(en.Atime)
 	sb.WriteString(logDelim)
 	sb.WriteString(en.Location)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
 }
@@ -591,7 +591,7 @@ func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 func (log *_log) copies(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
 	sb.Reset(logMaxLn)
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
 
@@ -599,7 +599,7 @@ func (log *_log) copies(scr *scrBp, en *cmn.LsoEnt) {
 	sb.WriteString(strconv.FormatInt(en.Size, 10))
 	sb.WriteString(logDelim)
 	sb.WriteString(strconv.Itoa(int(en.Copies)))
-	sb.WriteByte('"')
+	sb.WriteUint8('"')
 	fmt.Fprintln(log.fh, sb.String())
 	log.cnt++
 }

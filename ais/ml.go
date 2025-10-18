@@ -205,6 +205,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 //
 
 type mossCtx struct {
+	t   *target
 	req *apc.MossReq
 	bck *meta.Bck
 	tid string
@@ -218,10 +219,11 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	// phase 1: DT to initialize Rx (see `designated`)
 	// phase 2: senders to open SDM and start sending
 	case http.MethodPost:
-		ctx, err := t.mossparse(w, r)
-		if err != nil {
+		var ctx mossCtx
+		if err := t.mossparse(w, r, &ctx); err != nil {
 			return
 		}
+		ctx.t = t
 
 		var (
 			smap = t.owner.smap.get()
@@ -238,98 +240,44 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 
 		tsi := smap.GetTarget(ctx.tid)
 		if tsi == nil {
-			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "moss", ctx.tid}) // TODO: unify errs
+			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "moss", ctx.tid})
 			return
 		}
 
-		// renew x-moss or find/reuse existing one
-		var (
-			xid        = ctx.xid
-			designated = ctx.tid == t.SID()
-		)
+		designated := ctx.tid == t.SID()
 		if designated {
-			// phase 1.
-			if xid != placeholderXID {
-				err := fmt.Errorf("moss: expected '%s', got %q", placeholderXID, xid)
-				debug.AssertNoErr(err)
-				t.writeErr(w, r, err)
-				return
-			}
-			xid = cos.GenUUID()
+			ctx.phase1(w, r, smap, nat)
 		} else {
-			// phase 2.
-			debug.Assert(nat > 1, "not expecting POST -> non-DT when single-node ", nat) // (ctx.nat checked above)
-			if !cos.IsValidUUID(xid) {
-				// (unlikely)
-				err := fmt.Errorf("moss: invalid xid %q at phase 2 (non-DT)", xid)
-				debug.AssertNoErr(err)
-				t.writeErr(w, r, err)
-				return
-			}
-		}
-		rns := xreg.RenewGetBatch(ctx.bck, xid, designated)
-		if rns.Err != nil {
-			t.writeErr(w, r, rns.Err)
-			return
-		}
-		xctn := rns.Entry.Get()
-		if xid != xctn.ID() {
-			// (unlikely)
-			err := fmt.Errorf("moss: expecting xid %q, got %q [DT=%t, %s, %s]", xid, xctn.ID(), designated, ctx.tid, t.SID())
-			debug.AssertNoErr(err)
-			xctn.Abort(err)
-			t.writeErr(w, r, err)
-			return
-		}
-		if cmn.Rom.V(5, cos.ModAIS) {
-			nlog.Infoln(t.String(), "x-moss renewed:", xctn.Name(), "was running:", rns.IsRunning())
+			ctx.phase2(w, r, smap, tsi, nat)
 		}
 
-		xmoss, ok := xctn.(*xs.XactMoss)
-		debug.Assert(ok, xctn.Name())
-
-		if err := bundle.SDM.Open(); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-		if designated {
-			if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, nat > 1 /*receiving*/); err != nil {
-				xmoss.Abort(err)
-				t.writeErr(w, r, err)
-				return
-			}
-			w.Header().Set(apc.HdrXactionID, xid)
-		} else {
-			if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid); err != nil {
-				xmoss.Abort(err)
-				xmoss.BcastAbort(err)
-				t.writeErr(w, r, err)
-				return
-			}
-		}
-
-	// phase 3: redirect
+	// phase 3: redirect; start an assembly
 	case http.MethodGet:
-		ctx, err := t.mossparse(w, r)
-		if err != nil {
+		var ctx mossCtx
+		if err := t.mossparse(w, r, &ctx); err != nil {
 			return
 		}
+		ctx.t = t
 
 		debug.Assert(cos.IsValidUUID(ctx.xid), ctx.xid)
 		xctn := xreg.GetActiveXact(ctx.xid)
 		if xctn == nil {
-			err := fmt.Errorf("%s: x-moss %q must be active", t, ctx.xid)
-			debug.AssertNoErr(err)
-			t.writeErr(w, r, err) // TODO -- FIXME: abort-all
+			ecode := http.StatusConflict
+			if xctn, _ = xreg.GetXact(ctx.xid); xctn == nil {
+				ecode = http.StatusNotFound
+			}
+			t.writeErr(w, r, fmt.Errorf("moss: xid %q not active", ctx.xid), ecode)
 			return
 		}
 		xmoss, ok := xctn.(*xs.XactMoss)
 		debug.Assert(ok, xctn.Name())
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
-			bundle.SDM.UnregRecv(xmoss.ID()) // drop all Rx earlier
-
-			xmoss.BcastAbort(err)
+			// in single-target there’s no SDM and nobody to notify
+			if ctx.nat > 1 {
+				xmoss.BcastAbort(err)
+				bundle.SDM.UnregRecv(xmoss.ID())
+			}
 			xmoss.Abort(err)
 			if err == cmn.ErrGetTxBenign {
 				if cmn.Rom.V(5, cos.ModAIS) {
@@ -344,20 +292,117 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Phase 1: DT renews x-moss and initializes Rx
+func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, nat int) {
+	t := ctx.t
+
+	if ctx.xid != placeholderXID {
+		err := fmt.Errorf("moss: expected '%s', got %q", placeholderXID, ctx.xid)
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
+
+	xid := cos.GenUUID()
+	rns := xreg.RenewGetBatch(ctx.bck, xid, true /*designated*/)
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err)
+		return
+	}
+	xctn := rns.Entry.Get()
+	if xid != xctn.ID() && xctn.ID() != "" {
+		// reusing xprev
+		debug.Assert(rns.IsRunning())
+		if cmn.Rom.V(5, cos.ModAIS) {
+			nlog.Infoln(t.String(), "reusing prev x-moss:", xctn.ID(), rns.IsRunning())
+		}
+	}
+	xid = xctn.ID()
+
+	if cmn.Rom.V(5, cos.ModAIS) {
+		nlog.Infoln(t.String(), "designated = true, renewed:", xctn.Name(), "was running:", rns.IsRunning())
+	}
+
+	xmoss, ok := xctn.(*xs.XactMoss)
+	debug.Assert(ok, xctn.Name())
+
+	receiving := nat > 1 // multi-target cluster: setup Rx
+	if receiving {
+		// open SDM
+		if err := bundle.SDM.Open(); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+	}
+	if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, receiving); err != nil {
+		xmoss.Abort(err)
+		t.writeErr(w, r, err)
+		return
+	}
+
+	// to have a fresh full idle window for the eventual phase3 GET
+	xmoss.IncPending()
+	xmoss.DecPending()
+
+	// return xid (proxy will send it to phase 2 senders)
+	w.Header().Set(apc.HdrXactionID, xid)
+}
+
+// Phase 2: Senders open SDM and start sending
+func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, tsi *meta.Snode, nat int) {
+	debug.Assert(nat > 1)
+	t := ctx.t
+
+	// expecting valid xid from phase 1
+	if !cos.IsValidUUID(ctx.xid) {
+		err := fmt.Errorf("moss: invalid xid %q at phase 2 (non-DT)", ctx.xid)
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
+
+	// renew x-moss by ID
+	rns := xreg.RenewGetBatch(ctx.bck, ctx.xid, false /*designated*/)
+	if rns.Err != nil {
+		t.writeErr(w, r, rns.Err)
+		return
+	}
+	xctn := rns.Entry.Get()
+
+	if cmn.Rom.V(5, cos.ModAIS) {
+		nlog.Infoln(t.String(), "designated = false, renewed:", xctn.Name(), "was running:", rns.IsRunning())
+	}
+
+	xmoss, ok := xctn.(*xs.XactMoss)
+	debug.Assert(ok, xctn.Name())
+
+	// open SDM and start sending
+	if err := bundle.SDM.Open(); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid); err != nil {
+		xmoss.BcastAbort(err)
+		xmoss.Abort(err)
+		t.writeErr(w, r, err)
+		return
+	}
+}
+
 // parse tmosspath()
-func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx, err error) {
+func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx) (err error) {
 	var (
 		items []string
 	)
 	if items, err = t.parseURL(w, r, apc.URLPathML.L, 4, true); err != nil {
-		return ctx, err
+		return err
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(t.String(), "mossparse", r.Method, "items", items)
 	}
 	if len(items) > tmosspathNumItems {
 		t.writeErrURL(w, r)
-		return ctx, err
+		return cmn.ErrSkip // merely a non-nil bail signal
 	}
 	debug.Assert(items[0] == apc.Moss, items[0])
 
@@ -377,7 +422,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 	ctx.nat, err = strconv.Atoi(items[shift])
 	if err != nil {
 		t.writeErrURL(w, r)
-		return ctx, err
+		return err
 	}
 	debug.Assert(ctx.nat > 0 && ctx.nat < 10_000, ctx.nat)
 
@@ -387,17 +432,18 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 		ctx.bck, err = newBckFromQ(bucket, q, nil)
 		if err != nil {
 			t.writeErr(w, r, err)
-			return ctx, err
+			return err
 		}
 	}
 
 	ctx.req = &apc.MossReq{}
 	if err := cmn.ReadJSON(w, r, ctx.req); err != nil {
-		return ctx, err
+		return err
 	}
 	if len(ctx.req.In) == 0 {
-		t.writeErr(w, r, errors.New(apc.Moss+": empty input")) // TODO: unify errs
-		return ctx, err
+		err := errors.New(apc.Moss + ": empty input") // TODO: unify errs
+		t.writeErr(w, r, err)
+		return err
 	}
 	if ctx.req.OutputFormat == "" {
 		ctx.req.OutputFormat = archive.ExtTar // default
@@ -405,12 +451,12 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request) (ctx mossCtx,
 		f, err := archive.Mime(ctx.req.OutputFormat, "" /*filename*/) // normalize
 		if err != nil {
 			t.writeErr(w, r, err)
-			return ctx, err
+			return err
 		}
 		ctx.req.OutputFormat = f
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(t.String(), "mossparse", "ctx [", ctx.bck.String(), ctx.tid, ctx.xid, ctx.wid, "]")
 	}
-	return ctx, nil
+	return nil
 }
