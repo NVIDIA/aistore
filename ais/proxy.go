@@ -942,10 +942,8 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	if err != nil {
 		return
 	}
-	perms := apc.AceDestroyBucket
-	if msg.Action == apc.ActDeleteObjects || msg.Action == apc.ActEvictObjects {
-		perms = apc.AceObjDELETE
-	}
+	delObjs := msg.Action == apc.ActDeleteObjects || msg.Action == apc.ActEvictObjects
+	perms := cos.Ternary(delObjs, apc.AceObjDELETE, apc.AceDestroyBucket)
 
 	// 2. bucket
 	bck := apireq.bck

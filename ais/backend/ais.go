@@ -268,10 +268,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	)
 
 	for _, u := range confURLs {
-		client := cliH
-		if cos.IsHTTPS(u) {
-			client = cliTLS
-		}
+		client := cos.Ternary(cos.IsHTTPS(u), cliTLS, cliH)
 		smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua})
 		if err != nil {
 			nlog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)

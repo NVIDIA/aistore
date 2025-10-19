@@ -355,12 +355,7 @@ func ListDisplayNames(onlyStartable bool) (names []string) {
 		if onlyStartable && !dtor.Startable {
 			continue
 		}
-		var name string
-		if dtor.DisplayName != "" {
-			name = dtor.DisplayName
-		} else {
-			name = kind
-		}
+		name := cos.Ternary(dtor.DisplayName != "", dtor.DisplayName, kind)
 		debug.Assert(!cos.StringInSlice(name, names))
 		names = append(names, name)
 	}

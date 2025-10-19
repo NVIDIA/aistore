@@ -352,10 +352,7 @@ func suggestUpdatableConfig(c *cli.Context) {
 	if propValueCompletion(c, false /*bucket scope*/) {
 		return
 	}
-	scope := apc.Cluster
-	if c.NArg() > 0 && !isConfigProp(c.Args().Get(0)) {
-		scope = apc.Daemon
-	}
+	scope := cos.Ternary(c.NArg() > 0 && !isConfigProp(c.Args().Get(0)), apc.Daemon, apc.Cluster)
 
 	props := append(configPropList(scope), apc.QparamTransient)
 	for _, prop := range props {

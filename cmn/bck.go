@@ -508,10 +508,7 @@ func (qbck QueryBcks) String() string {
 		return ""
 	}
 	if qbck.Name == "" {
-		p := qbck.Provider
-		if p == "" {
-			p = apc.AIS // querying default = apc.NormalizeProvider("")
-		}
+		p := cos.Ternary(qbck.Provider == "", apc.AIS, qbck.Provider)
 		if qbck.Ns.IsGlobal() {
 			return apc.ToScheme(p) + apc.BckProviderSeparator
 		}

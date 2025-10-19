@@ -465,10 +465,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	// 4. if remirror|re-EC|TBD-storage-svc
 	// NOTE: setting up IC listening prior to committing (and confirming xid) here and elsewhere
 	if ctx.needReMirror || ctx.needReEC {
-		action := apc.ActMakeNCopies
-		if ctx.needReEC {
-			action = apc.ActECEncode
-		}
+		action := cos.Ternary(ctx.needReEC, apc.ActECEncode, apc.ActMakeNCopies)
 		nl := xact.NewXactNL(c.uuid, action, &c.smap.Smap, nil, bck.Bucket())
 		nl.SetOwner(equalIC)
 		p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})

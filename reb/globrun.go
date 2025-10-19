@@ -437,10 +437,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 
 	// 4. create persistent mark
 	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
-		err := writeErr
-		if fatalErr != nil {
-			err = fatalErr
-		}
+		err := cos.Ternary(fatalErr != nil, fatalErr, writeErr)
 		reb.endStreams(err, rargs.logHdr)
 		rargs.xreb.Abort(err)
 		reb.mu.Unlock()

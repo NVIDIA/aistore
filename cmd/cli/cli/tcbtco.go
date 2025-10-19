@@ -218,10 +218,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	}
 
 	// by default, copying in-cluster objects, with an option to copy remote as well (TODO: FltExistsOutside)
-	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag) {
-		fltPresence = apc.FltExists
-	}
+	fltPresence := cos.Ternary(flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag), apc.FltExists, apc.FltPresent)
 
 	if showProgress {
 		var cpr cprCtx
@@ -343,10 +340,7 @@ func etlBucket(c *cli.Context, etlNameOrPipeline string, bckFrom, bckTo cmn.Bck)
 
 	// by default, copying objects in the cluster, with an option to override
 	// TODO: FltExistsOutside maybe later
-	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag) {
-		fltPresence = apc.FltExists
-	}
+	fltPresence := cos.Ternary(flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, etlAllObjsFlag), apc.FltExists, apc.FltPresent)
 
 	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, &msg, fltPresence)
 	if errV := handleETLHTTPError(err, transform.Name); errV != nil {

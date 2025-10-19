@@ -161,10 +161,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 }
 
 func WriteErrJSON(w http.ResponseWriter, r *http.Request, out any, err error) error {
-	at := thisNodeName
-	if thisNodeName == "" {
-		at = r.URL.Path
-	}
+	at := cos.Ternary(thisNodeName == "", r.URL.Path, thisNodeName)
 	err = fmt.Errorf(FmtErrUnmarshal, at, fmt.Sprintf("[%T]", out), r.Method, err)
 	if _, file, line, ok := runtime.Caller(2); ok {
 		f := filepath.Base(file)

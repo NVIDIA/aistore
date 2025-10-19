@@ -163,10 +163,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err := cmn.ErrXactUserAbort
-		if msg.Name == cmn.ErrXactICNotifAbort.Error() {
-			err = cmn.ErrXactICNotifAbort
-		}
+		err := cos.Ternary(msg.Name == cmn.ErrXactICNotifAbort.Error(), cmn.ErrXactICNotifAbort, cmn.ErrXactUserAbort)
 		flt := xreg.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
 		xreg.DoAbort(&flt, err)
 	default:

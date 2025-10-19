@@ -356,10 +356,7 @@ func (n *notifs) housekeep(int64) time.Duration {
 
 	n.fin.mtx.Lock()
 	for _, nl := range n.fin.m {
-		timeout := hk.OldAgeNotif
-		if nl.Kind() == apc.ActList {
-			timeout = hk.OldAgeNotifLso
-		}
+		timeout := cos.Ternary(nl.Kind() == apc.ActList, hk.OldAgeNotifLso, hk.OldAgeNotif)
 		if time.Duration(now-nl.EndTime()) > timeout {
 			n.fin.del(nl, true /*locked*/)
 		}

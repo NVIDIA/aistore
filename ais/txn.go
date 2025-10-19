@@ -291,10 +291,7 @@ func (txns *txns) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err err
 	err = txns._wait(txn, timeoutNetw, timeoutHost)
 
 	// cleanup or abort, depending on the returned err
-	act := apc.Commit2PC
-	if err != nil {
-		act = apc.Abort2PC
-	}
+	act := cos.Ternary(err != nil, apc.Abort2PC, apc.Commit2PC)
 	txns.term(txn.uuid(), act)
 	return err
 }

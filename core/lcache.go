@@ -94,10 +94,7 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	}
 
 	pct, util, lavg := fs.ThrottlePct()
-	flog := nlog.Infoln
-	if pct > maxEvictThreashold {
-		flog = nlog.Warningln
-	}
+	flog := cos.Ternary(pct > maxEvictThreashold, nlog.Warningln, nlog.Infoln)
 	flog("uncache:", bcks[0].String(), "[ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
 	if num := len(bcks); num > 1 {
 		flog("\tmultiple buckets:", bcks[0].String(), bcks[1].String(), "... [ num:", num, "]")

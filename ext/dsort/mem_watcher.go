@@ -146,10 +146,7 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				continue
 			}
 
-			storeType := shard.DiskStoreType
-			if mw.m.shardRW.SupportsOffset() {
-				storeType = shard.OffsetStoreType
-			}
+			storeType := cos.Ternary(mw.m.shardRW.SupportsOffset(), shard.OffsetStoreType, shard.DiskStoreType)
 			mw.m.recm.RecordContents().Range(func(key, value any) bool {
 				n := mw.m.recm.FreeMem(key.(string), storeType, value, buf)
 				memExcess -= n

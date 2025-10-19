@@ -447,10 +447,7 @@ func (u *Ufest) load(completed bool) error {
 	csgl := g.pmm.NewSGL(sizeLoad)
 	defer csgl.Free()
 
-	tag := tagPartial
-	if completed {
-		tag = tagCompleted
-	}
+	tag := cos.Ternary(completed, tagCompleted, tagPartial)
 	if err := u.fread(csgl, completed); err != nil {
 		return u._errLoad(tag, u.lom.Cname(), err)
 	}

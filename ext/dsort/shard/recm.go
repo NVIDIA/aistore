@@ -147,10 +147,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 		// If extractor was initialized we need to read the content, since it
 		// may contain information about the sorting/shuffling key.
 		if needRead || args.w != nil {
-			dst := io.Discard
-			if args.w != nil {
-				dst = args.w
-			}
+			dst := cos.Ternary(args.w != nil, args.w, io.Discard)
 			if _, err := io.CopyBuffer(dst, r, args.buf); err != nil {
 				return 0, errors.WithStack(err)
 			}

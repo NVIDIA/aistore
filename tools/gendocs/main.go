@@ -166,10 +166,8 @@ func generateHTTPCommand(ep *endpoint, payload string) string {
 	// Add headers and payload only if payload provided
 	if payload != "" {
 		// Detect S3 endpoints and use appropriate content type
-		contentType := contentTypeJSON
-		if strings.HasPrefix(ep.Path, "/s3/") || ep.Path == "/s3" {
-			contentType = contentTypeXML
-		}
+		isS3Endpoint := strings.HasPrefix(ep.Path, "/s3/") || ep.Path == "/s3"
+		contentType := cos.Ternary(isS3Endpoint, contentTypeXML, contentTypeJSON)
 		cmd += "  " + headerFlag + " '" + contentType + "'" + backslash + newlineChar
 		cmd += fmt.Sprintf("  %s '%s'%s", dataFlag, payload, backslash) + newlineChar
 	}

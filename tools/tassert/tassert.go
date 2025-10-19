@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
@@ -93,10 +94,7 @@ func Errorf(tb testing.TB, cond bool, format string, args ...any) {
 func SelectErr(tb testing.TB, errCh chan error, verb string, errIsFatal bool) {
 	if num := len(errCh); num > 0 {
 		err := <-errCh
-		f := tb.Errorf
-		if errIsFatal {
-			f = tb.Fatalf
-		}
+		f := cos.Ternary(errIsFatal, tb.Fatalf, tb.Errorf)
 		if num > 1 {
 			f("Failed to %s %d objects, e.g. error:\n%v", verb, num, err)
 		} else {

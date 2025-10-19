@@ -1187,10 +1187,7 @@ func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Val
 	}
 	fh, err := os.Open(log)
 	if err != nil {
-		ecode := http.StatusInternalServerError
-		if cos.IsNotExist(err) {
-			ecode = http.StatusNotFound
-		}
+		ecode := cos.Ternary(cos.IsNotExist(err), http.StatusNotFound, http.StatusInternalServerError)
 		h.writeErr(w, r, err, ecode)
 		return
 	}
@@ -2213,10 +2210,7 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 	res := h.call(cargs, smap)
 	status, err := res.status, res.err
 	if err != nil {
-		f := nlog.Errorf
-		if ignoreErr {
-			f = nlog.Infof
-		}
+		f := cos.Ternary(ignoreErr, nlog.Infof, nlog.Errorf)
 		f("%s: failed to remove %s (self) from %s: %v(%d)", apc.ActSelfRemove, h.si, smap, err, status)
 	} else {
 		nlog.Infoln(apc.ActSelfRemove+":", h.String(), "(self) from", smap.StringEx())
