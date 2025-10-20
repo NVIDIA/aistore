@@ -397,3 +397,16 @@ class TestBatch(ParallelTestBase):
 
         _, data3 = results[2]
         self.assertEqual(data3, content[90:100], "Last 10 bytes mismatch")
+
+    def test_batch_no_default_bucket(self):
+        """Test batch retrieval with no default bucket."""
+        batch = self.client.batch()
+
+        with self.assertRaises(ValueError) as context:
+            batch.add("obj1")
+
+        self.assertIn(
+            "Bucket must be provided when objects are specified as raw names",
+            str(context.exception),
+            "Should raise ValueError with 'No bucket provided' message",
+        )

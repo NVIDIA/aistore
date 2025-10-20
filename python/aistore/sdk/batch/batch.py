@@ -55,7 +55,6 @@ class Batch:
         Args:
             request_client (RequestClient): Client for making HTTP requests
             objects (Optional[Union[List[Object], Object, str, List[str]]]): Objects to retrieve. Can be:
-                Note: if objects are specified as raw names (str or list of str), bucket must be provided
                 - Single object name: "file.txt"
                 - List of names: ["file1.txt", "file2.txt"]
                 - Single Object instance
@@ -118,7 +117,13 @@ class Batch:
                             "Cannot add string object '%s': no bucket provided", obj
                         )
                         raise ValueError(_BUCKET_REQUIRED_MSG)
-                    self.request.add(MossIn(obj_name=obj))
+                    self.request.add(
+                        MossIn(
+                            obj_name=obj,
+                            bck=self.bucket.name,
+                            provider=self.bucket.provider.value,
+                        )
+                    )
                 else:
                     logger.error("Unsupported object type: %s", type(obj))
                     raise ValueError(f"Unsupported object type: {type(obj)}")
@@ -136,7 +141,13 @@ class Batch:
                     "Cannot add string object '%s': no bucket provided", objects
                 )
                 raise ValueError(_BUCKET_REQUIRED_MSG)
-            self.request.add(MossIn(obj_name=objects))
+            self.request.add(
+                MossIn(
+                    obj_name=objects,
+                    bck=self.bucket.name,
+                    provider=self.bucket.provider.value,
+                )
+            )
 
     def add(
         self,
@@ -188,7 +199,9 @@ class Batch:
             if not self.bucket:
                 logger.error("Cannot add string object '%s': no bucket provided", obj)
                 raise ValueError(_BUCKET_REQUIRED_MSG)
-            moss_in = MossIn(obj_name=obj)
+            moss_in = MossIn(
+                obj_name=obj, bck=self.bucket.name, provider=self.bucket.provider.value
+            )
 
         # Add optional parameters
         if opaque:
@@ -306,7 +319,9 @@ class Batch:
                 metadata_body = next(parts_iter)[1].read()
             else:
                 metadata_body = next(parts_iter)[1]
-            moss_resp = MossResp.parse_raw(metadata_body.decode(decoder.encoding))
+            moss_resp = MossResp.model_validate_json(
+                metadata_body.decode(decoder.encoding)
+            )
 
             # Part 2: Archive data stream
             if decode_as_stream:

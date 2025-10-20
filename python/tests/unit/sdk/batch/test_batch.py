@@ -730,6 +730,66 @@ class TestBatch(unittest.TestCase):
         self.assertIn("uuid", resp_dict)
         self.assertEqual(resp_dict["uuid"], "request-uuid-12345")
 
+    def test_batch_moss_in_all_have_bucket(self):
+        """Test that all MossIn objects in the batch request have the 'bck' (bucket) field set."""
+
+        # Create different ways of adding objects
+
+        # 1. String objects with batch-level bucket
+        batch1 = Batch(
+            self.mock_request_client,
+            objects=["a.txt", "b.txt"],
+            bucket=self.mock_bucket,
+        )
+        for moss_in in batch1.request.moss_in:
+            self.assertTrue(hasattr(moss_in, "bck"))
+            self.assertIsNotNone(moss_in.bck)
+            self.assertEqual(moss_in.bck, self.mock_bucket.name)
+
+        # 2. Object instances with their own buckets
+        mock_obj1 = Mock(spec=Object)
+        mock_obj1.name = "x.txt"
+        mock_obj1.bucket_name = "mybucket"
+        mock_obj1.bucket_provider.value = "ais"
+
+        batch2 = Batch(self.mock_request_client, objects=[mock_obj1])
+        for moss_in in batch2.request.moss_in:
+            self.assertTrue(hasattr(moss_in, "bck"))
+            self.assertIsNotNone(moss_in.bck)
+            self.assertEqual(moss_in.bck, mock_obj1.bucket_name)
+
+        # 3. Mixed list: string + obj, with batch-level bucket
+        mock_obj2 = Mock(spec=Object)
+        mock_obj2.name = "y.txt"
+        mock_obj2.bucket_name = "anotherbucket"
+        mock_obj2.bucket_provider.value = "ais"
+
+        batch3 = Batch(
+            self.mock_request_client,
+            objects=[mock_obj2, "z.txt"],
+            bucket=self.mock_bucket,
+        )
+        bcks = [m.bck for m in batch3.request.moss_in]
+        # First is object's bucket, second is default batch bucket
+        self.assertEqual(bcks[0], mock_obj2.bucket_name)
+        self.assertEqual(bcks[1], self.mock_bucket.name)
+
+        # 4. Add using .add() with string and batch bucket
+        batch4 = Batch(self.mock_request_client, bucket=self.mock_bucket)
+        batch4.add("t.txt")
+        for moss_in in batch4.request.moss_in:
+            self.assertIsNotNone(moss_in.bck)
+            self.assertEqual(moss_in.bck, self.mock_bucket.name)
+
+        # 5. Add using .add() with Object
+        mock_obj3 = Mock(spec=Object)
+        mock_obj3.name = "bar.txt"
+        mock_obj3.bucket_name = "bk"
+        mock_obj3.bucket_provider.value = "ais"
+        batch4.add(mock_obj3)
+        moss_in_obj = [m for m in batch4.request.moss_in if m.obj_name == "bar.txt"][0]
+        self.assertEqual(moss_in_obj.bck, "bk")
+
     @staticmethod
     def _create_test_tar() -> bytes:
         """Helper method to create a test tar archive."""
