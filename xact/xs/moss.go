@@ -72,8 +72,13 @@ where data-item = (object | archived file) // range read TBD
 // - range read
 // - finer-grained wi abort
 
-// TODO configurable "hole-plug" waiting timeout: max(host-busy, 30s)
-const maxwait = 30 * time.Second
+// TODO configurable "hole-plug" waiting timeout: max(host-busy, 30s); see also logStats
+const (
+	maxwait = 30 * time.Second
+)
+const (
+	sparseLog = 30 * time.Second
+)
 
 // TODO configurable pagecache (read-ahead) warm-up:
 // - one small-size worker pool per XactMoss instance
@@ -117,7 +122,8 @@ type (
 		started int64       // (mono)
 		waitRx  int64       // total wait-for-receive time
 		size    int64       // (cumulative)
-		cnt     int         // number of processed MossReq entries (m.b. eq len(MossIn))
+		ocnt    int         // number of processed MossReq objects
+		fcnt    int         // --/-- files
 		clean   atomic.Bool
 		awfin   atomic.Bool
 	}
@@ -138,9 +144,12 @@ type (
 		pending sync.Map // [wid => *basewi]
 		xact.DemandBase
 		activeWG sync.WaitGroup // when pending
-		size     atomic.Int64   // (cumulative across work items)
-		cnt      atomic.Int64   // ditto
+		size     atomic.Int64   // cumulative across all work items (plain objects, archived files)
+		ocnt     atomic.Int64   // total objects: sum(wi.ocnt)
+		fcnt     atomic.Int64   // total files: sum(wi.fcnt)
 		waitRx   atomic.Int64   // total wait-for-receive time (= sum(work-items))
+		numWis   atomic.Int64   // num get-batch requests
+		lastLog  atomic.Int64   // last log timestamp (sparse)
 		gfn      struct {       // counts
 			ok   atomic.Int32
 			fail atomic.Int32
@@ -163,8 +172,6 @@ type (
 
 const (
 	mossIdleTime = xact.IdleDefault
-
-	mossLogStats = 0x7 // log sampling rate
 )
 
 // interface guard
@@ -267,8 +274,7 @@ func (r *XactMoss) Abort(err error) bool {
 		return false
 	}
 
-	nlog.Infoln(r.Name(), "aborting")
-	r.logStats()
+	nlog.Infoln(r.Name(), "aborting:", err)
 
 	// make sure all asm() and Send() exited
 	r.activeWG.Wait()
@@ -284,7 +290,7 @@ func (r *XactMoss) Abort(err error) bool {
 	return true
 }
 
-// a callback to cleanup all pending work items
+// pending (sync.Map's) callback to cleanup all pending work items
 func (r *XactMoss) cleanup(key, value any) bool {
 	wi := value.(*basewi)
 	if wi.cleanup() {
@@ -296,7 +302,7 @@ func (r *XactMoss) cleanup(key, value any) bool {
 func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 	var (
 		iters  int
-		tout   = max(mossIdleTime, 2*time.Minute)
+		tout   = max(mossIdleTime, time.Minute)
 		cutoff = now - tout.Nanoseconds()
 	)
 	debug.Assert(maxIters > 0)
@@ -304,7 +310,7 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 		iters++
 		cont := iters < maxIters
 		wi := v.(*basewi)
-		// old enough and not cleaned-up
+		// old enough
 		if wi.started != 0 && wi.started < cutoff {
 			if wi.cleanup() {
 				// not r.DecPending here (these wi-s never incremented)
@@ -335,9 +341,14 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
-		nlog.Infoln(r.Name(), "idle expired - finishing")
-		r.logStats()
-
+		ocnt := r.ocnt.Load()
+		fcnt := r.fcnt.Load()
+		size := r.size.Load()
+		if size == 0 {
+			nlog.Infoln(r.Name(), "idle expired [ stats: none ]")
+		} else {
+			nlog.Infoln(r.Name(), "idle expired [ objs:", ocnt, "files:", fcnt, "size:", size, "]")
+		}
 		r.pending.Range(r.cleanup)
 
 		// see "Shared-DM registration lifecycle" note above
@@ -350,29 +361,14 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 }
 
 func (r *XactMoss) bewarmStop() {
-	if r.bewarm != nil {
-		r.bewarm.Stop()
-		nlog.Infoln(r.Name(), "bewarm count:", r.bewarm.NumDone())
-		r.bewarm.Wait()
-	}
-}
-
-func (r *XactMoss) logStats() {
-	const (
-		mincnt  = 10
-		minwait = 10 * time.Millisecond
-	)
-	cnt := r.cnt.Load()
-	if cnt < mincnt {
+	if r.bewarm == nil {
 		return
 	}
-	nlog.Infoln(r.Name(), "stats: [ count:", cnt, "size:", r.size.Load(), "]")
-
-	waitRx := time.Duration(r.waitRx.Load())
-	if waitRx > minwait {
-		avg := waitRx / time.Duration(cnt)
-		nlog.Infoln("\t\twait-receive: [ total:", waitRx, "avg: ", avg, "]")
+	r.bewarm.Stop()
+	if n := r.bewarm.NumDone(); n > 0 {
+		nlog.Infoln(r.Name(), "bewarm count:", n)
 	}
+	r.bewarm.Wait()
 }
 
 // (phase 1)
@@ -394,12 +390,16 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
 		wi.recv.mtx = &sync.Mutex{}
 
-		r.updateCtlMsg()
+		r.updateCtlMsg(wi.started)
 	}
 
-	if _, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
-		err := fmt.Errorf("%s: work item %q already exists (duplicate prep-rx?)", r.Name(), wid)
-		debug.AssertNoErr(err)
+	if a, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
+		old := a.(*basewi)
+		age := mono.Since(old.started)
+		err := fmt.Errorf("%s: work item %q already exists for %v (duplicate WID generated?)", r.Name(), wid, age)
+		if age > mossIdleTime {
+			nlog.Errorln(core.T.String(), err)
+		}
 		return err
 	}
 	wi.awfin.Store(true)
@@ -424,12 +424,11 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	r.IncPending()
-	r.updateCtlMsg()
 	err := r.asm(req, w, wi)
 	wi.cleanup()
 
 	r.DecPending()
-	r.updateCtlMsg()
+	r.updateCtlMsg(0)
 	return err
 }
 
@@ -787,37 +786,57 @@ func (*XactMoss) bewarmFQN(fqn string) {
 }
 
 // single writer: DT only
-func (r *XactMoss) updateCtlMsg() {
-	pending := r.Pending()
-	objs := r.cnt.Load()
-	sz := r.size.Load()
-
-	var avgStr string
-	if objs > 0 {
-		avg := time.Duration(r.waitRx.Load()) / time.Duration(objs)
-		avgStr = avg.String()
-	} else {
-		avgStr = "-"
+func (r *XactMoss) updateCtlMsg(now int64) {
+	ocnt, fcnt := r.ocnt.Load(), r.fcnt.Load()
+	if ocnt+fcnt == 0 {
+		return
 	}
 
-	// build + publish under a short critical section
-	// (e.g.: pending:2 objs/files:391284 total-size:3.70GiB waitrx.avg:2.3ms wid:AcPWK8PX bewarm:on)
-	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
+	// build under a short critical section
+	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB waitrx.avg:2.3ms bewarm:on)
 
 	r.ctl.mu.Lock()
 	r.ctl.sb.Reset(min(128, r.ctl.sb.Len()))
-	r.ctl.sb.WriteString("pending:")
-	r.ctl.sb.WriteString(strconv.FormatInt(pending, 10))
-	r.ctl.sb.WriteString(" data-items:")
-	r.ctl.sb.WriteString(strconv.FormatInt(objs, 10))
-	r.ctl.sb.WriteString(" total-size:")
-	r.ctl.sb.WriteString(cos.IEC(sz, 2))
-	r.ctl.sb.WriteString(" avg-wait:")
-	r.ctl.sb.WriteString(avgStr)
+	if pending := r.Pending(); pending > 0 {
+		r.ctl.sb.WriteString("pending:")
+		r.ctl.sb.WriteString(strconv.FormatInt(pending, 10))
+	}
+	if ocnt > 0 {
+		r.ctl.sb.WriteString(" objs:")
+		r.ctl.sb.WriteString(strconv.FormatInt(ocnt, 10))
+	}
+	if fcnt > 0 {
+		r.ctl.sb.WriteString(" files:")
+		r.ctl.sb.WriteString(strconv.FormatInt(fcnt, 10))
+	}
+
+	r.ctl.sb.WriteString(" size:")
+	r.ctl.sb.WriteString(cos.IEC(r.size.Load(), 2))
+
+	r.ctl.sb.WriteString(" reqs:")
+	r.ctl.sb.WriteString(strconv.FormatInt(r.numWis.Load(), 10))
+
+	if waitRx := r.waitRx.Load(); waitRx > 0 {
+		avg := time.Duration(r.waitRx.Load()) / time.Duration(ocnt+fcnt)
+		r.ctl.sb.WriteString(" avg-wait:")
+		r.ctl.sb.WriteString(avg.String())
+	}
+
 	r.ctl.sb.WriteString(" bewarm:")
+	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
 	r.ctl.sb.WriteString(bewarm)
-	r.SetCtlMsg(r.ctl.sb.String())
+
+	msg := r.ctl.sb.String()
+	r.SetCtlMsg(msg)
 	r.ctl.mu.Unlock()
+
+	if now == 0 {
+		now = mono.NanoTime()
+	}
+	if time.Duration(now-r.lastLog.Load()) > sparseLog {
+		nlog.Infoln(r.Name(), "stats: [", msg, "]")
+		r.lastLog.Store(now)
+	}
 }
 
 ////////////
@@ -832,14 +851,12 @@ func (wi *basewi) cleanup() bool {
 	}
 	r := wi.r
 
-	// accumulate
+	// update x-moss stats
+	r.ocnt.Add(int64(wi.ocnt))
+	r.fcnt.Add(int64(wi.fcnt))
 	r.size.Add(wi.size)
-	cnt := r.cnt.Add(int64(wi.cnt))
 	r.waitRx.Add(wi.waitRx)
-
-	if cnt&mossLogStats == mossLogStats {
-		r.logStats()
-	}
+	r.numWis.Inc()
 
 	if wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
@@ -869,16 +886,10 @@ func (wi *basewi) cleanup() bool {
 	clear(wi.recv.m)
 	wi.recv.m = nil
 	wi.recv.mtx.Unlock()
-
-	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "cleanup: done", wi.wid,
-			"stats [ cnt:", wi.cnt, "size:", wi.size, "lat:", mono.Since(wi.started), "]")
-	}
-
 	return true
 }
 
-// handle receive for this work item
+// receive work item at [index]
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mopaque *mossOpaque) (err error) {
 	var (
@@ -903,27 +914,50 @@ func (wi *basewi) recvObj(index int, hdr *transport.ObjHdr, reader io.Reader, mo
 	debug.Assert(size == sgl.Len(), size, " vs ", sgl.Len())
 
 add:
-	wi.recv.mtx.Lock()
+	var added, freegl bool
 
-	if index < 0 || index >= len(wi.recv.m) {
+	wi.recv.mtx.Lock()
+	added, freegl, err = wi._recvObj(index, hdr, mopaque, sgl)
+	wi.recv.mtx.Unlock()
+
+	if freegl {
 		sgl.Free()
-		if r.IsAborted() || r.Finished() {
-			return nil
+	}
+	if added {
+		wi.recv.ch <- index
+	}
+	if err == nil {
+		if cmn.Rom.V(5, cos.ModXs) {
+			nlog.Infoln(r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
 		}
-		return fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
+		return nil
 	}
 
-	entry := &wi.recv.m[index]
+	if cmn.Rom.V(4, cos.ModXs) {
+		nlog.Warningln(r.Name(), core.T.String(), "Rx error [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "err:", err, "]")
+	}
+	return err
+}
 
-	if !entry.isEmpty() {
-		wi.recv.mtx.Unlock()
-		if sgl != nil {
-			sgl.Free()
+// under receive mutex
+func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque, sgl *memsys.SGL) (added, freegl bool, _ error) {
+	r := wi.r
+	if index < 0 || index >= len(wi.recv.m) {
+		if r.IsAborted() || r.Finished() {
+			return false, sgl != nil, nil
 		}
-		err = fmt.Errorf("%s %s duplicate recv idx=%d from %s — dropping", r.Name(), core.T.String(), index, meta.Tname(hdr.SID))
-		debug.AssertNoErr(err)
-		nlog.Warningln(err)
-		return nil
+		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
+	}
+
+	// two rare conditions
+	entry := &wi.recv.m[index]
+	if entry.isLocal() {
+		// gfn
+		return false, sgl != nil, nil
+	}
+	if !entry.isEmpty() {
+		nlog.Warningf("%s %s duplicate recv idx=%d from %s — dropping", r.Name(), core.T.String(), index, meta.Tname(hdr.SID))
+		return false, sgl != nil, nil
 	}
 
 	wi.recv.m[index] = rxentry{
@@ -932,14 +966,7 @@ add:
 		nameInArch: cos.StrDup(hdr.ObjName),
 		mopaque:    mopaque,
 	}
-	wi.recv.mtx.Unlock()
-
-	wi.recv.ch <- index
-
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(r.Name(), core.T.String(), "Rx [ wid:", wi.wid, "index:", index, "oname:", hdr.ObjName, "size:", size, "]")
-	}
-	return nil
+	return true, false, nil
 }
 
 func (wi *basewi) waitFlushRx(i int) (int, error) {
@@ -1049,12 +1076,8 @@ func (wi *basewi) next(i int) (int, error) {
 	}
 
 	if tsi != nil {
-		// TODO: remove this code after a while, leave debug.Assert
-		if !wi.receiving() {
-			err := fmt.Errorf("%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
-			debug.AssertNoErr(err)
-			return 0, err
-		}
+		debug.Assertf(wi.receiving(),
+			"%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
 
 		// prior to starting to wait on Rx:
 		// best-effort non-blocking (look-ahead + `bewarm`)
@@ -1096,6 +1119,7 @@ func (wi *basewi) next(i int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if wi.req.StreamingGet {
 		if err := wi.aw.Flush(); err != nil {
 			return 0, err
@@ -1103,12 +1127,14 @@ func (wi *basewi) next(i int) (int, error) {
 	} else {
 		wi.resp.Out = append(wi.resp.Out, out)
 	}
-	wi.cnt++
+
+	if in.ArchPath == "" {
+		wi.ocnt++
+	} else {
+		wi.fcnt++
+	}
 	wi.size += out.Size
 
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(r.Name(), "archived cnt:", wi.cnt, "[", nameInArch, cos.IEC(out.Size, 2), "]")
-	}
 	if wi.receiving() {
 		wi.recv.mtx.Lock()
 		entry := &wi.recv.m[i]
@@ -1328,9 +1354,14 @@ func (wi *basewi) flushRx() error {
 			entry.sgl.Free()
 			entry.sgl = nil
 		}
-		wi.recv.next++ // this "hole" is done
 
-		wi.cnt++
+		// this "hole" is plugged
+		wi.recv.next++
+		if in.ArchPath == "" {
+			wi.ocnt++
+		} else {
+			wi.fcnt++
+		}
 		wi.size += size
 	}
 	return nil
@@ -1369,7 +1400,9 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	}
 
 	wi.sgl.Reset()
-	wi.r.ObjsAdd(wi.cnt, wi.size)
+
+	// TODO: consider adding archived-files counts and sizes => base.Xact
+	wi.r.ObjsAdd(wi.ocnt+wi.fcnt, wi.size)
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
@@ -1417,11 +1450,9 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 		}
 	}
 
-	wi.r.ObjsAdd(wi.cnt, wi.size)
+	// TODO: ditto
+	wi.r.ObjsAdd(wi.ocnt+wi.fcnt, wi.size)
 
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(wi.r.Name(), "done streaming: [ count:", wi.cnt, "written:", wi.size, "format:", wi.req.OutputFormat, "]")
-	}
 	return nil
 }
 

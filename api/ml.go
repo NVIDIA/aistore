@@ -49,7 +49,10 @@ import (
 //     - but when read range is defined: MossOut.Size = (length of this range)
 
 func GetBatch(bp BaseParams, bck cmn.Bck, req *apc.MossReq, w io.Writer) (resp apc.MossResp, err error) {
-	rp, q := _makeMossReq(bp, bck, req)
+	rp, q, e := _makeMossReq(bp, bck, req)
+	if e != nil {
+		return resp, e
+	}
 	if req.StreamingGet {
 		var wresp *wrappedResp
 		wresp, err = rp.doWriter(w)
@@ -80,11 +83,15 @@ func GetBatchStream(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (io.ReadCloser
 		return nil, nil, errors.New("GetBatchStream: expecting req.StreamingGet to be set")
 	}
 	if req.OutputFormat != "" {
-		if req.OutputFormat == zipext || strings.Contains(req.OutputFormat, zipext[1:]) {
+		of := strings.ToLower(req.OutputFormat)
+		if of == zipext || strings.Contains(of, zipext[1:]) {
 			return nil, nil, fmt.Errorf("GetBatchStream: output format %q is not streamable", req.OutputFormat)
 		}
 	}
-	rp, q := _makeMossReq(bp, bck, req)
+	rp, q, e := _makeMossReq(bp, bck, req)
+	if e != nil {
+		return nil, nil, e
+	}
 
 	wresp, body, err := rp.doStream()
 	FreeRp(rp)
@@ -114,25 +121,48 @@ func _checkMossResp(hdr http.Header) error {
 	return nil
 }
 
-func _makeMossReq(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (*ReqParams, url.Values) {
+func _makeMossReq(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (*ReqParams, url.Values, error) {
 	bp.Method = http.MethodGet
-	q, path := _optionalBucket(&bck)
+
+	// - set path with the specified default `bck` unless empty
+	// - make sure every entry in the request has bucket defined explicitly
+	// - see related  _bucket() in x-moss
+	q, path, err := _bucket(&bck, req)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	rp := AllocRp()
 	rp.BaseParams = bp
 	rp.Path = path
 	rp.Body = cos.MustMarshal(req)
 	rp.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	rp.Query = q
-	return rp, q
+
+	return rp, q, nil
 }
 
-func _optionalBucket(bck *cmn.Bck) (q url.Values, path string) {
-	if bck.IsEmpty() {
+func _bucket(bck *cmn.Bck, req *apc.MossReq) (q url.Values, path string, err error) {
+	nodflt := bck.IsEmpty()
+
+	// _may_ mutate user's apc.MossReq
+	for i := range req.In {
+		in := &req.In[i]
+		if in.Uname == "" && in.Bucket == "" {
+			if nodflt {
+				return nil, "", fmt.Errorf("missing bucket specification for (name:%s idx:%d)", in.ObjName, i)
+			}
+			in.Bucket = bck.Name
+			in.Provider = bck.Provider
+		}
+	}
+
+	if nodflt {
 		path = apc.URLPathML.Join(apc.Moss)
-		return
+		return nil, path, nil
 	}
 	q = qalloc()
 	bck.SetQuery(q)
 	path = apc.URLPathML.Join(apc.Moss, bck.Name)
-	return
+	return q, path, nil
 }

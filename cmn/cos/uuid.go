@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/mono"
 
 	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/teris-io/shortid"
@@ -51,6 +52,8 @@ var (
 func InitShortID(seed uint64) {
 	worker := uint8(seed & 0x1f) // must be < 32
 	sid = shortid.MustNew(worker, uuidABC, seed)
+
+	rtie.Store(uint64(mono.NanoTime()) ^ seed)
 }
 
 //
@@ -65,12 +68,14 @@ func GenUUID() string {
 		h, t string
 		uuid = sid.MustGenerate()
 	)
-	if c := uuid[0]; (c == 'g' && looksLikeReb(uuid)) || !isAlpha(c) { // cosmetic prefix
-		tie := int(rtie.Add(1))
+	c := uuid[0]
+	if (c == 'g' && looksLikeReb(uuid)) || !isAlpha(c) { // cosmetic prefix
+		tie := rtie.Add(1)
 		h = string(rune('A' + tie%26))
 	}
-	if c := uuid[len(uuid)-1]; c == '-' || c == '_' { // cosmetic suffix
-		tie := int(rtie.Add(1))
+	c = uuid[len(uuid)-1]
+	if c == '-' || c == '_' { // ditto
+		tie := rtie.Add(1)
 		t = string(rune('a' + tie%26))
 	}
 	return h + uuid + t
@@ -256,17 +261,23 @@ func GenTie() string {
 
 // yet another unique ID (compare w/ GenUUID and GenBEID)
 func GenYAID(sid string) string {
-	var (
-		l = len(sid)
-		b = make([]byte, l+4)
+	const (
+		lsuffix = 5
+		lprefix = 7
 	)
-	copy(b, sid)
+	var (
+		shift uint
+		l     = min(len(sid), lprefix)
+		b     = make([]byte, l+1+lsuffix)
+	)
+	copy(b, sid[:l])
 	tie := rtie.Add(1)
 	tie *= 0x9e3779b97f4a7c15 // ditto
 	b[l] = '-'
-	b[l+1] = uuidABC[tie&0x3f]
-	b[l+2] = uuidABC[(tie>>6)&0x3f]
-	b[l+3] = uuidABC[(tie>>12)&0x3f]
+	for i := range lsuffix {
+		b[l+1+i] = uuidABC[(tie>>shift)&0x3f]
+		shift += 6
+	}
 	return UnsafeS(b)
 }
 
