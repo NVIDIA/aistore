@@ -305,6 +305,7 @@ test:short:aisloader:
   <<: *test_short_def
   timeout: 30m
   rules:
+    - !reference [.test_short_template, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/'
       when: manual
       allow_failure: true
