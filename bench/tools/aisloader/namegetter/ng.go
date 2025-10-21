@@ -5,6 +5,7 @@
 package namegetter
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sync"
 
@@ -301,12 +302,15 @@ func (rng *PermShuffle) PickBatch(in []apc.MossIn) []apc.MossIn {
 
 // generate uint32 permutation
 func _shuffle(rnd *rand.Rand, n uint32) []uint32 {
+	if n < 2 {
+		panic(fmt.Errorf("shuffle: need at least 2 items (got %d)", n))
+	}
 	perm := make([]uint32, n)
 	for i := range n {
 		perm[i] = i
 	}
 	// Fisher-Yates shuffle
-	for i := n - 1; i > 0; i-- {
+	for i := int(n) - 1; i > 0; i-- {
 		j := uint32(rnd.Int64N(int64(i + 1)))
 		perm[i], perm[j] = perm[j], perm[i]
 	}

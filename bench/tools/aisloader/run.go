@@ -237,19 +237,30 @@ func Start(version, buildtime string) (err error) {
 		objnameGetter = &namegetter.Random{}
 		objnameGetter.Init([]string{}, rnd)
 	case !runParams.skipList:
-		if err := listObjects(); err != nil {
+		names, err := listObjects()
+		if err != nil {
 			return err
 		}
-
-		objsLen := objnameGetter.Len()
-		if runParams.putPct == 0 && objsLen == 0 {
+		var (
+			l               = len(names)
+			ng, isPermBased = newNameGetter(names)
+		)
+		if runParams.putPct < 100 && isPermBased && l < 2 {
+			mixed := cos.Ternary(runParams.putPct > 0, " mixed", " read-only")
+			return fmt.Errorf("need at least 2 existing objects for epochs-based%s workload (got %d)", mixed, l)
+		}
+		if runParams.putPct == 0 && l == 0 {
 			if runParams.subDir == "" {
 				return errors.New("the bucket is empty, cannot run 100% read benchmark")
 			}
 			return errors.New("no objects with prefix '" + runParams.subDir + "' in the bucket, cannot run 100% read benchmark")
 		}
 
-		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(objsLen), cos.Plural(objsLen))
+		// initialize global name-getter and announce
+		objnameGetter = ng
+		objnameGetter.Init(names, rnd)
+		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(l), cos.Plural(l))
+
 	default:
 		objnameGetter = &namegetter.Random{}
 		objnameGetter.Init([]string{}, rnd)
@@ -714,11 +725,7 @@ func objNamesFromFile() (names []string, err error) {
 	return
 }
 
-func listObjects() error {
-	var (
-		names []string
-		err   error
-	)
+func listObjects() (names []string, err error) {
 	switch {
 	case runParams.fileList != "":
 		names, err = objNamesFromFile()
@@ -727,15 +734,10 @@ func listObjects() error {
 	default:
 		names, err = listObjectNames(runParams)
 	}
-	if err != nil {
-		return err
-	}
-
-	newNameGetter(names)
-	return nil
+	return
 }
 
-func newNameGetter(names []string) {
+func newNameGetter(names []string) (ng namegetter.Basic, isPermBased bool) {
 	var (
 		readOnly  = runParams.putPct == 0
 		epoching  = runParams.numEpochs > 0
@@ -744,17 +746,19 @@ func newNameGetter(names []string) {
 	)
 	switch {
 	case !readOnly && !epoching:
-		objnameGetter = &namegetter.Random{}
+		ng = &namegetter.Random{}
 	case !readOnly && epoching:
-		objnameGetter = &namegetter.RandomUnique{}
+		ng = &namegetter.RandomUnique{}
 	case n > int(threshold) && n > namegetter.AffineMinN:
 		// O(1) memory, strict per-epoch
-		objnameGetter = &namegetter.PermAffinePrime{}
+		ng = &namegetter.PermAffinePrime{}
+		isPermBased = true
 	default:
 		// Fisher-Yates shuffle: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-		objnameGetter = &namegetter.PermShuffle{}
+		ng = &namegetter.PermShuffle{}
+		isPermBased = true
 	}
-	objnameGetter.Init(names, rnd)
+	return
 }
 
 // returns smallest number divisible by `align` that is greater or equal `val`
