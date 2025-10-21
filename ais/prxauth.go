@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -28,12 +27,12 @@ import (
 )
 
 type (
-	tokenList authn.TokenList       // token strings
-	tkList    map[string]*tok.Token // tk structs
+	tokenList authn.TokenList           // token strings
+	tokenMap  map[string]*tok.AISClaims // map token strings to claim structs
 
 	authManager struct {
-		// cache of decrypted tokens
-		tkList tkList
+		// cache of decrypted token claims
+		tokenMap tokenMap
 		// list of invalid tokens(revoked or of deleted users)
 		// Authn sends these tokens to primary for broadcasting
 		revokedTokens map[string]bool
@@ -58,7 +57,7 @@ func newAuthManager(config *cmn.Config) *authManager {
 		cos.ExitLogf("Failed to parse RSA public key: %v", err)
 	}
 	return &authManager{
-		tkList:        make(tkList),
+		tokenMap:      make(tokenMap),
 		revokedTokens: make(map[string]bool), // TODO: preallocate
 		version:       1,
 		secret:        cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey)), // environment override
@@ -104,7 +103,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	// Add new revoked tokens and remove them from the valid token list.
 	for _, token := range newRevoked.Tokens {
 		a.revokedTokens[token] = true
-		delete(a.tkList, token)
+		delete(a.tokenMap, token)
 	}
 
 	allRevoked = &tokenList{
@@ -113,15 +112,15 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	}
 
 	// Clean up expired tokens from the revoked list.
-	now := time.Now()
-
 	for token := range a.revokedTokens {
-		tk, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
-		debug.AssertNoErr(err)
-		if tk.IsExpired(&now) {
+		_, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
+		switch {
+		case errors.Is(err, tok.ErrTokenExpired):
 			delete(a.revokedTokens, token)
-		} else {
+		case err == nil:
 			allRevoked.Tokens = append(allRevoked.Tokens, token)
+		default:
+			nlog.Errorf("Unexpected token validation error: %v (token: %s)", err, token)
 		}
 	}
 	if len(allRevoked.Tokens) == 0 {
@@ -150,36 +149,40 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 //
-// Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (tk *tok.Token, err error) {
+// Returns decoded token claims if it is valid
+func (a *authManager) validateToken(token string) (claims *tok.AISClaims, err error) {
 	a.Lock()
 	if _, ok := a.revokedTokens[token]; ok {
-		tk, err = nil, fmt.Errorf("%v: %s", tok.ErrTokenRevoked, tk)
+		claims, err = nil, fmt.Errorf("%v: %s", tok.ErrTokenRevoked, token)
 	} else {
-		tk, err = a.validateAddRm(token)
+		claims, err = a.validateAddRm(token)
 	}
 	a.Unlock()
 	return
 }
 
-// Decrypts and validates token. Adds it to authManager.token if not found. Removes if expired.
+// If token not found in authManager.tokenMap, decrypts token, validates claims, and caches it
+// Removes expired tokens from authManager.tokenMap.
 // Must be called under lock.
-func (a *authManager) validateAddRm(token string) (*tok.Token, error) {
-	tk, ok := a.tkList[token]
-	debug.Assert(!ok || tk != nil)
-	if !ok || tk == nil {
-		var err error
-		if tk, err = tok.ValidateToken(token, a.secret, a.rsaPubKey); err != nil {
-			nlog.Errorln(err)
-			return nil, tok.ErrInvalidToken
+func (a *authManager) validateAddRm(token string) (*tok.AISClaims, error) {
+	claims, ok := a.tokenMap[token]
+	debug.Assert(!ok || claims != nil)
+	// If token string exists in cache, only need to check claim expiry
+	if ok && claims != nil {
+		if claims.IsExpired() {
+			delete(a.tokenMap, token)
+			return nil, fmt.Errorf("%v: %q", tok.ErrTokenExpired, token)
 		}
-		a.tkList[token] = tk
+		return claims, nil
 	}
-	if tk.IsExpired(nil) {
-		delete(a.tkList, token)
-		return nil, fmt.Errorf("%v: %s", tok.ErrTokenExpired, tk)
+	// New token string, so extract the claims and cache it
+	claims, err := tok.ValidateToken(token, a.secret, a.rsaPubKey)
+	if err != nil {
+		nlog.Infof("Received invalid token, error: %v", err)
+		return nil, err
 	}
-	return tk, nil
+	a.tokenMap[token] = claims
+	return claims, nil
 }
 
 ///////////////
@@ -266,17 +269,17 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // Validates a token from the request header
-func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
+func (p *proxy) validateToken(hdr http.Header) (*tok.AISClaims, error) {
 	token, err := tok.ExtractToken(hdr)
 	if err != nil {
 		return nil, err
 	}
-	tk, err := p.authn.validateToken(token)
+	claims, err := p.authn.validateToken(token)
 	if err != nil {
 		nlog.Errorf("invalid token: %v", err)
 		return nil, err
 	}
-	return tk, nil
+	return claims, nil
 }
 
 // When AuthN is on, accessing a bucket requires two permissions:
@@ -299,7 +302,7 @@ func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 func aceErrToCode(err error) (status int) {
 	switch {
 	case err == nil:
-	case errors.Is(err, tok.ErrNoToken) || errors.Is(err, tok.ErrInvalidToken):
+	case errors.Is(err, tok.ErrNoToken) || errors.Is(err, tok.ErrInvalidToken) || errors.Is(err, tok.ErrTokenExpired):
 		status = http.StatusUnauthorized
 	default:
 		status = http.StatusForbidden
@@ -309,17 +312,17 @@ func aceErrToCode(err error) (status int) {
 
 func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	var (
-		tk     *tok.Token
+		claims *tok.AISClaims
 		bucket *cmn.Bck
 	)
 	if p.checkIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
 	if cmn.Rom.AuthEnabled() { // config.Auth.Enabled
-		tk, err = p.validateToken(hdr)
+		claims, err = p.validateToken(hdr)
 		if err != nil {
 			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
-			if err == tok.ErrNoToken && bck != nil && bck.IsHT() {
+			if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
 				err = nil
 			}
 			return err
@@ -328,7 +331,7 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 		if bck != nil {
 			bucket = bck.Bucket()
 		}
-		if err := tk.CheckPermissions(uid, bucket, ace); err != nil {
+		if err = claims.CheckPermissions(uid, bucket, ace); err != nil {
 			return err
 		}
 	}
@@ -342,7 +345,7 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 	// - with AuthN:    superuser can PATCH and change ACL
 	if !cmn.Rom.AuthEnabled() {
 		ace &^= (apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO)
-	} else if tk.IsAdmin {
+	} else if claims != nil && claims.IsAdmin {
 		ace &^= (apc.AcePATCH | apc.AceBckSetACL)
 	}
 	if ace == 0 {

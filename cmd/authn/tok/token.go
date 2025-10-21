@@ -16,50 +16,62 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Token struct {
-	UserID      string          `json:"username"`
-	Expiry      time.Time       `json:"exp"`
+type AISClaims struct {
+	// Deprecated: Use RegisteredClaims.Subject instead, mapped to 'sub' claim.
+	UserID string `json:"username"`
+	// Deprecated: Use RegisteredClaims.ExpiresAt instead, mapped to 'exp' claim.
 	Expires     time.Time       `json:"expires"`
-	Token       string          `json:"token"`
 	ClusterACLs []*authn.CluACL `json:"clusters"`
 	BucketACLs  []*authn.BckACL `json:"buckets,omitempty"`
 	IsAdmin     bool            `json:"admin"`
+	jwt.RegisteredClaims
 }
 
 var (
-	ErrNoPermissions = errors.New("insufficient permissions")
-	ErrInvalidToken  = errors.New("invalid token")
-	ErrNoToken       = errors.New("token required")
-	ErrNoBearerToken = errors.New("invalid token: no bearer")
-	ErrTokenExpired  = errors.New("token expired")
-	ErrTokenRevoked  = errors.New("token revoked")
+	ErrNoPermissions        = errors.New("insufficient permissions")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrNoToken              = errors.New("token required")
+	ErrNoBearerToken        = errors.New("invalid token: no bearer")
+	ErrTokenExpired         = errors.New("token expired")
+	ErrTokenRevoked         = errors.New("token revoked")
+	supportedSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodRS384.Name, jwt.SigningMethodRS512.Name, jwt.SigningMethodHS256.Name}
 )
 
 // TODO: cos.Unsafe* and other micro-optimization and refactoring
 
-func AdminJWT(expires time.Time, userID, secret string) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"expires":  expires,
-		"username": userID,
-		"admin":    true,
-	})
+func CreateHMACTokenStr(c jwt.Claims, secret string) (string, error) {
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	return t.SignedString([]byte(secret))
 }
 
-func JWT(expires time.Time, userID string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL,
-	secret string) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"expires":  expires,
-		"username": userID,
-		"buckets":  bucketACLs,
-		"clusters": clusterACLs,
-	})
-	return t.SignedString([]byte(secret))
+func CreateRSATokenStr(c jwt.Claims, rsaKey *rsa.PrivateKey) (string, error) {
+	t := jwt.NewWithClaims(jwt.SigningMethodRS256, c)
+	return t.SignedString(rsaKey)
+}
+
+func StandardClaims(expires time.Time, userID string, bucketACLs []*authn.BckACL, clusterACLs []*authn.CluACL) *AISClaims {
+	return &AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expires),
+			Subject:   userID,
+		},
+		BucketACLs:  bucketACLs,
+		ClusterACLs: clusterACLs,
+	}
+}
+
+func AdminClaims(expires time.Time, userID string) *AISClaims {
+	return &AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expires),
+			Subject:   userID,
+		},
+		IsAdmin: true,
+	}
 }
 
 // Header format: 'Authorization: Bearer <token>'
@@ -91,46 +103,68 @@ func parseJWTKey(t *jwt.Token, secret string, pubKey *rsa.PublicKey) (any, error
 // (supporting both HMAC (HS256) and RSA (RS256) signing methods)
 // - HS256: validates with secret (symmetric)
 // - RS256: validates with pubKey (asymmetric)
-func ValidateToken(tokenStr, secret string, pubKey *rsa.PublicKey) (*Token, error) {
-	jwtToken, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-		return parseJWTKey(t, secret, pubKey)
-	})
+func ValidateToken(tokenStr, secret string, pubKey *rsa.PublicKey) (*AISClaims, error) {
+	jwtToken, err := jwt.ParseWithClaims(
+		tokenStr,
+		&AISClaims{},
+		func(t *jwt.Token) (any, error) {
+			return parseJWTKey(t, secret, pubKey)
+		},
+		jwt.WithValidMethods(supportedSigningMethods),
+	)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, fmt.Errorf("%w [err: %v]", ErrTokenExpired, err)
+		}
+		return nil, fmt.Errorf("%w [err: %v]", ErrInvalidToken, err)
 	}
-	claims, ok := jwtToken.Claims.(jwt.MapClaims)
+	claims, ok := jwtToken.Claims.(*AISClaims)
 	if !ok || !jwtToken.Valid {
 		return nil, ErrInvalidToken
 	}
-	tk := &Token{}
-	if err := cos.MorphMarshal(claims, tk); err != nil {
-		return nil, ErrInvalidToken
-	}
-	return tk, nil
+	return claims, nil
 }
 
 ///////////
-// Token //
+// AISClaims //
 ///////////
 
-func (tk *Token) String() string {
-	return fmt.Sprintf("user %s, %s", tk.UserID, expiresIn(tk.getExpiry()))
+// GetExpirationTime implements Claims interface with backwards-compatible support for 'expires'
+func (c *AISClaims) GetExpirationTime() (*jwt.NumericDate, error) {
+	if c.ExpiresAt != nil && !c.ExpiresAt.IsZero() {
+		return c.ExpiresAt, nil
+	}
+	return jwt.NewNumericDate(c.Expires), nil
+}
+
+// GetSubject implements Claims interface with backwards-compatible support for 'username'
+func (c *AISClaims) GetSubject() (string, error) {
+	if c.Subject != "" {
+		return c.Subject, nil
+	}
+	return c.UserID, nil
+}
+
+func (c *AISClaims) String() string {
+	sub, _ := c.GetSubject()
+	return fmt.Sprintf("user %s, %s", sub, expiresIn(c.getExpiry()))
 }
 
 // Supports both our old `expires` and standard `exp` fields, with `exp` taking precedence
-func (tk *Token) getExpiry() time.Time {
-	if !tk.Expiry.IsZero() {
-		return tk.Expiry
+func (c *AISClaims) getExpiry() time.Time {
+	if c.ExpiresAt != nil && !c.ExpiresAt.IsZero() {
+		return c.ExpiresAt.UTC()
 	}
-	return tk.Expires
+	return c.Expires
 }
 
-// IsExpired Check if this token's expiry is after the time provided. If not provided, compare against time.Now.
-func (tk *Token) IsExpired(now *time.Time) bool {
-	if now != nil {
-		return tk.getExpiry().Before(*now)
-	}
-	return tk.getExpiry().Before(time.Now())
+func (c *AISClaims) IsExpired() bool {
+	return c.getExpiry().Before(time.Now())
+}
+
+func (c *AISClaims) IsUser(user string) bool {
+	sub, _ := c.GetSubject()
+	return sub == user
 }
 
 // A user has two-level permissions: cluster-wide and on per bucket basis.
@@ -149,27 +183,28 @@ func (tk *Token) IsExpired(now *time.Time) bool {
 //
 // If there are no defined ACL found at any step, any access is denied.
 
-func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
-	if tk.IsAdmin {
+func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.AccessAttrs) error {
+	if c.IsAdmin {
 		return nil
 	}
 	if perms == 0 {
 		return errors.New("empty permissions requested")
 	}
+	sub, _ := c.GetSubject()
 	cluPerms := perms & apc.ClusterAccessRW
 	objPerms := perms & apc.AccessRW
-	cluACL, cluOk := tk.aclForCluster(clusterID)
+	cluACL, cluOk := c.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested
 		if !cluOk {
-			return fmt.Errorf("user `%s` has %v", tk.UserID, ErrNoPermissions)
+			return fmt.Errorf("user `%s` has %v", sub, ErrNoPermissions)
 		}
 		if clusterID == "" {
 			return errors.New("requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return fmt.Errorf("user `%s` has %v: [cluster %s, %s, granted(%s)]", tk.UserID,
-				ErrNoPermissions, clusterID, tk, cluACL.Describe(false /*include all*/))
+			return fmt.Errorf("user `%s` has %v: [cluster %s, %s, granted(%s)]", sub,
+				ErrNoPermissions, clusterID, c, cluACL.Describe(false /*include all*/))
 		}
 	}
 	if objPerms == 0 {
@@ -180,16 +215,16 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 	if bck == nil {
 		return errors.New("requested bucket permissions without a bucket")
 	}
-	bckACL, bckOk := tk.aclForBucket(clusterID, bck)
+	bckACL, bckOk := c.aclForBucket(clusterID, bck)
 	if bckOk {
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return fmt.Errorf("user `%s` has %v: [%s, bucket %s, granted(%s)]", tk.UserID,
-			ErrNoPermissions, tk, bck.String(), bckACL.Describe(false /*include all*/))
+		return fmt.Errorf("user `%s` has %v: [%s, bucket %s, granted(%s)]", sub,
+			ErrNoPermissions, c, bck.String(), bckACL.Describe(false /*include all*/))
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
-		return fmt.Errorf("user `%s` has %v: [%s, granted(%s)]", tk.UserID, ErrNoPermissions, tk, cluACL.Describe(false /*include all*/))
+		return fmt.Errorf("user `%s` has %v: [%s, granted(%s)]", sub, ErrNoPermissions, c, cluACL.Describe(false /*include all*/))
 	}
 	return nil
 }
@@ -209,9 +244,9 @@ func expiresIn(tm time.Time) string {
 	return "token expires in " + d.String()
 }
 
-func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
+func (c *AISClaims) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {
 	var defaultCluster *authn.CluACL
-	for _, pm := range tk.ClusterACLs {
+	for _, pm := range c.ClusterACLs {
 		if pm.ID == clusterID {
 			return pm.Access, true
 		}
@@ -225,8 +260,8 @@ func (tk *Token) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool
 	return 0, false
 }
 
-func (tk *Token) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessAttrs, ok bool) {
-	for _, b := range tk.BucketACLs {
+func (c *AISClaims) aclForBucket(clusterID string, bck *cmn.Bck) (perms apc.AccessAttrs, ok bool) {
+	for _, b := range c.BucketACLs {
 		tbBck := b.Bck
 		if tbBck.Ns.UUID != clusterID {
 			continue

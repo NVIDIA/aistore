@@ -5,8 +5,11 @@
 package tok_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -18,6 +21,16 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+const (
+	testUser              = "testUserName"
+	testHMACSigningSecret = "tokenSigningValue"
+)
+
+var (
+	previousTime = time.Now().Add(-time.Second)
+	futureTime   = time.Now().Add(1 * time.Hour)
 )
 
 // Helper for dummy permission structs
@@ -35,69 +48,90 @@ func makeCluACL(access apc.AccessAttrs, clusterID string) *authn.CluACL {
 	}
 }
 
-func TestAdminJWTAndValidate(t *testing.T) {
-	secret := "supersecret"
-	expires := time.Now().Add(1 * time.Hour)
-	user := "adminUser"
+// Common assertions for specific token types
 
-	tokenStr, err := tok.AdminJWT(expires, user, secret)
-	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	tk, err := tok.ValidateToken(tokenStr, secret, nil)
-	tassert.Fatalf(t, err == nil, "ValidateToken failed: %v", err)
-	tassert.Error(t, tk.IsAdmin, "Expected IsAdmin to be true")
-	tassert.Errorf(t, tk.UserID == user, "Expected UserID %q, got %q", user, tk.UserID)
+func assertCommon(t *testing.T, c *tok.AISClaims, user string, admin bool) {
+	if admin {
+		tassert.Error(t, c.IsAdmin, "Expected IsAdmin to be true")
+	} else {
+		tassert.Error(t, !c.IsAdmin, "Expected IsAdmin to be false")
+	}
+	sub, err := c.GetSubject()
+	tassert.Error(t, err == nil, "Expected token GetSubject to succeed")
+	tassert.Errorf(t, sub == user, "Expected username %q, got %q", user, sub)
+}
+
+func assertAdminClaims(t *testing.T, c *tok.AISClaims, user string) {
+	assertCommon(t, c, user, true)
 	// Bucket and cluster don't matter if token has full admin access
-	err = tk.CheckPermissions("any", &cmn.Bck{Name: "b1", Provider: "ais"}, apc.ClusterAccessRW&apc.AccessRW)
+	err := c.CheckPermissions("any", &cmn.Bck{Name: "b1", Provider: "ais"}, apc.ClusterAccessRW&apc.AccessRW)
 	tassert.Errorf(t, err == nil, "Failed to get full cluster RW access, error: %v", err)
 }
 
-func TestJWTBucket(t *testing.T) {
-	secret := "secret"
-	expires := time.Now().Add(2 * time.Hour)
-	user := "normalUser"
-
-	bckACL := makeBckACL(apc.AccessRO, "cid1", "b1")
-
-	tokenStr, err := tok.JWT(expires, user, []*authn.BckACL{bckACL}, nil, secret)
-	tassert.Fatalf(t, err == nil, "JWT generation failed: %v", err)
-	tk, err := tok.ValidateToken(tokenStr, secret, nil)
-	tassert.Fatalf(t, err == nil, "ValidateToken failed: %v", err)
-
-	// When comparing against bucket, don't include the cluster id in the namespace
-	bck := &cmn.Bck{Name: "b1", Provider: "ais"}
-	err = tk.CheckPermissions("cid1", bck, apc.AccessRO)
-	tassert.Errorf(t, err == nil, "Expected RO access on b1, got:: %v", err)
-
-	err = tk.CheckPermissions("cid1", bck, apc.AccessRW)
-	tassert.Error(t, err != nil, "Expected validation error requesting RW access on b1")
-	err = tk.CheckPermissions("cid2", bck, apc.AccessRO)
-	tassert.Error(t, err != nil, "Expected validation error when accessing cluster cid2")
-
-	bck2 := &cmn.Bck{Name: "b2", Provider: "ais", Ns: cmn.Ns{UUID: "cid1"}}
-	err = tk.CheckPermissions("cid1", bck2, apc.AccessRO)
-	tassert.Error(t, err != nil, "Expected write to b2 to be denied")
+func assertBucketClaims(t *testing.T, c *tok.AISClaims, user, cid string, bck1, bck2 *cmn.Bck) {
+	assertCommon(t, c, user, false)
+	err := c.CheckPermissions(cid, bck1, apc.AccessRO)
+	tassert.Errorf(t, err == nil, "Expected RO access on %s, got:: %v", bck1.Name, err)
+	err = c.CheckPermissions(cid, bck1, apc.AccessRW)
+	tassert.Errorf(t, err != nil, "Expected validation error requesting RW access on %s", bck1.Name)
+	err = c.CheckPermissions("another-cluster", bck1, apc.AccessRO)
+	tassert.Error(t, err != nil, "Expected validation error when accessing unauthorized cluster")
+	err = c.CheckPermissions(cid, bck2, apc.AccessRO)
+	tassert.Errorf(t, err != nil, "Expected all access to %s to be denied", bck2.Name)
 }
 
-func TestJWTCluster(t *testing.T) {
-	secret := "secret"
-	expires := time.Now().Add(2 * time.Hour)
-	user := "normalUser"
+func assertClusterClaims(t *testing.T, c *tok.AISClaims, user, cid string) {
+	assertCommon(t, c, user, false)
+	err := c.CheckPermissions(cid, nil, apc.ClusterAccessRO)
+	tassert.Errorf(t, err == nil, "Expected RO access on %s, got: %v", cid, err)
+	err = c.CheckPermissions(cid, nil, apc.ClusterAccessRW)
+	tassert.Errorf(t, err != nil, "Expected validation error when requesting RW access on %s", cid)
+	err = c.CheckPermissions("another-cluster", nil, apc.ClusterAccessRO)
+	tassert.Error(t, err != nil, "Expected validation error when requesting RO access on unauthorized cluster")
+}
 
-	cluACL := makeCluACL(apc.ClusterAccessRO, "cid1")
+func TestCreateHMACTokenStr(t *testing.T) {
+	tk, err := tok.CreateHMACTokenStr(tok.AdminClaims(futureTime, testUser), testHMACSigningSecret)
+	tassert.Errorf(t, err == nil, "Failed to create hmac-signed token string: %v", err)
+	_, err = tok.ValidateToken(tk, testHMACSigningSecret, nil)
+	tassert.Errorf(t, err == nil, "Failed to validate hmac-siagned token: %v", err)
+}
 
-	tokenStr, err := tok.JWT(expires, user, nil, []*authn.CluACL{cluACL}, secret)
-	tassert.Fatalf(t, err == nil, "JWT generation failed: %v", err)
-	tk, err := tok.ValidateToken(tokenStr, secret, nil)
-	tassert.Fatalf(t, err == nil, "ValidateToken failed: %v", err)
+func TestCreateRSATokenStr(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	tassert.Errorf(t, err == nil, "Failed to create rsa signing key: %v", err)
+	tk, err := tok.CreateRSATokenStr(tok.AdminClaims(futureTime, testUser), rsaKey)
+	tassert.Errorf(t, err == nil, "Failed to create RSA-signed token string: %v", err)
+	_, err = tok.ValidateToken(tk, "", &rsaKey.PublicKey)
+	tassert.Errorf(t, err == nil, "Failed to validate RSA-signed token: %v", err)
+}
 
-	err = tk.CheckPermissions("cid1", nil, apc.ClusterAccessRO)
-	tassert.Errorf(t, err == nil, "Expected RO access on cid1, got: %v", err)
+func TestAdminClaims(t *testing.T) {
+	claims := tok.AdminClaims(futureTime, testUser)
+	assertAdminClaims(t, claims, testUser)
+}
 
-	err = tk.CheckPermissions("cid1", nil, apc.ClusterAccessRW)
-	tassert.Error(t, err != nil, "Expected  validation error when requesting RW access on cid1")
+func TestStandardClaimsBucket(t *testing.T) {
+	cluster := "cid1"
 
-	err = tk.CheckPermissions("cid2", nil, apc.ClusterAccessRO)
-	tassert.Error(t, err != nil, "Expected  validation error when requesting RO access on cid2")
+	bckACL := makeBckACL(apc.AccessRO, cluster, "b1")
+
+	claims := tok.StandardClaims(futureTime, testUser, []*authn.BckACL{bckACL}, nil)
+
+	// When comparing against bucket, don't include the cluster id in the namespace
+	bck1 := &cmn.Bck{Name: "b1", Provider: "ais"}
+	bck2 := &cmn.Bck{Name: "b2", Provider: "ais"}
+
+	assertBucketClaims(t, claims, testUser, cluster, bck1, bck2)
+}
+
+func TestStandardClaimsCluster(t *testing.T) {
+	cluster := "cid1"
+
+	cluACL := makeCluACL(apc.ClusterAccessRO, cluster)
+
+	claims := tok.StandardClaims(futureTime, testUser, nil, []*authn.CluACL{cluACL})
+	assertClusterClaims(t, claims, testUser, cluster)
 }
 
 func TestExtractToken(t *testing.T) {
@@ -111,32 +145,99 @@ func TestExtractToken(t *testing.T) {
 	tassert.Error(t, err != nil, "Expected failure due to missing 'Bearer' prefix")
 }
 
-func TestTokenExpiration(t *testing.T) {
-	tk := &tok.Token{Expires: time.Now().Add(-time.Second)}
-	tassert.Error(t, tk.IsExpired(nil), "Token should be expired")
-	tk2 := &tok.Token{Expires: time.Now().Add(1 * time.Hour)}
-	tassert.Error(t, !tk2.IsExpired(nil), "Token should not be expired")
+func TestTokenIsExpired(t *testing.T) {
+	c := &tok.AISClaims{Expires: previousTime}
+	tassert.Error(t, c.IsExpired(), "AISClaims should be expired")
+	c = &tok.AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(previousTime),
+		},
+	}
+	tassert.Error(t, c.IsExpired(), "AISClaims should be expired")
+	c = &tok.AISClaims{Expires: futureTime}
+	tassert.Error(t, !c.IsExpired(), "AISClaims should not be expired")
+	c = &tok.AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(futureTime),
+		},
+	}
+	tassert.Error(t, !c.IsExpired(), "AISClaims should not be expired")
 }
 
-func TestRSAJWTValidate(t *testing.T) {
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("failed to generate RSA keys: %v", err)
+func TestTokenIsUser(t *testing.T) {
+	c := &tok.AISClaims{UserID: testUser}
+	tassert.Error(t, c.IsUser(testUser), "Claims should equal user")
+	tassert.Error(t, !c.IsUser("someOtherUser"), "Claims should not equal user")
+	c = &tok.AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject: testUser,
+		},
 	}
+	tassert.Error(t, c.IsUser(testUser), "Claims should equal user")
+	tassert.Error(t, !c.IsUser("someOtherUser"), "Claims should not equal user")
+}
 
-	expires := time.Now().Add(30 * time.Minute)
-	user := "rsauser"
-	claims := map[string]any{
-		"expires":  expires,
-		"username": user,
-		"admin":    true,
+// Create claims containing both old and new fields and validate the standard fields take precedence
+func TestClaimsBackwardsCompat(t *testing.T) {
+	expectedExp := jwt.NewNumericDate(time.Now().Add(30 * time.Minute))
+	expectedSub := "sub claim"
+	oldExp := jwt.NewNumericDate(time.Now().Add(2 * time.Hour))
+	userID := "username field"
+	combinedClaims := &tok.AISClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: expectedExp,
+			Subject:   expectedSub,
+		},
+		UserID:  userID,
+		Expires: oldExp.UTC(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims(claims))
-	tokenStr, err := token.SignedString(rsaKey)
-	tassert.Fatalf(t, err == nil, "RSA signing failed: %v", err)
+	sub, err := combinedClaims.GetSubject()
+	tassert.Errorf(t, err == nil, "Error getting subject from token: %v", err)
+	tassert.Error(t, expectedSub == sub, "Expected token subject to be equal to the OIDC sub claim")
+	exp, err := combinedClaims.GetExpirationTime()
+	tassert.Errorf(t, err == nil, "Error getting expiration time from token: %v", err)
+	tassert.Error(t, expectedExp.UTC().Equal(exp.UTC()), "Expected token expiration time to be equal to the OIDC exp claim")
+	// The old fields are still set, just not used by the overridden Claims methods
+	tassert.Error(t, oldExp.UTC().Equal(combinedClaims.Expires), "Expected token to contain old expiry field")
+	tassert.Error(t, userID == combinedClaims.UserID, "Expected user id to match old userID field")
+}
 
-	tk, err := tok.ValidateToken(tokenStr, "", &rsaKey.PublicKey)
-	tassert.Fatalf(t, err == nil, "ValidateToken failed with RSA: %v", err)
-	tassert.Errorf(t, tk.UserID == user, "Expected username %q, got %q", user, tk.UserID)
-	tassert.Errorf(t, tk.IsAdmin, "Expected IsAdmin to be true")
+// Test validating a token successfully
+func TestValidateTokenSuccess(t *testing.T) {
+	c := tok.AdminClaims(futureTime, testUser)
+	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
+	claims, err := tok.ValidateToken(tokenStr, testHMACSigningSecret, nil)
+	tassert.Errorf(t, err == nil, "Expected successful validation but got %v", err)
+	assertAdminClaims(t, claims, testUser)
+}
+
+// Test validating token with invalid claims
+func TestValidateTokenInvalidKey(t *testing.T) {
+	c := tok.AdminClaims(futureTime, testUser)
+	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
+	_, err = tok.ValidateToken(tokenStr, "invalid secret", nil)
+	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with wrong key to fail")
+}
+
+// Test validating an expired token with an unsupported signing method
+func TestValidateTokenUnsupported(t *testing.T) {
+	c := tok.AdminClaims(futureTime, testUser)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	tassert.Fatalf(t, err == nil, "Failed to generate ecdsa key: %v", err)
+	tk := jwt.NewWithClaims(jwt.SigningMethodES256, c)
+	tokenStr, err := tk.SignedString(key)
+	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
+	_, err = tok.ValidateToken(tokenStr, "", nil)
+	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with invalid signing method to fail")
+}
+
+// Test that validating an expired token raises the appropriate exception
+func TestValidateTokenExpired(t *testing.T) {
+	c := tok.AdminClaims(previousTime, testUser)
+	tokenStr, err := tok.CreateHMACTokenStr(c, testHMACSigningSecret)
+	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
+	_, err = tok.ValidateToken(tokenStr, testHMACSigningSecret, nil)
+	tassert.Fatal(t, errors.Is(err, tok.ErrTokenExpired), "Expected an error when token is expired")
 }

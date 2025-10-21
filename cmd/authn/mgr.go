@@ -362,7 +362,7 @@ func (m *mgr) delCluster(cluID string) (int, error) {
 
 // Generates a token for a user if user credentials are valid. If the token is
 // already generated and is not expired yet the existing token is returned.
-// Token includes user ID, permissions, and token expiration time.
+// AISClaims includes user ID, permissions, and token expiration time.
 // If a new token was generated then it sends the proxy a new valid token list
 func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, code int, err error) {
 	var (
@@ -397,7 +397,7 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 	return token, http.StatusOK, nil
 }
 
-func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (token string, err error) {
+func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (string, error) {
 	expDelta := Conf.Expire()
 	if msg.ExpiresIn != nil {
 		expDelta = *msg.ExpiresIn
@@ -409,15 +409,13 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 	// put all useful info into token: who owns the token, when it was issued,
 	// when it expires and credentials to log in AWS, GCP etc.
 	// If a user is a super user, it is enough to pass only isAdmin marker
-	expires := time.Now().Add(expDelta)
+	expires := time.Now().UTC().Add(expDelta)
 	uid := uInfo.ID
 	if uInfo.IsAdmin() {
-		token, err = tok.AdminJWT(expires, uid, Conf.Secret())
-	} else {
-		m.fixClusterIDs(cluACLs)
-		token, err = tok.JWT(expires, uid, bckACLs, cluACLs, Conf.Secret())
+		return tok.CreateHMACTokenStr(tok.AdminClaims(expires, uid), Conf.Secret())
 	}
-	return token, err
+	m.fixClusterIDs(cluACLs)
+	return tok.CreateHMACTokenStr(tok.StandardClaims(expires, uid, bckACLs, cluACLs), Conf.Secret())
 }
 
 // Before putting a list of cluster permissions to a token, cluster aliases
@@ -462,18 +460,16 @@ func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
 		return nil, code, err
 	}
 
-	now := time.Now()
 	revokeList := make([]string, 0, len(tokens))
 	secret := Conf.Secret()
 	for _, token := range tokens {
-		tk, err := tok.ValidateToken(token, secret, nil)
+		_, err = tok.ValidateToken(token, secret, nil)
 		if err != nil {
-			m.db.Delete(revokedCollection, token)
-			continue
-		}
-		if tk.IsExpired(&now) {
-			nlog.Infof("removing %s", tk)
-			m.db.Delete(revokedCollection, token)
+			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
+			_, err = m.db.Delete(revokedCollection, token)
+			if err != nil {
+				nlog.Errorf("failed to delete token %q due to error %v", token, err)
+			}
 			continue
 		}
 		revokeList = append(revokeList, token)

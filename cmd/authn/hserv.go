@@ -284,7 +284,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reqUser := items[0]
-	if !tk.IsAdmin && tk.UserID != reqUser {
+	if !tk.IsAdmin && !tk.IsUser(reqUser) {
 		err := errors.New("not authorized: requires admin or self")
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
@@ -298,20 +298,20 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, uInfo, "get user")
 }
 
-func getToken(r *http.Request) (*tok.Token, error) {
+func getToken(r *http.Request) (*tok.AISClaims, error) {
 	tokenStr, err := tok.ExtractToken(r.Header)
 	if err != nil {
 		return nil, err
 	}
 	secret := Conf.Secret()
-	tk, err := tok.ValidateToken(tokenStr, secret, nil)
+	claims, err := tok.ValidateToken(tokenStr, secret, nil)
 	if err != nil {
+		if errors.Is(err, tok.ErrInvalidToken) {
+			return nil, fmt.Errorf("not authorized (token expired): %q", tokenStr)
+		}
 		return nil, err
 	}
-	if tk.IsExpired(nil) {
-		return nil, fmt.Errorf("not authorized (token expired): %s", tk)
-	}
-	return tk, nil
+	return claims, nil
 }
 
 // Checks if the request header contains valid admin credentials.
@@ -339,7 +339,7 @@ func validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, 
 	if tk.IsAdmin {
 		return nil
 	}
-	if tk.UserID == userID && len(updateReq.Roles) == 0 {
+	if tk.IsUser(userID) && len(updateReq.Roles) == 0 {
 		return nil
 	}
 	err = fmt.Errorf("not authorized: (%s)", tk)

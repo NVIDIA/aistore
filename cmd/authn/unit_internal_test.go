@@ -9,6 +9,7 @@ package main
 // NOTE go:build debug (above) =====================================
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -211,8 +212,10 @@ func TestToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to decrypt token %v: %v", token, err)
 	}
-	if info.UserID != users[1] {
-		t.Errorf("Invalid user %s returned for token of %s", info.UserID, users[1])
+	sub, err := info.GetSubject()
+	tassert.CheckFatal(t, err)
+	if sub != users[1] {
+		t.Errorf("Invalid subject %s returned for token of %s", sub, users[1])
 	}
 
 	// incorrect user creds
@@ -224,9 +227,8 @@ func TestToken(t *testing.T) {
 
 	// expired token test
 	time.Sleep(shortExpiration)
-	tk, err := tok.ValidateToken(token, secret, nil)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, tk.IsExpired(nil), "Token must be expired: %s", token)
+	_, err = tok.ValidateToken(token, secret, nil)
+	tassert.Fatalf(t, errors.Is(err, tok.ErrTokenExpired), "Token must be expired: %s", token)
 }
 
 func TestMergeCluACLS(t *testing.T) {
