@@ -173,7 +173,7 @@ func Start(version, buildtime string) (err error) {
 	if runParams.getLoaderID {
 		fmt.Printf("0x%x\n", suffixID)
 		if useRandomObjName {
-			fmt.Printf("Warning: loaderID 0x%x used only for StatsD, not for object names!\n", suffixID)
+			fmt.Fprintf(os.Stderr, "Warning: loaderID 0x%x used only for StatsD, not for object names!\n", suffixID)
 		}
 		return nil
 	}
@@ -236,6 +236,8 @@ func Start(version, buildtime string) (err error) {
 		}
 		objnameGetter = &namegetter.Random{}
 		objnameGetter.Init([]string{}, rnd)
+
+		// note that "'-skiplist' option is ignored when '-filelist' is specified"
 	case !runParams.skipList:
 		names, err := listObjects()
 		if err != nil {
@@ -460,7 +462,7 @@ Done:
 				}
 			}
 			if actualChunked != accumulatedStats.putMPU.Total() {
-				fmt.Printf("WARNING: Expected %d chunked objects but found %d\n", accumulatedStats.putMPU.Total(), actualChunked)
+				fmt.Fprintf(os.Stderr, "Warning: Expected %d chunked objects but found %d\n", accumulatedStats.putMPU.Total(), actualChunked)
 			}
 		}
 	}

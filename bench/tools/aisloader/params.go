@@ -356,15 +356,15 @@ func _init(p *params) (err error) {
 		return fmt.Errorf("invalid option: pctmultipart %d (must be 0-100)", p.multipartPct)
 	}
 	if p.multipartChunks == 0 && p.multipartPct != 0 {
-		fmt.Printf("Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
+		fmt.Fprintf(os.Stderr, "Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
 	}
 
-	if p.skipList {
-		if p.fileList != "" {
-			fmt.Println("Warning: '-skiplist' is redundant (implied) when '-filelist' is specified")
-		} else if p.putPct != 100 {
-			return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
-		}
+	if p.skipList && p.fileList != "" {
+		fmt.Fprintln(os.Stderr, "Warning: '-skiplist' option is ignored when '-filelist' is specified")
+		p.skipList = false
+	}
+	if p.skipList && p.putPct < 100 {
+		return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
 	}
 
 	// direct s3 access vs other command line
