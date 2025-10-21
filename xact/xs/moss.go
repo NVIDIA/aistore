@@ -197,6 +197,8 @@ func (p *mossFactory) Start() error {
 	return nil
 }
 
+// exercise full control over "reuse the one that is running now" decision
+// compare w/ xreg.usePrev() default logic
 func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 	if prev.UUID() == p.UUID() {
 		return xreg.WprUse, nil
@@ -210,6 +212,24 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 		debug.Assert(false)
 		return xreg.WprKeepAndStartNew, nil
 	}
+
+	var (
+		prevBck = r.Bck()
+		currBck = p.Bck
+	)
+
+	switch {
+	case prevBck == nil && currBck == nil:
+		// reuse when no default bucket whatsoever
+	case (prevBck == nil) != (currBck == nil):
+		return xreg.WprKeepAndStartNew, nil
+	default:
+		if !prevBck.Equal(currBck, true, true) {
+			return xreg.WprKeepAndStartNew, nil
+		}
+		// reuse
+	}
+
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(core.T.String(), "DT prev:", r.Name(), "curr:", p.UUID(), "- using prev...")
 	}

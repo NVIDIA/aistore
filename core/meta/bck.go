@@ -133,6 +133,13 @@ func (b *Bck) String() string {
 }
 
 func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
+	if b == nil || other == nil {
+		return false
+	}
+	if b == other {
+		return true
+	}
+
 	left, right := (*cmn.Bck)(b), (*cmn.Bck)(other)
 	if left.IsEmpty() || right.IsEmpty() {
 		return false
@@ -140,16 +147,21 @@ func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	if !left.Equal(right) {
 		return false
 	}
+
+	// only enforce BID when both are initialized
 	if sameID && b.Props != nil && other.Props != nil && b.Props.BID != other.Props.BID {
 		return false
 	}
 	if !sameBackend {
 		return true
 	}
-	if backleft, backright := left.Backend(), right.Backend(); backleft != nil && backright != nil {
-		return backleft.Equal(backright)
+
+	// for backends: (nil, nil) is fine; otherwise by (name, provider, namespace) only
+	bl, br := left.Backend(), right.Backend()
+	if bl == nil || br == nil {
+		return bl == br
 	}
-	return true
+	return bl.Equal(br)
 }
 
 func (b *Bck) Eq(other *cmn.Bck) bool { return other.Equal(b.Bucket()) }
