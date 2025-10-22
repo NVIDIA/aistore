@@ -192,9 +192,10 @@ class TestObjectGroupOps(ParallelTestBase):
         )
         for job_id in copy_job_ids:
             self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
-
-        self.assertEqual(
-            4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
+        assert_with_retries(
+            self.assertEqual,
+            4,
+            len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix)),
         )
 
     def test_copy_objects(self):
@@ -344,7 +345,7 @@ class TestObjectGroupOps(ParallelTestBase):
         )
         for job_id in copy_job_ids:
             self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
-        self.assertEqual(1, len(to_bck.list_all_objects()))
+        assert_with_retries(self.assertEqual, 1, len(to_bck.list_all_objects()))
         content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
