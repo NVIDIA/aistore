@@ -74,7 +74,7 @@ client.bucket(BUCKET_NAME).create()
 client.cluster().list_buckets()
 
 # Put dataset [COMPRESSED_TINYIMAGENET] in bucket [BUCKET_NAME] as object with name [OBJECT_NAME]
-client.bucket(BUCKET_NAME).object(OBJECT_NAME).put(COMPRESSED_TINYIMAGENET)
+client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_writer().put_file(COMPRESSED_TINYIMAGENET)
 
 # Verify object put operation
 client.bucket(BUCKET_NAME).list_objects().get_entries()
@@ -108,10 +108,13 @@ BUCKET_NAME = "tinyimagenet_compressed"
 OBJECT_NAME = "tinyimagenet-compressed.zip"
 
 # Get object [OBJECT_NAME] from bucket [BUCKET_NAME]
-client.bucket(BUCKET_NAME).object(OBJECT_NAME).get()
+reader = client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_reader()
+
+# Read all bytes
+data = reader.read_all()
 ```
 
-If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.list_objects) and [Object.get()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get).
+If we want to get the *uncompressed* TinyImageNet from AIStore bucket `ais://tinyimagenet_uncompressed`, we can easily do that with [Bucket.list_objects()](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.list_objects) and [Object.get_reader()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get_reader).
 
 ```python
 BUCKET_NAME = "tinyimagenet_uncompressed"
@@ -121,7 +124,7 @@ TINYIMAGENET_UNCOMPRESSED = client.bucket(BUCKET_NAME).list_objects().get_entrie
 
 for FILENAME in TINYIMAGENET_UNCOMPRESSED:
     # Get object [filename.name] from bucket [BUCKET_NAME]
-    client.bucket(BUCKET_NAME).object(FILENAME.name).get()
+    client.bucket(BUCKET_NAME).object(FILENAME.name).get_reader()
 ```
 
 We can also pick a *specific* section of the uncompressed dataset and only get those specific objects. By specifying a `prefix` to our [Bucket.list_objects()](https://aistore.nvidia.com/docs/python-sdk#bucket.Bucket.list_objects) call, we can manipulate the *symbolic* file system and list only the contents in our desired directory.
@@ -134,7 +137,7 @@ TINYIMAGENET_UNCOMPRESSED_VAL = client.bucket(BUCKET_NAME).list_objects(prefix="
 
 for FILENAME in TINYIMAGENET_UNCOMPRESSED_VAL:
     # Get operation on objects with prefix "validation/" from bucket [tinyimagenet_uncompressed]
-    client.bucket(BUCKET_NAME).object(FILENAME.name).get()
+    client.bucket(BUCKET_NAME).object(FILENAME.name).get_reader()
 ```
 
 ### External Cloud Storage Providers
@@ -161,26 +164,26 @@ docker run -d \
 
 > Deploying an AIStore cluster with third-party cloud backends simply *imports/copies the buckets and objects from the provided third-party backends to AIStore*. The client-side APIs themselves do **not** interact with the actual external backends at any point. The client-side APIs only interact with duplicate instances of those external cloud storage buckets residing in the AIStore cluster.
 
-The [Object.get()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get) works with external cloud storage buckets as well. We can use the method in a similar fashion as shown previously to easily get either a compressed or uncompressed version of the dataset from, for examples, `gcp://tinyimagenet_compressed` and `gcp://tinyimagenet_uncompressed`. 
+The [Object.get_reader()](https://aistore.nvidia.com/docs/python-sdk#obj.object.Object.get_reader) works with external cloud storage buckets as well. We can use the method in a similar fashion as shown previously to easily get either a compressed or uncompressed version of the dataset from, for examples, `gcp://tinyimagenet_compressed` and `gcp://tinyimagenet_uncompressed`. 
 
 ```python
 # Getting compressed TinyImageNet dataset from [gcp://tinyimagenet_compressed]
 BUCKET_NAME = "tinyimagenet_compressed"
 OBJECT_NAME = "tinyimagenet-compressed.zip"
-client.bucket(BUCKET_NAME, provider="gcp").object(OBJECT_NAME).get()
+client.bucket(BUCKET_NAME, provider="gcp").object(OBJECT_NAME).get_reader()
 
 
 # Getting uncompressed TinyImageNet dataset from [gcp://tinyimagenet_uncompressed]
 BUCKET_NAME = "tinyimagenet_uncompressed"
 TINYIMAGENET_UNCOMPRESSED = client.bucket(BUCKET_NAME, provider="gcp").list_objects().get_entries()
 for FILENAME in TINYIMAGENET_UNCOMPRESSED:
-    client.bucket(BUCKET_NAME, provider="gcp").object(FILENAME.name).get()
+    client.bucket(BUCKET_NAME, provider="gcp").object(FILENAME.name).get_reader()
 
 
 # Getting only objects with prefix "validation/" from bucket [gcp://tinyimagenet_uncompressed]
 TINYIMAGENET_UNCOMPRESSED_VAL = client.bucket(BUCKET_NAME).list_objects(prefix="validation/").get_entries()
 for FILENAME in TINYIMAGENET_UNCOMPRESSED_VAL:
-    client.bucket(BUCKET_NAME).object(FILENAME.name).get()
+    client.bucket(BUCKET_NAME).object(FILENAME.name).get_reader()
 ```
 
 > Note the added argument `provider` supplied in [`Client.bucket()`](https://aistore.nvidia.com/docs/python-sdk#client.Client.bucket) for the examples shown above.

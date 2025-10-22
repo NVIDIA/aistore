@@ -27,7 +27,7 @@ client = Client("http://localhost:8080", retry=retry)
 obj = client.bucket(BUCKET_NAME).object(OBJECT_NAME)
 
 # Open the object as a file and read data in chunks
-with obj.get().as_file(max_resume=5) as file:
+with obj.get_reader().as_file(max_resume=5) as file:
     file.read(1024) # Read the first 1KB
     file.read(1024) # Read the next 1KB 
     file.read() # Or read until EOF
@@ -39,7 +39,7 @@ During each `read` operation, `ObjectFile` will attempt to resume a disconnected
 
 ## Background
 
-The basic `object.get()` function in the AIS SDK returns an `ObjectReader`, which enables efficient streaming of data by providing an iterator that fetches data in chunks (using the [requests library's stream option](https://requests.readthedocs.io/en/latest/user/advanced/#body-content-workflow)). However, it doesn’t account for network interruptions, such as unexpected stream closures or timeouts. In the case of a failure, the entire stream may need to be manually restarted, resulting in major inefficiencies and redundant data transfer.
+The basic `object.get_reader()` function in the AIS SDK returns an `ObjectReader`, which enables efficient streaming of data by providing an iterator that fetches data in chunks (using the [requests library's stream option](https://requests.readthedocs.io/en/latest/user/advanced/#body-content-workflow)). However, it doesn't account for network interruptions, such as unexpected stream closures or timeouts. In the case of a failure, the entire stream may need to be manually restarted, resulting in major inefficiencies and redundant data transfer.
 
 `ObjectFile` addresses this problem by wrapping `ObjectReader` with a file-like interface that incorporates buffer management and logic to handle unexpected interruptions to the object stream. By resuming streams from the exact byte where an interruption occurred, `ObjectFile` eliminates the need to re-fetch previously read data, ensuring uninterrupted data access even in unstable network conditions.
 
@@ -79,14 +79,14 @@ Because `ObjectFile` extends `io.BufferedIOBase`, you can use it in any context 
 
 ```python
 # Stream and extract a tar file
-with client.bucket(BUCKET_NAME).object(OBJECT_NAME).get().as_file(max_resume=5) as file_obj:
+with client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_reader().as_file(max_resume=5) as file_obj:
     with tarfile.open(fileobj=file_obj, mode='r|*') as tar:
         for member in tar:
             print(f"Extracting {member.name}")
             tar.extract(member)
 
 # Stream a CSV file and iterate through rows
-with client.bucket(BUCKET_NAME).object(OBJECT_NAME).get().as_file(max_resume=5) as obj_file:
+with client.bucket(BUCKET_NAME).object(OBJECT_NAME).get_reader().as_file(max_resume=5) as obj_file:
     csv_reader = csv.reader(obj_file)
     for row in csv_reader:
         print(row)
@@ -100,7 +100,7 @@ While `ObjectFile` brings substantial improvements in terms of resilience and pe
 
 #### Custom Buffer Size
 
-In the initial implementation, `ObjectFile` uses an internal buffer of the same size requested by the reader (on each call to `read()`). For reading larger chunk sizes over the network, we rely on the `object.get()` `chunk_size` parameter, which can exceed the requested buffer size. With a larger chunk size, the buffer will often still hold enough data for multiple reads. 
+In the initial implementation, `ObjectFile` uses an internal buffer of the same size requested by the reader (on each call to `read()`). For reading larger chunk sizes over the network, we rely on the `object.get_reader()` `chunk_size` parameter, which can exceed the requested buffer size. With a larger chunk size, the buffer will often still hold enough data for multiple reads. 
 
 Adding support for custom buffer sizes would allow further performance optimization by separating the buffer size from the amount specified in each `read` call. More work still needs to be done to determine optimal sizes for read, buffer, and chunk iteration (see [Benchmarking](#benchmarking) section below for ongoing efforts to fine-tune these sizes).
 

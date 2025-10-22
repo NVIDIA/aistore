@@ -70,7 +70,7 @@ bucket = client.bucket("my-bck").create(exist_ok=True)
 # Creating objects in our bucket
 object_names = [f"example_obj_{i}" for i in range(10)]
 for name in object_names:
-    bucket.object(name).put_content("object content".encode("utf-8"))
+    bucket.object(name).get_writer().put_content("object content".encode("utf-8"))
 
 # Creating an object group
 my_objects = bucket.objects(obj_names=object_names)

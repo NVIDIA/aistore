@@ -110,7 +110,7 @@ class CIFAR10Dataset(AISBaseIterDataset):
         worker_iter, _ = self._get_worker_iter_info() # from AISBaseIterDataset, returns iter of objects for current worker (even if not using workers)
 
         for obj in worker_iter:
-            cifar_dict = pickle.load(BytesIO(obj.get().read_all()), encoding="bytes")
+            cifar_dict = pickle.load(BytesIO(obj.get_reader().read_all()), encoding="bytes")
 
             data = cifar_dict[b"data"]
             reshaped_data = data.reshape(10000, 3, 32, 32).transpose(0, 2, 3, 1)

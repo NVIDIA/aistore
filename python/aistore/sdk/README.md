@@ -79,7 +79,7 @@ client.bucket("my-gcp-bucket", provider="gcp").evict()
 
 ```python
 # Get object from Azure bucket
-client.bucket("my-azure-bucket", provider="azure").object("filename.ext").get()
+client.bucket("my-azure-bucket", provider="azure").object("filename.ext").get_reader()
 ```
 
 ```python

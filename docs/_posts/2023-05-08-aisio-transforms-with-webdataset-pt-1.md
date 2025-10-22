@@ -69,7 +69,7 @@ The full code is available [here](https://github.com/NVIDIA/aistore/blob/main/do
 def load_data(bucket, sample_generator):
 
     def upload_shard(filename):
-        bucket.object(filename).put_file(filename)
+        bucket.object(filename).get_writer().put_file(filename)
         os.unlink(filename)
 
     # Writes data as tar to disk, uses callback function "post" to upload to AIS and delete
