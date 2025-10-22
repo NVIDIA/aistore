@@ -233,6 +233,41 @@ func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader 
 	return
 }
 
+func uploadMultipartPart(baseParams api.BaseParams, bck cmn.Bck, objName, uploadID string,
+	partNum int, partSize uint64, cksumType string,
+	mu *sync.Mutex, partNumbers []int) error {
+	partReader, err := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      int64(partSize),
+		CksumType: cksumType,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
+	}
+	putPartArgs := &api.PutPartArgs{
+		PutArgs: api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			ObjName:    objName,
+			Cksum:      partReader.Cksum(),
+			Reader:     partReader,
+			Size:       partSize,
+			SkipVC:     true,
+		},
+		UploadID:   uploadID,
+		PartNumber: partNum,
+	}
+	if err := api.UploadPart(putPartArgs); err != nil {
+		return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
+	}
+
+	mu.Lock()
+	partNumbers[partNum-1] = partNum
+	mu.Unlock()
+
+	return nil
+}
+
 // putMultipart performs multipart upload for the given object
 func putMultipart(proxyURL string, bck cmn.Bck, objName string, size int64, numChunks int, cksumType string) error {
 	baseParams := api.BaseParams{
@@ -262,39 +297,9 @@ func putMultipart(proxyURL string, bck cmn.Bck, objName string, size int64, numC
 			nextOffset = uint64(partNum) * uint64(size) / uint64(numChunks)
 			partSize   = nextOffset - offset
 		)
-		group.Go(func(partNum int) func() error {
-			return func() error {
-				// Create reader for this part (simplified - just use random data)
-				partReader, err := readers.NewRand(int64(partSize), cksumType)
-				if err != nil {
-					return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
-				}
-
-				putPartArgs := &api.PutPartArgs{
-					PutArgs: api.PutArgs{
-						BaseParams: baseParams,
-						Bck:        bck,
-						ObjName:    objName,
-						Cksum:      partReader.Cksum(),
-						Reader:     partReader,
-						Size:       partSize,
-						SkipVC:     true,
-					},
-					UploadID:   uploadID,
-					PartNumber: partNum,
-				}
-
-				if err := api.UploadPart(putPartArgs); err != nil {
-					return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
-				}
-
-				mu.Lock()
-				partNumbers[partNum-1] = partNum
-				mu.Unlock()
-
-				return nil
-			}
-		}(partNum))
+		group.Go(func() error {
+			return uploadMultipartPart(baseParams, bck, objName, uploadID, partNum, partSize, cksumType, mu, partNumbers)
+		})
 	}
 
 	// Wait for all parts to complete

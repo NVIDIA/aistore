@@ -27,7 +27,7 @@ import (
 var bp api.BaseParams
 
 func TestPutFile(t *testing.T) {
-	err := putFile(1024, cos.ChecksumCesXxh)
+	err := putRandFile(1024, cos.ChecksumCesXxh)
 	if err != nil {
 		t.Fatal("Put file failed", err)
 	}
@@ -45,10 +45,16 @@ func TestPutSG(t *testing.T) {
 	}
 }
 
-func putFile(size int64, cksumType string) error {
+func putRandFile(size int64, cksumType string) error {
 	fn := "ais-client-test-" + trand.String(32)
 	dir := "/tmp"
-	r, err := readers.NewRandFile(dir, fn, size, cksumType)
+	r, err := readers.New(&readers.Params{
+		Type:      readers.TypeFile,
+		Path:      dir,
+		Name:      fn,
+		Size:      size,
+		CksumType: cksumType,
+	})
 	if err != nil {
 		return err
 	}
@@ -65,7 +71,11 @@ func putFile(size int64, cksumType string) error {
 }
 
 func putRand(size int64, cksumType string) error {
-	r, err := readers.NewRand(size, cksumType)
+	r, err := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      size,
+		CksumType: cksumType,
+	})
 	if err != nil {
 		return err
 	}
@@ -82,7 +92,12 @@ func putRand(size int64, cksumType string) error {
 
 func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	sgl.Reset()
-	r, err := readers.NewSG(sgl, size, cksumType)
+	r, err := readers.New(&readers.Params{
+		Type:      readers.TypeSG,
+		SGL:       sgl,
+		Size:      size,
+		CksumType: cksumType,
+	})
 	if err != nil {
 		return err
 	}
@@ -99,7 +114,7 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
 	for b.Loop() {
-		err := putFile(1024*1024, cos.ChecksumCesXxh)
+		err := putRandFile(1024*1024, cos.ChecksumCesXxh)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -130,7 +145,7 @@ func BenchmarkPutSGWithHash1M(b *testing.B) {
 
 func BenchmarkPutFileNoHash1M(b *testing.B) {
 	for b.Loop() {
-		err := putFile(1024*1024, cos.ChecksumNone)
+		err := putRandFile(1024*1024, cos.ChecksumNone)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -162,7 +177,7 @@ func BenchmarkPutSGNoHash1M(b *testing.B) {
 func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err := putFile(1024*1024, cos.ChecksumCesXxh)
+			err := putRandFile(1024*1024, cos.ChecksumCesXxh)
 			if err != nil {
 				b.Fatal(err)
 			}

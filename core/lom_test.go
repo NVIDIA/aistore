@@ -1173,7 +1173,12 @@ func createTestFile(fqn string, size int) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	if size > 0 {
-		reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+		reader, _ := readers.New(&readers.Params{
+			Type:      readers.TypeRand,
+			Size:      int64(size),
+			CksumType: cos.ChecksumNone,
+		})
+		defer reader.Close()
 		_, err := io.Copy(testFile, reader)
 		_ = testFile.Close()
 
@@ -1188,7 +1193,12 @@ func createTestChunk(fqn string, size int, xxhash io.Writer) {
 
 	if size > 0 {
 		mw := cos.IniWriterMulti(testFile, xxhash)
-		reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+		reader, _ := readers.New(&readers.Params{
+			Type:      readers.TypeRand,
+			Size:      int64(size),
+			CksumType: cos.ChecksumNone,
+		})
+		defer reader.Close()
 		_, err := io.Copy(mw, reader)
 		_ = testFile.Close()
 

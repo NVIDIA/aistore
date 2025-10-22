@@ -148,14 +148,26 @@ func TestGetFromArch(t *testing.T) {
 					if test.autodetect && corruptAutoDetectOnce.Inc() == 1 {
 						corrupted = true
 						tlog.Logfln("============== damaging %s - overwriting w/ random data", archName)
-						reader, err = readers.NewRandFile(filepath.Dir(archName),
-							filepath.Base(archName), 1024, cos.ChecksumNone)
+						reader, err = readers.New(&readers.Params{
+							Type:      readers.TypeFile,
+							Path:      filepath.Dir(archName),
+							Name:      filepath.Base(archName),
+							Size:      1024,
+							CksumType: cos.ChecksumNone,
+						})
 					} else {
-						reader, err = readers.NewExistingFile(archName, cos.ChecksumNone)
+						reader, err = readers.New(&readers.Params{
+							Type:      readers.TypeFile,
+							Path:      archName,
+							Size:      readers.ExistingFileSize,
+							CksumType: cos.ChecksumNone,
+						})
 					}
 					tassert.CheckFatal(t, err)
 
 					tools.Put(m.proxyURL, m.bck, objname, reader, 0 /*size*/, 0 /*numChunks*/, errCh)
+					tassert.Error(t, reader.Close() != nil, "expecting file reader to be closed")
+
 					tassert.SelectErr(t, errCh, "put", true)
 
 					for _, randomName := range randomNames {

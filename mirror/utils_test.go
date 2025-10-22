@@ -191,7 +191,14 @@ func createTestFile(filePath, objName string, size int64) {
 	err := cos.CreateDir(filePath)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	r, err := readers.NewRandFile(filePath, objName, size, cos.ChecksumNone)
+	r, err := readers.New(&readers.Params{
+		Path:      filePath,
+		Name:      objName,
+		Type:      readers.TypeFile,
+		Size:      size,
+		CksumType: cos.ChecksumNone,
+	})
+
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }
@@ -230,7 +237,14 @@ func createChunkedMirrorLOM(fqn string, numChunks int) *core.LOM {
 		err = cos.CreateDir(filepath.Dir(chunkFQN))
 		Expect(err).NotTo(HaveOccurred())
 
-		r, err := readers.NewRandFile(filepath.Dir(chunkFQN), filepath.Base(chunkFQN), chunkSize, cos.ChecksumNone)
+		r, err := readers.New(&readers.Params{
+			Path:      filepath.Dir(chunkFQN),
+			Name:      filepath.Base(chunkFQN),
+			Type:      readers.TypeFile,
+			Size:      chunkSize,
+			CksumType: cos.ChecksumNone,
+		})
+
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(r.Close()).ShouldNot(HaveOccurred())
 

@@ -236,7 +236,13 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logln("PUT object")
-	reader, err := readers.NewExistingFile(inputFilePath, cos.ChecksumNone)
+	reader, err := readers.New(&readers.Params{
+		Type:      readers.TypeFile,
+		Path:      inputFilePath,
+		Size:      readers.ExistingFileSize,
+		CksumType: cos.ChecksumCesXxh,
+	})
+
 	tassert.CheckFatal(t, err)
 	tools.PutObject(t, bck, objName, reader, 0 /*size*/)
 

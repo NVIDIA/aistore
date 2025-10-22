@@ -388,20 +388,59 @@ func putMultipartObjectSequential(bp api.BaseParams, bck cmn.Bck, objName, uploa
 
 		if err := api.UploadPart(putPartArgs); err != nil {
 			if abortErr := api.AbortMultipartUpload(bp, bck, objName, uploadID); abortErr != nil {
-				return fmt.Errorf("failed to upload part %d and failed to abort %s: upload error: %w, abort error: %v", partNum, objName, err, abortErr)
+				return fmt.Errorf("failed to upload part %d and failed to abort %s: upload err: %w, abort err: %v",
+					partNum, objName, err, abortErr)
 			}
 			return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
 		}
-
 		partNumbers[partNum-1] = partNum
 	}
 
 	if err := api.CompleteMultipartUpload(bp, bck, objName, uploadID, partNumbers); err != nil {
 		if abortErr := api.AbortMultipartUpload(bp, bck, objName, uploadID); abortErr != nil {
-			return fmt.Errorf("failed to complete multipart upload and failed to abort %s: complete error: %w, abort error: %v", objName, err, abortErr)
+			return fmt.Errorf("failed to complete multipart upload and failed to abort %s: complete err: %w, abort err: %v",
+				objName, err, abortErr)
 		}
 		return fmt.Errorf("failed to complete multipart upload for %s: %w", objName, err)
 	}
+	return nil
+}
+
+func uploadPart(bp api.BaseParams, bck cmn.Bck, objName, uploadID string,
+	partNum int, partSize uint64, args *PutObjectsArgs,
+	mu *sync.Mutex, partNumbers []int) error {
+	partReader, err := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      int64(partSize),
+		CksumType: args.CksumType,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
+	}
+	defer partReader.Close()
+
+	putPartArgs := &api.PutPartArgs{
+		PutArgs: api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    objName,
+			Cksum:      partReader.Cksum(),
+			Reader:     partReader,
+			Size:       partSize,
+			SkipVC:     args.SkipVC,
+		},
+		UploadID:   uploadID,
+		PartNumber: partNum,
+	}
+
+	if err := api.UploadPart(putPartArgs); err != nil {
+		return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
+	}
+
+	mu.Lock()
+	partNumbers[partNum-1] = partNum
+	mu.Unlock()
+
 	return nil
 }
 
@@ -422,6 +461,7 @@ func PutMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uin
 		mu          = &sync.Mutex{}
 		group       = &errgroup.Group{}
 	)
+
 	for i := range args.MultipartNumChunks {
 		var (
 			partNum    = i + 1
@@ -429,38 +469,9 @@ func PutMultipartObject(bp api.BaseParams, bck cmn.Bck, objName string, size uin
 			nextOffset = uint64(partNum) * size / uint64(args.MultipartNumChunks)
 			partSize   = nextOffset - offset
 		)
-		group.Go(func(partNum int) func() error {
-			return func() error {
-				partReader, err := readers.NewRand(int64(partSize), args.CksumType)
-				if err != nil {
-					return fmt.Errorf("failed to create reader for part %d of %s: %w", partNum, objName, err)
-				}
-
-				putPartArgs := &api.PutPartArgs{
-					PutArgs: api.PutArgs{
-						BaseParams: bp,
-						Bck:        bck,
-						ObjName:    objName,
-						Cksum:      partReader.Cksum(),
-						Reader:     partReader,
-						Size:       partSize,
-						SkipVC:     args.SkipVC,
-					},
-					UploadID:   uploadID,
-					PartNumber: partNum,
-				}
-
-				if err := api.UploadPart(putPartArgs); err != nil {
-					return fmt.Errorf("failed to upload part %d of %s: %w", partNum, objName, err)
-				}
-
-				mu.Lock()
-				partNumbers[partNum-1] = partNum
-				mu.Unlock()
-
-				return nil
-			}
-		}(partNum))
+		group.Go(func() error {
+			return uploadPart(bp, bck, objName, uploadID, partNum, partSize, args, mu, partNumbers)
+		})
 	}
 
 	// Wait for all parts to complete
@@ -508,52 +519,80 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	}
 	chunkSize := (len(objNames) + workerCnt - 1) / workerCnt
 	for i := 0; i < len(objNames); i += chunkSize {
-		group.Go(func(start, end int) func() error {
-			return func() error {
-				for _, objName := range objNames[start:end] {
-					size := GetRandSize(args.ObjSizeRange, args.ObjSize, args.FixedSize)
-
-					if args.CksumType == "" {
-						args.CksumType = cos.ChecksumNone
-					}
-
-					var err error
-					if args.MultipartNumChunks > 0 {
-						err = PutMultipartObject(bp, args.Bck, objName, size, &args)
-					} else {
-						reader, rerr := readers.NewRand(int64(size), args.CksumType)
-						cos.AssertNoErr(rerr)
-
-						// We could PUT while creating files, but that makes it
-						// begin all the puts immediately (because creating random files is fast
-						// compared to the list objects call that getRandomFiles does)
-						_, err = api.PutObject(&api.PutArgs{
-							BaseParams: bp,
-							Bck:        args.Bck,
-							ObjName:    objName,
-							Cksum:      reader.Cksum(),
-							Reader:     reader,
-							Size:       size,
-							SkipVC:     args.SkipVC,
-						})
-					}
-					putCnt.Inc()
-					if err != nil {
-						if args.IgnoreErr {
-							errCnt.Inc()
-							return nil
-						}
-						return err
-					}
-				}
-				return nil
-			}
-		}(i, min(i+chunkSize, len(objNames))))
+		end := min(i+chunkSize, len(objNames))
+		group.Go(func() error {
+			return putObjectBatch(bp, objNames, i, end, &args, putCnt, errCnt)
+		})
 	}
 
 	err := group.Wait()
 	cos.Assert(err != nil || len(objNames) == int(putCnt.Load()))
 	return objNames, int(errCnt.Load()), err
+}
+
+func putSingleObject(bp api.BaseParams, objName string, size uint64, args *PutObjectsArgs,
+	putCnt, errCnt *atomic.Int32) error {
+	reader, err := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      int64(size),
+		CksumType: args.CksumType,
+	})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// We could PUT while creating files, but that makes it
+	// begin all the puts immediately (because creating random files is fast
+	// compared to the list objects call that getRandomFiles does)
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: bp,
+		Bck:        args.Bck,
+		ObjName:    objName,
+		Cksum:      reader.Cksum(),
+		Reader:     reader,
+		Size:       size,
+		SkipVC:     args.SkipVC,
+	})
+
+	putCnt.Inc()
+	if err != nil {
+		if args.IgnoreErr {
+			errCnt.Inc()
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func putObjectBatch(bp api.BaseParams, objNames []string, start, end int,
+	args *PutObjectsArgs, putCnt, errCnt *atomic.Int32) error {
+	for _, objName := range objNames[start:end] {
+		size := GetRandSize(args.ObjSizeRange, args.ObjSize, args.FixedSize)
+
+		if args.CksumType == "" {
+			args.CksumType = cos.ChecksumNone
+		}
+
+		var err error
+		if args.MultipartNumChunks > 0 {
+			err = PutMultipartObject(bp, args.Bck, objName, size, args)
+			putCnt.Inc()
+			if err != nil {
+				if args.IgnoreErr {
+					errCnt.Inc()
+					continue
+				}
+				return err
+			}
+		} else {
+			if err := putSingleObject(bp, objName, size, args, putCnt, errCnt); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Put an object into a cloud bucket and evict it afterwards - can be used to test cold GET

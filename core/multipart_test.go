@@ -1069,7 +1069,12 @@ func creatChunkMD5andWhole(fqn string, size int, wholeMD5Writer io.Writer) []byt
 		mw = cos.IniWriterMulti(testFile, chunkMD5.H)
 	}
 
-	reader, _ := readers.NewRand(int64(size), cos.ChecksumNone)
+	reader, _ := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      int64(size),
+		CksumType: cos.ChecksumNone,
+	})
+	defer reader.Close()
 	_, err = io.Copy(mw, reader)
 	_ = testFile.Close()
 

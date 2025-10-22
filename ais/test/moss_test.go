@@ -387,7 +387,12 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 	}
 
 	// PUT
-	reader, err := readers.NewExistingFile(archPath, cos.ChecksumNone)
+	reader, err := readers.New(&readers.Params{
+		Type:      readers.TypeFile,
+		Path:      archPath,
+		Size:      readers.ExistingFileSize,
+		CksumType: cos.ChecksumNone,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -237,26 +237,25 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 }
 
 func doPut(wo *workOrder) {
-	var (
-		sgl *memsys.SGL
-		url = runParams.proxyURL
-	)
-	if runParams.readerType == readers.TypeSG {
-		sgl = gmm.NewSGL(wo.size)
-		wo.sgl = sgl
+	var readParams = readers.Params{
+		Type:      runParams.readerType,
+		Path:      runParams.tmpDir,
+		Name:      wo.objName,
+		Size:      wo.size,
+		CksumType: wo.cksumType,
 	}
-	r, err := readers.New(readers.Params{
-		Type: runParams.readerType,
-		SGL:  sgl,
-		Path: runParams.tmpDir,
-		Name: wo.objName,
-		Size: wo.size,
-	}, wo.cksumType)
+	if runParams.readerType == readers.TypeSG {
+		wo.sgl = gmm.NewSGL(wo.size)
+		readParams.SGL = wo.sgl
+	}
 
+	r, err := readers.New(&readParams)
 	if err != nil {
 		wo.err = err
 		return
 	}
+
+	url := runParams.proxyURL
 	if runParams.randomProxy {
 		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)

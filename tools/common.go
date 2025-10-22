@@ -142,7 +142,11 @@ func isRemoteAndPresentBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool 
 }
 
 func PutObjRR(bp api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {
-	reader, err := readers.NewRand(objSize, cksumType)
+	reader, err := readers.New(&readers.Params{
+		Type:      readers.TypeRand,
+		Size:      objSize,
+		CksumType: cksumType,
+	})
 	if err != nil {
 		return err
 	}

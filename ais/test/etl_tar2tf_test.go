@@ -72,7 +72,13 @@ func TestETLTar2TFS3(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	// PUT TAR to the cluster
-	f, err := readers.NewExistingFile(tarPath, cos.ChecksumCesXxh)
+	f, err := readers.New(&readers.Params{
+		Type:      readers.TypeFile,
+		Path:      tarPath,
+		Size:      readers.ExistingFileSize,
+		CksumType: cos.ChecksumCesXxh,
+	})
+
 	tassert.CheckFatal(t, err)
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
@@ -150,7 +156,12 @@ func TestETLTar2TFRanges(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	// PUT TAR to the cluster
-	f, err := readers.NewExistingFile(tarPath, cos.ChecksumCesXxh)
+	f, err := readers.New(&readers.Params{
+		Type:      readers.TypeFile,
+		Path:      tarPath,
+		Size:      readers.ExistingFileSize,
+		CksumType: cos.ChecksumCesXxh,
+	})
 	tassert.CheckFatal(t, err)
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
