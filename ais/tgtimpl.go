@@ -37,7 +37,7 @@ func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values)
 	return t.reqHealth(si, timeout, query, t.owner.smap.get(), false /*retry*/)
 }
 
-func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
+func (t *target) PutObject(lom *core.LOM, params *core.PutParams) (err error) {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := lom.GenFQN(fs.WorkCT, params.WorkTag)
 
@@ -54,11 +54,19 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 		poi.owt = params.OWT
 		poi.skipEC = params.SkipEC
 		poi.coldGET = params.ColdGET
+		poi.locked = params.Locked
 	}
 	if poi.owt != cmn.OwtPut {
 		poi.cksumToUse = params.Cksum
 	}
-	_, err := poi.putObject()
+
+	switch {
+	case params.ChunkSize > 0:
+		_, err = poi.chunk(params.ChunkSize)
+	default:
+		_, err = poi.putObject()
+	}
+
 	freePOI(poi)
 	debug.Func(func() {
 		if err == nil {

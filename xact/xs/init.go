@@ -41,4 +41,6 @@ func Treg(coi COI) {
 	xreg.RegBckXact(&tcbFactory{kind: apc.ActETLBck})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActETLObjects}})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActCopyObjects}})
+
+	xreg.RegBckXact(&rechunkFactory{kind: apc.ActRechunk})
 }

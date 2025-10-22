@@ -282,6 +282,20 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		}
 		go t.runResilver(resargs, wg)
 		wg.Wait()
+	case apc.ActRechunk:
+		if err := xreg.LimitedCoexistence(t.si, bck, args.Kind); err != nil {
+			return "", err
+		}
+		rns := xreg.RenewBckRechunks(bck, args.ID, &xreg.RechunkArgs{
+			ObjSizeLimit: int64(bck.Props.Chunks.ObjSizeLimit),
+			ChunkSize:    int64(bck.Props.Chunks.ChunkSize),
+		})
+		if rns.Err != nil {
+			return "", rns.Err
+		}
+		xctn := rns.Entry.Get()
+		xact.GoRunW(xctn)
+		return xctn.ID(), nil
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
 		return xid, rns.Err

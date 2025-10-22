@@ -39,6 +39,7 @@ const (
 
 	ActMakeNCopies = "make-n-copies"
 	ActPutCopies   = "put-copies"
+	ActRechunk     = "rechunk"
 
 	ActRebalance = "rebalance"
 	ActMoveBck   = "move-bck"

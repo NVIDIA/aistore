@@ -60,6 +60,7 @@ type (
 		parts    apc.MptCompletedParts
 		isS3     bool
 		coldGET  bool
+		locked   bool // true if the LOM is already locked by the caller
 	}
 )
 
@@ -529,8 +530,8 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 
 	// atomically flip: persist manifest, mark chunked, persist main
 	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
-	debug.Assertf(!args.coldGET || lom.IsLocked() == apc.LockWrite, "expecting wlock, have %d", lom.IsLocked())
-	if err = lom.CompleteUfest(manifest, args.coldGET); err != nil {
+	debug.Assertf(!args.locked || lom.IsLocked() == apc.LockWrite, "expecting wlock, have %d", lom.IsLocked())
+	if err = lom.CompleteUfest(manifest, args.locked); err != nil {
 		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
 		return "", http.StatusInternalServerError, err
 	}

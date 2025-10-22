@@ -68,6 +68,7 @@ type (
 		skipEC     bool          // do not erasure-encode when finalizing
 		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 		coldGET    bool          // (one implication: proceed to write)
+		locked     bool          // true if the LOM is already locked by the caller
 		remoteErr  bool          // to exclude `putRemote` errors when counting soft IO errors
 	}
 
@@ -180,6 +181,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		lom      = poi.lom
 		uploadID string
 	)
+	debug.Assertf(!poi.coldGET || poi.locked, "expecting locked LOM for cold-GET")
 
 	debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname())
 	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.coldGET); err != nil {
@@ -239,12 +241,14 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		parts:    completedParts,
 		isS3:     false,
 		coldGET:  poi.coldGET,
+		locked:   poi.locked,
 	})
 	return ecode, err
 }
 
 func (poi *putOI) putObject() (ecode int, err error) {
 	maxMonoSize := int64(poi.lom.Bprops().Chunks.MaxMonolithicSize)
+	// protect the bucket: if the object size exceeds the max monolithic size, MUST chunk
 	// NOTE: if `poi.size` is not set, don't trigger chunking
 	if maxMonoSize > 0 && poi.size > maxMonoSize {
 		if cmn.Rom.V(5, cos.ModAIS) {
@@ -453,8 +457,9 @@ func (poi *putOI) fini() (ecode int, err error) {
 	// locking strategies: optimistic and otherwise
 	// (see GetCold() implementation and cmn.OWT enum)
 	switch poi.owt {
-	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
+	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet, cmn.OwtChunks:
 		// do nothing: lom is already wlocked
+		debug.Assertf(lom.IsLocked() == apc.LockWrite, "lom %s is not write-locked", lom.Cname())
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			nlog.Warningln(poi.loghdr(), "is busy")
@@ -879,6 +884,7 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 		poi.owt = cmn.OwtGet
 		poi.cksumToUse = res.ExpCksum // expected checksum (to validate if the bucket's `validate_cold_get == true`)
 		poi.coldGET = true
+		poi.locked = true
 	}
 	code, err := poi.putObject()
 	freePOI(poi)

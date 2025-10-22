@@ -26,15 +26,17 @@ import (
 // intra-cluster data path: control structures and types
 type (
 	PutParams struct {
-		Reader  io.ReadCloser
-		Cksum   *cos.Cksum // checksum to check
-		Atime   time.Time
-		Xact    Xact
-		WorkTag string // (=> work fqn)
-		Size    int64
-		OWT     cmn.OWT
-		SkipEC  bool // don't erasure-code when finalizing
-		ColdGET bool // this PUT is in fact a cold-GET
+		Reader    io.ReadCloser
+		Cksum     *cos.Cksum // checksum to check
+		Atime     time.Time
+		Xact      Xact
+		WorkTag   string // (=> work fqn)
+		Size      int64
+		ChunkSize int64 // if set, the object will be chunked with this size regardless of the bucket's chunk properties
+		OWT       cmn.OWT
+		SkipEC    bool // don't erasure-code when finalizing
+		ColdGET   bool // this PUT is in fact a cold-GET
+		Locked    bool // true if the LOM is already locked by the caller
 	}
 	PromoteParams struct {
 		Bck             *meta.Bck   // destination bucket

@@ -25,6 +25,7 @@ const (
 	OwtArchive              // multi-obj arch
 	OwtTransform            // ETL
 	OwtCopy                 // copy and move objects within cluster
+	OwtChunks               // chunks
 	OwtRebalance            // NOTE: must be the last in PUT* group
 	//
 	// GET and friends

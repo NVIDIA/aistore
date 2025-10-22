@@ -41,6 +41,11 @@ type (
 		Tag    string
 		Copies int
 	}
+	RechunkArgs struct {
+		ObjSizeLimit int64
+		ChunkSize    int64
+		Prefix       string
+	}
 	LsoArgs struct {
 		Msg *apc.LsoMsg
 		Hdr http.Header

@@ -145,6 +145,7 @@ var Table = map[string]Descriptor{
 
 	// single target (node)
 	apc.ActResilver: {Scope: ScopeT, Startable: true, Resilver: true},
+	apc.ActRechunk:  {Scope: ScopeB, Startable: true, RefreshCap: true, ConflictRebRes: true},
 
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
