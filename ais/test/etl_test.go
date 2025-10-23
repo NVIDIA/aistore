@@ -120,7 +120,7 @@ func (tbc *testBucketConfig) setupBckFrom(t *testing.T, prefix string, objCnt in
 		wg.Add(1)
 		go func(objName string) {
 			defer wg.Done()
-			r, err := readers.NewRand(int64(fileSize), p.Cksum.Type)
+			r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(fileSize), CksumType: p.Cksum.Type})
 			tassert.CheckFatal(t, err)
 			tools.Put(proxyURL, bckFrom, objName, r, fileSize, 0 /*numChunks*/, errCh)
 		}(objName)
@@ -236,8 +236,8 @@ func testETLObject(t *testing.T, etlName string, args any, inPath, outPath strin
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logln("PUT object")
-	reader, err := readers.New(&readers.Params{
-		Type:      readers.TypeFile,
+	reader, err := readers.New(&readers.Arg{
+		Type:      readers.File,
 		Path:      inputFilePath,
 		Size:      readers.ExistingFileSize,
 		CksumType: cos.ChecksumCesXxh,
@@ -280,7 +280,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName, args string, onlyLon
 
 	objName := fmt.Sprintf("%s/%s-%s-object", prefix, etlName, trand.String(5))
 	tlog.Logln("PUT object")
-	reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
 	tassert.CheckFatal(t, err)
 
 	_, err = api.PutObject(&api.PutArgs{
@@ -480,7 +480,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 
 	tlog.Logln("PUT object")
 	objName := trand.String(10)
-	reader, err := readers.NewRand(cos.MiB, cos.ChecksumMD5)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.MiB, CksumType: cos.ChecksumMD5})
 	tassert.CheckFatal(t, err)
 
 	_, err = api.PutObject(&api.PutArgs{

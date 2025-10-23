@@ -52,7 +52,8 @@ func TestAuthObj(t *testing.T) {
 		tlog.Logfln("bucket %s destroyed", bck.String())
 	}()
 
-	r, _ := readers.NewRand(fileSize, cos.ChecksumNone)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cos.ChecksumNone})
+	tassert.CheckError(t, err)
 	objName := trand.String(10)
 	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: unAuthBP,
@@ -63,7 +64,7 @@ func TestAuthObj(t *testing.T) {
 	})
 	expectUnauthorized(t, err)
 
-	r, _ = readers.NewRand(fileSize, cos.ChecksumNone)
+	r, _ = readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cos.ChecksumNone})
 	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: authBP,
 		Bck:        bck,

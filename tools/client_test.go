@@ -48,8 +48,8 @@ func TestPutSG(t *testing.T) {
 func putRandFile(size int64, cksumType string) error {
 	fn := "ais-client-test-" + trand.String(32)
 	dir := "/tmp"
-	r, err := readers.New(&readers.Params{
-		Type:      readers.TypeFile,
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.File,
 		Path:      dir,
 		Name:      fn,
 		Size:      size,
@@ -71,8 +71,8 @@ func putRandFile(size int64, cksumType string) error {
 }
 
 func putRand(size int64, cksumType string) error {
-	r, err := readers.New(&readers.Params{
-		Type:      readers.TypeRand,
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.Rand,
 		Size:      size,
 		CksumType: cksumType,
 	})
@@ -92,8 +92,8 @@ func putRand(size int64, cksumType string) error {
 
 func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 	sgl.Reset()
-	r, err := readers.New(&readers.Params{
-		Type:      readers.TypeSG,
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.SG,
 		SGL:       sgl,
 		Size:      size,
 		CksumType: cksumType,

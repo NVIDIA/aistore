@@ -148,16 +148,16 @@ func TestGetFromArch(t *testing.T) {
 					if test.autodetect && corruptAutoDetectOnce.Inc() == 1 {
 						corrupted = true
 						tlog.Logfln("============== damaging %s - overwriting w/ random data", archName)
-						reader, err = readers.New(&readers.Params{
-							Type:      readers.TypeFile,
+						reader, err = readers.New(&readers.Arg{
+							Type:      readers.File,
 							Path:      filepath.Dir(archName),
 							Name:      filepath.Base(archName),
 							Size:      1024,
 							CksumType: cos.ChecksumNone,
 						})
 					} else {
-						reader, err = readers.New(&readers.Params{
-							Type:      readers.TypeFile,
+						reader, err = readers.New(&readers.Arg{
+							Type:      readers.File,
 							Path:      archName,
 							Size:      readers.ExistingFileSize,
 							CksumType: cos.ChecksumNone,
@@ -587,7 +587,8 @@ func TestAppendToArch(t *testing.T) {
 					}()
 				} else {
 					for j := range numAdd {
-						reader, _ := readers.NewRand(fileSize, cos.ChecksumNone)
+						reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cos.ChecksumNone})
+						tassert.CheckError(t, err)
 						putArgs := api.PutArgs{
 							BaseParams: baseParams,
 							Bck:        bckTo,

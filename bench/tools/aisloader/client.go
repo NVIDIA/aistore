@@ -236,8 +236,8 @@ func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader 
 func uploadMultipartPart(baseParams api.BaseParams, bck cmn.Bck, objName, uploadID string,
 	partNum int, partSize uint64, cksumType string,
 	mu *sync.Mutex, partNumbers []int) error {
-	partReader, err := readers.New(&readers.Params{
-		Type:      readers.TypeRand,
+	partReader, err := readers.New(&readers.Arg{
+		Type:      readers.Rand,
 		Size:      int64(partSize),
 		CksumType: cksumType,
 	})

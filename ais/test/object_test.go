@@ -93,7 +93,7 @@ func TestObjectInvalidName(t *testing.T) {
 		t.Run(test.op, func(t *testing.T) {
 			switch test.op {
 			case putOP:
-				reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
+				reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
 				tassert.CheckFatal(t, err)
 				_, err = api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
@@ -139,7 +139,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				bck.Name = cliBck.Name
 			}
 
-			reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
 			tassert.CheckFatal(t, err)
 
 			defer api.DeleteObject(baseParams, bck, object)
@@ -2447,7 +2447,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					)
 				}
 				for _, objName := range objList {
-					r, _ := readers.NewRand(objSize, cksumType)
+					r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cksumType})
 					_, err := api.PutObject(&api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),

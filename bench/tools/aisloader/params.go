@@ -191,8 +191,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.Int64Var(&p.seed, "seed", 0, "random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds)")
 
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "local directory to store temporary files")
-	f.StringVar(&p.readerType, "readertype", readers.TypeSG,
-		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s | %s", readers.TypeSG, readers.TypeFile, readers.TypeRand, readers.TypeTar))
+	f.StringVar(&p.readerType, "readertype", readers.SG,
+		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s | %s", readers.SG, readers.File, readers.Rand, readers.Tar))
 
 	// ============ Object sizing and checksumming ============
 	f.StringVar(&p.minSizeStr, "minsize", "", "minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")

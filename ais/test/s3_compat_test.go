@@ -334,7 +334,7 @@ func TestS3ETag(t *testing.T) {
 	s3Client := s3.NewFromConfig(cfg)
 
 	t.Run("PutObject", func(t *testing.T) {
-		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		oah, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
@@ -363,7 +363,7 @@ func TestS3ETag(t *testing.T) {
 			partSize = 5 * cos.MiB
 		)
 
-		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		cfg.HTTPClient = newS3Client(true /*pathStyle*/)
 		aisClient := s3.NewFromConfig(cfg)
@@ -425,7 +425,7 @@ func TestS3ObjMetadata(t *testing.T) {
 	}
 
 	t.Run("PutObject", func(t *testing.T) {
-		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		header := make(http.Header)
 		for k, v := range metadata {
@@ -457,7 +457,7 @@ func TestS3ObjMetadata(t *testing.T) {
 			partSize = 5 * cos.MiB
 		)
 
-		reader, err := readers.NewRand(int64(objSize), cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		cfg.HTTPClient = newS3Client(true /*pathStyle*/)
 		aisClient := s3.NewFromConfig(cfg)
@@ -509,7 +509,7 @@ func TestS3MultipartPartOperations(t *testing.T) {
 	// Create AIStore bucket
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	reader, err := readers.NewRand(objSize, cos.ChecksumNone)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
 	tassert.CheckFatal(t, err)
 
 	_, err = api.PutObject(&api.PutArgs{

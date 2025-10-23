@@ -237,14 +237,14 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 }
 
 func doPut(wo *workOrder) {
-	var readParams = readers.Params{
+	var readParams = readers.Arg{
 		Type:      runParams.readerType,
 		Path:      runParams.tmpDir,
 		Name:      wo.objName,
 		Size:      wo.size,
 		CksumType: wo.cksumType,
 	}
-	if runParams.readerType == readers.TypeSG {
+	if runParams.readerType == readers.SG {
 		wo.sgl = gmm.NewSGL(wo.size)
 		readParams.SGL = wo.sgl
 	}
@@ -275,7 +275,7 @@ func doPut(wo *workOrder) {
 		debug.Assert(!isDirectS3())
 		wo.err = putWithTrace(url, runParams.bck, wo.objName, &wo.latencies, r.Cksum(), r)
 	}
-	if runParams.readerType == readers.TypeFile {
+	if runParams.readerType == readers.File {
 		r.Close()
 		os.Remove(path.Join(runParams.tmpDir, wo.objName))
 	}

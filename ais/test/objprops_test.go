@@ -41,7 +41,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 	msg *apc.LsoMsg, versionEnabled bool, cksumType string) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tlog.Logln("Updating...")
-	r, err := readers.NewRand(int64(fileSize), cksumType)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(fileSize), CksumType: cksumType})
 	if err != nil {
 		t.Fatalf("Failed to create reader: %v", err)
 	}

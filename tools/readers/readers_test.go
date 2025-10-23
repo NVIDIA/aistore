@@ -21,8 +21,8 @@ import (
 const mmName = "readers_test"
 
 func TestFileReader(t *testing.T) {
-	r, err := readers.New(&readers.Params{
-		Type:      readers.TypeFile,
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.File,
 		Path:      "/tmp",
 		Name:      "seek",
 		Size:      10240,
@@ -238,8 +238,8 @@ func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 
 func TestRandReader(t *testing.T) {
 	size := int64(1024)
-	r, err := readers.New(&readers.Params{
-		Type:      readers.TypeRand,
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.Rand,
 		Size:      size,
 		CksumType: cos.ChecksumCesXxh,
 	})
@@ -260,8 +260,8 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeSG,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.SG,
 			SGL:       sgl,
 			Size:      size,
 			CksumType: cos.ChecksumCesXxh,
@@ -299,8 +299,8 @@ func TestSGReader(t *testing.T) {
 		sgl := mmsa.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeSG,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.SG,
 			SGL:       sgl,
 			Size:      size,
 			CksumType: cos.ChecksumCesXxh,
@@ -318,8 +318,8 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for b.Loop() {
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeFile,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.File,
 			Path:      filepath,
 			Name:      fn,
 			Size:      cos.MiB,
@@ -339,8 +339,8 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for b.Loop() {
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeRand,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.Rand,
 			Size:      cos.MiB,
 			CksumType: cos.ChecksumCesXxh,
 		})
@@ -361,8 +361,8 @@ func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
 
 	for b.Loop() {
 		sgl.Reset()
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeSG,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.SG,
 			SGL:       sgl,
 			Size:      cos.MiB,
 			CksumType: cos.ChecksumCesXxh,
@@ -379,8 +379,8 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for b.Loop() {
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeFile,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.File,
 			Path:      filepath,
 			Name:      fn,
 			Size:      cos.MiB,
@@ -400,8 +400,8 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 	for b.Loop() {
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeRand,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.Rand,
 			Size:      cos.MiB,
 			CksumType: cos.ChecksumNone,
 		})
@@ -422,8 +422,8 @@ func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
 
 	for b.Loop() {
 		sgl.Reset()
-		r, err := readers.New(&readers.Params{
-			Type:      readers.TypeSG,
+		r, err := readers.New(&readers.Arg{
+			Type:      readers.SG,
 			SGL:       sgl,
 			Size:      cos.MiB,
 			CksumType: cos.ChecksumNone,

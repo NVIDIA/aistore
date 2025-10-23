@@ -61,7 +61,8 @@ func TestHTTPProviderBucket(t *testing.T) {
 	_, err = api.ListObjects(baseParams, bck, nil, api.ListArgs{})
 	tassert.Fatalf(t, err != nil, "expected error")
 
-	reader, _ := readers.NewRand(cos.KiB, cos.ChecksumNone)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
+	tassert.CheckError(t, err)
 	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
@@ -452,7 +453,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	tlog.Logfln("Overwrite %s objects with newer versions", m.bck.String())
 	nsize := int64(m.fileSize) * 10
 	for _, en := range lst.Entries {
-		reader, err := readers.NewRand(nsize, cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: nsize, CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 		_, err = api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
@@ -1376,7 +1377,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				objName := fmt.Sprintf("prefix/obj%d", i+1)
 				objNames = append(objNames, objName)
 
-				r, _ := readers.NewRand(fileSize, cos.ChecksumNone)
+				r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cos.ChecksumNone})
 				_, err := api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
@@ -3836,7 +3837,7 @@ func TestListObjectsNoRecursion(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	for _, nm := range objs {
 		objectSize := int64(rand.IntN(256) + 20)
-		reader, _ := readers.NewRand(objectSize, cos.ChecksumNone)
+		reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: objectSize, CksumType: cos.ChecksumNone})
 		_, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,

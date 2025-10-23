@@ -41,7 +41,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.
-		r, err := readers.NewRand(fileSize, cksumType)
+		r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cksumType})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +57,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.
-		r, err := readers.NewRand(fileSize, cksumType)
+		r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: cksumType})
 		if err != nil {
 			t.Fatal(err)
 		}

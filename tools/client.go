@@ -409,8 +409,8 @@ func putMultipartObjectSequential(bp api.BaseParams, bck cmn.Bck, objName, uploa
 func uploadPart(bp api.BaseParams, bck cmn.Bck, objName, uploadID string,
 	partNum int, partSize uint64, args *PutObjectsArgs,
 	mu *sync.Mutex, partNumbers []int) error {
-	partReader, err := readers.New(&readers.Params{
-		Type:      readers.TypeRand,
+	partReader, err := readers.New(&readers.Arg{
+		Type:      readers.Rand,
 		Size:      int64(partSize),
 		CksumType: args.CksumType,
 	})
@@ -532,8 +532,8 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 
 func putSingleObject(bp api.BaseParams, objName string, size uint64, args *PutObjectsArgs,
 	putCnt, errCnt *atomic.Int32) error {
-	reader, err := readers.New(&readers.Params{
-		Type:      readers.TypeRand,
+	reader, err := readers.New(&readers.Arg{
+		Type:      readers.Rand,
 		Size:      int64(size),
 		CksumType: args.CksumType,
 	})

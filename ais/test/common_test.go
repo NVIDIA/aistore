@@ -333,7 +333,7 @@ func (m *ioContext) update(objName, cksumType string) (readers.Reader, uint64) {
 	if m.chunksConf != nil && m.chunksConf.multipart {
 		numChunks = m.chunksConf.numChunks
 	}
-	r, err := readers.NewRand(int64(size), cksumType)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(size), CksumType: cksumType})
 	tassert.CheckFatal(m.t, err)
 	tools.Put(m.proxyURL, m.bck, objName, r, size, numChunks, errCh)
 	tassert.SelectErr(m.t, errCh, "put", true)
@@ -439,7 +439,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 		go func(size uint64, objName string, cksumType string) {
 			defer wg.Done()
 
-			r, err := readers.NewRand(int64(size), cksumType)
+			r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(size), CksumType: cksumType})
 			tassert.CheckFatal(m.t, err)
 			tools.Put(m.proxyURL, m.bck, objName, r, size, numChunks, errCh)
 		}(size, objName, p.Cksum.Type)

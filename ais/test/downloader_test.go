@@ -535,7 +535,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			expectedObjs := make([]string, 0, fileCnt)
 			for i := range fileCnt {
-				reader, err := readers.NewRand(256, cos.ChecksumNone)
+				reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: 256, CksumType: cos.ChecksumNone})
 				tassert.CheckFatal(t, err)
 
 				objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
@@ -977,7 +977,8 @@ func TestDownloadOverrideObject(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	tlog.Logln("Trying to update the object (expecting to fail)")
-	r, _ := readers.NewRand(10, p.Cksum.Type)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: 10, CksumType: p.Cksum.Type})
+	tassert.CheckError(t, err)
 	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
@@ -1032,7 +1033,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
-	r, _ := readers.NewRand(newSize, p.Cksum.Type)
+	r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: newSize, CksumType: p.Cksum.Type})
 	_, err := api.PutObject(&api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,

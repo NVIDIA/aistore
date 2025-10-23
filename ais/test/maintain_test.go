@@ -208,7 +208,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	for i := range objCount {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
-		r, _ := readers.NewRand(int64(fileSize), cos.ChecksumCesXxh)
+		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(fileSize), CksumType: cos.ChecksumCesXxh})
 		_, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,

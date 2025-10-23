@@ -387,8 +387,8 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 	}
 
 	// PUT
-	reader, err := readers.New(&readers.Params{
-		Type:      readers.TypeFile,
+	reader, err := readers.New(&readers.Arg{
+		Type:      readers.File,
 		Path:      archPath,
 		Size:      readers.ExistingFileSize,
 		CksumType: cos.ChecksumNone,
@@ -921,7 +921,7 @@ func TestGetBatchStream_DrainTar(t *testing.T) {
 	names := []string{"s1", "s2", "sbig", "s3"}
 	sizes := []int64{8*cos.KiB + 123, 12*cos.KiB + 456, 3*cos.MiB + 789, 4*cos.KiB + 0xabc}
 	for i, n := range names {
-		reader, err := readers.NewRand(sizes[i], cos.ChecksumNone)
+		reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: sizes[i], CksumType: cos.ChecksumNone})
 		tassert.CheckFatal(t, err)
 
 		_, err = api.PutObject(&api.PutArgs{

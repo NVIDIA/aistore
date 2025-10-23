@@ -23,14 +23,10 @@ import (
 )
 
 const (
-	// TypeFile defines the name for file reader
-	TypeFile = "file"
-	// TypeSG defines the name for sg reader
-	TypeSG = "sg"
-	// TypeRand defines the name for rand reader
-	TypeRand = "rand"
-	// TypeTar defines the name for random TAR reader
-	TypeTar = "tar"
+	File = "file" // file reader
+	SG   = "sg"   // sgl-based reader
+	Rand = "rand" // random reader
+	Tar  = "tar"  // TAR reader
 )
 
 const ExistingFileSize = -1
@@ -78,16 +74,16 @@ type (
 
 // construction params
 type (
-	ArchParams struct {
+	Arch struct {
 		Mime    string // archive.ExtTar|ExtTgz|ExtTarGz|ExtZip|ExtTarLz4
 		Num     int    // files per shard
 		MinSize int64  // min file size
 		MaxSize int64  // max file size
 		Prefix  string // optional prefix inside archive (e.g., "trunk-", "a/b/c/trunk-")
 	}
-	Params struct {
+	Arg struct {
 		SGL        *memsys.SGL // when Type == "sg"
-		Arch       *ArchParams // when the content is archive
+		Arch       *Arch       // when the content is archive
 		Type       string      // "file" | "sg" | "inmem" | "rand"
 		Path, Name string      // when Type == "file"; path and name of file to be created if doesn't exist
 		CksumType  string
@@ -103,17 +99,17 @@ var (
 	_ Reader = (*sgReader)(nil)
 )
 
-func New(p *Params) (Reader, error) {
-	switch p.Type {
-	case TypeSG:
-		debug.Assert(p.SGL != nil)
-		return newSG(p)
-	case TypeRand:
-		return newRand(p)
-	case TypeFile:
-		return newRandFile(p)
-	case TypeTar:
-		return newTarReader(p)
+func New(a *Arg) (Reader, error) {
+	switch a.Type {
+	case SG:
+		debug.Assert(a.SGL != nil)
+		return newSG(a)
+	case Rand:
+		return newRand(a)
+	case File:
+		return newRandFile(a)
+	case Tar:
+		return newTarReader(a)
 	default:
 		return nil, errors.New("unknown memory type for creating inmem reader")
 	}
@@ -123,22 +119,13 @@ func New(p *Params) (Reader, error) {
 // randReader //
 ////////////////
 
-// TODO: keeping for convenience; consider removing and using readers.New() instead
-func NewRand(size int64, cksumType string) (Reader, error) {
-	return newRand(&Params{
-		Type:      TypeRand,
-		Size:      size,
-		CksumType: cksumType,
-	})
-}
-
-func newRand(p *Params) (Reader, error) {
+func newRand(a *Arg) (Reader, error) {
 	truffle := newTruffle()
 
 	var cksum *cos.Cksum
-	if p.CksumType != cos.ChecksumNone {
-		rr := &rrLimited{truffle, p.Size, 0}
-		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, p.CksumType)
+	if a.CksumType != cos.ChecksumNone {
+		rr := &rrLimited{truffle, a.Size, 0}
+		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, a.CksumType)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +135,7 @@ func newRand(p *Params) (Reader, error) {
 
 	return &randReader{
 		truffle: truffle,
-		size:    p.Size,
+		size:    a.Size,
 		cksum:   cksum,
 	}, nil
 }
@@ -229,27 +216,27 @@ func (rr *rrLimited) Read(p []byte) (n int, err error) {
 
 // creates/opens the file, populates it with random data, and returns a new fileReader
 // NOTE: caller is responsible for closing.
-func newRandFile(p *Params) (Reader, error) {
+func newRandFile(a *Arg) (Reader, error) {
 	var (
 		cksum     *cos.Cksum
 		cksumHash *cos.CksumHash
-		fn        = path.Join(p.Path, p.Name)
+		fn        = path.Join(a.Path, a.Name)
 		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
 		exists    bool
 	)
 	if err != nil {
 		return nil, err
 	}
-	if p.Size == ExistingFileSize {
+	if a.Size == ExistingFileSize {
 		// checksum existing file
 		exists = true
-		if p.CksumType != cos.ChecksumNone {
-			debug.Assert(p.CksumType != "")
-			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, p.CksumType)
+		if a.CksumType != cos.ChecksumNone {
+			debug.Assert(a.CksumType != "")
+			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, a.CksumType)
 		}
 	} else {
 		// Write random file
-		cksumHash, err = copyRandWithHash(f, p.Size, p.CksumType)
+		cksumHash, err = copyRandWithHash(f, a.Size, a.CksumType)
 	}
 	if err == nil {
 		_, err = f.Seek(0, io.SeekStart)
@@ -264,10 +251,10 @@ func newRandFile(p *Params) (Reader, error) {
 		return nil, err
 	}
 
-	if p.CksumType != cos.ChecksumNone {
+	if a.CksumType != cos.ChecksumNone {
 		cksum = cksumHash.Clone()
 	}
-	return &fileReader{f, p.Path, p.Name, cksum}, nil
+	return &fileReader{f, a.Path, a.Name, cksum}, nil
 }
 
 func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
@@ -275,7 +262,7 @@ func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
 	if r.cksum != nil {
 		cksumType = r.cksum.Type()
 	}
-	return newRandFile(&Params{Path: r.filePath, Name: r.name, Size: ExistingFileSize, CksumType: cksumType})
+	return newRandFile(&Arg{Path: r.filePath, Name: r.name, Size: ExistingFileSize, CksumType: cksumType})
 }
 
 func (r *fileReader) Cksum() *cos.Cksum {
@@ -288,20 +275,20 @@ func (r *fileReader) Reset() { r.File.Seek(0, io.SeekStart) }
 // sgReader //
 //////////////
 
-func newSG(p *Params) (Reader, error) {
+func newSG(a *Arg) (Reader, error) {
 	var cksum *cos.Cksum
-	if p.Size > 0 {
-		cksumHash, err := copyRandWithHash(p.SGL, p.Size, p.CksumType)
+	if a.Size > 0 {
+		cksumHash, err := copyRandWithHash(a.SGL, a.Size, a.CksumType)
 		if err != nil {
 			return nil, err
 		}
-		if p.CksumType != cos.ChecksumNone {
+		if a.CksumType != cos.ChecksumNone {
 			cksum = cksumHash.Clone()
 		}
 	}
 
-	r := memsys.NewReader(p.SGL)
-	return &sgReader{*r, cksum, p.SGL}, nil
+	r := memsys.NewReader(a.SGL)
+	return &sgReader{*r, cksum, a.SGL}, nil
 }
 
 func (r *sgReader) Cksum() *cos.Cksum {
@@ -341,17 +328,17 @@ func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 // tarReader //
 ///////////////
 
-func newTarReader(p *Params) (r Reader, err error) {
+func newTarReader(a *Arg) (r Reader, err error) {
 	var (
-		singleFileSize = min(p.Size, int64(cos.KiB))
+		singleFileSize = min(a.Size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
-	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, max(int(p.Size/singleFileSize), 1),
+	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, max(int(a.Size/singleFileSize), 1),
 		int(singleFileSize), shard.ContentKeyInt, ".cls", true /*missing keys*/, false /*exact size*/)
 	if err != nil {
 		return nil, err
 	}
-	cksum, err := cos.ChecksumBytes(buff.Bytes(), p.CksumType)
+	cksum, err := cos.ChecksumBytes(buff.Bytes(), a.CksumType)
 	if err != nil {
 		return nil, err
 	}

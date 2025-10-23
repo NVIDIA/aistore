@@ -133,7 +133,7 @@ func TestETLPipelineNotFound(t *testing.T) {
 	etlNames[1] = "non-existing-etl"
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-	r, err := readers.NewRand(int64(fileSize), cos.ChecksumNone)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(fileSize), CksumType: cos.ChecksumNone})
 	tassert.CheckFatal(t, err)
 	tools.PutObject(t, bck, objName, r, fileSize)
 	etlPipeline := &api.ETL{ETLName: etlNames[0]}

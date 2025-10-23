@@ -126,7 +126,7 @@ func TestPutObjectChunks(tst *testing.T) {
 	for _, tt := range tests {
 		tst.Run(tt.name, func(test *testing.T) {
 			// Create a random reader
-			reader, _ := readers.NewRand(tt.dataSize, cos.ChecksumNone)
+			reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: tt.dataSize, CksumType: cos.ChecksumNone})
 
 			// Set up LOM (using global testBucket that was created in TestMain)
 			lom := core.AllocLOM("test-chunked-obj-" + tt.name)
@@ -198,7 +198,7 @@ func BenchmarkObjPut(b *testing.B) {
 
 			for b.Loop() {
 				b.StopTimer()
-				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
+				r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: bench.fileSize, CksumType: cos.ChecksumNone})
 				poi := &putOI{
 					atime:   time.Now().UnixNano(),
 					t:       t,
@@ -246,7 +246,7 @@ func BenchmarkObjAppend(b *testing.B) {
 			var hdl aoHdl
 			for b.Loop() {
 				b.StopTimer()
-				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
+				r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: bench.fileSize, CksumType: cos.ChecksumNone})
 				aoi := &apndOI{
 					started: time.Now().UnixNano(),
 					t:       t,
@@ -306,7 +306,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
+			r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: bench.fileSize, CksumType: cos.ChecksumNone})
 			poi := &putOI{
 				atime:   time.Now().UnixNano(),
 				t:       t,

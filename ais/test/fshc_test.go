@@ -134,7 +134,7 @@ func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string
 		p, err := api.HeadBucket(md.baseParams, md.bck, true /* don't add */)
 		tassert.CheckFatal(md.t, err)
 		for _, objName := range lst {
-			r, _ := readers.NewRand(md.fileSize, p.Cksum.Type)
+			r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: md.fileSize, CksumType: p.Cksum.Type})
 			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: md.baseParams,
 				Bck:        md.bck,
@@ -296,7 +296,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 
 			switch op {
 			case "PUT":
-				r, _ := readers.NewRand(fileSize, p.Cksum.Type)
+				r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: fileSize, CksumType: p.Cksum.Type})
 				api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,

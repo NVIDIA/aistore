@@ -328,8 +328,8 @@ func (df *dsortFramework) createInputShards() {
 			}
 			tassert.CheckFatal(df.m.t, err)
 
-			reader, err := readers.New(&readers.Params{
-				Type:      readers.TypeFile,
+			reader, err := readers.New(&readers.Arg{
+				Type:      readers.File,
 				Path:      tarName,
 				Size:      readers.ExistingFileSize,
 				CksumType: cos.ChecksumNone,
