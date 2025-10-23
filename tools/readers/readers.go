@@ -224,6 +224,10 @@ func newRandFile(a *Arg) (Reader, error) {
 			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, a.CksumType)
 		}
 	case a.Arch != nil:
+		if err := a.Arch.init(); err != nil {
+			return nil, err
+		}
+
 		// Write archive shard into file
 		cksumHash, err = a.Arch.write(f, a.CksumType)
 	default:
@@ -274,6 +278,9 @@ func newSG(a *Arg) (Reader, error) {
 
 	if a.Arch != nil {
 		// (A) archival content
+		if err := a.Arch.init(); err != nil {
+			return nil, err
+		}
 		cksumHash, err = a.Arch.write(a.SGL, a.CksumType)
 	} else if a.Size > 0 {
 		// (B) plain random payload

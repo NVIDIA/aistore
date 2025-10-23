@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 )
 
+const dfltExt = ".txt"
+
 type Arch struct {
 	Mime    string // archive.ExtTar|ExtTgz|ExtTarGz|ExtZip|ExtTarLz4
 	Prefix  string // optional prefix inside archive (e.g., "trunk-", "a/b/c/trunk-")
@@ -30,16 +32,51 @@ type Arch struct {
 	// advanced options - each and every one can be omitted
 	//
 	Names     []string   // explicit in-archive names
+	RecExt    string     // default ".txt"; see also extended comment below
 	TarFormat tar.Format // to override cmn/archive default
-	RecExts   []string   // e.g. []{".txt"}; if empty -> ".txt"
+	MaxLayers int        // upper bound for RandDir; default 5
 	RandNames bool       // generate numeric-random names
 	RandDir   bool       // add random dir layers
-	MaxLayers int        // upper bound for RandDir; default 5
 }
 
 //////////
 // Arch //
 //////////
+
+func (a *Arch) init() error {
+	if a.Num <= 0 {
+		return fmt.Errorf("Arch.Num must be positive (got %d)", a.Num)
+	}
+	if a.MinSize < 0 {
+		return fmt.Errorf("Arch.MinSize must be non-negative (got %d)", a.MinSize)
+	}
+	if a.MaxSize < a.MinSize {
+		return fmt.Errorf("Arch.MaxSize (%d) must be >= MinSize (%d)", a.MaxSize, a.MinSize)
+	}
+	if l := len(a.Names); l > 0 {
+		if a.Num == 0 {
+			a.Num = l
+		}
+		if l != a.Num {
+			return fmt.Errorf("Arch.Names length (%d) must match Num (%d)", len(a.Names), a.Num)
+		}
+	}
+
+	// set defaults
+	if a.Seed == 0 {
+		a.Seed = uint64(mono.NanoTime())
+	}
+	switch {
+	case a.RecExt == "":
+		a.RecExt = dfltExt
+	case a.RecExt == ".":
+		return fmt.Errorf("Arch.RecExt (%q) is invalid", a.RecExt)
+	case a.RecExt[0] != '.':
+		a.RecExt = "." + a.RecExt
+	}
+
+	return nil
+}
 
 func (a *Arch) randInRange(idx uint64) int64 {
 	span := uint64((a.MaxSize - a.MinSize) + 1) // inclusive
@@ -47,21 +84,13 @@ func (a *Arch) randInRange(idx uint64) int64 {
 }
 
 // size selection:
-// - Max > Min:  uniform in [Min,Max]
-// - othwerwise: fixed size, with optional jitter for very small sizes
+// - Max > Min: uniform in [Min,Max]
+// - otherwise: fixed size
 func (a *Arch) pickSize(i int) int64 {
 	if a.MaxSize > a.MinSize {
 		return a.randInRange(uint64(i))
 	}
 	return a.MinSize
-}
-
-// choose extension; if none, ".txt"
-func (a *Arch) chooseExt() string {
-	if len(a.RecExts) == 0 {
-		return ".txt"
-	}
-	return a.RecExts[0]
 }
 
 // decimal-like random name
@@ -83,6 +112,15 @@ func (a *Arch) randomLayer(salt uint64) string {
 }
 
 // build the in-archive path using Arch knobs
+
+// NOTE in re: in-archive filename extensions ===================================
+// For WebDataset-style record grouping (where each sample has multiple
+// files with different extensions grouped together, e.g., sample000.jpg +
+// sample000.json + sample000.txt), use explicit Names with appropriate extensions.
+// The legacy tools/tarch supported this via nested loops over RecExts, but the
+// current architecture with unique per-file indexing in buildPath() doesn't
+// support automatic grouping semantics. ========================================
+
 func (a *Arch) buildPath(i int) string {
 	if len(a.Names) > 0 {
 		// caller-provided names (but avoid absolute paths inside arch)
@@ -99,17 +137,18 @@ func (a *Arch) buildPath(i int) string {
 	} else {
 		base = fmt.Sprintf("obj-%06d", i)
 	}
-	base += a.chooseExt()
+	base += a.RecExt
 
 	name := base
 	if a.RandDir {
+		const randomLayerSalt = 17 // prime for poor man's random below
 		maxLayers := a.MaxLayers
 		if maxLayers <= 0 {
 			maxLayers = 5
 		}
 		layers := int(xoshiro256.Hash(a.Seed+uint64(i)) % uint64(maxLayers))
 		for d := range layers {
-			name = path.Join(a.randomLayer(uint64(i*17+d+1)), name)
+			name = path.Join(a.randomLayer(uint64(i*randomLayerSalt+d+1)), name)
 		}
 	}
 	if a.Prefix != "" {
@@ -137,7 +176,6 @@ func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 		now   = mono.NanoTime()
 		total int64
 	)
-	a.Seed = cos.NonZero(a.Seed, uint64(now))
 	for i := range a.Num {
 		sz := a.pickSize(i)
 		name := a.buildPath(i)

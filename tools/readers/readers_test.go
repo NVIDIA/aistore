@@ -5,13 +5,17 @@
 package readers_test
 
 import (
+	"archive/tar"
 	"io"
 	"math/rand/v2"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -19,6 +23,10 @@ import (
 )
 
 const mmName = "readers_test"
+
+//
+// older unit tests - plain objects
+//
 
 func TestFileReader(t *testing.T) {
 	r, err := readers.New(&readers.Arg{
@@ -312,6 +320,278 @@ func TestSGReader(t *testing.T) {
 		r.Close()
 	}
 }
+
+//
+// assorted readers have the capability to provide archived content
+//
+
+func TestArchReader(t *testing.T) {
+	mmsa := memsys.NewMMSA(mmName, false)
+	defer mmsa.Terminate(false)
+
+	tests := []struct {
+		name        string
+		arch        *readers.Arch
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "basic_tar",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     5,
+				MinSize: cos.KiB,
+				MaxSize: cos.KiB,
+				Seed:    123,
+			},
+		},
+		{
+			name: "with_extension",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTgz,
+				Num:     3,
+				MinSize: 100,
+				MaxSize: 200,
+				RecExt:  ".json",
+				Seed:    456,
+			},
+		},
+		{
+			name: "extension_no_dot",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     2,
+				MinSize: 50,
+				MaxSize: 50,
+				RecExt:  "txt", // Should normalize to ".txt"
+				Seed:    789,
+			},
+		},
+		{
+			name: "with_prefix",
+			arch: &readers.Arch{
+				Mime:    archive.ExtZip,
+				Num:     4,
+				MinSize: cos.KiB,
+				MaxSize: 2 * cos.KiB,
+				Prefix:  "data/trunk-",
+				Seed:    111,
+			},
+		},
+		{
+			name: "random_names",
+			arch: &readers.Arch{
+				Mime:      archive.ExtTar,
+				Num:       3,
+				MinSize:   100,
+				MaxSize:   100,
+				RandNames: true,
+				Seed:      222,
+			},
+		},
+		{
+			name: "random_dirs",
+			arch: &readers.Arch{
+				Mime:      archive.ExtTgz,
+				Num:       5,
+				MinSize:   500,
+				MaxSize:   1000,
+				RandDir:   true,
+				MaxLayers: 3,
+				Seed:      333,
+			},
+		},
+		{
+			name: "explicit_names",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     3,
+				MinSize: 100,
+				MaxSize: 100,
+				Names:   []string{"file1.txt", "file2.json", "file3.csv"},
+				Seed:    444,
+			},
+		},
+		{
+			name: "tar_format_override",
+			arch: &readers.Arch{
+				Mime:      archive.ExtTar,
+				TarFormat: tar.FormatGNU,
+				Num:       2,
+				MinSize:   cos.KiB,
+				MaxSize:   cos.KiB,
+				Seed:      555,
+			},
+		},
+		{
+			name: "deterministic_seed",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     3,
+				MinSize: 100,
+				MaxSize: 100,
+				Seed:    999, // Same seed should produce same output
+			},
+		},
+		// Error cases
+		{
+			name: "invalid_num_zero",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     0,
+				MinSize: 100,
+				MaxSize: 100,
+			},
+			wantErr:     true,
+			errContains: "Num must be positive",
+		},
+		{
+			name: "invalid_min_negative",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     1,
+				MinSize: -1,
+				MaxSize: 100,
+			},
+			wantErr:     true,
+			errContains: "MinSize must be non-negative",
+		},
+		{
+			name: "invalid_max_less_than_min",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     1,
+				MinSize: 1000,
+				MaxSize: 100,
+			},
+			wantErr:     true,
+			errContains: "MaxSize",
+		},
+		{
+			name: "invalid_names_length",
+			arch: &readers.Arch{
+				Mime:    archive.ExtTar,
+				Num:     3,
+				MinSize: 100,
+				MaxSize: 100,
+				Names:   []string{"only_one.txt"}, // Should be 3
+			},
+			wantErr:     true,
+			errContains: "Names length",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sgl := mmsa.NewSGL(0)
+			defer sgl.Free()
+
+			r, err := readers.New(&readers.Arg{
+				Type:      readers.SG,
+				SGL:       sgl,
+				CksumType: cos.ChecksumCesXxh,
+				Arch:      tt.arch,
+			})
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.errContains)
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Fatalf("expected error containing %q, got %q", tt.errContains, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			defer r.Close()
+
+			// Verify we can read the archive
+			buf := make([]byte, sgl.Size())
+			n, err := r.Read(buf)
+			if err != nil && err != io.EOF {
+				t.Fatalf("read error: %v", err)
+			}
+			if n != int(sgl.Size()) {
+				t.Fatalf("read size mismatch: got %d, want %d", n, sgl.Size())
+			}
+
+			// Verify checksum is set
+			if r.Cksum() == nil {
+				t.Fatal("expected checksum, got nil")
+			}
+		})
+	}
+}
+
+func TestArchFileReader(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	arch := &readers.Arch{
+		Mime:    archive.ExtTgz,
+		Num:     3,
+		MinSize: cos.KiB,
+		MaxSize: 2 * cos.KiB,
+		Seed:    777,
+	}
+
+	r, err := readers.New(&readers.Arg{
+		Type:      readers.File,
+		Path:      tmpDir,
+		Name:      "test.tgz",
+		CksumType: cos.ChecksumCesXxh,
+		Arch:      arch,
+	})
+	if err != nil {
+		t.Fatalf("failed to create file reader: %v", err)
+	}
+	defer r.Close()
+
+	// Verify file was created
+	filePath := filepath.Join(tmpDir, "test.tgz")
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatalf("archive file not created: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("archive file is empty")
+	}
+
+	// Verify we can read it
+	buf := make([]byte, info.Size())
+	n, err := r.Read(buf)
+	if err != nil && err != io.EOF {
+		t.Fatalf("read error: %v", err)
+	}
+	if int64(n) != info.Size() {
+		t.Fatalf("read size mismatch: got %d, want %d", n, info.Size())
+	}
+}
+
+func TestRandReaderRejectsArch(t *testing.T) {
+	_, err := readers.New(&readers.Arg{
+		Type: readers.Rand,
+		Size: cos.KiB,
+		Arch: &readers.Arch{
+			Mime:    archive.ExtTar,
+			Num:     1,
+			MinSize: 100,
+			MaxSize: 100,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error when using Arch with Rand reader")
+	}
+	if !strings.Contains(err.Error(), "does not support archival content") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+//
+// micro-benchmarks
+//
 
 func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	filepath := "/tmp"
