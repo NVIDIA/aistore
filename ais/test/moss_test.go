@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tarch"
@@ -286,7 +287,6 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 
 	// Create archives
 	var (
-		tmpDir     = t.TempDir() // (with automatic cleanup)
 		errCh      = make(chan error, numArchives)
 		wg         = cos.NewLimitedWaitGroup(10, 0)
 		archInfoCh = make(chan archiveInfo, numArchives)
@@ -296,7 +296,7 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 
 		wg.Add(1)
 		go func(archName string) {
-			randomNames, err := _createMossArch(m, test, tmpDir, archName, numInArch)
+			randomNames, err := _createMossArch(m, test, archName, numInArch)
 			if err != nil {
 				errCh <- err
 			} else {
@@ -354,8 +354,8 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 	}
 }
 
-func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, numInArch int) ([]string, error) {
-	// Generate filenames for archive content
+func _createMossArch(m *ioContext, test *mossConfig, archName string, numInArch int) ([]string, error) {
+	// 1) generate filenames for archive content
 	randomNames := make([]string, 0, numInArch)
 	for j := range numInArch {
 		name := fmt.Sprintf("file%d.txt", j)
@@ -368,34 +368,30 @@ func _createMossArch(m *ioContext, test *mossConfig, tmpDir, archName string, nu
 		randomNames = append(randomNames, name)
 	}
 
-	// Create archive (shards) of a given format
-	archPath := tmpDir + "/" + cos.GenTie() + test.inputFormat
-	err := tarch.CreateArchRandomFiles(
-		archPath,
-		tar.FormatUnknown, // tar format
-		test.inputFormat,  // file extension
-		numInArch,         // file count
-		int(m.fileSize),   // file size
-		nil,               // no record extensions
-		randomNames,       // pregenerated filenames
-		false,             // no duplication
-		false,             // no random dir prefix
-		false,             // not exact size
-	)
+	// 2) build shard in-memory via SG reader
+	sgl := memsys.PageMM().NewSGL(0)
+	defer sgl.Free() // free after PUT
+
+	arg := &readers.Arg{
+		Type:      readers.SG,
+		SGL:       sgl,
+		CksumType: cos.ChecksumNone,
+		Arch: &readers.Arch{
+			Mime:      test.inputFormat, // e.g., archive.ExtTar/ExtTgz/ExtZip
+			TarFormat: tar.FormatUnknown,
+			MinSize:   int64(m.fileSize), // fixed per-entry size
+			MaxSize:   int64(m.fileSize),
+			Seed:      1, // deterministic (any nonzero)
+			Num:       numInArch,
+			Names:     randomNames, // use explicit names
+		},
+	}
+	reader, err := readers.New(arg)
 	if err != nil {
 		return nil, err
 	}
 
-	// PUT
-	reader, err := readers.New(&readers.Arg{
-		Type:      readers.File,
-		Path:      archPath,
-		Size:      readers.ExistingFileSize,
-		CksumType: cos.ChecksumNone,
-	})
-	if err != nil {
-		return nil, err
-	}
+	// 3) PUT
 	bp := tools.BaseAPIParams(m.proxyURL)
 	putArgs := api.PutArgs{
 		BaseParams: bp,

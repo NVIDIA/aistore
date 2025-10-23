@@ -5,28 +5,22 @@
 package readers
 
 import (
-	"archive/tar"
 	"bytes"
-	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
 
-	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tools/tarch"
 )
 
 const (
 	File = "file" // file reader
 	SG   = "sg"   // sgl-based reader
 	Rand = "rand" // random reader
-	Tar  = "tar"  // TAR reader
 )
 
 const ExistingFileSize = -1
@@ -44,11 +38,6 @@ type (
 		size    int64
 		offset  int64
 		cksum   *cos.Cksum
-	}
-	tarReader struct {
-		b []byte
-		bytes.Reader
-		cksum *cos.Cksum
 	}
 	rrLimited struct {
 		random *truffleReader
@@ -74,13 +63,6 @@ type (
 
 // construction params
 type (
-	Arch struct {
-		Mime    string // archive.ExtTar|ExtTgz|ExtTarGz|ExtZip|ExtTarLz4
-		Num     int    // files per shard
-		MinSize int64  // min file size
-		MaxSize int64  // max file size
-		Prefix  string // optional prefix inside archive (e.g., "trunk-", "a/b/c/trunk-")
-	}
 	Arg struct {
 		SGL        *memsys.SGL // when Type == "sg"
 		Arch       *Arch       // when the content is archive
@@ -94,7 +76,6 @@ type (
 // interface guard
 var (
 	_ Reader = (*randReader)(nil)
-	_ Reader = (*tarReader)(nil)
 	_ Reader = (*fileReader)(nil)
 	_ Reader = (*sgReader)(nil)
 )
@@ -108,10 +89,10 @@ func New(a *Arg) (Reader, error) {
 		return newRand(a)
 	case File:
 		return newRandFile(a)
-	case Tar:
-		return newTarReader(a)
 	default:
-		return nil, errors.New("unknown memory type for creating inmem reader")
+		err := fmt.Errorf("unknown reader type %q", a.Type)
+		debug.AssertNoErr(err)
+		return nil, err
 	}
 }
 
@@ -120,6 +101,11 @@ func New(a *Arg) (Reader, error) {
 ////////////////
 
 func newRand(a *Arg) (Reader, error) {
+	// randReader is intentionally lightweight - keeping it this way
+	if a.Arch != nil {
+		return nil, fmt.Errorf("reader %q does not support archival content; use %q or %q", Rand, SG, File)
+	}
+
 	truffle := newTruffle()
 
 	var cksum *cos.Cksum
@@ -221,27 +207,32 @@ func newRandFile(a *Arg) (Reader, error) {
 		cksum     *cos.Cksum
 		cksumHash *cos.CksumHash
 		fn        = path.Join(a.Path, a.Name)
-		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
 		exists    bool
 	)
+
+	f, err := os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
 	if err != nil {
 		return nil, err
 	}
-	if a.Size == ExistingFileSize {
+
+	switch {
+	case a.Size == ExistingFileSize:
 		// checksum existing file
 		exists = true
 		if a.CksumType != cos.ChecksumNone {
 			debug.Assert(a.CksumType != "")
 			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, a.CksumType)
 		}
-	} else {
-		// Write random file
-		cksumHash, err = copyRandWithHash(f, a.Size, a.CksumType)
+	case a.Arch != nil:
+		// Write archive shard into file
+		cksumHash, err = a.Arch.write(f, a.CksumType)
+	default:
+		// Write plain random bytes
+		cksumHash, err = writeTruffleWithHash(f, a.Size, a.CksumType)
 	}
 	if err == nil {
 		_, err = f.Seek(0, io.SeekStart)
 	}
-
 	if err != nil {
 		// cleanup and ret
 		f.Close()
@@ -276,17 +267,26 @@ func (r *fileReader) Reset() { r.File.Seek(0, io.SeekStart) }
 //////////////
 
 func newSG(a *Arg) (Reader, error) {
-	var cksum *cos.Cksum
-	if a.Size > 0 {
-		cksumHash, err := copyRandWithHash(a.SGL, a.Size, a.CksumType)
-		if err != nil {
-			return nil, err
-		}
-		if a.CksumType != cos.ChecksumNone {
-			cksum = cksumHash.Clone()
-		}
+	var (
+		cksumHash *cos.CksumHash
+		err       error
+	)
+
+	if a.Arch != nil {
+		// (A) archival content
+		cksumHash, err = a.Arch.write(a.SGL, a.CksumType)
+	} else if a.Size > 0 {
+		// (B) plain random payload
+		cksumHash, err = writeTruffleWithHash(a.SGL, a.Size, a.CksumType)
+	}
+	if err != nil {
+		return nil, err
 	}
 
+	var cksum *cos.Cksum
+	if a.CksumType != cos.ChecksumNone {
+		cksum = cksumHash.Clone()
+	}
 	r := memsys.NewReader(a.SGL)
 	return &sgReader{*r, cksum, a.SGL}, nil
 }
@@ -324,78 +324,20 @@ func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 	}, nil
 }
 
-///////////////
-// tarReader //
-///////////////
+//
+// readers' own utilities
+//
 
-func newTarReader(a *Arg) (r Reader, err error) {
-	var (
-		singleFileSize = min(a.Size, int64(cos.KiB))
-		buff           = bytes.NewBuffer(nil)
-	)
-	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, max(int(a.Size/singleFileSize), 1),
-		int(singleFileSize), shard.ContentKeyInt, ".cls", true /*missing keys*/, false /*exact size*/)
+// stream truffle bytes into w and (optionally) compute checksum
+func writeTruffleWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash, error) {
+	tr := newTruffle()
+	lim := &rrLimited{random: tr, size: size, off: 0}
+
+	// cos.CopyAndChecksum copies from lim -> w and returns the running checksum (if requested).
+	// It also avoids double-buffering on our side.
+	_, h, err := cos.CopyAndChecksum(w, lim, nil, cksumType)
 	if err != nil {
 		return nil, err
 	}
-	cksum, err := cos.ChecksumBytes(buff.Bytes(), a.CksumType)
-	if err != nil {
-		return nil, err
-	}
-	return &tarReader{
-		b:      buff.Bytes(),
-		Reader: *bytes.NewReader(buff.Bytes()),
-		cksum:  cksum,
-	}, err
-}
-
-func (*tarReader) Close() error        { return nil }
-func (r *tarReader) Cksum() *cos.Cksum { return r.cksum }
-
-func (r *tarReader) Reset() { r.Reader.Seek(0, io.SeekStart) }
-
-func (r *tarReader) Open() (cos.ReadOpenCloser, error) {
-	return &tarReader{
-		Reader: *bytes.NewReader(r.b),
-		cksum:  r.cksum,
-		b:      r.b,
-	}, nil
-}
-
-// copyRandWithHash reads data from random source and writes it to a writer while
-// optionally computing xxhash
-// See related: memsys_test.copyRand
-func copyRandWithHash(w io.Writer, size int64, cksumType string) (*cos.CksumHash, error) {
-	var (
-		cksum   *cos.CksumHash
-		rem     = size
-		buf, s  = memsys.PageMM().Alloc()
-		blkSize = int64(len(buf))
-		seed    = uint64(mono.NanoTime())
-	)
-	defer s.Free(buf)
-
-	if cksumType != cos.ChecksumNone {
-		cksum = cos.NewCksumHash(cksumType)
-	}
-	for i := int64(0); i <= size/blkSize; i++ {
-		n := int(min(blkSize, rem))
-		// Fill buffer with deterministic random data (faster than crypto/rand)
-		for j := 0; j <= len(buf)-cos.SizeofI64; j += cos.SizeofI64 {
-			binary.BigEndian.PutUint64(buf[j:], seed+uint64(j))
-		}
-		m, err := w.Write(buf[:n])
-		if err != nil {
-			return nil, err
-		}
-		if cksumType != cos.ChecksumNone {
-			cksum.H.Write(buf[:m])
-		}
-		debug.Assert(m == n)
-		rem -= int64(m)
-	}
-	if cksumType != cos.ChecksumNone {
-		cksum.Finalize()
-	}
-	return cksum, nil
+	return h, nil
 }

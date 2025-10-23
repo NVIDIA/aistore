@@ -192,7 +192,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "local directory to store temporary files")
 	f.StringVar(&p.readerType, "readertype", readers.SG,
-		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s | %s", readers.SG, readers.File, readers.Rand, readers.Tar))
+		fmt.Sprintf("[advanced usage only] type of reader: %s(default) | %s | %s", readers.SG, readers.File, readers.Rand))
 
 	// ============ Object sizing and checksumming ============
 	f.StringVar(&p.minSizeStr, "minsize", "", "minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
