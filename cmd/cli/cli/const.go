@@ -111,6 +111,7 @@ const (
 	cmdDsort        = apc.ActDsort
 	cmdRebalance    = apc.ActRebalance
 	cmdLRU          = apc.ActLRU
+	commandRechunk  = apc.ActRechunk
 	cmdStgCleanup   = "cleanup" // display name for apc.ActStoreCleanup
 	cmdScrub        = "validate"
 	cmdSummary      = "summary" // ditto apc.ActSummaryBck
@@ -1060,6 +1061,12 @@ var (
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
 		Usage: "Chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')",
+	}
+
+	// usage: rechunk
+	objSizeLimitFlag = cli.StringFlag{
+		Name:  "objsize-limit",
+		Usage: "Object size threshold for chunking in IEC or SI units (e.g.: 50MiB, 100mb); objects >= this size will be chunked",
 	}
 
 	blobThresholdFlag = cli.StringFlag{

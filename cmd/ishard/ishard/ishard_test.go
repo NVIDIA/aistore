@@ -809,7 +809,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 			randomizeQueue = randomizeQueue[1:]
 			size := rand.Int64N(fileSize)
 			totalSize += size
-			r, _ := readers.NewRand(size, cos.ChecksumNone)
+			r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumNone})
 			if _, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bucket,
@@ -844,7 +844,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 			objectName := filepath.Join(basePath, baseName+ext)
 			size := rand.Int64N(fileSize)
 			totalSize += size
-			r, _ := readers.NewRand(size, cos.ChecksumNone)
+			r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumNone})
 			if _, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bucket,
@@ -861,7 +861,7 @@ func generateNestedStructure(baseParams api.BaseParams, bucket cmn.Bck, numRecor
 	for _, objectName := range randomizeQueue {
 		size := rand.Int64N(fileSize)
 		totalSize += size
-		r, _ := readers.NewRand(size, cos.ChecksumNone)
+		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumNone})
 		if _, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bucket,

@@ -1,0 +1,33 @@
+# Test rechunk command
+
+# Create bucket
+ais bucket create ais://$BUCKET // IGNORE
+
+# Create objects with different sizes
+# small1.txt: 10KB
+# small2.txt: 10KB  
+# large.txt: 100KB
+head -c 10240 /dev/urandom | ais object put - ais://$BUCKET/small1.txt // IGNORE
+head -c 10240 /dev/urandom | ais object put - ais://$BUCKET/small2.txt // IGNORE
+head -c 102400 /dev/urandom | ais object put - ais://$BUCKET/large.txt // IGNORE
+
+# List objects before rechunk - none should be chunked
+ais ls ais://$BUCKET --chunked | awk 'NR>1 {print $1, $3}'
+
+# Start rechunk
+ais bucket rechunk ais://$BUCKET --objsize-limit 51200 --chunk-size 20480
+
+# Wait for rechunk to finish
+ais wait job rechunk // IGNORE
+
+# List objects after rechunk - only large.txt should show CHUNKED=yes
+ais ls ais://$BUCKET --chunked | awk 'NR>1 {print $1, $3}'
+
+# Verify we can get all objects (data integrity check)
+ais object get ais://$BUCKET/small1.txt /dev/null // IGNORE
+ais object get ais://$BUCKET/small2.txt /dev/null // IGNORE
+ais object get ais://$BUCKET/large.txt /dev/null // IGNORE
+
+# Clean up
+ais bucket rm --yes ais://$BUCKET // IGNORE
+

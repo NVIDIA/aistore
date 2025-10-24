@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -18,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/xact"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -116,6 +118,11 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket: print object count and total size;\n" +
 	indent1 + "\t* ais ls s3 --summary --all \t- summary report for all s3 buckets including remote/non-present;\n" +
 	indent1 + "\t* ais ls s3 --summary --all --dont-add \t- same, without adding non-present buckets to cluster metadata."
+
+// ais rechunk
+const rechunkUsage = "Re-chunk bucket objects based on size threshold. " +
+	"Objects equal to or larger than objsize_limit will be split and stored as multiple chunk_size chunks. " +
+	"Use objsize_limit=0 to restore all objects to monolithic format."
 
 // ais bucket ... props
 const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
@@ -245,6 +252,13 @@ var (
 			enableFlag,
 			disableFlag,
 		},
+		commandRechunk: {
+			chunkSizeFlag,
+			objSizeLimitFlag,
+			verbObjPrefixFlag,
+			waitFlag,
+			waitJobXactFinishedFlag,
+		},
 	}
 )
 
@@ -312,6 +326,13 @@ var (
 			bucketCmdLRU,
 			bucketObjCmdEvict,
 			objectCmdPrefetch,
+			{
+				Name:      apc.ActRechunk,
+				Usage:     rechunkUsage,
+				ArgsUsage: bucketArgument,
+				Flags:     sortFlags(bucketCmdsFlags[apc.ActRechunk]),
+				Action:    rechunkBucketHandler,
+			},
 			makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:      commandCreate,
@@ -404,6 +425,104 @@ func removeBucketHandler(c *cli.Context) error {
 		return removeAllBuckets(c)
 	}
 	return removeSpecificBuckets(c)
+}
+
+func parseRechunkConfig(c *cli.Context, bck cmn.Bck) (chunkSize, objSizeLimit int64, err error) {
+	// Parse chunk_size flag if provided
+	if flagIsSet(c, chunkSizeFlag) {
+		chunkSize, err = parseSizeFlag(c, chunkSizeFlag)
+		if err != nil {
+			return 0, 0, err
+		}
+		if chunkSize <= 0 {
+			return 0, 0, incorrectUsageMsg(c, "chunk size must be positive, got %s", cos.ToSizeIEC(chunkSize, 0))
+		}
+	}
+
+	// Parse objsize_limit flag if provided
+	if flagIsSet(c, objSizeLimitFlag) {
+		objSizeLimit, err = parseSizeFlag(c, objSizeLimitFlag)
+		if err != nil {
+			return 0, 0, err
+		}
+		if objSizeLimit < 0 {
+			return 0, 0, incorrectUsageMsg(c, "object size limit cannot be negative, got %s", cos.ToSizeIEC(objSizeLimit, 0))
+		}
+	}
+
+	// If either flag is missing, get from bucket and prompt for confirmation
+	if !flagIsSet(c, chunkSizeFlag) || !flagIsSet(c, objSizeLimitFlag) {
+		bckProps, err := api.HeadBucket(apiBP, bck, true /*don't add*/)
+		if err != nil {
+			return 0, 0, V(err)
+		}
+
+		// Fill in missing values from bucket
+		if !flagIsSet(c, chunkSizeFlag) {
+			chunkSize = int64(bckProps.Chunks.ChunkSize)
+		}
+		if !flagIsSet(c, objSizeLimitFlag) {
+			objSizeLimit = int64(bckProps.Chunks.ObjSizeLimit)
+		}
+
+		// Prompt user for confirmation (unless --yes is set)
+		if !flagIsSet(c, yesFlag) {
+			fmt.Fprint(c.App.Writer, "Rechunk configuration:\n")
+			fmt.Fprintf(c.App.Writer, "\tchunk_size:\t%s\n", cos.ToSizeIEC(chunkSize, 0))
+			fmt.Fprintf(c.App.Writer, "\tobjsize_limit:\t%s%s\n", cos.ToSizeIEC(objSizeLimit, 0), cos.Ternary(objSizeLimit == 0, " (chunking disabled)", ""))
+			if !confirm(c, "Proceed with these values?") {
+				return 0, 0, errors.New("operation canceled")
+			}
+		}
+	}
+
+	return chunkSize, objSizeLimit, nil
+}
+
+func rechunkBucketHandler(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing bucket name")
+	}
+
+	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true /*optObjName*/)
+	if err != nil {
+		return err
+	}
+
+	// Parse/determine chunk configuration (may prompt user)
+	chunkSize, objSizeLimit, err := parseRechunkConfig(c, bck)
+	if err != nil {
+		return err
+	}
+
+	prefix := parseStrFlag(c, verbObjPrefixFlag)
+	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
+		return fmt.Errorf("cannot handle embedded prefix ('%s') and --prefix flag ('%s') simultaneously - prefix flag must start with embedded prefix",
+			objName, prefix)
+	}
+	if prefix == "" {
+		prefix = objName
+	}
+
+	// Start rechunk
+	xid, err := api.RechunkBucket(apiBP, bck, objSizeLimit, chunkSize, prefix)
+	if err != nil {
+		return V(err)
+	}
+
+	// Prepare message
+	_, xname := xact.GetKindName(apc.ActRechunk)
+	text := fmt.Sprintf("%s: %s", xact.Cname(xname, xid), bck.Cname(""))
+	if prefix != "" {
+		text += fmt.Sprintf(" (prefix: %q)", prefix)
+	}
+
+	// Check wait flags
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
+		return nil
+	}
+	return waitJob(c, xname, xid, bck)
 }
 
 func removeAllBuckets(c *cli.Context) error {

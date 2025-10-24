@@ -1,0 +1,7 @@
+large.txt
+small1.txt
+small2.txt
+^*rechunk.*$
+^large\.txt.*yes$
+small1.txt
+small2.txt

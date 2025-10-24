@@ -40,6 +40,7 @@ var showJobUsage = "Show running and/or finished jobs:\n" +
 	indent1 + "\t- show job copy\t- show all copying jobs including both bucket-to-bucket and multi-object;\n" +
 	indent1 + "\t- show job copy-objects --all\t- show both running and already finished (or stopped) multi-object copies;\n" +
 	indent1 + "\t- show job copy-objects --all --top 10\t- show 10 most recent multi-object copy jobs;\n" +
+	indent1 + "\t- show job rechunk\t- show all running rechunk jobs;\n" +
 	indent1 + "\t- show job ec\t- show all erasure-coding;\n" +
 	indent1 + "\t- show job list\t- show all running list-objects jobs;\n" +
 	indent1 + "\t- show job ls\t- same as above;\n" +
