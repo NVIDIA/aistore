@@ -17,10 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/xoshiro256"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
@@ -65,6 +67,8 @@ type (
 )
 
 func postNewWorkOrder() (err error) {
+	totalWOs++
+
 	// operation
 	op := opGet
 	switch {
@@ -249,6 +253,22 @@ func doPut(wo *workOrder) {
 		readParams.SGL = wo.sgl
 	}
 
+	// PUT(shard)
+	if runParams.archParams.use {
+		mime, err := archive.Mime(runParams.archParams.format, wo.objName)
+		if err != nil {
+			wo.err = err
+			return
+		}
+		readParams.Arch = &readers.Arch{
+			Mime:    mime,
+			Prefix:  runParams.archParams.prefix,
+			MinSize: runParams.archParams.minSz,
+			MaxSize: runParams.archParams.maxSz,
+			Num:     runParams.archParams.numFiles,
+		}
+	}
+
 	r, err := readers.New(&readParams)
 	if err != nil {
 		wo.err = err
@@ -393,6 +413,12 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 func newPutWorkOrder() (*workOrder, error)       { return _newPutWO(opPut) }
 func newMultipartWorkOrder() (*workOrder, error) { return _newPutWO(opPutMultipart) }
 
+func _randInRange(minSize, maxSize int64) int64 {
+	span := uint64(maxSize - minSize + 1)
+	v := xoshiro256.Hash(totalWOs) % span
+	return minSize + int64(v)
+}
+
 func _newPutWO(op int) (*workOrder, error) {
 	objName, err := _genObjName()
 	if err != nil {
@@ -400,8 +426,7 @@ func _newPutWO(op int) (*workOrder, error) {
 	}
 	size := runParams.minSize
 	if runParams.maxSize != runParams.minSize {
-		d := rnd.Int64N(runParams.maxSize + 1 - runParams.minSize)
-		size = runParams.minSize + d
+		size = _randInRange(runParams.minSize, runParams.maxSize)
 	}
 	putPending++
 
@@ -417,7 +442,7 @@ func _newPutWO(op int) (*workOrder, error) {
 func _genObjName() (string, error) {
 	cnt := objNameCnt.Inc()
 	if runParams.maxputs != 0 && cnt-1 == runParams.maxputs {
-		return "", fmt.Errorf("number of PUT objects reached maxputs limit (%d)", runParams.maxputs)
+		return "", fmt.Errorf("number of PUT objects reached '--maxputs' limit (%d)", runParams.maxputs)
 	}
 
 	var (
@@ -430,8 +455,8 @@ func _genObjName() (string, error) {
 		idx++
 	}
 
-	if runParams.putShards != 0 {
-		comps[idx] = fmt.Sprintf("%05x", cnt%runParams.putShards)
+	if runParams.numVirtDirs != 0 {
+		comps[idx] = fmt.Sprintf("%05x", cnt%runParams.numVirtDirs)
 		idx++
 	}
 
@@ -445,7 +470,17 @@ func _genObjName() (string, error) {
 		idx++
 	}
 
-	return path.Join(comps[0:idx]...), nil
+	name := path.Join(comps[0:idx]...)
+
+	// new shard: add extension
+	if runParams.archParams.use && cos.Ext(name) == "" {
+		if runParams.archParams.format != "" {
+			name += runParams.archParams.format
+		} else {
+			name += archive.ExtTar // default .tar
+		}
+	}
+	return name, nil
 }
 
 func newGetWorkOrder(op int) (*workOrder, error) {
@@ -499,20 +534,15 @@ func (wo *workOrder) String() string {
 	return fmt.Sprintf("wo[%s %s, %v, size: %d%s]", opName, cname, lat, wo.size, s)
 }
 
-// shouldUsePercentage returns true based on the given percentage (0-100)
+// returns true based on the given PUT percentage (0-100)
+// uses totalWOs counter with xoshiro256 hash for deterministic, well-distributed decisions
 func shouldUsePercentage(pct int) bool {
-	switch pct {
-	case 0:
+	if pct <= 0 {
 		return false
-	case 25:
-		return mono.NanoTime()&0x3 == 0x3
-	case 50:
-		return mono.NanoTime()&1 == 1
-	case 75:
-		return mono.NanoTime()&0x3 > 0
-	case 100:
-		return true
-	default:
-		return pct > rnd.IntN(100)
 	}
+	if pct >= 100 {
+		return true
+	}
+	v := xoshiro256.Hash(totalWOs) % 100
+	return v < uint64(pct)
 }

@@ -246,7 +246,9 @@ func isHexN(s string, n int) bool {
 }
 
 // 3-letter tie breaker (fast)
-// (see also: bench/micro/uuid/genid_test.go)
+// see also:
+// - bench/micro/uuid/genid_test.go
+// - cmn/xoshiro256
 func GenTie() string {
 	tie := rtie.Add(1)
 	tie *= 0x9e3779b97f4a7c15 // golden ratio multiplier (bit spread)
@@ -259,7 +261,10 @@ func GenTie() string {
 	return UnsafeS(b[:])
 }
 
-// yet another unique ID (compare w/ GenUUID and GenBEID)
+// GenYAID - yet another unique ID:
+// - it uses simple multiplicative by golden ratio to spread sequential counter values
+// - for stronger mixing, see cmn/xoshiro256 package
+// - compare w/ GenUUID and GenBEID above
 func GenYAID(sid string) string {
 	const (
 		lsuffix = 5

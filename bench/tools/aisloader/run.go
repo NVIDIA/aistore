@@ -103,10 +103,18 @@ var (
 	objnameGetter    namegetter.Basic
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC          *statsd.Client
-	getPending       int64
-	putPending       int64
-	getBatchPending  int64
-	traceHTTPSig     atomic.Bool
+
+	// ===========================================================
+	// NOTE: the following non-atomic counters are updated/read exclusively
+	// by the single-threaded producer (main) loop. Do NOT access from
+	// worker goroutines - or switch to atomics or refactor accordingly.
+	// ===========================================================
+	getPending      int64  // main-loop only
+	putPending      int64  // main-loop only
+	totalWOs        uint64 // main-loop only (used for deterministic hashing)
+	getBatchPending int64  // main-loop only
+
+	traceHTTPSig atomic.Bool
 
 	flagUsage   bool
 	flagVersion bool

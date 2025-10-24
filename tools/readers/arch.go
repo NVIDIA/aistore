@@ -21,6 +21,12 @@ import (
 
 const dfltExt = ".txt"
 
+const (
+	dfltMinSize  = cos.KiB
+	dfltMaxSize  = cos.MiB
+	dfltNumFiles = 32
+)
+
 type Arch struct {
 	Mime    string // archive.ExtTar|ExtTgz|ExtTarGz|ExtZip|ExtTarLz4
 	Prefix  string // optional prefix inside archive (e.g., "trunk-", "a/b/c/trunk-")
@@ -43,9 +49,10 @@ type Arch struct {
 // Arch //
 //////////
 
-func (a *Arch) init() error {
-	if a.Num <= 0 {
-		return fmt.Errorf("Arch.Num must be positive (got %d)", a.Num)
+// validate Arch fields, normalize Mime, and fills defaults
+func (a *Arch) Init(objSize int64) error {
+	if a.Num < 0 {
+		return fmt.Errorf("Arch.Num cannot be negative (got %d)", a.Num)
 	}
 	if a.MinSize < 0 {
 		return fmt.Errorf("Arch.MinSize must be non-negative (got %d)", a.MinSize)
@@ -61,8 +68,40 @@ func (a *Arch) init() error {
 			return fmt.Errorf("Arch.Names length (%d) must match Num (%d)", len(a.Names), a.Num)
 		}
 	}
+	if objSize > 0 && int64(a.Num)*a.MinSize > objSize {
+		return fmt.Errorf("object size (%d) cannot be less than Arch.MinSize(%d) * Arch.Num(%d)",
+			objSize, a.MinSize, a.Num)
+	}
+	m, err := archive.Mime(a.Mime, "")
+	if err != nil {
+		return fmt.Errorf("Arch.Mime (%q) is invalid: %v", a.Mime, err)
+	}
+	a.Mime = m
 
 	// set defaults
+	if a.MinSize == 0 && a.MaxSize == 0 {
+		a.MinSize, a.MaxSize = dfltMinSize, dfltMaxSize
+	} else if a.MaxSize == 0 {
+		a.MaxSize = a.MinSize
+	}
+	if a.Num == 0 {
+		if objSize > 0 && a.MinSize > 0 {
+			avgFileSize := (a.MinSize + a.MaxSize) / 2
+			if avgFileSize == 0 {
+				avgFileSize = a.MinSize
+			}
+			if avgFileSize > 0 {
+				a.Num = int(objSize / avgFileSize)
+				if a.Num < 1 {
+					a.Num = 1
+				}
+			} else {
+				a.Num = dfltNumFiles
+			}
+		} else {
+			a.Num = dfltNumFiles
+		}
+	}
 	if a.Seed == 0 {
 		a.Seed = uint64(mono.NanoTime())
 	}

@@ -435,17 +435,6 @@ func TestArchReader(t *testing.T) {
 		},
 		// Error cases
 		{
-			name: "invalid_num_zero",
-			arch: &readers.Arch{
-				Mime:    archive.ExtTar,
-				Num:     0,
-				MinSize: 100,
-				MaxSize: 100,
-			},
-			wantErr:     true,
-			errContains: "Num must be positive",
-		},
-		{
 			name: "invalid_min_negative",
 			arch: &readers.Arch{
 				Mime:    archive.ExtTar,

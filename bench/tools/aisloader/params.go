@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -66,11 +67,37 @@ type (
 		verifyHash bool   // recompute and validate checksums on GET
 	}
 
+	// archives aka shards
+	// NOTE:
+	// aisloader currently uses a subset of readers.Arch functionality.
+	// Supported fields are listed below; the remaining ones are not yet wired in:
+	//   - Names:     explicit file names (aisloader generates synthetic names)
+	//   - RecExt:    in-archive filename (aka, recordi) extension (defaults to .txt)
+	//   - TarFormat: tar format override (uses archive package defaults while readers.Arch supports GNU, USTAR, etc.)
+	//   - RandNames: random numeric names (aisloader uses its own naming)
+	//   - RandDir:   random directory layers
+	//   - MaxLayers: max directory depth (not applicable)
+	//   - Seed:      always auto-generated from mono.NanoTime()
+
+	archParams struct {
+		format   string // archive format (default: .tar)
+		prefix   string // optional prefix inside archive (e.g., "trunk-", "a/b/c/trunk-")
+		numFiles int    // number of archived files inside shard (PUT only)
+		minSzStr string // min file size
+		maxSzStr string // max --/--
+
+		// resolved
+		minSz int64
+		maxSz int64
+
+		use bool // whether to enable sharding across all supported workloads (PUT, GET, etc.)
+	}
+
 	// Object naming strategy and distribution
 	namingParams struct {
 		subDir        string // virtual directory prefix for objects
 		fileList      string // file containing object names to use
-		putShards     uint64 // spread objects across N subdirectories (max 100k)
+		numVirtDirs   uint64 // spread generated objects across that many virtual subdirectories (< 100k or "%05x")
 		randomObjName bool   // generate random 32-char object names
 		skipList      bool   // skip listing bucket before 100% PUT workload
 	}
@@ -139,6 +166,7 @@ type (
 		bucketParams    // bucket + properties
 		workloadParams  // timing, workers, name-getter config
 		sizeCksumParams // object size + integrity
+		archParams      // one of the AIS-supported formats and related defining parameters
 		namingParams    // object naming strategy
 		readParams      // read operations
 		multipartParams // multipart upload
@@ -201,13 +229,21 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"when true, checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 
+	// ============ Archives (Shards) ============
+	f.StringVar(&p.archParams.format, "arch.format", "", "archive format (one of the 4 supported by AIStore; default TAR)")
+	f.StringVar(&p.archParams.prefix, "arch.prefix", "", "optional prefix inside archive (e.g., \"trunk\" or \"a/b/c/trunk-\")")
+	f.IntVar(&p.archParams.numFiles, "arch.num-files", 0, "number of archived files per shard (PUT only; default gets computed from sizes)")
+	f.StringVar(&p.archParams.minSzStr, "arch.minsize", "", "minimum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
+	f.StringVar(&p.archParams.maxSzStr, "arch.maxsize", "", "maximum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
+	f.BoolVar(&p.archParams.use, "arch.use", false, "enable sharding across all workloads: PUT, GET, chunks, batches, etc.")
+
 	// ============ Naming ============
 	f.StringVar(&p.subDir, "subdir", "", "For GET requests, '-subdir' is a prefix that may or may not be an actual _virtual directory_;\n"+
 		"For PUTs, '-subdir' is a virtual destination directory for all aisloader-generated objects;\n"+
 		"See also:\n"+
 		"\t- closely related CLI '--prefix' option: "+cmn.GitHubHome+"/blob/main/docs/cli/object.md\n"+
 		"\t- virtual directories:                   "+cmn.GitHubHome+"/blob/main/docs/howto_virt_dirs.md")
-	f.Uint64Var(&p.putShards, "putshards", 0, "spread generated objects over this many subdirectories (max 100k)")
+	f.Uint64Var(&p.numVirtDirs, "num-subdirs", 0, "spread generated objects over this many virtual subdirectories (< 100k)")
 	f.BoolVar(&p.randomObjName, "randomname", true,
 		"when true, generate object names of 32 random characters. This option is ignored when loadernum is defined")
 	f.StringVar(&p.fileList, "filelist", "", "local or locally-accessible text file containing object names (for subsequent reading)")
@@ -305,26 +341,29 @@ func _init(p *params) (err error) {
 	}
 	rnd = rand.New(cos.NewRandSource(uint64(p.seed)))
 
-	if p.putSizeUpperBoundStr != "" {
-		if p.putSizeUpperBound, err = cos.ParseSize(p.putSizeUpperBoundStr, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("failed to parse total PUT size %s: %v", p.putSizeUpperBoundStr, err)
-		}
+	//
+	// parse sizes
+	//
+	if p.putSizeUpperBound, err = _parseSize(p.putSizeUpperBoundStr, "totalputsize", 0); err != nil {
+		return err
 	}
-
-	if p.minSizeStr != "" {
-		if p.minSize, err = cos.ParseSize(p.minSizeStr, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("failed to parse min size %s: %v", p.minSizeStr, err)
-		}
-	} else {
-		p.minSize = cos.MiB
+	if p.minSize, err = _parseSize(p.minSizeStr, "minsize", cos.MiB); err != nil {
+		return err
 	}
-
-	if p.maxSizeStr != "" {
-		if p.maxSize, err = cos.ParseSize(p.maxSizeStr, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("failed to parse max size %s: %v", p.maxSizeStr, err)
-		}
-	} else {
-		p.maxSize = cos.GiB
+	if p.maxSize, err = _parseSize(p.maxSizeStr, "maxsize", cos.GiB); err != nil {
+		return err
+	}
+	if p.readOff, err = _parseSize(p.readOffStr, "readoff", 0); err != nil {
+		return err
+	}
+	if p.readLen, err = _parseSize(p.readLenStr, "readlen", 0); err != nil {
+		return err
+	}
+	if p.minSz, err = _parseSize(p.minSzStr, "arch.minsize", 0); err != nil {
+		return err
+	}
+	if p.maxSz, err = _parseSize(p.maxSzStr, "arch.maxsize", 0); err != nil {
+		return err
 	}
 
 	if !p.duration.IsSet {
@@ -337,187 +376,9 @@ func _init(p *params) (err error) {
 		}
 	}
 
-	// Sanity check
-	if p.maxSize < p.minSize {
-		return fmt.Errorf("invalid option: min and max size (%d, %d), respectively", p.minSize, p.maxSize)
-	}
-
-	if p.putPct < 0 || p.putPct > 100 {
-		return fmt.Errorf("invalid option: PUT percent %d", p.putPct)
-	}
-	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
-		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.putPct)
-	}
-
-	if p.multipartChunks < 0 {
-		return fmt.Errorf("invalid option: multipart-chunks %d (must be >= 0)", p.multipartChunks)
-	}
-	if p.multipartPct < 0 || p.multipartPct > 100 {
-		return fmt.Errorf("invalid option: pctmultipart %d (must be 0-100)", p.multipartPct)
-	}
-	if p.multipartChunks == 0 && p.multipartPct != 0 {
-		fmt.Fprintf(os.Stderr, "Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
-	}
-
-	if p.skipList && p.fileList != "" {
-		fmt.Fprintln(os.Stderr, "Warning: '-skiplist' option is ignored when '-filelist' is specified")
-		p.skipList = false
-	}
-	if p.skipList && p.putPct < 100 {
-		return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
-	}
-
-	// direct s3 access vs other command line
-	if isDirectS3() {
-		if p.randomProxy {
-			return errors.New("command line options '-s3endpoint' and '-randomproxy' are mutually exclusive")
-		}
-		if ip != "" && ip != defaultClusterIP && ip != defaultClusterIPv4 {
-			return errors.New("command line options '-s3endpoint' and '-ip' are mutually exclusive")
-		}
-		if port != "" && port != "8080" { // TODO: ditto
-			return errors.New("command line options '-s3endpoint' and '-port' are mutually exclusive")
-		}
-		if p.traceHTTP {
-			return errors.New("direct S3 access via '-s3endpoint': HTTP tracing is not supported yet")
-		}
-		if p.cleanUp.Val {
-			return errors.New("direct S3 access via '-s3endpoint': '-cleanup' option is not supported yet")
-		}
-		if p.verifyHash {
-			return errors.New("direct S3 access via '-s3endpoint': '-verifyhash' option is not supported yet")
-		}
-		if p.readOffStr != "" || p.readLenStr != "" {
-			return errors.New("direct S3 access via '-s3endpoint': Read range is not supported yet")
-		}
-		if p.multipartChunks > 0 {
-			return errors.New("direct S3 access via '-s3endpoint': multipart upload is not supported yet")
-		}
-	}
-
-	if p.getBatchSize != 0 {
-		const s = "'--get-batchsize'"
-		if p.getBatchSize < 1 || p.getBatchSize > 1000 {
-			return fmt.Errorf("invalid %s value %d (must be 1-1000)", s, p.getBatchSize)
-		}
-		if p.readOff != 0 || p.readLen != 0 {
-			return fmt.Errorf("option %s cannot be used with readoff/readlen", s)
-		}
-		if p.verifyHash {
-			return fmt.Errorf("option %s cannot be used with verifyhash", s)
-		}
-		if p.etlName != "" || p.etlSpecPath != "" {
-			return fmt.Errorf("option %s cannot be used with ETL", s)
-		}
-		if isDirectS3() {
-			return fmt.Errorf("option %s requires AIStore (S3 does not provide GetBatch)", s)
-		}
-	}
-
-	if p.statsShowInterval < 0 {
-		return fmt.Errorf("invalid option: stats show interval %d", p.statsShowInterval)
-	}
-
-	if p.readOffStr != "" {
-		if p.readOff, err = cos.ParseSize(p.readOffStr, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("failed to parse read offset %s: %v", p.readOffStr, err)
-		}
-	}
-	if p.readLenStr != "" {
-		if p.readLen, err = cos.ParseSize(p.readLenStr, cos.UnitsIEC); err != nil {
-			return fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
-		}
-	}
-
-	if p.loaderID == "" {
-		return errors.New("loaderID can't be empty")
-	}
-
-	loaderID, parseErr := strconv.ParseUint(p.loaderID, 10, 64)
-	if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
-		if p.randomObjName {
-			useRandomObjName = true
-			if parseErr != nil {
-				return errors.New("loaderID as string only allowed when using loaderIDHashLen")
-			}
-			// don't have to set suffixIDLen as userRandomObjName = true
-			suffixID = loaderID
-		} else {
-			// stats will be using loaderID
-			// but as suffixIDMaskLen = 0, object names will be just consecutive numbers
-			suffixID = loaderID
-			suffixIDMaskLen = 0
-		}
-	} else {
-		if p.loaderCnt > 0 && p.loaderIDHashLen > 0 {
-			return errors.New("loadernum and loaderIDHashLen can't be > 0 at the same time")
-		}
-
-		if p.loaderIDHashLen > 0 {
-			if p.loaderIDHashLen == 0 || p.loaderIDHashLen > 63 {
-				return errors.New("loaderIDHashLen has to be larger than 0 and smaller than 64")
-			}
-
-			suffixIDMaskLen = ceilAlign(p.loaderIDHashLen, 4)
-			suffixID = getIDFromString(p.loaderID, suffixIDMaskLen)
-		} else {
-			// p.loaderCnt > 0
-			if parseErr != nil {
-				return errors.New("loadername has to be a number when using loadernum")
-			}
-			if loaderID > p.loaderCnt {
-				return errors.New("loaderid has to be smaller than loadernum")
-			}
-
-			suffixIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
-			suffixID = loaderID
-		}
-	}
-
-	if p.subDir != "" {
-		p.subDir = filepath.Clean(p.subDir)
-		if p.subDir[0] == '/' {
-			return errors.New("object name prefix can't start with /")
-		}
-	}
-
-	if p.putShards > 100000 {
-		return errors.New("putshards should not exceed 100000")
-	}
-
-	if err := cos.ValidateCksumType(p.cksumType); err != nil {
+	// validate
+	if err := p.validate(); err != nil {
 		return err
-	}
-
-	if p.etlName != "" && p.etlSpecPath != "" {
-		return errors.New("etl and etl-spec flag can't be set both")
-	}
-
-	if p.etlSpecPath != "" {
-		fh, err := os.Open(p.etlSpecPath)
-		if err != nil {
-			return err
-		}
-		etlSpec, err := cos.ReadAll(fh)
-		fh.Close()
-		if err != nil {
-			return err
-		}
-		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
-		if err != nil {
-			return err
-		}
-	}
-
-	if p.etlName != "" {
-		etlSpec, err := tetl.GetTransformYaml(p.etlName)
-		if err != nil {
-			return err
-		}
-		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
-		if err != nil {
-			return err
-		}
 	}
 
 	if p.bPropsStr != "" {
@@ -609,5 +470,206 @@ func _init(p *params) (err error) {
 	}
 
 	// NOTE: auth token is assigned below when we execute the very first API call
+	return nil
+}
+
+func _parseSize(valueStr, name string, defaultVal int64) (int64, error) {
+	if valueStr == "" {
+		return defaultVal, nil
+	}
+	v, err := cos.ParseSize(valueStr, cos.UnitsIEC)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse '--%s=%s': %v", name, valueStr, err)
+	}
+	return v, nil
+}
+
+func (p *params) validate() error {
+	if p.maxSize < p.minSize {
+		return fmt.Errorf("invalid option: min and max size (%d, %d), respectively", p.minSize, p.maxSize)
+	}
+
+	if p.putPct < 0 || p.putPct > 100 {
+		return fmt.Errorf("invalid option: PUT percent %d", p.putPct)
+	}
+	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
+		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.putPct)
+	}
+
+	if p.multipartChunks < 0 {
+		return fmt.Errorf("invalid option: multipart-chunks %d (must be >= 0)", p.multipartChunks)
+	}
+	if p.multipartPct < 0 || p.multipartPct > 100 {
+		return fmt.Errorf("invalid option: pctmultipart %d (must be 0-100)", p.multipartPct)
+	}
+	if p.multipartChunks == 0 && p.multipartPct != 0 {
+		fmt.Fprintf(os.Stderr, "Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
+	}
+
+	if p.skipList && p.fileList != "" {
+		fmt.Fprintln(os.Stderr, "Warning: '-skiplist' option is ignored when '-filelist' is specified")
+		p.skipList = false
+	}
+	if p.skipList && p.putPct < 100 {
+		return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
+	}
+
+	// direct s3 access vs other command line
+	if isDirectS3() {
+		if p.randomProxy {
+			return errors.New("command line options '-s3endpoint' and '-randomproxy' are mutually exclusive")
+		}
+		if ip != "" && ip != defaultClusterIP && ip != defaultClusterIPv4 {
+			return errors.New("command line options '-s3endpoint' and '-ip' are mutually exclusive")
+		}
+		if port != "" && port != "8080" {
+			return errors.New("command line options '-s3endpoint' and '-port' are mutually exclusive")
+		}
+		if p.traceHTTP {
+			return errors.New("direct S3 access via '-s3endpoint': HTTP tracing is not supported yet")
+		}
+		if p.cleanUp.Val {
+			return errors.New("direct S3 access via '-s3endpoint': '-cleanup' option is not supported yet")
+		}
+		if p.verifyHash {
+			return errors.New("direct S3 access via '-s3endpoint': '-verifyhash' option is not supported yet")
+		}
+		if p.readOffStr != "" || p.readLenStr != "" {
+			return errors.New("direct S3 access via '-s3endpoint': Read range is not supported yet")
+		}
+		if p.multipartChunks > 0 {
+			return errors.New("direct S3 access via '-s3endpoint': multipart upload is not supported yet")
+		}
+	}
+
+	if p.getBatchSize != 0 {
+		const s = "'--get-batchsize'"
+		if p.getBatchSize < 1 || p.getBatchSize > 1000 {
+			return fmt.Errorf("invalid %s value %d (must be 1-1000)", s, p.getBatchSize)
+		}
+		if p.readOff != 0 || p.readLen != 0 {
+			return fmt.Errorf("option %s cannot be used with readoff/readlen", s)
+		}
+		if p.verifyHash {
+			return fmt.Errorf("option %s cannot be used with verifyhash", s)
+		}
+		if p.etlName != "" || p.etlSpecPath != "" {
+			return fmt.Errorf("option %s cannot be used with ETL", s)
+		}
+		if isDirectS3() {
+			return fmt.Errorf("option %s requires AIStore (S3 does not provide GetBatch)", s)
+		}
+	}
+
+	if p.statsShowInterval < 0 {
+		return fmt.Errorf("invalid option: stats show interval %d", p.statsShowInterval)
+	}
+
+	if p.loaderID == "" {
+		return errors.New("loaderID can't be empty")
+	}
+
+	loaderID, parseErr := strconv.ParseUint(p.loaderID, 10, 64)
+	if p.loaderCnt == 0 && p.loaderIDHashLen == 0 {
+		if p.randomObjName {
+			useRandomObjName = true
+			if parseErr != nil {
+				return errors.New("loaderID as string only allowed when using loaderIDHashLen")
+			}
+			// don't have to set suffixIDLen as userRandomObjName = true
+			suffixID = loaderID
+		} else {
+			// stats will be using loaderID
+			// but as suffixIDMaskLen = 0, object names will be just consecutive numbers
+			suffixID = loaderID
+			suffixIDMaskLen = 0
+		}
+	} else {
+		if p.loaderCnt > 0 && p.loaderIDHashLen > 0 {
+			return errors.New("loadernum and loaderIDHashLen can't be > 0 at the same time")
+		}
+
+		if p.loaderIDHashLen > 0 {
+			if p.loaderIDHashLen == 0 || p.loaderIDHashLen > 63 {
+				return errors.New("loaderIDHashLen has to be larger than 0 and smaller than 64")
+			}
+
+			suffixIDMaskLen = ceilAlign(p.loaderIDHashLen, 4)
+			suffixID = getIDFromString(p.loaderID, suffixIDMaskLen)
+		} else {
+			// p.loaderCnt > 0
+			if parseErr != nil {
+				return errors.New("loadername has to be a number when using loadernum")
+			}
+			if loaderID > p.loaderCnt {
+				return errors.New("loaderid has to be smaller than loadernum")
+			}
+
+			suffixIDMaskLen = loaderMaskFromTotalLoaders(p.loaderCnt)
+			suffixID = loaderID
+		}
+	}
+
+	if p.subDir != "" {
+		p.subDir = filepath.Clean(p.subDir)
+		if p.subDir[0] == '/' {
+			return errors.New("object name prefix can't start with /")
+		}
+	}
+
+	if p.numVirtDirs >= 100_000 {
+		return fmt.Errorf("'--num-subdirs' (%d) must be a non-negative number in the open interval [0, 100k)", p.numVirtDirs)
+	}
+
+	if err := cos.ValidateCksumType(p.cksumType); err != nil {
+		return err
+	}
+
+	if p.etlName != "" && p.etlSpecPath != "" {
+		return errors.New("etl and etl-spec flag can't be set both")
+	}
+
+	if p.etlSpecPath != "" {
+		fh, err := os.Open(p.etlSpecPath)
+		if err != nil {
+			return err
+		}
+		etlSpec, err := cos.ReadAll(fh)
+		fh.Close()
+		if err != nil {
+			return err
+		}
+		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
+		if err != nil {
+			return err
+		}
+	}
+
+	if p.etlName != "" {
+		etlSpec, err := tetl.GetTransformYaml(p.etlName)
+		if err != nil {
+			return err
+		}
+		etlInitSpec, err = tetl.SpecToInitMsg(etlSpec)
+		if err != nil {
+			return err
+		}
+	}
+
+	// validate archive
+	if p.archParams.use {
+		mime := cos.NonZero(p.archParams.format, archive.ExtTar)
+		arch := &readers.Arch{
+			Mime:    mime,
+			Prefix:  p.archParams.prefix,
+			MinSize: p.archParams.minSz,
+			MaxSize: p.archParams.maxSz,
+			Num:     p.archParams.numFiles,
+		}
+		if err := arch.Init(p.maxSize); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

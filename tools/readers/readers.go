@@ -23,7 +23,7 @@ const (
 	Rand = "rand" // random reader
 )
 
-const ExistingFileSize = -1
+const ExistingFileSize = -1 // reader type "file" only
 
 // readers: interface and concrete types
 type (
@@ -81,6 +81,9 @@ var (
 )
 
 func New(a *Arg) (Reader, error) {
+	if err := a.validate(); err != nil {
+		return nil, err
+	}
 	switch a.Type {
 	case SG:
 		debug.Assert(a.SGL != nil)
@@ -94,6 +97,21 @@ func New(a *Arg) (Reader, error) {
 		debug.AssertNoErr(err)
 		return nil, err
 	}
+}
+
+func (a *Arg) validate() error {
+	// size
+	switch {
+	case a.Size > 0:
+		return nil
+	case a.Size < 0 && a.Size != ExistingFileSize:
+		return fmt.Errorf("readers.Arg.Size must be either -1 (indicating existing file) or non-negative (got %d)", a.Size)
+	case a.Size == ExistingFileSize && a.Type != File:
+		return fmt.Errorf("readers.Arg.Size = -1 (indicating existing file) requires file reader (got %q)", a.Type)
+	case a.Size == 0 && a.Arch == nil:
+		return errors.New("readers.Arg.Size must be positive for non-archive content (got 0)")
+	}
+	return nil
 }
 
 ////////////////
@@ -224,7 +242,7 @@ func newRandFile(a *Arg) (Reader, error) {
 			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, a.CksumType)
 		}
 	case a.Arch != nil:
-		if err := a.Arch.init(); err != nil {
+		if err := a.Arch.Init(a.Size); err != nil {
 			return nil, err
 		}
 
@@ -278,7 +296,7 @@ func newSG(a *Arg) (Reader, error) {
 
 	if a.Arch != nil {
 		// (A) archival content
-		if err := a.Arch.init(); err != nil {
+		if err := a.Arch.Init(a.Size); err != nil {
 			return nil, err
 		}
 		cksumHash, err = a.Arch.write(a.SGL, a.CksumType)
