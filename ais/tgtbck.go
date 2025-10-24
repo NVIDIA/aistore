@@ -435,10 +435,6 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if err != nil {
 		return
 	}
-	if msg.Action != apc.ActPrefetchObjects {
-		t.writeErrAct(w, r, msg.Action)
-		return
-	}
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -449,14 +445,54 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 
-	prfMsg := &apc.PrefetchMsg{}
-	if err := cos.MorphMarshal(msg.Value, prfMsg); err != nil {
-		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-		return
+	switch msg.Action {
+	case apc.ActPrefetchObjects:
+		prfMsg := &apc.PrefetchMsg{}
+		if err = cos.MorphMarshal(msg.Value, prfMsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		if ecode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
+			t.writeErr(w, r, err, ecode)
+			return
+		}
+	case apc.ActRechunk:
+		rechunkMsg := &xreg.RechunkArgs{}
+		if err = cos.MorphMarshal(msg.Value, rechunkMsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		_, err = t.runRechunk(msg.UUID, apireq.bck, rechunkMsg)
+	default:
+		t.writeErrAct(w, r, msg.Action)
 	}
-	if ecode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
-		t.writeErr(w, r, err, ecode)
+
+	// common return
+	if err != nil {
+		t.writeErr(w, r, err)
 	}
+}
+
+func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *xreg.RechunkArgs) (xid string, err error) {
+	if err := xreg.LimitedCoexistence(t.si, bck, apc.ActRechunk); err != nil {
+		return "", err
+	}
+	rns := xreg.RenewBckRechunks(bck, xactID, rechunkMsg)
+	if rns.Err != nil {
+		return "", rns.Err
+	}
+	xctn := rns.Entry.Get()
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		Xact: xctn,
+	}
+	xctn.AddNotif(notif)
+
+	if cmn.Rom.V(5, cos.ModAIS) {
+		nlog.Infoln("start rechunk", bck.String(), "xid", xactID)
+	}
+	xact.GoRunW(xctn)
+	return xctn.ID(), nil
 }
 
 // handle apc.ActPrefetchObjects <-- via api.Prefetch* and api.StartX*

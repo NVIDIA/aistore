@@ -51,6 +51,9 @@ func (p *rechunkFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *rechunkFactory) Start() (err error) {
 	p.xctn, err = newxactRechunk(p)
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.ctlMsg())
+	}
 	return err
 }
 
@@ -182,6 +185,7 @@ func (xch *xactRechunk) Run(wg *sync.WaitGroup) {
 	if errJog != nil && !xch.IsAborted() {
 		nlog.Warningln(xch.Name(), errJog)
 	}
+	nlog.Infoln("finish rechunk", xch.Name(), "xid", xch.ID())
 	xch.Finish()
 }
 

@@ -1536,6 +1536,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+	case apc.ActRechunk:
+		// re-chunk bucket objects according to provided args
+		if xid, err = p.bcastMultiobj(r.Method, bucket, msg, query); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
 	case apc.ActMakeNCopies:
 		if xid, err = p.makeNCopies(msg, bck); err != nil {
 			p.writeErr(w, r, err)
