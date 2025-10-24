@@ -1966,6 +1966,18 @@ func (c *AuthSignatureConf) IsRSA() bool {
 	return slices.Contains(rsaNames, strings.ToUpper(c.Method))
 }
 
+//////////////
+// OIDCConf //
+//////////////
+
+func (c *OIDCConf) GetAllowedIssSet() map[string]struct{} {
+	allowSet := make(map[string]struct{}, len(c.AllowedIssuers))
+	for _, v := range c.AllowedIssuers {
+		allowSet[v] = struct{}{}
+	}
+	return allowSet
+}
+
 ////////////////////
 // LocalNetConfig //
 ////////////////////

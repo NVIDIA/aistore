@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -58,19 +59,51 @@ type (
 
 // TokenMapShardExponent is used to define the number of maps used for parallel locking of token -> claims
 // The actual number of shards will be equal to 2^TokenMapShardExponent
-const TokenMapShardExponent = 4
+const (
+	TokenMapShardExponent  = 4
+	TokenParserInitTimeout = 10 * time.Second
+)
 
 /////////////////
 // authManager //
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
-	parser := tok.NewTokenParser(&config.Auth)
+	parser := tok.NewTokenParser(&config.Auth, getJWKSClientConf(config), nil)
+	cancelCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
+	defer cancel()
+	if err := parser.InitKeyCache(cancelCtx); err != nil {
+		// TODO: Add dynamic cache registration so we can proceed from this init failure and resolve later
+		cos.ExitLogf("Auth manager error: %v", err)
+	}
 	return &authManager{
 		tokenParser:   parser,
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
 	}
+}
+
+// Define the config for JWKS client used by the token parser
+func getJWKSClientConf(config *cmn.Config) (jwksConf *tok.JWKSClientConf) {
+	// Set our own certificate, key, and verification settings from AIS network config
+	var tlsArgs cmn.TLSArgs
+	if config.Net.HTTP.UseHTTPS {
+		tlsArgs = config.Net.HTTP.ToTLS()
+	} else {
+		tlsArgs = cmn.TLSArgs{
+			SkipVerify: false,
+		}
+	}
+	if config.Auth.OIDC != nil {
+		// Define the trusted CA for issuers
+		tlsArgs.ClientCA = config.Auth.OIDC.IssuerCA
+	}
+
+	// Leave transport args empty for default config
+	clientConf := &tok.JWKSClientConf{
+		TLSArgs: &tlsArgs,
+	}
+	return clientConf
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.

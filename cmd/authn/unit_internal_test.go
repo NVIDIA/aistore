@@ -179,7 +179,6 @@ func TestToken(t *testing.T) {
 		err   error
 		token string
 	)
-
 	driver := mock.NewDBDriver()
 	mgr, err := createManagerWithAdmin(driver)
 	tassert.CheckFatal(t, err)

@@ -44,6 +44,8 @@ type (
 		sigConfig *SigConfig
 		// options for the jwt parser to use
 		parseOpts []jwt.ParserOption
+		// manages cached public keys from issuers
+		keyCacheManager *KeyCacheManager
 	}
 
 	TokenHdr struct {
@@ -152,10 +154,13 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 // TokenParser //
 /////////////////
 
-func NewTokenParser(conf *cmn.AuthConf) *TokenParser {
+// NewTokenParser creates a new instance of TokenParser.
+// If using allowed issuers and public key lookups, call InitKeyCache after creation
+func NewTokenParser(conf *cmn.AuthConf, clientConf *JWKSClientConf, cacheConf *CacheConfig) *TokenParser {
 	return &TokenParser{
-		sigConfig: newSigConfig(conf),
-		parseOpts: buildParseOptions(conf.RequiredClaims),
+		sigConfig:       newSigConfig(conf),
+		parseOpts:       buildParseOptions(conf.RequiredClaims),
+		keyCacheManager: NewKeyCacheManager(conf.OIDC, clientConf, cacheConf),
 	}
 }
 
@@ -204,13 +209,26 @@ func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
 	return opts
 }
 
+func (tm *TokenParser) InitKeyCache(ctx context.Context) error {
+	err := tm.keyCacheManager.init(ctx)
+	if err != nil {
+		return fmt.Errorf("error initializing token parser key cache: %w", err)
+	}
+	return nil
+}
+
 // Based on the token provided, return the key for the jwt library to use to verify the signature
-func (tm *TokenParser) parseJWTKey(tok *jwt.Token) (any, error) {
+func (tm *TokenParser) parseJWTKey(ctx context.Context, tok *jwt.Token) (any, error) {
 	switch tok.Method.(type) {
 	case *jwt.SigningMethodHMAC:
 		return []byte(tm.getHMACSecret()), nil
 	case *jwt.SigningMethodRSA:
-		return tm.getRSAPublicKey(), nil
+		// If pub key is provided directly in config, don't look up by issuer
+		if staticKey := tm.getRSAPublicKey(); staticKey != nil {
+			return staticKey, nil
+		}
+		// Look up by issuer claim
+		return tm.keyCacheManager.getKeyForToken(ctx, tok)
 	default:
 		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", tok.Method, tok.Header["alg"])
 	}
@@ -241,13 +259,11 @@ func parsePubKey(str string) (*rsa.PublicKey, error) {
 // - HS256: validates with secret (symmetric)
 // - RS256: validates with pubKey (asymmetric)
 func (tm *TokenParser) ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error) {
-	// TODO: future use for OIDC pub key lookup
-	_ = ctx
 	jwtToken, err := jwt.ParseWithClaims(
 		tokenStr,
 		&AISClaims{},
 		func(t *jwt.Token) (any, error) {
-			return tm.parseJWTKey(t)
+			return tm.parseJWTKey(ctx, t)
 		},
 		tm.parseOpts...,
 	)
