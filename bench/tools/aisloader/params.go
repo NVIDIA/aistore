@@ -317,8 +317,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	}
 }
 
-// validate command line and finish initialization
-func _init(p *params) (err error) {
+// parse/validate command line and finish initialization
+func initParams(p *params) (err error) {
 	// '--s3endpoint' takes precedence
 	if s3Endpoint == "" {
 		if ep := os.Getenv(env.AWSEndpoint); ep != "" {

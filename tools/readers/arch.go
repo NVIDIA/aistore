@@ -6,8 +6,10 @@ package readers
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path"
 	"strconv"
 	"strings"
@@ -43,6 +45,10 @@ type Arch struct {
 	MaxLayers int        // upper bound for RandDir; default 5
 	RandNames bool       // generate numeric-random names
 	RandDir   bool       // add random dir layers
+	//
+	// dynamic sizing
+	//
+	objSize int64
 }
 
 //////////
@@ -51,6 +57,11 @@ type Arch struct {
 
 // validate Arch fields, normalize Mime, and fills defaults
 func (a *Arch) Init(objSize int64) error {
+	// dynamic sizing (pickSize())
+	a.objSize = objSize
+	if a.Num == 0 && a.objSize == 0 {
+		return errors.New("invalid readers.Arch: both Arch.Num and object size are zero")
+	}
 	if a.Num < 0 {
 		return fmt.Errorf("Arch.Num cannot be negative (got %d)", a.Num)
 	}
@@ -68,10 +79,7 @@ func (a *Arch) Init(objSize int64) error {
 			return fmt.Errorf("Arch.Names length (%d) must match Num (%d)", len(a.Names), a.Num)
 		}
 	}
-	if objSize > 0 && int64(a.Num)*a.MinSize > objSize {
-		return fmt.Errorf("object size (%d) cannot be less than Arch.MinSize(%d) * Arch.Num(%d)",
-			objSize, a.MinSize, a.Num)
-	}
+
 	m, err := archive.Mime(a.Mime, "")
 	if err != nil {
 		return fmt.Errorf("Arch.Mime (%q) is invalid: %v", a.Mime, err)
@@ -84,24 +92,19 @@ func (a *Arch) Init(objSize int64) error {
 	} else if a.MaxSize == 0 {
 		a.MaxSize = a.MinSize
 	}
-	if a.Num == 0 {
-		if objSize > 0 && a.MinSize > 0 {
-			avgFileSize := (a.MinSize + a.MaxSize) / 2
-			if avgFileSize == 0 {
-				avgFileSize = a.MinSize
-			}
-			if avgFileSize > 0 {
-				a.Num = int(objSize / avgFileSize)
-				if a.Num < 1 {
-					a.Num = 1
-				}
-			} else {
-				a.Num = dfltNumFiles
-			}
-		} else {
-			a.Num = dfltNumFiles
+
+	// clamp to object size
+	if objSize > 0 {
+		// clamp file sizes to object size
+		a.MaxSize = min(objSize, a.MaxSize)
+		a.MinSize = min(a.MaxSize, a.MinSize)
+
+		if int64(a.Num)*a.MinSize > objSize {
+			return fmt.Errorf("object size (%d) cannot be less than Arch.MinSize(%d) * Arch.Num(%d)",
+				objSize, a.MinSize, a.Num)
 		}
 	}
+
 	if a.Seed == 0 {
 		a.Seed = uint64(mono.NanoTime())
 	}
@@ -197,7 +200,7 @@ func (a *Arch) buildPath(i int) string {
 }
 
 func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
-	debug.Assertf(a != nil && a.Num > 0 && a.MinSize >= 0 && a.MaxSize >= a.MinSize, "invalid readers.Arch %+v", a)
+	debug.Assertf(a != nil && a.MinSize >= 0 && a.MaxSize >= a.MinSize, "invalid readers.Arch %+v", a)
 
 	var cksumHS *cos.CksumHashSize
 	if cksumType != cos.ChecksumNone {
@@ -211,12 +214,16 @@ func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 	aw := archive.NewWriter(a.Mime, w, cksumHS, opts)
 
 	var (
+		total int64
 		tr    = newTruffle()
 		now   = mono.NanoTime()
-		total int64
+		n     = cos.NonZero(a.Num, math.MaxInt)
 	)
-	for i := range a.Num {
+	for i := range n {
 		sz := a.pickSize(i)
+		if a.objSize > 0 && i > 0 && total+sz > a.objSize {
+			break
+		}
 		name := a.buildPath(i)
 		oah := cos.SimpleOAH{Size: sz, Atime: now}
 		lim := &rrLimited{random: tr, size: sz, off: 0}
@@ -228,7 +235,6 @@ func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 	if err := aw.Fini(); err != nil {
 		return nil, err
 	}
-	_ = total // TODO: possible future use (or remove)
 
 	if cksumType != cos.ChecksumNone {
 		cksumHS.Finalize()

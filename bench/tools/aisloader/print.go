@@ -18,8 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/tools/readers"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -346,32 +348,64 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t *sts) {
 	}
 }
 
-// printRunParams show run parameters in json format
-func printRunParams(p *params) {
-	var d = p.duration.String()
-	if p.duration.Val == time.Duration(math.MaxInt64) {
-		d = "-"
+// when starting to run show essential parameters in JSON format
+type (
+	ppEssential struct {
+		URL           string  `json:"proxy"`
+		Bucket        string  `json:"bucket"`
+		Duration      string  `json:"duration"`
+		NumWorkers    int     `json:"# workers"`
+		StatsInterval string  `json:"stats interval"`
+		PutPct        int     `json:"% PUT,omitempty"`
+		UpdatePct     int     `json:"% Update Existing,omitempty"`
+		MultipartPct  int     `json:"% Multipart PUT,omitempty"`
+		GetBatchSize  int     `json:"GET(batch): batch size,omitempty"`
+		MinSize       int64   `json:"minimum object size (bytes),omitempty"`
+		MaxSize       int64   `json:"maximum object size (bytes),omitempty"`
+		MaxPutBytes   int64   `json:"PUT upper bound,string,omitempty"`
+		Arch          *ppArch `json:"archive (shards),omitempty"`
+		NameGetter    string  `json:"name-getter"`
+		ReaderType    string  `json:"reader-type,omitempty"`
+		Cleanup       bool    `json:"cleanup"`
 	}
-	b, err := jsoniter.MarshalIndent(struct {
-		URL           string `json:"proxy"`
-		Bucket        string `json:"bucket"`
-		Duration      string `json:"duration"`
-		NumWorkers    int    `json:"# workers"`
-		StatsInterval string `json:"stats interval"`
-		PutPct        int    `json:"% PUT,omitempty"`
-		UpdatePct     int    `json:"% Update Existing,omitempty"`
-		MultipartPct  int    `json:"% Multipart PUT,omitempty"`
-		GetBatchSize  int    `json:"GET(batch): batch size,omitempty"`
-		MinSize       int64  `json:"minimum object size (bytes),omitempty"`
-		MaxSize       int64  `json:"maximum object size (bytes),omitempty"`
-		MaxPutBytes   int64  `json:"PUT upper bound,string,omitempty"`
-		NameGetter    string `json:"name-getter"`
-		ReaderType    string `json:"reader-type,omitempty"`
-		Cleanup       bool   `json:"cleanup"`
-	}{
+	ppArch struct {
+		Format   string `json:"format"`
+		Prefix   string `json:"prefix,omitempty"`
+		NumFiles int    `json:"files per shard,omitempty"`
+		MinSize  int64  `json:"minimum file size"`
+		MaxSize  int64  `json:"maximum file size"`
+	}
+)
+
+func printRunParams(p *params) {
+	var arch *ppArch
+	if p.archParams.use {
+		// temp readers.Arch to run Init() and get computed values
+		mime := cos.NonZero(p.archParams.format, archive.ExtTar)
+		tmpArch := &readers.Arch{
+			Mime:    mime,
+			Prefix:  p.archParams.prefix,
+			MinSize: p.archParams.minSz,
+			MaxSize: p.archParams.maxSz,
+			Num:     p.archParams.numFiles,
+		}
+		err := tmpArch.Init(p.maxSize)
+		cos.AssertNoErr(err)
+		if err == nil {
+			arch = &ppArch{
+				Format:   tmpArch.Mime,
+				Prefix:   tmpArch.Prefix,
+				NumFiles: tmpArch.Num,
+				MinSize:  tmpArch.MinSize,
+				MaxSize:  tmpArch.MaxSize,
+			}
+		}
+	}
+
+	b, err := jsoniter.MarshalIndent(ppEssential{
 		URL:           p.proxyURL,
 		Bucket:        p.bck.Cname(""),
-		Duration:      d,
+		Duration:      cos.Ternary(p.duration.Val == time.Duration(math.MaxInt64), "-", p.duration.String()),
 		NumWorkers:    p.numWorkers,
 		StatsInterval: (time.Duration(runParams.statsShowInterval) * time.Second).String(),
 		PutPct:        p.putPct,
@@ -381,12 +415,13 @@ func printRunParams(p *params) {
 		MinSize:       p.minSize,
 		MaxSize:       p.maxSize,
 		MaxPutBytes:   p.putSizeUpperBound,
+		Arch:          arch,
 		NameGetter:    ngLabel(),
 		ReaderType:    p.readerType,
 		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")
-	cos.AssertNoErr(err)
 
+	cos.AssertNoErr(err)
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
 }
 

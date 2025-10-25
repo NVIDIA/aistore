@@ -169,7 +169,7 @@ func Start(version, buildtime string) (err error) {
 	addCmdLine(f, runParams)
 
 	// validate and finish initialization
-	if err = _init(runParams); err != nil {
+	if err = initParams(runParams); err != nil {
 		return err
 	}
 
