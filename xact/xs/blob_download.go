@@ -261,11 +261,11 @@ func (p *blobFactory) Start() error {
 	//
 
 	ws := make([]io.Writer, 0, 3)
+	ws = append(ws, r.args.Lmfh)
 	if ty := r.args.Lom.CksumConf().Type; ty != cos.ChecksumNone {
 		r.cksum.Init(ty)
 		ws = append(ws, r.cksum.H)
 	}
-	ws = append(ws, r.args.Lmfh)
 	if r.args.RspW != nil {
 		// and transmit concurrently (alternatively,
 		// could keep writing locally even after GET client goes away)

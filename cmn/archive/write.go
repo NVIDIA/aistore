@@ -32,6 +32,9 @@ type (
 	}
 )
 
+// TODO:
+// consider adding Size() for the number of bytes already written to the underlying writer -
+// compressed bytes for compressed formats (note that cos.CksumHashSize has size)
 type (
 	Writer interface {
 		// Init specific writer

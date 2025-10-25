@@ -568,6 +568,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 		written, err = cos.CopyBuffer(lmfh, poi.r, buf)
 	default:
 		writers := make([]io.Writer, 0, 3)
+		writers = append(writers, lmfh)
 		cksums.store = cos.NewCksumHash(ckconf.Type) // always according to the bucket
 		writers = append(writers, cksums.store.H)
 		if !poi.skipVC && !cos.NoneC(poi.cksumToUse) && poi.validateCksum(ckconf) {
@@ -580,7 +581,6 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 				writers = append(writers, cksums.compt.H)
 			}
 		}
-		writers = append(writers, lmfh)
 		written, err = cos.CopyBuffer(cos.NewWriterMulti(writers...), poi.r, buf) // (ditto)
 	}
 	if err != nil {

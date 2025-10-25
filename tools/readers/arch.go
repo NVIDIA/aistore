@@ -210,11 +210,8 @@ func (a *Arch) buildPath(i int) string {
 func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 	debug.Assertf(a != nil && a.MinSize >= 0 && a.MaxSize >= a.MinSize, "invalid readers.Arch %+v", a)
 
-	var cksumHS *cos.CksumHashSize
-	if cksumType != cos.ChecksumNone {
-		cksumHS = &cos.CksumHashSize{}
-		cksumHS.Init(cksumType)
-	}
+	cksumHS := &cos.CksumHashSize{}
+	cksumHS.Init(cksumType)
 	var opts *archive.Opts
 	if a.TarFormat != 0 { // tar.FormatUnknown is the zero value
 		opts = &archive.Opts{TarFormat: a.TarFormat}
@@ -228,24 +225,24 @@ func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 	)
 	for i := range a.Num {
 		sz := a.pickSize(i)
-		if a.objSize > 0 && i > 0 && total+sz > a.objSize {
-			break
-		}
 		name := a.buildPath(i)
 		oah := cos.SimpleOAH{Size: sz, Atime: now}
 		lim := &rrLimited{random: tr, size: sz, off: 0}
 		if err := aw.Write(name, oah, lim); err != nil {
 			return nil, err
 		}
+
+		// alternatively, could use cksumHS.Size or (same) aw.Size()
+		// for rough (under)estimate of the actual compressed size
 		total += sz
+		if a.objSize > 0 && i > 0 && total+sz > a.objSize {
+			break
+		}
 	}
 	if err := aw.Fini(); err != nil {
 		return nil, err
 	}
 
-	if cksumType != cos.ChecksumNone {
-		cksumHS.Finalize()
-		return &cksumHS.CksumHash, nil
-	}
-	return nil, nil
+	cksumHS.Finalize()
+	return &cksumHS.CksumHash, nil
 }

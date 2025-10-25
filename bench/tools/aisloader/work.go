@@ -474,8 +474,12 @@ func _genObjName() (string, error) {
 
 	// new shard: add extension
 	if runParams.archParams.use && cos.Ext(name) == "" {
-		if runParams.archParams.format != "" {
-			name += runParams.archParams.format
+		if f := runParams.archParams.format; f != "" {
+			mime, err := archive.Mime(f, name)
+			if err != nil {
+				return "", fmt.Errorf("failed to generate object name: %v", err)
+			}
+			name += mime
 		} else {
 			name += archive.ExtTar // default .tar
 		}

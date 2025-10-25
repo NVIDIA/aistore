@@ -332,6 +332,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		partSHA      string
 		checkPartSHA bool
 	)
+	writers = append(writers, args.fh)
 	if req != nil {
 		partSHA = req.Header.Get(cos.S3HdrContentSHA256)
 		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
@@ -351,7 +352,6 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 			writers = append(writers, cksumH.H)
 		}
 	}
-	writers = append(writers, args.fh)
 
 	if rsize <= 0 {
 		return "", http.StatusBadRequest, fmt.Errorf("%s: put-part invalid size (%d)", lom.Cname(), rsize)
