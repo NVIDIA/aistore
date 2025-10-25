@@ -381,6 +381,7 @@ func printRunParams(p *params) {
 	var arch *ppArch
 	if p.archParams.use {
 		// temp readers.Arch to run Init() and get computed values
+		// aisloader's default format: TAR
 		mime := cos.NonZero(p.archParams.format, archive.ExtTar)
 		tmpArch := &readers.Arch{
 			Mime:    mime,
@@ -391,14 +392,14 @@ func printRunParams(p *params) {
 		}
 		err := tmpArch.Init(p.maxSize)
 		cos.AssertNoErr(err)
-		if err == nil {
-			arch = &ppArch{
-				Format:   tmpArch.Mime,
-				Prefix:   tmpArch.Prefix,
-				NumFiles: tmpArch.Num,
-				MinSize:  tmpArch.MinSize,
-				MaxSize:  tmpArch.MaxSize,
-			}
+
+		numf := cos.Ternary(tmpArch.Num == readers.DynamicNumFiles, 0, p.archParams.numFiles)
+		arch = &ppArch{
+			Format:   tmpArch.Mime,
+			Prefix:   tmpArch.Prefix,
+			NumFiles: numf,
+			MinSize:  tmpArch.MinSize,
+			MaxSize:  tmpArch.MaxSize,
 		}
 	}
 

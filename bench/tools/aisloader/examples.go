@@ -38,4 +38,7 @@ package aisloader
 // 12. Generate a list of object names (once), and then run aisloader without executing list-objects
 // ais ls ais://nnn --props name -H > /tmp/a.txt
 // aisloader -bucket=ais://nnn -duration 1h -numworkers=30 -pctput=0 -filelist /tmp/a.txt -cleanup=false
-//
+// ====================
+// 13. Write .tar shards with a random (first example) or specified number of files (second example):
+// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -minsize 1024 -maxsize=100k -quiet -arch.use
+// aisloader -bucket=ais://nnn -pctput=100 -duration=8s -numworkers=4 -cleanup=false -arch.num-files 10 -arch.minsize 1k -quiet -arch.use

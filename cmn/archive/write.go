@@ -48,8 +48,8 @@ type (
 	}
 	baseW struct {
 		wmul io.Writer
-		lck  sync.Locker // serialize: (multi-object => single shard)
-		cb   HeaderCallback
+		lck  sync.Locker    // serialize: (multi-object => single shard)
+		cb   HeaderCallback // nopTarHeader (default) and SetTarHeader
 		slab *memsys.Slab
 		buf  []byte
 	}
@@ -168,10 +168,10 @@ func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
 
 func (tw *tarWriter) Flush() error { return tw.tw.Flush() }
 
-// set Uid/Gid bits in TAR header
+// HeaderCallback to set TAR header fields: Uid/Gid, ModTime, etc.
 // - note: cos.PermRWRR default
 // - not calling standard tar.FileInfoHeader
-
+// - nopTarHeader default; SetTarHeader is currently used only by CLI
 func nopTarHeader(any) {}
 
 func SetTarHeader(hdr any) {

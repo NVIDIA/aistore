@@ -24,9 +24,11 @@ import (
 const dfltExt = ".txt"
 
 const (
-	dfltMinSize  = cos.KiB
-	dfltMaxSize  = cos.MiB
-	dfltNumFiles = 32
+	dfltMinSize = cos.KiB
+	dfltMaxSize = cos.MiB
+
+	maxNumFiles     = 10_000
+	DynamicNumFiles = math.MaxInt
 )
 
 type Arch struct {
@@ -57,18 +59,22 @@ type Arch struct {
 
 // validate Arch fields, normalize Mime, and fills defaults
 func (a *Arch) Init(objSize int64) error {
+	if a.objSize != 0 || a.Num == DynamicNumFiles {
+		return errors.New("readers.Arch already initialized")
+	}
 	// dynamic sizing (pickSize())
 	a.objSize = objSize
+
 	if a.Num == 0 && a.objSize == 0 {
 		return errors.New("invalid readers.Arch: both Arch.Num and object size are zero")
 	}
-	if a.Num < 0 {
-		return fmt.Errorf("Arch.Num cannot be negative (got %d)", a.Num)
+	if a.Num < 0 || a.Num > maxNumFiles {
+		return fmt.Errorf("invalid Arch.Num (%d)", a.Num)
 	}
 	if a.MinSize < 0 {
 		return fmt.Errorf("Arch.MinSize must be non-negative (got %d)", a.MinSize)
 	}
-	if a.MaxSize < a.MinSize {
+	if a.MaxSize != 0 && a.MaxSize < a.MinSize {
 		return fmt.Errorf("Arch.MaxSize (%d) must be >= MinSize (%d)", a.MaxSize, a.MinSize)
 	}
 	if l := len(a.Names); l > 0 {
@@ -104,6 +110,8 @@ func (a *Arch) Init(objSize int64) error {
 				objSize, a.MinSize, a.Num)
 		}
 	}
+
+	a.Num = cos.NonZero(a.Num, DynamicNumFiles)
 
 	if a.Seed == 0 {
 		a.Seed = uint64(mono.NanoTime())
@@ -217,9 +225,8 @@ func (a *Arch) write(w io.Writer, cksumType string) (*cos.CksumHash, error) {
 		total int64
 		tr    = newTruffle()
 		now   = mono.NanoTime()
-		n     = cos.NonZero(a.Num, math.MaxInt)
 	)
-	for i := range n {
+	for i := range a.Num {
 		sz := a.pickSize(i)
 		if a.objSize > 0 && i > 0 && total+sz > a.objSize {
 			break
