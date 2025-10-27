@@ -316,10 +316,15 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		t.writeErr(w, r, rns.Err)
 		return
 	}
-	xctn := rns.Entry.Get()
+
+	var (
+		xctn      = rns.Entry.Get()
+		usingPrev bool
+	)
 	if xid != xctn.ID() && xctn.ID() != "" {
 		// reusing xprev
 		debug.Assert(rns.IsRunning())
+		usingPrev = true
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.Infoln(t.String(), "reusing prev x-moss:", xctn.ID(), rns.IsRunning())
 		}
@@ -341,7 +346,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 			return
 		}
 	}
-	if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, receiving); err != nil {
+	if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, receiving, usingPrev); err != nil {
 		xmoss.Abort(err)
 		t.writeErr(w, r, err)
 		return
@@ -374,10 +379,12 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		t.writeErr(w, r, rns.Err)
 		return
 	}
-	xctn := rns.Entry.Get()
-
+	var (
+		xctn      = rns.Entry.Get()
+		usingPrev = rns.IsRunning()
+	)
 	if cmn.Rom.V(5, cos.ModAIS) {
-		nlog.Infoln(t.String(), "designated = false, renewed:", xctn.Name(), "was running:", rns.IsRunning())
+		nlog.Infoln(t.String(), "designated = false, renewed:", xctn.Name(), "was running:", usingPrev)
 	}
 
 	xmoss, ok := xctn.(*xs.XactMoss)
@@ -388,7 +395,7 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid); err != nil {
+	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
 		xmoss.BcastAbort(err)
 		xmoss.Abort(err)
 		t.writeErr(w, r, err)

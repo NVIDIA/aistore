@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -30,13 +31,13 @@ const SDMName = "shared-dm"
 type (
 	rxent struct {
 		rx   transport.Receiver
-		last int64
+		last atomic.Int64
 	}
 	sharedDM struct {
 		receivers map[string]*rxent
 		dm        DM
 		ocmu      sync.Mutex
-		rxmu      sync.Mutex
+		rxmu      sync.RWMutex
 	}
 )
 
@@ -59,19 +60,19 @@ func (*sharedDM) trname() string { return SDMName }
 
 func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
 
-// TODO: consider reaping old entries right here
 func (sdm *sharedDM) IsActive(now int64) (active bool) {
-	sdm.rxmu.Lock()
+	sdm.rxmu.RLock()
 	xid, _ := sdm.getActive(now)
 	active = xid != ""
-	sdm.rxmu.Unlock()
+	sdm.rxmu.RUnlock()
 	return
 }
 
-// is called under lock
+// is called under rlock or wlock
 func (sdm *sharedDM) getActive(now int64) (string /*xid*/, time.Duration /*age*/) {
-	for xid, rxent := range sdm.receivers {
-		if d := time.Duration(now - rxent.last); d < cmn.SharedStreamsDflt { // see also: dmToggle.timeout
+	for xid, en := range sdm.receivers {
+		last := en.last.Load()
+		if d := time.Duration(now - last); d < cmn.SharedStreamsDflt { // see also: dmToggle.timeout
 			return xid, d
 		}
 	}
@@ -135,18 +136,32 @@ func (sdm *sharedDM) Close(now int64) error {
 func (sdm *sharedDM) RegRecv(rx transport.Receiver, now int64) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
-	if !sdm.isOpen() {
-		sdm.rxmu.Unlock()
-		sdm.ocmu.Unlock()
-		debug.Assert(false, sdm.trname(), " ", "closed")
-		return
+	if sdm.isOpen() {
+		en := &rxent{rx: rx}
+		en.last.Store(now)
+		sdm.receivers[rx.ID()] = en
 	}
-	sdm.receivers[rx.ID()] = &rxent{rx: rx, last: now}
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
 }
 
-// remove demux entry immediately - any late deliveries for xid are dropped
+func (sdm *sharedDM) UseRecv(rx transport.Receiver, now int64) {
+	// fast path
+	sdm.rxmu.RLock()
+	en, ok := sdm.receivers[rx.ID()]
+	if ok {
+		en.last.Store(now)
+	}
+	sdm.rxmu.RUnlock()
+	if ok {
+		return
+	}
+
+	// slow/unlikely
+	sdm.RegRecv(rx, now)
+}
+
+// remove demux entry immediately
 func (sdm *sharedDM) UnregRecv(xid string) {
 	sdm.rxmu.Lock()
 	delete(sdm.receivers, xid)
@@ -171,20 +186,25 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 		return err
 	}
 
-	sdm.rxmu.Lock()
-	rxent, ok := sdm.receivers[xid]
+	sdm.rxmu.RLock()
+	en, ok := sdm.receivers[xid]
 	if !ok {
-		sdm.rxmu.Unlock()
+		sdm.rxmu.RUnlock()
 		return fmt.Errorf("%s: xid %s not found, dropping recv [oname: %s]", sdm.trname(), xid, hdr.ObjName)
 	}
-	rxent.last = mono.NanoTime() // TODO: a) only on success; b) micro-optimize
-	sdm.rxmu.Unlock()
+	sdm.rxmu.RUnlock()
 
 	// (unlikely)
-	if rxent.rx.ID() != xid {
-		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, rxent.rx.ID())
+	if en.rx.ID() != xid {
+		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, en.rx.ID())
 		debug.AssertNoErr(err)
 		return err
 	}
-	return rxent.rx.RecvObj(hdr, r, nil)
+
+	// note: not holding rxmu locked - race vs UnregRecv possible but benign
+	if err := en.rx.RecvObj(hdr, r, nil); err != nil {
+		return err
+	}
+	en.last.Store(mono.NanoTime()) // TODO: optimize
+	return nil
 }

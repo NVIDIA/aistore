@@ -392,7 +392,7 @@ func (r *XactMoss) bewarmStop() {
 }
 
 // (phase 1)
-func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving bool) error {
+func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	var (
 		resp = &apc.MossResp{UUID: r.ID()}
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
@@ -402,9 +402,11 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 	wi.started = mono.NanoTime()
 
 	if receiving {
-		// see "Shared-DM registration lifecycle" note above
-		bundle.SDM.RegRecv(r, wi.started)
-
+		if usingPrev {
+			bundle.SDM.UseRecv(r, wi.started)
+		} else {
+			bundle.SDM.RegRecv(r, wi.started)
+		}
 		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
@@ -487,9 +489,14 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // send all requested local data => DT (tsi)
 // (phase 2)
 
-func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string) error {
-	// to receive opAbort
-	bundle.SDM.RegRecv(r, mono.NanoTime())
+func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
+	// with a single purpose: to receive opAbort
+	now := mono.NanoTime()
+	if usingPrev {
+		bundle.SDM.UseRecv(r, now)
+	} else {
+		bundle.SDM.RegRecv(r, now)
+	}
 
 	// send all
 	r.IncPending()
