@@ -91,17 +91,18 @@ func dirSizeOnDiskFD(fd int, prefix string, stackSize int) (size uint64, err err
 				continue
 			}
 
+			// use architecture-specific fstatat syscall
 			var stat syscall.Stat_t
-			// TODO: We might consider defining `FstatatBuf(...)` for different architectures:
-			//  * `SYS_FSTATAT` - linux && arm64
-			_, _, errno := syscall.Syscall6(syscall.SYS_NEWFSTATAT, uintptr(fd), uintptr(unsafe.Pointer(&sde.Name[0])), uintptr(unsafe.Pointer(&stat)), uintptr(unix.AT_SYMLINK_NOFOLLOW), 0, 0)
+			_, _, errno := syscall.Syscall6(fstatatSyscall,
+				uintptr(fd), uintptr(unsafe.Pointer(&sde.Name[0])), uintptr(unsafe.Pointer(&stat)), uintptr(unix.AT_SYMLINK_NOFOLLOW), 0, 0)
 			if errno != 0 {
 				return size, errno
 			}
 			size += uint64(stat.Size)
 
 			if sde.Type == syscall.DT_DIR {
-				fd, _, errno := syscall.Syscall6(syscall.SYS_OPENAT, uintptr(fd), uintptr(unsafe.Pointer(&sde.Name[0])), uintptr(dirOpenMode), uintptr(0), 0, 0)
+				fd, _, errno := syscall.Syscall6(syscall.SYS_OPENAT,
+					uintptr(fd), uintptr(unsafe.Pointer(&sde.Name[0])), uintptr(dirOpenMode), uintptr(0), 0, 0)
 				if errno != 0 {
 					// syscall.EPERM - permission denied to open directory.
 					if errors.Is(err, syscall.EPERM) {
