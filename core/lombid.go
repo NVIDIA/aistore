@@ -15,7 +15,7 @@ import (
 // [63]=AisBID | [62:60]=legacy flags (3 bits) | [59:0]=serial
 
 const (
-	AisBID = uint64(1 << 63)
+	AisBID = uint64(1) << 63
 
 	bitshift   = 60
 	flagMaskV1 = math.MaxUint64 >> bitshift         // 0xf

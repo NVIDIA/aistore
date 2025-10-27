@@ -200,7 +200,7 @@ func Start(version, buildtime string) (err error) {
 		runParams.duration.Val = time.Duration(math.MaxInt64)
 	}
 
-	if runParams.readerType == readers.File {
+	if runParams.readerType == readers.File && runParams.putPct > 0 {
 		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
 			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
@@ -707,7 +707,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		}
 	}
 
-	if runParams.readerType == readers.File {
+	if runParams.readerType == readers.File && runParams.putPct > 0 {
 		for _, obj := range objs {
 			if err := os.Remove(runParams.tmpDir + "/" + obj); err != nil {
 				fmt.Println("delete local file err:", err)

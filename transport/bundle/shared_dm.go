@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -22,16 +24,21 @@ import (
 
 const iniSdmCap = 16
 
-// [TODO]
-// - Close() vs usage (when len(receivers) > 0); provide xctn.onFinished() => UnregRecv
-// - limitation: hdr.Opaque is exclusively reserved xaction ID
+// constant (until and if multiple instances)
+const SDMName = "shared-dm"
 
-type sharedDM struct {
-	receivers map[string]transport.Receiver
-	dm        DM
-	ocmu      sync.Mutex
-	rxmu      sync.Mutex
-}
+type (
+	rxent struct {
+		rx   transport.Receiver
+		last int64
+	}
+	sharedDM struct {
+		receivers map[string]*rxent
+		dm        DM
+		ocmu      sync.Mutex
+		rxmu      sync.Mutex
+	}
+)
 
 // global
 var SDM sharedDM
@@ -48,19 +55,28 @@ func InitSDM(config *cmn.Config, compression string) {
 	SDM.dm.init(SDM.trname(), SDM.recv, cmn.OwtNone, extra)
 }
 
+func (*sharedDM) trname() string { return SDMName }
+
 func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
 
-func (sdm *sharedDM) IsActive() (active bool) {
+// TODO: consider reaping old entries right here
+func (sdm *sharedDM) IsActive(now int64) (active bool) {
 	sdm.rxmu.Lock()
-	active = len(sdm.receivers) > 0
+	xid, _ := sdm.getActive(now)
+	active = xid != ""
 	sdm.rxmu.Unlock()
 	return
 }
 
-// constant (until and unless we run multiple shared-DMs)
-const SDMName = "shared-dm"
-
-func (*sharedDM) trname() string { return SDMName }
+// is called under lock
+func (sdm *sharedDM) getActive(now int64) (string /*xid*/, time.Duration /*age*/) {
+	for xid, rxent := range sdm.receivers {
+		if d := time.Duration(now - rxent.last); d < cmn.SharedStreamsDflt { // see also: dmToggle.timeout
+			return xid, d
+		}
+	}
+	return "", 0
+}
 
 // called on-demand
 func (sdm *sharedDM) Open() error {
@@ -75,7 +91,7 @@ func (sdm *sharedDM) Open() error {
 	}
 
 	sdm.rxmu.Lock()
-	sdm.receivers = make(map[string]transport.Receiver, iniSdmCap)
+	sdm.receivers = make(map[string]*rxent, iniSdmCap)
 	sdm.rxmu.Unlock()
 
 	if err := sdm.dm.RegRecv(); err != nil {
@@ -91,46 +107,32 @@ func (sdm *sharedDM) Open() error {
 	return nil
 }
 
-// nothing running + 10m inactivity
-func (sdm *sharedDM) Close() error {
-	if !sdm.isOpen() {
-		return nil
-	}
+// nothing running + cmn.SharedStreamsDflt (10m) inactivity
+func (sdm *sharedDM) Close(now int64) error {
 	sdm.ocmu.Lock()
-	if !sdm.isOpen() {
-		sdm.ocmu.Unlock()
-		return nil
-	}
-
-	var (
-		xid string
-		l   int
-	)
 	sdm.rxmu.Lock()
-	for xid = range sdm.receivers {
-		break
-	}
-	l = len(sdm.receivers)
 
-	if l > 0 {
+	if xid, age := sdm.getActive(now); xid != "" {
 		sdm.rxmu.Unlock()
 		sdm.ocmu.Unlock()
 		debug.Assert(cos.IsValidUUID(xid), xid)
-		return fmt.Errorf("cannot close %s: [%s, %d]", sdm.trname(), xid, l)
+		return fmt.Errorf("cannot close %s: %s is still active (age: %v, num-entries %d)",
+			sdm.trname(), xid, age, len(sdm.receivers))
 	}
-
-	sdm.receivers = nil
-	sdm.rxmu.Unlock()
 
 	sdm.dm.Close(nil)
 	sdm.dm.UnregRecv()
+	sdm.receivers = nil
+	sdm.rxmu.Unlock()
+
 	sdm.ocmu.Unlock()
 
 	nlog.InfoDepth(1, core.T.String(), "close", sdm.trname())
 	return nil
 }
 
-func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
+// demux-level RegRecv (not to confuse with transport level)
+func (sdm *sharedDM) RegRecv(rx transport.Receiver, now int64) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
 	if !sdm.isOpen() {
@@ -139,22 +141,16 @@ func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
 		debug.Assert(false, sdm.trname(), " ", "closed")
 		return
 	}
-	sdm.receivers[rx.ID()] = rx
+	sdm.receivers[rx.ID()] = &rxent{rx: rx, last: now}
 	sdm.rxmu.Unlock()
 	sdm.ocmu.Unlock()
 }
 
+// remove demux entry immediately - any late deliveries for xid are dropped
 func (sdm *sharedDM) UnregRecv(xid string) {
-	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
-	if !sdm.isOpen() {
-		sdm.rxmu.Unlock()
-		sdm.ocmu.Unlock()
-		return
-	}
 	delete(sdm.receivers, xid)
 	sdm.rxmu.Unlock()
-	sdm.ocmu.Unlock()
 }
 
 func (sdm *sharedDM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctn core.Xact) error {
@@ -176,20 +172,19 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	}
 
 	sdm.rxmu.Lock()
-	if !sdm.isOpen() {
-		sdm.rxmu.Unlock()
-		return fmt.Errorf("%s is closed, dropping recv [xid: %s, oname: %s]", sdm.trname(), xid, hdr.ObjName)
-	}
-	rx, ok := sdm.receivers[xid]
-	sdm.rxmu.Unlock()
-
+	rxent, ok := sdm.receivers[xid]
 	if !ok {
+		sdm.rxmu.Unlock()
 		return fmt.Errorf("%s: xid %s not found, dropping recv [oname: %s]", sdm.trname(), xid, hdr.ObjName)
 	}
-	if rx.ID() != xid {
-		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, rx.ID())
+	rxent.last = mono.NanoTime() // TODO: a) only on success; b) micro-optimize
+	sdm.rxmu.Unlock()
+
+	// (unlikely)
+	if rxent.rx.ID() != xid {
+		err = fmt.Errorf("%s: xid mismatch [%q vs %q]", sdm.trname(), xid, rxent.rx.ID())
 		debug.AssertNoErr(err)
 		return err
 	}
-	return rx.RecvObj(hdr, r, nil)
+	return rxent.rx.RecvObj(hdr, r, nil)
 }

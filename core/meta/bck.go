@@ -121,7 +121,7 @@ func (b *Bck) String() string {
 	// add BID
 	// for the mask to clear "ais" bit and/or other high bits reserved for LOM flags, see core/lombid
 	const (
-		aisBID = uint64(1 << 63)
+		aisBID = uint64(1) << 63
 	)
 	var sb strings.Builder
 	sb.Grow(64)

@@ -46,7 +46,7 @@ type (
 		duration             DurationExt // benchmark duration
 		putSizeUpperBoundStr string      // total PUT size limit (unparsed)
 		tmpDir               string      // temp directory for file-based readers
-		readerType           string      // reader type: sg(default), file, rand, tar
+		readerType           string      // reader type: sg(default), file, rand, tar (PUT only)
 		putSizeUpperBound    int64       // total PUT size limit (bytes)
 		seed                 int64       // random seed for reproducibility
 		maxputs              uint64      // max number of PUT operations

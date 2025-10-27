@@ -87,7 +87,7 @@ const (
 	DumpLomEnvVar = "AIS_DUMP_LOM"
 )
 
-const lomDirtyMask = uint64(1 << 63)
+const lomDirtyMask = uint64(1) << 63
 
 const (
 	badLmeta = "bad lmeta"

@@ -131,7 +131,7 @@ func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
 	return
 }
 
-func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast bool) (pid string, status int, err error) {
+func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, now int64, fast bool) (pid string, status int, err error) {
 	t := tkr.t
 	if fast {
 		// additionally
@@ -140,7 +140,7 @@ func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast 
 	}
 	if fast {
 		debug.Assert(ec.ECM != nil)
-		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive())
+		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive(now))
 		return pid, 0, err
 	}
 	return t.slowKalive(smap, tkr.t, timeout)
@@ -198,7 +198,8 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 	debug.Assert(!smap.isPrimary(pkr.p.si))
 
 	if fast {
-		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false, false /*shared streams*/)
+		last, dmActive := pkr.p.dm.nonpResetActive()
+		pid, hdr, err := pkr.p.fastKalive(smap, timeout, false, dmActive /*shared streams*/)
 		if err == nil {
 			// (shared streams; EC streams)
 			if pkr.p.ec.isActive(hdr) {
@@ -207,6 +208,8 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 			if pkr.p.dm.isActive(hdr) {
 				pkr.p.dm.setActive(now)
 			}
+		} else if dmActive {
+			pkr.p.dm.nonpUndo(last) // (unlikely)
 		}
 		return pid, 0, err
 	}

@@ -403,7 +403,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 	if receiving {
 		// see "Shared-DM registration lifecycle" note above
-		bundle.SDM.RegRecv(r)
+		bundle.SDM.RegRecv(r, wi.started)
 
 		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
@@ -489,7 +489,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string) error {
 	// to receive opAbort
-	bundle.SDM.RegRecv(r)
+	bundle.SDM.RegRecv(r, mono.NanoTime())
 
 	// send all
 	r.IncPending()

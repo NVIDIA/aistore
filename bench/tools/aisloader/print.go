@@ -403,6 +403,15 @@ func printRunParams(p *params) {
 		}
 	}
 
+	// omit PUT-only
+	var (
+		minsize, maxsize int64
+		readerType       string
+	)
+	if p.putPct > 0 {
+		minsize, maxsize = p.minSize, p.maxSize
+		readerType = p.readerType
+	}
 	b, err := jsoniter.MarshalIndent(ppEssential{
 		URL:           p.proxyURL,
 		Bucket:        p.bck.Cname(""),
@@ -413,12 +422,12 @@ func printRunParams(p *params) {
 		UpdatePct:     p.updateExistingPct,
 		MultipartPct:  p.multipartPct,
 		GetBatchSize:  p.getBatchSize,
-		MinSize:       p.minSize,
-		MaxSize:       p.maxSize,
+		MinSize:       minsize,
+		MaxSize:       maxsize,
 		MaxPutBytes:   p.putSizeUpperBound,
 		Arch:          arch,
 		NameGetter:    ngLabel(),
-		ReaderType:    p.readerType,
+		ReaderType:    readerType,
 		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")
 

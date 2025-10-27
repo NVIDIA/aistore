@@ -19,7 +19,7 @@ import (
 
 const (
 	// flags
-	msgFl       = uint64(1 << (63 - iota)) // message vs object demux
+	msgFl       = uint64(1) << (63 - iota) // message vs object demux
 	pduFl                                  // is PDU
 	pduLastFl                              // is last PDU
 	pduStreamFl                            // PDU-based stream

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -21,17 +22,18 @@ import (
 // auto-deactivates after a timeout;
 // negative timeout (see `tout` below) => never deactivate
 
-// [TODO] shared-DM:
-// - apc.HdrActiveDM
-// - dmToggle.on()
-// - extra checks on then target side (unregIf, etc.)
+// non-primary action
+const (
+	nonpBit  = uint64(1) << 63
+	nonpMask = ^nonpBit
+)
 
 type (
 	streamsToggle struct {
-		hdrActive string       // apc.HdrActiveEC, ...
-		actOn     string       // apc.ActOpenEC, ...
-		actOff    string       // apc.ActCloseEC, ...
-		last      atomic.Int64 // mono-time of last positive refresh
+		hdrActive string        // apc.HdrActiveEC, ...
+		actOn     string        // apc.ActOpenEC, ...
+		actOff    string        // apc.ActCloseEC, ...
+		last      atomic.Uint64 // mono-time of last positive refresh
 	}
 
 	ecToggle struct {
@@ -56,10 +58,34 @@ func (f *dmToggle) init() {
 	f.actOff = apc.ActCloseSDM
 }
 
-func (*dmToggle) timeout() time.Duration { return cmn.SharedStreamsDflt }
+func (*dmToggle) timeout() time.Duration { return cmn.SharedStreamsDflt } // see also: sharedDM.getActive
 
 func (f *streamsToggle) isActive(h http.Header) bool { _, ok := h[f.hdrActive]; return ok }
-func (f *streamsToggle) setActive(now int64)         { f.last.Store(now) }
+
+func (f *streamsToggle) setActive(now int64) {
+	f.last.Store(uint64(now))
+}
+
+// non-primary: executed user call requiring SDM
+func (f *streamsToggle) nonpSetActive(now int64) {
+	debug.Assert(now > 0, "invalid timestamp: ", now)
+	f.last.Store((uint64(now) & nonpMask) | nonpBit)
+}
+
+// non-primary: fast-keepalive => primary
+func (f *streamsToggle) nonpResetActive() (uint64, bool) {
+	last := f.last.Load()
+	if last&nonpBit == 0 {
+		return last, false
+	}
+	last = f.last.Swap(0)
+	return last, true
+}
+
+// non-primary: fast-keepalive => primary
+func (f *streamsToggle) nonpUndo(last uint64) {
+	_ = f.last.CAS(0, last)
+}
 
 // target => primary keep-alive
 func (f *streamsToggle) recvKalive(p *proxy, hdr http.Header, now int64, tout time.Duration) {
@@ -70,7 +96,7 @@ func (f *streamsToggle) recvKalive(p *proxy, hdr http.Header, now int64, tout ti
 	if tout < 0 {
 		return
 	}
-	last := f.last.Load()
+	last := int64(f.last.Load() & nonpMask)
 	if last == 0 || time.Duration(now-last) < tout {
 		return
 	}
@@ -80,7 +106,10 @@ func (f *streamsToggle) recvKalive(p *proxy, hdr http.Header, now int64, tout ti
 // primary => target keep-alive
 func (f *streamsToggle) respKalive(hdr http.Header, now int64, tout time.Duration) {
 	if tout > 0 {
-		if last := f.last.Load(); last != 0 && time.Duration(now-last) < tout {
+		v := f.last.Load()
+		last := int64(v & nonpMask)
+		debug.Assert(int64(v) >= 0, f.hdrActive, " invalid timestamp: ", v)
+		if last != 0 && time.Duration(now-last) < tout {
 			hdr.Set(f.hdrActive, "true")
 		}
 	}
@@ -96,7 +125,7 @@ func (f *streamsToggle) on(p *proxy, tout time.Duration) error {
 	}
 	var (
 		now  = mono.NanoTime()
-		last = f.last.Load()
+		last = int64(f.last.Load() & nonpMask)
 	)
 	if last != 0 && time.Duration(now-last) < cmn.SharedStreamsNack {
 		return nil
@@ -109,7 +138,8 @@ func (f *streamsToggle) on(p *proxy, tout time.Duration) error {
 }
 
 func (f *streamsToggle) off(p *proxy, last int64) {
-	if !f.last.CAS(last, 0) {
+	debug.Assert(last > 0, f.hdrActive, " invalid timestamp: ", last)
+	if !f.last.CAS(uint64(last), 0) {
 		return
 	}
 
