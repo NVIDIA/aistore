@@ -416,9 +416,9 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 
 func (r *registry) incFinished() { r.finDelta.Inc() }
 
-func (r *registry) hkPruneActive(int64) time.Duration {
+func (r *registry) hkPruneActive(now int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
-		return hk.Prune2mIval
+		return hk.Jitter(hk.Prune2mIval, now)
 	}
 	e := &r.entries
 	e.mtx.Lock()
@@ -434,14 +434,14 @@ func (r *registry) hkPruneActive(int64) time.Duration {
 		e.active = e.active[:l]
 	}
 	e.mtx.Unlock()
-	return hk.Prune2mIval
+	return hk.Jitter(hk.Prune2mIval, now)
 }
 
 func (r *registry) hkDelOld(int64) time.Duration {
 	var (
 		toRemove    []string
 		numKeepMore int
-		now         = time.Now()
+		now         = time.Now() // need calendar time
 	)
 
 	r.entries.mtx.RLock()
@@ -506,7 +506,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	}
 	r.entries.mtx.Unlock()
 
-	return d
+	return hk.Jitter(d, now.UnixNano())
 }
 
 func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {

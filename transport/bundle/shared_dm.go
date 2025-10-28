@@ -112,7 +112,7 @@ func (sdm *sharedDM) Open() error {
 	return nil
 }
 
-func (sdm *sharedDM) housekeep(int64) time.Duration {
+func (sdm *sharedDM) housekeep(now int64) time.Duration {
 	if !sdm.isOpen() {
 		return hk.UnregInterval
 	}
@@ -121,7 +121,7 @@ func (sdm *sharedDM) housekeep(int64) time.Duration {
 		en.ticks.Inc()
 	}
 	sdm.rxmu.RUnlock()
-	return hk.Prune2mIval
+	return hk.Jitter(hk.Prune2mIval, now)
 }
 
 // nothing running + cmn.SharedStreamsDflt (10m) inactivity

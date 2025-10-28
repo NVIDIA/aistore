@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -67,7 +68,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 		)
 		// too busy and not too "pressured"
 		if load >= float64(highLoad) {
-			return r.hkIval(p)
+			return r.hkIval(p, now)
 		}
 		r.refreshStats(now)
 		r.optDepth.Store(optDepth)
@@ -75,7 +76,7 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 			r.toGC.Add(freed)
 			r.freeMemToOS(sizeToGC, p)
 		}
-		return r.hkIval(p)
+		return r.hkIval(p, now)
 	}
 
 	// calibrate and mem-free accordingly
@@ -106,18 +107,19 @@ func (r *MMSA) hkcb(now int64) time.Duration {
 
 	// 6. GC and free mem to OS
 	r.freeMemToOS(mingc, p)
-	return r.hkIval(p)
+	return r.hkIval(p, now)
 }
 
-func (r *MMSA) hkIval(pressure int) time.Duration {
+func (r *MMSA) hkIval(pressure int, now int64) (d time.Duration) {
 	switch pressure {
 	case PressureLow:
-		return r.TimeIval * 2
+		d = r.TimeIval * 2
 	case PressureModerate:
-		return r.TimeIval
+		d = r.TimeIval
 	default:
-		return r.TimeIval / 2
+		d = r.TimeIval / 2
 	}
+	return hk.Jitter(d, now)
 }
 
 // refresh and clone internal hits/idle stats

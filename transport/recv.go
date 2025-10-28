@@ -188,7 +188,7 @@ func (h *hdlExtra) addOld(uid uint64) { h.oldSessions.Store(uid, mono.NanoTime()
 func (h *hdlExtra) cleanup(now int64) time.Duration {
 	h.now = now
 	h.oldSessions.Range(h.cl)
-	return sessionIsOld
+	return hk.Jitter(sessionIsOld, now)
 }
 
 func (h *hdlExtra) cl(key, value any) bool {

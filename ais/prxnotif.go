@@ -362,7 +362,7 @@ func (n *notifs) housekeep(now int64) time.Duration {
 	n.fin.mtx.Unlock()
 
 	if n.nls.l.Load() == 0 {
-		return hk.Prune2mIval
+		return hk.Jitter(hk.Prune2mIval, now)
 	}
 
 	n.nls.mtx.RLock()
@@ -379,7 +379,7 @@ func (n *notifs) housekeep(now int64) time.Duration {
 	// cleanup temp cloned notifs
 	clear(n.tempnl)
 
-	return hk.Prune2mIval
+	return hk.Jitter(hk.Prune2mIval, now)
 }
 
 // conditional: query targets iff they delayed updating

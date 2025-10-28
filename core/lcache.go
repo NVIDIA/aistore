@@ -38,7 +38,7 @@ type (
 	}
 	// HK flush & evict
 	evct struct {
-		now     time.Time
+		now     time.Time // vs atime
 		parent  *lchk
 		mi      *fs.Mountpath
 		wg      *sync.WaitGroup
@@ -262,6 +262,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 		nlog.Warningln("max-evict threshold:", maxEvictThreashold, "- not running")
 		return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 	}
+
 	now := time.Now()
 	if pct > skipEvictThreashold {
 		if elapsed := now.Sub(lchk.last); elapsed < min(cmn.LcacheEvictMax, max(lchk.timeout, time.Hour)*8) {
@@ -281,7 +282,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	lchk.last = now
 	go lchk.evict(lchk.timeout, now, pct)
 
-	return lchk.timeout
+	return hk.Jitter(lchk.timeout, now.UnixNano())
 }
 
 func (lchk *lchk) mempDropAll() bool /*dropped*/ {
