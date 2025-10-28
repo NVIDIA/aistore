@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/hk"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -2089,7 +2090,7 @@ const (
 	// config bloat vs specificity; consider phasing out `timeout.ec_streams_time` and
 	// using `timeout.shared_streams_time` instead
 	SharedStreamsEver = -time.Second
-	SharedStreamsDflt = 10 * time.Minute
+	SharedStreamsDflt = 10 * time.Minute // NOTE: must be > hk.Prune2mIval
 	SharedStreamsMin  = 5 * time.Minute
 	SharedStreamsNack = max(SharedStreamsMin>>1, 3*time.Minute)
 
@@ -2104,6 +2105,7 @@ const (
 )
 
 func (c *TimeoutConf) Validate() error {
+	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
 	if c.CplaneOperation.D() < 10*time.Millisecond {
 		return fmt.Errorf("invalid timeout.cplane_operation=%s", c.CplaneOperation)
 	}

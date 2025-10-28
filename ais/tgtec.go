@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -162,7 +161,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		if bundle.SDM.IsActive(mono.NanoTime()) {
+		if bundle.SDM.IsActive() {
 			t.writeErr(w, r, _errOff(bundle.SDMName))
 			return
 		}
@@ -185,10 +184,10 @@ func closeEc(int64) time.Duration {
 	return hk.UnregInterval
 }
 
-func closeSDM(now int64) time.Duration {
-	if bundle.SDM.IsActive(now) {
+func closeSDM(int64) time.Duration {
+	if bundle.SDM.IsActive() {
 		nlog.Warningln("hk-cb:", _errOff(bundle.SDMName))
-	} else if err := bundle.SDM.Close(now); err != nil {
+	} else if err := bundle.SDM.Close(); err != nil {
 		nlog.Errorln(err)
 	}
 	return hk.UnregInterval

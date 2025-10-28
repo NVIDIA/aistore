@@ -403,9 +403,9 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 	if receiving {
 		if usingPrev {
-			bundle.SDM.UseRecv(r, wi.started)
+			bundle.SDM.UseRecv(r)
 		} else {
-			bundle.SDM.RegRecv(r, wi.started)
+			bundle.SDM.RegRecv(r)
 		}
 		// Rx state
 		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
@@ -491,11 +491,10 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
 	// with a single purpose: to receive opAbort
-	now := mono.NanoTime()
 	if usingPrev {
-		bundle.SDM.UseRecv(r, now)
+		bundle.SDM.UseRecv(r)
 	} else {
-		bundle.SDM.RegRecv(r, now)
+		bundle.SDM.RegRecv(r)
 	}
 
 	// send all

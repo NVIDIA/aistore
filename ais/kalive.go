@@ -131,7 +131,7 @@ func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
 	return
 }
 
-func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, now int64, fast bool) (pid string, status int, err error) {
+func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, _ int64, fast bool) (pid string, status int, err error) {
 	t := tkr.t
 	if fast {
 		// additionally
@@ -140,7 +140,7 @@ func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, now int64, fas
 	}
 	if fast {
 		debug.Assert(ec.ECM != nil)
-		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive(now))
+		pid, _, err = t.fastKalive(smap, timeout, ec.ECM.IsActive(), bundle.SDM.IsActive())
 		return pid, 0, err
 	}
 	return t.slowKalive(smap, tkr.t, timeout)

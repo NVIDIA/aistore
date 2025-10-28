@@ -38,7 +38,7 @@ type (
 	listeners struct {
 		m   map[string]nl.Listener // [UUID => NotifListener]
 		l   atomic.Int32           // current len(m)
-		mtx sync.RWMutex
+		mtx sync.RWMutex           // TODO: use sharded rw-mutex :TODO
 	}
 
 	notifs struct {
@@ -98,7 +98,7 @@ func (n *notifs) init(p *proxy) {
 
 	n.tempnl = make([]nl.Listener, 0, 16)
 
-	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, hk.PruneActiveIval)
+	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, hk.Prune2mIval)
 	n.p.Sowner().Listeners().Reg(n)
 }
 
@@ -351,9 +351,7 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 // housekeeping
 //
 
-func (n *notifs) housekeep(int64) time.Duration {
-	now := time.Now().UnixNano()
-
+func (n *notifs) housekeep(now int64) time.Duration {
 	n.fin.mtx.Lock()
 	for _, nl := range n.fin.m {
 		timeout := cos.Ternary(nl.Kind() == apc.ActList, hk.OldAgeNotifLso, hk.OldAgeNotif)
@@ -364,7 +362,7 @@ func (n *notifs) housekeep(int64) time.Duration {
 	n.fin.mtx.Unlock()
 
 	if n.nls.l.Load() == 0 {
-		return hk.PruneActiveIval
+		return hk.Prune2mIval
 	}
 
 	n.nls.mtx.RLock()
@@ -376,12 +374,12 @@ func (n *notifs) housekeep(int64) time.Duration {
 	n.nls.mtx.RUnlock()
 
 	for _, nl := range n.tempnl {
-		n.bcastGetStats(nl, hk.PruneActiveIval)
+		n.bcastGetStats(nl, hk.Prune2mIval)
 	}
 	// cleanup temp cloned notifs
 	clear(n.tempnl)
 
-	return hk.PruneActiveIval
+	return hk.Prune2mIval
 }
 
 // conditional: query targets iff they delayed updating

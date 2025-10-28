@@ -12,11 +12,11 @@ import "time"
 const (
 	// hk timers
 	DelOldIval        = 24 * time.Minute // cleanup old xactions; old transactions
-	PruneActiveIval   = 2 * time.Minute  // prune active xactions; cleanup notifs
+	Prune2mIval       = 2 * time.Minute  // prune active xactions (from finished); cleanup notifs; remove aged idle SDM recv
 	PruneRateLimiters = 6 * time.Hour    // prune stale rate limiters on the front
 
 	//
-	// when things are considered _old_
+	// when things are getting _old_
 	//
 	OldAgeXshort   = time.Minute      // x-lso, x-moss
 	OldAgeX        = time.Hour        // all other xactions

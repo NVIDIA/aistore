@@ -418,7 +418,7 @@ func (r *registry) incFinished() { r.finDelta.Inc() }
 
 func (r *registry) hkPruneActive(int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
-		return hk.PruneActiveIval
+		return hk.Prune2mIval
 	}
 	e := &r.entries
 	e.mtx.Lock()
@@ -434,7 +434,7 @@ func (r *registry) hkPruneActive(int64) time.Duration {
 		e.active = e.active[:l]
 	}
 	e.mtx.Unlock()
-	return hk.PruneActiveIval
+	return hk.Prune2mIval
 }
 
 func (r *registry) hkDelOld(int64) time.Duration {
