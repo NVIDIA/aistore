@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -291,3 +292,75 @@ var _ = Describe("Notifications xaction test", func() {
 		})
 	})
 })
+
+func BenchmarkShardedAdd(b *testing.B) {
+	cos.InitShortID(0)
+	n := &notifs{
+		nls: newListeners(),
+		fin: newListeners(),
+	}
+	smap := &smapX{}
+	targets := make(meta.NodeMap, 1)
+	targets["target1"] = &meta.Snode{DaeID: "target1"}
+
+	b.ResetTimer()
+	for range b.N {
+		xid := cos.GenUUID()
+		nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
+		n.nls.add(nl, false)
+	}
+}
+
+func BenchmarkShardedEntry(b *testing.B) {
+	cos.InitShortID(0)
+	n := &notifs{
+		nls: newListeners(),
+		fin: newListeners(),
+	}
+	smap := &smapX{}
+	targets := make(meta.NodeMap, 1)
+	targets["target1"] = &meta.Snode{DaeID: "target1"}
+
+	// Seed with listeners
+	xids := make([]string, 1000)
+	for i := range xids {
+		xid := cos.GenUUID()
+		xids[i] = xid
+		nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
+		n.nls.add(nl, false)
+	}
+
+	b.ResetTimer()
+	for i := range b.N {
+		xid := xids[i%len(xids)]
+		_, _ = n.nls.entry(xid)
+	}
+}
+
+func BenchmarkShardedConcurrentMixed(b *testing.B) {
+	cos.InitShortID(0)
+	n := &notifs{
+		nls: newListeners(),
+		fin: newListeners(),
+	}
+	smap := &smapX{}
+	targets := make(meta.NodeMap, 1)
+	targets["target1"] = &meta.Snode{DaeID: "target1"}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			xid := cos.GenUUID()
+			nl := xact.NewXactNL(xid, apc.ActECEncode, &smap.Smap, targets)
+
+			// Add
+			n.nls.add(nl, false)
+
+			// Lookup
+			_, _ = n.nls.entry(xid)
+
+			// Delete
+			n.nls.del(nl, false)
+		}
+	})
+}
