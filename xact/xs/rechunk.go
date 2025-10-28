@@ -137,6 +137,8 @@ func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	)
 	if size < xch.objSizeLimit || xch.objSizeLimit == 0 {
 		if !lom.IsChunked() {
+			// Track skipped object stats (no-op case)
+			xch.ObjsAdd(1, size)
 			return nil // Do nothing: monolithic objects stay monolithic
 		}
 		chunkSize = 0 // restore chunked objects to monolithic
@@ -170,10 +172,11 @@ func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	err = core.T.PutObject(lom, params)
 	core.FreePutParams(params)
 	if err != nil {
-		nlog.Errorln(lom.Cname(), "putObject with chunk size", xch.chunkSize, "error", err)
 		xch.AddErr(err, 0)
 		return err
 	}
+
+	xch.ObjsAdd(1, size) // Track processed object stats
 
 	return nil
 }
