@@ -9,6 +9,7 @@ metadata:
     kapp.k14s.io/change-group: "setup"
 spec:
   clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     type: proxy
   ports:

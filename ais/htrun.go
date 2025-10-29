@@ -2231,33 +2231,63 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 	return err
 }
 
-// via /health handler
-func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
-	var (
-		senderID   = r.Header.Get(apc.HdrSenderID)
-		senderName = r.Header.Get(apc.HdrSenderName)
-	)
-	// external WD
-	// TODO: check receiving on PubNet
-	// NOTE: always ready for K8s
-	if senderID == "" && senderName == "" {
-		if cmn.Rom.V(5, cos.ModKalive) {
-			readiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
-			nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, readiness, "[", r.URL.RawQuery, "]")
-		}
+// external watchdogs, e.g. K8s (via /v1/health handler)
+// - liveness: always 200 (process is alive)
+// - readiness: 200 when node and cluster started + not in maint/decomm, 503 otherwise
+// TODO: check receiving on PubNet
+func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) bool {
+	isIntra, err := h.validateIntraRequest(r.Header, false /* from primary */)
+	if err != nil {
+		h.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return true
+	}
+	if isIntra {
+		return false
+	}
+
+	// NOTE: check via substring (not parsed query) to avoid allocation
+	isReadiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
+	if cmn.Rom.V(5, cos.ModKalive) {
+		nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, isReadiness, "[", r.URL.RawQuery, "]")
+	}
+
+	if !isReadiness {
 		w.WriteHeader(http.StatusOK)
 		return true
 	}
 
-	// intra-cluster health ping
-	// - pub addr permitted (see reqHealth)
-	// - compare w/ h.ensureIntraControl
-	err := h.checkIntraCall(r.Header, false /* from primary */)
-	if err != nil {
-		h.writeErr(w, r, err)
-		responded = true
+	if h.isReady() {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}
-	return responded
+	return true
+}
+
+func (h *htrun) validateIntraRequest(hdr http.Header, fromPrimary bool) (isIntra bool, err error) {
+	senderID := hdr.Get(apc.HdrSenderID)
+	senderName := hdr.Get(apc.HdrSenderName)
+	isIntra = senderID != "" || senderName != ""
+	if isIntra {
+		err = h.checkIntraCall(hdr, fromPrimary)
+	}
+	return
+}
+
+// ready when node started, not in maint/decomm, and cluster started (exception is primary in
+// a new cluster - requires targets to be registered as well before ClusterStarted can be true)
+func (h *htrun) isReady() bool {
+	if !h.NodeStarted() || h.si.Flags.IsAnySet(meta.SnodeMaintDecomm) {
+		return false
+	}
+
+	if !h.ClusterStarted() {
+		smap := h.owner.smap.get()
+		debug.Assert(smap.isValid())
+		return h.si.IsProxy() && smap.isPrimary(h.si) && smap.UUID == ""
+	}
+
+	return true
 }
 
 //
