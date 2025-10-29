@@ -329,7 +329,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	opaque := cos.MustMarshal(req)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Opaque: opaque}
-	o.Callback, o.CmplArg = ds.sentCallback, &req
+	o.SentCB, o.CmplArg = ds.sentCallback, &req
 
 	if err := ds.streams.request.Send(o, nil, tsi); err != nil {
 		return 0, errors.WithStack(err)
@@ -431,7 +431,7 @@ func (ds *dsorterGeneral) recvReq(hdr *transport.ObjHdr, objReader io.Reader, er
 
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
-	o.Callback = ds.responseCallback
+	o.SentCB = ds.responseCallback
 
 	fullContentPath := ds.m.recm.FullContentPath(req.RecordObj)
 

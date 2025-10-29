@@ -191,14 +191,14 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		objSize := hdr.ObjAttrs.Size
 		if num%7 == 0 {
 			objSize, hdr.ObjAttrs.Size = 0, 0
-			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, nil)
+			err = sb.Send(&transport.Obj{Hdr: hdr, SentCB: callback}, nil)
 		} else {
 			reader := &randReader{buf: wbuf, hdr: hdr, slab: slab, clone: true} // FIXME: multiplier reopen
 			if hdr.IsUnsized() {
 				reader.offEOF = int64(random.Int32()>>1) + 1
 				objSize = reader.offEOF
 			}
-			err = sb.Send(&transport.Obj{Hdr: hdr, Callback: callback}, reader)
+			err = sb.Send(&transport.Obj{Hdr: hdr, SentCB: callback}, reader)
 		}
 		if err != nil {
 			t.Fatalf("%s: exiting with err [%v]\n", sb, err)

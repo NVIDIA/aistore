@@ -567,7 +567,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 		hdr.Opaque = opaque
 	}
 
-	o.Callback, o.CmplArg = r.regSent, opaque
+	o.SentCB, o.CmplArg = r.regSent, opaque
 	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
@@ -623,7 +623,7 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		hdr.Demux = r.ID()
 		hdr.Opaque = opaque
 	}
-	o.Callback = r.archSent
+	o.SentCB = r.archSent
 	o.CmplArg = &_archSentCmpl{lom, lh, opaque}
 
 	return bundle.SDM.Send(o, roc, tsi, r)

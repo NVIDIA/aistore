@@ -166,9 +166,6 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 		return err
 	}
 
-	if obj.Callback == nil {
-		obj.Callback = sb.extra.Callback
-	}
 	if obj.IsHeaderOnly() {
 		roc = nil
 	}
@@ -230,8 +227,8 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	if roc != nil {
 		cos.Close(roc)
 	}
-	if obj.Callback != nil {
-		obj.Callback(&obj.Hdr, roc, obj.CmplArg, err)
+	if obj.SentCB != nil {
+		obj.SentCB(&obj.Hdr, roc, obj.CmplArg, err)
 	}
 }
 
@@ -441,6 +438,63 @@ func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
 		}
 	}
 	return
+}
+
+// replace streams to a single peer (dstID) in the bundle:
+// - optional parentOverride
+// - otherwise, use sb.extra.Parent as-is
+func (sb *Streams) ReopenPeerStream(dstID string, parentOverride *transport.Parent) error {
+	// 1) validate
+	old := sb.get()
+	orobin, ok := old[dstID]
+	if !ok {
+		return &ErrDestinationMissing{sb.String(), dstID, sb.smap.String()}
+	}
+	if len(orobin.stsdest) == 0 {
+		debug.Assert(false) // not expecting
+		return nil
+	}
+	smap := core.T.Sowner().Get()
+	if smap.Version != sb.smap.Version {
+		// to err on the side of caution
+		return fmt.Errorf("%s: reopening individual streams when cluster map changes is not supported yet (%s vs %s)",
+			sb, smap.StringEx(), sb.smap.StringEx())
+	}
+	si := sb.smap.GetNode(dstID)
+	if si == nil {
+		// (unlikely - checked above)
+		return fmt.Errorf("%s: destination %q not found in the streams' %s", sb, dstID, sb.smap.StringEx())
+	}
+	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
+
+	// 2) build new `robin` with same multiplier
+	nrobin := &robin{stsdest: make(stsdest, len(orobin.stsdest))}
+	for k := range nrobin.stsdest {
+		extra := sb.extra // copy struct by value
+		if parentOverride != nil {
+			extra.Parent = parentOverride
+		}
+		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
+		nrobin.stsdest[k] = ns
+	}
+	nbundle := make(bundle, len(old))
+	for id, r := range old {
+		nbundle[id] = r
+	}
+	nbundle[dstID] = nrobin
+
+	// 3) set new CoW instance immediately
+	sb.streams.Store(&nbundle)
+
+	// 4) stop old streams (may take a few millis)
+	for _, os := range orobin.stsdest {
+		if !os.IsTerminated() {
+			os.Stop() // via stopCh
+		}
+	}
+
+	nlog.Infoln(sb.String(), "successfully restablished connectivity to", dstID)
+	return nil
 }
 
 ///////////////////////////

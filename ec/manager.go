@@ -101,7 +101,11 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
 		compression = config.EC.Compression
-		extraReq    = transport.Extra{Callback: cbReq, Compression: compression, Config: config}
+		extraReq    = transport.Extra{
+			Parent:      &transport.Parent{SentCB: cbReq},
+			Compression: compression,
+			Config:      config,
+		}
 	)
 	reqSbArgs := bundle.Args{
 		Multiplier: config.EC.SbundleMult,

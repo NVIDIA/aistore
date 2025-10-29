@@ -35,7 +35,7 @@ type (
 	DM struct {
 		data        bp // data
 		ack         bp // ACKs and control
-		xctn        core.Xact
+		parent      *transport.Parent
 		config      *cmn.Config
 		compression string // enum { apc.CompressNever, ... }
 		multiplier  int
@@ -105,8 +105,18 @@ func (dm *DM) NetC() string  { return dm.ack.net }
 func (dm *DM) OWT() cmn.OWT  { return dm.owt }
 
 // xaction that drives and utilizes this data mover
-func (dm *DM) SetXact(xctn core.Xact) { dm.xctn = xctn }
-func (dm *DM) GetXact() core.Xact     { return dm.xctn }
+func (dm *DM) SetXact(xctn core.Xact) {
+	if dm.parent == nil {
+		dm.parent = &transport.Parent{}
+	}
+	dm.parent.Xact = xctn
+}
+func (dm *DM) xctn() core.Xact {
+	if dm.parent == nil {
+		return nil
+	}
+	return dm.parent.Xact
+}
 
 // when config changes
 func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
@@ -161,12 +171,12 @@ func (dm *DM) UnregRecv() {
 	}
 	defer dm.stage.regged.Store(false)
 
-	if dm.xctn != nil {
+	if xctn := dm.xctn(); xctn != nil {
 		timeout := dm.config.Transport.QuiesceTime.D()
-		if dm.xctn.IsAborted() {
+		if xctn.IsAborted() {
 			timeout = time.Second
 		}
-		dm.Quiesce(timeout)
+		dm.quiesce(timeout)
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
 		nlog.ErrorDepth(1, "FATAL:", err, "[", dm.data.trname, dm.String(), "]")
@@ -196,7 +206,7 @@ func (dm *DM) Open() {
 		Multiplier:   dm.multiplier,
 		ManualResync: true,
 	}
-	dataArgs.Extra.Xact = dm.xctn
+	dataArgs.Extra.Parent = dm.parent
 	dm.data.streams = New(dm.data.client, dataArgs)
 	if dm.useACKs() {
 		ackArgs := Args{
@@ -206,7 +216,7 @@ func (dm *DM) Open() {
 			Ntype:        core.Targets,
 			ManualResync: true,
 		}
-		ackArgs.Extra.Xact = dm.xctn
+		ackArgs.Extra.Parent = dm.parent
 		dm.ack.streams = New(dm.ack.client, ackArgs)
 	}
 
@@ -232,8 +242,8 @@ func (dm *DM) String() string {
 }
 
 // quiesce *local* Rx
-func (dm *DM) Quiesce(d time.Duration) core.QuiRes {
-	return dm.xctn.Quiesce(d, dm.quicb)
+func (dm *DM) quiesce(d time.Duration) core.QuiRes {
+	return dm.xctn().Quiesce(d, dm.quicb)
 }
 
 func (dm *DM) Close(err error) {
@@ -247,8 +257,10 @@ func (dm *DM) Close(err error) {
 		nlog.Errorln("Warning:", dm.String(), "not open")
 		return
 	}
-	if err == nil && dm.xctn != nil && dm.xctn.IsAborted() {
-		err = dm.xctn.AbortErr()
+	if err == nil {
+		if xctn := dm.xctn(); xctn != nil && xctn.IsAborted() {
+			err = xctn.AbortErr()
+		}
 	}
 	// nil: close gracefully via `fin`, otherwise abort
 	dm.data.streams.Close(err == nil)
@@ -267,20 +279,22 @@ func (dm *DM) Abort() {
 	nlog.Warningln("dm.abort", dm.String())
 }
 
-func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctns ...core.Xact) (err error) { // TODO -- FIXME: separate
+func (dm *DM) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode, xctns ...core.Xact) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
 	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
-		xctn := dm.xctn
+		xctn := dm.xctn()
 		if len(xctns) > 0 {
 			xctn = xctns[0]
 		}
-		xctn.OutObjsAdd(1, obj.Size())
+		if xctn != nil {
+			xctn.OutObjsAdd(1, obj.Size())
+		}
 	}
 	return
 }
 
-func (dm *DM) ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
-	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr, Callback: cb}, nil, tsi)
+func (dm *DM) ACK(hdr *transport.ObjHdr, cb transport.SentCB, tsi *meta.Snode) error {
+	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr, SentCB: cb}, nil, tsi)
 }
 
 func (dm *DM) Notif(hdr *transport.ObjHdr) error {
@@ -296,8 +310,9 @@ func (dm *DM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 //
 
 func (dm *DM) quicb(time.Duration /*total*/) core.QuiRes {
+	xctn := dm.xctn()
 	switch {
-	case dm.xctn != nil && dm.xctn.IsAborted():
+	case xctn != nil && xctn.IsAborted():
 		return core.QuiInactiveCB
 	case dm.stage.laterx.CAS(true, false):
 		return core.QuiActive
@@ -307,13 +322,15 @@ func (dm *DM) quicb(time.Duration /*total*/) core.QuiRes {
 }
 
 func (dm *DM) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {
-	// DEBUG -- TODO -- FIXME
+	// NOTE: SDM special case
 	if dm.data.trname == SDM.trname() {
 		return dm.data.recv(hdr, reader, err)
 	}
 
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
-		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
+		if xctn := dm.xctn(); xctn != nil {
+			xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
+		}
 	}
 	// NOTE: in re (hdr.ObjAttrs.Size < 0) see transport.UsePDU()
 

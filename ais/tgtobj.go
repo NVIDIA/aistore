@@ -1957,9 +1957,8 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 
 // use data mover to transmit objects to other targets
 // (compare with coi.put())
-func (coi *coi) _dm(lom *core.LOM, sargs *sendArgs) error {
+func (*coi) _dm(lom *core.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
-	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())
 	o := transport.AllocSend()
 	hdr, oa := &o.Hdr, sargs.objAttrs
 	{
@@ -1967,7 +1966,7 @@ func (coi *coi) _dm(lom *core.LOM, sargs *sendArgs) error {
 		hdr.ObjName = sargs.objNameTo
 		hdr.ObjAttrs.CopyFrom(oa, false /*skip cksum*/)
 	}
-	o.Callback = func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
+	o.SentCB = func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		core.FreeLOM(lom)
 	}
 	return sargs.dm.Send(o, sargs.reader, sargs.tsi)

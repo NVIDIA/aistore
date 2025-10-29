@@ -912,6 +912,6 @@ func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClos
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-	o.Callback, o.CmplArg = rj.objSentCallback, lom
+	o.SentCB, o.CmplArg = rj.objSentCallback, lom
 	return rj.m.dm.Send(o, roc, tsi)
 }

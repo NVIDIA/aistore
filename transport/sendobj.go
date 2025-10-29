@@ -22,11 +22,11 @@ import (
 // object stream & private types
 type (
 	Stream struct {
-		workCh   chan *Obj // send queue (SQ): next object to stream
-		cmplCh   chan cmpl // SCQ (note: SQ and SCQ form a FIFO)
-		callback ObjSentCB // to free SGLs, close files, etc. cleanup
-		lz4s     *lz4Stream
-		sendoff  sendoff
+		workCh  chan *Obj // send queue (SQ): next object to stream
+		cmplCh  chan cmpl // SCQ (note: SQ and SCQ form a FIFO)
+		sentCB  SentCB    // to free SGLs, close files, etc. cleanup
+		lz4s    *lz4Stream
+		sendoff sendoff
 		streamBase
 		chanFull cos.ChanFull
 	}
@@ -49,6 +49,7 @@ type (
 )
 
 // interface guard
+// (curerently, a single implementation but keeping it interfaced for possible futures)
 var _ streamer = (*Stream)(nil)
 
 ///////////////////
@@ -149,10 +150,10 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	}
 	// SCQ completion callback
 	if rc == 0 {
-		if obj.Callback != nil {
-			obj.Callback(&obj.Hdr, obj.Reader, obj.CmplArg, err)
-		} else if s.callback != nil {
-			s.callback(&obj.Hdr, obj.Reader, obj.CmplArg, err)
+		if obj.SentCB != nil {
+			obj.SentCB(&obj.Hdr, obj.Reader, obj.CmplArg, err)
+		} else if s.sentCB != nil {
+			s.sentCB(&obj.Hdr, obj.Reader, obj.CmplArg, err)
 		}
 	}
 	freeSend(obj)

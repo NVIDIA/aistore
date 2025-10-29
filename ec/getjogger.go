@@ -761,7 +761,7 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		}
 
 		// Every slice's SGL is freed upon transfer completion
-		cb := func(daemonID string, s *slice, rdr cos.ReadOpenCloser) transport.ObjSentCB {
+		cb := func(daemonID string, s *slice, rdr cos.ReadOpenCloser) transport.SentCB {
 			return func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 				if err != nil {
 					nlog.Errorf("%s failed to send %s to %v: %v", core.T, ctx.lom, daemonID, err)

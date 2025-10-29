@@ -628,7 +628,7 @@ func (resp *dsmCS) connectOrSend(r cos.ReadOpenCloser) (err error) {
 	} else {
 		o := transport.AllocSend()
 		o.Hdr = resp.hdr
-		o.Callback, o.CmplArg = resp.ds.sentCallback, &resp.rsp
+		o.SentCB, o.CmplArg = resp.ds.sentCallback, &resp.rsp
 		err = resp.ds.streams.response.Send(o, r, resp.tsi)
 		resp.decRef = true // sentCallback will call decrementRef
 	}

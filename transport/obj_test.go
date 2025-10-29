@@ -174,7 +174,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	}
 	hdr.ObjAttrs.SetVersion("1")
 	wg.Add(1)
-	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl1, Callback: cb})
+	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl1, SentCB: cb})
 	wg.Wait()
 
 	sgl2 := memsys.PageMM().NewSGL(0)
@@ -196,7 +196,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 	hdr.ObjAttrs.SetVersion("222222222222222222222222")
 	hdr.ObjAttrs.SetCustomMD(cos.StrKVs{"xx": "11", "yy": "22"})
 	wg.Add(1)
-	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, Callback: cb})
+	stream.Send(&transport.Obj{Hdr: hdr, Reader: sgl2, SentCB: cb})
 	wg.Wait()
 }
 
@@ -362,7 +362,7 @@ func TestSendCallback(t *testing.T) {
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
 		totalSend += hdr.ObjAttrs.Size
-		stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: rrc.sentCallback})
+		stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, SentCB: rrc.sentCallback})
 	}
 	stream.Fin()
 
@@ -614,11 +614,11 @@ func TestCompletionCount(t *testing.T) {
 			hdr := genStaticHeader(random)
 			hdr.ObjAttrs.Size = 0
 			hdr.Opaque = []byte(strconv.FormatInt(104729*int64(idx), 10))
-			stream.Send(&transport.Obj{Hdr: hdr, Callback: callback})
+			stream.Send(&transport.Obj{Hdr: hdr, SentCB: callback})
 			rem = random.Int64() % 13
 		} else {
 			hdr, rr := makeRandReader(random, false)
-			stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, Callback: callback})
+			stream.Send(&transport.Obj{Hdr: hdr, Reader: rr, SentCB: callback})
 		}
 		numSent++
 		if numSent > 5000 && rem == 3 {

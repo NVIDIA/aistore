@@ -346,7 +346,7 @@ func (c *putJogger) cleanup(lom *core.LOM) error {
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}
 	o.Hdr.Bck.Copy(lom.Bucket())
-	o.Callback = c.ctSendCallback
+	o.SentCB = c.ctSendCallback
 	c.parent.IncPending()
 	return c.parent.mgr.req().Send(o, nil, nodes...)
 }

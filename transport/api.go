@@ -58,10 +58,28 @@ const sizeofh = int(unsafe.Sizeof(Obj{}))
 // Correct usage: consume ObjHdr synchronously and inline inside the recv() callback.
 
 type (
-	// advanced usage: additional stream control
+	// object-sent callback that has the following signature can optionally be defined on a:
+	// a) per-stream basis (via NewStream constructor - see Extra struct above)
+	// b) for a given object that is being sent (for instance, to support a call-per-batch semantics)
+	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
+	// (i.e., non-nil), the stream callback is ignored/skipped.
+	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
+	SentCB func(*ObjHdr, io.ReadCloser, any, error)
+
+	// scope: stream
+	TermedCB func(error)
+
+	// usage and scope:
+	// - entire stream's lifetime (all Send() calls)
+	// - additional stream control
+	// - global or optional params (to override defaults)
+	Parent struct {
+		Xact     core.Xact // sender ID; abort
+		SentCB   SentCB    // to free SGLs, close files, etc. cleanup
+		TermedCB TermedCB  // when err-ed
+	}
 	Extra struct {
-		Xact         core.Xact     // usage: sender ID; abort
-		Callback     ObjSentCB     // typical usage: to free SGLs, close files
+		Parent       *Parent
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
 		Compression  string        // see CompressAlways, etc. enum
 		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
@@ -70,11 +88,7 @@ type (
 		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize
 	}
 
-	// receive-side session stats indexed by session ID (see recv.go for "uid")
-	// optional, currently tests only
-	RxStats map[uint64]*Stats
-
-	// object header
+	// _object_ header (not to confuse w/ objects in buckets)
 	ObjHdr struct {
 		Bck      cmn.Bck
 		ObjName  string
@@ -86,25 +100,11 @@ type (
 	}
 	// object to transmit
 	Obj struct {
-		Reader   io.ReadCloser // reader (to read the object, and close when done)
-		CmplArg  any           // optional context passed to the ObjSentCB callback
-		Callback ObjSentCB     // called when the last byte is sent _or_ when the stream terminates (see term.reason)
-		prc      *atomic.Int64 // private; if present, ref-counts so that we call ObjSentCB only once
-		Hdr      ObjHdr
-	}
-
-	// object-sent callback that has the following signature can optionally be defined on a:
-	// a) per-stream basis (via NewStream constructor - see Extra struct above)
-	// b) for a given object that is being sent (for instance, to support a call-per-batch semantics)
-	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
-	// (i.e., non-nil), the stream callback is ignored/skipped.
-	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	ObjSentCB func(*ObjHdr, io.ReadCloser, any, error)
-
-	Msg struct {
-		SID    string
-		Body   []byte
-		Opcode int
+		Reader  io.ReadCloser // reader (to read the object, and close when done)
+		CmplArg any           // optional context passed to the SentCB callback
+		SentCB  SentCB        // called when the last byte is sent _or_ when the stream terminates (see term.reason)
+		prc     *atomic.Int64 // private; if present, ref-counts so that we call SentCB only once
+		Hdr     ObjHdr
 	}
 
 	// stream collector
@@ -112,9 +112,15 @@ type (
 
 	// Rx callbacks
 	RecvObj func(hdr *ObjHdr, objReader io.Reader, err error) error
-	RecvMsg func(msg Msg, err error) error
 )
 
+// receive-side session stats indexed by session ID (see recv.go for "uid")
+// optional, currently tests only
+type (
+	RxStats map[uint64]*Stats
+)
+
+// shared data mover (SDM)
 type (
 	Receiver interface {
 		ID() string
@@ -134,7 +140,9 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	}
 	s = &Stream{streamBase: *newBase(client, dstURL, dstID, extra)}
 	s.streamBase.streamer = s
-	s.callback = extra.Callback
+	if extra.Parent != nil {
+		s.sentCB = extra.Parent.SentCB
+	}
 	if extra.Compressed() {
 		s.initCompression(extra)
 	}
@@ -162,10 +170,10 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 //     when the header's Dsize field is set to zero), the reader is not required and the
 //     corresponding argument in Send() can be set to nil.
 //   - object reader is *always* closed irrespectively of whether the Send() succeeds
-//     or fails. On success, if send-completion (ObjSentCB) callback is provided
+//     or fails. On success, if send-completion (SentCB) callback is provided
 //     (i.e., non-nil), the closing is done by doCmpl().
 //   - Optional reference counting is also done by (and in) the doCmpl, so that the
-//     ObjSentCB gets called if and only when the refcount (if provided i.e., non-nil)
+//     SentCB gets called if and only when the refcount (if provided i.e., non-nil)
 //     reaches zero.
 //   - For every transmission of every object there's always an doCmpl() completion
 //     (with its refcounting and reader-closing). This holds true in all cases including

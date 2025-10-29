@@ -68,8 +68,8 @@ type (
 	}
 	streamBase struct {
 		streamer streamer
-		client   Client        // stream's http client
-		xctn     core.Xact     // xaction
+		client   Client // stream's http client
+		parent   *Parent
 		stopCh   cos.StopCh    // stop/abort stream
 		lastCh   cos.StopCh    // end-of-stream
 		pdu      *spdu         // PDU buffer
@@ -113,7 +113,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	)
 	debug.AssertNoErr(err)
 
-	s = &streamBase{client: client, dstURL: dstURL, dstID: dstID}
+	s = &streamBase{client: client, parent: extra.Parent, dstURL: dstURL, dstID: dstID}
 
 	s.sessID = nextSessionID.Inc()
 	s.trname = path.Base(u.Path)
@@ -123,9 +123,8 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.postCh = make(chan struct{}, 1)
 
 	// default overrides
-	if extra.Xact != nil {
-		s.xctn = extra.Xact
-		sid = "-" + extra.Xact.ID()
+	if extra.Parent != nil && extra.Parent.Xact != nil {
+		sid = "-" + extra.Parent.Xact.ID()
 	}
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
@@ -319,13 +318,14 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 
 	// termination is caused by anything other than Fin()
 	// (reasonStopped is, effectively, abort via Stop() - totally legit)
+	var errExt error
 	if reason != reasonStopped {
-		errExt := fmt.Errorf("%s[term-reason: %s, err: %w]", s, reason, err)
+		errExt = fmt.Errorf("%s[term-reason: %s, err: %w]", s, reason, err)
 		nlog.Errorln(errExt)
 
 		// NOTE: aborting grandparent xaction
-		if s.xctn != nil {
-			s.xctn.Abort(errExt)
+		if s.parent != nil && s.parent.Xact != nil {
+			s.parent.Xact.Abort(errExt)
 		}
 	}
 
@@ -334,6 +334,13 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
+
+	// notify parent if defined
+	if reason != reasonStopped {
+		if s.parent != nil && s.parent.TermedCB != nil {
+			s.parent.TermedCB(errExt)
+		}
+	}
 
 	// count and log chanFull
 	if cnt := s.chanFull.Load(); cnt > 0 {

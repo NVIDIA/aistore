@@ -528,7 +528,7 @@ func (r *LsoXact) bcast(page *cmn.LsoRes) (err error) {
 		o.Hdr.Opaque = cos.UnsafeB(r.p.UUID())
 		o.Hdr.ObjAttrs.Size = sgl.Len()
 	}
-	o.Callback, o.CmplArg = r.sentCb, sgl // cleanup
+	o.SentCB, o.CmplArg = r.sentCb, sgl // cleanup
 	o.Reader = sgl
 	roc := memsys.NewReader(sgl)
 	r.p.dm.Bcast(o, roc)

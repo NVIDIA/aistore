@@ -175,7 +175,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	rHdr.Opaque = ireq.NewPack(g.smm)
 
 	o := transport.AllocSend()
-	o.Hdr, o.Callback = rHdr, r.sendCb
+	o.Hdr, o.SentCB = rHdr, r.sendCb
 
 	r.ObjsAdd(1, objAttrs.Size)
 	r.IncPending()
@@ -312,7 +312,7 @@ func (r *xactECBase) unregWriter(uname string) {
 //     The counter is used for sending slices of one big SGL to a few nodes. In
 //     this case every slice must be sent to only one target, and transport bundle
 //     cannot help to track automatically when SGL should be freed.
-func (r *xactECBase) writeRemote(daemonIDs []string, lom *core.LOM, src *dataSource, cb transport.ObjSentCB) error {
+func (r *xactECBase) writeRemote(daemonIDs []string, lom *core.LOM, src *dataSource, cb transport.SentCB) error {
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()
 	}
@@ -351,7 +351,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *core.LOM, src *dataSou
 	}
 
 	o := transport.AllocSend()
-	o.Hdr, o.Callback = hdr, cb
+	o.Hdr, o.SentCB = hdr, cb
 
 	r.IncPending()
 	return r.sendByDaemonID(daemonIDs, o, src.reader, false)
