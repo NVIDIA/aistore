@@ -34,11 +34,18 @@ import (
 
 const notifsName = "p-notifs"
 
+const (
+	shimcnt = 16
+	shimask = shimcnt - 1
+)
+
 type (
 	listeners struct {
-		m   map[string]nl.Listener // [UUID => NotifListener]
-		l   atomic.Int32           // current len(m)
-		mtx sync.RWMutex           // TODO: use sharded rw-mutex :TODO
+		all [shimcnt]struct {
+			sync.RWMutex
+			m map[string]nl.Listener
+		}
+		l atomic.Int32 // current len across all maps
 	}
 
 	notifs struct {
@@ -100,6 +107,9 @@ func (n *notifs) init(p *proxy) {
 
 	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, hk.Prune2mIval)
 	n.p.Sowner().Listeners().Reg(n)
+
+	// (see listeners.index)
+	debug.Assert(shimcnt < 0xff)
 }
 
 // handle other nodes' notifications
@@ -132,6 +142,11 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	// which is why we consider `not-found`, `already-finished`,
 	// and `unknown-notifier` benign non-error conditions
 	uuid = notifMsg.UUID
+	if err := xact.CheckValidUUID(uuid); err != nil {
+		n.p.writeErr(w, r, err)
+		return
+	}
+
 	if !withRetry(cmn.Rom.CplaneOperation(), func() bool {
 		nl = n.entry(uuid)
 		return nl != nil
@@ -190,13 +205,17 @@ func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) 
 	if msg.Data != nil {
 		// ditto
 		stats, _, abortedSnap, err := nl.UnmarshalStats(msg.Data)
-		debug.AssertNoErr(err)
-		nl.SetStats(tsi.ID(), stats)
+		if err != nil {
+			// (unlikely)
+			nlog.Errorln("bad finished stats for", nl.String(), "from", tsi.StringEx(), "err:", err)
+		} else {
+			nl.SetStats(tsi.ID(), stats)
 
-		if abortedSnap != msg.AbortedX && cmn.Rom.V(4, cos.ModAIS) {
-			nlog.Infoln("Warning:", msg.String(), "aborted", abortedSnap, "vs", msg.AbortedX, nl.String())
+			if abortedSnap != msg.AbortedX && cmn.Rom.V(4, cos.ModAIS) {
+				nlog.Infoln("Warning:", msg.String(), "aborted", abortedSnap, "vs", msg.AbortedX, nl.String())
+			}
+			aborted = aborted || abortedSnap
 		}
-		aborted = aborted || abortedSnap
 	}
 	if msg.ErrMsg != "" {
 		srcErr = errors.New(msg.ErrMsg)
@@ -210,19 +229,23 @@ func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) 
 }
 
 // start listening
-func (n *notifs) add(nl nl.Listener) (err error) {
-	debug.Assert(xact.IsValidUUID(nl.UUID()))
+func (n *notifs) add(nl nl.Listener) error {
+	if err := xact.CheckValidUUID(nl.UUID()); err != nil {
+		// unlikely
+		debug.AssertNoErr(err)
+		return err
+	}
 	if nl.ActiveCount() == 0 {
 		return fmt.Errorf("cannot add %q with no active notifiers", nl)
 	}
 	if exists := n.nls.add(nl, false /*locked*/); exists {
-		return
+		return nil
 	}
 	nl.SetAddedTime()
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("add", nl.Name())
 	}
-	return
+	return nil
 }
 
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
@@ -326,6 +349,7 @@ func (n *notifs) done(nl nl.Listener) {
 			freeBcArgs(args)
 		}
 	}
+	// may race vs notifs.apply (benign)
 	nl.Callback(nl, time.Now().UnixNano())
 }
 
@@ -351,35 +375,54 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 // housekeeping
 //
 
+const maxNotifsHK = time.Second >> 2
+
 func (n *notifs) housekeep(now int64) time.Duration {
-	n.fin.mtx.Lock()
-	for _, nl := range n.fin.m {
-		timeout := cos.Ternary(nl.Kind() == apc.ActList, hk.OldAgeNotifLso, hk.OldAgeNotif)
-		if time.Duration(now-nl.EndTime()) > timeout {
-			n.fin.del(nl, true /*locked*/)
+	n.fin.wlockAll()
+	for i := range shimcnt {
+		for uuid, nl := range n.fin.all[i].m {
+			timeout := cos.Ternary(nl.Kind() == apc.ActList, hk.OldAgeNotifLso, hk.OldAgeNotif)
+			if time.Duration(now-nl.EndTime()) > timeout {
+				delete(n.fin.all[i].m, uuid)
+				n.fin.l.Dec()
+			}
 		}
 	}
-	n.fin.mtx.Unlock()
+	n.fin.wunlockAll()
 
 	if n.nls.l.Load() == 0 {
 		return hk.Jitter(hk.Prune2mIval, now)
 	}
 
-	n.nls.mtx.RLock()
-	n.tempnl = n.tempnl[:0]
-	n.tempnl = cos.ResetSliceCap(n.tempnl, len(n.nls.m)) // clip cap
-	for _, nl := range n.nls.m {
-		n.tempnl = append(n.tempnl, nl)
+	if elapsed := mono.Since(now); elapsed > maxNotifsHK {
+		return hk.Jitter(hk.Prune2mIval>>1, now)
 	}
-	n.nls.mtx.RUnlock()
 
+	n.tempnl = n.tempnl[:0]
+	for i := range shimcnt {
+		sh := &n.nls.all[i]
+		sh.RLock()
+		for _, nl := range sh.m {
+			n.tempnl = append(n.tempnl, nl)
+		}
+		sh.RUnlock()
+	}
+	if cap(n.tempnl) > 2*len(n.tempnl) {
+		// clip cap
+		n.tempnl = cos.ResetSliceCap(n.tempnl, len(n.tempnl))
+	}
+	nexthk := hk.Prune2mIval
 	for _, nl := range n.tempnl {
 		n.bcastGetStats(nl, hk.Prune2mIval)
+		if mono.Since(now) > maxNotifsHK {
+			nexthk = hk.Prune2mIval >> 1
+			break
+		}
 	}
 	// cleanup temp cloned notifs
 	clear(n.tempnl)
 
-	return hk.Jitter(hk.Prune2mIval, now)
+	return hk.Jitter(nexthk, now)
 }
 
 // conditional: query targets iff they delayed updating
@@ -468,22 +511,26 @@ func (n *notifs) ListenSmapChanged() {
 		remnl map[string]nl.Listener
 		remid cos.StrKVs
 	)
-	n.nls.mtx.RLock()
-	for uuid, nl := range n.nls.m {
-		nl.RLock()
-		for sid := range nl.ActiveNotifiers() {
-			if node := smap.GetActiveNode(sid); node == nil {
-				if remnl == nil {
-					remnl, remid = _remini()
+
+	n.nls.rlockAll()
+	for i := range shimcnt {
+		for uuid, nl := range n.nls.all[i].m {
+			nl.RLock()
+			for sid := range nl.ActiveNotifiers() {
+				if node := smap.GetActiveNode(sid); node == nil {
+					if remnl == nil {
+						remnl, remid = _remini()
+					}
+					remnl[uuid] = nl
+					remid[uuid] = sid
+					break
 				}
-				remnl[uuid] = nl
-				remid[uuid] = sid
-				break
 			}
+			nl.RUnlock()
 		}
-		nl.RUnlock()
 	}
-	n.nls.mtx.RUnlock()
+	n.nls.runlockAll()
+
 	if len(remnl) == 0 {
 		return
 	}
@@ -508,17 +555,18 @@ repeat:
 	}
 
 	// cleanup and callback w/ nl.Err
-	n.fin.mtx.Lock()
+	n.fin.wlockAll()
 	for uuid, nl := range remnl {
 		debug.Assert(nl.UUID() == uuid)
 		n.fin.add(nl, true /*locked*/)
 	}
-	n.fin.mtx.Unlock()
-	n.nls.mtx.Lock()
+	n.fin.wunlockAll()
+
+	n.nls.wlockAll()
 	for _, nl := range remnl {
 		n.del(nl, true /*locked*/)
 	}
-	n.nls.mtx.Unlock()
+	n.nls.wunlockAll()
 
 	for _, nl := range remnl {
 		nl.Callback(nl, now)
@@ -538,19 +586,31 @@ func (n *notifs) MarshalJSON() ([]byte, error) {
 	}
 	t := jsonNotifs{}
 
-	n.nls.mtx.RLock()
-	n.fin.mtx.RLock()
-	t.Running = make([]*notifListenMsg, 0, len(n.nls.m))
-	t.Finished = make([]*notifListenMsg, 0, len(n.fin.m))
-	for _, nl := range n.nls.m {
-		t.Running = append(t.Running, newNLMsg(nl))
-	}
-	n.nls.mtx.RUnlock()
+	n.nls.rlockAll()
+	n.fin.rlockAll()
 
-	for _, nl := range n.fin.m {
-		t.Finished = append(t.Finished, newNLMsg(nl))
+	nlsSize := 0
+	finSize := 0
+	for i := range shimcnt {
+		nlsSize += len(n.nls.all[i].m)
+		finSize += len(n.fin.all[i].m)
 	}
-	n.fin.mtx.RUnlock()
+	t.Running = make([]*notifListenMsg, 0, nlsSize)
+	t.Finished = make([]*notifListenMsg, 0, finSize)
+
+	for i := range shimcnt {
+		for _, nl := range n.nls.all[i].m {
+			t.Running = append(t.Running, newNLMsg(nl))
+		}
+	}
+	n.nls.runlockAll()
+
+	for i := range shimcnt {
+		for _, nl := range n.fin.all[i].m {
+			t.Finished = append(t.Finished, newNLMsg(nl))
+		}
+	}
+	n.fin.runlockAll()
 
 	return jsoniter.Marshal(t)
 }
@@ -576,8 +636,9 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 // (under lock)
 func (n *notifs) apply(t *jsonNotifs) {
 	added, removed, finished := n.added[:0], n.removed[:0], n.finished[:0]
-	n.nls.mtx.RLock()
-	n.fin.mtx.RLock()
+
+	n.nls.rlockAll()
+	n.fin.rlockAll()
 	for _, m := range t.Running {
 		if n.fin.exists(m.nl.UUID()) || n.nls.exists(m.nl.UUID()) {
 			continue
@@ -594,36 +655,37 @@ func (n *notifs) apply(t *jsonNotifs) {
 		}
 		finished = append(finished, m.nl)
 	}
-	n.fin.mtx.RUnlock()
-	n.nls.mtx.RUnlock()
+	n.fin.runlockAll()
+	n.nls.runlockAll()
 
 	if len(removed) == 0 && len(added) == 0 {
 		goto fin
 	}
 
 	// Add/Remove `nl` - `n.nls`.
-	n.nls.mtx.Lock()
+	n.nls.wlockAll()
 	for _, nl := range added {
 		n.nls.add(nl, true /*locked*/)
 	}
 	for _, nl := range removed {
 		n.nls.del(nl, true /*locked*/)
 	}
-	n.nls.mtx.Unlock()
+	n.nls.wunlockAll()
 
 fin:
 	if len(finished) == 0 {
 		return
 	}
 
-	n.fin.mtx.Lock()
+	n.fin.wlockAll()
 	// Add `nl` to `n.fin`.
 	for _, nl := range finished {
 		n.fin.add(nl, true /*locked*/)
 	}
-	n.fin.mtx.Unlock()
+	n.fin.wunlockAll()
 
 	// Call the Callback for each `nl` marking it finished.
+	// (may race vs notifs.done (benign))
 	now := time.Now().UnixNano()
 	for _, nl := range finished {
 		nl.Callback(nl, now)
@@ -632,55 +694,103 @@ fin:
 
 func (n *notifs) String() string {
 	// not r-locking
-	return fmt.Sprintf("%s (nls=%d, fin=%d)", notifsName, len(n.nls.m), len(n.fin.m))
+	var nlsSize, finSize int
+	for i := range shimcnt {
+		nlsSize += len(n.nls.all[i].m)
+		finSize += len(n.fin.all[i].m)
+	}
+	return fmt.Sprintf("%s (nls=%d, fin=%d)", notifsName, nlsSize, finSize)
 }
 
 ///////////////
 // listeners //
 ///////////////
 
-func newListeners() *listeners { return &listeners{m: make(map[string]nl.Listener, 64)} }
+func newListeners() *listeners {
+	l := &listeners{}
+	for i := range shimcnt {
+		l.all[i].m = make(map[string]nl.Listener, 64)
+	}
+	return l
+}
+
+// index returns the idx index for a given UUID using the last 4 bits
+func (*listeners) index(uuid string) int {
+	return int(uuid[len(uuid)-1]) & shimask
+}
+
+func (l *listeners) rlockAll() {
+	for i := range shimcnt {
+		l.all[i].RLock()
+	}
+}
+
+func (l *listeners) runlockAll() {
+	for i := range shimcnt {
+		l.all[i].RUnlock()
+	}
+}
+
+func (l *listeners) wlockAll() {
+	for i := range shimcnt {
+		l.all[i].Lock()
+	}
+}
+
+func (l *listeners) wunlockAll() {
+	for i := range shimcnt {
+		l.all[i].Unlock()
+	}
+}
 
 func (l *listeners) entry(uuid string) (entry nl.Listener, exists bool) {
-	l.mtx.RLock()
-	entry, exists = l.m[uuid]
-	l.mtx.RUnlock()
+	idx := l.index(uuid)
+	l.all[idx].RLock()
+	entry, exists = l.all[idx].m[uuid]
+	l.all[idx].RUnlock()
 	return entry, exists
 }
 
 func (l *listeners) add(nl nl.Listener, locked bool) (exists bool) {
+	uuid := nl.UUID()
+	idx := l.index(uuid)
+
 	if !locked {
-		l.mtx.Lock()
+		l.all[idx].Lock()
 	}
-	if _, exists = l.m[nl.UUID()]; !exists {
-		l.m[nl.UUID()] = nl
+	if _, exists = l.all[idx].m[uuid]; !exists {
+		l.all[idx].m[uuid] = nl
 		a := l.l.Inc()
-		debug.Assert(len(l.m) == int(a), a, " vs ", len(l.m))
+		debug.Assert(int(a) > 0)
 	}
 	if !locked {
-		l.mtx.Unlock()
+		l.all[idx].Unlock()
 	}
 	return exists
 }
 
 func (l *listeners) del(nl nl.Listener, locked bool) (ok bool) {
+	uuid := nl.UUID()
+	idx := l.index(uuid)
+
 	if !locked {
-		l.mtx.Lock()
+		l.all[idx].Lock()
 	}
-	if _, ok = l.m[nl.UUID()]; ok {
-		delete(l.m, nl.UUID())
+	if _, ok = l.all[idx].m[uuid]; ok {
+		delete(l.all[idx].m, uuid)
 		a := l.l.Dec()
-		debug.Assert(len(l.m) == int(a), a, " vs ", len(l.m))
+		debug.Assert(int(a) >= 0)
 	}
 	if !locked {
-		l.mtx.Unlock()
+		l.all[idx].Unlock()
 	}
 	return ok
 }
 
-// PRECONDITION: `l` should be under lock.
+// is always called under lock
 func (l *listeners) exists(uuid string) (ok bool) {
-	_, ok = l.m[uuid]
+	idx := l.index(uuid)
+	_, ok = l.all[idx].m[uuid]
 	return ok
 }
 
@@ -690,35 +800,40 @@ func (l *listeners) exists(uuid string) (ok bool) {
 // (compare with the below)
 func (l *listeners) find(flt nlFilter) (nl nl.Listener) {
 	var ftime int64
-	l.mtx.RLock()
-	for _, listener := range l.m {
-		if !flt.match(listener) {
-			continue
+
+	l.rlockAll()
+	for i := range shimcnt {
+		for _, listener := range l.all[i].m {
+			if !flt.match(listener) {
+				continue
+			}
+			et := listener.EndTime()
+			if ftime != 0 && et < ftime {
+				debug.Assert(listener.Finished())
+				continue
+			}
+			nl = listener
+			if !listener.Finished() {
+				break
+			}
+			ftime = et
 		}
-		et := listener.EndTime()
-		if ftime != 0 && et < ftime {
-			debug.Assert(listener.Finished())
-			continue
-		}
-		nl = listener
-		if !listener.Finished() {
-			break
-		}
-		ftime = et
 	}
-	l.mtx.RUnlock()
+	l.runlockAll()
 	return
 }
 
 // returns all matches
 func (l *listeners) findAll(flt nlFilter) (nls []nl.Listener) {
-	l.mtx.RLock()
-	for _, listener := range l.m {
-		if flt.match(listener) {
-			nls = append(nls, listener)
+	l.rlockAll()
+	for i := range shimcnt {
+		for _, listener := range l.all[i].m {
+			if flt.match(listener) {
+				nls = append(nls, listener)
+			}
 		}
 	}
-	l.mtx.RUnlock()
+	l.runlockAll()
 	return
 }
 
