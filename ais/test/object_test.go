@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -2171,6 +2172,125 @@ func TestMultipartUploadParallel(t *testing.T) {
 		"content mismatch: expected %q, got %q", string(expectedContent), string(downloadedContent))
 
 	tlog.Logfln("parallel multipart upload completed successfully with correct content ordering")
+}
+
+func TestMultipartMaxChunks(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+		}
+		miniPartData = []byte("x") // Minimal 1-byte data per part
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	t.Run("exceed-limit", func(t *testing.T) {
+		var (
+			objName  = "test-multipart-exceed-limit"
+			numParts = core.MaxChunkCount + 100 // Exceed limit by 100
+		)
+
+		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		tassert.CheckFatal(t, err)
+
+		err = uploadPartsInParallel(objName, uploadID, numParts, bck, miniPartData)
+
+		// We expect an error because we're exceeding MaxChunkCount
+		tassert.Fatalf(t, err != nil, "expected error when exceeding MaxChunkCount, but upload succeeded")
+		herr := cmn.UnwrapErrHTTP(err)
+		tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v", err)
+		tassert.Fatalf(t, strings.Contains(herr.Message, "exceeds the maximum allowed"),
+			"expected error message to contain 'exceeds the maximum allowed', got: %v", err)
+
+		tlog.Logfln("multipart upload correctly rejected when exceeding MaxChunkCount (%d)", core.MaxChunkCount)
+
+		// Cleanup: abort the upload
+		_ = api.AbortMultipartUpload(baseParams, bck, objName, uploadID)
+	})
+
+	t.Run("equal-to-limit", func(t *testing.T) {
+		var (
+			objName  = "test-multipart-at-limit"
+			numParts = core.MaxChunkCount // Exactly at the limit
+		)
+
+		uploadID, err := api.CreateMultipartUpload(baseParams, bck, objName)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, uploadID != "", "upload ID should not be empty")
+
+		// Upload parts in parallel - all should succeed
+		err = uploadPartsInParallel(objName, uploadID, numParts, bck, miniPartData)
+		tassert.CheckFatal(t, err)
+
+		// Complete multipart upload
+		partNumbers := make([]int, numParts)
+		for i := range numParts {
+			partNumbers[i] = i + 1
+		}
+		err = api.CompleteMultipartUpload(baseParams, bck, objName, uploadID, partNumbers)
+		tassert.CheckFatal(t, err)
+
+		tlog.Logfln("multipart upload completed successfully with %d parts at MaxChunkCount", numParts)
+
+		// Verify the uploaded object
+		hargs := api.HeadArgs{FltPresence: apc.FltPresent}
+		objAttrs, err := api.HeadObject(baseParams, bck, objName, hargs)
+		tassert.CheckFatal(t, err)
+
+		expectedSize := int64(numParts * len(miniPartData))
+		tassert.Fatalf(t, objAttrs.Size == expectedSize, "object size mismatch: expected %d, got %d", expectedSize, objAttrs.Size)
+
+		// GET the object and validate content
+		writer := bytes.NewBuffer(nil)
+		getArgs := api.GetArgs{Writer: writer}
+		_, err = api.GetObject(baseParams, bck, objName, &getArgs)
+		tassert.CheckFatal(t, err)
+
+		downloadedContent := writer.Bytes()
+		tassert.Errorf(t, len(downloadedContent) == numParts,
+			"content length mismatch: expected %d bytes, got %d", numParts, len(downloadedContent))
+
+		// Validate all bytes are 'x'
+		for i, b := range downloadedContent {
+			if b != 'x' {
+				t.Fatalf("byte at position %d is %q, expected 'x'", i, b)
+			}
+		}
+
+		tlog.Logfln("object content validated successfully: %d bytes, all 'x'", len(downloadedContent))
+	})
+}
+
+func uploadPartsInParallel(objName, uploadID string, numParts int, bck cmn.Bck, data []byte) error {
+	g := errgroup.Group{}
+	g.SetLimit(sys.MaxParallelism())
+
+	for partNum := 1; partNum <= numParts; partNum++ {
+		pn := partNum
+
+		g.Go(func() error {
+			putPartArgs := &api.PutPartArgs{
+				PutArgs: api.PutArgs{
+					BaseParams: baseParams,
+					Bck:        bck,
+					ObjName:    objName,
+					Reader:     readers.NewBytes(data),
+					Size:       uint64(len(data)),
+				},
+				UploadID:   uploadID,
+				PartNumber: pn,
+			}
+
+			return api.UploadPart(putPartArgs)
+		})
+	}
+
+	return g.Wait()
 }
 
 func TestMultipartUploadAbort(t *testing.T) {

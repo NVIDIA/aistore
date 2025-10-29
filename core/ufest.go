@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -81,13 +80,24 @@ const (
 
 const (
 	iniChunksCap = 32
+	// MaxChunkCount is the maximum number of chunks allowed per object (limited by uint16 chunk numbering)
+	MaxChunkCount = 9999
 )
 
 const (
-	sizeLoad  = memsys.DefaultBufSize  // SGL buffer sizing
-	sizeStore = memsys.MaxPageSlabSize // ditto // (sgl.Bytes())
+	sizeStore = memsys.MaxPageSlabSize // SGL buffer sizing for store
 
-	packedChunkSize = 256 // estimated max
+	// Estimated worst-case packed size per chunk:
+	// - Fixed fields: 8 (size) + 2 (num) + 2 (flags) = 12 bytes
+	// - Path: 2 + 256 (very long object/bucket names) = 258 bytes
+	// - Checksum: 2+6 (type) + 2+128 (sha512 hex) = 138 bytes
+	// - MD5: 2 + 16 = 18 bytes
+	// - ETag: 2 + 100 (complex S3 multipart) = 102 bytes
+	// Total per chunk: ~512 bytes
+	estPackedChunkSize = 512
+
+	// Buffer size for manifest load: must fit MaxChunkCount chunks
+	sizeLoad = MaxChunkCount * estPackedChunkSize
 )
 
 const (
@@ -102,9 +112,8 @@ const (
 )
 
 const (
-	utag     = "chunk-manifest"
-	itag     = "invalid " + utag
-	tooShort = "failed to unpack: too short"
+	utag = "chunk-manifest"
+	itag = "invalid " + utag
 
 	tagCompleted = "completed"
 	tagPartial   = "partial"
@@ -215,16 +224,14 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 	if lom.FQN != u.lom.FQN {
 		return nil, fmt.Errorf("%s: object mismatch: %s vs (%s, %s)", u._utag(u.lom.Cname()), u.lom.mi, lom.Cname(), lom.mi)
 	}
-	if num <= 0 || num > math.MaxUint16 {
+	if num <= 0 {
 		return nil, fmt.Errorf("%s: invalid chunk number (%d)", u._utag(lom.Cname()), num)
 	}
-
-	var snum string
-	if num > 9999 {
-		snum = strconv.Itoa(num)
-	} else {
-		snum = fmt.Sprintf(fmtChunkNum, num)
+	if num > MaxChunkCount {
+		return nil, fmt.Errorf("%s: chunk number (%d) exceeds the maximum allowed (%d)", u._utag(lom.Cname()), num, MaxChunkCount)
 	}
+
+	snum := fmt.Sprintf(fmtChunkNum, num)
 
 	// note first chunk's location
 	if num == 1 {
@@ -443,6 +450,10 @@ func (u *Ufest) LoadPartial(lom *LOM) error {
 	return err
 }
 
+// load the given LOM's manifest into memory
+// 1) find and read the manifest file from file system based on the given LOM's FQN
+// 2) decompress the manifest data using LZ4 and deserialize it into the `Ufest` struct
+// 3) validate the compressed data checksum
 func (u *Ufest) load(completed bool) error {
 	csgl := g.pmm.NewSGL(sizeLoad)
 	defer csgl.Free()
@@ -455,58 +466,72 @@ func (u *Ufest) load(completed bool) error {
 }
 
 func (u *Ufest) _load(csgl *memsys.SGL, tag string) error {
-	data := csgl.Bytes()
-
-	// validate and strip/remove the trailing checksum
-	checksumOffset := len(data) - cos.SizeXXHash64
-	expectedChecksum := binary.BigEndian.Uint64(data[checksumOffset:])
-	compressedData := data[:checksumOffset]
-	actualChecksum := onexxh.Checksum64S(compressedData, cos.MLCG32)
-	if expectedChecksum != actualChecksum {
-		return cos.NewErrMetaCksum(expectedChecksum, actualChecksum, utag)
+	totalSize := csgl.Size()
+	if totalSize < int64(cos.SizeXXHash64) {
+		return fmt.Errorf("manifest too short: %d bytes", totalSize)
 	}
 
+	checksumOffset := totalSize - int64(cos.SizeXXHash64)
 	givenID := u.id
 
-	// decompress into a 2nd buffer
-	dbuf, dslab := g.pmm.AllocSize(sizeLoad)
-	err := u._decompress(compressedData, dbuf)
-	dslab.Free(dbuf)
+	// Compressed data (excluding trailing checksum)
+	compressedReader := io.LimitReader(csgl, checksumOffset)
 
+	// Calculate checksum WHILE decompressing using TeeReader
+	h := onexxh.NewS64(cos.MLCG32)
+	err := u._decompress(io.TeeReader(compressedReader, h))
 	if err != nil {
 		e := fmt.Errorf("failed to load %s %s: %v", tag, u._utag(u.lom.Cname()), err)
 		return cmn.NewErrLmetaCorrupted(e)
 	}
+
+	return u._validate(csgl, h, givenID)
+}
+
+func (u *Ufest) _decompress(compressedReader io.Reader) error {
+	// hold decompressed data
+	sgl := g.pmm.NewSGL(estPackedChunkSize * iniChunksCap)
+	defer sgl.Free()
+
+	zr := lz4.NewReader(compressedReader)
+	if _, err := io.Copy(sgl, zr); err != nil {
+		return fmt.Errorf("failed to decompress: %w", err)
+	}
+
+	debug.Assert(sgl.Size() > 0, "decompressed manifest is empty")
+
+	if err := u.unpack(sgl); err != nil {
+		return fmt.Errorf("failed to unpack: %w", err)
+	}
+
+	debug.Assert(u.validNums() == nil)
+
+	return nil
+}
+
+func (u *Ufest) _validate(csgl io.Reader, h *onexxh.XXHash64, givenID string) error {
+	// Read the expected checksum from last 8 bytes
+	var checksumBuf [cos.SizeXXHash64]byte
+	if _, err := io.ReadFull(csgl, checksumBuf[:]); err != nil {
+		return fmt.Errorf("failed to read expected checksum: %w", err)
+	}
+	expectedChecksum := binary.BigEndian.Uint64(checksumBuf[:])
+
+	actualChecksum := h.Sum64()
+	debug.Assert(expectedChecksum != 0, "expected checksum is zero")
+	debug.Assert(actualChecksum != 0, "actual checksum is zero")
+
+	if expectedChecksum != actualChecksum {
+		return cos.NewErrMetaCksum(expectedChecksum, actualChecksum, utag)
+	}
+
 	debug.Assert(u.validNums() == nil)
 
 	if givenID != "" && givenID != u.id {
-		return fmt.Errorf("loaded %s %s has different ID: given %q vs stored %q", tag, u._utag(u.lom.Cname()), givenID, u.id)
+		return fmt.Errorf("loaded %s has different ID: given %q vs stored %q", u._utag(u.lom.Cname()), givenID, u.id)
 	}
 	debug.AssertNoErr(cos.ValidateManifestID(u.id))
-	return err
-}
 
-func (u *Ufest) _decompress(compressedData, buf []byte) error {
-	data := buf[:0]
-	zr := lz4.NewReader(bytes.NewReader(compressedData))
-
-	for {
-		if len(data) == cap(data) {
-			return fmt.Errorf("%s too large", utag)
-		}
-		n, err := zr.Read(data[len(data):cap(data)])
-		data = data[:len(data)+n]
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to decompress: %w", err)
-		}
-	}
-
-	if err := u.unpack(data); err != nil {
-		return fmt.Errorf("failed to unpack: %w", err)
-	}
 	return nil
 }
 
@@ -654,7 +679,7 @@ func (u *Ufest) StorePartial(lom *LOM, locked bool) error {
 // - checksum value (wo/ type): ~16-32 bytes depending on algorithm
 // - S3 fields: 0 to 50 bytes
 func (u *Ufest) _packSize() int64 {
-	estimated := int64(len(u.chunks)) * packedChunkSize
+	estimated := int64(len(u.chunks)) * estPackedChunkSize
 	return max(sizeStore, estimated+32)
 }
 
@@ -663,16 +688,23 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
 		return fmt.Errorf("cannot store %s: %v", u._utag(lom.Cname()), err)
 	}
 
-	// compress
-	zw := lz4.NewWriter(sgl)
+	debug.Assert(u.validNums() == nil)
+
+	// Calculate checksum WHILE compressing using MultiWriter
+	h := onexxh.NewS64(cos.MLCG32)
+	mw := io.MultiWriter(sgl, h)
+	zw := lz4.NewWriter(mw)
 	u.pack(zw)
 	zw.Close()
 
-	// compute and write trailing checksum
-	data := sgl.Bytes()
-	h := onexxh.Checksum64S(data, cos.MLCG32)
+	debug.Assert(sgl.Size() > 0, "compressed manifest is empty")
+
+	// Write trailing checksum
+	checksum := h.Sum64()
+	debug.Assert(checksum != 0, "manifest checksum is zero")
+
 	var checksumBuf [cos.SizeXXHash64]byte
-	binary.BigEndian.PutUint64(checksumBuf[:], h)
+	binary.BigEndian.PutUint64(checksumBuf[:], checksum)
 	sgl.Write(checksumBuf[:])
 
 	return u.fwrite(lom, sgl, completed)
@@ -915,45 +947,43 @@ func _packCksum(w io.Writer, cksum *cos.Cksum) {
 	_packStr(w, cksum.Val())
 }
 
-func (u *Ufest) unpack(data []byte) (err error) {
-	if len(data) < 1 {
-		return errors.New(tooShort)
-	}
-
-	var offset int
+func (u *Ufest) unpack(r io.Reader) (err error) {
+	var (
+		buf8 [cos.SizeofI64]byte // buffer for 64-bit reads
+		buf2 [cos.SizeofI16]byte // buffer for 16-bit reads
+	)
 
 	// meta-version
-	metaver := data[offset]
-	offset++
-	if metaver != umetaver {
-		return fmt.Errorf("unsupported %s meta-version %d (expecting %d)", utag, metaver, umetaver)
+	if _, err = io.ReadFull(r, buf2[:1]); err != nil {
+		return fmt.Errorf("failed to read meta-version: %w", err)
+	}
+	if buf2[0] != umetaver {
+		return fmt.Errorf("unsupported %s meta-version %d (expecting %d)", utag, buf2[0], umetaver)
 	}
 
 	// upload ID
-	if u.id, offset, err = _unpackStr(data, offset); err != nil {
+	if u.id, err = _unpackStr(r, buf2[:]); err != nil {
 		return err
 	}
 
 	// start time
-	if len(data) < offset+cos.SizeofI64 {
-		return errors.New(tooShort)
+	if _, err = io.ReadFull(r, buf8[:]); err != nil {
+		return fmt.Errorf("failed to read creation time: %w", err)
 	}
-	timeNano := int64(binary.BigEndian.Uint64(data[offset:]))
+	timeNano := int64(binary.BigEndian.Uint64(buf8[:]))
 	u.created = time.Unix(0, timeNano)
-	offset += cos.SizeofI64
 
 	// number of chunks
-	if len(data) < offset+cos.SizeofI16 {
-		return errors.New(tooShort)
+	if _, err = io.ReadFull(r, buf2[:]); err != nil {
+		return fmt.Errorf("failed to read chunk count: %w", err)
 	}
-	u.count = binary.BigEndian.Uint16(data[offset:])
-	offset += cos.SizeofI16
+	u.count = binary.BigEndian.Uint16(buf2[:])
+
 	// flags
-	if len(data) < offset+cos.SizeofI16 {
-		return errors.New(tooShort)
+	if _, err = io.ReadFull(r, buf2[:]); err != nil {
+		return fmt.Errorf("failed to read flags: %w", err)
 	}
-	u.flags = binary.BigEndian.Uint16(data[offset:])
-	offset += cos.SizeofI16
+	u.flags = binary.BigEndian.Uint16(buf2[:])
 
 	// Read chunks
 	u.chunks = make([]Uchunk, u.count)
@@ -962,81 +992,87 @@ func (u *Ufest) unpack(data []byte) (err error) {
 		c := &u.chunks[i]
 
 		// chunk size
-		if len(data) < offset+cos.SizeofI64 {
-			return errors.New(tooShort)
+		if _, err = io.ReadFull(r, buf8[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d size: %w", i, err)
 		}
-		c.size = int64(binary.BigEndian.Uint64(data[offset:]))
-		offset += cos.SizeofI64
+		c.size = int64(binary.BigEndian.Uint64(buf8[:]))
 		u.size += c.size
 
 		// chunk path
-		if c.path, offset, err = _unpackStr(data, offset); err != nil {
-			return err
+		if c.path, err = _unpackStr(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d path: %w", i, err)
 		}
 
 		// chunk checksum
-		if c.cksum, offset, err = _unpackCksum(data, offset); err != nil {
-			return err
+		if c.cksum, err = _unpackCksum(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d checksum: %w", i, err)
 		}
 
-		// chunk number and flags
-		if len(data) < offset+cos.SizeofI16 {
-			return errors.New(tooShort)
+		// chunk number
+		if _, err = io.ReadFull(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d number: %w", i, err)
 		}
-		c.num = binary.BigEndian.Uint16(data[offset:])
-		offset += cos.SizeofI16
-		if len(data) < offset+cos.SizeofI16 {
-			return errors.New(tooShort)
-		}
-		c.flags = binary.BigEndian.Uint16(data[offset:])
-		offset += cos.SizeofI16
+		c.num = binary.BigEndian.Uint16(buf2[:])
 
-		// S3 legacy
-		if c.MD5, offset, err = _unpackBytes(data, offset); err != nil {
-			return err
+		// chunk flags
+		if _, err = io.ReadFull(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d flags: %w", i, err)
+		}
+		c.flags = binary.BigEndian.Uint16(buf2[:])
+
+		// S3 legacy - MD5
+		if c.MD5, err = _unpackBytes(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d MD5: %w", i, err)
 		}
 		if l := len(c.MD5); l != 0 && l != cos.LenMD5Hash {
 			return fmt.Errorf("invalid MD5 size %d", l)
 		}
-		if c.ETag, offset, err = _unpackStr(data, offset); err != nil {
-			return err
+
+		// S3 legacy - ETag
+		if c.ETag, err = _unpackStr(r, buf2[:]); err != nil {
+			return fmt.Errorf("failed to read chunk %d ETag: %w", i, err)
 		}
 	}
 	return nil
 }
 
-func _unpackStr(data []byte, offset int) (s string, off int, err error) {
+func _unpackStr(r io.Reader, buf2 []byte) (s string, err error) {
 	var b []byte
-	b, off, err = _unpackBytes(data, offset)
+	b, err = _unpackBytes(r, buf2)
 	if err == nil {
 		s = string(b)
 	}
 	return
 }
 
-func _unpackBytes(data []byte, offset int) ([]byte, int, error) {
-	if len(data) < offset+cos.SizeofI16 {
-		return nil, offset, errors.New(tooShort)
+func _unpackBytes(r io.Reader, buf2 []byte) ([]byte, error) {
+	// Read 2-byte length
+	if _, err := io.ReadFull(r, buf2); err != nil {
+		return nil, fmt.Errorf("failed to read length: %w", err)
 	}
 
-	l := int(binary.BigEndian.Uint16(data[offset:]))
-	offset += cos.SizeofI16
-	if len(data) < offset+l {
-		return nil, offset, errors.New(tooShort)
+	l := int(binary.BigEndian.Uint16(buf2))
+	if l == 0 {
+		return nil, nil
 	}
-	return data[offset : offset+l], offset + l, nil
+
+	// Read the actual bytes
+	data := make([]byte, l)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, fmt.Errorf("failed to read %d bytes: %w", l, err)
+	}
+	return data, nil
 }
 
-func _unpackCksum(data []byte, offset int) (cksum *cos.Cksum, off int, err error) {
+func _unpackCksum(r io.Reader, buf2 []byte) (cksum *cos.Cksum, err error) {
 	var (
 		ty, val string
 	)
-	ty, off, err = _unpackStr(data, offset)
+	ty, err = _unpackStr(r, buf2)
 	if err != nil || ty == "" {
-		return nil, off, err
+		return nil, err
 	}
-	offset = off
-	val, off, err = _unpackStr(data, offset)
+	val, err = _unpackStr(r, buf2)
 	if err == nil {
 		cksum = cos.NewCksum(ty, val)
 	}

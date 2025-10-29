@@ -207,10 +207,11 @@ var _ = Describe("Ufest Core Functionality", func() {
 			// Test chunk number exceeding uint16 limit
 			_, err := manifest.NewChunk(70000, lom) // > math.MaxUint16
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid chunk number"))
+			Expect(err.Error()).To(ContainSubstring("exceeds the maximum allowed"))
 
 			_, err = manifest.NewChunk(-1, lom)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid chunk number"))
 		})
 
 		It("should handle concurrent chunk additions safely", func() {
@@ -534,6 +535,53 @@ var _ = Describe("Ufest Core Functionality", func() {
 				"expected ErrLmetaCorrupted or ErrBadCksum")
 		})
 
+		It("detects corrupted compressed data via checksum or decompression failure", func() {
+			testObject := "mpu/checksum-corrupt.bin"
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObject)
+			createTestFile(localFQN, 0)
+			lom := newBasicLom(localFQN)
+
+			u, err := core.NewUfest("cksum-test-"+cos.GenTie(), lom, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Add multiple chunks to ensure we have enough data
+			for i := 1; i <= 3; i++ {
+				c, err := u.NewChunk(i, lom)
+				Expect(err).NotTo(HaveOccurred())
+				createTestChunk(c.Path(), 8*cos.KiB, nil)
+				Expect(u.Add(c, 8*cos.KiB, int64(i))).NotTo(HaveOccurred())
+			}
+			Expect(lom.CompleteUfest(u, false)).NotTo(HaveOccurred())
+
+			mfqn := lom.GenFQN(fs.ChunkMetaCT)
+			buf, err := os.ReadFile(mfqn)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(buf)).To(BeNumerically(">", 16)) // Need enough data
+
+			// Corrupt the compressed data (not the trailing checksum)
+			// Trailing checksum is last 8 bytes, so corrupt byte before that
+			corruptIdx := len(buf) - 16
+			buf[corruptIdx] ^= 0xFF
+			Expect(os.WriteFile(mfqn, buf, 0o644)).NotTo(HaveOccurred())
+
+			// Reload and expect either decompression failure or checksum mismatch
+			loaded, err := core.NewUfest("", lom, true)
+			Expect(err).NotTo(HaveOccurred())
+			lom.Lock(false)
+			err = loaded.LoadCompleted(lom)
+			lom.Unlock(false)
+
+			// Corrupting compressed data can fail in two ways:
+			// 1. LZ4 decompression fails (ErrLmetaCorrupted) - most common
+			// 2. Checksum validation fails (ErrBadCksum) - if corruption doesn't break LZ4
+			var (
+				lmerr *cmn.ErrLmetaCorrupted
+				bcerr *cos.ErrBadCksum
+			)
+			Expect(errors.As(err, &lmerr) || errors.As(err, &bcerr)).To(BeTrue(),
+				"expected ErrLmetaCorrupted or ErrBadCksum for corrupted compressed data")
+		})
+
 	})
 
 	Describe("Locking Behavior", func() {
@@ -592,6 +640,50 @@ var _ = Describe("Ufest Core Functionality", func() {
 		It("should enforce chunk number limits", func() {
 			// Test exceeding uint16 limit
 			_, err := manifest.NewChunk(70000, manifest.Lom()) // > math.MaxUint16 (65535)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("exceeds the maximum allowed"))
+		})
+	})
+
+	Describe("MaxChunkCount Limit", func() {
+		var (
+			manifest *core.Ufest
+			lom      *core.LOM
+		)
+
+		BeforeEach(func() {
+			var err error
+			testObjectName := "test-objects/maxchunks-test.bin"
+			testFileSize := int64(1 * cos.TiB)
+			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
+			lom = newBasicLom(localFQN, testFileSize)
+			manifest, err = core.NewUfest("test-maxchunks-"+trand.String(8), lom, false)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should reject chunk number exceeding MaxChunkCount", func() {
+			invalidChunkNum := core.MaxChunkCount + 1
+			_, err := manifest.NewChunk(invalidChunkNum, lom)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("exceeds the maximum allowed"))
+		})
+
+		It("should accept chunk number at MaxChunkCount", func() {
+			validChunkNum := core.MaxChunkCount
+			chunk, err := manifest.NewChunk(validChunkNum, lom)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chunk).NotTo(BeNil())
+			Expect(chunk.Num()).To(Equal(uint16(validChunkNum)))
+		})
+
+		It("should reject chunk number at zero", func() {
+			_, err := manifest.NewChunk(0, lom)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid chunk number"))
+		})
+
+		It("should reject negative chunk number", func() {
+			_, err := manifest.NewChunk(-1, lom)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid chunk number"))
 		})
