@@ -440,10 +440,8 @@ func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
 	return
 }
 
-// replace streams to a single peer (dstID) in the bundle:
-// - optional parentOverride
-// - otherwise, use sb.extra.Parent as-is
-func (sb *Streams) ReopenPeerStream(dstID string, parentOverride *transport.Parent) error {
+// renew stream (or streams) to a given peer
+func (sb *Streams) ReopenPeerStream(dstID string) error {
 	// 1) validate
 	old := sb.get()
 	orobin, ok := old[dstID]
@@ -467,13 +465,10 @@ func (sb *Streams) ReopenPeerStream(dstID string, parentOverride *transport.Pare
 	}
 	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
 
-	// 2) build new `robin` with same multiplier
+	// 2) build new `robin` (same multiplier; consider setting nrobin.i)
 	nrobin := &robin{stsdest: make(stsdest, len(orobin.stsdest))}
 	for k := range nrobin.stsdest {
-		extra := sb.extra // copy struct by value
-		if parentOverride != nil {
-			extra.Parent = parentOverride
-		}
+		extra := sb.extra // by value
 		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
 		nrobin.stsdest[k] = ns
 	}
@@ -483,10 +478,10 @@ func (sb *Streams) ReopenPeerStream(dstID string, parentOverride *transport.Pare
 	}
 	nbundle[dstID] = nrobin
 
-	// 3) set new CoW instance immediately
+	// 3) switch over
 	sb.streams.Store(&nbundle)
 
-	// 4) stop old streams (may take a few millis)
+	// 4) stop old streams async
 	for _, os := range orobin.stsdest {
 		if !os.IsTerminated() {
 			os.Stop() // via stopCh

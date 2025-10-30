@@ -6,8 +6,10 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -15,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -290,13 +293,21 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 					retry = nil
 				}
 			} else {
-				retriable := cos.IsRetriableConnErr(err)
-				if retriable && retry == nil {
+				// the current send failed - complete right away
+				s.streamer.errCmpl(err)
+
+				if !_shouldRetry(err) {
+					if cmn.Rom.V(4, cos.ModTransport) {
+						nlog.Errorln(s.String(), "not retriable:", err)
+					}
+					reason = reasonError
+					break
+				}
+				if retry == nil {
 					retry = newRtry(config, s.String())
 				}
-				if !retriable || retry.timeout(err) {
+				if retry.timeout(err) {
 					reason = reasonError
-					s.streamer.errCmpl(err)
 					break
 				}
 
@@ -338,7 +349,7 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 	// notify parent if defined
 	if reason != reasonStopped {
 		if s.parent != nil && s.parent.TermedCB != nil {
-			s.parent.TermedCB(errExt)
+			s.parent.TermedCB(s.dstID, errExt)
 		}
 	}
 
@@ -348,6 +359,15 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
 		}
 	}
+}
+
+// only for timeouts on *in-flight writes*
+func _shouldRetry(err error) bool {
+	var nerr net.Error
+	if errors.As(err, &nerr) && nerr.Timeout() {
+		return true
+	}
+	return errors.Is(err, syscall.ETIMEDOUT)
 }
 
 func (s *streamBase) yelp(err error) {

@@ -67,7 +67,8 @@ type (
 	SentCB func(*ObjHdr, io.ReadCloser, any, error)
 
 	// scope: stream
-	TermedCB func(error)
+	// flow: connection dead => terminate => TermedCB => [reconnect() => fresh stream to same peer]
+	TermedCB func(dstID string, err error)
 
 	// usage and scope:
 	// - entire stream's lifetime (all Send() calls)

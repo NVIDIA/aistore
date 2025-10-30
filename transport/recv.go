@@ -6,6 +6,7 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -318,10 +319,10 @@ func eofOK(err error) error {
 func (it *iterator) nextProtoHdr(loghdr string) (int, uint64, error) {
 	n, err := it.Read(it.hbuf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
-		if err == nil {
-			err = fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d)", loghdr, n)
+		if err == nil || errors.Is(err, io.EOF) {
+			err = io.ErrUnexpectedEOF
 		}
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d): %w", loghdr, n, err)
 	}
 	// extract and validate hlen
 	return extProtoHdr(it.hbuf, loghdr)
@@ -349,7 +350,10 @@ func (it *iterator) nextObj(loghdr string, hlen int) (*objReader, error) {
 			}
 		}
 		if n < hlen {
-			return nil, fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d)", loghdr, n, hlen)
+			if err == nil || errors.Is(err, io.EOF) {
+				err = io.ErrUnexpectedEOF
+			}
+			return nil, fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d): %w", loghdr, n, hlen, err)
 		}
 	}
 	hdr := ExtObjHeader(it.hbuf, hlen)
@@ -371,23 +375,34 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 		return obj.readPDU(b)
 	}
 	debug.Assert(obj.Size() >= 0)
+
 	rem := obj.Size() - obj.off
-	if rem < int64(len(b)) {
+	if rem < int64(len(b)) && rem >= 0 {
 		b = b[:int(rem)]
 	}
+
 	n, err = obj.body.Read(b)
 	obj.off += int64(n) // NOTE: `GORACE` complaining here can be safely ignored
+
 	switch err {
 	case nil:
 		if obj.off >= obj.Size() {
+			// ok (w/ EOF to the caller)
 			err = io.EOF
 		}
 	case io.EOF:
+		// premature EOF: expected size not reached
 		if obj.off != obj.Size() {
-			err = fmt.Errorf("sbr6 %s: premature eof %d != %s, err %w", obj.loghdr, obj.off, obj, err)
+			err = fmt.Errorf("sbr6 %s: premature eof %d != %s: %w", obj.loghdr, obj.off, obj, io.ErrUnexpectedEOF)
 		}
 	default:
-		err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
+		// we haven't consumed the header-specified size
+		if obj.off < obj.Size() {
+			err = fmt.Errorf("sbr7 %s: off %d, obj %s, cause: %v: %w", obj.loghdr, obj.off, obj, err, io.ErrUnexpectedEOF)
+		} else {
+			// read the full payload; just annotate
+			err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
+		}
 	}
 	return n, err
 }
@@ -433,7 +448,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
 			} else if obj.Size() != obj.off {
-				err = fmt.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
+				err = fmt.Errorf("sbr9 %s: off %d != %s: %w", obj.loghdr, obj.off, obj, io.ErrUnexpectedEOF)
 				nlog.Warningln(err)
 			}
 		} else {

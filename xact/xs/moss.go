@@ -698,6 +698,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 		nlog.Errorln(r.Name(), core.T.String(), "RecvObj:", err)
 		r.BcastAbort(err)
 		r.Abort(err)
+		return err
 	}
 	if hdr.ObjAttrs.Size > 0 {
 		r.InObjsAdd(1, hdr.ObjAttrs.Size)

@@ -103,6 +103,9 @@ func (sdm *sharedDM) Open() error {
 		debug.AssertNoErr(err)
 		return err
 	}
+	sdm.dm.parent = &transport.Parent{
+		TermedCB: sdm.reconnect,
+	}
 	sdm.dm.Open()
 	sdm.ocmu.Unlock()
 
@@ -110,6 +113,18 @@ func (sdm *sharedDM) Open() error {
 
 	nlog.InfoDepth(1, core.T.String(), "open", sdm.trname())
 	return nil
+}
+
+func (sdm *sharedDM) reconnect(dstID string, err error) {
+	if !sdm.isOpen() {
+		return
+	}
+	if e := sdm.dm.data.streams.ReopenPeerStream(dstID); e != nil {
+		err = fmt.Errorf("%v => %v", err, e)
+		nlog.Errorf("%s: failed to reconnect to %s: %v", sdm.trname(), dstID, err)
+		sdm.Close(err)
+	}
+	nlog.Warningln(core.T.String(), "reconnect", sdm.trname(), "=>", dstID)
 }
 
 func (sdm *sharedDM) housekeep(now int64) time.Duration {
@@ -125,15 +140,20 @@ func (sdm *sharedDM) housekeep(now int64) time.Duration {
 }
 
 // nothing running + cmn.SharedStreamsDflt (10m) inactivity
-func (sdm *sharedDM) Close() error {
+func (sdm *sharedDM) Close(err ...error) error {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
 
-	if xid := sdm.getActive(); xid != "" {
-		sdm.rxmu.Unlock()
-		sdm.ocmu.Unlock()
-		debug.Assert(cos.IsValidUUID(xid), xid)
-		return fmt.Errorf("cannot close %s: xid %s is still active (num: %d)", sdm.trname(), xid, len(sdm.receivers))
+	xid := sdm.getActive()
+	if xid != "" {
+		msg := fmt.Sprintf("xid %s is still active (num: %d)", xid, len(sdm.receivers))
+		if len(err) == 0 {
+			sdm.rxmu.Unlock()
+			sdm.ocmu.Unlock()
+			debug.Assert(cos.IsValidUUID(xid), xid)
+			return fmt.Errorf("cannot close %s: %s", sdm.trname(), msg)
+		}
+		nlog.Errorln(sdm.trname(), "closing despite", msg, "[", err[0], "]")
 	}
 
 	sdm.dm.Close(nil)
