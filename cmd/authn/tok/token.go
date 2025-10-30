@@ -44,6 +44,15 @@ type (
 		parseOpts []jwt.ParserOption
 	}
 
+	Parser interface {
+		// ValidateToken verifies JWT signature and extracts token claims.
+		ValidateToken(tokenStr string) (*AISClaims, error)
+		// IsSecretCksumValid checks if a provided secret checksum is valid.
+		IsSecretCksumValid(cksumVal string) bool
+		// IsPublicKeyValid checks if a provided public key matches the parser's key.
+		IsPublicKeyValid(pubKeyStr string) (bool, error)
+	}
+
 	RequiredClaims struct {
 		Aud []string
 	}

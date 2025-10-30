@@ -24,21 +24,31 @@ import (
 )
 
 type (
-	tokenList authn.TokenList           // token strings
-	tokenMap  map[string]*tok.AISClaims // map token strings to claim structs
-
+	tokenList   authn.TokenList // token strings
 	authManager struct {
 		// used for parsing and validating claims from token strings
-		tokenParser *tok.TokenParser
-		// cache of decrypted token claims
-		tokenMap tokenMap
+		tokenParser tok.Parser
+		// provides thread-safe access to a cache of decrypted token claims
+		tokenMap *TokenClaimMap
+		// provides thread-safe access to an underlying map of tokens
+		revokedTokens *RevokedTokensMap
+	}
+
+	RevokedTokensMap struct {
 		// list of invalid tokens(revoked or of deleted users)
 		// Authn sends these tokens to primary for broadcasting
 		revokedTokens map[string]bool
 		// latest revoked version
 		version int64
 		// lock
-		sync.Mutex
+		sync.RWMutex
+	}
+
+	TokenClaimMap struct {
+		// map token strings to claim structs
+		tokenMap map[string]*tok.AISClaims
+		// lock
+		sync.RWMutex
 	}
 )
 
@@ -56,70 +66,27 @@ func newAuthManager(config *cmn.Config) *authManager {
 		Aud: config.Auth.Aud,
 	}
 	return &authManager{
-		tokenMap:      make(tokenMap),
-		revokedTokens: make(map[string]bool), // TODO: preallocate
-		version:       1,
+		tokenMap:      newTokenClaimMap(),
+		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   tok.NewTokenParser(secret, rsaPubKey, requiredClaims),
 	}
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.
 func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *tokenList) {
-	a.Lock()
-	defer a.Unlock()
-
-	switch {
-	case newRevoked.Version == 0: // Manually revoked tokens
-		a.version++
-	case newRevoked.Version > a.version:
-		a.version = newRevoked.Version
-	default:
-		nlog.Errorf("Current token list v%d is greater than received v%d", a.version, newRevoked.Version)
+	// Add new revoked tokens -- error if invalid version
+	err := a.revokedTokens.update(newRevoked)
+	if err != nil {
 		return nil
 	}
-
-	// Add new revoked tokens and remove them from the valid token list.
-	for _, token := range newRevoked.Tokens {
-		a.revokedTokens[token] = true
-		delete(a.tokenMap, token)
-	}
-
-	allRevoked = &tokenList{
-		Tokens:  make([]string, 0, len(a.revokedTokens)),
-		Version: a.version,
-	}
-
-	// Clean up expired tokens from the revoked list.
-	for token := range a.revokedTokens {
-		_, err := a.tokenParser.ValidateToken(token)
-		switch {
-		case errors.Is(err, tok.ErrTokenExpired):
-			delete(a.revokedTokens, token)
-		case err == nil:
-			allRevoked.Tokens = append(allRevoked.Tokens, token)
-		default:
-			nlog.Errorf("Unexpected token validation error: %v (token: %s)", err, token)
-		}
-	}
-	if len(allRevoked.Tokens) == 0 {
-		allRevoked = nil
-	}
-	return allRevoked
+	// Remove revoked tokens from the token cache
+	a.tokenMap.deleteMultiple(newRevoked.Tokens)
+	// Clean up any expired tokens from the revoked list
+	return a.revokedTokens.cleanup(a.tokenParser)
 }
 
 func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
-	a.Lock()
-	l := len(a.revokedTokens)
-	if l == 0 {
-		a.Unlock()
-		return
-	}
-	allRevoked = &tokenList{Tokens: make([]string, 0, l), Version: a.version}
-	for token := range a.revokedTokens {
-		allRevoked.Tokens = append(allRevoked.Tokens, token)
-	}
-	a.Unlock()
-	return
+	return a.revokedTokens.getAll()
 }
 
 // Checks if a token is valid:
@@ -129,17 +96,18 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 //
 // Caches and returns decoded token claims if it is valid
 func (a *authManager) validateToken(token string) (*tok.AISClaims, error) {
-	a.Lock()
-	defer a.Unlock()
-	if _, ok := a.revokedTokens[token]; ok {
+	if a.revokedTokens.contains(token) {
 		return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenRevoked, token)
 	}
-	claims, ok := a.tokenMap[token]
+	claims, ok := a.tokenMap.get(token)
 	debug.Assert(!ok || claims != nil)
 	// If token string exists in cache, only need to check claim expiry
 	if ok && claims != nil {
 		if claims.IsExpired() {
-			delete(a.tokenMap, token)
+			// This takes a separate write lock than the previous read, but:
+			// - claims are immutable once cached
+			// - we only delete expired claims, never modify them
+			a.tokenMap.delete(token)
 			return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenExpired, token)
 		}
 		return claims, nil
@@ -155,7 +123,8 @@ func (a *authManager) cacheNewToken(token string) (claims *tok.AISClaims, err er
 		nlog.Infof("Received invalid token, error: %v", err)
 		return nil, err
 	}
-	a.tokenMap[token] = claims
+	// We aren't guaranteed someone else didn't do this, but worth a separate attempt to validate outside of lock
+	a.tokenMap.set(token, claims)
 	return claims, nil
 }
 
@@ -325,4 +294,134 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 		return nil
 	}
 	return bck.Allow(ace)
+}
+
+///////////////////
+// TokenClaimMap //
+///////////////////
+
+func newTokenClaimMap() *TokenClaimMap {
+	return &TokenClaimMap{
+		tokenMap: make(map[string]*tok.AISClaims),
+	}
+}
+
+func (m *TokenClaimMap) get(token string) (*tok.AISClaims, bool) {
+	m.RLock()
+	claims, ok := m.tokenMap[token]
+	m.RUnlock()
+	return claims, ok
+}
+
+func (m *TokenClaimMap) set(token string, claims *tok.AISClaims) {
+	m.Lock()
+	m.tokenMap[token] = claims
+	m.Unlock()
+}
+
+func (m *TokenClaimMap) delete(token string) {
+	m.Lock()
+	delete(m.tokenMap, token)
+	m.Unlock()
+}
+
+func (m *TokenClaimMap) deleteMultiple(tokens []string) {
+	m.Lock()
+	for _, token := range tokens {
+		delete(m.tokenMap, token)
+	}
+	m.Unlock()
+}
+
+//////////////////////
+// RevokedTokensMap //
+//////////////////////
+
+func newRevokedTokensMap() *RevokedTokensMap {
+	return &RevokedTokensMap{
+		revokedTokens: make(map[string]bool),
+		version:       1,
+	}
+}
+
+func (r *RevokedTokensMap) update(newRevoked *tokenList) error {
+	// Lock over the whole operation as we must verify the final updated version matches the version number
+	r.Lock()
+	defer r.Unlock()
+	err := r.updateVersion(newRevoked)
+	if err != nil {
+		return err
+	}
+	for _, token := range newRevoked.Tokens {
+		r.revokedTokens[token] = true
+	}
+	return nil
+}
+
+// Must be called under lock
+func (r *RevokedTokensMap) updateVersion(newRevoked *tokenList) error {
+	currentVersion := r.version
+	switch {
+	case newRevoked.Version == 0:
+		r.version++
+		return nil
+	case newRevoked.Version > currentVersion:
+		r.version = newRevoked.Version
+		return nil
+	case newRevoked.Version == currentVersion:
+		nlog.Warningf("received token list v%d equal to current token list v%d, ignoring", newRevoked.Version, currentVersion)
+	default:
+		nlog.Errorf("received token list v%d less than current token list v%d", newRevoked.Version, currentVersion)
+	}
+	return fmt.Errorf("received invalid token list version v%d compared to current token list v%d", newRevoked.Version, currentVersion)
+}
+
+func (r *RevokedTokensMap) cleanup(tkParser tok.Parser) (allRevoked *tokenList) {
+	r.Lock()
+	defer r.Unlock()
+	allRevoked = &tokenList{
+		Tokens:  make([]string, 0, len(r.revokedTokens)),
+		Version: r.version,
+	}
+
+	// Clean up expired tokens from the revoked list.
+	for token := range r.revokedTokens {
+		_, err := tkParser.ValidateToken(token)
+		switch {
+		case errors.Is(err, tok.ErrTokenExpired):
+			delete(r.revokedTokens, token)
+		case err == nil:
+			allRevoked.Tokens = append(allRevoked.Tokens, token)
+		default:
+			// Keep tokens if error validating that's not expiration
+			// We don't want to un-revoke this token in case expected claims revert to previous
+			allRevoked.Tokens = append(allRevoked.Tokens, token)
+			nlog.Errorf("Unexpected token validation error: %v (token: %s)", err, token)
+		}
+	}
+	if len(allRevoked.Tokens) == 0 {
+		allRevoked = nil
+	}
+	return allRevoked
+}
+
+func (r *RevokedTokensMap) contains(token string) bool {
+	r.RLock()
+	_, ok := r.revokedTokens[token]
+	r.RUnlock()
+	return ok
+}
+
+func (r *RevokedTokensMap) getAll() *tokenList {
+	r.RLock()
+	defer r.RUnlock()
+	l := len(r.revokedTokens)
+	if l == 0 {
+		return nil
+	}
+	allRevoked := &tokenList{Tokens: make([]string, 0, l), Version: r.version}
+	for token := range r.revokedTokens {
+		allRevoked.Tokens = append(allRevoked.Tokens, token)
+	}
+	return allRevoked
 }
