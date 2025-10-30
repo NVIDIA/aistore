@@ -319,14 +319,13 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 //
 
 func expiresIn(tm time.Time) string {
-	now := time.Now()
-	if now.After(tm) {
+	dur := time.Until(tm)
+	if dur <= 0 {
 		return ErrTokenExpired.Error()
 	}
 	// round up
-	d := tm.Sub(now) / time.Second
-	d *= time.Second
-	return "token expires in " + d.String()
+	dur = dur.Round(time.Second)
+	return "token expires in " + dur.String()
 }
 
 func (c *AISClaims) aclForCluster(clusterID string) (perms apc.AccessAttrs, ok bool) {

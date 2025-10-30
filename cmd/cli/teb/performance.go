@@ -343,9 +343,14 @@ func _metricToPrintedColName(mname string, cols []*header, metrics, n2n cos.StrK
 	if parts[l] == "total" { // latency; see related: `stats.LatencyToCounter`
 		l--
 	}
+	var sb strings.Builder
+	sb.Grow(32)
+	sb.WriteString(printedName)
 	for j := 1; j < l; j++ {
-		printedName += "-" + strings.ToUpper(parts[j])
+		sb.WriteByte('-')
+		sb.WriteString(strings.ToUpper(parts[j]))
 	}
+	printedName = sb.String()
 
 	// suffix
 	switch kind {

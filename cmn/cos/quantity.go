@@ -41,11 +41,14 @@ func ParseQuantity(quantity string) (ParsedQuantity, error) {
 		idx     int
 		number  string
 		parsedQ ParsedQuantity
+		sb      strings.Builder
 	)
 	quantity = strings.ReplaceAll(quantity, " ", "")
+	sb.Grow(len(quantity)) // at most all digits
 	for ; idx < len(quantity) && unicode.IsDigit(rune(quantity[idx])); idx++ {
-		number += string(quantity[idx])
+		sb.WriteByte(quantity[idx])
 	}
+	number = sb.String()
 
 	value, err := strconv.Atoi(number)
 	if err != nil {

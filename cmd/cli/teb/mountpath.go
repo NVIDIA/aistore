@@ -188,15 +188,20 @@ func _capStatus(tcdf fs.Tcdf) (s string) {
 }
 
 func _fmtMpathDisks(cdfs map[string]*fs.CDF, idx int) (s string) {
-	var next bool
+	var (
+		prefix = "\n" + strings.Repeat("\t", idx) + " "
+		sb     strings.Builder
+		next   bool
+	)
+	sb.Grow(len(cdfs) * 64) // estimate per CDF entry
 	for _, cdf := range cdfs {
 		if next {
-			s += "\n" + strings.Repeat("\t", idx) + " "
+			sb.WriteString(prefix)
 		}
-		s += cdf.FS.String()
+		sb.WriteString(cdf.FS.String())
 		next = true
 	}
-	return
+	return sb.String()
 }
 
 func _inclStatus(st StstMap) bool {

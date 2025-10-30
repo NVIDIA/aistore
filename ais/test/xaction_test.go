@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,16 @@ func TestXactionNotFound(t *testing.T) {
 	)
 	_, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: "dummy-" + cos.GenUUID()})
 	tools.CheckErrIsNotFound(t, err)
+}
+
+func _string(vec nl.StatusVec) string {
+	var sb strings.Builder
+	for _, ns := range vec {
+		sb.WriteString(ns.String())
+		sb.WriteString(", ")
+	}
+	s := sb.String()
+	return s[:max(0, len(s)-2)]
 }
 
 func TestXactionAllStatus(t *testing.T) {
@@ -51,7 +62,7 @@ func TestXactionAllStatus(t *testing.T) {
 				continue
 			}
 			if kind != apc.ActList {
-				tlog.Logln(vec.String())
+				tlog.Logln(_string(vec))
 			}
 			for _, ns := range vec {
 				tassert.Errorf(t, ns.Kind == kind, "kind %q vs %q", ns.Kind, kind)

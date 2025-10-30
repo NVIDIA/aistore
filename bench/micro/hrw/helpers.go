@@ -61,9 +61,9 @@ func similarFileName(bucketName string, objNum int) string {
 // Duplicated on purpose to avoid dependency on any AIStore code.
 func randNodeID(randGen *rand.Rand) string {
 	randIP := ""
-	for range 3 {
-		randIP += strconv.Itoa(randGen.IntN(255)) + "."
-	}
+	randIP += strconv.Itoa(randGen.IntN(255)) + "."
+	randIP += strconv.Itoa(randGen.IntN(255)) + "."
+	randIP += strconv.Itoa(randGen.IntN(255)) + "."
 	randIP += strconv.Itoa(randGen.IntN(255))
 	cksum := onexxh.Checksum32S(cos.UnsafeB(randIP), xxHashSeed)
 	nodeID := strconv.Itoa(int(cksum & 0xfffff))

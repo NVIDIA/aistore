@@ -298,13 +298,6 @@ func (ns *Status) String() (s string) {
 	return
 }
 
-func (nsv StatusVec) String() (s string) {
-	for _, ns := range nsv {
-		s += ns.String() + ", "
-	}
-	return s[:max(0, len(s)-2)]
-}
-
 ///////////////
 // NodeStats //
 ///////////////

@@ -1022,10 +1022,11 @@ func isBrowser(userAgent string) bool {
 
 func (h *htrun) logerr(tag string, v any, err error) {
 	const maxl = 48
-	var efmt, msg string
+	var efmt string
 	if nlog.Stopping() {
 		return
 	}
+
 	if v != nil {
 		efmt = fmt.Sprintf("message: {%+v", v)
 		if len(efmt) > maxl {
@@ -1035,18 +1036,29 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		}
 	}
 	efmt = tag + " response error: %v, " + efmt + " at "
-	msg = fmt.Sprintf(efmt, err)
+
+	// build msg
+	var (
+		sb strings.Builder
+	)
+	sb.Grow(cos.KiB)
+	sb.WriteString(fmt.Sprintf(efmt, err))
+
 	for i := 1; i < 4; i++ {
 		_, file, line, ok := runtime.Caller(i)
 		if !ok {
 			break
 		}
 		if i > 1 {
-			msg += " <- "
+			sb.WriteString(" <- ")
 		}
 		f := filepath.Base(file)
-		msg += fmt.Sprintf("%s:%d", f, line)
+		sb.WriteString(f)
+		sb.WriteByte(':')
+		sb.WriteString(strconv.Itoa(line))
 	}
+	msg := sb.String()
+
 	if cos.IsErrBrokenPipe(err) { // client went away
 		nlog.Infoln("Warning: " + msg)
 	} else {

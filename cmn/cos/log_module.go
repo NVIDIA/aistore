@@ -7,6 +7,7 @@ package cos
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -80,7 +81,6 @@ func (l LogLevel) Validate() (err error) {
 
 func (l LogLevel) String() (s string) {
 	var (
-		ms             string
 		n              int
 		level, modules = l.Parse()
 	)
@@ -88,13 +88,18 @@ func (l LogLevel) String() (s string) {
 	if modules == 0 {
 		return
 	}
+
+	var sb strings.Builder
+	sb.Grow(len(Mods) * 16)
 	for i, sm := range Mods {
 		if modules&(1<<i) != 0 {
-			ms += "," + sm
+			sb.WriteByte(',')
+			sb.WriteString(sm)
 			n++
 		}
 	}
+
 	debug.Assert(n > 0, fmt.Sprintf(ferl, string(l), level, modules))
-	s += " (module" + Plural(n) + ": " + ms[1:] + ")"
+	s += " (module" + Plural(n) + ": " + sb.String()[1:] + ")"
 	return
 }
