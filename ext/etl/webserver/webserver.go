@@ -382,7 +382,7 @@ func (*etlServerBase) getFQNReader(urlPath string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("[%s] %w", "failed to unescape FQN", err)
 	}
 
-	return os.Open(cos.JoinWords(fqn))
+	return os.Open(fqn)
 }
 
 func (base *etlServerBase) directPut(directPutURL string, r io.ReadCloser, size int64, objPath, remainingPipelineURL string) (*directPutResponse, error) {

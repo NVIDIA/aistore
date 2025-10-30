@@ -60,7 +60,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	debug.Assert(len(apiEndpoint) == len(apc.Daemon) || apiEndpoint[len(apc.Daemon)] == '/', apiEndpoint)
 
 	// update URL path: remove `apc.Reverse`
-	r.URL.Path = cos.JoinWords(apc.Version, apiEndpoint)
+	r.URL.Path = cos.JoinW0(apc.Version, apiEndpoint)
 
 	nodeID := r.Header.Get(apc.HdrNodeID)
 	if nodeID == "" {

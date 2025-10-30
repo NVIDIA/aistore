@@ -233,7 +233,7 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 		if nh.r[0] == '/' { // absolute path
 			path = nh.r
 		} else {
-			path = cos.JoinWords(apc.Version, nh.r)
+			path = cos.JoinW0(apc.Version, nh.r)
 		}
 		debug.Assert(nh.net != 0)
 		if nh.net.isSet(accessNetPublic) {

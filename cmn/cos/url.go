@@ -72,19 +72,31 @@ func ReparseQuery(r *http.Request) {
 	r.URL.RawQuery = q.Encode()
 }
 
-func JoinWords(w0 string, words ...string) (path string) {
-	debug.Assert(w0 != "")
-	var l = len(w0)
-	if w0[0] != '/' {
-		l++
-	}
+// join an absolute path (must start with '/') with additional optional segments
+func JoinWP(path string, words ...string) string {
+	debug.Assert(path != "" && path[0] == '/', path)
+	var l = len(path)
 	for _, w := range words {
 		l += 1 + len(w)
 	}
 	b := make([]byte, 0, l)
-	if w0[0] != '/' {
+	b = append(b, path...)
+	for _, w := range words {
 		b = append(b, '/')
+		b = append(b, w...)
 	}
+	return UnsafeS(b)
+}
+
+// join a first segment (that must NOT start with '/') with additional optional segments
+func JoinW0(w0 string, words ...string) string {
+	debug.Assert(w0 != "" && w0[0] != '/', w0)
+	var l = len(w0) + 1
+	for _, w := range words {
+		l += 1 + len(w)
+	}
+	b := make([]byte, 0, l)
+	b = append(b, '/')
 	b = append(b, w0...)
 	for _, w := range words {
 		b = append(b, '/')
@@ -93,7 +105,7 @@ func JoinWords(w0 string, words ...string) (path string) {
 	return UnsafeS(b)
 }
 
-// JoinPath joins two path elements that may (or may not) be prefixed/suffixed with a slash.
+// join two paths
 func JoinPath(url, path string) string {
 	suffix := IsLastB(url, '/')
 	prefix := path[0] == '/'
@@ -106,7 +118,7 @@ func JoinPath(url, path string) string {
 	return url + path
 }
 
-// JoinQuery merges new query parameters into the existing URL.
+// merge new query parameters into the existing URL
 func JoinQuery(base string, newQuery url.Values) string {
 	url, valid := ParseURL(base)
 	if !valid || len(newQuery) == 0 {

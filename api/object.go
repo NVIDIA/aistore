@@ -524,7 +524,7 @@ func DeleteObject(bp BaseParams, bck cmn.Bck, objName string) error {
 func EvictObject(bp BaseParams, bck cmn.Bck, objName string) error {
 	var (
 		q      = qalloc()
-		actMsg = apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, objName)}
+		actMsg = apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinW0(bck.Name, objName)}
 	)
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()

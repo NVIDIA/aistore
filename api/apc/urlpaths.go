@@ -124,7 +124,7 @@ type URLPath struct {
 }
 
 func urlpath(words ...string) URLPath {
-	return URLPath{L: words, S: cos.JoinWords(words[0], words[1:]...)}
+	return URLPath{L: words, S: cos.JoinW0(words[0], words[1:]...)}
 }
 
 var (
@@ -202,5 +202,5 @@ var (
 )
 
 func (u URLPath) Join(words ...string) string {
-	return cos.JoinWords(u.S, words...)
+	return cos.JoinWP(u.S, words...)
 }

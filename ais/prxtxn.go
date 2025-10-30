@@ -134,7 +134,8 @@ func (c *txnCln) cmtTout(waitmsync bool) time.Duration {
 }
 
 func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResults) {
-	c.req.Path = cos.JoinWords(c.path, phase)
+	// c.path is absolute (starts with /v1)
+	c.req.Path = cos.JoinWP(c.path, phase)
 	if phase != apc.Abort2PC {
 		now := time.Now()
 		c.req.Query.Set(apc.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))

@@ -125,7 +125,7 @@ func GetRegisteredClusters(bp api.BaseParams, spec CluACL) ([]*CluACL, error) {
 	bp.Method = http.MethodGet
 	path := apc.URLPathClusters.S
 	if spec.ID != "" {
-		path = cos.JoinWords(path, spec.ID)
+		path = cos.JoinWP(path, spec.ID)
 	}
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
@@ -154,7 +154,7 @@ func GetRole(bp api.BaseParams, roleID string) (*Role, error) {
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = cos.JoinWords(apc.URLPathRoles.S, roleID)
+		reqParams.Path = cos.JoinWP(apc.URLPathRoles.S, roleID)
 	}
 
 	rInfo := &Role{}
@@ -212,7 +212,7 @@ func GetUser(bp api.BaseParams, userID string) (*User, error) {
 	defer api.FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = cos.JoinWords(apc.URLPathUsers.S, userID)
+		reqParams.Path = cos.JoinWP(apc.URLPathUsers.S, userID)
 	}
 
 	uInfo := &User{}

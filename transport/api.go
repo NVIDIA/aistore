@@ -226,9 +226,9 @@ func ObjURLPath(trname string) string { return _urlPath(apc.ObjStream, trname) }
 
 func _urlPath(endp, trname string) string {
 	if trname == "" {
-		return cos.JoinWords(apc.Version, endp)
+		return cos.JoinW0(apc.Version, endp)
 	}
-	return cos.JoinWords(apc.Version, endp, trname)
+	return cos.JoinW0(apc.Version, endp, trname)
 }
 
 func GetRxStats() (netstats map[string]RxStats) {

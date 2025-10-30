@@ -1830,7 +1830,7 @@ func (p *proxy) actBackend(w http.ResponseWriter, r *http.Request, tag string, u
 			args = allocBcArgs()
 		)
 		// bcast
-		path = cos.JoinWords(upath.S, np, phase)
+		path = cos.JoinWP(upath.S, np, phase)
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: path}
 		args.to = core.Targets
 		results := p.bcastGroup(args)

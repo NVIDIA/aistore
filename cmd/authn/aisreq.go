@@ -107,7 +107,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 		msg     []byte
 		retries = retryCount
 		sleep   = retrySleep
-		url     = proxyURL + cos.JoinWords(apc.Version, path)
+		url     = proxyURL + cos.JoinW0(apc.Version, path)
 		client  = m.clientH
 	)
 	if cos.IsHTTPS(proxyURL) {

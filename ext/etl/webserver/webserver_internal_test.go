@@ -100,7 +100,7 @@ func TestETLServerPutHandler(t *testing.T) {
 		var directPutPath = "ais@#test/obj"
 		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
-			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+			tassert.Fatalf(t, cos.JoinWP(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWP(secretPrefix, directPutPath), r.URL.Path)
 			w.WriteHeader(http.StatusNoContent)
 		}))
 		defer directPutTargetServer.Close()
@@ -151,7 +151,7 @@ func TestETLServerPutHandler(t *testing.T) {
 		var directPutPath = "ais@#test/obj"
 		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
-			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+			tassert.Fatalf(t, cos.JoinWP(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWP(secretPrefix, directPutPath), r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer directPutTargetServer.Close()
@@ -207,7 +207,7 @@ func TestEchoServerGetHandler(t *testing.T) {
 	)
 	localTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tassert.Fatalf(t, r.Method == http.MethodGet, "expected GET method, got %s", r.Method)
-		tassert.Fatalf(t, cos.JoinWords(secretPrefix, objUname) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, objUname), r.URL.Path)
+		tassert.Fatalf(t, cos.JoinWP(secretPrefix, objUname) == r.URL.Path, "expected path %s, got %s", cos.JoinWP(secretPrefix, objUname), r.URL.Path)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write(objContent)
@@ -263,7 +263,7 @@ func TestEchoServerGetHandler(t *testing.T) {
 		var directPutPath = "ais@#test/obj"
 		directPutTargetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tassert.Fatalf(t, r.Method == http.MethodPut, "expected PUT method, got %s", r.Method)
-			tassert.Fatalf(t, cos.JoinWords(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWords(secretPrefix, directPutPath), r.URL.Path)
+			tassert.Fatalf(t, cos.JoinWP(secretPrefix, directPutPath) == r.URL.Path, "expected path %s, got %s", cos.JoinWP(secretPrefix, directPutPath), r.URL.Path)
 
 			w.WriteHeader(http.StatusNoContent)
 		}))
