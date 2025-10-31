@@ -216,13 +216,30 @@ class Batch:
         self.request.add(moss_in)
         return self  # Allow chaining
 
+    def clear(self) -> "Batch":
+        """
+        Clear all objects from the batch request.
+
+        This allows reusing the same batch instance for multiple requests
+        without creating a new Batch object.
+
+        Returns:
+            Batch: Self for method chaining
+        """
+        self.request.moss_in = []
+        return self
+
     def get(
         self,
         raw: bool = False,
         decode_as_stream: bool = False,
+        clear_batch: bool = True,
     ) -> Union[BatchResult, HTTPResponse]:
         """
         Execute the Get-Batch request.
+
+        After execution, the batch is automatically cleared to allow reuse.
+        You can add new objects and call get() again on the same instance.
 
         Note:
             When 'streaming_get' is True (default), the server returns a pure archive stream
@@ -234,6 +251,11 @@ class Batch:
         Args:
             raw (bool): Return raw HTTP response stream. User must close the stream
             decode_as_stream (bool): Stream multipart decoding (memory efficient)
+            clear_batch (bool): Whether to clear the batch after execution.
+                - True (default): Automatically clears all objects from the batch after running get(),
+                    enabling reuse with new objects.
+                - False: Retains the batch objects, allowing repeated get() calls or adding more objects
+                    before execution.
 
         Returns:
             Union[BatchResult, HTTPResponse]:
@@ -255,7 +277,7 @@ class Batch:
             raw,
         )
 
-        # Build request
+        # Build request URL and parameters
         url_path = URL_PATH_GB
         params = {}
 
@@ -273,31 +295,43 @@ class Batch:
             json=self.request.dict(),
         )
 
+        if clear_batch:
+            # Create a deep copy of the request for the extractor to use.
+            # This allows us to clear the batch immediately while the generator
+            # (which may be consumed later) still has access to the request data.
+            request_snapshot = self.request.model_copy(deep=True)
+            self.clear()
+        else:
+            request_snapshot = self.request
+
         if raw:
             # Returns raw batch stream, user must close
             return response.raw
 
         # TODO: Handle error response, create customized errors
         if self.request.streaming_get:
-            return self._extract_streaming(response)
-        return self._extract_multipart(response, decode_as_stream)
+            return self._extract_streaming(response, request_snapshot)
+        return self._extract_multipart(response, decode_as_stream, request_snapshot)
 
-    def _extract_streaming(self, response) -> BatchResult:
+    def _extract_streaming(self, response, request_snapshot: MossReq) -> BatchResult:
         """
         Extract from streaming response (no metadata).
         Infer MossOut from request data.
 
         Args:
             response (Response): HTTP response object
+            request_snapshot (MossReq): Snapshot of the request for this batch
 
         Returns:
             BatchResult: Generator yielding (MossOut, content) tuples
         """
 
-        return self.extractor.extract(response, response.raw, self.request, None)
+        return self.extractor.extract(response, response.raw, request_snapshot, None)
 
     # TODO: revisit
-    def _extract_multipart(self, response, decode_as_stream: bool) -> BatchResult:
+    def _extract_multipart(
+        self, response, decode_as_stream: bool, request_snapshot: MossReq
+    ) -> BatchResult:
         """
         Extract from multipart response (with metadata).
         Returns actual MossOut with size, errors, etc.
@@ -305,6 +339,7 @@ class Batch:
         Args:
             response (Response): HTTP response object
             decode_as_stream (bool): Whether to decode multipart as stream
+            request_snapshot (MossReq): Snapshot of the request for this batch
 
         Returns:
             BatchResult: Generator yielding (MossOut, content) tuples
@@ -331,7 +366,7 @@ class Batch:
 
             # Extract archive and pair with metadata
             return self.extractor.extract(
-                response, data_stream, self.request, moss_resp
+                response, data_stream, request_snapshot, moss_resp
             )
 
         except Exception as e:

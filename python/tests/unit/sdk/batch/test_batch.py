@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
-
+# pylint: disable=too-many-lines
 import unittest
 from unittest.mock import Mock, patch
 from io import BytesIO
@@ -256,7 +256,7 @@ class TestBatch(unittest.TestCase):
         )
 
         # Create mock decoder parts
-        json_part = moss_resp.json(by_alias=True).encode()
+        json_part = moss_resp.model_dump_json(by_alias=True).encode()
         tar_data = self._create_test_tar()
         mock_parts = iter(
             [
@@ -360,7 +360,7 @@ class TestBatch(unittest.TestCase):
             uuid="test-uuid",
         )
 
-        json_part = moss_resp.json(by_alias=True).encode()
+        json_part = moss_resp.model_dump_json(by_alias=True).encode()
         tar_data = b"empty tar"
         mock_parts = iter(
             [
@@ -530,7 +530,9 @@ class TestBatch(unittest.TestCase):
         )
 
         json_stream = Mock()
-        json_stream.read.return_value = moss_resp.json(by_alias=True).encode()
+        json_stream.read.return_value = moss_resp.model_dump_json(
+            by_alias=True
+        ).encode()
 
         tar_stream = BytesIO(b"empty tar content")
 
@@ -726,7 +728,7 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(moss_resp.uuid, "request-uuid-12345")
 
         # Serialize and verify
-        resp_dict = moss_resp.dict(by_alias=True)
+        resp_dict = moss_resp.model_dump(by_alias=True)
         self.assertIn("uuid", resp_dict)
         self.assertEqual(resp_dict["uuid"], "request-uuid-12345")
 
@@ -789,6 +791,307 @@ class TestBatch(unittest.TestCase):
         batch4.add(mock_obj3)
         moss_in_obj = [m for m in batch4.request.moss_in if m.obj_name == "bar.txt"][0]
         self.assertEqual(moss_in_obj.bck, "bk")
+
+    def test_clear_empty_batch(self):
+        """Test clearing an empty batch."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+
+        self.assertEqual(len(batch), 0)
+        result = batch.clear()
+
+        # Should still be empty
+        self.assertEqual(len(batch), 0)
+        # Should return self for chaining
+        self.assertIs(result, batch)
+
+    def test_clear_batch_with_objects(self):
+        """Test clearing a batch that has objects."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt", "file2.txt", "file3.txt"],
+            bucket=self.mock_bucket,
+        )
+
+        self.assertEqual(len(batch), 3)
+        result = batch.clear()
+
+        # Should be empty after clear
+        self.assertEqual(len(batch), 0)
+        self.assertEqual(len(batch.request.moss_in), 0)
+        # Should return self for chaining
+        self.assertIs(result, batch)
+
+    def test_clear_allows_chaining(self):
+        """Test that clear() can be chained with add()."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt", "file2.txt"],
+            bucket=self.mock_bucket,
+        )
+
+        self.assertEqual(len(batch), 2)
+
+        # Clear and add in one chain
+        batch.clear().add("file3.txt").add("file4.txt")
+
+        self.assertEqual(len(batch), 2)
+        self.assertEqual(batch.request.moss_in[0].obj_name, "file3.txt")
+        self.assertEqual(batch.request.moss_in[1].obj_name, "file4.txt")
+
+    def test_clear_after_add(self):
+        """Test clearing batch after adding objects one by one."""
+        batch = Batch(self.mock_request_client, bucket=self.mock_bucket)
+
+        batch.add("file1.txt")
+        batch.add("file2.txt")
+        self.assertEqual(len(batch), 2)
+
+        batch.clear()
+        self.assertEqual(len(batch), 0)
+
+        # Can add new objects after clear
+        batch.add("file3.txt")
+        self.assertEqual(len(batch), 1)
+        self.assertEqual(batch.request.moss_in[0].obj_name, "file3.txt")
+
+    def test_clear_preserves_batch_configuration(self):
+        """Test that clear() only clears objects, not batch configuration."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt"],
+            bucket=self.mock_bucket,
+            output_format=".tar.gz",
+            cont_on_err=False,
+            only_obj_name=True,
+            streaming_get=False,
+        )
+
+        # Verify initial configuration
+        self.assertEqual(batch.request.output_format, ".tar.gz")
+        self.assertFalse(batch.request.cont_on_err)
+        self.assertTrue(batch.request.only_obj_name)
+        self.assertFalse(batch.request.streaming_get)
+        self.assertEqual(batch.bucket, self.mock_bucket)
+
+        # Clear the batch
+        batch.clear()
+
+        # Configuration should be preserved
+        self.assertEqual(batch.request.output_format, ".tar.gz")
+        self.assertFalse(batch.request.cont_on_err)
+        self.assertTrue(batch.request.only_obj_name)
+        self.assertFalse(batch.request.streaming_get)
+        self.assertEqual(batch.bucket, self.mock_bucket)
+
+        # Only objects should be cleared
+        self.assertEqual(len(batch), 0)
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_get_with_clear_batch_false(self, mock_extractor_manager_cls):
+        """Test that get(clear_batch=False) preserves batch objects."""
+        # Setup extractor manager mock
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt", "file2.txt"],
+            bucket=self.mock_bucket,
+            streaming_get=True,
+        )
+
+        # Verify initial state
+        self.assertEqual(len(batch), 2)
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        # Configure mock extractor
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file1.txt", bucket="test-bucket", provider="ais"),
+                    b"content1",
+                ),
+                (
+                    MossOut(obj_name="file2.txt", bucket="test-bucket", provider="ais"),
+                    b"content2",
+                ),
+            ]
+        )
+
+        # Execute get() with clear_batch=False
+        result = list(batch.get(clear_batch=False))
+
+        # Verify results were returned
+        self.assertEqual(len(result), 2)
+
+        # Batch should NOT be cleared
+        self.assertEqual(
+            len(batch), 2, "Batch should retain objects when clear_batch=False"
+        )
+        self.assertEqual(len(batch.request.moss_in), 2)
+        self.assertEqual(batch.request.moss_in[0].obj_name, "file1.txt")
+        self.assertEqual(batch.request.moss_in[1].obj_name, "file2.txt")
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_get_clear_batch_false_allows_accumulation(
+        self, mock_extractor_manager_cls
+    ):
+        """Test that clear_batch=False allows adding more objects after get()."""
+        # Setup extractor manager mock
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt"],
+            bucket=self.mock_bucket,
+            streaming_get=True,
+        )
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file1.txt", bucket="test-bucket", provider="ais"),
+                    b"content1",
+                ),
+            ]
+        )
+
+        # First get with clear_batch=False
+        list(batch.get(clear_batch=False))
+        self.assertEqual(len(batch), 1)
+
+        # Add more objects
+        batch.add("file2.txt")
+        self.assertEqual(len(batch), 2)
+
+        # Verify both objects are in the batch
+        self.assertEqual(batch.request.moss_in[0].obj_name, "file1.txt")
+        self.assertEqual(batch.request.moss_in[1].obj_name, "file2.txt")
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_batch_reset_after_get(self, mock_extractor_manager_cls):
+        """Test that batch request is reset after get() execution."""
+        # Setup extractor manager mock before creating batch
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt", "file2.txt"],
+            bucket=self.mock_bucket,
+            streaming_get=True,
+        )
+
+        # Verify objects added
+        self.assertEqual(len(batch), 2)
+        self.assertEqual(len(batch.request.moss_in), 2)
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        # Configure mock extractor
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file1.txt", bucket="test-bucket", provider="ais"),
+                    b"content1",
+                ),
+                (
+                    MossOut(obj_name="file2.txt", bucket="test-bucket", provider="ais"),
+                    b"content2",
+                ),
+            ]
+        )
+
+        # Execute get()
+        list(batch.get())
+
+        # Verify batch request was reset
+        self.assertEqual(len(batch), 0, "Batch should be empty after get()")
+        self.assertEqual(
+            len(batch.request.moss_in), 0, "moss_in list should be cleared after get()"
+        )
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_batch_reuse_after_get(self, mock_extractor_manager_cls):
+        """Test that batch can be reused after get() is executed."""
+        # Setup extractor manager mock before creating batch
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file1.txt", "file2.txt"],
+            bucket=self.mock_bucket,
+            streaming_get=True,
+        )
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        # Configure mock extractor for first request
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file1.txt", bucket="test-bucket", provider="ais"),
+                    b"content1",
+                ),
+                (
+                    MossOut(obj_name="file2.txt", bucket="test-bucket", provider="ais"),
+                    b"content2",
+                ),
+            ]
+        )
+
+        # First get() execution
+        results1 = list(batch.get())
+        self.assertEqual(len(results1), 2)
+        self.assertEqual(len(batch), 0, "Batch should be empty after first get()")
+
+        # Add new objects and execute again
+        batch.add("file3.txt").add("file4.txt")
+        self.assertEqual(len(batch), 2, "Batch should have 2 new objects")
+
+        # Configure mock extractor for second request
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file3.txt", bucket="test-bucket", provider="ais"),
+                    b"content3",
+                ),
+                (
+                    MossOut(obj_name="file4.txt", bucket="test-bucket", provider="ais"),
+                    b"content4",
+                ),
+            ]
+        )
+
+        # Second get() execution
+        results2 = list(batch.get())
+        self.assertEqual(len(results2), 2)
+        self.assertEqual(len(batch), 0, "Batch should be empty after second get()")
+
+        # Verify second request has different objects
+        self.assertEqual(results2[0][0].obj_name, "file3.txt")
+        self.assertEqual(results2[1][0].obj_name, "file4.txt")
+
+        # Verify batch configuration was preserved
+        self.assertTrue(batch.request.streaming_get)
+        self.assertEqual(batch.bucket, self.mock_bucket)
 
     @staticmethod
     def _create_test_tar() -> bytes:

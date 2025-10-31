@@ -410,3 +410,82 @@ class TestBatch(ParallelTestBase):
             str(context.exception),
             "Should raise ValueError with 'No bucket provided' message",
         )
+
+    @case_matrix([("multipart", False), ("stream", True)])
+    def test_batch_reset_after_get(self, case):
+        """
+        Test that batch request is reset after get() execution.
+
+        Verifies that the moss_in list is cleared after get() is called,
+        allowing the batch object to be reused.
+        """
+        _, stream_get = case
+
+        # Create test objects
+        obj1, _ = self._create_object_with_content()
+        obj2, _ = self._create_object_with_content()
+
+        # Create batch with initial objects
+        batch = self.client.batch(
+            objects=[obj1, obj2], bucket=self.bucket, streaming_get=stream_get
+        )
+
+        # Verify objects added
+        self.assertEqual(len(batch), 2, "Batch should have 2 objects before get()")
+
+        # Execute get()
+        results = list(batch.get())
+        self.assertEqual(len(results), 2, "Should retrieve 2 objects")
+
+        # Verify batch was reset
+        self.assertEqual(
+            len(batch), 0, "Batch should be empty after get() (reset logic)"
+        )
+
+    @case_matrix([("multipart", False), ("stream", True)])
+    def test_batch_reuse_after_get(self, case):
+        """
+        Test that batch can be reused after get() is executed.
+
+        Verifies the builder pattern: execute get(), add new objects, execute get() again.
+        """
+        _, stream_get = case
+
+        # Create first set of objects
+        obj1, content1 = self._create_object_with_content()
+        obj2, content2 = self._create_object_with_content()
+
+        # Create batch and execute first request
+        batch = self.client.batch(
+            objects=[obj1, obj2], bucket=self.bucket, streaming_get=stream_get
+        )
+
+        results1 = list(batch.get())
+        self.assertEqual(len(results1), 2, "First get() should retrieve 2 objects")
+        self.assertEqual(len(batch), 0, "Batch should be empty after first get()")
+
+        # Verify first results
+        self.assertEqual(results1[0][0].obj_name, obj1.name)
+        self.assertEqual(results1[0][1], content1)
+        self.assertEqual(results1[1][0].obj_name, obj2.name)
+        self.assertEqual(results1[1][1], content2)
+
+        # Add new objects to the same batch instance
+        obj3, content3 = self._create_object_with_content()
+        obj4, content4 = self._create_object_with_content()
+
+        batch.add(obj3).add(obj4)
+        self.assertEqual(
+            len(batch), 2, "Batch should have 2 new objects after adding them"
+        )
+
+        # Execute second request
+        results2 = list(batch.get())
+        self.assertEqual(len(results2), 2, "Second get() should retrieve 2 objects")
+        self.assertEqual(len(batch), 0, "Batch should be empty after second get()")
+
+        # Verify second results have different objects
+        self.assertEqual(results2[0][0].obj_name, obj3.name)
+        self.assertEqual(results2[0][1], content3)
+        self.assertEqual(results2[1][0].obj_name, obj4.name)
+        self.assertEqual(results2[1][1], content4)
