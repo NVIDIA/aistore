@@ -72,10 +72,6 @@ where data-item = (object | archived file) // range read TBD
 // - range read
 // - finer-grained wi abort
 
-// TODO configurable "hole-plug" waiting timeout: max(host-busy, 30s); see also logStats
-const (
-	maxwait = 30 * time.Second
-)
 const (
 	sparseLog = 30 * time.Second
 )
@@ -85,7 +81,6 @@ const (
 // - bewarm pool is created once at x-moss initialization based on current system load;
 // - it stays enabled/disabled for the entire lifetime of this xaction instance across all work items
 const (
-	bewarmCnt  = 2
 	bewarmSize = cos.MiB
 )
 
@@ -248,14 +243,16 @@ func newMoss(p *mossFactory) *XactMoss {
 	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
 
 	// best-effort `bewarm` for pagecache warming-up
-	load, isExtreme := sys.MaxLoad2()
 	s := "without"
-	if !isExtreme {
-		ncpu := sys.NumCPU()
-		highcpu := ncpu * sys.HighLoad / 100
-		if load < float64(highcpu) {
-			r.bewarm = work.New(bewarmCnt, bewarmCnt, r.bewarmFQN, r.ChanAbort())
-			s = "with"
+	if num := r.config.GetBatch.WarmupWorkers(); num > 0 {
+		load, isExtreme := sys.MaxLoad2()
+		if !isExtreme {
+			ncpu := sys.NumCPU()
+			highcpu := ncpu * sys.HighLoad / 100
+			if load < float64(highcpu) {
+				r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
+				s = "with"
+			}
 		}
 	}
 
@@ -1001,7 +998,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 		elapsed        time.Duration
 		start          = mono.NanoTime()
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
-		timeout        = max(maxwait, wi.r.config.Timeout.MaxHostBusy.D())
+		timeout        = wi.r.config.GetBatch.MaxWait.D()
 	)
 	for {
 		wi.recv.mtx.Lock()

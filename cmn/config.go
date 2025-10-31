@@ -35,10 +35,13 @@ const (
 )
 
 type (
-	Validator interface {
+	validator interface {
 		Validate() error
 	}
-	PropsValidator interface {
+	contextValidator interface {
+		Validate(*Config) error
+	}
+	propsValidator interface {
 		ValidateAsProps(arg ...any) error
 	}
 )
@@ -128,6 +131,7 @@ type (
 		Version     int64           `json:"config_version,string"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
+		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
 	}
 	ConfigToSet struct {
 		// ClusterConfig
@@ -160,6 +164,7 @@ type (
 		Proxy       *ProxyConfToSet       `json:"proxy,omitempty"`
 		RateLimit   *RateLimitConfToSet   `json:"rate_limit"`
 		Features    *feat.Flags           `json:"features,string,omitempty"`
+		GetBatch    *GetBatchConfToSet    `json:"get_batch,omitempty"`
 
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
@@ -637,9 +642,9 @@ type (
 
 	AuthConf struct {
 		Secret  string   `json:"secret"`
-		Enabled bool     `json:"enabled"`
 		PubKey  string   `json:"public_key"`
 		Aud     []string `json:"aud"`
+		Enabled bool     `json:"enabled"`
 	}
 	AuthConfToSet struct {
 		Secret  *string  `json:"secret,omitempty"`
@@ -833,6 +838,31 @@ type (
 	}
 )
 
+// ref: https://github.com/NVIDIA/aistore/releases/tag/v1.4.0#getbatch-api-ml-endpoint
+type (
+	GetBatchConf struct {
+		// Maximum time to wait for remote targets to send their data during
+		// distributed multi-object/multi-file retrieval. When a sending target
+		// fails or is slow to respond, the designated target (DT) waits up to
+		// this duration before attempting recovery.
+		// Longer values increase tolerance for transient slowdowns but delay
+		// error detection. Shorter values fail faster but may be too aggressive.
+		MaxWait cos.Duration `json:"max_wait"`
+
+		// Number of worker goroutines for pagecache read-ahead warming.
+		// Helps reduce cold-read latency by pre-loading file data into memory.
+		// Always auto-disabled under extreme system load.
+		// - (-1): disabled
+		// - 0:    default (enabled w/ 2 (numWarmupWorkersDflt) workers)
+		// - >0:   enabled with N workers
+		NumWarmupWorkers int `json:"warmup_workers"`
+	}
+	GetBatchConfToSet struct {
+		MaxWait          *cos.Duration `json:"max_wait,omitempty"`
+		NumWarmupWorkers *int          `json:"warmup_workers,omitempty"`
+	}
+)
+
 // assorted named fields that require (cluster | node) restart for changes to make an effect
 // (used by CLI)
 var ConfigRestartRequired = [...]string{"auth.secret", "memsys", "net"}
@@ -859,48 +889,50 @@ func (*ConfigToSet) JspOpts() jsp.Options   { return _jspOpts() }
 
 // interface guard: config validators
 var (
-	_ Validator = (*BackendConf)(nil)
-	_ Validator = (*CksumConf)(nil)
-	_ Validator = (*LogConf)(nil)
-	_ Validator = (*LRUConf)(nil)
-	_ Validator = (*SpaceConf)(nil)
-	_ Validator = (*MirrorConf)(nil)
-	_ Validator = (*ECConf)(nil)
-	_ Validator = (*ChunksConf)(nil)
-	_ Validator = (*VersionConf)(nil)
-	_ Validator = (*KeepaliveConf)(nil)
-	_ Validator = (*PeriodConf)(nil)
-	_ Validator = (*TimeoutConf)(nil)
-	_ Validator = (*ClientConf)(nil)
-	_ Validator = (*RebalanceConf)(nil)
-	_ Validator = (*ResilverConf)(nil)
-	_ Validator = (*NetConf)(nil)
-	_ Validator = (*FSHCConf)(nil)
-	_ Validator = (*HTTPConf)(nil)
-	_ Validator = (*DownloaderConf)(nil)
-	_ Validator = (*DsortConf)(nil)
-	_ Validator = (*TransportConf)(nil)
-	_ Validator = (*MemsysConf)(nil)
-	_ Validator = (*TCBConf)(nil)
-	_ Validator = (*WritePolicyConf)(nil)
-	_ Validator = (*TracingConf)(nil)
+	_ validator = (*BackendConf)(nil)
+	_ validator = (*CksumConf)(nil)
+	_ validator = (*LogConf)(nil)
+	_ validator = (*LRUConf)(nil)
+	_ validator = (*SpaceConf)(nil)
+	_ validator = (*MirrorConf)(nil)
+	_ validator = (*ECConf)(nil)
+	_ validator = (*ChunksConf)(nil)
+	_ validator = (*VersionConf)(nil)
+	_ validator = (*PeriodConf)(nil)
+	_ validator = (*TimeoutConf)(nil)
+	_ validator = (*ClientConf)(nil)
+	_ validator = (*RebalanceConf)(nil)
+	_ validator = (*ResilverConf)(nil)
+	_ validator = (*NetConf)(nil)
+	_ validator = (*FSHCConf)(nil)
+	_ validator = (*HTTPConf)(nil)
+	_ validator = (*DownloaderConf)(nil)
+	_ validator = (*DsortConf)(nil)
+	_ validator = (*TransportConf)(nil)
+	_ validator = (*MemsysConf)(nil)
+	_ validator = (*TCBConf)(nil)
+	_ validator = (*WritePolicyConf)(nil)
+	_ validator = (*TracingConf)(nil)
+	_ validator = (*GetBatchConf)(nil)
 
-	_ Validator = (*feat.Flags)(nil)
+	_ validator = (*feat.Flags)(nil) // is called explicitly from main config validator
+
+	_ contextValidator = (*KeepaliveConf)(nil)
 )
 
 // interface guard: bucket-level validators-as-props
 var (
-	_ PropsValidator = (*CksumConf)(nil)
-	_ PropsValidator = (*MirrorConf)(nil)
-	_ PropsValidator = (*ECConf)(nil)
+	_ propsValidator = (*CksumConf)(nil)
+	_ propsValidator = (*MirrorConf)(nil)
+	_ propsValidator = (*ECConf)(nil)
 
-	_ PropsValidator = (*ExtraProps)(nil)
-	_ PropsValidator = (*feat.Flags)(nil)
+	_ propsValidator = (*ExtraProps)(nil)
+	_ propsValidator = (*feat.Flags)(nil)
 
-	_ PropsValidator = (*WritePolicyConf)(nil)
-	_ PropsValidator = (*RateLimitConf)(nil)
-	_ PropsValidator = (*ChunksConf)(nil)
-	_ PropsValidator = (*LRUConf)(nil)
+	_ propsValidator = (*WritePolicyConf)(nil)
+	_ propsValidator = (*RateLimitConf)(nil)
+	_ propsValidator = (*ChunksConf)(nil)
+	_ propsValidator = (*LRUConf)(nil)
 )
 
 // interface guard: special (un)marshaling
@@ -924,8 +956,9 @@ func (c *Config) Validate() error {
 		return errors.New("invalid log dir value (must be non-empty)")
 	}
 
-	// NOTE: These two validations require more context and so we call them explicitly;
-	//       The rest all implement generic interface.
+	//
+	// NOTE: the following validations perform cross-sections checks - call them explicitly
+	//
 	if err := c.LocalConfig.HostNet.Validate(c); err != nil {
 		return err
 	}
@@ -938,16 +971,16 @@ func (c *Config) Validate() error {
 	if err := c.Features.Validate(); err != nil {
 		return err
 	}
-
 	opts := IterOpts{VisitAll: true}
-	return IterFields(c, _validateFld, opts)
+	return IterFields(c, c.validateFld, opts)
 }
 
-func _validateFld(_ string, field IterField) (error, bool) {
-	if v, ok := field.Value().(Validator); ok {
-		if err := v.Validate(); err != nil {
-			return err, false
-		}
+func (c *Config) validateFld(_ string, field IterField) (error, bool) {
+	switch v := field.Value().(type) {
+	case contextValidator:
+		return v.Validate(c), false
+	case validator:
+		return v.Validate(), false
 	}
 	return nil, false
 }
@@ -1639,7 +1672,14 @@ func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 // see palive.retry in re "total number of failures prior to removing"
 const kaNumRetries = 3
 
-func (c *KeepaliveConf) Validate() error {
+// interval bounds
+const (
+	kaliveIvalMin = 1 * time.Second
+	kaliveIvalMax = 1 * time.Minute
+	kaliveToutMax = 2 * time.Minute
+)
+
+func (c *KeepaliveConf) Validate(config *Config) error {
 	if c.Proxy.Name != "heartbeat" {
 		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
 	}
@@ -1655,12 +1695,35 @@ func (c *KeepaliveConf) Validate() error {
 	if c.NumRetries < 1 || c.NumRetries > 10 {
 		return fmt.Errorf("invalid keepalivetracker.num_retries %d (expecting range [1, 10])", c.NumRetries)
 	}
-	return nil
+
+	if err := c.Proxy.validate(&config.Timeout); err != nil {
+		return err
+	}
+	return c.Target.validate(&config.Timeout)
 }
 
 func KeepaliveRetryDuration(c *Config) time.Duration {
 	d := c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
 	return min(d, c.Timeout.MaxKeepalive.D()+time.Second)
+}
+
+func (c *KeepaliveTrackerConf) validate(timeoutConf *TimeoutConf) error {
+	if c.Interval.D() < kaliveIvalMin || c.Interval.D() > kaliveIvalMax {
+		return fmt.Errorf("invalid keepalivetracker.interval=%s (expected range [%v, %v])",
+			c.Interval, kaliveIvalMin, kaliveIvalMax)
+	}
+	//
+	// must be consistent w/ assorted timeout knobs
+	//
+	if c.Interval.D() < timeoutConf.MaxKeepalive.D() {
+		return fmt.Errorf("keepalivetracker.interval=%s should be >= timeout.max_keepalive=%s",
+			c.Interval, timeoutConf.MaxKeepalive)
+	}
+	kwin := c.Interval.D() * time.Duration(c.Factor)
+	if kwin > kaliveToutMax {
+		return fmt.Errorf("keepalive detection window=%v (interval * factor) exceeds %v", kwin, kaliveToutMax)
+	}
+	return nil
 }
 
 /////////////
@@ -2315,6 +2378,42 @@ func (*RateLimitConf) verbs(tag, name, value string) error {
 
 // NOTE: separately, frontend-rate-limiter validation in `makeNewBckProps`
 func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
+
+//////////////////
+// GetBatchConf //
+//////////////////
+
+const (
+	getBatchMaxWaitDflt = 30 * time.Second
+	getBatchMaxWaitMin  = time.Second
+	getBatchMaxWaitMax  = time.Minute
+
+	numWarmupWorkersDisabled = -1
+	numWarmupWorkersDflt     = 2
+)
+
+func (c *GetBatchConf) WarmupWorkers() int {
+	return cos.Ternary(c.NumWarmupWorkers == numWarmupWorkersDisabled, 0, c.NumWarmupWorkers)
+}
+
+func (c *GetBatchConf) Validate() error {
+	debug.Assert(numWarmupWorkersDisabled < 0 && getBatchMaxWaitDflt > getBatchMaxWaitMin && getBatchMaxWaitMin < getBatchMaxWaitMax)
+	if c.MaxWait == 0 {
+		c.MaxWait = cos.Duration(getBatchMaxWaitDflt)
+	} else if c.MaxWait.D() < getBatchMaxWaitMin || c.MaxWait.D() > getBatchMaxWaitMax {
+		return fmt.Errorf("invalid get_batch.max_wait=%s (must be in range [%v, %v])", c.MaxWait, getBatchMaxWaitMin, getBatchMaxWaitMax)
+	}
+	switch c.NumWarmupWorkers {
+	case numWarmupWorkersDisabled:
+	case 0:
+		c.NumWarmupWorkers = numWarmupWorkersDflt
+	default:
+		if c.NumWarmupWorkers < 0 || c.NumWarmupWorkers > 10 {
+			return fmt.Errorf("invalid get_batch.warmup_workers=%d (expecting range [%d, %d])", c.NumWarmupWorkers, 0, 10)
+		}
+	}
+	return nil
+}
 
 //
 // misc config utilities ---------------------------------------------------------
