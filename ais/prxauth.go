@@ -21,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+
+	onexxh "github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -29,7 +31,7 @@ type (
 		// used for parsing and validating claims from token strings
 		tokenParser tok.Parser
 		// provides thread-safe access to a cache of decrypted token claims
-		tokenMap *TokenClaimMap
+		tokenMap *shardedTokenMap
 		// provides thread-safe access to an underlying map of tokens
 		revokedTokens *RevokedTokensMap
 	}
@@ -44,13 +46,20 @@ type (
 		sync.RWMutex
 	}
 
-	TokenClaimMap struct {
-		// map token strings to claim structs
-		tokenMap map[string]*tok.AISClaims
-		// lock
+	shardedTokenMap struct {
+		// Shard tokens into separate maps for improved locking
+		shards []*tokenMap
+	}
+
+	tokenMap struct {
+		tokens map[string]*tok.AISClaims
 		sync.RWMutex
 	}
 )
+
+// TokenMapShardExponent is used to define the number of maps used for parallel locking of token -> claims
+// The actual number of shards will be equal to 2^TokenMapShardExponent
+const TokenMapShardExponent = 4
 
 /////////////////
 // authManager //
@@ -66,7 +75,7 @@ func newAuthManager(config *cmn.Config) *authManager {
 		Aud: config.Auth.Aud,
 	}
 	return &authManager{
-		tokenMap:      newTokenClaimMap(),
+		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   tok.NewTokenParser(secret, rsaPubKey, requiredClaims),
 	}
@@ -99,7 +108,7 @@ func (a *authManager) validateToken(token string) (*tok.AISClaims, error) {
 	if a.revokedTokens.contains(token) {
 		return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenRevoked, token)
 	}
-	claims, ok := a.tokenMap.get(token)
+	claims, ok := a.tokenMap.getClaims(token)
 	debug.Assert(!ok || claims != nil)
 	// If token string exists in cache, only need to check claim expiry
 	if ok && claims != nil {
@@ -296,41 +305,80 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 	return bck.Allow(ace)
 }
 
-///////////////////
-// TokenClaimMap //
-///////////////////
+/////////////////////
+// shardedTokenMap //
+/////////////////////
 
-func newTokenClaimMap() *TokenClaimMap {
-	return &TokenClaimMap{
-		tokenMap: make(map[string]*tok.AISClaims),
+func newShardedTokenMap(exponent int) *shardedTokenMap {
+	// Force size to be a power of 2 so we can use bitmask
+	size := 1 << exponent
+	shardedMap := &shardedTokenMap{
+		shards: make([]*tokenMap, size),
 	}
+	for i := range size {
+		shardedMap.shards[i] = newTokenMap()
+	}
+	return shardedMap
 }
 
-func (m *TokenClaimMap) get(token string) (*tok.AISClaims, bool) {
+func (sm *shardedTokenMap) getClaims(token string) (*tok.AISClaims, bool) {
+	m := sm.shards[sm.getShardIndex(token)]
 	m.RLock()
-	claims, ok := m.tokenMap[token]
+	claims, ok := m.tokens[token]
 	m.RUnlock()
 	return claims, ok
 }
 
-func (m *TokenClaimMap) set(token string, claims *tok.AISClaims) {
+func (sm *shardedTokenMap) set(token string, claims *tok.AISClaims) {
+	m := sm.shards[sm.getShardIndex(token)]
 	m.Lock()
-	m.tokenMap[token] = claims
+	m.tokens[token] = claims
 	m.Unlock()
 }
 
-func (m *TokenClaimMap) delete(token string) {
+func (sm *shardedTokenMap) delete(token string) {
+	m := sm.shards[sm.getShardIndex(token)]
 	m.Lock()
-	delete(m.tokenMap, token)
+	delete(m.tokens, token)
 	m.Unlock()
 }
 
-func (m *TokenClaimMap) deleteMultiple(tokens []string) {
-	m.Lock()
-	for _, token := range tokens {
-		delete(m.tokenMap, token)
+func (sm *shardedTokenMap) deleteMultiple(tokens []string) {
+	if len(tokens) == 0 {
+		return
 	}
-	m.Unlock()
+	// Map from shard index to slice of tokens to delete in that shard
+	shardTokens := make(map[int][]string)
+	for _, token := range tokens {
+		idx := sm.getShardIndex(token)
+		shardTokens[idx] = append(shardTokens[idx], token)
+	}
+
+	// Delete from each touched shard
+	for idx, tkList := range shardTokens {
+		tm := sm.shards[idx]
+		tm.Lock()
+		for _, token := range tkList {
+			delete(tm.tokens, token)
+		}
+		tm.Unlock()
+	}
+}
+
+func (sm *shardedTokenMap) getShardIndex(token string) int {
+	tkHash := onexxh.ChecksumString64(token)
+	// Pick a shard by bitmasking against the total number (power of 2)
+	return int(tkHash & uint64(len(sm.shards)-1))
+}
+
+//////////////
+// tokenMap //
+//////////////
+
+func newTokenMap() *tokenMap {
+	return &tokenMap{
+		tokens: make(map[string]*tok.AISClaims),
+	}
 }
 
 //////////////////////

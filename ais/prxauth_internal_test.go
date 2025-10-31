@@ -63,7 +63,7 @@ func TestAuth_Manager_UpdateRevokedList_AddsRevokedTokens(t *testing.T) {
 		mockParser.claimsMap[token] = validClaim
 	}
 	am := &authManager{
-		tokenMap:      newTokenClaimMap(),
+		tokenMap:      newShardedTokenMap(2),
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   mockParser,
 	}
@@ -80,7 +80,7 @@ func TestAuth_Manager_UpdateRevokedList_AddsRevokedTokens(t *testing.T) {
 
 func TestAuth_Manager_UpdateRevokedList_CleansExpiredTokens(t *testing.T) {
 	am := &authManager{
-		tokenMap:      newTokenClaimMap(),
+		tokenMap:      newShardedTokenMap(2),
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser: &mockTokenParser{
 			validateMap: map[string]error{"expiredToken": tok.ErrTokenExpired},
@@ -93,7 +93,7 @@ func TestAuth_Manager_UpdateRevokedList_CleansExpiredTokens(t *testing.T) {
 
 func TestAuth_Manager_RevokedTokenList(t *testing.T) {
 	am := &authManager{
-		tokenMap:      newTokenClaimMap(),
+		tokenMap:      newShardedTokenMap(2),
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   newMockTokenParser(),
 	}
@@ -107,10 +107,10 @@ func TestAuth_Manager_RevokedTokenList(t *testing.T) {
 func TestAuth_Manager_ValidateToken_Revoked(t *testing.T) {
 	// Set up a token with valid claims but revoke it, should still fail
 	token := "revoked"
-	tcMap := newTokenClaimMap()
-	tcMap.set(token, validClaim)
+	tkMap := newShardedTokenMap(2)
+	tkMap.set(token, validClaim)
 	am := &authManager{
-		tokenMap:      newTokenClaimMap(),
+		tokenMap:      tkMap,
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
@@ -121,10 +121,10 @@ func TestAuth_Manager_ValidateToken_Revoked(t *testing.T) {
 
 func TestAuth_Manager_ValidateToken_CachedValid(t *testing.T) {
 	token := "goodtoken"
-	tcMap := newTokenClaimMap()
-	tcMap.set(token, validClaim)
+	tkMap := newShardedTokenMap(2)
+	tkMap.set(token, validClaim)
 	am := &authManager{
-		tokenMap:      tcMap,
+		tokenMap:      tkMap,
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
@@ -134,10 +134,10 @@ func TestAuth_Manager_ValidateToken_CachedValid(t *testing.T) {
 
 func TestAuth_Manager_ValidateToken_CachedExpired(t *testing.T) {
 	token := "expiredtoken"
-	tcMap := newTokenClaimMap()
-	tcMap.set(token, expiredClaim)
+	tkMap := newShardedTokenMap(2)
+	tkMap.set(token, expiredClaim)
 	am := &authManager{
-		tokenMap:      tcMap,
+		tokenMap:      tkMap,
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
@@ -233,51 +233,99 @@ func TestAuth_RevokedTokensMap_Concurrency(t *testing.T) {
 	// No assertion here as success is absence of data race or panic.
 }
 
-func TestAuth_TokenClaimMap_Initialize(t *testing.T) {
-	m := newTokenClaimMap()
-	tassert.Error(t, m != nil, "expected newTokenClaimMap to return non-nil")
-	tassert.Error(t, len(m.tokenMap) == 0, "expected empty tokenMap on creation")
+func TestAuth_ShardedTokenMap_Initialize(t *testing.T) {
+	m := newShardedTokenMap(2)
+	tassert.Error(t, m != nil, "expected newShardedTokenMap to return non-nil")
+	tassert.Error(t, len(m.shards) == 4, "expected shard count to match given size")
+	for _, s := range m.shards {
+		tassert.Error(t, len(s.tokens) == 0, "expected all sharded token maps to be empty")
+	}
 }
 
-func TestAuth_TokenClaimMap_SetAndGet(t *testing.T) {
-	m := newTokenClaimMap()
+func TestAuth_ShardedTokenMap_ShardLocks(t *testing.T) {
+	// Create a map with only 2 shards to (almost) guarantee both are used
+	m := newShardedTokenMap(1)
+	// Insert 100 tokens into the map to ensure both shards get populated
+	c := &tok.AISClaims{IsAdmin: true}
+	for i := range 100 {
+		m.set(string(rune(i)), c)
+	}
+	// Internal access to both maps
+	m1 := m.shards[0]
+	m2 := m.shards[1]
+	// Get a token that was inserted into the m2 map
+	var t2 string
+	var c2 *tok.AISClaims
+	for k, v := range m2.tokens {
+		t2 = k
+		c2 = v
+		break
+	}
+	// While m1 is under full lock, access to claims in other maps must still work
+	m1.Lock()
+	defer m1.Unlock()
+	resClaims, ok := m.getClaims(t2)
+	tassert.Error(t, ok == true, "Claim should exist in map")
+	tassert.Error(t, resClaims == c2, "Claim must match")
+}
+
+func TestAuth_ShardedTokenMap_SetAndGet(t *testing.T) {
+	m := newShardedTokenMap(2)
 	c := &tok.AISClaims{IsAdmin: true}
 	m.set("foo", c)
-	val, ok := m.get("foo")
+	val, ok := m.getClaims("foo")
 	tassert.Error(t, ok, "expected token 'foo' to be present after set")
 	tassert.Error(t, val == c, "retrieved claims did not match the inserted claims")
 }
 
-func TestAuth_TokenClaimMap_Get_NonExistent(t *testing.T) {
-	m := newTokenClaimMap()
-	val, ok := m.get("bar")
+func TestAuth_ShardedTokenMap_Get_NonExistent(t *testing.T) {
+	m := newShardedTokenMap(2)
+	val, ok := m.getClaims("bar")
 	tassert.Error(t, !ok, "expected get on missing token to return false")
 	tassert.Error(t, val == nil, "expected nil claims for missing token")
 }
 
-func TestAuth_TokenClaimMap_Delete(t *testing.T) {
-	m := newTokenClaimMap()
+func TestAuth_ShardedTokenMap_Delete(t *testing.T) {
+	m := newShardedTokenMap(2)
 	c := &tok.AISClaims{}
 	m.set("tok", c)
 	m.delete("tok")
-	val, ok := m.get("tok")
+	val, ok := m.getClaims("tok")
 	tassert.Error(t, !ok, "expected token to be gone after delete")
 	tassert.Error(t, val == nil, "expected nil claims after delete")
 }
 
-func TestAuth_TokenClaimMap_DeleteMultiple(t *testing.T) {
-	m := newTokenClaimMap()
-	c1, c2 := &tok.AISClaims{}, &tok.AISClaims{}
-	m.set("a", c1)
-	m.set("b", c2)
-	m.deleteMultiple([]string{"a", "b", "nonexistent"})
-	_, ok1 := m.get("a")
-	_, ok2 := m.get("b")
-	tassert.Error(t, !ok1 && !ok2, "expected all specified tokens to be deleted")
+func TestAuth_ShardedTokenMap_DeleteMultiple(t *testing.T) {
+	m := newShardedTokenMap(2)
+	kept := make([]string, 0, 50)
+	deleted := make([]string, 0, 50)
+	for i := range 100 {
+		name := string(rune(i))
+		if i < 50 {
+			kept = append(kept, name)
+		} else {
+			deleted = append(deleted, name)
+		}
+		m.set(name, &tok.AISClaims{})
+	}
+	count := 0
+	for _, shard := range m.shards {
+		count += len(shard.tokens)
+	}
+	tassert.Fatal(t, count == 100, "expected all tokens to be properly set")
+	m.deleteMultiple(deleted)
+	for _, tk := range deleted {
+		_, ok := m.getClaims(tk)
+		tassert.Errorf(t, !ok, "expected token %s to be deleted", tk)
+	}
+	for _, tk := range kept {
+		_, ok := m.getClaims(tk)
+		tassert.Errorf(t, ok, "expected token %s to be kept", tk)
+	}
 }
 
-func TestAuth_TokenClaimMap_Concurrency(_ *testing.T) {
-	m := newTokenClaimMap()
+func TestAuth_ShardedTokenMap_Concurrency(_ *testing.T) {
+	m := newShardedTokenMap(2)
 	wg := sync.WaitGroup{}
 	c := &tok.AISClaims{}
 	// Set tokens concurrently
@@ -286,7 +334,7 @@ func TestAuth_TokenClaimMap_Concurrency(_ *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			m.set(string(rune('A'+i)), c)
-			m.get(string(rune('A' + i)))
+			m.getClaims(string(rune('A' + i)))
 		}(i)
 	}
 	wg.Wait()
