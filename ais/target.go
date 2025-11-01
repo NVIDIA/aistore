@@ -816,7 +816,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.atime = time.Now().UnixNano()
 		goi.ltime = mono.NanoTime()
 		if dpq.ptime != "" {
-			if d := ptLatency(goi.atime, dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
+			if d := ptLatency(goi.atime, dpq.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
 				t.statsT.Add(stats.GetRedirLatency, d)
 			}
 		}
@@ -1027,7 +1027,7 @@ func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	{
 		poi.atime = time.Now().UnixNano()
 		if dpq.ptime != "" {
-			if d := ptLatency(poi.atime, dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
+			if d := ptLatency(poi.atime, dpq.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
 				t.statsT.Add(stats.PutRedirLatency, d)
 			}
 		}

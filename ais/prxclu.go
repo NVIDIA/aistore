@@ -591,10 +591,10 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 	}
 	if fast {
 		var (
-			callerID   = r.Header.Get(apc.HdrCallerID)
-			callerSver = r.Header.Get(apc.HdrCallerSmapVer)
+			senderID   = r.Header.Get(apc.HdrSenderID)
+			senderSver = r.Header.Get(apc.HdrSenderSmapVer)
 		)
-		if callerID == sid && callerSver != "" && callerSver == smap.vstr {
+		if senderID == sid && senderSver != "" && senderSver == smap.vstr {
 			if si := smap.GetNode(sid); si != nil {
 				now := p.keepalive.heardFrom(sid)
 
@@ -2037,9 +2037,9 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cid := r.Header.Get(apc.HdrCallerID)
-	if cid != sid {
-		err = fmt.Errorf("expecting %s by %s, got a wrong node ID (%s != %s)", apc.ActSelfRemove, node.StringEx(), cid, sid)
+	senderID := r.Header.Get(apc.HdrSenderID)
+	if senderID != sid {
+		err = fmt.Errorf("expecting %s by %s, got a wrong node ID (%s != %s)", apc.ActSelfRemove, node.StringEx(), senderID, sid)
 		p.writeErr(w, r, err)
 		return
 	}

@@ -347,16 +347,16 @@ func (p *proxy) gojoin(config *cmn.Config) {
 	nlog.Infoln(p.String(), "is ready(?)")
 }
 
-func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) error {
+func (p *proxy) recvCluMetaBytes(action string, body []byte, sender string) error {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cos.BHead(body), err)
 	}
-	return p.recvCluMeta(&cm, action, caller)
+	return p.recvCluMeta(&cm, action, sender)
 }
 
 // TODO: unify w/ t.recvCluMetaBytes
-func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
+func (p *proxy) recvCluMeta(cm *cluMeta, action, sender string) error {
 	var (
 		msg  = p.newAmsgStr(action, cm.BMD)
 		self = p.String() + ":"
@@ -372,7 +372,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		nlog.Errorln(err)
 		return err
 	}
-	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
+	if err := p.receiveConfig(cm.Config, msg, nil, sender); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -381,7 +381,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		nlog.Infoln(self, tagCM, action, cm.Config.String())
 	}
 	// Smap
-	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
+	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, sender, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -390,7 +390,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		nlog.Infoln(self, tagCM, action, cm.Smap.String())
 	}
 	// BMD
-	if err := p.receiveBMD(cm.BMD, msg, nil, caller); err != nil {
+	if err := p.receiveBMD(cm.BMD, msg, nil, sender); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -399,7 +399,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		nlog.Infoln(self, tagCM, action, cm.BMD.String())
 	}
 	// RMD
-	if err := p.receiveRMD(cm.RMD, msg, caller); err != nil {
+	if err := p.receiveRMD(cm.RMD, msg, sender); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -408,7 +408,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		nlog.Infoln(self, tagCM, action, cm.RMD.String())
 	}
 	// EtlMD
-	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, caller, nil); err != nil {
+	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, sender, nil); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -1066,29 +1066,29 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 1. extract
 	var (
-		caller                       = r.Header.Get(apc.HdrCallerName)
-		newConf, msgConf, errConf    = p.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap    = p.extractSmap(payload, caller, false /*skip validation*/)
-		newBMD, msgBMD, errBMD       = p.extractBMD(payload, caller)
-		newRMD, msgRMD, errRMD       = p.extractRMD(payload, caller)
-		newEtlMD, msgEtlMD, errEtlMD = p.extractEtlMD(payload, caller)
-		revokedTokens, errTokens     = p.extractRevokedTokenList(payload, caller)
+		sender                       = r.Header.Get(apc.HdrSenderName)
+		newConf, msgConf, errConf    = p.extractConfig(payload, sender)
+		newSmap, msgSmap, errSmap    = p.extractSmap(payload, sender, false /*skip validation*/)
+		newBMD, msgBMD, errBMD       = p.extractBMD(payload, sender)
+		newRMD, msgRMD, errRMD       = p.extractRMD(payload, sender)
+		newEtlMD, msgEtlMD, errEtlMD = p.extractEtlMD(payload, sender)
+		revokedTokens, errTokens     = p.extractRevokedTokenList(payload, sender)
 	)
 	// 2. apply
 	if errConf == nil && newConf != nil {
-		errConf = p.receiveConfig(newConf, msgConf, payload, caller)
+		errConf = p.receiveConfig(newConf, msgConf, payload, sender)
 	}
 	if errSmap == nil && newSmap != nil {
-		errSmap = p.receiveSmap(newSmap, msgSmap, payload, caller, p.smapOnUpdate)
+		errSmap = p.receiveSmap(newSmap, msgSmap, payload, sender, p.smapOnUpdate)
 	}
 	if errBMD == nil && newBMD != nil {
-		errBMD = p.receiveBMD(newBMD, msgBMD, payload, caller)
+		errBMD = p.receiveBMD(newBMD, msgBMD, payload, sender)
 	}
 	if errRMD == nil && newRMD != nil {
-		errRMD = p.receiveRMD(newRMD, msgRMD, caller)
+		errRMD = p.receiveRMD(newRMD, msgRMD, sender)
 	}
 	if errEtlMD == nil && newEtlMD != nil {
-		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, nil)
+		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, sender, nil)
 	}
 	if errTokens == nil && revokedTokens != nil {
 		_ = p.authn.updateRevokedList(revokedTokens)
@@ -1165,9 +1165,9 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callerID := r.Header.Get(apc.HdrCallerID)
-	if callerID != "" && smap.GetProxy(callerID) != nil {
-		p.keepalive.heardFrom(callerID)
+	senderID := r.Header.Get(apc.HdrSenderID)
+	if senderID != "" && smap.GetProxy(senderID) != nil {
+		p.keepalive.heardFrom(senderID)
 	}
 
 	// primary
@@ -1200,7 +1200,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if askPrimary {
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %q, %s",
-			p, callerID, smap.StringEx())
+			p, senderID, smap.StringEx())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -2546,8 +2546,8 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(apc.HdrCallerName)
-	if err := p.recvCluMetaBytes(apc.ActAdminJoinProxy, body, caller); err != nil {
+	sender := r.Header.Get(apc.HdrSenderName)
+	if err := p.recvCluMetaBytes(apc.ActAdminJoinProxy, body, sender); err != nil {
 		p.writeErr(w, r, err)
 	}
 }
@@ -2740,9 +2740,9 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 //
 
 // compare w/ t.receiveConfig
-func (p *proxy) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload msPayload, caller string) (err error) {
+func (p *proxy) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload msPayload, sender string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	logmsync(oldConfig.Version, newConfig, msg, caller, newConfig.String(), oldConfig.UUID)
+	logmsync(oldConfig.Version, newConfig, msg, sender, newConfig.String(), oldConfig.UUID)
 
 	p.owner.config.Lock()
 	err = p._recvCfg(newConfig, msg, payload)
@@ -2833,9 +2833,9 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	nlog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 
-func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, caller string) error {
+func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, sender string) error {
 	rmd := p.owner.rmd.get()
-	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
+	logmsync(rmd.Version, newRMD, msg, sender, newRMD.String(), rmd.CluID)
 
 	if msg.Action == apc.ActPrimaryForce {
 		return p.owner.rmd.synch(newRMD, false)
@@ -2885,9 +2885,9 @@ func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags) {
 	p.htrun.smapUpdatedCB(newSmap, oldSmap, nfl, ofl)
 }
 
-func (p *proxy) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, caller string) (err error) {
+func (p *proxy) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, sender string) (err error) {
 	bmd := p.owner.bmd.get()
-	logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
+	logmsync(bmd.Version, newBMD, msg, sender, newBMD.String(), bmd.UUID)
 
 	p.owner.bmd.Lock()
 	bmd = p.owner.bmd.get()
@@ -2896,7 +2896,7 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, 
 		goto skip
 	}
 
-	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
+	if err = bmd.validateUUID(newBMD, p.si, nil, sender); err != nil {
 		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
 		nlog.Errorf("%s (non-primary): %v - proceeding to override BMD", p, err)
@@ -3097,8 +3097,8 @@ func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
 	if err != nil {
 		return
 	}
-	req.Header.Set(apc.HdrCallerID, p.SID())
-	req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
+	req.Header.Set(apc.HdrSenderID, p.SID())
+	req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
 	g.client.control.Do(req) //nolint:bodyclose // exiting
 	cmn.HreqFree(req)
 }

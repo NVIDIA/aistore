@@ -66,7 +66,7 @@ const tagCM = "recv-clumeta"
 
 // TODO: unify w/ p.recvCluMeta
 // do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
-func (t *target) recvCluMetaBytes(action string, body []byte, caller string) error {
+func (t *target) recvCluMetaBytes(action string, body []byte, sender string) error {
 	var (
 		cm   cluMeta
 		errs []error
@@ -92,7 +92,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 		nlog.Errorln(err)
 		return err
 	}
-	if err := t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
+	if err := t.receiveConfig(cm.Config, msg, nil, sender); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -109,7 +109,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	reb.OnTimedGFN()
 
 	// BMD
-	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
+	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, sender, true /*silent*/); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(err)
@@ -118,7 +118,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 		nlog.Infoln(self, tagCM, action, cm.BMD.String())
 	}
 	// Smap
-	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, t.htrun.smapUpdatedCB); err != nil {
+	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, sender, t.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			nlog.Errorln(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
@@ -540,8 +540,8 @@ func (t *target) adminJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	caller := r.Header.Get(apc.HdrCallerName)
-	if err := t.recvCluMetaBytes(apc.ActAdminJoinTarget, body, caller); err != nil {
+	sender := r.Header.Get(apc.HdrSenderName)
+	if err := t.recvCluMetaBytes(apc.ActAdminJoinTarget, body, sender); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -704,17 +704,17 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	}
 }
 
-func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag, caller string, silent bool) error {
+func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload, tag, sender string, silent bool) error {
 	if msg.UUID == "" {
 		oldVer, err := t.applyBMD(newBMD, msg, payload, tag)
 		if err == nil && newBMD.Version > oldVer {
-			logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
+			logmsync(oldVer, newBMD, msg, sender, newBMD.StringEx())
 		}
 		return err
 	}
 
 	// txn [before -- do -- after]
-	if errDone := t.txns.commitBefore(caller, msg); errDone != nil {
+	if errDone := t.txns.commitBefore(sender, msg); errDone != nil {
 		err := fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
 			nlog.Errorln(err)
@@ -727,16 +727,16 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *actMsgExt, payload msPayload,
 	// log
 	switch {
 	case err != nil:
-		nlog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), caller, msg.Action, msg.UUID)
+		nlog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), sender, msg.Action, msg.UUID)
 	case newBMD.Version > oldVer:
-		logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
+		logmsync(oldVer, newBMD, msg, sender, newBMD.StringEx())
 	case newBMD.Version == oldVer:
 		nlog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
-			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
+			t, newBMD.StringEx(), sender, msg.Action, msg.UUID)
 	}
 
 	// --after]
-	if errDone := t.txns.commitAfter(caller, msg, err, newBMD); errDone != nil {
+	if errDone := t.txns.commitAfter(sender, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
 			nlog.Errorln(err)
@@ -1092,7 +1092,7 @@ func _getbmd(res *callResult, tname, what string) (bmd *bucketMD, err error) {
 
 func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	var (
-		caller string
+		sender string
 		bck    cmn.Bck
 	)
 	if len(bcks) > 0 {
@@ -1106,14 +1106,14 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	}
 	msg := t.newAmsgStr("get-what="+apc.WhatBMD, newBucketMD)
 	if r != nil {
-		caller = r.Header.Get(apc.HdrCallerName)
+		sender = r.Header.Get(apc.HdrSenderName)
 	}
 	t.regstate.mu.Lock()
 	if nlog.Stopping() {
 		t.regstate.mu.Unlock()
 		return
 	}
-	err = t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/)
+	err = t.receiveBMD(newBucketMD, msg, nil, bmdFixup, sender, true /*silent*/)
 	t.regstate.mu.Unlock()
 	if err != nil && !isErrDowngrade(err) {
 		nlog.Errorln(err)
@@ -1163,22 +1163,22 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 
 	// 1. extract
 	var (
-		caller                       = r.Header.Get(apc.HdrCallerName)
-		newConf, msgConf, errConf    = t.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap    = t.extractSmap(payload, caller, false /*skip validation*/)
-		newBMD, msgBMD, errBMD       = t.extractBMD(payload, caller)
-		newRMD, msgRMD, errRMD       = t.extractRMD(payload, caller)
-		newEtlMD, msgEtlMD, errEtlMD = t.extractEtlMD(payload, caller)
+		sender                       = r.Header.Get(apc.HdrSenderName)
+		newConf, msgConf, errConf    = t.extractConfig(payload, sender)
+		newSmap, msgSmap, errSmap    = t.extractSmap(payload, sender, false /*skip validation*/)
+		newBMD, msgBMD, errBMD       = t.extractBMD(payload, sender)
+		newRMD, msgRMD, errRMD       = t.extractRMD(payload, sender)
+		newEtlMD, msgEtlMD, errEtlMD = t.extractEtlMD(payload, sender)
 	)
 	// 2. apply
 	if errConf == nil && newConf != nil {
-		errConf = t.receiveConfig(newConf, msgConf, payload, caller)
+		errConf = t.receiveConfig(newConf, msgConf, payload, sender)
 	}
 	if errSmap == nil && newSmap != nil {
-		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, t.htrun.smapUpdatedCB)
+		errSmap = t.receiveSmap(newSmap, msgSmap, payload, sender, t.htrun.smapUpdatedCB)
 	}
 	if errBMD == nil && newBMD != nil {
-		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, caller, false /*silent*/)
+		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, sender, false /*silent*/)
 	}
 	if errRMD == nil && newRMD != nil {
 		t.owner.rmd.Lock()
@@ -1186,7 +1186,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		t.owner.rmd.Unlock()
 	}
 	if errEtlMD == nil && newEtlMD != nil {
-		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, _stopETLs)
+		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, sender, _stopETLs)
 	}
 	// 3. respond
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
@@ -1267,8 +1267,8 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	caller := r.Header.Get(apc.HdrCallerName)
-	newSmap, msg, err := t.extractSmap(payload, caller, true /*skip validation*/)
+	sender := r.Header.Get(apc.HdrSenderName)
+	newSmap, msg, err := t.extractSmap(payload, sender, true /*skip validation*/)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -1331,16 +1331,16 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// return ok plus optional reb info
 	var (
 		err              error
-		callerID         = r.Header.Get(apc.HdrCallerID)
-		caller           = r.Header.Get(apc.HdrCallerName)
-		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrCallerSmapVer), 10, 64)
+		senderID         = r.Header.Get(apc.HdrSenderID)
+		senderName       = r.Header.Get(apc.HdrSenderName)
+		senderSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrSenderSmapVer), 10, 64)
 	)
-	if smap.version() != callerSmapVer {
+	if smap.version() != senderSmapVer {
 		s := "older"
-		if smap.version() < callerSmapVer {
+		if smap.version() < senderSmapVer {
 			s = "newer"
 		}
-		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
+		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", senderID, senderName, s, senderSmapVer)
 		nlog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
 	if getRebStatus {
@@ -1349,13 +1349,13 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		if !t.writeJS(w, r, status, "rebalance-status") {
 			return
 		}
-		if smap.version() < callerSmapVer && status.Running {
+		if smap.version() < senderSmapVer && status.Running {
 			// NOTE: abort right away but don't broadcast
 			t.reb.AbortLocal(smap.version(), err)
 		}
 	}
-	if smap.GetProxy(callerID) != nil {
-		t.keepalive.heardFrom(callerID)
+	if smap.GetProxy(senderID) != nil {
+		t.keepalive.heardFrom(senderID)
 	}
 }
 

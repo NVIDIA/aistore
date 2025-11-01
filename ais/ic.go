@@ -340,7 +340,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		var (
 			regMsg     = &xactRegMsg{}
 			tmap       meta.NodeMap
-			callerSver = r.Header.Get(apc.HdrCallerSmapVer)
+			senderSver = r.Header.Get(apc.HdrSenderSmapVer)
 			err        error
 		)
 		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {
@@ -351,7 +351,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		withRetry(cmn.Rom.CplaneOperation(), func() bool {
 			smap = ic.p.owner.smap.get()
 			tmap, err = smap.NewTmap(regMsg.Srcs)
-			return err == nil && callerSver == smap.vstr
+			return err == nil && senderSver == smap.vstr
 		})
 		if err != nil {
 			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%s: failed to %q: %v", ic.p, msg.Action, err)

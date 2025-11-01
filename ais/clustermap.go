@@ -404,7 +404,7 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 }
 
 // detect duplicate URL and/or IP
-// if `del` is true delete the old one so that the caller can update Snode
+// if `del` is true delete the old one so that the sender can update Snode
 func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
 	var osi *meta.Snode
 	if osi, err = m.IsDupNet(nsi); err == nil {
@@ -425,7 +425,7 @@ func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
 	return
 }
 
-func (m *smapX) validateUUID(si *meta.Snode, newSmap *smapX, caller string, cieNum int) (err error) {
+func (m *smapX) validateUUID(si *meta.Snode, newSmap *smapX, sender string, cieNum int) (err error) {
 	if m == nil || newSmap == nil || newSmap.Version == 0 {
 		return
 	}
@@ -436,11 +436,11 @@ func (m *smapX) validateUUID(si *meta.Snode, newSmap *smapX, caller string, cieN
 		return
 	}
 	// cluster integrity error (cie)
-	if caller == "" {
-		caller = "???"
+	if sender == "" {
+		sender = "???"
 	}
 	s := fmt.Sprintf("%s: Smaps have different UUIDs: local [%s, %s] vs from [%s, %s]",
-		ciError(cieNum), si, m.StringEx(), caller, newSmap.StringEx())
+		ciError(cieNum), si, m.StringEx(), sender, newSmap.StringEx())
 	err = &errSmapUUIDDiffer{s}
 	return
 }

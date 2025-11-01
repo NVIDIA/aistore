@@ -1097,7 +1097,7 @@ func (e *ErrHTTP) init(r *http.Request, err error, ecode int) {
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
 		e.RemoteAddr = r.RemoteAddr
-		e.Caller = r.Header.Get(apc.HdrCallerName)
+		e.Caller = r.Header.Get(apc.HdrSenderName)
 	}
 	e.Node = thisNodeName
 }

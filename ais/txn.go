@@ -40,7 +40,7 @@ type (
 		isDone() (done bool, err error)
 		set(nlps []core.NLP)
 		// triggers
-		commitAfter(caller string, msg *actMsgExt, err error, args ...any) (bool, error)
+		commitAfter(sender string, msg *actMsgExt, err error, args ...any) (bool, error)
 		rsvp(err error)
 		// cleanup
 		abort(error)
@@ -50,7 +50,7 @@ type (
 	}
 	rndzvs struct { // rendezvous records
 		err        *txnError
-		callerName string
+		senderName string
 		timestamp  int64
 	}
 	// two maps, two locks
@@ -77,8 +77,8 @@ type (
 		xctn       core.Xact
 		err        ratomic.Pointer[txnError]
 		action     string
-		callerName string
-		callerID   string
+		senderName string
+		senderID   string
 		uid        string
 		smapVer    int64
 		bmdVer     int64
@@ -227,14 +227,14 @@ func (txns *txns) find(uuid string) (_ txn, err error) {
 	return found, err
 }
 
-func (txns *txns) commitBefore(caller string, msg *actMsgExt) error {
+func (txns *txns) commitBefore(sender string, msg *actMsgExt) error {
 	var (
 		rndzvs rndzvs
 		ok     bool
 	)
 	txns.rendezvous.mtx.Lock()
 	if rndzvs, ok = txns.rendezvous.m[msg.UUID]; !ok {
-		rndzvs.callerName, rndzvs.timestamp = caller, mono.NanoTime()
+		rndzvs.senderName, rndzvs.timestamp = sender, mono.NanoTime()
 		txns.rendezvous.m[msg.UUID] = rndzvs
 		txns.rendezvous.mtx.Unlock()
 		return nil
@@ -243,7 +243,7 @@ func (txns *txns) commitBefore(caller string, msg *actMsgExt) error {
 	return fmt.Errorf("rendezvous record %s:%d already exists", msg.UUID, rndzvs.timestamp)
 }
 
-func (txns *txns) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (errDone error) {
+func (txns *txns) commitAfter(sender string, msg *actMsgExt, err error, args ...any) (errDone error) {
 	txns.mtx.Lock()
 	txn, ok := txns.m[msg.UUID]
 	txns.mtx.Unlock()
@@ -256,7 +256,7 @@ func (txns *txns) commitAfter(caller string, msg *actMsgExt, err error, args ...
 			bmd := txns.t.owner.bmd.get()
 			nlog.Warningf("%s: commit with downgraded (current: %s)", txn, bmd)
 		}
-		if running, errDone = txn.commitAfter(caller, msg, err, args...); running {
+		if running, errDone = txn.commitAfter(sender, msg, err, args...); running {
 			nlog.Infoln(txn.String())
 		}
 	}
@@ -444,8 +444,8 @@ func (txn *txnBase) rsvp(err error) { txn.err.Store(&txnError{err: err}) }
 func (txn *txnBase) fillFromCtx(c *txnSrv) {
 	txn.uid = c.uuid
 	txn.action = c.msg.Action
-	txn.callerName = c.callerName
-	txn.callerID = c.callerID
+	txn.senderName = c.senderName
+	txn.senderID = c.senderID
 	txn.smapVer = c.t.owner.smap.get().version()
 	txn.bmdVer = c.t.owner.bmd.get().version()
 }
@@ -496,8 +496,8 @@ func (txn *txnBckBase) String() string {
 	return fmt.Sprintf("txn-%s[%s]-%s%s%s]", txn.action, txn.uid, txn.bck.Bucket().String(), tm, res)
 }
 
-func (txn *txnBase) commitAfter(caller string, msg *actMsgExt, err error, args ...any) (found bool, errDone error) {
-	if txn.callerName != caller || msg.UUID != txn.uuid() {
+func (txn *txnBase) commitAfter(sender string, msg *actMsgExt, err error, args ...any) (found bool, errDone error) {
+	if txn.senderName != sender || msg.UUID != txn.uuid() {
 		return
 	}
 	found = true

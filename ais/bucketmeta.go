@@ -201,7 +201,7 @@ func (m *bucketMD) clone() *bucketMD {
 	return dst
 }
 
-func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *meta.Snode, caller string) (err error) {
+func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *meta.Snode, sender string) (err error) {
 	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
 		return
 	}
@@ -211,7 +211,7 @@ func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *meta.Snode, caller stri
 	if m.UUID == nbmd.UUID {
 		return
 	}
-	nsiname := caller
+	nsiname := sender
 	if nsi != nil {
 		nsiname = nsi.StringEx()
 	} else if nsiname == "" {

@@ -692,12 +692,12 @@ func (h *htrun) daeForceJoin(w http.ResponseWriter, r *http.Request) {
 func (h *htrun) _prepForceJoin(w http.ResponseWriter, r *http.Request, msg *actMsgExt) {
 	const tag = "prep-force-join:"
 	var (
-		callerID = r.Header.Get(apc.HdrCallerID)
+		senderID = r.Header.Get(apc.HdrSenderID)
 		smap     = h.owner.smap.get()
-		psi      = smap.GetNode(callerID)
+		psi      = smap.GetNode(senderID)
 	)
 	if !smap.IsPrimary(psi) {
-		h.writeErrf(w, r, "%s expecting %s call from primary, got %q", h, tag, callerID)
+		h.writeErrf(w, r, "%s expecting %s call from primary, got %q", h, tag, senderID)
 		return
 	}
 

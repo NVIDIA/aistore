@@ -101,11 +101,15 @@ const (
 
 // Internal (intra-cluster) headers
 const (
-	HdrCallerID        = aisPrefix + "Caller-Id" // Marker of intra-cluster request.
-	HdrT2TPutterID     = aisPrefix + "Putter-Id" // DaemonID of the target that performs intra-cluster PUT
-	HdrCallerName      = aisPrefix + "Caller-Name"
-	HdrCallerIsPrimary = aisPrefix + "Caller-Is-Primary"
-	HdrCallerSmapVer   = aisPrefix + "Caller-Smap-Ver"
+	//
+	// TODO: update as aisPrefix + "Sender..."; keeping for now for backward compat.
+	//
+	HdrSenderID        = aisPrefix + "Caller-Id"
+	HdrSenderName      = aisPrefix + "Caller-Name"
+	HdrSenderIsPrimary = aisPrefix + "Caller-Is-Primary"
+	HdrSenderSmapVer   = aisPrefix + "Caller-Smap-Ver"
+
+	HdrT2TPutterID = aisPrefix + "Putter-Id" // DaemonID of the target that performs intra-cluster PUT
 
 	HdrXactionID = aisPrefix + "Xaction-Id"
 

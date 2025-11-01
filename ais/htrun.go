@@ -696,12 +696,12 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	// req header
 	if smap.vstr != "" {
 		if smap.IsPrimary(h.si) {
-			req.Header.Set(apc.HdrCallerIsPrimary, "true")
+			req.Header.Set(apc.HdrSenderIsPrimary, "true")
 		}
-		req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
+		req.Header.Set(apc.HdrSenderSmapVer, smap.vstr)
 	}
-	req.Header.Set(apc.HdrCallerID, h.SID())
-	req.Header.Set(apc.HdrCallerName, h.si.Name())
+	req.Header.Set(apc.HdrSenderID, h.SID())
+	req.Header.Set(apc.HdrSenderName, h.si.Name())
 	req.Header.Set(cos.HdrUserAgent, ua)
 
 	resp, res.err = client.Do(req)
@@ -1505,7 +1505,7 @@ func (h *htrun) warnMsync(r *http.Request, smap *smapX) {
 	if !smap.isValid() {
 		return
 	}
-	pid := r.Header.Get(apc.HdrCallerID)
+	pid := r.Header.Get(apc.HdrSenderID)
 	psi := smap.GetNode(pid)
 	if psi == nil {
 		err := &errNodeNotFound{msg: tag + " warning:", id: pid, si: h.si, smap: smap}
@@ -1515,36 +1515,35 @@ func (h *htrun) warnMsync(r *http.Request, smap *smapX) {
 	}
 }
 
-func logmsync(lver int64, revs revs, msg *actMsgExt, opts ...string) { // caller [, what, luuid]
+func logmsync(lver int64, revs revs, msg *actMsgExt, sender string, opts ...string) { // sender [, what, luuid]
 	const tag = "msync Rx:"
 	var (
-		what   string
-		caller = opts[0]
-		uuid   = revs.uuid()
-		lv     = "v" + strconv.FormatInt(lver, 10)
-		luuid  string
+		what  string
+		uuid  = revs.uuid()
+		lv    = "v" + strconv.FormatInt(lver, 10)
+		luuid string
 	)
 	switch len(opts) {
-	case 1:
+	case 0:
 		what = revs.String()
 		if uuid := revs.uuid(); uuid != "" {
 			what += "[" + uuid + "]"
 		}
-	case 2:
-		what = opts[1]
+	case 1:
+		what = opts[0]
 		if strings.IndexByte(what, '[') < 0 {
 			if uuid != "" {
 				what += "[" + uuid + "]"
 			}
 		}
-	case 3:
-		what = opts[1]
-		luuid := opts[2]
+	default:
+		what = opts[0]
+		luuid = opts[1]
 		lv += "[" + luuid + "]"
 	}
 	// different uuids (clusters) - versions cannot be compared
 	if luuid != "" && uuid != "" && uuid != luuid {
-		nlog.InfoDepth(1, "Warning", tag, what, "( different cluster", lv, msg.String(), "<--", caller, msg.String(), ")")
+		nlog.InfoDepth(1, "Warning", tag, what, "( different cluster", lv, msg.String(), "<--", sender, msg.String(), ")")
 		return
 	}
 
@@ -1555,16 +1554,16 @@ func logmsync(lver int64, revs revs, msg *actMsgExt, opts ...string) { // caller
 		if lver == 0 {
 			s = "( initial"
 		}
-		nlog.InfoDepth(1, tag, what, s, lv, msg.String(), "<--", caller, ")")
+		nlog.InfoDepth(1, tag, what, s, lv, msg.String(), "<--", sender, ")")
 	case lver > revs.version():
-		nlog.InfoDepth(1, "Warning", tag, what, "( down from", lv, msg.String(), "<--", caller, msg.String(), ")")
+		nlog.InfoDepth(1, "Warning", tag, what, "( down from", lv, msg.String(), "<--", sender, msg.String(), ")")
 	default:
-		nlog.InfoDepth(1, tag, "new", what, "( have", lv, msg.String(), "<--", caller, ")")
+		nlog.InfoDepth(1, tag, "new", what, "( have", lv, msg.String(), "<--", sender, ")")
 	}
 }
 
 // return extracted (new) config with associated action message; otherwise error
-func (h *htrun) extractConfig(payload msPayload, caller string) (*globalConfig, *actMsgExt, error) {
+func (h *htrun) extractConfig(payload msPayload, sender string) (*globalConfig, *actMsgExt, error) {
 	confValue, ok := payload[revsConfTag]
 	if !ok {
 		return nil, nil, nil
@@ -1587,7 +1586,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (*globalConfig, 
 	}
 	config := cmn.GCO.Get()
 	if cmn.Rom.V(4, cos.ModAIS) {
-		logmsync(config.Version, newConfig, msg, caller, newConfig.String(), config.UUID)
+		logmsync(config.Version, newConfig, msg, sender, newConfig.String(), config.UUID)
 	}
 	if newConfig.version() <= config.Version && msg.Action != apc.ActPrimaryForce {
 		if newConfig.version() < config.Version {
@@ -1600,7 +1599,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (*globalConfig, 
 }
 
 // return extracted (new) etl metadata with associated action message; otherwise error
-func (h *htrun) extractEtlMD(payload msPayload, caller string) (*etlMD, *actMsgExt, error) {
+func (h *htrun) extractEtlMD(payload msPayload, sender string) (*etlMD, *actMsgExt, error) {
 	etlMDValue, ok := payload[revsEtlMDTag]
 	if !ok {
 		return nil, nil, nil
@@ -1623,7 +1622,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (*etlMD, *actMsgE
 
 	etlMD := h.owner.etl.get()
 	if cmn.Rom.V(4, cos.ModAIS) {
-		logmsync(etlMD.Version, newMD, msg, caller)
+		logmsync(etlMD.Version, newMD, msg, sender)
 	}
 	if newMD.version() <= etlMD.version() && msg.Action != apc.ActPrimaryForce {
 		if newMD.version() < etlMD.version() {
@@ -1636,7 +1635,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (*etlMD, *actMsgE
 }
 
 // return extracted (new) Smap with associated action message; otherwise error
-func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (*smapX, *actMsgExt, error) {
+func (h *htrun) extractSmap(payload msPayload, sender string, skipValidation bool) (*smapX, *actMsgExt, error) {
 	const (
 		act = "extract-smap"
 	)
@@ -1685,12 +1684,12 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		return newSmap, msg, nil
 	}
 
-	if err := smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
+	if err := smap.validateUUID(h.si, newSmap, sender, 50 /* ciError */); err != nil {
 		return newSmap, msg, err // FATAL: cluster integrity error
 	}
 
 	if cmn.Rom.V(4, cos.ModAIS) {
-		logmsync(smap.Version, newSmap, msg, caller, newSmap.String(), smap.UUID)
+		logmsync(smap.Version, newSmap, msg, sender, newSmap.String(), smap.UUID)
 	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	debug.Assert(sameOrigin)
@@ -1707,7 +1706,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 }
 
 // return extracted (new) RMD with associated action message; otherwise error
-func (h *htrun) extractRMD(payload msPayload, caller string) (*rebMD, *actMsgExt, error) {
+func (h *htrun) extractRMD(payload msPayload, sender string) (*rebMD, *actMsgExt, error) {
 	rmdValue, ok := payload[revsRMDTag]
 	if !ok {
 		return nil, nil, nil
@@ -1729,7 +1728,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (*rebMD, *actMsgExt
 	}
 
 	rmd := h.owner.rmd.get()
-	logmsync(rmd.Version, newRMD, msg, caller, newRMD.String(), rmd.CluID)
+	logmsync(rmd.Version, newRMD, msg, sender, newRMD.String(), rmd.CluID)
 
 	if msg.Action == apc.ActPrimaryForce {
 		return newRMD, msg, nil
@@ -1752,7 +1751,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (*rebMD, *actMsgExt
 }
 
 // return extracted (new) BMD with associated action message; otherwise error
-func (h *htrun) extractBMD(payload msPayload, caller string) (*bucketMD, *actMsgExt, error) {
+func (h *htrun) extractBMD(payload msPayload, sender string) (*bucketMD, *actMsgExt, error) {
 	bmdValue, ok := payload[revsBMDTag]
 	if !ok {
 		return nil, nil, nil
@@ -1776,7 +1775,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (*bucketMD, *actMsg
 
 	bmd := h.owner.bmd.get()
 	if cmn.Rom.V(4, cos.ModAIS) {
-		logmsync(bmd.Version, newBMD, msg, caller, newBMD.String(), bmd.UUID)
+		logmsync(bmd.Version, newBMD, msg, sender, newBMD.String(), bmd.UUID)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
@@ -1792,12 +1791,12 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (*bucketMD, *actMsg
 	return newBMD, msg, nil
 }
 
-func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, caller string, cb smapUpdatedCB) error {
+func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, sender string, cb smapUpdatedCB) error {
 	if newSmap == nil {
 		return nil
 	}
 	smap := h.owner.smap.get()
-	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx(), smap.UUID)
+	logmsync(smap.Version, newSmap, msg, sender, newSmap.StringEx(), smap.UUID)
 
 	if !newSmap.isPresent(h.si) {
 		return &errSelfNotFound{act: "receive-smap", si: h.si, tag: "new", smap: newSmap}
@@ -1805,12 +1804,12 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *actMsgExt, payload msPayload, c
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
 
-func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *actMsgExt, payload msPayload, caller string, cb func(ne, oe *etlMD)) (err error) {
+func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *actMsgExt, payload msPayload, sender string, cb func(ne, oe *etlMD)) (err error) {
 	if newEtlMD == nil {
 		return
 	}
 	etlMD := h.owner.etl.get()
-	logmsync(etlMD.Version, newEtlMD, msg, caller)
+	logmsync(etlMD.Version, newEtlMD, msg, sender)
 
 	h.owner.etl.Lock()
 	etlMD = h.owner.etl.get()
@@ -1853,7 +1852,7 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *actMsgExt, payload msPayl
 	return cmn.GCO.Update(&newConfig.ClusterConfig)
 }
 
-func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*tokenList, error) {
+func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*tokenList, error) {
 	var (
 		msg       actMsgExt
 		bytes, ok = payload[revsTokenTag]
@@ -1872,7 +1871,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "blocked token list", cos.BHead(bytes), err)
 		return nil, err
 	}
-	nlog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,
+	nlog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", sender,
 		len(tokenList.Tokens), msg.Action, msg.UUID)
 	return tokenList, nil
 }
@@ -2235,13 +2234,13 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 // via /health handler
 func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
 	var (
-		callerID = r.Header.Get(apc.HdrCallerID)
-		caller   = r.Header.Get(apc.HdrCallerName)
+		senderID   = r.Header.Get(apc.HdrSenderID)
+		senderName = r.Header.Get(apc.HdrSenderName)
 	)
 	// external WD
 	// TODO: check receiving on PubNet
 	// NOTE: always ready for K8s
-	if callerID == "" && caller == "" {
+	if senderID == "" && senderName == "" {
 		if cmn.Rom.V(5, cos.ModKalive) {
 			readiness := strings.Contains(r.URL.RawQuery, apc.QparamHealthReady)
 			nlog.Infoln(h.String(), "external health-probe:", r.RemoteAddr, readiness, "[", r.URL.RawQuery, "]")
@@ -2267,25 +2266,26 @@ func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bo
 
 func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 	var (
-		callerID   = hdr.Get(apc.HdrCallerID)
-		callerName = hdr.Get(apc.HdrCallerName)
-		callerSver = hdr.Get(apc.HdrCallerSmapVer)
+		senderID   = hdr.Get(apc.HdrSenderID)
+		senderName = hdr.Get(apc.HdrSenderName)
+		senderSver = hdr.Get(apc.HdrSenderSmapVer)
 	)
 	if !h.ClusterStarted() {
 		return http.StatusServiceUnavailable, errors.New("not ready yet")
 	}
-	if ok := callerID != "" && callerName != ""; !ok {
+	if ok := senderID != "" && senderName != ""; !ok {
 		return 0, errIntraControl
 	}
 	if err := smap.validate(); err != nil {
 		return 0, err
 	}
-	caller := smap.GetNode(callerID)
-	if caller == nil {
-		return http.StatusConflict, fmt.Errorf("%s: caller %s (%s) not present in the local %s", h, callerID, callerName, smap.StringEx())
+	sender := smap.GetNode(senderID)
+	if sender == nil {
+		return http.StatusConflict, fmt.Errorf("%s: sender %s (%s) not present in the local %s", h, senderID, senderName, smap.StringEx())
 	}
-	if callerSver != smap.vstr {
-		return http.StatusConflict, fmt.Errorf("%s: different Smap version from %s(%s): %q vs local %s", h, callerID, callerName, callerSver, smap.StringEx())
+	if senderSver != smap.vstr {
+		return http.StatusConflict, fmt.Errorf("%s: different Smap version from %s(%s): %q vs local %s",
+			h, senderID, senderName, senderSver, smap.StringEx())
 	}
 	return 0, nil
 }
@@ -2293,46 +2293,46 @@ func (h *htrun) ensureSameSmap(hdr http.Header, smap *smapX) (int, error) {
 func (h *htrun) checkIntraCall(hdr http.Header, fromPrimary bool) error {
 	var (
 		smap       = h.owner.smap.get()
-		callerID   = hdr.Get(apc.HdrCallerID)
-		callerName = hdr.Get(apc.HdrCallerName)
-		callerSver = hdr.Get(apc.HdrCallerSmapVer)
+		senderID   = hdr.Get(apc.HdrSenderID)
+		senderName = hdr.Get(apc.HdrSenderName)
+		senderSver = hdr.Get(apc.HdrSenderSmapVer)
 	)
-	if ok := callerID != "" && callerName != ""; !ok {
+	if ok := senderID != "" && senderName != ""; !ok {
 		return errIntraControl
 	}
 	if !smap.isValid() {
 		return nil
 	}
-	caller := smap.GetNode(callerID)
-	if ok := caller != nil && (!fromPrimary || smap.isPrimary(caller)); ok {
+	node := smap.GetNode(senderID)
+	if ok := node != nil && (!fromPrimary || smap.isPrimary(node)); ok {
 		return nil
 	}
-	if callerSver != smap.vstr && callerSver != "" {
-		callerVer, err := strconv.ParseInt(callerSver, 10, 64)
+	if senderSver != smap.vstr && senderSver != "" {
+		ver, err := strconv.ParseInt(senderSver, 10, 64)
 		if err != nil { // (unlikely)
-			e := fmt.Errorf("%s: invalid caller's Smap ver [%s, %q, %w], %s", h, callerName, callerSver, err, smap)
+			e := fmt.Errorf("%s: invalid sender's Smap ver [%s, %q, %w], %s", h, senderName, senderSver, err, smap)
 			nlog.Errorln(e)
 			return e
 		}
 		// we still trust the request when the sender's Smap is more current
-		if callerVer > smap.version() {
+		if ver > smap.version() {
 			if h.ClusterStarted() {
 				// (exception: setting primary w/ force)
-				warn := h.String() + ": local " + smap.String() + " is older than (caller's) " + callerName + " Smap v" + callerSver
+				warn := h.String() + ": local " + smap.String() + " is older than (sender's) " + senderName + " Smap v" + senderSver
 				nlog.ErrorDepth(1, warn, "- proceeding anyway...")
 			}
 			runtime.Gosched()
 			return nil
 		}
 	}
-	if caller == nil {
+	if node == nil {
 		if !fromPrimary {
 			// assume request from a newly joined node and proceed
 			return nil
 		}
 		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
 	}
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, caller, smap)
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, node, smap)
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {

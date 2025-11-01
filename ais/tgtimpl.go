@@ -225,8 +225,8 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 		reqArgs.Method = http.MethodGet
 		reqArgs.Base = params.Tsi.URL(cmn.NetIntraData)
 		reqArgs.Header = http.Header{
-			apc.HdrCallerID:   []string{t.SID()},
-			apc.HdrCallerName: []string{t.String()},
+			apc.HdrSenderID:   []string{t.SID()},
+			apc.HdrSenderName: []string{t.String()},
 		}
 		reqArgs.Path = apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName)
 		reqArgs.Query = query

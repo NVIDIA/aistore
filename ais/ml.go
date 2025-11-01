@@ -280,17 +280,11 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(ok, xctn.Name())
 
 		if err := xmoss.Assemble(ctx.req, w, ctx.wid); err != nil {
-			// in single-target there’s no SDM and nobody to notify
-			if ctx.nat > 1 {
-				xmoss.BcastAbort(err)
-				bundle.SDM.UnregRecv(xmoss.ID())
-			}
-			xmoss.Abort(err)
+			// NOTE: not aborting x-moss on a single wid failure
 			if err == cmn.ErrGetTxBenign {
-				if cmn.Rom.V(5, cos.ModAIS) {
-					nlog.Warningln(err)
-				}
+				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 0)
 			} else {
+				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
 				t.writeErr(w, r, err)
 			}
 		}
@@ -396,8 +390,8 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		return
 	}
 	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
-		xmoss.BcastAbort(err)
-		xmoss.Abort(err)
+		// NOTE: not aborting x-moss on a single wid failure
+		xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
 		t.writeErr(w, r, err)
 	}
 }

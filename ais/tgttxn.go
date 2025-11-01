@@ -45,8 +45,8 @@ type txnSrv struct {
 	query      url.Values
 	uuid       string
 	phase      string
-	callerName string
-	callerID   string
+	senderName string
+	senderID   string
 	timeout    struct {
 		netw time.Duration
 		host time.Duration
@@ -1178,8 +1178,8 @@ func isDisableDM(msg *apc.TCBMsg) (bool, error) {
 ////////////
 
 func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
-	c.callerName = r.Header.Get(apc.HdrCallerName)
-	c.callerID = r.Header.Get(apc.HdrCallerID)
+	c.senderName = r.Header.Get(apc.HdrSenderName)
+	c.senderID = r.Header.Get(apc.HdrSenderID)
 
 	query := r.URL.Query()
 	if bucket != "" {
@@ -1196,11 +1196,11 @@ func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	if c.phase == apc.Begin2PC {
 		if ptime := query.Get(apc.QparamUnixTime); ptime != "" {
 			now := time.Now().UnixNano()
-			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrCallerIsPrimary))
+			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrSenderIsPrimary))
 			lim := int64(cmn.Rom.CplaneOperation()) >> 1
 			if dur > lim || dur < -lim {
 				nlog.Errorf("Warning: clock drift %s <-> %s(self) = %v, txn %s[%s]",
-					c.callerName, c.t, time.Duration(dur), c.msg.Action, c.msg.UUID)
+					c.senderName, c.t, time.Duration(dur), c.msg.Action, c.msg.UUID)
 			}
 		}
 	}

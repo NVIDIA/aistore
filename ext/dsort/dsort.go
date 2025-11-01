@@ -612,8 +612,8 @@ func (m *Manager) parseEKMFile() (shard.ExternalKeyMap, error) {
 	}
 	// is intra-call
 	tsi := core.T.Snode()
-	req.Header.Set(apc.HdrCallerID, tsi.ID())
-	req.Header.Set(apc.HdrCallerName, tsi.String())
+	req.Header.Set(apc.HdrSenderID, tsi.ID())
+	req.Header.Set(apc.HdrSenderName, tsi.String())
 
 	resp, err := m.client.Do(req) //nolint:bodyclose // closed by cos.Close below
 	if err != nil {

@@ -119,7 +119,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 		notifMsg = &core.NotifMsg{}
 		nl       nl.Listener
 		uuid     string
-		tid      = r.Header.Get(apc.HdrCallerID) // sender node ID
+		tid      = r.Header.Get(apc.HdrSenderID) // sender node ID
 	)
 	if r.Method != http.MethodPost {
 		cmn.WriteErr405(w, r, http.MethodPost)
