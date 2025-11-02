@@ -26,7 +26,7 @@ type (
 		pdu
 	}
 	rpdu struct {
-		body io.Reader
+		parent *iterator
 		pdu
 		flags uint64
 		plen  int
@@ -90,36 +90,38 @@ func (pdu *spdu) reset() {
 // rpdu //
 //////////
 
-func newRecvPDU(body io.Reader, buf []byte) (p *rpdu) {
-	p = &rpdu{body: body, pdu: pdu{buf: buf}}
+func newRecvPDU(it *iterator, buf []byte) (p *rpdu) {
+	p = &rpdu{parent: it, pdu: pdu{buf: buf}}
 	p.reset()
 	return
 }
 
-func (pdu *rpdu) readHdr(loghdr string) (err error) {
-	const fmterr = "sbrk %s: invalid PDU header [plen=%d, flags=%s]"
-	var n int
+func (pdu *rpdu) readHdr() error {
 	debug.Assert(pdu.woff == 0)
-	n, err = pdu.body.Read(pdu.buf[:sizeProtoHdr])
+	const (
+		fmterr = "(plen=%d, flags=%s)"
+	)
+	n, err := pdu.parent.body.Read(pdu.buf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
 		if err == nil {
-			err = fmt.Errorf("sbrk %s: failed to receive PDU header (n=%d)", loghdr, n)
+			err = io.ErrUnexpectedEOF
 		}
-		return
+		return pdu.parent.newErr(err, sbrPDUHdrTooShort, fmt.Sprintf("n=%d", n))
 	}
-	pdu.plen, pdu.flags, err = extProtoHdr(pdu.buf, loghdr)
+	// extract/validate
+	pdu.plen, pdu.flags, err = pdu.parent.extProtoHdr(pdu.buf)
 	if err != nil {
-		return
+		return err
 	}
 	if pdu.flags&pduFl == 0 || pdu.plen > maxSizePDU || pdu.plen < 0 {
-		err = fmt.Errorf(fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
-		debug.AssertNoErr(err)
-		return
+		detail := fmt.Sprintf(fmterr, pdu.plen, fl2s(pdu.flags))
+		return pdu.parent.newErr(nil, sbrPDUHdrInvalid, detail)
 	}
+
 	pdu.woff = sizeProtoHdr
 	pdu.last = pdu.flags&pduLastFl != 0
-	debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, loghdr, pdu.plen, fl2s(pdu.flags))
-	return
+	debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, pdu.plen, fl2s(pdu.flags))
+	return nil
 }
 
 func (pdu *rpdu) reset() {
@@ -128,7 +130,7 @@ func (pdu *rpdu) reset() {
 }
 
 func (pdu *rpdu) readFrom() (n int, err error) {
-	n, err = pdu.body.Read(pdu.buf[pdu.woff : sizeProtoHdr+pdu.plen]) // NOTE: maxSizePDU
+	n, err = pdu.parent.body.Read(pdu.buf[pdu.woff : sizeProtoHdr+pdu.plen]) // NOTE: maxSizePDU
 	pdu.woff += n
 	pdu.done = pdu.plength() == pdu.plen
 	if err != nil {

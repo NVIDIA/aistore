@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 
 	"github.com/valyala/fasthttp"
 )
@@ -85,6 +86,7 @@ func (s *streamBase) _do(body io.Reader, req *fasthttp.Request, resp *fasthttp.R
 	req.SetRequestURI(s.dstURL)
 	req.SetBodyStream(body, -1)
 	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
+	req.Header.Set(apc.HdrSenderID, core.T.SID())
 	req.Header.Set(cos.HdrUserAgent, ua)
 
 	// do

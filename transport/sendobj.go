@@ -341,16 +341,21 @@ func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
 		h    = &handler{trname: s.trname}
-		it   = iterator{handler: h, body: body, hbuf: make([]byte, cmn.DfltTransportHeader)}
+		it   = iterator{
+			handler: h,
+			body:    body,
+			hbuf:    make([]byte, cmn.DfltTransportHeader),
+			loghdr:  s.String(),
+		}
 	)
 	for {
-		hlen, flags, err := it.nextProtoHdr(s.String())
+		hlen, flags, err := it.nextProtoHdr()
 		if err == io.EOF {
 			break
 		}
 		debug.AssertNoErr(err)
 		debug.Assert(flags&msgFl == 0)
-		obj, err := it.nextObj(s.String(), hlen)
+		obj, err := it.nextObj(hlen)
 		if obj != nil {
 			cos.DrainReader(obj) // TODO: recycle `objReader` here
 			continue

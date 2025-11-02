@@ -26,6 +26,10 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
+// TODO:
+// - see "amend all callers" below
+// - err.IsBenign()
+
 // private types
 type (
 	handler struct {
@@ -38,11 +42,12 @@ type (
 		pdu     *rpdu
 		hbuf    []byte
 		sid     string
+		loghdr  string
 	}
 	objReader struct {
 		body   io.Reader
 		pdu    *rpdu
-		loghdr string
+		parent *iterator
 		hdr    ObjHdr
 		off    int64
 	}
@@ -100,8 +105,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	it.hbuf, _ = mm.AllocSize(_sizeHdr(config, 0))
 
 	// receive loop (until eof or error)
-	loghdr := _loghdr(h.trname, it.sid, core.T.SID(), false /*transmit*/, lz4Reader != nil)
-	err = it.rxloop(loghdr, mm)
+	it.loghdr = _loghdr(h.trname, it.sid, core.T.SID(), false /*transmit*/, lz4Reader != nil)
+	err = it.rxloop(mm)
 
 	// cleanup
 	if lz4Reader != nil {
@@ -132,13 +137,13 @@ func (h *handler) recv(hdr *ObjHdr, objReader io.Reader, err error) error {
 
 func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
-func (it *iterator) rxloop(loghdr string, mm *memsys.MMSA) (err error) {
+func (it *iterator) rxloop(mm *memsys.MMSA) (err error) {
 	for err == nil {
 		var (
 			flags uint64
 			hlen  int
 		)
-		hlen, flags, err = it.nextProtoHdr(loghdr)
+		hlen, flags, err = it.nextProtoHdr()
 		if err != nil {
 			if !cos.IsOkEOF(err) && false { // TODO: amend all callers and enable (ref 020943)
 				if errCb := it.handler.recv(&ObjHdr{}, nil, err); errCb != nil {
@@ -149,11 +154,11 @@ func (it *iterator) rxloop(loghdr string, mm *memsys.MMSA) (err error) {
 		}
 		if hlen > cap(it.hbuf) {
 			if hlen > cmn.MaxTransportHeader {
-				err = fmt.Errorf("sbr1 %s: transport header %d exceeds maximum %d", loghdr, hlen, cmn.MaxTransportHeader)
+				err = it.newErr(err, sbrProtoHdrTooLong, fmt.Sprintf("%d>%d", hlen, cmn.MaxTransportHeader))
 				break
 			}
 			// grow
-			nlog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
+			nlog.Warningf("%s: header length %d exceeds the current buffer %d", it.loghdr, hlen, cap(it.hbuf))
 			mm.Free(it.hbuf)
 			it.hbuf, _ = mm.AllocSize(min(int64(hlen)<<1, cmn.MaxTransportHeader))
 		}
@@ -162,23 +167,23 @@ func (it *iterator) rxloop(loghdr string, mm *memsys.MMSA) (err error) {
 		if flags&pduStreamFl != 0 {
 			if it.pdu == nil {
 				pbuf, _ := mm.AllocSize(maxSizePDU)
-				it.pdu = newRecvPDU(it.body, pbuf)
+				it.pdu = newRecvPDU(it, pbuf)
 			} else {
 				it.pdu.reset()
 			}
 		}
-		err = it.rxObj(loghdr, hlen)
+		err = it.rxObj(hlen)
 	}
 
 	return err
 }
 
-func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
+func (it *iterator) rxObj(hlen int) (err error) {
 	var (
 		obj *objReader
 		h   = it.handler
 	)
-	obj, err = it.nextObj(loghdr, hlen)
+	obj, err = it.nextObj(hlen)
 	if obj != nil {
 		if !obj.hdr.IsHeaderOnly() {
 			obj.pdu = it.pdu
@@ -220,7 +225,7 @@ func eofOK(err error) error {
 // - hlen: header length for transport.Obj (and formerly, message length for transport.Msg)
 // - flags: msgFl | pduFl | pduLastFl | pduStreamFl
 // - error
-func (it *iterator) nextProtoHdr(loghdr string) (int, uint64, error) {
+func (it *iterator) nextProtoHdr() (int, uint64, error) {
 	n, err := it.Read(it.hbuf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
 		switch {
@@ -231,13 +236,13 @@ func (it *iterator) nextProtoHdr(loghdr string) (int, uint64, error) {
 		default:
 			err = io.ErrUnexpectedEOF
 		}
-		return 0, 0, fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d): %w", loghdr, n, err)
+		return 0, 0, it.newErr(err, sbrProtoHdr, fmt.Sprintf("n=%d", n))
 	}
 	// extract and validate hlen
-	return extProtoHdr(it.hbuf, loghdr)
+	return it.extProtoHdr(it.hbuf)
 }
 
-func (it *iterator) nextObj(loghdr string, hlen int) (*objReader, error) {
+func (it *iterator) nextObj(hlen int) (*objReader, error) {
 	n, err := it.Read(it.hbuf[:hlen])
 	if n < hlen {
 		if err == nil {
@@ -262,7 +267,7 @@ func (it *iterator) nextObj(loghdr string, hlen int) (*objReader, error) {
 			if err == nil || errors.Is(err, io.EOF) {
 				err = io.ErrUnexpectedEOF
 			}
-			return nil, fmt.Errorf("sbr4 %s: failed to receive obj hdr (%d < %d): %w", loghdr, n, hlen, err)
+			return nil, it.newErr(err, sbrObjHdrTooShort, fmt.Sprintf("%d<%d", n, hlen))
 		}
 	}
 	hdr := ExtObjHeader(it.hbuf, hlen)
@@ -271,8 +276,18 @@ func (it *iterator) nextObj(loghdr string, hlen int) (*objReader, error) {
 	}
 
 	obj := allocRecv()
-	obj.body, obj.hdr, obj.loghdr = it.body, hdr, loghdr
+	obj.body, obj.hdr, obj.parent = it.body, hdr, it
 	return obj, nil
+}
+
+func (it *iterator) newErr(err error, code, detail string) error {
+	return &ErrSBR{
+		err:    err,
+		loghdr: it.loghdr,
+		sid:    it.sid,
+		code:   code,
+		detail: detail,
+	}
 }
 
 ///////////////
@@ -300,17 +315,16 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 			err = io.EOF
 		}
 	case io.EOF:
-		// premature EOF: expected size not reached
+		// premature EOF
 		if obj.off != obj.Size() {
-			err = fmt.Errorf("sbr6 %s: premature eof %d != %s: %w", obj.loghdr, obj.off, obj, io.ErrUnexpectedEOF)
+			err = obj.parent.newErr(io.ErrUnexpectedEOF, sbrObjDataEOF, obj.String())
 		}
 	default:
-		// we haven't consumed the header-specified size
+		// ditto, w/ error
 		if obj.off < obj.Size() {
-			err = fmt.Errorf("sbr7 %s: off %d, obj %s, cause: %v: %w", obj.loghdr, obj.off, obj, err, io.ErrUnexpectedEOF)
+			err = obj.parent.newErr(err, sbrObjDataSize, obj.String())
 		} else {
-			// read the full payload; just annotate
-			err = fmt.Errorf("sbr7 %s: off %d, obj %s, err %w", obj.loghdr, obj.off, obj, err)
+			err = obj.parent.newErr(err, sbrObjData, obj.String())
 		}
 	}
 	return n, err
@@ -330,14 +344,14 @@ func (obj *objReader) IsUnsized() bool { return obj.hdr.IsUnsized() }
 func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	pdu := obj.pdu
 	if pdu.woff == 0 {
-		err = pdu.readHdr(obj.loghdr)
+		err = pdu.readHdr()
 		if err != nil {
 			return 0, err
 		}
 	}
 	for !pdu.done {
 		if _, err = pdu.readFrom(); err != nil && err != io.EOF {
-			err = fmt.Errorf("sbr8 %s: failed to receive PDU, err %w, obj %s", obj.loghdr, err, obj)
+			err = obj.parent.newErr(err, sbrPDUData, obj.String())
 			break
 		}
 		debug.Assert(err == nil || (err == io.EOF && pdu.done))
@@ -357,8 +371,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
 			} else if obj.Size() != obj.off {
-				err = fmt.Errorf("sbr9 %s: off %d != %s: %w", obj.loghdr, obj.off, obj, io.ErrUnexpectedEOF)
-				nlog.Warningln(err)
+				err = obj.parent.newErr(io.ErrUnexpectedEOF, sbrPDUDataSize, obj.String())
 			}
 		} else {
 			pdu.reset()

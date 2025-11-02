@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -110,7 +111,6 @@ type (
 
 func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
 	var (
-		sid    string
 		u, err = url.Parse(dstURL)
 	)
 	debug.AssertNoErr(err)
@@ -124,10 +124,6 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.stopCh.Init()
 	s.postCh = make(chan struct{}, 1)
 
-	// default overrides
-	if extra.Parent != nil && extra.Parent.Xact != nil {
-		sid = "-" + extra.Parent.Xact.ID()
-	}
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
 		if extra.SizePDU > maxSizePDU {
@@ -146,6 +142,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
+	sid := core.T.SID()
 	s.loghdr = _loghdr(s.trname, sid, dstID, true, extra.Compressed())
 	s.maxhdr, _ = g.mm.AllocSize(_sizeHdr(extra.Config, int64(extra.MaxHdrSize)))
 
@@ -170,8 +167,7 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 
 	if s.IsTerminated() {
 		// slow path
-		reason, errT := s.TermInfo()
-		err = cmn.NewErrStreamTerminated(s.String(), errT, reason, "dropping "+streamable.String())
+		err = s.newErr("dropping " + streamable.String())
 		if s.term.yelp.CAS(false, true) { // only once
 			nlog.Errorln(err)
 		}
@@ -185,6 +181,17 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 		}
 	}
 	return
+}
+
+func (s *streamBase) newErr(detail string) error {
+	reason, errT := s.TermInfo()
+	return &ErrStreamTerm{
+		err:    errT,
+		dst:    s.dstID,
+		loghdr: s.loghdr,
+		reason: reason,
+		detail: detail,
+	}
 }
 
 func (s *streamBase) Stop()               { s.stopCh.Close() }

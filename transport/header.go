@@ -124,15 +124,17 @@ func insAttrs(off int, to []byte, attr *cmn.ObjAttrs) int {
 // proto header: deserialization
 //
 
-func extProtoHdr(hbuf []byte, loghdr string) (hlen int, flags uint64, err error) {
+func (it *iterator) extProtoHdr(hbuf []byte) (hlen int, flags uint64, err error) {
 	off, word1 := extUint64(0, hbuf)
 	hlen = int(word1 & ^allFlags)
 	flags = word1 & allFlags
+	//
 	// validate checksum
+	//
 	_, checksum := extUint64(0, hbuf[off:])
 	chc := xoshiro256.Hash(word1)
 	if checksum != chc {
-		err = fmt.Errorf("sbrk %s: bad checksum %x != %x (hlen=%d)", loghdr, checksum, chc, hlen)
+		err = it.newErr(nil, sbrHdrChecksum, fmt.Sprintf("%x != %x (hlen=%d)", checksum, chc, hlen))
 	}
 	return
 }

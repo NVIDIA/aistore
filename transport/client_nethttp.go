@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 )
 
 const ua = "aisnode/streams"
@@ -67,6 +68,7 @@ func (s *streamBase) doCmpr(body io.Reader) error {
 
 func (s *streamBase) _do(req *http.Request) error {
 	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
+	req.Header.Set(apc.HdrSenderID, core.T.SID())
 	req.Header.Set(cos.HdrUserAgent, ua)
 
 	resp, err := s.client.Do(req)
