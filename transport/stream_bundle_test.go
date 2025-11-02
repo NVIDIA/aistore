@@ -138,8 +138,8 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	smap.Version = 1
 
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		if err != nil && !cos.IsEOF(err) {
-			tassert.CheckFatal(t, err)
+		if err != nil && !cos.IsOkEOF(err) {
+			return err
 		}
 		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
@@ -211,21 +211,9 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		}
 	}
 	sb.Close(true /* gracefully */)
-	stats := sb.GetStats()
 
 	slab.Free(wbuf)
 
-	if nvs["compression"] != apc.CompressNever {
-		for id, tstat := range stats {
-			tlog.Logf("send$ %s/%s: offset=%d, num=%d(%d), compression-ratio=%.2f\n",
-				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num, tstat.CompressionRatio())
-		}
-	} else {
-		for id, tstat := range stats {
-			tlog.Logf("send$ %s/%s: offset=%d, num=%d(%d)\n",
-				id, trname, tstat.Offset.Load(), tstat.Num.Load(), num)
-		}
-	}
 	tlog.Logf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }
 

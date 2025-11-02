@@ -23,7 +23,7 @@ const (
 	numOld = 32
 )
 
-type hmap map[string]handler
+type hmap map[string]*handler
 
 type (
 	errTrname struct {
@@ -52,7 +52,7 @@ func _idx(trname string) byte {
 	return byte(hash & mskHmaps)
 }
 
-func oget(trname string) (h handler, err error) {
+func oget(trname string) (h *handler, err error) {
 	i := _idx(trname)
 	hmtxs[i].Lock()
 	hmap := hmaps[i]
@@ -77,7 +77,7 @@ func _lookup(trname string) error {
 	return &errUnknownTrname{errTrname{trname}}
 }
 
-func oput(trname string, h handler) (err error) {
+func oput(trname string, h *handler) (err error) {
 	i := _idx(trname)
 	hmtxs[i].Lock()
 	hmap := hmaps[i]
@@ -95,7 +95,7 @@ func odel(trname string) (err error) {
 	i := _idx(trname)
 	hmtxs[i].Lock()
 	hmap := hmaps[i]
-	h, ok := hmap[trname]
+	_, ok := hmap[trname]
 	if !ok {
 		hmtxs[i].Unlock()
 		return &errAlreadyRemovedTrname{errTrname{trname}}
@@ -103,8 +103,6 @@ func odel(trname string) (err error) {
 
 	delete(hmap, trname)
 	hmtxs[i].Unlock()
-
-	h.unreg()
 
 	oldMtx.Lock()
 	old[oldIdx] = trname

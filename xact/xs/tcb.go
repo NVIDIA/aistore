@@ -419,7 +419,7 @@ func (r *XactTCB) do(lom *core.LOM, buf []byte) error {
 
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-	if err != nil && !cos.IsEOF(err) {
+	if err != nil && !cos.IsOkEOF(err) {
 		nlog.Errorln(err)
 		return err
 	}

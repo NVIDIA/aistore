@@ -241,7 +241,7 @@ repeat:
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
 		if cmn.Rom.V(5, cos.ModTransport) {
-			nlog.Infoln(s.String(), "stopped [", s.numCur, s.stats.Num.Load(), "]")
+			nlog.Infoln(s.String(), "stopped [", s.numCur, "]")
 		}
 		return 0, io.EOF
 	}
@@ -254,7 +254,6 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		return
 	}
 	debug.Assert(s.sendoff.off == int64(len(s.header)))
-	s.stats.Offset.Add(s.sendoff.off)
 
 	obj := &s.sendoff.obj
 	if s.usePDU() && !obj.IsHeaderOnly() {
@@ -263,7 +262,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		s.sendoff.ins = inData
 	}
 	if cmn.Rom.V(5, cos.ModTransport) && s.numCur&0x3f == 2 {
-		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, s.stats.Num.Load(), "]")
+		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, "]")
 	}
 	s.sendoff.off = 0
 	if obj.Hdr.isFin() {
@@ -310,7 +309,6 @@ func (s *Stream) eoObj(err error) {
 		objSize = s.sendoff.off
 	}
 	s.sizeCur += s.sendoff.off
-	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
 		goto exit
 	}
@@ -319,11 +317,9 @@ func (s *Stream) eoObj(err error) {
 		goto exit
 	}
 	// this stream stats
-	s.stats.Size.Add(objSize)
 	s.numCur++
-	s.stats.Num.Inc()
 	if cmn.Rom.V(5, cos.ModTransport) && s.numCur&0x3f == 3 {
-		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, s.stats.Num.Load(), "]")
+		nlog.Infoln(s.String(), obj.Hdr.Cname(), "[", s.numCur, "]")
 	}
 
 	// target stats
@@ -344,7 +340,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &hdl{trname: s.trname}
+		h    = &handler{trname: s.trname}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, cmn.DfltTransportHeader)}
 	)
 	for {
@@ -406,16 +402,6 @@ func (s *Stream) idleTick() {
 	}
 }
 
-///////////
-// Stats //
-///////////
-
-func (stats *Stats) CompressionRatio() float64 {
-	bytesRead := stats.Offset.Load()
-	bytesSent := stats.CompressedSize.Load()
-	return float64(bytesRead) / float64(bytesSent)
-}
-
 ///////////////
 // lz4Stream //
 ///////////////
@@ -455,7 +441,6 @@ re:
 		n, _ = lz4s.sgl.Read(b)
 	}
 ex:
-	lz4s.s.stats.CompressedSize.Add(int64(n))
 	if lz4s.sgl.Len() == 0 {
 		lz4s.sgl.Reset()
 	}

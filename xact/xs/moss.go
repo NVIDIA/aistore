@@ -667,14 +667,12 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 // demux -> wi.recv()
 // note convention: received hdr.ObjName is `nameInArch` (ie., filename in resulting TAR)
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+	defer transport.DrainAndFreeReader(reader)
 	if err != nil {
 		nlog.Errorln(err)
 		return err
 	}
 	if r.IsAborted() || r.Finished() {
-		if reader != nil && !hdr.IsHeaderOnly() {
-			io.Copy(io.Discard, reader)
-		}
 		return nil
 	}
 
@@ -715,9 +713,6 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	a, loaded := r.pending.Load(mopaque.WID)
 	if !loaded {
 		// stale or unknown WID: drop quietly
-		if reader != nil && !hdr.IsHeaderOnly() {
-			io.Copy(io.Discard, reader)
-		}
 		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Infof("%s: wi %q not pending - dropping", r.Name(), mopaque.WID)
 		}
@@ -727,9 +722,6 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 
 	// already cleaned-up via gcAbandoned()? drop as well
 	if wi.clean.Load() {
-		if reader != nil && !hdr.IsHeaderOnly() {
-			io.Copy(io.Discard, reader)
-		}
 		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Name(), wi.wid)
 		}

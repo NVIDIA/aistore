@@ -193,7 +193,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
 		n, err := io.Copy(io.Discard, objReader)
-		if err != nil && !cos.IsEOF(err) {
+		if err != nil && !cos.IsOkEOF(err) {
 			nlog.Errorf("failed to read request body: %v", err)
 			return err
 		}

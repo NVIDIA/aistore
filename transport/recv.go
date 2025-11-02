@@ -13,38 +13,31 @@ import (
 	"net/http"
 	"path"
 	"runtime"
-	"strconv"
-	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/hk"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
 
-	onexxh "github.com/OneOfOne/xxhash"
 	"github.com/pierrec/lz4/v4"
 )
 
-const sessionIsOld = time.Hour
-
 // private types
 type (
-	rxStats interface {
-		addOff(int64)
-		incNum()
+	handler struct {
+		rxObj  RecvObj
+		trname string
 	}
 	iterator struct {
 		body    io.Reader
-		handler handler
+		handler *handler
 		pdu     *rpdu
-		stats   rxStats
 		hbuf    []byte
+		sid     string
 	}
 	objReader struct {
 		body   io.Reader
@@ -53,31 +46,6 @@ type (
 		hdr    ObjHdr
 		off    int64
 	}
-
-	handler interface {
-		recv(hdr *ObjHdr, objReader io.Reader, err error) error // RecvObj
-		stats(*http.Request, string) (rxStats, uint64, string)
-		unreg()
-		addOld(uint64)
-		getStats() RxStats
-	}
-	hdl struct {
-		rxObj  RecvObj
-		trname string
-		now    int64
-	}
-	hdlExtra struct {
-		sessions    sync.Map
-		oldSessions sync.Map
-		hkName      string
-		hdl
-	}
-)
-
-// interface guard
-var (
-	_ handler = (*hdl)(nil)
-	_ handler = (*hdlExtra)(nil)
 )
 
 // global
@@ -121,15 +89,19 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		config             = cmn.GCO.Get()
-		stats, uid, loghdr = h.stats(r, trname)
-		it                 = &iterator{handler: h, body: reader, stats: stats}
+		config = cmn.GCO.Get()
+		it     = &iterator{
+			handler: h,
+			body:    reader,
+			sid:     r.Header.Get(apc.HdrSenderID),
+		}
 	)
 	debug.Assert(config.Transport.IdleTeardown > 0, "invalid config ", config.Transport)
 	it.hbuf, _ = mm.AllocSize(_sizeHdr(config, 0))
 
 	// receive loop (until eof or error)
-	err = it.rxloop(uid, loghdr, mm)
+	loghdr := _loghdr(h.trname, it.sid, core.T.SID(), false /*transmit*/, lz4Reader != nil)
+	err = it.rxloop(loghdr, mm)
 
 	// cleanup
 	if lz4Reader != nil {
@@ -140,7 +112,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	}
 	mm.Free(it.hbuf)
 
-	if !cos.IsEOF(err) {
+	if !cos.IsOkEOF(err) {
 		cmn.WriteErr(w, r, err)
 	}
 }
@@ -150,78 +122,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 ////////////////
 
 // begin t2t session
-func (h *hdl) stats(r *http.Request, trname string) (rxStats, uint64, string) {
-	debug.Assertf(h.trname == trname, "%q vs %q", h.trname, trname)
-	sid := r.Header.Get(apc.HdrSessID)
-	loghdr := h.trname + "[" + r.RemoteAddr + ":" + sid + "]"
-	return nopRxStats{}, 0, loghdr
-}
-
-// ditto, with Rx stats
-func (h *hdlExtra) stats(r *http.Request, trname string) (rxStats, uint64, string) {
-	debug.Assertf(h.trname == trname, "%q vs %q", h.trname, trname)
-	sid := r.Header.Get(apc.HdrSessID)
-
-	sessID, err := strconv.ParseInt(sid, 10, 64)
-	if err != nil || sessID == 0 {
-		err = fmt.Errorf("%s[:%q]: invalid session ID, err %w", h.trname, sid, err)
-		cos.AssertNoErr(err)
-	}
-
-	// yet another id to index optional h.sessions & h.oldSessions sync.Maps
-	uid := uniqueID(r, sessID)
-	statsif, _ := h.sessions.LoadOrStore(uid, &Stats{})
-
-	xxh, _ := UID2SessID(uid)
-	loghdr := fmt.Sprintf("%s[%d:%d]", h.trname, xxh, sessID)
-	if cmn.Rom.V(5, cos.ModTransport) {
-		nlog.Infoln(loghdr, "start-of-stream from", r.RemoteAddr)
-	}
-	return statsif.(rxStats), uid, loghdr
-}
-
-func (*hdl) unreg()        {}
-func (h *hdlExtra) unreg() { hk.Unreg(h.hkName + hk.NameSuffix) }
-
-func (*hdl) addOld(uint64)            {}
-func (h *hdlExtra) addOld(uid uint64) { h.oldSessions.Store(uid, mono.NanoTime()) }
-
-func (h *hdlExtra) cleanup(now int64) time.Duration {
-	h.now = now
-	h.oldSessions.Range(h.cl)
-	return hk.Jitter(sessionIsOld, now)
-}
-
-func (h *hdlExtra) cl(key, value any) bool {
-	timeClosed := value.(int64)
-	if time.Duration(h.now-timeClosed) > sessionIsOld {
-		uid := key.(uint64)
-		h.oldSessions.Delete(uid)
-		h.sessions.Delete(uid)
-	}
-	return true
-}
-
-func (h *hdl) recv(hdr *ObjHdr, objReader io.Reader, err error) error {
+func (h *handler) recv(hdr *ObjHdr, objReader io.Reader, err error) error {
 	return h.rxObj(hdr, objReader, err)
-}
-
-func (*hdl) getStats() RxStats { return nil }
-
-func (h *hdlExtra) getStats() (s RxStats) {
-	s = make(RxStats, 4)
-	h.sessions.Range(s.f)
-	return s
-}
-
-func (s RxStats) f(key, value any) bool {
-	out := &Stats{}
-	uid := key.(uint64)
-	in := value.(*Stats)
-	out.Num.Store(in.Num.Load())       // via rxStats.incNum
-	out.Offset.Store(in.Offset.Load()) // via rxStats.addOff
-	s[uid] = out
-	return true
 }
 
 //////////////////////////////////
@@ -230,7 +132,7 @@ func (s RxStats) f(key, value any) bool {
 
 func (it *iterator) Read(p []byte) (n int, err error) { return it.body.Read(p) }
 
-func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err error) {
+func (it *iterator) rxloop(loghdr string, mm *memsys.MMSA) (err error) {
 	for err == nil {
 		var (
 			flags uint64
@@ -238,6 +140,11 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 		)
 		hlen, flags, err = it.nextProtoHdr(loghdr)
 		if err != nil {
+			if !cos.IsOkEOF(err) && false { // TODO: amend all callers and enable (ref 020943)
+				if errCb := it.handler.recv(&ObjHdr{}, nil, err); errCb != nil {
+					err = errCb
+				}
+			}
 			break
 		}
 		if hlen > cap(it.hbuf) {
@@ -251,7 +158,6 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 			it.hbuf, _ = mm.AllocSize(min(int64(hlen)<<1, cmn.MaxTransportHeader))
 		}
 
-		it.stats.addOff(int64(hlen + sizeProtoHdr))
 		debug.Assert(flags&msgFl == 0) //  messaging: not used, removed
 		if flags&pduStreamFl != 0 {
 			if it.pdu == nil {
@@ -264,7 +170,6 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 		err = it.rxObj(loghdr, hlen)
 	}
 
-	it.handler.addOld(uid)
 	return err
 }
 
@@ -286,8 +191,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		debug.DeadBeefSmall(it.hbuf[:hlen])
 		// stats
 		if err == nil {
-			it.stats.incNum()                   // 1. this stream stats
-			g.tstats.Inc(cos.StreamsInObjCount) // 2. stats/target_stats.go
+			g.tstats.Inc(cos.StreamsInObjCount) // stats/target_stats.go
 
 			if size >= 0 {
 				g.tstats.Add(cos.StreamsInObjSize, size)
@@ -319,7 +223,12 @@ func eofOK(err error) error {
 func (it *iterator) nextProtoHdr(loghdr string) (int, uint64, error) {
 	n, err := it.Read(it.hbuf[:sizeProtoHdr])
 	if n < sizeProtoHdr {
-		if err == nil || errors.Is(err, io.EOF) {
+		switch {
+		case err == nil:
+			err = io.ErrUnexpectedEOF
+		case n == 0 && cos.IsOkEOF(err):
+			return 0, 0, err
+		default:
 			err = io.ErrUnexpectedEOF
 		}
 		return 0, 0, fmt.Errorf("sbr3 %s: failed to receive proto hdr (n=%d): %w", loghdr, n, err)
@@ -456,20 +365,6 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 		}
 	}
 	return n, err
-}
-
-//
-// session ID <=> unique ID
-//
-
-func uniqueID(r *http.Request, sessID int64) uint64 {
-	hash := onexxh.Checksum64S(cos.UnsafeB(r.RemoteAddr), cos.MLCG32)
-	return (hash&math.MaxUint32)<<32 | uint64(sessID)
-}
-
-func UID2SessID(uid uint64) (xxh, sessID uint64) {
-	xxh, sessID = uid>>32, uid&math.MaxUint32
-	return xxh, sessID
 }
 
 // DrainAndFreeReader:

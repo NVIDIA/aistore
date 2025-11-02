@@ -727,7 +727,7 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		// see:  streamingX.sendTerm
 		err = newErrRecvAbort(r, hdr)
 	}
-	if err != nil && !cos.IsEOF(err) {
+	if err != nil && !cos.IsOkEOF(err) {
 		nlog.Errorln(core.T.String(), r.String(), len(r.remtCh), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 		return err

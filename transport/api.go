@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -115,12 +114,6 @@ type (
 	RecvObj func(hdr *ObjHdr, objReader io.Reader, err error) error
 )
 
-// receive-side session stats indexed by session ID (see recv.go for "uid")
-// optional, currently tests only
-type (
-	RxStats map[uint64]*Stats
-)
-
 // shared data mover (SDM)
 type (
 	Receiver interface {
@@ -204,16 +197,8 @@ func (s *Stream) Fin() {
 // receive-side API //
 //////////////////////
 
-func Handle(trname string, rxObj RecvObj, withStats ...bool) error {
-	var h handler
-	if len(withStats) > 0 && withStats[0] {
-		hkName := ObjURLPath(trname)
-		hex := &hdlExtra{hdl: hdl{trname: trname, rxObj: rxObj}, hkName: hkName}
-		hk.Reg(hkName+hk.NameSuffix, hex.cleanup, sessionIsOld)
-		h = hex
-	} else {
-		h = &hdl{trname: trname, rxObj: rxObj}
-	}
+func Handle(trname string, rxObj RecvObj) error {
+	h := &handler{trname: trname, rxObj: rxObj}
 	return oput(trname, h)
 }
 
@@ -230,18 +215,4 @@ func _urlPath(endp, trname string) string {
 		return cos.JoinW0(apc.Version, endp)
 	}
 	return cos.JoinW0(apc.Version, endp, trname)
-}
-
-func GetRxStats() (netstats map[string]RxStats) {
-	netstats = make(map[string]RxStats)
-	for i, hmap := range hmaps {
-		hmtxs[i].Lock()
-		for trname, h := range hmap {
-			if s := h.getStats(); s != nil {
-				netstats[trname] = s
-			}
-		}
-		hmtxs[i].Unlock()
-	}
-	return
 }

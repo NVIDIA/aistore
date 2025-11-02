@@ -263,7 +263,7 @@ func IsUnreachable(err error, status int) bool {
 		errors.Is(err, context.DeadlineExceeded) ||
 		status == http.StatusRequestTimeout ||
 		status == http.StatusServiceUnavailable ||
-		IsEOF(err) ||
+		IsAnyEOF(err) ||
 		status == http.StatusBadGateway
 }
 

@@ -51,7 +51,6 @@ type (
 		multiplier   int // optionally: multiple streams per destination (round-robin)
 		manualResync bool
 	}
-	Stats map[string]*transport.Stats // by DaemonID
 
 	Args struct {
 		Extra        *transport.Extra // additional parameters
@@ -103,7 +102,7 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 	sb.Resync()
 	sb.smaplock.Unlock()
 
-	sb._lid()
+	sb.lid = sb._lid()
 	nlog.Infoln("open", sb.lid)
 
 	// for auto-resync, register this stream-bundle as Smap listener
@@ -114,10 +113,14 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 	return sb
 }
 
-func (sb *Streams) _lid() {
-	var s strings.Builder
+func (sb *Streams) String() string { return sb.lid }
 
-	s.WriteString("sb-[")
+// (compare w/ transport._loghdr)
+func (sb *Streams) _lid() string {
+	var s strings.Builder
+	s.Grow(20 + len(sb.trname))
+
+	s.WriteString(cos.Ternary(sb.extra.Compressed(), "sb(z)-[", "sb-["))
 	s.WriteString(core.T.SID())
 	if sb.network != cmn.NetIntraData {
 		s.WriteByte('-')
@@ -128,11 +131,9 @@ func (sb *Streams) _lid() {
 	s.WriteByte('-')
 	s.WriteString(sb.trname)
 
-	sb.extra.Lid(&s)
-
 	s.WriteByte(']')
 
-	sb.lid = s.String() // approx. "sb[%s-%s-%s...]"
+	return s.String()
 }
 
 // Close closes all contained streams and unregisters the bundle from Smap listeners;
@@ -232,7 +233,6 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	}
 }
 
-func (sb *Streams) String() string   { return sb.lid }
 func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
@@ -245,17 +245,6 @@ func (sb *Streams) ListenSmapChanged() {
 	sb.smaplock.Lock()
 	sb.Resync()
 	sb.smaplock.Unlock()
-}
-
-func (sb *Streams) GetStats() Stats {
-	streams := sb.get()
-	stats := make(Stats, len(streams))
-	for id, robin := range streams {
-		s := robin.stsdest[0]
-		tstat := s.GetStats()
-		stats[id] = &tstat
-	}
-	return stats
 }
 
 //

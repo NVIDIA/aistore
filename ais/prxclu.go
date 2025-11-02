@@ -2096,7 +2096,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 		emsg := fmt.Sprintf("%s: (%s %s) final: %v - proceeding anyway...", p, msg, sname, err)
 		switch msg.Action {
 		case apc.ActShutdownNode, apc.ActDecommissionNode: // expecting EOF
-			if !cos.IsEOF(err) {
+			if !cos.IsAnyEOF(err) {
 				nlog.Errorln(emsg)
 			}
 		case apc.ActRmNodeUnsafe:

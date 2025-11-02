@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/core"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -88,9 +87,9 @@ type (
 			reason string
 			mu     sync.Mutex
 			done   atomic.Bool
+			yelp   atomic.Bool
 		}
-		stats Stats // stream stats (send side - compare with rxStats)
-		time  struct {
+		time struct {
 			idleTeardown time.Duration // idle timeout
 			inSend       atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
 			ticks        int           // num 1s ticks until idle timeout
@@ -138,6 +137,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 		buf, _ := g.mm.AllocSize(int64(extra.SizePDU))
 		s.pdu = newSendPDU(buf)
 	}
+	// idle time
 	if extra.IdleTeardown > 0 {
 		s.time.idleTeardown = extra.IdleTeardown
 	} else {
@@ -146,33 +146,12 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
 	s.time.ticks = int(s.time.idleTeardown / dfltTick)
 
-	s._loghdr(sid, dstID, extra)
-
+	s.loghdr = _loghdr(s.trname, sid, dstID, true, extra.Compressed())
 	s.maxhdr, _ = g.mm.AllocSize(_sizeHdr(extra.Config, int64(extra.MaxHdrSize)))
 
-	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
+	// fsm: initiate HTTP session upon the first arrival
+	s.sessST.Store(inactive)
 	return s
-}
-
-func (s *streamBase) _loghdr(sid, dstID string, extra *Extra) {
-	var (
-		sb strings.Builder
-		l  = 2 + len(s.trname) + len(sid) + 32 + len(dstID)
-	)
-	sb.Grow(l)
-
-	sb.WriteString("s-")
-	sb.WriteString(s.trname)
-	sb.WriteString(sid)
-	sb.WriteByte('[')
-	sb.WriteString(core.T.SID()) // (consider adding back session ID, as in: [node-ID/110])
-
-	extra.Lid(&sb) // + compressed
-
-	sb.WriteString("]=>")
-	sb.WriteString(dstID)
-
-	s.loghdr = sb.String() // looks like: s-<trname><sid>[<sender-id>]=><dest-id>
 }
 
 // (used on the receive side as well)
@@ -193,7 +172,9 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 		// slow path
 		reason, errT := s.TermInfo()
 		err = cmn.NewErrStreamTerminated(s.String(), errT, reason, "dropping "+streamable.String())
-		nlog.Errorln(err)
+		if s.term.yelp.CAS(false, true) { // only once
+			nlog.Errorln(err)
+		}
 		return
 	}
 
@@ -230,15 +211,6 @@ func (s *streamBase) TermInfo() (reason string, err error) {
 	return
 }
 
-func (s *streamBase) GetStats() (stats Stats) {
-	// byte-num transfer stats
-	stats.Num.Store(s.stats.Num.Load())
-	stats.Offset.Store(s.stats.Offset.Load())
-	stats.Size.Store(s.stats.Size.Load())
-	stats.CompressedSize.Store(s.stats.CompressedSize.Load())
-	return
-}
-
 func (s *streamBase) isNextReq() (reason string) {
 	for {
 		select {
@@ -267,7 +239,7 @@ func (s *streamBase) isNextReq() (reason string) {
 func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
 	if cmn.Rom.V(5, cos.ModTransport) {
-		nlog.Infoln(s.String(), "connection teardown: [", s.numCur, s.stats.Num.Load(), "]")
+		nlog.Infoln(s.String(), "connection teardown: [", s.numCur, "]")
 	}
 	return
 }
@@ -384,14 +356,6 @@ func (extra *Extra) Compressed() bool {
 	return extra.Compression != "" && extra.Compression != apc.CompressNever
 }
 
-func (extra *Extra) Lid(sb *strings.Builder) {
-	if extra.Compressed() {
-		sb.WriteByte('[')
-		sb.WriteString(extra.Config.Transport.LZ4BlockMaxSize.String())
-		sb.WriteByte(']')
-	}
-}
-
 //
 // misc
 //
@@ -404,6 +368,25 @@ func dryrun() (dryrun bool) {
 		}
 	}
 	return
+}
+
+func _loghdr(trname, from, to string, transmit, compressed bool) string {
+	var (
+		sb strings.Builder
+		l  = len(trname) + len(from) + len(to) + 16
+	)
+	sb.Grow(l)
+
+	sb.WriteString(trname)
+	sb.WriteByte('[')
+	if compressed {
+		sb.WriteString("(z)")
+	}
+	sb.WriteString(from)
+	sb.WriteString(cos.Ternary(transmit, "=>", "<="))
+	sb.WriteString(to)
+	sb.WriteByte(']')
+	return sb.String()
 }
 
 //////////

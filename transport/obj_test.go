@@ -202,7 +202,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 
 func Example_obj() {
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil)
+		cos.Assert(err == nil) // TODO: (ref 020943)
 		object, err := cos.ReadAll(objReader)
 		if err != nil {
 			panic(err)
@@ -240,8 +240,7 @@ func TestOneStream(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	streamWriteUntil(t, 55, nil, ts, nil, nil, false /*compress*/, true /*PDU*/)
-	printNetworkStats()
+	streamWriteUntil(t, 55, nil, ts, false /*compress*/, true /*PDU*/)
 }
 
 func TestMultiStream(t *testing.T) {
@@ -252,48 +251,12 @@ func TestMultiStream(t *testing.T) {
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
-	netstats := make(map[string]transport.RxStats)
-	lock := &sync.Mutex{}
 	for i := range 16 {
 		wg.Add(1)
-		go streamWriteUntil(t, i, wg, ts, netstats, lock, false /*compress*/, false /*PDU*/)
+		go streamWriteUntil(t, i, wg, ts, false /*compress*/, false /*PDU*/)
 	}
 	wg.Wait()
-	compareNetworkStats(netstats)
-}
-
-func printNetworkStats() {
-	netstats := transport.GetRxStats()
-	for trname, eps := range netstats {
-		for uid, stats := range eps { // RxStats by session ID
-			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
-				trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
-		}
-	}
-}
-
-func compareNetworkStats(netstats1 map[string]transport.RxStats) {
-	netstats2 := transport.GetRxStats()
-	for trname, eps2 := range netstats2 {
-		eps1, ok := netstats1[trname]
-		for uid, stats2 := range eps2 { // RxStats by session ID
-			xx, sessID := transport.UID2SessID(uid)
-			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
-				stats2.Offset.Load(), stats2.Num.Load())
-			if ok {
-				stats1, ok := eps1[sessID]
-				if ok {
-					fmt.Printf("send$ %s[%d]: offset=%d, num=%d\n",
-						trname, sessID, stats1.Offset.Load(), stats1.Num.Load())
-				} else {
-					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
-				}
-			} else {
-				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessID)
-			}
-		}
-	}
+	tlog.Logln("Multi-stream test completed successfully")
 }
 
 func TestMultipleNetworks(t *testing.T) {
@@ -405,8 +368,7 @@ func TestObjAttrs(t *testing.T) {
 
 	var receivedCount atomic.Int64
 	recvFunc := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil)
-
+		cos.Assert(err == nil) // TODO; (ref 020943)
 		idx := hdr.Opaque[0]
 		cos.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
 		cos.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
@@ -457,7 +419,7 @@ func TestObjAttrs(t *testing.T) {
 }
 
 func receive10G(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-	cos.Assert(err == nil || cos.IsEOF(err))
+	cos.Assert(err == nil || cos.IsAnyEOF(err)) // TODO: (ref 020943)
 	written, _ := io.Copy(io.Discard, objReader)
 	cos.Assert(written == hdr.ObjAttrs.Size)
 	return nil
@@ -477,7 +439,7 @@ func TestCompressedOne(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	err := transport.Handle(trname, receive10G, true /*with Rx stats*/)
+	err := transport.Handle(trname, receive10G)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 
@@ -515,20 +477,14 @@ func TestCompressedOne(t *testing.T) {
 		num++
 		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cos.GiB*4 {
-			stats := stream.GetStats()
-			tlog.Logf("%s: %d GiB compression-ratio=%.2f\n", stream, size/cos.GiB, stats.CompressionRatio())
+			tlog.Logf("%s: %d GiB\n", stream, size/cos.GiB)
 			prevsize = size
 		}
 	}
 	stream.Fin()
-	stats := stream.GetStats()
 
 	slab.Free(buf)
-
-	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
-		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
-
-	printNetworkStats()
+	tlog.Logf("Compressed stream test: sent %d objects (%d header-only) totaling %d GiB\n", num, numhdr, size/cos.GiB)
 }
 
 // TODO: Skip unmaintained dry-run test to reduce test runtime (revisit)
@@ -573,9 +529,7 @@ func TestDryRun(t *testing.T) {
 		}
 	}
 	stream.Fin()
-	stats := stream.GetStats()
-
-	tlog.Logf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
+	tlog.Logf("[dry]: sent %d objects totaling %d GiB\n", num, size/cos.GiB)
 }
 
 func TestCompletionCount(t *testing.T) {
@@ -586,7 +540,7 @@ func TestCompletionCount(t *testing.T) {
 	)
 
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil)
+		cos.Assert(err == nil) // TODO: (ref 020943)
 		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
@@ -645,14 +599,13 @@ func TestCompletionCount(t *testing.T) {
 // test helpers
 //
 
-func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server,
-	netstats map[string]transport.RxStats, lock sync.Locker, compress, usePDU bool) {
+func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, compress, usePDU bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
 	trname := fmt.Sprintf("rand-rx-%d", ii)
-	err := transport.Handle(trname, recvFunc, true /* with Rx stats */)
+	err := transport.Handle(trname, recvFunc)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 
@@ -708,19 +661,10 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		}
 	}
 	stream.Fin()
-	stats := stream.GetStats()
-	if netstats == nil {
-		reason, termErr := stream.TermInfo()
-		tassert.Errorf(t, reason != "", "expecting reason for termination")
-		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), term(%q, %v)\n",
-			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, reason, termErr)
-	} else {
-		lock.Lock()
-		eps := make(transport.RxStats)
-		eps[uint64(sessID)] = &stats
-		netstats[trname] = eps
-		lock.Unlock()
-	}
+	reason, termErr := stream.TermInfo()
+	tassert.Errorf(t, reason != "", "expecting reason for termination")
+	tlog.Logf("stream[%s/%d]: sent %d objects (%d GiB), terminated(%q, %v)\n",
+		trname, sessID, num, size/cos.GiB, reason, termErr)
 
 	if *totalRecv != size {
 		t.Errorf("total received bytes %d is different from expected: %d", *totalRecv, size)
@@ -731,9 +675,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil || cos.IsEOF(err))
+		cos.Assert(err == nil || cos.IsAnyEOF(err)) // TODO: (ref 020943)
 		written, err := io.Copy(io.Discard, objReader)
-		if err != nil && !cos.IsEOF(err) {
+		if err != nil && !cos.IsOkEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
 		if written != hdr.ObjAttrs.Size && !hdr.IsUnsized() {
