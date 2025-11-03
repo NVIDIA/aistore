@@ -48,7 +48,6 @@ func newExporter(conf *cmn.TracingConf) (trace.SpanExporter, error) {
 	options := []otlptracegrpc.Option{
 		otlptracegrpc.WithHeaders(headers),
 		otlptracegrpc.WithEndpoint(conf.ExporterEndpoint),
-		otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{Enabled: true}),
 	}
 	if conf.SkipVerify {
 		options = append(options, otlptracegrpc.WithInsecure())
