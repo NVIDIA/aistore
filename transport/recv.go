@@ -1,5 +1,4 @@
-// Package transport provides long-lived http/tcp connections for
-// intra-cluster communications (see README for details and usage example).
+// Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -144,9 +143,20 @@ func (it *iterator) rxloop(mm *memsys.MMSA) (err error) {
 			hlen  int
 		)
 		hlen, flags, err = it.nextProtoHdr()
+
+		// Protocol header read - first line of defense for transport errors.
+		// Note that io.EOF from sender's Stream.Fin() (opcFin) is normal termination
+		// (hence, cos.IsOkEOF() filter below).
+		//
+		// We do call recv() for all other errors (connection reset, malformed headers,
+		// unexpected EOF, etc.) so receivers can see and handle transport failures.
+		//
+		// Compare w/ recv() callbacks below that handle object-header and object-payload
+		// level errors.
+
 		if err != nil {
-			if !cos.IsOkEOF(err) && false { // TODO: amend all callers and enable (ref 020943)
-				if errCb := it.handler.recv(&ObjHdr{}, nil, err); errCb != nil {
+			if !cos.IsOkEOF(err) { //
+				if errCb := it.handler.recv(&ObjHdr{SID: it.sid}, nil, err); errCb != nil {
 					err = errCb
 				}
 			}
@@ -206,7 +216,7 @@ func (it *iterator) rxObj(hlen int) (err error) {
 			}
 		}
 	} else if err != nil && err != io.EOF {
-		if errCb := h.recv(&ObjHdr{}, nil, err); errCb != nil {
+		if errCb := h.recv(&ObjHdr{SID: it.sid}, nil, err); errCb != nil {
 			err = errCb
 		}
 	}
@@ -230,13 +240,15 @@ func (it *iterator) nextProtoHdr() (int, uint64, error) {
 	if n < sizeProtoHdr {
 		switch {
 		case err == nil:
-			err = io.ErrUnexpectedEOF
+			err = it.newErr(io.ErrUnexpectedEOF, sbrProtoHdr, fmt.Sprintf("n=%d", n))
 		case n == 0 && cos.IsOkEOF(err):
-			return 0, 0, err
+			// ok
+		case n == 0:
+			err = it.newErr(err, sbrProtoHdr, "")
 		default:
-			err = io.ErrUnexpectedEOF
+			err = it.newErr(err, sbrProtoHdr, fmt.Sprintf("n=%d", n))
 		}
-		return 0, 0, it.newErr(err, sbrProtoHdr, fmt.Sprintf("n=%d", n))
+		return 0, 0, err
 	}
 	// extract and validate hlen
 	return it.extProtoHdr(it.hbuf)
@@ -280,13 +292,13 @@ func (it *iterator) nextObj(hlen int) (*objReader, error) {
 	return obj, nil
 }
 
-func (it *iterator) newErr(err error, code, detail string) error {
+func (it *iterator) newErr(err error, code, ctx string) error {
 	return &ErrSBR{
 		err:    err,
 		loghdr: it.loghdr,
 		sid:    it.sid,
 		code:   code,
-		detail: detail,
+		ctx:    ctx,
 	}
 }
 

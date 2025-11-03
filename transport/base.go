@@ -1,5 +1,4 @@
-// Package transport provides long-lived http/tcp connections for
-// intra-cluster communications (see README for details and usage example).
+// Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -183,14 +182,14 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	return
 }
 
-func (s *streamBase) newErr(detail string) error {
+func (s *streamBase) newErr(ctx string) error {
 	reason, errT := s.TermInfo()
 	return &ErrStreamTerm{
 		err:    errT,
 		dst:    s.dstID,
 		loghdr: s.loghdr,
 		reason: reason,
-		detail: detail,
+		ctx:    ctx,
 	}
 }
 
@@ -306,16 +305,17 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 		return
 	}
 
-	// termination is caused by anything other than Fin()
-	// (reasonStopped is, effectively, abort via Stop() - totally legit)
-	var errExt error
-	if reason != reasonStopped {
-		errExt = fmt.Errorf("%s[term-reason: %s, err: %w]", s, reason, err)
-		nlog.Errorln(errExt)
+	// termination is caused by anything other than Fin() ---------------
+	// 1) reasonStopped via Stop(), or
+	// 2) broken pipe, connection reset, etc.
+	// steps:
+	// - abort parent xaction if defined AND the parent's TermedCB is nil
+	// - wait and complete
+	// - call parent's TermedCB if defined ---------- (notice "either/OR")
 
-		// NOTE: aborting grandparent xaction
-		if s.parent != nil && s.parent.Xact != nil {
-			s.parent.Xact.Abort(errExt)
+	if reason != reasonStopped {
+		if s.parent != nil && s.parent.Xact != nil && s.parent.TermedCB == nil {
+			s.parent.Xact.Abort(s.newErr(""))
 		}
 	}
 
@@ -325,10 +325,9 @@ func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
-	// notify parent if defined
 	if reason != reasonStopped {
 		if s.parent != nil && s.parent.TermedCB != nil {
-			s.parent.TermedCB(s.dstID, errExt)
+			s.parent.TermedCB(s.dstID, err)
 		}
 	}
 

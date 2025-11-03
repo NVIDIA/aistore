@@ -1,5 +1,4 @@
-// Package transport provides long-lived http/tcp connections for
-// intra-cluster communications (see README for details and usage example).
+// Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -202,7 +201,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 
 func Example_obj() {
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil) // TODO: (ref 020943)
+		cos.Assert(err == nil)
 		object, err := cos.ReadAll(objReader)
 		if err != nil {
 			panic(err)
@@ -368,7 +367,7 @@ func TestObjAttrs(t *testing.T) {
 
 	var receivedCount atomic.Int64
 	recvFunc := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil) // TODO; (ref 020943)
+		cos.Assert(err == nil)
 		idx := hdr.Opaque[0]
 		cos.AssertMsg(hdr.Bck.IsAIS(), "expecting ais bucket")
 		cos.Assertf(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs),
@@ -419,7 +418,7 @@ func TestObjAttrs(t *testing.T) {
 }
 
 func receive10G(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-	cos.Assert(err == nil || cos.IsAnyEOF(err)) // TODO: (ref 020943)
+	cos.Assert(err == nil || cos.IsAnyEOF(err))
 	written, _ := io.Copy(io.Discard, objReader)
 	cos.Assert(written == hdr.ObjAttrs.Size)
 	return nil
@@ -540,7 +539,7 @@ func TestCompletionCount(t *testing.T) {
 	)
 
 	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil) // TODO: (ref 020943)
+		cos.Assert(err == nil)
 		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
@@ -675,7 +674,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
 	totalReceived := new(int64)
 	return totalReceived, func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
-		cos.Assert(err == nil || cos.IsAnyEOF(err)) // TODO: (ref 020943)
+		cos.Assert(err == nil || cos.IsAnyEOF(err))
 		written, err := io.Copy(io.Discard, objReader)
 		if err != nil && !cos.IsOkEOF(err) {
 			tassert.CheckFatal(t, err)

@@ -1,12 +1,13 @@
-// Package transport provides long-lived http/tcp connections for
-// intra-cluster communications (see README for details and usage example).
+// Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
 import (
-	"fmt"
+	"strings"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // ErrSBR codes (receive-side stream breakage)
@@ -25,14 +26,15 @@ const (
 	sbrPDUDataSize    = "sbr_pdu_data_size"   // PDU size mismatch
 )
 
+// (do not wrap %w these errors; use Unwrap)
 type (
 	// Tx
 	ErrStreamTerm struct {
 		err    error
 		loghdr string
-		dst    string // destination node ID
+		dst    string // destination node ID // TODO: needed?
 		reason string
-		detail string
+		ctx    string
 	}
 	// Rx
 	ErrSBR struct {
@@ -40,7 +42,7 @@ type (
 		loghdr string
 		sid    string // sender node ID
 		code   string
-		detail string
+		ctx    string
 	}
 )
 
@@ -49,34 +51,61 @@ type (
 ///////////////////
 
 func (e *ErrStreamTerm) Error() string {
-	return fmt.Sprintf("%s terminated [dst: %s, reason: %s, detail: %s, err: %v]", e.loghdr, e.dst, e.reason, e.detail, e.err)
+	debug.Assert(e.err != nil)
+	debug.Assert(strings.Contains(e.loghdr, e.dst), e.loghdr, " vs ", e.dst)
+
+	var sb strings.Builder
+	sb.Grow(256)
+	sb.WriteString(e.loghdr)
+	sb.WriteString(" terminated [reason: '")
+	sb.WriteString(e.reason)
+	sb.WriteString("' ")
+	if e.ctx != "" {
+		sb.WriteString("ctx: ")
+		sb.WriteString(e.ctx)
+		sb.WriteByte(' ')
+	}
+	sb.WriteString("err: ")
+	sb.WriteString(e.err.Error())
+	sb.WriteByte(']')
+	return sb.String()
 }
 
 func (e *ErrStreamTerm) Unwrap() error { return e.err }
-
-// func (e *ErrStreamTerm) DestID() string { return e.dst } // uncomment if needed
-
-func IsErrStreamTerm(err error) bool {
-	_, ok := err.(*ErrStreamTerm)
-	return ok
-}
 
 ////////////
 // ErrSBR //
 ////////////
 
 func (e *ErrSBR) Error() string {
-	if e.err == nil {
-		return fmt.Sprintf("%s %s: [sender: %s, detail: %s]", e.loghdr, e.code, e.sid, e.detail)
+	debug.Assert(strings.Contains(e.loghdr, e.sid), e.loghdr, " vs ", e.sid)
+	var sb strings.Builder
+	sb.Grow(256)
+	sb.WriteString(e.loghdr)
+	sb.WriteByte(' ')
+	sb.WriteString(e.code)
+	sb.WriteString(":[")
+	if e.ctx != "" {
+		sb.WriteString("ctx: ")
+		sb.WriteString(e.ctx)
 	}
-	return fmt.Sprintf("%s %s: [sender: %s, detail: %s, err: %v]", e.loghdr, e.code, e.sid, e.detail, e.err)
+	if e.err != nil {
+		if e.ctx != "" {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("err: ")
+		sb.WriteString(e.err.Error())
+	}
+	sb.WriteByte(']')
+	return sb.String()
 }
 
 func (e *ErrSBR) Unwrap() error { return e.err }
+func (e *ErrSBR) SID() string   { return e.sid }
 
-// func (e *ErrSBR) SID() string   { return e.sid } // uncomment if needed
-
-func IsErrSBR(err error) bool {
-	_, ok := err.(*ErrSBR)
-	return ok
+func AsErrSBR(err error) *ErrSBR {
+	if e, ok := err.(*ErrSBR); ok {
+		return e
+	}
+	return nil
 }

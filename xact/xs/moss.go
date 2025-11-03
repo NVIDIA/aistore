@@ -64,7 +64,6 @@ where data-item = (object | archived file) // range read TBD
 
 // TODO:
 // - stats: (files, objects) separately; Prometheus metrics
-// - limit the number of GFN-failure-stimulated empty returns
 // - soft errors other than not-found; unified error formatting
 // - mem-pool: basewi; apc.MossReq; apc.MossResp
 // ---------- (can wait) ------------------
@@ -76,12 +75,16 @@ const (
 	sparseLog = 30 * time.Second
 )
 
-// TODO configurable pagecache (read-ahead) warm-up:
-// - one small-size worker pool per XactMoss instance
-// - bewarm pool is created once at x-moss initialization based on current system load;
-// - it stays enabled/disabled for the entire lifetime of this xaction instance across all work items
+// bwarm is a small-size worker pool per x-moss instance unless under heavy load:
+// - created at init time
+// - stays enabled for the entire lifetime
 const (
 	bewarmSize = cos.MiB
+)
+
+// limit the number of GFN requests by a work item (wi)
+const (
+	gfnMaxCount = 2
 )
 
 type (
@@ -119,6 +122,7 @@ type (
 		size    int64       // (cumulative)
 		ocnt    int         // number of processed MossReq objects
 		fcnt    int         // --/-- files
+		gfncnt  int         // <= gfnMaxCount
 		clean   atomic.Bool
 		awfin   atomic.Bool
 	}
@@ -669,7 +673,7 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(reader)
 	if err != nil {
-		nlog.Errorln(err)
+		// TODO: handle transport.AsErrSBR(err); not enough info to abort one WID :TODO
 		return err
 	}
 	if r.IsAborted() || r.Finished() {
@@ -1112,7 +1116,7 @@ func (wi *basewi) next(i int) (int, error) {
 
 		var nextIdx int
 		nextIdx, err = wi.waitFlushRx(i)
-		if err == nil || !isErrHole(err) {
+		if err == nil || !isErrHole(err) || wi.gfncnt >= gfnMaxCount {
 			return nextIdx, err
 		}
 	}
@@ -1128,6 +1132,7 @@ func (wi *basewi) next(i int) (int, error) {
 	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
 
 	if isErrHole(err) {
+		wi.gfncnt++
 		err = wi.gfn(lom, tsi, in, &out, nameInArch, err)
 	} else {
 		err = wi.write(lom, in, &out, nameInArch)
@@ -1172,11 +1177,8 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 
 	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
 
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(wi.r.Name(), "GFN", lom.Cname(), err, in.ArchPath)
-	}
-
 	if err != nil {
+		nlog.Warningln(wi.r.Name(), wi.wid, "GFN fail:", nameInArch, err)
 		wi.r.gfn.fail.Inc()
 		if wi.req.ContinueOnErr {
 			return wi.write(lom, in, out, nameInArch)
@@ -1184,6 +1186,7 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		return errHole // remains orig err
 	}
 
+	nlog.Infoln(wi.r.Name(), wi.wid, "GFN ok:", nameInArch)
 	wi.r.gfn.ok.Inc()
 	if in.ArchPath == "" {
 		oah := cos.SimpleOAH{Size: resp.ContentLength}

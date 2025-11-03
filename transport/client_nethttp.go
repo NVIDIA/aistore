@@ -1,7 +1,6 @@
 //go:build nethttp
 
-// Package transport provides long-lived http/tcp connections for
-// intra-cluster communications (see README for details and usage example).
+// Package transport provides long-lived http/tcp connections for intra-cluster communications
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */

@@ -408,16 +408,17 @@ func (ds *dsorterGeneral) recvReq(hdr *transport.ObjHdr, objReader io.Reader, er
 		transport.FreeRecv(objReader)
 	}()
 	req := remoteRequest{}
-	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "recv request", cos.BHead(hdr.Opaque), err)
+	if errM := jsoniter.Unmarshal(hdr.Opaque, &req); errM != nil {
+		if err == nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "recv request", cos.BHead(hdr.Opaque), errM)
+		}
 		ds.m.abort(err)
 		return err
 	}
 
 	fromNode := ds.m.smap.GetTarget(hdr.SID)
 	if fromNode == nil {
-		err := fmt.Errorf("received request (%v) from %q not present in the %s", req.Record, hdr.SID, ds.m.smap)
-		return err
+		return fmt.Errorf("received request (%v) from %q not present in the %s", req.Record, hdr.SID, ds.m.smap)
 	}
 
 	if err != nil {
