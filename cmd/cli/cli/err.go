@@ -126,7 +126,7 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 		return "", false
 	default:
 		msg = err.Error()
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			unreachable = cos.IsUnreachable(herr, herr.Status)
 		} else {
 			regx := regexp.MustCompile("dial.*(timeout|refused)")
@@ -358,7 +358,7 @@ func completionErr(c *cli.Context, err error) {
 
 func notV(err error) error {
 	if err != nil && !cliConfVerbose() {
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			return errors.New(herr.Message)
 		}
 	}
@@ -367,7 +367,7 @@ func notV(err error) error {
 
 func V(err error) error {
 	if err != nil && cliConfVerbose() {
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			herr.Message = herr.StringEx()
 			return herr
 		}

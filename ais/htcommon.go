@@ -427,7 +427,7 @@ func (res *callResult) toErr() error {
 		return nil
 	}
 	// is cmn.ErrHTTP
-	if herr := cmn.UnwrapErrHTTP(res.err); herr != nil {
+	if herr := cmn.AsErrHTTP(res.err); herr != nil {
 		// add status, details
 		if res.status >= http.StatusBadRequest {
 			herr.Status = res.status
@@ -467,7 +467,7 @@ func (res *callResult) errorf(format string, a ...any) error {
 	debug.Assert(res.err != nil)
 	// add formatted
 	msg := fmt.Sprintf(format, a...)
-	if herr := cmn.UnwrapErrHTTP(res.err); herr != nil {
+	if herr := cmn.AsErrHTTP(res.err); herr != nil {
 		herr.Message = msg + ": " + herr.Message
 		res.err = herr
 	} else {

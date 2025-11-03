@@ -24,7 +24,7 @@ import (
 // Creates new ais bucket
 func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadRemote bool) (err error) {
 	if err = api.CreateBucket(apiBP, bck, props, dontHeadRemote); err != nil {
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			if herr.Status == http.StatusConflict {
 				desc := fmt.Sprintf("Bucket %q already exists", bck.String())
 				if flagIsSet(c, ignoreErrorFlag) {

@@ -939,7 +939,7 @@ func handleETLHTTPError(err error, etlName string) error {
 	if err == nil {
 		return nil
 	}
-	if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+	if herr := cmn.AsErrHTTP(err); herr != nil {
 		// TODO: How to find out if it's transformation not found, and not object not found?
 		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
 			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",

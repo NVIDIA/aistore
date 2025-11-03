@@ -577,7 +577,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 				tlog.Logfln("%v", status)
 				break
 			}
-			if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+			if herr := cmn.AsErrHTTP(err); herr != nil {
 				tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
 			}
 			time.Sleep(time.Second)
@@ -690,7 +690,7 @@ func TestShutdownListObjects(t *testing.T) {
 				tlog.Logfln("%v", status)
 				break
 			}
-			herr := cmn.UnwrapErrHTTP(err)
+			herr := cmn.AsErrHTTP(err)
 			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
 			time.Sleep(time.Second)
 		}

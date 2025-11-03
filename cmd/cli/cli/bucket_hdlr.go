@@ -566,7 +566,7 @@ func removeSpecificBuckets(c *cli.Context) error {
 		return nil
 	}
 
-	if herr := cmn.UnwrapErrHTTP(err); herr != nil && herr.TypeCode == "ErrUnsupp" {
+	if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode == "ErrUnsupp" {
 		return fmt.Errorf("%v\n(Tip: did you want to evict '%s' from aistore?)", err, bck.Cname(""))
 	}
 	return err

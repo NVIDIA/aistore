@@ -157,7 +157,7 @@ func (cpr *cprCtx) do(c *cli.Context) {
 		)
 		xs, cms, err := queryXactions(&xargs, true /*summarize*/)
 		if err != nil {
-			if herr := cmn.UnwrapErrHTTP(err); herr != nil && herr.Status == http.StatusNotFound {
+			if herr := cmn.AsErrHTTP(err); herr != nil && herr.Status == http.StatusNotFound {
 				briefPause(refreshRateMinDur / time.Second)
 				continue
 			}

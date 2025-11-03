@@ -535,7 +535,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {
-	if herr := cmn.UnwrapErrHTTP(err); herr != nil && msg.IsFlagSet(apc.LsBckPresent) {
+	if herr := cmn.AsErrHTTP(err); herr != nil && msg.IsFlagSet(apc.LsBckPresent) {
 		if herr.TypeCode == "ErrRemoteBckNotFound" {
 			err = V(err)
 			return fmt.Errorf("%v\nTip: use %s to list all objects including remote", V(err), qflprn(allObjsOrBcksFlag))

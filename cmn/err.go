@@ -1037,15 +1037,15 @@ func Str2HTTPErr(msg string) *ErrHTTP {
 	return nil
 }
 
-func UnwrapErrHTTP(err error) *ErrHTTP {
-	e, ok := err.(*ErrHTTP)
-	if !ok {
-		var e *ErrHTTP
-		if !errors.As(err, &e) {
-			return nil
-		}
+func AsErrHTTP(err error) *ErrHTTP {
+	if e, ok := err.(*ErrHTTP); ok {
+		return e
 	}
-	return e
+	var e *ErrHTTP
+	if errors.As(err, &e) {
+		return e
+	}
+	return nil
 }
 
 const maxTypeCodeLen = 30

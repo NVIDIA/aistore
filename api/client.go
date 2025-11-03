@@ -77,7 +77,7 @@ func HTTPStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-	if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+	if herr := cmn.AsErrHTTP(err); herr != nil {
 		return herr.Status
 	}
 	return -1 // invalid

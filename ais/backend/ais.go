@@ -98,7 +98,7 @@ func extractErrCode(e error, uuid string) (int, error) {
 	if cos.IsClientTimeout(e) {
 		return http.StatusRequestTimeout, e
 	}
-	herr := cmn.UnwrapErrHTTP(e)
+	herr := cmn.AsErrHTTP(e)
 	if herr == nil {
 		return http.StatusInternalServerError, e
 	}

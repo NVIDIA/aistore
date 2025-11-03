@@ -440,7 +440,7 @@ func summaryStorageHandler(c *cli.Context) error {
 
 	var status int
 	if err != nil {
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			status = herr.Status
 		}
 		if dontWait && status == http.StatusAccepted {

@@ -1621,7 +1621,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName string, isChunked bool, t *testing.T) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	_, err := api.GetObjectWithValidation(baseParams, bck, objName, nil)
-	herr := cmn.UnwrapErrHTTP(err)
+	herr := cmn.AsErrHTTP(err)
 	switch {
 	case herr == nil:
 		t.Error("Error is nil, expected internal server error on a GET for an object")
@@ -1633,7 +1633,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 
 	// Execute another GET to make sure that the object is deleted
 	_, err = api.GetObjectWithValidation(baseParams, bck, objName, nil)
-	herr = cmn.UnwrapErrHTTP(err)
+	herr = cmn.AsErrHTTP(err)
 	switch {
 	case herr == nil:
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
@@ -2202,7 +2202,7 @@ func TestMultipartMaxChunks(t *testing.T) {
 
 		// We expect an error because we're exceeding MaxChunkCount
 		tassert.Fatalf(t, err != nil, "expected error when exceeding MaxChunkCount, but upload succeeded")
-		herr := cmn.UnwrapErrHTTP(err)
+		herr := cmn.AsErrHTTP(err)
 		tassert.Fatalf(t, herr != nil, "expected ErrHTTP, got %v", err)
 		tassert.Fatalf(t, strings.Contains(herr.Message, "exceeds the maximum allowed"),
 			"expected error message to contain 'exceeds the maximum allowed', got: %v", err)

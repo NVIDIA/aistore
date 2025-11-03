@@ -184,19 +184,7 @@ func (e *Errs) Unwrap() []error {
 // IS-syscall helpers
 //
 
-func UnwrapSyscallErr(err error) error {
-	if syscallErr, ok := err.(*os.SyscallError); ok {
-		return syscallErr.Unwrap()
-	}
-	return nil
-}
-
-func IsErrSyscallTimeout(err error) bool {
-	syscallErr, ok := err.(*os.SyscallError)
-	return ok && syscallErr.Timeout()
-}
-
-func IsPathErr(err error) (ok bool) {
+func IsPathErr(err error) bool {
 	var pathErr *iofs.PathError
 	return errors.As(err, &pathErr)
 }
@@ -326,7 +314,7 @@ func IsErrMv(err error) bool {
 
 // to satisfy errors.Is()
 func (e *ErrMv) Is(target error) bool {
-	return e.ty == 2 && target == syscall.ENOTDIR
+	return e.ty == 2 && errors.Is(target, syscall.ENOTDIR)
 }
 
 func (e *ErrMv) Error() string {

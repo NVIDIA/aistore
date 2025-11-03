@@ -116,7 +116,7 @@ func _addStatus(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
 	if err != nil {
 		ds = &stats.NodeStatus{}
 		ds.Snode = node
-		if herr := cmn.UnwrapErrHTTP(err); herr != nil {
+		if herr := cmn.AsErrHTTP(err); herr != nil {
 			ds.Status = herr.TypeCode
 		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
 			ds.Status = "[errNodeNotFound]"
