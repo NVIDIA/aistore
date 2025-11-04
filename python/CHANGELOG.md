@@ -17,6 +17,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - To disable timeout, use `0` instead of `None`: Previously, `timeout=None` disabled timeouts. Now, use `timeout=0` or `timeout=(0, 0)` to disable all timeouts.
   - Granular timeout control: Use tuples with `0` to disable specific timeouts: `timeout=(0, 20)` disables connect timeout only, `timeout=(5, 0)` disables read timeout only.
   - Environment variables: Added support for environment variables to configure connection timeout (`AIS_CONNECT_TIMEOUT`), read timeout (`AIS_READ_TIMEOUT`), and maximum connection pool size (`AIS_MAX_CONN_POOL`). Set `AIS_CONNECT_TIMEOUT=0` or `AIS_READ_TIMEOUT=0` to disable specific timeouts via environment variables.
+- All job wait methods (`Job.wait()`, `Job.wait_for_idle()`, `Job.wait_single_node()`, `Dsort.wait()`) now return unified `WaitResult` dataclass:
+  - Check `result.success` to verify success of wait operation.
+  - Access error details via `result.error` and completion time via `result.end_time`.
+  - Wait timeouts raise `Timeout` exception with detailed debug info.
+
+### Fixed
+
+- `Job.wait_for_idle()` now correctly exits early when job is aborted or failed, instead of falsely timing out.
 
 ## [1.17.0] - 2025-10-16
 

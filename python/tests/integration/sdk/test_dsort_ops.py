@@ -20,9 +20,14 @@ from aistore.sdk.dsort import (
     ExternalKeyMap,
 )
 from aistore.sdk.multiobj import ObjectRange, ObjectNames
-from tests.const import TEST_TIMEOUT, MB, KB
+from tests.const import MB, KB
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
-from tests.utils import cases, random_string, create_random_tarballs
+from tests.utils import (
+    cases,
+    random_string,
+    create_random_tarballs,
+)
+from tests.const import TEST_TIMEOUT
 
 TAR_NUM_FILES = 100
 MIN_SHARD_SIZE = 50 * KB
@@ -151,7 +156,8 @@ class TestDsortOps(ParallelTestBase):
         dsort = self.client.dsort()
         dsort.start(spec_file)
 
-        dsort.wait(timeout=TEST_TIMEOUT)
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         output_bytes = out_bck.object("out-shard-0.tar").get_reader().read_all()
         result_contents = {}
         self._update_result_with_tar(result_contents, io.BytesIO(output_bytes))
@@ -190,7 +196,8 @@ class TestDsortOps(ParallelTestBase):
 
         dsort = self.client.dsort()
         dsort.start(dsort_framework)
-        dsort.wait(timeout=TEST_TIMEOUT)
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         for output_shard in out_bck.list_all_objects_iter():
             output_bytes = output_shard.get_reader().read_all()
@@ -231,7 +238,8 @@ class TestDsortOps(ParallelTestBase):
 
         dsort = self.client.dsort()
         dsort.start(dsort_framework)
-        dsort.wait(timeout=TEST_TIMEOUT)
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         tar_names = []
         for output_shard in out_bck.list_all_objects_iter(prefix="output-shards-"):
             output_bytes = output_shard.get_reader().read_all()
@@ -273,7 +281,8 @@ class TestDsortOps(ParallelTestBase):
 
         dsort = self.client.dsort()
         dsort.start(dsort_framework)
-        dsort.wait(timeout=TEST_TIMEOUT)
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         tar_names = []
         for output_shard in self.client.bucket(out_bck.name).list_all_objects_iter(
             prefix="output-shards-"
@@ -341,7 +350,8 @@ class TestDsortOps(ParallelTestBase):
 
         dsort = self.client.dsort()
         dsort.start(dsort_framework)
-        dsort.wait(timeout=TEST_TIMEOUT)
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         num_archived_files = 0
         last_file_name, last_value = "", None
@@ -392,7 +402,5 @@ class TestDsortOps(ParallelTestBase):
         dsort = self.client.dsort()
         dsort.start(dsort_framework)
         dsort.abort()
-        dsort.wait(timeout=TEST_TIMEOUT)
-        for job_info in dsort.get_job_info().values():
-            self.assertTrue(job_info.metrics.aborted)
-            self.assertEqual(1, len(job_info.metrics.errors))
+        result = dsort.wait(timeout=TEST_TIMEOUT)
+        self.assertFalse(result.success, "Job should have been aborted")

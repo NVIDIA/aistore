@@ -546,6 +546,23 @@ class AggregatedJobSnap(RootModel[Dict[str, List[JobSnap]]]):
                 return snaps[0].unpack_glob_id()[1]
         return 0
 
+    def all_idle(self) -> bool:
+        """
+        Check if all snapshots are idle, aborted, or have an abort error.
+        """
+        return all(s.is_idle or s.aborted or s.abort_err for s in self.list_snapshots())
+
+    def any_finished(self) -> bool:
+        """
+        Check if any snapshot is finished (aborted, errored, or has valid end_time).
+        """
+        return any(
+            s.aborted
+            or s.abort_err
+            or (s.end_time and s.end_time != "0001-01-01T00:00:00Z")
+            for s in self.list_snapshots()
+        )
+
 
 class CopyBckMsg(BaseModel):
     """

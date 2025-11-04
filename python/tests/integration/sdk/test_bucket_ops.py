@@ -31,14 +31,17 @@ from aistore.sdk.errors import (
 from aistore.sdk.provider import Provider
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
-from tests.utils import cases, has_targets, random_string
+from tests.utils import (
+    cases,
+    has_targets,
+    random_string,
+)
 from tests.const import (
     OBJECT_COUNT,
     OBJ_CONTENT,
     PREFIX_NAME,
-    TEST_TIMEOUT,
     SUFFIX_NAME,
-    TEST_TIMEOUT_LONG,
+    TEST_TIMEOUT,
 )
 from tests.integration import REMOTE_SET, AWS_BUCKET
 
@@ -115,7 +118,8 @@ class TestBucketOps(ParallelTestBase):
         self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
-        self.client.job(job_id).wait(TEST_TIMEOUT_LONG)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         # new bucket should be created and accessible
         to_bck = self.client.bucket(to_bck_name)
@@ -154,7 +158,8 @@ class TestBucketOps(ParallelTestBase):
         self.assertNotEqual(job_id, "")
 
         job = self.client.job(job_id)
-        job.wait()
+        result = job.wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         try:
             actual_workers = job.get_details().get_num_workers()
             self.assertEqual(
@@ -228,11 +233,13 @@ class TestBucketOps(ParallelTestBase):
 
         # cache and verify
         job_id = obj_group.prefetch()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self._verify_cached_objects(num_obj, range(num_obj))
         # copy objs to dst bck
         copy_job = self.bucket.copy(prefix_filter=self.obj_prefix, to_bck=to_bck)
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        result = self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self.assertEqual(num_obj, len(to_bck.list_all_objects()))
 
         # randomly delete 10% of the objects
@@ -246,7 +253,8 @@ class TestBucketOps(ParallelTestBase):
         copy_job = self.bucket.copy(
             prefix_filter=self.obj_prefix, to_bck=to_bck, sync=True
         )
-        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT * 3)
+        result = self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self.assertEqual(
             num_obj - num_to_del, len(to_bck.list_all_objects(prefix=self.obj_prefix))
         )
@@ -613,7 +621,8 @@ class TestBucketOps(ParallelTestBase):
 
         self.assertNotEqual(job_id, "")
 
-        self.client.job(job_id).wait(TEST_TIMEOUT)
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         self.assertEqual(0, len(dst_bck.list_all_objects()))
 
@@ -637,7 +646,8 @@ class TestBucketOps(ParallelTestBase):
             ext={"txt": "bin"},
         )
         self.assertNotEqual(job_id, "")
-        self.client.job(job_id).wait(TEST_TIMEOUT)
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self.assertEqual(0, len(dst_bck.list_all_objects()))
         etl.stop()
         etl.delete()

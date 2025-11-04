@@ -17,15 +17,18 @@ from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThread
 from tests.const import (
     MEDIUM_FILE_SIZE,
     OBJECT_COUNT,
-    TEST_TIMEOUT,
-    TEST_TIMEOUT_LONG,
     PREFIX_NAME,
     SUFFIX_NAME,
     SMALL_FILE_SIZE,
+    TEST_TIMEOUT,
+    TEST_TIMEOUT_LONG,
 )
 from tests.integration import REMOTE_SET, AWS_BUCKET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
-from tests.utils import random_string, assert_with_retries
+from tests.utils import (
+    random_string,
+    assert_with_retries,
+)
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -57,7 +60,8 @@ class TestObjectGroupOps(ParallelTestBase):
 
     def _evict_objects(self, obj_group):
         job_id = obj_group.evict()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self._check_all_objects_cached(
             len(obj_group.list_names()), expected_cached=False
         )
@@ -69,7 +73,8 @@ class TestObjectGroupOps(ParallelTestBase):
         self._create_small_objects()
         object_group = self.bucket.objects(obj_names=self._get_obj_names()[1:])
         job_id = object_group.delete()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         existing_objects = self.bucket.list_objects(prefix=self.obj_prefix).entries
         self.assertEqual(1, len(existing_objects))
         self.assertEqual(self._get_obj_names()[0], existing_objects[0].name)
@@ -82,7 +87,8 @@ class TestObjectGroupOps(ParallelTestBase):
         self._create_small_objects()
         object_group = self.bucket.objects(obj_names=self._get_obj_names()[1:])
         job_id = object_group.evict()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self._verify_cached_objects(OBJECT_COUNT, [0])
 
     def test_evict_objects_local(self):
@@ -104,7 +110,8 @@ class TestObjectGroupOps(ParallelTestBase):
         if num_workers is not None:
             prefetch_kwargs["num_workers"] = num_workers
         job_id = prefetched_objects.prefetch(**prefetch_kwargs)
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 5)
+        result = self.client.job(job_id).wait(timeout=TEST_TIMEOUT_LONG)
+        self.assertTrue(result.success)
 
         # Verify all objects exist but only those in the prefetch group are now cached
         self._verify_cached_objects(OBJECT_COUNT, range(objects_excluded, OBJECT_COUNT))
@@ -133,7 +140,8 @@ class TestObjectGroupOps(ParallelTestBase):
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         # Use a threshold that's just low enough for our object size to require blob
         job_id = obj_group.prefetch(blob_threshold=MEDIUM_FILE_SIZE)
-        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 5)
+        result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT_LONG)
+        self.assertTrue(result.success)
 
         jobs_list = self.client.job(job_kind="blob-download").get_within_timeframe(
             start_time=start_time
@@ -159,7 +167,8 @@ class TestObjectGroupOps(ParallelTestBase):
         self._evict_objects(obj_group)
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         job_id = obj_group.prefetch(blob_threshold=MEDIUM_FILE_SIZE + 1)
-        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT * 5)
+        result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT_LONG)
+        self.assertTrue(result.success)
 
         with self.assertRaises(JobInfoNotFound):
             self.client.job(job_kind="blob-download").get_within_timeframe(
@@ -191,7 +200,10 @@ class TestObjectGroupOps(ParallelTestBase):
             to_bck, **copy_kwargs
         )
         for job_id in copy_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
         assert_with_retries(
             self.assertEqual,
             4,
@@ -199,9 +211,13 @@ class TestObjectGroupOps(ParallelTestBase):
         )
 
     def test_copy_objects(self):
+        # NOTE: Force local bucket for CI stability (override remote bucket if set)
+        self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
         self._copy_objects_test_helper()
 
     def test_copy_objects_with_num_workers(self):
+        # NOTE: Force local bucket for CI stability (override remote bucket if set)
+        self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
         self._copy_objects_test_helper(num_workers=3)
 
     @unittest.skipIf(
@@ -245,7 +261,10 @@ class TestObjectGroupOps(ParallelTestBase):
             self.bucket, sync=True
         )
         for job_id in copy_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
         with self.assertRaises(AISError):
             self.bucket.object(obj_name).get_reader().read_all()
 
@@ -265,7 +284,10 @@ class TestObjectGroupOps(ParallelTestBase):
         obj_group = self.bucket.objects(obj_template=template)
         copy_job_ids = obj_group.copy(to_bck)
         for job_id in copy_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
         self.assertEqual(
             len(to_bck.list_all_objects(prefix=self.obj_prefix)), OBJECT_COUNT
         )
@@ -278,7 +300,10 @@ class TestObjectGroupOps(ParallelTestBase):
             to_bck, sync=True
         )
         for job_id in copy_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
 
         # NOTE: S3 and similar providers are only *eventually* consistent.
         #       Wrap emptiness assertions in a retry to avoid flakes.
@@ -325,13 +350,15 @@ class TestObjectGroupOps(ParallelTestBase):
 
         # run prefetch with '--latest' one last time, and make sure the object "disappears"
         # prefetch_job = self.bucket.objects(obj_names=[obj_name]).prefetch(latest=True)
-        # self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+        # result = self.client.job(job_id=prefetch_job).wait_for_job(timeout=TEST_TIMEOUT_LONG)
+        # self.assertTrue(result.success)
         # with self.assertRaises(AISError):
         #    self.bucket.object(obj_name).get_reader().read_all()
 
     def _prefetch_and_check_with_latest(self, bucket, obj_name, expected, latest_flag):
         prefetch_job = bucket.objects(obj_names=[obj_name]).prefetch(latest=latest_flag)
-        self.client.job(job_id=prefetch_job).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+        result = self.client.job(job_id=prefetch_job).wait(timeout=TEST_TIMEOUT_LONG)
+        self.assertTrue(result.success)
 
         content = bucket.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
@@ -344,27 +371,29 @@ class TestObjectGroupOps(ParallelTestBase):
             to_bck, latest=latest_flag
         )
         for job_id in copy_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
         assert_with_retries(self.assertEqual, 1, len(to_bck.list_all_objects()))
         content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
     def test_archive_objects_without_copy(self):
+        # NOTE: Force local bucket for CI stability (override remote bucket if set)
+        self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
         arch_name = self.obj_prefix + "-archive-without-copy.tar"
         self._archive_exec_assert(arch_name, self.bucket, self.bucket)
 
-    @pytest.mark.nonparallel("")
     def test_archive_objects_with_copy(self):
+        # NOTE: Force local bucket for CI stability (override remote bucket if set)
+        self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
         arch_name = self.obj_prefix + "-archive-with-copy.tar"
         dest_bck = self._create_bucket()
         self._archive_exec_assert(arch_name, self.bucket, dest_bck)
 
     def _archive_exec_assert(self, arch_name, src_bck, res_bck):
         self._create_small_objects()
-        # Add to object list to clean up on test finish
-        if res_bck.provider != Provider.AIS:
-            self._register_for_post_test_cleanup(names=[arch_name], is_bucket=False)
-        # Subset of the objects created initially
         archived_obj = dict(list(self.obj_dict.items())[1:5])
 
         if src_bck.name != res_bck.name:
@@ -378,7 +407,10 @@ class TestObjectGroupOps(ParallelTestBase):
             )
 
         for job_id in arch_job_ids:
-            self.client.job(job_id=job_id).wait_for_idle(timeout=TEST_TIMEOUT * 2)
+            result = self.client.job(job_id=job_id).wait_for_idle(
+                timeout=TEST_TIMEOUT_LONG
+            )
+            self.assertTrue(result.success)
 
         # Read the tar archive and assert the object names and contents match
         res_bytes = res_bck.object(arch_name).get_reader().read_all()
@@ -428,7 +460,10 @@ class TestObjectGroupOps(ParallelTestBase):
             transform_kwargs["num_workers"] = num_workers
 
         transform_job = self._get_obj_group().transform(**transform_kwargs)
-        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT_LONG)
+        result = self.client.job(job_id=transform_job).wait_for_idle(
+            timeout=TEST_TIMEOUT_LONG
+        )
+        self.assertTrue(result.success)
 
         # Get the md5 transform of each source object and verify the destination bucket contains those results
         from_obj_hashes = [

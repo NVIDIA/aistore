@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import time
 from dateutil.parser import isoparse
@@ -18,7 +18,8 @@ from aistore.sdk.const import (
     ACT_START,
     WHAT_QUERY_XACT_STATS,
 )
-from aistore.sdk.errors import Timeout, JobInfoNotFound
+from aistore.sdk.errors import JobInfoNotFound, Timeout
+from aistore.sdk.wait_result import WaitResult
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     JobStatus,
@@ -92,13 +93,16 @@ class Job:
         self,
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
         verbose: bool = True,
-    ):
+    ) -> WaitResult:
         """
         Wait for a job to finish
 
         Args:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
+
+        Returns:
+            WaitResult: Outcome of the wait operation
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -110,34 +114,51 @@ class Job:
         logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
+
         while True:
-            if passed > timeout:
-                raise Timeout("job to finish")
             status = self.status()
+
+            if passed > timeout:
+                logger.error(
+                    "Timeout waiting for job '%s' after %ds. Job status: %s",
+                    status.uuid,
+                    timeout,
+                    status,
+                )
+                raise Timeout(f"job '{status.uuid}'", f"after {timeout}s")
+
             if status.end_time == 0:
                 time.sleep(sleep_time)
                 passed += sleep_time
                 logger.info("Waiting on job '%s'...", status.uuid)
                 continue
-            end_time = datetime.fromtimestamp(status.end_time / 1e9).time()
-            if status.err:
-                logger.error(
-                    "Job '%s' failed at time '%s' with error: %s",
-                    status.uuid,
-                    end_time,
-                    status.err,
-                )
-            elif status.aborted:
-                logger.error("Job '%s' aborted at time '%s'", status.uuid, end_time)
+
+            end_time = (
+                datetime.fromtimestamp(status.end_time / 1e9, tz=timezone.utc)
+                if status.end_time > 0
+                else None
+            )
+            error = status.err or "aborted" if status.aborted else status.err
+            success = not status.err and not status.aborted
+            result = WaitResult(
+                job_id=status.uuid,
+                success=success,
+                error=error,
+                end_time=end_time,
+            )
+
+            if success:
+                logger.info("Job '%s' finished successfully", status.uuid)
             else:
-                logger.info("Job '%s' finished at time '%s'", status.uuid, end_time)
-            break
+                logger.error("Job '%s' failed: %s", status.uuid, result.error)
+
+            return result
 
     def wait_for_idle(
         self,
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
         verbose: bool = True,
-    ):
+    ) -> WaitResult:
         """
         Wait for a job to reach an idle state
 
@@ -145,23 +166,25 @@ class Job:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
 
+        Returns:
+            WaitResult: Outcome of the wait operation
+
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
-            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
-        action = f"job '{self._job_id}' to reach idle state"
-        logger.disabled = not verbose
-        self._wait_for_condition(self._check_job_idle, action, timeout)
+        return self._wait_for_condition(
+            lambda d: d.all_idle(), timeout, verbose, "reached idle state"
+        )
 
     def wait_single_node(
         self,
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
         verbose: bool = True,
-    ):
+    ) -> WaitResult:
         """
         Wait for a job running on a single node
 
@@ -169,17 +192,19 @@ class Job:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
 
+        Returns:
+            WaitResult: Outcome of the wait operation
+
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
-            errors.JobInfoNotFound: Raised when information on a job's status could not be found on the AIS cluster
         """
-        action = f"job '{self._job_id}' to finish"
-        logger.disabled = not verbose
-        self._wait_for_condition(self._check_snapshot_finished, action, timeout)
+        return self._wait_for_condition(
+            lambda d: d.any_finished(), timeout, verbose, "finished"
+        )
 
     def start(
         self,
@@ -321,60 +346,38 @@ class Job:
         except IndexError:
             return None  # No valid timestamps
 
-    def _check_snapshot_finished(self, snapshots):
-        job_found = False
-        snapshot = None
-        for snap in snapshots:
-            if snap.id != self._job_id:
-                continue
-            job_found = True
-            snapshot = snap
-            break
-
-        if not job_found:
-            raise JobInfoNotFound(f"No info found for job {self._job_id}")
-
-        end_time = isoparse(snapshot.end_time).time()
-        if snapshot.end_time != "0001-01-01T00:00:00Z" and not snapshot.aborted:
-            logger.info("Job '%s' finished at time '%s'", self.job_id, end_time)
-            return True
-        if snapshot.aborted:
-            logger.error("Job '%s' aborted at time '%s'", self.job_id, end_time)
-            return True
-        return False
-
-    def _check_job_idle(self, snapshots):
-        job_found = False
-        for snap in snapshots:
-            if snap.id != self._job_id:
-                continue
-            job_found = True
-            # If any targets are reporting the job not idle, continue waiting
-            if not snap.is_idle:
-                return False
-
-        if not job_found:
-            raise JobInfoNotFound(f"No info found for job {self._job_id}")
-
-        logger.info("Job '%s' reached idle state", self._job_id)
-        return True
-
-    def _wait_for_condition(self, condition_fn, action, timeout):
+    def _wait_for_condition(
+        self, condition_fn, timeout: int, verbose: bool, state: str
+    ) -> WaitResult:
+        logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
 
         while True:
-            snapshots = self.get_details().list_snapshots()
-            try:
-                if condition_fn(snapshots):
-                    return
-            except JobInfoNotFound:
-                logger.info("No information found for job %s, retrying", self._job_id)
+            details = self.get_details()
+            snaps = details.list_snapshots()
 
             if passed > timeout:
-                if len(snapshots) == 0:
-                    raise Timeout(action, "No job information found.")
-                raise Timeout(action)
+                logger.error(
+                    "Timeout waiting for job '%s' after %ds. Job snapshots: %s",
+                    self._job_id,
+                    timeout,
+                    snaps,
+                )
+                raise Timeout(f"job '{self._job_id}'", f"after {timeout}s")
+
+            if not snaps:
+                logger.info("No info for job '%s', retrying", self._job_id)
+            else:
+                if condition_fn(details):
+                    result = WaitResult.from_snapshots(self._job_id, snaps)
+                    if result.success:
+                        logger.info("Job '%s' %s", self._job_id, state)
+                    else:
+                        logger.error("Job '%s' failed: %s", self._job_id, result.error)
+                    return result
+
+                logger.info("Waiting on job '%s'...", self._job_id)
+
             time.sleep(sleep_time)
             passed += sleep_time
-            logger.info("Waiting for %s", action)

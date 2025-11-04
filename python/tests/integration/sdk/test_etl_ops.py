@@ -33,6 +33,7 @@ from tests.utils import (
     has_targets,
     assert_with_retries,
 )
+from tests.const import TEST_TIMEOUT
 
 
 # pylint: disable=unused-variable
@@ -190,7 +191,8 @@ class TestETLOps(unittest.TestCase):
 
         # Transform Bucket with MD5 Template
         job_id = self.bucket.transform(etl_name=spec_etl.name, to_bck=temp_bck1)
-        self.client.job(job_id).wait()
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         starting_obj = self.bucket.list_objects().entries
         transformed_obj = temp_bck1.list_objects().entries
@@ -217,7 +219,8 @@ class TestETLOps(unittest.TestCase):
             to_bck=temp_bck2,
             ext={"jpg": "txt"},
         )
-        self.client.job(job_id).wait()
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         # Verify extension rename
         for obj_iter in temp_bck2.list_objects().entries:
@@ -258,7 +261,8 @@ class TestETLOps(unittest.TestCase):
             etl_name=md5_hpush_etl.name,
             to_bck=Bucket("transformed-etl-hpush", self.bucket.client),
         )
-        self.client.job(job_id).wait()
+        result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         for key, value in content.items():
             transformed_obj_hpush = (
@@ -377,7 +381,8 @@ class TestETLOps(unittest.TestCase):
         )
 
         job = self.client.job(job_id)
-        job.wait()
+        result = job.wait_for_idle(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self.assertEqual(num_workers, job.get_details().get_num_workers())
 
         self.assertEqual(2, len(dst_bck.list_all_objects()))
@@ -500,7 +505,9 @@ class TestETLOps(unittest.TestCase):
             cont_on_err=True,  # Allow continuation despite errors
         )
         job = self.client.job(job_id)
-        job.wait()
+        result = job.wait(timeout=TEST_TIMEOUT)
+        self.assertFalse(result.success, "Job should have failed")
+        self.assertIsNotNone(result.error)
 
         etl_details = etl.view(job_id=job_id)
         self.assertIsNotNone(etl_details.obj_errors)

@@ -12,7 +12,8 @@ from aistore.sdk.const import (
     ACT_START,
     WHAT_QUERY_XACT_STATS,
 )
-from aistore.sdk.errors import Timeout, JobInfoNotFound
+from aistore.sdk.errors import JobInfoNotFound, Timeout
+from aistore.sdk.wait_result import WaitResult
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     JobStatus,
@@ -100,7 +101,8 @@ class TestJob(unittest.TestCase):
     def test_wait_timeout(self, mock_status, mock_sleep):
         mock_status.return_value = JobStatus(end_time=0)
 
-        self.assertRaises(Timeout, self.job.wait)
+        with self.assertRaises(Timeout):
+            self.job.wait()
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def wait_exec_assert(
@@ -118,7 +120,9 @@ class TestJob(unittest.TestCase):
             JobStatus(end_time=1),
         ]
 
-        job.wait(**kwargs)
+        result = job.wait(**kwargs)
+        self.assertTrue(result.success)
+        self.assertIsInstance(result, WaitResult)
 
         mock_status.assert_has_calls(expected_status_calls)
         mock_sleep.assert_has_calls(expected_sleep_calls)
@@ -159,8 +163,9 @@ class TestJob(unittest.TestCase):
         expected_client_requests = [expected_call for _ in range(2)]
         expected_sleep_calls = [call(frequency), call(frequency)]
 
-        self.job.wait_for_idle(timeout=timeout)
-
+        result = self.job.wait_for_idle(timeout=timeout)
+        self.assertTrue(result.success)
+        self.assertIsInstance(result, WaitResult)
         self.mock_client.request_deserialize.assert_has_calls(expected_client_requests)
         mock_sleep.assert_has_calls(expected_sleep_calls)
         self.assertEqual(3, self.mock_client.request_deserialize.call_count)
@@ -176,20 +181,16 @@ class TestJob(unittest.TestCase):
             }
         )
         self.mock_client.request_deserialize.return_value = res
-        self.assertRaises(Timeout, self.job.wait_for_idle)
+        with self.assertRaises(Timeout):
+            self.job.wait_for_idle()
 
     @patch("aistore.sdk.job.time.sleep")
     # pylint: disable=unused-argument
     def test_wait_for_idle_no_snapshots(self, mock_sleep):
-        self.mock_client.request_deserialize.return_value = (
-            AggregatedJobSnap.model_validate({})
-        )
-        with self.assertRaises(Timeout) as exc:
+        res = AggregatedJobSnap.model_validate({})
+        self.mock_client.request_deserialize.return_value = res
+        with self.assertRaises(Timeout):
             self.job.wait_for_idle()
-        self.assertEqual(
-            "Timed out while waiting for job '1234' to reach idle state. No job information found.",
-            str(exc.exception.args[0]),
-        )
 
     @patch("aistore.sdk.job.time.sleep")
     # pylint: disable=unused-argument
@@ -201,12 +202,8 @@ class TestJob(unittest.TestCase):
             }
         )
         self.mock_client.request_deserialize.return_value = res
-        with self.assertRaises(Timeout) as exc:
+        with self.assertRaises(Timeout):
             self.job.wait_for_idle()
-        self.assertEqual(
-            "Timed out while waiting for job '1234' to reach idle state. ",
-            str(exc.exception.args[0]),
-        )
 
     def test_job_start_single_bucket(self):
         daemon_id = "daemon id"
@@ -287,8 +284,10 @@ class TestJob(unittest.TestCase):
         )
         self.mock_client.request_deserialize.return_value = finished_snapshot
 
-        self.job.wait_single_node()
-
+        result = self.job.wait_single_node()
+        self.assertTrue(result.success)
+        self.assertIsInstance(result, WaitResult)
+        self.assertIsNotNone(result.end_time)
         self.mock_client.request_deserialize.assert_called()
         self.assertEqual(self.mock_client.request_deserialize.call_count, 1)
 
@@ -308,7 +307,9 @@ class TestJob(unittest.TestCase):
         )
         self.mock_client.request_deserialize.return_value = aborted_snapshot
 
-        self.job.wait_single_node()
+        result = self.job.wait_single_node()
+        self.assertFalse(result.success)
+        self.assertIsInstance(result, WaitResult)
         self.mock_client.request_deserialize.assert_called()
 
     @patch("aistore.sdk.job.time.sleep", Mock())
@@ -329,8 +330,6 @@ class TestJob(unittest.TestCase):
 
         with self.assertRaises(Timeout):
             self.job.wait_single_node()
-
-        self.mock_client.request_deserialize.assert_called()
 
     def test_get_within_timeframe_found_jobs(self):
         start_time = datetime.now(timezone.utc) - timedelta(days=1)

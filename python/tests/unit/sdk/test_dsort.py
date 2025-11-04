@@ -19,11 +19,12 @@ from aistore.sdk.const import (
 from aistore.sdk.dsort import Dsort, DsortFramework, DsortShardsGroup, DsortAlgorithm
 from aistore.sdk.dsort.types import DsortMetrics, JobInfo
 from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_FILE_NAME
+from aistore.sdk.errors import Timeout
+from aistore.sdk.wait_result import WaitResult
 from aistore.sdk.provider import Provider
 from aistore.sdk.multiobj import ObjectNames, ObjectRange
 
 from aistore.sdk.types import BucketModel
-from aistore.sdk.errors import Timeout
 from aistore.sdk.utils import probing_frequency
 
 VALID_JSON_SPEC = """
@@ -72,12 +73,14 @@ class TestDsort(unittest.TestCase):
         self.invalid_value = "invalid_value"
 
     @staticmethod
-    def _get_mock_job_info(finished, aborted=False):
+    def _get_mock_job_info(finished, aborted=False, errors=None):
         mock_metrics = Mock(DsortMetrics)
         mock_metrics.aborted = aborted
         mock_metrics.shard_creation = Mock(finished=finished)
+        mock_metrics.errors = errors
         mock_job_info = Mock(JobInfo)
         mock_job_info.metrics = mock_metrics
+        mock_job_info.finish_time = "2024-01-01T00:00:00Z" if finished else ""
         return mock_job_info
 
     def test_properties(self):
@@ -276,10 +279,10 @@ class TestDsort(unittest.TestCase):
     @patch("aistore.sdk.dsort.core.Dsort.get_job_info")
     # pylint: disable=unused-argument
     def test_wait_timeout(self, mock_get_job_info, mock_sleep):
-        mock_get_job_info.return_value = {
-            "key": self._get_mock_job_info(finished=False, aborted=False)
-        }
-        self.assertRaises(Timeout, self.dsort.wait)
+        job_info_dict = {"key": self._get_mock_job_info(finished=False, aborted=False)}
+        mock_get_job_info.return_value = job_info_dict
+        with self.assertRaises(Timeout):
+            self.dsort.wait()
 
     @patch("aistore.sdk.dsort.core.time.sleep")
     @patch("aistore.sdk.dsort.core.Dsort.get_job_info")
@@ -291,9 +294,14 @@ class TestDsort(unittest.TestCase):
             call(),
         ]
         expected_sleep_calls = [call(frequency)]
+        job_info_aborted = {
+            "key": self._get_mock_job_info(
+                finished=False, aborted=True, errors=["Dsort job aborted"]
+            )
+        }
         mock_get_job_info.side_effect = [
             {"key": self._get_mock_job_info(finished=False)},
-            {"key": self._get_mock_job_info(finished=False, aborted=True)},
+            job_info_aborted,
             {"key": self._get_mock_job_info(finished=False)},
         ]
 
@@ -303,6 +311,7 @@ class TestDsort(unittest.TestCase):
             mock_sleep,
             expected_metrics_calls,
             expected_sleep_calls,
+            expected_success=False,
         )
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -315,10 +324,11 @@ class TestDsort(unittest.TestCase):
         expected_sleep_calls,
         **kwargs,
     ):
+        expected_result = {"job_id": self._get_mock_job_info(finished=True)}
         mock_get_job_info.side_effect = [
             {"job_id": self._get_mock_job_info(finished=False)},
             {"job_id": self._get_mock_job_info(finished=False)},
-            {"job_id": self._get_mock_job_info(finished=True)},
+            expected_result,
         ]
         self._wait_exec_assert(
             dsort,
@@ -326,6 +336,7 @@ class TestDsort(unittest.TestCase):
             mock_sleep,
             expected_job_info_calls,
             expected_sleep_calls,
+            expected_success=True,
             **kwargs,
         )
 
@@ -336,10 +347,12 @@ class TestDsort(unittest.TestCase):
         mock_sleep,
         expected_job_info_calls,
         expected_sleep_calls,
+        expected_success,
         **kwargs,
     ):
-        dsort.wait(**kwargs)
-
+        result = dsort.wait(**kwargs)
+        self.assertEqual(result.success, expected_success)
+        self.assertIsInstance(result, WaitResult)
         mock_get_job_info.assert_has_calls(expected_job_info_calls)
         mock_sleep.assert_has_calls(expected_sleep_calls)
         self.assertEqual(len(expected_job_info_calls), mock_get_job_info.call_count)

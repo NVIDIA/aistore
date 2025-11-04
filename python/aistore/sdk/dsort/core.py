@@ -3,6 +3,7 @@ import time
 import json
 from typing import Dict, Union
 from pathlib import Path
+from dateutil.parser import isoparse
 
 from aistore.sdk.const import (
     HTTP_METHOD_POST,
@@ -18,6 +19,7 @@ from aistore.sdk.dsort.ekm import ExternalKeyMap, EKM_FILE_NAME
 from aistore.sdk.dsort.types import JobInfo
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.errors import Timeout
+from aistore.sdk.wait_result import WaitResult
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.utils import validate_file, probing_frequency
 
@@ -98,17 +100,22 @@ class Dsort:
             params=qparam,
         )
 
+    # TODO: Refactor and remove pylint disable
+    # pylint: disable=too-many-nested-blocks
     def wait(
         self,
         timeout: int = DEFAULT_DSORT_WAIT_TIMEOUT,
         verbose: bool = True,
-    ):
+    ) -> WaitResult:
         """
         Wait for a dSort job to finish
 
         Args:
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
+
+        Returns:
+            WaitResult: Outcome of the wait operation
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -121,19 +128,48 @@ class Dsort:
         logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
+
         while True:
+            job_info_dict = self.get_job_info()
+
             if passed > timeout:
-                raise Timeout("dsort job to finish")
-            finished = True
-            for job_info in self.get_job_info().values():
-                if job_info.metrics.aborted:
-                    logger.info("DSort job '%s' aborted", self._dsort_id)
-                    return
-                # Shard creation is the last phase, so check if it's finished
-                finished = job_info.metrics.shard_creation.finished and finished
+                logger.error(
+                    "Timeout waiting for dsort job '%s' after %ds. Job info: %s",
+                    self._dsort_id,
+                    timeout,
+                    job_info_dict,
+                )
+                raise Timeout(f"dsort job '{self._dsort_id}'", f"after {timeout}s")
+
+            if not job_info_dict:
+                time.sleep(sleep_time)
+                passed += sleep_time
+                continue
+
+            infos = list(job_info_dict.values())
+            aborted = any(i.metrics.aborted for i in infos)
+            finished = all(i.metrics.shard_creation.finished for i in infos)
+
+            if not (finished or aborted):
+                time.sleep(sleep_time)
+                passed += sleep_time
+                continue
+
+            error = None
+            for info in infos:
+                if info.metrics.errors:
+                    error = next((e for e in info.metrics.errors if e), None)
+                    if error:
+                        break
+
+            end_time = None
             if finished:
-                logger.info("DSort job '%s' finished", self._dsort_id)
-                return
-            logger.info("Waiting on dsort job '%s'...", self._dsort_id)
-            time.sleep(sleep_time)
-            passed += sleep_time
+                times = [isoparse(i.finish_time) for i in infos if i.finish_time]
+                end_time = max(times) if times else None
+
+            return WaitResult(
+                job_id=self._dsort_id,
+                success=finished and not aborted,
+                error=error,
+                end_time=end_time,
+            )

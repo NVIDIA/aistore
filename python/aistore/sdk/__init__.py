@@ -1,7 +1,7 @@
 """
 Import client-accessible components here to provide consistent imports via `from aistore.sdk import *`
 
-Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
 """
 
 # Clients
@@ -24,3 +24,4 @@ from aistore.sdk.dataset.data_shard import DataShard
 from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.retry_config import ColdGetConf
 from aistore.sdk.retry_config import RetryConfig
+from aistore.sdk.wait_result import WaitResult

@@ -11,6 +11,7 @@ from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 from tests.utils import random_string, create_and_put_object, cases
+from tests.const import TEST_TIMEOUT
 
 
 # pylint: disable=unused-variable
@@ -86,6 +87,7 @@ class TestETLPipelineOps(unittest.TestCase):
         self._etl_names.append(etl.name)
         return etl
 
+    # pylint: disable=too-many-locals
     @pytest.mark.etl
     @cases(
         (
@@ -148,7 +150,8 @@ class TestETLPipelineOps(unittest.TestCase):
                     etl_pipeline=pipeline.pipeline,
                     to_bck=dst_bucket,
                 )
-                self.client.job(job_id).wait()
+                result = self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
+                self.assertTrue(result.success)
 
                 # Verify all transformed objects in destination bucket
                 for obj_name, original_content in self.test_objects.items():

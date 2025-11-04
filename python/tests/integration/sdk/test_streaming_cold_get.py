@@ -13,7 +13,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError, Time
 from tests.integration import REMOTE_SET, REMOTE_BUCKET, CLUSTER_ENDPOINT
 from tests.integration.sdk import TEST_RETRY_CONFIG, DEFAULT_TEST_CLIENT
 from tests.utils import random_string
-from tests.const import MIB, GIB
+from tests.const import MIB, GIB, TEST_TIMEOUT
 
 from aistore.sdk import Bucket, Object, Client
 from aistore.sdk.const import HTTP_METHOD_PATCH
@@ -87,7 +87,8 @@ class TestStreamingColdGet(unittest.TestCase):
     def setUp(self) -> None:
         # Evict the object before each test
         eviction_job = self.bucket.objects(obj_names=[self.OBJECT_NAME]).evict()
-        self.client.job(job_id=eviction_job).wait()
+        result = self.client.job(job_id=eviction_job).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         self.bucket_uri = f"{self.bucket.provider.value}://{self.bucket.name}"
 

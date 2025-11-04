@@ -1,6 +1,9 @@
 #
 # Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
 #
+
+# pylint: disable=duplicate-code
+
 import random
 import unittest
 import io
@@ -27,7 +30,6 @@ from tests.const import (
     SMALL_FILE_SIZE,
     OBJ_READ_TYPE_ALL,
     OBJ_READ_TYPE_CHUNK,
-    TEST_TIMEOUT,
 )
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
@@ -37,6 +39,7 @@ from tests.utils import (
     has_targets,
     random_string,
 )
+from tests.const import TEST_TIMEOUT
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_SET, AWS_BUCKET
 
 
@@ -190,7 +193,8 @@ class TestObjectOps(ParallelTestBase):
         objects = self._put_objects(1, SMALL_FILE_SIZE)
         obj_names = list(objects.keys())
         evict_job_id = self.bucket.objects(obj_names=obj_names).evict()
-        self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         for obj_name, content in objects.items():
             start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -223,7 +227,8 @@ class TestObjectOps(ParallelTestBase):
 
         # Evict the object
         evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
-        self.client.job(job_id=evict_job_id).wait(timeout=TEST_TIMEOUT)
+        result = self.client.job(job_id=evict_job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
 
         # Check the `Ais-Present` attribute after eviction
         # Note: `Ais-Present` should be "false" after eviction
@@ -277,7 +282,8 @@ class TestObjectOps(ParallelTestBase):
 
         # If promote is executed as an asynchronous job, wait until it completes
         if promote_job:
-            self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
+            result = self.client.job(job_id=promote_job).wait(timeout=TEST_TIMEOUT)
+            self.assertTrue(result.success)
 
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
@@ -301,7 +307,8 @@ class TestObjectOps(ParallelTestBase):
 
         # If promote is executed as an asynchronous job, wait until it completes
         if promote_job:
-            self.client.job(job_id=promote_job).wait_for_idle(timeout=TEST_TIMEOUT)
+            result = self.client.job(job_id=promote_job).wait(timeout=TEST_TIMEOUT)
+            self.assertTrue(result.success)
 
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
@@ -345,14 +352,16 @@ class TestObjectOps(ParallelTestBase):
         obj, _ = self._create_object_with_content()
 
         evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
-        self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
+        self.assertTrue(result.success)
         self.assertFalse(obj.props.present)
 
         blob_download_job_id = obj.blob_download()
         self.assertNotEqual(blob_download_job_id, "")
-        self.client.job(job_id=blob_download_job_id).wait_single_node(
+        result = self.client.job(job_id=blob_download_job_id).wait_single_node(
             timeout=TEST_TIMEOUT
         )
+        self.assertTrue(result.success)
         self.assertTrue(obj.props.present)
 
     def test_get_archregex(self):
