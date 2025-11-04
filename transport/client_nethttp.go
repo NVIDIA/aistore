@@ -46,7 +46,7 @@ func NewIntraDataClient() (client *http.Client) {
 	return
 }
 
-func (s *streamBase) doPlain(body io.Reader) error {
+func (s *base) doPlain(body io.Reader) error {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, s.dstURL, body)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (s *streamBase) doPlain(body io.Reader) error {
 	return s._do(req)
 }
 
-func (s *streamBase) doCmpr(body io.Reader) error {
+func (s *base) doCmpr(body io.Reader) error {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPut, s.dstURL, body)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (s *streamBase) doCmpr(body io.Reader) error {
 	return err
 }
 
-func (s *streamBase) _do(req *http.Request) error {
+func (s *base) _do(req *http.Request) error {
 	req.Header.Set(apc.HdrSessID, strconv.FormatInt(s.sessID, 10))
 	req.Header.Set(apc.HdrSenderID, core.T.SID())
 	req.Header.Set(cos.HdrUserAgent, ua)

@@ -52,8 +52,8 @@ func Init(tstats cos.StatsUpdater) *StreamCollector {
 	// real stream collector
 	gc = &collector{
 		ctrlCh:  make(chan ctrl, dfltCollectChan),
-		streams: make(map[int64]*streamBase, iniCollectCap),
-		heap:    make([]*streamBase, 0, iniCollectCap), // min-heap sorted by stream.time.ticks
+		streams: make(map[int64]*base, iniCollectCap),
+		heap:    make([]*base, 0, iniCollectCap), // min-heap sorted by stream.time.ticks
 	}
 	gc.stopCh.Init()
 	heap.Init(gc)

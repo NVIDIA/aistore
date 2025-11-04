@@ -26,7 +26,7 @@ type (
 		sentCB  SentCB    // to free SGLs, close files, etc. cleanup
 		lz4s    *lz4Stream
 		sendoff sendoff
-		streamBase
+		base
 		chanFull cos.ChanFull
 	}
 	lz4Stream struct {
@@ -75,7 +75,7 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 	// Remove stream after lock because we could deadlock between `do()`
 	// (which checks for `Terminated` status) and this function which
 	// would be under lock.
-	gc.remove(&s.streamBase)
+	gc.remove(&s.base)
 
 	if s.compressed() {
 		s.lz4s.sgl.Free()

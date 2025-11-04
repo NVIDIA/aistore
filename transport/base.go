@@ -68,7 +68,7 @@ type (
 		drain(err error)
 		idleTick()
 	}
-	streamBase struct {
+	base struct {
 		streamer streamer
 		client   Client // stream's http client
 		parent   *Parent
@@ -87,7 +87,7 @@ type (
 			reason string
 			mu     sync.Mutex
 			done   atomic.Bool
-			yelp   atomic.Bool
+			once   atomic.Bool // term log
 		}
 		time struct {
 			idleTeardown time.Duration // idle timeout
@@ -105,16 +105,19 @@ type (
 )
 
 ////////////////
-// streamBase //
+// base //
 ////////////////
 
-func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
+func (s *Stream) initBase(client Client, dstURL, dstID string, extra *Extra) {
 	var (
 		u, err = url.Parse(dstURL)
 	)
 	debug.AssertNoErr(err)
 
-	s = &streamBase{client: client, parent: extra.Parent, dstURL: dstURL, dstID: dstID}
+	s.base.client = client
+	s.base.parent = extra.Parent
+	s.base.dstURL = dstURL
+	s.base.dstID = dstID
 
 	s.sessID = nextSessionID.Inc()
 	s.trname = path.Base(u.Path)
@@ -147,7 +150,6 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 
 	// fsm: initiate HTTP session upon the first arrival
 	s.sessST.Store(inactive)
-	return s
 }
 
 // (used on the receive side as well)
@@ -161,13 +163,13 @@ func _sizeHdr(config *cmn.Config, size int64) int64 {
 	return size
 }
 
-func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
+func (s *base) startSend(streamable fmt.Stringer) (err error) {
 	s.time.inSend.Store(true) // StreamCollector to postpone cleanups
 
 	if s.IsTerminated() {
 		// slow path
 		err = s.newErr("dropping " + streamable.String())
-		if s.term.yelp.CAS(false, true) { // only once
+		if s.term.once.CAS(false, true) {
 			nlog.Errorln(err)
 		}
 		return
@@ -182,7 +184,7 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 	return
 }
 
-func (s *streamBase) newErr(ctx string) error {
+func (s *base) newErr(ctx string) error {
 	reason, errT := s.TermInfo()
 	return &ErrStreamTerm{
 		err:    errT,
@@ -193,16 +195,16 @@ func (s *streamBase) newErr(ctx string) error {
 	}
 }
 
-func (s *streamBase) Stop()               { s.stopCh.Close() }
-func (s *streamBase) URL() string         { return s.dstURL }
-func (s *streamBase) ID() (string, int64) { return s.trname, s.sessID } // usage: test only
-func (s *streamBase) String() string      { return s.loghdr }
+func (s *base) Stop()               { s.stopCh.Close() }
+func (s *base) URL() string         { return s.dstURL }
+func (s *base) ID() (string, int64) { return s.trname, s.sessID } // usage: test only
+func (s *base) String() string      { return s.loghdr }
 
-func (s *streamBase) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
+func (s *base) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. usage see otherXreb.Abort())
 
-func (s *streamBase) IsTerminated() bool { return s.term.done.Load() }
+func (s *base) IsTerminated() bool { return s.term.done.Load() }
 
-func (s *streamBase) TermInfo() (reason string, err error) {
+func (s *base) TermInfo() (reason string, err error) {
 	// to account for an unlikely delay between done.CAS() and mu.Lock - see terminate()
 	sleep := cos.ProbingFrequency(termErrWait)
 	for elapsed := time.Duration(0); elapsed < termErrWait; elapsed += sleep {
@@ -217,7 +219,7 @@ func (s *streamBase) TermInfo() (reason string, err error) {
 	return
 }
 
-func (s *streamBase) isNextReq() (reason string) {
+func (s *base) isNextReq() (reason string) {
 	for {
 		select {
 		case <-s.lastCh.Listen():
@@ -242,7 +244,7 @@ func (s *streamBase) isNextReq() (reason string) {
 	}
 }
 
-func (s *streamBase) deactivate() (n int, err error) {
+func (s *base) deactivate() (n int, err error) {
 	err = io.EOF
 	if cmn.Rom.V(5, cos.ModTransport) {
 		nlog.Infoln(s.String(), "connection teardown: [", s.numCur, "]")
@@ -250,7 +252,7 @@ func (s *streamBase) deactivate() (n int, err error) {
 	return
 }
 
-func (s *streamBase) sendLoop(config *cmn.Config, dryrun bool) {
+func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 	var (
 		err    error
 		reason string
@@ -348,7 +350,7 @@ func _shouldRetry(err error) bool {
 	return errors.Is(err, syscall.ETIMEDOUT)
 }
 
-func (s *streamBase) yelp(err error) {
+func (s *base) yelp(err error) {
 	nlog.WarningDepth(1, "Error:", s.String(), "[", err, "]")
 }
 

@@ -131,8 +131,9 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	} else if extra.Config == nil {
 		extra.Config = cmn.GCO.Get()
 	}
-	s = &Stream{streamBase: *newBase(client, dstURL, dstID, extra)}
-	s.streamBase.streamer = s
+	s = &Stream{}
+	s.initBase(client, dstURL, dstID, extra)
+	s.base.streamer = s
 	if extra.Parent != nil {
 		s.sentCB = extra.Parent.SentCB
 	}
@@ -149,7 +150,7 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	go s.sendLoop(extra.Config, dryrun()) // handle SQ
 	go s.cmplLoop()                       // handle SCQ
 
-	gc.ctrlCh <- ctrl{&s.streamBase, true /* collect */}
+	gc.ctrlCh <- ctrl{&s.base, true /* collect */}
 	return
 }
 

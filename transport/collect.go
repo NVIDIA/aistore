@@ -17,15 +17,15 @@ import (
 
 type (
 	ctrl struct { // add/del channel to/from collector
-		s   *streamBase
+		s   *base
 		add bool
 	}
 	collector struct {
-		streams map[int64]*streamBase // by session ID
+		streams map[int64]*base // by session ID
 		ticker  *time.Ticker
 		stopCh  cos.StopCh
 		ctrlCh  chan ctrl
-		heap    []*streamBase
+		heap    []*base
 		none    atomic.Bool // no streams
 	}
 )
@@ -72,7 +72,7 @@ func (gc *collector) run() {
 			if !gc.none.Load() {
 				now := mono.NanoTime()
 				if time.Duration(now-prev) >= dfltCollectLog {
-					var s *streamBase
+					var s *base
 					for _, s = range gc.streams {
 						break
 					}
@@ -117,7 +117,7 @@ func (gc *collector) stop() {
 	gc.stopCh.Close()
 }
 
-func (gc *collector) remove(s *streamBase) {
+func (gc *collector) remove(s *base) {
 	gc.ctrlCh <- ctrl{s, false} // remove and close workCh
 }
 
@@ -138,13 +138,13 @@ func (gc *collector) Swap(i, j int) {
 
 func (gc *collector) Push(x any) {
 	l := len(gc.heap)
-	s := x.(*streamBase)
+	s := x.(*base)
 	s.time.index = l
 	gc.heap = append(gc.heap, s)
 	heap.Fix(gc, s.time.index) // reorder the newly added stream right away
 }
 
-func (gc *collector) update(s *streamBase, ticks int) {
+func (gc *collector) update(s *base, ticks int) {
 	s.time.ticks = ticks
 	debug.Assert(s.time.ticks >= 0)
 	heap.Fix(gc, s.time.index)

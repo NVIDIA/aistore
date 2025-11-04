@@ -54,7 +54,7 @@ func NewIntraDataClient() Client {
 	return cl
 }
 
-func (s *streamBase) doPlain(body io.Reader) (err error) {
+func (s *base) doPlain(body io.Reader) (err error) {
 	var (
 		req  = fasthttp.AcquireRequest()
 		resp = fasthttp.AcquireResponse()
@@ -65,7 +65,7 @@ func (s *streamBase) doPlain(body io.Reader) (err error) {
 	return err
 }
 
-func (s *streamBase) doCmpr(body io.Reader) (err error) {
+func (s *base) doCmpr(body io.Reader) (err error) {
 	var (
 		req  = fasthttp.AcquireRequest()
 		resp = fasthttp.AcquireResponse()
@@ -80,7 +80,7 @@ func (s *streamBase) doCmpr(body io.Reader) (err error) {
 	return err
 }
 
-func (s *streamBase) _do(body io.Reader, req *fasthttp.Request, resp *fasthttp.Response) (err error) {
+func (s *base) _do(body io.Reader, req *fasthttp.Request, resp *fasthttp.Response) (err error) {
 	req.Header.SetMethod(http.MethodPut)
 	req.SetRequestURI(s.dstURL)
 	req.SetBodyStream(body, -1)
