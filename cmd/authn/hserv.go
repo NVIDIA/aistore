@@ -299,15 +299,15 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func getToken(r *http.Request) (*tok.AISClaims, error) {
-	tokenStr, err := tok.ExtractToken(r.Header, Conf.Server.AllowS3TokenCompat)
+	tokenHdr, err := tok.ExtractToken(r.Header)
 	if err != nil {
 		return nil, err
 	}
 	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
-	claims, err := tkParser.ValidateToken(tokenStr)
+	claims, err := tkParser.ValidateToken(tokenHdr.Token)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
-			return nil, fmt.Errorf("not authorized (token expired): %q", tokenStr)
+			return nil, fmt.Errorf("not authorized (token expired): %q", tokenHdr.Token)
 		}
 		return nil, err
 	}

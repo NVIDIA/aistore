@@ -641,18 +641,16 @@ type (
 	}
 
 	AuthConf struct {
-		Secret             string   `json:"secret"`
-		PubKey             string   `json:"public_key"`
-		Aud                []string `json:"aud"`
-		Enabled            bool     `json:"enabled"`
-		AllowS3TokenCompat bool     `json:"allow_s3_token_compat,omitempty"` // Allow X-Amz-Security-Token header to contain JWT instead of SigV4
+		Secret  string   `json:"secret"`
+		Enabled bool     `json:"enabled"`
+		PubKey  string   `json:"public_key"`
+		Aud     []string `json:"aud"`
 	}
 	AuthConfToSet struct {
-		Secret             *string  `json:"secret,omitempty"`
-		Enabled            *bool    `json:"enabled,omitempty"`
-		AllowS3TokenCompat *bool    `json:"allow_s3_token_compat,omitempty"`
-		PubKey             string   `json:"public_key,omitempty"`
-		Aud                []string `json:"aud,omitempty"`
+		Secret  *string  `json:"secret,omitempty"`
+		Enabled *bool    `json:"enabled,omitempty"`
+		PubKey  string   `json:"public_key,omitempty"`
+		Aud     []string `json:"aud,omitempty"`
 	}
 
 	// keepalive

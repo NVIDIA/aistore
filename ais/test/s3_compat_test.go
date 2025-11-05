@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -142,8 +141,8 @@ func getS3Credentials(t *testing.T) aws.CredentialsProvider {
 }
 
 // setupS3Compat configures the cluster for S3 compatibility tests
-// If auth is enabled, it automatically enables S3 reverse proxy and JWT token compat mode
-// Returns a cleanup function that restores original settings
+// If auth is enabled, it enables S3 reverse proxy feature.
+// S3 JWT authentication (via X-Amz-Security-Token) will be checked as a fallback if no Authorization header is present.
 func setupS3Compat(t *testing.T) {
 	config, err := api.GetClusterConfig(tools.BaseAPIParams())
 	tassert.CheckFatal(t, err)
@@ -153,19 +152,16 @@ func setupS3Compat(t *testing.T) {
 		return
 	}
 
-	// Auth is enabled - ensure S3 JWT compat mode is enabled
+	// Auth is enabled - ensure S3 reverse proxy is enabled
 	originalFeatures := config.Features.String()
-	originalS3TokenCompat := strconv.FormatBool(config.Auth.AllowS3TokenCompat)
 
 	tools.SetClusterConfig(t, cos.StrKVs{
-		"features":                   feat.S3ReverseProxy.String(),
-		"auth.allow_s3_token_compat": "true",
+		"features": feat.S3ReverseProxy.String(),
 	})
 
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{
-			"features":                   originalFeatures,
-			"auth.allow_s3_token_compat": originalS3TokenCompat,
+			"features": originalFeatures,
 		})
 	})
 }
@@ -712,13 +708,6 @@ func TestS3JWTAuth(t *testing.T) {
 	// Create test bucket
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	// VERIFY: S3 JWT compat is enabled
-	updatedConfig, err := api.GetClusterConfig(authBP)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, updatedConfig.Auth.AllowS3TokenCompat,
-		"S3 JWT compat mode should be enabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
-	tlog.Logfln("✓ S3 JWT compatibility mode enabled")
-
 	// Get a valid JWT token from the authenticated BaseParams
 	testJWT := authBP.Token
 	tassert.Fatalf(t, testJWT != "", "Expected valid auth token from tools.BaseAPIParams()")
@@ -816,18 +805,8 @@ func TestS3JWTAuthFailures(t *testing.T) {
 		bck      = cmn.Bck{Name: "test-s3-jwt-fail-" + trand.String(6), Provider: apc.AIS}
 	)
 
-	// Get authenticated BaseParams
-	authBP := tools.BaseAPIParams()
-
 	// Create test bucket
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-
-	// VERIFY: S3 JWT compat is enabled
-	updatedConfig, err := api.GetClusterConfig(authBP)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, updatedConfig.Auth.AllowS3TokenCompat,
-		"S3 JWT compat mode should be enabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
-	tlog.Logfln("✓ S3 JWT compatibility mode enabled")
 
 	// Test 1: Request with NO credentials at all
 	tlog.Logln("Test 1: Request with NO credentials should fail...")
@@ -913,78 +892,4 @@ func TestS3JWTAuthFailures(t *testing.T) {
 	_, err = malformedClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
 	tassert.Fatalf(t, err != nil, "Expected request with malformed JWT to fail, but it succeeded")
 	tlog.Logfln("✓ Malformed JWT signature failed as expected: %v", err)
-}
-
-// TestS3JWTAuthDisabledByDefault validates backward compatibility:
-// When auth is enabled but allow_s3_token_compat is false (default),
-// valid JWT tokens in X-Amz-Security-Token should be rejected
-func TestS3JWTAuthDisabledByDefault(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
-
-	var (
-		proxyURL = tools.GetPrimaryURL()
-		bck      = cmn.Bck{Name: "test-s3-jwt-disabled-" + trand.String(6), Provider: apc.AIS}
-	)
-
-	// Get authenticated BaseParams
-	authBP := tools.BaseAPIParams()
-
-	// Get current config
-	clusterConfig, err := api.GetClusterConfig(authBP)
-	tassert.CheckFatal(t, err)
-	originalFeatures := clusterConfig.Features.String()
-	originalS3TokenCompat := strconv.FormatBool(clusterConfig.Auth.AllowS3TokenCompat)
-
-	// Create test bucket
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
-
-	// Enable S3 reverse proxy but keep allow_s3_token_compat disabled (false)
-	tlog.Logln("Enabling S3 reverse proxy with JWT auth mode DISABLED...")
-	tools.SetClusterConfig(t, cos.StrKVs{
-		"features":                   feat.S3ReverseProxy.String(),
-		"auth.allow_s3_token_compat": "false",
-	})
-	t.Cleanup(func() {
-		// Restore original config values
-		tools.SetClusterConfig(t, cos.StrKVs{
-			"features":                   originalFeatures,
-			"auth.allow_s3_token_compat": originalS3TokenCompat,
-		})
-	})
-
-	// VERIFY: S3 JWT compat is disabled
-	updatedConfig, err := api.GetClusterConfig(authBP)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, !updatedConfig.Auth.AllowS3TokenCompat,
-		"S3 JWT compat mode should be disabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
-	tlog.Logfln("✓ S3 JWT compatibility mode is disabled (backward compatibility mode)")
-
-	// Get a valid JWT token
-	testJWT := authBP.Token
-	tassert.Fatalf(t, testJWT != "", "Expected valid auth token from tools.BaseAPIParams()")
-	tlog.Logfln("Attempting S3 request with valid JWT token (length: %d bytes)", len(testJWT))
-
-	// Create AWS SDK client with JWT as SessionToken
-	cfg, err := config.LoadDefaultConfig(
-		context.Background(),
-		config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(
-				"dummy-access-key",
-				"dummy-secret-key",
-				testJWT, // Valid JWT in X-Amz-Security-Token header
-			),
-		),
-		config.WithRegion(env.AwsDefaultRegion()),
-	)
-	tassert.CheckFatal(t, err)
-
-	cfg.HTTPClient = newS3Client(false)
-	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
-	s3Client := s3.NewFromConfig(cfg)
-
-	// Attempt S3 request - should FAIL because allow_s3_token_compat is disabled
-	tlog.Logln("Testing that valid JWT is rejected when feature is disabled...")
-	_, err = s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
-	tassert.Fatalf(t, err != nil, "Expected request to fail when allow_s3_token_compat=false, but it succeeded")
-	tlog.Logfln("✓ Valid JWT was correctly rejected (backward compatibility preserved): %v", err)
 }

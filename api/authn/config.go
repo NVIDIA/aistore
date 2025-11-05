@@ -38,12 +38,11 @@ type (
 		UseHTTPS    bool   `json:"use_https"`
 	}
 	ServerConf struct {
-		psecret            *string       `json:"-"`
-		pexpire            *cos.Duration `json:"-"`
-		Secret             string        `json:"secret"`
-		Expire             cos.Duration  `json:"expiration_time"`
-		PubKey             *string       `json:"public_key"`
-		AllowS3TokenCompat bool          `json:"allow_s3_token_compat"`
+		psecret *string       `json:"-"`
+		pexpire *cos.Duration `json:"-"`
+		Secret  string        `json:"secret"`
+		Expire  cos.Duration  `json:"expiration_time"`
+		PubKey  *string       `json:"public_key"`
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`

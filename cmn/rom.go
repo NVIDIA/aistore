@@ -20,11 +20,10 @@ type readMostly struct {
 		keepalive time.Duration // MaxKeepalive
 		ecstreams time.Duration // EcStreams
 	}
-	features           feat.Flags
-	level, modules     int
-	testingEnv         bool
-	authEnabled        bool
-	allowS3TokenCompat bool // token validation fast path
+	features       feat.Flags
+	level, modules int
+	testingEnv     bool
+	authEnabled    bool
 }
 
 var Rom readMostly
@@ -43,7 +42,6 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	}
 	rom.features = cfg.Features
 	rom.authEnabled = cfg.Auth.Enabled
-	rom.allowS3TokenCompat = cfg.Auth.AllowS3TokenCompat
 
 	// pre-parse for V (below)
 	rom.level, rom.modules = cfg.Log.Level.Parse()
@@ -55,7 +53,6 @@ func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecst
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
-func (rom *readMostly) AllowS3TokenCompat() bool       { return rom.allowS3TokenCompat }
 
 func (rom *readMostly) V(verbosity, fl int) bool {
 	return rom.level >= verbosity || rom.modules&fl != 0
