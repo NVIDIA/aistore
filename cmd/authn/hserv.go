@@ -299,7 +299,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func getToken(r *http.Request) (*tok.AISClaims, error) {
-	tokenStr, err := tok.ExtractToken(r.Header)
+	tokenStr, err := tok.ExtractToken(r.Header, Conf.Server.AllowS3TokenCompat)
 	if err != nil {
 		return nil, err
 	}

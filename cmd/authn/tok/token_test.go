@@ -142,13 +142,16 @@ func TestStandardClaimsCluster(t *testing.T) {
 }
 
 func TestExtractToken(t *testing.T) {
+	// Test bearer token extraction (s3CompatEnabled=false)
 	hdr := http.Header{}
 	hdr.Set("Authorization", "Bearer sometoken")
-	token, err := tok.ExtractToken(hdr)
+	token, err := tok.ExtractToken(hdr, false)
 	tassert.Fatalf(t, err == nil, "ExtractToken failed: %v", err)
 	tassert.Errorf(t, token == "sometoken", "Expected 'sometoken', got %q", token)
+
+	// Test missing Bearer prefix
 	hdr.Set("Authorization", "sometoken")
-	_, err = tok.ExtractToken(hdr)
+	_, err = tok.ExtractToken(hdr, false)
 	tassert.Error(t, err != nil, "Expected failure due to missing 'Bearer' prefix")
 }
 
@@ -288,4 +291,47 @@ func TestValidateClaims_NoSubject(t *testing.T) {
 	_, err = hmacParser.ValidateToken(tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with missing subject and username to fail")
 	tassert.Fatal(t, errors.Is(err, tok.ErrNoSubject), "Expected validating token with missing subject and username to fail")
+}
+
+func TestExtractTokenS3Compat(t *testing.T) {
+	// Create a dummy JWT
+	testJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0dXNlciIsImV4cCI6OTk5OTk5OTk5OX0.dummy"
+
+	// Test 1: JWT in X-Amz-Security-Token (with SigV4 headers present)
+	hdr := http.Header{}
+	hdr.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request...")
+	hdr.Set("X-Amz-Security-Token", testJWT)
+	hdr.Set("X-Amz-Date", "20130524T000000Z")
+
+	token, err := tok.ExtractToken(hdr, true)
+	tassert.Fatalf(t, err == nil, "ExtractToken failed: %v", err)
+	tassert.Errorf(t, token == testJWT, "Expected JWT from X-Amz-Security-Token, got %q", token)
+
+	// Test 2: Bearer token takes precedence
+	hdr.Set("Authorization", "Bearer priority-token")
+	token, err = tok.ExtractToken(hdr, true)
+	tassert.Fatalf(t, err == nil, "ExtractToken failed: %v", err)
+	tassert.Errorf(t, token == "priority-token", "Expected Bearer token to take precedence, got %q", token)
+
+	// Test 3: X-Amz-Security-Token with non-JWT data extracts successfully
+	// (validation happens later in ValidateToken, not during extraction)
+	hdr = http.Header{}
+	hdr.Set("Authorization", "AWS4-HMAC-SHA256 Credential=...")
+	hdr.Set("X-Amz-Security-Token", "not-a-jwt-no-dots")
+	token, err = tok.ExtractToken(hdr, true)
+	tassert.Fatalf(t, err == nil, "ExtractToken should succeed, got: %v", err)
+	tassert.Errorf(t, token == "not-a-jwt-no-dots", "Expected extracted token, got %q", token)
+
+	// Test 4: No token at all
+	hdr = http.Header{}
+	hdr.Set("Authorization", "AWS4-HMAC-SHA256 Credential=...")
+	_, err = tok.ExtractToken(hdr, true)
+	tassert.Fatalf(t, errors.Is(err, tok.ErrNoToken), "Expected ErrNoToken, got: %v", err)
+
+	// Test 5: S3 compat disabled - should NOT check X-Amz-Security-Token
+	hdr = http.Header{}
+	hdr.Set("Authorization", "AWS4-HMAC-SHA256 Credential=...")
+	hdr.Set("X-Amz-Security-Token", testJWT)
+	_, err = tok.ExtractToken(hdr, false) // s3CompatEnabled=false
+	tassert.Fatalf(t, errors.Is(err, tok.ErrNoToken), "Expected ErrNoToken when S3 compat disabled, got: %v", err)
 }

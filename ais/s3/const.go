@@ -40,7 +40,8 @@ const (
 	// https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html#UserMetadata
 	HeaderMetaPrefix = cmn.AwsHeaderMetaPrefix
 
-	HeaderCredentials = "X-Amz-Credential" //nolint:gosec // This is just a header name definition...
+	HeaderCredentials   = "X-Amz-Credential"     //nolint:gosec // This is just a header name definition...
+	HeaderSecurityToken = "X-Amz-Security-Token" // AWS temporary security token (used for JWT in compatibility mode)
 
 	versioningEnabled  = "Enabled"
 	versioningDisabled = "Suspended"

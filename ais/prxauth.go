@@ -220,8 +220,9 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // Validates a token from the request header
+// When config.Auth.AllowS3TokenCompat is enabled, also checks X-Amz-Security-Token header
 func (p *proxy) validateToken(hdr http.Header) (*tok.AISClaims, error) {
-	token, err := tok.ExtractToken(hdr)
+	token, err := tok.ExtractToken(hdr, cmn.Rom.AllowS3TokenCompat())
 	if err != nil {
 		return nil, err
 	}

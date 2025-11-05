@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -115,6 +116,58 @@ func newS3Client(pathStyle bool) *http.Client {
 	return &http.Client{
 		Transport: newCustomTransport(pathStyle),
 	}
+}
+
+// getS3Credentials returns appropriate credentials based on cluster auth configuration
+// If auth is enabled, returns JWT token from authenticated session
+// Otherwise returns anonymous credentials
+func getS3Credentials(t *testing.T) aws.CredentialsProvider {
+	config, err := api.GetClusterConfig(tools.BaseAPIParams())
+	tassert.CheckFatal(t, err)
+
+	if config.Auth.Enabled {
+		authBP := tools.BaseAPIParams()
+		if authBP.Token == "" {
+			t.Fatal("Auth is enabled but no token available")
+		}
+		// Use JWT token via X-Amz-Security-Token header (requires allow_s3_token_compat)
+		return credentials.NewStaticCredentialsProvider(
+			"dummy-access-key",
+			"dummy-secret-key",
+			authBP.Token, // JWT as SessionToken
+		)
+	}
+
+	return aws.AnonymousCredentials{}
+}
+
+// setupS3Compat configures the cluster for S3 compatibility tests
+// If auth is enabled, it automatically enables S3 reverse proxy and JWT token compat mode
+// Returns a cleanup function that restores original settings
+func setupS3Compat(t *testing.T) {
+	config, err := api.GetClusterConfig(tools.BaseAPIParams())
+	tassert.CheckFatal(t, err)
+
+	if !config.Auth.Enabled {
+		// No auth - nothing to set up
+		return
+	}
+
+	// Auth is enabled - ensure S3 JWT compat mode is enabled
+	originalFeatures := config.Features.String()
+	originalS3TokenCompat := strconv.FormatBool(config.Auth.AllowS3TokenCompat)
+
+	tools.SetClusterConfig(t, cos.StrKVs{
+		"features":                   feat.S3ReverseProxy.String(),
+		"auth.allow_s3_token_compat": "true",
+	})
+
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{
+			"features":                   originalFeatures,
+			"auth.allow_s3_token_compat": originalS3TokenCompat,
+		})
+	})
 }
 
 func setBucketFeatures(t *testing.T, bck cmn.Bck, bprops *cmn.Bprops, nf feat.Flags) {
@@ -499,6 +552,8 @@ func TestS3ObjMetadata(t *testing.T) {
 // This test specifically targets the rlock implementation in tgts3mpt.go
 // We will create large object (forces multipart storage) + concurrent S3 range requests
 func TestS3MultipartPartOperations(t *testing.T) {
+	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
+
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		bck      = cmn.Bck{Name: "test-mpt-rlock-" + trand.String(6), Provider: apc.AIS}
@@ -532,7 +587,7 @@ func TestS3MultipartPartOperations(t *testing.T) {
 			Region:       "us-east-1",
 			BaseEndpoint: aws.String(proxyURL),
 			UsePathStyle: true,
-			Credentials:  aws.AnonymousCredentials{},
+			Credentials:  getS3Credentials(t),
 		})
 		errorsCh = make(chan error, numConcurrentReaders*numIterationsPerReader*2)
 		wg       sync.WaitGroup
@@ -597,6 +652,8 @@ func TestS3MultipartPartOperations(t *testing.T) {
 }
 
 func TestS3MultipartErrorHandling(t *testing.T) {
+	setupS3Compat(t) // Enable S3 JWT compat if auth is enabled
+
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		bck      = cmn.Bck{Name: "test-s3-mpt-err-" + trand.String(6), Provider: apc.AIS}
@@ -615,7 +672,7 @@ func TestS3MultipartErrorHandling(t *testing.T) {
 		Region:       env.AwsDefaultRegion(),
 		BaseEndpoint: aws.String(proxyURL),
 		UsePathStyle: true,
-		Credentials:  aws.AnonymousCredentials{},
+		Credentials:  getS3Credentials(t),
 	})
 
 	// Call UploadPart with invalid upload ID
@@ -637,4 +694,297 @@ func TestS3MultipartErrorHandling(t *testing.T) {
 	var httpErr *smithyhttp.ResponseError
 	tassert.Errorf(t, errors.As(err, &httpErr) && httpErr.HTTPStatusCode() == 404,
 		"expected HTTP 404, got: %v", err)
+}
+
+func TestS3JWTAuth(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+	setupS3Compat(t) // Enable S3 JWT compat mode
+
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-jwt-" + trand.String(6), Provider: apc.AIS}
+		objName  = "test-object.txt"
+	)
+
+	// Get authenticated BaseParams
+	authBP := tools.BaseAPIParams()
+
+	// Create test bucket
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// VERIFY: S3 JWT compat is enabled
+	updatedConfig, err := api.GetClusterConfig(authBP)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, updatedConfig.Auth.AllowS3TokenCompat,
+		"S3 JWT compat mode should be enabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
+	tlog.Logfln("✓ S3 JWT compatibility mode enabled")
+
+	// Get a valid JWT token from the authenticated BaseParams
+	testJWT := authBP.Token
+	tassert.Fatalf(t, testJWT != "", "Expected valid auth token from tools.BaseAPIParams()")
+	tlog.Logfln("Using JWT token[%s...] (length: %d bytes) for S3 auth", testJWT[:min(16, len(testJWT))], len(testJWT))
+
+	// Create AWS SDK client with JWT as SessionToken
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+
+	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	s3Client := s3.NewFromConfig(cfg)
+
+	// Test 1: List buckets
+	// This request will have:
+	// - Authorization: AWS4-HMAC-SHA256 ... (SigV4 signature)
+	// - X-Amz-Security-Token: <JWT>
+	// AIStore should ignore SigV4 and authenticate using JWT!
+	tlog.Logln("Testing ListBuckets with JWT via X-Amz-Security-Token...")
+	listOutput, err := s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("Successfully listed %d buckets using JWT auth", len(listOutput.Buckets))
+
+	// Verify our test bucket is in the list
+	found := false
+	for _, b := range listOutput.Buckets {
+		if *b.Name == bck.Name {
+			found = true
+			break
+		}
+	}
+	tassert.Errorf(t, found, "Expected to find bucket %s in list", bck.Name)
+
+	// Test 2: PUT object with JWT auth
+	tlog.Logfln("Testing PutObject to %s with JWT auth...", bck.Cname(objName))
+	testData := "test data for JWT S3 auth"
+	_, err = s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+		Body:   strings.NewReader(testData),
+	})
+	tassert.CheckFatal(t, err)
+	tlog.Logln("Successfully PUT object using JWT auth")
+
+	// Test 3: GET object with JWT auth
+	tlog.Logfln("Testing GetObject from %s with JWT auth...", bck.Cname(objName))
+	getOutput, err := s3Client.GetObject(context.Background(), &s3.GetObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+	})
+	tassert.CheckFatal(t, err)
+	defer getOutput.Body.Close()
+
+	body, err := io.ReadAll(getOutput.Body)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, string(body) == testData, "Expected data %q, got %q", testData, string(body))
+	tlog.Logln("Successfully GET object using JWT auth")
+
+	// Test 4: NEGATIVE TEST - Verify request WITHOUT JWT fails (proves auth is enforced)
+	tlog.Logln("Testing that unauthenticated request fails (negative test)...")
+	unauthCfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				"dummy-key",
+				"dummy-secret",
+				"", // No SessionToken = no JWT
+			),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+
+	unauthCfg.HTTPClient = newS3Client(false)
+	unauthCfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	unauthClient := s3.NewFromConfig(unauthCfg)
+
+	_, err = unauthClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected unauthenticated request to fail, but it succeeded")
+	tlog.Logfln("✓ Unauthenticated request failed as expected: %v", err)
+}
+
+// TestS3JWTAuthFailures validates that S3 requests properly fail when S3 JWT compat mode
+// is enabled but invalid or missing credentials are provided
+func TestS3JWTAuthFailures(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+	setupS3Compat(t) // Enable S3 JWT compat mode
+
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-jwt-fail-" + trand.String(6), Provider: apc.AIS}
+	)
+
+	// Get authenticated BaseParams
+	authBP := tools.BaseAPIParams()
+
+	// Create test bucket
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// VERIFY: S3 JWT compat is enabled
+	updatedConfig, err := api.GetClusterConfig(authBP)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, updatedConfig.Auth.AllowS3TokenCompat,
+		"S3 JWT compat mode should be enabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
+	tlog.Logfln("✓ S3 JWT compatibility mode enabled")
+
+	// Test 1: Request with NO credentials at all
+	tlog.Logln("Test 1: Request with NO credentials should fail...")
+	noCfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("", "", ""),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	noCfg.HTTPClient = newS3Client(false)
+	noCfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	noCredsClient := s3.NewFromConfig(noCfg)
+
+	_, err = noCredsClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected request with no credentials to fail, but it succeeded")
+	tlog.Logfln("✓ Request with no credentials failed as expected: %v", err)
+
+	// Test 2: Request with AWS SigV4 credentials but NO JWT (SessionToken empty)
+	tlog.Logln("Test 2: Request with SigV4 credentials but NO JWT should fail...")
+	sigv4Cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				"AKIAIOSFODNN7EXAMPLE",                     // Valid-looking AWS access key
+				"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", // Valid-looking secret
+				"", // No SessionToken = no JWT
+			),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	sigv4Cfg.HTTPClient = newS3Client(false)
+	sigv4Cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	sigv4Client := s3.NewFromConfig(sigv4Cfg)
+
+	_, err = sigv4Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected SigV4-only request to fail, but it succeeded")
+	tlog.Logfln("✓ SigV4-only request (no JWT) failed as expected: %v", err)
+
+	// Test 3: Request with INVALID JWT format
+	tlog.Logln("Test 3: Request with invalid JWT format should fail...")
+	invalidJWTCfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				"dummy-key",
+				"dummy-secret",
+				"not-a-valid-jwt-token", // Invalid JWT format
+			),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	invalidJWTCfg.HTTPClient = newS3Client(false)
+	invalidJWTCfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	invalidJWTClient := s3.NewFromConfig(invalidJWTCfg)
+
+	_, err = invalidJWTClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected request with invalid JWT to fail, but it succeeded")
+	tlog.Logfln("✓ Invalid JWT format failed as expected: %v", err)
+
+	// Test 4: Request with malformed JWT (looks like JWT but invalid signature)
+	tlog.Logln("Test 4: Request with malformed JWT signature should fail...")
+	malformedJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJoYWNrZXIiLCJhZG1pbiI6dHJ1ZSwiZXhwIjo5OTk5OTk5OTk5fQ.InvalidSignature"
+	malformedCfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				"dummy-key",
+				"dummy-secret",
+				malformedJWT,
+			),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	malformedCfg.HTTPClient = newS3Client(false)
+	malformedCfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	malformedClient := s3.NewFromConfig(malformedCfg)
+
+	_, err = malformedClient.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected request with malformed JWT to fail, but it succeeded")
+	tlog.Logfln("✓ Malformed JWT signature failed as expected: %v", err)
+}
+
+// TestS3JWTAuthDisabledByDefault validates backward compatibility:
+// When auth is enabled but allow_s3_token_compat is false (default),
+// valid JWT tokens in X-Amz-Security-Token should be rejected
+func TestS3JWTAuthDisabledByDefault(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bck      = cmn.Bck{Name: "test-s3-jwt-disabled-" + trand.String(6), Provider: apc.AIS}
+	)
+
+	// Get authenticated BaseParams
+	authBP := tools.BaseAPIParams()
+
+	// Get current config
+	clusterConfig, err := api.GetClusterConfig(authBP)
+	tassert.CheckFatal(t, err)
+	originalFeatures := clusterConfig.Features.String()
+	originalS3TokenCompat := strconv.FormatBool(clusterConfig.Auth.AllowS3TokenCompat)
+
+	// Create test bucket
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// Enable S3 reverse proxy but keep allow_s3_token_compat disabled (false)
+	tlog.Logln("Enabling S3 reverse proxy with JWT auth mode DISABLED...")
+	tools.SetClusterConfig(t, cos.StrKVs{
+		"features":                   feat.S3ReverseProxy.String(),
+		"auth.allow_s3_token_compat": "false",
+	})
+	t.Cleanup(func() {
+		// Restore original config values
+		tools.SetClusterConfig(t, cos.StrKVs{
+			"features":                   originalFeatures,
+			"auth.allow_s3_token_compat": originalS3TokenCompat,
+		})
+	})
+
+	// VERIFY: S3 JWT compat is disabled
+	updatedConfig, err := api.GetClusterConfig(authBP)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, !updatedConfig.Auth.AllowS3TokenCompat,
+		"S3 JWT compat mode should be disabled but got: %v", updatedConfig.Auth.AllowS3TokenCompat)
+	tlog.Logfln("✓ S3 JWT compatibility mode is disabled (backward compatibility mode)")
+
+	// Get a valid JWT token
+	testJWT := authBP.Token
+	tassert.Fatalf(t, testJWT != "", "Expected valid auth token from tools.BaseAPIParams()")
+	tlog.Logfln("Attempting S3 request with valid JWT token (length: %d bytes)", len(testJWT))
+
+	// Create AWS SDK client with JWT as SessionToken
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				"dummy-access-key",
+				"dummy-secret-key",
+				testJWT, // Valid JWT in X-Amz-Security-Token header
+			),
+		),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+
+	cfg.HTTPClient = newS3Client(false)
+	cfg.BaseEndpoint = aws.String(proxyURL + "/s3")
+	s3Client := s3.NewFromConfig(cfg)
+
+	// Attempt S3 request - should FAIL because allow_s3_token_compat is disabled
+	tlog.Logln("Testing that valid JWT is rejected when feature is disabled...")
+	_, err = s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+	tassert.Fatalf(t, err != nil, "Expected request to fail when allow_s3_token_compat=false, but it succeeded")
+	tlog.Logfln("✓ Valid JWT was correctly rejected (backward compatibility preserved): %v", err)
 }

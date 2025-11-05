@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
@@ -104,8 +105,9 @@ func AdminClaims(expires time.Time, userID, aud string) *AISClaims {
 	}
 }
 
+// extractBearerToken extracts a bearer token from the Authorization header.
 // Header format: 'Authorization: Bearer <token>'
-func ExtractToken(hdr http.Header) (string, error) {
+func extractBearerToken(hdr http.Header) (string, error) {
 	s := hdr.Get(apc.HdrAuthorization)
 	if s == "" {
 		return "", ErrNoToken
@@ -115,6 +117,31 @@ func ExtractToken(hdr http.Header) (string, error) {
 		return "", ErrNoBearerToken
 	}
 	return s[idx+1:], nil
+}
+
+// ExtractToken extracts JWT token from either Authorization header (Bearer token)
+// or X-Amz-Security-Token header (AWS SDK compatibility mode).
+// This enables native AWS SDK clients to authenticate using JWT tokens passed via the
+// X-Amz-Security-Token header, bypassing SigV4 validation.
+//
+// Priority:
+//  1. Authorization: Bearer <token> (standard JWT auth)
+//  2. X-Amz-Security-Token: <token> (AWS SDK compatibility when s3CompatEnabled=true)
+func ExtractToken(hdr http.Header, s3CompatEnabled bool) (string, error) {
+	// First, try standard Bearer token from Authorization header
+	s, err := extractBearerToken(hdr)
+	if err == nil {
+		return s, nil
+	}
+
+	// Fallback to X-Amz-Security-Token for AWS SDK compatibility
+	if s3CompatEnabled {
+		s := hdr.Get(s3.HeaderSecurityToken)
+		if s != "" {
+			return s, nil
+		}
+	}
+	return "", ErrNoToken
 }
 
 /////////////////
