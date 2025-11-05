@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -71,6 +72,10 @@ type (
 		chunkSize  int64
 		fullSize   int64
 		numWorkers int
+
+		// TODO: remove these fields after integration with chunk manifest
+		lmfh cos.LomWriter
+		wfqn string
 	}
 )
 
@@ -178,7 +183,7 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *blobFactory) Start() error {
+func (p *blobFactory) Start() (err error) {
 	// reuse the same args-carrying structure and keep initializing
 	r := p.pre
 
@@ -251,9 +256,11 @@ func (p *blobFactory) Start() error {
 
 	p.xctn = r
 
-	// deliver locally for custom processing
-	if r.args.WriteSGL != nil {
-		return nil
+	// TODO: remove after integration with chunk manifest
+	r.wfqn = r.args.Lom.GenFQN(fs.WorkCT, "blob-dl")
+	r.lmfh, err = r.args.Lom.CreateWork(r.wfqn)
+	if err != nil {
+		return err
 	}
 
 	//
@@ -261,7 +268,7 @@ func (p *blobFactory) Start() error {
 	//
 
 	ws := make([]io.Writer, 0, 3)
-	ws = append(ws, r.args.Lmfh)
+	ws = append(ws, r.lmfh)
 	if ty := r.args.Lom.CksumConf().Type; ty != cos.ChecksumNone {
 		r.cksum.Init(ty)
 		ws = append(ws, r.cksum.H)
@@ -393,59 +400,54 @@ outer:
 fin:
 	close(r.workCh)
 
-	if r.args.WriteSGL != nil {
-		errN := r.args.WriteSGL(nil)
-		debug.AssertNoErr(errN)
-	} else {
-		// finalize r.args.Lom
-		if err == nil && r.args.Lom.IsFeatureSet(feat.FsyncPUT) {
-			err = r.args.Lmfh.Sync()
-		}
-		cos.Close(r.args.Lmfh)
+	// finalize r.args.Lom
+	if err == nil && r.args.Lom.IsFeatureSet(feat.FsyncPUT) {
+		err = r.lmfh.Sync()
+	}
+	cos.Close(r.lmfh)
 
-		if err == nil {
-			if r.fullSize != r.woff {
-				err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
-				debug.AssertNoErr(err)
-			} else {
-				r.args.Lom.SetSize(r.woff)
-				if r.cksum.H != nil {
-					r.cksum.Finalize()
-					r.args.Lom.SetCksum(r.cksum.Clone())
-				}
-				_, err = core.T.FinalizeObj(r.args.Lom, r.args.Wfqn, r, cmn.OwtGetPrefetchLock)
-			}
-		}
-
-		if err == nil {
-			// stats
-			tstats := core.T.StatsUpdater()
-			tstats.IncWith(r.bp.MetricName(stats.GetCount), r.xlabs)
-			tstats.AddWith(
-				cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.xlabs},
-			)
-
-			debug.Assert(r.args.Lom.Lsize() == r.woff)
-			tstats.IncWith(stats.GetBlobCount, r.vlabs)
-			tstats.AddWith(
-				cos.NamedVal64{Name: stats.GetBlobSize, Value: r.args.Lom.Lsize(), VarLabs: r.vlabs},
-			)
-
-			r.ObjsAdd(1, 0)
+	if err == nil {
+		if r.fullSize != r.woff {
+			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
+			debug.AssertNoErr(err)
 		} else {
-			tstats := core.T.StatsUpdater()
-
-			// Increment global GET error count
-			tstats.IncWith(stats.ErrGetCount, r.vlabs)
-			// Increment blob-download specific GET error count
-			tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
-
-			if errRemove := cos.RemoveFile(r.args.Wfqn); errRemove != nil && !cos.IsNotExist(errRemove) {
-				nlog.Errorln("nested err:", errRemove)
+			r.args.Lom.SetSize(r.woff)
+			if r.cksum.H != nil {
+				r.cksum.Finalize()
+				r.args.Lom.SetCksum(r.cksum.Clone())
 			}
-			if err != cmn.ErrXactUserAbort {
-				r.Abort(err)
-			}
+			_, err = core.T.FinalizeObj(r.args.Lom, r.wfqn, r, cmn.OwtGetPrefetchLock)
+		}
+	}
+
+	if err == nil {
+		// stats
+		tstats := core.T.StatsUpdater()
+		tstats.IncWith(r.bp.MetricName(stats.GetCount), r.xlabs)
+		tstats.AddWith(
+			cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.xlabs},
+		)
+
+		debug.Assert(r.args.Lom.Lsize() == r.woff)
+		tstats.IncWith(stats.GetBlobCount, r.vlabs)
+		tstats.AddWith(
+			cos.NamedVal64{Name: stats.GetBlobSize, Value: r.args.Lom.Lsize(), VarLabs: r.vlabs},
+		)
+
+		r.ObjsAdd(1, 0)
+	} else {
+		tstats := core.T.StatsUpdater()
+
+		// Increment global GET error count
+		tstats.IncWith(stats.ErrGetCount, r.vlabs)
+		// Increment blob-download specific GET error count
+		tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
+
+		if errRemove := cos.RemoveFile(r.wfqn); errRemove != nil && !cos.IsNotExist(errRemove) {
+			nlog.Errorln("nested err:", errRemove)
+		}
+		if err != cmn.ErrXactUserAbort {
+			r.Abort(err)
 		}
 	}
 
@@ -471,12 +473,8 @@ func (r *XactBlobDl) write(sgl *memsys.SGL) (err error) {
 		written int64
 		size    = sgl.Size()
 	)
-	if r.args.WriteSGL != nil {
-		err = r.args.WriteSGL(sgl) // custom write
-		written = sgl.Size() - sgl.Len()
-	} else {
-		written, err = io.Copy(r.writer, sgl) // utilizing sgl.ReadFrom
-	}
+	// NOTE: r.writer has already included `r.lmfh` and `r.args.RspW`
+	written, err = io.Copy(r.writer, sgl) // utilizing sgl.ReadFrom
 
 	sgl.Reset()
 

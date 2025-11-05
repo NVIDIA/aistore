@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 //
@@ -46,16 +45,10 @@ type (
 		apc.PromoteArgs             // all of the above
 	}
 
-	// blob
-	WriteSGL func(*memsys.SGL) error
-
 	BlobParams struct {
-		Lmfh     cos.LomWriter
-		RspW     http.ResponseWriter // (GET)
-		WriteSGL WriteSGL            // custom write
-		Lom      *LOM
-		Msg      *apc.BlobMsg
-		Wfqn     string
+		Lom  *LOM
+		Msg  *apc.BlobMsg
+		RspW http.ResponseWriter // (GET)
 	}
 
 	GfnParams struct {

@@ -1715,28 +1715,9 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 
 // returns an empty xid ("") if nothing to do
 func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
-	if params.WriteSGL == nil {
-		// regular lom save (custom writer not present)
-		wfqn := params.Lom.GenFQN(fs.WorkCT, "blob-dl")
-		lmfh, err := params.Lom.CreateWork(wfqn)
-		if err != nil {
-			return "", nil, err
-		}
-		params.Lmfh = lmfh
-		params.Wfqn = wfqn
-	}
-	// new
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
-		if params.Lmfh != nil {
-			cos.Close(params.Lmfh)
-		}
-		if params.Wfqn != "" {
-			if errRemove := cos.RemoveFile(params.Wfqn); errRemove != nil {
-				nlog.Errorln("nested err", errRemove)
-			}
-		}
 		return "", nil, rns.Err
 	}
 

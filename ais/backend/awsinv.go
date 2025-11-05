@@ -39,8 +39,7 @@ import (
 // TODO:
 // - LsoMsg.StartAfter (a.k.a. ListObjectsV2Input.StartAfter); see also "expecting to resume" below
 
-// constant and tunables (see also: ais/s3/inventory)
-const numBlobWorkers = 10
+// constants (see also: ais/s3/inventory)
 
 const invTag = "bucket-inventory"
 
@@ -205,43 +204,29 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 		return _errInv("create-file", err)
 	}
 
-	var (
-		r = &reader{
-			workCh: make(chan *memsys.SGL, 1),
-			doneCh: make(chan *memsys.SGL, 1),
-		}
-		uzw = &unzipWriter{
-			r:   r,
-			wfh: wfh,
-		}
-		params = &core.BlobParams{
-			Lom:      lom,
-			Msg:      &apc.BlobMsg{NumWorkers: numBlobWorkers},
-			WriteSGL: uzw.writeSGL,
-		}
-		xblob core.Xact
-		gzr   *gzip.Reader
-	)
-	// run x-blob-downloader with default (num-readers, chunk-size) tunables
-	xblob, err = s3bp.t.GetColdBlob(params, lom.ObjAttrs())
-	if err == nil {
-		if cmn.Rom.V(4, cos.ModBackend) {
-			nlog.Infoln("started", xblob.String(), "->", wfqn)
-		}
-		gzr, err = gzip.NewReader(r)
+	// Get compressed stream from S3
+	res := s3bp.GetObjReader(context.Background(), lom, 0, 0)
+	if res.Err != nil {
+		wfh.Close()
+		cos.RemoveFile(wfqn)
+		return _errInv("get-obj-reader", res.Err)
 	}
+	defer res.R.Close()
+
+	// Decompress gzip stream
+	gzr, err := gzip.NewReader(res.R)
 	if err != nil {
 		wfh.Close()
 		cos.RemoveFile(wfqn)
-		return _errInv("blob-gunzip", err)
+		return _errInv("gzip-reader", err)
 	}
+	defer gzr.Close() // LIFO order of defer calls on closing
 
+	// Stream: S3 -> gunzip -> file
 	buf, slab := s3bp.mm.AllocSize(memsys.DefaultBuf2Size)
-	ctx.Size, err = cos.CopyBuffer(uzw, gzr, buf)
-
+	ctx.Size, err = cos.CopyBuffer(wfh, gzr, buf)
 	slab.Free(buf)
 	wfh.Close()
-	gzr.Close()
 
 	// finalize (NOTE a lighter version of FinalizeObj - no redundancy, no locks)
 	if err == nil {
@@ -256,7 +241,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 					debug.AssertNoErr(errN) // (unlikely)
 					nlog.Errorln("failed to persist", lom.Cname(), "err:", errN, "- proceeding anyway...")
 				} else if cmn.Rom.V(4, cos.ModBackend) {
-					nlog.Infoln("done", xblob.String(), "->", lom.Cname(), ctx.Size)
+					nlog.Infoln("done", lom.Cname(), ctx.Size)
 				}
 				return nil
 			}
@@ -267,10 +252,7 @@ func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT)
 	if nerr := cos.RemoveFile(wfqn); nerr != nil && !cos.IsNotExist(nerr) {
 		nlog.Errorf("get-inv (%v), nested fail to remove (%v)", err, nerr)
 	}
-	if abrt := xblob.AbortErr(); abrt != nil {
-		return _errInv("get-inv-abort", abrt)
-	}
-	return _errInv("get-inv-gzr-uzw-fail", err)
+	return _errInv("get-inv-fail", err)
 }
 
 func (*s3bp) listInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, msg *apc.LsoMsg, lst *cmn.LsoRes) (err error) {
@@ -487,76 +469,4 @@ func _sinceAbs(t1, t2 time.Time) time.Duration {
 		return t1.Sub(t2)
 	}
 	return t2.Sub(t1)
-}
-
-//
-// chunk reader; serial reader; unzip unzipWriter
-//
-
-type (
-	reader struct {
-		sgl    *memsys.SGL
-		workCh chan *memsys.SGL
-		doneCh chan *memsys.SGL
-	}
-	unzipWriter struct {
-		r   *reader
-		wfh cos.LomWriter
-	}
-)
-
-/////////////////
-// unzipWriter //
-/////////////////
-
-// callback of the type `core.WriteSGL`
-func (uzw *unzipWriter) writeSGL(sgl *memsys.SGL) error {
-	uzw.r.workCh <- sgl
-	<-uzw.r.doneCh // block here
-	return nil
-}
-
-func (uzw *unzipWriter) Write(p []byte) (int, error) {
-	return uzw.wfh.Write(p)
-}
-
-////////////
-// reader //
-////////////
-
-func (r *reader) Read(b []byte) (n int, err error) {
-	if r.sgl == nil {
-		goto next
-	}
-read:
-	n, err = r.sgl.Read(b)
-	if err == nil {
-		debug.Assert(n > 0)
-		if r.sgl.Len() == 0 {
-			r.doneCh <- r.sgl // recycle
-			r.sgl = nil
-		}
-		return n, nil
-	}
-	if err == io.EOF {
-		// done reading multi-SGL input
-		debug.Assert(r.sgl.Len() == 0)
-		debug.Assert(n > 0)
-		err = nil
-	}
-	r.doneCh <- r.sgl // return on: sgl is fully read (EOF above) or any error
-	r.sgl = nil
-	return n, err
-
-next: // (nil indicates EOF or error)
-	r.sgl = <-r.workCh
-
-	if r.sgl == nil {
-		// user done as well
-		close(r.workCh)
-		close(r.doneCh)
-		return 0, io.EOF
-	}
-	debug.Assert(r.sgl.Len() > 0)
-	goto read
 }
