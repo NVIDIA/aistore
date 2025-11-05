@@ -11,8 +11,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
-// read-mostly and most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
-// updating: a) upon startup, b) periodically, via stats runner, and c) upon receiving new global config
+// read-mostly and most often used config values: assigned at startup and updated
+// when cluster config changes to reduce the number of GCO.Get() calls
 
 type readMostly struct {
 	timeout struct {
@@ -24,7 +24,7 @@ type readMostly struct {
 	level, modules     int
 	testingEnv         bool
 	authEnabled        bool
-	allowS3TokenCompat bool
+	allowS3TokenCompat bool // token validation fast path
 }
 
 var Rom readMostly
