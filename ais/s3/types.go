@@ -208,11 +208,11 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 	// 2. Last-Modified
 	if v, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
 		hdr.Set(cos.HdrLastModified, v)
-	} else {
-		// [NOTE]
-		// see "as we do not track mtime we choose to _prefer_ atime" comment above
+	} else if lom.AtimeUnix() != 0 {
+		// - see "as we do not track mtime we choose to _prefer_ atime" comment above
+		// - http.TimeFormat (string) is GMT, hence UTC
 		atime := lom.Atime()
-		hdr.Set(cos.HdrLastModified, atime.Format(http.TimeFormat))
+		hdr.Set(cos.HdrLastModified, atime.UTC().Format(http.TimeFormat))
 	}
 
 	// 3. x-amz-version-id
