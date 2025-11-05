@@ -40,7 +40,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-/*
+/* ------------------------------------------------------------------------------------------
 client →  any proxy →  randomly selected designated-target (DT (= T0))
                    │
                    ├── basewi.next()      ←  local data-items
@@ -55,14 +55,7 @@ senders (T1..Tn)
                     shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
 
 where data-item = (object | archived file) // range read TBD
-*/
 
-// Shared-DM registration lifecycle: xaction registers once with shared-dm transport
-// when first work item needs receiving (PrepRx w/ receiving=true), then
-// unregisters once at xaction end (Abort/fini). No per-work-item ref-counting
-// needed since UnregRecv is permissive no-op when not registered.
-
-// TODO:
 // - stats: (files, objects) separately; Prometheus metrics
 // - soft errors other than not-found; unified error formatting
 // - mem-pool: basewi; apc.MossReq; apc.MossResp
@@ -70,21 +63,36 @@ where data-item = (object | archived file) // range read TBD
 // - speed-up via selecting multiple files from a given archive
 // - range read
 // - finer-grained wi abort
+-----------------------------------------------------------------------------------------*/
 
+// shared data mover lifecycle: ---------------------------------------------------------
+// - x-moss registers once with shared-dm transport when first work item needs `receiving`
+// - unregisters once at xaction's end (Abort/fini)
+// (no per-work-item ref-counting needed since UnregRecv is permissive no-op when not exist)
+
+// peer-to-peer stream breakages manifest themselves as `transport.ErrSBR`
+// via RecvObj callback (see sbrWin, sbrs, etc.)
+
+// hardcoded tunables
 const (
+	// low-level stats: total processed files, objects, etc.
 	sparseLog = 30 * time.Second
-)
 
-// bwarm is a small-size worker pool per x-moss instance unless under heavy load:
-// - created at init time
-// - stays enabled for the entire lifetime
-const (
+	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
+	// - created at init time
+	// - stays enabled for the entire lifetime
 	bewarmSize = cos.MiB
-)
 
-// limit the number of GFN requests by a work item (wi)
-const (
+	// limit the number of GFN requests by a work item (wi)
 	gfnMaxCount = 2
+
+	// the interval of _validity_
+	sbrWin = 4 * time.Second
+
+	// next(i) poll interval: a fraction of configured timeout clamped to reasonable bounds
+	pollMin = time.Second
+	pollMax = max(2*sbrWin, 2*pollMin)
+	pollDiv = 10
 )
 
 type (
@@ -104,11 +112,18 @@ type (
 		local      bool
 	}
 	basewi struct {
+		// Tx/Rx shared state
 		recv struct {
 			ch   chan int
 			m    []rxentry
 			next int
 			mtx  *sync.Mutex
+		}
+		timer *time.Timer
+		sbrs  struct { // (ref 032011)
+			m   map[string]*transport.ErrSBR
+			sid string // current sender ID
+			ver int64  // r.sbrs.ver (below)
 		}
 		aw      archive.Writer
 		r       *XactMoss
@@ -157,6 +172,12 @@ type (
 		ctl struct {
 			sb cos.Sbuilder
 			mu sync.Mutex
+		}
+		// (ref 032011)
+		sbrs struct {
+			m   map[string]*transport.ErrSBR
+			ver atomic.Int64
+			mtx sync.RWMutex
 		}
 	}
 )
@@ -414,6 +435,9 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi.recv.mtx = &sync.Mutex{}
 
 		r.updateCtlMsg(wi.started)
+
+		wi.timer = time.NewTimer(time.Hour)
+		wi.timer.Stop()
 	}
 
 	if a, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
@@ -673,7 +697,19 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(reader)
 	if err != nil {
-		// TODO: handle transport.AsErrSBR(err); not enough info to abort one WID :TODO
+		// (ref 032011)
+		if e := transport.AsErrSBR(err); e != nil {
+			nlog.Errorln(core.T.String(), ">>>>>>>>>", e) // DEBUG
+			r.sbrs.mtx.Lock()
+			if r.sbrs.m == nil {
+				r.sbrs.m = make(map[string]*transport.ErrSBR, 4)
+			}
+			r.sbrs.m[e.SID()] = e
+			r.sbrs.ver.Inc()
+			r.sbrs.mtx.Unlock()
+			return nil
+		}
+
 		return err
 	}
 	if r.IsAborted() || r.Finished() {
@@ -906,6 +942,18 @@ func (wi *basewi) cleanup() bool {
 	clear(wi.recv.m)
 	wi.recv.m = nil
 	wi.recv.mtx.Unlock()
+
+	// finally
+	if wi.timer != nil {
+		if !wi.timer.Stop() {
+			select {
+			case <-wi.timer.C:
+			default:
+			}
+		}
+		wi.timer = nil
+	}
+
 	return true
 }
 
@@ -992,9 +1040,9 @@ func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque
 func (wi *basewi) waitFlushRx(i int) (int, error) {
 	var (
 		elapsed        time.Duration
-		start          = mono.NanoTime()
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
 		timeout        = wi.r.config.GetBatch.MaxWait.D()
+		pollIval       = cos.ClampDuration(timeout/pollDiv, pollMin, pollMax) // (TODO ref 032011)
 	)
 	for {
 		wi.recv.mtx.Lock()
@@ -1027,50 +1075,74 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			continue
 		}
 
+		// (ref 032011)
+		if err := wi.checkSBR(); err != nil {
+			return 0, err
+		}
+
+		switch err := wi.waitAnyRx(pollIval); err {
+		case nil:
+			continue // TODO: elapsed (stats) won't be very precise
+		case errStopped:
+			return 0, errStopped
+		default:
+			debug.Assert(err == context.DeadlineExceeded)
+		}
+
+		elapsed += pollIval
 		if elapsed >= timeout {
 			return 0, wi.newErrHole(timeout)
 		}
-		if err := wi.waitAnyRx(timeout - elapsed); err != nil {
-			if err == context.DeadlineExceeded {
-				return 0, wi.newErrHole(timeout)
-			}
-			return 0, err
-		}
-		elapsed = mono.Since(start)
 	}
+}
+
+// (ref 032011)
+func (wi *basewi) checkSBR() error {
+	r := wi.r
+	if ver := r.sbrs.ver.Load(); ver > wi.sbrs.ver {
+		wi.sbrs.m = make(map[string]*transport.ErrSBR, len(r.sbrs.m))
+		r.sbrs.mtx.RLock()
+		for sid, e := range r.sbrs.m {
+			wi.sbrs.m[sid] = e
+		}
+		r.sbrs.mtx.RUnlock()
+
+		wi.sbrs.ver = ver
+	}
+
+	d := sbrWin
+	for sid, e := range wi.sbrs.m {
+		if e.Since() > d {
+			delete(wi.sbrs.m, sid) // stale
+			continue
+		}
+		if sid == wi.sbrs.sid {
+			return e
+		}
+	}
+	return nil
 }
 
 // in parallel with RecvObj() inserting new entries..
 func (wi *basewi) waitAnyRx(timeout time.Duration) error {
-	// fast path
+	wi.timer.Reset(timeout)
 	select {
 	case _, ok := <-wi.recv.ch:
 		if !ok {
 			return errStopped
 		}
-		return nil
-	case <-wi.r.ChanAbort():
-		return errStopped
-	default:
-	}
-
-	// wait
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	for {
-		select {
-		case _, ok := <-wi.recv.ch:
-			if !ok {
-				return errStopped
+		if !wi.timer.Stop() {
+			select {
+			case <-wi.timer.C:
+			default:
 			}
-			return nil
-
-		case <-timer.C:
-			return context.DeadlineExceeded
-
-		case <-wi.r.ChanAbort():
-			return errStopped
 		}
+		return nil
+	case <-wi.timer.C:
+		return context.DeadlineExceeded
+	case <-wi.r.ChanAbort():
+		wi.timer.Stop()
+		return errStopped
 	}
 }
 
@@ -1099,6 +1171,9 @@ func (wi *basewi) next(i int) (int, error) {
 		debug.Assertf(wi.receiving(),
 			"%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
 
+		// set current sender
+		wi.sbrs.sid = tsi.ID()
+
 		// prior to starting to wait on Rx:
 		// best-effort non-blocking (look-ahead + `bewarm`)
 		if r.bewarm != nil && !r.bewarm.IsBusy() {
@@ -1116,26 +1191,30 @@ func (wi *basewi) next(i int) (int, error) {
 
 		var nextIdx int
 		nextIdx, err = wi.waitFlushRx(i)
+
+		if transport.IsErrSBR(err) {
+			// treat as transient loss for this index
+			if !wi.req.ContinueOnErr {
+				return 0, err
+			}
+			out, nameInArch := wi._out(lom, in)
+			if e := wi.addMissing(err, nameInArch, out); e != nil {
+				return 0, e
+			}
+			return i + 1, nil
+		}
+
 		if err == nil || !isErrHole(err) || wi.gfncnt >= gfnMaxCount {
 			return nextIdx, err
 		}
 	}
 
-	bck := lom.Bck()
-	out := apc.MossOut{
-		Bucket:   bck.Name,
-		Provider: bck.Provider,
-		ObjName:  in.ObjName,
-		ArchPath: in.ArchPath,
-		Opaque:   in.Opaque,
-	}
-	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
-
+	out, nameInArch := wi._out(lom, in)
 	if isErrHole(err) {
 		wi.gfncnt++
-		err = wi.gfn(lom, tsi, in, &out, nameInArch, err)
+		err = wi.gfn(lom, tsi, in, out, nameInArch, err)
 	} else {
-		err = wi.write(lom, in, &out, nameInArch)
+		err = wi.write(lom, in, out, nameInArch)
 	}
 	if err != nil {
 		return 0, err
@@ -1146,7 +1225,7 @@ func (wi *basewi) next(i int) (int, error) {
 			return 0, err
 		}
 	} else {
-		wi.resp.Out = append(wi.resp.Out, out)
+		wi.resp.Out = append(wi.resp.Out, *out)
 	}
 
 	if in.ArchPath == "" {
@@ -1164,6 +1243,19 @@ func (wi *basewi) next(i int) (int, error) {
 		wi.recv.mtx.Unlock()
 	}
 	return i + 1, nil
+}
+
+func (wi *basewi) _out(lom *core.LOM, in *apc.MossIn) (*apc.MossOut, string) {
+	bck := lom.Bck()
+	out := apc.MossOut{
+		Bucket:   bck.Name,
+		Provider: bck.Provider,
+		ObjName:  in.ObjName,
+		ArchPath: in.ArchPath,
+		Opaque:   in.Opaque,
+	}
+	nameInArch := in.NameInRespArch(bck.Name, wi.req.OnlyObjName)
+	return &out, nameInArch
 }
 
 func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.MossOut, nameInArch string, errHole error) error {

@@ -6,8 +6,10 @@ package transport
 
 import (
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 // ErrSBR codes (receive-side stream breakage)
@@ -43,6 +45,7 @@ type (
 		sid    string // sender node ID
 		code   string
 		ctx    string
+		ts     int64
 	}
 )
 
@@ -100,8 +103,14 @@ func (e *ErrSBR) Error() string {
 	return sb.String()
 }
 
-func (e *ErrSBR) Unwrap() error { return e.err }
-func (e *ErrSBR) SID() string   { return e.sid }
+func (e *ErrSBR) Unwrap() error        { return e.err }
+func (e *ErrSBR) SID() string          { return e.sid }
+func (e *ErrSBR) Since() time.Duration { return mono.Since(e.ts) }
+
+func IsErrSBR(err error) bool {
+	_, ok := err.(*ErrSBR)
+	return ok
+}
 
 func AsErrSBR(err error) *ErrSBR {
 	if e, ok := err.(*ErrSBR); ok {

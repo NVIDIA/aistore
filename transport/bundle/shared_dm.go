@@ -115,6 +115,7 @@ func (sdm *sharedDM) Open() error {
 	return nil
 }
 
+// TODO: prevent a) too-frequent reconnects and/or b) too-many-during-stream's-lifetime :TODO
 func (sdm *sharedDM) reconnect(dstID string, err error) {
 	if !sdm.isOpen() {
 		return
@@ -209,6 +210,26 @@ func (sdm *sharedDM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
+		//
+		// `transport.ErrSBR` => all reg-ed receivers
+		//
+		if e := transport.AsErrSBR(err); e != nil {
+			// clone to call outside rlock
+			sdm.rxmu.RLock()
+			receivers := make([]transport.Receiver, 0, len(sdm.receivers))
+			for xid := range sdm.receivers {
+				receivers = append(receivers, sdm.receivers[xid].rx)
+			}
+			sdm.rxmu.RUnlock()
+
+			for _, rx := range receivers {
+				_ = rx.RecvObj(hdr, nil, e)
+			}
+
+			clear(receivers)
+			return nil
+		}
+
 		return err
 	}
 	xid := hdr.Demux

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
@@ -299,6 +300,7 @@ func (it *iterator) newErr(err error, code, ctx string) error {
 		sid:    it.sid,
 		code:   code,
 		ctx:    ctx,
+		ts:     mono.NanoTime(),
 	}
 }
 

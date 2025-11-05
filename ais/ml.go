@@ -390,9 +390,11 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		return
 	}
 	if err := xmoss.Send(ctx.req, &smap.Smap, tsi, ctx.wid, usingPrev); err != nil {
-		// NOTE: not aborting x-moss on a single wid failure
+		//
+		// not aborting x-moss on a single wid failure; silent log
+		//
 		xmoss.AddErr(fmt.Errorf("send wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
-		t.writeErr(w, r, err)
+		t.writeErr(w, r, err, 0, Silent)
 	}
 }
 
