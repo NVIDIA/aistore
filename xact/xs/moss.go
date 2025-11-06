@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -40,38 +41,38 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-/* ------------------------------------------------------------------------------------------
-client →  any proxy →  randomly selected designated-target (DT (= T0))
-                   │
-                   ├── basewi.next()      ←  local data-items
-                   │
-                   ├── shared-dm.recvd[i] = ...     ←  data-items from other targets via recv()
-                   │
-                   └── stream TAR         ←  in-order via flushRx()
+/* ---------------------------------------------------------------------------------------------------------
+   client →  any proxy →  randomly selected designated-target (DT (= T0))
+                      │
+                      ├── basewi.next()      ←  local data-items
+                      │
+                      ├── shared-dm.recvd[i] = ...     ←  data-items from other targets via recv()
+                      │
+                      └── stream TAR         ←  in-order via flushRx()
 
-senders (T1..Tn)
-    └── shared-DM.Send(req, smap, DT)
-           └── for locality(data-item) == self:
-                    shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
+   senders (T1..Tn)
+       └── shared-DM.Send(req, smap, DT)
+              └── for locality(data-item) == self:
+                       shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
 
-where data-item = (object | archived file) // range read TBD
+   where data-item = (object | archived file) // range read TBD
 
-// - stats: (files, objects) separately; Prometheus metrics
-// - soft errors other than not-found; unified error formatting
-// - mem-pool: basewi; apc.MossReq; apc.MossResp
-// ---------- (can wait) ------------------
-// - speed-up via selecting multiple files from a given archive
-// - range read
-// - finer-grained wi abort
------------------------------------------------------------------------------------------*/
+* todo:
+- stats: (files, objects) separately; Prometheus metrics
+- soft errors other than not-found; unified error formatting
+- mem-pool: basewi; apc.MossReq; apc.MossResp
+- speed-up via selecting multiple files from a given archive
+- range read
+- finer-grained wi abort
 
-// shared data mover lifecycle: ---------------------------------------------------------
-// - x-moss registers once with shared-dm transport when first work item needs `receiving`
-// - unregisters once at xaction's end (Abort/fini)
-// (no per-work-item ref-counting needed since UnregRecv is permissive no-op when not exist)
+* shared data-mover lifecycle:
+- x-moss registers once with shared-dm transport when first work item needs `receiving`
+- unregisters once at xaction's end (Abort/fini)
+  (no per-work-item ref-counting needed since UnregRecv is permissive no-op when not exist)
 
-// peer-to-peer stream breakages manifest themselves as `transport.ErrSBR`
-// via RecvObj callback (see sbrWin, sbrs, etc.)
+* peer-to-peer stream breakages manifest themselves as `transport.ErrSBR`
+  via RecvObj callback (see sbrWin, sbrs, etc.)
+-------------------------------------------------------------------------------------------------------------*/
 
 // hardcoded tunables
 const (
@@ -84,7 +85,7 @@ const (
 	bewarmSize = cos.MiB
 
 	// limit the number of GFN requests by a work item (wi)
-	gfnMaxCount = 2
+	gfnMaxCount = 3
 
 	// the interval of _validity_
 	sbrWin = 4 * time.Second
@@ -111,6 +112,16 @@ type (
 		nameInArch string
 		local      bool
 	}
+	// DT stats (per-wi and x-totals, both)
+	aint64 int64
+	moss   struct {
+		size aint64 // (cumulative)
+		ocnt aint64 // number of processed MossReq objects
+		fcnt aint64 // --/-- files
+		wait aint64 // total wait-for-receive time
+		ngfn aint64 // <= gfnMaxCount
+		miss aint64 // via addMissing
+	}
 	basewi struct {
 		// Tx/Rx shared state
 		recv struct {
@@ -125,6 +136,7 @@ type (
 			sid string // current sender ID
 			ver int64  // r.sbrs.ver (below)
 		}
+		stats   moss
 		aw      archive.Writer
 		r       *XactMoss
 		smap    *meta.Smap
@@ -133,11 +145,6 @@ type (
 		sgl     *memsys.SGL // multipart (buffered) only
 		wid     string      // work item ID
 		started int64       // (mono)
-		waitRx  int64       // total wait-for-receive time
-		size    int64       // (cumulative)
-		ocnt    int         // number of processed MossReq objects
-		fcnt    int         // --/-- files
-		gfncnt  int         // <= gfnMaxCount
 		clean   atomic.Bool
 		awfin   atomic.Bool
 	}
@@ -158,26 +165,25 @@ type (
 		pending sync.Map // [wid => *basewi]
 		xact.DemandBase
 		activeWG sync.WaitGroup // when pending
-		size     atomic.Int64   // cumulative across all work items (plain objects, archived files)
-		ocnt     atomic.Int64   // total objects: sum(wi.ocnt)
-		fcnt     atomic.Int64   // total files: sum(wi.fcnt)
-		waitRx   atomic.Int64   // total wait-for-receive time (= sum(work-items))
-		numWis   atomic.Int64   // num get-batch requests
 		lastLog  atomic.Int64   // last log timestamp (sparse)
 		gfn      struct {       // counts
 			ok   atomic.Int32
 			fail atomic.Int32
-		}
-		// ctlmsg builder (reused)
-		ctl struct {
-			sb cos.Sbuilder
-			mu sync.Mutex
 		}
 		// (ref 032011)
 		sbrs struct {
 			m   map[string]*transport.ErrSBR
 			ver atomic.Int64
 			mtx sync.RWMutex
+		}
+		// sum{wi}
+		stats struct {
+			// DT
+			moss
+			nreq aint64 // num get-batch requests (num wi-s)
+			// senders
+			nsent aint64
+			nfail aint64
 		}
 	}
 )
@@ -383,14 +389,9 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
-		ocnt := r.ocnt.Load()
-		fcnt := r.fcnt.Load()
-		size := r.size.Load()
-		if size == 0 {
-			nlog.Infoln(r.Name(), "idle expired [ stats: none ]")
-		} else {
-			nlog.Infoln(r.Name(), "idle expired [ objs:", ocnt, "files:", fcnt, "size:", size, "]")
-		}
+		msg := r.updCtlMsg()
+		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
+
 		r.pending.Range(r.cleanup)
 
 		// see "Shared-DM registration lifecycle" note above
@@ -434,7 +435,13 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
 		wi.recv.mtx = &sync.Mutex{}
 
-		r.updateCtlMsg(wi.started)
+		if time.Duration(wi.started-r.lastLog.Load()) > sparseLog {
+			// log and `ais show job`
+			if msg := r.updCtlMsg(); msg != "" {
+				nlog.Infoln(r.Name(), "stats: [", msg, "]")
+			}
+			r.lastLog.Store(wi.started)
+		}
 
 		wi.timer = time.NewTimer(time.Hour)
 		wi.timer.Stop()
@@ -475,7 +482,6 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	wi.cleanup()
 
 	r.DecPending()
-	r.updateCtlMsg(0)
 	return err
 }
 
@@ -596,13 +602,18 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	return bundle.SDM.Send(o, roc, tsi, r)
 }
 
-func (r *XactMoss) regSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, _ error) {
+func (r *XactMoss) regSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	opaque, ok := arg.([]byte)
 	debug.Assert(ok)
 	r.smm.Free(opaque)
 
-	if hdr.ObjAttrs.Size > 0 {
-		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
+	if err != nil {
+		r.stats.nfail.add(1)
+	} else {
+		r.stats.nsent.add(1)
+		if hdr.ObjAttrs.Size > 0 {
+			r.OutObjsAdd(1, hdr.ObjAttrs.Size)
+		}
 	}
 }
 
@@ -842,57 +853,34 @@ func (*XactMoss) bewarmFQN(fqn string) {
 }
 
 // single writer: DT only
-func (r *XactMoss) updateCtlMsg(now int64) {
-	ocnt, fcnt := r.ocnt.Load(), r.fcnt.Load()
-	if ocnt+fcnt == 0 {
-		return
+func (r *XactMoss) updCtlMsg() string {
+	if r.stats.size.load() == 0 {
+		return ""
 	}
+	var sb strings.Builder
+	sb.Grow(256)
 
-	// build under a short critical section
-	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB waitrx.avg:2.3ms bewarm:on)
+	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB avg-wait:2.3ms reqs:123 bewarm:on)
 
-	r.ctl.mu.Lock()
-	r.ctl.sb.Reset(min(128, r.ctl.sb.Len()))
 	if pending := r.Pending(); pending > 0 {
-		r.ctl.sb.WriteString("pending:")
-		r.ctl.sb.WriteString(strconv.FormatInt(pending, 10))
-	}
-	if ocnt > 0 {
-		r.ctl.sb.WriteString(" objs:")
-		r.ctl.sb.WriteString(strconv.FormatInt(ocnt, 10))
-	}
-	if fcnt > 0 {
-		r.ctl.sb.WriteString(" files:")
-		r.ctl.sb.WriteString(strconv.FormatInt(fcnt, 10))
+		sb.WriteString("pending:")
+		sb.WriteString(strconv.FormatInt(pending, 10))
 	}
 
-	r.ctl.sb.WriteString(" size:")
-	r.ctl.sb.WriteString(cos.IEC(r.size.Load(), 2))
+	// append `moss` stats line (objs/files/size/avg-wait[/miss])
+	r.stats.moss.append(&sb)
 
-	r.ctl.sb.WriteString(" reqs:")
-	r.ctl.sb.WriteString(strconv.FormatInt(r.numWis.Load(), 10))
+	sb.WriteString(" reqs:")
+	sb.WriteString(strconv.FormatInt(r.stats.nreq.load(), 10))
 
-	if waitRx := r.waitRx.Load(); waitRx > 0 {
-		avg := time.Duration(r.waitRx.Load()) / time.Duration(ocnt+fcnt)
-		r.ctl.sb.WriteString(" avg-wait:")
-		r.ctl.sb.WriteString(avg.String())
-	}
-
-	r.ctl.sb.WriteString(" bewarm:")
+	sb.WriteString(" bewarm:")
 	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
-	r.ctl.sb.WriteString(bewarm)
+	sb.WriteString(bewarm)
 
-	msg := r.ctl.sb.String()
+	msg := sb.String()
 	r.SetCtlMsg(msg)
-	r.ctl.mu.Unlock()
 
-	if now == 0 {
-		now = mono.NanoTime()
-	}
-	if time.Duration(now-r.lastLog.Load()) > sparseLog {
-		nlog.Infoln(r.Name(), "stats: [", msg, "]")
-		r.lastLog.Store(now)
-	}
+	return msg
 }
 
 ////////////
@@ -907,12 +895,13 @@ func (wi *basewi) cleanup() bool {
 	}
 	r := wi.r
 
-	// update x-moss stats
-	r.ocnt.Add(int64(wi.ocnt))
-	r.fcnt.Add(int64(wi.fcnt))
-	r.size.Add(wi.size)
-	r.waitRx.Add(wi.waitRx)
-	r.numWis.Inc()
+	// update totals
+	r.stats.ocnt.add(int64(wi.stats.ocnt))
+	r.stats.fcnt.add(int64(wi.stats.fcnt))
+	r.stats.size.add(int64(wi.stats.size))
+	r.stats.wait.add(int64(wi.stats.wait))
+	r.stats.miss.add(int64(wi.stats.miss))
+	r.stats.nreq.add(1)
 
 	if wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
@@ -1054,7 +1043,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			return 0, err
 		}
 		if next > i {
-			wi.waitRx += elapsed.Nanoseconds()
+			wi.stats.wait += aint64(elapsed.Nanoseconds())
 			return next, nil
 		}
 
@@ -1204,14 +1193,14 @@ func (wi *basewi) next(i int) (int, error) {
 			return i + 1, nil
 		}
 
-		if err == nil || !isErrHole(err) || wi.gfncnt >= gfnMaxCount {
+		if err == nil || !isErrHole(err) || wi.stats.ngfn >= gfnMaxCount {
 			return nextIdx, err
 		}
 	}
 
 	out, nameInArch := wi._out(lom, in)
 	if isErrHole(err) {
-		wi.gfncnt++
+		wi.stats.ngfn++
 		err = wi.gfn(lom, tsi, in, out, nameInArch, err)
 	} else {
 		err = wi.write(lom, in, out, nameInArch)
@@ -1229,11 +1218,11 @@ func (wi *basewi) next(i int) (int, error) {
 	}
 
 	if in.ArchPath == "" {
-		wi.ocnt++
+		wi.stats.ocnt++
 	} else {
-		wi.fcnt++
+		wi.stats.fcnt++
 	}
-	wi.size += out.Size
+	wi.stats.size += aint64(out.Size)
 
 	if wi.receiving() {
 		wi.recv.mtx.Lock()
@@ -1384,6 +1373,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 		return err
 	}
 	out.ErrMsg = err.Error()
+	wi.stats.miss++
 	return nil
 }
 
@@ -1469,11 +1459,11 @@ func (wi *basewi) flushRx() error {
 		// this "hole" is plugged
 		wi.recv.next++
 		if in.ArchPath == "" {
-			wi.ocnt++
+			wi.stats.ocnt++
 		} else {
-			wi.fcnt++
+			wi.stats.fcnt++
 		}
-		wi.size += size
+		wi.stats.size += aint64(size)
 	}
 	return nil
 }
@@ -1512,8 +1502,10 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 
 	wi.sgl.Reset()
 
-	// TODO: consider adding archived-files counts and sizes => base.Xact
-	wi.r.ObjsAdd(wi.ocnt+wi.fcnt, wi.size)
+	//
+	// TODO: add archived (files counts and sizes) => base.Xact stats
+	//
+	wi.r.ObjsAdd(int(wi.stats.ocnt+wi.stats.fcnt), int64(wi.stats.size))
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
@@ -1562,7 +1554,7 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 	}
 
 	// TODO: ditto
-	wi.r.ObjsAdd(wi.ocnt+wi.fcnt, wi.size)
+	wi.r.ObjsAdd(int(wi.stats.ocnt+wi.stats.fcnt), int64(wi.stats.size))
 
 	return nil
 }
@@ -1589,9 +1581,9 @@ func (nopROC) Read([]byte) (int, error)          { return 0, io.EOF }
 func (nopROC) Open() (cos.ReadOpenCloser, error) { return &nopROC{}, nil }
 func (nopROC) Close() error                      { return nil }
 
-// //////////////
+/////////////////
 // mossOpaque (not to confuse with apc.MossIn/Out Opaque)
-// //////////////
+/////////////////
 
 type mossOpaque struct {
 	WID     string
@@ -1649,4 +1641,55 @@ func (e *errHole) Error() string { return e.msg }
 func isErrHole(err error) bool {
 	_, ok := err.(*errHole)
 	return ok
+}
+
+////////////
+// aint64 //
+////////////
+
+func (a *aint64) load() int64 { return ratomic.LoadInt64((*int64)(a)) }
+func (a *aint64) add(d int64) { _ = ratomic.AddInt64((*int64)(a), d) }
+
+//
+// moss (stats) => string
+//
+
+func (m *moss) append(sb *strings.Builder) {
+	ocnt := m.ocnt.load()
+	fcnt := m.fcnt.load()
+	size := m.size.load()
+	wait := m.wait.load()
+	miss := m.miss.load()
+
+	// (e.g.) " objs:123 files:456 size:8.70GiB avg-wait:2.3ms miss:7"
+	if ocnt > 0 {
+		if sb.Len() > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("objs:")
+		sb.WriteString(strconv.FormatInt(ocnt, 10))
+	}
+	if fcnt > 0 {
+		if sb.Len() > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("files:")
+		sb.WriteString(strconv.FormatInt(fcnt, 10))
+	}
+
+	sb.WriteString(" size:")
+	sb.WriteString(cos.IEC(size, 2))
+
+	// avg wait (only if we have items and nonzero total wait)
+	total := ocnt + fcnt
+	if wait > 0 && total > 0 {
+		avg := time.Duration(wait / total)
+		sb.WriteString(" avg-wait:")
+		sb.WriteString(avg.String())
+	}
+	// include miss if nonzero
+	if miss > 0 {
+		sb.WriteString(" miss:")
+		sb.WriteString(strconv.FormatInt(miss, 10))
+	}
 }

@@ -23,13 +23,24 @@ func (b *Sbuilder) String() string {
 	return unsafe.String(unsafe.SliceData(b.buf), len(b.buf))
 }
 
-func (b *Sbuilder) Reset(size int) {
+func (b *Sbuilder) Reset(want int) {
+	const (
+		headroom = 64
+	)
+	var (
+		prev = len(b.buf)
+		curr = cap(b.buf)
+	)
+	want = max(want, prev+headroom)
 	switch {
-	case b.buf == nil:
-		b.buf = make([]byte, 0, size)
-	case len(b.buf) >= size-size>>1: // vs. previous usage
-		b.buf = make([]byte, 0, size<<1)
+	case curr < want:
+		// alloc
+		b.buf = make([]byte, 0, want)
+	case curr > want<<2:
+		// shrink
+		b.buf = make([]byte, 0, want<<1)
 	default:
+		// reuse as is
 		b.buf = b.buf[:0]
 	}
 }
