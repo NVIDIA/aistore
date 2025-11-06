@@ -37,7 +37,7 @@ type (
 		id     string
 		kind   string
 		_nam   string
-		ctlmsg string // via InitBase, SetCtlMsg
+		ctlmsg ratomic.Value // via InitBase, SetCtlMsg
 		err    cos.Errs
 		stats  struct {
 			objs     atomic.Int64 // locally processed
@@ -76,7 +76,7 @@ func (xctn *Base) InitBase(id, kind, ctlmsg string, bck *meta.Bck) {
 	debug.Assert(IsValidKind(kind), kind)
 
 	xctn.id, xctn.kind = id, kind
-	xctn.ctlmsg = ctlmsg
+	xctn.ctlmsg.Store(ctlmsg)
 
 	xctn.err = cos.NewErrs()
 	xctn.abort.ch = make(chan error, 1)
@@ -413,7 +413,7 @@ func (xctn *Base) InObjsAdd(cnt int, size int64) {
 func (xctn *Base) ToSnap(snap *core.Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
-	snap.CtlMsg = xctn.ctlmsg
+	snap.CtlMsg = xctn.ctlmsg.Load().(string) // cannot be nil (InitBase)
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	if err := xctn.AbortErr(); err != nil {
@@ -438,7 +438,7 @@ func (xctn *Base) ToStats(stats *core.Stats) {
 	stats.InBytes = xctn.InBytes()
 }
 
-func (xctn *Base) SetCtlMsg(s string) { xctn.ctlmsg = s } // see InitBase
+func (xctn *Base) SetCtlMsg(s string) { xctn.ctlmsg.Store(s) } // see InitBase
 
 //
 // RebID helpers
