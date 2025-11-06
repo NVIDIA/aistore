@@ -184,6 +184,9 @@ func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 // - standard cos.HdrContentLength ("Content-Length") & cos.HdrETag ("ETag")
 // - atime, version, etc. - all the rest "ais-" prefixed
 func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
+	if hdr == nil {
+		return
+	}
 	var cksum *cos.Cksum
 	if len(cksums) > 0 {
 		// - range checksum, or

@@ -299,7 +299,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 				Lom: lom,
 				Msg: &apc.BlobMsg{}, // default tunables when executing via x-start API
 			}
-			xid, _, err = t.blobdl(params, nil /*oa*/)
+			xid, _, err = t.blobdl(params, nil /*oa*/, nil /*object headers*/)
 		}
 		if err != nil {
 			core.FreeLOM(lom)

@@ -185,7 +185,7 @@ func (t *target) rgetstats(backend core.Backend, cname, xkind string, size, lat 
 func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn core.Xact, err error) {
 	debug.Assert(params.Lom != nil)
 	debug.Assert(params.Msg != nil)
-	_, xctn, err = t.blobdl(params, oa)
+	_, xctn, err = t.blobdl(params, oa, nil /*object headers*/)
 	return xctn, err
 }
 

@@ -583,8 +583,8 @@ func (m *ioContext) del(opts ...int) {
 			lsmsg.Flags = uint64(opts[1]) // do HEAD(remote-bucket)
 		}
 	}
-	if toRemoveCnt < 0 && m.prefix != "" {
-		lsmsg.Prefix = "" // all means all
+	if toRemoveCnt < 0 && m.prefix == "" {
+		lsmsg.Prefix = "" // all means all (when prefix is already empty)
 	}
 	lst, err := api.ListObjects(baseParams, m.bck, lsmsg, api.ListArgs{})
 	if err != nil {

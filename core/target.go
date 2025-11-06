@@ -46,9 +46,14 @@ type (
 	}
 
 	BlobParams struct {
-		Lom  *LOM
-		Msg  *apc.BlobMsg
-		RspW http.ResponseWriter // (GET)
+		Lom *LOM
+		Msg *apc.BlobMsg
+
+		// When `RespWriter` is set, `XactBlobDl` not only downloads chunks into the cluster,
+		// but also stitches them together and sequentially writes to `RespWriter`.
+		// This makes the blob downloading job synchronous and blocking until all chunks are written.
+		// Only set this if you need to simultaneously download and write to the response writer (e.g., for streaming blob GET).
+		RespWriter io.Writer
 	}
 
 	GfnParams struct {

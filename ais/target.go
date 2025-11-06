@@ -40,12 +40,14 @@ import (
 	"github.com/NVIDIA/aistore/fs/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/volume"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -782,23 +784,22 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	}
 
 	// two special flows
-	if dpq.get(apc.QparamETLName) != "" {
+	switch {
+	case dpq.get(apc.QparamETLName) != "":
 		t.inlineETL(w, r, dpq, lom)
 		return lom, nil
-	}
-	if cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)) {
+	case cos.IsParseBool(r.Header.Get(apc.HdrBlobDownload)):
 		var msg apc.BlobMsg
 		if err := msg.FromHeader(r.Header); err != nil {
 			return lom, err
 		}
 
-		// NOTE: make a blocking call w/ simultaneous Tx
 		args := &core.BlobParams{
-			RspW: w,
-			Lom:  lom,
-			Msg:  &msg,
+			RespWriter: w, // NOTE: make a blocking call
+			Lom:        lom,
+			Msg:        &msg,
 		}
-		xid, _, err := t.blobdl(args, nil /*oa*/)
+		xid, _, err := t.blobdl(args, nil /*oa*/, w.Header())
 		if err != nil && xid != "" {
 			// (for the same reason as cmn.ErrGetTxBenign)
 			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
@@ -1140,7 +1141,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			Lom: lom, // eventually freed by x-blob
 			Msg: &blobMsg,
 		}
-		if xid, _, err = t.blobdl(args, nil /*oa*/); xid != "" {
+		if xid, _, err = t.blobdl(args, nil /*oa*/, nil /*object headers*/); xid != "" {
 			debug.AssertNoErr(err)
 			writeXid(w, xid)
 		}
@@ -1668,7 +1669,7 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) error {
 }
 
 // compare running the same via (generic) t.xstart
-func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs, whdr http.Header) (string, *xs.XactBlobDl, error) {
 	// cap
 	cs := fs.Cap()
 	if errCap := cs.Err(); errCap != nil {
@@ -1679,7 +1680,9 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 	}
 
 	if oa != nil {
-		return _blobdl(params, oa)
+		// write HTTP headers before starting blob download
+		cmn.ToHeader(oa, whdr, oa.Size)
+		return t._blobdl(params, oa)
 	}
 
 	// - try-lock (above) to load, check availability
@@ -1709,22 +1712,35 @@ func (t *target) blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.
 		return "", nil, err
 	}
 
+	if oa == nil {
+		oa, _, err = t.HeadCold(lom, nil /*origReq*/)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+	// write HTTP headers before starting blob download
+	cmn.ToHeader(oa, whdr, oa.Size)
 	// handle: (not-present || latest-not-eq)
-	return _blobdl(params, oa)
+	return t._blobdl(params, oa)
 }
 
 // returns an empty xid ("") if nothing to do
-func _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
+func (t *target) _blobdl(params *core.BlobParams, oa *cmn.ObjAttrs) (string, *xs.XactBlobDl, error) {
 	xid := cos.GenUUID()
 	rns := xs.RenewBlobDl(xid, params, oa)
 	if rns.Err != nil || rns.IsRunning() { // cmn.IsErrXactUsePrev(rns.Err): single blob-downloader per blob
 		return "", nil, rns.Err
 	}
 
-	// a) via x-start, x-blob-download
 	xblob := rns.Entry.Get().(*xs.XactBlobDl)
-	if params.RspW == nil {
-		go xblob.Run(nil)
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		Xact: xblob,
+	}
+	xblob.AddNotif(notif)
+	// a) via x-start, x-blob-download
+	if params.RespWriter == nil {
+		xact.GoRunW(xblob)
 		return xblob.ID(), xblob, nil
 	}
 	// b) via GET (blocking w/ simultaneous transmission)
