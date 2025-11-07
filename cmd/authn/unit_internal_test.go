@@ -1,5 +1,3 @@
-//go:build debug
-
 // Package authn
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
@@ -182,7 +180,7 @@ func TestToken(t *testing.T) {
 	var (
 		err      error
 		token    string
-		tkParser = tok.NewTokenParser(Conf.Secret(), nil, nil)
+		tkParser = tok.NewTokenParser(&tok.SigConfig{HMACSecret: Conf.Secret()}, nil)
 	)
 
 	driver := mock.NewDBDriver()

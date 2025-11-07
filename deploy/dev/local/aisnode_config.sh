@@ -153,7 +153,10 @@ cat > $AIS_CONF_FILE <<EOL
 		"enabled":        true
 	},
 	"auth": {
-		"secret":      "$AIS_AUTHN_SECRET_KEY",
+	  "signature": {
+	    "key": "$AIS_AUTHN_SECRET_KEY",
+	    "method": "HMAC"
+	  },
 		"enabled":     ${AIS_AUTHN_ENABLED:-false}
 	},
 	"keepalivetracker": {

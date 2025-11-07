@@ -36,7 +36,7 @@ var (
 	reqClaims    = &tok.RequiredClaims{
 		Aud: reqAud,
 	}
-	hmacParser       = tok.NewTokenParser(testHMACSigningSecret, nil, reqClaims)
+	hmacParser       = tok.NewTokenParser(&tok.SigConfig{HMACSecret: testHMACSigningSecret}, reqClaims)
 	basicAdminClaims = tok.AdminClaims(futureTime, testUser, testAudience)
 )
 
@@ -107,7 +107,7 @@ func TestCreateHMACTokenStr(t *testing.T) {
 func TestCreateRSATokenStr(t *testing.T) {
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	tassert.Errorf(t, err == nil, "Failed to create rsa signing key: %v", err)
-	tkParser := tok.NewTokenParser("", &rsaKey.PublicKey, nil)
+	tkParser := tok.NewTokenParser(&tok.SigConfig{RSAPublicKey: &rsaKey.PublicKey}, nil)
 	tk, err := tok.CreateRSATokenStr(basicAdminClaims, rsaKey)
 	tassert.Errorf(t, err == nil, "Failed to create RSA-signed token string: %v", err)
 	_, err = tkParser.ValidateToken(tk)
@@ -226,7 +226,7 @@ func TestValidateTokenSuccess(t *testing.T) {
 func TestValidateTokenInvalidKey(t *testing.T) {
 	tokenStr, err := tok.CreateHMACTokenStr(basicAdminClaims, testHMACSigningSecret)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
-	invalidParser := tok.NewTokenParser("invalid-secret", nil, reqClaims)
+	invalidParser := tok.NewTokenParser(&tok.SigConfig{HMACSecret: "invalid-secret"}, reqClaims)
 	_, err = invalidParser.ValidateToken(tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with wrong key to fail")
 }

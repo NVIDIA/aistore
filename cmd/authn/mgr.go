@@ -30,6 +30,7 @@ type mgr struct {
 	clientH   *http.Client
 	clientTLS *http.Client
 	db        kvdb.Driver
+	tkParser  *tok.TokenParser
 }
 
 var (
@@ -53,6 +54,13 @@ func newMgr(driver kvdb.Driver) (m *mgr, code int, err error) {
 	}
 	m.clientH, m.clientTLS = cmn.NewDefaultClients(time.Duration(Conf.Timeout.Default))
 	code, err = initializeDB(driver)
+	if err != nil {
+		return
+	}
+	// Create a limited token parser that only validates against a symmetric key with no issuer lookup
+	// TODO: Support RSA keys in authN and issuer lookup with cert verification
+	sigConf := &tok.SigConfig{HMACSecret: Conf.Secret()}
+	m.tkParser = tok.NewTokenParser(sigConf, nil)
 	return
 }
 
@@ -463,9 +471,8 @@ func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
 	}
 
 	revokeList := make([]string, 0, len(tokens))
-	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
 	for _, token := range tokens {
-		_, err = tkParser.ValidateToken(token)
+		_, err = m.tkParser.ValidateToken(token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)

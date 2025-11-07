@@ -117,7 +117,7 @@ func (h *hserv) registerPublicHandlers() {
 	h.registerHandler(apc.URLPathTokens.S, h.tokenHandler)
 	h.registerHandler(apc.URLPathClusters.S, h.clusterHandler)
 	h.registerHandler(apc.URLPathRoles.S, h.roleHandler)
-	h.registerHandler(apc.URLPathDae.S, configHandler)
+	h.registerHandler(apc.URLPathDae.S, h.configHandler)
 }
 
 func (h *hserv) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -172,12 +172,14 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "empty token")
 		return
 	}
-	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
-	if _, err := tkParser.ValidateToken(msg.Token); err != nil {
+	if _, err := h.mgr.tkParser.ValidateToken(msg.Token); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	h.mgr.revokeToken(msg.Token)
+	code, err := h.mgr.revokeToken(msg.Token)
+	if err != nil {
+		h.failAction(w, r, "revoke token", msg.Token, err, code)
+	}
 }
 
 func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +187,7 @@ func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
+	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	userID := apiItems[0]
@@ -221,7 +223,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	if err = validateUpdatePerms(w, r, userID, updateReq); err != nil {
+	if err = h.validateUpdatePerms(w, r, userID, updateReq); err != nil {
 		return
 	}
 	if Conf.Verbose() {
@@ -234,7 +236,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 
 // Adds h new user to user list
 func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
-	if err := validateAdminPerms(w, r); err != nil {
+	if err := h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	info := &authn.User{}
@@ -265,7 +267,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		code  int
 	)
 	if len(items) == 0 {
-		if err := validateAdminPerms(w, r); err != nil {
+		if err := h.validateAdminPerms(w, r); err != nil {
 			return
 		}
 		if users, code, err = h.mgr.userList(); err != nil {
@@ -278,7 +280,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, users, "list users")
 		return
 	}
-	tk, err := getToken(r)
+	tk, err := h.getToken(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
@@ -298,13 +300,12 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, uInfo, "get user")
 }
 
-func getToken(r *http.Request) (*tok.AISClaims, error) {
+func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
 	tokenHdr, err := tok.ExtractToken(r.Header)
 	if err != nil {
 		return nil, err
 	}
-	tkParser := tok.NewTokenParser(Conf.Secret(), nil, nil)
-	claims, err := tkParser.ValidateToken(tokenHdr.Token)
+	claims, err := h.mgr.tkParser.ValidateToken(tokenHdr.Token)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
 			return nil, fmt.Errorf("not authorized (token expired): %q", tokenHdr.Token)
@@ -316,8 +317,8 @@ func getToken(r *http.Request) (*tok.AISClaims, error) {
 
 // Checks if the request header contains valid admin credentials.
 // (admin is created at deployment time and cannot be modified via API)
-func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
-	tk, err := getToken(r)
+func (h *hserv) validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
+	tk, err := h.getToken(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
@@ -330,8 +331,8 @@ func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, updateReq *authn.User) error {
-	tk, err := getToken(r)
+func (h *hserv) validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, updateReq *authn.User) error {
+	tk, err := h.getToken(r)
 	if err != nil {
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return err
@@ -396,7 +397,7 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if _, err := parseURL(w, r, 0, apc.URLPathClusters.L); err != nil {
 		return
 	}
-	if err := validateAdminPerms(w, r); err != nil {
+	if err := h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	cluConf := &authn.CluACL{}
@@ -413,7 +414,7 @@ func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err := validateAdminPerms(w, r); err != nil {
+	if err := h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	cluConf := &authn.CluACL{}
@@ -431,7 +432,7 @@ func (h *hserv) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
+	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	cluID := apiItems[0]
@@ -530,7 +531,7 @@ func (h *hserv) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
+	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 
@@ -545,7 +546,7 @@ func (h *hserv) httpRolePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
+	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	info := &authn.Role{}
@@ -562,7 +563,7 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if err = validateAdminPerms(w, r); err != nil {
+	if err = h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 

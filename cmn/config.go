@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -640,17 +641,59 @@ type (
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
+	// AuthConfV4 [backwards compatibility]: v4.0 and prior
+	AuthConfV4 struct {
+		Enabled bool   `json:"enabled"`
+		Secret  string `json:"secret"`
+	}
+
+	AuthConfV4ToSet struct {
+		Enabled *bool   `json:"enabled,omitempty"`
+		Secret  *string `json:"secret,omitempty"`
+	}
+
 	AuthConf struct {
-		Secret  string   `json:"secret"`
-		Enabled bool     `json:"enabled"`
-		PubKey  string   `json:"public_key"`
-		Aud     []string `json:"aud"`
+		Enabled bool `json:"enabled"`
+		// Fields for validating JWT signature
+		Signature *AuthSignatureConf `json:"signature,omitempty"`
+		// JWT claims to validate
+		RequiredClaims *RequiredClaimsConf `json:"required_claims,omitempty"`
+		// Config for OIDC behavior such as issuer public key discovery
+		OIDC *OIDCConf `json:"oidc,omitempty"`
 	}
 	AuthConfToSet struct {
-		Secret  *string  `json:"secret,omitempty"`
-		Enabled *bool    `json:"enabled,omitempty"`
-		PubKey  string   `json:"public_key,omitempty"`
-		Aud     []string `json:"aud,omitempty"`
+		Enabled        *bool                   `json:"enabled,omitempty"`
+		Signature      *AuthSignatureConfToSet `json:"signature,omitempty"`
+		RequiredClaims *RequiredClaimsConf     `json:"required_claims,omitempty"`
+		OIDC           *OIDCConf               `json:"oidc,omitempty"`
+	}
+
+	AuthSignatureConf struct {
+		Key    string `json:"key"`
+		Method string `json:"method"`
+	}
+
+	AuthSignatureConfToSet struct {
+		Key    *string `json:"key,omitempty"`
+		Method *string `json:"method,omitempty"`
+	}
+
+	RequiredClaimsConf struct {
+		Aud []string `json:"aud"`
+	}
+
+	RequiredClaimsConfToSet struct {
+		Aud *[]string `json:"aud,omitempty"`
+	}
+
+	OIDCConf struct {
+		AllowedIssuers []string `json:"allowed_iss"`
+		IssuerCA       string   `json:"issuer_ca_bundle,omitempty"`
+	}
+
+	OIDCConfToSet struct {
+		AllowedIssuers *[]string `json:"allowed_iss,omitempty"`
+		IssuerCA       *string   `json:"issuer_ca_bundle,omitempty"`
 	}
 
 	// keepalive
@@ -905,6 +948,7 @@ var (
 	_ validator = (*ResilverConf)(nil)
 	_ validator = (*NetConf)(nil)
 	_ validator = (*FSHCConf)(nil)
+	_ validator = (*AuthConf)(nil)
 	_ validator = (*HTTPConf)(nil)
 	_ validator = (*DownloaderConf)(nil)
 	_ validator = (*DsortConf)(nil)
@@ -939,6 +983,7 @@ var (
 var (
 	_ json.Marshaler   = (*BackendConf)(nil)
 	_ json.Unmarshaler = (*BackendConf)(nil)
+	_ json.Unmarshaler = (*AuthConf)(nil)
 	_ json.Marshaler   = (*FSPConf)(nil)
 	_ json.Unmarshaler = (*FSPConf)(nil)
 )
@@ -1820,6 +1865,86 @@ func (c *FSHCConf) Validate() error {
 		return fmt.Errorf("invalid fshc.io_err_time %d (expecting <= %v)", c.IOErrTime, 60*time.Second)
 	}
 	return nil
+}
+
+//////////////
+// AuthConf //
+//////////////
+
+func (a *AuthConf) Validate() error {
+	if a.Signature != nil {
+		if err := a.Signature.Validate(); err != nil {
+			return err
+		}
+	}
+	if a.Signature != nil && a.OIDC != nil {
+		return errors.New("invalid auth config, only one of signature or OIDC config should be provided")
+	}
+	if a.Enabled && a.Signature == nil && a.OIDC == nil {
+		return errors.New("invalid auth config, one of signature or OIDC config must be provided")
+	}
+	return nil
+}
+
+func (a *AuthConf) UnmarshalJSON(data []byte) error {
+	// Try unmarshalling as the current AuthConf format first
+	type Alias AuthConf
+	var tmp Alias
+	errCurrent := cos.JSON.Unmarshal(data, &tmp)
+	if errCurrent == nil {
+		*a = AuthConf(tmp)
+		return nil
+	}
+
+	// If current unmarshal fails, try legacy AuthConfV4
+	var v4 AuthConfV4
+	errLegacy := cos.JSON.Unmarshal(data, &v4)
+	if errLegacy != nil {
+		return fmt.Errorf("failed to parse auth config using current config structure (err: %v) and v4 (err: %v)", errCurrent, errLegacy)
+	}
+	a.Enabled = v4.Enabled
+	// All legacy keys are 256 bit HMAC
+	a.Signature = &AuthSignatureConf{Key: v4.Secret, Method: "HS256"}
+	a.RequiredClaims = nil
+	a.OIDC = nil
+	return nil
+}
+
+func (a *AuthConf) CensorKey() {
+	if a.Signature != nil && a.Signature.Key != "" {
+		a.Signature.Key = "**********"
+	}
+}
+
+///////////////////////
+// AuthSignatureConf //
+///////////////////////
+
+var (
+	hmacNames = []string{"HMAC", "HS256", "HS384", "HS512"}
+	rsaNames  = []string{"RSA", "RS256", "RS384", "RS512"}
+)
+
+func (c *AuthSignatureConf) Validate() error {
+	if c.Key != "" && c.Method == "" {
+		return errors.New("invalid auth signature config, method is required if key provided")
+	}
+	if !c.IsHMAC() && !c.IsRSA() {
+		return fmt.Errorf("invalid auth signature config, method must be one of: %q", c.ValidMethods())
+	}
+	return nil
+}
+
+func (*AuthSignatureConf) ValidMethods() string {
+	return strings.Join(slices.Concat(hmacNames, rsaNames), ",")
+}
+
+func (c *AuthSignatureConf) IsHMAC() bool {
+	return slices.Contains(hmacNames, strings.ToUpper(c.Method))
+}
+
+func (c *AuthSignatureConf) IsRSA() bool {
+	return slices.Contains(rsaNames, strings.ToUpper(c.Method))
 }
 
 ////////////////////

@@ -37,10 +37,8 @@ type (
 	}
 
 	TokenParser struct {
-		// signing key secret
-		secret string
-		// public key for validating tokens
-		rsaPubKey *rsa.PublicKey
+		// used for validating JWT signature with e.g. a public key
+		sigConfig *SigConfig
 		// options for the jwt parser to use
 		parseOpts []jwt.ParserOption
 	}
@@ -50,6 +48,11 @@ type (
 		Header string
 		// Raw token string from request
 		Token string
+	}
+
+	SigConfig struct {
+		HMACSecret   string
+		RSAPublicKey *rsa.PublicKey
 	}
 
 	Parser interface {
@@ -150,10 +153,9 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 // TokenParser //
 /////////////////
 
-func NewTokenParser(secret string, rsaPubKey *rsa.PublicKey, reqClaims *RequiredClaims) *TokenParser {
+func NewTokenParser(sigConf *SigConfig, reqClaims *RequiredClaims) *TokenParser {
 	return &TokenParser{
-		secret:    secret,
-		rsaPubKey: rsaPubKey,
+		sigConfig: sigConf,
 		parseOpts: buildParseOptions(reqClaims),
 	}
 }
@@ -172,9 +174,9 @@ func buildParseOptions(reqClaims *RequiredClaims) []jwt.ParserOption {
 func (tm *TokenParser) parseJWTKey(tok *jwt.Token) (any, error) {
 	switch tok.Method.(type) {
 	case *jwt.SigningMethodHMAC:
-		return []byte(tm.secret), nil
+		return []byte(tm.getHMACSecret()), nil
 	case *jwt.SigningMethodRSA:
-		return tm.rsaPubKey, nil
+		return tm.getRSAPublicKey(), nil
 	default:
 		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", tok.Method, tok.Header["alg"])
 	}
@@ -228,7 +230,7 @@ func (tm *TokenParser) ValidateToken(tokenStr string) (*AISClaims, error) {
 
 // IsSecretCksumValid Checks if a provided secret checksum is valid for signing requests to be parsed by this cluster
 func (tm *TokenParser) IsSecretCksumValid(cksumVal string) bool {
-	return cos.ChecksumB2S(cos.UnsafeB(tm.secret), cos.ChecksumSHA256) == cksumVal
+	return cos.ChecksumB2S(cos.UnsafeB(tm.getHMACSecret()), cos.ChecksumSHA256) == cksumVal
 }
 
 // IsPublicKeyValid Checks if a provided public key matches what this cluster will use to validate tokens
@@ -237,7 +239,21 @@ func (tm *TokenParser) IsPublicKeyValid(pubKeyStr string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return tm.rsaPubKey.Equal(reqKey), nil
+	return reqKey.Equal(tm.getRSAPublicKey()), nil
+}
+
+func (tm *TokenParser) getRSAPublicKey() *rsa.PublicKey {
+	if tm.sigConfig == nil {
+		return nil
+	}
+	return tm.sigConfig.RSAPublicKey
+}
+
+func (tm *TokenParser) getHMACSecret() string {
+	if tm.sigConfig == nil {
+		return ""
+	}
+	return tm.sigConfig.HMACSecret
 }
 
 ///////////////

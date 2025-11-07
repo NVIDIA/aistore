@@ -16,19 +16,19 @@ import (
 
 var Conf = &authn.Config{}
 
-func configHandler(w http.ResponseWriter, r *http.Request) {
+func (h *hserv) configHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		httpConfigGet(w, r)
+		h.httpConfigGet(w, r)
 	case http.MethodPut:
-		httpConfigPut(w, r)
+		h.httpConfigPut(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodPut, http.MethodGet)
 	}
 }
 
-func httpConfigGet(w http.ResponseWriter, r *http.Request) {
-	if err := validateAdminPerms(w, r); err != nil {
+func (h *hserv) httpConfigGet(w http.ResponseWriter, r *http.Request) {
+	if err := h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	Conf.Lock()
@@ -36,8 +36,8 @@ func httpConfigGet(w http.ResponseWriter, r *http.Request) {
 	Conf.Unlock()
 }
 
-func httpConfigPut(w http.ResponseWriter, r *http.Request) {
-	if err := validateAdminPerms(w, r); err != nil {
+func (h *hserv) httpConfigPut(w http.ResponseWriter, r *http.Request) {
+	if err := h.validateAdminPerms(w, r); err != nil {
 		return
 	}
 	updateCfg := &authn.ConfigToUpdate{}

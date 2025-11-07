@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -66,18 +67,51 @@ const TokenMapShardExponent = 4
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
-	rsaPubKey, err := tok.ParsePubKey(cos.Right(config.Auth.PubKey, os.Getenv(env.AisAuthPublicKey)))
-	if err != nil {
-		cos.ExitLogf("Failed to parse RSA public key: %v", err)
-	}
-	secret := cos.Right(config.Auth.Secret, os.Getenv(env.AisAuthSecretKey))
-	requiredClaims := &tok.RequiredClaims{
-		Aud: config.Auth.Aud,
+	var requiredClaims *tok.RequiredClaims
+	if config.Auth.RequiredClaims != nil {
+		requiredClaims = &tok.RequiredClaims{
+			Aud: config.Auth.RequiredClaims.Aud,
+		}
 	}
 	return &authManager{
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
-		tokenParser:   tok.NewTokenParser(secret, rsaPubKey, requiredClaims),
+		tokenParser:   tok.NewTokenParser(newSigConfig(&config.Auth), requiredClaims),
+	}
+}
+
+// Parse config and environment variables to determine keys for validating JWT signatures
+func newSigConfig(authConf *cmn.AuthConf) *tok.SigConfig {
+	// First check for env vars as they take precedence
+	if pubKeyEnvStr := os.Getenv(env.AisAuthPublicKey); pubKeyEnvStr != "" {
+		pubKey, err := tok.ParsePubKey(pubKeyEnvStr)
+		if err != nil {
+			cos.ExitLogf("Failed to parse RSA public key: %v", err)
+		}
+		return &tok.SigConfig{RSAPublicKey: pubKey}
+	}
+	if hmacEnvStr := os.Getenv(env.AisAuthSecretKey); hmacEnvStr != "" {
+		return &tok.SigConfig{HMACSecret: hmacEnvStr}
+	}
+	// Empty config is valid with enabled auth as OIDC issuer lookup may be used
+	if authConf.Signature == nil || authConf.Signature.Method == "" {
+		return &tok.SigConfig{}
+	}
+
+	// Finally check config -- parse according to provided method
+	m := strings.ToUpper(authConf.Signature.Method)
+	switch {
+	case authConf.Signature.IsHMAC():
+		return &tok.SigConfig{HMACSecret: authConf.Signature.Key}
+	case authConf.Signature.IsRSA():
+		pubKey, err := tok.ParsePubKey(authConf.Signature.Key)
+		if err != nil {
+			cos.ExitLogf("Failed to parse RSA public key: %v", err)
+		}
+		return &tok.SigConfig{RSAPublicKey: pubKey}
+	default:
+		cos.ExitLogf("Auth enabled with invalid key signature: %q. Supported values are: %s", m, authConf.Signature.ValidMethods())
+		return nil
 	}
 }
 

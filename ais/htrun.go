@@ -1110,7 +1110,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		)
 		// hide secret
 		out = *config
-		out.Auth.Secret = "**********"
+		out.Auth.CensorKey()
 		body = &out
 	case apc.WhatSmap:
 		body = h.owner.smap.get()
