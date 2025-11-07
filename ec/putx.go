@@ -66,7 +66,7 @@ func (*putFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *putFactory) Start() error {
 	xec := ECM.NewPutXact(p.Bck.Bucket())
-	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, 0 /*use default*/)
+	xec.DemandBase.Init(cos.GenUUID(), p.Kind(), p.Bck, 0 /*use default*/)
 	p.xctn = xec
 
 	xact.GoRunW(xec)

@@ -38,18 +38,26 @@ type (
 	}
 )
 
-func (msg *BsummCtrlMsg) Str(cname string) string {
-	var sb strings.Builder
-	sb.Grow(64)
+func (msg *BsummCtrlMsg) Str(cname string, sb *strings.Builder) {
 	sb.WriteString(cname)
+
+	sb.WriteString(", flags:")
+	first := true
 	if msg.ObjCached {
-		sb.WriteString(", cached")
+		sb.WriteString("cached")
+		first = false
 	}
 	if msg.BckPresent {
-		sb.WriteString(", bck-present")
+		if !first {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("bck-present")
+		first = false
 	}
 	if msg.DontAddRemote {
-		sb.WriteString(", don't-add")
+		if !first {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("don't-add")
 	}
-	return sb.String()
 }

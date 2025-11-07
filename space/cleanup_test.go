@@ -97,7 +97,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		// x-cleanup
 		xcln := &space.XactCln{}
-		xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, "" /*ctlmsg*/, nil)
+		xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, nil)
 		ini = &space.IniCln{
 			Xaction: xcln,
 			StatsT:  mock.NewStatsTracker(),

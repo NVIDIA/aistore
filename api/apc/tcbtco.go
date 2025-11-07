@@ -89,17 +89,29 @@ func (msg *TCBMsg) ToName(name string) string {
 // CopyBckMsg //
 ////////////////
 
-func (msg *CopyBckMsg) Str(sb *strings.Builder, fromCname, toCname string) {
+func (msg *CopyBckMsg) Str(sb *strings.Builder, fromCname, toCname, tag string) {
+	sb.WriteString(tag)
 	sb.WriteString(fromCname)
 	sb.WriteString("=>")
 	sb.WriteString(toCname)
+
+	sb.WriteString(", flags:")
+	first := true
 	if msg.LatestVer {
-		sb.WriteString(", latest")
+		sb.WriteString("latest")
+		first = false
 	}
 	if msg.Sync {
-		sb.WriteString(", sync")
+		if !first {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("sync")
+		first = false
 	}
 	if msg.NonRecurs {
-		sb.WriteString(", non-recurs")
+		if !first {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("non-recurs")
 	}
 }

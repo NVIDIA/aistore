@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,7 +127,7 @@ func (p *lsoFactory) Start() error {
 
 	// idle timeout vs delayed next-page request
 	// see also: resetIdle()
-	r.DemandBase.Init(p.UUID(), apc.ActList, p.msg.Str(p.Bck.Cname(p.msg.Prefix)) /*ctlmsg*/, p.Bck, r.config.Timeout.MaxHostBusy.D())
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
 	// is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps()
@@ -190,6 +191,19 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 // LsoXact //
 /////////////
 
+func (r *LsoXact) ctlmsg() string {
+	var sb strings.Builder
+	sb.Grow(160)
+	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
+	if r.nextToken != "" {
+		sb.WriteString(", paging")
+	}
+	if r.walk.remote {
+		sb.WriteString(", remote")
+	}
+	return sb.String()
+}
+
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
 
@@ -210,8 +224,8 @@ loop:
 
 			// cannot change
 			debug.Assert(r.msg.SID == msg.SID, r.msg.SID, " vs ", msg.SID)
-			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), msg.Str(r.p.Bck.Cname("")))
-			debug.Assert(r.walk.remote == lsoIsRemote(r.p.Bck, msg.IsFlagSet(apc.LsCached)), msg.Str(r.p.Bck.Cname("")))
+			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), r.ctlmsg())
+			debug.Assert(r.walk.remote == lsoIsRemote(r.p.Bck, msg.IsFlagSet(apc.LsCached)), r.ctlmsg())
 
 			r.IncPending()
 			resp := r.doPage()
@@ -708,7 +722,10 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 
 func (r *LsoXact) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return

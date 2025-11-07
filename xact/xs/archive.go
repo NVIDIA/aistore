@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,7 @@ type (
 		cksum     cos.CksumHashSize
 		appendPos int64 // append to existing (tar only)
 		tarFormat tar.Format
+		lrp       int
 		cnt       atomic.Int32 // num archived
 		refc      atomic.Int32 // finishing
 	}
@@ -129,8 +131,7 @@ func (p *archFactory) Start() (err error) {
 	r.smap = core.T.Sowner().Get()
 	p.xctn = r
 
-	// delay ctlmsg until DoMsg()
-	r.DemandBase.Init(p.UUID(), p.kind, "" /*ctlmsg*/, p.Bck /*from*/, xact.IdleDefault)
+	r.DemandBase.Init(p.UUID(), p.kind, p.Bck /*from*/, xact.IdleDefault)
 
 	dmxtra := bundle.Extra{
 		RecvAck:     nil, // no ACKs
@@ -286,30 +287,6 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 		return
 	}
 
-	// dynamic ctlmsg // TODO: ref
-	{
-		var sb strings.Builder
-		sb.Grow(80)
-		sb.WriteString(r.Bck().Cname(""))
-		if r.bckTo != nil && !r.bckTo.IsEmpty() {
-			sb.WriteString("=>")
-			sb.WriteString(r.bckTo.Cname(""))
-		}
-		sb.WriteByte(' ')
-		msg.ListRange.Str(&sb, lrit.lrp == lrpPrefix)
-		if msg.BaseNameOnly {
-			sb.WriteString(", basename-only")
-		}
-		if msg.InclSrcBname {
-			sb.WriteString(", incl-src-basename")
-		}
-		if msg.AppendIfExists {
-			sb.WriteString(", append-iff")
-		}
-
-		r.Base.SetCtlMsg(sb.String())
-	}
-
 	if r.IsAborted() {
 		return
 	}
@@ -324,6 +301,45 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 		r.Abort(r.Err())
 		r.cleanup()
 	}
+}
+
+func (r *XactArch) ctlmsg() string {
+	var sb strings.Builder
+	n := r.wiCnt.Load()
+	if n == 0 {
+		sb.Grow(64)
+	} else {
+		sb.Grow(64 + 80*int(n))
+	}
+	sb.WriteString(r.Bck().Cname(""))
+	if r.bckTo != nil {
+		sb.WriteString("=>")
+		sb.WriteString(r.bckTo.Cname(""))
+	}
+	if n == 0 {
+		return sb.String()
+	}
+
+	// append work items
+	r.pending.mtx.Lock()
+	wis := make([]*archwi, 0, len(r.pending.m))
+	for _, wi := range r.pending.m {
+		wis = append(wis, wi)
+	}
+	r.pending.mtx.Unlock()
+
+	sb.WriteString(" [")
+	first := true
+	for _, wi := range wis {
+		if !first {
+			sb.WriteString("; ")
+		}
+		wi.append(&sb)
+		first = false
+	}
+	sb.WriteByte(']')
+
+	return sb.String()
 }
 
 func (r *XactArch) Run(wg *sync.WaitGroup) {
@@ -520,7 +536,10 @@ func (r *XactArch) chanFullTotal() (n int64) {
 
 func (r *XactArch) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.Pack(len(r.joggers.m), 0 /*currently, always zero*/, r.chanFullTotal())
 
@@ -558,6 +577,7 @@ func (j *jogger) do(archtask *archtask) {
 		lrit, wi = archtask.lrit, archtask.wi
 	)
 	debug.Assert(r == wi.r)
+	wi.lrp = lrit.lrp
 	if err := lrit.run(wi, j.r.smap, false /*prealloc buf*/); err != nil {
 		wi.r.AddErr(err)
 	}
@@ -752,4 +772,38 @@ func (wi *archwi) finalize() (int64, error) {
 	wi.cksum.Finalize()
 	wi.archlom.SetCksum(&wi.cksum.Cksum)
 	return wi.cksum.Size, nil
+}
+
+func (wi *archwi) append(sb *strings.Builder) {
+	msg := wi.msg
+	msg.ListRange.Str(sb, wi.lrp == lrpPrefix)
+
+	if wi.tsi.ID() != core.T.SID() {
+		sb.WriteString(", target:")
+		sb.WriteString(wi.tsi.ID())
+	}
+	if cnt := wi.cnt.Load(); cnt > 0 {
+		sb.WriteString(", archived:")
+		sb.WriteString(strconv.FormatInt(int64(cnt), 10))
+	}
+
+	sb.WriteString(", flags:")
+	first := true
+	if msg.BaseNameOnly {
+		first = false
+		sb.WriteString("basename-only")
+	}
+	if msg.InclSrcBname {
+		if !first {
+			sb.WriteByte(',')
+		}
+		first = false
+		sb.WriteString("incl-src-bname")
+	}
+	if msg.AppendIfExists {
+		if !first {
+			sb.WriteByte(',')
+		}
+		sb.WriteString("append-iff")
+	}
 }

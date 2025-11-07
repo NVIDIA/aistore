@@ -260,19 +260,12 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 	)
 	mpopts.Bck.Copy(args.BckFrom.Bucket())
 
-	// ctlmsg
-	var (
-		sb        strings.Builder
-		fromCname = args.BckFrom.Cname(msg.Prefix)
-		toCname   = args.BckTo.Cname(msg.Prepend)
-	)
-	sb.Grow(80)
-	msg.Str(&sb, fromCname, toCname)
-
 	// init base
-	r.BckJog.Init(uuid, kind, sb.String() /*ctlmsg*/, args.BckTo, mpopts, config)
+	r.BckJog.Init(uuid, kind, args.BckTo, mpopts, config)
 
 	// xname
+	fromCname := args.BckFrom.Cname(msg.Prefix)
+	toCname := args.BckTo.Cname(msg.Prepend)
 	r._name(fromCname, toCname, r.BckJog.NumJoggers())
 
 	r.rate.init(args.BckFrom, args.BckTo, nat)
@@ -300,6 +293,28 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 		stats.VlabBucket: args.BckFrom.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
+}
+
+func (r *XactTCB) ctlmsg(rename bool) string {
+	var (
+		sb        strings.Builder
+		msg       = r.args.Msg
+		fromCname = r.args.BckFrom.Cname(msg.Prefix)
+		toCname   = r.args.BckTo.Cname(msg.Prepend)
+		tag       string
+	)
+	switch {
+	case rename:
+		tag = "mv: "
+	case r.Kind() == apc.ActETLBck:
+		tag = "etl: "
+	default:
+		tag = "cp: "
+	}
+
+	sb.Grow(80)
+	msg.Str(&sb, fromCname, toCname, tag)
+	return sb.String()
 }
 
 // sub-routine that does the core copy bucket logic; doesn't include the Finish() call and abort check
@@ -522,7 +537,10 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 
 func (r *XactTCB) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg(false)
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.Pack(fs.NumAvail(), len(r.nwp.workers), r.nwp.chanFull.Load())
 

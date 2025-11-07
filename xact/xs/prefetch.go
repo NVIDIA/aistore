@@ -120,7 +120,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	if err != nil {
 		return nil, err
 	}
-	r.InitBase(xargs.UUID, kind, msg.Str(r.lrp == lrpPrefix), bck)
+	r.InitBase(xargs.UUID, kind, bck)
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
 	r.bp = core.T.Backend(bck)
@@ -135,6 +135,10 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	}
 
 	return r, nil
+}
+
+func (r *prefetch) ctlmsg() string {
+	return r.msg.Str(r.lrit.lrp == lrpPrefix)
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {
@@ -262,7 +266,10 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 
 func (r *prefetch) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.Pack(0, len(r.lrit.nwp.workers), r.lrit.nwp.chanFull.Load())
 

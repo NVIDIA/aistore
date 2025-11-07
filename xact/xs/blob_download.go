@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -188,7 +189,7 @@ func (p *blobFactory) Start() (err error) {
 	r := p.pre
 
 	bck := r.args.Lom.Bck()
-	r.InitBase(p.Args.UUID, p.Kind(), r.args.Lom.Cname(), bck)
+	r.InitBase(p.Args.UUID, p.Kind(), bck)
 
 	r.bp = core.T.Backend(bck)
 	r.vlabs = map[string]string{
@@ -532,6 +533,47 @@ func (r *XactBlobDl) cleanup() {
 	}
 }
 
+func (r *XactBlobDl) ctlmsg() string {
+	var sb strings.Builder
+	sb.Grow(128)
+
+	sb.WriteString(r.args.Lom.Cname())
+
+	sb.WriteString(" chunk-size:")
+	sb.WriteString(cos.IEC(r.chunkSize, 0))
+
+	sb.WriteString(", workers:")
+	sb.WriteString(strconv.FormatInt(int64(r.numWorkers), 10))
+
+	// progress
+	woff := atomic.LoadInt64(&r.woff)
+	if woff > 0 && r.fullSize > 0 {
+		pct := (woff * 100) / r.fullSize
+
+		sb.WriteString(", downloaded:")
+		sb.WriteString(cos.IEC(woff, 1))
+		sb.WriteString("/")
+		sb.WriteString(cos.IEC(r.fullSize, 1))
+		sb.WriteString(" (")
+		sb.WriteString(strconv.FormatInt(pct, 10))
+		sb.WriteString("%)")
+	}
+
+	return sb.String()
+}
+
+func (r *XactBlobDl) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+
+	// HACK shortcut to support progress bar
+	snap.Stats.InBytes = r.fullSize
+	return
+}
+
 //
 // blobReader
 //
@@ -571,13 +613,4 @@ func (reader *blobReader) run() {
 		reader.parent.doneCh <- chunkDone{nil, sgl, msg.roff, res.ErrCode}
 	}
 	reader.parent.wg.Done()
-}
-
-func (r *XactBlobDl) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.ToSnap(snap)
-
-	// HACK shortcut to support progress bar
-	snap.Stats.InBytes = r.fullSize
-	return
 }

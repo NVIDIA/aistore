@@ -7,6 +7,8 @@ package xs
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -30,8 +32,7 @@ type (
 	}
 	xactRechunk struct {
 		xact.BckJog
-		objSizeLimit int64
-		chunkSize    int64
+		args *xreg.RechunkArgs
 	}
 )
 
@@ -52,7 +53,7 @@ func (p *rechunkFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *rechunkFactory) Start() (err error) {
 	p.xctn, err = newxactRechunk(p)
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.ctlMsg())
+		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.ctlmsg())
 	}
 	return err
 }
@@ -99,12 +100,12 @@ func (p *rechunkFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.W
 func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 	var (
 		args      = p.Args.Custom.(*xreg.RechunkArgs)
-		xch       = &xactRechunk{objSizeLimit: args.ObjSizeLimit, chunkSize: args.ChunkSize}
+		r         = &xactRechunk{args: args}
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		mpopts    = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjCT},
-			VisitObj: xch.do,
+			VisitObj: r.do,
 			Slab:     slab,
 			Prefix:   args.Prefix,
 			DoLoad:   mpather.Load,
@@ -119,9 +120,9 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 	debug.AssertNoErr(err)
 	mpopts.Bck.Copy(p.Bck.Bucket())
 
-	xch.BckJog.Init(p.UUID(), p.Kind(), xch.ctlMsg(), p.Bck, mpopts, config)
+	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, mpopts, config)
 
-	return xch, nil
+	return r, nil
 }
 
 // | Object Size       | Was Chunked? | Action                 |
@@ -130,15 +131,15 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 // | < objSizeLimit    |     No       | No-op                  |
 // | >= objSizeLimit   |     Yes      | Re-chunk               |
 // | >= objSizeLimit   |     No       | Re-chunk               |
-func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
+func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	var (
 		size      = lom.Lsize()
-		chunkSize = xch.chunkSize
+		chunkSize = r.args.ChunkSize
 	)
-	if size < xch.objSizeLimit || xch.objSizeLimit == 0 {
+	if size < r.args.ObjSizeLimit || r.args.ObjSizeLimit == 0 {
 		if !lom.IsChunked() {
 			// Track skipped object stats (no-op case)
-			xch.ObjsAdd(1, size)
+			r.ObjsAdd(1, size)
 			return nil // Do nothing: monolithic objects stay monolithic
 		}
 		chunkSize = 0 // restore chunked objects to monolithic
@@ -149,7 +150,7 @@ func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
 
 	lh, err := lom.Open()
 	if err != nil {
-		xch.AddErr(err, 0)
+		r.AddErr(err, 0)
 		return err
 	}
 	defer lh.Close()
@@ -159,7 +160,7 @@ func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		// NOTE: if chunkSize > 0, will trigger the underlying `poi.chunk(chunkSize)`
 		params.ChunkSize = chunkSize
 		params.WorkTag = fs.WorkfilePut
-		params.Xact = xch
+		params.Xact = r
 		params.Reader = lh
 		// NOTE: if chunkSize == 0 (chunk disabled) but size > config.MaxMonolithicSize,
 		// it will trigger the underlying `poi.chunk(config.MaxMonolithicSize)`
@@ -172,34 +173,53 @@ func (xch *xactRechunk) do(lom *core.LOM, _ []byte) error {
 	err = core.T.PutObject(lom, params)
 	core.FreePutParams(params)
 	if err != nil {
-		xch.AddErr(err, 0)
+		r.AddErr(err, 0)
 		return err
 	}
 
-	xch.ObjsAdd(1, size) // Track processed object stats
+	r.ObjsAdd(1, size) // Track processed object stats
 
 	return nil
 }
 
-func (xch *xactRechunk) Run(wg *sync.WaitGroup) {
+func (r *xactRechunk) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	xch.BckJog.Run()
-	errJog := xch.BckJog.Wait()
-	if errJog != nil && !xch.IsAborted() {
-		nlog.Warningln(xch.Name(), errJog)
+	r.BckJog.Run()
+	errJog := r.BckJog.Wait()
+	if errJog != nil && !r.IsAborted() {
+		nlog.Warningln(r.Name(), errJog)
 	}
-	nlog.Infoln("finish rechunk", xch.Name(), "xid", xch.ID())
-	xch.Finish()
+	nlog.Infoln("finish rechunk", r.Name(), "xid", r.ID())
+	r.Finish()
 }
 
-func (xch *xactRechunk) Snap() *core.Snap {
+func (r *xactRechunk) Snap() *core.Snap {
 	snap := &core.Snap{}
-	xch.ToSnap(snap)
+	r.AddBaseSnap(snap)
 
-	snap.IdleX = xch.IsIdle()
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+
+	snap.IdleX = r.IsIdle()
 	return snap
 }
 
-func (xch *xactRechunk) ctlMsg() string {
-	return fmt.Sprintf("objsize_limit=%s, chunk_size=%s", cos.ToSizeIEC(xch.objSizeLimit, 0), cos.ToSizeIEC(xch.chunkSize, 0))
+func (r *xactRechunk) ctlmsg() string {
+	var sb strings.Builder
+	sb.Grow(96)
+
+	sb.WriteString("objsize-limit:")
+	sb.WriteString(cos.ToSizeIEC(r.args.ObjSizeLimit, 0))
+	sb.WriteString(", chunk-size:")
+	sb.WriteString(cos.ToSizeIEC(r.args.ChunkSize, 0))
+
+	if r.args.Prefix != "" {
+		sb.WriteString(", prefix:")
+		sb.WriteString(r.args.Prefix)
+	}
+	if nv := r.NumVisits(); nv > 0 {
+		sb.WriteString(", visited:")
+		sb.WriteString(strconv.FormatInt(nv, 10))
+	}
+	return sb.String()
 }

@@ -386,7 +386,7 @@ func (r *xactECBase) ECStats() *Stats { return r.stats.stats() }
 
 func (r *xactECBase) baseSnap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
 
 	snap.IdleX = r.IsIdle()
 	return

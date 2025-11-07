@@ -16,15 +16,27 @@ type BckJog struct {
 	Base
 }
 
-func (r *BckJog) Init(id, kind, ctlmsg string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
-	r.InitBase(id, kind, ctlmsg, bck)
+func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
+	r.InitBase(id, kind, bck)
 	r.joggers = mpather.NewJoggerGroup(opts, config, nil)
 	r.Config = config
 }
 
-func (r *BckJog) Run()             { r.joggers.Run() }
-func (r *BckJog) NumJoggers() int  { return r.joggers.NumJ() }
-func (r *BckJog) NumVisits() int64 { return r.joggers.NumVisits() }
+func (r *BckJog) Run() { r.joggers.Run() }
+
+func (r *BckJog) NumJoggers() int {
+	if r.joggers == nil {
+		return 0
+	}
+	return r.joggers.NumJ()
+}
+
+func (r *BckJog) NumVisits() int64 {
+	if r.joggers == nil {
+		return 0
+	}
+	return r.joggers.NumVisits()
+}
 
 func (r *BckJog) Wait() error {
 	select {

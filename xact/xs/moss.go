@@ -77,7 +77,7 @@ import (
 // hardcoded tunables
 const (
 	// low-level stats: total processed files, objects, etc.
-	sparseLog = 30 * time.Second
+	sparseLog = time.Minute
 
 	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
 	// - created at init time
@@ -271,7 +271,7 @@ func newMoss(p *mossFactory) *XactMoss {
 		smm:    memsys.ByteMM(),
 		config: cmn.GCO.Get(),
 	}
-	r.DemandBase.Init(p.UUID(), p.Kind(), "" /*ctlmsg*/, p.Bck, mossIdleTime, r.fini)
+	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 
 	// best-effort `bewarm` for pagecache warming-up
 	s := "without"
@@ -389,7 +389,7 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
-		msg := r.updCtlMsg()
+		msg := r.ctlmsg()
 		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
 
 		r.pending.Range(r.cleanup)
@@ -437,8 +437,8 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 		if time.Duration(wi.started-r.lastLog.Load()) > sparseLog {
 			// log and `ais show job`
-			if msg := r.updCtlMsg(); msg != "" {
-				nlog.Infoln(r.Name(), "stats: [", msg, "]")
+			if msg := r.ctlmsg(); msg != "" {
+				nlog.Infoln(r.Name(), "ctlmsg (", msg, ")")
 			}
 			r.lastLog.Store(wi.started)
 		}
@@ -789,7 +789,11 @@ func (p *mossFactory) Get() core.Xact { return p.xctn }
 
 func (r *XactMoss) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+
 	snap.IdleX = r.IsIdle()
 	return
 }
@@ -853,7 +857,7 @@ func (*XactMoss) bewarmFQN(fqn string) {
 }
 
 // single writer: DT only
-func (r *XactMoss) updCtlMsg() string {
+func (r *XactMoss) ctlmsg() string {
 	if r.stats.size.load() == 0 {
 		return ""
 	}
@@ -870,16 +874,14 @@ func (r *XactMoss) updCtlMsg() string {
 	// append `moss` stats line (objs/files/size/avg-wait[/miss])
 	r.stats.moss.append(&sb)
 
-	sb.WriteString(" reqs:")
+	sb.WriteString(", reqs:")
 	sb.WriteString(strconv.FormatInt(r.stats.nreq.load(), 10))
 
-	sb.WriteString(" bewarm:")
+	sb.WriteString(", bewarm:")
 	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
 	sb.WriteString(bewarm)
 
 	msg := sb.String()
-	r.SetCtlMsg(msg)
-
 	return msg
 }
 

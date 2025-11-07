@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,6 +61,8 @@ type (
 		Force               bool
 	}
 	XactLRU struct {
+		p   *lruFactory
+		ini *IniLRU
 		xact.Base
 	}
 )
@@ -115,9 +118,8 @@ func (*lruFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 }
 
 func (p *lruFactory) Start() error {
-	p.xctn = &XactLRU{}
-	ctlmsg := p.Args.Custom.(string)
-	p.xctn.InitBase(p.UUID(), apc.ActLRU, ctlmsg, nil)
+	p.xctn = &XactLRU{p: p}
+	p.xctn.InitBase(p.UUID(), apc.ActLRU, nil)
 	return nil
 }
 
@@ -147,6 +149,9 @@ func RunLRU(ini *IniLRU) {
 		xlru.Finish()
 		return
 	}
+
+	xlru.ini = ini
+
 	for mpath, mi := range avail {
 		h := make(minHeap, 0, 64)
 		joggers[mpath] = &lruJ{
@@ -181,11 +186,33 @@ func RunLRU(ini *IniLRU) {
 	nlog.Infof("%s finished, %s", xlru, cs.String())
 }
 
-func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunLRU
+
+func (r *XactLRU) ctlmsg() string {
+	s := r.p.Args.Custom.(string)
+	if r.ini == nil {
+		return s
+	}
+	if l := len(r.ini.Buckets); l > 0 {
+		cnames := make([]string, 0, l)
+		for i := range r.ini.Buckets {
+			b := &r.ini.Buckets[i]
+			cnames = append(cnames, b.Cname(""))
+		}
+		s += ", buckets: " + strings.Join(cnames, ",")
+	}
+	if r.ini.Force {
+		s += ", force"
+	}
+	return s
+}
 
 func (r *XactLRU) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return

@@ -145,7 +145,7 @@ var _ = Describe("CommunicatorTest", func() {
 				}
 				xetl := &XactETL{}
 				xid := cos.GenUUID()
-				xetl.InitBase(xid, apc.ActETLInline, msg.String(), nil)
+				xetl.InitBase(xid, apc.ActETLInline, nil)
 
 				switch msg.CommType() {
 				case Hpush, HpushStdin:

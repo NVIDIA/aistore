@@ -6,6 +6,8 @@ package mirror
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +97,7 @@ func (p *putFactory) Start() error {
 		// is Ok (compare with x-archive, x-tco)
 		beid = cos.GenUUID()
 	}
-	r.DemandBase.Init(beid, p.Kind(), "" /*ctlmsg*/, bck, xact.IdleDefault)
+	r.DemandBase.Init(beid, p.Kind(), bck, xact.IdleDefault)
 
 	// joggers
 	r.wkg, err = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
@@ -124,6 +126,19 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 /////////////
 // XactPut //
 /////////////
+
+func (r *XactPut) ctlmsg() string {
+	if !r.mirror.Enabled {
+		return "mirror disabled"
+	}
+	var sb strings.Builder
+	sb.Grow(32)
+	sb.WriteString("copies:")
+	sb.WriteString(strconv.FormatInt(r.mirror.Copies, 10))
+	sb.WriteString(", burst:")
+	sb.WriteString(strconv.Itoa(r.mirror.Burst))
+	return sb.String()
+}
 
 // (one worker per mountpath)
 func (r *XactPut) do(lom *core.LOM, buf []byte) {
@@ -220,7 +235,10 @@ func (r *XactPut) stop() (err error) {
 
 func (r *XactPut) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return snap

@@ -77,12 +77,12 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	msg.ListRange.Str(&sb, isPrefix)
 	if msg.BlobThreshold > 0 {
 		msg.delim(&sb)
-		sb.WriteString("blob-threshold: ")
+		sb.WriteString("blob-threshold:")
 		sb.WriteString(cos.IEC(msg.BlobThreshold, 0))
 	}
 	if msg.NumWorkers > 0 {
 		msg.delim(&sb)
-		sb.WriteString("workers: ")
+		sb.WriteString("workers:")
 		sb.WriteString(strconv.Itoa(msg.NumWorkers))
 	}
 	if msg.LatestVer {

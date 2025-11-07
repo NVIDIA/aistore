@@ -6,7 +6,6 @@ package apc
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -226,23 +225,70 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	return s
 }
 
-func (lsmsg *LsoMsg) Str(cname string) string {
-	var sb strings.Builder
-	sb.Grow(80)
-
+func (lsmsg *LsoMsg) Str(cname string, sb *strings.Builder) {
 	sb.WriteString(cname)
 	if lsmsg.Props != "" {
 		sb.WriteString(", props:")
 		sb.WriteString(lsmsg.Props)
 	}
 	if fl := lsmsg.Flags; fl != 0 {
-		sb.WriteString(", flags: 0x")
-		sb.WriteString(strconv.FormatUint(fl, 16))
-		sb.WriteString(" (")
-		sb.WriteString(strconv.FormatUint(fl, 2))
-		sb.WriteString(")")
+		sb.WriteString(", flags:")
+		lsmsg.appendFlags(sb)
 	}
-	return sb.String()
+}
+
+func (lsmsg *LsoMsg) appendFlags(sb *strings.Builder) {
+	flags := make([]string, 0, 8)
+
+	if lsmsg.IsFlagSet(LsCached) {
+		flags = append(flags, "cached")
+	}
+	if lsmsg.IsFlagSet(LsMissing) {
+		flags = append(flags, "missing")
+	}
+	if lsmsg.IsFlagSet(LsDeleted) {
+		flags = append(flags, "deleted")
+	}
+	if lsmsg.IsFlagSet(LsArchDir) {
+		flags = append(flags, "arch-dir")
+	}
+	if lsmsg.IsFlagSet(LsNameOnly) {
+		flags = append(flags, "name-only")
+	}
+	if lsmsg.IsFlagSet(LsNameSize) {
+		flags = append(flags, "name-size")
+	}
+	if lsmsg.IsFlagSet(LsBckPresent) {
+		flags = append(flags, "bck-present")
+	}
+	if lsmsg.IsFlagSet(LsDontHeadRemote) {
+		flags = append(flags, "no-head-remote")
+	}
+	if lsmsg.IsFlagSet(LsDontAddRemote) {
+		flags = append(flags, "no-add-remote")
+	}
+	if lsmsg.IsFlagSet(LsNotCached) {
+		flags = append(flags, "not-cached")
+	}
+	if lsmsg.IsFlagSet(LsWantOnlyRemoteProps) {
+		flags = append(flags, "only-remote-props")
+	}
+	if lsmsg.IsFlagSet(LsNoRecursion) {
+		flags = append(flags, "no-recursion")
+	}
+	if lsmsg.IsFlagSet(LsDiff) {
+		flags = append(flags, "diff")
+	}
+	if lsmsg.IsFlagSet(LsNoDirs) {
+		flags = append(flags, "no-dirs")
+	}
+	if lsmsg.IsFlagSet(LsIsS3) {
+		flags = append(flags, "s3")
+	}
+
+	if len(flags) > 0 {
+		sb.WriteString(strings.Join(flags, ","))
+	}
 }
 
 // LsoMsg flags enum: LsCached, ...

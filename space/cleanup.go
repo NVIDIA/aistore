@@ -51,6 +51,8 @@ const (
 
 type (
 	XactCln struct {
+		p   *clnFactory
+		ini *IniCln
 		xact.Base
 	}
 	IniCln struct {
@@ -111,11 +113,22 @@ var (
 	_ core.Xact      = (*XactCln)(nil)
 )
 
-func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
+func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunCleanup() below
+
+func (r *XactCln) ctlmsg() string {
+	s := r.p.Args.Custom.(string)
+	if r.ini == nil {
+		return s
+	}
+	return s + ", " + r.ini.Args.String()
+}
 
 func (r *XactCln) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return
@@ -130,9 +143,8 @@ func (*clnFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 }
 
 func (p *clnFactory) Start() error {
-	p.xctn = &XactCln{}
-	ctlmsg := p.Args.Custom.(string)
-	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, ctlmsg, nil)
+	p.xctn = &XactCln{p: p}
+	p.xctn.InitBase(p.UUID(), apc.ActStoreCleanup, nil)
 	return nil
 }
 
@@ -162,6 +174,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		xcln.Finish()
 		return fs.CapStatus{}
 	}
+
+	xcln.ini = ini
+
 	now := time.Now()
 	for mpath, mi := range avail {
 		j := &clnJ{

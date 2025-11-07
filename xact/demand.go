@@ -57,7 +57,7 @@ func (r *DemandBase) IsIdle() bool {
 	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive()+time.Second, 4*time.Second)
 }
 
-func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time.Duration, hkcb ...hk.HKCB) {
+func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration, hkcb ...hk.HKCB) {
 	r.hkName = kind + "/" + uuid
 	if idleDur > 0 {
 		debug.Assert(idleDur >= IdleDefault || kind == apc.ActList, "Warning: ", idleDur, " is mostly expected >= ", IdleDefault, "(default)")
@@ -73,7 +73,7 @@ func (r *DemandBase) Init(uuid, kind, ctlmsg string, bck *meta.Bck, idleDur time
 		r.parentCB = hkcb[0]
 		debug.Assert(r.parentCB != nil)
 	}
-	r.InitBase(uuid, kind, ctlmsg, bck)
+	r.InitBase(uuid, kind, bck)
 
 	r.idle.last.Store(mono.NanoTime())
 	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)

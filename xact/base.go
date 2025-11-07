@@ -34,12 +34,11 @@ type (
 			done   atomic.Bool
 			closed atomic.Bool
 		}
-		id     string
-		kind   string
-		_nam   string
-		ctlmsg ratomic.Value // via InitBase, SetCtlMsg
-		err    cos.Errs
-		stats  struct {
+		id    string
+		kind  string
+		_nam  string
+		err   cos.Errs
+		stats struct {
 			objs     atomic.Int64 // locally processed
 			bytes    atomic.Int64
 			outobjs  atomic.Int64 // transmit
@@ -71,12 +70,11 @@ func GoRunW(xctn core.Xact) {
 // Base - partially implements `core.Xact` interface
 //////////////
 
-func (xctn *Base) InitBase(id, kind, ctlmsg string, bck *meta.Bck) {
+func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
 	debug.Assert(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.Assert(IsValidKind(kind), kind)
 
 	xctn.id, xctn.kind = id, kind
-	xctn.ctlmsg.Store(ctlmsg)
 
 	xctn.err = cos.NewErrs()
 	xctn.abort.ch = make(chan error, 1)
@@ -410,10 +408,9 @@ func (xctn *Base) InObjsAdd(cnt int, size int64) {
 }
 
 // provided for external use to fill-in xaction-specific `SnapExt` part
-func (xctn *Base) ToSnap(snap *core.Snap) {
+func (xctn *Base) AddBaseSnap(snap *core.Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
-	snap.CtlMsg = xctn.ctlmsg.Load().(string) // cannot be nil (InitBase)
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
 	if err := xctn.AbortErr(); err != nil {
@@ -437,8 +434,6 @@ func (xctn *Base) ToStats(stats *core.Stats) {
 	stats.InObjs = xctn.InObjs()     // receive
 	stats.InBytes = xctn.InBytes()
 }
-
-func (xctn *Base) SetCtlMsg(s string) { xctn.ctlmsg.Store(s) } // see InitBase
 
 //
 // RebID helpers

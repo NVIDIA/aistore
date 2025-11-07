@@ -105,16 +105,18 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
+func (r *XactBckEncode) ctlmsg() (s string) {
+	if r.checkAndRecover {
+		s = "recover"
+	}
+	return
+}
+
 func (r *XactBckEncode) init(uuid string) error {
 	r.wg = &sync.WaitGroup{}
 	r.smap = core.T.Sowner().Get()
 
-	var ctlmsg string
-	if r.checkAndRecover {
-		ctlmsg = "recover"
-		r.probFilter = prob.NewDefaultFilter()
-	}
-	r.InitBase(uuid, apc.ActECEncode, ctlmsg, r.bck)
+	r.InitBase(uuid, apc.ActECEncode, r.bck)
 
 	if err := r.bck.Init(core.T.Bowner()); err != nil {
 		return err
@@ -127,7 +129,10 @@ func (r *XactBckEncode) init(uuid string) error {
 	if len(avail) == 0 {
 		return cmn.ErrNoMountpaths
 	}
+
 	if r.checkAndRecover {
+		r.probFilter = prob.NewDefaultFilter()
+
 		// construct recovery joggers
 		r.rcvyJG = make(map[string]*rcvyJogger, len(avail))
 		for _, mi := range avail {
@@ -139,7 +144,6 @@ func (r *XactBckEncode) init(uuid string) error {
 			r.rcvyJG[mi.Path] = j
 		}
 	}
-
 	return nil
 }
 
@@ -266,8 +270,9 @@ func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 
 func (r *XactBckEncode) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
 
+	snap.CtlMsg = r.ctlmsg()
 	snap.Pack(fs.NumAvail(), len(r.rcvyJG), r.chanFullTotal())
 
 	snap.IdleX = r.IsIdle()

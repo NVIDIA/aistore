@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -69,7 +71,7 @@ func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 		DoLoad:   mpather.Load,
 	}
 	mpopts.Bck.Copy(bck.Bucket())
-	r.BckJog.Init(uuid, apc.ActLoadLomCache, "" /*ctlmsg*/, bck, mpopts, cmn.GCO.Get())
+	r.BckJog.Init(uuid, apc.ActLoadLomCache, bck, mpopts, cmn.GCO.Get())
 	return
 }
 
@@ -83,9 +85,26 @@ func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
+func (r *xactLLC) ctlmsg() string {
+	nv := r.NumVisits()
+	if nv == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.Grow(16)
+	sb.WriteString(", visited:")
+	sb.WriteString(strconv.FormatInt(nv, 10))
+	return sb.String()
+}
+
 func (r *xactLLC) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	if snap.CtlMsg != "" {
+		nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	}
 
 	snap.IdleX = r.IsIdle()
 	return

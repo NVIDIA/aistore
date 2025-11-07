@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -96,13 +95,9 @@ func (r *BckRename) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *BckRename) String() string {
-	return fmt.Sprintf("%s <= %s", r.Base.String(), r.XactTCB.args.BckFrom)
-}
-
-func (r *BckRename) Name() string {
-	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.XactTCB.args.BckFrom)
-}
+func (r *BckRename) ctlmsg() string { return r.XactTCB.ctlmsg(true /*rename*/) }
+func (r *BckRename) String() string { return r.ctlmsg() }
+func (r *BckRename) Name() string   { return r.ctlmsg() }
 
 func (r *BckRename) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.XactTCB.args.BckFrom, r.XactTCB.args.BckTo
@@ -110,7 +105,10 @@ func (r *BckRename) FromTo() (*meta.Bck, *meta.Bck) {
 
 func (r *BckRename) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()

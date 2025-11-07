@@ -76,8 +76,12 @@ func newETL(p *factory) *XactETL {
 			stats.VlabBucket: "",
 		},
 	}
-	xctn.InitBase(p.Args.UUID, p.Kind(), msg.String(), nil)
+	xctn.InitBase(p.Args.UUID, p.Kind(), nil)
 	return xctn
+}
+
+func (r *XactETL) ctlmsg() string {
+	return r.msg.String()
 }
 
 func (*XactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
@@ -93,7 +97,10 @@ func (r *XactETL) Abort(err error) (aborted bool) {
 
 func (r *XactETL) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return

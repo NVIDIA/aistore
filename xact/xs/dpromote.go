@@ -7,6 +7,7 @@ package xs
 
 import (
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -56,10 +57,9 @@ func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *proFactory) Start() error {
 	var (
-		xctn   = &XactDirPromote{p: p}
-		ctlmsg = p.args.String()
+		xctn = &XactDirPromote{p: p}
 	)
-	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, ctlmsg, p.Bck, &mpather.JgroupOpts{}, cmn.GCO.Get())
+	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JgroupOpts{}, cmn.GCO.Get())
 	p.xctn = xctn
 	return nil
 }
@@ -76,6 +76,13 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 ////////////////////
 
 func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is called before Run()
+
+func (r *XactDirPromote) ctlmsg() string {
+	var sb strings.Builder
+	sb.Grow(128)
+	r.p.args.Str(&sb)
+	return sb.String()
+}
 
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
@@ -147,7 +154,10 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 
 func (r *XactDirPromote) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
+
+	snap.CtlMsg = r.ctlmsg()
+	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
 
 	snap.IdleX = r.IsIdle()
 	return

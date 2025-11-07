@@ -192,7 +192,7 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newXact(p *factory) (xld *Xact) {
 	xld = &Xact{p: p}
 	xld.dispatcher = newDispatcher(xld)
-	xld.DemandBase.Init(p.UUID(), apc.Download, "" /*ctlmsg*/, p.bck, 0 /*use default*/)
+	xld.DemandBase.Init(p.UUID(), apc.Download, p.bck, 0 /*use default*/)
 	return
 }
 
@@ -256,7 +256,7 @@ func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int
 
 func (xld *Xact) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	xld.ToSnap(snap)
+	xld.AddBaseSnap(snap)
 
 	snap.IdleX = xld.IsIdle()
 	return

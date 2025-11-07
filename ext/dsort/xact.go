@@ -40,7 +40,7 @@ func (p *factory) Start() error {
 	args, ok := custom.(*xreg.DsortArgs)
 	debug.Assert(ok)
 	p.xctn = &xaction{args: args}
-	p.xctn.InitBase(p.UUID(), apc.ActDsort, "" /*ctlmsg*/, args.BckTo /*compare w/ tcb and tco*/)
+	p.xctn.InitBase(p.UUID(), apc.ActDsort, args.BckTo /*compare w/ tcb and tco*/)
 
 	g.once.Do(func() {
 		hk.Reg(apc.ActDsort+hk.NameSuffix, g.mg.housekeep, hk.DayInterval)
@@ -79,7 +79,7 @@ func (r *xaction) Abort(err error) (ok bool) {
 
 func (r *xaction) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
-	r.ToSnap(snap)
+	r.AddBaseSnap(snap)
 
 	m, exists := g.mg.Get(r.ID(), true /*incl. archived*/)
 	if !exists {
