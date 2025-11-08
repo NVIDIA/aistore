@@ -24,8 +24,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/hk"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -401,9 +403,12 @@ func _loghdr(trname, from, to string, transmit, compressed bool) string {
 // rtry //
 //////////
 
+// exponential backoff (1.5x growth) with approx. 3% jitter
+// typical behavior: 7-9 retry attempts over 6-10 seconds total
+
 type rtry struct {
-	config   *cmn.Config
 	sname    string
+	now      int64
 	total    time.Duration
 	nxtSleep time.Duration
 	maxSleep time.Duration
@@ -413,8 +418,8 @@ type rtry struct {
 func newRtry(config *cmn.Config, sname string) *rtry {
 	ini := cos.ClampDuration(config.Timeout.CplaneOperation.D()/2, 100*time.Millisecond, 2*time.Second)
 	return &rtry{
-		config:   config,
 		sname:    sname,
+		now:      mono.NanoTime(),
 		nxtSleep: ini,
 		maxSleep: cos.ClampDuration(config.Timeout.MaxKeepalive.D(), 2*time.Second, 5*time.Second),
 	}
@@ -422,14 +427,16 @@ func newRtry(config *cmn.Config, sname string) *rtry {
 
 func (r *rtry) sleep(err error) {
 	r.cnt++
-	nlog.WarningDepth(1, "retry", r.sname, "[", err, r.cnt, r.total, "]")
-	time.Sleep(r.nxtSleep)
-	r.total += r.nxtSleep
-	r.nxtSleep = min(r.nxtSleep+r.nxtSleep>>1, r.maxSleep)
-	if r.cnt > 1 {
-		// poor-man's jitter
+	d := r.nxtSleep
+	if r.cnt == 1 {
+		nlog.WarningDepth(1, "retry", r.sname, "[", err, r.cnt, r.total, "]")
+	} else {
+		d = hk.Jitter(r.nxtSleep, r.now+int64(r.total))
 		runtime.Gosched()
 	}
+	time.Sleep(d)
+	r.total += d
+	r.nxtSleep = min(r.nxtSleep+r.nxtSleep>>1, r.maxSleep)
 }
 
 func (r *rtry) timeout(err error) bool {
