@@ -281,8 +281,7 @@ func (r *XactNsumm) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 
 	snap.IdleX = r.IsIdle()
 	return

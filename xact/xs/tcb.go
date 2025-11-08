@@ -539,9 +539,7 @@ func (r *XactTCB) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg(false)
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
-
+	snap.SetCtlMsg(r.Name(), r.ctlmsg(false))
 	snap.Pack(fs.NumAvail(), len(r.nwp.workers), r.nwp.chanFull.Load())
 
 	snap.IdleX = r.IsIdle()

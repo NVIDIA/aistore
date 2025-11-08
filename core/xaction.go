@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
@@ -148,4 +149,9 @@ func (xsnap *Snap) Unpack() (njoggers, nworkers, chanFull int) {
 	nworkers = int(xsnap.Packed>>gorBits) & gorMask
 	chanFull = int(xsnap.Packed >> chShift)
 	return njoggers, nworkers, chanFull
+}
+
+func (xsnap *Snap) SetCtlMsg(xname, msg string) {
+	xsnap.CtlMsg = msg
+	nlog.InfoDepth(1, xname, "run options:", msg)
 }

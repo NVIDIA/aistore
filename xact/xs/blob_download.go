@@ -597,8 +597,7 @@ func (r *XactBlobDl) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 
 	// HACK shortcut to support progress bar
 	snap.Stats.InBytes = r.fullSize

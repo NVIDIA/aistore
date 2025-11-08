@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -128,8 +127,7 @@ func (r *evictDelete) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 
 	snap.Pack(0, len(r.lrit.nwp.workers), r.lrit.nwp.chanFull.Load())
 

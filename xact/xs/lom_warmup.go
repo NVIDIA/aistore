@@ -101,11 +101,9 @@ func (r *xactLLC) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	if snap.CtlMsg != "" {
-		nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	if s := r.ctlmsg(); s != "" {
+		snap.SetCtlMsg(r.Name(), s)
 	}
-
 	snap.IdleX = r.IsIdle()
 	return
 }

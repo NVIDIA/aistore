@@ -272,7 +272,7 @@ func (r *XactBckEncode) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 	snap.Pack(fs.NumAvail(), len(r.rcvyJG), r.chanFullTotal())
 
 	snap.IdleX = r.IsIdle()

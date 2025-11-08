@@ -193,9 +193,7 @@ func (r *XactTCO) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
-
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 	snap.Pack(0, int(r.nworkers.Load()), r.chanFull.Load())
 
 	snap.IdleX = r.IsIdle()

@@ -172,7 +172,7 @@ func (xreb *Rebalance) Snap() (snap *core.Snap) {
 
 	snap.IdleX = xreb.IsIdle()
 
-	snap.CtlMsg = xreb.ctlmsg()
+	snap.SetCtlMsg(xreb.Name(), xreb.ctlmsg())
 
 	// the number of rebalanced objects _is_ the number of transmitted objects (definition)
 	// (TODO: revisit)

@@ -538,8 +538,7 @@ func (r *XactArch) Snap() (snap *core.Snap) {
 	snap = &core.Snap{}
 	r.AddBaseSnap(snap)
 
-	snap.CtlMsg = r.ctlmsg()
-	nlog.Infoln(r.Name(), "ctlmsg (", snap.CtlMsg, ")")
+	snap.SetCtlMsg(r.Name(), r.ctlmsg())
 
 	snap.Pack(len(r.joggers.m), 0 /*currently, always zero*/, r.chanFullTotal())
 
