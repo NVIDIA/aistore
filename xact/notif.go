@@ -59,7 +59,7 @@ func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats any, finished, ab
 		return
 	}
 	stats = snap
-	aborted, finished = snap.IsAborted(), snap.Finished()
+	aborted, finished = snap.IsAborted(), snap.IsFinished()
 	return
 }
 

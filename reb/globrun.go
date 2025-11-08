@@ -165,7 +165,7 @@ func (reb *Reb) _preempt(logHdr, oxid string) error {
 	if err != nil {
 		return err
 	}
-	if oxreb != nil && oxreb.Running() {
+	if oxreb != nil && oxreb.IsRunning() {
 		oxreb.Abort(cmn.ErrXactRenewAbort)
 		nlog.Warningln(logHdr, "[", cmn.ErrXactRenewAbort, oxreb.String(), "]", reb.dm.String())
 	}
@@ -196,7 +196,7 @@ func _preempt2(logHdr string, id int64) bool {
 	}
 
 	s := oxreb.String()
-	if oxreb.Running() {
+	if oxreb.IsRunning() {
 		oxreb.Abort(cmn.ErrXactRenewAbort)
 		nlog.Warningln(logHdr, "aborted _older_", s)
 	} else {

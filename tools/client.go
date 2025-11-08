@@ -797,7 +797,7 @@ func _waitReToStart(bp api.BaseParams) {
 			args := xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true, Kind: kind}
 			status, err := api.GetOneXactionStatus(bp, &args)
 			if err == nil {
-				if !status.Finished() {
+				if !status.IsFinished() {
 					return
 				}
 			}

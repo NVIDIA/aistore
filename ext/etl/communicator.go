@@ -215,7 +215,7 @@ func (c *baseComm) stop() error {
 	}
 
 	// Note: xctn might have already been aborted and finished by pod watcher
-	if !c.xctn.Finished() && !c.xctn.IsAborted() {
+	if !c.xctn.IsFinished() && !c.xctn.IsAborted() {
 		c.xctn.Finish()
 	}
 

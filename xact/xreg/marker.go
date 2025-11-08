@@ -19,7 +19,7 @@ func GetRebMarked() (out xact.Marked) {
 	if entry == nil {
 		out.Interrupted = fs.MarkerExists(fname.RebalanceMarker)
 		out.Restarted = fs.MarkerExists(fname.NodeRestartedPrev)
-	} else if xreb := entry.Get(); xreb != nil && xreb.Running() {
+	} else if xreb := entry.Get(); xreb != nil && xreb.IsRunning() {
 		out.Xact = xreb
 	}
 	return out
@@ -31,7 +31,7 @@ func GetResilverMarked() (out xact.Marked) {
 	dreg.entries.mtx.RUnlock()
 	if entry == nil {
 		out.Interrupted = fs.MarkerExists(fname.ResilverMarker)
-	} else if xres := entry.Get(); xres != nil && xres.Running() {
+	} else if xres := entry.Get(); xres != nil && xres.IsRunning() {
 		out.Xact = xres
 	}
 	return out

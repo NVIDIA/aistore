@@ -184,7 +184,7 @@ func (s *sentinel) pending() {
 //
 
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
-	if s.r.IsAborted() || s.r.Finished() {
+	if s.r.IsAborted() || s.r.IsFinished() {
 		return
 	}
 	apair := s.pend.m[hdr.SID]
@@ -203,7 +203,7 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 
 func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
 	r := s.r
-	if r.IsAborted() || r.Finished() {
+	if r.IsAborted() || r.IsFinished() {
 		return
 	}
 	err := newErrRecvAbort(r, hdr)

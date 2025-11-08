@@ -333,7 +333,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 		}
 		return
 	}
-	if !xctn.Finished() {
+	if !xctn.IsFinished() {
 		if len(result) == 0 {
 			w.WriteHeader(http.StatusAccepted)
 		} else {

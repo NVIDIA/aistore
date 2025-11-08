@@ -93,7 +93,7 @@ func waitXact(args *xact.ArgsMsg) error {
 	if err != nil {
 		return V(err)
 	}
-	if status.Aborted() {
+	if status.IsAborted() {
 		return fmt.Errorf("%s aborted", xact.Cname(xname, status.UUID))
 	}
 	return nil
@@ -112,7 +112,7 @@ func waitXactBlob(xargs *xact.ArgsMsg) error {
 			return errors.New(snap.AbortErr)
 		}
 		debug.Assert(snap.ID == xargs.ID)
-		if snap.Finished() {
+		if snap.IsFinished() {
 			return nil
 		}
 		sleep = min(sleep+sleep/2, xact.MaxPollTime)
@@ -274,7 +274,7 @@ func queryXactions(xargs *xact.ArgsMsg, summarize bool) (xs xact.MultiSnap, cms 
 		for _, snap := range snaps {
 			if first {
 				cms.xid, cms.bck = snap.ID, snap.Bck
-				cms.aborted, cms.running = snap.IsAborted(), snap.Running()
+				cms.aborted, cms.running = snap.IsAborted(), snap.IsRunning()
 				if cms.bck.IsEmpty() {
 					notBck = true
 					debug.Assert(xargs.Bck.IsEmpty())
@@ -295,7 +295,7 @@ func queryXactions(xargs *xact.ArgsMsg, summarize bool) (xs xact.MultiSnap, cms 
 				notBck = true
 			}
 			cms.aborted = cms.aborted && snap.IsAborted()
-			cms.running = cms.running || snap.Running() // NOTE: also true when idle (as in: snap.IsIdle())
+			cms.running = cms.running || snap.IsRunning() // NOTE: also true when idle (as in: snap.IsIdle())
 		}
 	}
 

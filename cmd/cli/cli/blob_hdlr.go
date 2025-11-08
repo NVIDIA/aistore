@@ -208,7 +208,7 @@ func _blobOneProgress(xid string, bar *mpb.Bar, errCh chan error, sleep time.Dur
 			errCh <- errN
 			break
 		}
-		done = snap.Finished()
+		done = snap.IsFinished()
 		debug.Assert(snap.ID == xargs.ID)
 		if xargs.DaemonID == "" {
 			xargs.DaemonID = daemonID

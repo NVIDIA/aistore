@@ -47,8 +47,8 @@ type (
 	// lrit needs for itself
 	lrxact interface {
 		Abort(error) bool
-		IsAborted() bool // used exclusively to break iteration
-		Finished() bool  // ditto
+		IsAborted() bool  // used exclusively to break iteration
+		IsFinished() bool // ditto
 		Name() string
 		ChanAbort() <-chan error
 	}
@@ -230,7 +230,7 @@ func (r *lrit) wait() {
 	r.nwp.wg.Wait()
 }
 
-func (r *lrit) done() bool { return r.parent.IsAborted() || r.parent.Finished() }
+func (r *lrit) done() bool { return r.parent.IsAborted() || r.parent.IsFinished() }
 
 func (r *lrit) _list(wi lrwi, smap *meta.Smap) error {
 	r.lrp = lrpList

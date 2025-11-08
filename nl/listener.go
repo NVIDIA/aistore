@@ -36,7 +36,7 @@ type Listener interface {
 	ErrCnt() int
 	UUID() string
 	SetAborted()
-	Aborted() bool
+	IsAborted() bool
 	Status() *Status
 	SetStats(daeID string, stats any)
 	NodeStats() *NodeStats
@@ -44,7 +44,7 @@ type Listener interface {
 	EndTime() int64
 	SetAddedTime()
 	AddedTime() int64
-	Finished() bool
+	IsFinished() bool
 	Name() string
 	String() string
 	GetOwner() string
@@ -132,10 +132,10 @@ func (nlb *ListenerBase) RUnlock() { nlb.mu.RUnlock() }
 
 func (nlb *ListenerBase) Notifiers() meta.NodeMap         { return nlb.Srcs }
 func (nlb *ListenerBase) UUID() string                    { return nlb.Common.UUID }
-func (nlb *ListenerBase) Aborted() bool                   { return nlb.AbortedX.Load() }
+func (nlb *ListenerBase) IsAborted() bool                 { return nlb.AbortedX.Load() }
 func (nlb *ListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
 func (nlb *ListenerBase) EndTime() int64                  { return nlb.EndTimeX.Load() }
-func (nlb *ListenerBase) Finished() bool                  { return nlb.EndTime() > 0 }
+func (nlb *ListenerBase) IsFinished() bool                { return nlb.EndTime() > 0 }
 func (nlb *ListenerBase) ProgressInterval() time.Duration { return nlb.progress }
 func (nlb *ListenerBase) NodeStats() *NodeStats           { return nlb.Stats }
 func (nlb *ListenerBase) GetOwner() string                { return nlb.Common.Owned }
@@ -215,7 +215,7 @@ func (nlb *ListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes meta
 }
 
 func (nlb *ListenerBase) Status() *Status {
-	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), EndTimeX: nlb.EndTimeX.Load(), AbortedX: nlb.Aborted()}
+	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), EndTimeX: nlb.EndTimeX.Load(), AbortedX: nlb.IsAborted()}
 }
 
 func (nlb *ListenerBase) _name(l int) *strings.Builder {
@@ -280,15 +280,15 @@ func (nlb *ListenerBase) String() string {
 // Status //
 ////////////
 
-func (ns *Status) Finished() bool { return ns.EndTimeX > 0 }
-func (ns *Status) Aborted() bool  { return ns.AbortedX }
+func (ns *Status) IsFinished() bool { return ns.EndTimeX > 0 }
+func (ns *Status) IsAborted() bool  { return ns.AbortedX }
 
 func (ns *Status) String() (s string) {
 	s = ns.Kind + "[" + ns.UUID + "]"
 	switch {
-	case ns.Aborted():
+	case ns.IsAborted():
 		s += "-abrt"
-	case ns.Finished():
+	case ns.IsFinished():
 		if ns.ErrMsg != "" {
 			s += "-" + ns.ErrMsg
 		} else {

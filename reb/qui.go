@@ -27,7 +27,7 @@ type qui struct {
 
 func (q *qui) quicb(total time.Duration) core.QuiRes {
 	xctn := q.reb.xctn()
-	if xctn == nil || xctn.IsAborted() || xctn.Finished() {
+	if xctn == nil || xctn.IsAborted() || xctn.IsFinished() {
 		return core.QuiInactiveCB
 	}
 

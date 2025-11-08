@@ -324,7 +324,7 @@ func (n *notifs) done(nl nl.Listener) {
 	}
 	n.fin.add(nl, false /*locked*/)
 
-	if nl.Aborted() {
+	if nl.IsAborted() {
 		smap := n.p.owner.smap.get()
 		// abort via primary to eliminate redundant intra-cluster messaging-and-handling
 		// TODO: confirm & load-balance
@@ -809,11 +809,11 @@ func (l *listeners) find(flt nlFilter) (nl nl.Listener) {
 			}
 			et := listener.EndTime()
 			if ftime != 0 && et < ftime {
-				debug.Assert(listener.Finished())
+				debug.Assert(listener.IsFinished())
 				continue
 			}
 			nl = listener
-			if !listener.Finished() {
+			if !listener.IsFinished() {
 				break
 			}
 			ftime = et

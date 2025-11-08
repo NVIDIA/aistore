@@ -172,7 +172,7 @@ func (cpr *cprCtx) do(c *cli.Context) {
 					debug.Assertf(cpr.xid == xsnap.ID, "%q vs %q", cpr.xid, xsnap.ID)
 					size += xsnap.Stats.Bytes
 					objs += xsnap.Stats.Objs
-					if xsnap.Running() {
+					if xsnap.IsRunning() {
 						if xsnap.IsIdle() {
 							debug.Assert(xact.IdlesBeforeFinishing(cpr.xname))
 						} else {

@@ -384,7 +384,7 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 	r.gcAbandoned(now, 32 /*max-iters*/)
 
 	switch {
-	case r.IsAborted() || r.Finished():
+	case r.IsAborted() || r.IsFinished():
 		return hk.UnregInterval
 	case r.Pending() > 0:
 		return mossIdleTime
@@ -533,7 +533,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 	defer r.DecPending()
 
 	for i := range req.In {
-		if r.IsAborted() || r.Finished() {
+		if r.IsAborted() || r.IsFinished() {
 			return nil
 		}
 		in := &req.In[i]
@@ -723,7 +723,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 
 		return err
 	}
-	if r.IsAborted() || r.Finished() {
+	if r.IsAborted() || r.IsFinished() {
 		return nil
 	}
 
@@ -1001,7 +1001,7 @@ add:
 func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque, sgl *memsys.SGL) (added, freegl bool, _ error) {
 	r := wi.r
 	if index < 0 || index >= len(wi.recv.m) {
-		if r.IsAborted() || r.Finished() {
+		if r.IsAborted() || r.IsFinished() {
 			return false, sgl != nil, nil
 		}
 		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
@@ -1381,7 +1381,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 func (wi *basewi) asm() error {
 	l := len(wi.req.In)
 	for i := 0; i < l; {
-		if wi.r.IsAborted() || wi.r.Finished() {
+		if wi.r.IsAborted() || wi.r.IsFinished() {
 			return nil
 		}
 		j, err := wi.next(i)

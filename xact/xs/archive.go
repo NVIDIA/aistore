@@ -404,7 +404,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 	r.pending.mtx.Unlock()
 	if !ok {
-		if r.Finished() || r.IsAborted() {
+		if r.IsFinished() || r.IsAborted() {
 			return nil
 		}
 		cnt, err := r.JoinErr()

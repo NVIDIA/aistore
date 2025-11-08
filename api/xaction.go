@@ -267,7 +267,7 @@ func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bo
 		var done bool
 		if fn == nil {
 			status, err = GetOneXactionStatus(bp, args)
-			done = err == nil && status.Finished() && elapsed >= xact.MinPollTime
+			done = err == nil && status.IsFinished() && elapsed >= xact.MinPollTime
 		} else {
 			var (
 				snaps          xact.MultiSnap

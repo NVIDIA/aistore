@@ -1179,7 +1179,7 @@ type _brenameFinalizer struct {
 func (f *_brenameFinalizer) cb(nl nl.Listener) {
 	var (
 		err     = nl.Err()
-		aborted = nl.Aborted()
+		aborted = nl.IsAborted()
 	)
 	if aborted {
 		nlog.Warningln("abort:", err)
@@ -1201,7 +1201,7 @@ type _tcbfin struct {
 func (r *_tcbfin) cb(nl nl.Listener) {
 	var (
 		err     = nl.Err()
-		aborted = nl.Aborted()
+		aborted = nl.IsAborted()
 	)
 	switch {
 	case err == nil:

@@ -288,7 +288,7 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	debug.Assert(nl.UUID() == m.rebID)
 	var (
 		err  = nl.Err()
-		abrt = nl.Aborted()
+		abrt = nl.IsAborted()
 		name = "rebalance[" + nl.UUID() + "]"
 	)
 	switch {

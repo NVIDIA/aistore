@@ -95,15 +95,15 @@ func (xctn *Base) Kind() string { return xctn.kind }
 
 func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 
-func (xctn *Base) Finished() bool { return xctn.eutime.Load() != 0 }
+func (xctn *Base) IsFinished() bool { return xctn.eutime.Load() != 0 }
 
-func (xctn *Base) Running() (yes bool) {
-	yes = xctn.sutime.Load() != 0 && !xctn.Finished() && !xctn.IsAborted()
+func (xctn *Base) IsRunning() (yes bool) {
+	yes = xctn.sutime.Load() != 0 && !xctn.IsFinished() && !xctn.IsAborted()
 	debug.Assert(!yes || xctn.ID() != "", xctn.String())
 	return
 }
 
-func (xctn *Base) IsIdle() bool { return !xctn.Running() }
+func (xctn *Base) IsIdle() bool { return !xctn.IsRunning() }
 
 func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
 
@@ -146,7 +146,7 @@ func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
 }
 
 func (xctn *Base) Abort(err error) bool {
-	if xctn.Finished() || !xctn.abort.done.CAS(false, true) {
+	if xctn.IsFinished() || !xctn.abort.done.CAS(false, true) {
 		return false
 	}
 
@@ -321,7 +321,7 @@ func (xctn *Base) String() string {
 	sb.WriteByte('-')
 	sb.WriteString(cos.FormatTime(xctn.StartTime(), cos.StampMicro))
 
-	if !xctn.Finished() { // ok to (rarely) miss _aborted_ state as this is purely informational
+	if !xctn.IsFinished() { // ok to (rarely) miss _aborted_ state as this is purely informational
 		return sb.String()
 	}
 	etime := cos.FormatTime(xctn.EndTime(), cos.StampMicro)

@@ -38,8 +38,8 @@ type (
 		FromTo() (*meta.Bck, *meta.Bck)
 		StartTime() time.Time
 		EndTime() time.Time
-		Finished() bool
-		Running() bool
+		IsFinished() bool
+		IsRunning() bool
 		Quiesce(time.Duration, QuiCB) QuiRes
 
 		// abrt
@@ -122,11 +122,11 @@ func (xsnap *Snap) IsAborted() bool { return xsnap.AbortedX }
 func (xsnap *Snap) IsIdle() bool    { return xsnap.IdleX }
 func (xsnap *Snap) Started() bool   { return !xsnap.StartTime.IsZero() }
 
-func (xsnap *Snap) Running() bool {
+func (xsnap *Snap) IsRunning() bool {
 	return xsnap.Started() && !xsnap.IsAborted() && xsnap.EndTime.IsZero()
 }
 
-func (xsnap *Snap) Finished() bool { return xsnap.Started() && !xsnap.EndTime.IsZero() }
+func (xsnap *Snap) IsFinished() bool { return xsnap.Started() && !xsnap.EndTime.IsZero() }
 
 // snap.Packed layout:
 //

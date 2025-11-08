@@ -166,7 +166,7 @@ var _ = Describe("Notifications xaction test", func() {
 			msg := &core.NotifMsg{Data: cos.MustMarshal(snap)}
 			n._finished(nl1, targets[target1ID], msg)
 			Expect(nl1.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
-			Expect(nl1.Finished()).To(BeFalse())
+			Expect(nl1.IsFinished()).To(BeFalse())
 		})
 
 		It("should set error when source sends an error message", func() {
@@ -186,14 +186,14 @@ var _ = Describe("Notifications xaction test", func() {
 			n._finished(nl1, targets[target1ID], msg)
 			n._finished(nl1, targets[target2ID], msg)
 			Expect(nl1.FinCount()).To(BeEquivalentTo(len(targets)))
-			Expect(nl1.Finished()).To(BeTrue())
+			Expect(nl1.IsFinished()).To(BeTrue())
 		})
 
 		It("should be done if xaction Aborted", func() {
 			snap := abortedXact(xid)
 			msg := &core.NotifMsg{Data: cos.MustMarshal(snap), AbortedX: snap.AbortedX}
 			n._finished(nl1, targets[target1ID], msg)
-			Expect(nl1.Aborted()).To(BeTrue())
+			Expect(nl1.IsAborted()).To(BeTrue())
 			Expect(nl1.Err()).NotTo(BeNil())
 		})
 
@@ -244,8 +244,8 @@ var _ = Describe("Notifications xaction test", func() {
 			n.p.owner.smap.put(smap)
 
 			n.ListenSmapChanged()
-			Expect(nl1.Finished()).To(BeTrue())
-			Expect(nl1.Aborted()).To(BeTrue())
+			Expect(nl1.IsFinished()).To(BeTrue())
+			Expect(nl1.IsAborted()).To(BeTrue())
 		})
 	})
 
@@ -262,14 +262,14 @@ var _ = Describe("Notifications xaction test", func() {
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should not be marked finished on progress notification
-			Expect(nl1.Finished()).To(BeFalse())
+			Expect(nl1.IsFinished()).To(BeFalse())
 
 			// Second target finished
 			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
-			Expect(nl1.Finished()).To(BeTrue())
+			Expect(nl1.IsFinished()).To(BeTrue())
 		})
 
 		It("should accept finished notifications after a target aborts", func() {
@@ -282,13 +282,13 @@ var _ = Describe("Notifications xaction test", func() {
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished when an xaction aborts
-			Expect(nl1.Finished()).To(BeTrue())
+			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(1))
 
 			// Second target sends finished stats
 			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
-			Expect(nl1.Finished()).To(BeTrue())
+			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(2))
 		})
 	})
@@ -558,7 +558,7 @@ func (*fakeNL) Err() error                                                { retu
 func (*fakeNL) ErrCnt() int                                               { return 0 }
 func (f *fakeNL) UUID() string                                            { return f.id }
 func (*fakeNL) SetAborted()                                               {}
-func (*fakeNL) Aborted() bool                                             { return false }
+func (*fakeNL) IsAborted() bool                                           { return false }
 func (*fakeNL) Status() *nl.Status                                        { return nil }
 func (*fakeNL) SetStats(string, any)                                      {}
 func (*fakeNL) NodeStats() *nl.NodeStats                                  { return nil }
@@ -566,7 +566,7 @@ func (*fakeNL) QueryArgs() cmn.HreqArgs                                   { retu
 func (*fakeNL) EndTime() int64                                            { return 0 }
 func (*fakeNL) SetAddedTime()                                             {}
 func (*fakeNL) AddedTime() int64                                          { return 0 }
-func (*fakeNL) Finished() bool                                            { return false }
+func (*fakeNL) IsFinished() bool                                          { return false }
 func (f *fakeNL) Name() string                                            { return f.id }
 func (f *fakeNL) String() string                                          { return f.id }
 func (f *fakeNL) GetOwner() string                                        { return f.owner }

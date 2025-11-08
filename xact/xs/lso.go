@@ -251,7 +251,7 @@ loop:
 func (r *LsoXact) stop() {
 	r.stopCh.Close()
 	if lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
-		if r.DemandBase.Finished() {
+		if r.DemandBase.IsFinished() {
 			// must be aborted
 			if !r.walk.wor {
 				r.p.dm.Close(r.Err())

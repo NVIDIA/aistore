@@ -297,7 +297,7 @@ func WaitForAborted(bp api.BaseParams, xid, kind string, timeout time.Duration) 
 	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(bp, &args)
 	if err == nil {
-		if !status.Aborted() {
+		if !status.IsAborted() {
 			err = fmt.Errorf("expected ETL x-%s[%s] status to indicate 'abort', got: %+v", kind, xid, status)
 		}
 		return err

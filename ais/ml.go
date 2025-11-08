@@ -158,7 +158,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !cos.IsValidUUID(xid) {
-		err := fmt.Errorf("moss: invalid xid %q at phase 1", xid)
+		err := fmt.Errorf("x-moss: invalid xid %q at phase 1", xid)
 		debug.AssertNoErr(err)
 		p.writeErr(w, r, err)
 		return
@@ -241,13 +241,13 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if nat != ctx.nat {
-			t.writeErrf(w, r, "moss: expecting %d targets, have %d", nat, ctx.nat)
+			t.writeErrf(w, r, "x-moss: expecting %d targets, have %d", nat, ctx.nat)
 			return
 		}
 
 		tsi := smap.GetTarget(ctx.tid)
 		if tsi == nil {
-			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "moss", ctx.tid})
+			t.writeErr(w, r, &errNodeNotFound{t.si, smap, "x-moss", ctx.tid})
 			return
 		}
 
@@ -273,7 +273,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			if xctn, _ = xreg.GetXact(ctx.xid); xctn == nil {
 				ecode = http.StatusNotFound
 			}
-			t.writeErr(w, r, fmt.Errorf("moss: xid %q not active", ctx.xid), ecode)
+			t.writeErr(w, r, fmt.Errorf("x-moss: xid %q not active", ctx.xid), ecode)
 			return
 		}
 		xmoss, ok := xctn.(*xs.XactMoss)
@@ -285,7 +285,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 0)
 			} else {
 				xmoss.AddErr(fmt.Errorf("assemble wid=%s: %v", ctx.wid, err), 4, cos.ModXs)
-				t.writeErr(w, r, err)
+				t.writeErr(w, r, err, 0, Silent)
 			}
 		}
 	default:
@@ -298,37 +298,42 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	t := ctx.t
 
 	if ctx.xid != placeholderXID {
-		err := fmt.Errorf("moss: expected '%s', got %q", placeholderXID, ctx.xid)
+		err := fmt.Errorf("x-moss: expected '%s', got %q", placeholderXID, ctx.xid)
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
 	}
 
+	//
+	// start new or keep using prev x-moss
+	//
 	xid := cos.GenUUID()
 	rns := xreg.RenewGetBatch(ctx.bck, xid, true /*designated*/)
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
 		return
 	}
-
 	var (
 		xctn      = rns.Entry.Get()
 		usingPrev bool
 	)
 	if xid != xctn.ID() && xctn.ID() != "" {
-		// reusing xprev
-		debug.Assert(rns.IsRunning())
-		usingPrev = true
-		if cmn.Rom.V(5, cos.ModAIS) {
-			nlog.Infoln(t.String(), "reusing prev x-moss:", xctn.ID(), rns.IsRunning())
+		if !rns.IsRunning() {
+			// (unlikely, esp. given xreg's retry-once)
+			err := fmt.Errorf("x-moss renewal (temp) conflict: [%s, %t, %v]", xctn.ID(), xctn.IsAborted(), xctn.EndTime())
+			t.writeErr(w, r, err, http.StatusConflict)
+			return
 		}
+		usingPrev = true
 	}
 	xid = xctn.ID()
 
+	//
+	// prepare new get-batch for assembly
+	//
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(t.String(), "designated = true, renewed:", xctn.Name(), "was running:", rns.IsRunning())
 	}
-
 	xmoss, ok := xctn.(*xs.XactMoss)
 	debug.Assert(ok, xctn.Name())
 
@@ -361,7 +366,7 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 
 	// expecting valid xid from phase 1
 	if !cos.IsValidUUID(ctx.xid) {
-		err := fmt.Errorf("moss: invalid xid %q at phase 2 (non-DT)", ctx.xid)
+		err := fmt.Errorf("x-moss: invalid xid %q at phase 2 (non-DT)", ctx.xid)
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return

@@ -488,7 +488,7 @@ func (xs MultiSnap) checkEmptyID(xid string) error {
 			} else if kind != xsnap.Kind {
 				return fmt.Errorf("invalid multi-snap Kind: %q vs %q", kind, xsnap.Kind)
 			}
-			if xsnap.Running() {
+			if xsnap.IsRunning() {
 				if uuid == "" {
 					uuid = xsnap.ID
 				} else if uuid != xsnap.ID {
@@ -516,7 +516,7 @@ func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error
 	}
 	for tid, snaps := range xs {
 		for _, xsnap := range snaps {
-			if (xid == xsnap.ID || xid == "") && xsnap.Running() {
+			if (xid == xsnap.ID || xid == "") && xsnap.IsRunning() {
 				return tid, xsnap, nil
 			}
 		}
@@ -614,7 +614,7 @@ func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
 		for _, xsnap := range snaps {
 			if xid == xsnap.ID {
 				found = true
-				running = running || xsnap.Running()
+				running = running || xsnap.IsRunning()
 				if !xsnap.StartTime.IsZero() {
 					if start.IsZero() || xsnap.StartTime.Before(start) {
 						start = xsnap.StartTime

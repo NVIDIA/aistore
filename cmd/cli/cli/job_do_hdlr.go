@@ -1465,10 +1465,10 @@ func waitJobWithRefresh(c *cli.Context, xargs *xact.ArgsMsg, xname string, bck c
 		if err != nil {
 			return V(err)
 		}
-		if status.Aborted() {
+		if status.IsAborted() {
 			return fmt.Errorf("%s was aborted", msg)
 		}
-		if status.Finished() {
+		if status.IsFinished() {
 			break
 		}
 

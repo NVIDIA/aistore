@@ -84,7 +84,7 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 	opts.Bck.Copy(bck)
 	if err := fs.Walk(opts); err != nil {
 		xreb := rargs.xreb
-		if xreb.IsAborted() || xreb.Finished() {
+		if xreb.IsAborted() || xreb.IsFinished() {
 			nlog.Infoln(rargs.logHdr, "aborting traversal")
 		} else {
 			nlog.Warningln(rargs.logHdr, "failed to traverse, err:", err)

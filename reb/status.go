@@ -41,7 +41,7 @@ func (reb *Reb) RebStatus(status *Status) {
 	xreb := reb.xctn()
 	if xreb != nil {
 		status.Aborted = xreb.IsAborted()
-		status.Running = xreb.Running()
+		status.Running = xreb.IsRunning()
 		xreb.ToStats(&status.Stats)
 		if status.Running {
 			if marked.Xact != nil && marked.Xact.ID() != xreb.ID() {

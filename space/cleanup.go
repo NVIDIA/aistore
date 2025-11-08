@@ -997,5 +997,5 @@ func (j *clnJ) done() bool {
 	default:
 		break
 	}
-	return xcln.Finished()
+	return xcln.IsFinished()
 }

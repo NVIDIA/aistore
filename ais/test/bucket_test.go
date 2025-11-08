@@ -3115,7 +3115,7 @@ func _isAbortedOrFinished(xid string, xs xact.MultiSnap) (aborted, finished bool
 				if xsnap.IsAborted() {
 					return true, false
 				}
-				if !xsnap.Finished() {
+				if !xsnap.IsFinished() {
 					return false, false
 				}
 			}
