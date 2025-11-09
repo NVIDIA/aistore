@@ -126,6 +126,21 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 		sdm.Close(err)
 	}
 	nlog.Warningln(core.T.String(), "reconnect", sdm.trname(), "=>", dstID)
+
+	// TODO: in progress/draft :TODO
+	if true {
+		return
+	}
+	go func() {
+		o := transport.AllocSend()
+		o.Hdr.Opcode = transport.OpcReconnect
+		o.Hdr.SID = core.T.SID()
+
+		smap := core.T.Sowner().Get()
+		tsi := smap.GetNode(dstID)
+		debug.Assert(tsi != nil)
+		_ = sdm.Send(o, nil /*roc*/, tsi, nil)
+	}()
 }
 
 func (sdm *sharedDM) housekeep(now int64) time.Duration {
@@ -232,6 +247,13 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 
 		return err
 	}
+
+	// TODO: in progress/draft :TODO
+	if hdr.Opcode == transport.OpcReconnect {
+		nlog.Errorln(core.T.String(), ">>>>>>>>>> RECONNECT from", hdr.SID)
+		return nil
+	}
+
 	xid := hdr.Demux
 	if err := xact.CheckValidUUID(xid); err != nil {
 		err = fmt.Errorf("%s: %w", sdm.trname(), err)

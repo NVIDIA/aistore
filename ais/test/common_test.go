@@ -629,7 +629,7 @@ func (m *ioContext) del(opts ...int) {
 	wg.Wait()
 }
 
-// TODO: rid of strings.Contains
+// TODO: rid of strings.Contains - use cmn.AsErrHTTP
 func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt, sleep *atomic.Int64) {
 	err := api.DeleteObject(baseParams, m.bck, obj.Name)
 	if err == nil {
@@ -648,22 +648,27 @@ func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEnt, errCnt, 
 		return // see (unexported) http.exportErrServerClosedIdle in the Go source
 	case cos.IsErrConnectionNotAvail(err):
 		errCnt.Add(max(2, maxDelObjErrCount/10-1))
-	// retry
-	case m.bck.IsCloud() && (cos.IsErrConnectionReset(err) || strings.Contains(e, "reset by peer")):
-		time.Sleep(d)
-		err = api.DeleteObject(baseParams, m.bck, obj.Name)
-		b = true
-	case m.bck.IsCloud() && strings.Contains(e, "try again"):
-		// aws-error[InternalError: We encountered an internal error. Please try again.]
-		time.Sleep(d)
-		err = api.DeleteObject(baseParams, m.bck, obj.Name)
-		b = true
-	case m.bck.IsCloud() && apc.ToScheme(m.bck.Provider) == apc.GSScheme &&
-		strings.Contains(e, "gateway") && strings.Contains(e, "timeout"):
-		// e.g:. "googleapi: Error 504: , gatewayTimeout" (where the gateway is in fact LB)
-		time.Sleep(d)
-		b = true
-		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+
+	// retry (cloud): transient network or well-known HTTP flaps
+	case m.bck.IsCloud():
+		// respectively:
+		// - timeout / reset / refused / aborted / pipe / url.Timeout
+		// - 429 Too Many Requests
+		// - 502 Bad Gateway
+		// - 503 Service Unavailable
+		// - AWS InternalError "Please try again"
+		// - GCS / LB 504 wording
+		retriable := cos.IsErrRetriableConn(err) ||
+			strings.Contains(e, "too many requests") ||
+			cmn.IsStatusBadGateway(err) || strings.Contains(e, "bad gateway") ||
+			cmn.IsStatusServiceUnavailable(err) || strings.Contains(e, "service unavailable") ||
+			strings.Contains(e, "try again") ||
+			(apc.ToScheme(m.bck.Provider) == apc.GSScheme && strings.Contains(e, "gateway") && strings.Contains(e, "timeout"))
+		if retriable {
+			time.Sleep(d)
+			err = api.DeleteObject(baseParams, m.bck, obj.Name)
+			b = true
+		}
 	}
 
 	if err == nil || cmn.IsErrObjNought(err) {

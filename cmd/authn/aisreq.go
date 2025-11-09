@@ -113,7 +113,8 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 	if cos.IsHTTPS(proxyURL) {
 		client = m.clientTLS
 	}
-	// while cos.IsRetriableConnErr()
+
+	// while cos.IsErrRetriableConn()
 	for i := 1; i <= retries; i++ {
 		req, nerr := http.NewRequestWithContext(context.Background(), method, url, bytes.NewBuffer(injson))
 		if nerr != nil {
@@ -134,7 +135,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 				return nil
 			}
 		} else {
-			if cos.IsRetriableConnErr(err) {
+			if cos.IsErrRetriableConn(err) {
 				continue
 			}
 			if resp == nil {

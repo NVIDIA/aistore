@@ -634,7 +634,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 	if err == nil {
 		return nil
 	}
-	if !cos.IsRetriableConnErr(err) {
+	if !cos.IsErrRetriableConn(err) {
 		return err
 	}
 	// retry
@@ -647,7 +647,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 		if err == nil {
 			return nil
 		}
-		if !cos.IsRetriableConnErr(err) {
+		if !cos.IsErrRetriableConn(err) {
 			break
 		}
 		sleep += sleep / 2

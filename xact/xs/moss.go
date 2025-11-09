@@ -308,7 +308,7 @@ func (r *XactMoss) BcastAbort(err error) {
 		return
 	}
 	o := transport.AllocSend()
-	o.Hdr.Opcode = opAbort
+	o.Hdr.Opcode = transport.OpcAbort
 	o.Hdr.Demux = r.ID()
 	o.Hdr.ObjName = err.Error()
 	e := bundle.SDM.Bcast(o, nil /*roc*/) // receive via sntl.rxAbort
@@ -521,7 +521,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // (phase 2)
 
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
-	// with a single purpose: to receive opAbort
+	// with a single purpose: to receive transport.OpcAbort
 	if usingPrev {
 		bundle.SDM.UseRecv(r)
 	} else {
@@ -730,7 +730,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 	// control
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
-		case opAbort:
+		case transport.OpcAbort:
 			sntl := &sentinel{r: r}
 			sntl.rxAbort(hdr)
 			return nil

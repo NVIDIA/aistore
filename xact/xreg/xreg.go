@@ -23,7 +23,19 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-// TODO: some of these constants must be configurable or derived from the config
+/* TODO shard by xact.Kind as follows:
+	kind struct {
+		bckXacts    map[string]Renewable
+		nonbckXacts map[string]Renewable
+		entries     ...
+		finDelta    atomic.Int64
+		renewMtx    sync.RWMutex
+	}
+        // registry must be statically allocated with all (statically) declared xaction kinds
+	// (see api.go)
+        registry map[string]kind
+*/
+
 const (
 	initialCap       = 256  // initial capacity
 	keepOldThreshold = 1024 // keep so many
@@ -100,7 +112,7 @@ type (
 		nonbckXacts map[string]Renewable
 		entries     entries
 		finDelta    atomic.Int64
-		renewMtx    sync.RWMutex // TODO: revisit
+		renewMtx    sync.RWMutex
 	}
 )
 

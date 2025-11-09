@@ -586,7 +586,7 @@ func (h *htrun) stop(wg *sync.WaitGroup, rmFromSmap bool) {
 
 	if rmFromSmap {
 		smap := h.owner.smap.get()
-		if err := h.rmSelf(smap, true); err != nil && !cos.IsErrConnectionRefused(err) {
+		if err := h.rmSelf(smap, true); err != nil && !cos.IsErrRetriableConn(err) {
 			nlog.Warningln(err)
 		}
 	}
@@ -1020,6 +1020,7 @@ func isBrowser(userAgent string) bool {
 	return strings.HasPrefix(userAgent, "Mozilla/5.0")
 }
 
+// json/msgpack response write failure
 func (h *htrun) logerr(tag string, v any, err error) {
 	const maxl = 48
 	var efmt string
@@ -1059,8 +1060,8 @@ func (h *htrun) logerr(tag string, v any, err error) {
 	}
 	msg := sb.String()
 
-	if cos.IsErrBrokenPipe(err) { // client went away
-		nlog.Infoln("Warning: " + msg)
+	if cos.IsClientGone(err) {
+		nlog.Infoln("Warning: [client gone]", msg)
 	} else {
 		nlog.Errorln(msg)
 	}

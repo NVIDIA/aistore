@@ -177,7 +177,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	}
 
 	// sentinels, to coordinate finishing, aborting, and progress;
-	// use DM to communicate sentinel opcodes (opDone, opAbort, ...)
+	// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
 	r.sntl.init(r, smap, nat)
 	return r, nil
 }
@@ -442,18 +442,18 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	// control
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
-		case opDone:
+		case transport.OpcDone:
 			r.sntl.rxDone(hdr)
-		case opAbort:
+		case transport.OpcAbort:
 			r.sntl.rxAbort(hdr)
-		case opRequest:
+		case transport.OpcRequest:
 			o := transport.AllocSend()
-			o.Hdr.Opcode = opResponse
+			o.Hdr.Opcode = transport.OpcResponse
 			b := make([]byte, cos.SizeofI64)
 			binary.BigEndian.PutUint64(b, uint64(r.BckJog.NumVisits())) // report progress
 			o.Hdr.Opaque = b
 			r.dm.Bcast(o, nil) // TODO: consider limiting this broadcast to only quiescing (waiting) targets
-		case opResponse:
+		case transport.OpcResponse:
 			r.sntl.rxProgress(hdr) // handle response: progress by others
 		default:
 			return abortOpcode(r, hdr.Opcode)

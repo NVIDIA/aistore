@@ -553,7 +553,7 @@ func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err er
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-	} else if cmn.Rom.V(4, cos.ModXs) || !cos.IsRetriableConnErr(err) {
+	} else if cmn.Rom.V(4, cos.ModXs) || !cos.IsErrRetriableConn(err) {
 		nlog.Infof("Warning: %s: failed to send [%+v]: %v", core.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)
@@ -738,7 +738,7 @@ func (r *LsoXact) Snap() (snap *core.Snap) {
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)))
 
-	if hdr.Opcode == opAbort {
+	if hdr.Opcode == transport.OpcAbort {
 		// TODO: consider r.Abort(err); today it'll idle for a while
 		// see:  streamingX.sendTerm
 		err = newErrRecvAbort(r, hdr)

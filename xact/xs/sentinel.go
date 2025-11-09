@@ -21,14 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 )
 
-// sentinel values
-const (
-	opDone = iota + 27182
-	opAbort
-	opRequest
-	opResponse
-)
-
 const apairDeleted int64 = -1
 
 type (
@@ -69,7 +61,7 @@ func (s *sentinel) cleanup() {
 
 func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 	o := transport.AllocSend()
-	o.Hdr.Opcode = opDone
+	o.Hdr.Opcode = transport.OpcDone
 	if uuid != "" {
 		o.Hdr.Opaque = cos.UnsafeB(uuid)
 	}
@@ -77,7 +69,7 @@ func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
 		if isErrRecvAbort(abortErr) {
 			return // do nothing
 		}
-		o.Hdr.Opcode = opAbort
+		o.Hdr.Opcode = transport.OpcAbort
 		o.Hdr.ObjName = abortErr.Error() // (compare w/ sendTerm)
 	}
 
@@ -141,7 +133,7 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 
 	// 4. request progress
 	o := transport.AllocSend()
-	o.Hdr.Opcode = opRequest
+	o.Hdr.Opcode = transport.OpcRequest
 
 	if err := dm.Bcast(o, nil); err != nil {
 		// (is it too harsh?)

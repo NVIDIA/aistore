@@ -201,36 +201,62 @@ func IsErrConnectionNotAvail(err error) (yes bool) {
 	return errors.Is(err, syscall.EADDRNOTAVAIL)
 }
 
-// retriable conn errs
-func IsErrConnectionRefused(err error) (yes bool) { return errors.Is(err, syscall.ECONNREFUSED) }
-func IsErrConnectionReset(err error) (yes bool)   { return errors.Is(err, syscall.ECONNRESET) }
-func IsErrBrokenPipe(err error) (yes bool)        { return errors.Is(err, syscall.EPIPE) }
+//
+// retriable connection errs
+//
 
-func IsRetriableConnErr(err error) (yes bool) {
-	// 1. url.Error with Timeout()
-	var uerr *url.Error
-	if errors.As(err, &uerr) {
-		if uerr.Timeout() {
-			return true
-		}
-		err = uerr.Err
-	}
-
-	// 2. net.Error with Timeout()
+// network-level (spurious or intermittent) timeout - always retriable
+// (compare w/ IsErrClientTimeout)
+func IsErrNetTimeoutConn(err error) bool {
 	var nerr net.Error
 	if errors.As(err, &nerr) && nerr.Timeout() {
 		return true
 	}
+	return errors.Is(err, syscall.ETIMEDOUT)
+}
 
-	// 3. canonical retry-ables
+// can be retried when client has the original request
+// (includes IsErrClientTimeout)
+func IsErrRetriableConn(err error) (yes bool) {
+	if IsErrClientTimeout(err) {
+		return true
+	}
+	// canonical retry-ables
 	return errors.Is(err, syscall.ECONNREFUSED) ||
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, syscall.EPIPE) ||
-		errors.Is(err, syscall.ETIMEDOUT) ||
 		errors.Is(err, syscall.ECONNABORTED)
-
-	// TODO: 4. consider retrying io.ErrUnexpectedEOF
 }
+
+// true when an HTTP response write failed
+// because the peer went away (client canceled/closed/reset)
+func IsClientGone(err error) bool {
+	if errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNABORTED) {
+		return true
+	}
+	return errors.Is(err, context.Canceled)
+}
+
+// request/HTTP client timeout
+func IsErrClientTimeout(err error) bool {
+	// url.Error with Timeout()
+	var uerr *url.Error
+	if errors.As(err, &uerr) && uerr.Timeout() {
+		return true
+	}
+	// context deadline exceeded
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// net.Error Timeout() / ETIMEDOUT
+	return IsErrNetTimeoutConn(err)
+}
+
+//
+// misc. Is* helpers
+//
 
 func IsErrOOS(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)
@@ -241,12 +267,8 @@ func IsErrDNSLookup(err error) bool {
 	return errors.As(err, &wrapped)
 }
 
-func IsClientTimeout(err error) bool {
-	return errors.Is(err, context.DeadlineExceeded)
-}
-
 func IsUnreachable(err error, status int) bool {
-	return IsErrConnectionRefused(err) ||
+	return errors.Is(err, syscall.ECONNREFUSED) ||
 		IsErrDNSLookup(err) ||
 		errors.Is(err, context.DeadlineExceeded) ||
 		status == http.StatusRequestTimeout ||

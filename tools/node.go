@@ -264,7 +264,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			ok        bool
 		)
 		if err != nil {
-			if !cos.IsRetriableConnErr(err) {
+			if !cos.IsErrRetriableConn(err) {
 				return nil, err
 			}
 			tlog.Logfln("%v", err)
@@ -840,7 +840,7 @@ while503:
 	if err == nil {
 		return nil
 	}
-	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsRetriableConnErr(err) {
+	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsErrRetriableConn(err) {
 		return
 	}
 	time.Sleep(retryInterval)
@@ -906,7 +906,7 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 			sname = meta.Pname(sid)
 		}
 		newSmap, err := api.GetNodeClusterMap(bp, sid)
-		if err != nil && !cos.IsRetriableConnErr(err) &&
+		if err != nil && !cos.IsErrRetriableConn(err) &&
 			!cmn.IsStatusServiceUnavailable(err) && !cmn.IsStatusBadGateway(err) /* retry as well */ {
 			return err
 		}

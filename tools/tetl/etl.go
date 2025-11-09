@@ -522,7 +522,7 @@ retry:
 	if err == nil && len(list.Entries) == expectedCount {
 		return nil
 	}
-	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsRetriableConnErr(err) {
+	if !cmn.IsStatusServiceUnavailable(err) && !cos.IsErrRetriableConn(err) {
 		return
 	}
 	time.Sleep(retryInterval)

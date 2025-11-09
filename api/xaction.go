@@ -281,7 +281,7 @@ func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bo
 				}
 			}
 		}
-		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
+		canRetry := err == nil || cos.IsErrRetriableConn(err) || cmn.IsStatusServiceUnavailable(err)
 		if done || !canRetry /*fail*/ {
 			return status, err
 		}

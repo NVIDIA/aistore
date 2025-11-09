@@ -6,7 +6,6 @@ package transport
 
 import (
 	"io"
-	"math"
 	"time"
 	"unsafe"
 
@@ -22,15 +21,6 @@ import (
 ///////////////////
 // object stream //
 ///////////////////
-
-// range of 16 `Obj.Hdr.Opcode` and `Msg.Opcode` values
-// reserved for _internal_ use
-const (
-	opcFin = iota + math.MaxUint16 - 16
-	opcIdleTick
-)
-
-func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
 const (
 	SizeUnknown = cos.ContentLengthUnknown // -1: obj size unknown (not set)

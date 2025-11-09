@@ -372,7 +372,7 @@ ex:
 func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
-		case opDone:
+		case transport.OpcDone:
 			uuid := cos.UnsafeS(hdr.Opaque) // txnUUID
 			r.pend.mtx.Lock()
 			wi, ok := r.pend.m[uuid]
@@ -386,7 +386,7 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				r.wiCnt.Dec()
 			}
 			r.pend.mtx.Unlock()
-		case opAbort:
+		case transport.OpcAbort:
 			uuid := cos.UnsafeS(hdr.Opaque)
 			debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID())
 

@@ -81,8 +81,8 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 	lom.Unlock(true)
 
 	s := err.Error()
-	if cos.IsErrBrokenPipe(err) {
-		s = "[broken pipe]" // EPIPE
+	if cos.IsClientGone(err) {
+		s = "[client gone]" // EPIPE, et al.
 	}
 	nlog.InfoDepth(1, ftcg, tag, cname, "err:", s)
 }

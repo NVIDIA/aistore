@@ -5,10 +5,8 @@
 package transport
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/url"
 	"os"
 	"path"
@@ -16,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -278,7 +275,7 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 				// the current send failed - complete right away
 				s.streamer.errCmpl(err)
 
-				if !_shouldRetry(err) {
+				if !cos.IsErrNetTimeoutConn(err) {
 					if cmn.Rom.V(4, cos.ModTransport) {
 						nlog.Errorln(s.String(), "not retriable:", err)
 					}
@@ -341,15 +338,6 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 			nlog.Errorln(s.String(), cos.ErrWorkChanFull, "cnt:", cnt)
 		}
 	}
-}
-
-// only for timeouts on *in-flight writes*
-func _shouldRetry(err error) bool {
-	var nerr net.Error
-	if errors.As(err, &nerr) && nerr.Timeout() {
-		return true
-	}
-	return errors.Is(err, syscall.ETIMEDOUT)
 }
 
 func (s *base) yelp(err error) {

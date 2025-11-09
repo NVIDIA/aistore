@@ -250,8 +250,8 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 	if si != nil {
 		dst = "node " + si.StringEx()
 	}
-	if cos.IsErrConnectionRefused(err) {
-		nlog.Errorf("%s: %s is unreachable (%s %s)", p, dst, r.Method, r.URL.Path)
+	if cos.IsErrRetriableConn(err) {
+		nlog.Warningf("%s: %s temporarily unreachable (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
 	} else {
 		nlog.Errorf("%s rproxy to %s (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
 	}

@@ -386,7 +386,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			continue
 		}
 		// - retrying, counting
-		if cos.IsRetriableConnErr(err) || cos.StringInSlice(res.si.ID(), newTIDs) { // always retry newTIDs (joining)
+		if cos.IsErrRetriableConn(err) || cos.StringInSlice(res.si.ID(), newTIDs) { // always retry newTIDs (joining)
 			if refused == nil {
 				refused = make(meta.NodeMap, 2)
 			}

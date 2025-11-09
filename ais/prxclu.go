@@ -500,7 +500,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
 			ok, err := p._confirmSnode(osi, nsi) // handshake (expecting nsi in response)
 			if err != nil {
-				if !cos.IsRetriableConnErr(err) {
+				if !cos.IsErrRetriableConn(err) {
 					p.writeErrf(w, r, "failed to obtain node info: %v", err)
 					return
 				}
@@ -634,7 +634,7 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (
 	err = res.err
 	status := res.status
 	if err != nil {
-		if cos.IsRetriableConnErr(res.err) {
+		if cos.IsErrRetriableConn(res.err) {
 			err = fmt.Errorf("%s: failed to reach %s at %s:%s: %w",
 				p.si, nsi.StringEx(), nsi.PubNet.Hostname, nsi.PubNet.Port, res.err)
 		} else {

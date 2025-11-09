@@ -31,6 +31,31 @@ const (
 )
 
 //
+// ObjHdr.Opcode enums: 3 groups
+//
+
+// group 1: application-level opcodes (sentinels)
+const (
+	OpcDone = iota + 27182
+	OpcAbort
+	OpcRequest
+	OpcResponse
+)
+
+// group 2: transport/bundle (data mover's) opcodes
+const (
+	OpcReconnect = iota + 46351
+)
+
+// group 3: transport's internal range of 16 `Obj.Hdr.Opcode` values
+const (
+	opcFin = iota + math.MaxUint16 - 16
+	opcIdleTick
+)
+
+func ReservedOpcode(opc int) bool { return opc >= opcFin }
+
+//
 // proto header: serialization
 //
 

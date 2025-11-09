@@ -197,7 +197,7 @@ func (task *singleTask) downloadLocal(lom *core.LOM) (err error) {
 				return err // nothing we can do
 			}
 		} else {
-			if !cos.IsRetriableConnErr(err) {
+			if !cos.IsErrRetriableConn(err) {
 				return err // ditto
 			}
 			nlog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", task, i, retryCnt, err)

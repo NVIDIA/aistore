@@ -163,9 +163,9 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 	o.Hdr.SID = core.T.SID()
 	o.Hdr.Opaque = cos.UnsafeB(uuid)
 	if abortErr == nil {
-		o.Hdr.Opcode = opDone
+		o.Hdr.Opcode = transport.OpcDone
 	} else {
-		o.Hdr.Opcode = opAbort
+		o.Hdr.Opcode = transport.OpcAbort
 		o.Hdr.ObjName = abortErr.Error()
 	}
 

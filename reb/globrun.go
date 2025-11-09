@@ -783,7 +783,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 	}
 
 	// err
-	if cmn.Rom.V(4, cos.ModReb) || !cos.IsRetriableConnErr(err) {
+	if cmn.Rom.V(4, cos.ModReb) || !cos.IsErrRetriableConn(err) {
 		switch {
 		case bundle.IsErrDestinationMissing(err):
 			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.rargs.smap.StringEx())

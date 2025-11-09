@@ -203,7 +203,7 @@ func lsoPage(reqParams *ReqParams) (_ *cmn.LsoRes, err error) {
 		if _, err = reqParams.DoReqAny(page); err == nil {
 			return page, nil
 		}
-		if !cos.IsClientTimeout(err) {
+		if !cos.IsErrClientTimeout(err) {
 			break
 		}
 		client := *reqParams.BaseParams.Client

@@ -77,7 +77,7 @@ func (args *RetryArgs) Do() (ecode int, err error) {
 		if args.Verbosity == RetryLogVerbose {
 			nlog.Errorf("%s failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, ecode)
 		}
-		if cos.IsRetriableConnErr(err) {
+		if cos.IsErrRetriableConn(err) {
 			softErrCnt++
 		} else {
 			hardErrCnt++

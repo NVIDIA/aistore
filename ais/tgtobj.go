@@ -309,7 +309,7 @@ rerr:
 		vlabs := poi._vlabs(true /*detailed*/)
 		poi.t.statsT.IncWith(stats.ErrPutCount, vlabs)
 
-		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsRetriableConnErr(err) && !cos.IsErrMv(err) {
+		if err != cmn.ErrSkip && !poi.remoteErr && err != io.ErrUnexpectedEOF && !cos.IsErrRetriableConn(err) && !cos.IsErrMv(err) {
 			poi.t.statsT.IncWith(stats.IOErrPutCount, vlabs)
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Warningln("io-error [", err, "]", poi.loghdr())
@@ -1357,7 +1357,7 @@ func (goi *getOI) _txerr(err error, fqn string, written, size int64) error {
 
 	// [failure to transmit] return cmn.ErrGetTxBenign
 	switch {
-	case cos.IsRetriableConnErr(err):
+	case cos.IsErrRetriableConn(err):
 		if cmn.Rom.V(5, cos.ModAIS) {
 			nlog.WarningDepth(1, act, cname, "err:", err)
 		}

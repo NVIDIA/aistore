@@ -842,5 +842,5 @@ func _retry(err error, resp *http.Response) bool {
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true
 	}
-	return err != nil && cos.IsRetriableConnErr(err)
+	return err != nil && cos.IsErrRetriableConn(err)
 }
