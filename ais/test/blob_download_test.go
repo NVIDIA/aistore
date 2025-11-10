@@ -204,7 +204,7 @@ func TestBlobDownloadAbort(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	chunks := m.findObjChunksOnDisk(bck, objName)
-	tlog.Logfln("Found chunk files after abort", chunks)
+	tlog.Logfln("Found chunk %d files after abort", len(chunks))
 	tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files after abort, found %d", len(chunks))
 
 	// Cleanup: delete the remote object

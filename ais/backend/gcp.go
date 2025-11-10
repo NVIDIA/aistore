@@ -344,6 +344,8 @@ func (*gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
 		return res
 	}
+
+	// range read
 	if length > 0 {
 		rc, res.Err = o.NewRangeReader(ctx, offset, length)
 		if res.Err != nil {
@@ -352,21 +354,43 @@ func (*gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int
 			}
 			return res
 		}
-	} else {
-		rc, res.Err = o.NewReader(ctx)
-		if res.Err != nil {
+		// NOTE: for range reads, use the requested length, not rc.Attrs.Size (which is the full object size)
+		rsize := rc.Remain()
+		if rsize < 0 {
+			res.Err = errors.New("gcp: returned length is less than 0")
 			return res
 		}
-		// custom metadata
-		lom.SetCustomKey(cmn.SourceObjMD, apc.GCP)
-		if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
-			if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
-				lom.SetCksum(cos.NewCksum(cksumType, cksumValue))
-			}
+		if length < rsize {
+			res.Err = errors.New("gcp: returned length is more than the requested range-read length")
+			return res
 		}
-		res.ExpCksum = setCustomGs(lom, attrs)
+		debug.Assertf(offset+rsize <= attrs.Size, "offset + rsize %d > attrs.Size %d", offset+rsize, attrs.Size)
+		res.Size = rsize
+		res.R = rc
+		return res
 	}
 
+	// full read
+	rc, res.Err = o.NewReader(ctx)
+	if res.Err != nil {
+		return res
+	}
+	// custom metadata
+	lom.SetCustomKey(cmn.SourceObjMD, apc.GCP)
+	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
+		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
+			cksum := cos.NewCksum(cksumType, cksumValue)
+			lom.SetCksum(cksum)
+			res.ExpCksum = cksum // Use custom checksum as expected checksum
+		}
+	}
+
+	expCksum := setCustomGs(lom, attrs)
+	if res.ExpCksum == nil {
+		res.ExpCksum = expCksum
+	}
+
+	// For full reads, use rc.Attrs.Size
 	res.Size = rc.Attrs.Size
 	res.R = rc
 	return res
