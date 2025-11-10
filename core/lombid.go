@@ -7,6 +7,7 @@ package core
 import (
 	"math"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
@@ -15,7 +16,7 @@ import (
 // [63]=AisBID | [62:60]=legacy flags (3 bits) | [59:0]=serial
 
 const (
-	AisBID = uint64(1) << 63
+	AisBID = cos.MSB64
 
 	bitshift   = 60
 	flagMaskV1 = math.MaxUint64 >> bitshift         // 0xf

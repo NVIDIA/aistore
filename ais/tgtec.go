@@ -125,7 +125,7 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				t.writeErr(w, r, cmn.NewErrFailedTo(t, "EC-recover", cname, err))
 			}
-		case !xctn.IsFinished() && !xctn.IsAborted():
+		case !xctn.IsDone() && !xctn.IsAborted():
 			xbenc, ok := xctn.(*ec.XactBckEncode)
 			debug.Assert(ok, xctn.String())
 

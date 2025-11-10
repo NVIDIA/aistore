@@ -302,9 +302,9 @@ func DoAbort(flt *Flt, err error) {
 }
 
 func GetSnap(flt *Flt) ([]*core.Snap, error) {
-	var onlyRunning bool
+	var onl bool
 	if flt.OnlyRunning != nil {
-		onlyRunning = *flt.OnlyRunning
+		onl = *flt.OnlyRunning
 	}
 	if flt.ID != "" {
 		xctn, err := dreg.getXact(flt.ID)
@@ -312,7 +312,7 @@ func GetSnap(flt *Flt) ([]*core.Snap, error) {
 			return nil, err
 		}
 		if xctn != nil {
-			if onlyRunning && xctn.IsFinished() {
+			if onl && xctn.IsDone() {
 				return nil, cmn.NewErrXactNotFoundError("[only-running vs " + xctn.String() + "]")
 			}
 			if flt.Kind != "" && xctn.Kind() != flt.Kind {
@@ -320,14 +320,14 @@ func GetSnap(flt *Flt) ([]*core.Snap, error) {
 			}
 			return []*core.Snap{xctn.Snap()}, nil
 		}
-		if onlyRunning || flt.Kind != apc.ActRebalance {
+		if onl || flt.Kind != apc.ActRebalance {
 			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
 		}
 		// not running rebalance: include all finished (but not aborted) ones
 		// with ID at or _after_ the specified
 		return dreg.matchingXactsStats(func(xctn core.Xact) bool {
 			cmp := xact.CompareRebIDs(xctn.ID(), flt.ID)
-			return cmp >= 0 && xctn.IsFinished() && !xctn.IsAborted()
+			return cmp >= 0 && xctn.IsDone() && !xctn.IsAborted()
 		}), nil
 	}
 	if flt.Bck != nil || flt.Kind != "" {
@@ -339,7 +339,7 @@ func GetSnap(flt *Flt) ([]*core.Snap, error) {
 			return nil, fmt.Errorf("xaction %q: unknown provider for bucket %s", flt.Kind, flt.Bck.Name)
 		}
 
-		if onlyRunning {
+		if onl {
 			var matching []*core.Snap
 
 			dreg.entries.mtx.RLock() // ----------
@@ -373,7 +373,7 @@ func (r *registry) abort(args *abortArgs) {
 
 func (args *abortArgs) do(entry Renewable) bool {
 	xctn := entry.Get()
-	if xctn.IsFinished() {
+	if xctn.IsDone() {
 		return true
 	}
 
@@ -438,7 +438,7 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 	l := len(e.active)
 	for i := 0; i < l; i++ {
 		entry := e.active[i]
-		if !entry.Get().IsFinished() {
+		if !entry.Get().IsDone() {
 			continue
 		}
 		copy(e.active[i:], e.active[i+1:])
@@ -467,7 +467,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 			numKeepMore++
 			continue
 		}
-		if xctn.IsFinished() {
+		if xctn.IsDone() {
 			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeXshort {
 				toRemove = append(toRemove, xctn.ID())
 			}
@@ -482,7 +482,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 			if xact.Table[xctn.Kind()].LogLess {
 				continue
 			}
-			if xctn.IsFinished() {
+			if xctn.IsDone() {
 				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeX {
 					toRemove = append(toRemove, xctn.ID())
 					cnt++
@@ -603,7 +603,7 @@ func (e *entries) del(id string) {
 	for idx, entry := range e.all {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			debug.Assert(xctn.IsFinished(), xctn.String(), " aborted: ", xctn.IsAborted())
+			debug.Assert(xctn.IsDone(), xctn.String(), " aborted: ", xctn.IsAborted())
 			nlen := len(e.all) - 1
 			e.all[idx] = e.all[nlen]
 			e.all = e.all[:nlen]
@@ -613,7 +613,7 @@ func (e *entries) del(id string) {
 	for idx, entry := range e.active {
 		xctn := entry.Get()
 		if xctn.ID() == id {
-			if !xctn.IsFinished() {
+			if !xctn.IsDone() {
 				nlog.Errorln("Warning: premature HK call to del-old", xctn.String())
 				break
 			}
@@ -808,7 +808,8 @@ func (flt *Flt) Matches(xctn core.Xact) (yes bool) {
 	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
 	// running?
 	if flt.OnlyRunning != nil {
-		if *flt.OnlyRunning != xctn.IsRunning() {
+		onl := *flt.OnlyRunning
+		if onl != xctn.IsRunning() {
 			return false
 		}
 	}

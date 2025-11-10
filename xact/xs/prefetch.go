@@ -300,7 +300,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) error {
 	notif.Xact = xctn
 	xctn.AddNotif(notif)
 
-	if xctn.IsFinished() {
+	if xctn.IsDone() {
 		return nil
 	}
 	r.pebl.add(xctn)
@@ -348,7 +348,7 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 			continue
 		}
 		// finished - remove as well
-		if xctn.IsFinished() {
+		if xctn.IsDone() {
 			continue
 		}
 		// keep

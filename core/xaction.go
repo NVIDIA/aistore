@@ -38,7 +38,7 @@ type (
 		FromTo() (*meta.Bck, *meta.Bck)
 		StartTime() time.Time
 		EndTime() time.Time
-		IsFinished() bool
+		IsDone() bool
 		IsRunning() bool
 		Quiesce(time.Duration, QuiCB) QuiRes
 

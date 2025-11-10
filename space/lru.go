@@ -522,7 +522,7 @@ func (j *lruJ) done() bool {
 	default:
 		break
 	}
-	return xlru.IsFinished()
+	return xlru.IsDone()
 }
 
 // sort buckets by size

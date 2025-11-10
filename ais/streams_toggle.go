@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -24,7 +25,7 @@ import (
 
 // non-primary action
 const (
-	nonpBit  = uint64(1) << 63
+	nonpBit  = cos.MSB64
 	nonpMask = ^nonpBit
 )
 

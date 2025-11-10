@@ -24,6 +24,12 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 )
 
+// lifecycle notes:
+// - IsRunning: accepting work
+// - IsDone:    not accepting work (stopping OR finished)
+// - EndTime:   non-zero iff fully finished
+const finishSentinel = uint64(1)
+
 type (
 	Base struct {
 		notif *NotifXact
@@ -34,20 +40,15 @@ type (
 			done   atomic.Bool
 			closed atomic.Bool
 		}
-		id    string
-		kind  string
-		_nam  string
-		err   cos.Errs
-		stats struct {
-			objs     atomic.Int64 // locally processed
-			bytes    atomic.Int64
-			outobjs  atomic.Int64 // transmit
-			outbytes atomic.Int64
-			inobjs   atomic.Int64 // receive
-			inbytes  atomic.Int64
-		}
+		id   string
+		kind string
+		_nam string
+		err  cos.Errs
+		// TODO: add archived files counts
+		stats core.Stats
+		// starting and stopping
 		sutime atomic.Int64
-		eutime atomic.Int64
+		eutime atomic.Uint64
 	}
 	Marked struct {
 		Xact        core.Xact
@@ -95,14 +96,23 @@ func (xctn *Base) Kind() string { return xctn.kind }
 
 func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 
-func (xctn *Base) IsFinished() bool { return xctn.eutime.Load() != 0 }
+// return true if 'stopping' OR 'finished'
+func (xctn *Base) IsDone() bool { return xctn.eutime.Load() != 0 }
+
+// mark the xaction as stopping (and finishing soon); EndTime remains zero until Finish()
+func (xctn *Base) SetStopping() { xctn.eutime.CAS(0, cos.MSB64) } // i.e., not running vis-à-vis xreg
 
 func (xctn *Base) IsRunning() (yes bool) {
-	yes = xctn.sutime.Load() != 0 && !xctn.IsFinished() && !xctn.IsAborted()
+	yes = xctn.sutime.Load() != 0 && !xctn.IsDone() && !xctn.IsAborted()
 	debug.Assert(!yes || xctn.ID() != "", xctn.String())
 	return
 }
 
+// NOTE on existing legacy:
+// * default idle == not-running
+// * Demand-based xactions override as needed
+// * Python SDK's Job.wait_for_idle() and, potentially, other callers currently expect this behavior
+// * this MAY change in the future
 func (xctn *Base) IsIdle() bool { return !xctn.IsRunning() }
 
 func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
@@ -146,9 +156,10 @@ func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
 }
 
 func (xctn *Base) Abort(err error) bool {
-	if xctn.IsFinished() || !xctn.abort.done.CAS(false, true) {
+	if xctn.IsDone() || !xctn.abort.done.CAS(false, true) {
 		return false
 	}
+	xctn.SetStopping()
 
 	if err == nil {
 		err = cmn.ErrXactUserAbort // NOTE: only user can cause no-errors abort
@@ -172,12 +183,12 @@ func (xctn *Base) Abort(err error) bool {
 	return true
 }
 
-// atomically set end-time
 func (xctn *Base) Finish() {
-	if !xctn.eutime.CAS(0, 1) {
+	if !xctn.eutime.CAS(0, finishSentinel) && !xctn.eutime.CAS(cos.MSB64, finishSentinel) {
 		return
 	}
 
+	// serialized path
 	var (
 		err     error
 		n, xerr = xctn._nerr()
@@ -185,7 +196,7 @@ func (xctn *Base) Finish() {
 		now     = time.Now()
 		aborted bool
 	)
-	xctn.eutime.Store(now.UnixNano())
+	xctn.eutime.Store(uint64(now.UnixNano()))
 	if aborted = xctn.IsAborted(); aborted {
 		if perr := xctn.abort.err.Load(); perr != nil {
 			err = *perr
@@ -321,7 +332,7 @@ func (xctn *Base) String() string {
 	sb.WriteByte('-')
 	sb.WriteString(cos.FormatTime(xctn.StartTime(), cos.StampMicro))
 
-	if !xctn.IsFinished() { // ok to (rarely) miss _aborted_ state as this is purely informational
+	if !xctn.IsDone() { // ok to (rarely) miss _aborted_ state as this is purely informational
 		return sb.String()
 	}
 	etime := cos.FormatTime(xctn.EndTime(), cos.StampMicro)
@@ -345,9 +356,9 @@ func (xctn *Base) StartTime() time.Time {
 func (xctn *Base) setStartTime(s time.Time) { xctn.sutime.Store(s.UnixNano()) }
 
 func (xctn *Base) EndTime() time.Time {
-	u := xctn.eutime.Load()
-	if u != 0 {
-		return time.Unix(0, u)
+	u := xctn.eutime.Load() &^ cos.MSB64
+	if u > finishSentinel {
+		return time.Unix(0, int64(u))
 	}
 	return time.Time{}
 }
@@ -372,67 +383,6 @@ func (xctn *Base) AddNotif(n core.Notif) {
 	xctn.notif = n.(*NotifXact)
 	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)     // always fin-notif and points to self
 	debug.Assert(!n.Upon(core.UponProgress) || xctn.notif.P != nil) // progress notification is optional
-}
-
-// base stats: locally processed
-func (xctn *Base) Objs() int64  { return xctn.stats.objs.Load() }
-func (xctn *Base) Bytes() int64 { return xctn.stats.bytes.Load() }
-
-func (xctn *Base) ObjsAdd(cnt int, size int64) {
-	xctn.stats.objs.Add(int64(cnt))
-	xctn.stats.bytes.Add(size)
-}
-
-// oft. used
-func (xctn *Base) LomAdd(lom *core.LOM) { xctn.ObjsAdd(1, lom.Lsize(true)) }
-
-// base stats: transmit
-func (xctn *Base) OutObjs() int64  { return xctn.stats.outobjs.Load() }
-func (xctn *Base) OutBytes() int64 { return xctn.stats.outbytes.Load() }
-
-func (xctn *Base) OutObjsAdd(cnt int, size int64) {
-	xctn.stats.outobjs.Add(int64(cnt))
-	if size > 0 { // not unsized
-		xctn.stats.outbytes.Add(size)
-	}
-}
-
-// base stats: receive
-func (xctn *Base) InObjs() int64  { return xctn.stats.inobjs.Load() }
-func (xctn *Base) InBytes() int64 { return xctn.stats.inbytes.Load() }
-
-func (xctn *Base) InObjsAdd(cnt int, size int64) {
-	debug.Assert(size >= 0, xctn.String()) // "unsized" is caller's responsibility
-	xctn.stats.inobjs.Add(int64(cnt))
-	xctn.stats.inbytes.Add(size)
-}
-
-// provided for external use to fill-in xaction-specific `SnapExt` part
-func (xctn *Base) AddBaseSnap(snap *core.Snap) {
-	snap.ID = xctn.ID()
-	snap.Kind = xctn.Kind()
-	snap.StartTime = xctn.StartTime()
-	snap.EndTime = xctn.EndTime()
-	if err := xctn.AbortErr(); err != nil {
-		snap.AbortErr = err.Error()
-		snap.AbortedX = true
-	}
-	snap.Err = xctn.err.Error() // TODO: a (verbose) option to respond with xctn.err.JoinErr() :NOTE
-	if b := xctn.Bck(); b != nil {
-		snap.Bck = b.Clone()
-	}
-
-	// counters
-	xctn.ToStats(&snap.Stats)
-}
-
-func (xctn *Base) ToStats(stats *core.Stats) {
-	stats.Objs = xctn.Objs()         // locally processed
-	stats.Bytes = xctn.Bytes()       //
-	stats.OutObjs = xctn.OutObjs()   // transmit
-	stats.OutBytes = xctn.OutBytes() //
-	stats.InObjs = xctn.InObjs()     // receive
-	stats.InBytes = xctn.InBytes()
 }
 
 //

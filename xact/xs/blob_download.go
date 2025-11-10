@@ -434,6 +434,7 @@ outer:
 		}
 	}
 fin:
+	r.SetStopping()
 	close(r.workCh)
 
 	if err == nil {

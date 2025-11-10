@@ -189,7 +189,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 }
 
 func (r *streamingX) fin(unreg bool) {
-	if r.DemandBase.IsFinished() {
+	if r.DemandBase.IsDone() {
 		// must be aborted
 		r.p.dm.Close(r.Err())
 		r.p.dm.UnregRecv()

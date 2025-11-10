@@ -6,6 +6,8 @@ package cos
 
 import "sync/atomic"
 
+const MSB64 = uint64(1) << 63
+
 type BitFlags uint64
 
 func (f BitFlags) Set(flags BitFlags) BitFlags {

@@ -317,7 +317,7 @@ func (r *XactBckEncode) RecvRecover(lom *core.LOM) {
 		return
 	}
 
-	if r.done.Load() || r.IsAborted() || r.IsFinished() {
+	if r.done.Load() || r.IsAborted() || r.IsDone() {
 		core.FreeLOM(lom)
 		return
 	}
@@ -351,7 +351,7 @@ func (j *rcvyJogger) run() {
 	)
 	for {
 		lom, ok := <-j.workCh
-		if !ok || r.done.Load() || r.IsAborted() || r.IsFinished() {
+		if !ok || r.done.Load() || r.IsAborted() || r.IsDone() {
 			break
 		}
 

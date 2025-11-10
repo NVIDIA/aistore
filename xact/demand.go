@@ -124,6 +124,7 @@ func (r *DemandBase) SubPending(n int) {
 }
 
 func (r *DemandBase) Stop() {
+	r.SetStopping()
 	hk.Unreg(r.hkName + hk.NameSuffix)
 	if r.ticks != nil {
 		r.ticks.Close()

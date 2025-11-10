@@ -184,7 +184,7 @@ loop:
 
 // main method
 func (r *XactPut) Repl(lom *core.LOM) {
-	debug.Assert(!r.IsFinished(), r.String())
+	debug.Assert(!r.IsDone(), r.String())
 
 	// ref-count on-demand, decrement via worker.Callback = r.do
 	r.IncPending()

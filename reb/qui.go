@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -27,7 +27,7 @@ type qui struct {
 
 func (q *qui) quicb(total time.Duration) core.QuiRes {
 	xctn := q.reb.xctn()
-	if xctn == nil || xctn.IsAborted() || xctn.IsFinished() {
+	if xctn == nil || xctn.IsAborted() || xctn.IsDone() {
 		return core.QuiInactiveCB
 	}
 

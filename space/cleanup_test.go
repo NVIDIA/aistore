@@ -624,7 +624,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 			space.RunCleanup(ini)
 
-			Expect(ini.Xaction.IsFinished()).To(BeTrue())
+			Expect(ini.Xaction.IsDone()).To(BeTrue())
 		})
 
 		It("should handle misplaced at threshold timing", func() {

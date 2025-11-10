@@ -321,6 +321,8 @@ func (r *XactMoss) Abort(err error) bool {
 	if !r.DemandBase.Abort(err) {
 		return false
 	}
+	// stop receiving
+	bundle.SDM.UnregRecv(r.ID())
 
 	nlog.Infoln(r.Name(), "aborting:", err)
 
@@ -330,9 +332,6 @@ func (r *XactMoss) Abort(err error) bool {
 	r.pending.Range(r.cleanup)
 
 	r.DemandBase.Stop()
-
-	// see "Shared-DM registration lifecycle" note above
-	bundle.SDM.UnregRecv(r.ID())
 
 	r.bewarmStop()
 	return true
@@ -384,18 +383,19 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 	r.gcAbandoned(now, 32 /*max-iters*/)
 
 	switch {
-	case r.IsAborted() || r.IsFinished():
+	case r.IsAborted() || r.IsDone():
 		return hk.UnregInterval
 	case r.Pending() > 0:
 		return mossIdleTime
 	default:
+		r.SetStopping()
+		// stop receiving
+		bundle.SDM.UnregRecv(r.ID())
+
 		msg := r.ctlmsg()
 		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
 
 		r.pending.Range(r.cleanup)
-
-		// see "Shared-DM registration lifecycle" note above
-		bundle.SDM.UnregRecv(r.ID())
 
 		r.bewarmStop()
 		r.Finish()
@@ -533,7 +533,7 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 	defer r.DecPending()
 
 	for i := range req.In {
-		if r.IsAborted() || r.IsFinished() {
+		if r.IsAborted() || r.IsDone() {
 			return nil
 		}
 		in := &req.In[i]
@@ -723,7 +723,7 @@ func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) e
 
 		return err
 	}
-	if r.IsAborted() || r.IsFinished() {
+	if r.IsAborted() || r.IsDone() {
 		return nil
 	}
 
@@ -1001,7 +1001,7 @@ add:
 func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque, sgl *memsys.SGL) (added, freegl bool, _ error) {
 	r := wi.r
 	if index < 0 || index >= len(wi.recv.m) {
-		if r.IsAborted() || r.IsFinished() {
+		if r.IsAborted() || r.IsDone() {
 			return false, sgl != nil, nil
 		}
 		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
@@ -1381,7 +1381,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 func (wi *basewi) asm() error {
 	l := len(wi.req.In)
 	for i := 0; i < l; {
-		if wi.r.IsAborted() || wi.r.IsFinished() {
+		if wi.r.IsAborted() || wi.r.IsDone() {
 			return nil
 		}
 		j, err := wi.next(i)
