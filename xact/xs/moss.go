@@ -55,23 +55,18 @@ import (
               └── for locality(data-item) == self:
                        shared-dm.Send(data-item, hdr.Opaque = [wid, oname, emsg, index, missing]) → DT
 
-   where data-item = (object | archived file) // range read TBD
+   where data-item = (object | archived file)
 
-* todo:
-- stats: (files, objects) separately; Prometheus metrics
-- soft errors other than not-found; unified error formatting
-- mem-pool: basewi; apc.MossReq; apc.MossResp
-- speed-up via selecting multiple files from a given archive
-- range read
-- finer-grained wi abort
+   Peer-to-peer stream drops/terminations manifest themselves as `transport.ErrSBR` and
+   are handled by shared-DM
 
-* shared data-mover lifecycle:
-- x-moss registers once with shared-dm transport when first work item needs `receiving`
-- unregisters once at xaction's end (Abort/fini)
-  (no per-work-item ref-counting needed since UnregRecv is permissive no-op when not exist)
-
-* peer-to-peer stream breakages manifest themselves as `transport.ErrSBR`
-  via RecvObj callback (see sbrWin, sbrs, etc.)
+TBD:
+   - throttle (observing memory pressure under stress)
+   - stats: (files, objects) separately; Prometheus metrics
+   - soft errors other than not-found; unified error formatting
+   - mem-pool: basewi; apc.MossReq; apc.MossResp
+   - speed-up via selecting multiple files from a given archive
+   - range read
 -------------------------------------------------------------------------------------------------------------*/
 
 // hardcoded tunables
@@ -130,12 +125,7 @@ type (
 			next int
 			mtx  *sync.Mutex
 		}
-		timer *time.Timer
-		sbrs  struct { // (ref 032011)
-			m   map[string]*transport.ErrSBR
-			sid string // current sender ID
-			ver int64  // r.sbrs.ver (below)
-		}
+		timer   *time.Timer
 		stats   moss
 		aw      archive.Writer
 		r       *XactMoss
@@ -144,6 +134,7 @@ type (
 		resp    *apc.MossResp
 		sgl     *memsys.SGL // multipart (buffered) only
 		wid     string      // work item ID
+		sid     string      // current sender ID
 		started int64       // (mono)
 		clean   atomic.Bool
 		awfin   atomic.Bool
@@ -170,13 +161,7 @@ type (
 			ok   atomic.Int32
 			fail atomic.Int32
 		}
-		// (ref 032011)
-		sbrs struct {
-			m   map[string]*transport.ErrSBR
-			ver atomic.Int64
-			mtx sync.RWMutex
-		}
-		// sum{wi}
+		// totals: sum{wi}
 		stats struct {
 			// DT
 			moss
@@ -467,7 +452,9 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
 		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
-		nlog.Errorln(core.T.String(), err)
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Errorln(core.T.String(), err)
+		}
 		return err
 	}
 	wi := a.(*basewi)
@@ -708,19 +695,6 @@ func (r *XactMoss) unpackOpaque(opaque []byte) (*mossOpaque, error) {
 func (r *XactMoss) RecvObj(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(reader)
 	if err != nil {
-		// (ref 032011)
-		if e := transport.AsErrSBR(err); e != nil {
-			nlog.Errorln(core.T.String(), ">>>>>>>>>", e) // DEBUG
-			r.sbrs.mtx.Lock()
-			if r.sbrs.m == nil {
-				r.sbrs.m = make(map[string]*transport.ErrSBR, 4)
-			}
-			r.sbrs.m[e.SID()] = e
-			r.sbrs.ver.Inc()
-			r.sbrs.mtx.Unlock()
-			return nil
-		}
-
 		return err
 	}
 	if r.IsAborted() || r.IsDone() {
@@ -1065,9 +1039,8 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			continue
 		}
 
-		// (ref 032011)
-		if err := wi.checkSBR(); err != nil {
-			return 0, err
+		if err := bundle.SDM.CanSend(wi.sid); err != nil {
+			return 0, wi.newErrHole(0, err)
 		}
 
 		switch err := wi.waitAnyRx(pollIval); err {
@@ -1081,36 +1054,9 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 
 		elapsed += pollIval
 		if elapsed >= timeout {
-			return 0, wi.newErrHole(timeout)
+			return 0, wi.newErrHole(timeout, nil)
 		}
 	}
-}
-
-// (ref 032011)
-func (wi *basewi) checkSBR() error {
-	r := wi.r
-	if ver := r.sbrs.ver.Load(); ver > wi.sbrs.ver {
-		wi.sbrs.m = make(map[string]*transport.ErrSBR, len(r.sbrs.m))
-		r.sbrs.mtx.RLock()
-		for sid, e := range r.sbrs.m {
-			wi.sbrs.m[sid] = e
-		}
-		r.sbrs.mtx.RUnlock()
-
-		wi.sbrs.ver = ver
-	}
-
-	d := sbrWin
-	for sid, e := range wi.sbrs.m {
-		if e.Since() > d {
-			delete(wi.sbrs.m, sid) // stale
-			continue
-		}
-		if sid == wi.sbrs.sid {
-			return e
-		}
-	}
-	return nil
 }
 
 // in parallel with RecvObj() inserting new entries..
@@ -1136,10 +1082,15 @@ func (wi *basewi) waitAnyRx(timeout time.Duration) error {
 	}
 }
 
-func (wi *basewi) newErrHole(total time.Duration) error {
-	index := wi.recv.next // Safe to read without lock here
-	s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
-		wi.r.Name(), index, core.T.String(), wi.wid, total)
+func (wi *basewi) newErrHole(total time.Duration, err error) error {
+	index := wi.recv.next
+	if err == nil {
+		s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
+			wi.r.Name(), index, core.T.String(), wi.wid, total)
+		return &errHole{s}
+	}
+	s := fmt.Sprintf("%s: network error while trying to fill %d \"hole\" [ %s, wid=%s, err=%v ]",
+		wi.r.Name(), index, core.T.String(), wi.wid, err)
 	return &errHole{s}
 }
 
@@ -1162,7 +1113,7 @@ func (wi *basewi) next(i int) (int, error) {
 			"%s: unexpected non-local %s when _not_ receiving [%s, %s]", r.Name(), lom.Cname(), wi.wid, wi.smap)
 
 		// set current sender
-		wi.sbrs.sid = tsi.ID()
+		wi.sid = tsi.ID()
 
 		// prior to starting to wait on Rx:
 		// best-effort non-blocking (look-ahead + `bewarm`)

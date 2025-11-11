@@ -23,6 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
+const sbrWinMax = 15 * time.Second
+
 const iniSdmCap = 16
 
 // in other words, "oldAge-rxent = cmn.SharedStreamsDflt"
@@ -41,6 +43,12 @@ type (
 		dm        DM
 		ocmu      sync.Mutex
 		rxmu      sync.RWMutex
+
+		// per-sender ErrSBR windows (Rx side) // TODO: prevent on/off flapping :TODO
+		sbrs struct {
+			m   map[string]*transport.ErrSBR
+			mtx sync.RWMutex
+		}
 	}
 )
 
@@ -121,26 +129,38 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 		return
 	}
 	if e := sdm.dm.data.streams.ReopenPeerStream(dstID); e != nil {
-		err = fmt.Errorf("%v => %v", err, e)
-		nlog.Errorf("%s: failed to reconnect to %s: %v", sdm.trname(), dstID, err)
-		sdm.Close(err)
-	}
-	nlog.Warningln(core.T.String(), "reconnect", sdm.trname(), "=>", dstID)
-
-	// TODO: in progress/draft :TODO
-	if true {
+		err = fmt.Errorf("%s: failed reconnecting to %s (%w --> %w)", sdm.trname(), dstID, err, e)
+		nlog.Errorln(core.T.String(), err, "- closing/aborting...")
+		sdm.Close(err) // NOTE -- TODO: may now close underneath
 		return
 	}
-	go func() {
-		o := transport.AllocSend()
-		o.Hdr.Opcode = transport.OpcReconnect
-		o.Hdr.SID = core.T.SID()
 
-		smap := core.T.Sowner().Get()
-		tsi := smap.GetNode(dstID)
-		debug.Assert(tsi != nil)
-		_ = sdm.Send(o, nil /*roc*/, tsi, nil)
-	}()
+	// ping remote peer
+	go sdm.gosend(dstID)
+}
+
+func (sdm *sharedDM) gosend(dstID string) {
+	o := transport.AllocSend()
+	o.Hdr.Opcode = transport.OpcReconnect
+	o.Hdr.SID = core.T.SID()
+
+	smap := core.T.Sowner().Get()
+	tsi := smap.GetNode(dstID)
+	if tsi != nil && sdm.isOpen() {
+		err := sdm.Send(o, nil /*roc*/, tsi, nil)
+		nlog.Warningln(core.T.String(), "reconnect/send:", sdm.trname(), "-->", dstID, err)
+	}
+}
+
+func (sdm *sharedDM) CanSend(sid string) (err error) {
+	sdm.sbrs.mtx.RLock()
+	if e, ok := sdm.sbrs.m[sid]; ok {
+		if e.Since() < sbrWinMax {
+			err = e
+		}
+	}
+	sdm.sbrs.mtx.RUnlock()
+	return
 }
 
 func (sdm *sharedDM) housekeep(now int64) time.Duration {
@@ -178,6 +198,10 @@ func (sdm *sharedDM) Close(err ...error) error {
 	sdm.rxmu.Unlock()
 
 	sdm.ocmu.Unlock()
+
+	sdm.sbrs.mtx.Lock()
+	clear(sdm.sbrs.m)
+	sdm.sbrs.mtx.Unlock()
 
 	nlog.InfoDepth(1, core.T.String(), "close", sdm.trname())
 	return nil
@@ -225,32 +249,28 @@ func (sdm *sharedDM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
-		//
-		// `transport.ErrSBR` => all reg-ed receivers
-		//
 		if e := transport.AsErrSBR(err); e != nil {
-			// clone to call outside rlock
-			sdm.rxmu.RLock()
-			receivers := make([]transport.Receiver, 0, len(sdm.receivers))
-			for xid := range sdm.receivers {
-				receivers = append(receivers, sdm.receivers[xid].rx)
+			// add and prune
+			sdm.sbrs.mtx.Lock()
+			if sdm.sbrs.m == nil {
+				sdm.sbrs.m = make(map[string]*transport.ErrSBR, 4)
 			}
-			sdm.rxmu.RUnlock()
-
-			for _, rx := range receivers {
-				_ = rx.RecvObj(hdr, nil, e)
+			sdm.sbrs.m[e.SID()] = e
+			for sid, ee := range sdm.sbrs.m {
+				if ee != e && ee.Since() > sbrWinMax {
+					delete(sdm.sbrs.m, sid)
+				}
 			}
-
-			clear(receivers)
-			return nil
+			sdm.sbrs.mtx.Unlock()
+			nlog.Warningln(core.T.String(), sdm.trname(), e)
 		}
-
 		return err
 	}
-
-	// TODO: in progress/draft :TODO
 	if hdr.Opcode == transport.OpcReconnect {
-		nlog.Errorln(core.T.String(), ">>>>>>>>>> RECONNECT from", hdr.SID)
+		sdm.sbrs.mtx.Lock()
+		delete(sdm.sbrs.m, hdr.SID)
+		sdm.sbrs.mtx.Unlock()
+		nlog.Warningln(core.T.String(), sdm.trname(), "successful reconnect from", hdr.SID)
 		return nil
 	}
 
