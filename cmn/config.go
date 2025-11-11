@@ -1873,7 +1873,7 @@ func (c *FSHCConf) Validate() error {
 
 func (a *AuthConf) Validate() error {
 	if a.Signature != nil {
-		if err := a.Signature.Validate(); err != nil {
+		if err := a.Signature.validate(); err != nil {
 			return err
 		}
 	}
@@ -1925,12 +1925,12 @@ var (
 	rsaNames  = []string{"RSA", "RS256", "RS384", "RS512"}
 )
 
-func (c *AuthSignatureConf) Validate() error {
+func (c *AuthSignatureConf) validate() error {
 	if c.Key != "" && c.Method == "" {
 		return errors.New("invalid auth signature config, method is required if key provided")
 	}
 	if !c.IsHMAC() && !c.IsRSA() {
-		return fmt.Errorf("invalid auth signature config, method must be one of: %q", c.ValidMethods())
+		return fmt.Errorf("invalid auth signature config, provided method %q must be one of: %q", c.Method, c.ValidMethods())
 	}
 	return nil
 }
