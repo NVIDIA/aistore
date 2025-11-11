@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -152,7 +153,7 @@ func setCluConfigHandler(c *cli.Context) error {
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
 
-	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if slices.Contains(propList, args.First()) || strings.Contains(args.First(), keyAndValueSeparator) {
 		kvs = args
 	}
 	if len(kvs) == 0 {
@@ -170,7 +171,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		return err
 	}
 	for k := range nvs {
-		if !cos.StringInSlice(k, propList) {
+		if !slices.Contains(propList, k) {
 			return fmt.Errorf("invalid property name %q%s", k, examplesCluSetCfg)
 		}
 	}
@@ -307,7 +308,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if cos.StringInSlice(cfgScopeLocal, args) {
+	if slices.Contains(args, cfgScopeLocal) {
 		v = &config.LocalConfig
 	}
 	err = cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
@@ -317,7 +318,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	debug.AssertNoErr(err)
 
 	kvs := args.Tail()
-	if cos.StringInSlice(args.First(), propList) || strings.Contains(args.First(), keyAndValueSeparator) {
+	if slices.Contains(propList, args.First()) || strings.Contains(args.First(), keyAndValueSeparator) {
 		kvs = args
 	}
 	if len(kvs) == 0 || (len(kvs) == 1 && (kvs[0] == cfgScopeLocal || kvs[0] == cfgScopeInherited)) {
@@ -351,7 +352,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		}
 	}
 	for k := range nvs {
-		if !cos.StringInSlice(k, propList) {
+		if !slices.Contains(propList, k) {
 			return fmt.Errorf("invalid property name %q%s", k, examplesNodeSetCfg)
 		}
 	}

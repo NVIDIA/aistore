@@ -6,6 +6,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -759,7 +760,7 @@ func multiRoleCompletions(c *cli.Context) {
 	}
 	args := c.Args()
 	for _, role := range roleList {
-		if cos.StringInSlice(role.Name, args) {
+		if slices.Contains(args, role.Name) {
 			continue
 		}
 		fmt.Println(role.Name)
@@ -829,7 +830,7 @@ func suggestUpdatableAuthNConfig(c *cli.Context) {
 	lastIsProp := c.NArg() != 0
 	if c.NArg() != 0 {
 		lastVal := argLast(c)
-		lastIsProp = cos.StringInSlice(lastVal, props)
+		lastIsProp = slices.Contains(props, lastVal)
 	}
 	if lastIsProp {
 		return

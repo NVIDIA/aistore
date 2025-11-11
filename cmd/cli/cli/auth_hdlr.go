@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -279,13 +280,13 @@ func filterRolesByCluster(roles []*authn.Role, clusters []string) ([]*authn.Role
 	filtered := roles[:0]
 	for _, role := range roles {
 		for _, clu := range role.ClusterACLs {
-			if cos.StringInSlice(clu.ID, cluIDs) {
+			if slices.Contains(cluIDs, clu.ID) {
 				filtered = append(filtered, role)
 				break
 			}
 		}
 		for _, bck := range role.BucketACLs {
-			if cos.StringInSlice(bck.Bck.Ns.UUID, cluIDs) {
+			if slices.Contains(cluIDs, bck.Bck.Ns.UUID) {
 				filtered = append(filtered, role)
 				break
 			}

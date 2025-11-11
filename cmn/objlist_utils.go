@@ -7,6 +7,7 @@ package cmn
 
 import (
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -181,7 +182,7 @@ func CustomMD2S(md cos.StrKVs) string {
 			if k == OrigFntl {
 				continue
 			}
-			if cos.StringInSlice(k, stdCustomProps[:]) {
+			if slices.Contains(stdCustomProps[:], k) {
 				continue
 			}
 			if prev {

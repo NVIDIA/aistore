@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -157,7 +158,7 @@ func isConfigProp(s string) bool {
 			return true
 		}
 	}
-	return cos.StringInSlice(s, props)
+	return slices.Contains(props, s)
 }
 
 func getPrefixFromPrimary() string {
@@ -368,7 +369,7 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 			idx++
 			continue
 		}
-		isCmd := cos.StringInSlice(values[idx], props)
+		isCmd := slices.Contains(props, values[idx])
 		if cmd != "" && isCmd {
 			return nil, fmt.Errorf("missing property %q value", cmd)
 		}

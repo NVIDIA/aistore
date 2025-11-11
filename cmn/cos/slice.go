@@ -8,15 +8,6 @@ import (
 	"strings"
 )
 
-func StringInSlice(s string, arr []string) bool {
-	for _, el := range arr {
-		if el == s {
-			return true
-		}
-	}
-	return false
-}
-
 func ResetSliceCap[T any](s []T, maxCap int) []T {
 	var (
 		l = len(s)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -386,7 +387,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			continue
 		}
 		// - retrying, counting
-		if cos.IsErrRetriableConn(err) || cos.StringInSlice(res.si.ID(), newTIDs) { // always retry newTIDs (joining)
+		if cos.IsErrRetriableConn(err) || slices.Contains(newTIDs, res.si.ID()) { // always retry newTIDs (joining)
 			if refused == nil {
 				refused = make(meta.NodeMap, 2)
 			}

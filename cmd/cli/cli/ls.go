@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -396,7 +397,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		msg.SetFlag(apc.LsNameSize)
 		msg.AddProps([]string{apc.GetPropsName, apc.GetPropsSize}...)
 	default:
-		if cos.StringInSlice(allPropsFlag.GetName(), props) {
+		if slices.Contains(props, allPropsFlag.GetName()) {
 			msg.AddProps(apc.GetPropsAll...)
 			allProps = true
 		} else {

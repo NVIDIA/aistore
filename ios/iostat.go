@@ -8,6 +8,7 @@ package ios
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	ratomic "sync/atomic"
@@ -270,7 +271,7 @@ func (ios *ios) RescanDisks(mpath, fsname string, disks []string) (out RescanDis
 		}
 	}
 	for d := range fsdisks {
-		if !cos.StringInSlice(d, disks) {
+		if !slices.Contains(disks, d) {
 			out.Attached = append(out.Attached, cmn.NewErrMpathNewDisk(mpath, fsname, disks, fsdisks.ToSlice()))
 
 			// TODO -- FIXME: under lock: update ios.mpath2disks and related state; log

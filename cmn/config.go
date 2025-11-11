@@ -2029,7 +2029,7 @@ func (c *DsortConf) Validate() (err error) {
 
 func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	f := func(reaction string) bool {
-		return ((allowEmpty && reaction == "") || cos.StringInSlice(reaction, SupportedReactions))
+		return ((allowEmpty && reaction == "") || slices.Contains(SupportedReactions, reaction))
 	}
 
 	const s = "expecting one of:"
@@ -2070,7 +2070,7 @@ func (c *FSPConf) MarshalJSON() ([]byte, error) {
 }
 
 func (c *FSPConf) Validate(contextConfig *Config) error {
-	debug.Assertf(cos.StringInSlice(contextConfig.role, []string{apc.Proxy, apc.Target}),
+	debug.Assertf(slices.Contains([]string{apc.Proxy, apc.Target}, contextConfig.role),
 		"unexpected node type: %q", contextConfig.role)
 
 	// Don't validate in testing environment.

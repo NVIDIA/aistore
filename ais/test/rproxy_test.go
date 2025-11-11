@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func genObjURL(isSecure, isXML bool) (s string) {
 func genCURLCmdLine(t *testing.T, resURL, proxyURL string, targets meta.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
-		if !cos.StringInSlice(t.PubNet.Hostname, noProxy) {
+		if !slices.Contains(noProxy, t.PubNet.Hostname) {
 			noProxy = append(noProxy, t.PubNet.Hostname)
 		}
 	}

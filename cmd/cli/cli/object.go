@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	ratomic "sync/atomic"
@@ -331,7 +332,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		} else if bck.IsCloud() {
 			selectedProps = apc.GetPropsDefaultCloud
 		}
-	case cos.StringInSlice("all", propsFlag):
+	case slices.Contains(propsFlag, "all"):
 		selectedProps = apc.GetPropsAll
 	default:
 		selectedProps = propsFlag

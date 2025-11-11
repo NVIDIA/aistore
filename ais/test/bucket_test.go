@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -97,7 +98,7 @@ func TestListBuckets(t *testing.T) {
 
 	// tests: vs configured backend vs count
 	for provider := range apc.Providers {
-		configured := cos.StringInSlice(provider, backends)
+		configured := slices.Contains(backends, provider)
 		qbck := cmn.QueryBcks{Provider: provider}
 		bcks, err := api.ListBuckets(baseParams, qbck, apc.FltExists)
 		if err != nil {
@@ -2914,7 +2915,7 @@ func TestCopyBucketSync(t *testing.T) {
 	for i := range num2del {
 		pos := (strtpos + i*3) % m.num
 		name := m.objNames[pos]
-		for cos.StringInSlice(name, nam2del) {
+		for slices.Contains(nam2del, name) {
 			pos++
 			name = m.objNames[pos%m.num]
 		}

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -799,7 +800,7 @@ func createBackendDownloadJobDefinition(c *cli.Context, req *downloadRequest) (J
 	}
 
 	switch {
-	case cos.StringInSlice(req.source.backend.bck.Provider, backends):
+	case slices.Contains(backends, req.source.backend.bck.Provider):
 		p, err := api.HeadBucket(apiBP, req.basePayload.Bck, false /* don't add */)
 		if err != nil {
 			return nil, V(err)

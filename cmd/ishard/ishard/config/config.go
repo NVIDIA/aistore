@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -295,7 +296,7 @@ func parseCliParams(cfg *Config) error {
 	flag.Parse()
 
 	var reactions = []string{"ignore", "warn", "abort", "exclude"}
-	if !cos.StringInSlice(missingExtActStr, reactions) {
+	if !slices.Contains(reactions, missingExtActStr) {
 		msg := fmt.Sprintf("Invalid action: %s. Accepted values are: abort, warn, ignore, exclude\n", missingExtActStr)
 		return errWithUsage(errors.New(msg))
 	}

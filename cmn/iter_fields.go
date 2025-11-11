@@ -8,6 +8,7 @@ package cmn
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -224,7 +225,7 @@ func CopyProps(src, dst any, asType string) error {
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
 	)
-	debug.Assertf(cos.StringInSlice(asType, []string{apc.Daemon, apc.Cluster}), "unexpected config level: %s", asType)
+	debug.Assertf(slices.Contains([]string{apc.Daemon, apc.Cluster}, asType), "unexpected config level: %s", asType)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}

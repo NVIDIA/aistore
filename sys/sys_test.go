@@ -10,16 +10,16 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func checkSkipOS(t *testing.T, oss ...string) {
-	if cos.StringInSlice(runtime.GOOS, oss) {
+	if slices.Contains(oss, runtime.GOOS) {
 		t.Skipf("skipping test for %s platform", runtime.GOOS)
 	}
 }

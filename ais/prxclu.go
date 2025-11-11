@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1892,7 +1893,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 				continue
 			}
 			errmsg := fmt.Sprintf("%s: %s is already attached", p.si, detail)
-			if !cos.StringInSlice(u, urls) {
+			if !slices.Contains(urls, u) {
 				return false, errors.New(errmsg)
 			}
 			nlog.Warningln(errmsg + " - proceeding anyway")

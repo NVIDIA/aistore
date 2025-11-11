@@ -6,6 +6,7 @@ package xact
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -357,7 +358,7 @@ func ListDisplayNames(onlyStartable bool) (names []string) {
 			continue
 		}
 		name := cos.Ternary(dtor.DisplayName != "", dtor.DisplayName, kind)
-		debug.Assert(!cos.StringInSlice(name, names))
+		debug.Assert(!slices.Contains(names, name), names, " vs ", name)
 		names = append(names, name)
 	}
 	sort.Strings(names)

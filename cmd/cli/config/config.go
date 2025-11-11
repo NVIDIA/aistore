@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 
@@ -199,7 +200,7 @@ func Load(args []string, reset string) (*Config, error) {
 	)
 	if err := jsp.LoadAppConfig(ConfigDir, fname.CliConfig, cfg); err != nil {
 		if !cos.IsNotExist(err) {
-			if !cos.StringInSlice(reset, args) {
+			if !slices.Contains(args, reset) {
 				path := filepath.Join(ConfigDir, fname.CliConfig)
 				return nil, fmt.Errorf("failed to load CLI config %q: %v\n\n%s", path, err, tipReset)
 			}
@@ -220,7 +221,7 @@ func Load(args []string, reset string) (*Config, error) {
 
 	if err := cfg.validate(); err != nil {
 		path := filepath.Join(ConfigDir, fname.CliConfig)
-		if cos.StringInSlice(reset, args) {
+		if slices.Contains(args, reset) {
 			fmt.Fprintf(os.Stderr, "CLI config at %s: %v\n", path, err)
 			fmt.Fprint(os.Stderr, "Resetting config to system defaults...\t")
 			time.Sleep(time.Second)

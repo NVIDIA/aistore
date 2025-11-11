@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2003,7 +2004,7 @@ func _addCan(url, selfPub, selfCtrl string, candidates []string) []string {
 	if u, valid := cos.ParseURL(url); !valid || u.Host == selfPub || u.Host == selfCtrl {
 		return candidates
 	}
-	if cos.StringInSlice(url, candidates) {
+	if slices.Contains(candidates, url) {
 		return candidates
 	}
 	return append(candidates, url)

@@ -7,6 +7,7 @@ package etl
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -268,7 +269,7 @@ func (m *InitMsgBase) Validate(detail string) error {
 	}
 
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
-	if m.CommTypeX != "" && !cos.StringInSlice(m.CommTypeX, commTypes) {
+	if m.CommTypeX != "" && !slices.Contains(commTypes, m.CommTypeX) {
 		err := fmt.Errorf("unknown comm-type %q", m.CommTypeX)
 		return cmn.NewErrETLf(errCtx, ferr, err, detail)
 	}

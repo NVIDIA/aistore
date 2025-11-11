@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -172,11 +173,11 @@ func searchCmdHdlr(c *cli.Context) (err error) {
 	} else {
 		if c.NArg() > 1 {
 			for word, similar := range similarWords {
-				if !cos.StringInSlice(word, c.Args()) {
+				if !slices.Contains(c.Args(), word) {
 					continue
 				}
 				for _, word2 := range similar {
-					if cos.StringInSlice(word2, c.Args()) {
+					if slices.Contains(c.Args(), word2) {
 						warn := fmt.Sprintf("%q and %q are \"similar\"", word, word2)
 						actionWarn(c, warn+" (search results may include either/or combinations)")
 					}

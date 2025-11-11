@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -555,7 +556,7 @@ func (fp *fileParser) parseEndpoint(lines []string, i int) (endpoint, error) {
 		actionName := strings.TrimPrefix(action.Action, apcPrefix)
 		if realValue, exists := fp.ActionMap[actionName]; exists {
 			actionLink := fmt.Sprintf(apiLinkFormat, tag, operationID, realValue)
-			if !cos.StringInSlice(actionLink, fp.ModelActions[action.Model]) {
+			if !slices.Contains(fp.ModelActions[action.Model], actionLink) {
 				fp.ModelActions[action.Model] = append(fp.ModelActions[action.Model], actionLink)
 			}
 		}

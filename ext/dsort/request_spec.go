@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -243,7 +244,7 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 }
 
 func parseAlgorithm(alg Algorithm) (*Algorithm, error) {
-	if !cos.StringInSlice(alg.Kind, algorithms) {
+	if !slices.Contains(algorithms, alg.Kind) {
 		return nil, fmt.Errorf(fmtErrInvalidAlg, algorithms)
 	}
 	if alg.Seed != "" {

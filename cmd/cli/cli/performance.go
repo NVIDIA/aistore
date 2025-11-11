@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,7 +164,7 @@ func showCountersHandler(c *cli.Context) error {
 			// skip assorted internal counters and sizes, unless verbose or regex
 			//
 			if !verbose && regexStr == "" {
-				if cos.StringInSlice(name, verboseCounters[:]) {
+				if slices.Contains(verboseCounters[:], name) {
 					continue
 				}
 			}
