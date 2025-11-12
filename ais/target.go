@@ -1128,7 +1128,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		var (
 			xid     string
 			blobMsg apc.BlobMsg
-			lom     = core.AllocLOM(msg.Name)
+			lom     = &core.LOM{ObjName: msg.Name}
 		)
 		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
 			break

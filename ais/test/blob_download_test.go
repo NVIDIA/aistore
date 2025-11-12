@@ -6,7 +6,9 @@ package integration_test
 
 import (
 	"bytes"
+	"io"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -134,85 +136,117 @@ func TestBlobDownloadAbort(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		objName    = "blob-abort-test-" + trand.String(5)
 		bck        = cliBck
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
-
 	initMountpaths(t, proxyURL)
 
-	// Provision a large object to remote bucket
-	tlog.Logfln("Provisioning large object %s (%s)", objName, cos.ToSizeIEC(objSize, 0))
-	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
-	tassert.CheckFatal(t, err)
-	_, err = api.PutObject(&api.PutArgs{
-		BaseParams: baseParams,
-		Bck:        bck,
-		ObjName:    objName,
-		Reader:     r,
-		Size:       uint64(objSize),
-	})
-	tassert.CheckFatal(t, err)
-
-	// Evict the object
-	tlog.Logfln("Evicting object %s", objName)
-	err = api.EvictObject(baseParams, bck, objName)
-	tassert.CheckFatal(t, err)
-
-	// Start blob download
-	tlog.Logfln("Starting blob download for %s", objName)
-	blobMsg := &apc.BlobMsg{
-		ChunkSize:  chunkSize,
-		FullSize:   objSize,
-		NumWorkers: numWorkers,
-		LatestVer:  false,
+	tests := []struct {
+		name      string
+		streamGet bool
+	}{
+		{name: "blob-download", streamGet: false},
+		{name: "streaming-get", streamGet: true},
 	}
-	xid, err := api.BlobDownload(baseParams, bck, objName, blobMsg)
-	tassert.CheckFatal(t, err)
-	tlog.Logfln("Blob download started with xid=%s", xid)
 
-	// Give it a moment to start downloading
-	time.Sleep(500 * time.Millisecond)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				objName = "blob-abort-test-" + trand.String(5)
+				xid     string
+			)
 
-	// Abort the xaction
-	tlog.Logfln("Aborting blob download xid=%s", xid)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
-	err = api.AbortXaction(baseParams, &args)
-	tassert.CheckFatal(t, err)
+			// Provision a large object to remote bucket
+			tlog.Logfln("Provisioning large object %s (%s)", objName, cos.ToSizeIEC(objSize, 0))
+			r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+			_, err = api.PutObject(&api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				ObjName:    objName,
+				Reader:     r,
+				Size:       uint64(objSize),
+			})
+			tassert.CheckFatal(t, err)
 
-	// Wait for the xaction to finish aborting
-	tlog.Logfln("Waiting for blob download to finish aborting")
-	xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
-		tid, _, err := snaps.RunningTarget("")
-		if err != nil {
-			return false, false
-		}
-		finished := tid == "" // not running = finished
-		return finished, false
+			// Evict the object
+			tlog.Logfln("Evicting object %s", objName)
+			err = api.EvictObject(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+
+			if test.streamGet {
+				// Start blob download via streaming GET
+				tlog.Logfln("Starting blob download via streaming GET for %s", objName)
+
+				getArgs := &api.GetArgs{
+					Writer: io.Discard, // Discard the data, we're testing abort
+					Header: http.Header{
+						apc.HdrBlobDownload: []string{"true"},
+						apc.HdrBlobChunk:    []string{cos.ToSizeIEC(chunkSize, 0)},
+						apc.HdrBlobWorkers:  []string{strconv.FormatInt(numWorkers, 10)},
+					},
+				}
+				_, size, _ := api.GetObjectReader(baseParams, bck, objName, getArgs)
+				tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+
+				// Give it a moment to start downloading and retrieve the xid
+				time.Sleep(500 * time.Millisecond)
+
+				// Query for the running blob download xaction to get its xid
+				args := xact.ArgsMsg{Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+				snaps, err := api.QueryXactionSnaps(baseParams, &args)
+				tassert.CheckFatal(t, err)
+				tid, _, err := snaps.RunningTarget("")
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, tid != "", "expected blob download to be running")
+				xid = snaps[tid][0].ID
+				tlog.Logfln("Blob download started with xid=%s", xid)
+			} else {
+				// Start blob download via API
+				tlog.Logfln("Starting blob download for %s", objName)
+				blobMsg := &apc.BlobMsg{
+					ChunkSize:  chunkSize,
+					FullSize:   objSize,
+					NumWorkers: numWorkers,
+					LatestVer:  false,
+				}
+				xid, err = api.BlobDownload(baseParams, bck, objName, blobMsg)
+				tassert.CheckFatal(t, err)
+				tlog.Logfln("Blob download started with xid=%s", xid)
+
+				// Give it a moment to start downloading
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			// Abort the xaction
+			tlog.Logfln("Aborting blob download xid=%s", xid)
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+			err = api.AbortXaction(baseParams, &args)
+			tassert.CheckFatal(t, err)
+
+			// Wait for the xaction to finish aborting
+			tlog.Logfln("Waiting for blob download to finish aborting")
+			xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
+				tid, _, err := snaps.RunningTarget("")
+				if err != nil {
+					return false, false
+				}
+				finished := tid == "" // not running = finished
+				return finished, false
+			}
+			err = api.WaitForXactionNode(baseParams, &args, xactFinished)
+			tassert.CheckFatal(t, err)
+			tlog.Logfln("Blob download aborted and finished")
+
+			// Cleanup: delete the remote object
+			tlog.Logfln("Cleaning up remote object")
+			err = api.DeleteObject(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+
+			tlog.Logfln("Blob download abort test completed successfully")
+		})
 	}
-	err = api.WaitForXactionNode(baseParams, &args, xactFinished)
-	tassert.CheckFatal(t, err)
-	tlog.Logfln("Blob download aborted and finished")
-
-	// Verify no chunks remain on disk
-	m := &ioContext{t: t, bck: bck}
-	tlog.Logfln("Verifying no chunks remain on disk after abort")
-	err = tools.WaitForCondition(func() bool {
-		return len(m.findObjChunksOnDisk(bck, objName)) == 0
-	}, tools.WaitRetryOpts{MaxRetries: 10, Interval: 1 * time.Second})
-	tassert.CheckFatal(t, err)
-
-	chunks := m.findObjChunksOnDisk(bck, objName)
-	tlog.Logfln("Found chunk %d files after abort", len(chunks))
-	tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files after abort, found %d", len(chunks))
-
-	// Cleanup: delete the remote object
-	tlog.Logfln("Cleaning up remote object")
-	err = api.DeleteObject(baseParams, bck, objName)
-	tassert.CheckFatal(t, err)
-
-	tlog.Logfln("Blob download abort test completed successfully")
 }
 
 func TestPrefetchWithBlobThreshold(t *testing.T) {

@@ -44,8 +44,7 @@ const (
 	maxChunkSize   = 16 * cos.MiB
 	dfltNumWorkers = 4
 
-	maxInitialSizeSGL = 128           // vec length
-	maxTotalChunksMem = 128 * cos.MiB // max mem per blob downloader
+	maxTotalChunksMem = 128 * cos.MiB // max mem per blob worker
 
 	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 )
@@ -53,13 +52,13 @@ const (
 type (
 	XactBlobDl struct {
 		bp      core.Backend
-		doneCh  chan chunkDone
+		workCh  chan *chunkTask
+		doneCh  chan *chunkTask
 		args    *core.BlobParams
 		vlabs   map[string]string
 		xlabs   map[string]string
-		workCh  chan chunkWi
-		sgls    []*memsys.SGL
-		readers []*chunkDownloader
+		workers []*worker
+		pending map[int64]*chunkTask // map of pending tasks indexed by roff
 		xact.Base
 		wg       sync.WaitGroup
 		nextRoff int64
@@ -76,18 +75,15 @@ type (
 
 // internal
 type (
-	chunkDownloader struct {
+	worker struct {
 		parent *XactBlobDl
 	}
-	chunkWi struct {
-		sgl  *memsys.SGL
-		roff int64
-	}
-	chunkDone struct {
-		err     error
+	chunkTask struct {
+		name    string // for logging and debug assertions
+		roff    int64
 		sgl     *memsys.SGL
 		written int64
-		roff    int64
+		err     error
 		code    int
 	}
 	blobFactory struct {
@@ -146,7 +142,7 @@ var (
 // Producer: XactBlobDl - main thread
 // ------------------------------------------------------------------------------------------------
 // PHASE 1: `blobFactory.Start()` and `XactBlobDl.start()`
-// - Initialize readers and chunk manifest
+// - Initialize worker and chunk manifest
 // - Seed initial work items (chunks) to workCh (one per worker)
 // ------------------------------------------------------------------------------------------------
 // PHASE 2: `XactBlobDl.Run()` - coordination loop
@@ -270,10 +266,6 @@ func (p *blobFactory) Start() (err error) {
 	cnt := max((r.chunkSize+slabSize-1)/slabSize, 1)
 	r.chunkSize = min(cnt*slabSize, r.fullSize)
 
-	if cnt > maxInitialSizeSGL {
-		cnt = maxInitialSizeSGL
-	}
-
 	nr := int64(r.numWorkers)
 	nc := (r.fullSize + r.chunkSize - 1) / r.chunkSize
 	if pressure == memsys.PressureLow && r.numWorkers < sys.MaxParallelism() {
@@ -287,20 +279,17 @@ func (p *blobFactory) Start() (err error) {
 	}
 
 	// open channels
-	r.workCh = make(chan chunkWi, r.numWorkers)
-	r.doneCh = make(chan chunkDone, r.numWorkers)
+	r.workCh = make(chan *chunkTask, r.numWorkers)
+	r.doneCh = make(chan *chunkTask, r.numWorkers)
+
+	r.pending = make(map[int64]*chunkTask, r.numWorkers)
 
 	// init and allocate
-	r.readers = make([]*chunkDownloader, r.numWorkers)
-	r.sgls = make([]*memsys.SGL, r.numWorkers)
-	for i := range r.readers {
-		r.readers[i] = &chunkDownloader{
+	r.workers = make([]*worker, r.numWorkers)
+	for i := range r.workers {
+		r.workers[i] = &worker{
 			parent: r,
 		}
-		// TODO -- FIXME: optimze SGL usage and allocation
-		// The reader's SGLs are now only required for streaming GETs (when RespWriter is set).
-		// For regular cases where only chunk manifest is used, allocating SGLs is not needed,
-		r.sgls[i] = mm.NewSGL(cnt*slabSize, slabSize)
 	}
 
 	p.xctn = r
@@ -356,10 +345,10 @@ func (r *XactBlobDl) String() string {
 
 func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 	var (
-		err     error
-		pending []chunkDone
-		eof     bool
-		lom     = r.args.Lom
+		err  error
+		done *chunkTask
+		eof  bool
+		lom  = r.args.Lom
 	)
 
 	nlog.Infoln(r.String())
@@ -371,8 +360,8 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 outer:
 	for {
 		select {
-		case done := <-r.doneCh:
-			sgl, written := done.sgl, done.written
+		case done = <-r.doneCh:
+			written := done.written
 			if done.err != nil {
 				err = done.err
 				goto fin
@@ -389,32 +378,25 @@ outer:
 			eof = r.fullSize <= done.roff+written
 			debug.Assert(written > 0 || eof)
 
-			// add pending in the offset-descending order
+			// out-of-order chunks: temporarily store in map and wait for the next sequential chunk
 			if done.roff != r.woff {
-				debug.Assert(done.roff > r.woff)
-				debug.Assert((done.roff-r.woff)%r.chunkSize == 0)
-				pending = append(pending, chunkDone{roff: -1})
-				for i := range pending {
-					if i == len(pending)-1 || (pending[i].roff >= 0 && pending[i].roff < done.roff) {
-						copy(pending[i+1:], pending[i:])
-						pending[i] = done
-						continue outer
-					}
-				}
+				debug.Assertf(done.roff > r.woff, "out-of-order chunk's offset should be greater than the current write offset")
+				debug.Assertf((done.roff-r.woff)%r.chunkSize == 0, "out-of-order chunk's offset should be a multiple of chunk size")
+
+				debug.Assertf(r.pending[done.roff] == nil, "out-of-order chunk should not be already in the pending map")
+				r.pending[done.roff] = done
+				continue outer
 			}
-			// type #1 write
-			if err = r.write(sgl, written); err != nil {
+
+			// type #1 write: chunk arrived in order
+			if err = r.write(done.sgl, written); err != nil {
 				goto fin
 			}
 
-			if r.nextRoff < r.fullSize {
-				debug.Assert(sgl.Size() == 0)
-				r.workCh <- chunkWi{sgl, r.nextRoff}
-				r.nextRoff += r.chunkSize
-			}
+			r.scheduleNextChunk(done)
 
-			// walk backwards and plug any holes (type #2 write)
-			if pending, err = r.plugholes(pending); err != nil {
+			// type #2 write: drain consecutive pending chunks that are now ready
+			if err = r.drainPendingChunks(); err != nil {
 				goto fin
 			}
 
@@ -424,8 +406,8 @@ outer:
 			}
 			if eof && cmn.Rom.V(5, cos.ModXs) {
 				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d", r.Name(), r.woff, r.nextRoff, r.fullSize)
-				for i := len(pending) - 1; i >= 0; i-- {
-					nlog.Errorf("   roff %d", pending[i].roff)
+				for roff := range r.pending {
+					nlog.Errorf("   roff %d", roff)
 				}
 			}
 		case <-r.ChanAbort():
@@ -434,7 +416,6 @@ outer:
 		}
 	}
 fin:
-	r.SetStopping()
 	close(r.workCh)
 
 	if err == nil {
@@ -442,6 +423,7 @@ fin:
 			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
 			debug.AssertNoErr(err)
 		} else {
+			debug.Assertf(len(r.pending) == 0, "%s: pending tasks should be all drained, got %d", r.Name(), len(r.pending))
 			if ty := lom.CksumConf().Type; ty != cos.ChecksumNone {
 				cksumH := cos.NewCksumHash(ty)
 				if err = r.manifest.ComputeWholeChecksum(cksumH); err != nil {
@@ -482,11 +464,14 @@ fin:
 		// Increment blob-download specific GET error count
 		tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
 
-		// Abort manifest: removes all chunks and the manifest itself
-		r.manifest.Abort(lom)
-
+		// non-abort error: cleanup the current task and abort the xaction
+		if done != nil {
+			done.cleanup()
+		}
 		if err != cmn.ErrXactUserAbort {
-			r.Abort(err)
+			if r.manifest != nil {
+				r.manifest.Abort(lom)
+			}
 		}
 	}
 
@@ -494,14 +479,44 @@ fin:
 	r.Finish()
 }
 
-func (r *XactBlobDl) start() {
-	r.wg.Add(len(r.readers))
-	for i := range r.readers {
-		go r.readers[i].run()
+func (r *XactBlobDl) Abort(err error) bool {
+	if !r.Base.Abort(err) { // already aborted?
+		return false
 	}
-	for i := range r.readers {
-		r.workCh <- chunkWi{r.sgls[i], r.nextRoff}
+	r.wg.Wait()
+	if r.manifest != nil {
+		r.manifest.Abort(r.args.Lom)
+	}
+
+	return true
+}
+
+func (r *XactBlobDl) start() {
+	r.wg.Add(len(r.workers))
+	for i := range r.workers {
+		go r.workers[i].run()
+
+		// Seed initial work items (chunks) to workCh (one per worker)
+		tsk := &chunkTask{name: r.Name() + "_chunk_task_" + strconv.Itoa(i), roff: r.nextRoff}
+		if r.args.RespWriter != nil {
+			tsk.sgl = core.T.PageMM().NewSGL(r.chunkSize)
+		}
+		r.workCh <- tsk
 		r.nextRoff += r.chunkSize
+		debug.IncCounter(tsk.name)
+	}
+}
+
+func (r *XactBlobDl) scheduleNextChunk(tsk *chunkTask) {
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infoln("scheduling next chunk:", tsk.name, r.nextRoff, r.fullSize)
+	}
+	if r.nextRoff < r.fullSize {
+		r.workCh <- tsk.advance(r.nextRoff)
+		r.nextRoff += r.chunkSize
+	} else {
+		// last chunk, cleanup the task struct
+		tsk.cleanup()
 	}
 }
 
@@ -521,8 +536,6 @@ func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
 		debug.Assertf(written == size, "%s: expected written size=%d, got %d (at woff %d)", r.Name(), size, written, r.woff)
 	}
 
-	sgl.Reset()
-
 	// stats
 	tstats := core.T.StatsUpdater()
 	tstats.AddWith(
@@ -533,35 +546,38 @@ func (r *XactBlobDl) write(sgl *memsys.SGL, size int64) (err error) {
 	return nil
 }
 
-func (r *XactBlobDl) plugholes(pending []chunkDone) ([]chunkDone, error) {
-	for i := len(pending) - 1; i >= 0; i-- {
-		done := pending[i]
-		if done.roff > r.woff {
-			break
-		}
-		debug.Assert(done.roff == r.woff)
-
-		sgl, written := done.sgl, done.written
-		pending = pending[:i]
-		if err := r.write(sgl, written); err != nil { // type #2 write: remove from pending and append
-			return pending, err
+// drainPendingChunks processes consecutive pending chunks that are now ready to write.
+// It continuously checks if the next expected chunk (at r.woff) is available in the
+// pending map, and if so, writes it and schedules the next download.
+func (r *XactBlobDl) drainPendingChunks() error {
+	for {
+		next, exists := r.pending[r.woff]
+		if !exists {
+			break // gap in sequence, wait for more chunks
 		}
 
-		if r.nextRoff < r.fullSize {
-			r.workCh <- chunkWi{sgl, r.nextRoff}
-			r.nextRoff += r.chunkSize
+		delete(r.pending, r.woff)
+
+		if err := r.write(next.sgl, next.written); err != nil {
+			return err
 		}
+
+		r.scheduleNextChunk(next)
 	}
-	return pending, nil
+	return nil
 }
 
 func (r *XactBlobDl) cleanup() {
-	for i := range r.readers {
-		r.sgls[i].Free()
+	drainTaskCh(r.workCh)
+	drainTaskCh(r.doneCh)
+
+	for roff := range r.pending {
+		r.pending[roff].cleanup()
 	}
-	clear(r.sgls)
-	if r.args.RespWriter == nil { // not a GET
-		core.FreeLOM(r.args.Lom)
+
+	// make sure all chunk tasks are cleaned up
+	for i := range r.workers {
+		debug.AssertCounterEquals(r.Name()+"_chunk_task_"+strconv.Itoa(i), 0)
 	}
 }
 
@@ -606,105 +622,150 @@ func (r *XactBlobDl) Snap() (snap *core.Snap) {
 }
 
 //
-// chunkDownloader
+// worker
 //
 
-func (reader *chunkDownloader) run() {
+// get range reader -> create chunk file -> copy data to chunk file -> add chunk to manifest -> notify completion | report error
+func (w *worker) do(tsk *chunkTask, buf []byte) (int, error) {
 	var (
-		a         = reader.parent.args
-		lom       = a.Lom
-		manifest  = reader.parent.manifest
-		chunkSize = reader.parent.chunkSize
+		chunkSize  = w.parent.chunkSize
+		lom        = w.parent.args.Lom
+		manifest   = w.parent.manifest
+		respWriter = w.parent.args.RespWriter
 	)
+	partNum := int(tsk.roff/chunkSize) + 1
+
+	// Get object range reader
+	res := core.T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, tsk.roff, chunkSize)
+	if res.Err != nil || res.ErrCode == http.StatusRequestedRangeNotSatisfiable || res.R == nil {
+		return res.ErrCode, res.Err
+	}
+
+	// Create chunk in manifest
+	chunk, chunkErr := manifest.NewChunk(partNum, lom)
+	if chunkErr != nil {
+		return 0, chunkErr
+	}
+
+	// Create chunk file
+	chunkPath := chunk.Path()
+	chunkFh, chunkFhErr := lom.CreatePart(chunkPath)
+	if chunkFhErr != nil {
+		return 0, chunkFhErr
+	}
+
+	// Setup writers: chunk file + SGL (for RespWriter if needed)
+	writers := make([]io.Writer, 0, 3)
+	writers = append(writers, chunkFh)
+
+	// If RespWriter is set, copy the data to the task's SGL.
+	// This SGL will later be stitched together and sequentially written
+	// to the RespWriter via the `doneCh` channel (see `XactBlobDl.write()`).
+	if respWriter != nil {
+		writers = append(writers, tsk.sgl)
+	}
+
+	multiWriter := cos.NewWriterMulti(writers...)
+
+	chwritten, cksum, copyErr := cos.CopyAndChecksum(multiWriter, res.R, buf, lom.CksumConf().Type)
+	cos.Close(res.R)
+	cos.Close(chunkFh)
+	if copyErr != nil {
+		if nerr := cos.RemoveFile(chunkPath); nerr != nil {
+			nlog.Errorln("nested error removing chunk:", nerr)
+		}
+		return 0, copyErr
+	}
+
+	if cksum != nil {
+		chunk.SetCksum(&cksum.Cksum)
+	}
+
+	// Add chunk to manifest with size and checksum
+	if addErr := manifest.Add(chunk, chwritten, int64(partNum)); addErr != nil {
+		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
+			nlog.Errorln("nested error removing chunk:", nerr)
+		}
+		return 0, addErr
+	}
+
+	debug.Assertf(res.Size == chwritten, "%d != %d (at woff %d)", res.Size, chwritten, tsk.roff)
+	tsk.written = chwritten
+
+	return 0, nil
+}
+
+func (w *worker) run() {
+	var (
+		chunkSize      = w.parent.chunkSize
+		workCh, doneCh = w.parent.workCh, w.parent.doneCh
+		err            error
+		ecode          int
+	)
+
+	defer w.parent.wg.Done()
 
 	// Allocate buffer for copying
 	buf, slab := core.T.PageMM().AllocSize(chunkSize)
 	defer slab.Free(buf)
 
+loop:
 	for {
-		msg, ok := <-reader.parent.workCh
-		if !ok {
-			break
-		}
-		sgl := msg.sgl
-		partNum := int(msg.roff/chunkSize) + 1
-
-		res := core.T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, msg.roff, chunkSize)
-		if reader.parent.IsAborted() {
-			break
-		}
-		if res.Err != nil {
-			reader.parent.doneCh <- chunkDone{res.Err, sgl, 0, msg.roff, res.ErrCode}
-			break
-		}
-		if res.ErrCode == http.StatusRequestedRangeNotSatisfiable {
-			debug.Assert(res.Size == 0)
-			reader.parent.doneCh <- chunkDone{nil, sgl, 0, msg.roff, http.StatusRequestedRangeNotSatisfiable}
-			break
-		}
-
-		// Create chunk in manifest
-		chunk, err := manifest.NewChunk(partNum, lom)
-		if err != nil {
-			reader.parent.doneCh <- chunkDone{err, sgl, 0, msg.roff, http.StatusInternalServerError}
-			break
-		}
-
-		// Create chunk file
-		chunkPath := chunk.Path()
-		chunkFh, err := lom.CreatePart(chunkPath)
-		if err != nil {
-			reader.parent.doneCh <- chunkDone{err, sgl, 0, msg.roff, http.StatusInternalServerError}
-			break
-		}
-
-		// Setup writers: chunk file + SGL (for RespWriter if needed) + checksum
-		writers := make([]io.Writer, 0, 3)
-		writers = append(writers, chunkFh)
-
-		// Calculate checksum for this chunk
-		cksumH := cos.CksumHash{}
-		if ty := lom.CksumConf().Type; ty != cos.ChecksumNone {
-			cksumH.Init(ty)
-			writers = append(writers, cksumH.H)
-		}
-
-		// If RespWriter is set, copy the data to the SGLs corresponding to each reader.
-		// These SGLs will later be stitched together and sequentially written
-		// to the RespWriter via the `doneCh` channel (see `XactBlobDl.write()`).
-		if a.RespWriter != nil {
-			writers = append(writers, sgl)
-		}
-
-		multiWriter := cos.NewWriterMulti(writers...)
-
-		chwritten, err := cos.CopyBuffer(multiWriter, res.R, buf)
-		cos.Close(res.R)
-		cos.Close(chunkFh)
-		if err != nil {
-			if nerr := cos.RemoveFile(chunkPath); nerr != nil {
-				nlog.Errorln("nested error removing chunk:", nerr)
+		select {
+		case tsk, ok := <-workCh:
+			if !ok {
+				break loop
 			}
-			reader.parent.doneCh <- chunkDone{err, sgl, 0, msg.roff, res.ErrCode}
-			break
-		}
 
-		if cksumH.H != nil {
-			cksumH.Finalize()
-			chunk.SetCksum(&cksumH.Cksum)
-		}
+			ecode, err = w.do(tsk, buf)
 
-		// Add chunk to manifest with size and checksum
-		if err := manifest.Add(chunk, chwritten, int64(partNum)); err != nil {
-			if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
-				nlog.Errorln("nested error removing chunk:", nerr)
+			tsk.err, tsk.code = err, ecode
+			doneCh <- tsk
+
+			if err != nil {
+				break loop
 			}
-			reader.parent.doneCh <- chunkDone{err, sgl, msg.roff, 0, http.StatusInternalServerError}
-			break
+		case <-w.parent.ChanAbort():
+			break loop
 		}
-
-		debug.Assertf(res.Size == chwritten, "%d != %d (at woff %d)", res.Size, chwritten, msg.roff)
-		reader.parent.doneCh <- chunkDone{nil, sgl, chwritten, msg.roff, res.ErrCode}
 	}
-	reader.parent.wg.Done()
+
+	// error handling: send failed task back for cleanup
+	if err != nil {
+		w.parent.AddErr(err, ecode)
+	}
+}
+
+//
+// chunkTask
+//
+
+func (ct *chunkTask) advance(nextRoff int64) *chunkTask {
+	if ct.sgl != nil {
+		ct.sgl.Reset() // re-use the SGL for the next chunk
+	}
+	ct.written = 0
+	ct.roff = nextRoff
+	return ct
+}
+
+func (ct *chunkTask) cleanup() {
+	if ct.sgl != nil {
+		ct.sgl.Free()
+	}
+	debug.DecCounter(ct.name)
+}
+
+func drainTaskCh(ch chan *chunkTask) {
+	for {
+		select {
+		case tsk, ok := <-ch:
+			if !ok {
+				return
+			}
+			tsk.cleanup()
+		default:
+			return
+		}
+	}
 }
