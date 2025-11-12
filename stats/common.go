@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -59,10 +60,8 @@ const (
 )
 
 const (
-	NgrPrompt     = "Number of goroutines"
-	ngrHighTime   = 10 * time.Minute  // log a warning if the number of goroutines remains high
-	lshiftNgrHigh = 10                // red alert: 1024 * num-CPUs
-	lshiftNgrWarn = lshiftNgrHigh - 1 // yellow
+	NgrPrompt   = "Number of goroutines"
+	ngrHighTime = 10 * time.Minute // log a warning if the number of goroutines remains high
 )
 
 // Naming conventions: error counters' prefixes
@@ -460,7 +459,6 @@ waitStartup:
 	ticker.Stop()
 
 	config = cmn.GCO.Get()
-	goMaxProcs := runtime.GOMAXPROCS(0)
 	nlog.Infoln("Starting", r.Name())
 	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, hkLogs, maxLogSizeCheckTime)
 
@@ -484,7 +482,7 @@ waitStartup:
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
 
 			// 1. "High number of"
-			lastNgr = r.checkNgr(now, lastNgr, goMaxProcs)
+			lastNgr = r.checkNgr(now, lastNgr)
 
 			if statsTime != config.Periodic.StatsTime.D() {
 				statsTime = config.Periodic.StatsTime.D()
@@ -627,12 +625,12 @@ func (r *runner) GetMetricNames() cos.StrKVs {
 }
 
 // TODO: add Prometheus metric
-func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
+func (r *runner) checkNgr(now, lastNgr int64) int64 {
 	var (
-		warn = goMaxProcs << lshiftNgrWarn
-		ngr  = runtime.NumGoroutine()
+		ngr     = runtime.NumGoroutine()
+		ngrLoad = load.Gor(ngr)
 	)
-	if ngr < warn {
+	if ngrLoad == load.Low || ngrLoad == load.Moderate {
 		if lastNgr != 0 {
 			r.ClrFlag(NodeAlerts, cos.HighNumGoroutines|cos.NumGoroutines)
 			nlog.Infoln(NgrPrompt, "is now back to normal:", ngr)
@@ -640,16 +638,13 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 		return 0
 	}
 
-	var (
-		high     = goMaxProcs << lshiftNgrHigh
-		set, clr cos.NodeStateFlags
-		tag      = "(red alert)"
-	)
-	if ngr < high {
+	var set, clr cos.NodeStateFlags
+	tag := "(red alert)"
+	if ngrLoad == load.High { // yellow
 		clr = cos.HighNumGoroutines
 		set = cos.NumGoroutines
 		tag = "(yellow alert)"
-	} else {
+	} else { // Critical
 		set = cos.HighNumGoroutines
 		clr = cos.NumGoroutines
 	}
@@ -659,7 +654,6 @@ func (r *runner) checkNgr(now, lastNgr int64, goMaxProcs int) int64 {
 		lastNgr = now
 		nlog.Warningln(NgrPrompt, ngr, tag)
 	}
-
 	return lastNgr
 }
 

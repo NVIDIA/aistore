@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/prob"
@@ -364,10 +365,10 @@ func (j *rcvyJogger) run() {
 
 		n++
 		// (compare with ec/putjogger where we also check memory pressure)
-		if err == nil && fs.IsThrottleDflt(n) {
-			pct, _, _ := fs.ThrottlePct()
-			if pct >= fs.MaxThrottlePct {
-				time.Sleep(fs.Throttle10ms)
+		if err == nil && load.IsThrottleDflt(n) {
+			pct, _, _ := load.ThrottlePct()
+			if pct >= load.MaxThrottlePct {
+				time.Sleep(load.Throttle10ms)
 			}
 		}
 	}

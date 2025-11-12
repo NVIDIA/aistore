@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -23,8 +24,8 @@ import (
 )
 
 const (
-	skipEvictThreashold = 20                // likely not running when above
-	maxEvictThreashold  = fs.MaxThrottlePct // not running when above
+	skipEvictThreashold = 20                  // likely not running when above
+	maxEvictThreashold  = load.MaxThrottlePct // not running when above
 )
 
 type (
@@ -93,7 +94,7 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 		return true // dropped all caches, nothing to do
 	}
 
-	pct, util, lavg := fs.ThrottlePct()
+	pct, util, lavg := load.ThrottlePct()
 	flog := cos.Ternary(pct > maxEvictThreashold, nlog.Warningln, nlog.Infoln)
 	flog("uncache:", bcks[0].String(), "[ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
 	if num := len(bcks); num > 1 {
@@ -163,10 +164,10 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.throttle && fs.IsThrottleDflt(u.nd) {
+		if u.throttle && load.IsThrottleDflt(u.nd) {
 			// compare with _throttle(evct.pct) but note: caller's waiting on wg
 			if u.pct >= maxEvictThreashold {
-				time.Sleep(fs.Throttle10ms)
+				time.Sleep(load.Throttle10ms)
 			} else {
 				runtime.Gosched()
 			}
@@ -255,7 +256,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	}
 
 	// load, utilization
-	pct, util, lavg := fs.ThrottlePct()
+	pct, util, lavg := load.ThrottlePct()
 	nlog.Infoln("hk: [ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
 
 	if pct > maxEvictThreashold {
@@ -369,7 +370,7 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	if fs.IsThrottleMini(evct.evicted) {
+	if load.IsThrottleMini(evct.evicted) {
 		_throttle(evct.pct)
 	}
 

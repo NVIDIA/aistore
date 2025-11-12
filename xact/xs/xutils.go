@@ -14,12 +14,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
@@ -107,51 +107,48 @@ const (
 // - xname is xaction name
 // - n is the requested number of workers
 func throttleNwp(xname string, n, numMpaths int) (int, error) {
+	const memExtremeMsg = "extreme memory pressure"
 	var (
-		mm     = core.T.PageMM()
-		tstats = core.T.StatsUpdater()
-		flags  = cos.NodeStateFlags(tstats.Get(cos.NodeAlerts))
+		ngr     = runtime.NumGoroutine()
+		ngrLoad = load.Gor(ngr)
 	)
-	// red alert 'num goroutines'
-	if flags.IsSet(cos.HighNumGoroutines) {
-		_ = mm.Pressure() // log
-		nlog.Warningln(xname, stats.NgrPrompt, runtime.NumGoroutine())
+	// 1. goroutine
+	if ngrLoad == load.Critical {
+		nlog.Warningln(xname, stats.NgrPrompt, ngr)
 		return nwpNone, nil
 	}
 
-	// normally, always limit by the number of available (containerized) cores
 	n = min(sys.MaxParallelism()+4, n)
 
-	// yellow alert 'num goroutines'
-	if flags.IsSet(cos.NumGoroutines) {
-		nlog.Warningln(xname, stats.NgrPrompt, runtime.NumGoroutine())
+	// yellow alert (high)
+	if ngrLoad == load.High {
+		nlog.Warningln(xname, stats.NgrPrompt, ngr)
 		n = min(n, numMpaths)
 	}
 
-	// factor-in memory pressure
-	pressure := mm.Pressure()
-	switch pressure {
-	case memsys.OOM, memsys.PressureExtreme:
+	// 2. memory pressure
+	memLoad := load.Mem()
+	switch memLoad {
+	case load.Critical:
 		oom.FreeToOS(true)
 		if !cmn.Rom.TestingEnv() {
-			return 0, errors.New(xname + ": " + memsys.FmtErrExtreme + " - not starting")
+			return 0, errors.New(xname + ": " + memExtremeMsg + " - not starting")
 		}
 		return nwpNone, nil
-	case memsys.PressureHigh:
-		if flags.IsSet(cos.NumGoroutines) {
+	case load.High:
+		if ngrLoad == load.High {
 			return nwpNone, nil
 		}
 		n = min(nwpMin+1, n)
 	}
 
-	// finally, take into account load averages
-	var (
-		load     = sys.MaxLoad()
-		highLoad = sys.HighLoadWM()
-	)
-	if load >= float64(highLoad) {
-		nlog.Warningln(xname, "high load [", load, highLoad, "]")
-		if flags.IsSet(cos.NumGoroutines) {
+	// 3. CPU load averages
+	cpuLoad := load.CPU()
+	if cpuLoad >= load.High {
+		if lv, wm := sys.MaxLoad(), sys.HighLoadWM(); lv >= float64(wm) {
+			nlog.Warningln(xname, "high load [", lv, wm, "]")
+		}
+		if ngrLoad == load.High {
 			return nwpNone, nil
 		}
 		n = min(nwpMin, n)

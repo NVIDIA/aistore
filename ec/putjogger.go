@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
@@ -150,9 +151,9 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 		c.parent.AddErr(err, 0)
 	}
 	c.ntotal++
-	if (c.micro && fs.IsThrottleMicro(c.ntotal)) || fs.IsThrottleMini(c.ntotal) {
+	if (c.micro && load.IsThrottleMicro(c.ntotal)) || load.IsThrottleMini(c.ntotal) {
 		if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
-			time.Sleep(fs.Throttle100ms)
+			time.Sleep(load.Throttle100ms)
 			if !c.micro && pressure >= memsys.PressureExtreme {
 				// too late?
 				c.micro = true

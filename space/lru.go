@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -38,7 +39,7 @@ import (
 // LRU is implemented as eXtended Action (xaction, see xact/README.md) that gets
 // triggered when/if a used local capacity exceeds high watermark (config.Space.HighWM). LRU then
 // runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
-// in accordance with the current storage-target's utilization (see xaction_throttle.go).
+// in accordance with the current storage-target's utilization (see cmn/load package).
 //
 // There's only one API that this module provides to the rest of the code:
 //   - runLRU - to initiate a new LRU extended action on the local target
@@ -469,9 +470,9 @@ func (j *lruJ) _throttle(usedPct int64) {
 	)
 	if ratioUtil >= ratioCap {
 		if util > j.config.Disk.DiskUtilHighWM {
-			time.Sleep(fs.Throttle10ms)
+			time.Sleep(load.Throttle10ms)
 		} else {
-			time.Sleep(fs.Throttle1ms)
+			time.Sleep(load.Throttle1ms)
 		}
 	}
 }

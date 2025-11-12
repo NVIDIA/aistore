@@ -1,13 +1,14 @@
-// Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
+// Package load provides 5-dimensional node-pressure readings and per-dimension grading.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
-package fs
+package load
 
 import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -27,18 +28,13 @@ const (
 	throttleWalk = 0xff
 )
 
-func IsThrottleDflt(n int64) bool  { return n&throttleBatch == throttleBatch }
-func IsThrottleMini(n int64) bool  { return n&throMiniBatch == throMiniBatch }
-func IsThrottleMicro(n int64) bool { return n&throMicroBatch == throMicroBatch }
-
-func IsThrottleWalk(n int64) bool { return n&throttleWalk == throttleWalk }
-
+// return:
 // - max disk utilization across mountpaths
 // - max (1 minute, 5 minute) load average
 func ThrottlePct() (int, int64, float64) {
 	var (
 		load     = sys.MaxLoad()
-		util     = GetMaxUtil()
+		util     = fs.GetMaxUtil()
 		highLoad = sys.HighLoadWM()
 	)
 	if load >= float64(highLoad) {
@@ -48,3 +44,10 @@ func ThrottlePct() (int, int64, float64) {
 	rl := cos.RatioPct(int64(10*highLoad), 1, int64(10*load))
 	return int(max(ru, rl)), util, load
 }
+
+// inline helpers
+func IsThrottleDflt(n int64) bool  { return n&throttleBatch == throttleBatch }
+func IsThrottleMini(n int64) bool  { return n&throMiniBatch == throMiniBatch }
+func IsThrottleMicro(n int64) bool { return n&throMicroBatch == throMicroBatch }
+
+func IsThrottleWalk(n int64) bool { return n&throttleWalk == throttleWalk }

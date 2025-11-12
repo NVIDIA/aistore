@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -284,6 +285,8 @@ func (h *htrun) init(config *cmn.Config) {
 
 	initCtrlClient(config)
 	initDataClient(config)
+
+	load.Init()
 
 	tcpbuf := config.Net.L4.SndRcvBufSize
 	if h.si.IsProxy() {

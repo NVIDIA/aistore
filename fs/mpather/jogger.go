@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -300,7 +301,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 
 	// poor man's throttle; see "rate limit"
 	if j.opts.Throttle {
-		if fs.IsThrottleDflt(n) {
+		if load.IsThrottleDflt(n) {
 			j.throttle()
 		} else {
 			runtime.Gosched()
@@ -361,7 +362,7 @@ func (j *jogger) checkStopped() error {
 func (j *jogger) throttle() {
 	curUtil := fs.GetMpathUtil(j.mi.Path)
 	if curUtil >= j.config.Disk.DiskUtilHighWM {
-		time.Sleep(fs.Throttle1ms)
+		time.Sleep(load.Throttle1ms)
 	}
 }
 

@@ -23,6 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
+// TODO: reconnect() must become common for all data-mover's xactions; add `transport.OpcReconnect`
+
 const sbrWinMax = 15 * time.Second
 
 const iniSdmCap = 16
