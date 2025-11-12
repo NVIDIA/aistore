@@ -65,7 +65,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			// list all buckets; NOTE: compare with `p.easyURLHandler` and see
 			// "list buckets for a given provider" comment there
 			// perms: apc.AceListBuckets
-			if err := p.access(r.Header, nil, apc.AceListBuckets); err != nil {
+			if err := p.access(r.Context(), r.Header, nil, apc.AceListBuckets); err != nil {
 				s3.WriteErr(w, r, err, http.StatusForbidden)
 				return
 			}
@@ -178,7 +178,7 @@ func (p *proxy) bckNamesFromBMD(w http.ResponseWriter) {
 // +gen:endpoint PUT /s3/{bucket-name}
 // Create a new S3 bucket
 func (p *proxy) putBckS3(w http.ResponseWriter, r *http.Request, bucket string) {
-	if err := p.access(r.Header, nil, apc.AceCreateBucket); err != nil {
+	if err := p.access(r.Context(), r.Header, nil, apc.AceCreateBucket); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -204,7 +204,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceDestroyBucket); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceDestroyBucket); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -234,7 +234,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AcePUT); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -264,7 +264,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceObjDELETE); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceObjDELETE); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -329,7 +329,7 @@ func (p *proxy) headBckS3(w http.ResponseWriter, r *http.Request, bucket string)
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceBckHEAD); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceBckHEAD); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -353,7 +353,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceObjLIST); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceObjLIST); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -474,7 +474,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if bckSrc == nil {
 		return
 	}
-	if err := p.access(r.Header, bckSrc, apc.AceGET); err != nil {
+	if err := p.access(r.Context(), r.Header, bckSrc, apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -510,7 +510,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AcePUT); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -546,7 +546,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceGET); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -637,7 +637,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceObjHEAD); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceObjHEAD); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}
@@ -676,7 +676,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 	if bck == nil {
 		return
 	}
-	if err := p.access(r.Header, bck, apc.AceObjDELETE); err != nil {
+	if err := p.access(r.Context(), r.Header, bck, apc.AceObjDELETE); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
 		return
 	}

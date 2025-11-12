@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -29,7 +30,7 @@ var (
 )
 
 // Validate tokens in the validateMap, return claims from claimsMap, otherwise fail
-func (m *mockTokenParser) ValidateToken(token string) (*tok.AISClaims, error) {
+func (m *mockTokenParser) ValidateToken(_ context.Context, token string) (*tok.AISClaims, error) {
 	if err, ok := m.validateMap[token]; ok {
 		return nil, err
 	}
@@ -69,7 +70,7 @@ func TestAuth_Manager_UpdateRevokedList_AddsRevokedTokens(t *testing.T) {
 	}
 	revoked := &tokenList{Tokens: tokens, Version: 2}
 
-	res := am.updateRevokedList(revoked)
+	res := am.updateRevokedList(t.Context(), revoked)
 
 	tassert.Fatal(t, res != nil, "Expect a non-nil result from revocation call")
 	tassert.Error(t, len(res.Tokens) == 2, "Expected only 2 entries")
@@ -87,7 +88,7 @@ func TestAuth_Manager_UpdateRevokedList_CleansExpiredTokens(t *testing.T) {
 		},
 	}
 	revoked := &tokenList{Tokens: []string{"expiredToken"}, Version: 1}
-	allRevoked := am.updateRevokedList(revoked)
+	allRevoked := am.updateRevokedList(t.Context(), revoked)
 	tassert.Error(t, allRevoked == nil, "Expected allRevoked to be nil after cleanup of expired tokens")
 }
 
@@ -114,8 +115,8 @@ func TestAuth_Manager_ValidateToken_Revoked(t *testing.T) {
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
-	am.updateRevokedList(&tokenList{Tokens: []string{token}})
-	_, err := am.validateToken(token)
+	am.updateRevokedList(t.Context(), &tokenList{Tokens: []string{token}})
+	_, err := am.validateToken(t.Context(), token)
 	tassert.Error(t, err != nil, "Revoked token should not be valid")
 }
 
@@ -128,7 +129,7 @@ func TestAuth_Manager_ValidateToken_CachedValid(t *testing.T) {
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
-	_, err := am.validateToken(token)
+	_, err := am.validateToken(t.Context(), token)
 	tassert.Errorf(t, err == nil, "Expected token to be valid, but got: %v", err)
 }
 
@@ -141,7 +142,7 @@ func TestAuth_Manager_ValidateToken_CachedExpired(t *testing.T) {
 		revokedTokens: newRevokedTokensMap(),
 		tokenParser:   &mockTokenParser{},
 	}
-	_, err := am.validateToken(token)
+	_, err := am.validateToken(t.Context(), token)
 	tassert.Error(t, err != nil, "Expected error when token is expired")
 }
 
@@ -204,7 +205,7 @@ func TestAuth_RevokedTokensMap_Cleanup(t *testing.T) {
 			"good":    nil,
 		},
 	}
-	result := r.cleanup(parser)
+	result := r.cleanup(t.Context(), parser)
 	tassert.Error(t, len(result.Tokens) == 2, "expected both valid and invalid tokens after cleanup")
 	tassert.Error(t, !r.contains("expired"), "expired token should have been removed")
 }

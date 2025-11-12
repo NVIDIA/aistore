@@ -78,9 +78,9 @@ func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 }
 
 // Send valid and non-expired revoked token list to a cluster.
-func (m *mgr) syncTokenList(clu *authn.CluACL) {
+func (m *mgr) syncTokenList(ctx context.Context, clu *authn.CluACL) {
 	const tag = "sync-tokens"
-	tokenList, code, err := m.generateRevokedTokenList()
+	tokenList, code, err := m.generateRevokedTokenList(ctx)
 	if err != nil {
 		nlog.Errorf("failed to sync token list with %q(%q): %v (%d)", clu.ID, clu.Alias, err, code)
 		return

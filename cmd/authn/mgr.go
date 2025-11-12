@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -59,8 +60,8 @@ func newMgr(driver kvdb.Driver) (m *mgr, code int, err error) {
 	}
 	// Create a limited token parser that only validates against a symmetric key with no issuer lookup
 	// TODO: Support RSA keys in authN and issuer lookup with cert verification
-	sigConf := &tok.SigConfig{HMACSecret: Conf.Secret()}
-	m.tkParser = tok.NewTokenParser(sigConf, nil)
+	sigConf := &cmn.AuthSignatureConf{Key: Conf.Secret(), Method: cmn.SigMethodHMAC}
+	m.tkParser = tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf})
 	return
 }
 
@@ -297,7 +298,7 @@ func (m *mgr) getCluster(cluID string) (*authn.CluACL, int, error) {
 }
 
 // Registers a new cluster
-func (m *mgr) addCluster(clu *authn.CluACL) (int, error) {
+func (m *mgr) addCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
 	if clu.ID == "" {
 		return http.StatusBadRequest, errors.New("cluster UUID is undefined")
 	}
@@ -320,7 +321,7 @@ func (m *mgr) addCluster(clu *authn.CluACL) (int, error) {
 	}
 	m.createRolesForCluster(clu)
 
-	go m.syncTokenList(clu)
+	go m.syncTokenList(ctx, clu)
 	return http.StatusOK, nil
 }
 
@@ -463,7 +464,7 @@ func (m *mgr) revokeToken(token string) (int, error) {
 
 // Create a list of non-expired and valid revoked tokens.
 // Obsolete and invalid tokens are removed from the database.
-func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
+func (m *mgr) generateRevokedTokenList(ctx context.Context) ([]string, int, error) {
 	tokens, code, err := m.db.List(revokedCollection, "")
 	if err != nil {
 		debug.AssertNoErr(err)
@@ -472,7 +473,7 @@ func (m *mgr) generateRevokedTokenList() ([]string, int, error) {
 
 	revokeList := make([]string, 0, len(tokens))
 	for _, token := range tokens {
-		_, err = m.tkParser.ValidateToken(token)
+		_, err = m.tkParser.ValidateToken(ctx, token)
 		if err != nil {
 			nlog.Infof("removing invalid token %q due to validation error %v", token, err)
 			_, err = m.db.Delete(revokedCollection, token)

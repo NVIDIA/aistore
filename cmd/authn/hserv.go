@@ -172,7 +172,7 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "empty token")
 		return
 	}
-	if _, err := h.mgr.tkParser.ValidateToken(msg.Token); err != nil {
+	if _, err := h.mgr.tkParser.ValidateToken(r.Context(), msg.Token); err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -305,7 +305,7 @@ func (h *hserv) getToken(r *http.Request) (*tok.AISClaims, error) {
 	if err != nil {
 		return nil, err
 	}
-	claims, err := h.mgr.tkParser.ValidateToken(tokenHdr.Token)
+	claims, err := h.mgr.tkParser.ValidateToken(r.Context(), tokenHdr.Token)
 	if err != nil {
 		if errors.Is(err, tok.ErrInvalidToken) {
 			return nil, fmt.Errorf("not authorized (token expired): %q", tokenHdr.Token)
@@ -404,7 +404,7 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, cluConf); err != nil {
 		return
 	}
-	if code, err := h.mgr.addCluster(cluConf); err != nil {
+	if code, err := h.mgr.addCluster(r.Context(), cluConf); err != nil {
 		h.failAction(w, r, "add cluster", cluConf.ID, err, code)
 	}
 }

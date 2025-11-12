@@ -176,7 +176,7 @@ rerr:
 
 // (compare w/ accessSupported)
 func (bctx *bctx) accessAllowed(bck *meta.Bck) (ecode int, err error) {
-	err = bctx.p.access(bctx.r.Header, bck, bctx.perms)
+	err = bctx.p.access(bctx.r.Context(), bctx.r.Header, bck, bctx.perms)
 	ecode = aceErrToCode(err)
 	return ecode, err
 }
@@ -286,7 +286,7 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 		bck = backend // NOTE: from here on backend
 	}
 	if bck.IsAIS() {
-		if err := p.access(bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
+		if err := p.access(bctx.r.Context(), bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
 			return bck, aceErrToCode(err), err
 		}
 		nlog.Warningf("%s: %q doesn't exist, proceeding to create", p, bctx.bck.String())

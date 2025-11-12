@@ -1920,6 +1920,11 @@ func (a *AuthConf) CensorKey() {
 // AuthSignatureConf //
 ///////////////////////
 
+const (
+	SigMethodHMAC = "HS256"
+	SigMethodRSA  = "RS256"
+)
+
 var (
 	hmacNames = []string{"HMAC", "HS256", "HS384", "HS512"}
 	rsaNames  = []string{"RSA", "RS256", "RS384", "RS512"}

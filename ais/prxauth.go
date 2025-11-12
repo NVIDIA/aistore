@@ -5,16 +5,14 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -67,56 +65,16 @@ const TokenMapShardExponent = 4
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
-	var requiredClaims *tok.RequiredClaims
-	if config.Auth.RequiredClaims != nil {
-		requiredClaims = &tok.RequiredClaims{
-			Aud: config.Auth.RequiredClaims.Aud,
-		}
-	}
+	parser := tok.NewTokenParser(&config.Auth)
 	return &authManager{
+		tokenParser:   parser,
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
-		tokenParser:   tok.NewTokenParser(newSigConfig(&config.Auth), requiredClaims),
-	}
-}
-
-// Parse config and environment variables to determine keys for validating JWT signatures
-func newSigConfig(authConf *cmn.AuthConf) *tok.SigConfig {
-	// First check for env vars as they take precedence
-	if pubKeyEnvStr := os.Getenv(env.AisAuthPublicKey); pubKeyEnvStr != "" {
-		pubKey, err := tok.ParsePubKey(pubKeyEnvStr)
-		if err != nil {
-			cos.ExitLogf("Failed to parse RSA public key: %v", err)
-		}
-		return &tok.SigConfig{RSAPublicKey: pubKey}
-	}
-	if hmacEnvStr := os.Getenv(env.AisAuthSecretKey); hmacEnvStr != "" {
-		return &tok.SigConfig{HMACSecret: hmacEnvStr}
-	}
-	// Empty config is valid with enabled auth as OIDC issuer lookup may be used
-	if authConf.Signature == nil || authConf.Signature.Method == "" {
-		return &tok.SigConfig{}
-	}
-
-	// Finally check config -- parse according to provided method
-	m := strings.ToUpper(authConf.Signature.Method)
-	switch {
-	case authConf.Signature.IsHMAC():
-		return &tok.SigConfig{HMACSecret: authConf.Signature.Key}
-	case authConf.Signature.IsRSA():
-		pubKey, err := tok.ParsePubKey(authConf.Signature.Key)
-		if err != nil {
-			cos.ExitLogf("Failed to parse RSA public key: %v", err)
-		}
-		return &tok.SigConfig{RSAPublicKey: pubKey}
-	default:
-		cos.ExitLogf("Auth enabled with invalid key signature: %q. Supported values are: %s", m, authConf.Signature.ValidMethods())
-		return nil
 	}
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.
-func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *tokenList) {
+func (a *authManager) updateRevokedList(ctx context.Context, newRevoked *tokenList) (allRevoked *tokenList) {
 	// Add new revoked tokens -- error if invalid version
 	err := a.revokedTokens.update(newRevoked)
 	if err != nil {
@@ -125,7 +83,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	// Remove revoked tokens from the token cache
 	a.tokenMap.deleteMultiple(newRevoked.Tokens)
 	// Clean up any expired tokens from the revoked list
-	return a.revokedTokens.cleanup(a.tokenParser)
+	return a.revokedTokens.cleanup(ctx, a.tokenParser)
 }
 
 func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
@@ -138,7 +96,7 @@ func (a *authManager) revokedTokenList() (allRevoked *tokenList) {
 //   - must have valid JWT claims or equivalent: sub, iss, aud, exp
 //
 // Caches and returns decoded token claims if it is valid
-func (a *authManager) validateToken(token string) (*tok.AISClaims, error) {
+func (a *authManager) validateToken(ctx context.Context, token string) (*tok.AISClaims, error) {
 	if a.revokedTokens.contains(token) {
 		return nil, fmt.Errorf("%w [err: %w]: %s", tok.ErrInvalidToken, tok.ErrTokenRevoked, token)
 	}
@@ -155,13 +113,13 @@ func (a *authManager) validateToken(token string) (*tok.AISClaims, error) {
 		}
 		return claims, nil
 	}
-	return a.cacheNewToken(token)
+	return a.cacheNewToken(ctx, token)
 }
 
 // Take a token string, validate the signature and claims, and add to the authManager cache
-func (a *authManager) cacheNewToken(token string) (claims *tok.AISClaims, err error) {
+func (a *authManager) cacheNewToken(ctx context.Context, token string) (claims *tok.AISClaims, err error) {
 	// Validate token signature and extract
-	claims, err = a.tokenParser.ValidateToken(token)
+	claims, err = a.tokenParser.ValidateToken(ctx, token)
 	if err != nil {
 		nlog.Infof("Received invalid token, error: %v", err)
 		return nil, err
@@ -246,7 +204,7 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
 		return
 	}
-	allRevoked := p.authn.updateRevokedList(tokenList)
+	allRevoked := p.authn.updateRevokedList(r.Context(), tokenList)
 	if allRevoked != nil && p.owner.smap.get().isPrimary(p.si) {
 		msg := p.newAmsgStr(apc.ActNewPrimary, nil)
 		_ = p.metasyncer.sync(revsPair{allRevoked, msg})
@@ -256,12 +214,12 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 // Validates a token from the request header.
 // Supports both standard Bearer tokens and X-Amz-Security-Token
 // as fallback for AWS SDK compatibility.
-func (p *proxy) validateToken(hdr http.Header) (*tok.AISClaims, error) {
+func (p *proxy) validateToken(ctx context.Context, hdr http.Header) (*tok.AISClaims, error) {
 	tokenHdr, err := tok.ExtractToken(hdr)
 	if err != nil {
 		return nil, err
 	}
-	claims, err := p.authn.validateToken(tokenHdr.Token)
+	claims, err := p.authn.validateToken(ctx, tokenHdr.Token)
 	if err != nil {
 		nlog.Errorf("invalid token from header %q: %v ", tokenHdr.Header, err)
 		return nil, err
@@ -280,9 +238,12 @@ func (p *proxy) validateToken(hdr http.Header) (*tok.AISClaims, error) {
 //	- read-only access to a bucket is always granted
 //	- PATCH cannot be forbidden
 func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
-	if err = p.access(r.Header, bck, ace); err != nil {
-		p.writeErr(w, r, err, aceErrToCode(err))
+	if err = p.access(r.Context(), r.Header, bck, ace); err != nil {
+		// Use writeErrMsg (with the combined message from wrapped errors) instead of writeErr
+		// aceErrToCode parses code from the type so additional status code parsing is not necessary
+		p.writeErrMsg(w, r, err.Error(), aceErrToCode(err))
 	}
+
 	return
 }
 
@@ -297,7 +258,7 @@ func aceErrToCode(err error) (status int) {
 	return status
 }
 
-func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
+func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	var (
 		claims *tok.AISClaims
 		bucket *cmn.Bck
@@ -306,7 +267,7 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 		return nil
 	}
 	if cmn.Rom.AuthEnabled() { // config.Auth.Enabled
-		claims, err = p.validateToken(hdr)
+		claims, err = p.validateToken(ctx, hdr)
 		if err != nil {
 			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
 			if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
@@ -460,7 +421,7 @@ func (r *RevokedTokensMap) updateVersion(newRevoked *tokenList) error {
 	return fmt.Errorf("received invalid token list version v%d compared to current token list v%d", newRevoked.Version, currentVersion)
 }
 
-func (r *RevokedTokensMap) cleanup(tkParser tok.Parser) (allRevoked *tokenList) {
+func (r *RevokedTokensMap) cleanup(ctx context.Context, tkParser tok.Parser) (allRevoked *tokenList) {
 	r.Lock()
 	defer r.Unlock()
 	allRevoked = &tokenList{
@@ -470,7 +431,7 @@ func (r *RevokedTokensMap) cleanup(tkParser tok.Parser) (allRevoked *tokenList) 
 
 	// Clean up expired tokens from the revoked list.
 	for token := range r.revokedTokens {
-		_, err := tkParser.ValidateToken(token)
+		_, err := tkParser.ValidateToken(ctx, token)
 		switch {
 		case errors.Is(err, tok.ErrTokenExpired):
 			delete(r.revokedTokens, token)

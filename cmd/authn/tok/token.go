@@ -6,18 +6,21 @@
 package tok
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 
@@ -57,15 +60,11 @@ type (
 
 	Parser interface {
 		// ValidateToken verifies JWT signature and extracts token claims.
-		ValidateToken(tokenStr string) (*AISClaims, error)
+		ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error)
 		// IsSecretCksumValid checks if a provided secret checksum is valid.
 		IsSecretCksumValid(cksumVal string) bool
 		// IsPublicKeyValid checks if a provided public key matches the parser's key.
 		IsPublicKeyValid(pubKeyStr string) (bool, error)
-	}
-
-	RequiredClaims struct {
-		Aud []string
 	}
 )
 
@@ -153,14 +152,49 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 // TokenParser //
 /////////////////
 
-func NewTokenParser(sigConf *SigConfig, reqClaims *RequiredClaims) *TokenParser {
+func NewTokenParser(conf *cmn.AuthConf) *TokenParser {
 	return &TokenParser{
-		sigConfig: sigConf,
-		parseOpts: buildParseOptions(reqClaims),
+		sigConfig: newSigConfig(conf),
+		parseOpts: buildParseOptions(conf.RequiredClaims),
 	}
 }
 
-func buildParseOptions(reqClaims *RequiredClaims) []jwt.ParserOption {
+// Parse config and environment variables to determine keys for validating JWT signatures
+func newSigConfig(authConf *cmn.AuthConf) *SigConfig {
+	// First check for env vars as they take precedence
+	if pubKeyEnvStr := os.Getenv(env.AisAuthPublicKey); pubKeyEnvStr != "" {
+		pubKey, err := parsePubKey(pubKeyEnvStr)
+		if err != nil {
+			cos.ExitLogf("Failed to parse RSA public key: %v", err)
+		}
+		return &SigConfig{RSAPublicKey: pubKey}
+	}
+	if hmacEnvStr := os.Getenv(env.AisAuthSecretKey); hmacEnvStr != "" {
+		return &SigConfig{HMACSecret: hmacEnvStr}
+	}
+	// Empty config is valid with enabled auth as OIDC issuer lookup may be used
+	if authConf.Signature == nil || authConf.Signature.Method == "" {
+		return &SigConfig{}
+	}
+
+	// Finally check config -- parse according to provided method
+	m := strings.ToUpper(authConf.Signature.Method)
+	switch {
+	case authConf.Signature.IsHMAC():
+		return &SigConfig{HMACSecret: authConf.Signature.Key}
+	case authConf.Signature.IsRSA():
+		pubKey, err := parsePubKey(authConf.Signature.Key)
+		if err != nil {
+			cos.ExitLogf("Failed to parse RSA public key: %v", err)
+		}
+		return &SigConfig{RSAPublicKey: pubKey}
+	default:
+		cos.ExitLogf("Auth enabled with invalid key signature: %q. Supported values are: %s", m, authConf.Signature.ValidMethods())
+		return nil
+	}
+}
+
+func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods(supportedSigningMethods),
 	}
@@ -182,7 +216,7 @@ func (tm *TokenParser) parseJWTKey(tok *jwt.Token) (any, error) {
 	}
 }
 
-func ParsePubKey(str string) (*rsa.PublicKey, error) {
+func parsePubKey(str string) (*rsa.PublicKey, error) {
 	if str == "" {
 		return nil, nil
 	}
@@ -206,7 +240,9 @@ func ParsePubKey(str string) (*rsa.PublicKey, error) {
 // (supporting both HMAC (HS256) and RSA (RS256) signing methods)
 // - HS256: validates with secret (symmetric)
 // - RS256: validates with pubKey (asymmetric)
-func (tm *TokenParser) ValidateToken(tokenStr string) (*AISClaims, error) {
+func (tm *TokenParser) ValidateToken(ctx context.Context, tokenStr string) (*AISClaims, error) {
+	// TODO: future use for OIDC pub key lookup
+	_ = ctx
 	jwtToken, err := jwt.ParseWithClaims(
 		tokenStr,
 		&AISClaims{},
@@ -235,7 +271,7 @@ func (tm *TokenParser) IsSecretCksumValid(cksumVal string) bool {
 
 // IsPublicKeyValid Checks if a provided public key matches what this cluster will use to validate tokens
 func (tm *TokenParser) IsPublicKeyValid(pubKeyStr string) (bool, error) {
-	reqKey, err := ParsePubKey(pubKeyStr)
+	reqKey, err := parsePubKey(pubKeyStr)
 	if err != nil {
 		return false, err
 	}

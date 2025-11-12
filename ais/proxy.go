@@ -1091,7 +1091,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, sender, nil)
 	}
 	if errTokens == nil && revokedTokens != nil {
-		_ = p.authn.updateRevokedList(revokedTokens)
+		_ = p.authn.updateRevokedList(r.Context(), revokedTokens)
 	}
 	// 3. respond
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
