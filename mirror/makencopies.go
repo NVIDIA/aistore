@@ -83,7 +83,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 		VisitObj: r.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load,
-		Throttle: true,
+		RW:       true,
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
 	s := r.ctlmsg()

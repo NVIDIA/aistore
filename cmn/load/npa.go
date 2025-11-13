@@ -7,11 +7,14 @@ package load
 import (
 	"runtime"
 
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/oom"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// bitmask of load dimensions (used in refresh argument and getters)
+// load dimensions: bit flags
 const (
 	FlFdt = 1 << iota // file descriptors
 	FlGor             // goroutines
@@ -22,7 +25,7 @@ const (
 	FlAll = FlFdt | FlGor | FlMem | FlCla | FlDsk
 )
 
-// per-dimension load grades
+// per-dimension load level
 type Load uint8
 
 const (
@@ -32,7 +35,7 @@ const (
 	Critical // “extreme” in memsys terms
 )
 
-// 8 bits per dimension packed into a uint64
+// 8 bits per _dimension_ packed into a uint64
 const (
 	slotBits = 8
 	slotMask = uint64(0xff)
@@ -45,13 +48,14 @@ const (
 )
 
 const (
-	lshiftNgrHigh = 10                // red alert: 1024 * num-CPUs
+	lshiftNgrHigh = 10                // high-number-goroutines red alert: 1024 * num-CPUs
 	lshiftNgrWarn = lshiftNgrHigh - 1 // yellow
 )
 
 var (
 	gmp int
-	// grades atomic.Uint64 // TODO: cache it when/if required - likely with mono-time timestamp(s)
+
+	Text = [...]string{"", "low", "moderate", "high", "critical"}
 )
 
 func Init() {
@@ -75,10 +79,12 @@ func Gor(ngr int) Load {
 	}
 }
 
+// NOTE: may trigger free-to-OS
 func Mem() Load {
 	mm := memsys.PageMM()
 	switch mm.Pressure() {
 	case memsys.OOM, memsys.PressureExtreme:
+		oom.FreeToOS(true /*force*/)
 		return Critical
 	case memsys.PressureHigh:
 		return High
@@ -103,33 +109,50 @@ func CPU() Load {
 	}
 }
 
-//
-// refresh selected load "dimensions" and return the packed vector{shifted grades}
-//
+func Dsk(mi *fs.Mountpath, cfg *cmn.DiskConf) Load {
+	var util int64
+	if mi == nil {
+		util = fs.GetMaxUtil()
+	} else {
+		util = mi.GetUtil()
+	}
+	switch {
+	case util >= cfg.DiskUtilMaxWM:
+		return Critical
+	case util > cfg.DiskUtilHighWM:
+		return High
+	default:
+		return Low
+	}
+}
 
-// 8 bits per dimension packed into a uint64
-// each slot is 0 (unset) or one of Load(Low..Critical)
-func Refresh(refresh uint64) (cur uint64) {
-	if refresh&FlGor != 0 {
+// refresh selected load _dimensions_ and return the packed vector:
+// - 8 bits per dimension packed into a uint64
+// - each slot is 0 (unset) or one of Load(Low..Critical)
+// - calls oom.FreeToOS when critical
+func refresh(flags uint64, mi *fs.Mountpath, cfg *cmn.DiskConf) (vec uint64) {
+	if flags&FlGor != 0 {
 		ngr := runtime.NumGoroutine()
-		cur = setSlot(cur, gorShift, Gor(ngr))
+		vec = setSlot(vec, gorShift, Gor(ngr))
 	}
-	if refresh&FlMem != 0 {
-		cur = setSlot(cur, memShift, Mem())
+	if flags&FlMem != 0 {
+		vec = setSlot(vec, memShift, Mem())
 	}
-	if refresh&FlCla != 0 {
-		cur = setSlot(cur, cpuShift, CPU())
+	if flags&FlCla != 0 {
+		vec = setSlot(vec, cpuShift, CPU())
 	}
-	// grades.Store(cur)
-	return cur
+	if flags&FlDsk != 0 {
+		vec = setSlot(vec, dskShift, Dsk(mi, cfg))
+	}
+	return vec
 }
 
 // func fdtOf(x uint64) Load { return Load((x >> fdtShift) & slotMask) } // TODO: use it
+
+func dskOf(x uint64) Load { return Load((x >> dskShift) & slotMask) } // ditto
 func gorOf(x uint64) Load { return Load((x >> gorShift) & slotMask) }
 func memOf(x uint64) Load { return Load((x >> memShift) & slotMask) }
 func cpuOf(x uint64) Load { return Load((x >> cpuShift) & slotMask) }
-
-// func dskOf(x uint64) Load { return Load((x >> dskShift) & slotMask) } // ditto
 
 func setSlot(x uint64, shift int, g Load) uint64 {
 	x &^= (slotMask << shift)

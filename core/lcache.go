@@ -16,16 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/memsys"
-)
-
-const (
-	skipEvictThreashold = 20                  // likely not running when above
-	maxEvictThreashold  = load.MaxThrottlePct // not running when above
 )
 
 type (
@@ -45,8 +38,8 @@ type (
 		wg      *sync.WaitGroup
 		cache   *sync.Map
 		d       time.Duration
-		pct     int
 		evicted int64
+		adv     load.Advice // throttle
 	}
 	// termination
 	term struct {
@@ -60,9 +53,10 @@ type (
 		cache *sync.Map
 		bcks  []*meta.Bck
 		begin int64
-		pct   int
 		nd    int64
-		// on => off at half-time
+
+		// throttle
+		adv      load.Advice
 		throttle bool
 	}
 )
@@ -89,16 +83,22 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 	g.lchk.rc.Inc()
 	defer g.lchk.rc.Dec()
 
-	// mem pressure; NOTE: may call oom.FreeToOS
-	if g.lchk.mempDropAll() {
-		return true // dropped all caches, nothing to do
+	memLoad := load.Mem() // may trigger free-to-OS
+	if memLoad == load.Critical {
+		g.lchk.dropAll()
+		return true // dropped all caches, nothing more to do
 	}
 
-	pct, util, lavg := load.ThrottlePct()
-	flog := cos.Ternary(pct > maxEvictThreashold, nlog.Warningln, nlog.Infoln)
-	flog("uncache:", bcks[0].String(), "[ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
+	config := cmn.GCO.Get()
+	cpuLoad := load.CPU()
+	dskLoad := load.Dsk(nil /*all*/, &config.Disk)
+
+	// log
+	_log("uncache:", memLoad, cpuLoad, dskLoad)
 	if num := len(bcks); num > 1 {
-		flog("\tmultiple buckets:", bcks[0].String(), bcks[1].String(), "... [ num:", num, "]")
+		nlog.Infoln("\tmultiple buckets:", bcks[0].String(), bcks[1].String(), "... [ num:", num, "]")
+	} else {
+		nlog.Infoln("\tsingle bucket:", bcks[0].String())
 	}
 
 	avail := fs.GetAvail()
@@ -109,10 +109,13 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) bool {
 			mi:       mi,
 			wg:       wg,
 			bcks:     bcks,
-			pct:      pct,
 			begin:    begin,
 			throttle: true,
 		}
+		u.adv.Init(
+			load.FlMem|load.FlCla,
+			&load.Extra{RW: false}, // metadata-only
+		)
 		go u.do()
 	}
 	return false
@@ -140,7 +143,6 @@ func (u *rmbcks) do() {
 		}
 		u.cache = u.mi.LomCaches.Get(idx)
 		u.cache.Range(u.f)
-
 		// stop throttling at half-timeout (see metasync)
 		if u.throttle && mono.Since(u.begin) > cmn.Rom.MaxKeepalive()>>1 {
 			u.throttle = false
@@ -164,10 +166,10 @@ func (u *rmbcks) f(hkey, value any) bool {
 		}
 		// throttle
 		u.nd++
-		if u.throttle && load.IsThrottleDflt(u.nd) {
-			// compare with _throttle(evct.pct) but note: caller's waiting on wg
-			if u.pct >= maxEvictThreashold {
-				time.Sleep(load.Throttle10ms)
+		if u.throttle && u.adv.ShouldCheck(u.nd) {
+			u.adv.Refresh()
+			if u.adv.Sleep > 0 {
+				time.Sleep(u.adv.Sleep)
 			} else {
 				runtime.Gosched()
 			}
@@ -238,6 +240,17 @@ func (*term) f(_, value any) bool {
 // HK evict
 //
 
+func (lchk *lchk) dropAll() {
+	nlog.WarningDepth(1, "dropping all caches")
+	LcacheClear()
+	lchk.last = time.Now()
+}
+
+func _log(tag string, memLoad, cpuLoad, dskLoad load.Load) {
+	flog := cos.Ternary(memLoad > load.Moderate || cpuLoad > load.Moderate || dskLoad > load.Moderate, nlog.Warningln, nlog.Infoln)
+	flog(tag, "[ mem/cpu/disk:", load.Text[memLoad], load.Text[cpuLoad], load.Text[dskLoad], "]")
+}
+
 func (lchk *lchk) housekeep(int64) time.Duration {
 	// refresh
 	config := cmn.GCO.Get()
@@ -250,24 +263,29 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 		return lchk.timeout
 	}
 
-	// mem pressure; NOTE: may call oom.FreeToOS
-	if lchk.mempDropAll() {
+	memLoad := load.Mem() // may trigger free-to-OS
+	if memLoad == load.Critical {
+		lchk.dropAll()
 		return lchk.timeout
 	}
 
-	// load, utilization
-	pct, util, lavg := load.ThrottlePct()
-	nlog.Infoln("hk: [ throttle(%%):", pct, "dutil:", util, "load avg:", lavg, "]")
+	cpuLoad := load.CPU()
+	dskLoad := load.Dsk(nil /*max util*/, &config.Disk)
+	_log("hk:", memLoad, cpuLoad, dskLoad)
 
-	if pct > maxEvictThreashold {
-		nlog.Warningln("max-evict threshold:", maxEvictThreashold, "- not running")
+	now := time.Now()
+	memBad := memLoad >= load.High
+
+	// hard skip: memory is OK (<= Moderate) but CPU or disk are Critical
+	if !memBad && (cpuLoad == load.Critical || dskLoad == load.Critical) {
+		nlog.Warningln("hk: high system load (cpu:", cpuLoad, "disk:", dskLoad, ") - not running")
 		return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 	}
 
-	now := time.Now()
-	if pct > skipEvictThreashold {
+	// soft skip: memory is OK, CPU/disk are high, and we ran recently
+	if !memBad && (cpuLoad == load.High || dskLoad == load.High) {
 		if elapsed := now.Sub(lchk.last); elapsed < min(cmn.LcacheEvictMax, max(lchk.timeout, time.Hour)*8) {
-			nlog.Warningln("skip-evict threshold:", skipEvictThreashold, "elapsed:", elapsed, "- not running")
+			nlog.Warningln("hk: high load, elapsed:", elapsed, "- not running")
 			return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 		}
 	}
@@ -281,25 +299,12 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	// finally, run
 	nlog.Infoln("hk begin")
 	lchk.last = now
-	go lchk.evict(lchk.timeout, now, pct)
+	go lchk.evict(lchk.timeout, now) // note: evict signature drops 'pct'
 
 	return hk.Jitter(lchk.timeout, now.UnixNano())
 }
 
-func (lchk *lchk) mempDropAll() bool /*dropped*/ {
-	if p := g.pmm.Pressure(); p >= memsys.PressureExtreme {
-		nlog.WarningDepth(1, "dropping all caches")
-		LcacheClear()
-		lchk.last = time.Now()
-
-		oom.FreeToOS(true)
-		return true
-	}
-
-	return false
-}
-
-func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {
+func (lchk *lchk) evict(timeout time.Duration, now time.Time) {
 	defer lchk.running.Store(false)
 	var (
 		avail   = fs.GetAvail()
@@ -316,8 +321,11 @@ func (lchk *lchk) evict(timeout time.Duration, now time.Time, pct int) {
 			wg:     wg,
 			now:    now,
 			d:      timeout,
-			pct:    pct,
 		}
+		evct.adv.Init(
+			load.FlMem|load.FlCla,
+			&load.Extra{RW: false},
+		)
 		go evct.do()
 	}
 	wg.Wait()
@@ -370,10 +378,14 @@ func (evct *evct) f(hkey, value any) bool {
 
 	// throttle
 	evct.evicted++
-	if load.IsThrottleMini(evct.evicted) {
-		_throttle(evct.pct)
+	if evct.adv.ShouldCheck(evct.evicted) {
+		evct.adv.Refresh()
+		if evct.adv.Sleep > 0 {
+			time.Sleep(evct.adv.Sleep)
+		} else {
+			runtime.Gosched()
+		}
 	}
-
 	return evct.parent.rc.Load() == 0
 }
 
@@ -428,16 +440,4 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 	}
 	g.smm.Free(buf)
 	FreeLOM(lom)
-}
-
-//
-// throttle
-//
-
-func _throttle(pct int) {
-	if pct < 10 {
-		runtime.Gosched()
-	} else {
-		time.Sleep(time.Duration(pct) * time.Millisecond)
-	}
 }

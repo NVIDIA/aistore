@@ -39,9 +39,10 @@ type (
 	}
 	XactBckEncode struct {
 		xact.Base
-		bck  *meta.Bck
-		wg   *sync.WaitGroup // to wait for EC finishes all objects
-		smap *meta.Smap
+		bck    *meta.Bck
+		wg     *sync.WaitGroup // to wait for EC finishes all objects
+		smap   *meta.Smap
+		config *cmn.Config
 		//
 		// check and recover slices and metafiles
 		//
@@ -56,6 +57,8 @@ type (
 		workCh   chan *core.LOM
 		r        *XactBckEncode
 		chanFull cos.ChanFull
+		// throttle
+		adv load.Advice
 	}
 )
 
@@ -80,10 +83,12 @@ func (p *encFactory) Start() error {
 	r := &XactBckEncode{
 		bck:             p.Bck,
 		checkAndRecover: custom.Recover,
+		config:          cmn.GCO.Get(),
 	}
 	if err := r.init(p.UUID()); err != nil {
 		return err
 	}
+
 	p.xctn = r
 	return nil
 }
@@ -142,6 +147,10 @@ func (r *XactBckEncode) init(uuid string) error {
 				workCh: make(chan *core.LOM, rcvyWorkChanSize),
 				r:      r,
 			}
+			j.adv.Init(
+				load.FlMem|load.FlCla|load.FlDsk,
+				&load.Extra{Mi: mi, Cfg: &r.config.Disk, RW: true /* heavy IO */},
+			)
 			r.rcvyJG[mi.Path] = j
 		}
 	}
@@ -156,6 +165,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 		CTs:      []string{fs.ObjCT},
 		VisitObj: r.encode,
 		DoLoad:   mpather.Load,
+		RW:       true,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
 
@@ -171,8 +181,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 		}
 	}
 
-	config := cmn.GCO.Get()
-	jg := mpather.NewJoggerGroup(opts, config, nil)
+	jg := mpather.NewJoggerGroup(opts, r.config, nil)
 	jg.Run()
 
 	select {
@@ -364,11 +373,10 @@ func (j *rcvyJogger) run() {
 		core.FreeLOM(lom)
 
 		n++
-		// (compare with ec/putjogger where we also check memory pressure)
-		if err == nil && load.IsThrottleDflt(n) {
-			pct, _, _ := load.ThrottlePct()
-			if pct >= load.MaxThrottlePct {
-				time.Sleep(load.Throttle10ms)
+		if err == nil && j.adv.ShouldCheck(n) {
+			j.adv.Refresh()
+			if j.adv.Sleep > 0 {
+				time.Sleep(j.adv.Sleep)
 			}
 		}
 	}

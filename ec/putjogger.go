@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -49,15 +48,16 @@ type (
 		parent *XactPut
 		slab   *memsys.Slab
 		buffer []byte
-		mpath  string
+		mi     *fs.Mountpath
 
 		putCh  chan *request // top priority operation (object PUT)
 		xactCh chan *request // low priority operation (ec-encode)
 		stopCh cos.StopCh    // jogger management channel: to stop it
 
-		ntotal int64 // (throttle to prevent OOM)
-		micro  bool  // (throttle tuneup)
-		toDisk bool  // use files or SGL (NOTE: toDisk == false may cause OOM)
+		ntotal int64
+		adv    load.Advice // throttle
+
+		toDisk bool // use files or SGL (NOTE: toDisk == false may cause OOM)
 	}
 )
 
@@ -85,7 +85,7 @@ func (ctx *encodeCtx) freeReplica() {
 ///////////////
 
 func (c *putJogger) run(wg *sync.WaitGroup) {
-	nlog.Infoln("start [", c.parent.bck.Cname(""), c.mpath, "]")
+	nlog.Infoln("start [", c.parent.bck.Cname(""), c.mi.String(), "]")
 
 	defer wg.Done()
 	c.buffer, c.slab = g.pmm.Alloc()
@@ -146,25 +146,22 @@ func (c *putJogger) _do(req *request, lom *core.LOM) {
 	c.parent.stats.updateWaitTime(now.Sub(req.tm))
 	req.tm = now
 
-	if err := c.ec(req, lom); err != nil {
+	err := c.ec(req, lom)
+	if err != nil {
 		err = cmn.NewErrFailedTo(core.T, req.Action, lom.Cname(), err)
 		c.parent.AddErr(err, 0)
 	}
 	c.ntotal++
-	if (c.micro && load.IsThrottleMicro(c.ntotal)) || load.IsThrottleMini(c.ntotal) {
-		if pressure := g.pmm.Pressure(); pressure >= memsys.PressureHigh {
-			time.Sleep(load.Throttle100ms)
-			if !c.micro && pressure >= memsys.PressureExtreme {
-				// too late?
-				c.micro = true
-				oom.FreeToOS(true /*force*/)
-			}
+	if err == nil && c.adv.ShouldCheck(c.ntotal) {
+		c.adv.Refresh()
+		if c.adv.Sleep > 0 {
+			time.Sleep(c.adv.Sleep)
 		}
 	}
 }
 
 func (c *putJogger) stop() {
-	nlog.Infoln("stop [", c.parent.bck.Cname(""), c.mpath, "]")
+	nlog.Infoln("stop [", c.parent.bck.Cname(""), c.mi.String(), "]")
 	c.stopCh.Close()
 }
 

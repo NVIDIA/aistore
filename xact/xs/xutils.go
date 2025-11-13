@@ -103,10 +103,11 @@ const (
 	nwpDflt = 0  // (number of mountpaths)
 )
 
-// throttle all list-range type jobs and tcb, where:
+// clamp the requested number of workers based on node load
+// usage: all list-range type jobs and tcb
 // - xname is xaction name
 // - n is the requested number of workers
-func throttleNwp(xname string, n, numMpaths int) (int, error) {
+func clampNumWorkers(xname string, n, numMpaths int) (int, error) {
 	const memExtremeMsg = "extreme memory pressure"
 	var (
 		ngr     = runtime.NumGoroutine()

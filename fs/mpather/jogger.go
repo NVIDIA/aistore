@@ -48,7 +48,7 @@ type (
 		DoLoad      LoadType // if specified, lom.Load(lock type)
 		IncludeCopy bool     // visit copies (aka replicas)
 		PerBucket   bool     // num joggers = (num mountpaths) x (num buckets)
-		Throttle    bool     // true: pace itself depending on disk utilization
+		RW          bool     // true when performs data IO
 	}
 
 	// Jgroup runs jogger per mountpath which walk the entire bucket and
@@ -73,6 +73,7 @@ type (
 		stopCh    cos.StopCh
 		buf       []byte
 		numvis    atomic.Int64 // counter: num visited objects
+		adv       load.Advice  // throttle
 	}
 )
 
@@ -173,6 +174,9 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjCT) // this mountpath's bucket dir that contains objects
 		j.objPrefix = filepath.Join(j.bdir, opts.Prefix)
 	}
+	// throttling context
+	j.adv.Init(load.FlMem|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: j.opts.RW})
+
 	j.stopCh.Init()
 	return
 }
@@ -298,11 +302,10 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 	}
 
 	n := j.numvis.Inc()
-
-	// poor man's throttle; see "rate limit"
-	if j.opts.Throttle {
-		if load.IsThrottleDflt(n) {
-			j.throttle()
+	if j.opts.RW && j.adv.ShouldCheck(n) {
+		j.adv.Refresh()
+		if j.adv.Sleep > 0 {
+			time.Sleep(j.adv.Sleep)
 		} else {
 			runtime.Gosched()
 		}
@@ -356,13 +359,6 @@ func (j *jogger) checkStopped() error {
 		return cmn.NewErrAborted(j.String(), "mpath-jog", nil)
 	default:
 		return nil
-	}
-}
-
-func (j *jogger) throttle() {
-	curUtil := fs.GetMpathUtil(j.mi.Path)
-	if curUtil >= j.config.Disk.DiskUtilHighWM {
-		time.Sleep(load.Throttle1ms)
 	}
 }
 

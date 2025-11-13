@@ -137,10 +137,11 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	// - not using any workers - is the supported default.
 
 	if msg.NumWorkers > 0 {
-		// tune-up the specified number of workers
-		l := fs.NumAvail()
-		n := max(msg.NumWorkers, l)
-		numWorkers, err := throttleNwp(r.Name(), n, l)
+		var (
+			l = fs.NumAvail()
+			n = max(msg.NumWorkers, l)
+		)
+		numWorkers, err := clampNumWorkers(r.Name(), n, l)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +256,7 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 			Prefix:   msg.Prefix,
 			Slab:     slab,
 			DoLoad:   mpather.Load,
-			Throttle: false, // superseded by destination rate-limiting (v3.28)
+			RW:       true,
 		}
 	)
 	mpopts.Bck.Copy(args.BckFrom.Bucket())

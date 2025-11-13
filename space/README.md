@@ -82,7 +82,12 @@ Behavior depends on whether EC is enabled for the bucket:
 ## 3. Implementation Details
 
 ### Throttling
-Scanning uses `fs.IsThrottleWalk` to prevent I/O spikes during large operations.
+
+Space cleanup uses the unified `cmn/load` throttling (`load.Advice`) to avoid I/O and CPU spikes during large scans:
+
+- Each mountpath  keeps a `load.Advice` instance initialized with `FlMem|FlCla|FlDsk` and `RW=false` (metadata-only).
+- On every N-th visit (`adv.ShouldCheck(nvisits)`), it refreshes node pressure and may insert a small sleep.
+- Under `Critical` memory, CPU, or disk pressure, cleanup backs off; under merely `High` load it keeps progressing but with gentler pacing.
 
 ### Time Dependencies
 Relies on filesystem mtimes. Clock changes on the operator may influence cleanup decisions.

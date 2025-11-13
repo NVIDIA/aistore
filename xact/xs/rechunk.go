@@ -109,7 +109,7 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 			Slab:     slab,
 			Prefix:   args.Prefix,
 			DoLoad:   mpather.Load,
-			Throttle: false,
+			RW:       true,
 		}
 	)
 

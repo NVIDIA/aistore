@@ -83,14 +83,19 @@ type (
 	// lruJ represents a single LRU context and a single /jogger/
 	// that traverses and evicts a single given mountpath.
 	lruJ struct {
-		p           *lruP    // parent
-		heap        *minHeap // sorted
-		ini         *IniLRU  // init params
-		stopCh      chan struct{}
-		joggers     map[string]*lruJ
-		mi          *fs.Mountpath // the mountpath
-		config      *cmn.Config   // to refresh independently
-		bck         cmn.Bck
+		p      *lruP    // parent
+		heap   *minHeap // sorted
+		ini    *IniLRU  // init params
+		stopCh chan struct{}
+		mi     *fs.Mountpath // the mountpath
+		config *cmn.Config   // to refresh independently
+		bck    cmn.Bck
+
+		// throttle
+		nvisits int64
+		adv     load.Advice
+
+		// runtime state
 		capCheck    int64
 		newest      int64
 		now         int64
@@ -155,7 +160,7 @@ func RunLRU(ini *IniLRU) {
 
 	for mpath, mi := range avail {
 		h := make(minHeap, 0, 64)
-		joggers[mpath] = &lruJ{
+		j := &lruJ{
 			heap:   &h,
 			stopCh: make(chan struct{}, 1),
 			mi:     mi,
@@ -163,12 +168,15 @@ func RunLRU(ini *IniLRU) {
 			ini:    &parent.ini,
 			p:      parent,
 		}
+		// init throttling context
+		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: false})
+
+		joggers[mpath] = j
 	}
 	providers := apc.Providers.ToSlice()
 
 	for _, j := range joggers {
 		parent.wg.Add(1)
-		j.joggers = joggers
 		go j.run(providers)
 	}
 	cs := fs.Cap()
@@ -387,6 +395,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 	if j.done() {
 		return nil
 	}
+	j.nvisits++
 	if _, err := core.ResolveFQN(fqn, &parsed); err != nil {
 		xlru := j.ini.Xaction
 		xlru.AddErr(err, 0)
@@ -428,8 +437,10 @@ func (j *lruJ) evict(batch int64) {
 
 		// plus, once per batch
 		if fevicted >= batch {
-			usedPct, _ := j.ini.GetFSUsedPercentage(j.mi.Path)
-			j._throttle(usedPct)
+			j.adv.Refresh()
+			if j.adv.Sleep > 0 {
+				time.Sleep(j.adv.Sleep)
+			}
 		}
 	}
 }
@@ -445,34 +456,15 @@ func (j *lruJ) capCheckAndThrottle(size int64) {
 	j.allowDelObj, _ = j.allow()
 	j.config = cmn.GCO.Get() // refresh
 	j.now = time.Now().UnixNano()
-	usedPct, err := j.ini.GetFSUsedPercentage(j.mi.Path)
-	if err != nil {
-		xlru := j.ini.Xaction
-		e := fmt.Errorf("%s: unexpected failure to check used%%: %v", j, err)
-		xlru.Abort(e)
-		return
-	}
-	j._throttle(usedPct)
 	j.capCheck = 0
-}
 
-func (j *lruJ) _throttle(usedPct int64) {
-	if usedPct >= j.config.Space.HighWM {
-		return
-	}
-	util := j.mi.GetUtil()
-	if util < j.config.Disk.DiskUtilLowWM {
-		return
-	}
-	var (
-		ratioCap  = cos.RatioPct(j.config.Space.HighWM, j.config.Space.LowWM, usedPct)
-		ratioUtil = cos.RatioPct(j.config.Disk.DiskUtilHighWM, j.config.Disk.DiskUtilLowWM, util)
-	)
-	if ratioUtil >= ratioCap {
-		if util > j.config.Disk.DiskUtilHighWM {
-			time.Sleep(load.Throttle10ms)
-		} else {
-			time.Sleep(load.Throttle1ms)
+	if j.adv.ShouldCheck(j.nvisits) {
+		usedPct, _ := j.ini.GetFSUsedPercentage(j.mi.Path)
+		if usedPct < j.config.Space.HighWM {
+			j.adv.Refresh()
+			if j.adv.Sleep > 0 {
+				time.Sleep(j.adv.Sleep)
+			}
 		}
 	}
 }

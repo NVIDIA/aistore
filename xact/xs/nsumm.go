@@ -106,6 +106,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		VisitObj:    r.visitObj,
 		DoLoad:      mpather.Load,
 		IncludeCopy: true,
+		RW:          false,
 	}
 	if !p.Bck.IsQuery() {
 		r.initRes(&r.oneRes, p.Bck) // init single result-set

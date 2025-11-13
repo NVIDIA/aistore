@@ -108,6 +108,7 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 			VisitObj: jctx.visitObj,
 			VisitCT:  jctx.visitCT,
 			Slab:     slab,
+			RW:       false, // system-critical to run
 		}
 	)
 	debug.AssertNoErr(err)

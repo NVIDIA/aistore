@@ -101,6 +101,9 @@ type (
 		nmisplc int64
 		norphan int64
 		nvisits int64
+
+		// throttle
+		adv load.Advice
 	}
 	clnFactory struct {
 		xctn *XactCln
@@ -190,6 +193,11 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 			now:     now,
 		}
 		j.name = j._str()
+
+		// init throttling context
+		j.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: false})
+
+		// add
 		joggers[mpath] = j
 		joggers[mpath].misplaced.loms = make([]*core.LOM, 0, 64)
 		joggers[mpath].misplaced.ec = make([]*core.CT, 0, 64)
@@ -417,6 +425,7 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
+	j.nvisits++
 	if finfo, err := os.Lstat(fqn); err == nil {
 		mtime := finfo.ModTime()
 		if mtime.Add(j.dont()).After(j.now) {
@@ -445,10 +454,10 @@ func (j *clnJ) visit(fqn string, de fs.DirEntry) error {
 		core.FreeLOM(lom)
 	}
 
-	j.nvisits++
-	if load.IsThrottleWalk(j.nvisits) {
-		if pct, _, _ := load.ThrottlePct(); pct >= load.MaxThrottlePct {
-			time.Sleep(load.Throttle1ms)
+	if j.adv.ShouldCheck(j.nvisits) {
+		j.adv.Refresh()
+		if j.adv.Sleep > 0 {
+			time.Sleep(j.adv.Sleep)
 		}
 	}
 
@@ -980,10 +989,11 @@ func (j *clnJ) rmLeftovers(specifier int) {
 	xcln.ObjsAdd(int(nfiles), nbytes)
 }
 
-func (*clnJ) _throttle(n int64) {
-	if load.IsThrottleDflt(n) {
-		if pct, _, _ := load.ThrottlePct(); pct >= load.MaxThrottlePct {
-			time.Sleep(load.Throttle10ms)
+func (j *clnJ) _throttle(n int64) {
+	if j.adv.ShouldCheck(n) {
+		j.adv.Refresh()
+		if j.adv.Sleep > 0 {
+			time.Sleep(j.adv.Sleep)
 		}
 	}
 }

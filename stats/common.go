@@ -630,7 +630,7 @@ func (r *runner) checkNgr(now, lastNgr int64) int64 {
 		ngr     = runtime.NumGoroutine()
 		ngrLoad = load.Gor(ngr)
 	)
-	if ngrLoad == load.Low || ngrLoad == load.Moderate {
+	if ngrLoad < load.High {
 		if lastNgr != 0 {
 			r.ClrFlag(NodeAlerts, cos.HighNumGoroutines|cos.NumGoroutines)
 			nlog.Infoln(NgrPrompt, "is now back to normal:", ngr)
