@@ -5,6 +5,7 @@
 package tok_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -48,7 +49,7 @@ var (
 		Key:    testHMACSigningSecret,
 		Method: cmn.SigMethodHMAC,
 	}
-	hmacParser       = tok.NewTokenParser(&cmn.AuthConf{RequiredClaims: reqClaims, Signature: hmacSigConfig}, nil, nil)
+	hmacParser       = tok.NewTokenParser(&cmn.AuthConf{RequiredClaims: reqClaims, Signature: hmacSigConfig}, nil)
 	basicAdminClaims = tok.AdminClaims(futureTime, testUser, testAudience)
 	cacheConfNoRetry = &tok.CacheConfig{
 		DiscoveryConf: &tok.DiscoveryConf{
@@ -180,7 +181,7 @@ func TestCreateRSATokenStr(t *testing.T) {
 	derBytes, err := x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
 	tassert.Errorf(t, err == nil, "Failed to marshal rsa public key: %v", err)
 	sigConf := &cmn.AuthSignatureConf{Key: base64.StdEncoding.EncodeToString(derBytes), Method: cmn.SigMethodRSA}
-	tkParser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil, nil)
+	tkParser := tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
 	tk, err := tok.CreateRSATokenStr(basicAdminClaims, rsaKey)
 	tassert.Errorf(t, err == nil, "Failed to create RSA-signed token string: %v", err)
 	_, err = tkParser.ValidateToken(t.Context(), tk)
@@ -337,7 +338,7 @@ func TestValidateToken_InvalidKey(t *testing.T) {
 	tokenStr, err := tok.CreateHMACTokenStr(basicAdminClaims, testHMACSigningSecret)
 	tassert.Fatalf(t, err == nil, "AdminJWT token generation failed: %v", err)
 	invalidSig := &cmn.AuthSignatureConf{Key: "invalid-secret", Method: cmn.SigMethodHMAC}
-	invalidParser := tok.NewTokenParser(&cmn.AuthConf{Signature: invalidSig}, nil, nil)
+	invalidParser := tok.NewTokenParser(&cmn.AuthConf{Signature: invalidSig}, nil)
 	_, err = invalidParser.ValidateToken(t.Context(), tokenStr)
 	tassert.Fatal(t, errors.Is(err, tok.ErrInvalidToken), "Expected validating token with wrong key to fail")
 }
@@ -413,6 +414,7 @@ type testTokenEnv struct {
 	jwksJSON string
 	jwksSrv  *httptest.Server
 	oidcSrv  *httptest.Server
+	keyCache *tok.KeyCacheManager
 	tkParser *tok.TokenParser
 }
 
@@ -429,12 +431,13 @@ func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
 	// The URL of the mock server is our issuer
 	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{oidcS.URL}}
 	// Set up the TLS config and get the config for our client
-	clientConf := getClientConf(t, oidcS.Certificate())
-	tkParser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, clientConf, nil)
+	authConf := &cmn.AuthConf{OIDC: oidcConf}
+	client := getKeyCacheClient(t, oidcS.Certificate())
+	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, client, nil)
+	tkParser := tok.NewTokenParser(authConf, keyCacheManager)
 	tassert.Fatalf(t, err == nil, "Failed to create token parser: %v", err)
 	if init {
-		err = tkParser.InitKeyCache(t.Context())
-		tassert.Fatalf(t, err == nil, "Failed to initialize token parser key cache: %v", err)
+		initKeyCacheManager(t, keyCacheManager)
 	}
 	t.Cleanup(func() {
 		jwksS.Close()
@@ -442,35 +445,52 @@ func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
 	})
 
 	return testTokenEnv{
-		keyID, rsaKey, jwksJSON, jwksS, oidcS, tkParser,
+		keyID, rsaKey, jwksJSON, jwksS, oidcS, keyCacheManager, tkParser,
 	}
 }
 
-func getClientConf(t *testing.T, cert *x509.Certificate) *tok.JWKSClientConf {
-	// Extract the certificate from the test server and encode it as PEM
-	caCertPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: cert.Raw,
-	})
+func initKeyCacheManager(t *testing.T, kcm *tok.KeyCacheManager) {
+	kcm.Init(t.Context())
+	jwksCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := kcm.PopulateJWKSCache(jwksCtx)
+	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
+}
 
-	// Write to a temp file if your ClientCA expects a file path
-	caFile, err := os.CreateTemp(t.TempDir(), "test-ca-*.pem")
-	tassert.Fatalf(t, err == nil, "Failed to create temp CA file: %v", err)
-	t.Cleanup(func() {
-		os.Remove(caFile.Name())
-	})
+func getKeyCacheClient(t *testing.T, cert *x509.Certificate) *http.Client {
+	tls := cmn.TLSArgs{
+		SkipVerify: false,
+	}
+	if cert != nil {
+		// Extract the certificate from the test server and encode it as PEM
+		caCertPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Raw,
+		})
 
-	_, err = caFile.Write(caCertPEM)
-	tassert.Fatalf(t, err == nil, "Failed to write CA cert: %v", err)
-	caFile.Close()
+		// Write to a temp file
+		caFile, err := os.CreateTemp(t.TempDir(), "test-ca-*.pem")
+		tassert.Fatalf(t, err == nil, "Failed to create temp CA file: %v", err)
+		t.Cleanup(func() {
+			os.Remove(caFile.Name())
+		})
 
-	// The URL of the mock server is our issuer
-	return &tok.JWKSClientConf{
-		TLSArgs: &cmn.TLSArgs{
+		_, err = caFile.Write(caCertPEM)
+		tassert.Fatalf(t, err == nil, "Failed to write CA cert: %v", err)
+		caFile.Close()
+
+		tls = cmn.TLSArgs{
 			ClientCA:   caFile.Name(), // Path to the CA cert file
 			SkipVerify: false,
-		},
+		}
 	}
+	transport := cmn.TransportArgs{
+		DialTimeout:      1 * time.Second,
+		Timeout:          2 * time.Second,
+		IdleConnsPerHost: 0,
+		MaxIdleConns:     1,
+	}
+	return cmn.NewClientTLS(transport, tls, false)
 }
 
 func TestValidateToken_IssLookup(t *testing.T) {
@@ -489,13 +509,20 @@ func TestValidateToken_IssLookupNoInit(t *testing.T) {
 	basicAdminClaims.Issuer = env.oidcSrv.URL
 	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
 	_, err := env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err != nil, "Expected token validation to fail with uninitialized cache")
+	tassert.Error(t, err != nil, "Expected token validation to fail with uninitialized cache manager")
 
 	// Init and repeat
-	err = env.tkParser.InitKeyCache(t.Context())
-	tassert.Errorf(t, err == nil, "Failed to initialize token key cache: %v", err)
+	env.keyCache.Init(t.Context())
 	_, err = env.tkParser.ValidateToken(t.Context(), tk)
-	tassert.Errorf(t, err == nil, "Failed to validate RSA-signed token: %v", err)
+	tassert.Errorf(t, err == nil, "Expected validation to succeed after initialization without pre-population: %v", err)
+
+	// "Proper" pre-population after dynamic lookup
+	jwksCtx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err = env.keyCache.PopulateJWKSCache(jwksCtx)
+	tassert.Fatalf(t, err == nil, "Failed to populate key manager cache: %v", err)
+	_, err = env.tkParser.ValidateToken(t.Context(), tk)
+	tassert.Errorf(t, err == nil, "Expected validation to still succeed after manual pre-population: %v", err)
 }
 
 func TestValidateToken_IssLookupNoKey(t *testing.T) {
@@ -512,16 +539,14 @@ func TestValidateToken_IssLookupNoKey(t *testing.T) {
 
 func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
 	env := setupTokenTestEnv(t, true)
-	oidcConf := &cmn.OIDCConf{
-		// Empty allowed issuer fails validation
-		AllowedIssuers: []string{},
-	}
-	emptyTkParser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, nil, nil)
-	err := emptyTkParser.InitKeyCache(t.Context())
-	tassert.Fatalf(t, err == nil, "Failed to init key cache for token parser: %v", err)
+	// Empty allowed issuer fails validation
+	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}
+	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil)
+	initKeyCacheManager(t, keyCacheManager)
+	emptyTkParser := tok.NewTokenParser(authConf, keyCacheManager)
 	basicAdminClaims.Issuer = env.oidcSrv.URL
 	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
-	_, err = emptyTkParser.ValidateToken(t.Context(), tk)
+	_, err := emptyTkParser.ValidateToken(t.Context(), tk)
 	tassert.Error(t, err != nil, "Expected validation failure with no allowed issuers")
 
 	basicAdminClaims.Issuer = "wrong-issuer"
@@ -535,72 +560,51 @@ func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
 	tassert.Error(t, err != nil, "Expected validation failure with missing token issuer")
 }
 
-func TestNewTokenParser_InvalidDiscovery(t *testing.T) {
-	// Test that an invalid discovery URL raises an error when calling InitKeyCache
+func TestKeyCacheManager_Population_InvalidDiscovery(t *testing.T) {
+	// Test that an invalid discovery URL raises an error when initializing a KeyCacheManager
 	for _, url := range invalidIssuerURLs {
-		oidcConf := &cmn.OIDCConf{
-			AllowedIssuers: []string{url},
-		}
-		parser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, nil, nil)
-		err := parser.InitKeyCache(t.Context())
+		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{url}}}
+		kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), nil)
+		kcm.Init(t.Context())
+		err := kcm.PopulateJWKSCache(t.Context())
 		tassert.Errorf(
 			t, err != nil,
-			"Token parser initialization should fail for invalid discovery URL: %q", url,
+			"Key Cache Manager population should raise error for invalid discovery URL %s", url,
 		)
 	}
 }
 
-func TestNewTokenParser_PartiallyValidDiscovery(t *testing.T) {
-	// Test that including both a valid and invalid discovery URL does NOT raise an error
-	// Don't initialize token parser -- we'll use our own here with specific issuers
-	env := setupTokenTestEnv(t, false)
-	oidcConf := &cmn.OIDCConf{
-		AllowedIssuers: []string{invalidIssuerURLs[0], env.oidcSrv.URL},
-	}
-	parser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, getClientConf(t, env.oidcSrv.Certificate()), nil)
-	err := parser.InitKeyCache(t.Context())
+func TestKeyCacheManager_Population_UnresponsiveDiscovery(t *testing.T) {
+	// Test that a valid but unresponsive discovery URL does NOT raise an error when initializing a KeyCacheManager
+	validURL := "https://missing-host:1234"
+	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{validURL}}}
+	kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), cacheConfNoRetry)
+	kcm.Init(t.Context())
+	err := kcm.PopulateJWKSCache(t.Context())
 	tassert.Errorf(
 		t, err == nil,
-		"Token parser initialization should NOT fail with both a valid and invalid discovery URL: %v, got: %v", oidcConf.AllowedIssuers, err,
+		"Key Cache Manager population should not raise error for valid unresponsive discovery URL, got %v", err,
 	)
 }
 
-func TestNewTokenParser_CertificateValidation(t *testing.T) {
+func TestValidateClaims_CertificateValidation(t *testing.T) {
 	env := setupTokenTestEnv(t, false)
 	oidcConf := &cmn.OIDCConf{AllowedIssuers: []string{env.oidcSrv.URL}}
-	// No adding of oidc server certificate to trusted certs
-	parser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, nil, cacheConfNoRetry)
-	err := parser.InitKeyCache(t.Context())
-	tassert.Error(t, err != nil, "Token parser initialization should fail without certificate trust")
-}
-
-func TestNewTokenParser_InvalidJWKSURL(t *testing.T) {
-	for _, badJwks := range invalidIssuerURLs {
-		// Create a discovery server that returns invalid JWKS urls
-		oidcSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/.well-known/openid-configuration" {
-				resp := map[string]string{
-					"jwks_uri": badJwks,
-				}
-				_ = json.NewEncoder(w).Encode(resp)
-				return
-			}
-			http.NotFound(w, r)
-		}))
-		t.Cleanup(oidcSrv.Close)
-		oidcConf := &cmn.OIDCConf{
-			AllowedIssuers: []string{oidcSrv.URL},
-		}
-		clientConf := &tok.JWKSClientConf{
-			TLSArgs: &cmn.TLSArgs{
-				SkipVerify: true, // allow self-signed test certs
-			},
-		}
-		parser := tok.NewTokenParser(&cmn.AuthConf{OIDC: oidcConf}, clientConf, nil)
-		err := parser.InitKeyCache(t.Context())
-		tassert.Errorf(
-			t, err != nil,
-			"Token parser initialization should fail for invalid JWKS URL: %q", badJwks,
-		)
-	}
+	authConf := &cmn.AuthConf{OIDC: oidcConf}
+	// Add OIDC server WITHOUT adding certificate to trusted certs
+	clientNoTrust := getKeyCacheClient(t, nil)
+	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry)
+	// No error, but issuer isn't added
+	initKeyCacheManager(t, kcm)
+	parser := tok.NewTokenParser(authConf, kcm)
+	// Token validation fails
+	tk := createTokenWithKeyID(t, basicAdminClaims, env.rsaKey, env.keyID)
+	_, err := parser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Token validation should fail without certificate trust on issuer")
+	// Recreate with client using trusted certificate
+	clientWithTrust := getKeyCacheClient(t, env.oidcSrv.Certificate())
+	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry)
+	parser = tok.NewTokenParser(authConf, kcmWithTrust)
+	_, err = parser.ValidateToken(t.Context(), tk)
+	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")
 }

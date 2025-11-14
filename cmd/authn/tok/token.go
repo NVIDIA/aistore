@@ -156,11 +156,11 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 
 // NewTokenParser creates a new instance of TokenParser.
 // If using allowed issuers and public key lookups, call InitKeyCache after creation
-func NewTokenParser(conf *cmn.AuthConf, clientConf *JWKSClientConf, cacheConf *CacheConfig) *TokenParser {
+func NewTokenParser(conf *cmn.AuthConf, cacheManager *KeyCacheManager) *TokenParser {
 	return &TokenParser{
 		sigConfig:       newSigConfig(conf),
 		parseOpts:       buildParseOptions(conf.RequiredClaims),
-		keyCacheManager: NewKeyCacheManager(conf.OIDC, clientConf, cacheConf),
+		keyCacheManager: cacheManager,
 	}
 }
 
@@ -209,26 +209,22 @@ func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
 	return opts
 }
 
-func (tm *TokenParser) InitKeyCache(ctx context.Context) error {
-	err := tm.keyCacheManager.init(ctx)
-	if err != nil {
-		return fmt.Errorf("error initializing token parser key cache: %w", err)
-	}
-	return nil
-}
-
 // Based on the token provided, return the key for the jwt library to use to verify the signature
 func (tm *TokenParser) parseJWTKey(ctx context.Context, tok *jwt.Token) (any, error) {
 	switch tok.Method.(type) {
 	case *jwt.SigningMethodHMAC:
 		return []byte(tm.getHMACSecret()), nil
 	case *jwt.SigningMethodRSA:
-		// If pub key is provided directly in config, don't look up by issuer
-		if staticKey := tm.getRSAPublicKey(); staticKey != nil {
-			return staticKey, nil
+		switch {
+		// Static public key provided directly in config
+		case tm.getRSAPublicKey() != nil:
+			return tm.getRSAPublicKey(), nil
+		case tm.keyCacheManager != nil:
+			// Lookup by issuer claim
+			return tm.keyCacheManager.getKeyForToken(ctx, tok)
+		default:
+			return nil, errors.New("invalid rsa validation options -- no static key or oidc lookup configured")
 		}
-		// Look up by issuer claim
-		return tm.keyCacheManager.getKeyForToken(ctx, tok)
 	default:
 		return nil, fmt.Errorf("unsupported signing method %v, header specified %s", tok.Method, tok.Header["alg"])
 	}

@@ -28,22 +28,22 @@ type (
 	KeyCacheManager struct {
 		// Configured allowed issuers
 		allowedIss map[string]struct{}
-		// Map of iss URL to JWKS URL -- Written once on init, read only after
-		issuerToJWKS map[string]string
-		// Cache for key sets -- Written once on init, read only after
-		jwksCache *jwk.Cache
+		// Manages all cached JWKS
+		keyCache *keyCache
 		// Client for looking up JWKS URI and caching key sets
 		jwksClient *http.Client
 		// Exposed config options for the JWK client and cache
 		cacheConfig *CacheConfig
-
-		// For locking during initialization
-		once sync.Once
 	}
 
-	JWKSClientConf struct {
-		TransportArgs *cmn.TransportArgs
-		TLSArgs       *cmn.TLSArgs
+	keyCache struct {
+		// Map of iss URL to JWKS URL
+		issuerToJWKS map[string]string
+		// Cache for key sets
+		jwksCache *jwk.Cache
+		// Lock to allow for dynamic updates
+		// All key cache fields should be updated within the same lock
+		sync.RWMutex
 	}
 
 	CacheConfig struct {
@@ -59,11 +59,9 @@ type (
 	discoverResp struct {
 		JWKSURI string `json:"jwks_uri"`
 	}
-
-	IssuerCacheError struct {
-		Failed map[string]error
-	}
 )
+
+var ErrNoJWKSForIssuer = errors.New("no JWKS entry exists for issuer")
 
 const (
 	defaultMinCacheRefreshInterval = 15 * time.Minute
@@ -74,11 +72,12 @@ const (
 )
 
 // NewKeyCacheManager creates an instance of KeyCacheManager with an unpopulated cache
-// After creating, call initJWKSCache to register and preload the allowed issuers
-func NewKeyCacheManager(oidc *cmn.OIDCConf, clientConf *JWKSClientConf, cacheConf *CacheConfig) *KeyCacheManager {
+// After creating, call Init with a long-lived context to create a key cache
+// Optionally, also pre-populate the cache to register and preload the allowed issuers
+func NewKeyCacheManager(oidc *cmn.OIDCConf, client *http.Client, cacheConf *CacheConfig) *KeyCacheManager {
 	return &KeyCacheManager{
 		allowedIss:  newAllowSet(oidc),
-		jwksClient:  newClient(clientConf),
+		jwksClient:  client,
 		cacheConfig: newCacheConfig(cacheConf),
 	}
 }
@@ -106,83 +105,87 @@ func newCacheConfig(conf *CacheConfig) *CacheConfig {
 	return conf
 }
 
-func newClient(clientConf *JWKSClientConf) *http.Client {
-	if clientConf == nil {
-		clientConf = &JWKSClientConf{}
-	}
-	if clientConf.TransportArgs == nil {
-		// Client defaults for looking up the JWKS endpoint from the issuer discovery endpoint
-		// See cmn/client.go
-		clientConf.TransportArgs = &cmn.TransportArgs{
-			DialTimeout: 3 * time.Second,
-			Timeout:     5 * time.Second,
-			// No need for idle connections to the same issuer host because of cached key sets
-			IdleConnsPerHost: 0,
-			MaxIdleConns:     1,
-		}
-	}
-	if clientConf.TLSArgs == nil {
-		clientConf.TLSArgs = &cmn.TLSArgs{
-			SkipVerify: false,
-		}
-	}
-	return cmn.NewClientTLS(*clientConf.TransportArgs, *clientConf.TLSArgs, false)
+func (km *KeyCacheManager) isInitialized() bool {
+	return km.keyCache != nil
 }
 
-func (km *KeyCacheManager) init(ctx context.Context) error {
-	var initErr error
-	km.once.Do(func() {
-		initErr = km.initJWKSCache(ctx)
-	})
-	return initErr
+// Init prepares a key cache manager to provide to a token parser
+// The provided context must be valid for the life of the cache for automatic refresh
+func (km *KeyCacheManager) Init(rootCtx context.Context) {
+	km.keyCache = &keyCache{
+		jwksCache:    jwk.NewCache(rootCtx),
+		issuerToJWKS: make(map[string]string, len(km.allowedIss)),
+	}
 }
 
-// Look up JWKS URLs, add them to the cache, and preload JWKS
-// Returned error specifically means no issuers succeeded
-func (km *KeyCacheManager) initJWKSCache(ctx context.Context) error {
-	km.jwksCache = jwk.NewCache(ctx)
-	// TODO populate this in parallel with dynamic updates if initial registration fails
-	km.issuerToJWKS = make(map[string]string, len(km.allowedIss))
-	anySucceeded := false
-	// Aggregate errors to allow some issuers to succeed if others fail
-	failed := make(map[string]error)
+// PopulateJWKSCache looks up JWKS URLs, adds them to the cache, and preloads JWKS
+// Returns error only on context cancellation or invalid config
+func (km *KeyCacheManager) PopulateJWKSCache(ctx context.Context) error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(km.allowedIss))
+
 	for iss := range km.allowedIss {
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
-			failed["__context__"] = ctx.Err()
-			return &IssuerCacheError{Failed: failed}
-		default:
-		}
-		jwksURL, err := km.discoverJWKSURI(ctx, iss)
+		wg.Add(1)
+		go func(iss string) {
+			defer wg.Done()
+			select {
+			// Check for context cancellation
+			case <-ctx.Done():
+				nlog.Errorf("key cache initialization canceled for issuer %s", iss)
+				return
+			default:
+				// Issuer URL is invalid, so record error as we never expect it to work
+				discoveryURL, err := getDiscoveryURL(iss)
+				if err != nil {
+					errCh <- fmt.Errorf("failed to get discovery URL for issuer %s: %w", iss, err)
+					return
+				}
+				// Ignore errors from individual issuers with valid URLs
+				// Errors are logged internally and registration will retry later on request
+				_ = km.registerIssWithCache(ctx, iss, discoveryURL)
+			}
+		}(iss)
+	}
+	wg.Wait()
+	close(errCh)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	var errs []error
+	for err := range errCh {
 		if err != nil {
-			err = fmt.Errorf("failed to discover JWKS URI: %w", err)
-			nlog.Errorf("iss %s err: %v", iss, err)
-			failed[iss] = err
-			continue
-		}
-		km.issuerToJWKS[iss] = jwksURL
-		err = km.jwksCache.Register(jwksURL, jwk.WithHTTPClient(km.jwksClient), jwk.WithMinRefreshInterval(*km.cacheConfig.MinCacheRefreshInterval))
-		if err != nil {
-			err = fmt.Errorf("failed to register jwksURL in cache: %w", err)
-			nlog.Errorf("iss %s err: %v", iss, err)
-			failed[iss] = err
-			continue
-		}
-		anySucceeded = true
-		// Preload -- best effort
-		if _, err = km.jwksCache.Refresh(ctx, jwksURL); err != nil {
-			nlog.Errorf("failed to preload jwks cache for issuer %s: %v", iss, err)
-			continue
+			errs = append(errs, err)
 		}
 	}
-	if len(failed) > 0 && !anySucceeded {
-		return &IssuerCacheError{Failed: failed}
+
+	km.keyCache.preLoadAll(ctx)
+	return errors.Join(errs...)
+}
+
+// Register a given issuer to the cache and map the issuer to the JWKS url
+func (km *KeyCacheManager) registerIssWithCache(ctx context.Context, iss, discoveryURL string) error {
+	jwksURL, err := km.discoverJWKSURI(ctx, iss, discoveryURL)
+	if err != nil {
+		err = fmt.Errorf("failed to discover JWKS URI: %w", err)
+		nlog.Errorf("iss %s err: %v", iss, err)
+		return err
+	}
+	regOpts := []jwk.RegisterOption{
+		jwk.WithHTTPClient(km.jwksClient),
+		jwk.WithMinRefreshInterval(*km.cacheConfig.MinCacheRefreshInterval),
+	}
+	err = km.keyCache.registerIss(iss, jwksURL, regOpts)
+	if err != nil {
+		nlog.Errorf("iss %s err: %v", iss, err)
+		return err
 	}
 	return nil
 }
 
 func (km *KeyCacheManager) getKeyForToken(ctx context.Context, tok *jwt.Token) (any, error) {
+	if !km.isInitialized() {
+		return nil, errors.New("cannot validate signature by issuer lookup: jwks cache not initialized")
+	}
 	if len(km.allowedIss) == 0 {
 		return nil, errors.New("no public key or allowed issuers configured to validate token")
 	}
@@ -229,15 +232,7 @@ func getKeyID(tok *jwt.Token) (string, error) {
 }
 
 func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any, error) {
-	if km.jwksCache == nil {
-		return nil, errors.New("jwks cache not initialized, cannot get public key")
-	}
-	jwksCache := km.jwksCache
-	jwksURL, ok := km.issuerToJWKS[iss]
-	if !ok {
-		return nil, fmt.Errorf("failed to get keyset; no JWKS entry exists for issuer %s", iss)
-	}
-	keySet, err := jwksCache.Get(ctx, jwksURL)
+	keySet, err := km.getKeySetFromCache(ctx, iss)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get keyset for issuer %s: %v", iss, err)
 	}
@@ -250,6 +245,35 @@ func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any,
 		return nil, fmt.Errorf("failed to parse public key [iss: %s, kid: %s, err: %w]", iss, kid, err)
 	}
 	return pubKey, nil
+}
+
+func (km *KeyCacheManager) getKeySetFromCache(ctx context.Context, iss string) (jwk.Set, error) {
+	keySet, err := km.keyCache.getKeySetForIss(ctx, iss)
+	if err == nil {
+		return keySet, nil
+	}
+	// Only continue to dynamic registration and retry if the issuer has not been registered
+	if !errors.Is(err, ErrNoJWKSForIssuer) {
+		return nil, err
+	}
+	return km.getUnregisteredKeySet(ctx, iss)
+}
+
+// Attempt dynamic registration of an issuer that's already confirmed to be in the allowed list
+// Note this is susceptible to races if functionality is added to allow updating the allowed list
+func (km *KeyCacheManager) getUnregisteredKeySet(ctx context.Context, iss string) (jwk.Set, error) {
+	nlog.Infof("Performing dynamic auth issuer registration for issuer %s", iss)
+	// Fail if the URL is invalid
+	discoveryURL, err := getDiscoveryURL(iss)
+	if err != nil {
+		return nil, err
+	}
+	regErr := km.registerIssWithCache(ctx, iss, discoveryURL)
+	if regErr != nil {
+		return nil, fmt.Errorf("failed dynamic issuer registration: %w", regErr)
+	}
+	// Retry fetching the keySet once initialized
+	return km.keyCache.getKeySetForIss(ctx, iss)
 }
 
 // Parse and validate key issuer URLs used for JWKS discovery and fetching
@@ -283,11 +307,7 @@ func getDiscoveryURL(issuer string) (string, error) {
 	return base + oidcDiscoveryEndpoint, nil
 }
 
-func (km *KeyCacheManager) discoverJWKSURI(ctx context.Context, issuer string) (string, error) {
-	discoveryURL, err := getDiscoveryURL(issuer)
-	if err != nil {
-		return "", err
-	}
+func (km *KeyCacheManager) discoverJWKSURI(ctx context.Context, issuer, discoveryURL string) (string, error) {
 	var (
 		attempts  = km.cacheConfig.DiscoveryConf.Retries + 1
 		baseDelay = km.cacheConfig.DiscoveryConf.BaseDelay
@@ -352,11 +372,55 @@ func (km *KeyCacheManager) makeDiscoveryRequest(ctx context.Context, reqURL, iss
 	return meta.JWKSURI, nil
 }
 
-func (e *IssuerCacheError) Error() string {
-	var b strings.Builder
-	b.WriteString("JWKS cache creation failed for issuers:\n")
-	for iss, err := range e.Failed {
-		fmt.Fprintf(&b, "  %s: %v\n", iss, err)
+//////////////
+// keyCache //
+//////////////
+
+// Best-effort attempt to refresh all cached JWKS
+func (kc *keyCache) preLoadAll(ctx context.Context) {
+	// Snapshot issuerToJWKS under lock
+	kc.RLock()
+	issuerToJWKS := make(map[string]string, len(kc.issuerToJWKS))
+	for iss, jwksURL := range kc.issuerToJWKS {
+		issuerToJWKS[iss] = jwksURL
 	}
-	return b.String()
+	kc.RUnlock()
+
+	// Refresh all JWKS in parallel
+	var wg sync.WaitGroup
+	for iss, jwksURL := range issuerToJWKS {
+		wg.Add(1)
+		go func(issuer, url string) {
+			defer wg.Done()
+			if _, err := kc.jwksCache.Refresh(ctx, url); err != nil {
+				nlog.Errorf("failed to preload jwks cache for issuer %s: %v", issuer, err)
+			}
+		}(iss, jwksURL)
+	}
+	wg.Wait()
+}
+
+// Register a new issuer with the internal cache and update the map from issuer to JWKS url
+func (kc *keyCache) registerIss(iss, jwksURL string, regOpts []jwk.RegisterOption) error {
+	kc.Lock()
+	defer kc.Unlock()
+	err := kc.jwksCache.Register(jwksURL, regOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to register jwksURL in cache: %w", err)
+	}
+	kc.issuerToJWKS[iss] = jwksURL
+	return nil
+}
+
+func (kc *keyCache) getKeySetForIss(ctx context.Context, iss string) (jwk.Set, error) {
+	if kc.jwksCache == nil {
+		return nil, errors.New("jwks cache not initialized")
+	}
+	kc.RLock()
+	defer kc.RUnlock()
+	jwksURL, ok := kc.issuerToJWKS[iss]
+	if !ok {
+		return nil, ErrNoJWKSForIssuer
+	}
+	return kc.jwksCache.Get(ctx, jwksURL)
 }

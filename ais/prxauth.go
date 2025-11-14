@@ -34,6 +34,8 @@ type (
 		tokenMap *shardedTokenMap
 		// provides thread-safe access to an underlying map of tokens
 		revokedTokens *RevokedTokensMap
+		// for canceling internal long-lived context
+		cancelCtx context.CancelFunc
 	}
 
 	RevokedTokensMap struct {
@@ -64,46 +66,76 @@ const (
 	TokenParserInitTimeout = 10 * time.Second
 )
 
+// Client defaults for issuer requests
+// Used for JWKS URL discovery and fetching
+// See cmn/client.go
+const (
+	// KeyCacheDialTimeout and KeyCacheTimeout are set for faster proxy startup in case of an unresponsive issuer service
+	KeyCacheDialTimeout = 5 * time.Second
+	KeyCacheTimeout     = 10 * time.Second
+
+	// KeyCacheIdleConnsPerHost overrides AIS client settings to match http.Transport.DefaultMaxIdleConnsPerHost
+	// Because of cached key sets, we don't expect to need idle connections to the same issuer host
+	KeyCacheIdleConnsPerHost = 2
+	// KeyCacheMaxIdleConnsLimit caps the maximum idle conns based on number of allowed issuers
+	KeyCacheMaxIdleConnsLimit = 16
+)
+
 /////////////////
 // authManager //
 /////////////////
 
 func newAuthManager(config *cmn.Config) *authManager {
-	parser := tok.NewTokenParser(&config.Auth, getJWKSClientConf(config), nil)
-	cancelCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	keyCacheClient := newKeyCacheClient(config)
+	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil)
+	keyCacheManager.Init(rootCtx)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
 	defer cancel()
-	if err := parser.InitKeyCache(cancelCtx); err != nil {
-		// TODO: Add dynamic cache registration so we can proceed from this init failure and resolve later
-		cos.ExitLogf("Auth manager error: %v", err)
+	if err := keyCacheManager.PopulateJWKSCache(timeoutCtx); err != nil {
+		nlog.Errorf("Errors occurred while pre-populating JWKS key cache: %v", err)
 	}
 	return &authManager{
-		tokenParser:   parser,
+		tokenParser:   tok.NewTokenParser(&config.Auth, keyCacheManager),
 		tokenMap:      newShardedTokenMap(TokenMapShardExponent),
 		revokedTokens: newRevokedTokensMap(),
+		cancelCtx:     rootCancel,
 	}
 }
 
-// Define the config for JWKS client used by the token parser
-func getJWKSClientConf(config *cmn.Config) (jwksConf *tok.JWKSClientConf) {
+// Define the client used by the key cache manager for contacting token issuers
+func newKeyCacheClient(config *cmn.Config) *http.Client {
+	var tls cmn.TLSArgs
 	// Set our own certificate, key, and verification settings from AIS network config
-	var tlsArgs cmn.TLSArgs
 	if config.Net.HTTP.UseHTTPS {
-		tlsArgs = config.Net.HTTP.ToTLS()
+		tls = config.Net.HTTP.ToTLS()
 	} else {
-		tlsArgs = cmn.TLSArgs{
+		tls = cmn.TLSArgs{
 			SkipVerify: false,
 		}
 	}
-	if config.Auth.OIDC != nil {
-		// Define the trusted CA for issuers
-		tlsArgs.ClientCA = config.Auth.OIDC.IssuerCA
+	// Override the trusted CA for issuers if location provided
+	if config.Auth.OIDC != nil && config.Auth.OIDC.IssuerCA != "" {
+		tls.ClientCA = config.Auth.OIDC.IssuerCA
+	}
+	// Key cache client should never need more idle connections than configured issuers
+	// Set MaxIdleConns to limit the idle connections kept to issuers when we don't expect any subsequent requests
+	maxIdleConns := KeyCacheIdleConnsPerHost
+	if config.Auth.OIDC != nil && len(config.Auth.OIDC.AllowedIssuers) > maxIdleConns {
+		maxIdleConns = min(len(config.Auth.OIDC.AllowedIssuers), KeyCacheMaxIdleConnsLimit)
 	}
 
-	// Leave transport args empty for default config
-	clientConf := &tok.JWKSClientConf{
-		TLSArgs: &tlsArgs,
+	transport := cmn.TransportArgs{
+		DialTimeout:      KeyCacheDialTimeout,
+		Timeout:          KeyCacheTimeout,
+		IdleConnsPerHost: KeyCacheIdleConnsPerHost,
+		MaxIdleConns:     maxIdleConns,
 	}
-	return clientConf
+	return cmn.NewClientTLS(transport, tls, false)
+}
+
+func (a *authManager) stop() {
+	a.cancelCtx()
 }
 
 // Add tokens to the list of invalid ones and clean up the list from expired tokens.

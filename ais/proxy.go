@@ -3086,6 +3086,7 @@ func (p *proxy) Stop(err error) {
 	xreg.AbortAll(errors.New("p-stop"))
 
 	p.htrun.stop(&sync.WaitGroup{}, !isPrimary && smap.isValid() && !isEnu /*rmFromSmap*/)
+	p.authn.stop()
 }
 
 // on a best-effort basis, ignoring errors and bodyclose

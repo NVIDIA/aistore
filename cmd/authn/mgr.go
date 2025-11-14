@@ -61,7 +61,7 @@ func newMgr(driver kvdb.Driver) (m *mgr, code int, err error) {
 	// Create a limited token parser that only validates against a symmetric key with no issuer lookup
 	// TODO: Support RSA keys in authN and issuer lookup with cert verification
 	sigConf := &cmn.AuthSignatureConf{Key: Conf.Secret(), Method: cmn.SigMethodHMAC}
-	m.tkParser = tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil, nil)
+	m.tkParser = tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
 	return
 }
 
