@@ -14,7 +14,7 @@ var (
 	MyTime    atomic.Int64
 )
 
-// infrequent log when not adding (LogLess) xaction to xreg history
+// infrequent log when not adding (QuietBrief) xaction to xreg history
 var skipXregHst atomic.Int64
 
 const skipXregHstCnt = 100

@@ -463,7 +463,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	// first, cleanup (x-lso, x-moss): walk older to newer while counting the other kinds
 	for i := range l {
 		xctn := r.entries.all[i].Get()
-		if !xact.Table[xctn.Kind()].LogLess {
+		if !xact.Table[xctn.Kind()].QuietBrief {
 			numKeepMore++
 			continue
 		}
@@ -479,7 +479,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 		var cnt int
 		for i := range l {
 			xctn := r.entries.all[i].Get()
-			if xact.Table[xctn.Kind()].LogLess {
+			if xact.Table[xctn.Kind()].QuietBrief {
 				continue
 			}
 			if xctn.IsDone() {
@@ -626,13 +626,13 @@ func (e *entries) del(id string) {
 }
 
 // is called under lock
-// history control for LogLess kinds (x-lso, x-moss)
+// history control for QuietBrief kinds (x-lso, x-moss)
 // – keep up to 1 024 finished records
 // – anything beyond is silently dropped
 func (e *entries) _add(entry Renewable) {
 	e.active = append(e.active, entry)
 
-	if l := len(e.all); xact.Table[entry.Kind()].LogLess && l >= keepOldThreshold {
+	if l := len(e.all); xact.Table[entry.Kind()].QuietBrief && l >= keepOldThreshold {
 		if n := skipXregHst.Inc(); n%skipXregHstCnt == 1 {
 			nlog.Warningln("num entries in xreg history:", l, "exceeds the cap:", keepOldThreshold,
 				"- not adding:", xact.Cname(entry.Kind(), entry.UUID()))

@@ -177,7 +177,7 @@ func (xctn *Base) Abort(err error) bool {
 		close(xctn.abort.ch)
 	}
 
-	if !Table[xctn.kind].LogLess {
+	if !Table[xctn.kind].QuietBrief {
 		nlog.InfoDepth(1, xctn.Name(), err)
 	}
 	return true
@@ -218,9 +218,9 @@ func (xctn *Base) Finish() {
 	switch {
 	case err == nil:
 		debug.Assert(n == 0, n)
-		nlog.Infoln(xname, "finished") // TODO: consider skipping LogLess as well
+		nlog.Infoln(xname, "finished") // TODO: consider skipping QuietBrief as well
 		return
-	case Table[xctn.kind].LogLess:
+	case Table[xctn.kind].QuietBrief:
 		// skip
 	case aborted:
 		nlog.Warningln(xname, "aborted:", err)

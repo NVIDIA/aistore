@@ -111,9 +111,9 @@ type (
 		// (see related: `Snap.Ext` in core/xaction.go)
 		ExtendedStats bool
 
-		// suppress verbose per-state log records and marks the kind
-		// as low-value for registry history retention
-		LogLess bool
+		// suppress verbose per-state log records and keep only hk.OldAgeXshort (1m)
+		// in registry history
+		QuietBrief bool
 	}
 )
 
@@ -276,9 +276,9 @@ var Table = map[string]Descriptor{
 		AbortRebRes: true,
 	},
 
-	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, LogLess: true},
+	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Idles: true, QuietBrief: true},
 
-	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: true, LogLess: true}, // apc.Moss
+	apc.ActGetBatch: {Scope: ScopeGB, Startable: false, Metasync: false, ConflictRebRes: true, Idles: true}, // apc.Moss
 
 	// cache management, internal usage
 	apc.ActLoadLomCache: {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true},
