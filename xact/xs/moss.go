@@ -82,12 +82,7 @@ const (
 	// limit the number of GFN requests by a work item (wi)
 	gfnMaxCount = 3
 
-	// the interval of _validity_
-	sbrWin = 4 * time.Second
-
-	// next(i) poll interval: a fraction of configured timeout clamped to reasonable bounds
-	pollMin = time.Second
-	pollMax = max(2*sbrWin, 2*pollMin)
+	// next(i) poll interval: a fraction of configured timeout
 	pollDiv = 10
 )
 
@@ -1006,7 +1001,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 		elapsed        time.Duration
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
 		timeout        = wi.r.config.GetBatch.MaxWait.D()
-		pollIval       = cos.ClampDuration(timeout/pollDiv, pollMin, pollMax) // (TODO ref 032011)
+		pollIval       = cos.Ternary(timeout > pollDiv*time.Second, timeout/pollDiv, time.Second)
 	)
 	for {
 		wi.recv.mtx.Lock()
