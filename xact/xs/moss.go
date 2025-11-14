@@ -79,7 +79,7 @@ const (
 	// - stays enabled for the entire lifetime
 	bewarmSize = cos.MiB
 
-	// limit the number of GFN requests by a work item (wi)
+	// the number of GFN recovery requests by a work item = min(gfnMaxCount, config.GetBatch.MaxSoftErrs)
 	gfnMaxCount = 3
 
 	// next(i) poll interval: a fraction of configured timeout
@@ -131,6 +131,7 @@ type (
 		wid     string      // work item ID
 		sid     string      // current sender ID
 		started int64       // (mono)
+		nerr    int         // number of soft errors must be <= maxSoftErrs
 		clean   atomic.Bool
 		awfin   atomic.Bool
 	}
@@ -1001,7 +1002,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 		elapsed        time.Duration
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
 		timeout        = wi.r.config.GetBatch.MaxWait.D()
-		pollIval       = cos.Ternary(timeout > pollDiv*time.Second, timeout/pollDiv, time.Second)
+		pollIval       = cos.Ternary(timeout > pollDiv*cmn.GetBatchWaitMin, timeout/pollDiv, cmn.GetBatchWaitMin)
 	)
 	for {
 		wi.recv.mtx.Lock()
@@ -1038,7 +1039,9 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			return 0, wi.newErrHole(0, err)
 		}
 
-		switch err := wi.waitAnyRx(pollIval); err {
+		rem := min(pollIval, timeout-elapsed)
+		debug.Assert(rem > 0)
+		switch err := wi.waitAnyRx(rem); err {
 		case nil:
 			continue // TODO: elapsed (stats) won't be very precise
 		case errStopped:
@@ -1077,14 +1080,16 @@ func (wi *basewi) waitAnyRx(timeout time.Duration) error {
 	}
 }
 
+// to indicate a missing entry at a given index position
+// (either timeout or network error during retrieval)
 func (wi *basewi) newErrHole(total time.Duration, err error) error {
 	index := wi.recv.next
 	if err == nil {
-		s := fmt.Sprintf("%s: timed out waiting for %d \"hole\" to fill [ %s, wid=%s, total-wait=%v ]",
+		s := fmt.Sprintf("%s: timed out waiting for missing entry at index %d [ %s, wid=%s, total-wait=%v ]",
 			wi.r.Name(), index, core.T.String(), wi.wid, total)
 		return &errHole{s}
 	}
-	s := fmt.Sprintf("%s: network error while trying to fill %d \"hole\" [ %s, wid=%s, err=%v ]",
+	s := fmt.Sprintf("%s: network error while retrieving entry at index %d [ %s, wid=%s, err=%v ]",
 		wi.r.Name(), index, core.T.String(), wi.wid, err)
 	return &errHole{s}
 }
@@ -1128,8 +1133,13 @@ func (wi *basewi) next(i int) (int, error) {
 		var nextIdx int
 		nextIdx, err = wi.waitFlushRx(i)
 
-		if transport.IsErrSBR(err) {
+		// handle(err)
+		switch {
+		case err == nil:
+			return nextIdx, nil
+		case transport.IsErrSBR(err):
 			// treat as transient loss for this index
+			wi.nerr++
 			if !wi.req.ContinueOnErr {
 				return 0, err
 			}
@@ -1138,10 +1148,13 @@ func (wi *basewi) next(i int) (int, error) {
 				return 0, e
 			}
 			return i + 1, nil
-		}
-
-		if err == nil || !isErrHole(err) || wi.stats.ngfn >= gfnMaxCount {
+		case !isErrHole(err):
 			return nextIdx, err
+		default:
+			wi.nerr++
+			if wi.stats.ngfn >= aint64(min(gfnMaxCount, r.config.GetBatch.MaxSoftErrs)) {
+				return nextIdx, err
+			}
 		}
 	}
 
@@ -1325,10 +1338,14 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 }
 
 func (wi *basewi) asm() error {
+	r := wi.r
 	l := len(wi.req.In)
 	for i := 0; i < l; {
-		if wi.r.IsAborted() || wi.r.IsDone() {
+		if r.IsAborted() || r.IsDone() {
 			return nil
+		}
+		if limit := r.config.GetBatch.MaxSoftErrs; wi.nerr > limit {
+			return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", r.Name(), wi.wid, wi.nerr, limit)
 		}
 		j, err := wi.next(i)
 		if err != nil {

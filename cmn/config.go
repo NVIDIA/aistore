@@ -890,19 +890,33 @@ type (
 		// this duration before attempting recovery.
 		// Longer values increase tolerance for transient slowdowns but delay
 		// error detection. Shorter values fail faster but may be too aggressive.
-		MaxWait cos.Duration `json:"max_wait"`
+		MaxWait cos.Duration `json:"max_wait,omitempty"`
 
 		// Number of worker goroutines for pagecache read-ahead warming.
 		// Helps reduce cold-read latency by pre-loading file data into memory.
 		// Always auto-disabled under extreme system load.
 		// - (-1): disabled
-		// - 0:    default (enabled w/ 2 (numWarmupWorkersDflt) workers)
+		// - 0:    default (enabled w/ 2 workers)
 		// - >0:   enabled with N workers
-		NumWarmupWorkers int `json:"warmup_workers"`
+		NumWarmupWorkers int `json:"warmup_workers,omitempty"`
+
+		// Max number of soft (recoverable) errors allowed during a single
+		// GetBatch request when ContinueOnErr = true.
+		// A soft error is either:
+		//  - a remote stream-break (ErrSBR) that gets converted into a missing
+		//    entry, OR
+		//  - a timed-out missing entry (technically referred to as a "hole")
+		//    when a (reassembling) AIS target spent up to MaxWait (see above)
+		//    waiting for the input from another node in the cluster.
+		// If MaxSoftErrs == 0, the system default (6) is used.
+		// Once the request exceeds this limit, the target stops treating further
+		// failures as recoverable and aborts the request.
+		MaxSoftErrs int `json:"max_soft_errs,omitempty"`
 	}
 	GetBatchConfToSet struct {
 		MaxWait          *cos.Duration `json:"max_wait,omitempty"`
 		NumWarmupWorkers *int          `json:"warmup_workers,omitempty"`
+		MaxSoftErrs      *int          `json:"max_soft_errs,omitempty"`
 	}
 )
 
@@ -2514,12 +2528,14 @@ func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
 //////////////////
 
 const (
-	getBatchMaxWaitDflt = 30 * time.Second
-	getBatchMaxWaitMin  = time.Second
-	getBatchMaxWaitMax  = time.Minute
+	getBatchWaitDflt = 30 * time.Second
+	GetBatchWaitMin  = time.Second
+	getBatchWaitMax  = time.Minute
 
 	numWarmupWorkersDisabled = -1
 	numWarmupWorkersDflt     = 2
+
+	getBatchSoftErrs = 6
 )
 
 func (c *GetBatchConf) WarmupWorkers() int {
@@ -2527,11 +2543,11 @@ func (c *GetBatchConf) WarmupWorkers() int {
 }
 
 func (c *GetBatchConf) Validate() error {
-	debug.Assert(numWarmupWorkersDisabled < 0 && getBatchMaxWaitDflt > getBatchMaxWaitMin && getBatchMaxWaitMin < getBatchMaxWaitMax)
+	debug.Assert(numWarmupWorkersDisabled < 0 && getBatchWaitDflt > GetBatchWaitMin && GetBatchWaitMin < getBatchWaitMax)
 	if c.MaxWait == 0 {
-		c.MaxWait = cos.Duration(getBatchMaxWaitDflt)
-	} else if c.MaxWait.D() < getBatchMaxWaitMin || c.MaxWait.D() > getBatchMaxWaitMax {
-		return fmt.Errorf("invalid get_batch.max_wait=%s (must be in range [%v, %v])", c.MaxWait, getBatchMaxWaitMin, getBatchMaxWaitMax)
+		c.MaxWait = cos.Duration(getBatchWaitDflt)
+	} else if c.MaxWait.D() < GetBatchWaitMin || c.MaxWait.D() > getBatchWaitMax {
+		return fmt.Errorf("invalid get_batch.max_wait=%s (must be in range [%v, %v])", c.MaxWait, GetBatchWaitMin, getBatchWaitMax)
 	}
 	switch c.NumWarmupWorkers {
 	case numWarmupWorkersDisabled:
@@ -2541,6 +2557,11 @@ func (c *GetBatchConf) Validate() error {
 		if c.NumWarmupWorkers < 0 || c.NumWarmupWorkers > 10 {
 			return fmt.Errorf("invalid get_batch.warmup_workers=%d (expecting range [%d, %d])", c.NumWarmupWorkers, 0, 10)
 		}
+	}
+	if c.MaxSoftErrs == 0 {
+		c.MaxSoftErrs = getBatchSoftErrs
+	} else if c.MaxSoftErrs < 0 {
+		return fmt.Errorf("invalid get_batch.max_soft_errs=%d (expecting non-negative integer)", c.MaxSoftErrs)
 	}
 	return nil
 }
