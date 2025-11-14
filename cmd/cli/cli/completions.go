@@ -200,11 +200,12 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 	if cfgScope == cfgScopeLocal {
 		v = &config.LocalConfig
 	}
+	opts := cmn.IterOpts{OnlyRead: true}
 	err = cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 		section := strings.Split(uniqueTag, cmn.IterFieldNameSepa)[0]
 		props.Set(section)
 		return nil, false
-	})
+	}, opts)
 	debug.AssertNoErr(err)
 	for prop := range props {
 		fmt.Println(prop)
@@ -233,13 +234,14 @@ func setNodeConfigCompletions(c *cli.Context) {
 			fmt.Println(cmdReset)
 			fmt.Println("backend") // NOTE special case: custom marshaling (ref 080235)
 		}
+		opts := cmn.IterOpts{OnlyRead: true}
 		err := cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
 			props.Set(tag)
 			if tag == confLogLevel {
 				props.Set(confLogModules) // (ref 836)
 			}
 			return nil, false
-		})
+		}, opts)
 		debug.AssertNoErr(err)
 		for prop := range props {
 			if !cos.AnyHasPrefixInSlice(prop, c.Args()) {
@@ -323,6 +325,7 @@ func setCluConfigCompletions(c *cli.Context) {
 	var (
 		config   cmn.Config
 		propList = make([]string, 0, 48)
+		opts     = cmn.IterOpts{Allowed: apc.Cluster, OnlyRead: true}
 	)
 	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
@@ -330,7 +333,7 @@ func setCluConfigCompletions(c *cli.Context) {
 			propList = append(propList, confLogModules) // insert to assign separately and combine below (ref 836)
 		}
 		return
-	}, cmn.IterOpts{Allowed: apc.Cluster})
+	}, opts)
 	debug.AssertNoErr(err)
 
 	if propValueCompletion(c, false /*bucket scope*/) {
@@ -511,6 +514,7 @@ func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstB
 }
 
 func bpropCompletions(c *cli.Context) {
+	opts := cmn.IterOpts{OnlyRead: true}
 	err := cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
 			if bpropsFilterExtra(c, tag) {
@@ -518,7 +522,7 @@ func bpropCompletions(c *cli.Context) {
 			}
 		}
 		return nil, false
-	})
+	}, opts)
 	debug.AssertNoErr(err)
 }
 
@@ -536,6 +540,7 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 }
 
 func bucketAndPropsCompletions(c *cli.Context) {
+	opts := cmn.IterOpts{OnlyRead: true}
 	if c.NArg() == 0 {
 		f := bucketCompletions(bcmplop{})
 		f(c)
@@ -549,7 +554,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 				sections = append(sections, uniqueTag)
 			}
 			return nil, false
-		})
+		}, opts)
 		// NOTE: do not have bprops at this point, may miss remote backend (prop)
 		if bck, err := parseBckURI(c, c.Args().Get(0), false); err == nil {
 			p := apc.NormalizeProvider(bck.Provider)
@@ -558,7 +563,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 					sections = append(sections, "extra")
 				}
 				return
-			})
+			}, opts)
 		}
 
 		debug.AssertNoErr(err)
@@ -818,10 +823,11 @@ func oneClusterCompletions(c *cli.Context) {
 func authNConfigPropList() []string {
 	propList := []string{}
 	emptyCfg := authn.ConfigToUpdate{Server: &authn.ServerConfToSet{}}
+	opts := cmn.IterOpts{OnlyRead: true}
 	cmn.IterFields(emptyCfg, func(tag string, _ cmn.IterField) (error, bool) {
 		propList = append(propList, tag)
 		return nil, false
-	})
+	}, opts)
 	return propList
 }
 
@@ -867,12 +873,13 @@ func showRemoteConfigCompletions(c *cli.Context) {
 }
 
 func cliPropCompletions(c *cli.Context) {
+	opts := cmn.IterOpts{OnlyRead: true}
 	err := cmn.IterFields(gcfg, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
 			fmt.Println(tag)
 		}
 		return nil, false
-	})
+	}, opts)
 	debug.AssertNoErr(err)
 }
 

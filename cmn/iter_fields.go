@@ -135,10 +135,23 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 		// If the field is a pointer to a struct we must dereference it.
 		if srcValField.Kind() == reflect.Ptr && srcValField.Type().Elem().Kind() == reflect.Struct {
 			if srcValField.IsNil() {
-				allocatedStruct = true
-				srcValField.Set(reflect.New(srcValField.Type().Elem()))
+				if opts.OnlyRead {
+					// read-only:
+					// - allocate a temporary struct just for iteration
+					// - do not assign it back to the parent (`allocatedStruct` remains false)
+					tmp := reflect.New(srcValField.Type().Elem())
+					srcValField = tmp.Elem()
+				} else {
+					// write mode: the field must be settable
+					debug.Assertf(srcValField.CanSet(), "write-mode: %q (type=%s) is not settable",
+						prefix+fieldName, srcValField.Type())
+					allocatedStruct = true
+					srcValField.Set(reflect.New(srcValField.Type().Elem()))
+					srcValField = srcValField.Elem()
+				}
+			} else {
+				srcValField = srcValField.Elem()
 			}
-			srcValField = srcValField.Elem()
 		}
 
 		// Read-only walk skips empty (zero) fields.

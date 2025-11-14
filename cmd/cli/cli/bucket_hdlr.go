@@ -702,12 +702,13 @@ func setPropsHandler(c *cli.Context) error {
 		isValid bool
 	)
 	if section != "" {
+		opts := cmn.IterOpts{OnlyRead: true}
 		cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (e error, f bool) {
 			if strings.Contains(tag, section) {
 				isValid = true
 			}
 			return
-		})
+		}, opts)
 	}
 	if section == "" || isValid {
 		if errV := showBucketProps(c); errV == nil {

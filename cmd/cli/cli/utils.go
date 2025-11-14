@@ -695,13 +695,14 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 // see also authNConfPairs
 func flattenJSON(jstruct any, section string) (flat nvpairList) {
 	flat = make(nvpairList, 0, 40)
+	opts := cmn.IterOpts{OnlyRead: true}
 	cmn.IterFields(jstruct, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
 			v := _toStr(field.Value())
 			flat = append(flat, nvpair{tag, v})
 		}
 		return nil, false
-	})
+	}, opts)
 	return flat
 }
 
@@ -789,6 +790,7 @@ func showSectionNotFoundError(c *cli.Context, section string, config any, helpCm
 func extractAvailableSections(config any) []string {
 	var availableSections []string
 	seen := make(map[string]bool, 16)
+	opts := cmn.IterOpts{VisitAll: true, OnlyRead: true}
 
 	cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
 		root := strings.Split(tag, ".")[0]
@@ -797,7 +799,7 @@ func extractAvailableSections(config any) []string {
 			seen[root] = true
 		}
 		return nil, false
-	}, cmn.IterOpts{VisitAll: true})
+	}, opts)
 
 	sort.Strings(availableSections)
 	return availableSections
@@ -813,6 +815,7 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 		found = true
 	} else {
 		// Find specific section
+		opts := cmn.IterOpts{VisitAll: true, OnlyRead: true}
 		cmn.IterFields(in, func(tag string, field cmn.IterField) (error, bool) {
 			if tag == section {
 				found = true
@@ -820,7 +823,7 @@ func printSectionJSON(c *cli.Context, in any, section string) bool {
 				return nil, true // Stop after finding exact match
 			}
 			return nil, false
-		}, cmn.IterOpts{VisitAll: true})
+		}, opts)
 
 		// Wrap the result with the section name as the root key
 		if found {
@@ -856,6 +859,7 @@ func defaultBckProps(bck cmn.Bck) (*cmn.Bprops, error) {
 // see also flattenJSON
 func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 	flat := make(nvpairList, 0, 8)
+	opts := cmn.IterOpts{OnlyRead: true}
 	err := cmn.IterFields(conf, func(tag string, field cmn.IterField) (error, bool) {
 		if prefix != "" && !strings.HasPrefix(tag, prefix) {
 			return nil, false
@@ -863,7 +867,7 @@ func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 		v := _toStr(field.Value())
 		flat = append(flat, nvpair{Name: tag, Value: v})
 		return nil, false
-	})
+	}, opts)
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
@@ -876,10 +880,11 @@ func configPropList(scopes ...string) []string {
 		scope = scopes[0]
 	}
 	propList := make([]string, 0, 48)
+	opts := cmn.IterOpts{Allowed: scope, OnlyRead: true}
 	err := cmn.IterFields(cmn.Config{}, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
 		return
-	}, cmn.IterOpts{Allowed: scope})
+	}, opts)
 	debug.AssertNoErr(err)
 	return propList
 }
