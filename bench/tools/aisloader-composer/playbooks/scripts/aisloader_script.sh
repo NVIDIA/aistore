@@ -16,6 +16,7 @@ ais_port=""
 grafana_host=""
 workers=""
 filelist=""
+get_batchsize=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -54,6 +55,9 @@ for arg in "$@"; do
             ;;
         --filelist=*)
             filelist="${arg#*=}"
+            ;;
+        --get-batchsize=*)
+            get_batchsize="${arg#*=}"
             ;;
         *)
             echo "Invalid argument: $arg"
@@ -101,6 +105,9 @@ else
     bench_args+=("-pctput=0")
     if [ -n "$filelist" ]; then
         bench_args+=("-filelist=$filelist")
+    fi
+    if [ -n "$get_batchsize" ]; then
+        bench_args+=("-get-batchsize=$get_batchsize")
     fi
 fi
 

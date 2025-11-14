@@ -31,6 +31,10 @@
     ansible.builtin.script: scripts/aisloader_script.sh --bench_type={{ bench_type }} --bucket={{ bucket }} --ais_proxies={{ target_host_ips }} --ais_port={{ ais_port.value }} --each_size={{ bench_size }} --total_size={{ total_size }} --grafana_host={{ hostvars[grafana_host].ansible_host }} --workers={{ put_workers.value }}
     when: bench_type == "put"
 
+  - name: Start aisloader GET-BATCH
+    ansible.builtin.script: scripts/aisloader_script.sh --bench_type={{ bench_type }} --bucket={{ bucket }} --duration={{ duration }} --epochs={{ epochs }} --workers={{ get_workers.value }} --filelist={{ filelist | basename }}  --get-batchsize={{ batch_size }}
+    when: bench_type == "get_batch"
+
   - name: Set bucket_name variable
     set_fact:
       bucket_name: "{{ bucket if '//' not in bucket else bucket.split('//')[1] }}"
