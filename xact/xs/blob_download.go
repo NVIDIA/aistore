@@ -7,7 +7,6 @@ package xs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,19 +14,20 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -39,12 +39,9 @@ import (
 
 // default tunables (can override via apc.BlobMsg)
 const (
-	dfltChunkSize  = 4 * cos.MiB
-	minChunkSize   = memsys.DefaultBufSize
-	maxChunkSize   = 16 * cos.MiB
-	dfltNumWorkers = 4
-
-	maxTotalChunksMem = 128 * cos.MiB // max mem per blob worker
+	dfltChunkSize = 4 * cos.MiB
+	minChunkSize  = memsys.DefaultBufSize
+	maxChunkSize  = 16 * cos.MiB
 
 	minBlobDlPrefetch = cos.MiB // size threshold for x-prefetch
 )
@@ -70,6 +67,7 @@ type (
 		numWorkers int
 		uploadID   string
 		manifest   *core.Ufest
+		adv        load.Advice // load advisory
 	}
 )
 
@@ -181,32 +179,10 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 		return xreg.RenewRes{Err: err}
 	}
 
-	// validate, assign defaults (further tune-up below)
-	switch {
-	case pre.chunkSize == 0:
+	// Store user preference (or default if unspecified)
+	// Actual chunk size will be determined in factory.Start() based on load conditions
+	if pre.chunkSize == 0 {
 		pre.chunkSize = dfltChunkSize
-	case pre.chunkSize < minChunkSize:
-		nlog.Infoln("Warning: chunk size", cos.IEC(pre.chunkSize, 1), "is below permitted minimum",
-			cos.IEC(minChunkSize, 0))
-		pre.chunkSize = minChunkSize
-	case pre.chunkSize > maxChunkSize:
-		nlog.Infoln("Warning: chunk size", cos.IEC(pre.chunkSize, 1), "exceeds permitted maximum",
-			cos.IEC(maxChunkSize, 0))
-		pre.chunkSize = maxChunkSize
-	}
-
-	// [NOTE] factor in num CPUs and num chunks to tuneup num workers (heuristic)
-	if pre.numWorkers == 0 {
-		pre.numWorkers = dfltNumWorkers
-	}
-	if a := sys.MaxParallelism(); a > pre.numWorkers+4 {
-		pre.numWorkers++
-	}
-	if int64(pre.numWorkers)*pre.chunkSize > pre.fullSize {
-		pre.numWorkers = int((pre.fullSize + pre.chunkSize - 1) / pre.chunkSize)
-	}
-	if a := sys.MaxParallelism(); a < pre.numWorkers {
-		pre.numWorkers = a
 	}
 
 	return xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: pre})
@@ -225,6 +201,35 @@ func (*blobFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
+// calcChunkSize determines optimal chunk size based on:
+// - memory load level (from load advisory system)
+// - user's preference (preferred chunk size if load permits)
+// - blob size (can't exceed the full size)
+func (r *XactBlobDl) calcChunkSize() {
+	memLoad := r.adv.MemLoad()
+	// Handle critical and high memory loads first
+	if memLoad == load.Critical {
+		nlog.Warningf("%s: critical memory load, using minimum chunk size: %s", r.Name(), cos.IEC(minChunkSize, 0))
+		r.chunkSize = minChunkSize
+	}
+	if memLoad == load.High {
+		nlog.Warningf("%s: high memory load, using conservative chunk size: %s", r.Name(), cos.IEC(2*minChunkSize, 0))
+		r.chunkSize = 2 * minChunkSize
+	}
+
+	// Low/Moderate memory load: validate and adjust user preference
+	switch {
+	case r.chunkSize == 0:
+		r.chunkSize = dfltChunkSize
+	case r.chunkSize < minChunkSize:
+		nlog.Warningf("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(minChunkSize, 0))
+		r.chunkSize = minChunkSize
+	case r.chunkSize > maxChunkSize:
+		nlog.Warningf("chunk size", cos.IEC(r.chunkSize, 1), "exceeds permitted maximum", cos.IEC(maxChunkSize, 0))
+		r.chunkSize = maxChunkSize
+	}
+}
+
 func (p *blobFactory) Start() (err error) {
 	// reuse the same args-carrying structure and keep initializing
 	r := p.pre
@@ -241,55 +246,48 @@ func (p *blobFactory) Start() (err error) {
 		stats.VlabXkind:  r.Kind(),
 	}
 
-	// 2nd (just in time) tune-up
 	var (
-		mm       = core.T.PageMM()
-		slabSize = int64(memsys.MaxPageSlabSize)
-		pressure = mm.Pressure()
+		l = fs.NumAvail()
+		n = max(r.numWorkers, l)
 	)
-	if pressure >= memsys.PressureExtreme {
-		oom.FreeToOS(true)
-		if !cmn.Rom.TestingEnv() {
-			return errors.New(r.Name() + ": " + memsys.FmtErrExtreme + " - not starting")
-		}
-	}
-	switch pressure {
-	case memsys.PressureHigh:
-		slabSize = memsys.DefaultBufSize
-		r.numWorkers = 1
-		nlog.Warningln(r.Name(), "num-workers = 1")
-	case memsys.PressureModerate:
-		slabSize >>= 1
-		r.numWorkers = min(3, r.numWorkers)
-	}
 
-	cnt := max((r.chunkSize+slabSize-1)/slabSize, 1)
-	r.chunkSize = min(cnt*slabSize, r.fullSize)
+	// Admission check: assess load to determine if we can start
+	config := cmn.GCO.Get()
+	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{
+		Mi:  r.args.Lom.Mountpath(),
+		Cfg: &config.Disk,
+		RW:  true, // data I/O operation
+	})
+	r.adv.Refresh()
 
-	nr := int64(r.numWorkers)
-	nc := (r.fullSize + r.chunkSize - 1) / r.chunkSize
-	if pressure == memsys.PressureLow && r.numWorkers < sys.MaxParallelism() {
-		if nr < nc && nr*r.chunkSize < maxTotalChunksMem {
-			r.numWorkers++ // add a reader
-		}
-		if r.numWorkers == 1 && r.chunkSize > minChunkSize<<1 {
-			r.numWorkers = 2
-			r.chunkSize >>= 1
-		}
+	if r.adv.MemLoad() == load.Critical {
+		err := fmt.Errorf("%s: rejected due to resource pressure (%s) - not starting", r.Name(), r.adv.String())
+		return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+	}
+	if r.adv.Sleep > 0 {
+		time.Sleep(r.adv.Sleep)
 	}
 
-	// open channels
-	r.workCh = make(chan *chunkTask, r.numWorkers)
-	r.doneCh = make(chan *chunkTask, r.numWorkers)
-
-	r.pending = make(map[int64]*chunkTask, r.numWorkers)
-
-	// init and allocate
-	r.workers = make([]*worker, r.numWorkers)
-	for i := range r.workers {
-		r.workers[i] = &worker{
-			parent: r,
+	if r.numWorkers >= nwpDflt {
+		numWorkers, err := clampNumWorkers(r.Name(), n, l)
+		if err != nil {
+			return err
 		}
+		r.numWorkers = numWorkers
+	}
+	r.calcChunkSize()
+
+	if r.numWorkers != nwpNone {
+		r.workers = make([]*worker, r.numWorkers)
+		for i := range r.workers {
+			r.workers[i] = &worker{
+				parent: r,
+			}
+		}
+		// open channels
+		r.workCh = make(chan *chunkTask, r.numWorkers)
+		r.doneCh = make(chan *chunkTask, r.numWorkers)
+		r.pending = make(map[int64]*chunkTask, r.numWorkers)
 	}
 
 	p.xctn = r
@@ -345,37 +343,98 @@ func (r *XactBlobDl) String() string {
 
 func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 	var (
-		err  error
-		done *chunkTask
-		eof  bool
-		lom  = r.args.Lom
+		err error
+		lom = r.args.Lom
+		now = mono.NanoTime()
 	)
 
 	nlog.Infoln(r.String())
-	r.start()
 	if wg != nil {
 		wg.Done() // signal that xaction has started
 	}
-	now := mono.NanoTime()
-outer:
+
+	switch r.numWorkers {
+	case nwpNone:
+		err = r.runSerial()
+	default:
+		err = r.runWorkers()
+	}
+
+	r.finalize(err, lom, now)
+}
+
+// runSerial downloads chunks sequentially without using workers.
+func (r *XactBlobDl) runSerial() error {
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infof("running serial download: %s, chunk size: %s", r.Name(), cos.IEC(r.chunkSize, 0))
+	}
+	buf, slab := core.T.PageMM().AllocSize(r.chunkSize)
+	defer slab.Free(buf)
+
+	worker := &worker{parent: r}
+	tsk := &chunkTask{name: r.Name() + "_chunk_task", roff: r.nextRoff}
+	debug.IncCounter(tsk.name)
+	defer tsk.cleanup()
+	if r.args.RespWriter != nil {
+		// in the serial case, we use a single chunkTask and a single SGL for the entire download
+		// this SGL will be used to write the data to the RespWriter, and it will be freed upon completion
+		tsk.sgl = core.T.PageMM().NewSGL(r.chunkSize)
+	}
+
+	for r.nextRoff < r.fullSize {
+		if r.IsAborted() {
+			return r.AbortErr()
+		}
+		ecode, err := worker.do(tsk, buf)
+		if err != nil {
+			return fmt.Errorf("%s: failed to download chunk at offset %d (code %d): %w", r.Name(), r.nextRoff, ecode, err)
+		}
+		if ecode == http.StatusRequestedRangeNotSatisfiable && r.fullSize > r.nextRoff {
+			return fmt.Errorf("%s: premature eof: expected size %d, have %d", r.Name(), r.fullSize, r.nextRoff)
+		}
+
+		if err = r.write(tsk.sgl, tsk.written); err != nil {
+			return err
+		}
+		r.nextRoff += tsk.written
+		tsk.advance(r.nextRoff)
+	}
+	debug.Assertf(r.nextRoff == r.fullSize, "%d != %d", r.nextRoff, r.fullSize)
+	return nil
+}
+
+// runWorkers downloads chunks concurrently using multiple workers.
+// Main thread coordinates: seeds work, receives completions, handles out-of-order chunks.
+// Note: All chunk tasks are returned to the main thread through `doneCh` and are cleaned up either after `goto cleanup` or within `scheduleNextChunk`.
+func (r *XactBlobDl) runWorkers() error {
+	r.startWorkers()
+
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infof("started workers: %s, chunk size: %s, num workers: %d", r.Name(), cos.IEC(r.chunkSize, 0), r.numWorkers)
+	}
+
+	var (
+		done *chunkTask
+		err  error
+	)
 	for {
 		select {
 		case done = <-r.doneCh:
 			written := done.written
 			if done.err != nil {
 				err = done.err
-				goto fin
+				goto cleanup
 			}
 			if done.code == http.StatusRequestedRangeNotSatisfiable && r.fullSize > done.roff+written {
 				err = fmt.Errorf("%s: premature eof: expected size %d, have %d", r.Name(), r.fullSize, done.roff+written)
-				goto fin
+				goto cleanup
 			}
 			if written > 0 && r.fullSize < done.roff+written {
 				err = fmt.Errorf("%s: detected size increase during download: expected %d, have (%d + %d)", r.Name(),
 					r.fullSize, done.roff, written)
-				goto fin
+				goto cleanup
 			}
-			eof = r.fullSize <= done.roff+written
+			eof := r.fullSize <= done.roff+written
 			debug.Assert(written > 0 || eof)
 
 			// out-of-order chunks: temporarily store in map and wait for the next sequential chunk
@@ -385,24 +444,24 @@ outer:
 
 				debug.Assertf(r.pending[done.roff] == nil, "out-of-order chunk should not be already in the pending map")
 				r.pending[done.roff] = done
-				continue outer
+				continue
 			}
 
 			// type #1 write: chunk arrived in order
 			if err = r.write(done.sgl, written); err != nil {
-				goto fin
+				goto cleanup
 			}
 
 			r.scheduleNextChunk(done)
 
 			// type #2 write: drain consecutive pending chunks that are now ready
 			if err = r.drainPendingChunks(); err != nil {
-				goto fin
+				goto cleanup
 			}
 
 			if r.woff >= r.fullSize {
 				debug.Assertf(r.woff == r.fullSize, "%d > %d", r.woff, r.fullSize)
-				goto fin
+				goto cleanup
 			}
 			if eof && cmn.Rom.V(5, cos.ModXs) {
 				nlog.Errorf("%s eof w/pending: woff=%d, next=%d, size=%d", r.Name(), r.woff, r.nextRoff, r.fullSize)
@@ -412,12 +471,24 @@ outer:
 			}
 		case <-r.ChanAbort():
 			err = cmn.ErrXactUserAbort
-			goto fin
+			goto cleanup
 		}
 	}
-fin:
-	close(r.workCh)
 
+cleanup:
+	if err != nil && done != nil {
+		// runtime error in main thread: cleanup the leftover chunkTask
+		done.cleanup()
+	}
+	close(r.workCh)
+	r.wg.Wait()
+	close(r.doneCh)
+
+	return err
+}
+
+// finalize handles post-download tasks: checksum, stats, cleanup
+func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 	if err == nil {
 		if r.fullSize != r.woff {
 			err = fmt.Errorf("%s: exp size %d != %d off", r.Name(), r.fullSize, r.woff)
@@ -438,15 +509,12 @@ fin:
 		}
 	}
 
-	r.wg.Wait()
-	close(r.doneCh)
-
 	if err == nil {
 		// stats
 		tstats := core.T.StatsUpdater()
 		tstats.IncWith(r.bp.MetricName(stats.GetCount), r.xlabs)
 		tstats.AddWith(
-			cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(now), VarLabs: r.xlabs},
+			cos.NamedVal64{Name: r.bp.MetricName(stats.GetLatencyTotal), Value: mono.SinceNano(startTime), VarLabs: r.xlabs},
 		)
 
 		debug.Assert(lom.Lsize() == r.woff)
@@ -464,10 +532,7 @@ fin:
 		// Increment blob-download specific GET error count
 		tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
 
-		// non-abort error: cleanup the current task and abort the xaction
-		if done != nil {
-			done.cleanup()
-		}
+		// non-abort error: abort the xaction
 		if err != cmn.ErrXactUserAbort {
 			if r.manifest != nil {
 				r.manifest.Abort(lom)
@@ -491,9 +556,12 @@ func (r *XactBlobDl) Abort(err error) bool {
 	return true
 }
 
-func (r *XactBlobDl) start() {
-	r.wg.Add(len(r.workers))
+func (r *XactBlobDl) startWorkers() {
 	for i := range r.workers {
+		if r.nextRoff >= r.fullSize {
+			break
+		}
+		r.wg.Add(1)
 		go r.workers[i].run()
 
 		// Seed initial work items (chunks) to workCh (one per worker)
@@ -579,6 +647,7 @@ func (r *XactBlobDl) cleanup() {
 	for i := range r.workers {
 		debug.AssertCounterEquals(r.Name()+"_chunk_task_"+strconv.Itoa(i), 0)
 	}
+	debug.AssertCounterEquals(r.Name()+"_chunk_task", 0)
 }
 
 func (r *XactBlobDl) CtlMsg() string {
@@ -630,7 +699,8 @@ func (w *worker) do(tsk *chunkTask, buf []byte) (int, error) {
 		manifest   = w.parent.manifest
 		respWriter = w.parent.args.RespWriter
 	)
-	partNum := int(tsk.roff/chunkSize) + 1
+
+	partNum := tsk.roff/chunkSize + 1
 
 	// Get object range reader
 	res := core.T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, tsk.roff, chunkSize)
@@ -639,7 +709,7 @@ func (w *worker) do(tsk *chunkTask, buf []byte) (int, error) {
 	}
 
 	// Create chunk in manifest
-	chunk, chunkErr := manifest.NewChunk(partNum, lom)
+	chunk, chunkErr := manifest.NewChunk(int(partNum), lom)
 	if chunkErr != nil {
 		return 0, chunkErr
 	}
@@ -679,7 +749,7 @@ func (w *worker) do(tsk *chunkTask, buf []byte) (int, error) {
 	}
 
 	// Add chunk to manifest with size and checksum
-	if addErr := manifest.Add(chunk, chwritten, int64(partNum)); addErr != nil {
+	if addErr := manifest.Add(chunk, chwritten, partNum); addErr != nil {
 		if nerr := cos.RemoveFile(chunkPath); nerr != nil && !cos.IsNotExist(nerr) {
 			nlog.Errorln("nested error removing chunk:", nerr)
 		}

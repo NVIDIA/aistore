@@ -463,3 +463,130 @@ func TestBlobDownloadStreamGet(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "warm GET: data mismatch")
 }
+
+// TestBlobDownloadSingleThreaded tests single-threaded blob download (numWorkers = -1).
+// It validates:
+// 1. Single-threaded blob download via API works correctly
+// 2. Single-threaded blob download via streaming GET works correctly
+// 3. Objects are downloaded and cached properly in single-threaded mode
+func TestBlobDownloadSingleThreaded(t *testing.T) {
+	const (
+		objSize   = 32 * cos.MiB
+		chunkSize = 8 * cos.MiB
+	)
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cliBck
+	)
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	initMountpaths(t, proxyURL)
+
+	tests := []struct {
+		name      string
+		streamGet bool
+	}{
+		{name: "blob-download", streamGet: false},
+		{name: "streaming-get", streamGet: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			objName := "blob-single-threaded-" + test.name + "-" + trand.String(5)
+
+			// Provision object to remote bucket
+			tlog.Logfln("Provisioning object %s (%s)", objName, cos.ToSizeIEC(objSize, 0))
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+
+			_, err = api.PutObject(&api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				ObjName:    objName,
+				Reader:     reader,
+				Size:       uint64(objSize),
+			})
+			tassert.CheckFatal(t, err)
+			defer api.DeleteObject(baseParams, bck, objName)
+
+			// Evict the object to force cold GET
+			tlog.Logfln("Evicting object %s", objName)
+			err = api.EvictObject(baseParams, bck, objName)
+			tassert.CheckFatal(t, err)
+
+			if test.streamGet {
+				// Test single-threaded blob download via streaming GET
+				tlog.Logfln("Starting single-threaded blob download via streaming GET")
+				coldGetBuf := &bytes.Buffer{}
+				getArgs := &api.GetArgs{
+					Writer: coldGetBuf,
+					Header: http.Header{
+						apc.HdrBlobDownload: []string{"true"},
+						apc.HdrBlobChunk:    []string{cos.ToSizeIEC(chunkSize, 0)},
+						apc.HdrBlobWorkers:  []string{"-1"}, // Single-threaded
+					},
+				}
+				result, size, err := api.GetObjectReader(baseParams, bck, objName, getArgs)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+
+				// Verify content matches
+				readerDup, err := reader.Open()
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "cold GET: data mismatch")
+			} else {
+				// Test single-threaded blob download via API
+				tlog.Logfln("Starting single-threaded blob download via API")
+				blobMsg := &apc.BlobMsg{
+					ChunkSize:  chunkSize,
+					FullSize:   objSize,
+					NumWorkers: -1, // Single-threaded
+					LatestVer:  false,
+				}
+				xid, err := api.BlobDownload(baseParams, bck, objName, blobMsg)
+				tassert.CheckFatal(t, err)
+				tlog.Logfln("Blob download started with xid=%s", xid)
+
+				// Wait for blob download to complete
+				tlog.Logfln("Waiting for single-threaded blob download to complete")
+				xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
+					tid, _, err := snaps.RunningTarget("")
+					if err != nil {
+						return false, false
+					}
+					finished := tid == "" // not running = finished
+					return finished, false
+				}
+				args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.EvictPrefetchTimeout}
+				err = api.WaitForXactionNode(baseParams, &args, xactFinished)
+				tassert.CheckFatal(t, err)
+
+				// Verify content via GET
+				result, size, err := api.GetObjectReader(baseParams, bck, objName, nil)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+
+				readerDup, err := reader.Open()
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, tools.ReaderEqual(readerDup, result), "warm GET: data mismatch")
+			}
+
+			// Verify object is cached
+			tlog.Logfln("Verifying object is cached")
+			cachedList, err := api.ListObjects(baseParams, bck, &apc.LsoMsg{Prefix: objName, Props: apc.GetPropsCached}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(cachedList.Entries) == 1, "expected 1 cached object, got %d", len(cachedList.Entries))
+
+			// Verify object is chunked
+			tlog.Logfln("Verifying object is chunked")
+			m := &ioContext{t: t, bck: bck}
+			chunks := m.findObjChunksOnDisk(bck, objName)
+			expectedChunks := int((objSize + chunkSize - 1) / chunkSize)
+			tassert.Fatalf(t, len(chunks)+1 == expectedChunks,
+				"expected %d chunk files, found %d", expectedChunks, len(chunks)+1)
+
+			tlog.Logfln("Single-threaded blob download test (%s) completed successfully", test.name)
+		})
+	}
+}

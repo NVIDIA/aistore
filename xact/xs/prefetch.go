@@ -202,7 +202,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		r.brl.RetryAcquire(time.Second)
 	}
 	if r.msg.BlobThreshold > 0 && size >= r.msg.BlobThreshold && !r.pebl.busy() {
-		err = r.blobdl(lom, oa)
+		ecode, err = r.blobdl(lom, oa)
 	} else {
 		if r.msg.BlobThreshold == 0 && size > cos.GiB {
 			r._whinge(lom, size)
@@ -274,32 +274,40 @@ func (r *prefetch) Snap() (snap *core.Snap) {
 // async, via blob-downloader --------------------------
 //
 
-func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) error {
+func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	params := &core.BlobParams{
 		Lom: core.AllocLOM(lom.ObjName),
 		Msg: &apc.BlobMsg{},
 	}
 	if err := params.Lom.InitBck(lom.Bucket()); err != nil {
-		return err
+		return 0, err
 	}
+	xctn, err := core.T.GetColdBlob(params, oa)
+
+	// error handling
+	switch {
+	case cmn.IsErrTooManyRequests(err):
+		// fall back to regular cold GET if blob download is rejected due to resource pressure
+		nlog.Warningln(r.Name(), ": blob download rejected due to resource pressure, falling back to regular cold GET, error: ", err)
+		return r.getCold(lom)
+	case err != nil:
+		return 0, err
+	}
+
 	notif := &xact.NotifXact{
 		Base: nl.Base{
 			When: core.UponTerm,
 			F:    r.pebl.done,
 		},
 	}
-	xctn, err := core.T.GetColdBlob(params, oa)
-	if err != nil {
-		return err
-	}
 	notif.Xact = xctn
 	xctn.AddNotif(notif)
 
 	if xctn.IsDone() {
-		return nil
+		return 0, nil
 	}
 	r.pebl.add(xctn)
-	return nil
+	return 0, nil
 }
 
 //////////
