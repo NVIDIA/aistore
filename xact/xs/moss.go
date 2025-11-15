@@ -397,17 +397,20 @@ func (r *XactMoss) bewarmStop() {
 func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	var (
 		now  = mono.NanoTime()
-		next = r.advNextCheck.Load()
 		resp = &apc.MossResp{UUID: r.ID()}
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
 
 	// refresh load.Advice periodically; when under stress return 429 or throttle
-	// note: change adv.MemLoad() to (general) adv.Load >= load.Critical if need be
-	if now >= next {
+	if next := r.advNextCheck.Load(); now >= next {
+		// benign race: temporarily set far-future value to minimize duplicate adv.Refresh()
+		r.advNextCheck.Store(now + int64(time.Hour))
+
 		adv := r.newAdvice()
 		ival := advIval(adv.Load)
 		r.advNextCheck.Store(now + int64(ival))
+
+		// change adv.MemLoad() to (general) adv.Load >= load.Critical if need be
 		if adv.MemLoad() == load.Critical {
 			err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, adv.String())
 			return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
