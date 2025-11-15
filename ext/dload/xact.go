@@ -254,13 +254,8 @@ func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int
 	return
 }
 
-func (xld *Xact) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	xld.AddBaseSnap(snap)
-
-	snap.IdleX = xld.IsIdle()
-	return
-}
+func (*Xact) CtlMsg() string       { return "" }
+func (xld *Xact) Snap() *core.Snap { return xld.Base.NewSnap(xld) }
 
 /////////////
 // request //

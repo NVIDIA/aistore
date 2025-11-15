@@ -137,7 +137,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	return r, nil
 }
 
-func (r *prefetch) ctlmsg() string {
+func (r *prefetch) CtlMsg() string {
 	return r.msg.Str(r.lrit.lrp == lrpPrefix)
 }
 
@@ -265,13 +265,8 @@ func (r *prefetch) getCold(lom *core.LOM) (ecode int, err error) {
 }
 
 func (r *prefetch) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
+	snap = r.Base.NewSnap(r)
 	snap.Pack(0, len(r.lrit.nwp.workers), r.lrit.nwp.chanFull.Load())
-
-	snap.IdleX = r.IsIdle()
 	return
 }
 

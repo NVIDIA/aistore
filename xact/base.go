@@ -319,7 +319,7 @@ func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 
 func (xctn *Base) Cname() string { return Cname(xctn.Kind(), xctn.ID()) }
 
-func (xctn *Base) Name() (s string) { return xctn._nam }
+func (xctn *Base) Name() string { return xctn._nam }
 
 func (xctn *Base) String() string {
 	var (

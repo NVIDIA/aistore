@@ -80,7 +80,7 @@ func newETL(p *factory) *XactETL {
 	return xctn
 }
 
-func (r *XactETL) ctlmsg() string {
+func (r *XactETL) CtlMsg() string {
 	return r.msg.String()
 }
 
@@ -95,15 +95,7 @@ func (r *XactETL) Abort(err error) (aborted bool) {
 	return aborted
 }
 
-func (r *XactETL) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactETL) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *XactETL) AddObjErr(xid string, err *ObjErr) {
 	debug.Assert(err != nil)

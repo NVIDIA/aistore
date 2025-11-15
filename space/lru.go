@@ -197,7 +197,7 @@ func RunLRU(ini *IniLRU) {
 
 func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunLRU
 
-func (r *XactLRU) ctlmsg() string {
+func (r *XactLRU) CtlMsg() string {
 	s := r.p.Args.Custom.(string)
 	if r.ini == nil {
 		return s
@@ -216,15 +216,7 @@ func (r *XactLRU) ctlmsg() string {
 	return s
 }
 
-func (r *XactLRU) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactLRU) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 //
 // lruJ: mountpath jogger

@@ -123,7 +123,7 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 	return xreb, nil
 }
 
-func (xreb *Rebalance) ctlmsg() string {
+func (xreb *Rebalance) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(80)
 	if xreb.Args.Bck != nil {
@@ -167,12 +167,7 @@ func (xreb *Rebalance) RebID() int64 {
 }
 
 func (xreb *Rebalance) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	xreb.AddBaseSnap(snap)
-
-	snap.IdleX = xreb.IsIdle()
-
-	snap.SetCtlMsg(xreb.Name(), xreb.ctlmsg())
+	snap = xreb.Base.NewSnap(xreb)
 
 	// the number of rebalanced objects _is_ the number of transmitted objects (definition)
 	// (TODO: revisit)
@@ -217,10 +212,5 @@ func (xres *Resilver) String() string {
 	return xres.Base.String()
 }
 
-func (xres *Resilver) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	xres.AddBaseSnap(snap)
-
-	snap.IdleX = xres.IsIdle()
-	return
-}
+func (*Resilver) CtlMsg() string        { return "" }
+func (xres *Resilver) Snap() *core.Snap { return xres.Base.NewSnap(xres) }

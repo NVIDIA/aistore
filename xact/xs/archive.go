@@ -303,7 +303,7 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	}
 }
 
-func (r *XactArch) ctlmsg() string {
+func (r *XactArch) CtlMsg() string {
 	var sb strings.Builder
 	n := r.wiCnt.Load()
 	if n == 0 {
@@ -535,14 +535,10 @@ func (r *XactArch) chanFullTotal() (n int64) {
 }
 
 func (r *XactArch) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
+	snap = r.Base.NewSnap(r)
 
 	snap.Pack(len(r.joggers.m), 0 /*currently, always zero*/, r.chanFullTotal())
 
-	snap.IdleX = r.IsIdle()
 	if f, t := r.FromTo(); f != nil {
 		snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	}

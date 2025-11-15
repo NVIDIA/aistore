@@ -111,13 +111,6 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func (r *XactBckEncode) ctlmsg() (s string) {
-	if r.checkAndRecover {
-		s = "recover"
-	}
-	return
-}
-
 func (r *XactBckEncode) init(uuid string) error {
 	r.wg = &sync.WaitGroup{}
 	r.smap = core.T.Sowner().Get()
@@ -278,14 +271,16 @@ func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 	return nil
 }
 
+func (r *XactBckEncode) CtlMsg() (s string) {
+	if r.checkAndRecover {
+		s = "recover"
+	}
+	return
+}
+
 func (r *XactBckEncode) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
+	snap = r.Base.NewSnap(r)
 	snap.Pack(fs.NumAvail(), len(r.rcvyJG), r.chanFullTotal())
-
-	snap.IdleX = r.IsIdle()
 	return
 }
 

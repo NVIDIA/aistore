@@ -7,14 +7,18 @@ package xact
 import (
 	ratomic "sync/atomic"
 
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
 
 // TODO: (verbose) option to respond with xctn.err.JoinErr()
 
-// provided for external use to fill-in xaction-specific `SnapExt` part
-func (xctn *Base) AddBaseSnap(snap *core.Snap) {
+func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
+	snap = &core.Snap{}
+
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
 	snap.StartTime = xctn.StartTime()
@@ -30,6 +34,17 @@ func (xctn *Base) AddBaseSnap(snap *core.Snap) {
 
 	// counters
 	xctn.ToStats(&snap.Stats)
+
+	snap.CtlMsg = self.CtlMsg()
+	if snap.CtlMsg == "" {
+		return snap
+	}
+	if !Table[self.Kind()].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
+		nlog.InfoDepth(1, self.Name(), "run options:", snap.CtlMsg)
+	}
+
+	snap.IdleX = self.IsIdle()
+	return snap
 }
 
 // base stats: locally processed

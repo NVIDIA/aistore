@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
@@ -30,6 +29,15 @@ const (
 type (
 	QuiCB func(elapsed time.Duration) QuiRes // see enum below
 
+	GetStats interface {
+		Objs() int64
+		ObjsAdd(int, int64)    // locally processed
+		OutObjsAdd(int, int64) // transmit
+		InObjsAdd(int, int64)  // receive
+		InBytes() int64
+		OutBytes() int64
+	}
+
 	Xact interface {
 		Run(*sync.WaitGroup)
 		ID() string
@@ -40,6 +48,7 @@ type (
 		EndTime() time.Time
 		IsDone() bool
 		IsRunning() bool
+		IsIdle() bool
 		Quiesce(time.Duration, QuiCB) QuiRes
 
 		// abrt
@@ -50,6 +59,8 @@ type (
 		// err (info)
 		AddErr(error, ...int)
 
+		// to support api.QueryXactionSnaps
+		CtlMsg() string
 		Snap() *Snap // (struct below)
 
 		// reporting: log, err
@@ -63,12 +74,7 @@ type (
 		AddNotif(n Notif)
 
 		// common stats
-		Objs() int64
-		ObjsAdd(int, int64)    // locally processed
-		OutObjsAdd(int, int64) // transmit
-		InObjsAdd(int, int64)  // receive
-		InBytes() int64
-		OutBytes() int64
+		GetStats
 	}
 )
 
@@ -149,9 +155,4 @@ func (xsnap *Snap) Unpack() (njoggers, nworkers, chanFull int) {
 	nworkers = int(xsnap.Packed>>gorBits) & gorMask
 	chanFull = int(xsnap.Packed >> chShift)
 	return njoggers, nworkers, chanFull
-}
-
-func (xsnap *Snap) SetCtlMsg(xname, msg string) {
-	xsnap.CtlMsg = msg
-	nlog.InfoDepth(1, xname, "run options:", msg)
 }

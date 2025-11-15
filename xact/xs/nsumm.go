@@ -144,13 +144,13 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	}
 
 	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, opts, cmn.GCO.Get())
-	s := r.ctlmsg()
+	s := r.CtlMsg()
 	r._nam = r.Base.Name() + "-" + s
 	r._str = r.Base.String() + "-" + s
 	return r, nil
 }
 
-func (r *XactNsumm) ctlmsg() string {
+func (r *XactNsumm) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(96)
 	p, msg := r.p, r.p.msg
@@ -275,18 +275,9 @@ func (r *XactNsumm) initRes(res *cmn.BsummResult, bck *meta.Bck) {
 	res.ObjSize.Min = math.MaxInt64
 }
 
-func (r *XactNsumm) String() string { return r._str }
-func (r *XactNsumm) Name() string   { return r._nam }
-
-func (r *XactNsumm) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactNsumm) String() string   { return r._str }
+func (r *XactNsumm) Name() string     { return r._nam }
+func (r *XactNsumm) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *XactNsumm) Result() (cmn.AllBsummResults, error) {
 	if r.single {

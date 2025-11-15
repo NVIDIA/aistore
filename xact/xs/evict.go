@@ -87,7 +87,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMs
 	return r, nil
 }
 
-func (r *evictDelete) ctlmsg() string {
+func (r *evictDelete) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(80)
 	r.msg.Str(&sb, r.lrit.lrp == lrpPrefix)
@@ -124,13 +124,7 @@ eret:
 }
 
 func (r *evictDelete) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
+	snap = r.Base.NewSnap(r)
 	snap.Pack(0, len(r.lrit.nwp.workers), r.lrit.nwp.chanFull.Load())
-
-	snap.IdleX = r.IsIdle()
 	return
 }

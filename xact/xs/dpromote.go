@@ -77,7 +77,7 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is called before Run()
 
-func (r *XactDirPromote) ctlmsg() string {
+func (r *XactDirPromote) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(128)
 	r.p.args.Str(&sb)
@@ -152,15 +152,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	return err
 }
 
-func (r *XactDirPromote) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactDirPromote) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 //
 // destination naming

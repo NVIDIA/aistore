@@ -311,8 +311,11 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
+func (*XactGet) CtlMsg() string { return "" }
+
 func (r *XactGet) Snap() (snap *core.Snap) {
-	snap = r.baseSnap()
+	snap = r.Base.NewSnap(r)
+
 	st := r.stats.stats()
 	snap.Ext = &ExtECGetStats{
 		AvgTime:     cos.Duration(st.DecodeTime),

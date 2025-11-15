@@ -190,13 +190,9 @@ func (r *XactTCO) String() string {
 func (r *XactTCO) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
 
 func (r *XactTCO) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
+	snap = r.Base.NewSnap(r)
 	snap.Pack(0, int(r.nworkers.Load()), r.chanFull.Load())
 
-	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return snap
@@ -434,7 +430,7 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 	return
 }
 
-func (r *XactTCO) ctlmsg() string {
+func (r *XactTCO) CtlMsg() string {
 	var sb strings.Builder
 	n := r.wiCnt.Load()
 	if n == 0 {

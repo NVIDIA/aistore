@@ -85,7 +85,7 @@ func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *xactLLC) ctlmsg() string {
+func (r *xactLLC) CtlMsg() string {
 	nv := r.NumVisits()
 	if nv == 0 {
 		return ""
@@ -97,13 +97,4 @@ func (r *xactLLC) ctlmsg() string {
 	return sb.String()
 }
 
-func (r *xactLLC) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	if s := r.ctlmsg(); s != "" {
-		snap.SetCtlMsg(r.Name(), s)
-	}
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *xactLLC) Snap() *core.Snap { return r.Base.NewSnap(r) }

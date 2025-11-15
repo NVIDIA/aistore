@@ -581,7 +581,7 @@ func (r *XactBlobDl) cleanup() {
 	}
 }
 
-func (r *XactBlobDl) ctlmsg() string {
+func (r *XactBlobDl) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(128)
 
@@ -611,10 +611,7 @@ func (r *XactBlobDl) ctlmsg() string {
 }
 
 func (r *XactBlobDl) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
+	snap = r.Base.NewSnap(r)
 
 	// HACK shortcut to support progress bar
 	snap.Stats.InBytes = r.fullSize

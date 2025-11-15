@@ -191,7 +191,7 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 // LsoXact //
 /////////////
 
-func (r *LsoXact) ctlmsg() string {
+func (r *LsoXact) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(160)
 	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
@@ -224,8 +224,8 @@ loop:
 
 			// cannot change
 			debug.Assert(r.msg.SID == msg.SID, r.msg.SID, " vs ", msg.SID)
-			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), r.ctlmsg())
-			debug.Assert(r.walk.remote == lsoIsRemote(r.p.Bck, msg.IsFlagSet(apc.LsCached)), r.ctlmsg())
+			debug.Assert(r.walk.wor == msg.WantOnlyRemoteProps(), r.CtlMsg())
+			debug.Assert(r.walk.remote == lsoIsRemote(r.p.Bck, msg.IsFlagSet(apc.LsCached)), r.CtlMsg())
 
 			r.IncPending()
 			resp := r.doPage()
@@ -720,15 +720,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	return nil
 }
 
-func (r *LsoXact) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *LsoXact) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 //
 // streaming receive: remote pages

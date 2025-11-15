@@ -34,8 +34,5 @@ func NewXact(kind string) *XactMock {
 	return xctn
 }
 
-func (r *XactMock) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-	return
-}
+func (*XactMock) CtlMsg() string     { return "" }
+func (r *XactMock) Snap() *core.Snap { return r.Base.NewSnap(r) }

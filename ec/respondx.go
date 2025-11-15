@@ -242,5 +242,5 @@ func (r *XactRespond) stop() {
 	r.Finish()
 }
 
-// (compare w/ XactGet/Put)
-func (r *XactRespond) Snap() *core.Snap { return r.baseSnap() }
+func (*XactRespond) CtlMsg() string     { return "" }
+func (r *XactRespond) Snap() *core.Snap { return r.Base.NewSnap(r) }

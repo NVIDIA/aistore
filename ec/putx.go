@@ -234,8 +234,11 @@ func (r *XactPut) cleanup(req *request, lom *core.LOM) {
 	}
 }
 
+func (*XactPut) CtlMsg() string { return "" }
+
 func (r *XactPut) Snap() (snap *core.Snap) {
-	snap = r.baseSnap()
+	snap = r.Base.NewSnap(r)
+
 	st := r.stats.stats()
 	snap.Ext = &ExtECPutStats{
 		AvgEncodeTime:  cos.Duration(st.EncodeTime),

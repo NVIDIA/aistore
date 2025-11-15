@@ -371,7 +371,7 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 		// stop receiving
 		bundle.SDM.UnregRecv(r.ID())
 
-		msg := r.ctlmsg()
+		msg := r.CtlMsg()
 		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
 
 		r.pending.Range(r.cleanup)
@@ -437,7 +437,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 		if time.Duration(wi.started-r.lastLog.Load()) > sparseLog {
 			// log and `ais show job`
-			if msg := r.ctlmsg(); msg != "" {
+			if msg := r.CtlMsg(); msg != "" {
 				nlog.Infoln(r.Name(), "ctlmsg (", msg, ")")
 			}
 			r.lastLog.Store(wi.started)
@@ -777,16 +777,7 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 
 func (*mossFactory) Kind() string     { return apc.ActGetBatch }
 func (p *mossFactory) Get() core.Xact { return p.xctn }
-
-func (r *XactMoss) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactMoss) Snap() *core.Snap  { return r.Base.NewSnap(r) }
 
 func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, tsi *meta.Snode, err error) {
 	bck, err := r._bucket(in)
@@ -847,7 +838,7 @@ func (*XactMoss) bewarmFQN(fqn string) {
 }
 
 // single writer: DT only
-func (r *XactMoss) ctlmsg() string {
+func (r *XactMoss) CtlMsg() string {
 	if r.stats.size.load() == 0 {
 		return ""
 	}

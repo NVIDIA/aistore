@@ -230,7 +230,7 @@ func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
 		)
 		if inout.Idle != nil {
 			if _, ok := xctn.(xact.Demand); ok {
-				isIdle = xctn.Snap().IsIdle()
+				isIdle = xctn.IsIdle()
 			}
 		}
 		if isIdle {

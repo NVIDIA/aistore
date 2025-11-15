@@ -296,28 +296,6 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 	}
 }
 
-func (r *XactTCB) ctlmsg(rename bool) string {
-	var (
-		sb        strings.Builder
-		msg       = r.args.Msg
-		fromCname = r.args.BckFrom.Cname(msg.Prefix)
-		toCname   = r.args.BckTo.Cname(msg.Prepend)
-		tag       string
-	)
-	switch {
-	case rename:
-		tag = "mv: "
-	case r.Kind() == apc.ActETLBck:
-		tag = "etl: "
-	default:
-		tag = "cp: "
-	}
-
-	sb.Grow(80)
-	msg.Str(&sb, fromCname, toCname, tag)
-	return sb.String()
-}
-
 // sub-routine that does the core copy bucket logic; doesn't include the Finish() call and abort check
 func (r *XactTCB) run(wg *sync.WaitGroup) {
 	// make sure `nat` hasn't changed between Start and now (highly unlikely)
@@ -536,14 +514,34 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.args.BckFrom, r.args.BckTo
 }
 
-func (r *XactTCB) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
+func (r *XactTCB) CtlMsg() string { return r.formatCtlMsg(false) }
 
-	snap.SetCtlMsg(r.Name(), r.ctlmsg(false))
+func (r *XactTCB) formatCtlMsg(rename bool) string {
+	var (
+		sb        strings.Builder
+		msg       = r.args.Msg
+		fromCname = r.args.BckFrom.Cname(msg.Prefix)
+		toCname   = r.args.BckTo.Cname(msg.Prepend)
+		tag       string
+	)
+	switch {
+	case rename:
+		tag = "mv: "
+	case r.Kind() == apc.ActETLBck:
+		tag = "etl: "
+	default:
+		tag = "cp: "
+	}
+
+	sb.Grow(80)
+	msg.Str(&sb, fromCname, toCname, tag)
+	return sb.String()
+}
+
+func (r *XactTCB) Snap() (snap *core.Snap) {
+	snap = r.Base.NewSnap(r)
 	snap.Pack(fs.NumAvail(), len(r.nwp.workers), r.nwp.chanFull.Load())
 
-	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return

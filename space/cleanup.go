@@ -119,7 +119,7 @@ var (
 
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunCleanup() below
 
-func (r *XactCln) ctlmsg() string {
+func (r *XactCln) CtlMsg() string {
 	s := r.p.Args.Custom.(string)
 	if r.ini == nil {
 		return s
@@ -127,15 +127,7 @@ func (r *XactCln) ctlmsg() string {
 	return s + ", " + r.ini.Args.String()
 }
 
-func (r *XactCln) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return
-}
+func (r *XactCln) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 ////////////////
 // clnFactory //

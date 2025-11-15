@@ -127,7 +127,7 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactPut //
 /////////////
 
-func (r *XactPut) ctlmsg() string {
+func (r *XactPut) CtlMsg() string {
 	if !r.mirror.Enabled {
 		return "mirror disabled"
 	}
@@ -233,12 +233,4 @@ func (r *XactPut) stop() (err error) {
 	return err
 }
 
-func (r *XactPut) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return snap
-}
+func (r *XactPut) Snap() *core.Snap { return r.Base.NewSnap(r) }

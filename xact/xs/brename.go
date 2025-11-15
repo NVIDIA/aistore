@@ -95,21 +95,18 @@ func (r *BckRename) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *BckRename) ctlmsg() string { return r.XactTCB.ctlmsg(true /*rename*/) }
-func (r *BckRename) String() string { return r.ctlmsg() }
-func (r *BckRename) Name() string   { return r.ctlmsg() }
+func (r *BckRename) String() string { return r.CtlMsg() }
+func (r *BckRename) Name() string   { return r.CtlMsg() }
 
 func (r *BckRename) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.XactTCB.args.BckFrom, r.XactTCB.args.BckTo
 }
 
+func (r *BckRename) CtlMsg() string { return r.XactTCB.formatCtlMsg(true /*rename*/) }
+
 func (r *BckRename) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
+	snap = r.Base.NewSnap(r)
 
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
 	f, t := r.FromTo()
 	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return

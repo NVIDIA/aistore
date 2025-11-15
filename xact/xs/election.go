@@ -50,8 +50,5 @@ func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func (*Election) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *Election) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
-	return
-}
+func (*Election) CtlMsg() string     { return "" }
+func (r *Election) Snap() *core.Snap { return r.Base.NewSnap(r) }

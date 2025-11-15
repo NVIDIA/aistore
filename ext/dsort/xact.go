@@ -77,9 +77,10 @@ func (r *xaction) Abort(err error) (ok bool) {
 	return
 }
 
+func (*xaction) CtlMsg() string { return "" }
+
 func (r *xaction) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.AddBaseSnap(snap)
+	snap = r.Base.NewSnap(r)
 
 	m, exists := g.mg.Get(r.ID(), true /*incl. archived*/)
 	if !exists {

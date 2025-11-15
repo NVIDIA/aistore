@@ -53,7 +53,7 @@ func (p *rechunkFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *rechunkFactory) Start() (err error) {
 	p.xctn, err = newxactRechunk(p)
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.ctlmsg())
+		nlog.Infoln("start rechunk", p.Bck.String(), "xid", p.UUID(), "args", p.xctn.CtlMsg())
 	}
 	return err
 }
@@ -193,17 +193,9 @@ func (r *xactRechunk) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *xactRechunk) Snap() *core.Snap {
-	snap := &core.Snap{}
-	r.AddBaseSnap(snap)
+func (r *xactRechunk) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
-	snap.SetCtlMsg(r.Name(), r.ctlmsg())
-
-	snap.IdleX = r.IsIdle()
-	return snap
-}
-
-func (r *xactRechunk) ctlmsg() string {
+func (r *xactRechunk) CtlMsg() string {
 	var sb strings.Builder
 	sb.Grow(96)
 
