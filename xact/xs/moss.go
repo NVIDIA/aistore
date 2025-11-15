@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/work"
@@ -32,7 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -166,6 +166,7 @@ type (
 			nsent aint64
 			nfail aint64
 		}
+		adv load.Advice
 	}
 )
 
@@ -254,17 +255,16 @@ func newMoss(p *mossFactory) *XactMoss {
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 
+	// throttling context; refresh to decide in re: bewarm
+	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &r.config.Disk, RW: true})
+	r.adv.Refresh()
+
 	// best-effort `bewarm` for pagecache warming-up
 	s := "without"
 	if num := r.config.GetBatch.WarmupWorkers(); num > 0 {
-		load, isExtreme := sys.MaxLoad2()
-		if !isExtreme {
-			ncpu := sys.NumCPU()
-			highcpu := ncpu * sys.HighLoad / 100
-			if load < float64(highcpu) {
-				r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
-				s = "with"
-			}
+		if r.adv.Load < load.High {
+			r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
+			s = "with"
 		}
 	}
 
@@ -402,6 +402,16 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
 
+	// refresh load.Advice unconditionally; when under stress return 429 or throttle
+	r.adv.Refresh()
+	if r.adv.MemLoad() == load.Critical { // note: change to r.adv.Load >= load.Critical if need be
+		err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, r.adv.String())
+		return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+	}
+	if r.adv.Sleep > 0 {
+		time.Sleep(r.adv.Sleep)
+	}
+
 	// for receiving (DT) and GC (all)
 	wi.started = mono.NanoTime()
 
@@ -510,6 +520,8 @@ func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/
 	} else {
 		bundle.SDM.RegRecv(r)
 	}
+
+	// TODO optional future tuning: init sender's own load.Advice right here and check periodically inside the loop
 
 	// send all
 	r.IncPending()

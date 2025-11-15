@@ -5,6 +5,7 @@
 package load
 
 import (
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -15,6 +16,7 @@ import (
 
 //
 // unified throttling recommendation based on current system load
+// for background and usage, see README.md in this package
 //
 
 const (
@@ -38,6 +40,9 @@ type (
 		// init
 		flags uint64
 		extra Extra
+
+		// packed per-dimension grades (Low..Critical)
+		loads uint64
 
 		// runtime
 		Sleep time.Duration // recommended sleep at check points
@@ -77,15 +82,15 @@ func (a *Advice) Refresh() {
 	if a.flags&FlDsk != 0 {
 		mi, cfg = a.extra.Mi, a.extra.Cfg
 	}
-	loads := refresh(a.flags, mi, cfg)
+	a.loads = refresh(a.flags, mi, cfg)
 
 	// reset optimistically
 	a.Sleep = 0
 	a.Batch = maxBatch
-	a.Load = memOf(loads)
+	a.Load = memOf(a.loads)
 
 	// 1) memory pressure
-	switch memOf(loads) {
+	switch memOf(a.loads) {
 	case Critical:
 		a.Sleep = sleep100ms
 		a.Batch = minBatch
@@ -99,22 +104,22 @@ func (a *Advice) Refresh() {
 
 	// 2) goroutines and CPU
 	switch {
-	case gorOf(loads) == Critical && cpuOf(loads) == Critical:
+	case gorOf(a.loads) == Critical && cpuOf(a.loads) == Critical:
 		a.Sleep = cos.Ternary(a.Sleep >= sleep10ms, max(sleep100ms, a.Sleep), sleep10ms)
 		a.Batch = min(a.Batch, minBatch)
 		a.Load = Critical
-	case gorOf(loads) == Critical || cpuOf(loads) == Critical:
+	case gorOf(a.loads) == Critical || cpuOf(a.loads) == Critical:
 		a.Sleep = cos.Ternary(a.Sleep >= sleep1ms, max(sleep10ms, a.Sleep), sleep1ms)
 		a.Batch = min(a.Batch, smallBatch)
 		a.Load = Critical
-	case gorOf(loads) == High || cpuOf(loads) == High:
+	case gorOf(a.loads) == High || cpuOf(a.loads) == High:
 		a.Sleep = max(a.Sleep, sleep1ms)
 		a.Batch = min(a.Batch, smallBatch)
 		a.Load = max(a.Load, High)
 	}
 
 	// 3) disk
-	switch dskOf(loads) {
+	switch dskOf(a.loads) {
 	case Critical:
 		a.Sleep = cos.Ternary(a.Sleep >= sleep10ms, max(sleep100ms, a.Sleep), sleep10ms)
 		a.Batch = min(a.Batch, minBatch)
@@ -135,4 +140,59 @@ func (a *Advice) Refresh() {
 			a.Batch = min(a.Batch<<4, maxBatch)
 		}
 	}
+}
+
+//
+// inline helpers
+//
+
+func (a *Advice) MemLoad() Load { return memOf(a.loads) }
+func (a *Advice) ClaLoad() Load { return cpuOf(a.loads) }
+func (a *Advice) DskLoad() Load { return dskOf(a.loads) }
+
+//
+// usage: nlog
+//
+
+func (a *Advice) String() string {
+	var sb strings.Builder
+	sb.Grow(92)
+
+	sb.WriteString("load=")
+	sb.WriteString(Text[a.Load])
+	sb.WriteString(" sleep=")
+	sb.WriteString(a.Sleep.String())
+
+	get := func(shift uint64) Load {
+		return Load((a.loads >> shift) & slotMask)
+	}
+	dims := []struct {
+		name string
+		l    Load
+	}{
+		{"mem", get(memShift)},
+		{"cpu", get(cpuShift)},
+		{"dsk", get(dskShift)},
+		{"gor", get(gorShift)},
+		{"fdt", get(fdtShift)},
+	}
+	first := true
+	for _, d := range dims {
+		if d.l == 0 {
+			continue
+		}
+		if first {
+			sb.WriteString(" [")
+			first = false
+		} else {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(d.name)
+		sb.WriteByte('=')
+		sb.WriteString(Text[d.l])
+	}
+	if !first {
+		sb.WriteByte(']')
+	}
+	return sb.String()
 }

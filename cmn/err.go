@@ -1271,6 +1271,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 			status = http.StatusNotImplemented
 		case IsErrBusy(err):
 			status = http.StatusConflict
+		case IsErrTooManyRequests(err):
+			status = http.StatusTooManyRequests
 		}
 	}
 

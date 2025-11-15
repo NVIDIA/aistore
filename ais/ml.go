@@ -341,13 +341,19 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	if receiving {
 		// open SDM
 		if err := bundle.SDM.Open(); err != nil {
+			xmoss.Abort(err)
 			t.writeErr(w, r, err)
 			return
 		}
 	}
 	if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, receiving, usingPrev); err != nil {
-		xmoss.Abort(err)
-		t.writeErr(w, r, err)
+		var ecode int
+		if !cmn.IsErrTooManyRequests(err) {
+			xmoss.Abort(err)
+		} else {
+			ecode = http.StatusTooManyRequests
+		}
+		t.writeErr(w, r, err, ecode)
 		return
 	}
 

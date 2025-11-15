@@ -14,6 +14,10 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
+//
+// for background and usage, see README.md in this package
+//
+
 // load dimensions: bit flags
 const (
 	FlFdt = 1 << iota // file descriptors
