@@ -71,8 +71,8 @@ TBD:
 
 // hardcoded tunables
 const (
-	// low-level stats: total processed files, objects, etc.
-	sparseLog = time.Minute
+	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
+	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
 
 	// bewarm is a small-size worker pool per x-moss instance - unless under heavy load
 	// - created at init time
@@ -166,7 +166,7 @@ type (
 			nsent aint64
 			nfail aint64
 		}
-		adv load.Advice
+		advNextCheck atomic.Int64
 	}
 )
 
@@ -255,18 +255,16 @@ func newMoss(p *mossFactory) *XactMoss {
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 
-	// throttling context; refresh to decide in re: bewarm
-	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &r.config.Disk, RW: true})
-	r.adv.Refresh()
-
 	// best-effort `bewarm` for pagecache warming-up
+	adv := r.newAdvice()
 	s := "without"
 	if num := r.config.GetBatch.WarmupWorkers(); num > 0 {
-		if r.adv.Load < load.High {
+		if adv.Load < load.High {
 			r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
 			s = "with"
 		}
 	}
+	r.advNextCheck.Store(mono.NanoTime())
 
 	nlog.Infoln(core.T.String(), "run:", r.Name(), s, "\"bewarm\"")
 	return r
@@ -398,22 +396,30 @@ func (r *XactMoss) bewarmStop() {
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	var (
+		now  = mono.NanoTime()
+		next = r.advNextCheck.Load()
 		resp = &apc.MossResp{UUID: r.ID()}
 		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
 	)
 
-	// refresh load.Advice unconditionally; when under stress return 429 or throttle
-	r.adv.Refresh()
-	if r.adv.MemLoad() == load.Critical { // note: change to r.adv.Load >= load.Critical if need be
-		err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, r.adv.String())
-		return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
-	}
-	if r.adv.Sleep > 0 {
-		time.Sleep(r.adv.Sleep)
+	// refresh load.Advice periodically; when under stress return 429 or throttle
+	// note: change adv.MemLoad() to (general) adv.Load >= load.Critical if need be
+	if now >= next {
+		adv := r.newAdvice()
+		ival := advIval(adv.Load)
+		r.advNextCheck.Store(now + int64(ival))
+		if adv.MemLoad() == load.Critical {
+			err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, adv.String())
+			return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
+		}
+		if adv.Sleep > 0 {
+			time.Sleep(adv.Sleep)
+			now += adv.Sleep.Nanoseconds()
+		}
 	}
 
 	// for receiving (DT) and GC (all)
-	wi.started = mono.NanoTime()
+	wi.started = now
 
 	if receiving {
 		if usingPrev {
@@ -1667,5 +1673,26 @@ func (m *moss) append(sb *strings.Builder) {
 	if miss > 0 {
 		sb.WriteString(" miss:")
 		sb.WriteString(strconv.FormatInt(miss, 10))
+	}
+}
+
+//
+// load.Advice helpers
+//
+
+func (r *XactMoss) newAdvice() (adv load.Advice) {
+	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &r.config.Disk, RW: true})
+	adv.Refresh()
+	return
+}
+
+func advIval(l load.Load) time.Duration {
+	switch l {
+	case load.Critical:
+		return sparseAdvice >> 3
+	case load.High:
+		return sparseAdvice >> 2
+	default:
+		return sparseAdvice
 	}
 }
