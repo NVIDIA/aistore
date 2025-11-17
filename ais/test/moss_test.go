@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -39,6 +40,7 @@ import (
 const (
 	mossMissingPrefix = "missing-"
 	mossMissingSuffix = ".nonexistent"
+	mossMissingRatio  = 3 // as in: every 3rd
 )
 
 type mossConfig struct {
@@ -190,6 +192,8 @@ func TestMoss(t *testing.T) {
 
 	t.Cleanup(stopMossJobs) // in re: ErrLimitedCoexistence
 
+	oconfig := tools.GetClusterConfig(t)
+
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
 			m := ioContext{
@@ -208,6 +212,15 @@ func TestMoss(t *testing.T) {
 
 			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			m.init(true /*cleanup*/)
+
+			if test.withMissing {
+				s := strconv.Itoa(numPlainObjs)
+				tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
+				t.Cleanup(func() {
+					s := strconv.Itoa(oconfig.GetBatch.MaxSoftErrs)
+					tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
+				})
+			}
 
 			if test.inputFormat == "" {
 				testMossPlainObjects(t, &m, &test, numPlainObjs)
@@ -250,11 +263,11 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	// Inject missing objects if requested
 	if test.withMissing {
 		originalEntries := mossIn
-		mossIn = make([]apc.MossIn, 0, len(originalEntries)+len(originalEntries)/3)
+		mossIn = make([]apc.MossIn, 0, len(originalEntries)+len(originalEntries)/mossMissingRatio)
 
 		for i, entry := range originalEntries {
 			mossIn = append(mossIn, entry)
-			if i%3 == 0 {
+			if i%mossMissingRatio == 0 {
 				missingEntry := apc.MossIn{
 					ObjName: mossMissingPrefix + trand.String(8),
 				}
@@ -342,7 +355,7 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 	// Inject missing archive paths if requested
 	if test.withMissing {
 		for i := range mossIn {
-			if i%3 == 0 {
+			if i%mossMissingRatio == 0 {
 				mossIn[i].ArchPath = trand.String(8) + mossMissingSuffix
 			}
 		}

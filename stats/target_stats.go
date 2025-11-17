@@ -31,24 +31,33 @@ import (
 //
 // all error counters must have "err_" prefix (see `errPrefix`)
 
+//
+// ais target metrics: groups 1 through 4 =====================
+//
+
+// 1. datapath (counters, sizes, latencies) and common errors
 const (
-	// KindCounter & KindSize - always incremented
+	// KindThroughput
+	GetThroughput = "get.bps" // bytes per second
+	PutThroughput = "put.bps" // ditto
 
-	LruEvictCount = "lru.evict.n"
-	LruEvictSize  = "lru.evict.size"
+	// same as above via `.cumulative`
+	GetSize = "get.size"
+	PutSize = "put.size"
 
-	CleanupStoreCount = "cleanup.store.n"
-	CleanupStoreSize  = "cleanup.store.size"
+	// common latencies
+	AppendLatency    = "append.ns"
+	GetRedirLatency  = "get.redir.ns"
+	PutRedirLatency  = "put.redir.ns"
+	HeadLatencyTotal = "head.ns.total"
 
+	// out-of-band
 	VerChangeCount = "ver.change.n"
 	VerChangeSize  = "ver.change.size"
 
-	// errors
+	// errors (note common prefix convention)
 	ErrPutCksumCount = errPrefix + "put.cksum.n"
-
-	ErrFSHCCount = errPrefix + "fshc.n"
-
-	ErrDloadCount = errPrefix + "dl.n"
+	ErrFSHCCount     = errPrefix + "fshc.n"
 
 	// IO errors (must have ioErrPrefix)
 	IOErrGetCount    = ioErrPrefix + "get.n"
@@ -69,13 +78,32 @@ const (
 	RatelimPutRetryCount        = "ratelim.retry.put.n"
 	RatelimPutRetryLatencyTotal = "ratelim.retry.put.ns.total"
 
-	AppendLatency     = "append.ns"
-	GetRedirLatency   = "get.redir.ns"
-	PutRedirLatency   = "put.redir.ns"
-	DloadLatencyTotal = "dl.ns.total"
-	HeadLatencyTotal  = "head.ns.total"
+	// compare w/ common `DeleteCount`
+	RemoteDeletedDelCount = core.RemoteDeletedDelCount
+)
 
-	// Dsort
+// 2. object metadata in memory
+const (
+	LcacheCollisionCount = core.LcacheCollisionCount
+	LcacheEvictedCount   = core.LcacheEvictedCount
+	LcacheErrCount       = core.LcacheErrCount
+	LcacheFlushColdCount = core.LcacheFlushColdCount
+)
+
+// 3. xactions (jobs)
+const (
+	// blob downloader
+	GetBlobSize = "getblob.size"
+
+	// LRU eviction
+	LruEvictCount = "lru.evict.n"
+	LruEvictSize  = "lru.evict.size"
+
+	// space cleanup
+	CleanupStoreCount = "cleanup.store.n"
+	CleanupStoreSize  = "cleanup.store.size"
+
+	// distributed sort (ext/dsort)
 	DsortCreationReqCount    = "dsort.creation.req.n"
 	DsortCreationRespCount   = "dsort.creation.resp.n"
 	DsortCreationRespLatency = "dsort.creation.resp.ns"
@@ -83,7 +111,7 @@ const (
 	DsortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
 	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
-	// ETL
+	// ETL (ext/etl)
 	ETLInlineCount         = "etl.inline.n"
 	ETLInlineLatencyTotal  = "etl.inline.ns.total"
 	ETLInlineSize          = "etl.inline.size"
@@ -91,28 +119,36 @@ const (
 	ETLOfflineLatencyTotal = "etl.offline.ns.total"
 	ETLOfflineSize         = "etl.offline.size"
 
-	// Downloader
-	DloadSize = "dl.size"
+	// downloader (ext/dload)
+	// (not to confuse with blob downloader)
+	DloadSize         = "dl.size"
+	DloadLatencyTotal = "dl.ns.total"
+	ErrDloadCount     = errPrefix + "dl.n"
 
-	// KindThroughput
-	GetThroughput = "get.bps" // bytes per second
-	PutThroughput = "put.bps" // ditto
+	// get-batch (x-moss)
+	GetBatchCount     = "getbatch.n"
+	GetBatchObjCount  = "getbatch.obj.n"
+	GetBatchFileCount = "getbatch.file.n"
+	GetBatchObjSize   = "getbatch.obj.size"
+	GetBatchFileSize  = "getbatch.file.size"
 
-	// same as above via `.cumulative`
-	GetSize = "get.size"
-	PutSize = "put.size"
+	GetBatchRxWaitTotal   = "getbatch.rxwait.ns"
+	GetBatchThrottleTotal = "getbatch.throttle.ns"
 
-	GetBlobSize = "getblob.size"
+	ErrGetBatchCount     = errPrefix + "getbatch.n"
+	GetBatchSoftErrCount = errPrefix + "soft.getbatch.n"
+)
 
-	// core
-	RemoteDeletedDelCount = core.RemoteDeletedDelCount // compare w/ common `DeleteCount`
+// 4, streams (peer-to-peer long-lived connections)
+const (
+	_ = cos.StreamsOutObjCount
+	_ = cos.StreamsOutObjSize
+	_ = cos.StreamsInObjCount
+	_ = cos.StreamsInObjSize
+)
 
-	LcacheCollisionCount = core.LcacheCollisionCount
-	LcacheEvictedCount   = core.LcacheEvictedCount
-	LcacheErrCount       = core.LcacheErrCount
-	LcacheFlushColdCount = core.LcacheFlushColdCount
-
-	// variable label used for prometheus disk metrics
+// variable label used for prometheus disk metrics
+const (
 	diskMetricLabel = "disk"
 )
 
@@ -420,7 +456,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		},
 	)
 
-	// streams
+	// streams: peer-to-peer long-lived connections
 	r.reg(snode, cos.StreamsOutObjCount, KindCounter,
 		&Extra{
 			Help: "intra-cluster streaming communications: number of sent objects",
@@ -442,6 +478,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		},
 	)
 
+	// downloader (ext/dload)
 	r.reg(snode, DloadSize, KindSize,
 		&Extra{
 			Help:    "total downloaded size (bytes)",
@@ -567,6 +604,53 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 	r.reg(snode, LcacheFlushColdCount, KindCounter,
 		&Extra{
 			Help: "number of times a LOM from cache was written to stable storage (core, internal)",
+		},
+	)
+
+	// get-batch (x-moss)
+	r.reg(snode, GetBatchCount, KindCounter,
+		&Extra{
+			Help: "total number of get-batch requests (work items)",
+		},
+	)
+	r.reg(snode, GetBatchObjCount, KindCounter,
+		&Extra{
+			Help: "get-batch: total number of whole objects retrieved and delivered via output archive",
+		},
+	)
+	r.reg(snode, GetBatchFileCount, KindCounter,
+		&Extra{
+			Help: "get-batch: total number of files extracted from shards and delivered via output archive",
+		},
+	)
+	r.reg(snode, GetBatchObjSize, KindSize,
+		&Extra{
+			Help: "get-batch: total cumulative size (bytes) of whole objects",
+		},
+	)
+	r.reg(snode, GetBatchFileSize, KindSize,
+		&Extra{
+			Help: "get-batch: total cumulative size (bytes) of archived files extracted from shards",
+		},
+	)
+	r.reg(snode, GetBatchRxWaitTotal, KindTotal,
+		&Extra{
+			Help: "get-batch: total cumulative time (nanoseconds) spent waiting to receive entries from peer targets",
+		},
+	)
+	r.reg(snode, GetBatchThrottleTotal, KindTotal,
+		&Extra{
+			Help: "get-batch: total cumulative time (nanoseconds) slept due to resource pressure",
+		},
+	)
+	r.reg(snode, GetBatchSoftErrCount, KindCounter,
+		&Extra{
+			Help: "get-batch: number of transient errors (retryable failures under configured limit)",
+		},
+	)
+	r.reg(snode, ErrGetBatchCount, KindCounter,
+		&Extra{
+			Help: "get-batch: number of hard errors including request failures and 429 rejections",
 		},
 	)
 }

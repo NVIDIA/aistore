@@ -2547,7 +2547,7 @@ const (
 	numWarmupWorkersDisabled = -1
 	numWarmupWorkersDflt     = 2
 
-	getBatchSoftErrs = 6
+	GetBatchSoftErrsDflt = 6
 )
 
 func (c *GetBatchConf) WarmupWorkers() int {
@@ -2571,7 +2571,7 @@ func (c *GetBatchConf) Validate() error {
 		}
 	}
 	if c.MaxSoftErrs == 0 {
-		c.MaxSoftErrs = getBatchSoftErrs
+		c.MaxSoftErrs = GetBatchSoftErrsDflt
 	} else if c.MaxSoftErrs < 0 {
 		return fmt.Errorf("invalid get_batch.max_soft_errs=%d (expecting non-negative integer)", c.MaxSoftErrs)
 	}

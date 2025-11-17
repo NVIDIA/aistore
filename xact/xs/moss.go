@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -33,6 +32,7 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -60,10 +60,14 @@ import (
    Peer-to-peer stream drops/terminations manifest themselves as `transport.ErrSBR` and
    are handled by shared-DM
 
+   Soft errors: any path in the flow that does addMissing() is a soft error irrespective of its
+   original cause that may include:
+   a) missing data (404)
+   b) network error (ErrSBR) with subsequent successful recovery via GFN
+
 TBD:
    - throttle (observing memory pressure under stress)
    - stats: (files, objects) separately; Prometheus metrics
-   - soft errors other than not-found; unified error formatting
    - mem-pool: basewi; apc.MossReq; apc.MossResp
    - speed-up via selecting multiple files from a given archive
    - range read
@@ -83,7 +87,7 @@ const (
 	gfnMaxCount = 3
 
 	// next(i) poll interval: a fraction of configured timeout
-	pollDiv = 10
+	pollDiv = 8
 )
 
 type (
@@ -102,15 +106,19 @@ type (
 		nameInArch string
 		local      bool
 	}
-	// DT stats (per-wi and x-totals, both)
-	aint64 int64
-	moss   struct {
-		size aint64 // (cumulative)
-		ocnt aint64 // number of processed MossReq objects
-		fcnt aint64 // --/-- files
-		wait aint64 // total wait-for-receive time
-		ngfn aint64 // <= gfnMaxCount
-		miss aint64 // via addMissing
+
+	// per work item stats that all get summed-up => global Prometheus
+	moss struct {
+		obj struct {
+			size int64
+			cnt  int64
+		}
+		fil struct {
+			size int64
+			cnt  int64
+		}
+		wait int64 // Rx wait: time spent waiting to receive entries from peers
+		ngfn int   // num successful GFN requests by this wi
 	}
 	basewi struct {
 		// Tx/Rx shared state
@@ -131,7 +139,7 @@ type (
 		wid     string      // work item ID
 		sid     string      // current sender ID
 		started int64       // (mono)
-		nerr    int         // number of soft errors must be <= maxSoftErrs
+		soft    int         // number of soft errors must be <= maxSoftErrs; see definition above
 		clean   atomic.Bool
 		awfin   atomic.Bool
 	}
@@ -156,15 +164,6 @@ type (
 		gfn      struct {       // counts
 			ok   atomic.Int32
 			fail atomic.Int32
-		}
-		// totals: sum{wi}
-		stats struct {
-			// DT
-			moss
-			nreq aint64 // num get-batch requests (num wi-s)
-			// senders
-			nsent aint64
-			nfail aint64
 		}
 		advNextCheck atomic.Int64
 	}
@@ -412,11 +411,13 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 
 		// change adv.MemLoad() to (general) adv.Load >= load.Critical if need be
 		if adv.MemLoad() == load.Critical {
+			core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
 			err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, adv.String())
 			return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 		}
 		if adv.Sleep > 0 {
 			time.Sleep(adv.Sleep)
+			core.T.StatsUpdater().Add(stats.GetBatchThrottleTotal, int64(adv.Sleep))
 			now += adv.Sleep.Nanoseconds()
 		}
 	}
@@ -480,7 +481,11 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	}
 
 	r.IncPending()
+
 	err := r.asm(req, w, wi)
+	if err != nil {
+		core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
+	}
 	wi.cleanup()
 
 	r.DecPending()
@@ -519,20 +524,19 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 	return err
 }
 
-// send all requested local data => DT (tsi)
+// send all requested local data => DT (`tsi`)
 // (phase 2)
-
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
-	// with a single purpose: to receive transport.OpcAbort
+	// reg recv with a single purpose: to receive transport.OpcAbort
 	if usingPrev {
 		bundle.SDM.UseRecv(r)
 	} else {
 		bundle.SDM.RegRecv(r)
 	}
 
-	// TODO optional future tuning: init sender's own load.Advice right here and check periodically inside the loop
+	// note optional future tuning:
+	// init sender's own load.Advice and check periodically inside the loop
 
-	// send all
 	r.IncPending()
 	defer r.DecPending()
 
@@ -611,13 +615,8 @@ func (r *XactMoss) regSent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err 
 	debug.Assert(ok)
 	r.smm.Free(opaque)
 
-	if err != nil {
-		r.stats.nfail.add(1)
-	} else {
-		r.stats.nsent.add(1)
-		if hdr.ObjAttrs.Size > 0 {
-			r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-		}
+	if err == nil && hdr.ObjAttrs.Size > 0 {
+		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
 	}
 }
 
@@ -837,11 +836,16 @@ func (*XactMoss) bewarmFQN(fqn string) {
 	}
 }
 
-// single writer: DT only
+// read from StatsUpdater and report:
+// 1) _global_ target metrics, and
+// 2) this xaction's just-in-time _pending_ and bewarm
 func (r *XactMoss) CtlMsg() string {
-	if r.stats.size.load() == 0 {
+	tstats := core.T.StatsUpdater()
+	nreq := tstats.Get(stats.GetBatchCount)
+	if nreq == 0 {
 		return ""
 	}
+
 	var sb strings.Builder
 	sb.Grow(256)
 
@@ -852,15 +856,43 @@ func (r *XactMoss) CtlMsg() string {
 		sb.WriteString(strconv.FormatInt(pending, 10))
 	}
 
-	// append `moss` stats line (objs/files/size/avg-wait[/miss])
-	r.stats.moss.append(&sb)
+	sb.WriteString(" reqs:")
+	sb.WriteString(strconv.FormatInt(nreq, 10))
 
-	sb.WriteString(", reqs:")
-	sb.WriteString(strconv.FormatInt(r.stats.nreq.load(), 10))
+	ocnt := tstats.Get(stats.GetBatchObjCount)
+	if ocnt > 0 {
+		if sb.Len() > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("objs: [")
+		sb.WriteString(strconv.FormatInt(ocnt, 10))
+		sb.WriteByte(' ')
+		osize := tstats.Get(stats.GetBatchObjSize)
+		sb.WriteString(cos.IEC(osize, 2))
+		sb.WriteByte(']')
+	}
+	fcnt := tstats.Get(stats.GetBatchFileCount)
+	if fcnt > 0 {
+		if sb.Len() > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString("files: [")
+		sb.WriteString(strconv.FormatInt(fcnt, 10))
+		sb.WriteByte(' ')
+		fsize := tstats.Get(stats.GetBatchFileSize)
+		sb.WriteString(cos.IEC(fsize, 2))
+		sb.WriteByte(']')
+	}
 
 	sb.WriteString(", bewarm:")
 	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
 	sb.WriteString(bewarm)
+
+	if wait := tstats.Get(stats.GetBatchRxWaitTotal); wait > 0 {
+		avg := time.Duration(wait / nreq)
+		sb.WriteString(" avg-wait:")
+		sb.WriteString(avg.String())
+	}
 
 	msg := sb.String()
 	return msg
@@ -877,14 +909,21 @@ func (wi *basewi) cleanup() bool {
 		return false
 	}
 	r := wi.r
+	tstats := core.T.StatsUpdater()
+	tstats.Inc(stats.GetBatchCount)
+	tstats.Add(stats.GetBatchObjCount, wi.stats.obj.cnt)
+	tstats.Add(stats.GetBatchObjSize, wi.stats.obj.size)
+	tstats.Add(stats.GetBatchFileCount, wi.stats.fil.cnt)
+	tstats.Add(stats.GetBatchFileSize, wi.stats.fil.size)
+	if wi.soft > 0 {
+		tstats.Add(stats.GetBatchSoftErrCount, int64(wi.soft))
+	}
+	if wi.stats.wait > 0 {
+		tstats.Add(stats.GetBatchRxWaitTotal, wi.stats.wait)
+	}
 
-	// update totals
-	r.stats.ocnt.add(int64(wi.stats.ocnt))
-	r.stats.fcnt.add(int64(wi.stats.fcnt))
-	r.stats.size.add(int64(wi.stats.size))
-	r.stats.wait.add(int64(wi.stats.wait))
-	r.stats.miss.add(int64(wi.stats.miss))
-	r.stats.nreq.add(1)
+	// TODO: core.Xact to count archived files separately
+	wi.r.ObjsAdd(int(wi.stats.obj.cnt+wi.stats.fil.cnt), wi.stats.obj.size+wi.stats.fil.size)
 
 	if wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
@@ -986,7 +1025,8 @@ func (wi *basewi) _recvObj(index int, hdr *transport.ObjHdr, mopaque *mossOpaque
 		if r.IsAborted() || r.IsDone() {
 			return false, sgl != nil, nil
 		}
-		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)", r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
+		return false, sgl != nil, fmt.Errorf("%s %s out-of-bounds index %d (recv'd len=%d, wid=%s)",
+			r.Name(), core.T.String(), index, len(wi.recv.m), wi.wid)
 	}
 
 	// two rare conditions
@@ -1026,7 +1066,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 			return 0, err
 		}
 		if next > i {
-			wi.stats.wait += aint64(elapsed.Nanoseconds())
+			wi.stats.wait += elapsed.Nanoseconds()
 			return next, nil
 		}
 
@@ -1150,8 +1190,6 @@ func (wi *basewi) next(i int) (int, error) {
 		case err == nil:
 			return nextIdx, nil
 		case transport.IsErrSBR(err):
-			// treat as transient loss for this index
-			wi.nerr++
 			if !wi.req.ContinueOnErr {
 				return 0, err
 			}
@@ -1163,8 +1201,7 @@ func (wi *basewi) next(i int) (int, error) {
 		case !isErrHole(err):
 			return nextIdx, err
 		default:
-			wi.nerr++
-			if wi.stats.ngfn >= aint64(min(gfnMaxCount, r.config.GetBatch.MaxSoftErrs)) {
+			if wi.stats.ngfn >= min(gfnMaxCount, r.config.GetBatch.MaxSoftErrs) {
 				return nextIdx, err
 			}
 		}
@@ -1173,6 +1210,7 @@ func (wi *basewi) next(i int) (int, error) {
 	out, nameInArch := wi._out(lom, in)
 	if isErrHole(err) {
 		wi.stats.ngfn++
+		wi.soft++
 		err = wi.gfn(lom, tsi, in, out, nameInArch, err)
 	} else {
 		err = wi.write(lom, in, out, nameInArch)
@@ -1188,13 +1226,6 @@ func (wi *basewi) next(i int) (int, error) {
 	} else {
 		wi.resp.Out = append(wi.resp.Out, *out)
 	}
-
-	if in.ArchPath == "" {
-		wi.stats.ocnt++
-	} else {
-		wi.stats.fcnt++
-	}
-	wi.stats.size += aint64(out.Size)
 
 	if wi.receiving() {
 		wi.recv.mtx.Lock()
@@ -1269,18 +1300,28 @@ func (wi *basewi) avgSize() (size int64) {
 
 func (wi *basewi) write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
 	lom.Lock(false)
-	err := wi._write(lom, in, out, nameInArch)
+	size, err := wi._write(lom, in, out, nameInArch)
 	lom.Unlock(false)
+
+	if err == nil && size > 0 {
+		if in.ArchPath == "" {
+			wi.stats.obj.cnt++
+			wi.stats.obj.size += size
+		} else {
+			wi.stats.fil.cnt++
+			wi.stats.fil.size += size
+		}
+	}
 	return err
 }
 
 // (under rlock)
-func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
+func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) (size int64, _ error) {
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
-		return err
+		return 0, err
 	}
 
 	lmfh, err := lom.Open()
@@ -1288,7 +1329,7 @@ func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameIn
 		if cos.IsNotExist(err) && wi.req.ContinueOnErr {
 			err = wi.addMissing(err, nameInArch, out)
 		}
-		return err
+		return 0, err
 	}
 
 	switch {
@@ -1301,14 +1342,16 @@ func (wi *basewi) _write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameIn
 				err = wi.addMissing(err, nameInArch, out)
 			}
 		} else {
+			size = csl.Size()
 			err = wi._txarch(csl, out, nameInArch, csl.Size())
 			csl.Close()
 		}
 	default:
+		size = lom.Lsize()
 		err = wi._txreg(lom, lmfh, out, nameInArch)
 	}
 	cos.Close(lmfh)
-	return err
+	return size, err
 }
 
 func _withArchpath(nameInArch, archpath string) string {
@@ -1344,8 +1387,10 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	if err := wi.aw.Write(missingName, oah, roc); err != nil {
 		return err
 	}
+
+	// NOTE: always inc number of soft errors
 	out.ErrMsg = err.Error()
-	wi.stats.miss++
+	wi.soft++
 	return nil
 }
 
@@ -1356,8 +1401,8 @@ func (wi *basewi) asm() error {
 		if r.IsAborted() || r.IsDone() {
 			return nil
 		}
-		if limit := r.config.GetBatch.MaxSoftErrs; wi.nerr > limit {
-			return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", r.Name(), wi.wid, wi.nerr, limit)
+		if limit := r.config.GetBatch.MaxSoftErrs; wi.soft > limit {
+			return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", r.Name(), wi.wid, wi.soft, limit)
 		}
 		j, err := wi.next(i)
 		if err != nil {
@@ -1434,12 +1479,15 @@ func (wi *basewi) flushRx() error {
 
 		// this "hole" is plugged
 		wi.recv.next++
-		if in.ArchPath == "" {
-			wi.stats.ocnt++
-		} else {
-			wi.stats.fcnt++
+		if size > 0 {
+			if in.ArchPath == "" {
+				wi.stats.obj.cnt++
+				wi.stats.obj.size += size
+			} else {
+				wi.stats.fil.cnt++
+				wi.stats.fil.size += size
+			}
 		}
-		wi.stats.size += aint64(size)
 	}
 	return nil
 }
@@ -1477,11 +1525,6 @@ func (wi *buffwi) asm(w http.ResponseWriter) error {
 	}
 
 	wi.sgl.Reset()
-
-	//
-	// TODO: add archived (files counts and sizes) => base.Xact stats
-	//
-	wi.r.ObjsAdd(int(wi.stats.ocnt+wi.stats.fcnt), int64(wi.stats.size))
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), "done buffered: [ count:", len(wi.resp.Out), "written:", written, "format:", wi.req.OutputFormat, "]")
@@ -1528,9 +1571,6 @@ func (wi *streamwi) asm(w http.ResponseWriter) error {
 			return cmn.ErrGetTxBenign
 		}
 	}
-
-	// TODO: ditto
-	wi.r.ObjsAdd(int(wi.stats.ocnt+wi.stats.fcnt), int64(wi.stats.size))
 
 	return nil
 }
@@ -1617,57 +1657,6 @@ func (e *errHole) Error() string { return e.msg }
 func isErrHole(err error) bool {
 	_, ok := err.(*errHole)
 	return ok
-}
-
-////////////
-// aint64 //
-////////////
-
-func (a *aint64) load() int64 { return ratomic.LoadInt64((*int64)(a)) }
-func (a *aint64) add(d int64) { _ = ratomic.AddInt64((*int64)(a), d) }
-
-//
-// moss (stats) => string
-//
-
-func (m *moss) append(sb *strings.Builder) {
-	ocnt := m.ocnt.load()
-	fcnt := m.fcnt.load()
-	size := m.size.load()
-	wait := m.wait.load()
-	miss := m.miss.load()
-
-	// (e.g.) " objs:123 files:456 size:8.70GiB avg-wait:2.3ms miss:7"
-	if ocnt > 0 {
-		if sb.Len() > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString("objs:")
-		sb.WriteString(strconv.FormatInt(ocnt, 10))
-	}
-	if fcnt > 0 {
-		if sb.Len() > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString("files:")
-		sb.WriteString(strconv.FormatInt(fcnt, 10))
-	}
-
-	sb.WriteString(" size:")
-	sb.WriteString(cos.IEC(size, 2))
-
-	// avg wait (only if we have items and nonzero total wait)
-	total := ocnt + fcnt
-	if wait > 0 && total > 0 {
-		avg := time.Duration(wait / total)
-		sb.WriteString(" avg-wait:")
-		sb.WriteString(avg.String())
-	}
-	// include miss if nonzero
-	if miss > 0 {
-		sb.WriteString(" miss:")
-		sb.WriteString(strconv.FormatInt(miss, 10))
-	}
 }
 
 //
