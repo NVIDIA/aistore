@@ -308,6 +308,11 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 			mSmall.remotePuts(tt.evict)
 			mLarge.remotePuts(tt.evict)
 
+			// Calculate expected byte range based on provisioned object sizes
+			minExpectedBytes := int64(numSmallObjs*mSmall.fileSizeRange[0] + numLargeObjs*mLarge.fileSizeRange[0])
+			maxExpectedBytes := int64(numSmallObjs*mSmall.fileSizeRange[1] + numLargeObjs*mLarge.fileSizeRange[1])
+			tlog.Logfln("Expected byte range: %s - %s", cos.IEC(minExpectedBytes, 2), cos.IEC(maxExpectedBytes, 2))
+
 			// Prefetch with blob threshold
 			tlog.Logfln("Prefetching with blob threshold=%s", cos.ToSizeIEC(blobThresh, 0))
 			msg := &apc.PrefetchMsg{
@@ -319,6 +324,14 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
 			_, err = api.WaitForXactionIC(baseParams, &args)
 			tassert.CheckFatal(t, err)
+
+			// Validate xaction stats
+			tlog.Logfln("Validating xaction stats...")
+			snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
+			tassert.CheckFatal(t, err)
+			locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
+			tlog.Logfln("Xaction byte counts: locBytes=%s, outBytes=%s, inBytes=%s",
+				cos.ToSizeIEC(locBytes, 2), cos.ToSizeIEC(outBytes, 2), cos.ToSizeIEC(inBytes, 2))
 
 			// Verify all objects are GETable with correct content
 			tlog.Logln("Verifying small objects are GETable...")
@@ -349,6 +362,12 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 					chunks := mSmall.findObjChunksOnDisk(mSmall.bck, objName)
 					tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files for small object %s (regular prefetch), found %d", objName, len(chunks))
 				}
+
+				// Objects were evicted and prefetched, expect full download within size range
+				tassert.Fatalf(t, locBytes >= minExpectedBytes && locBytes <= maxExpectedBytes,
+					"expected locBytes=%s to be within range [%s, %s] (evict=%v)",
+					cos.ToSizeIEC(locBytes, 2), cos.ToSizeIEC(minExpectedBytes, 2),
+					cos.ToSizeIEC(maxExpectedBytes, 2), tt.evict)
 			} else {
 				// Both large and small objects should not be chunked (warm GET)
 				for _, objName := range mLarge.objNames {
@@ -359,6 +378,9 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 					chunks := mSmall.findObjChunksOnDisk(mSmall.bck, objName)
 					tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files for small object %s (warm GET), found %d", objName, len(chunks))
 				}
+
+				// Objects were already present (warm GET), expect zero bytes to be counted
+				tassert.Fatalf(t, locBytes == 0, "expected locBytes=0, got %s", cos.ToSizeIEC(locBytes, 2))
 			}
 		})
 	}

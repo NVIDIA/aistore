@@ -361,12 +361,14 @@ func (pebl *pebl) done(nmsg core.Notif, err error, aborted bool) {
 		return
 	}
 
-	// log
+	// log and stats
 	xname := pebl.parent.Name()
 	switch {
 	case aborted || err != nil:
 		nlog.Warningln(xname, "::", xblob.String(), "[", msg.String(), err, "]")
+		pebl.parent.AddErr(err)
 	default:
+		pebl.parent.ObjsAdd(1, xblob.Size())
 		if xblob.Size() >= cos.GiB/2 || cmn.Rom.V(4, cos.ModXs) {
 			if n > 0 {
 				nlog.Infoln(xname, "::", xblob.String(), "( num-pending", strconv.Itoa(int(n)), ")")
