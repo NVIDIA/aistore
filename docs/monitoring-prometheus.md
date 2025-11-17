@@ -1,47 +1,60 @@
-# AIStore Observability: Prometheus
+# **AIStore Observability: Prometheus**
 
-AIStore (AIS) exposes metrics in [Prometheus](https://prometheus.io) format via HTTP endpoints. This integration enables comprehensive monitoring of AIS clusters, performance tracking, and trend analysis.
+AIStore (AIS) exposes metrics in [Prometheus](https://prometheus.io) format via HTTP endpoints.
+
+This integration enables comprehensive monitoring of AIS clusters, performance tracking, capacity planning, and long-term trend analysis.
 
 ## Table of Contents
-- [Overview](#overview)
-- [Monitoring Architecture](#monitoring-architecture)
-- [Prometheus Integration](#prometheus-integration)
-  - [Native Exporter](#native-exporter)
-  - [Viewing Raw Metrics](#viewing-raw-metrics)
-  - [Key Metrics Groups](#key-metrics-groups)
-  - [Metric Labels](#metric-labels)
-  - [Essential Prometheus Queries](#essential-prometheus-queries)
-- [Node Alerts](#node-alerts)
-  - [CLI Monitoring](#cli-monitoring)
-  - [Prometheus Queries](#prometheus-queries)
-  - [Grafana Alerting](#grafana-alerting)
-- [StatsD is no longer supported](#statsd-is-no-longer-supported)
-- [Best Practices](#best-practices)
-- [References](#references)
-- [Related Documentation](#related-documentation)
+
+* [Overview](#overview)
+* [Monitoring Stack](#monitoring-stack)
+* [Prometheus Integration](#prometheus-integration)
+  * [Native Exporter](#native-exporter)
+  * [Viewing Raw Metrics](#viewing-raw-metrics)
+  * [Key Metric Groups](#key-metric-groups)
+  * [Metric Labels](#metric-labels)
+  * [Essential PromQL Queries](#essential-promql-queries)
+  * [GetBatch (x-moss) Queries](#getbatch-x-moss-queries)
+* [Node Alerts](#node-alerts)
+  * [CLI Monitoring](#cli-monitoring)
+  * [Prometheus Queries](#prometheus-queries)
+  * [Grafana Alerting](#grafana-alerting)
+* [Best Practices](#best-practices)
+* [References](#references)
+* [Related Documentation](#related-documentation)
+
+---
 
 ## Overview
 
 AIS tracks a comprehensive set of performance metrics including:
 
-* Performance counters
-* Resource utilization percentages
-* Latency and throughput metrics
-* Data transfer statistics (total bytes and object counts)
-* Error counters and operational status
+* Operation counters (GET/PUT/DELETE/etc.)
+* Resource utilization (CPU, memory, disk)
+* Latencies and throughput
+* Network and peer-to-peer streaming statistics
+* Extended actions (xactions)
+* Error counters and node state
 
-Full observability is supported using multiple complementary tools:
+AIS supports observability through several complementary tools:
 
-* AIS node logs for detailed diagnostics
-* [CLI](/docs/cli.md) for interactive monitoring, specifically the [`ais show cluster stats`](/docs/cli/cluster.md) command
+* Node logs (fine-grained operational events)
+* [CLI](/docs/cli.md) for interactive monitoring (e.g., `ais show cluster stats`)
 * Monitoring backends:
-  * [Prometheus](https://prometheus.io/) (recommended)
 
-> For information on load testing metrics, please refer to [AIS Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
+  * **Prometheus** (recommended)
+  * Grafana for dashboards & alerting
 
-## Monitoring Architecture
+> For load testing and benchmarking metrics, see [AIS Load Generator](/docs/aisloader.md) and [How To Benchmark AIStore](/docs/howto_benchmark.md).
 
-The typical monitoring setup with Prometheus looks as follows:
+A complete catalog of AIS metrics is available at:
+**[Monitoring Metrics Reference](/docs/monitoring-metrics.md)**
+
+---
+
+## Monitoring Stack
+
+Typical Prometheus deployment:
 
 ```
 ┌────────────────┐       ┌────────────────┐
@@ -49,9 +62,9 @@ The typical monitoring setup with Prometheus looks as follows:
 │   Prometheus   │◄──────┤  AIStore Node  │
 │                │       │   /metrics     │
 └────────────────┘       └────────────────┘
-        │
-        │ query
-        ▼
+       ││
+       ││ query
+       ▼
 ┌────────────────┐
 │                │
 │     Grafana    │
@@ -59,248 +72,297 @@ The typical monitoring setup with Prometheus looks as follows:
 └────────────────┘
 ```
 
-This layout provides:
+This stack provides:
 
-- Direct metric collection from AIS nodes
-- Centralized metric storage in Prometheus
-- Powerful visualization through [Grafana dashboards](/docs/monitoring-grafana.md)
-- Historical trend analysis and alerting capabilities
+* Direct metric collection from AIS nodes
+* Centralized metric retention
+* Grafana visualization & alerting
+* Long-term performance & cost analysis
+
+---
 
 ## Prometheus Integration
 
 ### Native Exporter
 
-AIS is a fully compliant [Prometheus exporter](https://prometheus.io/docs/instrumenting/writing_exporters/) that natively supports metric collection without additional components. Key integration points:
+AIS acts as a **first-class Prometheus exporter**. Every node automatically:
 
-1. **Configuration**: No special configuration is required to enable Prometheus support
-2. **Metric Registration**: When starting, each AIS node (gateway or storage target) automatically:
-   - Registers all metric descriptions (names, labels, and help text) with Prometheus
-   - Exposes the HTTP endpoint `/metrics` for Prometheus scraping
+1. Registers all metrics at startup
+2. Exposes `/metrics` for Prometheus to scrape
+3. Uses Prometheus native formatting and metadata
+4. Works with both HTTP and HTTPS clusters
 
-> For the complete list of supported build tags, please see [conditional linkage](/docs/build_tags.md).
+> No configuration is required to “enable” Prometheus — it is always on.
+
+AIS source metrics (`put.size`, `get.ns`, etc.) are exported with AIS naming conventions:
+
+```
+ais_target_<metric_name>{node_id="T1"} <value>
+```
+
+This document primarily uses the exported Prometheus names.
+
+---
 
 ### Viewing Raw Metrics
 
-You can directly view the exposed metrics using `curl`:
+View metrics directly:
 
-```console
-$ curl http://<aistore-node-ip-or-hostname>:<port>/metrics
-
-# For HTTPS deployments:
-$ curl https://<aistore-node-ip-or-hostname>:<port>/metrics
+```bash
+$ curl http://<node>:<port>/metrics
+# or
+$ curl https://<node>:<port>/metrics
 ```
 
-Sample output:
+Example:
 
-```console
-# HELP ais_target_disk_avg_rsize average read size (bytes)
-# TYPE ais_target_disk_avg_rsize gauge
-ais_target_disk_avg_rsize{disk="nvme0n1",node_id="ClCt8081"} 4096
-# HELP ais_target_disk_avg_wsize average write size (bytes)
-# TYPE ais_target_disk_avg_wsize gauge
-ais_target_disk_avg_wsize{disk="nvme0n1",node_id="ClCt8081"} 260130
-# HELP ais_target_disk_read_mbps read bandwidth (MB/s)
+```
+# HELP ais_target_put_bytes total bytes served via PUT
 # TYPE ais_target_put_bytes counter
-...
 ais_target_put_bytes{node_id="ClCt8081"} 1.721761792e+10
-# HELP ais_target_put_count total number of executed PUT(object) requests
-# TYPE ais_target_put_count counter
-ais_target_put_count{node_id="ClCt8081"} 1642
-# HELP ais_target_put_ns_total PUT: total cumulative time (nanoseconds)
+
+# HELP ais_target_put_ns_total total PUT latency (nanoseconds)
 # TYPE ais_target_put_ns_total counter
 ais_target_put_ns_total{node_id="ClCt8081"} 9.44367232e+09
+
+# HELP ais_target_state_flags node state and alert flags
 # TYPE ais_target_state_flags gauge
 ais_target_state_flags{node_id="ClCt8081"} 6
-# HELP ais_target_uptime this node's uptime since its startup (seconds)
-# TYPE ais_target_uptime gauge
-ais_target_uptime{node_id="ClCt8081"} 210
-...
 ```
 
-For continuous monitoring of specific metrics without a full Prometheus deployment:
+To watch GET rates without Prometheus:
 
-```console
+```bash
 for i in {1..99999}; do
-  curl http://hostname:8081/metrics --silent | grep "ais_target_get_n.*node"
+  curl -s http://hostname:8081/metrics | grep "ais_target_get_count"
   sleep 1
 done
 ```
 
-### Key Metrics Groups
+---
 
-| Category | Metrics Prefix | Examples | Usage |
-|----------|----------------|----------|-------|
-| Operations | `ais_target_get_*`, `ais_target_put_*` | `ais_target_get_count`, `ais_target_put_bytes` | Track throughput, operation counts |
-| Resources | `ais_target_disk_*`, `ais_target_mem_*` | `ais_target_disk_util`, `ais_target_mem_used` | Monitor resource consumption |
-| Errors | `ais_target_err_*` | `ais_target_err_get_count` | Track operation failures |
-| Cloud operations | `ais_target_cloud_*` | `ais_target_cloud_get_count` | Monitor cloud backend activity |
-| System | `ais_target_uptime`, `ais_target_rebalance_*` | `ais_target_uptime`, `ais_target_rebalance_objects` | System status, rebalancing |
+### Key Metric Groups
+
+AIS organizes metrics into **four major groups**, reflected in the codebase and Prometheus exporter:
+
+| Group                              | Description                                                                            | Examples                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **1. Datapath**                    | GET/PUT counters, sizes, latencies, rate-limiting, I/O errors                          | `ais_target_get_count`, `ais_target_put_bps`, `ais_target_ratelim_retry_get_n` |
+| **2. Metadata (in-memory)**        | Lcache activity (evictions, collisions)                                                | `ais_target_lcache_evicted_count`                                              |
+| **3. Extended Actions (xactions)** | Background & multi-object jobs: LRU, EC, rebalance, ETL, Download, DSort, **GetBatch** | `ais_target_lru_evict_n`, `ais_target_getbatch_n`                              |
+| **4. Streams**                     | Long-lived peer-to-peer (SharedDM) streaming channels                                  | `ais_target_streams_out_obj_n`                                                 |
+
+> For GetBatch observability, see
+> **[Monitoring GetBatch](/docs/monitoring-get-batch.md)**.
+
+---
 
 ### Metric Labels
 
-AIS exposes labels for detailed filtering and aggregation:
+AIS exposes labels for filtering and aggregation:
 
-| Label | Description | Type |
-|----------|-------------|-----------------|
-| `node_id` | Unique node identifier | Static |
-| `disk` | Disk identifier for storage metrics | Variable |
-| `bucket` | Bucket name | Variable |
-| `xaction` | Extended action (batch job) identifier | Variable |
+| Label      | Usage                                    |
+| ---------- | ---------------------------------------- |
+| `node_id`  | Node identity (target or gateway)        |
+| `disk`     | Disk name for per-disk metrics           |
+| `bucket`   | Source/destination bucket                |
+| `xaction`  | Xaction UUID for multi-object jobs       |
+| `slice`    | For erasure coding slice metrics         |
+| `archpath` | For per-file shard extraction (GetBatch) |
 
-> Variable labels provide powerful filtering capabilities only available in Prometheus mode.
-
-### Essential Prometheus Queries
-
-Here are key PromQL queries for operational monitoring:
+Labels enable PromQL queries such as:
 
 ```
-# Cluster-wide GET operations per second (rate over 5m)
+sum by (node_id)(rate(ais_target_put_bytes[5m]))
+sum by (disk)(ais_target_disk_util)
+```
+
+---
+
+## Essential PromQL Queries
+
+### GET operations per second
+
+```promql
 sum(rate(ais_target_get_count[5m]))
-
-# Average GET latency in milliseconds
-sum(rate(ais_target_get_ns_total[5m])) / sum(rate(ais_target_get_count[5m])) / 1000000
-
-# Disk utilization per target
-ais_target_disk_util{disk="nvme0n1"}
-
-# Error rate as percentage of operations
-sum(rate(ais_target_err_get_count[5m])) / sum(rate(ais_target_get_count[5m])) * 100
-
-# Cluster storage capacity utilization
-sum(ais_target_capacity_used) / sum(ais_target_capacity_total) * 100
-
-# Node health status (state flags)
-ais_target_state_flags
 ```
+
+### Average GET latency (ms)
+
+```promql
+sum(rate(ais_target_get_ns_total[5m]))
+/ sum(rate(ais_target_get_count[5m]))
+/ 1e6   # convert ns → ms
+```
+
+### Disk utilization
+
+```promql
+ais_target_disk_util{disk="nvme0n1"}
+```
+
+### GET error percentage
+
+```promql
+sum(rate(ais_target_err_get_count[5m]))
+/ sum(rate(ais_target_get_count[5m])) * 100
+```
+
+### Total cluster capacity usage
+
+```promql
+sum(ais_target_capacity_used)
+/
+sum(ais_target_capacity_total)
+* 100
+```
+
+---
+
+## GetBatch (x-moss) Queries
+
+GetBatch is AIStore’s high-performance multi-object retrieval pipeline.
+Metrics describe throughput, composition (objects vs files), Rx stalls, throttling, and error behavior.
+
+### Work items per second
+
+```promql
+sum(rate(ais_target_getbatch_n[5m]))
+```
+
+### Logical payload throughput
+
+```promql
+sum(rate(ais_target_getbatch_obj_size[5m]))
++
+sum(rate(ais_target_getbatch_file_size[5m]))
+```
+
+### Stall breakdown (RxWait vs Throttle)
+
+```promql
+sum(rate(ais_target_getbatch_rxwait_ns[5m]))
+/
+(
+  sum(rate(ais_target_getbatch_rxwait_ns[5m])) +
+  sum(rate(ais_target_getbatch_throttle_ns[5m]))
+)
+```
+
+### Soft vs Hard Error Rates
+
+```promql
+rate(ais_target_err_soft_getbatch_n[5m])
+rate(ais_target_err_getbatch_n[5m])
+```
+
+Full details and operational guidance:
+**→ [Monitoring GetBatch](/docs/monitoring-get-batch.md)**
+
+---
 
 ## Node Alerts
 
-AIStore node states are categorized into three severity levels:
+AIS nodes expose operational alerts and states via `ais_target_state_flags`.
+Flags indicate:
 
-1. **Red Alerts** - Critical issues requiring immediate attention:
-   - `OOS` - Out of space condition
-   - `OOM` - Out of memory condition
-   - `OOCPU` - Out of CPU resources
-   - `DiskFault` - Disk failures detected
-   - `NumGoroutines` - Excessive number of goroutines
-   - `CertificateExpired` - TLS certificate has expired
-   - `CertificateInvalid` - TLS certificate is invalid
+### Red (critical)
 
-2. **Warning Alerts** - Potential issues that may require attention:
-   - `Rebalancing` - Rebalance operation in progress
-   - `RebalanceInterrupted` - Rebalance was interrupted
-   - `Resilvering` - Resilvering operation in progress
-   - `ResilverInterrupted` - Resilver was interrupted
-   - `NodeRestarted` - Node was restarted (powercycle, crash)
-   - `MaintenanceMode` - Node is in maintenance mode
-   - `LowCapacity` - Low storage capacity (OOS possible soon)
-   - `LowMemory` - Low memory condition (OOM possible soon)
-   - `LowCPU` - Low CPU availability
-   - `CertWillSoonExpire` - TLS certificate will expire soon
-   - `KeepAliveErrors` - Recent keep-alive errors detected
+* `OOS` — Out of space
+* `OOM` — Out of memory
+* `DiskFault` — Disk failures
+* `NumGoroutines` — excessive goroutines
+* `CertificateExpired` — TLS expiry
+* `KeepAliveErrors` — peer connectivity issues
 
-3. **Information States** - Normal operational states:
-   - `ClusterStarted` - Cluster has started (primary) or node has joined cluster
-   - `NodeStarted` - Node has started (may not have joined cluster yet)
-   - `VoteInProgress` - Voting process is in progress
+### Warning
 
-Node state flags are exposed via the Prometheus metric `ais_target_state_flags` and can be monitored using the following methods:
+* `Rebalancing`, `Resilvering`
+* `RebalanceInterrupted`, `ResilverInterrupted`
+* `LowCapacity`, `LowMemory`, `LowCPU`
+* `NodeRestarted`
+* `MaintenanceMode`
+* `CertWillSoonExpire`
+
+### Informational
+
+* `ClusterStarted`
+* `NodeStarted`
+* `VoteInProgress`
 
 ### CLI Monitoring
 
-The node state can be viewed directly using the CLI:
-
-```console
+```bash
 $ ais show cluster
 ```
 
-This command displays the state for all nodes in the cluster, including any active alerts.
-
 ### Prometheus Queries
 
-To monitor node states with Prometheus:
+Critical:
 
-```
-# Detect nodes with any red alert condition
-ais_target_state_flags > 0 and on (node_id) (
-  ais_target_state_flags & 8192 > 0 or  # OOS
-  ais_target_state_flags & 16384 > 0 or # OOM
-  ais_target_state_flags & 262144 > 0 or # OOCPU
-  ais_target_state_flags & 65536 > 0 or # DiskFault
-  ais_target_state_flags & 262144 > 0 or # NumGoroutines
-  ais_target_state_flags & 1048576 > 0 # CertificateExpired
-)
-
-# Find nodes with warning conditions
-ais_target_state_flags > 0 and on (node_id) (
-  ais_target_state_flags & 8 > 0 or # Rebalancing
-  ais_target_state_flags & 16 > 0 or # RebalanceInterrupted
-  ais_target_state_flags & 32 > 0 or # Resilvering
-  ais_target_state_flags & 64 > 0 or # ResilverInterrupted
-  ais_target_state_flags & 128 > 0 or # NodeRestarted
-  ais_target_state_flags & 32768 > 0 or # MaintenanceMode
-  ais_target_state_flags & 4096 > 0 or # LowCapacity
-  ais_target_state_flags & 8192 > 0 # LowMemory
-)
+```promql
+ais_target_state_flags & 8192  > 0  # OOS
+or ais_target_state_flags & 16384 > 0  # OOM
+or ais_target_state_flags & 65536 > 0  # DiskFault
 ```
 
-### Grafana Alerting
+Warnings:
 
-In Grafana, you can set up alerts based on these node state flags:
-
-1. Create a Grafana alert rule using the PromQL queries above
-2. Set appropriate thresholds and notification channels
-3. Configure different severity levels for red vs. warning conditions
-
-Example Grafana alert rule for red alerts:
-
-```
-# Alert on critical node conditions
-ais_target_state_flags{node_id=~"$node"} > 0 and (
-  ais_target_state_flags{node_id=~"$node"} & 8192 > 0 or
-  ais_target_state_flags{node_id=~"$node"} & 16384 > 0 or
-  ais_target_state_flags{node_id=~"$node"} & 262144 > 0
-)
+```promql
+ais_target_state_flags & 4096 > 0  # LowCapacity
+or ais_target_state_flags & 8192 > 0  # LowMemory
 ```
 
-This alerting system provides comprehensive visibility into the operational state of your AIStore cluster and helps detect issues before they impact performance or availability.
+### Grafana Alert Example
 
-## StatsD is no longer supported
+```
+ais_target_state_flags{node_id=~"$node"} & 8192 > 0
+```
 
-> StatsD support was removed in v4.0 (September 2025).
+---
 
 ## Best Practices
 
-To maximize the value of AIStore's Prometheus integration:
+1. **Prometheus retention**
+   Plan retention around performance analysis needs (14–30 days recommended).
 
-1. **Retention Planning**: Configure appropriate retention periods in Prometheus based on your monitoring needs
-2. **Dashboard Organization**: Create dedicated [Grafana dashboards](/docs/monitoring-grafana.md) for:
-   - Cluster overview (high-level health)
-   - Per-node performance
-   - Resource utilization
-   - Operation latencies
-   - Error analysis
-3. **Alerting**: Configure alerts for critical conditions:
-   - Node state red alerts (OOS, OOM, DiskFault, etc.)
-   - High error rates
-   - Disk utilization thresholds
-   - Performance degradation
-4. **Metric Selection**: Focus on key operational metrics for routine monitoring
-5. **Collection Frequency**: Balance scrape intervals for accuracy versus storage requirements
+2. **Dashboard segmentation**
+   Maintain dashboards for:
 
-## References
+   * Cluster overview
+   * Node-level performance
+   * Resource utilization
+   * Error monitoring
+   * Extended actions (GetBatch, rebalance, ETL)
+
+3. **Alerts on critical states**
+   Monitor:
+
+   * Node state flags
+   * Error spikes
+   * Disk utilization
+   * High throttle or rxwait stalls (GetBatch)
+
+4. **Scrape frequency**
+   5–15 seconds for critical workloads; 30s+ for low-traffic clusters.
+
+---
+
+## Related Documentation
+
+| Document                                              | Description                                 |
+| ----------------------------------------------------- | ------------------------------------------- |
+| [Overview](/docs/monitoring-overview.md)              | AIS observability introduction              |
+| [CLI](/docs/monitoring-cli.md)                        | CLI monitoring and commands                 |
+| [Logs](/docs/monitoring-logs.md)                      | Log-based observability                     |
+| [Metrics Reference](/docs/monitoring-metrics.md)      | Full AIS metric catalog                     |
+| [Grafana](/docs/monitoring-grafana.md)                | Grafana dashboards                          |
+| [Kubernetes](/docs/monitoring-kubernetes.md)          | K8s deployment monitoring                   |
+| [GetBatch Monitoring](/docs/monitoring-get-batch.md)  | Multi-object retrieval metrics and analysis |
+
+Separately, Prometheus references:
 
 * [Prometheus Exporters](https://prometheus.io/docs/instrumenting/writing_exporters/)
 * [Prometheus Data Model](https://prometheus.io/docs/concepts/data_model/)
 * [Prometheus Metric Types](https://prometheus.io/docs/concepts/metric_types/)
 
-## Related Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Overview](/docs/monitoring-overview.md) | Introduction to AIS observability |
-| [CLI](/docs/monitoring-cli.md) | Command-line monitoring tools |
-| [Logs](/docs/monitoring-logs.md) | Log-based observability |
-| [Metrics Reference](/docs/monitoring-metrics.md) | Complete metrics catalog |
-| [Grafana](/docs/monitoring-grafana.md) | Visualizing AIS metrics with Grafana |
-| [Kubernetes](/docs/monitoring-kubernetes.md) | Working with Kubernetes monitoring stacks |
