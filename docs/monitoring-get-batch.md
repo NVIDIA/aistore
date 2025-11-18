@@ -4,12 +4,12 @@ GetBatch (a.k.a `get-batch` or `x-moss`) is the high-performance multi-object re
 
 It streams objects and archived files in strict user-specified order, assembling them on the designated target (DT) and serving them as a TAR archive (buffered or streaming).
 
-> TAR is the default output format but TAR.GZ, ZIP, and TAR.LZ4 are equally supported.
+> TAR is the default output format; compressed serialized options include TAR.GZ, ZIP, and TAR.LZ4 and are also fully supported.
 
-**See:**
+**See also:**
 
-* [GetBatch overview and usage](/docs/get_batch.md) for capabilities, operational guidance, and usage (including Go and Python examples).
-- [Release Notes v1.4.0](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - GetBatch introduction.
+* [GetBatch: Multi-Object Retrieval API](/docs/get_batch.md) for overview, capabilities and APIs, operational guidance, usage, Go and Python examples, and more.
+- [Release Notes 4.0](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - GetBatch introduction.
 
 Unlike ordinary GET requests, get-batch:
 
@@ -71,7 +71,7 @@ These two combined provide a full picture of “Why is my job slower?”
 
 For PromQL examples, please refer to [Observability: Prometheus](/docs/monitoring-prometheus.md) document.
 
-Here, we'll just notice maybe less obvious query that allows to analyze get-batch latency and, in particular, whether the latter is peer-induced vs resource-induced.
+In this section, we only highlight a few less obvious queries that may help analyze GetBatch latency - in particular, distinguish peer-induced stalls from resource-induced throttling.
 
 ## Rx Stall Rate (peer-induced waits)
 

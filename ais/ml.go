@@ -26,8 +26,12 @@ import (
 )
 
 // -----------------------------------------------------------------------
-// Control Flow (where DT: designated target, senders: all the rest)
-//
+// For background and usage, please refer to:
+// 1. GetBatch: Multi-Object Retrieval API, at https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
+// 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
+// -----------------------------------------------------------------------
+
+// ---------------------- Control Flow -----------------------------------
 // phase 1 (POST): Client → Proxy → DT
 //   DT: PrepRx(receiving=true) → SDM.RegRecv() → Return XID
 // phase 2 (POST): Proxy → Senders

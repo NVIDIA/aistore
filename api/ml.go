@@ -17,33 +17,33 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
+// -----------------------------------------------------------------------
+// For background and usage, please refer to:
+// 1. GetBatch: Multi-Object Retrieval API, at https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
+// 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
+// -----------------------------------------------------------------------
+
 // Definitions
 // ===========
 // - GetBatch() supports reading (and returning in a single TAR) - multiple objects, multiple archived (sharded) files,
 //   or any mix of thereof
-//
 // - TAR is not the only supported output format - compression is supported in a variety of ways (see `OutputFormat`)
 //    - here and elsewhere, "TAR" is used strictly for reading convenience
-//
 // - When GetBatch() returns an error all the other returned data and/or metadata (if any) can be ignored and dropped
-//
 // - When GetBatch() succeeds (err == nil):
 //    - user should expect the same exact number of entries in the MossResp and the same number of files in the resulting TAR
 //    - the order: entries in the response (MossResp, TAR) are ordered in **precisely** the same order as in the MossReq
-//
 // - Naming convention:
 //    - by default, files in the resulting TAR are named <Bucket>/<ObjName>
 //    - `OnlyObjName` further controls the naming:
 //       - when set:            archived (sharded) files are named as <ObjName>/<archpath> in the resulting TAR
 //       - otherwise (default): archived files are named as <Bucket>/<ObjName>/<archpath>
 //    The third variant (just <archpath>) is not currently supported to avoid ambiguity.
-//
 // - When (and only if) `ContinueOnErr` is set true:
 //   - missing files will not result in GetBatch() failure
 //   - missing files will be present in the resulting TAR
 //     - with "__404__/" prefix and zero size
 //     - if you extract resulting TAR you'll find them all in one place: under __404__/<Bucket>/<ObjName>
-//
 // - Returned size:
 //   - when the requested file is found the corresponding MossOut.Size will be equal (the number of bytes in the respective TAR-ed payload)
 //     - but when read range is defined: MossOut.Size = (length of this range)

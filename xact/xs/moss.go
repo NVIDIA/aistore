@@ -41,6 +41,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// -----------------------------------------------------------------------
+// For background and usage, please refer to:
+// 1. GetBatch: Multi-Object Retrieval API, at https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
+// 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
+// -----------------------------------------------------------------------
+
 /* ---------------------------------------------------------------------------------------------------------
    client →  any proxy →  randomly selected designated-target (DT (= T0))
                       │

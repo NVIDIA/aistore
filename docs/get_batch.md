@@ -6,7 +6,9 @@ GetBatch is AIStore's high-performance API for retrieving multiple objects and/o
 
 > GetBatch is implemented by the extended action (job) codenamed "x-moss" and is available via `/v1/ml/moss` API endpoint.
 
-**Key capabilities:**
+Regardless of retrieval source (in-cluster objects, remote objects, or shard extractions), GetBatch always preserves the **exact ordering** of request entries in both streaming and buffered modes.
+
+Other supported capabilities include:
 
 - Fetch thousands of objects in strict user-specified order
 - Extract specific files from distributed shard archives (TAR/ZIP/TGZ/LZ4)
@@ -14,7 +16,51 @@ GetBatch is AIStore's high-performance API for retrieving multiple objects and/o
 - Graceful handling of missing data
 - Streaming or buffered delivery
 
-> For TGZ, both .tgz and .tar.gz are accepted aliases - both denote the same exact format.
+> Note: buffered mode always returns both metadata (that describes the output) and the resulting serialized archive containing all requested data items.
+
+> Note: for TGZ, both .tgz and .tar.gz are accepted (and interchangeable) aliases - both denote the same exact format.
+
+**A Note on HTTP Semantics**
+
+GetBatch uses **HTTP GET with a JSON request body**, which is:
+- Permitted by [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html) - HTTP semantics allow message bodies in GET requests.
+- Necessary for this API, as the list of requested objects can contain thousands of entries that would exceed URL length limits.
+- Semantically correct - the operation is idempotent (pure data retrieval with no server-side state changes).
+
+Rest of this document is structured as follows:
+
+**Table of Contents**
+* [Overview](#overview)
+* [Supported APIs](#supported-apis)
+* [Terminology](#terminology)
+* [When to Use GetBatch](#when-to-use-getbatch)
+* [When NOT to Use GetBatch](#when-not-to-use-getbatch)
+* [Go API Structure](#go-api-structure)
+* [Python Integrations](#python-integrations)
+* [Usage Examples](#usage-examples)
+* [Performance Characteristics](#performance-characteristics)
+* [Error Handling](#error-handling)
+* [Configuration](#configuration)
+* [Output Formats](#output-formats)
+* [Naming Conventions](#naming-conventions)
+* [Monitoring & Observability](#monitoring-observability)
+* [Advanced Use Cases](#advanced-use-cases)
+* [Limitations & Future Work](#limitations-future-work)
+* [References](#references)
+
+## Supported APIs
+
+GetBatch is typically called from:
+
+1. Go services via the [`api/ml.go`](https://github.com/NVIDIA/aistore/blob/main/api/ml.go) client bindings, and
+2. Python via the [AIStore SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk/batch), and
+3. Third-party tooling such as [Lhotse](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/dataset/input_strategies.py).
+
+The respective Go and Python-based  usage examples follow below, in the sections that include:
+
+* [Go API Structure](#go-api-structure)
+* [Python Integrations](#python-integrations)
+* [Advanced Use Cases](#advanced-use-cases)
 
 ## Terminology
 
@@ -56,9 +102,9 @@ GetBatch is AIStore's high-performance API for retrieving multiple objects and/o
 
 ---
 
-## API Structure
+## Go API Structure
 
-### Request: `apc.MossReq`
+### Request: [`apc.MossReq`](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go)
 
 ```json
 {
@@ -84,12 +130,12 @@ GetBatch is AIStore's high-performance API for retrieving multiple objects and/o
 | Field | Type | Description |
 |-------|------|-------------|
 | `mime` | string | Output format: `.tar` (default), `.tgz`, `.zip`, `.tar.lz4` |
-| `in`   | []MossIn | List of objects/files to retrieve (order preserved) |
+| `in`   | [][apc.MossIn](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go) | List of objects/files to retrieve (order preserved) |
 | `coer` | bool | Continue on error: `true` = include missing items under `__404__/`, `false` = fail on first missing |
 | `onob` | bool | Output naming: `false` = `bucket/object`, `true` = `object` only |
 | `strm` | bool | Streaming mode: `true` = stream as data arrives, `false` = buffer then send multipart response |
 
-### Request Entry: `apc.MossIn`
+### Request Entry: [`apc.MossIn`](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go)
 
 Each entry in the `in` array can specify:
 
@@ -104,7 +150,7 @@ Each entry in the `in` array can specify:
 | `start` | int64 | Range read start offset (future) |
 | `length` | int64 | Range read length (future) |
 
-### Response: `apc.MossResp`
+### Response: [`apc.MossResp`](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go)
 
 **Streaming mode (`strm: true`):**
 - Single HTTP response body containing TAR stream
@@ -151,14 +197,132 @@ Each entry in the `in` array can specify:
 
 ---
 
+## Python Integrations
+
+GetBatch is not limited to the Go API - it is also integrated with Python data loading stacks in two ways:
+
+### 1. AIStore Python SDK
+
+The [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) provides a `Batch` class that wraps the `/v1/ml/moss` endpoint with a Pythonic fluent API.
+
+**Key features:**
+- Pydantic models (`MossReq`, `MossIn`, `MossOut`) that mirror Go structs exactly
+- Fluent interface for building batch requests
+- Automatic TAR stream extraction
+- Support for archpath (shard extraction), opaque metadata, and cross-bucket requests
+
+The SDK mirrors Go structures, with minor naming conventions:
+
+| Concept | Go API | Python SDK |
+|--------|--------|-------------|
+| Output archive format | `MossReq.mime` | `output_format=".tar"` |
+| Continue-on-error | `MossReq.coer` | `cont_on_err=True` |
+| Streaming mode | `MossReq.strm` | `streaming_get=True` |
+| Archive subpath | `MossIn.archpath` | `archpath=` |
+| Opaque metadata | `MossIn.opaque` | `opaque=` |
+| Object name | `objname` | `obj_name` |
+
+> This mapping helps translate examples between Go and Python.
+
+**Basic usage:**
+```python
+from aistore.sdk import Client
+
+client = Client("http://ais-gateway")
+bucket = client.bucket("training-data")
+
+# Simple batch: list of object names
+batch = client.batch(["file1.bin", "file2.bin"], bucket)
+for moss_out, content in batch.get():
+    print(f"Got {moss_out.obj_name}: {len(content)} bytes")
+
+# Advanced: shard extraction with tracking
+batch = client.batch(bucket=bucket)
+batch.add("shard-0000.tar", archpath="images/photo.jpg")
+batch.add("shard-0001.tar", archpath="images/photo.jpg", opaque=b"batch-id-42")
+
+# Stream results
+for moss_out, content in batch.get():
+    if not moss_out.err_msg:  # Check for errors
+        process(content)
+```
+
+**Batch class methods:**
+- `add(obj, archpath=None, opaque=None, start=None, length=None)` - Add object with advanced parameters
+- `get(raw=False, decode_as_stream=False, clear_batch=True)` - Execute and return generator of `(MossOut, bytes)` tuples
+- `clear()` - Clear batch for reuse
+
+**Response structure:**
+- **Streaming mode** (`streaming_get=True`, default): Returns TAR stream, `MossOut` metadata inferred from request
+- **Multipart mode** (`streaming_get=False`): Returns server-validated `MossOut` with actual sizes, errors
+
+See [Python SDK Batch API](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk/batch) for complete documentation.
+
+### 2. Lhotse Integration
+
+[Lhotse](https://github.com/lhotse-speech/lhotse) is a speech/audio data toolkit used by NVIDIA NeMo and other frameworks. It includes native AIStore support via `AISBatchLoader`.
+
+**How it works:**
+
+1. **CutSet Manifests** - Lhotse manages audio/feature manifests with AIStore URLs
+2. **Batch Loading** - `AISBatchLoader` collects all URLs from a CutSet batch
+3. **GetBatch Execution** - Issues single batch request via AIStore Python SDK
+4. **Archive Extraction** - Automatically extracts files from sharded archives (TAR/TGZ)
+5. **In-Memory Injection** - Returns CutSet with data loaded into memory
+
+**Usage in DataLoader:**
+```python
+from lhotse.dataset.input_strategies import AudioSamples
+
+# Enable AIStore batch loading (requires AIS_ENDPOINT environment variable)
+audio_strategy = AudioSamples(use_batch_loader=True)
+
+# PyTorch DataLoader with Lhotse
+dataloader = DataLoader(
+    dataset=lhotse_dataset,
+    batch_size=32,
+    collate_fn=audio_strategy
+)
+
+# Each batch triggers one GetBatch request to AIStore
+for batch in dataloader:
+    # All audio already fetched and in memory
+    train(batch)
+```
+
+**Archive extraction example:**
+
+Lhotse URLs like `ais://mybucket/shard-0000.tar.gz/audio/sample_42.wav` automatically:
+- Split into object (`shard-0000.tar.gz`) + archpath (`audio/sample_42.wav`)
+- Send to GetBatch with `archpath` parameter
+- AIStore extracts the file server-side
+- Returns raw audio bytes directly to training loop
+
+**Architecture:**
+```
+Lhotse CutSet → AISBatchLoader → AIStore Python SDK → GetBatch API → Training Loop
+```
+
+**Key benefits:**
+- **Single batch request** instead of N individual GETs
+- **Server-side extraction** from sharded archives
+- **Deterministic ordering** for reproducible training
+- **Zero client-side decompression** overhead
+
+See also:
+- [Lhotse AIStore Integration](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/ais/batch_loader.py)
+- [AIStore in NeMo workflows](https://docs.nvidia.com/nemo-framework/) (data loading section)
+
+---
+
 ## Usage Examples
 
 Examples below are pseudo-code provided to quickly illustrate usage (rather than copy/paste as is).
 
 ### Example 1: Retrieve Plain Objects
 
-```bash
-curl -X POST http://aistore-gateway/v1/buckets/my-bucket \
+```console
+curl -X POST http://aistore-gateway/v1/ml/moss/my-bucket \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -183,11 +347,11 @@ my-bucket/file-0003.bin
 
 ### Example 2: Extract Files from Shards
 
-> pseudo-code to illustrate usage (rather than copy/paste as is)
+> This is a pseudo-code to illustrate usage (rather than copy/paste as is):
 
-```bash
+```console
 # Extract image_42.jpg from 100 distributed shards
-curl -X POST http://aistore-gateway/v1/buckets/shards \
+curl -X POST http://aistore-gateway/v1/ml/moss/shards \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -217,8 +381,8 @@ shard-0099.tar/image_42.jpg
 
 > The request bucket (`default-bucket` in URL) is used when bucket is omitted in an in entry.
 
-```bash
-curl -X POST http://aistore-gateway/v1/buckets/default-bucket \
+```console
+curl -X POST http://aistore-gateway/v1/ml/moss/default-bucket \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -237,8 +401,10 @@ Result: TAR containing objects from three different buckets in one request.
 
 ### Example 4: Handle Missing Data Gracefully
 
-```bash
-curl -X POST http://aistore-gateway/v1/buckets/training \
+> This is a pseudo-code to illustrate internal format and usage - do not copy/paste.
+
+```console
+curl -X POST http://aistore-gateway/v1/ml/moss \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -363,7 +529,7 @@ Maximum transient errors per work item before aborting.
 - Strict availability requirements
 - Fail faster on systemic issues
 
-```bash
+```console
 ais config cluster get_batch.max_soft_errs=10
 ```
 
@@ -381,13 +547,13 @@ Pagecache warming pool size (best-effort read-ahead).
 - Slow disks where read-ahead adds no value
 - CPU-constrained environments
 
-```bash
+```console
 ais config cluster get_batch.warmup_workers=4
 ```
 
 To disable warmup/look-ahead operation:
 
-```bash
+```console
 ais config cluster get_batch.warmup_workers=-1
 ```
 
@@ -455,15 +621,38 @@ GetBatch exposes Prometheus metrics for:
 
 **See:** [Monitoring GetBatch](/docs/monitoring-get-batch.md) for detailed metrics, PromQL queries, and operational guidance.
 
-**CLI monitoring:**
-```bash
-# Show active get-batch jobs
-ais show job xaction get-batch
+### CLI monitoring example
 
-# Example output:
-NODE         ID              OBJECTS    BYTES      STATE
-target1      xact-123        450K       127 GiB    Running
-target2      xact-123        445K       125 GiB    Running
+```console
+$ ais show job --refresh 10
+
+get-batch[NeEra51oM] (run options: objs:1398300 size:2.00GiB, reqs:21849, bewarm:on; pending:1 objs:1419972 size:2.03GiB, reqs:22188, bewarm:on; pending:2 objs:1421380 size:2.03GiB, reqs:22210, bewarm:on)
+NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
+target1         NeEra51oM       get-batch       ais://nnn       1419972         2.03GiB         14:38:20        -       Running
+target2         NeEra51oM       get-batch       ais://nnn       1421380         2.03GiB         14:38:20        -       Running
+target3         NeEra51oM       get-batch       ais://nnn       1398300         2.00GiB         14:38:20        -       Running
+                                Total:                          4239652         6.06GiB ✓
+------------------------------------------------------------------------
+get-batch[NeEra51oM] (run options: objs:1606276 size:2.30GiB, reqs:25099, bewarm:on; pending:1 objs:1627780 size:2.33GiB, reqs:25435, bewarm:on; objs:1622980 size:2.32GiB, reqs:25360, bewarm:on)
+NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
+target1         NeEra51oM       get-batch       ais://nnn       1627780         2.33GiB         14:38:20        -       Running
+target2         NeEra51oM       get-batch       ais://nnn       1622980         2.32GiB         14:38:20        -       Running
+target3         NeEra51oM       get-batch       ais://nnn       1606276         2.30GiB         14:38:20        -       Running
+                                Total:                          4857036         6.95GiB ✓
+------------------------------------------------------------------------
+get-batch[NeEra51oM] (run options: objs:1838584 size:2.63GiB, reqs:28729, bewarm:on; pending:2 objs:1826488 size:2.61GiB, reqs:28540, bewarm:on; pending:3 objs:1813892 size:2.59GiB, reqs:28343, bewarm:on)
+NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
+target1         NeEra51oM       get-batch       ais://nnn       1838584         2.63GiB         14:38:20        -       Running
+target2         NeEra51oM       get-batch       ais://nnn       1826488         2.61GiB         14:38:20        -       Running
+target3         NeEra51oM       get-batch       ais://nnn       1813892         2.59GiB         14:38:20        -       Running
+                                Total:                          5478964         7.84GiB ✓
+------------------------------------------------------------------------
+get-batch[NeEra51oM] (run options: pending:1 objs:2045932 size:2.93GiB, reqs:31969, bewarm:on; objs:2030828 size:2.90GiB, reqs:31733, bewarm:on; objs:2021444 size:2.89GiB, reqs:31586, bewarm:on)
+NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
+target1         NeEra51oM       get-batch       ais://nnn       2045932         2.93GiB         14:38:20        -       Running
+target2         NeEra51oM       get-batch       ais://nnn       2030828         2.90GiB         14:38:20        -       Running
+target3         NeEra51oM       get-batch       ais://nnn       2021444         2.89GiB         14:38:20        -       Running
+                                Total:                          6098204         8.72GiB ✓
 ```
 
 ---
@@ -471,52 +660,61 @@ target2      xact-123        445K       125 GiB    Running
 ## Advanced Use Cases
 
 ### ML Training: Deterministic Epoch Loading
-
 ```python
-import requests
+from aistore.sdk import Client
 import tarfile
+from io import BytesIO
 
 def load_epoch(epoch_num, num_shards=10000):
     """Load training data for specific epoch with deterministic ordering."""
 
-    req = {
-        "action": "getbatch",
-        "value": {
-            "mime": ".tar",
-            "in": [
-                {"objname": f"shard-{i:06d}.tar", "archpath": f"sample_{epoch_num}.jpg"}
-                for i in range(num_shards)
-            ],
-            "strm": True,
-            "coer": True  # Some shards may be missing
-        }
-    }
+    client = Client("http://aistore-gateway")
+    bucket = client.bucket("training-data")
 
-    response = requests.post(
-        "http://aistore/v1/buckets/training-data",
-        json=req,
-        stream=True
-    )
+    # Build batch: extract same sample from 10K shards
+    batch = client.batch(bucket=bucket, output_format=".tar", cont_on_err=True)
+    for i in range(num_shards):
+        batch.add(
+            f"shard-{i:06d}.tar",
+            archpath=f"samples/epoch_{epoch_num}.jpg"
+        )
 
-    # Stream TAR directly into DataLoader
-    with tarfile.open(fileobj=response.raw, mode='r|') as tar:
-        for member in tar:
-            if not member.name.startswith("__404__/"):
-                yield tar.extractfile(member).read()
+    # Stream TAR directly into training loop
+    for moss_out, content in batch.get():
+        if not moss_out.err_msg:  # Skip missing
+            yield content
+
+# Usage in training loop
+for epoch in range(num_epochs):
+    for sample_bytes in load_epoch(epoch):
+        image = decode_image(sample_bytes)
+        train_step(image)
 ```
 
 ### Distributed Processing: Scatter-Gather Pattern
+```python
+# Partition dataset across workers
+def get_worker_partition(worker_id, num_workers, total_objects):
+    """Each worker fetches its partition via GetBatch."""
 
-```bash
-# Scatter: Split 1M objects across 10 workers
-# Gather: Each worker fetches its partition via GetBatch
+    client = Client("http://aistore-gateway")
+    bucket = client.bucket("dataset")
 
-# Worker 1: Objects 0-99999
-curl -X POST http://aistore/v1/buckets/dataset \
-  -d '{"action":"getbatch", "value":{"in":[...]}}'
+    # Calculate this worker's range
+    objects_per_worker = total_objects // num_workers
+    start = worker_id * objects_per_worker
+    end = start + objects_per_worker
 
-# Worker 2: Objects 100000-199999
-# ... and so on
+    # Fetch partition in one batch
+    batch = client.batch(bucket=bucket)
+    for i in range(start, end):
+        batch.add(f"object-{i:08d}.bin")
+
+    return batch.get()
+
+# Worker process
+for moss_out, data in get_worker_partition(worker_id=0, num_workers=10, total_objects=1_000_000):
+    process(data)
 ```
 
 ---
@@ -525,7 +723,6 @@ curl -X POST http://aistore/v1/buckets/dataset \
 
 **Current limitations:**
 - Range reads (`start`/`length`) not yet implemented
-- Maximum work item size governed by memory + `max_soft_errs`
 - Shard extraction is sequential within each archive
 
 **Roadmap:**
@@ -535,10 +732,10 @@ curl -X POST http://aistore/v1/buckets/dataset \
 
 ---
 
-## See Also
+## References
 
 - [Release Notes 4.0](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - GetBatch introduction
-- [API Reference](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go) - Complete API structure
+- [Go API](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go) - API control structures
+- [Python Integrations](#python-integrations)
 - [Monitoring GetBatch](/docs/monitoring-get-batch.md) - Metrics and observability
 - [AIS CLI](/docs/cli.md) - Command-line tools
-- [Release Notes v1.4.0](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) - GetBatch introduction
