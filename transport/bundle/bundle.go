@@ -462,6 +462,9 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 		nrobin.stsdest[k] = ns
 	}
 	nbundle := maps.Clone(old)
+	if nbundle == nil {
+		nbundle = make(bundle)
+	}
 	nbundle[dstID] = nrobin
 
 	// 3) switch over

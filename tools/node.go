@@ -894,6 +894,9 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 		prevSid string
 		orig    = maps.Clone(ignore)
 	)
+	if orig == nil {
+		orig = make(cos.StrSet)
+	}
 	for {
 		sid, isproxy, exists := _nextNode(smap, ignore)
 		if !exists {
