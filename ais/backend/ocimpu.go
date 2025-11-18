@@ -257,10 +257,7 @@ func (mpuChild *ociMPUChildStruct) String() string {
 }
 
 func (mpuChild *ociMPUChildStruct) Read(p []byte) (n int, err error) {
-	n = int(mpuChild.length) - mpuChild.bufPos
-	if n > len(p) {
-		n = len(p)
-	}
+	n = min(int(mpuChild.length)-mpuChild.bufPos, len(p))
 	if n > 0 {
 		copy(p, mpuChild.buf[mpuChild.bufPos:(mpuChild.bufPos+n)])
 		mpuChild.bufPos += n

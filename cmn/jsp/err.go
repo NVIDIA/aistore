@@ -1,11 +1,14 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type (
 	ErrBadSignature struct {
@@ -32,10 +35,8 @@ func (e *ErrBadSignature) Error() string {
 
 func newErrVersion(tag string, got, expected uint32, compatibles ...uint32) error {
 	err := &ErrVersion{tag, got, expected}
-	for _, v := range compatibles {
-		if got == v {
-			return &ErrJspCompatibleVersion{*err}
-		}
+	if slices.Contains(compatibles, got) {
+		return &ErrJspCompatibleVersion{*err}
 	}
 	return &ErrUnsupportedMetaVersion{*err}
 }

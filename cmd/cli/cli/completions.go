@@ -103,14 +103,7 @@ func _lastv(c *cli.Context, values []string) bool {
 	if c.NArg() == 0 {
 		return false
 	}
-	lastArg := argLast(c)
-
-	for _, v := range values {
-		if v == lastArg {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, argLast(c))
 }
 
 // not-yet-typed:

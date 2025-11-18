@@ -1,11 +1,10 @@
 // Package cos provides common low-level types and utilities for all aistore projects.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
 import (
-	"reflect"
 	"sort"
 	"strings"
 
@@ -25,15 +24,7 @@ func NewStrKVs(l int) StrKVs {
 	return make(StrKVs, l)
 }
 
-func (kvs StrKVs) Compare(other StrKVs) bool {
-	if len(kvs) != len(other) {
-		return false
-	} else if len(kvs) > 0 {
-		return reflect.DeepEqual(kvs, other)
-	}
-	return true
-}
-
+// TODO: use maps.Keys() iterator instead
 func (kvs StrKVs) Keys() []string {
 	keys := make([]string, 0, len(kvs))
 	for k := range kvs {
@@ -89,6 +80,7 @@ func (ss StrSet) String() string {
 	return strings.Join(keys, ",")
 }
 
+// TODO: use maps.Keys() iterator instead
 func (ss StrSet) ToSlice() []string {
 	keys := make([]string, len(ss))
 	idx := 0
@@ -124,14 +116,6 @@ func (ss StrSet) Intersection(other StrSet) StrSet {
 		if other.Contains(key) {
 			result.Set(key)
 		}
-	}
-	return result
-}
-
-func (ss StrSet) Clone() StrSet {
-	result := make(StrSet, len(ss))
-	for k, v := range ss {
-		result[k] = v
 	}
 	return result
 }

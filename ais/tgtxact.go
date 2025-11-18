@@ -337,8 +337,7 @@ func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 
 	xactID := amsg.Name
 	if strings.IndexByte(xactID, xact.SepaID[0]) > 0 {
-		uuids := strings.Split(xactID, xact.SepaID)
-		for _, xid := range uuids {
+		for xid := range strings.SplitSeq(xactID, xact.SepaID) {
 			if xctn, err = xreg.GetXact(xid); err == nil {
 				break
 			}

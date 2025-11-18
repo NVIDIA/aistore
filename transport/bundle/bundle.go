@@ -7,6 +7,7 @@ package bundle
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -363,9 +364,8 @@ func (sb *Streams) Resync() {
 		l = max(len(obundle), len(obundle)+l)
 	}
 	nbundle := make(bundle, l)
-	for id, robin := range obundle {
-		nbundle[id] = robin
-	}
+	maps.Copy(nbundle, obundle)
+
 	for id, si := range added {
 		if id == core.T.SID() {
 			continue
@@ -461,10 +461,7 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
 		nrobin.stsdest[k] = ns
 	}
-	nbundle := make(bundle, len(old))
-	for id, r := range old {
-		nbundle[id] = r
-	}
+	nbundle := maps.Clone(old)
 	nbundle[dstID] = nrobin
 
 	// 3) switch over

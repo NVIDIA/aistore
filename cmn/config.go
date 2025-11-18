@@ -2587,8 +2587,7 @@ func ipsOverlap(alist, blist string) (addr string, overlap bool) {
 	if alist == "" || blist == "" {
 		return
 	}
-	alistAddrs := strings.Split(alist, HostnameListSepa)
-	for _, a := range alistAddrs {
+	for a := range strings.SplitSeq(alist, HostnameListSepa) {
 		a = strings.TrimSpace(a)
 		if a == "" {
 			continue

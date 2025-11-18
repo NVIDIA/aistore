@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -691,9 +692,8 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 	md[cos.S3MetadataChecksumType] = cksumType
 	md[cos.S3MetadataChecksumVal] = cksumValue
 	if oreq != nil {
-		for k, v := range cmn.BackendHelpers.Amazon.DecodeMetadata(oreq.Header) {
-			md[k] = v
-		}
+		dm := cmn.BackendHelpers.Amazon.DecodeMetadata(oreq.Header)
+		maps.Copy(md, dm)
 	}
 
 	uploader = s3manager.NewUploader(svc)

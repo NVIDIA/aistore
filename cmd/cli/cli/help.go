@@ -219,14 +219,12 @@ func helpMorePrinter(_ io.Writer, templ string, data any) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if _, err := io.Copy(buffer, r); err != nil {
 			exitln("write sgl:", err)
 		}
 		r.Close()
-	}()
+	})
 
 	cli.HelpPrinterCustom(w, templ, data, funcColorMap)
 

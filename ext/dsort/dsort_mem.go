@@ -319,18 +319,14 @@ func (ds *dsorterMem) createShardsLocally() error {
 	sa := newInmemShardAllocator(maxMemoryToUse - mem.ActualUsed)
 
 	// read
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		ds.localRead(stopCh, errCh)
-		wg.Done()
-	}()
+	})
 
 	// write
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		ds.localWrite(sa, stopCh, errCh)
-		wg.Done()
-	}()
+	})
 
 	wg.Wait()
 

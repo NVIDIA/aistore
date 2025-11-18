@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -292,10 +293,8 @@ func setupCommandHelp(commands []cli.Command) {
 func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
 	for _, flag := range commandFlags {
 		lst := splitCsv(flag.GetName())
-		for _, name := range lst {
-			if name == helpName {
-				return true
-			}
+		if slices.Contains(lst, helpName) {
+			return true
 		}
 	}
 	return false

@@ -50,8 +50,7 @@ func parsePipelineURL(pipelineURLHdr string) (string, string) {
 	if pipelineURLHdr == "" {
 		return "", ""
 	}
-	pipelineURLs := strings.Split(pipelineURLHdr, apc.ETLPipelineSeparator)
-	for _, pipelineURL := range pipelineURLs {
+	for pipelineURL := range strings.SplitSeq(pipelineURLHdr, apc.ETLPipelineSeparator) {
 		pipelineURL = strings.TrimSpace(pipelineURL)
 		if pipelineURL == "" {
 			return "", ""

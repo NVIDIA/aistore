@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -106,17 +107,8 @@ func (c *txnCln) commit(what fmt.Stringer, timeout time.Duration) (xid string, a
 				all = append(all, xid, resID)
 				xid, same4all = "", false
 			}
-		} else {
-			var found bool
-			for _, id := range all {
-				if resID == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				all = append(all, resID)
-			}
+		} else if !slices.Contains(all, resID) {
+			all = append(all, resID)
 		}
 	}
 

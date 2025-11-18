@@ -7,6 +7,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -392,10 +393,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		dstCksumTy = dst.CksumType()
 	)
 	if dst.isMirror(lom) && lom.md.copies != nil {
-		dst.md.copies = make(fs.MPI, len(lom.md.copies)+1)
-		for fqn, mpi := range lom.md.copies {
-			dst.md.copies[fqn] = mpi
-		}
+		dst.md.copies = maps.Clone(lom.md.copies)
 	}
 	if !dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/) {
 		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.

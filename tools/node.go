@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -891,7 +892,7 @@ func _nextNode(smap *meta.Smap, idsToIgnore cos.StrSet) (sid string, isproxy, ex
 func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int64, ignore cos.StrSet) error {
 	var (
 		prevSid string
-		orig    = ignore.Clone()
+		orig    = maps.Clone(ignore)
 	)
 	for {
 		sid, isproxy, exists := _nextNode(smap, ignore)
@@ -925,7 +926,7 @@ func waitSmapSync(bp api.BaseParams, timeout time.Time, smap *meta.Smap, ver int
 						newSmap.StringEx(), sname, ver, newSmap.Version)
 				}
 				ver = newSmap.Version - 1
-				ignore = orig.Clone()
+				ignore = maps.Clone(orig)
 				ignore.Add(sid)
 			}
 			continue

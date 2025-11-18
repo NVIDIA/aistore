@@ -590,7 +590,7 @@ reflectDst:
 			s = strings.TrimSuffix(s, "]")
 			if s != "" {
 				vals := strings.Split(s, " ")
-				tp := reflect.TypeOf(vals[0])
+				tp := reflect.TypeFor[string]()
 				lst := reflect.MakeSlice(reflect.SliceOf(tp), 0, 10)
 				for _, v := range vals {
 					if v == "" {

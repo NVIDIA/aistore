@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -31,10 +32,8 @@ func (d *FsID) UnmarshalJSON(b []byte) error {
 }
 
 func AddUniqueFsID(ids []FsID, nid FsID) ([]FsID, bool /*added*/) {
-	for _, id := range ids {
-		if nid == id {
-			return ids, false
-		}
+	if slices.Contains(ids, nid) {
+		return ids, false
 	}
 	return append(ids, nid), true
 }

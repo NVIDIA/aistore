@@ -1502,11 +1502,7 @@ func (t *target) Stop(err error) {
 	}
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		core.Term()
-		wg.Done()
-	}()
+	wg.Go(core.Term)
 
 	xreg.AbortAll(err)
 

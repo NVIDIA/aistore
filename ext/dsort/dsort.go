@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -160,7 +160,7 @@ func _torder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
 		targets[c] = d
 		keys = append(keys, c)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	slices.Sort(keys)
 
 	t := make(meta.Nodes, len(keys))
 	for i, k := range keys {
@@ -285,8 +285,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		wg   = &sync.WaitGroup{}
 		r, w = io.Pipe()
 	)
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		var err error
 		if !m.Pars.DryRun {
 			params := core.AllocPutParams()
@@ -310,8 +309,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 			_, err = io.Copy(io.Discard, r)
 		}
 		errCh <- err
-		wg.Done()
-	}()
+	})
 
 	// may reshard into a different format
 	shardRW := m.shardRW

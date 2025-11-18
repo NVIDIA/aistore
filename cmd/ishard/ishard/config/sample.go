@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -44,10 +45,8 @@ func NewMissingExtManager(name string, sampleExts []string) (*MissingExtManager,
 	if len(sampleExts) == 0 {
 		return nil, errors.New("invalid extensions, should have at least one specified extension")
 	}
-	for _, ext := range sampleExts {
-		if ext == "" {
-			return nil, errors.New("invalid extensions, extension can't be empty string \"\"")
-		}
+	if slices.Contains(sampleExts, "") {
+		return nil, errors.New("invalid extensions, extension can't be empty string \"\"")
 	}
 	mgr := &MissingExtManager{
 		Name:   name,

@@ -6,6 +6,7 @@ package ais
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"sync"
 	ratomic "sync/atomic"
@@ -101,9 +102,7 @@ func (e *etlMD) clone() *etlMD {
 	dst := &etlMD{}
 	*dst = *e
 	dst.Init(len(e.ETLs))
-	for id, etl := range e.ETLs {
-		dst.ETLs[id] = etl
-	}
+	maps.Copy(dst.ETLs, e.ETLs)
 	return dst
 }
 

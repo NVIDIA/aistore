@@ -37,6 +37,7 @@ linters:
     - importas
     - ineffassign
     - intrange
+    - modernize
     - musttag
     - misspell
     - nakedret
@@ -151,6 +152,11 @@ linters:
         - "*.UnmarshalJSON"
         - "*.UnmarshalYAML"
 
+    modernize:
+      # By default, all analyzers are enabled.
+      disable:
+        - omitzero
+
     depguard:
       rules:
         main:
@@ -183,15 +189,18 @@ linters:
           - nakedret
           - noctx
           - govet
+          - modernize
       - path: bench/
         linters:
           - nakedret
           - noctx
+          - modernize
       - path: tools/
         linters:
           - nakedret
           - noctx
           - govet
+          - modernize
 
       # Exclude some `staticcheck` messages.
       - linters:

@@ -6,6 +6,7 @@ package fs
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -644,13 +645,7 @@ func ToMPL() (mpl *apc.MountpathList) {
 }
 
 // NOTE: must be under mfs lock
-func _cloneOne(mpis MPI) (clone MPI) {
-	clone = make(MPI, len(mpis))
-	for mpath, mi := range mpis {
-		clone[mpath] = mi
-	}
-	return clone
-}
+func _cloneOne(mpis MPI) MPI { return maps.Clone(mpis) }
 
 // cloneMPI returns a shallow copy of the current (available, disabled) mountpaths
 func cloneMPI() (availableCopy, disabledCopy MPI) {

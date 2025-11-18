@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -380,10 +381,7 @@ func (km *KeyCacheManager) makeDiscoveryRequest(ctx context.Context, reqURL, iss
 func (kc *keyCache) preLoadAll(ctx context.Context) {
 	// Snapshot issuerToJWKS under lock
 	kc.RLock()
-	issuerToJWKS := make(map[string]string, len(kc.issuerToJWKS))
-	for iss, jwksURL := range kc.issuerToJWKS {
-		issuerToJWKS[iss] = jwksURL
-	}
+	issuerToJWKS := maps.Clone(kc.issuerToJWKS)
 	kc.RUnlock()
 
 	// Refresh all JWKS in parallel

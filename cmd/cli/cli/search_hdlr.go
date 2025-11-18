@@ -83,8 +83,7 @@ func populateKeyMapInvIdx() {
 	invIndex = make(map[string][]int)
 	keywordMap = invertMap(similarWords)
 	for i := range cmdStrs {
-		keywords := strings.Split(cmdStrs[i], " ")
-		for _, word := range keywords {
+		for word := range strings.SplitSeq(cmdStrs[i], " ") {
 			keywordMap[word] = append(keywordMap[word], word)
 			invIndex[word] = append(invIndex[word], i)
 		}

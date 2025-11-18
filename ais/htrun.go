@@ -596,12 +596,11 @@ func (h *htrun) stop(wg *sync.WaitGroup, rmFromSmap bool) {
 	}
 	nlog.Infoln("Shutting down HTTP")
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		time.Sleep(sleep)
 		shuthttp()
-		wg.Done()
-	}()
+	})
+
 	var flt xreg.Flt
 	entry := xreg.GetRunning(&flt)
 	if entry != nil {
