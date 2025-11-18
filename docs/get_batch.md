@@ -300,7 +300,7 @@ Lhotse URLs like `ais://mybucket/shard-0000.tar.gz/audio/sample_42.wav` automati
 
 **Architecture:**
 ```
-Lhotse CutSet → AISBatchLoader → AIStore Python SDK → GetBatch API → Training Loop
+Lhotse CutSet => AISBatchLoader => AIStore Python SDK => GetBatch API => Training Loop
 ```
 
 **Key benefits:**
@@ -317,12 +317,12 @@ See also:
 
 ## Usage Examples
 
-Examples below are pseudo-code provided to quickly illustrate usage (rather than copy/paste as is).
+Note: `curl` examples in this section are **purely illustrative** - do not copy/paste.
 
 ### Example 1: Retrieve Plain Objects
 
 ```console
-curl -X POST http://aistore-gateway/v1/ml/moss/my-bucket \
+curl -L -X GET http://aistore-gateway/v1/ml/moss/my-bucket \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -347,11 +347,9 @@ my-bucket/file-0003.bin
 
 ### Example 2: Extract Files from Shards
 
-> This is a pseudo-code to illustrate usage (rather than copy/paste as is):
-
 ```console
 # Extract image_42.jpg from 100 distributed shards
-curl -X POST http://aistore-gateway/v1/ml/moss/shards \
+curl -L -X GET http://aistore-gateway/v1/ml/moss/shards \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -382,7 +380,7 @@ shard-0099.tar/image_42.jpg
 > The request bucket (`default-bucket` in URL) is used when bucket is omitted in an in entry.
 
 ```console
-curl -X POST http://aistore-gateway/v1/ml/moss/default-bucket \
+curl -L -X GET http://aistore-gateway/v1/ml/moss/default-bucket \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
@@ -401,10 +399,8 @@ Result: TAR containing objects from three different buckets in one request.
 
 ### Example 4: Handle Missing Data Gracefully
 
-> This is a pseudo-code to illustrate internal format and usage - do not copy/paste.
-
 ```console
-curl -X POST http://aistore-gateway/v1/ml/moss \
+curl -L -X GET http://aistore-gateway/v1/ml/moss \
   -H "Content-Type: application/json" \
   -d '{
     "action": "getbatch",
