@@ -35,6 +35,8 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 	// counters
 	xctn.ToStats(&snap.Stats)
 
+	snap.IdleX = self.IsIdle()
+
 	snap.CtlMsg = self.CtlMsg()
 	if snap.CtlMsg == "" {
 		return snap
@@ -43,7 +45,6 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 		nlog.InfoDepth(1, self.Name(), "run options:", snap.CtlMsg)
 	}
 
-	snap.IdleX = self.IsIdle()
 	return snap
 }
 
