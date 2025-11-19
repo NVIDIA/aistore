@@ -758,20 +758,7 @@ func (o *lstFilter) apply(entries cmn.LsoEntries) (matching, rest cmn.LsoEntries
 // prefix that crosses shard boundary, e.g.:
 // `ais ls bucket --prefix virt-subdir/A.tar.gz/dir-or-prefix-inside`
 func splitArchivePath(prefix string) (external, internal string) {
-	if prefix == "" {
-		return
-	}
-	external = prefix
-	for _, ext := range archive.FileExtensions {
-		i := strings.Index(prefix, ext+"/")
-		if i <= 0 {
-			continue
-		}
-		internal = prefix[i+len(ext)+1:]
-		external = prefix[:i+len(ext)]
-		break
-	}
-	return
+	return archive.SplitAtExtension(prefix)
 }
 
 func splitObjnameShardBoundary(fullName string) (objName, fileName string) {

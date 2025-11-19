@@ -247,7 +247,7 @@ func Start(version, buildtime string) (err error) {
 
 		// note that "'-skiplist' option is ignored when '-filelist' is specified"
 	case !runParams.skipList:
-		names, err := listObjects()
+		names, fcnt, err := listObjects()
 		if err != nil {
 			return err
 		}
@@ -269,7 +269,15 @@ func Start(version, buildtime string) (err error) {
 		// initialize global name-getter and announce
 		objnameGetter = ng
 		objnameGetter.Init(names, rnd)
-		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(l), cos.Plural(l))
+		switch fcnt {
+		case 0:
+			fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigInt(l), cos.Plural(l))
+		case l:
+			fmt.Printf("Found %s archived file%s\n\n", cos.FormatBigInt(l), cos.Plural(l))
+		default:
+			fmt.Printf("Found %s plain object%s and %s archived file%s\n\n",
+				cos.FormatBigInt(l-fcnt), cos.Plural(l-fcnt), cos.FormatBigInt(fcnt), cos.Plural(fcnt))
+		}
 
 	default:
 		objnameGetter = &namegetter.Random{}
@@ -735,16 +743,16 @@ func objNamesFromFile() (names []string, err error) {
 	return
 }
 
-func listObjects() (names []string, err error) {
+func listObjects() (names []string, fcnt int, err error) {
 	switch {
 	case runParams.fileList != "":
 		names, err = objNamesFromFile()
 	case isDirectS3():
 		names, err = s3ListObjects()
 	default:
-		names, err = listObjectNames(runParams)
+		names, fcnt, err = listObjectNames(runParams)
 	}
-	return
+	return names, fcnt, err
 }
 
 func newNameGetter(names []string) (ng namegetter.Basic, isPermBased bool) {

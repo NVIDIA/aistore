@@ -90,7 +90,7 @@ type (
 		minSz int64
 		maxSz int64
 
-		use bool // whether to enable sharding across all supported workloads (PUT, GET, etc.)
+		pct int // broadly: percentage of archive workload (affects both reading and writing when positive)
 	}
 
 	// Object naming strategy and distribution
@@ -236,7 +236,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.archParams.numFiles, "arch.num-files", 0, "number of archived files per shard (PUT only; default gets computed from sizes)")
 	f.StringVar(&p.archParams.minSzStr, "arch.minsize", "", "minimum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.archParams.maxSzStr, "arch.maxsize", "", "maximum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.BoolVar(&p.archParams.use, "arch.use", false, "enable sharding across all workloads: PUT, GET, chunks, batches, etc.")
+	f.IntVar(&p.archParams.pct, "arch.pct", 0, "when writing: percentage of shards vs plain objects; when reading: include archived files in the GET pool (ratio is ultimately determined by dataset)")
 
 	// ============ Naming ============
 	f.StringVar(&p.subDir, "subdir", "", "For GET requests, '-subdir' is a prefix that may or may not be an actual _virtual directory_;\n"+
@@ -349,12 +349,20 @@ func initParams(p *params) (err error) {
 	if p.putSizeUpperBound, err = _parseSize(p.putSizeUpperBoundStr, "totalputsize", 0); err != nil {
 		return err
 	}
+
 	if p.minSize, err = _parseSize(p.minSizeStr, "minsize", cos.MiB); err != nil {
 		return err
 	}
 	if p.maxSize, err = _parseSize(p.maxSizeStr, "maxsize", cos.GiB); err != nil {
 		return err
 	}
+	if p.minSizeStr == "" && p.maxSizeStr != "" {
+		p.minSize = min(p.minSize, p.maxSize)
+	}
+	if p.maxSizeStr == "" && p.minSizeStr != "" {
+		p.maxSize = max(p.minSize, p.maxSize)
+	}
+
 	if p.readOff, err = _parseSize(p.readOffStr, "readoff", 0); err != nil {
 		return err
 	}
@@ -659,7 +667,21 @@ func (p *params) validate() error {
 	}
 
 	// validate archive
-	if p.archParams.use {
+	if p.archParams.pct != 0 {
+		if p.archParams.pct < 0 || p.archParams.pct > 100 {
+			return fmt.Errorf("invalid option: arch.pct %d (must be 0-100)", p.archParams.pct)
+		}
+		if s3Endpoint != "" {
+			return errors.New("archive operations require AIStore cluster; not supported with '-s3endpoint' (direct S3 access)")
+		}
+
+		// TODO:
+		// - currently, we create each part independently with fresh readers
+		// - multipart upload of shards requires a special streaming chunk writer
+		if p.multipartPct > 0 {
+			return errors.New("multipart uploads and archive operations are mutually exclusive (not supported yet)")
+		}
+
 		mime := cos.NonZero(p.archParams.format, archive.ExtTar)
 		arch := &readers.Arch{
 			Mime:    mime,

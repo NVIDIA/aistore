@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ import (
 const (
 	opFree = iota
 	opPut
+	opPutShard
 	opGet
 	opUpdateExisting // {GET followed by PUT(same name, same size)} combo
 	opPutMultipart   // multipart upload operation
@@ -56,8 +58,9 @@ type (
 		sgl       *memsys.SGL
 		moss      *apc.MossReq // <= name-getter.PickBatch()
 		objName   string
+		archpath  string
 		cksumType string
-		latencies httpLatencies
+		latencies *httpLatencies
 		op        int
 		size      int64
 		start     int64
@@ -75,8 +78,13 @@ func postNewWorkOrder() (err error) {
 	case shouldUsePercentage(runParams.putPct):
 		// when a certain percentage of PUTs becomes PUT(multi-part)
 		op = opPut
+		debug.Assert(runParams.multipartChunks*runParams.archParams.pct == 0, "multipart uploads of shards not yet supported")
+
 		if runParams.multipartChunks > 0 && shouldUsePercentage(runParams.multipartPct) {
 			op = opPutMultipart
+		}
+		if runParams.archParams.pct > 0 && shouldUsePercentage(runParams.archParams.pct) {
+			op = opPutShard
 		}
 	case runParams.getBatchSize > 0:
 		// when GET becomes GET(batch)
@@ -89,8 +97,8 @@ func postNewWorkOrder() (err error) {
 	// work order
 	var wo *workOrder
 	switch op {
-	case opPut:
-		wo, err = newPutWorkOrder()
+	case opPut, opPutShard:
+		wo, err = newPutWorkOrder(op)
 	case opPutMultipart:
 		wo, err = newMultipartWorkOrder()
 	case opGet, opUpdateExisting:
@@ -112,7 +120,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		switch wo.op {
 		case opGet:
 			lat = &intervalStats.statsd.GetLat
-		case opPut:
+		case opPut, opPutShard:
 			lat = &intervalStats.statsd.PutLat
 		}
 		if lat != nil {
@@ -160,7 +168,7 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		elapsed = time.Duration(wo.end - wo.startPut)
 		putPending++
 		fallthrough
-	case opPut:
+	case opPut, opPutShard:
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
@@ -254,7 +262,7 @@ func doPut(wo *workOrder) {
 	}
 
 	// PUT(shard)
-	if runParams.archParams.use {
+	if wo.op == opPutShard {
 		mime, err := archive.Mime(runParams.archParams.format, wo.objName)
 		if err != nil {
 			wo.err = err
@@ -293,7 +301,8 @@ func doPut(wo *workOrder) {
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.err = putWithTrace(url, runParams.bck, wo.objName, &wo.latencies, r.Cksum(), r)
+		wo.latencies = new(httpLatencies)
+		wo.err = putWithTrace(url, runParams.bck, wo.objName, wo.latencies, r.Cksum(), r)
 	}
 	if runParams.readerType == readers.File {
 		r.Close()
@@ -334,13 +343,12 @@ func doGet(wo *workOrder) {
 		if isDirectS3() {
 			wo.size, wo.err = s3getDiscard(runParams.bck, wo.objName)
 		} else {
-			wo.size, wo.err = getDiscard(url, runParams.bck,
-				wo.objName, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
+			wo.size, wo.err = getDiscard(url, wo, runParams)
 		}
 	} else {
 		debug.Assert(!isDirectS3())
-		wo.size, wo.err = getTraceDiscard(url, runParams.bck,
-			wo.objName, &wo.latencies, runParams.readOff, runParams.readLen, runParams.verifyHash, runParams.latest)
+		wo.latencies = new(httpLatencies)
+		wo.size, wo.err = getTraceDiscard(url, wo, runParams)
 	}
 }
 
@@ -380,7 +388,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 		wo.start = mono.NanoTime()
 
 		switch wo.op {
-		case opPut:
+		case opPut, opPutShard:
 			doPut(wo)
 		case opGet:
 			doGet(wo)
@@ -410,7 +418,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 // workOrder //
 ///////////////
 
-func newPutWorkOrder() (*workOrder, error)       { return _newPutWO(opPut) }
+func newPutWorkOrder(op int) (*workOrder, error) { return _newPutWO(op) }
 func newMultipartWorkOrder() (*workOrder, error) { return _newPutWO(opPutMultipart) }
 
 func _randInRange(minSize, maxSize int64) int64 {
@@ -420,10 +428,6 @@ func _randInRange(minSize, maxSize int64) int64 {
 }
 
 func _newPutWO(op int) (*workOrder, error) {
-	objName, err := _genObjName()
-	if err != nil {
-		return nil, err
-	}
 	size := runParams.minSize
 	if runParams.maxSize != runParams.minSize {
 		size = _randInRange(runParams.minSize, runParams.maxSize)
@@ -431,18 +435,17 @@ func _newPutWO(op int) (*workOrder, error) {
 	putPending++
 
 	wo := allocWO(op)
-	{
-		wo.objName = objName
-		wo.size = size
-		wo.cksumType = runParams.cksumType
-	}
-	return wo, nil
+	wo.size = size
+	wo.cksumType = runParams.cksumType
+
+	err := wo.genObjName()
+	return wo, err
 }
 
-func _genObjName() (string, error) {
+func (wo *workOrder) genObjName() error {
 	cnt := objNameCnt.Inc()
 	if runParams.maxputs != 0 && cnt-1 == runParams.maxputs {
-		return "", fmt.Errorf("number of PUT objects reached '--maxputs' limit (%d)", runParams.maxputs)
+		return fmt.Errorf("number of PUT objects reached '--maxputs' limit (%d)", runParams.maxputs)
 	}
 
 	var (
@@ -472,19 +475,21 @@ func _genObjName() (string, error) {
 
 	name := path.Join(comps[0:idx]...)
 
-	// new shard: add extension
-	if runParams.archParams.use && cos.Ext(name) == "" {
+	// PUT(shard): add extension
+	if wo.op == opPutShard && cos.Ext(name) == "" {
 		if f := runParams.archParams.format; f != "" {
 			mime, err := archive.Mime(f, name)
 			if err != nil {
-				return "", fmt.Errorf("failed to generate object name: %v", err)
+				return fmt.Errorf("failed to generate object name: %v", err)
 			}
 			name += mime
 		} else {
 			name += archive.ExtTar // default .tar
 		}
 	}
-	return name, nil
+
+	wo.objName = name
+	return nil
 }
 
 func newGetWorkOrder(op int) (*workOrder, error) {
@@ -496,6 +501,11 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 	getPending++
 	wo := allocWO(op)
 	wo.objName = objnameGetter.Pick()
+
+	if runParams.archParams.pct > 0 {
+		wo.objName, wo.archpath = decodeArchName(wo.objName)
+	}
+
 	return wo, nil
 }
 
@@ -517,7 +527,7 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 func (wo *workOrder) String() string {
 	var opName, s string
 	switch wo.op {
-	case opPut:
+	case opPut, opPutShard:
 		opName = opLabelPut
 	case opGet:
 		opName = opLabelGet
@@ -550,4 +560,27 @@ func shouldUsePercentage(pct int) bool {
 	}
 	v := xoshiro256.Hash(totalWOs) % 100
 	return v < uint64(pct)
+}
+
+//
+// within bucket conversions: {objname[, archpath]} <=> FQN
+//
+
+const archSep = '\x00'
+
+func encodeArchName(objName, archpath string) string {
+	if archpath == "" {
+		return objName
+	}
+	debug.Assert(!strings.ContainsRune(objName, archSep))
+	debug.Assert(!strings.ContainsRune(archpath, archSep))
+	return objName + string(archSep) + archpath
+}
+
+func decodeArchName(s string) (objName, archpath string) {
+	i := strings.IndexByte(s, archSep)
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], s[i+1:]
 }

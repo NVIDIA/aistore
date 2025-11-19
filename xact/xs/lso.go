@@ -706,9 +706,11 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	entry.Flags |= apc.EntryIsArchive // the parent archive
 	for _, archEntry := range archList {
 		e := &cmn.LsoEnt{
-			Name:  path.Join(entry.Name, archEntry.Name),
-			Flags: entry.Flags | apc.EntryInArch,
-			Size:  archEntry.Size,
+			Name: path.Join(entry.Name, archEntry.Name),
+			Size: archEntry.Size,
+
+			// inherit parent's flags except apc.EntryIsArchive
+			Flags: (entry.Flags &^ apc.EntryIsArchive) | apc.EntryInArch,
 		}
 		select {
 		case r.walk.pageCh <- e:

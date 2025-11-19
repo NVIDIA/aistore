@@ -369,6 +369,7 @@ type (
 		Cleanup       bool    `json:"cleanup"`
 	}
 	ppArch struct {
+		Pct      int    `json:"% workload"`
 		Format   string `json:"format"`
 		Prefix   string `json:"prefix,omitempty"`
 		NumFiles int    `json:"files per shard,omitempty"`
@@ -379,7 +380,7 @@ type (
 
 func printRunParams(p *params) {
 	var arch *ppArch
-	if p.archParams.use {
+	if p.archParams.pct != 0 {
 		// temp readers.Arch to run Init() and get computed values
 		// aisloader's default format: TAR
 		mime := cos.NonZero(p.archParams.format, archive.ExtTar)
@@ -395,6 +396,7 @@ func printRunParams(p *params) {
 
 		numf := cos.Ternary(tmpArch.Num == readers.DynamicNumFiles, 0, p.archParams.numFiles)
 		arch = &ppArch{
+			Pct:      p.archParams.pct,
 			Format:   tmpArch.Mime,
 			Prefix:   tmpArch.Prefix,
 			NumFiles: numf,

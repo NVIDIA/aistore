@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -113,4 +114,27 @@ func lsZip(readerAt cos.ReadReaderAt, size int64) (lst []*Entry, err error) {
 func lsLz4(reader io.Reader) ([]*Entry, error) {
 	lzr := lz4.NewReader(reader)
 	return lsTar(lzr)
+}
+
+// Split a path at the first archive extension boundary, e.g.:
+// "a/b/c/shard.tar/dir/file.bin" -> ("a/b/c/shard.tar", "dir/file.bin")
+// "plain/object/path" -> ("plain/object/path", "").
+//
+// NOTE: Assumes archive extensions (.tar, .zip, etc. `FileExtensions`)
+// do not appear in non-archive path components.
+// This holds for lsmsg `apc.LsArchDir` results where
+// the first matching extension marks the actual archive boundary.
+
+func SplitAtExtension(path string) (shardName, fileName string) {
+	if path == "" {
+		return "", ""
+	}
+	for _, ext := range FileExtensions {
+		i := strings.Index(path, ext+"/")
+		if i < 0 {
+			continue
+		}
+		return path[:i+len(ext)], path[i+len(ext)+1:]
+	}
+	return path, ""
 }

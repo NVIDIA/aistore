@@ -377,26 +377,28 @@ func newTraceCtx(proxyURL string) *traceCtx {
 	return tctx
 }
 
-func newGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, length int64, latest bool) (*http.Request, error) {
-	var (
-		hdr   http.Header
-		query = url.Values{}
-	)
-	query = bck.AddToQuery(query)
+func newGetRequest(proxyURL string, wo *workOrder, p *params) (*http.Request, error) {
+	query := p.bck.AddToQuery(nil)
 	if etlName != "" {
 		query.Add(apc.QparamETLName, etlName)
 	}
-	if latest {
+	if p.latest {
 		query.Add(apc.QparamLatestVer, "true")
 	}
-	if length > 0 {
-		rng := cmn.MakeRangeHdr(offset, length)
+	if wo.archpath != "" {
+		query.Add(apc.QparamArchpath, wo.archpath)
+	}
+
+	var hdr http.Header
+	if p.readLen > 0 {
+		rng := cmn.MakeRangeHdr(p.readOff, p.readLen)
 		hdr = http.Header{cos.HdrRange: []string{rng}}
 	}
+
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,
 		Base:   proxyURL,
-		Path:   apc.URLPathObjects.Join(bck.Name, objName),
+		Path:   apc.URLPathObjects.Join(p.bck.Name, wo.objName),
 		Query:  query,
 		Header: hdr,
 	}
@@ -431,8 +433,8 @@ func s3getDiscard(bck cmn.Bck, objName string) (int64, error) {
 }
 
 // getDiscard sends a GET request and discards returned data.
-func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int64, validate, latest bool) (int64, error) {
-	req, err := newGetRequest(proxyURL, bck, objName, offset, length, latest)
+func getDiscard(proxyURL string, wo *workOrder, p *params) (int64, error) {
+	req, err := newGetRequest(proxyURL, wo, p)
 	if err != nil {
 		return 0, err
 	}
@@ -446,30 +448,33 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, offset, length int
 	}
 
 	var hdrCksumValue, hdrCksumType string
-	if validate {
+	if p.verifyHash {
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
-	src := "GET " + bck.Cname(objName)
-	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
+	n, cksumValue, err := readDiscard(resp, hdrCksumType)
 
 	resp.Body.Close()
 	if err != nil {
-		return 0, err
+		tag := "GET " + p.bck.Cname(wo.objName)
+		if wo.archpath != "" {
+			tag += "/" + wo.archpath
+		}
+		return 0, fmt.Errorf("%s: %v", tag, err)
 	}
-	if validate && hdrCksumValue != cksumValue {
+	if p.verifyHash && hdrCksumValue != cksumValue {
 		return 0, cmn.NewErrInvalidCksum(hdrCksumValue, cksumValue)
 	}
 	return n, err
 }
 
 // Same as above, but with HTTP trace.
-func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *httpLatencies, offset, length int64, validate, latest bool) (int64, error) {
+func getTraceDiscard(proxyURL string, wo *workOrder, p *params) (int64, error) {
 	var (
 		hdrCksumValue string
 		hdrCksumType  string
 	)
-	req, err := newGetRequest(proxyURL, bck, objName, offset, length, latest)
+	req, err := newGetRequest(proxyURL, wo, p)
 	if err != nil {
 		return 0, err
 	}
@@ -486,21 +491,24 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, latencies *ht
 	defer resp.Body.Close()
 
 	tctx.tr.tsHTTPEnd = time.Now()
-	if validate {
+	if p.verifyHash {
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 
-	src := "GET " + bck.Cname(objName)
-	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
+	n, cksumValue, err := readDiscard(resp, hdrCksumType)
 	if err != nil {
-		return 0, err
+		tag := "GET " + p.bck.Cname(wo.objName)
+		if wo.archpath != "" {
+			tag += "/" + wo.archpath
+		}
+		return 0, fmt.Errorf("%s: %v", tag, err)
 	}
-	if validate && hdrCksumValue != cksumValue {
+	if p.verifyHash && hdrCksumValue != cksumValue {
 		err = cmn.NewErrInvalidCksum(hdrCksumValue, cksumValue)
 	}
 
-	tctx.tr.set(latencies)
+	tctx.tr.set(wo.latencies)
 	return n, err
 }
 
@@ -557,7 +565,7 @@ func listObjCallback(ctx *api.LsoCounter) {
 }
 
 // listObjectNames returns a slice of object names of all objects that match the prefix in a bucket.
-func listObjectNames(p *params) ([]string, error) {
+func listObjectNames(p *params) (names []string, fcnt int /*num archived files*/, _ error) {
 	var (
 		bp       = p.bp
 		bck      = p.bck
@@ -572,16 +580,37 @@ func listObjectNames(p *params) ([]string, error) {
 		msg.Flags |= apc.LsNoDirs // aisloader's default (to override, use --list-dirs)
 	}
 	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
-	lst, err := api.ListObjects(bp, bck, msg, args)
-	if err != nil {
-		return nil, err
+	if p.archParams.pct > 0 {
+		msg.Flags |= apc.LsArchDir
 	}
 
-	objs := make([]string, 0, len(lst.Entries))
-	for _, obj := range lst.Entries {
-		objs = append(objs, obj.Name)
+	lst, err := api.ListObjects(bp, bck, msg, args)
+	if err != nil {
+		return nil, 0, err
 	}
-	return objs, nil
+
+	names = make([]string, 0, len(lst.Entries))
+	for _, en := range lst.Entries {
+		if en.Flags&apc.EntryInArch != 0 {
+			debug.Assert(msg.Flags&apc.LsArchDir != 0)
+			objName, archPath := archive.SplitAtExtension(en.Name)
+			if archPath != "" {
+				names = append(names, encodeArchName(objName, archPath)) // with `archSep` delimiter
+				fcnt++
+				continue
+			}
+		}
+		// skip archive/shard objects themselves
+		if en.Flags&apc.EntryIsArchive != 0 {
+			debug.Assert(msg.Flags&apc.LsArchDir != 0)
+			continue
+		}
+
+		// plain object or shard itself
+		names = append(names, en.Name)
+	}
+
+	return names, fcnt, nil
 }
 
 func initS3Svc() error {
@@ -668,13 +697,13 @@ func s3ListObjects() ([]string, error) {
 	return names, nil
 }
 
-func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error) {
+func readDiscard(r *http.Response, cksumType string) (int64, string, error) {
 	if r.StatusCode >= http.StatusBadRequest {
 		bytes, err := cos.ReadAll(r.Body)
 		if err == nil {
-			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, tag, string(bytes))
+			return 0, "", fmt.Errorf("bad status %d, response: %s", r.StatusCode, string(bytes))
 		}
-		return 0, "", fmt.Errorf("bad status %d from %s: %v", r.StatusCode, tag, err)
+		return 0, "", fmt.Errorf("bad status %d: %v", r.StatusCode, err)
 	}
 
 	n, cksum, err := cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
