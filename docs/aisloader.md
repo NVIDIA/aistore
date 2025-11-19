@@ -311,11 +311,12 @@ Found 108,959 plain objects and 1,089,590 archived files (91% archived)
 ### Usage Examples
 
 #### **Create 100% shards (each containing 10 files)**
+
 ```console
 $ aisloader -bucket=ais://abc -pctput=100 -arch.pct=100 \
             -arch.num-files=10 -arch.minsize=1K -arch.maxsize=100K \
             -duration=5m -cleanup=false
-````
+```
 
 All PUTs create shards; each shard contains 10 files between 1KB and 100KB.
 
