@@ -1,4 +1,4 @@
-// Package namegetter is a utility to generate filenames for aisloader PUT/GET requests
+// Package namegetter is a utility to provide random object and archived file names to aisloader
 /*
 * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -9,7 +9,6 @@ import (
 	"math/rand/v2"
 	"sync"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -26,10 +25,11 @@ type (
 		// pick a random name
 		Pick() string
 
-		// return up to len([]apc.MossIn) unique names
-		// - caller must pre-size `in` to the desired batch size
-		// - if fewer names are available than the batch size, the result will be shorter
-		PickBatch(in []apc.MossIn) []apc.MossIn
+		// iterate over a batch of up to `limit` unique names
+		// - calls yield(name) for each selected name
+		// - if yield returns false, iteration stops early
+		// - if fewer names are available than limit, fewer names are yielded
+		IterBatch(limit int, yield func(name string) bool)
 
 		// all known names and the number of thereof
 		// (note: both methods not thread-safe)
@@ -55,8 +55,8 @@ type (
 	}
 
 	// PermShuffle generates repeated random permutations of an open interval [0..n)
-	// NOTE: PickBatch can cross a permutation boundary - if that happens
-	// the returned batch (of names) may contain duplicates (extended comment below)
+	// NOTE: IterBatch can cross a permutation boundary - if that happens
+	// the yielded batch (of names) may contain duplicates (extended comment below)
 	PermShuffle struct {
 		base
 		rnd       *rand.Rand
@@ -67,7 +67,7 @@ type (
 	}
 
 	// epoch-based affine sequence over nextPrimeGE(n);
-	// each epoch emits exactly n unique indices; PickBatch never crosses epochs,
+	// each epoch emits exactly n unique indices; IterBatch never crosses epochs,
 	// so duplicates within a single batch are impossible
 	PermAffinePrime struct {
 		base
@@ -120,23 +120,24 @@ func (rng *Random) Pick() string {
 }
 
 // with-replacement for single Pick(), but strictly unique within a batch
-func (rng *Random) PickBatch(in []apc.MossIn) []apc.MossIn {
-	var (
-		total = len(rng.names)
-		n     = min(total, len(in))
-		i     int
-	)
+func (rng *Random) IterBatch(limit int, yield func(name string) bool) {
+	total := len(rng.names)
+	n := min(total, limit)
 	debug.Assert(n > 0)
+
 	rng.seen.reinit(total)
-	for i < n {
+	emitted := 0
+
+	for emitted < n {
 		idx := rng.rnd.IntN(total)
 		if !rng.seen.testAndSet(idx) {
 			continue
 		}
-		in[i].ObjName = rng.names[idx]
-		i++
+		if !yield(rng.names[idx]) {
+			return
+		}
+		emitted++
 	}
-	return in[:n]
 }
 
 //////////////////
@@ -173,19 +174,19 @@ func (rng *RandomUnique) Pick() string {
 	}
 }
 
-// strictly unique within the returned batch; still advances the epoch tracker
-func (rng *RandomUnique) PickBatch(in []apc.MossIn) []apc.MossIn {
-	var (
-		total = len(rng.names)
-		n     = min(total, len(in))
-		i     int
-	)
+// strictly unique within the yielded batch; still advances the epoch tracker
+func (rng *RandomUnique) IterBatch(limit int, yield func(name string) bool) {
+	total := len(rng.names)
+	n := min(total, limit)
 	debug.Assert(n > 0)
+
 	rng.seen.reinit(total)
 	if rng.tracker.needsReset(total) {
 		rng.tracker.reset()
 	}
-	for i < n {
+
+	emitted := 0
+	for emitted < n {
 		if rng.tracker.needsReset(total) {
 			rng.tracker.reset()
 		}
@@ -201,12 +202,13 @@ func (rng *RandomUnique) PickBatch(in []apc.MossIn) []apc.MossIn {
 			if !rng.seen.testAndSet(idx) {
 				continue
 			}
-			in[i].ObjName = rng.names[idx]
-			i++
+			if !yield(rng.names[idx]) {
+				return
+			}
+			emitted++
 			break
 		}
 	}
-	return in[:n]
 }
 
 /////////////////
@@ -249,24 +251,23 @@ func (rng *PermShuffle) Pick() string {
 }
 
 // NOTE: =====================================================================
-// * A single PickBatch can legitimately **straddle two permutations**.
+// * A single IterBatch can legitimately **straddle two permutations**.
 //   When that happens, the same name can appear twice within one batch
 //   (tail of previous permutation + head of the next).
 //   In other words, uniqueness is guaranteed
-//   only per permutation (epoch), not per individual PickBatch call.
+//   only per permutation (epoch), not per individual IterBatch call.
 // * Callers that require strictly unique names within each batch must either
 //   (a) set batch size <= remaining items in the current permutation, or
 //   (b) detect and skip duplicates at the boundary.
 // ============================================================================
 
 // consecutive window with pre-generated wrap
-func (rng *PermShuffle) PickBatch(in []apc.MossIn) []apc.MossIn {
-	var (
-		i     uint32
-		total = uint32(len(rng.names))
-		n     = min(uint32(len(in)), total)
-	)
-	for i < n {
+func (rng *PermShuffle) IterBatch(limit int, yield func(name string) bool) {
+	total := uint32(len(rng.names))
+	n := min(uint32(limit), total)
+	emitted := uint32(0)
+
+	for emitted < n {
 		left := total - rng.permidx
 		if left == 0 {
 			// swap in pre-generated next permutation
@@ -285,19 +286,21 @@ func (rng *PermShuffle) PickBatch(in []apc.MossIn) []apc.MossIn {
 		}
 
 		// number of items to emit from current permutation window
-		win := min(n-i, left)
+		win := min(n-emitted, left)
 
-		// copy window of names
+		// yield window of names
 		for j := range win {
 			idx := rng.perm[rng.permidx+j]
-			in[i+j].ObjName = rng.names[idx]
+			if !yield(rng.names[idx]) {
+				// early termination
+				rng.permidx += j
+				return
+			}
 		}
 
 		rng.permidx += win
-		i += win
+		emitted += win
 	}
-
-	return in[:n]
 }
 
 // generate uint32 permutation
@@ -365,25 +368,40 @@ func (pp *PermAffinePrime) Pick() string {
 	}
 }
 
-func (pp *PermAffinePrime) PickBatch(in []apc.MossIn) []apc.MossIn {
-	n := pp.n
-	k := min(len(in), n-pp.out)
-	if k <= 0 {
-		// start a new epoch so callers don't send an empty request
-		pp.newEpoch()
-		k = min(len(in), n-pp.out)
-	}
+// epoch-based affine sequence over nextPrimeGE(n);
+// each epoch emits exactly n unique indices
+// NOTE:
+// - may straddle epoch boundaries; in that case,
+// - a single batch can contain duplicates (tail of previous epoch + head of the next);
+// - unlikely though if the dataset size >> batch size
+func (pp *PermAffinePrime) IterBatch(limit int, yield func(name string) bool) {
+	debug.Assert(limit > 0 && limit <= pp.n)
 
+	n := pp.n
 	p := pp.p
 	a := pp.a
 	y := pp.curY
 	emitted := 0
-
-	for emitted < k {
-		if y < n {
-			in[emitted].ObjName = pp.names[y]
-			emitted++
+	for emitted < limit {
+		// exhausted current epoch: start a new one
+		if pp.out == n {
+			pp.newEpoch()
+			p = pp.p
+			a = pp.a
+			y = pp.curY
 		}
+
+		// for this epoch, emit only indices that map into [0..n)
+		if y < n {
+			if !yield(pp.names[y]) {
+				// caller stopped early; persist state and return
+				pp.curY = y
+				return
+			}
+			emitted++
+			pp.out++
+		}
+
 		// advance y = (y + a) mod p without %/mul
 		y += a
 		if y >= p {
@@ -392,8 +410,6 @@ func (pp *PermAffinePrime) PickBatch(in []apc.MossIn) []apc.MossIn {
 	}
 
 	pp.curY = y
-	pp.out += emitted
-	return in[:emitted]
 }
 
 // --- primes ---

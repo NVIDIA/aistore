@@ -251,6 +251,8 @@ func Start(version, buildtime string) (err error) {
 		if err != nil {
 			return err
 		}
+
+		// more validations:
 		var (
 			l               = len(names)
 			ng, isPermBased = newNameGetter(names)
@@ -265,6 +267,9 @@ func Start(version, buildtime string) (err error) {
 			}
 			return errors.New("no objects with prefix '" + runParams.subDir + "' in the bucket, cannot run 100% read benchmark")
 		}
+		if runParams.getBatchSize > l {
+			return fmt.Errorf("batch size (%d) exceeds dataset size (%d)", runParams.getBatchSize, l)
+		}
 
 		// initialize global name-getter and announce
 		objnameGetter = ng
@@ -275,8 +280,12 @@ func Start(version, buildtime string) (err error) {
 		case l:
 			fmt.Printf("Found %s archived file%s\n\n", cos.FormatBigInt(l), cos.Plural(l))
 		default:
-			fmt.Printf("Found %s plain object%s and %s archived file%s\n\n",
-				cos.FormatBigInt(l-fcnt), cos.Plural(l-fcnt), cos.FormatBigInt(fcnt), cos.Plural(fcnt))
+			plainCnt := l - fcnt
+			archPct := (fcnt * 100) / l
+			fmt.Printf("Found %s plain object%s and %s archived file%s (%d%% archived)\n\n",
+				cos.FormatBigInt(plainCnt), cos.Plural(plainCnt),
+				cos.FormatBigInt(fcnt), cos.Plural(fcnt),
+				archPct)
 		}
 
 	default:

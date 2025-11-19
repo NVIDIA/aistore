@@ -1,4 +1,4 @@
-// Package namegetter is a utility to generate filenames for aisloader PUT/GET requests
+// Package namegetter is a utility to provide random object and archived file names to aisloader
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  */

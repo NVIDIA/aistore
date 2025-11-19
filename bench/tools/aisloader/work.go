@@ -500,11 +500,8 @@ func newGetWorkOrder(op int) (*workOrder, error) {
 
 	getPending++
 	wo := allocWO(op)
-	wo.objName = objnameGetter.Pick()
-
-	if runParams.archParams.pct > 0 {
-		wo.objName, wo.archpath = decodeArchName(wo.objName)
-	}
+	name := objnameGetter.Pick()
+	wo.objName, wo.archpath = decodeArchName(name)
 
 	return wo, nil
 }
@@ -518,7 +515,14 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 
 	getBatchPending++
 	wo := allocGetBatchWO(runParams.getBatchSize)
-	wo.moss.In = objnameGetter.PickBatch(wo.moss.In)
+
+	var i int
+	objnameGetter.IterBatch(runParams.getBatchSize, func(name string) bool {
+		wo.moss.In[i].ObjName, wo.moss.In[i].ArchPath = decodeArchName(name)
+		i++
+		return true
+	})
+
 	wo.moss.ContinueOnErr = runParams.continueOnErr
 
 	return wo, nil

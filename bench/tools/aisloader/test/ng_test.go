@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -74,21 +73,21 @@ func TestRandomUnique(t *testing.T) {
 	ng := &namegetter.RandomUnique{}
 	checkGetsAllOncePerEpoch(t, ng, "RandomUnique")
 	checkSmallSampleRandomness(t, ng, "RandomUnique")
-	checkPickBatchUniqueness(t, ng, "RandomUnique")
+	checkIterBatchUniqueness(t, ng, "RandomUnique")
 }
 
 func TestPermShuffle(t *testing.T) {
 	ng := &namegetter.PermShuffle{}
 	checkGetsAllOncePerEpoch(t, ng, "PermShuffle")
 	checkSmallSampleRandomness(t, ng, "PermShuffle")
-	checkPickBatchUniqueness(t, ng, "PermShuffle")
+	checkIterBatchUniqueness(t, ng, "PermShuffle")
 }
 
 func TestPermAffinePrime(t *testing.T) {
 	ng := &namegetter.PermAffinePrime{}
 	checkGetsAllOncePerEpoch(t, ng, "PermAffinePrime")
 	checkSmallSampleRandomness(t, ng, "PermAffinePrime")
-	checkPickBatchUniqueness(t, ng, "PermAffinePrime")
+	checkIterBatchUniqueness(t, ng, "PermAffinePrime")
 }
 
 //
@@ -136,11 +135,11 @@ func checkSmallSampleRandomness(t *testing.T, getter namegetter.Basic, name stri
 	tassert.Fatal(t, !reflect.DeepEqual(s1, s2), name+" sequence appears deterministic with same RNG instance")
 }
 
-// ensures PickBatch:
-// - returns <= requested
+// ensures IterBatch:
+// - yields <= requested
 // - tolerates epoch rollover mid-batch and across batches
 // - guarantees per-epoch uniqueness (we track epochs via seen-set resets)
-func checkPickBatchUniqueness(t *testing.T, getter namegetter.Basic, name string) {
+func checkIterBatchUniqueness(t *testing.T, getter namegetter.Basic, name string) {
 	t.Helper()
 
 	rnd := cos.NowRand()
@@ -149,18 +148,13 @@ func checkPickBatchUniqueness(t *testing.T, getter namegetter.Basic, name string
 	seen := make(map[string]struct{}, objNamesSize)
 	epochs := 0
 
-	buf := make([]apc.MossIn, batchSize)
 	maxBatches := (objNamesSize/batchSize + 8)
 	for b := 0; epochs < 1 && b < maxBatches; b++ {
-		out := getter.PickBatch(buf)
+		count := 0
+		getter.IterBatch(batchSize, func(objName string) bool {
+			count++
 
-		if len(out) > batchSize {
-			t.Fatalf("%s PickBatch len=%d exceeds requested=%d", name, len(out), batchSize)
-		}
-		for i := range out {
-			obj := out[i].ObjName
-
-			if _, dup := seen[obj]; dup {
+			if _, dup := seen[objName]; dup {
 				// Count a completed epoch if we actually covered all N; then reset.
 				if len(seen) == objNamesSize {
 					epochs++
@@ -168,15 +162,21 @@ func checkPickBatchUniqueness(t *testing.T, getter namegetter.Basic, name string
 				seen = make(map[string]struct{}, objNamesSize)
 			}
 
-			seen[obj] = struct{}{}
+			seen[objName] = struct{}{}
 
 			if len(seen) == objNamesSize {
 				epochs++
 				seen = make(map[string]struct{}, objNamesSize)
 			}
+
+			return true
+		})
+
+		if count > batchSize {
+			t.Fatalf("%s IterBatch yielded=%d exceeds requested=%d", name, count, batchSize)
 		}
 	}
 	if epochs < 1 {
-		t.Fatalf("%s PickBatch did not complete a full epoch (epochs=%d)", name, epochs)
+		t.Fatalf("%s IterBatch did not complete a full epoch (epochs=%d)", name, epochs)
 	}
 }

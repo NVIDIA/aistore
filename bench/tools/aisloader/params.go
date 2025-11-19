@@ -211,7 +211,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.numWorkers, "numworkers", 10, "number of goroutine workers operating on AIS in parallel")
 	f.UintVar(&p.numEpochs, "epochs", 0, "number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
 	f.UintVar(&p.permShuffleMax, "perm-shuffle-max", 100_000, "max names for shuffle-based name-getter (above this uses O(1) memory affine)")
-	f.IntVar(&p.putPct, "pctput", 0, "percentage of PUTs in the aisloader-generated workload")
+	f.IntVar(&p.putPct, "pctput", 0, "percentage of PUTs in the aisloader-generated workload (see also: '-arch.pct')")
 	f.IntVar(&p.updateExistingPct, "pctupdate", 0,
 		"percentage of GET requests that are followed by a PUT \"update\" (i.e., creation of a new version of the object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "maximum number of objects to PUT")
@@ -236,7 +236,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.IntVar(&p.archParams.numFiles, "arch.num-files", 0, "number of archived files per shard (PUT only; default gets computed from sizes)")
 	f.StringVar(&p.archParams.minSzStr, "arch.minsize", "", "minimum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.archParams.maxSzStr, "arch.maxsize", "", "maximum file size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.IntVar(&p.archParams.pct, "arch.pct", 0, "when writing: percentage of shards vs plain objects; when reading: include archived files in the GET pool (ratio is ultimately determined by dataset)")
+	f.IntVar(&p.archParams.pct, "arch.pct", 0, "percentage of PUTs that create shards (0-100); does _not_ affect GET operations")
 
 	// ============ Naming ============
 	f.StringVar(&p.subDir, "subdir", "", "For GET requests, '-subdir' is a prefix that may or may not be an actual _virtual directory_;\n"+

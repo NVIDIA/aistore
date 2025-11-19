@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -127,7 +128,7 @@ func (mgr *MissingExtManager) exclude(recs *shard.Records) (*shard.Records, erro
 // difference finds the differences between two sets: `want` and `have`.
 // returns `extra` (extensions in `have` but not in `want`) and `missing` (extensions in `want` but not in `have`).
 func difference(want cos.StrSet, have []*shard.RecordObj) (extra, missing cos.StrSet) {
-	missing = want.Clone()
+	missing = maps.Clone(want)
 	extra = cos.NewStrSet()
 	for _, obj := range have {
 		if !missing.Contains(obj.Extension) {
