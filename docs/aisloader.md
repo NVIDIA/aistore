@@ -28,8 +28,9 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
 
 - [Setup](#Setup)
 - [Command line Options](#command-line-options)
-    - [Often used options explanation](#often-used-options-explanation)
+- [Assorted command line](#assorted-command-line)
 - [Environment variables](#environment-variables)
+- [Archive Workload](#archive-workload)
 - [Examples](#examples)
 - [Collecting stats](#collecting-stats)
     - [Grafana](#grafana)
@@ -55,67 +56,80 @@ See the following [script](https://github.com/NVIDIA/aistore/blob/main/bench/too
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
-### Options via AIS Loader flags
-
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
-| -batchsize | `int` | Batch size to list and delete | `100` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
-| -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
-| -cached | `bool` | list in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
-| -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash`|
-| -cleanup | `bool` | when true, remove bucket upon benchmark termination | `n/a` (required) |
-| -dry-run | `bool` | show the entire set of parameters that aisloader will use when actually running | `false` |
-| -duration | `string`, `int` | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do | `1m` |
-| -epochs | `int` |  Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `1`|
-| -etl | `string` | Built-in ETL, one-of: `tar2tf`, `md5`, or `echo`. Each object that `aisloader` GETs undergoes the selected transformation. See also: `-etl-spec` option. | `""` |
-| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification. Each object that `aisloader` GETs will undergo this user-defined transformation. See also: `-etl` option. | `""` |
-| -getconfig | `bool` | when true, generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
-| -getloaderid | `bool` | when true, print stored/computed unique loaderID aka aisloader identifier and exit | `false` |
+| -bucket | `string` | Bucket name or bucket URI. If empty, aisloader generates a new random bucket name | `""` |
+| -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
+| -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash` |
+| -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
+| -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
+| -duration | `duration` | Benchmark duration (0 - run forever or until Ctrl-C). If not specified and totalputsize > 0, runs until totalputsize reached | `1m` |
+| -epochs | `int` | Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `0` |
+| -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
+| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification | `""` |
+| -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
+| -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
+| -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
+| -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
 | -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
-| -json | `bool` | when true, print the output in JSON | `false` |
+| -json | `bool` | When true, print the output in JSON | `false` |
+| -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
+| -list-dirs | `bool` | List virtual subdirectories (remote buckets only) | `false` |
 | -loaderid | `string` | ID to identify a loader among multiple concurrent instances | `0` |
 | -loaderidhashlen | `int` | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum | `0` |
-| -loadernum | `int` | total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
+| -loadernum | `int` | Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
 | -maxputs | `int` | Maximum number of objects to PUT | `0` |
-| -maxsize | `int` | Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1GiB` |
-| -minsize | `int` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
+| -maxsize | `string` | Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1GiB` |
+| -minsize | `string` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
+| -multipart-chunks | `int` | Number of chunks for multipart upload (0 = disabled, >0 = use multipart with specified chunks) | `0` |
+| -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
 | -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
-| -pctput | `int` | Percentage of PUTs in the aisloader-generated workload | `0` |
+| -pctmultipart | `int` | Percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0) | `0` |
+| -pctput | `int` | Percentage of PUTs in the aisloader-generated workload (see also: `-arch.pct`) | `0` |
 | -pctupdate | `int` | Percentage of GET requests that are followed by a PUT "update" (i.e., creation of a new version of the object) | `0` |
-| -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
-| -port | `int` | Port number for proxy server | `8080` |
-| -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp", "aws", "azure", "oci" for Google, Amazon, Azure, and Oracle clouds, respectively | `ais` |
-| -putshards | `int` | Spread generated objects over this many subdirectories (max 100k) | `0` |
+| -perm-shuffle-max | `int` | Max names for shuffle-based name-getter (above this uses O(1) memory affine) | `100000` |
+| -port | `string` | AIS proxy/gateway port | `8080` |
+| -provider | `string` | `ais` for AIS bucket, `aws`, `azure`, `gcp`, `oci` for Amazon, Azure, Google, and Oracle clouds respectively | `ais` |
+| -putshards | `int` | **Deprecated** - use `-num-subdirs` instead | `0` |
 | -quiet | `bool` | When starting to run, do not print command line arguments, default settings, and usage examples | `false` |
-| -randomname | `bool` | when true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
-| -readertype | `string` | Type of reader: sg(default). Available: `sg`, `file`, `rand`, `tar` | `sg` |
-| -readlen | `string`, `int` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
-| -readoff | `string`, `int` | Read range offset (can contain multiplicative suffix K, MB, GiB, etc.) | `""` |
-| -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no aistore) | `""` |
-| -s3profile | `string` | Other then default S3 config profile referencing alternative credentials | `""` |
-| -seed | `int` | Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds) | `0` |
-| -skiplist | `bool` | Whether to skip listing objects in a bucket before running PUT workload | `false` |
-| -filelist | `string` | Local or locally accessible text file file containing object names (for subsequent reading) | `""` |
-| -stats-output | `string` | filename to log statistics (empty string translates as standard output (default) | `""` |
-| -statsdip | `string` | StatsD IP address or hostname | `localhost` |
-| -statsdport | `int` | StatsD UDP port | `8125` |
-| -statsdprobe | `bool` | Test-probe StatsD server prior to benchmarks | `true` |
-| -statsinterval | `int` | Interval in seconds to print performance counters; 0 - disabled | `10` |
-| -subdir | `string` | For GET requests, `-subdir` is a prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT, `-subdir` is a virtual destination directory for all aisloader-generated objects. See closely related [CLI](/docs/cli/object.md) `--prefix` option. | `""` |
-| -test-probe | `bool`| Test StatsD server prior to running benchmarks | `false` |
-| -timeout | `string` | Client HTTP timeout; `0` = infinity) | `10m` |
+| -randomname | `bool` | When true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
+| -randomproxy | `bool` | When true, select random gateway ("proxy") to execute each I/O request | `false` |
+| -readertype | `string` | Type of reader: `sg` (default), `file`, `rand`, `tar` | `sg` |
+| -readlen | `string` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no AIStore) | `""` |
+| -s3profile | `string` | Other than default S3 config profile referencing alternative credentials | `""` |
+| -s3-use-path-style | `bool` | Use older path-style addressing (e.g., `https://s3.amazonaws.com/BUCKET/KEY`). Should only be used with `-s3endpoint` | `false` |
+| -seed | `int` | Random seed to achieve deterministic reproducible results (0 = use current time in nanoseconds) | `0` |
+| -skiplist | `bool` | When true, skip listing objects in a bucket before running 100% PUT workload | `false` |
+| -stats-output | `string` | Filename to log statistics (empty string = standard output) | `""` |
+| -statsdip | `string` | **Deprecated** - StatsD IP address or hostname | `localhost` |
+| -statsdport | `int` | **Deprecated** - StatsD UDP port | `8125` |
+| -statsdprobe | `bool` | **Deprecated** - Test-probe StatsD server prior to benchmarks | `false` |
+| -statsinterval | `int` | Interval in seconds to print performance counters (0 = disabled) | `10` |
+| -stoppable | `bool` | When true, allow termination via Ctrl-C | `false` |
+| -subdir | `string` | For GET: prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT: virtual destination directory for all generated objects. See [CLI `--prefix`](/docs/cli/object.md) | `""` |
+| -timeout | `duration` | Client HTTP timeout (0 = infinity) | `10m` |
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
-| -tokenfile | `string` | Authentication token (FQN) | `""`|
-| -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
+| -tokenfile | `string` | Authentication token (FQN) | `""` |
+| -totalputsize | `string` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix) (0 = no limit) | `0` |
 | -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
-| -uniquegets | `bool` | when true, GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
+| -uniquegets | `bool` | When true, GET objects randomly and equally (i.e., avoid getting some objects more frequently than others) | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
-| -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |
+| -verifyhash | `bool` | Checksum-validate GET: recompute object checksums and validate against the one received with GET metadata | `false` |
+| **Archive/Shard Options** | | | |
+| -arch.format | `string` | Archive format (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`) | `.tar` |
+| -arch.minsize | `string` | Minimum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -arch.maxsize | `string` | Maximum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
+| -arch.pct | `int` | Percentage of PUTs that create shards (0-100); does NOT affect GET operations | `0` |
+| -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
 
-### Often used options explanation
+## Assorted command line
 
-#### Duration
+### Duration
 
 The loads can run for a given period of time (option `-duration <duration>`) or until the specified amount of data is generated (option `-totalputsize=<total size in KBs>`).
 
@@ -129,7 +143,7 @@ $ aisloader -bucket=abc -provider=ais -duration 2h -totalputsize=4000000 -pctput
 
 The above will run for two hours or until it writes around 4GB data into the bucket, whatever comes first.
 
-#### Write vs Read
+### Write vs Read
 
 You can choose a percentage of writing (versus reading) by setting the option `-pctput=<put percentage>`.
 
@@ -149,7 +163,7 @@ The duration in both examples above is set to 5 minutes.
 
 > To test 100% read (`-pctput=0`), make sure to fill the bucket beforehand.
 
-#### Read range
+### Read range
 
 The loader can read the entire object (default) **or** a range of object bytes.
 
@@ -165,7 +179,7 @@ $ aisloader -bucket=ais://abc -duration 5m -cleanup=false -readoff=1024 -readlen
 
 The test (above) will run for 5 minutes and will not "cleanup" after itself (next section).
 
-#### Cleanup
+### Cleanup
 
 **NOTE**: `-cleanup` is a mandatory option defining whether to destroy bucket upon completion of the benchmark.
 
@@ -186,13 +200,13 @@ If you just need to clean up old data prior to running a test, run the loader wi
 $ aisloader -bucket=<bucket to cleanup> -duration 0s -totalputsize=0
 ```
 
-#### Object size
+### Object size
 
 For the PUT workload the loader generates randomly-filled objects. But what about object sizing?
 
 By default, object sizes are randomly selected as well in the range between 1MiB and 1GiB. To set preferred (or fixed) object size(s), use the options `-minsize=<minimal object size in KiB>` and `-maxsize=<maximum object size in KiB>`
 
-#### Setting bucket properties
+### Setting bucket properties
 
 Before starting a test, it is possible to set `mirror` or `EC` properties on a bucket (for background, please see [storage services](/docs/storage_svcs.md)).
 
@@ -235,6 +249,8 @@ For example: `8M` would specify 8 MiB.
 The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB.
 Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
 
+---
+
 ## Environment variables
 
 | Environment Variable | Type | Description |
@@ -262,6 +278,104 @@ In addition, environment can be used to specify client-side TLS (aka, HTTPS) con
 See also:
 
 * [HTTPS: loading, reloading, and generating certificates; switching cluster between HTTP and HTTPS](/docs/https.md)
+
+---
+
+## Archive Workload
+
+AIStore supports packing many small files into *shards* (TAR, ZIP, TGZ, LZ4-TAR) to improve performance and reduce metadata overhead.
+
+AISLoader can benchmark both **archive creation (PUT)** and **reading individual files from existing shards (GET)**.
+
+### Archive Parameters
+
+| Parameter | Description |
+|----------|-------------|
+| `-arch.pct` | Percentage of PUTs that create shards (0–100). Does **not** affect GET operations. `100` = all PUTs create shards; `30` = 30% shards, 70% plain objects. |
+| `-arch.format` | Archive format: `.tar` (default), `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`. |
+| `-arch.num-files` | Files per shard for PUT. `0` = auto-computed from `arch.minsize` / `arch.maxsize`. |
+| `-arch.minsize` | Minimum size of files inside shards (supports multiplicative suffixes). |
+| `-arch.maxsize` | Maximum size of files inside shards (supports multiplicative suffixes). |
+
+When the bucket contains shards, aisloader automatically:
+1. Lists objects with archive expansion enabled
+2. Detects archived files (e.g., `shard-987.tar/file-042.bin`)
+3. Reads from them using the `?archpath=` API parameter
+
+The displayed statistics will show whether objects are plain or archived, e.g.:
+
+```console
+Found 108,959 plain objects and 1,089,590 archived files (91% archived)
+```
+
+### Usage Examples
+
+#### **Create 100% shards (each containing 10 files)**
+```console
+$ aisloader -bucket=ais://abc -pctput=100 -arch.pct=100 \
+            -arch.num-files=10 -arch.minsize=1K -arch.maxsize=100K \
+            -duration=5m -cleanup=false
+````
+
+All PUTs create shards; each shard contains 10 files between 1KB and 100KB.
+
+#### **Mixed workload: 30% shards, 70% plain objects**
+
+```console
+$ aisloader -bucket=ais://abc -pctput=100 -arch.pct=30 \
+            -arch.num-files=10 -arch.minsize=1K -arch.maxsize=100K \
+            -duration=5m -cleanup=false
+```
+
+30% of PUT operations create shards; the rest create plain objects.
+
+#### **Read from existing shards**
+
+```console
+$ aisloader -bucket=ais://abc -pctput=0 -duration=1h -cleanup=false
+```
+
+When the target bucket contains shards, aisloader automatically:
+
+1. Lists objects with archive expansion enabled
+2. Identifies archived files (e.g., `photos.tar/00042.jpg`)
+3. Issues GET requests using `?archpath=` to retrieve individual files inside shards
+
+Example startup message:
+
+```console
+Found 108,959 plain objects and 1,089,590 archived files (91% archived)
+```
+
+#### **Create shards using a specific archive format**
+
+```console
+$ aisloader -bucket=ais://abc -pctput=100 -arch.pct=100 -arch.format=.tgz -arch.num-files=20 -duration=5m -cleanup=false
+```
+
+### Performance Considerations
+
+* **Small-file workloads benefit greatly** from sharding: fewer large objects → fewer metadata lookups → higher throughput.
+* **Archived GETs add CPU overhead**, especially for compressed formats (`.tgz`, `.tar.lz4`).
+* **Throughput vs. operation rate tradeoff**:
+
+  * Large plain objects → high MB/s
+  * Many tiny files inside shards → lower MB/s but similar (or higher) operations/sec
+
+Example typical comparison:
+
+* Reading 16KB plain objects: **~250 MiB/s**
+* Reading 1KB archived files: **~13 MiB/s**, but with comparable GET operations/sec
+
+### Limitations
+
+* **Multipart uploads** of shards are not yet supported (requires streaming chunk writer).
+* **Direct S3 access** (`-s3endpoint`) does not support archive operations (sharding requires AIStore).
+
+For more information about AIStore’s archive/shard support, see
+* [AIStore Archive Documentation](/docs/archive.md).
+
+---
 
 ## Examples
 
@@ -387,7 +501,7 @@ For the most recently updated command-line options and examples, please run `ais
 **16**. PUT TAR files with random files inside into a cluster:
 
     ```console
-    $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
+    $ aisloader -bucket=ais://my_bucket -duration=10s -pctput=100 -arch.pct=100 -arch.num-files=10 -arch.minsize=1K -arch.maxsize=10K -cleanup=false
     ```
 
 **17**. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
@@ -412,6 +526,45 @@ For the most recently updated command-line options and examples, please run `ais
     $ ais ls ais://nnn --props name -H > /tmp/a.txt
     $ aisloader -bucket=ais://nnn -duration 1h -numworkers=30 -pctput=0 -filelist /tmp/a.txt -cleanup=false
     ```
+
+**21**. GetBatch example: read random batches each consisting of 64 archived files
+
+```console
+    $ ais ls ais://nnn --summary
+    NAME             PRESENT         OBJECTS         SIZE (apparent, objects, remote)        USAGE(%)
+    ais://nnn        yes             108959 0        1.67GiB 1.66GiB 0B                      0%
+
+    $ aisloader -bucket=ais://nnn -pctput=0 -duration=90m -numworkers=4 -cleanup=false -get-batchsize=64 --quiet -epochs 7 -cont-on-err
+    Found 1,089,590 archived files
+
+    Runtime configuration:
+    {
+       "proxy": "http://ais-endpoint:51080",
+       "bucket": "ais://nnn",
+       "duration": "1h30m0s",
+       "# workers": 4,
+       "stats interval": "10s",
+       "GET(batch): batch size": 64,
+       "archive (shards)": {
+          "% workload": 100,
+          "format": ".tar",
+          "minimum file size": 1024,
+          "maximum file size": 1048576
+       },
+       "name-getter": "unique epoch-based",
+       "cleanup": false
+    }
+
+    Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
+    14:16:45  GBT   6,602 (6,602)           412.6MiB (412.6MiB)     4.399ms    6.030ms    22.278ms          41.26MiB/s (41.26MiB/s) -
+    14:16:55  GBT   6,397 (12,999)          399.8MiB (812.4MiB)     4.566ms    6.225ms    17.136ms          39.98MiB/s (40.62MiB/s) -
+    14:17:05  GBT   6,201 (19,200)          387.6MiB (1.2GiB)       4.609ms    6.424ms    22.505ms          38.75MiB/s (40.00MiB/s) -
+    14:17:15  GBT   6,127 (25,327)          382.9MiB (1.5GiB)       4.821ms    6.500ms    21.599ms          38.30MiB/s (39.57MiB/s) -
+    14:17:25  GBT   6,153 (31,480)          384.6MiB (1.9GiB)       4.765ms    6.473ms    23.135ms          38.46MiB/s (39.35MiB/s) -
+    ...
+```
+
+---
 
 ## Collecting stats
 
