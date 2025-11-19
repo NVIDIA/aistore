@@ -54,7 +54,7 @@ GetBatch is typically called from:
 
 1. Go services via the [`api/ml.go`](https://github.com/NVIDIA/aistore/blob/main/api/ml.go) client bindings, and
 2. Python via the [AIStore SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk/batch), and
-3. Third-party tooling such as [Lhotse](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/dataset/input_strategies.py).
+3. Third-party tooling such as [Lhotse](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/ais/batch_loader.py).
 
 The respective Go and Python-based  usage examples follow below, in the sections that include:
 
@@ -66,12 +66,12 @@ The respective Go and Python-based  usage examples follow below, in the sections
 
 | Term | Description |
 |------|-------------|
-| **DT (Designated Target)** | Randomly selected AIS target that coordinates and assembles the get-batch response |
+| **Designated Target (DT)** | Randomly selected AIS target that coordinates and assembles the get-batch response |
 | **Work Item (WI)** | A single get-batch request being processed; implementation-wise, each request becomes one work item |
 | **Shard** | An archive file (TAR/ZIP/TGZ/LZ4) stored in (or accessible by) the cluster and containing multiple files, typically used for dataset distribution |
 | **Soft Error** | Recoverable error (missing object, transient network issue) that doesn't fail the entire request when `coer: true` |
 | **Hard Error** | Unrecoverable failure that terminates the work item (e.g., 429 rejection, fatal errors) |
-| **GFN (Get-From-Neighbor)** | Fallback mechanism to retrieve data from peer targets when primary location fails |
+| **Get-From-Neighbor (GFN)** | Fallback mechanism to retrieve data from peer targets when primary location fails |
 | **RxWait** | Time spent waiting to receive data from peer targets (coordination/network delay) |
 
 ## When to Use GetBatch
@@ -203,7 +203,7 @@ GetBatch is not limited to the Go API - it is also integrated with Python data l
 
 ### 1. AIStore Python SDK
 
-The [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) provides a `Batch` class that wraps the `/v1/ml/moss` endpoint with a Pythonic fluent API.
+The [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk) provides a [`Batch`](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk/batch) class that wraps the `/v1/ml/moss` endpoint with a Pythonic fluent API.
 
 **Key features:**
 - Pydantic models (`MossReq`, `MossIn`, `MossOut`) that mirror Go structs exactly
@@ -233,17 +233,19 @@ bucket = client.bucket("training-data")
 
 # Simple batch: list of object names
 batch = client.batch(["file1.bin", "file2.bin"], bucket)
-for moss_out, content in batch.get():
-    print(f"Got {moss_out.obj_name}: {len(content)} bytes")
+for obj_info, content in batch.get():
+    print(f"Got {obj_info.obj_name}: {len(content)} bytes")
 
 # Advanced: shard extraction with tracking
 batch = client.batch(bucket=bucket)
+# Extract specific files from archives
 batch.add("shard-0000.tar", archpath="images/photo.jpg")
-batch.add("shard-0001.tar", archpath="images/photo.jpg", opaque=b"batch-id-42")
+# Add opaque data for tracking/correlation
+batch.add("shard-0001.tar", archpath="images/photo.jpg", opaque=b"batch-id-42") 
 
 # Stream results
-for moss_out, content in batch.get():
-    if not moss_out.err_msg:  # Check for errors
+for obj_info, content in batch.get():
+    if not obj_info.err_msg:  # Check for errors
         process(content)
 ```
 
@@ -260,7 +262,7 @@ See [Python SDK Batch API](https://github.com/NVIDIA/aistore/tree/main/python/ai
 
 ### 2. Lhotse Integration
 
-[Lhotse](https://github.com/lhotse-speech/lhotse) is a speech/audio data toolkit used by NVIDIA NeMo and other frameworks. It includes native AIStore support via `AISBatchLoader`.
+[Lhotse](https://github.com/lhotse-speech/lhotse) is a speech/audio data toolkit used by NVIDIA NeMo and other frameworks. It includes native AIStore support via [`AISBatchLoader`](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/ais/batch_loader.py).
 
 **How it works:**
 
@@ -270,25 +272,22 @@ See [Python SDK Batch API](https://github.com/NVIDIA/aistore/tree/main/python/ai
 4. **Archive Extraction** - Automatically extracts files from sharded archives (TAR/TGZ)
 5. **In-Memory Injection** - Returns CutSet with data loaded into memory
 
-**Usage in DataLoader:**
+**Usage:**
 ```python
-from lhotse.dataset.input_strategies import AudioSamples
+from lhotse.ais import AISBatchLoader
 
-# Enable AIStore batch loading (requires AIS_ENDPOINT environment variable)
-audio_strategy = AudioSamples(use_batch_loader=True)
+# Create AIStore BatchLoader
+ais_batch_loader = AISBatchLoader()
 
-# PyTorch DataLoader with Lhotse
-dataloader = DataLoader(
-    dataset=lhotse_dataset,
-    batch_size=32,
-    collate_fn=audio_strategy
-)
+# Load entire dev cutset from AIStore
+loaded_cut_set = ais_batch_loader(cut_set)
 
-# Each batch triggers one GetBatch request to AIStore
-for batch in dataloader:
-    # All audio already fetched and in memory
-    train(batch)
+# Pass the loaded cut-set to DataLoaders
 ```
+
+
+**See also:**  
+A complete, runnable example for batch loading audios from AIStore with Lhotse is available in [here](https://github.com/lhotse-speech/lhotse/blob/master/examples/06-train-ais-batch.ipynb):
 
 **Archive extraction example:**
 
@@ -310,8 +309,11 @@ Lhotse CutSet => AISBatchLoader => AIStore Python SDK => GetBatch API => Trainin
 - **Zero client-side decompression** overhead
 
 See also:
-- [Lhotse AIStore Integration](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/ais/batch_loader.py)
 - [AIStore in NeMo workflows](https://docs.nvidia.com/nemo-framework/) (data loading section)
+
+### 3. PyTorch Integration
+
+The [AIStore PyTorch Plugin](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) provides `AISBatchIterDataset`, an iterable-style dataset that uses GetBatch API for efficient multi-worker data loading with automatic batching and streaming support.
 
 ---
 
