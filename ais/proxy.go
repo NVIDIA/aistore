@@ -265,19 +265,12 @@ func (p *proxy) Run() error {
 }
 
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	res, err := p.join(nil /*htext*/, primaryURLs...)
-	if err != nil {
-		return status, err
+	var cm *cluMeta
+	cm, status, err = p.htrun.joinCluster(nil /*htext*/, primaryURLs)
+
+	if err == nil && cm != nil {
+		err = p.recvCluMeta(cm, action, "")
 	}
-	defer freeCR(res)
-	if res.err != nil {
-		return res.status, res.err
-	}
-	// not being sent at cluster startup and keepalive
-	if len(res.bytes) == 0 {
-		return
-	}
-	err = p.recvCluMetaBytes(action, res.bytes, "")
 	return
 }
 
@@ -347,15 +340,6 @@ func (p *proxy) gojoin(config *cmn.Config) {
 	nlog.Infoln(p.String(), "is ready(?)")
 }
 
-func (p *proxy) recvCluMetaBytes(action string, body []byte, sender string) error {
-	var cm cluMeta
-	if err := jsoniter.Unmarshal(body, &cm); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, p, "reg-meta", cos.BHead(body), err)
-	}
-	return p.recvCluMeta(&cm, action, sender)
-}
-
-// TODO: unify w/ t.recvCluMetaBytes
 func (p *proxy) recvCluMeta(cm *cluMeta, action, sender string) error {
 	var (
 		msg  = p.newAmsgStr(action, cm.BMD)
@@ -2547,7 +2531,13 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sender := r.Header.Get(apc.HdrSenderName)
-	if err := p.recvCluMetaBytes(apc.ActAdminJoinProxy, body, sender); err != nil {
+
+	cm, err := p.htrun.recvCluMeta(body)
+	if err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	if err := p.recvCluMeta(cm, apc.ActAdminJoinProxy, sender); err != nil {
 		p.writeErr(w, r, err)
 	}
 }

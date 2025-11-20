@@ -30,8 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -46,35 +44,21 @@ type delb struct {
 }
 
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	res, err := t.join(t /*htext*/, primaryURLs...)
-	if err != nil {
-		return status, err
+	var cm *cluMeta
+	cm, status, err = t.htrun.joinCluster(t /*htext*/, primaryURLs)
+
+	if err == nil && cm != nil {
+		err = t.recvCluMeta(cm, action, "")
 	}
-	defer freeCR(res)
-	if res.err != nil {
-		return res.status, res.err
-	}
-	// not being sent at cluster startup and keepalive
-	if len(res.bytes) == 0 {
-		return
-	}
-	err = t.recvCluMetaBytes(action, res.bytes, "")
 	return
 }
 
-const tagCM = "recv-clumeta"
-
-// TODO: unify w/ p.recvCluMeta
 // do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
-func (t *target) recvCluMetaBytes(action string, body []byte, sender string) error {
+func (t *target) recvCluMeta(cm *cluMeta, action, sender string) error {
 	var (
-		cm   cluMeta
 		errs []error
 		self = t.String() + ":"
 	)
-	if err := jsoniter.Unmarshal(body, &cm); err != nil {
-		return fmt.Errorf(cmn.FmtErrUnmarshal, t, tagCM, cos.BHead(body), err)
-	}
 	if cm.PrimeTime == 0 {
 		err := errors.New(self + " zero prime_time (non-primary responded to an attempt to join?")
 		nlog.Errorln(err)
@@ -540,8 +524,13 @@ func (t *target) adminJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cm, err := t.htrun.recvCluMeta(body)
+	if err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	sender := r.Header.Get(apc.HdrSenderName)
-	if err := t.recvCluMetaBytes(apc.ActAdminJoinTarget, body, sender); err != nil {
+	if err := t.recvCluMeta(cm, apc.ActAdminJoinTarget, sender); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

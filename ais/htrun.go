@@ -64,6 +64,8 @@ To troubleshoot:
 
 const dfltDetail = "[control-plane]"
 
+const tagCM = "recv-clumeta"
+
 // extra or extended state - currently, target only
 type htext interface {
 	interruptedRestarted() (bool, bool)
@@ -188,6 +190,14 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.PrimeTime = time.Now().UnixNano()
 	}
 	return cm, nil
+}
+
+func (h *htrun) recvCluMeta(body []byte) (*cluMeta, error) {
+	var cm cluMeta
+	if err := jsoniter.Unmarshal(body, &cm); err != nil {
+		return nil, fmt.Errorf(cmn.FmtErrUnmarshal, h, tagCM, cos.BHead(body), err)
+	}
+	return &cm, nil
 }
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
@@ -1910,7 +1920,25 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*toke
 //   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *htrun) join(htext htext, contactURLs ...string) (*callResult, error) {
+
+func (h *htrun) joinCluster(htext htext, primaryURLs []string) (cm *cluMeta, status int, err error) {
+	res, err := h.join(htext, primaryURLs)
+	if err != nil {
+		return nil, status, err
+	}
+	defer freeCR(res)
+	if res.err != nil {
+		return nil, res.status, res.err
+	}
+	// not being sent at cluster startup and keepalive
+	if len(res.bytes) == 0 {
+		return nil, 0, nil
+	}
+	cm, err = h.recvCluMeta(res.bytes)
+	return cm, 0, err
+}
+
+func (h *htrun) join(htext htext, contactURLs []string) (*callResult, error) {
 	var (
 		config             = cmn.GCO.Get()
 		_, primaryURL, psi = h._primus(nil, config)
