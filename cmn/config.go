@@ -662,10 +662,10 @@ type (
 		OIDC *OIDCConf `json:"oidc,omitempty"`
 	}
 	AuthConfToSet struct {
-		Enabled        *bool                   `json:"enabled,omitempty"`
-		Signature      *AuthSignatureConfToSet `json:"signature,omitempty"`
-		RequiredClaims *RequiredClaimsConf     `json:"required_claims,omitempty"`
-		OIDC           *OIDCConf               `json:"oidc,omitempty"`
+		Enabled        *bool                    `json:"enabled,omitempty"`
+		Signature      *AuthSignatureConfToSet  `json:"signature,omitempty"`
+		RequiredClaims *RequiredClaimsConfToSet `json:"required_claims,omitempty"`
+		OIDC           *OIDCConfToSet           `json:"oidc,omitempty"`
 	}
 
 	AuthSignatureConf struct {
