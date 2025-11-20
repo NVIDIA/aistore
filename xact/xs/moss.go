@@ -589,13 +589,13 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 		roc, err = lom.NewDeferROC(false /*loaded*/)
 	)
 	mopaque := &mossOpaque{
-		WID:   wid,
-		Oname: lom.ObjName,
-		Index: int32(index),
+		wid:   wid,
+		oname: lom.ObjName,
+		index: int32(index),
 	}
 	if err != nil {
-		mopaque.Missing = true
-		mopaque.Emsg = err.Error()
+		mopaque.missing = true
+		mopaque.emsg = err.Error()
 		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 		oah = &cmn.ObjAttrs{}
 		roc = nil
@@ -631,24 +631,24 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch, ar
 		roc     cos.ReadOpenCloser
 		oah     cos.SimpleOAH
 		mopaque = &mossOpaque{
-			WID:   wid,
-			Oname: lom.ObjName + "/" + archpath,
-			Index: int32(index),
+			wid:   wid,
+			oname: lom.ObjName + "/" + archpath,
+			index: int32(index),
 		}
 	)
 	nameInArch += cos.PathSeparator + archpath
 
 	lh, err := lom.NewHandle(false /*loaded*/)
 	if err != nil {
-		mopaque.Missing = true
-		mopaque.Emsg = err.Error()
+		mopaque.missing = true
+		mopaque.emsg = err.Error()
 		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 	} else {
 		csl, err := lom.NewArchpathReader(lh, archpath, "" /*mime*/)
 		if err != nil {
 			nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
-			mopaque.Missing = true
-			mopaque.Emsg = err.Error()
+			mopaque.missing = true
+			mopaque.emsg = err.Error()
 			cos.Close(lh)
 			lh = nil
 		} else {
@@ -757,11 +757,11 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	if err != nil {
 		return err
 	}
-	a, loaded := r.pending.Load(mopaque.WID)
+	a, loaded := r.pending.Load(mopaque.wid)
 	if !loaded {
 		// stale or unknown WID: drop quietly
 		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infof("%s: wi %q not pending - dropping", r.Name(), mopaque.WID)
+			nlog.Infof("%s: wi %q not pending - dropping", r.Name(), mopaque.wid)
 		}
 		return nil
 	}
@@ -775,9 +775,9 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 		return nil
 	}
 
-	debug.Assert(mopaque.WID == wi.wid)
+	debug.Assert(mopaque.wid == wi.wid)
 	debug.Assert(wi.receiving())
-	return wi.recvObj(int(mopaque.Index), hdr, reader, mopaque)
+	return wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
 }
 
 func (*mossFactory) Kind() string     { return apc.ActGetBatch }
@@ -1447,11 +1447,11 @@ func (wi *basewi) flushRx() error {
 		wi.recv.mtx.Unlock() //--------------
 
 		switch {
-		case entry.mopaque.Missing:
+		case entry.mopaque.missing:
 			debug.Assert(strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/"), entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
 		default:
-			debug.Assert(entry.mopaque.Emsg == "", entry.mopaque.Emsg)
+			debug.Assert(entry.mopaque.emsg == "", entry.mopaque.emsg)
 			size = entry.sgl.Len()
 			oah := cos.SimpleOAH{Size: size}
 			err = wi.aw.Write(entry.nameInArch, oah, entry.sgl)
@@ -1469,10 +1469,10 @@ func (wi *basewi) flushRx() error {
 			out := apc.MossOut{
 				Bucket:   entry.bucket,
 				Provider: in.Provider, // (just copying)
-				ObjName:  entry.mopaque.Oname,
+				ObjName:  entry.mopaque.oname,
 				Size:     size,
 				Opaque:   in.Opaque, // as is (see apc/ml definition)
-				ErrMsg:   entry.mopaque.Emsg,
+				ErrMsg:   entry.mopaque.emsg,
 			}
 			wi.resp.Out = append(wi.resp.Out, out)
 		}
@@ -1608,11 +1608,11 @@ func (nopROC) Close() error                      { return nil }
 /////////////////
 
 type mossOpaque struct {
-	WID     string
-	Oname   string
-	Emsg    string
-	Index   int32
-	Missing bool
+	wid     string
+	oname   string
+	emsg    string
+	index   int32
+	missing bool
 }
 
 // interface guard
@@ -1622,31 +1622,31 @@ var (
 )
 
 func (o *mossOpaque) Pack(packer *cos.BytePack) {
-	packer.WriteString(o.WID)
-	packer.WriteString(o.Oname)
-	packer.WriteString(o.Emsg)
-	packer.WriteInt32(o.Index)
-	packer.WriteBool(o.Missing)
+	packer.WriteString(o.wid)
+	packer.WriteString(o.oname)
+	packer.WriteString(o.emsg)
+	packer.WriteInt32(o.index)
+	packer.WriteBool(o.missing)
 }
 
 func (o *mossOpaque) PackedSize() int {
-	return cos.PackedStrLen(o.WID) + cos.PackedStrLen(o.Oname) + cos.PackedStrLen(o.Emsg) + cos.SizeofI32 + 1
+	return cos.PackedStrLen(o.wid) + cos.PackedStrLen(o.oname) + cos.PackedStrLen(o.emsg) + cos.SizeofI32 + 1
 }
 
 func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
-	if o.WID, err = unpacker.ReadString(); err != nil {
+	if o.wid, err = unpacker.ReadString(); err != nil {
 		return err
 	}
-	if o.Oname, err = unpacker.ReadString(); err != nil {
+	if o.oname, err = unpacker.ReadString(); err != nil {
 		return err
 	}
-	if o.Emsg, err = unpacker.ReadString(); err != nil {
+	if o.emsg, err = unpacker.ReadString(); err != nil {
 		return err
 	}
-	if o.Index, err = unpacker.ReadInt32(); err != nil {
+	if o.index, err = unpacker.ReadInt32(); err != nil {
 		return err
 	}
-	o.Missing, err = unpacker.ReadBool()
+	o.missing, err = unpacker.ReadBool()
 	return err
 }
 
