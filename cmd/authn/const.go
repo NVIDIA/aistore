@@ -1,4 +1,4 @@
-// Package authn is authentication server for AIStore.
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -20,7 +20,7 @@ const (
 
 	adminUserID = "admin"
 
-	// when user-provided token expiration time is zero it means the token never expires;
-	// we then create a token and set it to expire in 20 years - effectively, never
+	// ForeverTokenTime is a duration of 20 years, used to define, effectively, no expiration on tokens
+	// Used when user-provided token expiration time is zero
 	foreverTokenTime = 20 * 365 * 24 * time.Hour
 )

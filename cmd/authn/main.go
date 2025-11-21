@@ -1,4 +1,4 @@
-// Package authn is authentication server for AIStore.
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
@@ -31,48 +31,13 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configPath, "config", "", svcName+" configuration")
+	flag.StringVar(&configPath, "config", "", config.ServiceName+" configuration")
 }
 
 func logFlush() {
 	for {
 		time.Sleep(time.Minute) // TODO: must be configurable
 		nlog.Flush(nlog.ActNone)
-	}
-}
-
-func getConfigDir() (configDir string) {
-	confDirFlag := flag.Lookup("config")
-	if confDirFlag != nil {
-		configDir = confDirFlag.Value.String()
-	}
-	if configDir == "" {
-		configDir = os.Getenv(env.AisAuthConfDir)
-	}
-	if configDir == "" {
-		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
-			svcName, "config", env.AisAuthConfDir)
-	}
-	return
-}
-
-func initConf(configDir string) {
-	configPath = filepath.Join(configDir, fname.AuthNConfig)
-	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
-		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
-	}
-	Conf.Init()
-	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
-		Conf.SetSecret(&val)
-	}
-	if Conf.Secret() == "" {
-		cos.ExitLogf("Secret key not provided. Set in config or override with %q", env.AisAuthSecretKey)
-	}
-	if err := updateLogOptions(); err != nil {
-		cos.ExitLogf("Failed to set up logger: %v", err)
-	}
-	if Conf.Verbose() {
-		nlog.Infof("Loaded configuration from %s", configPath)
 	}
 }
 
@@ -88,14 +53,12 @@ func main() {
 	}
 	installSignalHandler()
 	flag.Parse()
+	cm := config.NewConfManager()
 	configDir := getConfigDir()
-	initConf(configDir)
-	dbPath := filepath.Join(configDir, fname.AuthNDB)
-	driver, err := kvdb.NewBuntDB(dbPath)
-	if err != nil {
-		cos.ExitLogf("Failed to init local database: %v", err)
-	}
-	mgr, code, err := newMgr(driver)
+	cm.Init(configDir)
+	updateLogOptions(cm)
+	driver := createDB(configDir)
+	mgr, code, err := newMgr(cm, driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
 	}
@@ -114,13 +77,37 @@ func main() {
 	}
 }
 
-func updateLogOptions() error {
-	logDir := cos.GetEnvOrDefault(env.AisAuthLogDir, Conf.Log.Dir)
+func createDB(configDir string) *kvdb.BuntDriver {
+	dbPath := filepath.Join(configDir, fname.AuthNDB)
+	driver, err := kvdb.NewBuntDB(dbPath)
+	if err != nil {
+		cos.ExitLogf("Failed to init local database: %v", err)
+	}
+	return driver
+}
+
+func getConfigDir() (configDir string) {
+	confDirFlag := flag.Lookup("config")
+	if confDirFlag != nil {
+		configDir = confDirFlag.Value.String()
+	}
+	if configDir == "" {
+		configDir = os.Getenv(env.AisAuthConfDir)
+	}
+	if configDir == "" {
+		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
+			config.ServiceName, "config", env.AisAuthConfDir)
+	}
+	return
+}
+
+func updateLogOptions(cm *config.ConfManager) {
+	logDir := cm.GetLogDir()
 	if err := cos.CreateDir(logDir); err != nil {
-		return fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
+		err = fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
+		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
 	nlog.SetPre(logDir, "auth")
-	return nil
 }
 
 func installSignalHandler() {

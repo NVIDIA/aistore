@@ -1,4 +1,4 @@
-// Package authn is authentication server for AIStore.
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -27,13 +28,17 @@ const (
 	retry503   = time.Minute
 )
 
+// Send request to the defined cluster to validate that the cluster will allow tokens issued by this AuthN service
+func (m *mgr) validateCluster(clu *authn.CluACL) (err error) {
+	if m.cm.HasHMACSecret() {
+		return m.validateSecret(clu)
+	}
+	return errors.New("invalid cluster configuration, no signing key configured")
+}
+
 func (m *mgr) validateSecret(clu *authn.CluACL) (err error) {
 	const tag = "validate-secret"
-	var (
-		secret   = string(Conf.Secret())
-		cksumVal = cos.ChecksumB2S(cos.UnsafeB(secret), cos.ChecksumSHA256)
-		body     = cos.MustMarshal(&authn.ServerConf{Secret: cksumVal})
-	)
+	body := cos.MustMarshal(&authn.ServerConf{Secret: m.cm.GetSecretChecksum()})
 	for _, u := range clu.URLs {
 		if err = m.call(http.MethodPost, u, apc.Tokens, body, tag); err == nil {
 			return

@@ -1,4 +1,4 @@
-// Package authn
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,13 +33,6 @@ var (
 		},
 	}
 )
-
-func init() {
-	Conf.Init()
-	if Conf.Server.Expire == 0 {
-		Conf.Server.Expire = cos.Duration(time.Minute * 30) // NOTE: default token expiration time
-	}
-}
 
 func createUsers(mgr *mgr, t *testing.T) {
 	for idx := range users {
@@ -136,7 +130,15 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 }
 
-func createManagerWithAdmin(driver kvdb.Driver) (*mgr, error) {
+// Create a CM with a pre-configured config struct and skip loading from disk
+func createEmptyCM() *config.ConfManager {
+	conf := &authn.Config{Server: authn.ServerConf{Secret: "mytestsecret"}}
+	cm := config.NewConfManagerWithConf(conf)
+	cm.Init("")
+	return cm
+}
+
+func createManagerWithAdmin(cm *config.ConfManager, driver kvdb.Driver) (*mgr, error) {
 	oldPass, wasSet := os.LookupEnv(env.AisAuthAdminPassword)
 	os.Setenv(env.AisAuthAdminPassword, "admin-pass-for-test")
 	// Reset after test
@@ -147,14 +149,15 @@ func createManagerWithAdmin(driver kvdb.Driver) (*mgr, error) {
 			os.Unsetenv(env.AisAuthAdminPassword)
 		}
 	}()
-	m, _, err := newMgr(driver)
+	m, _, err := newMgr(cm, driver)
 	return m, err
 }
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
+	cm := createEmptyCM()
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
-	mgr, err := createManagerWithAdmin(driver)
+	mgr, err := createManagerWithAdmin(cm, driver)
 	tassert.CheckError(t, err)
 	createUsers(mgr, t)
 	testInvalidUser(mgr, t)
@@ -164,8 +167,9 @@ func TestManager(t *testing.T) {
 
 func TestManagerNoAdminPass(t *testing.T) {
 	driver := mock.NewDBDriver()
+	cm := createEmptyCM()
 	// If no admin password exists in env, initializing manager must fail
-	_, _, err := newMgr(driver)
+	_, _, err := newMgr(cm, driver)
 	if err == nil {
 		t.Fatal("expected error initializing manager without admin password Env, got nil")
 	}
@@ -180,7 +184,8 @@ func TestToken(t *testing.T) {
 		token string
 	)
 	driver := mock.NewDBDriver()
-	mgr, err := createManagerWithAdmin(driver)
+	cm := createEmptyCM()
+	mgr, err := createManagerWithAdmin(cm, driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
 	defer deleteUsers(mgr, false, t)

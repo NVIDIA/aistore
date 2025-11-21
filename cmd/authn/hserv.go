@@ -1,4 +1,4 @@
-// Package authn is authentication server for AIStore.
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -8,11 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,8 +18,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 )
-
-const svcName = "AuthN"
 
 type hserv struct {
 	mux *http.ServeMux
@@ -53,20 +49,11 @@ func (h *hserv) failAction(w http.ResponseWriter, r *http.Request, action, what 
 // Run public server to manage users and generate tokens
 func (h *hserv) Run() error {
 	var (
-		portStr    string
-		err        error
-		useHTTPS   bool
-		serverCert string
-		serverKey  string
+		portStr string
+		err     error
 	)
 
-	// Retrieve and set the port
-	portStr = os.Getenv(env.AisAuthPort)
-	if portStr == "" {
-		portStr = fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
-	} else {
-		portStr = ":" + portStr
-	}
+	portStr = h.mgr.cm.GetPort()
 	nlog.Infof("Listening on %s", portStr)
 
 	h.registerPublicHandlers()
@@ -79,16 +66,11 @@ func (h *hserv) Run() error {
 		h.s.ReadHeaderTimeout = timeout
 	}
 
-	// Retrieve and set HTTPS configuration with environment variables taking precedence
-	useHTTPS, err = cos.IsParseEnvBoolOrDefault(env.AisAuthUseHTTPS, Conf.Net.HTTP.UseHTTPS)
-	if err != nil {
-		nlog.Errorf("Failed to parse %s: %v. Defaulting to false", env.AisAuthUseHTTPS, err)
-	}
-	serverCert = cos.GetEnvOrDefault(env.AisAuthServerCrt, Conf.Net.HTTP.Certificate)
-	serverKey = cos.GetEnvOrDefault(env.AisAuthServerKey, Conf.Net.HTTP.Key)
-
 	// Start the appropriate server based on the configuration
-	if useHTTPS {
+	if h.mgr.cm.IsHTTPS() {
+		// Retrieve and set HTTPS configuration with environment variables taking precedence
+		serverCert := h.mgr.cm.GetServerCert()
+		serverKey := h.mgr.cm.GetServerKey()
 		nlog.Infof("Starting HTTPS server on port%s", portStr)
 		nlog.Infof("Certificate: %s", serverCert)
 		nlog.Infof("Key: %s", serverKey)
@@ -159,6 +141,32 @@ func (h *hserv) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *hserv) roleHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.httpRolePost(w, r)
+	case http.MethodPut:
+		h.httpRolePut(w, r)
+	case http.MethodDelete:
+		h.httpRoleDel(w, r)
+	case http.MethodGet:
+		h.httpRoleGet(w, r)
+	default:
+		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
+	}
+}
+
+func (h *hserv) configHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.httpConfigGet(w, r)
+	case http.MethodPut:
+		h.httpConfigPut(w, r)
+	default:
+		cmn.WriteErr405(w, r, http.MethodPut, http.MethodGet)
+	}
+}
+
 // Deletes existing token, h.k.h log out
 func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	if _, err := parseURL(w, r, 0, apc.URLPathTokens.L); err != nil {
@@ -226,7 +234,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if err = h.validateUpdatePerms(w, r, userID, updateReq); err != nil {
 		return
 	}
-	if Conf.Verbose() {
+	if h.mgr.cm.IsVerbose() {
 		nlog.Infof("PUT user %q", userID)
 	}
 	if code, err := h.mgr.updateUser(userID, updateReq); err != nil {
@@ -247,7 +255,7 @@ func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
 		h.failAction(w, r, "add user", info.ID, err, code)
 		return
 	}
-	if Conf.Verbose() {
+	if h.mgr.cm.IsVerbose() {
 		nlog.Infof("Add user %q", info.ID)
 	}
 }
@@ -473,21 +481,6 @@ func (h *hserv) httpSrvGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, cluList, "get cluster")
 }
 
-func (h *hserv) roleHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		h.httpRolePost(w, r)
-	case http.MethodPut:
-		h.httpRolePut(w, r)
-	case http.MethodDelete:
-		h.httpRoleDel(w, r)
-	case http.MethodGet:
-		h.httpRoleGet(w, r)
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
-	}
-}
-
 func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := parseURL(w, r, 0, apc.URLPathRoles.L)
 	if err != nil {
@@ -574,10 +567,38 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	if Conf.Verbose() {
+	if h.mgr.cm.IsVerbose() {
 		nlog.Infof("PUT role %q\n", role)
 	}
 	if code, err := h.mgr.updateRole(role, updateReq); err != nil {
 		h.failAction(w, r, "update role", role, err, code)
+	}
+}
+
+func (h *hserv) httpConfigGet(w http.ResponseWriter, r *http.Request) {
+	if err := h.validateAdminPerms(w, r); err != nil {
+		return
+	}
+	writeJSON(w, h.mgr.cm.GetConf(), "get config")
+}
+
+func (h *hserv) httpConfigPut(w http.ResponseWriter, r *http.Request) {
+	if err := h.validateAdminPerms(w, r); err != nil {
+		return
+	}
+	updateCfg := &authn.ConfigToUpdate{}
+	if err := jsoniter.NewDecoder(r.Body).Decode(updateCfg); err != nil {
+		cmn.WriteErrMsg(w, r, "Invalid request")
+		return
+	}
+
+	err := h.mgr.cm.UpdateConf(updateCfg)
+	if err != nil {
+		cmn.WriteErr(w, r, err)
+		return
+	}
+	err = h.mgr.cm.SaveToDisk(configPath)
+	if err != nil {
+		cmn.WriteErr(w, r, err)
 	}
 }

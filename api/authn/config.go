@@ -5,10 +5,7 @@
 package authn
 
 import (
-	"errors"
-	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,11 +16,10 @@ import (
 
 type (
 	Config struct {
-		Server  ServerConf   `json:"auth"`
-		Log     LogConf      `json:"log"`
-		Net     NetConf      `json:"net"`
-		Timeout TimeoutConf  `json:"timeout"`
-		mu      sync.RWMutex `json:"-"`
+		Server  ServerConf  `json:"auth"`
+		Log     LogConf     `json:"log"`
+		Net     NetConf     `json:"net"`
+		Timeout TimeoutConf `json:"timeout"`
 	}
 	LogConf struct {
 		Dir   string `json:"dir"`
@@ -71,15 +67,15 @@ var (
 
 func (*Config) JspOpts() jsp.Options { return authcfgJspOpts }
 
-func (c *Config) Lock()   { c.mu.Lock() }
-func (c *Config) Unlock() { c.mu.Unlock() }
-
 func (c *Config) Init() {
 	c.Server.psecret = &c.Server.Secret
 	c.Server.pexpire = &c.Server.Expire
 }
 
 func (c *Config) Verbose() bool {
+	if c.Log.Level == "" {
+		return false
+	}
 	level, err := strconv.Atoi(c.Log.Level)
 	debug.AssertNoErr(err)
 	return level > 3
@@ -87,30 +83,3 @@ func (c *Config) Verbose() bool {
 
 func (c *Config) Secret() cmn.Censored  { return cmn.Censored(*c.Server.psecret) }
 func (c *Config) Expire() time.Duration { return time.Duration(*c.Server.pexpire) }
-
-func (c *Config) SetSecret(val *string) {
-	c.Server.Secret = *val
-	c.Server.psecret = val
-}
-
-func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {
-	if cu.Server == nil {
-		return errors.New("configuration is empty")
-	}
-	if cu.Server.Secret != nil {
-		if *cu.Server.Secret == "" {
-			return errors.New("secret not defined")
-		}
-		c.SetSecret(cu.Server.Secret)
-	}
-	if cu.Server.Expire != nil {
-		dur, err := time.ParseDuration(*cu.Server.Expire)
-		if err != nil {
-			return fmt.Errorf("invalid time format %s: %v", *cu.Server.Expire, err)
-		}
-		v := cos.Duration(dur)
-		c.Server.Expire = v
-		c.Server.pexpire = &v
-	}
-	return nil
-}

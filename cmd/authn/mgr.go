@@ -1,4 +1,4 @@
-// Package authn is authentication server for AIStore.
+// Package main contains the independent authentication server for AIStore.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -31,6 +32,7 @@ type mgr struct {
 	clientH   *http.Client
 	clientTLS *http.Client
 	db        kvdb.Driver
+	cm        *config.ConfManager
 	tkParser  *tok.TokenParser
 }
 
@@ -49,23 +51,26 @@ var (
 )
 
 // If user DB exists, loads the data from the file and decrypts passwords
-func newMgr(driver kvdb.Driver) (m *mgr, code int, err error) {
+func newMgr(cm *config.ConfManager, driver kvdb.Driver) (m *mgr, code int, err error) {
 	m = &mgr{
 		db: driver,
+		cm: cm,
 	}
-	m.clientH, m.clientTLS = cmn.NewDefaultClients(time.Duration(Conf.Timeout.Default))
+	m.clientH, m.clientTLS = cmn.NewDefaultClients(cm.GetDefaultTimeout())
 	code, err = initializeDB(driver)
 	if err != nil {
 		return
 	}
-	// Create a limited token parser that only validates against a symmetric key with no issuer lookup
-	// TODO: Support RSA keys in authN and issuer lookup with cert verification
-	sigConf := &cmn.AuthSignatureConf{Key: Conf.Secret(), Method: cmn.SigMethodHMAC}
+	sigConf, err := cm.GetSigConf()
+	if err != nil {
+		return
+	}
+	// Create a limited token parser with no issuer lookup
 	m.tkParser = tok.NewTokenParser(&cmn.AuthConf{Signature: sigConf}, nil)
 	return
 }
 
-func (*mgr) String() string { return svcName }
+func (*mgr) String() string { return config.ServiceName }
 
 //
 // users ============================================================
@@ -312,7 +317,7 @@ func (m *mgr) addCluster(ctx context.Context, clu *authn.CluACL) (int, error) {
 	}
 
 	// secret handshake
-	if err := m.validateSecret(clu); err != nil {
+	if err := m.validateCluster(clu); err != nil {
 		return http.StatusInternalServerError, err
 	}
 
@@ -349,7 +354,7 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) (int, error) {
 	}
 
 	// secret handshake
-	if err := m.validateSecret(clu); err != nil {
+	if err := m.validateCluster(clu); err != nil {
 		return http.StatusInternalServerError, err
 	}
 
@@ -407,7 +412,7 @@ func (m *mgr) issueToken(uid, pwd string, msg *authn.LoginMsg) (token string, co
 }
 
 func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.CluACL, bckACLs []*authn.BckACL) (string, error) {
-	expDelta := Conf.Expire()
+	expDelta := m.cm.GetExpiry()
 	if msg.ExpiresIn != nil {
 		expDelta = *msg.ExpiresIn
 	}
@@ -423,10 +428,17 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 	// TODO: parse from ACLs and/or LoginMsg
 	aud := ""
 	if uInfo.IsAdmin() {
-		return tok.CreateHMACTokenStr(tok.AdminClaims(expires, uid, aud), Conf.Secret())
+		return m.createTokenWithClaims(tok.AdminClaims(expires, uid, aud))
 	}
 	m.fixClusterIDs(cluACLs)
-	return tok.CreateHMACTokenStr(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs), Conf.Secret())
+	return m.createTokenWithClaims(tok.StandardClaims(expires, uid, aud, bckACLs, cluACLs))
+}
+
+func (m *mgr) createTokenWithClaims(c *tok.AISClaims) (string, error) {
+	if m.cm.HasHMACSecret() {
+		return tok.CreateHMACTokenStr(c, m.cm.GetSecret())
+	}
+	return "", errors.New("no valid signing key configured")
 }
 
 // Before putting a list of cluster permissions to a token, cluster aliases
