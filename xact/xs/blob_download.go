@@ -55,6 +55,7 @@ type (
 		vlabs   map[string]string
 		xlabs   map[string]string
 		workers []*worker
+		config  *cmn.Config
 		pending map[int64]*chunkTask // map of pending tasks indexed by roff
 		xact.Base
 		wg       sync.WaitGroup
@@ -74,7 +75,9 @@ type (
 // internal
 type (
 	worker struct {
-		parent *XactBlobDl
+		parent  *XactBlobDl
+		adv     load.Advice
+		nchunks int64 // per-worker sequential counter for ShouldCheck
 	}
 	chunkTask struct {
 		name    string // for logging and debug assertions
@@ -252,13 +255,11 @@ func (p *blobFactory) Start() (err error) {
 	)
 
 	// Admission check: assess load to determine if we can start
-	config := cmn.GCO.Get()
+	r.config = cmn.GCO.Get()
 	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{
-		Mi:  r.args.Lom.Mountpath(),
-		Cfg: &config.Disk,
+		Cfg: &r.config.Disk,
 		RW:  true, // data I/O operation
 	})
-	r.adv.Refresh()
 
 	if r.adv.MemLoad() == load.Critical {
 		err := fmt.Errorf("%s: rejected due to resource pressure (%s) - not starting", r.Name(), r.adv.String())
@@ -279,10 +280,9 @@ func (p *blobFactory) Start() (err error) {
 
 	if r.numWorkers != nwpNone {
 		r.workers = make([]*worker, r.numWorkers)
+		r.adv.Refresh() // refresh advice one more time before copying to workers
 		for i := range r.workers {
-			r.workers[i] = &worker{
-				parent: r,
-			}
+			r.workers[i] = r.newWorker()
 		}
 		// open channels
 		r.workCh = make(chan *chunkTask, r.numWorkers)
@@ -371,7 +371,7 @@ func (r *XactBlobDl) runSerial() error {
 	buf, slab := core.T.PageMM().AllocSize(r.chunkSize)
 	defer slab.Free(buf)
 
-	worker := &worker{parent: r}
+	worker := r.newWorker()
 	tsk := &chunkTask{name: r.Name() + "_chunk_task", roff: r.nextRoff}
 	debug.IncCounter(tsk.name)
 	defer tsk.cleanup()
@@ -556,6 +556,11 @@ func (r *XactBlobDl) Abort(err error) bool {
 	return true
 }
 
+func (r *XactBlobDl) newWorker() *worker {
+	w := &worker{parent: r, adv: r.adv} // note: advice is copied by value
+	return w
+}
+
 func (r *XactBlobDl) startWorkers() {
 	for i := range r.workers {
 		if r.nextRoff >= r.fullSize {
@@ -701,6 +706,17 @@ func (w *worker) do(tsk *chunkTask, buf []byte) (int, error) {
 	)
 
 	partNum := tsk.roff/chunkSize + 1
+
+	// Periodic load check using sequential counter
+	w.nchunks++
+	if w.adv.ShouldCheck(w.nchunks) {
+		w.adv.Refresh()
+		// Note: the disk load checks utilizations across all mountpaths
+		if w.adv.DskLoad() >= load.High {
+			debug.Assert(w.adv.Sleep > 0)
+			time.Sleep(w.adv.Sleep)
+		}
+	}
 
 	// Get object range reader
 	res := core.T.Backend(lom.Bck()).GetObjReader(context.Background(), lom, tsk.roff, chunkSize)
