@@ -24,6 +24,7 @@ type readMostly struct {
 	level, modules int
 	testingEnv     bool
 	authEnabled    bool
+	cskEnabled     bool
 }
 
 var Rom readMostly
@@ -41,7 +42,9 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 		rom.timeout.ecstreams = d.D()
 	}
 	rom.features = cfg.Features
+
 	rom.authEnabled = cfg.Auth.Enabled
+	rom.cskEnabled = cfg.Auth.CSKEnabled()
 
 	// pre-parse for V (below)
 	rom.level, rom.modules = cfg.Log.Level.Parse()
@@ -53,6 +56,7 @@ func (rom *readMostly) EcStreams() time.Duration       { return rom.timeout.ecst
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
 func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }
+func (rom *readMostly) CSKEnabled() bool               { return rom.cskEnabled }
 
 func (rom *readMostly) V(verbosity, fl int) bool {
 	return rom.level >= verbosity || rom.modules&fl != 0

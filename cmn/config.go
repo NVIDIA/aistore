@@ -653,6 +653,8 @@ type (
 	}
 
 	AuthConf struct {
+		// Enable external user authentication via JWT/OIDC tokens
+		// (does not control internal cluster security - see ClusterConfig)
 		Enabled bool `json:"enabled"`
 		// Fields for validating JWT signature
 		Signature *AuthSignatureConf `json:"signature,omitempty"`
@@ -660,40 +662,50 @@ type (
 		RequiredClaims *RequiredClaimsConf `json:"required_claims,omitempty"`
 		// Config for OIDC behavior such as issuer public key discovery
 		OIDC *OIDCConf `json:"oidc,omitempty"`
+
+		// Cluster key config
+		ClusterKey *ClusterKeyConf `json:"cluster_key,omitempty"`
 	}
 	AuthConfToSet struct {
 		Enabled        *bool                    `json:"enabled,omitempty"`
 		Signature      *AuthSignatureConfToSet  `json:"signature,omitempty"`
 		RequiredClaims *RequiredClaimsConfToSet `json:"required_claims,omitempty"`
 		OIDC           *OIDCConfToSet           `json:"oidc,omitempty"`
+		ClusterKey     *ClusterKeyConfToSet     `json:"cluster_key,omitempty"`
 	}
-
 	AuthSignatureConf struct {
 		Key    string `json:"key"`
 		Method string `json:"method"`
 	}
-
 	AuthSignatureConfToSet struct {
 		Key    *string `json:"key,omitempty"`
 		Method *string `json:"method,omitempty"`
 	}
-
 	RequiredClaimsConf struct {
 		Aud []string `json:"aud"`
 	}
-
 	RequiredClaimsConfToSet struct {
 		Aud *[]string `json:"aud,omitempty"`
 	}
-
 	OIDCConf struct {
 		AllowedIssuers []string `json:"allowed_iss"`
 		IssuerCA       string   `json:"issuer_ca_bundle,omitempty"`
 	}
-
 	OIDCConfToSet struct {
 		AllowedIssuers *[]string `json:"allowed_iss,omitempty"`
 		IssuerCA       *string   `json:"issuer_ca_bundle,omitempty"`
+	}
+	ClusterKeyConf struct {
+		Enabled       bool         `json:"enabled"`
+		TTL           cos.Duration `json:"ttl"`            // default: 0 (never expire)
+		NonceWindow   cos.Duration `json:"nonce_window"`   // max clock skew for timestamp validation, default: 1m
+		RotationGrace cos.Duration `json:"rotation_grace"` // accept old+new key during rotation, default: 1m
+	}
+	ClusterKeyConfToSet struct {
+		Enabled       *bool         `json:"enabled,omitempty"`
+		TTL           *cos.Duration `json:"ttl,omitempty"`
+		NonceWindow   *cos.Duration `json:"nonce_window,omitempty"`
+		RotationGrace *cos.Duration `json:"rotation_grace,omitempty"`
 	}
 
 	// keepalive
@@ -1885,28 +1897,35 @@ func (c *FSHCConf) Validate() error {
 // AuthConf //
 //////////////
 
-func (a *AuthConf) Validate() error {
-	if a.Signature != nil {
-		if err := a.Signature.validate(); err != nil {
+func (c *AuthConf) CSKEnabled() bool {
+	return c.ClusterKey != nil && c.ClusterKey.Enabled
+}
+
+func (c *AuthConf) Validate() error {
+	if c.Signature != nil {
+		if err := c.Signature.validate(); err != nil {
 			return err
 		}
 	}
-	if a.Signature != nil && a.OIDC != nil {
+	if c.Signature != nil && c.OIDC != nil {
 		return errors.New("invalid auth config, only one of signature or OIDC config should be provided")
 	}
-	if a.Enabled && a.Signature == nil && a.OIDC == nil {
+	if c.Enabled && c.Signature == nil && c.OIDC == nil {
 		return errors.New("invalid auth config, one of signature or OIDC config must be provided")
+	}
+	if c.CSKEnabled() {
+		return c.ClusterKey.validate()
 	}
 	return nil
 }
 
-func (a *AuthConf) UnmarshalJSON(data []byte) error {
+func (c *AuthConf) UnmarshalJSON(data []byte) error {
 	// Try unmarshalling as the current AuthConf format first
 	type Alias AuthConf
 	var tmp Alias
 	errCurrent := cos.JSON.Unmarshal(data, &tmp)
 	if errCurrent == nil {
-		*a = AuthConf(tmp)
+		*c = AuthConf(tmp)
 		return nil
 	}
 
@@ -1916,17 +1935,17 @@ func (a *AuthConf) UnmarshalJSON(data []byte) error {
 	if errLegacy != nil {
 		return fmt.Errorf("failed to parse auth config using current config structure (err: %v) and v4 (err: %v)", errCurrent, errLegacy)
 	}
-	a.Enabled = v4.Enabled
+	c.Enabled = v4.Enabled
 	// All legacy keys are 256 bit HMAC
-	a.Signature = &AuthSignatureConf{Key: v4.Secret, Method: "HS256"}
-	a.RequiredClaims = nil
-	a.OIDC = nil
+	c.Signature = &AuthSignatureConf{Key: v4.Secret, Method: "HS256"}
+	c.RequiredClaims = nil
+	c.OIDC = nil
 	return nil
 }
 
-func (a *AuthConf) CensorKey() {
-	if a.Signature != nil && a.Signature.Key != "" {
-		a.Signature.Key = "**********"
+func (c *AuthConf) CensorSignatureKey() {
+	if c.Signature != nil && c.Signature.Key != "" {
+		c.Signature.Key = "**********"
 	}
 }
 
@@ -1976,6 +1995,51 @@ func (c *OIDCConf) GetAllowedIssSet() map[string]struct{} {
 		allowSet[v] = struct{}{}
 	}
 	return allowSet
+}
+
+////////////////////
+// ClusterKeyConf //
+////////////////////
+
+const (
+	dfltClusterKeyTTL = 0 // never expire
+	minClusterKeyTTL  = time.Hour
+
+	dfltNonceWindow   = time.Minute
+	dfltRotationGrace = time.Minute
+
+	maxNonceWindow   = 10 * time.Minute
+	maxRotationGrace = time.Hour
+)
+
+func (c *ClusterKeyConf) validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	// TTL: 0 == never expire; otherwise must be >= minClusterKeyTTL
+	if d := c.TTL.D(); d != dfltClusterKeyTTL {
+		if d < 0 {
+			return fmt.Errorf("invalid cluster_key.ttl %v (expecting >= 0)", d)
+		}
+		if d < minClusterKeyTTL {
+			return fmt.Errorf("invalid cluster_key.ttl %v (expecting >= %v)", d, minClusterKeyTTL)
+		}
+	}
+	if c.NonceWindow == 0 {
+		c.NonceWindow = cos.Duration(dfltNonceWindow)
+	}
+	if c.RotationGrace == 0 {
+		c.RotationGrace = cos.Duration(dfltRotationGrace)
+	}
+	if nw := c.NonceWindow.D(); nw <= 0 || nw > maxNonceWindow {
+		return fmt.Errorf("invalid cluster_key.nonce_window %v (expecting > 0 and <= %v)", nw, maxNonceWindow)
+	}
+	if rg := c.RotationGrace.D(); rg <= 0 || rg > maxRotationGrace {
+		return fmt.Errorf("invalid cluster_key.rotation_grace %v (expecting > 0 and <= %v)", rg, maxRotationGrace)
+	}
+
+	return nil
 }
 
 ////////////////////

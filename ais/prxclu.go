@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -119,7 +120,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		config := cmn.GCO.Get()
 		// hide secret
 		c := config.ClusterConfig
-		c.Auth.CensorKey()
+		c.Auth.CensorSignatureKey()
 		p.writeJSON(w, r, &c, what)
 	case apc.WhatBMD, apc.WhatSmapVote, apc.WhatSnode, apc.WhatSmap:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
@@ -490,7 +491,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	switch apiOp {
 	case apc.AdminJoin:
 		// call the node with cluster-metadata included
-		if ecode, err := p.adminJoinHandshake(smap, nsi, apiOp); err != nil {
+		includeCSK := config.Auth.CSKEnabled()
+		if ecode, err := p.adminJoinHandshake(smap, nsi, apiOp, includeCSK); err != nil {
 			p.writeErr(w, r, err, ecode)
 			return
 		}
@@ -566,7 +568,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	if apiOp == apc.SelfJoin {
 		// respond to the self-joining node with cluster-meta that does not include Smap
-		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
+		includeCSK := config.Auth.CSKEnabled()
+		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -618,8 +621,8 @@ func (p *proxy) fastKaliveRsp(w http.ResponseWriter, r *http.Request, smap *smap
 
 // when joining manually: update the node with cluster meta that does not include Smap
 // (the later gets finalized and metasync-ed upon success)
-func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (int, error) {
-	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
+func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string, includeCSK bool) (int, error) {
+	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true, includeCSK: includeCSK})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -1130,10 +1133,18 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			}
 		}
 	}
-	if toUpdate.Auth != nil {
-		from, _ := jsoniter.Marshal(config.Auth)
-		to, _ := jsoniter.Marshal(toUpdate.Auth)
-		whingeToUpdate("config.auth", string(from), string(to))
+	if toUpdate.Auth != nil && toUpdate.Auth.Enabled != nil {
+		authEnabled := *toUpdate.Auth.Enabled
+		if config.Auth.Enabled != authEnabled {
+			whingeToUpdate("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
+		}
+
+		if !config.Auth.CSKEnabled() && toUpdate.Auth.ClusterKey != nil {
+			cskEnabled := *toUpdate.Auth.ClusterKey.Enabled
+			if config.Auth.CSKEnabled() != cskEnabled {
+				whingeToUpdate("config.auth "+tagcsk, strconv.FormatBool(config.Auth.CSKEnabled()), strconv.FormatBool(cskEnabled))
+			}
+		}
 	}
 	if toUpdate.Tracing != nil {
 		from, _ := jsoniter.Marshal(config.Tracing)
@@ -1229,7 +1240,22 @@ func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err er
 }
 
 func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
-	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil)})
+	var (
+		wg  *sync.WaitGroup
+		msg = p.newAmsg(ctx.msg, nil)
+	)
+	switch {
+	case clone.Auth.CSKEnabled() && (ctx.oldConfig == nil || !ctx.oldConfig.Auth.CSKEnabled()):
+		cskgen(p.owner.smap.get().Version)
+		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{cskload(), msg})
+	case !clone.Auth.CSKEnabled() && (ctx.oldConfig != nil && ctx.oldConfig.Auth.CSKEnabled()):
+		// clear locally; usage gated by Rom.CSKEnabled()
+		cskreset()
+		fallthrough
+	default:
+		wg = p.metasyncer.sync(revsPair{clone, msg})
+	}
+
 	if ctx.wait {
 		wg.Wait()
 	}

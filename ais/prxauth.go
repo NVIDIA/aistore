@@ -186,7 +186,7 @@ func (a *authManager) cacheNewToken(ctx context.Context, token string) (claims *
 	// Validate token signature and extract
 	claims, err = a.tokenParser.ValidateToken(ctx, token)
 	if err != nil {
-		nlog.Infof("Received invalid token, error: %v", err)
+		nlog.Infoln("Received invalid token, error:", err)
 		return nil, err
 	}
 	// We aren't guaranteed someone else didn't do this, but worth a separate attempt to validate outside of lock

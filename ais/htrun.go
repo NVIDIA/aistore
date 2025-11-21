@@ -177,6 +177,14 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	if !opts.skipEtlMD {
 		cm.EtlMD = h.owner.etl.get()
 	}
+
+	if opts.includeCSK {
+		debug.Assert(smap.IsPrimary(h.si)) // only primary can be asked via opts.includeCSK
+		k := cskload()
+		debug.Assert(k.version() > 0 && len(k.secret) != 0) // must have a good key
+		cm.CSK = k.marshal()
+	}
+
 	if h.si.IsTarget() && opts.fillRebMarker {
 		rebInterrupted, restarted := opts.htext.interruptedRestarted()
 		if rebInterrupted {
@@ -196,6 +204,26 @@ func (h *htrun) recvCluMeta(body []byte) (*cluMeta, error) {
 	var cm cluMeta
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return nil, fmt.Errorf(cmn.FmtErrUnmarshal, h, tagCM, cos.BHead(body), err)
+	}
+	if len(cm.CSK) == 0 {
+		return &cm, nil
+	}
+
+	var (
+		nk       clusterKey
+		ok       = cskload()
+		unpacker = cos.NewUnpacker(cm.CSK)
+	)
+	if err := nk.Unpack(unpacker); err != nil {
+		return nil, fmt.Errorf("%s: failed to unpack %s, err: %v", h, tagcsk, err)
+	}
+	if nk.version() <= ok.version() {
+		if nk.version() < ok.version() {
+			return nil, newErrDowngrade(h.si, ok.String(), nk.String())
+		}
+	} else {
+		cskstore(&nk)
+		nlog.Infoln(h.String(), "received", nk.String())
 	}
 	return &cm, nil
 }
@@ -331,6 +359,8 @@ func (h *htrun) init(config *cmn.Config) {
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
+
+	cskreset()
 
 	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
 }
@@ -1123,7 +1153,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		)
 		// hide secret
 		out = *config
-		out.Auth.CensorKey()
+		out.Auth.CensorSignatureKey()
 		body = &out
 	case apc.WhatSmap:
 		body = h.owner.smap.get()
@@ -1540,7 +1570,7 @@ func logmsync(lver int64, revs revs, msg *actMsgExt, sender string, opts ...stri
 	switch len(opts) {
 	case 0:
 		what = revs.String()
-		if uuid := revs.uuid(); uuid != "" {
+		if uuid != "" {
 			what += "[" + uuid + "]"
 		}
 	case 1:
@@ -1866,28 +1896,69 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, msg *actMsgExt, payload msPayl
 	return cmn.GCO.Update(&newConfig.ClusterConfig)
 }
 
-func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*tokenList, error) {
+func (h *htrun) extractRevokedTokenList(payload msPayload, sender string) (*tokenList, *actMsgExt, error) {
 	var (
-		msg       actMsgExt
+		msg       = &actMsgExt{}
 		bytes, ok = payload[revsTokenTag]
 	)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
-		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
+		if err := jsoniter.Unmarshal(msgValue, msg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err)
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	tokenList := &tokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "blocked token list", cos.BHead(bytes), err)
-		return nil, err
+		return nil, nil, err
 	}
 	nlog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", sender,
 		len(tokenList.Tokens), msg.Action, msg.UUID)
-	return tokenList, nil
+	return tokenList, msg, nil
+}
+
+func (h *htrun) extractCSK(payload msPayload, sender string) (*clusterKey, *actMsgExt, error) {
+	var (
+		msg       = &actMsgExt{}
+		bytes, ok = payload[revsCSKTag]
+	)
+	if !ok {
+		return nil, nil, nil
+	}
+
+	if msgValue, ok := payload[revsCSKTag+revsActionTag]; ok {
+		if err := jsoniter.Unmarshal(msgValue, msg); err != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err)
+			return nil, nil, err
+		}
+	}
+	nk := &clusterKey{}
+	unpacker := cos.NewUnpacker(bytes)
+	if err := nk.Unpack(unpacker); err != nil {
+		err = fmt.Errorf("%s: failed to unpack %s, err: %v", h, tagcsk, err)
+		return nil, nil, err
+	}
+	nlog.Infof("extract %s from %q (action: %q)", nk.String(), sender, msg.Action)
+
+	return nk, msg, nil
+}
+
+// (compare w/ h.cluMeta)
+func (h *htrun) receiveCSK(nk *clusterKey, msg *actMsgExt, sender string) error {
+	ok := cskload()
+	logmsync(ok.ver, nk, msg, sender, nk.String())
+
+	if nk.version() <= ok.version() {
+		if nk.version() < ok.version() {
+			return newErrDowngrade(h.si, ok.String(), nk.String())
+		}
+	} else {
+		cskstore(nk)
+	}
+	return nil
 }
 
 // ================================== Background =========================================

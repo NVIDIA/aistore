@@ -1050,14 +1050,16 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 1. extract
 	var (
-		sender                       = r.Header.Get(apc.HdrSenderName)
-		newConf, msgConf, errConf    = p.extractConfig(payload, sender)
-		newSmap, msgSmap, errSmap    = p.extractSmap(payload, sender, false /*skip validation*/)
-		newBMD, msgBMD, errBMD       = p.extractBMD(payload, sender)
-		newRMD, msgRMD, errRMD       = p.extractRMD(payload, sender)
-		newEtlMD, msgEtlMD, errEtlMD = p.extractEtlMD(payload, sender)
-		revokedTokens, errTokens     = p.extractRevokedTokenList(payload, sender)
+		sender                              = r.Header.Get(apc.HdrSenderName)
+		newConf, msgConf, errConf           = p.extractConfig(payload, sender)
+		newSmap, msgSmap, errSmap           = p.extractSmap(payload, sender, false /*skip validation*/)
+		newBMD, msgBMD, errBMD              = p.extractBMD(payload, sender)
+		newRMD, msgRMD, errRMD              = p.extractRMD(payload, sender)
+		newEtlMD, msgEtlMD, errEtlMD        = p.extractEtlMD(payload, sender)
+		revokedTokens, msgTokens, errTokens = p.extractRevokedTokenList(payload, sender)
+		newCSK, msgCSK, errCSK              = p.extractCSK(payload, sender)
 	)
+
 	// 2. apply
 	if errConf == nil && newConf != nil {
 		errConf = p.receiveConfig(newConf, msgConf, payload, sender)
@@ -1075,14 +1077,20 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		errEtlMD = p.receiveEtlMD(newEtlMD, msgEtlMD, payload, sender, nil)
 	}
 	if errTokens == nil && revokedTokens != nil {
+		// tokens don't do versioning and don't have UUID
+		nlog.Infoln("msync Rx token list from", sender, "msg:", msgTokens.String(), "num revoked:", len(revokedTokens.Tokens))
 		_ = p.authn.updateRevokedList(r.Context(), revokedTokens)
 	}
+	if errCSK == nil && newCSK != nil {
+		errCSK = p.receiveCSK(newCSK, msgCSK, sender)
+	}
+
 	// 3. respond
-	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil {
+	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errTokens == nil && errEtlMD == nil && errCSK == nil {
 		return
 	}
 	p.fillNsti(nsti)
-	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
+	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens, errCSK)
 	p.writeErr(w, r, retErr, http.StatusConflict)
 }
 

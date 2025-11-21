@@ -293,7 +293,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		smap = clone
 	}
 
-	// 5.5: try to start with a fully staffed IC
+	// 6: try to start with a fully staffed IC
 	if count := smap.ICCount(); count < meta.DfltCountIC {
 		clone := smap.clone()
 		nc := clone.staffIC()
@@ -308,7 +308,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 	p.owner.smap.mu.Unlock()
 
-	// 6. initialize BMD
+	// 7. initialize BMD
 	bmd := p.owner.bmd.get().clone()
 	if bmd.Version == 0 {
 		bmd.Version = 1 // init BMD
@@ -318,11 +318,11 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 
-	// 7. mark RMD as starting up to prevent joining targets from triggering rebalance
+	// 8. mark RMD as starting up to prevent joining targets from triggering rebalance
 	ok := p.owner.rmd.starting.CAS(false, true)
 	debug.Assert(ok)
 
-	// 8. initialize etl
+	// 9. initialize etl
 	etlMD := p.owner.etl.get().clone()
 	if etlMD.Version > 0 {
 		if err := p.owner.etl.putPersist(etlMD, nil); err != nil {
@@ -330,18 +330,23 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 
-	// 9. cluster config: load existing _or_ initialize brand new v1
+	// 10. cluster config: load existing _or_ initialize brand new v1
 	cluConfig, err := p._cluConfig(smap)
 	if err != nil {
 		cos.ExitLog(err)
 	}
 
-	// 10. metasync (smap, config, etl & bmd) and startup as primary
+	// 11. metasync (smap, config, etl & bmd) and startup as primary
 	smap = p.owner.smap.get()
 	var (
 		actMsgExt = p.newAmsgStr(metaction2, bmd)
 		pairs     = []revsPair{{smap, actMsgExt}, {bmd, actMsgExt}, {cluConfig, actMsgExt}}
 	)
+	if cluConfig.Auth.CSKEnabled() {
+		cskgen(smap.Version)
+		pairs = append(pairs, revsPair{cskload(), actMsgExt})
+	}
+
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	p.markClusterStarted()
@@ -352,7 +357,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		_ = p.metasyncer.sync(revsPair{etlMD, actMsgExt})
 	}
 
-	// 11. Clear regpool
+	// 12. clear regpool
 	p.reg.mu.Lock()
 	p.reg.pool = p.reg.pool[:0]
 	p.reg.pool = nil

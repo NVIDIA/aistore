@@ -64,9 +64,10 @@ type (
 		Smap      *smapX             `json:"smap"`
 		BMD       *bucketMD          `json:"bmd"`
 		RMD       *rebMD             `json:"rmd"`
-		EtlMD     *etlMD             `json:"etlMD"`
+		EtlMD     *etlMD             `json:"etlMD,omitempty"`
 		Config    *globalConfig      `json:"config"`
 		SI        *meta.Snode        `json:"si"`
+		CSK       []byte             `json:"csk,omitempty"`
 		PrimeTime int64              `json:"prime_time"`
 		Flags     cos.NodeStateFlags `json:"flags"`
 	}
@@ -151,6 +152,7 @@ type (
 		skipEtlMD     bool
 		fillRebMarker bool
 		skipPrimeTime bool
+		includeCSK    bool
 	}
 
 	getMaxCii struct {
