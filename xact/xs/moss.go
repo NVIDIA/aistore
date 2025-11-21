@@ -42,7 +42,7 @@ import (
 )
 
 // -----------------------------------------------------------------------
-// For background and usage, please refer to:
+// For background and usage, refer to:
 // 1. GetBatch: Multi-Object Retrieval API, at https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
 // 2. Monitoring GetBatch Performance,      at https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
 // -----------------------------------------------------------------------
@@ -261,17 +261,19 @@ func newMoss(p *mossFactory) *XactMoss {
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 
 	// best-effort `bewarm` for pagecache warming-up
-	adv := r.newAdvice()
 	s := "without"
+	v := "[]"
 	if num := r.config.GetBatch.WarmupWorkers(); num > 0 {
+		adv := r.newAdvice()
 		if adv.Load < load.High {
 			r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
 			s = "with"
+			v = adv.String()
 		}
 	}
 	r.advNextCheck.Store(mono.NanoTime())
 
-	nlog.Infoln(core.T.String(), "run:", r.Name(), s, "\"bewarm\"")
+	nlog.Infoln(core.T.String(), "run:", r.Name(), s, "\"bewarm\"", v)
 	return r
 }
 
@@ -398,6 +400,20 @@ func (r *XactMoss) bewarmStop() {
 	r.bewarm.Wait()
 }
 
+// On "running under pressure" -----
+// 1. Memory is the hard resource constraint.
+//    DT allocates SGLs while assembling outgoing (TAR) archive, so mem-critical
+//    conditions must reject new work items (http 429) - once RAM is exhausted
+//    we cannot safely proceed.
+// 2. Disk is a soft constraint.
+//    Even at 95–99% disk utilization DT can still make forward progress.
+//    Instead of rejecting, we slow down either in PrepRx()
+//    (rare, only when overall load == Critical) or inside asm() where
+//    long-running assembly naturally amplifies disk pressure.
+// 3. load.Advice refreshing logic is decoupled:
+//    - PrepRx refreshes infrequently (advNextCheck).
+//    - asm() refreshes as prescribed (adv.ShouldCheck(i)) ---------------
+
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	var (
@@ -415,15 +431,19 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		ival := advIval(adv.Load)
 		r.advNextCheck.Store(now + int64(ival))
 
-		// change adv.MemLoad() to (general) adv.Load >= load.Critical if need be
+		// DT's admission control
+		tstats := core.T.StatsUpdater()
 		if adv.MemLoad() == load.Critical {
-			core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
+			tstats.Inc(stats.ErrGetBatchCount)
 			err := fmt.Errorf("%s: work item %q rejected due to resource pressure (%s)", r.Name(), wid, adv.String())
 			return cmn.NewErrTooManyRequests(err, http.StatusTooManyRequests)
 		}
-		if adv.Sleep > 0 {
+		if adv.Sleep > 0 && adv.Load == load.Critical {
+			if cmn.Rom.V(4, cos.ModXs) || time.Duration(now-r.lastLog.Load()) > sparseLog {
+				nlog.Warningln("resource pressure:", adv.String(), "- sleeping/delaying:", adv.Sleep)
+			}
 			time.Sleep(adv.Sleep)
-			core.T.StatsUpdater().Add(stats.GetBatchThrottleTotal, int64(adv.Sleep))
+			tstats.Add(stats.GetBatchThrottleTotal, int64(adv.Sleep))
 			now += adv.Sleep.Nanoseconds()
 		}
 	}
@@ -1402,6 +1422,7 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 
 func (wi *basewi) asm() error {
 	r := wi.r
+	adv := r.newAdvice()
 	l := len(wi.req.In)
 	for i := 0; i < l; {
 		if r.IsAborted() || r.IsDone() {
@@ -1416,6 +1437,14 @@ func (wi *basewi) asm() error {
 		}
 		debug.Assert(j > i && j <= l, i, " vs ", j, " vs ", l)
 		i = j
+
+		if adv.ShouldCheck(int64(i)) {
+			adv.Refresh()
+			if adv.DskLoad() >= load.High {
+				debug.Assert(adv.Sleep > 0)
+				time.Sleep(adv.Sleep)
+			}
+		}
 	}
 	return nil
 }

@@ -286,7 +286,8 @@ loaded_cut_set = ais_batch_loader(cut_set)
 ```
 
 
-**See also:**  
+**See also:**
+
 A complete, runnable example for batch loading audios from AIStore with Lhotse is available in [here](https://github.com/lhotse-speech/lhotse/blob/master/examples/06-train-ais-batch.ipynb):
 
 **Archive extraction example:**
