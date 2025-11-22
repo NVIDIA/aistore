@@ -1,8 +1,6 @@
 - name: Copy aisloader binary to hosts
   hosts: aisloader_hosts
   become: true
-  gather_facts: no
-
   tasks:
     - name: Copy aisloader binary
       ansible.builtin.copy:
@@ -11,4 +9,4 @@
     - name: Grant rwx permissions to /usr/local/bin/aisloader
       ansible.builtin.file:
         path: /usr/local/bin/aisloader
-        mode: 'a+rwx'
+        mode: 'a+x'
