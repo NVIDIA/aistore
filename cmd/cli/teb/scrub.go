@@ -56,7 +56,7 @@ type (
 		Prefix string
 		Stats  [ScrNumStats]CntSiz
 		// work
-		Line  cos.Sbuilder
+		Line  cos.SB
 		Cname string
 	}
 	ScrubHelper struct {

@@ -78,7 +78,7 @@ type (
 		total atomic.Int64
 		// detailed logs
 		logs       [teb.ScrNumStats]_log
-		progLine   cos.Sbuilder
+		progLine   cos.SB
 		numBcks    int
 		pid        int
 		haveRemote atomic.Bool
@@ -401,7 +401,7 @@ func (ctx *scrCtx) progress(scr *scrBp, listed int64, yes *bool) {
 	}
 
 	sb := &ctx.progLine
-	sb.Reset(160)
+	sb.Reset(160, true)
 
 	sb.WriteString(scr.Cname)
 	if scr.Prefix != "" {
@@ -539,7 +539,7 @@ func (scr *scrBp) cname(objname string) {
 // logTitleDflt = "Name,Size"
 func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
-	sb.Reset(logMaxLn)
+	sb.Reset(logMaxLn, true)
 	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
@@ -554,7 +554,7 @@ func (log *_log) dflt(scr *scrBp, en *cmn.LsoEnt) {
 // logTitleVerChanged = "Name,Size,Custom"
 func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
-	sb.Reset(logMaxLn)
+	sb.Reset(logMaxLn, true)
 	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
@@ -571,7 +571,7 @@ func (log *_log) vchanged(scr *scrBp, en *cmn.LsoEnt) {
 // logTitleMisplaced  = "Name,Size,Atime,Location"
 func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
-	sb.Reset(logMaxLn)
+	sb.Reset(logMaxLn, true)
 	sb.WriteUint8('"')
 
 	scr.cname(en.Name)
@@ -590,7 +590,7 @@ func (log *_log) misplaced(scr *scrBp, en *cmn.LsoEnt) {
 // logTitleCopies = "Name,Size,Copies"
 func (log *_log) copies(scr *scrBp, en *cmn.LsoEnt) {
 	sb := &scr.Line
-	sb.Reset(logMaxLn)
+	sb.Reset(logMaxLn, true)
 	sb.WriteUint8('"')
 
 	scr.cname(en.Name)

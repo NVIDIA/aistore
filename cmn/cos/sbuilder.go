@@ -8,46 +8,45 @@ import (
 	"unsafe"
 )
 
-// implementation:
-// - reusable, single-threaded, best-effort, and once-allocated
-// motivation:
-// - to optimally replace `strings.Sbuilder` when applicable
-// usage:
-// - currently, scrub only
+// yet another string buffer with assorted convenience
 
-type Sbuilder struct {
+type SB struct {
 	buf []byte
 }
 
-func (b *Sbuilder) String() string {
-	return unsafe.String(unsafe.SliceData(b.buf), len(b.buf))
+func (sb *SB) String() string {
+	return unsafe.String(unsafe.SliceData(sb.buf), len(sb.buf))
 }
 
-func (b *Sbuilder) Reset(want int) {
+func (sb *SB) CloneString() string { return string(sb.buf) }
+func (sb *SB) Bytes() []byte       { return sb.buf }
+
+func (sb *SB) Reset(want int, allowShrink bool) {
 	const (
 		headroom = 64
 	)
 	var (
-		prev = len(b.buf)
-		curr = cap(b.buf)
+		prev = len(sb.buf)
+		curr = cap(sb.buf)
 	)
 	want = max(want, prev+headroom)
 	switch {
 	case curr < want:
 		// alloc
-		b.buf = make([]byte, 0, want)
-	case curr > want<<2:
+		sb.buf = make([]byte, 0, want)
+	case allowShrink && curr > (want<<2):
 		// shrink
-		b.buf = make([]byte, 0, want<<1)
+		sb.buf = make([]byte, 0, want<<1)
 	default:
 		// reuse as is
-		b.buf = b.buf[:0]
+		sb.buf = sb.buf[:0]
 	}
 }
 
-func (b *Sbuilder) Len() int { return len(b.buf) }
-func (b *Sbuilder) Cap() int { return cap(b.buf) }
+func (sb *SB) Len() int { return len(sb.buf) }
+func (sb *SB) Cap() int { return cap(sb.buf) }
 
-func (b *Sbuilder) WriteUint8(c byte) { b.buf = append(b.buf, c) }
+func (sb *SB) WriteUint8(c byte) { sb.buf = append(sb.buf, c) }
 
-func (b *Sbuilder) WriteString(s string) { b.buf = append(b.buf, s...) }
+func (sb *SB) WriteString(s string) { sb.buf = append(sb.buf, s...) }
+func (sb *SB) WriteBytes(b []byte)  { sb.buf = append(sb.buf, b...) }
