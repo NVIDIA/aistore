@@ -203,7 +203,8 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 
 	// phase 3: redirect user's GET => DT
 	r.URL.Path = path
-	redirectURL := p.redirectURL(r, tsi, time.Now(), cmn.NetIntraControl)
+	started := time.Now()
+	redirectURL := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
 
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)

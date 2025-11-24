@@ -201,7 +201,7 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
 	}
 	if at := oah.AtimeUnix(); at != 0 {
-		hdr.Set(apc.HdrObjAtime, cos.UnixNano2S(at))
+		hdr.Set(apc.HdrObjAtime, unixNano2S(at))
 	}
 	if size > 0 {
 		// "response to a HEAD method should not have a body", and so
@@ -231,7 +231,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	}
 
 	if at := hdr.Get(apc.HdrObjAtime); at != "" {
-		atime, err := cos.S2UnixNano(at)
+		atime, err := s2UnixNano(at)
 		debug.AssertNoErr(err)
 		oa.Atime = atime
 	}
@@ -382,3 +382,10 @@ func _eqIgnoreQuotes(a, b string) bool {
 	}
 	return a == b
 }
+
+//
+// time utils (compare w/ ais/utils)
+//
+
+func unixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
+func s2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }

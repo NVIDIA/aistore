@@ -6,7 +6,6 @@ package cos
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -40,14 +39,8 @@ func FormatTime(t time.Time, format string) string {
 
 func FormatNowStamp() string { return FormatTime(time.Now(), StampMicro) }
 
-func S2Duration(s string) (time.Duration, error) {
-	d, err := strconv.ParseInt(s, 0, 64)
-	return time.Duration(d), err
-}
-
-func UnixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 10) }
-func S2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
-func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() == 0 } // https://github.com/golang/go/issues/33597
+// https://github.com/golang/go/issues/33597
+func IsTimeZero(t time.Time) bool { return t.IsZero() || t.UTC().Unix() == 0 }
 
 // wait duration => probing frequency
 func ProbingFrequency(dur time.Duration) time.Duration {

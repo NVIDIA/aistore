@@ -251,8 +251,8 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, items []
 		return
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redurl, bck.Name)
 }
 
 // DELETE /s3/<bucket-name>?delete
@@ -499,8 +499,8 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		nlog.Infoln("COPY:", r.Method, bckSrc.Cname(objName), "=>", bckDst.Cname(""), items, tsi.StringEx())
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraControl)
-	p.s3Redirect(w, r, tsi, redirectURL, bckDst.Name)
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	p.s3Redirect(w, r, tsi, redurl, bckDst.Name)
 }
 
 // PUT /s3/<bucket-name>/<object-name> - with empty `cos.S3HdrObjSrc`
@@ -533,10 +533,10 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
-	started := time.Now()
 
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
+	started := time.Now()
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redurl, bck.Name)
 }
 
 // +gen:endpoint GET /s3/{bucket-name}/{object-name}
@@ -573,10 +573,10 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 	if cmn.Rom.V(5, cos.ModS3) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
-	started := time.Now()
 
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
-	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
+	started := time.Now()
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	p.s3Redirect(w, r, tsi, redurl, bck.Name)
 }
 
 // GET /s3/<bucket-name>/<object-name> with `s3.QparamMptUploads`
@@ -589,8 +589,8 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 			return
 		}
 		started := time.Now()
-		redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
-		p.s3Redirect(w, r, si, redirectURL, bck.Name)
+		redurl := p.redurl(r, si, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+		p.s3Redirect(w, r, si, redurl, bck.Name)
 		return
 	}
 	// bcast & aggregate
@@ -696,8 +696,8 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraControl)
-	p.s3Redirect(w, r, tsi, redirectURL, bck.Name)
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	p.s3Redirect(w, r, tsi, redurl, bck.Name)
 }
 
 // +gen:endpoint GET /s3/{bucket-name} [s3.QparamVersioning=string]
@@ -773,7 +773,7 @@ func (p *proxy) initByNameOnly(w http.ResponseWriter, r *http.Request, bucket st
 
 // either reverse-proxy call _or_ HTTP-redirect to a designated node
 // see also: docs/s3compat.md
-func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redirectURL, bucket string) {
+func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snode, redurl, bucket string) {
 	if cmn.Rom.Features().IsSet(feat.S3ReverseProxy) {
 		// [intra-cluster communications]
 		// instead of regular HTTP redirect (below) reverse-proxy S3 API call to a designated target
@@ -785,12 +785,12 @@ func (p *proxy) s3Redirect(w http.ResponseWriter, r *http.Request, si *meta.Snod
 	}
 
 	h := w.Header()
-	h.Set(cos.HdrLocation, redirectURL)
+	h.Set(cos.HdrLocation, redurl)
 	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")
 	h.Set(cos.HdrServer, s3.AISServer)
 
 	var (
-		ep = extractEndpoint(redirectURL)
+		ep = extractEndpoint(redurl)
 		ll = max(256, 175+len(ep)+len(bucket)-27)
 		bb = bytes.NewBuffer(make([]byte, ll)) // TODO: consider using smm (small-size allocator) - here and elsewhere
 	)

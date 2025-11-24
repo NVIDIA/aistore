@@ -160,8 +160,9 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 			break
 		}
 	}
-	redirectURL := ic.p.redirectURL(r, node, time.Now(), cmn.NetIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	now := time.Now().UnixNano()
+	redurl := ic.p.redurl(r, node, smap.Version, now, cmn.NetIntraControl, "")
+	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 	return true
 }
 

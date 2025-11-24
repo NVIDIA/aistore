@@ -1209,13 +1209,17 @@ func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	if c.uuid == "" {
 		return nil
 	}
+
+	var d int64
 	if tout := query.Get(apc.QparamNetwTimeout); tout != "" {
-		c.timeout.netw, err = cos.S2Duration(tout)
+		d, err = s2UnixNano(tout)
 		debug.AssertNoErr(err)
+		c.timeout.netw = time.Duration(d)
 	}
 	if tout := query.Get(apc.QparamHostTimeout); tout != "" {
-		c.timeout.host, err = cos.S2Duration(tout)
+		d, err = s2UnixNano(tout)
 		debug.AssertNoErr(err)
+		c.timeout.host = time.Duration(d)
 	}
 	c.query = query // operation-specific values, if any
 	return err

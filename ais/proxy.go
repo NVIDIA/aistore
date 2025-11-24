@@ -9,7 +9,6 @@ package ais
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -760,8 +759,8 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		nlog.Infoln("GET", bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
-	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	http.Redirect(w, r, redurl, http.StatusMovedPermanently)
 
 	// 5. stats
 	p.statsT.IncBck(stats.GetCount, bck.Bucket())
@@ -863,8 +862,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		nlog.Infoln(verb, bck.Cname(objName), "=>", tsi.StringEx())
 	}
 
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraData, netPub)
+	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 
 	// 5. stats
 	p.statsT.IncWith(scnt, vlabs)
@@ -907,8 +906,9 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln("DELETE", bck.Cname(objName), "=>", tsi.StringEx())
 	}
-	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	started := time.Now()
+	redurl := p.redurl(r, tsi, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 
 	p.statsT.IncBck(stats.DeleteCount, bck.Bucket())
 }
@@ -2050,8 +2050,10 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+
+	started := time.Now()
+	redurl := p.redurl(r, si, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 
 // +gen:endpoint PATCH /v1/objects/{bucket-name}/{object-name}[apc.QparamProvider=string,apc.QparamNamespace=string]
@@ -2083,8 +2085,8 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	if cmn.Rom.V(5, cos.ModAIS) {
 		nlog.Infoln(r.Method, bck.Cname(objName), "=>", si.StringEx())
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+	redurl := p.redurl(r, si, smap.Version, started.UnixNano(), cmn.NetIntraControl, "")
+	http.Redirect(w, r, redurl, http.StatusTemporaryRedirect)
 }
 
 func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.ActMsg, dpq *dpq) {
@@ -2145,89 +2147,6 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	if _, err := w.Write(res.bytes); err != nil {
 		nlog.Warningln(err) // (broken pipe; benign)
 	}
-}
-
-func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIntra string, netPubs ...string) string {
-	var (
-		nodeURL string
-		netPub  = cmn.NetPublic
-	)
-	if len(netPubs) > 0 {
-		netPub = netPubs[0]
-	}
-	if p.si.LocalNet == nil {
-		nodeURL = si.URL(netPub)
-	} else {
-		var local bool
-		remote := r.RemoteAddr
-		if colon := strings.Index(remote, ":"); colon != -1 {
-			remote = remote[:colon]
-		}
-		if ip := net.ParseIP(remote); ip != nil {
-			local = p.si.LocalNet.Contains(ip)
-		}
-		if local {
-			nodeURL = si.URL(netIntra)
-		} else {
-			nodeURL = si.URL(netPub)
-		}
-	}
-	// fast path
-	if !cmn.HasSpecialSymbols(r.URL.Path) {
-		var (
-			q = url.Values{
-				apc.QparamPID:      []string{p.SID()},
-				apc.QparamUnixTime: []string{cos.UnixNano2S(ts.UnixNano())},
-			}
-		)
-		debug.Assertf(!strings.Contains(r.URL.Path, "%"), "path %q contains %%", r.URL.Path)
-		if r.URL.RawQuery != "" {
-			return nodeURL + r.URL.Path + "?" + r.URL.RawQuery + "&" + q.Encode()
-		}
-		return nodeURL + r.URL.Path + "?" + q.Encode()
-	}
-
-	// slow path
-	// it is conceivable that at some future point we may need to url.Parse nodeURL
-	// and then use both scheme and host from the parsed result; not now though (NOTE)
-	var (
-		scheme = "http"
-		host   string
-	)
-	if strings.HasPrefix(nodeURL, "https://") {
-		scheme = "https"
-		host = strings.TrimPrefix(nodeURL, "https://")
-	} else {
-		host = strings.TrimPrefix(nodeURL, "http://")
-	}
-	q := r.URL.Query()
-	q.Set(apc.QparamPID, p.SID())
-	q.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
-	u := url.URL{
-		Scheme:   scheme,
-		Host:     host,
-		Path:     r.URL.Path,
-		RawQuery: q.Encode(),
-	}
-	return u.String()
-}
-
-// http-redirect(with-json-message)
-func (p *proxy) redirectAction(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, msg *apc.ActMsg) {
-	started := time.Now()
-	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
-	if err != nil {
-		p.writeErr(w, r, err)
-		return
-	}
-	if cmn.Rom.V(5, cos.ModAIS) {
-		nlog.Infoln(msg.Action, bck.Cname(objName), "=>", si.StringEx())
-	}
-
-	// 307 is the only way to http-redirect with the original JSON payload
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func (p *proxy) bcastMultiobj(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {

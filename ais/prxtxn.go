@@ -63,9 +63,9 @@ func (c *txnCln) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitms
 	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
 	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
-		query.Set(apc.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
+		query.Set(apc.QparamNetwTimeout, unixNano2S(int64(c.timeout.netw)))
 	}
-	query.Set(apc.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
+	query.Set(apc.QparamHostTimeout, unixNano2S(int64(c.timeout.host)))
 
 	c.msg = c.p.newAmsg(msg, nil, c.uuid)
 	body := cos.MustMarshal(c.msg)
@@ -130,7 +130,7 @@ func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResult
 	c.req.Path = cos.JoinWP(c.path, phase)
 	if phase != apc.Abort2PC {
 		now := time.Now()
-		c.req.Query.Set(apc.QparamUnixTime, cos.UnixNano2S(now.UnixNano()))
+		c.req.Query.Set(apc.QparamUnixTime, unixNano2S(now.UnixNano()))
 	}
 
 	args := allocBcArgs()

@@ -2504,7 +2504,7 @@ func isRedirect(q url.Values) (ptime string) {
 }
 
 func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
-	pts, err := cos.S2UnixNano(ptime)
+	pts, err := s2UnixNano(ptime)
 	if err != nil {
 		debug.AssertNoErr(err)
 		return

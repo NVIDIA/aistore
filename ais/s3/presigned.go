@@ -176,6 +176,7 @@ func (pts *PresignedReq) DoReader(client *http.Client) (*PresignedResp, error) {
 	// S3 checks every single query param
 	pts.query.Del(apc.QparamPID)
 	pts.query.Del(apc.QparamUnixTime)
+	pts.query.Del(apc.QparamSmapVer)
 	queryEncoded := pts.query.Encode()
 
 	signedRequestStyle := pts.oreq.Header.Get(apc.HdrSignedRequestStyle)

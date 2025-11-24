@@ -469,3 +469,10 @@ func xvlabs(bck *meta.Bck) map[string]string {
 	}
 	return stats.EmptyBckXlabs
 }
+
+//
+// time utils (base36)
+//
+
+func unixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 36) }
+func s2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 36, 64) }
