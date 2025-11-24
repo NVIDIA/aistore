@@ -358,21 +358,8 @@ func extractXactIDsForKind(xs xact.MultiSnap, xactKind string) (xactIDs []string
 	return xactIDs
 }
 
-// [backward compatibility] added xargs.Flags in 44f77dfe56376e
-func xstart(c *cli.Context, xargs *xact.ArgsMsg, extra string) (xid string, err error) {
-	if xid, err = api.StartXaction(apiBP, xargs, extra); err == nil {
-		return xid, nil
-	}
-	if !strings.Contains(err.Error(), "marshal") {
-		return "", V(err)
-	}
-	debug.Assert(xargs.Flags != 0) // ditto
-	if smap, e1 := getClusterMap(c); e1 == nil {
-		if ds, e2 := api.GetStatsAndStatus(apiBP, smap.Primary); e2 == nil {
-			err = fmt.Errorf("CLI version %s is not compatible with (an older) AIS v%s", c.App.Version, ds.Version)
-		}
-	}
-	return "", err
+func xstart(xargs *xact.ArgsMsg, extra string) (xid string, err error) {
+	return api.StartXaction(apiBP, xargs, extra)
 }
 
 func xstop(xargs *xact.ArgsMsg) (err error) {

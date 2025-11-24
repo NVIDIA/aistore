@@ -35,29 +35,21 @@ type (
 	}
 )
 
-// NOTE: [backward compatibility] v3.23
 func (ctx *dstatsCtx) get() error {
-	// 1. get any stats
 	out, err := api.GetAnyStats(apiBP, ctx.tid, apc.WhatDiskRWUtilCap)
 	if err != nil {
 		return V(err)
 	}
 
-	// 2. current version
 	var tcdfExt fs.TcdfExt
-	err = jsoniter.Unmarshal(out, &tcdfExt)
-	if err == nil && tcdfExt.AllDiskStats != nil {
+	if err := jsoniter.Unmarshal(out, &tcdfExt); err != nil {
+		return fmt.Errorf("failed to unmarshal disk stats: %v", err)
+	}
+	if tcdfExt.AllDiskStats != nil {
 		ctx.ch <- dstats{tid: ctx.tid, stats: tcdfExt.AllDiskStats, tcdf: &tcdfExt.Tcdf}
-		return nil
+	} else if cliConfVerbose() {
+		fmt.Printf("Warning: empty disk stats from %s\n", meta.Tname(ctx.tid))
 	}
-
-	// 3. v3.23 and older
-	var stats cos.AllDiskStats
-	err = jsoniter.Unmarshal(out, &stats)
-	if err != nil {
-		return err
-	}
-	ctx.ch <- dstats{tid: ctx.tid, stats: stats}
 	return nil
 }
 

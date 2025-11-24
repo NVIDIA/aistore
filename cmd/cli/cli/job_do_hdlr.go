@@ -417,7 +417,7 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 		return fmt.Errorf("%q requires bucket to run", xargs.Kind)
 	}
 
-	xid, err := xstart(c, xargs, extra)
+	xid, err := xstart(xargs, extra)
 	if err != nil {
 		return err
 	}
@@ -1077,7 +1077,7 @@ func startLRUHandler(c *cli.Context) error {
 	}
 
 	xargs := xact.ArgsMsg{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
-	xid, err := xstart(c, &xargs, "")
+	xid, err := xstart(&xargs, "")
 	if err != nil {
 		return err
 	}

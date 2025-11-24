@@ -258,7 +258,7 @@ func cleanupStorageHandler(c *cli.Context) error {
 	}
 
 	// do
-	xid, err := xstart(c, &xargs, "")
+	xid, err := xstart(&xargs, "")
 	if err != nil {
 		return err
 	}

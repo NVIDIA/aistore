@@ -370,21 +370,12 @@ func fmtTargetsSumm(smap *meta.Smap, numDisks int) string {
 func fmtCapPctMAM(tcdf *fs.Tcdf, list bool) string {
 	var (
 		a, b, c string
-		skipMin = " -    " // len(sepa) + len("min%,")
 		sepa    = "  "
 	)
 	// list vs table
 	if list {
 		a, b, c, sepa = "min=", "avg=", "max=", ","
-		skipMin = ""
 	}
-
-	// [backward compatibility]: PctMin was added in v3.21
-	// TODO: remove
-	if tcdf.PctAvg > 0 && tcdf.PctMin == 0 {
-		return fmt.Sprintf("%s%s%2d%%%s %s%2d%%", skipMin, b, tcdf.PctAvg, sepa, c, tcdf.PctMax)
-	}
-
 	return fmt.Sprintf("%s%2d%%%s %s%2d%%%s %s%2d%%", a, tcdf.PctMin, sepa, b, tcdf.PctAvg, sepa, c, tcdf.PctMax)
 }
 
