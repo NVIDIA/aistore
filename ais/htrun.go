@@ -83,6 +83,7 @@ type htrun struct {
 		rmd    *rmdOwner
 		config *configOwner
 		etl    etlOwner
+		csk    cskOwner
 	}
 	keepalive keepaliver
 	statsT    stats.Tracker
@@ -180,7 +181,7 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 
 	if opts.includeCSK {
 		debug.Assert(smap.IsPrimary(h.si)) // only primary can be asked via opts.includeCSK
-		k := cskload()
+		k := h.owner.csk.load()
 		debug.Assert(k.version() > 0 && len(k.secret) != 0) // must have a good key
 		cm.CSK = k.marshal()
 	}
@@ -211,18 +212,18 @@ func (h *htrun) recvCluMeta(body []byte) (*cluMeta, error) {
 
 	var (
 		nk       clusterKey
-		ok       = cskload()
+		ok       = h.owner.csk.load()
 		unpacker = cos.NewUnpacker(cm.CSK)
 	)
 	if err := nk.Unpack(unpacker); err != nil {
-		return nil, fmt.Errorf("%s: failed to unpack %s, err: %v", h, tagcsk, err)
+		return nil, fmt.Errorf("%s: failed to unpack %s, err: %v", h, cskTag, err)
 	}
 	if nk.version() <= ok.version() {
 		if nk.version() < ok.version() {
 			return nil, newErrDowngrade(h.si, ok.String(), nk.String())
 		}
 	} else {
-		cskstore(&nk)
+		h.owner.csk.store(&nk)
 		nlog.Infoln(h.String(), "received", nk.String())
 	}
 	return &cm, nil
@@ -354,13 +355,12 @@ func (h *htrun) init(config *cmn.Config) {
 	h.owner.smap = newSmapOwner(config)
 	h.owner.rmd = newRMDOwner(config)
 	h.owner.rmd.load()
+	h.owner.csk.init()
 
 	h.gmm = memsys.PageMM()
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
-
-	cskreset()
 
 	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
 }
@@ -1938,7 +1938,7 @@ func (h *htrun) extractCSK(payload msPayload, sender string) (*clusterKey, *actM
 	nk := &clusterKey{}
 	unpacker := cos.NewUnpacker(bytes)
 	if err := nk.Unpack(unpacker); err != nil {
-		err = fmt.Errorf("%s: failed to unpack %s, err: %v", h, tagcsk, err)
+		err = fmt.Errorf("%s: failed to unpack %s, err: %v", h, cskTag, err)
 		return nil, nil, err
 	}
 	nlog.Infof("extract %s from %q (action: %q)", nk.String(), sender, msg.Action)
@@ -1948,7 +1948,7 @@ func (h *htrun) extractCSK(payload msPayload, sender string) (*clusterKey, *actM
 
 // (compare w/ h.cluMeta)
 func (h *htrun) receiveCSK(nk *clusterKey, msg *actMsgExt, sender string) error {
-	ok := cskload()
+	ok := h.owner.csk.load()
 	logmsync(ok.ver, nk, msg, sender, nk.String())
 
 	if nk.version() <= ok.version() {
@@ -1956,7 +1956,7 @@ func (h *htrun) receiveCSK(nk *clusterKey, msg *actMsgExt, sender string) error 
 			return newErrDowngrade(h.si, ok.String(), nk.String())
 		}
 	} else {
-		cskstore(nk)
+		h.owner.csk.store(nk)
 	}
 	return nil
 }

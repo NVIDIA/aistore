@@ -471,7 +471,7 @@ func xvlabs(bck *meta.Bck) map[string]string {
 }
 
 //
-// time utils (base36)
+// intra-cluster times and durations (base36)
 //
 
 func unixNano2S(unixnano int64) string   { return strconv.FormatInt(unixnano, 36) }

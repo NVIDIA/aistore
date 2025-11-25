@@ -235,8 +235,10 @@ const (
 	// Notification target's node ID (usually, the node that initiates the operation).
 	QparamNotifyMe = "nft"
 
-	// Smap version (see also HdrSenderSmapVer)
+	// added in v4.1
 	QparamSmapVer = "vpams"
+	QparamNonce   = "x"
+	QparamHMAC    = "u"
 )
 
 // QparamWhat enum.

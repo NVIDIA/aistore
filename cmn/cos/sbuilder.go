@@ -6,6 +6,8 @@ package cos
 
 import (
 	"unsafe"
+
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // yet another string buffer with assorted convenience
@@ -19,7 +21,18 @@ func (sb *SB) String() string {
 }
 
 func (sb *SB) CloneString() string { return string(sb.buf) }
-func (sb *SB) Bytes() []byte       { return sb.buf }
+
+func (sb *SB) Bytes() []byte { return sb.buf }
+
+// - reserve n bytes at the tail of sb.buf
+// - update sb's length
+// - return the corresponding byte slice
+func (sb *SB) ReserveAppend(n int) []byte {
+	debug.Assertf(cap(sb.buf) >= len(sb.buf)+n, "insufficient capacity: %d vs %d", cap(sb.buf), len(sb.buf)+n)
+	off := len(sb.buf)
+	sb.buf = sb.buf[:off+n]
+	return sb.buf[off : off+n]
+}
 
 func (sb *SB) Reset(want int, allowShrink bool) {
 	const (

@@ -88,7 +88,7 @@ const (
 	revsConfTag  = "Conf"
 	revsTokenTag = "token"
 	revsEtlMDTag = "EtlMD"
-	revsCSKTag   = tagcsk
+	revsCSKTag   = cskTag
 
 	revsMaxTags   = 7         // NOTE
 	revsActionTag = "-action" // prefix revs tag

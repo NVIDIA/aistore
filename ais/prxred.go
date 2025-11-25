@@ -22,22 +22,25 @@ import (
 
 var (
 	qPool = sync.Pool{
-		New: func() any { v := make(url.Values, 4); return v },
+		New: func() any { v := make(url.Values, 5); return v },
 	}
 )
 
 func qAlloc() url.Values { return qPool.Get().(url.Values) }
 func qFree(v url.Values) { clear(v); qPool.Put(v) }
 
-func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netIntra, netPub string) string {
-	var nodeURL string
+func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netIntra, netPub string) (out string) {
+	var (
+		nodeURL string // dst node
+	)
 	netPub = cos.Left(netPub, cmn.NetPublic)
-
 	if p.si.LocalNet == nil {
 		nodeURL = si.URL(netPub)
 	} else {
-		var local bool
-		remote := r.RemoteAddr
+		var (
+			remote = r.RemoteAddr
+			local  bool
+		)
 		if colon := strings.Index(remote, ":"); colon != -1 {
 			remote = remote[:colon]
 		}
@@ -51,47 +54,77 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 		}
 	}
 
-	// fast path
-	if !cmn.HasSpecialSymbols(r.URL.Path) {
+	var (
+		sign    *signer
+		enabled = cmn.Rom.CSKEnabled()
+		special = cmn.HasSpecialSymbols(r.URL.Path)
+	)
+	switch {
+	case enabled:
+		sb := sbAlloc()
+		defer sbFree(sb)
+		size := len(nodeURL) + len(r.URL.Path) + len(r.URL.RawQuery) + cskURLOverhead // !special size; not optimizing
+		sb.Reset(size, true)
+		sign = &signer{
+			r:       r,
+			p:       p,
+			sb:      sb,
+			smapVer: smapVer,
+		}
+		sign.compute()
+		if !special {
+			// fast signing path
+			out = sign.buildURL(nodeURL, now)
+			break
+		}
+		fallthrough
+	case !enabled && special:
+		scheme, host, q := _preparse(nodeURL, r)
+		raw := p.qencode(q, now, sign)
+		u := url.URL{
+			Scheme:   scheme,
+			Host:     host,
+			Path:     r.URL.Path,
+			RawQuery: raw,
+		}
+		out = u.String()
+	default:
+		// fast path
 		q := qAlloc()
-		s := p.qencode(q, smapVer, now)
+		raw := p.qencode(q, now, nil)
 		qFree(q)
 		if r.URL.RawQuery != "" {
-			return nodeURL + r.URL.Path + "?" + r.URL.RawQuery + "&" + s
+			return nodeURL + r.URL.Path + "?" + r.URL.RawQuery + "&" + raw
 		}
-		return nodeURL + r.URL.Path + "?" + s
+		out = nodeURL + r.URL.Path + "?" + raw
 	}
 
-	// slow path
-	// it is conceivable that at some future point we may need to url.Parse nodeURL
-	// and then use both scheme and host from the parsed result; not now though (NOTE)
-	var (
-		scheme = "http"
-		host   string
-	)
+	// in the future, we may need to parse nodeURL and use both scheme and host
+	return out
+}
+
+func _preparse(nodeURL string, r *http.Request) (scheme, host string, q url.Values) {
+	scheme = "http"
 	if strings.HasPrefix(nodeURL, "https://") {
 		scheme = "https"
 		host = strings.TrimPrefix(nodeURL, "https://")
 	} else {
 		host = strings.TrimPrefix(nodeURL, "http://")
 	}
-	q := r.URL.Query()
-	s := p.qencode(q, smapVer, now)
-	u := url.URL{
-		Scheme:   scheme,
-		Host:     host,
-		Path:     r.URL.Path,
-		RawQuery: s,
-	}
-	return u.String()
+	return scheme, host, r.URL.Query()
 }
 
 // populate redirect-specific query parameters (PID, timestamp, Smap version)
-// and return encoded query string
-func (p *proxy) qencode(q url.Values, smapVer, now int64) string {
+// return encoded (raw) query string
+func (p *proxy) qencode(q url.Values, now int64, sign *signer) string {
 	q.Set(apc.QparamPID, p.SID())
-	q.Set(apc.QparamSmapVer, strconv.FormatInt(smapVer, 16))
 	q.Set(apc.QparamUnixTime, unixNano2S(now))
+
+	if sign != nil {
+		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, cskBase))
+		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, cskBase))
+		q.Set(apc.QparamHMAC, string(sign.sig))
+	}
 	return q.Encode()
 }
 

@@ -92,6 +92,8 @@ func newPrimary(t *testing.T) *proxy {
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetInitialGconfPath(config.ConfigDir + "/ais.config")
 
+	cmn.Rom.Set(&config.ClusterConfig)
+
 	g.client.data = &http.Client{}
 	g.client.control = &http.Client{}
 
@@ -126,6 +128,8 @@ func newSecondary(name string) *proxy {
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Cksum.Type = cos.ChecksumOneXxh
 	cmn.GCO.CommitUpdate(config)
+
+	cmn.Rom.Set(&config.ClusterConfig)
 
 	o := newBMDOwnerPrx(cmn.GCO.Get())
 	o.put(newBucketMD())

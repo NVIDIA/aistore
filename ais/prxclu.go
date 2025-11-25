@@ -1142,7 +1142,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		if !config.Auth.CSKEnabled() && toUpdate.Auth.ClusterKey != nil {
 			cskEnabled := *toUpdate.Auth.ClusterKey.Enabled
 			if config.Auth.CSKEnabled() != cskEnabled {
-				whingeToUpdate("config.auth "+tagcsk, strconv.FormatBool(config.Auth.CSKEnabled()), strconv.FormatBool(cskEnabled))
+				whingeToUpdate("config.auth "+cskTag, strconv.FormatBool(config.Auth.CSKEnabled()), strconv.FormatBool(cskEnabled))
 			}
 		}
 	}
@@ -1246,11 +1246,11 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	)
 	switch {
 	case clone.Auth.CSKEnabled() && (ctx.oldConfig == nil || !ctx.oldConfig.Auth.CSKEnabled()):
-		cskgen(p.owner.smap.get().Version)
-		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{cskload(), msg})
+		k := p.owner.csk.gen(p.owner.smap.get().Version)
+		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{k, msg})
 	case !clone.Auth.CSKEnabled() && (ctx.oldConfig != nil && ctx.oldConfig.Auth.CSKEnabled()):
 		// clear locally; usage gated by Rom.CSKEnabled()
-		cskreset()
+		p.owner.csk.reset()
 		fallthrough
 	default:
 		wg = p.metasyncer.sync(revsPair{clone, msg})
