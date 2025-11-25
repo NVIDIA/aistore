@@ -192,3 +192,59 @@ func TestRedurl_SignedSlow(t *testing.T) {
 		t.Fatalf("expected HMAC, got %v", q)
 	}
 }
+
+func TestSigner_VerifyRoundTrip(t *testing.T) {
+	p := newTestProxy(t, true /* CSK enabled */)
+	dst := newTestSnode(t)
+	now := time.Now().UnixNano()
+	smapVer := int64(888)
+
+	// 1) generate signed redirect URL
+	orig := newReq(http.MethodGet, "/v1/signed-verify", "q=ok")
+	signed := p.redurl(orig, dst, smapVer, now, cmn.NetIntraControl, "")
+
+	u := parseRedirect(t, signed)
+
+	// 2) reconstruct incoming request on receiver side
+	rOK := &http.Request{
+		Method:        orig.Method,
+		URL:           u,
+		Host:          u.Host,
+		ContentLength: orig.ContentLength,
+	}
+
+	// assert
+	if !cmn.Rom.CSKEnabled() {
+		t.Fatal("CSK must be enabled for verify test")
+	}
+
+	// 3) verify with signer
+	sign := &signer{
+		r: rOK,
+		h: &p.htrun,
+	}
+	status, err := sign.verify(rOK.URL.Query())
+	if err != nil || status != 0 {
+		t.Fatalf("verify() failed for valid signed URL: status=%d, err=%v, url=%q", status, err, signed)
+	}
+
+	// 4) negative case: tamper a field that is part of HMAC (path)
+	uBad := *u // shallow copy
+	uBad.Path = u.Path + "-tampered"
+
+	rBad := &http.Request{
+		Method:        orig.Method,
+		URL:           &uBad,
+		Host:          uBad.Host,
+		ContentLength: orig.ContentLength,
+	}
+
+	signBad := &signer{
+		r: rBad,
+		h: &p.htrun,
+	}
+	status, err = signBad.verify(rBad.URL.Query())
+	if err == nil || status != http.StatusUnauthorized {
+		t.Fatalf("expected verify() to fail with 401 for tampered path, got status=%d, err=%v", status, err)
+	}
+}

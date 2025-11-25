@@ -2493,6 +2493,20 @@ func (h *htrun) uptime2hdr(hdr http.Header) {
 	hdr.Set(apc.HdrClusterUptime, strconv.FormatInt(now-h.startup.cluster.Load(), 10))
 }
 
+// populate redirect-specific query parameters (PID, timestamp, Smap version)
+// return encoded (raw) query string
+func (h *htrun) qencode(q url.Values, now int64, sign *signer) string {
+	q.Set(apc.QparamPID, h.SID())
+	q.Set(apc.QparamUnixTime, unixNano2S(now))
+
+	if sign != nil {
+		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, cskBase))
+		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, cskBase))
+		q.Set(apc.QparamHMAC, string(sign.sig))
+	}
+	return q.Encode()
+}
+
 // NOTE: not checking vs Smap (yet)
 func isT2TPut(hdr http.Header) bool { return hdr != nil && hdr.Get(apc.HdrT2TPutterID) != "" }
 
@@ -2518,6 +2532,25 @@ func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 		dur = 0
 	}
 	return
+}
+
+// validate HMAC of intra-cluster redirect URLs, if present
+// TODO -- FIXME: work in progress
+func (h *htrun) verifySignedURL(r *http.Request) (int, error) {
+	if !cmn.Rom.CSKEnabled() {
+		return 0, nil
+	}
+	// TODO -- FIXME: optimize
+	q := r.URL.Query()
+	if q.Get(apc.QparamHMAC) == "" {
+		// TODO -- FIXME: unsigned redirect (legacy) – accept for now
+		return 0, nil
+	}
+	sign := &signer{
+		r: r,
+		h: h,
+	}
+	return sign.verify(q)
 }
 
 //

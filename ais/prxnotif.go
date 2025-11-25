@@ -42,8 +42,8 @@ const (
 type (
 	listeners struct {
 		all [shimcnt]struct {
-			sync.RWMutex
 			m map[string]nl.Listener
+			sync.RWMutex
 		}
 		l atomic.Int32 // current len across all maps
 	}

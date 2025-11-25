@@ -5,16 +5,21 @@
 package ais
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"hash"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -49,10 +54,10 @@ const (
 type (
 	signer struct {
 		r       *http.Request
-		p       *proxy
-		smapVer int64
+		h       *htrun
 		sb      *cos.SB
 		sig     []byte
+		smapVer int64
 		nonce   uint64
 	}
 	cskOwner struct {
@@ -112,15 +117,19 @@ func (csk *cskOwner) gen(smapVer int64) (nk *clusterKey) {
 // signer //
 ////////////
 
-func (sign *signer) compute() {
+func (sign *signer) bufsize(pid string) int {
+	r := sign.r
+	return len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + cskSigLen
+}
+
+func (sign *signer) compute(pid string) {
 	var (
 		r    = sign.r
 		sb   = sign.sb
-		pid  = sign.p.SID()
-		size = len(r.Method) + 1 + len(r.URL.Path) + 1 + len(pid) + 1 + 3*cos.SizeofI64 + cskSigLen
+		size = sign.bufsize(pid)
 	)
-	debug.Assert(sb.Cap() >= size, sb.Cap(), " vs ", size)
 	sb.Reset(size, false /*allow shrink*/)
+	debug.Assert(sb.Cap() >= size, sb.Cap(), " vs ", size)
 
 	// (method, url path, pid)
 	sb.WriteString(r.Method)
@@ -136,13 +145,12 @@ func (sign *signer) compute() {
 	sb.WriteBytes(b8[:])
 	binary.BigEndian.PutUint64(b8[:], uint64(max(r.ContentLength, 0))) // (not max uint64)
 	sb.WriteBytes(b8[:])
-	sign.nonce = sign.p.owner.csk.nonce.Add(1)
 	binary.BigEndian.PutUint64(b8[:], sign.nonce)
 	sb.WriteBytes(b8[:])
 
 	// hash
 	hb := handAlloc()
-	k := sign.p.owner.csk.load()
+	k := sign.h.owner.csk.load()
 	debug.Assert(k.ver > 0 && len(k.secret) > 0)
 	if hb.h == nil || hb.ver != k.ver {
 		hb.h = hmac.New(sha256.New, k.secret)
@@ -164,13 +172,13 @@ func (sign *signer) compute() {
 
 func (sign *signer) buildURL(nodeURL string, now int64) string {
 	var (
-		p  = sign.p
+		h  = sign.h
 		r  = sign.r
 		sb = sign.sb
 	)
 	// 1) build the query string while `sign.sig` still points into sb.buf
 	q := qAlloc()
-	raw := p.qencode(q, now, sign)
+	raw := h.qencode(q, now, sign)
 	qFree(q)
 
 	// 2) reuse sb for final URL
@@ -189,6 +197,48 @@ func (sign *signer) buildURL(nodeURL string, now int64) string {
 
 	sb.WriteString(raw)
 	return sb.CloneString()
+}
+
+// receive side HMAC validation
+// TODO -- FIXME: nonce (replay) logic does not exist yet
+func (sign *signer) verify(q url.Values) (int, error) {
+	sig := q.Get(apc.QparamHMAC)
+	if sig == "" {
+		return 0, errors.New("missing HMAC signature")
+	}
+	if len(sig) != cskSigLen {
+		return 0, fmt.Errorf("invalid signature length: %d", len(sig))
+	}
+
+	s := q.Get(apc.QparamNonce)
+	nonce, err := strconv.ParseUint(s, cskBase, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid nonce: %v", err)
+	}
+
+	s = q.Get(apc.QparamSmapVer)
+	smapVer, err := strconv.ParseInt(s, cskBase, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid smap version: %v", err)
+	}
+	sign.nonce = nonce
+	sign.smapVer = smapVer
+
+	pid := q.Get(apc.QparamPID)
+	if pid == "" {
+		return 0, errors.New("missing proxy ID")
+	}
+	size := sign.bufsize(pid)
+	sign.sb = sbAlloc()
+	defer sbFree(sign.sb)
+	sign.sb.Reset(size, true /*allow shrink*/)
+
+	sign.compute(pid)
+
+	if !bytes.Equal(sign.sig, cos.UnsafeB(sig)) {
+		return http.StatusUnauthorized, errors.New("HMAC signature mismatch")
+	}
+	return 0, nil
 }
 
 ////////////////

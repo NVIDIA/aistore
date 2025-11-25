@@ -708,6 +708,10 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjhead(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPut:
+		if ecode, err := t.verifySignedURL(r); err != nil {
+			t.writeErr(w, r, err, ecode)
+			return
+		}
 		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		if err := t.parseReq(w, r, apireq); err == nil {
 			lom := core.AllocLOM(apireq.items[1])

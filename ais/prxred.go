@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -67,11 +66,12 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 		sb.Reset(size, true)
 		sign = &signer{
 			r:       r,
-			p:       p,
+			h:       &p.htrun,
 			sb:      sb,
 			smapVer: smapVer,
+			nonce:   p.owner.csk.nonce.Add(1),
 		}
-		sign.compute()
+		sign.compute(p.SID())
 		if !special {
 			// fast signing path
 			out = sign.buildURL(nodeURL, now)
@@ -112,20 +112,6 @@ func _preparse(nodeURL string, r *http.Request) (scheme, host string, q url.Valu
 		host = strings.TrimPrefix(nodeURL, "http://")
 	}
 	return scheme, host, r.URL.Query()
-}
-
-// populate redirect-specific query parameters (PID, timestamp, Smap version)
-// return encoded (raw) query string
-func (p *proxy) qencode(q url.Values, now int64, sign *signer) string {
-	q.Set(apc.QparamPID, p.SID())
-	q.Set(apc.QparamUnixTime, unixNano2S(now))
-
-	if sign != nil {
-		q.Set(apc.QparamSmapVer, strconv.FormatInt(sign.smapVer, cskBase))
-		q.Set(apc.QparamNonce, strconv.FormatUint(sign.nonce, cskBase))
-		q.Set(apc.QparamHMAC, string(sign.sig))
-	}
-	return q.Encode()
 }
 
 // http-redirect(with-json-message)
