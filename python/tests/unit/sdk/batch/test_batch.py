@@ -2,18 +2,25 @@
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 # pylint: disable=too-many-lines
-import unittest
-from unittest.mock import Mock, patch
-from io import BytesIO
 import tarfile
+import unittest
+from io import BytesIO
+from unittest.mock import Mock, patch
 
-from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
-from aistore.sdk.request_client import RequestClient
+from requests import Response
+from requests.exceptions import HTTPError
+from tenacity import Retrying, stop_after_attempt, retry_if_exception_type
+from urllib3.util.retry import Retry
+
 from aistore.sdk.batch.batch import Batch
-from aistore.sdk.batch.types import MossOut, MossResp
 from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamExtractor
+from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
+from aistore.sdk.batch.types import MossOut, MossResp
 from aistore.sdk.bucket import Bucket
+from aistore.sdk.errors import AISError
 from aistore.sdk.obj.object import Object
+from aistore.sdk.request_client import RequestClient
+from aistore.sdk.retry_config import NETWORK_RETRY_EXCEPTIONS, RetryConfig
 
 
 # pylint: disable=unsubscriptable-object,too-many-public-methods
@@ -1092,6 +1099,140 @@ class TestBatch(unittest.TestCase):
         # Verify batch configuration was preserved
         self.assertTrue(batch.request.streaming_get)
         self.assertEqual(batch.bucket, self.mock_bucket)
+
+    # pylint: disable=protected-access
+    def test_batch_429_max_retries_exceeded(self):
+        """Test that Batch raises error after max retries on persistent 429."""
+        # Create custom retry config with fewer attempts for faster test
+
+        custom_retry_config = RetryConfig(
+            http_retry=Retry(
+                total=2,  # Only 2 retries for this test
+                backoff_factor=0.1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                connect=0,
+                read=0,
+            ),
+            network_retry=Retrying(
+                stop=stop_after_attempt(2),
+                retry=retry_if_exception_type(NETWORK_RETRY_EXCEPTIONS),
+                reraise=True,
+            ),
+        )
+
+        # Create new request client with custom retry config
+        mock_session_manager = Mock(session=Mock())
+
+        custom_request_client = RequestClient(
+            endpoint="http://localhost:8080",
+            session_manager=mock_session_manager,
+            retry_config=custom_retry_config,
+        )
+
+        batch = Batch(
+            custom_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            streaming_get=True,
+        )
+
+        # Mock persistent 429 responses
+        mock_response_429 = Mock(
+            spec=Response,
+            status_code=429,
+            text="Too Many Requests: persistent resource pressure",
+            request=Mock(
+                url="http://localhost:8080/v1/gb/test-bucket",
+                method="GET",
+            ),
+            headers={},
+        )
+        mock_response_429.raise_for_status.side_effect = HTTPError(
+            response=mock_response_429
+        )
+
+        # Always return 429
+        custom_request_client._make_session_request = Mock(
+            return_value=mock_response_429
+        )
+
+        # Should raise AISError after exhausting retries
+        with self.assertRaises(AISError) as context:
+            list(batch.get())
+
+        # Verify error message contains 429
+        self.assertIn("429", str(context.exception))
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_batch_429_with_multiple_requests(self, mock_extractor_mgr):
+        """Test that 429 handling works correctly across multiple batch requests."""
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_mgr.return_value.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            bucket=self.mock_bucket,
+        )
+
+        # First request: immediate success
+        batch.add("file1.txt")
+
+        mock_response_1 = Mock(
+            spec=Response,
+            status_code=200,
+            raw=BytesIO(self._create_test_tar()),
+        )
+        self.mock_request_client.request.return_value = mock_response_1
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file1.txt", bucket="test-bucket", provider="ais"),
+                    b"content1",
+                ),
+            ]
+        )
+
+        result1 = list(batch.get())
+        self.assertEqual(len(result1), 1)
+
+        # Second request: 429 then success
+        batch.add("file2.txt")
+
+        mock_response_429 = Mock(
+            spec=Response,
+            status_code=429,
+            text="Too Many Requests",
+            request=Mock(url="http://localhost:8080/v1/gb/test-bucket"),
+            headers={},
+            raw=BytesIO(b""),
+        )
+
+        mock_response_2 = Mock(
+            spec=Response,
+            status_code=200,
+            raw=BytesIO(self._create_test_tar()),
+        )
+
+        self.mock_request_client.request.side_effect = [
+            mock_response_429,
+            mock_response_2,
+        ]
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file2.txt", bucket="test-bucket", provider="ais"),
+                    b"content2",
+                ),
+            ]
+        )
+
+        result2 = list(batch.get())
+        # Check that request() was called twice (first for 429, then for 200)
+        self.assertEqual(self.mock_request_client.request.call_count, 2)
+        self.assertEqual(len(result2), 1)
+        self.assertEqual(result2[0][0].obj_name, "file2.txt")
 
     @staticmethod
     def _create_test_tar() -> bytes:
