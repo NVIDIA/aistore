@@ -1295,8 +1295,11 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 		}
 		return errHole // remains orig err
 	}
+	defer cos.Close(resp.Body)
 
-	nlog.Infoln(wi.r.Name(), wi.wid, "GFN ok:", nameInArch)
+	if cmn.Rom.V(4, cos.ModXs) {
+		nlog.Infoln(wi.r.Name(), wi.wid, "GFN ok:", nameInArch)
+	}
 	wi.r.gfn.ok.Inc()
 	if in.ArchPath == "" {
 		oah := cos.SimpleOAH{Size: resp.ContentLength}
@@ -1308,9 +1311,13 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	}
 	if err != nil {
 		cos.DrainReader(resp.Body)
+		return err
 	}
-	cos.Close(resp.Body)
-	return err
+
+	if resp.ContentLength > 0 {
+		wi.updStats(in, resp.ContentLength)
+	}
+	return nil
 }
 
 func (wi *basewi) avgSize() (size int64) {
@@ -1324,19 +1331,23 @@ func (wi *basewi) avgSize() (size int64) {
 	return size / int64(cnt)
 }
 
+func (wi *basewi) updStats(in *apc.MossIn, size int64) {
+	if in.ArchPath == "" {
+		wi.stats.obj.cnt++
+		wi.stats.obj.size += size
+	} else {
+		wi.stats.fil.cnt++
+		wi.stats.fil.size += size
+	}
+}
+
 func (wi *basewi) write(lom *core.LOM, in *apc.MossIn, out *apc.MossOut, nameInArch string) error {
 	lom.Lock(false)
 	size, err := wi._write(lom, in, out, nameInArch)
 	lom.Unlock(false)
 
 	if err == nil && size > 0 {
-		if in.ArchPath == "" {
-			wi.stats.obj.cnt++
-			wi.stats.obj.size += size
-		} else {
-			wi.stats.fil.cnt++
-			wi.stats.fil.size += size
-		}
+		wi.updStats(in, size)
 	}
 	return err
 }
@@ -1515,13 +1526,7 @@ func (wi *basewi) flushRx() error {
 		// this "hole" is plugged
 		wi.recv.next++
 		if size > 0 {
-			if in.ArchPath == "" {
-				wi.stats.obj.cnt++
-				wi.stats.obj.size += size
-			} else {
-				wi.stats.fil.cnt++
-				wi.stats.fil.size += size
-			}
+			wi.updStats(in, size)
 		}
 	}
 	return nil
