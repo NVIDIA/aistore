@@ -1151,3 +1151,9 @@ func parseETLNames(etlNameOrPipeline string) ([]string, error) {
 
 	return etlNames, nil
 }
+
+//
+// usage: when AIS returns nanoseconds as base10 string
+//
+
+func s2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }

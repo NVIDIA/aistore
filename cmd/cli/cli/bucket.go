@@ -352,7 +352,7 @@ func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) (
 					}
 				case def.Name == cmn.PropBucketCreated:
 					if p.Value != teb.NotSetVal {
-						created, err := cos.S2UnixNano(p.Value)
+						created, err := s2UnixNano(p.Value)
 						if err == nil {
 							p.Value = fmtBucketCreatedTime(created)
 						}
