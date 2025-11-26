@@ -26,10 +26,10 @@ const GitHubHome = "https://github.com/NVIDIA/aistore"
 //   `jsp` formats its *signature* and other implementation details.
 
 const (
-	VersionAIStore = "4.0"
+	VersionAIStore = "4.1.rc1"
 	VersionCLI     = "1.21"
-	VersionLoader  = "2.0"
-	VersionAuthN   = "1.2"
+	VersionLoader  = "2.1"
+	VersionAuthN   = "1.3"
 )
 
 // NOTE: for (local) LOM meta-versions, see core/lom*

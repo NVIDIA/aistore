@@ -39,6 +39,17 @@ import (
 // HMAC:
 //   When enabled, proxies sign redirect URLs using HMAC-SHA256. The signature currently covers:
 //   HTTP method, URL path, proxy ID, Smap version, content-length, and a monotonic nonce.
+//   Incoming requests are validated once at the datapath entry point (h.parseReq => sign.verify()):
+//     - dpq fast-path embeds cskgrp directly;
+//     - url.Values slow-path uses cskFromQ().
+//   signer.verify() reconstructs the HMAC payload (using pid, smapVer, nonce, and URL fields)
+//   and compares it against the provided signature. Any mismatch results in a 401.
+
+// TODO: sign.verify()
+// - anti-replay logic (sliding time window, per-sender nonce tracking, etc.)
+// - validate pid: a) != "" (weak) or b) in Smap (strong)
+// - stricter handling for legacy unsigned redirects
+// - optionally, extend HMAC payload to cover assorted query parameters
 
 const (
 	cskTag         = "csk"
@@ -161,7 +172,6 @@ func (sign *signer) compute(pid string) {
 	hb.h.Sum(hb.buf[:0])
 
 	// encode and append => sb
-	debug.Assert(cskSigLen == base64.RawURLEncoding.EncodedLen(sha256.Size)) // TODO: remove
 	sign.sig = sb.ReserveAppend(cskSigLen)
 	base64.RawURLEncoding.Encode(sign.sig, hb.buf[:])
 
@@ -199,9 +209,6 @@ func (sign *signer) buildURL(nodeURL string, now int64) string {
 
 // receive-side HMAC validation
 // on failure return http.StatusUnauthorized or 0 (that is, 400), the latter for invalid request
-//
-// TODO -- FIXME: anti-replay logic NIY
-// TODO: can separately validate pid: a) != "" (weak) or b) inSmap (strong)
 func (sign *signer) verify(pid string, cskgrp *cskgrp) (int, error) {
 	if len(cskgrp.hmacSig) != cskSigLen {
 		return 0, fmt.Errorf("invalid signature length: %d", len(cskgrp.hmacSig))
