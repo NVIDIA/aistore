@@ -20,27 +20,28 @@ import (
 
 // Data Path Query parameters (DPQ)
 
-// DPQ is, essentially, performance-motivated alternative to the conventional url.Query.
-// The parsing follows 6 distinct categories:
+// DPQ is a performance-motivated alternative to the conventional url.Query.
+// The parsing follows 7 distinct categories:
 //
-// 1. Bucket (provider, namespace) - receive special handling due to their
-//    fundamental role. Provider stays as-is, namespace gets URL-unescaped.
+// 1. Parameters that don't need unescaping (MptPartNo, FltPresence, BinfoWithOrWithoutRemote) -
+//    stored directly in the map as-is to avoid unnecessary processing.
 //
 // 2. Archive fields (path, mime, regx, mode) - retain dedicated struct members and
 //    specialized parsing logic including validation.
 //
-// 3. Boolean fields (skipVC, isGFN, dontAddRemote, silent, et al.) -
+// 3. Bucket (provider, namespace) - receive special handling due to their
+//    fundamental role. Provider stays as-is, namespace gets URL-unescaped.
+//
+// 4. Special system fields (ptime, pid, uuid, owt, origURL, objto) - system
+//    parameters that are used throughout the codebase. Some require URL unescaping.
+//
+// 5. CSK/HMAC signature verification fields.
+//
+// 6. Boolean fields (skipVC, isGFN, dontAddRemote, silent, et al.) -
 //    remain as struct members for zero memory cost, direct access
 //    performance, and type safety. No unescaping.
 //
-// 4. Special system fields (ptime, pid, uuid, owt, origURL, objto) - core system
-//    parameters that need direct struct access for performance and are used throughout
-//    the codebase. Some require URL unescaping.
-//
-// 5. Parameters that don't need unescaping (MptPartNo, FltPresence, BinfoWithOrWithoutRemote) -
-//    stored directly in the map as-is to avoid unnecessary processing.
-//
-// 6. All other parameters - stored in the map with URL unescaping applied by default.
+// 7. All other parameters - stored in the map with URL unescaping applied by default.
 //    This includes ETL parameters, multipart upload parameters, append parameters,
 //    and any future additions. Exceptions are made for S3 headers (X-Amz-* prefix)
 //    and explicitly listed exceptions in the _except_ map.
@@ -48,35 +49,44 @@ import (
 // Note: it's always a good idea to explicitly add each and every new query into one of the
 // non-default categories, potentially 3, 4, or 5.
 
-type dpq struct {
-	m    cos.StrKVs
-	arch struct {
-		path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below) - keep as-is
+type (
+	cskgrp struct {
+		nonce   uint64 // QparamNonce
+		smapVer int64  // QparamSmapVer
+		hmacSig string // QparamHMAC
 	}
-	bck struct {
-		provider, namespace string // bucket
+	dpq struct {
+		m    cos.StrKVs // see groups 1 and 7 above
+		arch struct {
+			path, mime, regx, mmode string // QparamArchpath et al. (plus archmode below) - keep as-is
+		}
+		bck struct {
+			provider, namespace string // bucket
+		}
+		sys struct {
+			pid     string // QparamPID
+			ptime   string // req timestamp at calling/redirecting proxy (QparamUnixTime)
+			uuid    string // xaction
+			origURL string // ht://url->
+			owt     string // object write transaction { OwtPut, ... }
+			objto   string // uname of the destination object
+		}
+		csk cskgrp // csk envelope (group CSK/HMAC)
+
+		count int
+
+		// boolean fields
+		skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
+		isGFN         bool // QparamIsGFNRequest
+		dontAddRemote bool // QparamDontAddRemote
+		silent        bool // QparamSilent
+		latestVer     bool // QparamLatestVer
+		sync          bool // QparamSync
+
+		// Special use (internal context)
+		isS3 bool // frontend S3 API
 	}
-
-	ptime   string // req timestamp at calling/redirecting proxy (QparamUnixTime)
-	pid     string // QparamPID
-	uuid    string // xaction
-	origURL string // ht://url->
-	owt     string // object write transaction { OwtPut, ... }
-	objto   string // uname of the destination object
-
-	count int
-
-	// Boolean fields - keep as struct members
-	skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
-	isGFN         bool // QparamIsGFNRequest
-	dontAddRemote bool // QparamDontAddRemote
-	silent        bool // QparamSilent
-	latestVer     bool // QparamLatestVer
-	sync          bool // QparamSync
-
-	// Special use (internal context)
-	isS3 bool // frontend S3 API
-}
+)
 
 var _except = map[string]bool{
 	apc.QparamDontHeadRemote: false,
@@ -150,17 +160,17 @@ func (dpq *dpq) parse(rawQuery string) error {
 		}
 
 		switch key {
-		// 1. Bucket fields - special handling
+		// Bucket fields - special handling
 		case apc.QparamProvider:
 			dpq.bck.provider = value
 		case apc.QparamNamespace:
 			dpq.bck.namespace, err = _unescape(value)
 
-		// 2. Archive fields - special parsing likewise
+		// Archive fields - special parsing likewise
 		case apc.QparamArchpath, apc.QparamArchmime, apc.QparamArchregx, apc.QparamArchmode:
 			err = dpq._arch(key, value)
 
-		// 3. All boolean fields are struct members
+		// All boolean fields are struct members
 		case apc.QparamSkipVC:
 			dpq.skipVC = cos.IsParseBool(value)
 		case apc.QparamIsGFNRequest:
@@ -174,27 +184,35 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamSync:
 			dpq.sync = cos.IsParseBool(value)
 
-		// 4. Special system fields that need to be member variables
+		// System fields
 		case apc.QparamUnixTime:
-			dpq.ptime = value
+			dpq.sys.ptime = value
 		case apc.QparamPID:
-			dpq.pid = value
+			dpq.sys.pid = value
 		case apc.QparamUUID:
-			dpq.uuid = value
+			dpq.sys.uuid = value
 		case apc.QparamOWT:
-			dpq.owt = value
+			dpq.sys.owt = value
 		case apc.QparamOrigURL:
-			dpq.origURL, err = _unescape(value)
+			dpq.sys.origURL, err = _unescape(value)
 		case apc.QparamObjTo:
-			dpq.objto, err = _unescape(value)
+			dpq.sys.objto, err = _unescape(value)
 
-			// 5. Parameters that don't need unescaping
+		// CSK/HMAC fields
+		case apc.QparamNonce:
+			dpq.csk.nonce, err = strconv.ParseUint(value, cskBase, 64)
+		case apc.QparamSmapVer:
+			dpq.csk.smapVer, err = strconv.ParseInt(value, cskBase, 64)
+		case apc.QparamHMAC:
+			dpq.csk.hmacSig = value // (base64.RawURLEncoding)
+
+		// Parameters that don't need unescaping
 		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
 			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs:
 			dpq.m[key] = value
 			dpq.count++
 
-		// 6. Finally a) assorted named exceptions that we simply skip, and b) all the rest parameters
+		// Finally, assorted named exceptions that we simply skip, and b) all the rest parameters
 		default:
 			// Check for exceptions first
 			if strings.HasPrefix(key, s3.HeaderPrefix) {
@@ -272,10 +290,10 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 func (dpq *dpq) isArch() bool { return dpq.arch.path != "" || dpq.arch.mmode != "" }
 
 func (dpq *dpq) isRedirect() (ptime string) {
-	if dpq.pid == "" || dpq.ptime == "" {
+	if dpq.sys.pid == "" || dpq.sys.ptime == "" {
 		return
 	}
-	return dpq.ptime
+	return dpq.sys.ptime
 }
 
 // err & log
@@ -284,4 +302,31 @@ func (dpq *dpq) _archstr() string {
 		return fmt.Sprintf("(%s=%s)", apc.QparamArchpath, dpq.arch.path)
 	}
 	return fmt.Sprintf("(%s=%s, %s=%s)", apc.QparamArchregx, dpq.arch.regx, apc.QparamArchmode, dpq.arch.mmode)
+}
+
+//
+// url.Values => cskgrp
+//
+
+func cskFromQ(q url.Values) (*cskgrp, error) {
+	sig := q.Get(apc.QparamHMAC)
+	if sig == "" {
+		return nil, nil
+	}
+	if len(sig) != cskSigLen {
+		return nil, fmt.Errorf("invalid signature length: %d", len(sig))
+	}
+
+	s := q.Get(apc.QparamNonce)
+	nonce, err := strconv.ParseUint(s, cskBase, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid nonce: %v", err)
+	}
+
+	s = q.Get(apc.QparamSmapVer)
+	smapVer, err := strconv.ParseInt(s, cskBase, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid smap version: %v", err)
+	}
+	return &cskgrp{nonce: nonce, smapVer: smapVer, hmacSig: sig}, nil
 }

@@ -374,7 +374,7 @@ func (bctx *bctx) getOrigURL() (ourl string) {
 		debug.Assert(bctx.dpq == nil)
 		ourl = bctx.query.Get(apc.QparamOrigURL)
 	} else {
-		ourl = bctx.dpq.origURL
+		ourl = bctx.dpq.sys.origURL
 	}
 	return
 }

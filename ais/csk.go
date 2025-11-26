@@ -14,12 +14,10 @@ import (
 	"fmt"
 	"hash"
 	"net/http"
-	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -199,43 +197,26 @@ func (sign *signer) buildURL(nodeURL string, now int64) string {
 	return sb.CloneString()
 }
 
-// receive side HMAC validation
-// TODO -- FIXME: nonce (replay) logic does not exist yet
-func (sign *signer) verify(q url.Values) (int, error) {
-	sig := q.Get(apc.QparamHMAC)
-	if sig == "" {
-		return 0, errors.New("missing HMAC signature")
+// receive-side HMAC validation
+// on failure return http.StatusUnauthorized or 0 (that is, 400), the latter for invalid request
+//
+// TODO -- FIXME: anti-replay logic NIY
+// TODO: can separately validate pid: a) != "" (weak) or b) inSmap (strong)
+func (sign *signer) verify(pid string, cskgrp *cskgrp) (int, error) {
+	if len(cskgrp.hmacSig) != cskSigLen {
+		return 0, fmt.Errorf("invalid signature length: %d", len(cskgrp.hmacSig))
 	}
-	if len(sig) != cskSigLen {
-		return 0, fmt.Errorf("invalid signature length: %d", len(sig))
-	}
+	sign.nonce = cskgrp.nonce
+	sign.smapVer = cskgrp.smapVer
 
-	s := q.Get(apc.QparamNonce)
-	nonce, err := strconv.ParseUint(s, cskBase, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid nonce: %v", err)
-	}
-
-	s = q.Get(apc.QparamSmapVer)
-	smapVer, err := strconv.ParseInt(s, cskBase, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid smap version: %v", err)
-	}
-	sign.nonce = nonce
-	sign.smapVer = smapVer
-
-	pid := q.Get(apc.QparamPID)
-	if pid == "" {
-		return 0, errors.New("missing proxy ID")
-	}
 	size := sign.bufsize(pid)
 	sign.sb = sbAlloc()
-	defer sbFree(sign.sb)
 	sign.sb.Reset(size, true /*allow shrink*/)
 
 	sign.compute(pid)
+	sbFree(sign.sb)
 
-	if !bytes.Equal(sign.sig, cos.UnsafeB(sig)) {
+	if !bytes.Equal(sign.sig, cos.UnsafeB(cskgrp.hmacSig)) {
 		return http.StatusUnauthorized, errors.New("HMAC signature mismatch")
 	}
 	return 0, nil

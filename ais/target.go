@@ -708,10 +708,6 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjhead(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPut:
-		if ecode, err := t.verifySignedURL(r); err != nil {
-			t.writeErr(w, r, err, ecode)
-			return
-		}
 		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		if err := t.parseReq(w, r, apireq); err == nil {
 			lom := core.AllocLOM(apireq.items[1])
@@ -761,7 +757,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
-		if apireq.dpq.ptime == "" /*isRedirect*/ && t.checkIntraCall(r.Header, false /*from primary*/) != nil {
+		if apireq.dpq.sys.ptime == "" /*isRedirect*/ && t.checkIntraCall(r.Header, false /*from primary*/) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
@@ -820,8 +816,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		// - with periodic readjustment (***)
 		goi.atime = time.Now().UnixNano()
 		goi.ltime = mono.NanoTime()
-		if dpq.ptime != "" {
-			if d := ptLatency(goi.atime, dpq.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
+		if dpq.sys.ptime != "" {
+			if d := ptLatency(goi.atime, dpq.sys.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
 				t.statsT.Add(stats.GetRedirLatency, d)
 			}
 		}
@@ -850,7 +846,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 
 	// apc.QparamOrigURL
 	if bck.IsHT() {
-		originalURL := dpq.origURL
+		originalURL := dpq.sys.origURL
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
 
@@ -910,7 +906,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		started = time.Now().UnixNano()
 		t2tput  = isT2TPut(r.Header)
 	)
-	if apireq.dpq.ptime == "" && !t2tput {
+	if apireq.dpq.sys.ptime == "" && !t2tput {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
@@ -946,13 +942,13 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		apndTy   = dpq.get(apc.QparamAppendType)
 	)
 	switch {
-	case dpq.objto != "": // apc.QparamObjTo
+	case dpq.sys.objto != "": // apc.QparamObjTo
 		var (
 			bck     *meta.Bck
 			objName string
 		)
 
-		bck, objName, err = meta.ParseUname(dpq.objto, true /*object name required*/)
+		bck, objName, err = meta.ParseUname(dpq.sys.objto, true /*object name required*/)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -1031,8 +1027,8 @@ func (t *target) putObject(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	poi := allocPOI()
 	{
 		poi.atime = time.Now().UnixNano()
-		if dpq.ptime != "" {
-			if d := ptLatency(poi.atime, dpq.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
+		if dpq.sys.ptime != "" {
+			if d := ptLatency(poi.atime, dpq.sys.ptime, r.Header.Get(apc.HdrSenderIsPrimary)); d > 0 {
 				t.statsT.Add(stats.PutRedirLatency, d)
 			}
 		}

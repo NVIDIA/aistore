@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func newTestProxy(t *testing.T, cskEnabled bool) *proxy {
@@ -219,11 +220,16 @@ func TestSigner_VerifyRoundTrip(t *testing.T) {
 	}
 
 	// 3) verify with signer
+	q := rOK.URL.Query()
+	pid := q.Get(apc.QparamPID)
+	cskgrp, err := cskFromQ(rOK.URL.Query())
+	tassert.CheckFatal(t, err)
+
 	sign := &signer{
 		r: rOK,
 		h: &p.htrun,
 	}
-	status, err := sign.verify(rOK.URL.Query())
+	status, err := sign.verify(pid, cskgrp)
 	if err != nil || status != 0 {
 		t.Fatalf("verify() failed for valid signed URL: status=%d, err=%v, url=%q", status, err, signed)
 	}
@@ -239,11 +245,15 @@ func TestSigner_VerifyRoundTrip(t *testing.T) {
 		ContentLength: orig.ContentLength,
 	}
 
+	q = rBad.URL.Query()
+	pid = q.Get(apc.QparamPID)
+	cskgrp, err = cskFromQ(rBad.URL.Query())
+	tassert.CheckFatal(t, err)
 	signBad := &signer{
 		r: rBad,
 		h: &p.htrun,
 	}
-	status, err = signBad.verify(rBad.URL.Query())
+	status, err = signBad.verify(pid, cskgrp)
 	if err == nil || status != http.StatusUnauthorized {
 		t.Fatalf("expected verify() to fail with 401 for tampered path, got status=%d, err=%v", status, err)
 	}

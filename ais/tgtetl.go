@@ -216,7 +216,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 // Returns ETL errors (if any) for the given ETL xaction.
 func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, dpq *dpq, etlName string) {
 	var (
-		offlineXid = dpq.uuid
+		offlineXid = dpq.sys.uuid
 		errs       []error
 	)
 	comm, err := etl.GetCommunicator(etlName)

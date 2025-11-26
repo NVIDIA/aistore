@@ -137,13 +137,40 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	debug.Assert(len(apireq.items) > apireq.bckIdx)
 	bckName := apireq.items[apireq.bckIdx]
 
+	var (
+		csk *cskgrp
+		pid string
+	)
 	if apireq.dpq != nil {
 		if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
 			h.writeErr(w, r, err)
 			return err
 		}
+		if cmn.Rom.CSKEnabled() && apireq.dpq.csk.hmacSig != "" {
+			csk = &apireq.dpq.csk
+			pid = apireq.dpq.sys.pid
+		}
 	} else {
 		apireq.query = r.URL.Query()
+		if cmn.Rom.CSKEnabled() {
+			if csk, err = cskFromQ(apireq.query); err != nil {
+				h.writeErr(w, r, err)
+				return err
+			}
+		}
+		pid = apireq.query.Get(apc.QparamPID)
+	}
+
+	if csk != nil {
+		sign := &signer{
+			r: r,
+			h: h,
+		}
+		ecode, err := sign.verify(pid, csk)
+		if err != nil {
+			h.writeErr(w, r, err, ecode)
+			return err
+		}
 	}
 
 	if apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq); err != nil {
@@ -2532,25 +2559,6 @@ func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 		dur = 0
 	}
 	return
-}
-
-// validate HMAC of intra-cluster redirect URLs, if present
-// TODO -- FIXME: work in progress
-func (h *htrun) verifySignedURL(r *http.Request) (int, error) {
-	if !cmn.Rom.CSKEnabled() {
-		return 0, nil
-	}
-	// TODO -- FIXME: optimize
-	q := r.URL.Query()
-	if q.Get(apc.QparamHMAC) == "" {
-		// TODO -- FIXME: unsigned redirect (legacy) – accept for now
-		return 0, nil
-	}
-	sign := &signer{
-		r: r,
-		h: h,
-	}
-	return sign.verify(q)
 }
 
 //

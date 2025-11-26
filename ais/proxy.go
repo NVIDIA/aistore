@@ -1864,7 +1864,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 	if binfo := dpq.get(apc.QparamBinfoWithOrWithoutRemote); binfo != "" {
 		msg = apc.BsummCtrlMsg{
-			UUID:          dpq.uuid,
+			UUID:          dpq.sys.uuid,
 			Prefix:        prefix,
 			ObjCached:     !cos.IsParseBool(binfo),
 			BckPresent:    apc.IsFltPresent(fltPresence),

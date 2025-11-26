@@ -154,12 +154,12 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 		poi.cksumToUse = poi.lom.ObjAttrs().FromHeader(r.Header)
 		poi.owt = cmn.OwtPut // default
 	}
-	if dpq.owt != "" {
-		poi.owt.FromS(dpq.owt)
+	if dpq.sys.owt != "" {
+		poi.owt.FromS(dpq.sys.owt)
 	}
-	if dpq.uuid != "" {
+	if dpq.sys.uuid != "" {
 		// resolve cluster-wide xact "behind" this PUT (promote via a single target won't show up)
-		xctn, err := xreg.GetXact(dpq.uuid)
+		xctn, err := xreg.GetXact(dpq.sys.uuid)
 		if err != nil {
 			nlog.Errorln(err)
 			return 0, err
