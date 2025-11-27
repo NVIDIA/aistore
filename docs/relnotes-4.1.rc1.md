@@ -11,16 +11,18 @@ AIStore v4.1 extends the functionality introduced in v4.0 with a set of changes 
 1. [GetBatch: Distributed Multi-Object Retrieval](#getbatch-distributed-multi-object-retrieval)
 2. [Authentication and Security](#authentication-and-security)
 3. [Chunked Objects](#chunked-objects)
-4. [Rechunk Job](#rechunk-job)
-5. [Unified Load and Throttling](#unified-load-and-throttling)
-6. [Transport Layer](#transport-layer)
-7. [Backend Updates](#backend-updates)
-8. [Python SDK](#python-sdk)
-9. [Build System and Tooling](#build-system-and-tooling)
-10. [Xaction Lifecycle](#xaction-lifecycle)
-11. [ETL and Transform Pipeline](#etl-and-transform-pipeline)
-12. [Observability](#observability)
-13. [Configuration Changes](#configuration-changes)
+4. [Blob Downloader](#blob-downloader)
+5. [Rechunk Job](#rechunk-job)
+6. [Unified Load and Throttling](#unified-load-and-throttling)
+7. [Transport Layer](#transport-layer)
+8. [Multipart Upload](#multipart-upload)
+9. [Python SDK](#python-sdk)
+10. [S3 Compatibility](#s3-compatibility)
+11. [Build System and Tooling](#build-system-and-tooling)
+12. [Xaction Lifecycle](#xaction-lifecycle)
+13. [ETL and Transform Pipeline](#etl-and-transform-pipeline)
+14. [Observability](#observability)
+15. [Configuration Changes](#configuration-changes)
 
 ---
 
@@ -47,10 +49,16 @@ Client and tooling updates include a new `Batch` API in the Python SDK, extended
 
 ## Authentication and Security
 
-The authentication configuration has been reorganized but remains backward compatible with the v4.0 format. The new structure separates signature parameters, required claims, and OIDC issuer handling. Token verification supports both symmetric and asymmetric algorithms and validates standard JWT fields such as `aud`.
+The authentication configuration covers two independent concerns:
+
+* external user authentication via JWT/OIDC tokens, and
+* internal cluster security for intra-cluster operations.
+
+### External User Authentication
+
+The authentication configuration for external users (JWT/OIDC tokens) has been reorganized but remains backward compatible with the v4.0 format. The new structure separates signature parameters, required claims, and OIDC issuer handling. Token verification supports both symmetric (HMAC) and asymmetric (RSA) algorithms and validates standard JWT fields such as `aud`.
 
 The v4.0 format continues to be accepted:
-
 ```json
 {
   "auth": {
@@ -61,14 +69,13 @@ The v4.0 format continues to be accepted:
 ```
 
 The new v4.1 structure introduces more explicit fields:
-
 ```json
 {
   "auth": {
     "enabled": true,
     "signature": {
       "key": "your-key",
-      "method": "HS256"
+      "method": "HS256"  // or RS256, RS384, RS512
     },
     "required_claims": {
       "aud": ["your-audience"]
@@ -81,11 +88,13 @@ The new v4.1 structure introduces more explicit fields:
 }
 ```
 
-Internal OIDC handling includes JWKS caching, issuer validation, and optional custom CA bundles. S3 client calls that rely on STS-style authentication can now interoperate with JWTs where applicable. Internally, the token cache has been sharded to reduce contention.
+OIDC handling includes JWKS caching, issuer validation, and optional custom CA bundles. S3 client calls that rely on STS-style authentication can now interoperate with JWTs where applicable. The token cache has been sharded to reduce contention.
 
 ### Cluster-Key Authentication
 
-A new cluster-internal authentication mechanism supports signing redirect URLs with an HMAC shared key distributed via metasync. Key rotation, nonce validation, and limited grace periods are configurable:
+A separate cluster-internal authentication mechanism provides HMAC-based security to complement edge-based access control.
+
+This design allows AIS proxies (gateways) to handle JWT validation and access control at the edge, while AIS targets (storage servers) can independently validate user requests arriving on public ports.
 
 ```json
 {
@@ -99,6 +108,8 @@ A new cluster-internal authentication mechanism supports signing redirect URLs w
   }
 }
 ```
+
+This mechanism is independent of external user authentication and addresses internal cluster security concerns.
 
 ---
 
@@ -118,6 +129,26 @@ The chunked-object subsystem adds a new hard limit on maximum monolithic object 
 ```
 
 The `max_monolithic_size` value is validated against a fixed range (1 GiB–1 TiB). Auto-chunking for cold GETs is now controlled by bucket properties and integrated with blob downloader behavior. The manifest format introduced in v4.0 continues to be used.
+
+---
+
+## Blob Downloader
+
+The [blob downloader](https://github.com/NVIDIA/aistore/blob/main/docs/blob_downloader.md) has been extended to use chunked object representation for faster remote object retrieval. Large objects are split into smaller chunks and fetched via concurrent range-reads. Each chunk is streamed directly to a separate local file, bypassing intermediate buffering and aggregating write bandwidth across all available disks on the target.
+
+The downloader is integrated with the unified load system and adjusts its behavior dynamically. When memory or disk pressure rises, chunk sizes are recalculated and workers may back off to avoid overload. When the cluster has headroom, downloads run at full speed.
+
+[Benchmarks](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader) show a 4x speedup for 4GiB objects compared to standard cold-GET and a 2.28x improvement for prefetch operations on 1.56TiB buckets.
+
+The blob downloader is accessible through three interfaces:
+
+1. **Direct blob-download job** for specific objects
+2. **Prefetch integration** with configurable `--blob-threshold` parameter
+3. **Streaming GET** that caches while streaming to client
+
+Configuration parameters include chunk size and worker count, with automatic throttling when the cluster is under load.
+
+> [Blob Downloader Blog Post](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader)
 
 ---
 
@@ -141,17 +172,131 @@ Transport behavior has been clarified and refactored. Stream reconnection is mor
 
 Overhead has been reduced by eliminating per-connection stats and tightening stream construction. Connection-drop scenarios now propagate clearer failure signals to callers.
 
+Specific changes include:
+
+**Stream Recovery and Reconnection**
+- Automatic stream reconnection on connection drops and resets with exponential backoff
+- Stream breakage recovery (SBR) with per-sender tracking and 15-second time windows
+- Reconnect signaling via `OpcReconnect` to clear SBR entries and resume operations
+- Parent-child relationship between xactions/data movers and underlying streams via `TermedCB()` callback
+- `ReopenPeerStream()` for replacing failed streams
+
+**Error Handling**
+- Typed transport errors (`TxErr`, `RxErr`) with consistent formatting across send and receive paths
+- Clear distinction between protocol violations, benign EOF, and retriable network errors
+- Fail-fast detection for known stream breakages vs timeout-based failures
+- Client-side retry logic refined to only retry on write timeouts during in-flight operations
+
+**Optimizations**
+- Removed per-connection Tx/Rx stats tracking
+- Streamlined stream construction (init in place)
+- Tightened retry logic to reduce unnecessary connection attempts
+- Connection-drop scenarios now propagate typed failure signals with full context to callers
+
 ---
 
-## Backend Updates
+## Multipart Upload
 
 Multipart upload support is now implemented consistently across Azure and GCP backends. Other backend improvements include corrected range-read size reporting for GCP and adherence to S3’s UTC `Last-Modified` format. The set of provider behaviors is now more uniform across cloud backends.
+
+**Azure Backend:**
+- Native multipart upload support via Azure Blob Storage SDK
+- Automatic part management and completion
+
+**GCP Backend:**
+- Multipart upload implementation via direct HTTP client using GCP's XML API
+- Raw HTTP requests to XML API endpoints (GCP Go SDK lacks native XML multipart support)
+- Part upload tracking and finalization
+
+The multipart implementation now exposes a consistent interface across cloud providers, with part-level retry and error handling and automatic cleanup of parts if an upload is aborted.
 
 ---
 
 ## Python SDK
 
-Python SDK v1.17 includes support for the updated ML endpoint, Pydantic v2, and Python 3.14. The new `Batch` API replaces older multi-object loaders. Authentication test coverage has been revised, and retry behavior for 429 throttling has been improved. Additional examples and archive workflows have been added.
+Python SDK v1.17 includes support for the updated ML endpoint, Pydantic v2, and Python 3.14. The new `Get-Batch` API replaces older multi-object loaders. Authentication test coverage has been revised, and retry behavior for 429 throttling has been improved. Additional examples and archive workflows have been added.
+
+### Pydantic v2 Migration
+
+Complete migration from Pydantic v1 to v2, bringing improved performance and modern validation patterns:
+- `model_dump()` replaces `dict()` for serialization
+- `model_validate()` and `model_validate_json()` replace parsing methods
+- `RootModel` replaces `__root__` for wrapper types (e.g., `UserMap`, `RolesList`)
+- Field validators use `@field_validator` and `@model_validator` decorators
+- `model_config` dict replaces nested `Config` classes
+
+This affects all model definitions including AuthN types (`UserInfo`, `RoleInfo`, `ClusterInfo`), job types (`JobSnap`, `AggregatedJobSnap`), ETL types, and internal serialization throughout the SDK.
+
+### Get-Batch API
+
+The initial experimental Python Get-Batch API introduced in 4.0 has been replaced by a redesigned around a new `Batch` class:
+
+```python
+# Quick batch creation
+batch = client.batch(["file1.txt", "file2.txt"], bucket=bucket)
+
+# Or build incrementally with advanced options
+batch = client.batch(bucket=bucket)
+batch.add("simple.txt")
+batch.add("archive.tar", archpath="data/file.json")  # extract from archive
+batch.add("tracked.txt", opaque=b"user-id-123")      # with tracking data
+
+# Execute and iterate
+for obj_info, data in batch.get():
+    print(f"{obj_info.obj_name}: {len(data)} bytes")
+```
+
+The new API uses types (`MossIn`, `MossOut`, `MossReq`, `MossResp`) consistent with the [Go implementation](https://github.com/NVIDIA/aistore/blob/main/api/apc/ml.go), supports batch reuse via automatic clearing, and provides both streaming and multipart response modes.
+
+### Client Configuration Enhancements
+
+The `Client` constructor now supports environment variable configuration with explicit parameter priority:
+
+**Timeout configuration:**
+- Parameter > `AIS_CONNECT_TIMEOUT` / `AIS_READ_TIMEOUT` env vars > defaults `(3, 20)`
+- Setting timeout to `0` or `(0, 0)` disables all timeouts
+- Individual timeouts can be disabled: `(0, 20)` disables connect timeout only
+
+**Connection pool configuration:**
+- Parameter > `AIS_MAX_CONN_POOL` env var > default `10`
+
+This allows deployment-specific tuning without code changes while maintaining backward compatibility.
+
+### Additional Improvements
+
+- **AuthN manager updates**: Fixed permission value handling in `RoleManager.create()` and `update()` to use string representation, corrected type hints for optional parameters
+- **Python version support**: Tested and compatible through Python 3.14
+- **Type safety**: Comprehensive `Optional` type hint additions across object operations, bucket operations, and job management
+- **Model path handling**: `BucketModel.get_path()` now properly formats namespace paths
+- **ETL server optimization**: FastAPI server removed unnecessary `asyncio.to_thread()` wrapper, added configurable HTTP connection limits via environment variables (`MAX_CONN`, `MAX_KEEPALIVE_CONN`, `KEEPALIVE_EXPIRY`)
+- **Response parsing**: URL extraction regex improved to handle edge cases in bucket and object name patterns
+- **Error handling**: Better distinction between bucket-level and object-level 404 errors based on URL structure
+- **Retry configuration**: Updated default retry behavior with `total=5` attempts and exponential backoff (`backoff_factor=3.0`)
+
+---
+
+## S3 Compatibility
+
+**JWT Authentication via X-Amz-Security-Token:**
+AIStore can now accept JWT tokens through the `X-Amz-Security-Token` header when `allow_s3_token_compat` is enabled in the configuration. This allows native AWS SDKs to authenticate using JWTs while maintaining full SigV4 compatibility.
+
+The feature enables workload identity federation patterns where Kubernetes pods can exchange service account tokens for AIStore JWTs and authenticate S3 requests via standard AWS SDKs without requiring static credentials or long-lived tokens.
+
+**Example AWS configuration (~/.aws/config):**
+```ini
+[profile aistore]
+credential_process = cat ~/.config/ais/aws-credentials.json
+endpoint_url = http://aistore-proxy:8080/s3
+```
+
+The credential process supplies the AIStore JWT token in the `SessionToken` field, which AWS SDKs pass through in the `X-Amz-Security-Token` header.
+
+**Automatic JWT Fallback:**
+S3 JWT authentication is automatically attempted as a fallback when SigV4 authentication is present, streamlining authentication flows for mixed client environments.
+
+**HTTP Compliance:**
+- `Last-Modified` headers now formatted in UTC to meet HTTP and S3 specification requirements
+- Improved S3 API conformance for object metadata responses
 
 ---
 
