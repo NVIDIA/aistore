@@ -145,7 +145,7 @@ These results validate the architectural benefits discussed earlier: concurrent 
 
 ### 2. Prefetch with Blob Download Threshold
 
-In the prefetch benchmark, we created an S3 bucket contains **4,443 remote objects** spanning a wide size range from **10.68 MiB** up to **3.53 GiB**, for a total remote footprint of **1.56 TiB**. 
+In the prefetch benchmark, we created an S3 bucket containing **4,443 remote objects**, ranging from **10.68 MiB** to **3.53 GiB** in size, for a total remote footprint of **1.56 TiB**.
 
 ```console
 $ ais bucket summary s3://ais-tonyche/blob-bench
