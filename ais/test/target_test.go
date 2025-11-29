@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -60,4 +61,13 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 	if _, err := tools.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
 		t.Error("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
+}
+
+func TestInvalidHTTPMethod(t *testing.T) {
+	bp := tools.BaseAPIParams()
+	proxyURL := tools.RandomProxyURL(t)
+
+	req, err := http.NewRequest("TEST", proxyURL, http.NoBody)
+	tassert.CheckFatal(t, err)
+	tassert.DoAndCheckResp(t, bp.Client, req, http.StatusMethodNotAllowed)
 }

@@ -43,10 +43,6 @@ const (
 	// client and dev deployment; see also cluster config "net.http.skip_verify"
 	AisSkipVerifyCrt = "AIS_SKIP_VERIFY_CRT"
 
-	// tests and CI
-	AisNumTarget = "NUM_TARGET"
-	AisNumProxy  = "NUM_PROXY"
-
 	// via ais-k8s repo
 	// see also:
 	// * https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/env.go

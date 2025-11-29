@@ -6,8 +6,13 @@ As such, the `env` package is, effectively, part of the API: the names defined h
 
 > It is important to preserve consistency and reference the same names (without copy-paste duplication, when possible)
 
-* `ais.go`:   AIS environment
-* `authn.go`: AuthN environment
+|   Source   | Environment Variables Group |
+|------------|----------|
+| `ais.go`   | `aisnode` executable (see also: [aisnode command line](https://github.com/NVIDIA/aistore/blob/main/docs/command_line.md)) |
+| `authn.go` | [AuthN](https://github.com/NVIDIA/aistore/tree/main/cmd/authn) environment|
+| `aws.go`   | Amazon S3 backend (`S3_ENDPOINT`, etc.) |
+| `oci.go`   | Oracle OCI backend |
+| `test.go`  | Integration tests |
 
 ## See also
 

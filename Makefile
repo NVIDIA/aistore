@@ -244,17 +244,17 @@ test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
 test-short: test-envcheck ## Run short tests
-	@RE="$(RE)" BUCKET="$(BUCKET)" IOCTX_NUM_CHUNKS="$(IOCTX_NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
+	@RE="$(RE)" BUCKET="$(BUCKET)" NUM_CHUNKS="$(NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
 test-tracing-unit:
 	@cd tracing && go test -v -tags=oteltracing ./...
 
 test-assorted: test-envcheck # Run specific tests
-	@RE="ETLBucket|ETLFQN" BUCKET="$(BUCKET)" IOCTX_NUM_CHUNKS="$(IOCTX_NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+	@RE="ETLBucket|ETLFQN" BUCKET="$(BUCKET)" NUM_CHUNKS="$(NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 
 test-long: test-envcheck ## Run all integration tests
-	@RE="$(RE)" BUCKET="$(BUCKET)" IOCTX_NUM_CHUNKS="$(IOCTX_NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+	@RE="$(RE)" BUCKET="$(BUCKET)" NUM_CHUNKS="$(NUM_CHUNKS)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
 test-aisloader:

@@ -60,6 +60,8 @@ func newDiscoverServerPrimary() *proxy {
 	config.Cksum.Type = cos.ChecksumCesXxh
 	cmn.GCO.CommitUpdate(config)
 
+	cmn.Rom.Set(&config.ClusterConfig)
+
 	p.owner.smap = newSmapOwner(config)
 	p.owner.smap.put(newSmap())
 	owner := newBMDOwnerPrx(config)

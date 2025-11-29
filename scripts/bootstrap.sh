@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# Optional environment variables used by the Go tests:
+#   NUM_TARGET   - number of targets in CI/local test cluster
+#   NUM_PROXY    - number of proxies in CI/local test cluster
+#   NUM_CHUNKS   - when >0, number of PUT chunks for io contexts
+#   SIGN_HMAC    - when "true", enables redirect HMAC signing
+# See also:
+# * api/env/README.md
+# * docs/environment-vars.md
+#
+# Note: only BUCKET is mandatory for test invocation.
+
 run_tests() {
   SECONDS=0
 

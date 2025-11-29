@@ -434,12 +434,27 @@ test:short:chunks:
   <<: *test_short_def
   variables:
     BUCKET: "ais://test"
-    IOCTX_NUM_CHUNKS: "4"
+    NUM_CHUNKS: "4"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*chunks.*/'
+    - !reference [.test_short_skip_scheduled_template, rules]
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - make test-short
+
+test:short:sign_hmac:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://test"
+    SIGN_HMAC: "true"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*sign_hmac.*/'
     - !reference [.test_short_skip_scheduled_template, rules]
   script:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
@@ -707,7 +722,7 @@ test:long:chunks:
   <<: *test_long_def
   variables:
     BUCKET: "ais://test"
-    IOCTX_NUM_CHUNKS: "4"
+    NUM_CHUNKS: "4"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual

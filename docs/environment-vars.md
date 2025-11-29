@@ -149,14 +149,19 @@ In addition, all embedded (intra-cluster) clients in a cluster utilize the follo
 
 ## Local Playground
 
-| name | comment |
-| ---- | ------- |
-| `NUM_TARGET` | usage is limited to development scripts and test automation |
-| `NUM_PROXY` | (ditto) |
+This group of environment variables is used exclusively by development scripts and integration tests.
+
+| name         | comment |
+|--------------|---------|
+| `NUM_TARGET` | number of targets in a test cluster |
+| `NUM_PROXY`  | number of proxies (gateways) in a test cluster |
+| `NUM_CHUNKS` | when greater than zero, specifies the number of chunks each new PUT operation will produce |
+| `SIGN_HMAC`  | when "true", enables HMAC signing and validation of all HTTP redirects |
 
 See also:
 * [scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)
 * [wait-for-cluster](https://github.com/NVIDIA/aistore/blob/main/ais/test/main_test.go#L47-L56)
+* [api/env package readme](https://github.com/NVIDIA/aistore/blob/main/api/env/README.md)
 
 ## Kubernetes
 
