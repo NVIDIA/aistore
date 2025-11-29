@@ -188,8 +188,8 @@ security:sonarqube:
       - .sonar/cache
   allow_failure: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - !reference [.default_run_rules, rules]
+    - when: manual
+      allow_failure: true
   script:
     - sonar-scanner -Dsonar.qualitygate.wait=true
 

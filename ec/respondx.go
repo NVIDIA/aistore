@@ -221,8 +221,8 @@ func (r *XactRespond) dispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 					Xact:       r,
 				}
 				err = WriteReplicaAndMeta(lom, args)
+				core.FreeLOM(lom)
 			}
-			core.FreeLOM(lom)
 		}
 		if err != nil {
 			r.AddErr(err, 0)
