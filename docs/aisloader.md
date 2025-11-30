@@ -24,40 +24,66 @@ To integrate aisloader with Prometheus-based observability stacks, run the offic
 
 ---
 
-## Table of Contents
+**Table of Contents**
 
-- [Setup](#Setup)
-- [Command line Options](#command-line-options)
-- [Assorted command line](#assorted-command-line)
+- [Setup](#setup)
+- [Command Line Options](#command-line-options)
+  - [Quick Reference (Alphabetical)](#quick-reference-alphabetical)
+  - [Command Line Options Grouped by Category](#command-line-options-grouped-by-category)
+- [Assorted Command Line](#assorted-command-line)
 - [Environment variables](#environment-variables)
 - [Archive Workload](#archive-workload)
+- [Get-Batch Support](#get-batch-support)
+- [Random Access Across Very Large Collections](#random-access-across-very-large-collections)
 - [Examples](#examples)
 - [Collecting stats](#collecting-stats)
-    - [Grafana](#grafana)
+  - [Grafana](#grafana)
 - [HTTP tracing](#http-tracing)
 - [AISLoader-Composer](#aisloader-composer)
 - [References](#references)
 
 ## Setup
 
-To get started, go to root directory and run:
+You can install `aisloader` using the following Bash script:
+
+* https://github.com/NVIDIA/aistore/blob/main/scripts/install_from_binaries.sh
 
 ```console
+./scripts/install_from_binaries.sh --help
+```
+
+Alternatively, you can also build the tool directly from the source:
+
+```console
+## uncomment if needed:
+## git clone https://github.com/NVIDIA/aistore.git
+## cd aistore
+##
 $ make aisloader
 ```
 
 For usage, run: `aisloader`, `aisloader usage`, or `aisloader --help`.
 
-See the following [script](https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh) for usage examples and extended commentary:
+For usage examples and extended commentary, see also:
 
 * https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/test/ci-test.sh
 
-## Command-line Options
+## Command Line Options
+
+This section presents two alternative, intentionally redundant views for usability: a concise alphabetical quick reference for fast lookups, and a grouped-by-category presentation with explanations and examples for deeper understanding.
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
+### Quick Reference (Alphabetical)
+
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
+| -arch.format | `string` | Archive format (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`) | `.tar` |
+| -arch.minsize | `string` | Minimum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -arch.maxsize | `string` | Maximum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
+| -arch.pct | `int` | Percentage of PUTs that create shards (0-100); does NOT affect GET operations | `0` |
+| -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name or bucket URI. If empty, aisloader generates a new random bucket name | `""` |
 | -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
@@ -119,15 +145,137 @@ For the most recently updated command-line options and examples, please run `ais
 | -uniquegets | `bool` | When true, GET objects randomly and equally (i.e., avoid getting some objects more frequently than others) | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | Checksum-validate GET: recompute object checksums and validate against the one received with GET metadata | `false` |
-| **Archive/Shard Options** | | | |
+
+### Command Line Options Grouped by Category
+
+#### Cluster Connection and API Configuration (`clusterParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
+| -port | `string` | AIS proxy/gateway port | `8080` |
+| -randomproxy | `bool` | When true, select random gateway ("proxy") to execute each I/O request | `false` |
+| -timeout | `duration` | Client HTTP timeout (0 = infinity) | `10m` |
+| -tokenfile | `string` | Authentication token (FQN) | `""` |
+| -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no AIStore) | `""` |
+| -s3profile | `string` | Other than default S3 config profile referencing alternative credentials | `""` |
+| -s3-use-path-style | `bool` | Use older path-style addressing (e.g., `https://s3.amazonaws.com/BUCKET/KEY`). Should only be used with `-s3endpoint` | `false` |
+
+#### Target Bucket and Properties (`bucketParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -bucket | `string` | Bucket name or bucket URI. If empty, aisloader generates a new random bucket name | `""` |
+| -provider | `string` | `ais` for AIS bucket, `aws`, `azure`, `gcp`, `oci` for Amazon, Azure, Google, and Oracle clouds respectively | `ais` |
+| -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
+
+#### Timing, Intensity, and Name-Getter Configuration (`workloadParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -duration | `duration` | Benchmark duration (0 - run forever or until Ctrl-C). If not specified and totalputsize > 0, runs until totalputsize reached | `1m` |
+| -numworkers | `int` | Number of goroutine workers operating on AIS in parallel | `10` |
+| -pctput | `int` | Percentage of PUTs in the aisloader-generated workload (see also: `-arch.pct`) | `0` |
+| -pctupdate | `int` | Percentage of GET requests that are followed by a PUT "update" (i.e., creation of a new version of the object) | `0` |
+| -epochs | `int` | Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `0` |
+| -perm-shuffle-max | `int` | Max names for shuffle-based name-getter (above this uses O(1) memory affine) | `100000` |
+| -seed | `int` | Random seed to achieve deterministic reproducible results (0 = use current time in nanoseconds) | `0` |
+| -maxputs | `int` | Maximum number of objects to PUT | `0` |
+| -totalputsize | `string` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix) (0 = no limit) | `0` |
+| -skiplist | `bool` | When true, skip listing objects in a bucket before running 100% PUT workload | `false` |
+| -uniquegets | `bool` | When true, GET objects randomly and equally (i.e., avoid getting some objects more frequently than others) | `true` |
+
+#### Object Size Constraints and Integrity (`sizeCksumParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -minsize | `string` | Minimal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1MiB` |
+| -maxsize | `string` | Maximal object size, may contain [multiplicative suffix](#bytes-multiplicative-suffix) | `1GiB` |
+| -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash` |
+| -verifyhash | `bool` | Checksum-validate GET: recompute object checksums and validate against the one received with GET metadata | `false` |
+| -readertype | `string` | Type of reader: `sg` (default), `file`, `rand`, `tar` | `sg` |
+| -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
+
+#### Archive/Shard Configuration (`archParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
 | -arch.format | `string` | Archive format (`.tar`, `.tgz`, `.tar.gz`, `.zip`, `.tar.lz4`) | `.tar` |
+| -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
+| -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
 | -arch.minsize | `string` | Minimum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -arch.maxsize | `string` | Maximum size of files inside shards, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
-| -arch.num-files | `int` | Number of archived files per shard (PUT only; 0 = auto-computed from file sizes) | `0` |
 | -arch.pct | `int` | Percentage of PUTs that create shards (0-100); does NOT affect GET operations | `0` |
-| -arch.prefix | `string` | Optional prefix inside archive (e.g., `trunk-` or `a/b/c/trunk-`) | `""` |
 
-## Assorted command line
+#### Object Naming Strategy (`namingParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -num-subdirs | `int` | Spread generated objects over this many virtual subdirectories (< 100k) | `0` |
+| -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
+| -list-dirs | `bool` | List virtual subdirectories (remote buckets only) | `false` |
+| -randomname | `bool` | When true, generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
+| -subdir | `string` | For GET: prefix that may or may not be an actual [virtual directory](/docs/howto_virt_dirs.md). For PUT: virtual destination directory for all generated objects. See [CLI `--prefix`](/docs/cli/object.md) | `""` |
+| -putshards | `int` | **Deprecated** - use `-num-subdirs` instead | `0` |
+
+#### Read Operation Configuration (`readParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -readoff | `string` | Read range offset, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -readlen | `string` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
+| -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
+| -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
+| -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
+| -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
+| -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
+
+#### Multipart Upload Settings (`multipartParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -multipart-chunks | `int` | Number of chunks for multipart upload (0 = disabled, >0 = use multipart with specified chunks) | `0` |
+| -pctmultipart | `int` | Percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0) | `0` |
+
+#### ETL Configuration (`etlParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -etl | `string` | Built-in ETL, one of: `tar2tf`, `md5`, or `echo`. Each object that aisloader GETs undergoes the selected transformation | `""` |
+| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification | `""` |
+
+#### Fleet Coordination (`loaderParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -loaderid | `string` | ID to identify a loader among multiple concurrent instances | `0` |
+| -loadernum | `int` | Total number of aisloaders running concurrently and generating combined load. If defined, must be greater than the loaderid and cannot be used together with loaderidhashlen | `0` |
+| -loaderidhashlen | `int` | Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum | `0` |
+| -getloaderid | `bool` | When true, print stored/computed unique loaderID and exit | `false` |
+
+#### Statistics and Monitoring (`statsParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -stats-output | `string` | Filename to log statistics (empty string = standard output) | `""` |
+| -statsinterval | `int` | Interval in seconds to print performance counters (0 = disabled) | `10` |
+| -json | `bool` | When true, print the output in JSON | `false` |
+| -statsdip | `string` | **Deprecated** - StatsD IP address or hostname | `localhost` |
+| -statsdport | `int` | **Deprecated** - StatsD UDP port | `8125` |
+| -statsdprobe | `bool` | **Deprecated** - Test-probe StatsD server prior to benchmarks | `false` |
+
+#### Cleanup, Dry-Run, HTTP Tracing, Termination Control (`miscParams`)
+
+| Command-line option | Type | Description | Default |
+| --- | --- | --- | --- |
+| -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
+| -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
+| -stoppable | `bool` | When true, allow termination via Ctrl-C | `false` |
+| -quiet | `bool` | When starting to run, do not print command line arguments, default settings, and usage examples | `false` |
+| -usage | `bool` | Show command-line options, usage, and examples | `false` |
+
+## Assorted Command Line
 
 ### Duration
 
@@ -377,6 +525,32 @@ For more information about AIStore’s archive/shard support, see
 * [AIStore Archive Documentation](/docs/archive.md).
 
 ---
+
+## Get-Batch Support
+
+With version 2.1, `aisloader` can now benchmark [Get-Batch](#getbatch-distributed-multi-object-retrieval) operations using the `--get-batchsize` flag (range: 1-1000). The tool consumes TAR streams (see note below), validates archived file counts, and tracks Get-Batch-specific statistics. The `--continue-on-err` flag enables testing of soft-error handling behavior.
+
+> Supported serialization formats include: `.tar` (default), `.tar.gz`, `.tar.lz4`, and `.zip`.
+
+## Random Access Across Very Large Collections
+
+The tool uses the [`name-getter`] abstraction (see https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/namegetter/ng.go) to enable efficient random reads across very large collections: objects and archived files.
+
+The `--epochs N` flag enables full-dataset read passes, with different algorithms selected automatically based on dataset size:
+
+**PermAffinePrime**: For datasets larger than `100k` (by default) objects, an affine transformation with prime modulus provides memory-efficient pseudo-random access without storing full permutations. The algorithm fills batch requests completely and may span epoch boundaries.
+
+**PermShuffle**: For datasets up to (default) `100k` objects, Fisher-Yates shuffle with uint32 indices (50% memory reduction compared to previous implementation).
+
+**Selection Logic:**
+
+| Workload | Dataset Size | Selected Algorithm |
+|---|---:|---|
+| Mixed read/write or non-epoched workloads | any | Random / RandomUnique |
+| Read-only | <= `100k` objects (default) | PermShuffle |
+| Read-only | >  `100k` objects (--/--) | PermAffinePrime |
+
+> Command-line override to set the size threshold (instead of default `100k`): `--perm-shuffle-max` flag.
 
 ## Examples
 

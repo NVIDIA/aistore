@@ -349,7 +349,9 @@ The benchmarking and load generation tool has been updated to version 2.1 with s
 
 ### Get-Batch Support
 
-With v2.1, `aisloader` can now benchmark [Get-Batch](#getbatch-distributed-multi-object-retrieval) operations using the `--get-batchsize` flag (range: 1-1000). The tool consumes TAR streams, validates archived file counts, and tracks Get-Batch-specific statistics. The `--continue-on-err` flag enables testing of soft-error handling behavior.
+With v2.1, `aisloader` can now benchmark [Get-Batch](https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md) operations using the `--get-batchsize` flag (range: 1-1000). The tool consumes TAR streams (see note below), validates archived file counts, and tracks Get-Batch-specific statistics. The `--continue-on-err` flag enables testing of soft-error handling behavior.
+
+> Supported serialization formats include: `.tar` (default), `.tar.gz`, `.tar.lz4`, and `.zip`.
 
 ### Archive Workload Support
 
@@ -378,7 +380,7 @@ Archive-specific capabilities enable testing of shard-based ML workloads:
 
 ### Random Access Across Very Large Collections
 
-The tool uses the [`name-getter`] abstraction (see https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/namegetter/ng.go) to enable efficient random reads across very large collections: objects and archived files.
+The tool uses the `name-getter` abstraction (see https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/namegetter/ng.go) to enable efficient random reads across very large collections: objects and archived files.
 
 The `--epochs N` flag enables full-dataset read passes, with different algorithms selected automatically based on dataset size:
 
