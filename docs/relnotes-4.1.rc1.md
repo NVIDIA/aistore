@@ -23,6 +23,7 @@ AIStore v4.1 extends the functionality introduced in v4.0 with a set of changes 
 13. [ETL and Transform Pipeline](#etl-and-transform-pipeline)
 14. [Observability](#observability)
 15. [Configuration Changes](#configuration-changes)
+16. [Tools: `aisloader`](#tools-aisloader)
 
 ---
 
@@ -341,3 +342,84 @@ Prometheus metrics now cover GetBatch behavior, blob downloads, transport stream
 ### Compatibility
 
 * v4.0 auth configurations are automatically migrated.
+
+## Tools: `aisloader`
+
+The benchmarking and load generation tool has been updated to version 2.1 with support for archive workloads, Get-Batch operations, and efficient random-read access patterns for very large datasets.
+
+### Get-Batch Support
+
+With v2.1, `aisloader` can now benchmark [Get-Batch](#getbatch-distributed-multi-object-retrieval) operations using the `--get-batchsize` flag (range: 1-1000). The tool consumes TAR streams, validates archived file counts, and tracks Get-Batch-specific statistics. The `--continue-on-err` flag enables testing of soft-error handling behavior.
+
+### Archive Workload Support
+
+Archive-specific capabilities enable testing of shard-based ML workloads:
+
+**PUT Operations:**
+- Create shards at configurable percentages via `--arch.pct` (e.g., `arch.pct=30` creates 30% shards, 70% plain objects)
+- Configurable archive formats: tar, tgz, zip
+- Dynamic in-archive sizing with three modes: fixed count, size-bounded, or hybrid
+- Optional prefix inside archives (e.g., `--arch.prefix="trunk"` or `--arch.prefix="a/b/c/trunk-"`)
+
+**GET Operations:**
+- Read archived files from existing shards
+- Extract specific files via `archpath` parameter
+- List-objects integration with archive-aware filtering
+
+**Configuration:**
+```bash
+--arch.pct 30         # Percentage of PUTs that create shards
+--arch.format tar     # Archive format (tar, tgz, zip)
+--arch.num-files 100  # Files per shard (PUT only)
+--arch.minsize 1KB    # Minimum file size
+--arch.maxsize 10MB   # Maximum file size
+--arch.prefix trunk-  # Optional prefix inside archive
+```
+
+### Random Access Across Very Large Collections
+
+The tool uses the [`name-getter`] abstraction (see https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/namegetter/ng.go) to enable efficient random reads across very large collections: objects and archived files.
+
+The `--epochs N` flag enables full-dataset read passes, with different algorithms selected automatically based on dataset size:
+
+**PermAffinePrime**: For datasets larger than `100k` (by default) objects, an affine transformation with prime modulus provides memory-efficient pseudo-random access without storing full permutations. The algorithm fills batch requests completely and may span epoch boundaries.
+
+**PermShuffle**: For datasets up to (default) `100k` objects, Fisher-Yates shuffle with uint32 indices (50% memory reduction compared to previous implementation).
+
+**Selection Logic:**
+
+| Workload | Dataset Size | Selected Algorithm |
+|---|---:|---|
+| Mixed read/write or non-epoched workloads | any | Random / RandomUnique |
+| Read-only | <= `100k` objects (default) | PermShuffle |
+| Read-only | >  `100k` objects (--/--) | PermAffinePrime |
+
+> Command-line override to set the size threshold (instead of default `100k`): `--perm-shuffle-max` flag.
+
+### Command-Line Reorganization
+
+In v2.1, command-line parameters have been grouped into logical sections:
+
+| Parameter Group | Purpose / Contents |
+|---|---|
+| `clusterParams` | Cluster connection and API configuration — proxy URL, authentication, random gateway selection |
+| `bucketParams` | Target bucket and properties — bucket name, provider, JSON properties |
+| `workloadParams` | Timing, intensity, and name-getter configuration — duration, workers, PUT percentage, epochs, permutation thresholds, seed, limits |
+| `sizeCksumParams` | Object size constraints and integrity — min/max sizes, checksum type, hash verification |
+| `archParams` | Archive/shard configuration — format, prefix, file counts, sizing |
+| `namingParams` | Object naming strategy — subdirectories, file lists, virtual directories, random names |
+| `readParams` | Read operation configuration — range reads, Get-Batch, latest/cached flags, eviction, error handling |
+| `multipartParams` | Multipart upload settings — chunk count, percentage |
+| `etlParams` | ETL configuration — predefined transforms, custom specs |
+| `loaderParams` | Fleet coordination — loader ID, instance count, hash length |
+| `statsParams` | Statistics and monitoring — output file, intervals, JSON format |
+| `miscParams` | Cleanup, dry-run, HTTP tracing, termination control |
+
+> For the complete list and descriptions, please see [Command-line Options](https://github.com/NVIDIA/aistore/blob/main/docs/aisloader.md#command-line-options).
+
+### Additional Improvements
+
+- Memory pool optimization for work orders reduces allocations
+- Enhanced validation rejects invalid epoch-based runs on buckets with fewer than 2 objects
+- Improved CI test coverage with Get-Batch smoke tests
+- Consistent stderr usage for error logging
