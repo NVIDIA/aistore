@@ -877,7 +877,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		bmd       = p.owner.bmd.get()
 		etlMD     = p.owner.etl.get()
 		actMsgExt = p.newAmsg(ctx.msg, bmd)
-		pairs     = make([]revsPair, 0, 5)
+		pairs     = make([]revsPair, 0, 6)
 	)
 	// when targets join as well (redundant?, minor)
 	config, err := p.ensureConfigURLs()
@@ -889,6 +889,10 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		// proceed anyway
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, actMsgExt})
+		if config.Auth.CSKEnabled() {
+			k := p.owner.csk.load()
+			pairs = append(pairs, revsPair{k, actMsgExt})
+		}
 	}
 
 	pairs = append(pairs, revsPair{clone, actMsgExt}, revsPair{bmd, actMsgExt})
@@ -917,7 +921,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		actMsgExt = p.newAmsg(ctx.msg, nil)
-		pairs     = make([]revsPair, 0, 2)
+		pairs     = make([]revsPair, 0, 4)
 		reb       = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
 	)
 	pairs = append(pairs, revsPair{clone, actMsgExt})
@@ -933,8 +937,18 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 		debug.Assert(nlog.Stopping(), err)
 		return
 	}
-	if config != nil /*updated*/ {
-		pairs = append(pairs, revsPair{config, actMsgExt})
+	if config == nil /*not updated - including anyway*/ {
+		config, err = p.owner.config.get()
+		if err != nil {
+			debug.Assert(nlog.Stopping(), err)
+			return
+		}
+	}
+
+	pairs = append(pairs, revsPair{config, actMsgExt})
+	if config.Auth.CSKEnabled() {
+		k := p.owner.csk.load()
+		pairs = append(pairs, revsPair{k, actMsgExt})
 	}
 
 	wg := p.metasyncer.sync(pairs...)
@@ -1245,10 +1259,15 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 		msg = p.newAmsg(ctx.msg, nil)
 	)
 	switch {
-	case clone.Auth.CSKEnabled() && (ctx.oldConfig == nil || !ctx.oldConfig.Auth.CSKEnabled()):
-		k := p.owner.csk.gen(p.owner.smap.get().Version)
+	case clone.Auth.CSKEnabled():
+		var k *clusterKey
+		if ctx.oldConfig == nil || !ctx.oldConfig.Auth.CSKEnabled() {
+			k = p.owner.csk.gen(p.owner.smap.get().Version)
+		} else {
+			k = p.owner.csk.load()
+		}
 		wg = p.metasyncer.sync(revsPair{clone, msg}, revsPair{k, msg})
-	case !clone.Auth.CSKEnabled() && (ctx.oldConfig != nil && ctx.oldConfig.Auth.CSKEnabled()):
+	case ctx.oldConfig != nil && ctx.oldConfig.Auth.CSKEnabled():
 		// clear locally; usage gated by Rom.CSKEnabled()
 		p.owner.csk.reset()
 		fallthrough
