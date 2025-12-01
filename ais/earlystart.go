@@ -336,7 +336,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		cos.ExitLog(err)
 	}
 
-	// 11. metasync (smap, config, etl & bmd) and startup as primary
+	// 11. metasync (all cluster-level meta) and startup as primary
 	smap = p.owner.smap.get()
 	var (
 		actMsgExt = p.newAmsgStr(metaction2, bmd)
@@ -345,7 +345,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	if cluConfig.Auth.CSKEnabled() {
 		k := p.owner.csk.gen(smap.Version)
 		pairs = append(pairs, revsPair{k, actMsgExt})
-	}
+	} // note: can do signed requests after this point
 
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()

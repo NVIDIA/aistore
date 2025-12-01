@@ -49,6 +49,8 @@ import (
 // Note: it's always a good idea to explicitly add each and every new query into one of the
 // non-default categories, potentially 3, 4, or 5.
 
+const dpqTag = "dpq"
+
 type (
 	cskgrp struct {
 		nonce   uint64 // QparamNonce
@@ -72,8 +74,6 @@ type (
 			objto   string // uname of the destination object
 		}
 		csk cskgrp // csk envelope (group CSK/HMAC)
-
-		count int
 
 		// boolean fields
 		skipVC        bool // QparamSkipVC (skip loading existing object's metadata)
@@ -123,7 +123,7 @@ func dpqAlloc() (d *dpq) {
 }
 
 func dpqFree(d *dpq) {
-	c := d.count
+	c := len(d.m)
 	m := d.m
 
 	clear(m)
@@ -143,7 +143,6 @@ func (dpq *dpq) parse(rawQuery string) error {
 		query = rawQuery // r.URL.RawQuery
 		iters int
 	)
-	dpq.count = 0
 	for query != "" && iters < maxDpqCap {
 		var (
 			err   error
@@ -210,7 +209,6 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
 			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs:
 			dpq.m[key] = value
-			dpq.count++
 
 		// Finally, assorted named exceptions that we simply skip, and b) all the rest parameters
 		default:
@@ -224,17 +222,19 @@ func (dpq *dpq) parse(rawQuery string) error {
 
 			// Default: unescape and store in map
 			dpq.m[key], err = _unescape(value)
-			dpq.count++
 		}
 
 		// common error return
 		if err != nil {
-			return err
+			if errors.Is(err, strconv.ErrSyntax) {
+				err = strconv.ErrSyntax
+			}
+			return fmt.Errorf("%s: '%s=%s', err: %v", dpqTag, key, value, err)
 		}
 		iters++
 	}
 	if iters >= maxDpqCap {
-		return errors.New("exceeded max number of dpq iterations: " + strconv.Itoa(iters))
+		return fmt.Errorf("%s: exceeded maximum number of iterations (%d)", dpqTag, iters)
 	}
 
 	return nil
@@ -281,7 +281,7 @@ func (dpq *dpq) _arch(key, val string) (err error) {
 	}
 	// either/or
 	if dpq.arch.path != "" && dpq.arch.mmode != "" { // (empty arch.regx is fine - is EmptyMatchAny)
-		err = fmt.Errorf("query parameters archpath=%q (match one) and archregx=%q (match many) are mutually exclusive",
+		err = fmt.Errorf("%s: archpath=%q (match one) and archregx=%q (match many) are mutually exclusive", dpqTag,
 			apc.QparamArchpath, apc.QparamArchregx)
 	}
 	return err
@@ -309,24 +309,25 @@ func (dpq *dpq) _archstr() string {
 //
 
 func cskFromQ(q url.Values) (*cskgrp, error) {
+	const tag = "from-q"
 	sig := q.Get(apc.QparamHMAC)
 	if sig == "" {
 		return nil, nil
 	}
 	if len(sig) != cskSigLen {
-		return nil, fmt.Errorf("invalid signature length: %d", len(sig))
+		return nil, fmt.Errorf("%s: invalid signature length: %d", tag, len(sig))
 	}
 
 	s := q.Get(apc.QparamNonce)
 	nonce, err := strconv.ParseUint(s, cskBase, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid nonce: %v", err)
+		return nil, fmt.Errorf("%s: invalid nonce '%s=%s': %v", tag, apc.QparamNonce, s, err)
 	}
 
 	s = q.Get(apc.QparamSmapVer)
 	smapVer, err := strconv.ParseInt(s, cskBase, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid smap version: %v", err)
+		return nil, fmt.Errorf("%s: invalid Smap version %q: %v", tag, s, err)
 	}
 	return &cskgrp{nonce: nonce, smapVer: smapVer, hmacSig: sig}, nil
 }

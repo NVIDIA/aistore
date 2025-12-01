@@ -17,10 +17,12 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -46,18 +48,21 @@ import (
 //   and compares it against the provided signature. Any mismatch results in a 401.
 
 // TODO: sign.verify()
+// - check that csk is always initialized across (enable/disable; lifecycle events)
+//   (see related sign.warn())
 // - anti-replay logic (sliding time window, per-sender nonce tracking, etc.)
 // - validate pid: a) != "" (weak) or b) in Smap (strong)
-// - stricter handling for legacy unsigned redirects
 // - optionally, extend HMAC payload to cover assorted query parameters
 
 const (
-	cskTag         = "csk"
-	cskKeyLen      = 16  // len(secret)
-	cskSigLen      = 43  // = base64.RawURLEncoding.EncodedLen(sha256.Size)
-	cskSepa        = 0   // to separate strings in HMAC payload
-	cskBase        = 36  // base for all signed int64/uint64 fields
-	cskURLOverhead = 160 // pid+utm+vpams+x+u qparams (~145 worst-case)
+	cskTag = "csk"
+
+	cskKeyLen      = 16               // len(secret)
+	cskSigLen      = 43               // = base64.RawURLEncoding.EncodedLen(sha256.Size)
+	cskSepa        = 0                // to separate strings in HMAC payload
+	cskBase        = 36               // base for all signed int64/uint64 fields
+	cskURLOverhead = 160              // pid+utm+vpams+x+u qparams (~145 worst-case)
+	cskUptime      = 10 * time.Second // cluster uptime after which we start warning if CSK version remains zero
 )
 
 type (
@@ -157,10 +162,16 @@ func (sign *signer) compute(pid string) {
 	binary.BigEndian.PutUint64(b8[:], sign.nonce)
 	sb.WriteBytes(b8[:])
 
+	// load key
+	k := sign.h.owner.csk.load()
+	if k.ver == 0 {
+		sign.warn()
+		return
+	}
+	debug.Assert(len(k.secret) > 0, k.String())
+
 	// hash
 	hb := handAlloc()
-	k := sign.h.owner.csk.load()
-	debug.Assert(k.ver > 0 && len(k.secret) > 0)
 	if hb.h == nil || hb.ver != k.ver {
 		hb.h = hmac.New(sha256.New, k.secret)
 		hb.ver = k.ver
@@ -176,6 +187,19 @@ func (sign *signer) compute(pid string) {
 	base64.RawURLEncoding.Encode(sign.sig, hb.buf[:])
 
 	handFree(hb)
+}
+
+func (sign *signer) warn() {
+	const skip = "skip HMAC sign (cluster-key version is zero)"
+	uptime := sign.h.keepalive.cluUptime(mono.NanoTime())
+	switch {
+	case uptime < cskUptime:
+		// expected during early startup, stay quiet
+	case uptime < cskUptime<<1:
+		nlog.Warningln(sign.h.String(), skip)
+	case uptime < min(time.Minute, cskUptime<<2):
+		nlog.Errorln(sign.h.String(), skip)
+	}
 }
 
 func (sign *signer) buildURL(nodeURL string, now int64) string {
