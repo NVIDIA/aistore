@@ -1,33 +1,51 @@
-Training neural networks on very large datasets is not easy (an understatement).
+AIStore natively supports four archive/serialization formats across all APIs, batch jobs, and functional extensions: **TAR**, **TGZ** (TAR.GZ), **TAR.LZ4**, and **ZIP**.
 
-One of the many associated challenges is a so-called [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - the problem that gets progressively worse given continuous random access to the entirety of an underlying dataset (that often also has a tendency to annually double in size).
+## Motivation
 
-One way to address the small-file problem involves providing some sort of *serialization* or *sharding* that allows to run **unmodified** clients and apps.
+Archives address the [small-file problem](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%22small+file+problem%22) - performance degradation from random access to very large datasets containing many small files.
 
-[Sharding](overview.md#shard) is exactly the approach that we took in AIStore (AIS). Archiving or sharding, in the context, means utilizing TAR, for instance, to combine small files into .tar formatted shards.
+> To qualify "very large" and "small-file" - the range of the numbers we usually see in the field include datasets containing 10+ million files with sizes ranging from 1K to 100K.
 
-> While I/O performance was always the primary motivation, the fact that a sharded dataset is, effectively, a backup of the original one must be considered an important added bonus.
+AIStore’s implementation allows **unmodified** clients and applications to work efficiently with archived datasets.
 
-Today AIS equally supports formats: TAR, TGZ (TAR.GZ), TAR.LZ4, ZIP, where:
+Key benefits:
 
-* TAR is a well-known format first introduced in Unix V7 circa 1979 with specific formatting flavors including USTAR, PAX, and GNU TAR (all three are equally supported);
-* TGZ (aka TAR.GZ) and TAR.LZ4 provide, respectively, gzip and lz4 compression to tar files (aka tarballs);
-* ZIP is [PKWARE ZIP](https://www.pkware.com/appnote) first introduced in 1989.
+- Improved I/O performance via reduced metadata lookups and network roundtrips
+- Seamless integration with existing, unmodified workflows
+- Implicit dataset backup: each archive acts as a self-contained, immutable copy of the original files
 
-AIS can natively read, write, append(**), and list archives.
+> In addition to performance, sharded datasets provide a natural form of **dataset backup**: each shard is a self-contained, immutable representation of its original files, making it easy to replicate, snapshot, or version datasets without additional tooling.
 
-All sharding formats are equally supported across the entire set of AIS APIs. For instance, `list-objects` API supports "opening" _shards_
+## Supported Formats
 
-> ie., objects formatted as .tar, .tgz, etc. - see above
+* **TAR** (`.tar`) - Unix archive format (since 1979) supporting USTAR, PAX, and GNU TAR variants
+* **TGZ** (`.tgz`, `.tar.gz`) - TAR with gzip compression
+* **TAR.LZ4** (`.tar.lz4`) - TAR with lz4 compression
+* **ZIP** (`.zip`) - [PKWARE ZIP](https://www.pkware.com/appnote) format (since 1989)
 
-and including the corresponding pathnames into generated result sets. Clients can run concurrent multi-object (source bucket => destination bucket) transactions to en masse generate new archives from [selected](/docs/batch.md) subsets of files.
+## Operations
 
-APPEND to existing archives is also provided but limited to [TAR only](https://aistore.nvidia.com/blog/2021/08/10/tar-append).
+AIStore can natively **read**, **write**, **append**¹, and **list** archives. Operations include:
 
-> Maybe with exception of TAR, none of the listed sharding/archiving formats was ever designed to be append-able - that is, not if we are actually talking about *appending* and not some sort of extract-all-create-new type emulation (that will certainly break the performance in several well-documented ways).
+- Regular GET and PUT requests:
+  - [Go API](https://github.com/NVIDIA/aistore/blob/main/api/object.go) - see "ArchPath" parameter
+  - [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/obj/object.py) - ditto
+  - [Python SDK/Archive](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/archive_config.py) - see archive-related config
+- [**get-batch**](/docs/get_batch.md) - efficient multi-object/multi-file retrieval
+- **list-objects** - "opens" archives and includes contained pathnames in results
+- **[dsort](/docs/cli/dsort.md)** - distributed archive creation and transformation
+- **[aisloader](/docs/aisloader.md)** - benchmarking with archive workloads
+- Concurrent multi-object transactions for bulk archive generation from [selected](/docs/batch.md) objects
+
+**Default format**: TAR is the system default when serialization format is unspecified.
+
+---
+¹ **APPEND** is supported for [TAR format only](https://aistore.nvidia.com/blog/2021/08/10/tar-append). Other formats (ZIP, TGZ, TAR.LZ4) were not designed for true append operations - only extract-all-recreate emulation, which significantly impacts performance.
 
 ## See also
 
 * [CLI: archive](/docs/cli/archive.md)
+* [aisloader: archive](/docs/aisloader.md#command-line-options)
 * [Initial Sharding Tool (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
 * [Distributed Shuffle](/docs/cli/dsort.md)
+* [Get-Batch](/docs/get_batch.md)

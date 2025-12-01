@@ -8,13 +8,13 @@ The list of supported jobs can be viewed via the CLI `show` command and currentl
 $ ais show job --help
 
 NAME:
-   ais show job - Show running and/or finished jobs:
-
-     archive        blob-download  cleanup     copy-bucket       copy-objects      delete-objects
-     download       dsort          ec-bucket   ec-get            ec-put            ec-resp
-     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects     evict-remote-bucket
-     list           lru-eviction   mirror      prefetch-objects  promote-files     put-copies
-     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+   show  Show running and/or finished jobs:
+         archive        blob-download  cleanup       copy-bucket    copy-objects      delete-objects
+         download       dsort          ec-bucket     ec-get         ec-put            ec-resp
+         elect-primary  etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+         get-batch      list           lru-eviction  mirror         prefetch-objects  promote-files
+         put-copies     rebalance      rechunk       rename-bucket  resilver          summary
+         warm-up-metadata
 ```
 
 Terminology-wise, in the code we mostly call it _xaction_ by the name of the corresponding software abstraction. But elsewhere, it is simply a _job_ - the two terms are interchangeable.
@@ -32,11 +32,11 @@ In CLI, there's `ais job` command and its subcommands (`<TAB-TAB>` completions):
 $ ais job
 start   stop    wait    rm      show
 
-$ ais start
-prefetch           lru                cleanup            copy-bck
-blob-download      etl                mirror             move-bck
-download           rebalance          ec-encode
-dsort              resilver           warm-up-metadata
+$ ais start <TAB-TAB>
+
+prefetch           dsort              rebalance          mirror             warm-up-metadata
+blob-download      lru                resilver           ec-encode          copy-bck
+download           etl                cleanup            rechunk            move-bck
 ```
 
 > Note that `ais start` is an [alias](/docs/cli/alias.md) for the `ais job start` command - both (versions) can be used interchangeably.
