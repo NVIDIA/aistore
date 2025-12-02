@@ -15,13 +15,13 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 * ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
 * ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [AIStore Observability](/docs/monitoring-overview.md) for details.
-* ✅ **Chunked Objects:** High-performance chunked object representation, with independently retrievable chunks, metadata v2, and checksum-protected manifests. Supports rechunking, parallel reads, and seamless integration with [Get-Batch](/docs/get_batch.md) and [blob-downloader](/docs/blob_downloader.md).
+* ✅ **Chunked Objects:** High-performance chunked object representation, with independently retrievable chunks, metadata v2, and checksum-protected manifests. Supports rechunking, parallel reads, and seamless integration with [Get-Batch](/docs/get_batch.md), [blob-downloader](/docs/blob_downloader.md), and multipart uploads to supported cloud backends.
 * ✅ **Secure Redirects (cluster-key):** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key.
 * ✅ **Load-Aware Throttling:** Dynamic request throttling based on a five-dimensional load vector (CPU, memory, disk, FDs, goroutines) to protect AIS clusters under stress.
 * ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
 * ✅ **ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
-* ✅ **Get-Batch:** Retrieve multiple objects and/or [archived files](/docs/archive.md) with a single call. Designed for ML/AI pipelines, [Get-Batch](/docs/get_batch.md) fetches an entire training batch in one operation, assembling a TAR (or other supported format) that contains all requested items in the exact user-specified order.
+* ✅ **Get-Batch:** Retrieve multiple objects and/or [archived files](/docs/archive.md) with a single call. Designed for ML/AI pipelines, [Get-Batch](/docs/get_batch.md) fetches an entire training batch in one operation, assembling a TAR (or other supported [serialization format](/docs/archive.md)) that contains all requested items in the exact user-specified order.
 * ✅ **Data Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write-consistency) across all gateways, with [write-through](/docs/overview.md#write-through) semantics in presence of [remote backends](/docs/overview.md#backend-provider).
 * ✅ **Serialization & Sharding:** Native support for TAR, TGZ, TAR.LZ4, and ZIP [archives](/docs/archive.md) for efficient storage and processing of small-file datasets. Features include seamless integration with existing unmodified workflows across all APIs and subsystems.
 * ✅ **Kubernetes:** For production, AIS runs natively on Kubernetes. The dedicated [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository includes the AIS/K8s Operator, Ansible playbooks, Helm charts, and deployment guidance.
@@ -39,7 +39,7 @@ NAME:
     warm-up-metadata
 ```
 
-> The feature set keeps actively growing and also includes: [adding/removing nodes at runtime](/docs/lifecycle_node.md), managing [TLS certificates](/docs/cli/x509.md) at runtime, listing, copying, prefetching, and transforming [virtual directories](/docs/howto_virt_dirs.md), executing [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests), adaptive [rate limiting](/docs/rate_limit.md), and more.
+> The feature set continues to grow and also includes: [blob-downloader](https://aistore.nvidia.com/blog/2025/11/26/blob-downloader); [adding/removing nodes at runtime](/docs/lifecycle_node.md); runtime management of [TLS certificates](/docs/cli/x509.md); listing, copying, prefetching, and transforming [virtual directories](/docs/howto_virt_dirs.md); executing [presigned S3 requests](/docs/s3compat.md#presigned-s3-requests); adaptive [rate limiting](/docs/rate_limit.md); and more.
 
 > For the original **white paper** and design philosophy, please see [AIStore Overview](/docs/overview.md), which also includes high-level block diagram, terminology, APIs, CLI, and more.
 > For our 2024 KubeCon presentation, please see [AIStore: Enhancing petascale Deep Learning across Cloud backends](https://www.youtube.com/watch?v=N-d9cbROndg).
@@ -148,10 +148,7 @@ Let others know your project is powered by high-performance AI storage:
 * [Batch Jobs](/docs/batch.md)
 * [Performance](/docs/performance.md) and [CLI: performance](/docs/cli/performance.md)
 * [CLI Reference](/docs/cli.md)
-* [Authentication](/docs/authn.md)[^authn-beta]
 * [Production Deployment: Kubernetes Operator, Ansible Playbooks, Helm Charts, Monitoring](https://github.com/NVIDIA/ais-k8s)
-
-[^authn-beta]: AuthN is under development and has *NOT* gone through a complete security audit.
 
 ### How to find information
 
