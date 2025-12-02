@@ -31,6 +31,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// TODO post-4.1:
+// - revisit `allow:"cluster"` usage across ClusterConfig
+// - for 4.1, making a single change - marking `AuthConf` as cluster-scoped
+
 const (
 	confDisabled = "Disabled"
 )
@@ -105,7 +109,7 @@ type (
 		Dsort       DsortConf       `json:"distributed_sort"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum"`
-		Auth        AuthConf        `json:"auth"`
+		Auth        AuthConf        `json:"auth" allow:"cluster"`
 		Tracing     TracingConf     `json:"tracing"`
 		TCB         TCBConf         `json:"tcb"`
 		TCO         TCOConf         `json:"tco"`
@@ -1929,11 +1933,11 @@ func (c *AuthConf) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// If current unmarshal fails, try legacy AuthConfV4
+	// [backwards compatibility] try legacy AuthConfV4
 	var v4 AuthConfV4
 	errLegacy := cos.JSON.Unmarshal(data, &v4)
 	if errLegacy != nil {
-		return fmt.Errorf("failed to parse auth config using current config structure (err: %v) and v4 (err: %v)", errCurrent, errLegacy)
+		return fmt.Errorf("failed to parse auth config using current config structure (err: %v) and v4.0 (err: %v)", errCurrent, errLegacy)
 	}
 	c.Enabled = v4.Enabled
 	// All legacy keys are 256 bit HMAC
