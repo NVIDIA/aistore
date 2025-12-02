@@ -187,11 +187,10 @@ func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bo
 	return
 }
 
-// NOTE: must be called under config-owner lock
-func setConfig(toUpdate *cmn.ConfigToSet, transient bool) (err error) {
+// must be called under config-owner lock
+func setConfig(toUpdate *cmn.ConfigToSet, transient bool) error {
 	clone := cmn.GCO.Clone()
-	err = setConfigInMem(toUpdate, clone, apc.Daemon)
-	if err != nil {
+	if err := setConfigInMem(toUpdate, clone, apc.Daemon, transient); err != nil {
 		return err
 	}
 	override := cmn.GCO.GetOverride()
@@ -211,9 +210,8 @@ func setConfig(toUpdate *cmn.ConfigToSet, transient bool) (err error) {
 	return nil
 }
 
-func setConfigInMem(toUpdate *cmn.ConfigToSet, config *cmn.Config, asType string) (err error) {
-	err = config.UpdateClusterConfig(toUpdate, asType)
-	return
+func setConfigInMem(toUpdate *cmn.ConfigToSet, config *cmn.Config, asType string, transient bool) error {
+	return config.UpdateClusterConfig(toUpdate, asType, cmn.CopyPropsOpts{Transient: transient})
 }
 
 func (co *configOwner) resetDaemonConfig() (err error) {

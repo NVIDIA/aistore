@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const IterFieldNameSepa = "."
@@ -54,6 +55,14 @@ type (
 	}
 
 	updateFunc func(uniqueTag string, field IterField) (error, bool)
+)
+
+type (
+	// controls how CopyProps/_copyProps enforce config scope and transient rules
+	CopyPropsOpts struct {
+		Transient   bool // treat changes as transient: forbid writes to allow:"cluster"
+		IgnoreScope bool // when true, skip allow:"cluster" violations instead of failing (config override-only)
+	}
 )
 
 // interface guard
@@ -233,16 +242,20 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 }
 
 // CopyProps update dst with the values from src
-func CopyProps(src, dst any, asType string) error {
+func CopyProps(src, dst any, asType string, copts ...CopyPropsOpts) error {
 	var (
 		srcVal = reflect.ValueOf(src)
 		dstVal = reflect.ValueOf(dst).Elem()
+		opts   CopyPropsOpts
 	)
+	if len(copts) > 0 {
+		opts = copts[0]
+	}
 	debug.Assertf(slices.Contains([]string{apc.Daemon, apc.Cluster}, asType), "unexpected config level: %s", asType)
 	if srcVal.Kind() == reflect.Ptr {
 		srcVal = srcVal.Elem()
 	}
-	return _copyProps(srcVal, dstVal, asType)
+	return _copyProps(srcVal, dstVal, asType, opts)
 }
 
 // copyProps helper: whether v.Kind() supports IsNil()
@@ -277,7 +290,7 @@ func peel2(v reflect.Value) reflect.Value {
 	return v
 }
 
-func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
+func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts) error {
 	// normalize pointers on entry
 	for srcVal.Kind() == reflect.Ptr && !srcVal.IsNil() {
 		srcVal = srcVal.Elem()
@@ -353,7 +366,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
 				if nilable(srcField.Kind()) && srcField.IsNil() {
 					continue
 				}
-				if err := _copyProps(srcField, dstVal, asType); err != nil {
+				if err := _copyProps(srcField, dstVal, asType, opts); err != nil {
 					return err
 				}
 				continue
@@ -372,7 +385,17 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
 		// scope enforcement from dst tag
 		if dtf, ok := dstVal.Type().FieldByName(fieldName); ok {
 			allowedScope := dtf.Tag.Get("allow")
-			if allowedScope != "" && allowedScope != asType {
+
+			// 3 special cases
+			switch {
+			case opts.IgnoreScope && allowedScope == apc.Cluster && asType == apc.Daemon:
+				name := strings.ToLower(fieldName)
+				nlog.Warningln("ignoring node override for cluster-scoped config:", name)
+				continue
+			case opts.Transient && allowedScope == apc.Cluster:
+				name := strings.ToLower(fieldName)
+				return fmt.Errorf("%s (cluster-scoped) configuration cannot be changed transiently", name)
+			case allowedScope != "" && allowedScope != asType:
 				name := strings.ToLower(fieldName)
 				if allowedScope == apc.Cluster && asType == apc.Daemon {
 					return fmt.Errorf("%s configuration can only be globally updated", name)
@@ -401,7 +424,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string) error {
 
 		// recurse only when _both_ are structs
 		if s.Kind() == reflect.Struct && d.Kind() == reflect.Struct {
-			if err := _copyProps(srcField, dstField, asType); err != nil { // pass originals to allow alloc
+			if err := _copyProps(srcField, dstField, asType, opts); err != nil { // pass originals to allow alloc
 				return err
 			}
 			continue

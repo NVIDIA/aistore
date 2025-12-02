@@ -31,12 +31,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// TODO post-4.1:
-// - revisit `allow:"cluster"` usage across ClusterConfig
-// - for 4.1, making a single change - marking `AuthConf` as cluster-scoped
-
 const (
-	confDisabled = "Disabled"
+	confDisabled = "Disabled" // common conf.String()
 )
 
 type (
@@ -98,7 +94,10 @@ type (
 	}
 )
 
-// global configuration
+// Global configuration
+// Note: updating any of these fields on a per-node basis:
+// - will fail for (cluster-scoped) sections tagged with `allow:"cluster"`
+// - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
 type (
 	ClusterConfig struct {
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
@@ -108,21 +107,21 @@ type (
 		UUID        string          `json:"uuid"`
 		Dsort       DsortConf       `json:"distributed_sort"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
-		Cksum       CksumConf       `json:"checksum"`
+		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
 		Auth        AuthConf        `json:"auth" allow:"cluster"`
 		Tracing     TracingConf     `json:"tracing"`
-		TCB         TCBConf         `json:"tcb"`
-		TCO         TCOConf         `json:"tco"`
-		Arch        ArchConf        `json:"arch"`
+		TCB         TCBConf         `json:"tcb" allow:"cluster"`
+		TCO         TCOConf         `json:"tco" allow:"cluster"`
+		Arch        ArchConf        `json:"arch" allow:"cluster"`
 		RateLimit   RateLimitConf   `json:"rate_limit"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		EC          ECConf          `json:"ec" allow:"cluster"`
-		Net         NetConf         `json:"net"`
+		Net         NetConf         `json:"net" allow:"cluster"`
 		Timeout     TimeoutConf     `json:"timeout"`
 		Space       SpaceConf       `json:"space"`
-		Transport   TransportConf   `json:"transport"`
+		Transport   TransportConf   `json:"transport" allow:"cluster"`
 		Memsys      MemsysConf      `json:"memsys"`
 		Disk        DiskConf        `json:"disk"`
 		FSHC        FSHCConf        `json:"fshc"`
@@ -130,7 +129,7 @@ type (
 		LRU         LRUConf         `json:"lru"`
 		Client      ClientConf      `json:"client"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
-		Periodic    PeriodConf      `json:"periodic"`
+		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
 		Downloader  DownloaderConf  `json:"downloader"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // enumerated features to flip assorted global defaults (cmn/feat/feat and docs/feat*)
 		Version     int64           `json:"config_version,string"`
@@ -1065,9 +1064,8 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string) (err error) {
-	err = c.ClusterConfig.Apply(updateConf, asType)
-	if err != nil {
+func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string, opts CopyPropsOpts) (err error) {
+	if err = CopyProps(updateConf, &c.ClusterConfig, asType, opts); err != nil {
 		return
 	}
 	return c.Validate()
@@ -1128,10 +1126,6 @@ func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 ///////////////////
 // ClusterConfig //
 ///////////////////
-
-func (c *ClusterConfig) Apply(updateConf *ConfigToSet, asType string) error {
-	return CopyProps(updateConf, c, asType)
-}
 
 func (c *ClusterConfig) String() string {
 	if c == nil {
@@ -2782,7 +2776,7 @@ func handleOverrideConfig(config *Config) error {
 		config.LocalConfig.FSP = *overrideConfig.FSP // override local config's fspaths
 		overrideConfig.FSP = nil
 	}
-	return config.UpdateClusterConfig(overrideConfig, apc.Daemon)
+	return config.UpdateClusterConfig(overrideConfig, apc.Daemon, CopyPropsOpts{Transient: false, IgnoreScope: true})
 }
 
 func SaveOverrideConfig(configDir string, toUpdate *ConfigToSet) error {

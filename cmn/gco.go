@@ -110,7 +110,7 @@ func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
 	config.ClusterConfig = *cluConfig
 	override := gco.GetOverride()
 	if override != nil {
-		err = config.UpdateClusterConfig(override, apc.Daemon) // update and validate
+		err = config.UpdateClusterConfig(override, apc.Daemon, CopyPropsOpts{Transient: false, IgnoreScope: true}) // update and validate
 	} else {
 		err = config.Validate()
 	}

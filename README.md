@@ -16,7 +16,7 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
 * ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [AIStore Observability](/docs/monitoring-overview.md) for details.
 * ✅ **Chunked Objects:** High-performance chunked object representation, with independently retrievable chunks, metadata v2, and checksum-protected manifests. Supports rechunking, parallel reads, and seamless integration with [Get-Batch](/docs/get_batch.md), [blob-downloader](/docs/blob_downloader.md), and multipart uploads to supported cloud backends.
-* ✅ **Secure Redirects (cluster-key):** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key.
+* ✅ **Secure Redirects:** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key (stored in memory only).
 * ✅ **Load-Aware Throttling:** Dynamic request throttling based on a five-dimensional load vector (CPU, memory, disk, FDs, goroutines) to protect AIS clusters under stress.
 * ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.

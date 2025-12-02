@@ -1246,7 +1246,7 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 }
 
 func _setConfPre(ctx *configModifier, clone *globalConfig) (updated bool, err error) {
-	if err = clone.Apply(ctx.toUpdate, apc.Cluster); err != nil {
+	if err = cmn.CopyProps(ctx.toUpdate, clone, apc.Cluster); err != nil {
 		return
 	}
 	updated = true
