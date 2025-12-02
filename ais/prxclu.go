@@ -1149,6 +1149,17 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	}
 	if toUpdate.Auth != nil && toUpdate.Auth.Enabled != nil {
 		authEnabled := *toUpdate.Auth.Enabled
+
+		if !config.Auth.Enabled && authEnabled {
+			// enabling auth - always validate
+			clone := new(cmn.AuthConf)
+			cos.CopyStruct(clone, &config.Auth)
+
+			if ecode, err := p.validateEnableAuth(r, clone, toUpdate.Auth); err != nil {
+				p.writeErr(w, r, err, ecode)
+				return
+			}
+		}
 		if config.Auth.Enabled != authEnabled {
 			whingeToUpdate("config.auth JWT/OIDC", strconv.FormatBool(config.Auth.Enabled), strconv.FormatBool(authEnabled))
 		}

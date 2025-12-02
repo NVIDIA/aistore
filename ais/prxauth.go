@@ -213,6 +213,45 @@ func (t *tokenList) String() string    { return fmt.Sprintf("TokenList v%d", t.V
 // proxy cont-ed
 //
 
+// is called when authentication is being enabled at runtime to guard the transition
+//
+//	auth.enabled: false -> true
+//
+// - if the caller has a valid token under the current config, enabling auth is allowed unconditionally
+// - otherwise, we fail with one of the specific reasons (below)
+// - note that enabling cluster-key signing (auth.cluster_key.*) is handled separately
+
+func (p *proxy) validateEnableAuth(r *http.Request, clone *cmn.AuthConf, toUpdate *cmn.AuthConfToSet) (int, error) {
+	if clone.Enabled || toUpdate == nil || toUpdate.Enabled == nil || !*toUpdate.Enabled {
+		debug.Assertf(false, "%v %+v", clone.Enabled, toUpdate)
+		return 0, nil
+	}
+
+	claims, err := p.validateToken(r.Context(), r.Header)
+	if err != nil || claims == nil {
+		reason := "no claims in provided token"
+		if err != nil {
+			reason = err.Error()
+		}
+		return http.StatusUnauthorized, fmt.Errorf("enabling JWT/OIDC auth requires a valid token (%s)", reason)
+	}
+	if !claims.IsAdmin {
+		return http.StatusUnauthorized, errors.New("enabling JWT/OIDC auth requires a token with an 'admin' claim")
+	}
+
+	// apply and check
+	if e := cmn.CopyProps(toUpdate, clone, apc.Cluster); e != nil {
+		return 0, e
+	}
+
+	// validate config
+	err = clone.Validate()
+	if err != nil {
+		return http.StatusUnauthorized, fmt.Errorf("enabling JWT/OIDC auth requires valid config (%s)", err)
+	}
+	return 0, nil
+}
+
 // [METHOD] /v1/tokens
 func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

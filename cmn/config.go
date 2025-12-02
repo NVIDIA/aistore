@@ -1906,6 +1906,11 @@ func (c *AuthConf) Validate() error {
 			return err
 		}
 	}
+	if c.OIDC != nil {
+		if err := c.OIDC.validate(); err != nil {
+			return err
+		}
+	}
 	if c.Signature != nil && c.OIDC != nil {
 		return errors.New("invalid auth config, only one of signature or OIDC config should be provided")
 	}
@@ -1987,6 +1992,13 @@ func (c *AuthSignatureConf) IsRSA() bool {
 //////////////
 // OIDCConf //
 //////////////
+
+func (c *OIDCConf) validate() error {
+	if len(c.GetAllowedIssSet()) == 0 {
+		return errors.New("invalid auth OIDC config, must configure allowed issuers if provided")
+	}
+	return nil
+}
 
 func (c *OIDCConf) GetAllowedIssSet() map[string]struct{} {
 	allowSet := make(map[string]struct{}, len(c.AllowedIssuers))
