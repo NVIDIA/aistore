@@ -109,7 +109,7 @@ type (
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
 		Auth        AuthConf        `json:"auth" allow:"cluster"`
-		Tracing     TracingConf     `json:"tracing"`
+		Tracing     *TracingConf    `json:"tracing,omitempty"`
 		TCB         TCBConf         `json:"tcb" allow:"cluster"`
 		TCO         TCOConf         `json:"tco" allow:"cluster"`
 		Arch        ArchConf        `json:"arch" allow:"cluster"`
@@ -646,8 +646,8 @@ type (
 
 	// AuthConfV4 [backwards compatibility]: v4.0 and prior
 	AuthConfV4 struct {
-		Enabled bool   `json:"enabled"`
 		Secret  string `json:"secret"`
+		Enabled bool   `json:"enabled"`
 	}
 
 	AuthConfV4ToSet struct {
@@ -656,9 +656,6 @@ type (
 	}
 
 	AuthConf struct {
-		// Enable external user authentication via JWT/OIDC tokens
-		// (does not control internal cluster security - see ClusterConfig)
-		Enabled bool `json:"enabled"`
 		// Fields for validating JWT signature
 		Signature *AuthSignatureConf `json:"signature,omitempty"`
 		// JWT claims to validate
@@ -668,6 +665,10 @@ type (
 
 		// Cluster key config
 		ClusterKey *ClusterKeyConf `json:"cluster_key,omitempty"`
+
+		// Enable external user authentication via JWT/OIDC tokens
+		// (does not control internal cluster security - see ClusterConfig)
+		Enabled bool `json:"enabled"`
 	}
 	AuthConfToSet struct {
 		Enabled        *bool                    `json:"enabled,omitempty"`
@@ -691,8 +692,8 @@ type (
 		Aud *[]string `json:"aud,omitempty"`
 	}
 	OIDCConf struct {
-		AllowedIssuers []string `json:"allowed_iss"`
 		IssuerCA       string   `json:"issuer_ca_bundle,omitempty"`
+		AllowedIssuers []string `json:"allowed_iss"`
 	}
 	OIDCConfToSet struct {
 		AllowedIssuers *[]string `json:"allowed_iss,omitempty"`

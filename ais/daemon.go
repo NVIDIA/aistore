@@ -243,7 +243,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cmn.Init(p.si.Name(), nil)
 
 		// init distributed tracing
-		tracing.Init(&config.Tracing, p.si, nil, version)
+		tracing.Init(config.Tracing, p.si, nil, version)
 
 		// check ulimits
 		checkUlimits(apc.UlimitProxy, config.TestingEnv())
@@ -266,7 +266,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	cmn.Init(t.si.Name(), fs.CleanPathErr)
 
 	// init distributed tracing
-	tracing.Init(&config.Tracing, t.si, nil, version)
+	tracing.Init(config.Tracing, t.si, nil, version)
 
 	cmn.InitObjProps2Hdr()
 

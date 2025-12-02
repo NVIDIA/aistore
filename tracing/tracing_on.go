@@ -29,12 +29,78 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
-var tp *trace.TracerProvider
+// Init() enables OpenTelemetry tracing for an AIS node.
+// Semantics and constraints:
+// - Build-time feature:
+//     This function is only compiled when AIS is built with the `oteltracing`
+//     build tag (see tracing_off.go for the no-op stub used otherwise).
+//     Callers invoke Init() unconditionally.
+// - Config handling:
+//     The config.Tracing field is a *cmn.TracingConf pointer. A nil conf
+//     or a conf with Enabled == false is treated as "tracing disabled":
+//       - we log an informational message and return without error.
+//     This makes it safe to omit the `tracing` section from ais.conf entirely.
+// - Exporter endpoint:
+//     When tracing is enabled, ExporterEndpoint MUST be non-empty. If it is
+//     empty we log an error, trip a debug.Assert in debug builds, and return
+//     without installing a tracer provider. The node continues to run with
+//     tracing effectively disabled.
+// - Error handling (is intentionally tolerant):
+//     Any failure to construct the exporter (newExporter) or resource will
+//     trip debug assertions but will not crash non-debug builds. In those
+//     cases, tp remains nil and no global tracer provider is installed.
+
+var (
+	tp *trace.TracerProvider
+)
+
+func Init(conf *cmn.TracingConf, snode *meta.Snode, exp any /* trace.SpanExporter */, version string) {
+	if conf == nil || !conf.Enabled {
+		nlog.Infof("distributed tracing not enabled (%+v)", conf)
+		return
+	}
+	if conf.ExporterEndpoint == "" {
+		nlog.Errorln("exporter endpoint can't be empty")
+		debug.Assert(false)
+		return
+	}
+	var (
+		exporter trace.SpanExporter
+		err      error
+		ok       bool
+	)
+	if exp == nil {
+		// default trace.SpanExporter
+		exporter, err = newExporter(conf)
+		if err != nil {
+			nlog.Errorln("failed to start exporter:", err)
+			debug.AssertNoErr(err)
+			return
+		}
+	} else {
+		// unit test
+		exporter, ok = exp.(trace.SpanExporter)
+		debug.Assertf(ok, "invalid exporter type %T", exp)
+	}
+	tp = trace.NewTracerProvider(
+		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbability))),
+		trace.WithBatcher(exporter),
+		trace.WithResource(newResource(conf, snode, version)),
+	)
+
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+	otel.SetTracerProvider(tp)
+}
 
 func loadAccessToken(tokenFilePath string) string {
-	cos.AssertMsg(tokenFilePath != "", "token filepath cannot be empty")
+	debug.Assert(tokenFilePath != "", "token filepath cannot be empty")
 	data, err := os.ReadFile(tokenFilePath)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	return strings.TrimSpace(string(data))
 }
 
@@ -84,42 +150,6 @@ func newResource(conf *cmn.TracingConf, snode *meta.Snode, version string) *reso
 
 func IsEnabled() bool {
 	return tp != nil
-}
-
-func Init(conf *cmn.TracingConf, snode *meta.Snode, exp any /* trace.SpanExporter */, version string) {
-	if conf == nil || !conf.Enabled {
-		nlog.Infof("distributed tracing not enabled (%+v)", conf)
-		return
-	}
-	cos.AssertMsg(conf.ExporterEndpoint != "", "exporter endpoint can't be empty")
-
-	var (
-		exporter trace.SpanExporter
-		err      error
-		ok       bool
-	)
-	if exp == nil {
-		// default trace.SpanExporter
-		exporter, err = newExporter(conf)
-		cos.AssertNoErr(err)
-	} else {
-		// unit test
-		exporter, ok = exp.(trace.SpanExporter)
-		debug.Assertf(ok, "invalid exporter type %T", exp)
-	}
-	tp = trace.NewTracerProvider(
-		trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(conf.SamplerProbability))),
-		trace.WithBatcher(exporter),
-		trace.WithResource(newResource(conf, snode, version)),
-	)
-
-	otel.SetTextMapPropagator(
-		propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		),
-	)
-	otel.SetTracerProvider(tp)
 }
 
 // used in tests only
