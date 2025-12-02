@@ -7,7 +7,14 @@ set -euo pipefail
 
 BUCKET="${1:-nnn}"
 TEMPDIR=$(mktemp -d)
-HOST_ARGS="--host=localhost:8080/s3 --host-bucket=localhost:8080/s3/%(bucket) --no-ssl"
+
+# SSL configuration based on AIS_USE_HTTPS environment variable
+if [[ "${AIS_USE_HTTPS:-}" == "true" ]]; then
+  ssl_opts="--no-check-certificate"
+else
+  ssl_opts="--no-ssl"
+fi
+HOST_ARGS="--host=localhost:8080/s3 --host-bucket=localhost:8080/s3/%(bucket) $ssl_opts"
 
 cleanup() {
     rm -rf "$TEMPDIR"

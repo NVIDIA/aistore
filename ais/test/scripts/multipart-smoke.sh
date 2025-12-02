@@ -97,6 +97,15 @@ else
   exit 1
 fi
 
+## SSL configuration based on AIS_USE_HTTPS environment variable
+if [[ "${AIS_USE_HTTPS:-}" == "true" ]]; then
+  # HTTPS mode: use SSL, skip cert verification for self-signed certs
+  ssl_opts="--no-check-certificate"
+else
+  # HTTP mode: disable SSL
+  ssl_opts="--no-ssl"
+fi
+
 ## uncomment for verbose output
 # set -x ## DEBUG
 
@@ -129,14 +138,14 @@ echo "   Source hash: $h1"
 
 echo "3. uploading via s3cmd to $s3_bucket..."
 s3cmd put "$src" "$s3_bucket/${filename}" \
-  --no-ssl \
+  $ssl_opts \
   --host=localhost:8080/s3 \
   --host-bucket="localhost:8080/s3/%(bucket)" \
 || exit $?
 
 echo "4. downloading via s3cmd from $s3_bucket..."
 s3cmd get "$s3_bucket/${filename}" "$dst" --force \
-  --no-ssl \
+  $ssl_opts \
   --host=localhost:8080/s3 \
   --host-bucket="localhost:8080/s3/%(bucket)" \
 || exit $?

@@ -42,6 +42,15 @@ s3endpoint="localhost:8080/s3"
 host="--host=$s3endpoint"
 host_bucket="--host-bucket=$s3endpoint/%(bucket)"
 
+# SSL configuration based on AIS_USE_HTTPS environment variable
+if [[ "${AIS_USE_HTTPS:-}" == "true" ]]; then
+  # HTTPS mode: use SSL, skip cert verification for self-signed certs
+  ssl_opts="--no-check-certificate"
+else
+  # HTTP mode: disable SSL
+  ssl_opts="--no-ssl"
+fi
+
 if ! [ -x "$(command -v s3cmd)" ]; then
   echo "Error: s3cmd not installed" >&2
   exit 1
@@ -127,7 +136,7 @@ if [[ "$bucket_type" == "ais" ]]; then
   # Verify s3cmd can access the bucket (convert ais:// to s3:// for s3cmd)
   s3_bucket_path="s3://${bucket#ais://}"
   echo ">> verifying s3cmd access to $s3_bucket_path"
-  s3cmd info "$s3_bucket_path" $host $host_bucket --no-ssl 1> /dev/null || exit $?
+  s3cmd info "$s3_bucket_path" $host $host_bucket $ssl_opts 1> /dev/null || exit $?
 else
   # Verify S3 bucket exists
   s3cmd info $bucket 1> /dev/null || exit $?
@@ -148,7 +157,7 @@ cleanup() {
   # Clean up uploaded files
   if [[ "$bucket_type" == "ais" ]]; then
     s3_bucket_path="s3://${bucket#ais://}"
-    s3cmd del "$s3_bucket_path/$dstdir/mpt*" $host $host_bucket --no-ssl 2> /dev/null
+    s3cmd del "$s3_bucket_path/$dstdir/mpt*" $host $host_bucket $ssl_opts 2> /dev/null
   else
     s3cmd del "$bucket/$dstdir/mpt*" 2> /dev/null
   fi
@@ -216,7 +225,7 @@ for i in $(seq 1 1 $iterations); do
 
     if [[ "$bucket_type" == "ais" ]]; then
       s3_bucket_path="s3://${bucket#ais://}"
-      cmd="s3cmd put $srcdir/$f $s3_bucket_path/$dstdir/$f --multipart-chunk-size-mb=$partsize $host $host_bucket --no-ssl"
+      cmd="s3cmd put $srcdir/$f $s3_bucket_path/$dstdir/$f --multipart-chunk-size-mb=$partsize $host $host_bucket $ssl_opts"
     else
       cmd="s3cmd put $srcdir/$f $bucket/$dstdir/$f --multipart-chunk-size-mb=$partsize"
     fi
@@ -230,7 +239,7 @@ for i in $(seq 1 1 $iterations); do
 
   if [[ "$bucket_type" == "ais" ]]; then
     s3_bucket_path="s3://${bucket#ais://}"
-    s3cmd ls $s3_bucket_path/$dstdir/* $host $host_bucket --no-ssl || exit $?
+    s3cmd ls $s3_bucket_path/$dstdir/* $host $host_bucket $ssl_opts || exit $?
   else
     s3cmd ls $bucket/$dstdir/* || exit $?
   fi
@@ -242,7 +251,7 @@ for i in $(seq 1 1 $iterations); do
       # Size validation only
       if [[ "$bucket_type" == "ais" ]]; then
         s3_bucket_path="s3://${bucket#ais://}"
-        remote_size=$(s3cmd info "$s3_bucket_path/$dstdir/$f" $host $host_bucket --no-ssl | grep "File size" | awk '{print $3}')
+        remote_size=$(s3cmd info "$s3_bucket_path/$dstdir/$f" $host $host_bucket $ssl_opts | grep "File size" | awk '{print $3}')
       else
         remote_size=$(s3cmd info "$bucket/$dstdir/$f" | grep "File size" | awk '{print $3}')
       fi
@@ -259,7 +268,7 @@ for i in $(seq 1 1 $iterations); do
 
       if [[ "$bucket_type" == "ais" ]]; then
         s3_bucket_path="s3://${bucket#ais://}"
-        s3cmd get "$s3_bucket_path/$dstdir/$f" "$download_dir/$f" $host $host_bucket --no-ssl --force || exit $?
+        s3cmd get "$s3_bucket_path/$dstdir/$f" "$download_dir/$f" $host $host_bucket $ssl_opts --force || exit $?
       else
         s3cmd get "$bucket/$dstdir/$f" "$download_dir/$f" --force || exit $?
       fi
@@ -282,7 +291,7 @@ for i in $(seq 1 1 $iterations); do
 
     if [[ "$bucket_type" == "ais" ]]; then
       s3_bucket_path="s3://${bucket#ais://}"
-      s3cmd del $s3_bucket_path/$dstdir/$f $host $host_bucket --no-ssl
+      s3cmd del $s3_bucket_path/$dstdir/$f $host $host_bucket $ssl_opts
     else
       s3cmd del $bucket/$dstdir/$f
     fi
