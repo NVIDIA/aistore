@@ -50,7 +50,7 @@ var clusterFeatDesc = [...]string{
 	"do not delete unrecognized/invalid FQNs during space cleanup ('ais space-cleanup')",
 	"when bucket is n-way mirrored read object replica from the least-utilized mountpath",
 
-	// "none" ====================
+	// apc.ResetToken ("none") ===========
 }
 
 // best-effort tags to group features in help output

@@ -37,14 +37,14 @@ var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
 		// log modules
-		confLogModules: append(cos.Mods[:], apc.NilValue),
+		confLogModules: append(cos.Mods[:], apc.ResetToken),
 		// checksums
 		apc.HdrObjCksumType: cos.SupportedChecksums(),
 		// access
 		cmn.PropBucketAccessAttrs: apc.SupportedPermissions(),
 		// feature flags
-		clusterFeatures: append(feat.Cluster[:], apc.NilValue),
-		bucketFeatures:  append(feat.Bucket[:], apc.NilValue),
+		clusterFeatures: append(feat.Cluster[:], apc.ResetToken),
+		bucketFeatures:  append(feat.Bucket[:], apc.ResetToken),
 		// rest
 		"write_policy.data":                   apc.SupportedWritePolicy[:],
 		"write_policy.md":                     apc.SupportedWritePolicy[:],

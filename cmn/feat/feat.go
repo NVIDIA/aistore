@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -76,7 +77,7 @@ var Cluster = [...]string{
 	"Keep-Unknown-FQN",
 	"Load-Balance-GET",
 
-	// "none" ====================
+	// apc.ResetToken ("none") ===========
 }
 
 var Bucket = [...]string{
@@ -89,7 +90,7 @@ var Bucket = [...]string{
 	"S3-ListObjectVersions",
 	"Resume-Interrupted-MPU",
 
-	// "none" ====================
+	// apc.ResetToken ("none") ===========
 }
 
 // as cmn.Validator and cmn.PropsValidator
@@ -116,7 +117,7 @@ func IsBucketScope(name string) bool {
 }
 
 func CSV2Feat(s string) (Flags, error) {
-	if s == "" || s == "none" {
+	if s == "" || s == apc.ResetToken {
 		return 0, nil
 	}
 	for i, name := range Cluster {

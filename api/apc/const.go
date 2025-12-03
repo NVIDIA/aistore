@@ -19,7 +19,10 @@ const (
 	DeploymentDev = "dev"
 )
 
-const NilValue = "none" // features (flags), log modules, et al.
+// [convention]
+// reset features flags, log modules, slices inside cluster config, and more
+// (see also: docs/cli.md "Special keywords")
+const ResetToken = "none"
 
 // in re: "Slowloris Attack"
 const (

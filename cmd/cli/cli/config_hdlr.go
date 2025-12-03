@@ -26,6 +26,28 @@ import (
 	"github.com/urfave/cli"
 )
 
+// note apc.ResetToken usage in examples
+const configClusterUsage = "Configure AIS cluster.\n" +
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais config cluster --json'\t- show entire cluster config in JSON;\n" +
+	indent1 + "\t- 'ais config cluster log'\t- show 'log' section;\n" +
+	indent1 + "\t- 'ais config cluster log.level 4'\t- set log level to 4;\n" +
+	indent1 + "\t- 'ais config cluster log.modules ec xs'\t- elevate verbosity for selected modules;\n" +
+	indent1 + "\t- 'ais config cluster features S3-API-via-Root'\t- enable feature flag;\n" +
+	indent1 + "\t- 'ais config cluster features none'\t- reset all feature flags;\n" +
+	indent1 + "\t- 'ais config cluster log.modules none'\t- reset log modules"
+
+const configNodeUsage = "Configure AIS node.\n" +
+	indent1 + "Each node distributed across the cluster has 'inherited' (from cluster config) and 'local' configuration.\n" +
+	indent1 + "Distributed nodes can override inherited defaults with local values; use caution: local changes\n" +
+	indent1 + "may cause inconsistent behavior across the cluster. Examples:\n" +
+	indent1 + "\t- 'ais config node NODE local --json'\t- show node's local config in JSON;\n" +
+	indent1 + "\t- 'ais config node NODE inherited log'\t- show 'log' section (inherited);\n" +
+	indent1 + "\t- 'ais config node NODE local host_net --json'\t- show node's network config;\n" +
+	indent1 + "\t- 'ais config node NODE log.level 4'\t- set node's log level;\n" +
+	indent1 + "\t- 'ais config node NODE log.modules none'\t- reset log modules;\n" +
+	indent1 + "\t- 'ais config node NODE disk.iostat_time_long=4s'\t- update disk timing (in re: \"disk utilization smoothing\")"
+
 var (
 	configCmdsFlags = map[string][]cli.Flag{
 		cmdCluster: {
@@ -78,15 +100,15 @@ var (
 			makeAlias(&showCmdConfig, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:         cmdCluster,
-				Usage:        "Configure AIS cluster",
 				ArgsUsage:    keyValuePairsArgument,
 				Flags:        sortFlags(configCmdsFlags[cmdCluster]),
 				Action:       setCluConfigHandler,
+				Usage:        configClusterUsage,
 				BashComplete: setCluConfigCompletions,
 			},
 			{
 				Name:         cmdNode,
-				Usage:        "Configure AIS node",
+				Usage:        configNodeUsage,
 				ArgsUsage:    nodeConfigArgument,
 				Flags:        sortFlags(configCmdsFlags[cmdNode]),
 				Action:       setNodeConfigHandler,
@@ -242,7 +264,7 @@ func parseLogModules(v string) (string, error) {
 		return "", V(err)
 	}
 	level, _ := config.Log.Level.Parse()
-	if v == "" || v == apc.NilValue {
+	if v == "" || v == apc.ResetToken {
 		config.Log.Level.Set(level, []string{""})
 	} else {
 		config.Log.Level.Set(level, splitCsv(v))

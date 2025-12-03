@@ -70,6 +70,7 @@ Next, monitoring-wise, you'd maybe run `ais show performance`, etc.
 - [Global options](#global-options)
 - [Backend Provider](#backend-provider)
 - [Verbose errors](#verbose-errors)
+- [Special keywords](#special-keywords)
 - [CLI Help Paging](#cli-help-paging)
 
 AIS command-line interface (CLI) is a tool to easily manage and monitor every aspect of the AIS clusters' lifecycle.
@@ -357,6 +358,17 @@ $ ais config cli set verbose true
 $ ais bucket mv ais://ddd ais://mmm
 Error: {"tcode":"ErrBckNotFound","message":"bucket \"ais://ddd\" does not exist","method":"HEAD","url_path":"/v1/buckets/ddd","remote_addr":"127.0.0.1:57026","caller":"","node":"p[JFkp8080]","status":404}: HEAD /v1/buckets/ddd (stack: [utils.go:445 <- bucket.go:104 <- bucket_hdlr.go:343])
 ```
+
+## Special keywords
+
+"none" (ref `apc.ResetToken`) is a broad convention to clear (nullify, reset, empty) config fields - examples include:
+
+1. [feature flags](/docs/feature_flags.md)
+2. log modules (as in: `ais config cluster log`)
+3. `backend_bck` property of a bucket (see [usage/example](/docs/bucket.md))
+4. slices (a.k.a. multi-value fields) embedded in nested configuration structures (e.g., "auth.required_claims.aud", "auth.oidc.allowed_iss", etc.).
+
+and more.
 
 ## CLI Help Paging
 

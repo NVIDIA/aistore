@@ -231,7 +231,7 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) error {
 		goto validate
 	}
 
-	if v != apc.NilValue {
+	if v != apc.ResetToken {
 		var err error
 		if originBck, err = parseBckURI(c, v, true /*error only*/); err != nil {
 			return fmt.Errorf("invalid '%s=%s': expecting %q to be a valid bucket name",

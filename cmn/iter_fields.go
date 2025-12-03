@@ -611,6 +611,14 @@ reflectDst:
 			// A slice value looks like: "[value1 value2]"
 			s := strings.TrimPrefix(srcVal.String(), "[")
 			s = strings.TrimSuffix(s, "]")
+
+			// "none" is a system-wide convention
+			if s == apc.ResetToken {
+				empty := reflect.MakeSlice(dst.Type(), 0, 0)
+				dst.Set(empty)
+				break
+			}
+
 			if s != "" {
 				vals := strings.Split(s, " ")
 				tp := reflect.TypeFor[string]()

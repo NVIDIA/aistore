@@ -300,7 +300,7 @@ func parseFeatureFlags(values []string, idx int) (res feat.Flags, newIdx int, er
 	if len(values) == 0 {
 		return 0, idx, nil
 	}
-	if values[idx] == apc.NilValue {
+	if values[idx] == apc.ResetToken {
 		return 0, idx + 1, nil
 	}
 	// 1: parse (comma-separated) feat.Flags.String()
@@ -731,7 +731,7 @@ func _toStr(v any) (s string) {
 		// feature flags: custom formatting
 		if f, ok := v.(feat.Flags); ok {
 			if f == 0 {
-				v = apc.NilValue
+				v = apc.ResetToken
 			} else {
 				v = strings.Join(f.Names(), "\n\t ")
 			}
