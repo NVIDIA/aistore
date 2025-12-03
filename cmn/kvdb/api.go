@@ -1,6 +1,6 @@
 // Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
 package kvdb
 
@@ -53,9 +53,9 @@ type (
 
 // Extract collection and key names from full key path
 func ParsePath(path string) (string, string) {
-	pos := strings.Index(path, CollectionSepa)
-	if pos < 0 {
+	before, after, ok := strings.Cut(path, CollectionSepa)
+	if !ok {
 		return path, ""
 	}
-	return path[:pos], path[pos+len(CollectionSepa):]
+	return before, after
 }

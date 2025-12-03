@@ -123,11 +123,11 @@ func extractBearerToken(hdr http.Header) (*TokenHdr, error) {
 	if s == "" {
 		return nil, ErrNoToken
 	}
-	idx := strings.Index(s, " ")
-	if idx == -1 || s[:idx] != apc.AuthenticationTypeBearer {
+	before, after, ok := strings.Cut(s, " ")
+	if !ok || before != apc.AuthenticationTypeBearer {
 		return nil, ErrNoBearerToken
 	}
-	return &TokenHdr{Header: apc.HdrAuthorization, Token: s[idx+1:]}, nil
+	return &TokenHdr{Header: apc.HdrAuthorization, Token: after}, nil
 }
 
 // ExtractToken extracts JWT token from either Authorization header (Bearer token)

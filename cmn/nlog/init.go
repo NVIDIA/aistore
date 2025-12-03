@@ -92,8 +92,8 @@ func sname() (name string) {
 }
 
 func _shortHost(hostname string) string {
-	if i := strings.Index(hostname, "."); i >= 0 {
-		return hostname[:i]
+	if before, _, ok := strings.Cut(hostname, "."); ok {
+		return before
 	}
 	if len(hostname) < 16 || strings.IndexByte(hostname, '-') < 0 {
 		return hostname

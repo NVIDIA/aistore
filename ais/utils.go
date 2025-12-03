@@ -346,14 +346,15 @@ func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
 		if ra == "" {
 			continue
 		}
-		i := strings.Index(ra, "-")
-		if i < 0 {
+		start, end, ok := strings.Cut(ra, "-")
+		if !ok {
 			return nil, fmt.Errorf("read range %q is invalid (-)", s)
 		}
+		start = strings.TrimSpace(start)
+		end = strings.TrimSpace(end)
+
 		var (
-			r     htrange
-			start = strings.TrimSpace(ra[:i])
-			end   = strings.TrimSpace(ra[i+1:])
+			r htrange
 		)
 		if start == "" {
 			// If no start is specified, end specifies the range start relative

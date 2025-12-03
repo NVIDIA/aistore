@@ -56,11 +56,11 @@ func parsePipelineURL(pipelineURLHdr string) (string, string) {
 			return "", ""
 		}
 	}
-	commaIndex := strings.Index(pipelineURLHdr, apc.ETLPipelineSeparator)
-	if commaIndex == -1 {
+	before, after, ok := strings.Cut(pipelineURLHdr, apc.ETLPipelineSeparator)
+	if !ok {
 		// No comma found, only one URL (already validated)
 		return pipelineURLHdr, ""
 	}
 	// Extract first URL and remaining pipeline
-	return pipelineURLHdr[:commaIndex], pipelineURLHdr[commaIndex+1:]
+	return before, after
 }
