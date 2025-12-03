@@ -19,6 +19,11 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+var (
+	validIssUrls   = []string{"https://localhost:8080"}
+	invalidIssUrls = []string{"invalid-scheme"}
+)
+
 func TestConfigTestEnv(t *testing.T) {
 	oldConfig := cmn.GCO.Get()
 	defer func() {
@@ -83,9 +88,11 @@ func TestAuthConfValidateFailure(t *testing.T) {
 		desc string
 	}{
 		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: nil}, desc: "no provided validation config"},
-		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}, OIDC: &cmn.OIDCConf{}}, desc: "both configs set"},
 		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key"}, OIDC: nil}, desc: "missing method"},
 		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "wrong"}, OIDC: nil}, desc: "invalid method"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls}}, desc: "both configs set"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: invalidIssUrls}}, desc: "invalid allowed issuer"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}, desc: "missing allowed issuers"},
 	}
 	for _, tt := range tests {
 		if err := tt.auth.Validate(); err == nil {
@@ -100,11 +107,12 @@ func TestAuthConfValidateSuccess(t *testing.T) {
 		desc string
 	}{
 		{auth: cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "key", Method: "HS256"}}, desc: "valid signature"},
+		{auth: cmn.AuthConf{Enabled: true, Signature: nil, OIDC: &cmn.OIDCConf{AllowedIssuers: validIssUrls}}, desc: "valid OIDC"},
 		{auth: cmn.AuthConf{Enabled: false, Signature: nil, OIDC: nil}, desc: "not enabled"},
 	}
 	for _, tt := range tests {
 		if err := tt.auth.Validate(); err != nil {
-			t.Errorf("AuthConf.Validate() unexpected error [%s] for %#v: %v", tt.desc, tt.auth, err)
+			t.Errorf("AuthConf.Validate() for case [%s] with %#v raised unexpected error: %v", tt.desc, tt.auth, err)
 		}
 	}
 }
