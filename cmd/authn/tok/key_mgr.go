@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -277,30 +276,9 @@ func (km *KeyCacheManager) getUnregisteredKeySet(ctx context.Context, iss string
 	return km.keyCache.getKeySetForIss(ctx, iss)
 }
 
-// Parse and validate key issuer URLs used for JWKS discovery and fetching
-func validateIssuerURL(urlString string) error {
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return fmt.Errorf("invalid URL %s: %w", urlString, err)
-	}
-
-	if parsedURL.Scheme != "https" {
-		return fmt.Errorf("must use HTTPS: %s", urlString)
-	}
-
-	if parsedURL.Host == "" {
-		return fmt.Errorf("must have a host: %s", urlString)
-	}
-
-	if !parsedURL.IsAbs() {
-		return fmt.Errorf("must be an absolute URL: %s", urlString)
-	}
-	return nil
-}
-
 func getDiscoveryURL(issuer string) (string, error) {
 	// Parse and validate the issuer URL
-	err := validateIssuerURL(issuer)
+	err := cmn.ValidateIssuerURL(issuer)
 	if err != nil {
 		return "", fmt.Errorf("invalid issuer URL %s: %w", issuer, err)
 	}
@@ -331,7 +309,7 @@ func (km *KeyCacheManager) discoverJWKSURI(ctx context.Context, issuer, discover
 			lastErr = discoveryErr
 			continue
 		}
-		urlErr := validateIssuerURL(jwksURL)
+		urlErr := cmn.ValidateIssuerURL(jwksURL)
 		if urlErr != nil {
 			return "", fmt.Errorf("invalid issuer URL received from discovery %s: %w", issuer, urlErr)
 		}

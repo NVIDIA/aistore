@@ -1922,6 +1922,7 @@ func (c *AuthConf) CSKEnabled() bool {
 }
 
 func (c *AuthConf) Validate() error {
+	// First validate sub-configs if defined
 	if c.Signature != nil {
 		if err := c.Signature.validate(); err != nil {
 			return err
@@ -1932,11 +1933,15 @@ func (c *AuthConf) Validate() error {
 			return err
 		}
 	}
-	if c.Signature != nil && c.OIDC != nil {
-		return errors.New("invalid auth config, only one of signature or OIDC config should be provided")
+	// Method determines how the key is parsed, so use it to determine if static signature is to be used
+	sigConfigured := c.Signature != nil && c.Signature.Method != ""
+	// Only consider OIDC configured if it has allowed issuer URLs, validated above
+	oidcConfigured := c.OIDC != nil && c.OIDC.AllowedIssConfigured()
+	if c.Enabled && !sigConfigured && !oidcConfigured {
+		return errors.New("invalid auth config: must provide one of signature or OIDC config if enabled")
 	}
-	if c.Enabled && c.Signature == nil && c.OIDC == nil {
-		return errors.New("invalid auth config, one of signature or OIDC config must be provided")
+	if sigConfigured && oidcConfigured {
+		return errors.New("invalid auth config: only one of signature or OIDC config should be provided")
 	}
 	if c.CSKEnabled() {
 		return c.ClusterKey.validate()
@@ -1992,7 +1997,7 @@ func (c *AuthSignatureConf) validate() error {
 	if c.Key != "" && c.Method == "" {
 		return errors.New("invalid auth signature config, method is required if key provided")
 	}
-	if !c.IsHMAC() && !c.IsRSA() {
+	if !c.IsHMAC() && !c.IsRSA() && c.Method != "" {
 		return fmt.Errorf("invalid auth signature config, provided method %q must be one of: %q", c.Method, c.ValidMethods())
 	}
 	return nil
@@ -2014,9 +2019,16 @@ func (c *AuthSignatureConf) IsRSA() bool {
 // OIDCConf //
 //////////////
 
+func (c *OIDCConf) AllowedIssConfigured() bool {
+	return len(c.AllowedIssuers) > 0
+}
+
 func (c *OIDCConf) validate() error {
-	if len(c.GetAllowedIssSet()) == 0 {
-		return errors.New("invalid auth OIDC config, must configure allowed issuers if provided")
+	for _, iss := range c.AllowedIssuers {
+		err := ValidateIssuerURL(iss)
+		if err != nil {
+			return fmt.Errorf("failed to parse allowed issuer URL in auth OIDC config: %v", err)
+		}
 	}
 	return nil
 }
@@ -2027,6 +2039,24 @@ func (c *OIDCConf) GetAllowedIssSet() map[string]struct{} {
 		allowSet[v] = struct{}{}
 	}
 	return allowSet
+}
+
+// ValidateIssuerURL Parse and validate key issuer URLs used for JWKS discovery and fetching
+func ValidateIssuerURL(urlString string) error {
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return fmt.Errorf("invalid URL %s: %w", urlString, err)
+	}
+
+	if parsedURL.Scheme != "https" {
+		return fmt.Errorf("must use HTTPS: %s", urlString)
+	}
+
+	if parsedURL.Host == "" {
+		return fmt.Errorf("must have a host: %s", urlString)
+	}
+
+	return nil
 }
 
 ////////////////////
