@@ -709,8 +709,7 @@ func createRemoteBaseParams(ra *meta.RemAis) api.BaseParams {
 func showRemoteClustersTable(c *cli.Context) error {
 	const (
 		warnRemAisOffline = `remote ais cluster at %s is currently unreachable.
-Run 'ais config cluster backend.conf --json' - to show the respective configuration;
-    'ais config cluster backend.conf <new JSON formatted value>' - to reconfigure or remove.
+Run 'ais config cluster backend --json' - to show the respective configuration.
 For details and usage examples, see: docs/cli/config.md`
 	)
 

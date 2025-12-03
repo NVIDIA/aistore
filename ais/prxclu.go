@@ -1154,6 +1154,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			// enabling auth - always validate
 			clone := new(cmn.AuthConf)
 			cos.CopyStruct(clone, &config.Auth)
+			config.Auth.CopyTo(clone)
 
 			if ecode, err := p.validateEnableAuth(r, clone, toUpdate.Auth); err != nil {
 				p.writeErr(w, r, err, ecode)

@@ -108,8 +108,8 @@ type (
 		Dsort       DsortConf       `json:"distributed_sort"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
-		Auth        AuthConf        `json:"auth" allow:"cluster"`
-		Tracing     *TracingConf    `json:"tracing,omitempty"`
+		Auth        AuthConf        `json:"auth" allow:"cluster"` // (see gco.Clone())
+		Tracing     *TracingConf    `json:"tracing,omitempty"`    // (see gco.Clone())
 		TCB         TCBConf         `json:"tcb" allow:"cluster"`
 		TCO         TCOConf         `json:"tco" allow:"cluster"`
 		Arch        ArchConf        `json:"arch" allow:"cluster"`
@@ -137,6 +137,7 @@ type (
 		Resilver    ResilverConf    `json:"resilver"`
 		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
 	}
+	// contains ClusterConfig and LocalConfig
 	ConfigToSet struct {
 		// ClusterConfig
 		Backend     *BackendConf          `json:"backend,omitempty"`
@@ -1895,6 +1896,26 @@ func (c *FSHCConf) Validate() error {
 //////////////
 // AuthConf //
 //////////////
+
+// note: not cloning Auth.RequiredClaims.Aud etc. slices (low risk)
+func (c *AuthConf) CopyTo(dst *AuthConf) {
+	if c.Signature != nil {
+		v := *c.Signature
+		dst.Signature = &v
+	}
+	if c.OIDC != nil {
+		v := *c.OIDC
+		dst.OIDC = &v
+	}
+	if c.RequiredClaims != nil {
+		v := *c.RequiredClaims
+		dst.RequiredClaims = &v
+	}
+	if c.ClusterKey != nil {
+		v := *c.ClusterKey
+		dst.ClusterKey = &v
+	}
+}
 
 func (c *AuthConf) CSKEnabled() bool {
 	return c.ClusterKey != nil && c.ClusterKey.Enabled

@@ -71,7 +71,7 @@ $ ais config cluster log --json
 **Note:** some config values are read-only or otherwise protected and can be only listed, e.g.:
 
 ```console
-$ ais config cluster backend.conf --json
+$ ais config cluster backend --json
     "backend": {"aws":{},"azure":{},"gcp":{},"oci":{}}
 ```
 

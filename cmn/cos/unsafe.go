@@ -48,6 +48,7 @@ func UnsafeBptr(s *string) *[]byte {
 }
 
 // shallow copy
+// (see cmn/gco.Clone() for special handling)
 func CopyStruct(dst, src any) {
 	x := reflect.ValueOf(src)
 	debug.Assert(x.Kind() == reflect.Ptr)

@@ -70,12 +70,28 @@ func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToSet) (overrideConfig *ConfigTo
 	return
 }
 
-// CopyStruct is a shallow copy, which is fine as FSPaths and BackendConf "exceptions"
-// are taken care of separately. When cloning, beware: config is a large structure.
+// NOTE:
+//   - CopyStruct is a shallow copy. Pointer fields (Auth.*, Tracing)
+//     are deep-copied explicitly below to break aliasing.
+//   - Not cloning (read-only) FSPaths and BackendConf
 func (gco *gco) Clone() *Config {
-	config := &Config{}
-	cos.CopyStruct(config, gco.Get())
-	return config
+	src := gco.Get()
+	dst := &Config{}
+	cos.CopyStruct(dst, src) // shallow
+
+	// clone assorted pointers to structs
+	src.Auth.CopyTo(&dst.Auth)
+
+	if src.Tracing != nil {
+		v := *src.Tracing
+		dst.Tracing = &v
+
+		// 4.1 update: pointer and `omitempty`
+		if !dst.Tracing.Enabled && dst.Tracing.ExporterEndpoint == "" {
+			dst.Tracing = nil
+		}
+	}
+	return dst
 }
 
 // When updating we need to make sure that the update is transaction and no

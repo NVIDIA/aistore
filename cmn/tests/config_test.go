@@ -10,9 +10,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -195,5 +197,32 @@ func TestAuthSignatureConf_IsRSA(t *testing.T) {
 	for _, tt := range tests {
 		conf := cmn.AuthSignatureConf{Method: tt.method}
 		tassert.Errorf(t, conf.IsRSA() == tt.want, "IsRSA(%q) = %v, want %v", tt.method, conf.IsRSA(), tt.want)
+	}
+}
+
+func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
+	config := cmn.GCO.BeginUpdate()
+	config.Cksum.Type = cos.ChecksumOneXxh
+	config.Space = cmn.SpaceConf{
+		LowWM: 75, HighWM: 90, OOS: 95,
+	}
+	config.LRU = cmn.LRUConf{
+		DontEvictTime: cos.Duration(time.Hour), CapacityUpdTime: cos.Duration(time.Minute), Enabled: true,
+	}
+	config.ClusterConfig.Auth.Signature = &cmn.AuthSignatureConf{Key: "k"}
+	config.ClusterConfig.Tracing = &cmn.TracingConf{Enabled: true, ExporterEndpoint: "x"}
+	cmn.GCO.CommitUpdate(config)
+
+	c := cmn.GCO.Get()
+	clone := cmn.GCO.Clone()
+
+	if &clone.Auth == &c.Auth {
+		t.Fatal("Auth alias")
+	}
+	if clone.Auth.Signature == c.Auth.Signature {
+		t.Fatal("Auth.Signature alias")
+	}
+	if clone.Tracing == c.Tracing {
+		t.Fatal("Tracing alias")
 	}
 }
