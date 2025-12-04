@@ -1,9 +1,29 @@
-Primarily, there are two main configuration-managing commands, each having multiple subcommands and sub-subcommands:
+## Table of Contents
 
-1. `ais config`		- show and update configuration
-2. `ais show config`	- show configuration
+- [`ais config cluster`](#ais-config-cluster)
+- [`ais config node`](#ais-config-node)
+- [Example: show config, update config](#example-show-config-update-config)
+- [Example: show specific config section (flat and JSON)](#example-show-specific-config-section-flat-and-json)
+- [Configuration inheritance](#configuration-inheritance)
+- [Show configuration](#show-configuration)
+  - [Cluster configuration](#cluster-configuration)
+  - [Node configuration](#node-configuration)
+  - [Examples](#examples)
+- [Update cluster configuration](#update-cluster-configuration)
+- [Update node configuration](#update-node-configuration)
+- [Reset configuration](#reset-configuration)
+- [CLI configuration](#cli-configuration)
+  - [Show CLI configuration](#show-cli-configuration)
+  - [Update CLI configuration](#update-cli-configuration)
 
-> As always, the subcommands of the `ais config` and, respectively, `ais show config` will reveal themselves as completions (upon `<TAB-TAB>`).
+---
+
+There are two main configuration-managing commands, each with multiple subcommands:
+
+1. `ais config` - show and update configuration
+2. `ais show config` - show configuration
+
+> As always, subcommands will reveal themselves via tab completion (`<TAB-TAB>`).
 
 In brief:
 
@@ -26,11 +46,60 @@ OPTIONS:
    --help, -h  show help
 ```
 
-> As always, `ais config show` is an alias for `ais show config` - both can be used interchangeably.
+> `ais config show` is an alias for `ais show config` — both can be used interchangeably.
 
-Here's a couple quick usage examples:
+Here are a few usage examples:
 
-### Example: show config, update config
+## `ais config cluster`
+
+```console
+$ ais config cluster --help
+NAME:
+   ais config cluster - Configure AIS cluster.
+   Examples:
+     - 'ais config cluster --json'                    - show entire cluster config in JSON;
+     - 'ais config cluster log'                       - show 'log' section;
+     - 'ais config cluster log.level 4'               - set log level to 4;
+     - 'ais config cluster log.modules ec xs'         - elevate verbosity for selected modules;
+     - 'ais config cluster features S3-API-via-Root'  - enable feature flag;
+     - 'ais config cluster features none'             - reset all feature flags;
+     - 'ais config cluster log.modules none'          - reset log modules
+
+USAGE:
+   ais config cluster KEY=VALUE [KEY=VALUE...] [command options]
+
+OPTIONS:
+   --json, -j   JSON input/output
+   --transient  Update config in memory without storing the change(s) on disk
+   --help, -h   Show help
+```
+
+## `ais config node`
+
+```console
+$ ais config node --help
+NAME:
+   ais config node - Configure AIS node.
+   Each node in the cluster has 'inherited' (from cluster config) and 'local' configuration.
+   Nodes can override inherited defaults with local values; use caution: local changes
+   may cause inconsistent behavior across the cluster. Examples:
+     - 'ais config node NODE local --json'              - show node's local config in JSON;
+     - 'ais config node NODE inherited log'             - show 'log' section (inherited);
+     - 'ais config node NODE local host_net --json'     - show node's network config;
+     - 'ais config node NODE log.level 4'               - set node's log level;
+     - 'ais config node NODE log.modules none'          - reset log modules;
+     - 'ais config node NODE disk.iostat_time_long=4s'  - update disk timing (in re: "disk utilization smoothing")
+
+USAGE:
+   ais config node NODE_ID KEY=VALUE [KEY=VALUE...] [command options]
+
+OPTIONS:
+   --json, -j   JSON input/output
+   --transient  Update config in memory without storing the change(s) on disk
+   --help, -h   Show help
+```
+
+## Example: show config, update config
 
 ```console
 # show `ais config` subcommands:
@@ -55,13 +124,13 @@ $ ais config cluster checksum
 
 ```console
 # update one value (e.g., checksum type)
-$ ais config cluster checksum=md5
+$ ais config cluster checksum.type=md5
 
-# same using JSON-formatted values, update backend configuration;
+# same using JSON-formatted values
 $ ais config cluster checksum.type='{"type":"md5"}'
 ```
 
-More cluster-config-updating examples:
+More examples:
 
 ```console
 $ ais config cluster log.level 4
@@ -91,12 +160,12 @@ log.to_stderr    false
 Cluster config updated
 ```
 
-> **Notice** single quotes above. Single or double quotes are required when the value contains spaces and/or wildcards. But single quotes, in particular, are strongly recommended when the value itself contains double quotes.
+> **Note:** Single quotes are strongly recommended when values contain spaces, wildcards, or double quotes.
 
-### Example: show specific config section (flat and JSON)
+## Example: show specific config section (flat and JSON)
 
 ```console
-$ ais show cluster config ec
+$ ais config cluster ec
 PROPERTY                 VALUE
 ec.objsize_limit         262144
 ec.compression           never
@@ -108,7 +177,7 @@ ec.disk_only             false
 
 # same in JSON:
 
-$ ais show config cluster ec --json
+$ ais config cluster ec --json
 
     "ec": {
         "objsize_limit": 262144,
@@ -121,74 +190,55 @@ $ ais show config cluster ec --json
     }
 ```
 
-Further, as far as configuration, AIS supports **inheritance** and **local override**.
+## Configuration inheritance
 
-Here's how it works:
+AIS supports configuration **inheritance** with **local override**.
 
-At any point in time there is a single, protected and replicated, version of the cluster configuration. When a new cluster gets deployed, all clustered nodes inherit the same (initial) version - identical default values.
+At any point in time there is a single, protected and replicated version of the cluster configuration. When a new cluster gets deployed, all nodes inherit the same initial configuration with identical default values. When a new node joins the cluster, it receives the current version of the cluster configuration.
 
-Subsequently, when a new node joins cluster it will also receive the current version of the cluster configuration.
+However, you can select any node and override any inherited value. Note that if the corresponding value later changes at the cluster level, the node's override takes precedence — the cluster-level update won't apply to that node.
 
-On the other hand, it is possible at any point in time to select any node and override (any selected) inherited value - the value *inherited* by the node with its replica of the cluster config.
-
-Note, however: if and when the corresponding value changes on the cluster level, the node's override will take precedence - the specific update won't apply (to this node).
-
-> In other words, overriding inherited (cluster) configuration on the node level breaks the future inheritance.
+> In other words, overriding inherited configuration on the node level breaks future inheritance for that setting.
 
 > Use `ais config reset` to remove all previous overrides.
 
-Finally, note that all configuration updates are, by default, persistent. Use the `--transient` flag to make them transient - i.e., in memory only, i.e., *not* persisting across reboots.
+All configuration updates are persistent by default. Use the `--transient` flag to update in memory only (changes won't persist across reboots).
 
-See also:
-
-* [AIStore Configuration](/docs/configuration.md)
-
-## Table of Contents
-
-- [Show configuration](#show-configuration)
-- [`ais show config`](#ais-show-config)
-- [Update cluster configuration](#update-cluster-configuration)
-- [Update node configuration](#update-node-configuration)
-- [Reset configuration](#reset-configuration)
-- [CLI own configuration](#cli-own-configuration)
+See also: [AIStore Configuration](/docs/configuration.md)
 
 ## Show configuration
 
-The command `ais show config` is structured as follows.
-
 ```console
-# 1. Select to show: CLI config, cluster config, or the config of any of the clustered nodes, e.g.:
+# Select what to show: CLI config, cluster config, or any node's config:
 
 $ ais show config <TAB-TAB>
 cli           cluster       p[kdQp8080]   t[NBzt8081]
 ```
 
-> Notice here (and everywhere) that target nodes have `t` prefix, while AIS gateways (aka proxies) start with `p`.
+> Target nodes have the `t` prefix; gateways (proxies) have the `p` prefix.
 
 ```console
-# 2. For the cluster config, select a named section, or simply press Enter. Following
-# is the complete list of configuration sections resulting from pressing <TAB-TAB>:
+# For cluster config, use `TAB` completion to select a named section, or press Enter:
 
-$ ais show config cluster
-auth               disk               features           lru                proxy              timeout
-backend            distributed_sort   fshc               memsys             rebalance          transport
-checksum           downloader         keepalivetracker   mirror             resilver           uuid
-client             ec                 lastupdate_time    net                space              versioning
-config_version     log                periodic           tcb                write_policy
+$ ais show config cluster <TAB-TAB>
+
+downloader         net                proxy              config_version     keepalivetracker
+checksum           disk               arch               tracing            fshc
+ec                 get_batch          rebalance          tcb                resilver
+transport          uuid               timeout            tco                ext
+features           rate_limit         space              memsys             auth
+versioning         log                lru                lastupdate_time    mirror
+write_policy       chunks             client             distributed_sort   periodic
 ```
 
 ```console
-# 3. Tip: help is available at any point. For instance, as stated above, you could select a section.
-# But you could also run `ais show config cluster` with no section selected,
-# with or without `--json` option to format the output:
-
 $ ais show config cluster --help
 NAME:
    ais show config - show CLI, cluster, or node configurations (nodes inherit cluster and have local)
 
 USAGE:
    ais show config cli | cluster [CONFIG SECTION OR PREFIX] | [command options]
-      NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]
+      NODE_ID [ inherited | local | all [CONFIG SECTION OR PREFIX ] ]
 
 OPTIONS:
    --json, -j  json input/output
@@ -196,30 +246,17 @@ OPTIONS:
 ```
 
 ```console
-# 4. Finally, for any specific node you can show its inherited config (where some of the values *may* be overridden) and its local one:
+# For a specific node, choose inherited, local, or both:
 
-$ ais show config t[NBzt8081]
+$ ais show config t[NBzt8081] <TAB-TAB>
 inherited   local
 ```
 
-## `ais show config`
-
-As stated above, the command further splits as follows:
-
-`ais show config cluster` or `ais show config cli` or `ais show config [NODE_ID]`
-
-Node configuration consists of two parts:
-
-- global cluster configuration which is the same across the cluster
-- local daemon configuration which overrides the global one.
-
 ### Cluster configuration
 
-`ais show cluster config [CONFIG_PREFIX]`
+`ais show config cluster [CONFIG_PREFIX]`
 
-Display the cluster configuration. If `CONFIG_PREFIX` is given, only that configurations matching the prefix will be shown.
-
-#### Options
+Display the cluster configuration. If `CONFIG_PREFIX` is given, only configurations matching the prefix will be shown.
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -227,15 +264,19 @@ Display the cluster configuration. If `CONFIG_PREFIX` is given, only that config
 
 ### Node configuration
 
-`ais show config NODE_ID [CONFIG_PREFIX]`
+`ais show config NODE_ID [inherited | local] [CONFIG_PREFIX]`
 
-Display the actual daemon configuration. If `CONFIG_PREFIX` is given, only the configurations matching the prefix will be shown.
-The output includes extra column with global values. Some values in the column have special meaning:
+Display the node's configuration. Node configuration consists of two parts:
 
-- `-` - the local and global values are the same, the option is not overridden
-- `N/A` - the option is local-only and does not exist in global config
+- **inherited** — cluster configuration (may include local overrides)
+- **local** — node-specific settings that override cluster defaults
 
-#### Options
+If `CONFIG_PREFIX` is given, only configurations matching the prefix will be shown.
+
+When showing inherited config, the output includes an extra column with global values:
+
+- `-` — local and global values are the same (not overridden)
+- `N/A` — option is local-only and doesn't exist in global config
 
 | Flag | Type | Description | Default |
 | --- | --- | --- | --- |
@@ -245,10 +286,10 @@ The output includes extra column with global values. Some values in the column h
 
 #### Show node's local configuration
 
-Display all local configurations of the node with ID `CASGt8088`
+> **Note:** Examples in this section show [local-playground](/docs/getting_started.md#local-playground) paths and ports; production deployments will differ.
 
 ```console
-$ ais show config local CASGt8088
+$ ais show config CASGt8088 local
 PROPERTY                         VALUE
 confdir                          /home/divaturi/.ais8
 log_dir                          /tmp/ais/8/log
@@ -264,12 +305,10 @@ test_fspaths.count               5
 test_fspaths.instance            8
 ```
 
-#### Show cluster configurations on a node
-
-Display all cluster configurations (and overrides) of the node with ID `CASGt8088`
+#### Show node's inherited configuration
 
 ```console
-$ ais show config inherited CASGt8088
+$ ais show config CASGt8088 inherited
 PROPERTY                                 VALUE                                                           DEFAULT
 auth.enabled                             false                                                           -
 auth.secret                              **********                                                      -
@@ -285,46 +324,37 @@ client.client_long_timeout               30m                                    
 
 #### Show cluster LRU config section
 
-Display only the LRU config section of the global config
-
 ```console
 $ ais show config cluster lru
-PROPERTY		        VALUE
-lru.dont_evict_time	    1s
-lru.capacity_upd_time	10m
-lru.enabled		        true
+PROPERTY                 VALUE
+lru.dont_evict_time      1s
+lru.capacity_upd_time    10m
+lru.enabled              true
 
 $ ais show config cluster space
-PROPERTY		        VALUE
-space.cleanupwm		    70
-space.lowwm		        80
-space.highwm		    90
-space.out_of_space	    95
+PROPERTY                 VALUE
+space.cleanupwm          70
+space.lowwm              80
+space.highwm             90
+space.out_of_space       95
 ```
 
 ## Update cluster configuration
 
 `ais config cluster NAME=VALUE [NAME=VALUE...]`
 
-Alternatively:
+Use tab completion to discover available settings:
 
 ```console
 $ ais config cluster <TAB-TAB>
 Display all 108 possibilities? (y or n)
 
-$ ais config cluster time<TAB-TAB>
 $ ais config cluster timeout.<TAB-TAB>
 timeout.cplane_operation    timeout.max_host_busy       timeout.send_file_time
 timeout.join_startup_time   timeout.max_keepalive       timeout.startup_time
 ```
 
-And so on.
-
-Updating is done by specifying name-value pairs. Use completions to help you remind (and/or type) the name and specify the new value. Use space or the `=` sign to delineate names from values.
-
-**NOTE:** to see the current (pre-update) value, simply press Enter.
-
-For example:
+Specify name-value pairs separated by space or `=`. To see the current value before updating, just press Enter:
 
 ```console
 $ ais config cluster lru.enabled
@@ -333,15 +363,13 @@ lru.enabled      true
 
 $ ais config cluster lru.enabled=false
 {
-	    "lru.enabled": "false"
+    "lru.enabled": "false"
 }
 
-cluster config updated
+Cluster config updated
 ```
 
-### Set multiple config values in one shot
-
-Change `periodic.stats_time` and `disk.disk_util_low_wm` config values for the entire cluster.
+### Set multiple config values
 
 ```console
 $ ais config cluster periodic.stats_time=10s disk.disk_util_low_wm=40
@@ -350,26 +378,19 @@ Config has been updated successfully.
 
 ## Update node configuration
 
-`ais config node NODE_ID inherited NAME=VALUE [NAME=VALUE...]`
+`ais config node NODE_ID [inherited | local] NAME=VALUE [NAME=VALUE...]`
 
-or
+Steps:
 
-`ais config node NODE_ID local NAME=VALUE [NAME=VALUE...]`
+1. Select a node (or use `<TAB-TAB>` to complete)
+2. Select `inherited` to update cluster-level values, or `local` for node-specific settings
+3. Specify name-value pairs
 
-
-Usually, the steps:
-
-1. Select a node or use `<TAB-TAB>` to complete the selection.
-2. Next, select `inherited` to update cluster-level values. Alternatively, type or select `local`.
-3. Update selected value. Name and value can be separated either with `=` character or with a space.
-
-> When updating inherited values, keep in mind: all previous overrides can be undone using `ais config reset` command.
+> When updating inherited values, all previous overrides can be undone with `ais config reset`.
 
 ### Set multiple config values
 
 ```console
-# Change `periodic.stats_time` and `disk.disk_util_low_wm` config values for node CMhHp8082.
-
 $ ais config node CMhHp8082 periodic.stats_time=10s disk.disk_util_low_wm=40
 Config has been updated successfully.
 ```
@@ -378,79 +399,77 @@ Config has been updated successfully.
 
 `ais config reset [NODE_ID]`
 
-Reset configuration for a specific daemon or the entire cluster back to the cluster configuration.
-That is, all local overrides will be removed and the cluster configuration will be applied to all nodes.
-To reset the configuration for the entire cluster, do not specify a `DEAMON_ID` argument.
+Reset configuration back to cluster defaults, removing all local overrides.
 
 ```console
-# Discard local overrides for all nodes:
+# Reset all nodes to cluster defaults:
 
 $ ais config reset
 config successfully reset for all nodes
 ```
 
 ```console
-# Reset node's configuration to the current cluster-level values:
+# Reset a specific node:
 
 $ ais config reset CMhHp8082
 config for node "CMhHp8082" successfully reset
 ```
 
-## CLI own configuration
+## CLI configuration
 
-CLI (tool) has configuration of its own. CLI (tool) can be used to view and update its own config.
+The CLI tool has its own configuration, separate from cluster configuration.
+
+> **Note:** Examples in this section show [local-playground](/docs/getting_started.md#local-playground) paths and ports; production deployments will differ.
 
 ### Show CLI configuration
 
-`ais config cli show [--path] [--json]`
+`ais config cli [--path] [--json]`
 
-Display the current CLI configuration.
-If `--path` is set, display only the path to the CLI configuration file.
-
-#### Examples
+Display the current CLI configuration. Use `--path` to show only the config file location.
 
 ```console
-$ ais config cli show
+$ ais config cli
+
 PROPERTY                         VALUE
-aliases				 cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
+aliases                          cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
                                  ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start';
-				 blob-download => 'job start blob-download'; download => 'job start download';
-				 dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait';
-				 get => 'object get'; prefetch => 'object prefetch'; put => 'object put';
-				 rmo => 'object rm'
-auth.url			 http://127.0.0.1:52001
+                                 blob-download => 'job start blob-download'; download => 'job start download';
+                                 dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait';
+                                 get => 'object get'; mpu => 'object multipart-upload'; prefetch => 'object prefetch';
+                                 put => 'object put'; rmo => 'object rm'; space-cleanup => 'storage cleanup';
+                                 scrub => 'storage validate'
+auth.url                         http://127.0.0.1:52001
 cluster.client_ca_tls
 cluster.client_crt
 cluster.client_crt_key
-cluster.default_ais_host	 http://127.0.0.1:8080
-cluster.default_docker_host	 http://172.50.0.2:8080
-cluster.skip_verify_crt		 false
-cluster.url			 http://127.0.0.1:8080
-default_provider		 ais
-no_color			 false
-no_more				 false
-timeout.http_timeout		 0s
-timeout.tcp_timeout		 60s
-verbose				 false
+cluster.default_ais_host         http://127.0.0.1:8080
+cluster.default_docker_host      http://172.50.0.2:8080
+cluster.skip_verify_crt          false
+cluster.url                      http://127.0.0.1:8080
+default_provider                 ais
+no_color                         false
+no_more                          false
+timeout.http_timeout             0s
+timeout.tcp_timeout              60s
+verbose                          false
+```
 
-$ ais config cli show --path
+```console
+$ ais config cli --path
 /home/user/.ais/cli/cli.json
 ```
 
-### Change CLI configuration
+### Update CLI configuration
 
-`ais config cli set NAME=VALUE [NAME=VALUE...]`
+`ais config cli NAME=VALUE [NAME=VALUE...]`
 
-Modify the CLI configuration. The configuration file is updated only if **all** new options are applied without errors.
-If an option name does not exist or value is incorrect the operation is aborted.
-
-#### Examples
+The configuration file is updated only if all new options are applied without errors. If an option name doesn't exist or a value is incorrect, the operation is aborted.
 
 ```console
-$ ais config cli set timeout.tcp_timeout 61s
+$ ais config cli timeout.tcp_timeout 61s
 "timeout.tcp_timeout" set to: "61s" (was: "60s")
 
-$ ais config cli show --json
+$ ais config cli --json
 {
     "cluster": {
         "url": "http://127.0.0.1:8080",
