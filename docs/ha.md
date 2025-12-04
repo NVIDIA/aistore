@@ -4,11 +4,12 @@
     - [Election](#election)
     - [Non-electable gateways](#non-electable-gateways)
     - [Metasync](#metasync)
+- [References](#references)
 
 ## Highly Available Control Plane
 
 AIStore cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
-Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore [REST API](http_api.md).
+Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore [API](/docs/overview.md#aistore-api)
 
 It is, therefore, recommended that AIStore cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
 
@@ -26,7 +27,7 @@ The proxy's bootstrap sequence initiates by executing the following three main s
 
 - step 1: load a local copy of the cluster map (Smap) and try to use it for the discovery of the current one;
 - step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above and, optionally, [`AIS_PRIMARY_EP`](environment-vars.md) to figure out whether this proxy must keep starting up as a _primary_;
+- step 3: use all of the above and, optionally, [`AIS_PRIMARY_EP`](/docs/environment-vars.md) to figure out whether this proxy must keep starting up as a _primary_;
   - otherwise, join as a non-primary (a.k.a. _secondary_).
 
 The rules to determine whether a given starting-up proxy is the primary one in the cluster - are simple. In fact, it's a single switch statement in the namesake function:
@@ -59,4 +60,9 @@ AIStore cluster can be *stretched* to collocate its redundant gateways with the 
 
 ### Metasync
 
-By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
+By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](https://github.com/NVIDIA/aistore/blob/main/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
+
+## References
+
+* [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
+* [Blog: Split-brain is Inevitable](https://aistore.nvidia.com/blog/2025/02/16/split-brain-blog)
