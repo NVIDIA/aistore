@@ -70,6 +70,7 @@ type (
 	ObjAttrs struct {
 		wrespHeader http.Header
 		n           int64
+		statusCode  int
 	}
 )
 
@@ -185,6 +186,11 @@ func (oah *ObjAttrs) RespHeader() http.Header {
 	return oah.wrespHeader
 }
 
+// StatusCode returns the HTTP status code of the response (e.g., 200, 206)
+func (oah *ObjAttrs) StatusCode() int {
+	return oah.statusCode
+}
+
 func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
 	var (
 		wresp     *wrappedResp
@@ -214,7 +220,7 @@ func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah O
 	FreeRp(reqParams)
 	qfree(qall)
 	if err == nil {
-		oah.wrespHeader, oah.n = wresp.Header, wresp.n
+		oah.wrespHeader, oah.n, oah.statusCode = wresp.Header, wresp.n, wresp.StatusCode
 	}
 	return oah, err
 }
@@ -255,7 +261,7 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 	resp.Body.Close()
 	FreeRp(reqParams)
 	if err == nil {
-		oah.wrespHeader, oah.n = wresp.Header, wresp.n
+		oah.wrespHeader, oah.n, oah.statusCode = wresp.Header, wresp.n, wresp.StatusCode
 	} else if err.Error() == errNilCksum {
 		err = fmt.Errorf("%s is not checksummed, cannot validate", bck.Cname(objName))
 	}

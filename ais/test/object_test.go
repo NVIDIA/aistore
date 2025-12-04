@@ -1691,6 +1691,10 @@ func verifyValidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName,
 		cos.HdrAcceptRanges, acceptRanges)
 	contentRange := respHeader.Get(cos.HdrContentRange)
 	tassert.Errorf(t, contentRange != "", "%q header should be set", cos.HdrContentRange)
+
+	// verify 206 Partial Content status code
+	tassert.Errorf(t, oah.StatusCode() == http.StatusPartialContent,
+		"expected 206 Partial Content, got %d", oah.StatusCode())
 }
 
 func verifyInvalidRangesQuery(t *testing.T, proxyURL string, bck cmn.Bck, objName, rangeQuery string) {
