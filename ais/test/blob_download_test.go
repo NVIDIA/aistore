@@ -33,14 +33,18 @@ func TestBlobDownload(t *testing.T) {
 	const (
 		objSize    = 64 * cos.MiB
 		chunkSize  = 16 * cos.MiB
-		numObjs    = 5
 		numWorkers = 4
 	)
 	var (
+		numObjs    = 500
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		prefix     = "blob-download/" + trand.String(5)
 	)
+
+	if testing.Short() {
+		numObjs /= 10
+	}
 
 	// Setup ioContext
 	m := ioContext{
@@ -63,7 +67,7 @@ func TestBlobDownload(t *testing.T) {
 	m.remotePuts(true /*evict*/)
 
 	// Calculate expected number of chunks per object
-	expectedChunks := int((objSize + chunkSize - 1) / chunkSize) // ceiling division
+	expectedChunks := (objSize + chunkSize - 1) / chunkSize // ceiling division
 	tlog.Logfln("Expected chunks per object: %d (objSize=%s, chunkSize=%s)", expectedChunks, cos.ToSizeIEC(objSize, 0), cos.ToSizeIEC(chunkSize, 0))
 
 	// Perform blob download for each object
@@ -109,10 +113,7 @@ func TestBlobDownload(t *testing.T) {
 	// Verify all objects are chunked with exact expected number of chunks
 	tlog.Logfln("Verifying objects are chunked with exactly %d chunks each", expectedChunks)
 	for _, objName := range m.objNames {
-		chunks := m.findObjChunksOnDisk(m.bck, objName)
-		tassert.Fatalf(t, len(chunks)+1 == expectedChunks,
-			"object %s: expected exactly %d chunk files, found %d",
-			objName, expectedChunks, len(chunks)+1)
+		m.validateChunksOnDisk(m.bck, objName, expectedChunks)
 	}
 	tlog.Logfln("All objects have correct number of chunks (%d)", expectedChunks)
 
@@ -352,15 +353,13 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 
 				// Large objects should be chunked (downloaded via blob download)
 				for _, objName := range mLarge.objNames {
-					chunks := mLarge.findObjChunksOnDisk(mLarge.bck, objName)
-					tassert.Fatalf(t, len(chunks) > 0, "expected at least 1 chunk file for large object %s, found %d", objName, len(chunks))
+					mLarge.validateChunksOnDisk(mLarge.bck, objName, -1) // at least 1 chunk file
 				}
 
 				// Small objects should NOT be chunked (regular prefetch)
 				tlog.Logfln("Verifying small objects are NOT chunked (regular prefetch)")
 				for _, objName := range mSmall.objNames {
-					chunks := mSmall.findObjChunksOnDisk(mSmall.bck, objName)
-					tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files for small object %s (regular prefetch), found %d", objName, len(chunks))
+					mSmall.validateChunksOnDisk(mSmall.bck, objName, 0) // no chunk files
 				}
 
 				// Objects were evicted and prefetched, expect full download within size range
@@ -371,12 +370,10 @@ func TestPrefetchWithBlobThreshold(t *testing.T) {
 			} else {
 				// Both large and small objects should not be chunked (warm GET)
 				for _, objName := range mLarge.objNames {
-					chunks := mLarge.findObjChunksOnDisk(mLarge.bck, objName)
-					tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files for large object %s (warm GET), found %d", objName, len(chunks))
+					mLarge.validateChunksOnDisk(mLarge.bck, objName, 0) // no chunk files
 				}
 				for _, objName := range mSmall.objNames {
-					chunks := mSmall.findObjChunksOnDisk(mSmall.bck, objName)
-					tassert.Fatalf(t, len(chunks) == 0, "expected 0 chunk files for small object %s (warm GET), found %d", objName, len(chunks))
+					mSmall.validateChunksOnDisk(mSmall.bck, objName, 0) // no chunk files
 				}
 
 				// Objects were already present (warm GET), expect zero bytes to be counted
@@ -449,9 +446,7 @@ func TestBlobDownloadStreamGet(t *testing.T) {
 	// Verify object is chunked after blob download
 	tlog.Logfln("Verifying object is chunked after blob download")
 	m := &ioContext{t: t, bck: bck}
-	chunks := m.findObjChunksOnDisk(bck, objName)
-	tassert.Fatalf(t, len(chunks) > 0, "expected at least 1 chunk file for object %s, found %d", objName, len(chunks))
-	tlog.Logfln("Found %d chunk files for object %s", len(chunks), objName)
+	m.validateChunksOnDisk(bck, objName, -1) // at least 1 chunk file
 
 	// Warm GET (no blob download header needed - should read from cache)
 	tlog.Logfln("Performing warm GET")
@@ -581,10 +576,8 @@ func TestBlobDownloadSingleThreaded(t *testing.T) {
 			// Verify object is chunked
 			tlog.Logfln("Verifying object is chunked")
 			m := &ioContext{t: t, bck: bck}
-			chunks := m.findObjChunksOnDisk(bck, objName)
-			expectedChunks := int((objSize + chunkSize - 1) / chunkSize)
-			tassert.Fatalf(t, len(chunks)+1 == expectedChunks,
-				"expected %d chunk files, found %d", expectedChunks, len(chunks)+1)
+			expectedChunks := (objSize + chunkSize - 1) / chunkSize
+			m.validateChunksOnDisk(bck, objName, expectedChunks)
 
 			tlog.Logfln("Single-threaded blob download test (%s) completed successfully", test.name)
 		})

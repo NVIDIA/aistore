@@ -96,7 +96,7 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 			tb.Skipf("%s requires Kubernetes", tb.Name())
 		}
 	case ClusterTypeLocal:
-		isLocal, err := isClusterLocal()
+		isLocal, err := IsClusterLocal()
 		tassert.CheckFatal(tb, err)
 		if !isLocal {
 			tb.Skipf("%s requires local deployment", tb.Name())

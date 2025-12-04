@@ -746,7 +746,7 @@ test:long:chunks:
     AISNODE_IMAGE: "$CI_REGISTRY_IMAGE/aisnode"
     AISINIT_IMAGE: "$CI_REGISTRY_IMAGE/ais-init"
     FS_CNT: 6
-    RE: "TestETL|TestConfig|TestMountpath"
+    RE: "TestETL|TestConfig|TestMountpath|TestBlobDownload"
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   rules:
     - !reference [.default_test_rules, rules]
@@ -800,7 +800,7 @@ test:short:k8s:
       allow_failure: true
     - !reference [.test_k8s_short_template, rules]
   variables:
-    RE: "TestETL|TestConfig|TestMountpath"
+    RE: "TestETL|TestConfig|TestMountpath|TestBlobDownload"
   script:
     - make test-short
 
@@ -890,7 +890,7 @@ test:long:k8s:all:
   script:
     - |
       echo "----- RUNNING K8S TESTS -----"
-      BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath" make test-run
+      BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath|TestBlobDownload" make test-run
       exit_code=$?
       result=$((result + exit_code))
       echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"

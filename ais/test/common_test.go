@@ -1084,7 +1084,13 @@ func initOnce() {
 
 func initMountpaths(t *testing.T, proxyURL string) {
 	t.Helper()
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+
+	isLocal, err := tools.IsClusterLocal()
+	tassert.CheckFatal(t, err)
+	if !isLocal {
+		tlog.Logfln("initMountpaths: skipping for non-local deployment")
+		return
+	}
 
 	fs.TestNew(nil)
 	_onceInit.Do(initOnce)
@@ -1171,6 +1177,43 @@ func (m *ioContext) findObjChunksOnDisk(bck cmn.Bck, objName string) (fqn []stri
 		},
 	})
 	return fqn
+}
+
+// validateChunksOnDisk validates the number of chunks on disk for an object.
+// - expectedChunks: expected number of total chunks:
+//   - > 0: exactly this many chunks expected (including main object, i.e., len(chunks)+1 == expected)
+//   - = 0: no chunk files expected (len(chunks) == 0)
+//   - < 0: at least |expectedChunks| chunk files expected (len(chunks) >= |expected|)
+func (m *ioContext) validateChunksOnDisk(bck cmn.Bck, objName string, expectedChunks int) {
+	m.t.Helper()
+
+	isLocal, err := tools.IsClusterLocal()
+	tassert.CheckFatal(m.t, err)
+	if !isLocal {
+		tlog.Logfln("validateChunksOnDisk: skipping for non-local deployment")
+		return
+	}
+
+	chunks := m.findObjChunksOnDisk(bck, objName)
+	switch {
+	case expectedChunks > 0:
+		// Expect exact number of total chunks (including main object)
+		// len(chunks) returns extra chunk files, +1 for main object
+		tassert.Fatalf(m.t, len(chunks)+1 == expectedChunks,
+			"object %s: expected exactly %d total chunks, found %d (chunk files: %d)",
+			objName, expectedChunks, len(chunks)+1, len(chunks))
+	case expectedChunks == 0:
+		// Expect no chunk files
+		tassert.Fatalf(m.t, len(chunks) == 0,
+			"object %s: expected 0 chunk files, found %d",
+			objName, len(chunks))
+	default:
+		// expectedChunks < 0: expect at least |expectedChunks| chunk files
+		minExpected := -expectedChunks
+		tassert.Fatalf(m.t, len(chunks) >= minExpected,
+			"object %s: expected at least %d chunk files, found %d",
+			objName, minExpected, len(chunks))
+	}
 }
 
 func getObjToTemp(t *testing.T, proxyURL string, bck cmn.Bck, objName string) string {

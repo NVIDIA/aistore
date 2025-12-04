@@ -188,7 +188,7 @@ func isClusterK8s() (isK8s bool, err error) {
 	return
 }
 
-func isClusterLocal() (isLocal bool, err error) {
+func IsClusterLocal() (isLocal bool, err error) {
 	var (
 		primaryURL = GetPrimaryURL()
 		smap       *meta.Smap
