@@ -2404,19 +2404,17 @@ func (h *htrun) validateIntraRequest(hdr http.Header, fromPrimary bool) (isIntra
 	return
 }
 
-// ready when node started, not in maint/decomm, and cluster started (exception is primary in
-// a new cluster - requires targets to be registered as well before ClusterStarted can be true)
+// ready when node started, not in maint/decomm, and cluster started
+// primary is ready even if cluster has not yet started (targets not yet registered or reachable)
 func (h *htrun) isReady() bool {
 	if !h.NodeStarted() || h.si.Flags.IsAnySet(meta.SnodeMaintDecomm) {
 		return false
 	}
-
 	if !h.ClusterStarted() {
 		smap := h.owner.smap.get()
 		debug.Assert(smap.isValid())
-		return h.si.IsProxy() && smap.isPrimary(h.si) && smap.UUID == ""
+		return h.si.IsProxy() && smap.isPrimary(h.si)
 	}
-
 	return true
 }
 
