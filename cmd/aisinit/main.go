@@ -166,7 +166,7 @@ func populateClusterConfig(aisClusterConfigOverride, outputClusterConfig string)
 	if outputClusterConfig == "" || aisClusterConfigOverride == "" {
 		return
 	}
-	defaultConfig := newDefaultConfig()
+	confToWrite := newDefaultConfig()
 	data, err := os.ReadFile(aisClusterConfigOverride)
 	failOnError(err)
 
@@ -174,10 +174,14 @@ func populateClusterConfig(aisClusterConfigOverride, outputClusterConfig string)
 	err = json.Unmarshal(data, &configOverride)
 	failOnError(err)
 
-	err = aiscmn.CopyProps(configOverride, defaultConfig, aisapc.Cluster)
+	err = aiscmn.CopyProps(configOverride, confToWrite, aisapc.Cluster)
 	failOnError(err)
 
-	data, err = jsoniter.Marshal(defaultConfig)
+	// Only write the public version of any auth config
+	// Any private secrets should be loaded through env variables
+	confToWrite.Auth = confToWrite.Auth.PublicClone()
+
+	data, err = jsoniter.Marshal(confToWrite)
 	failOnError(err)
 
 	err = os.WriteFile(outputClusterConfig, data, 0o644) //nolint:gosec // For now we don't want to change this.

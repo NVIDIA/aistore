@@ -678,9 +678,10 @@ type (
 		OIDC           *OIDCConfToSet           `json:"oidc,omitempty"`
 		ClusterKey     *ClusterKeyConfToSet     `json:"cluster_key,omitempty"`
 	}
+	Censored          string
 	AuthSignatureConf struct {
-		Key    string `json:"key"`
-		Method string `json:"method"`
+		Key    Censored `json:"key"`
+		Method string   `json:"method"`
 	}
 	AuthSignatureConfToSet struct {
 		Key    *string `json:"key,omitempty"`
@@ -1967,16 +1968,26 @@ func (c *AuthConf) UnmarshalJSON(data []byte) error {
 	}
 	c.Enabled = v4.Enabled
 	// All legacy keys are 256 bit HMAC
-	c.Signature = &AuthSignatureConf{Key: v4.Secret, Method: "HS256"}
+	c.Signature = &AuthSignatureConf{Key: Censored(v4.Secret), Method: "HS256"}
 	c.RequiredClaims = nil
 	c.OIDC = nil
 	return nil
 }
 
-func (c *AuthConf) CensorSignatureKey() {
-	if c.Signature != nil && c.Signature.Key != "" {
-		c.Signature.Key = "**********"
+const censoredVal = "**********"
+
+func (Censored) String() string   { return censoredVal }
+func (Censored) GoString() string { return "Censored(*)" }
+
+func (c *AuthConf) PublicClone() (out AuthConf) {
+	out = *c
+	// only hide shared secret, not public key
+	if out.Signature != nil && !out.Signature.IsRSA() {
+		sig := *out.Signature
+		sig.Key = censoredVal
+		out.Signature = &sig
 	}
+	return out
 }
 
 ///////////////////////

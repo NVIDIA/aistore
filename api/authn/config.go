@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -84,7 +85,7 @@ func (c *Config) Verbose() bool {
 	return level > 3
 }
 
-func (c *Config) Secret() string        { return *c.Server.psecret }
+func (c *Config) Secret() cmn.Censored  { return cmn.Censored(*c.Server.psecret) }
 func (c *Config) Expire() time.Duration { return time.Duration(*c.Server.pexpire) }
 
 func (c *Config) SetSecret(val *string) {

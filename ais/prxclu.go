@@ -120,7 +120,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		config := cmn.GCO.Get()
 		// hide secret
 		c := config.ClusterConfig
-		c.Auth.CensorSignatureKey()
+		c.Auth = config.Auth.PublicClone()
 		p.writeJSON(w, r, &c, what)
 	case apc.WhatBMD, apc.WhatSmapVote, apc.WhatSnode, apc.WhatSmap:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)

@@ -56,7 +56,7 @@ type (
 	}
 
 	SigConfig struct {
-		HMACSecret   string
+		HMACSecret   cmn.Censored
 		RSAPublicKey *rsa.PublicKey
 	}
 
@@ -83,7 +83,7 @@ var (
 
 // TODO: cos.Unsafe* and other micro-optimization and refactoring
 
-func CreateHMACTokenStr(c jwt.Claims, secret string) (string, error) {
+func CreateHMACTokenStr(c jwt.Claims, secret cmn.Censored) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	return t.SignedString([]byte(secret))
 }
@@ -175,7 +175,7 @@ func newSigConfig(authConf *cmn.AuthConf) *SigConfig {
 		return &SigConfig{RSAPublicKey: pubKey}
 	}
 	if hmacEnvStr := os.Getenv(env.AisAuthSecretKey); hmacEnvStr != "" {
-		return &SigConfig{HMACSecret: hmacEnvStr}
+		return &SigConfig{HMACSecret: cmn.Censored(hmacEnvStr)}
 	}
 	// Empty config is valid with enabled auth as OIDC issuer lookup may be used
 	if authConf.Signature == nil || authConf.Signature.Method == "" {
@@ -188,7 +188,7 @@ func newSigConfig(authConf *cmn.AuthConf) *SigConfig {
 	case authConf.Signature.IsHMAC():
 		return &SigConfig{HMACSecret: authConf.Signature.Key}
 	case authConf.Signature.IsRSA():
-		pubKey, err := parsePubKey(authConf.Signature.Key)
+		pubKey, err := parsePubKey(string(authConf.Signature.Key))
 		if err != nil {
 			cos.ExitLogf("Failed to parse RSA public key: %v", err)
 		}
@@ -209,7 +209,7 @@ func buildParseOptions(reqClaims *cmn.RequiredClaimsConf) []jwt.ParserOption {
 	return opts
 }
 
-// Based on the token provided, return the key for the jwt library to use to verify the signature
+// Based on the token provided, return the key for the jwt library to verify the signature
 func (tm *TokenParser) parseJWTKey(ctx context.Context, tok *jwt.Token) (any, error) {
 	switch tok.Method.(type) {
 	case *jwt.SigningMethodHMAC:
@@ -301,7 +301,7 @@ func (tm *TokenParser) getHMACSecret() string {
 	if tm.sigConfig == nil {
 		return ""
 	}
-	return tm.sigConfig.HMACSecret
+	return string(tm.sigConfig.HMACSecret)
 }
 
 ///////////////

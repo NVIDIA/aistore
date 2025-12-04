@@ -30,7 +30,7 @@ const (
 func (m *mgr) validateSecret(clu *authn.CluACL) (err error) {
 	const tag = "validate-secret"
 	var (
-		secret   = Conf.Secret()
+		secret   = string(Conf.Secret())
 		cksumVal = cos.ChecksumB2S(cos.UnsafeB(secret), cos.ChecksumSHA256)
 		body     = cos.MustMarshal(&authn.ServerConf{Secret: cksumVal})
 	)
