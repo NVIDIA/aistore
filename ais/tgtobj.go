@@ -1219,6 +1219,9 @@ func (goi *getOI) _txrng(fqn string, lmfh cos.LomReader, whdr http.Header, hrng 
 
 	goi.setwhdr(whdr, cksum, size)
 
+	// RFC 9110: "server SHOULD send 206 (Partial Content) for satisfied range requests"
+	goi.w.WriteHeader(http.StatusPartialContent)
+
 	// transmit
 	buf, slab := goi.t.gmm.AllocSize(_txsize(size))
 	err := goi.transmit(r, buf, fqn, size)
