@@ -129,16 +129,33 @@ func main() {
 	podName := getRequiredEnv(env.AisK8sPod)
 	clusterDomain := getOrDefaultEnv(env.AisK8sClusterDomain, defaultClusterDomain)
 	publicHostName := getOrDefaultEnv(env.AisK8sPublicHostname, "")
+	publicDNSMode := getOrDefaultEnv(env.AisK8sPublicDNSMode, env.PubNetDNSModeIP)
 	podDNS := fmt.Sprintf("%s.%s.%s.svc.%s", podName, serviceName, namespace, clusterDomain)
 
 	localConf.HostNet.HostnameIntraControl = podDNS
 	localConf.HostNet.HostnameIntraData = podDNS
-	localConf.HostNet.Hostname = publicHostName
+
+	switch publicDNSMode {
+	case env.PubNetDNSModePod:
+		// Using pod DNS allows for simpler TLS certificates, and is viable when target pods are
+		// deployed with host networking since pod DNS resolves to the host IP
+		localConf.HostNet.Hostname = podDNS
+	case env.PubNetDNSModeNode, env.PubNetDNSModeIP:
+		// For Node and IP modes, use the publicHostName set by the operator via downward API
+		// (spec.nodeName for Node mode, status.hostIP for IP mode)
+		localConf.HostNet.Hostname = publicHostName
+	default:
+		nlog.Warningf("unknown AIS_PUBLIC_DNS_MODE %q, defaulting to '%s' for Hostname", publicDNSMode, publicHostName)
+		// fall back to publicHostName, if it is empty then ais node will discover IP at startup
+		localConf.HostNet.Hostname = publicHostName
+	}
 
 	if role == aisapc.Target {
 		useHostNetwork, err := cos.ParseBool(getOrDefaultEnv(env.AisK8sHostNetwork, "false"))
 		failOnError(err)
-		if useHostNetwork {
+
+		// For IP mode with host networking, clear hostnames to let ais node discover IP at startup
+		if useHostNetwork && publicDNSMode == env.PubNetDNSModeIP {
 			localConf.HostNet.HostnameIntraData = ""
 			localConf.HostNet.Hostname = ""
 		}

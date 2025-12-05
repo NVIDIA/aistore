@@ -234,3 +234,141 @@ func TestGCOClone_NoAuthTracingAlias(t *testing.T) {
 		t.Fatal("Tracing alias")
 	}
 }
+
+// TestLocalNetConfigValidate_NoOverlap verifies that different hostnames pass validation
+func TestLocalNetConfigValidate_NoOverlap(t *testing.T) {
+	tests := []struct {
+		name                 string
+		hostname             string
+		hostnameIntraControl string
+		hostnameIntraData    string
+	}{
+		{
+			name:                 "IP addresses",
+			hostname:             "192.0.2.1",
+			hostnameIntraControl: "198.51.100.1",
+			hostnameIntraData:    "203.0.113.1",
+		},
+		{
+			name:                 "podDNS format",
+			hostname:             "target-0-hostname.example.com",
+			hostnameIntraControl: "target-0.target-svc.ns1.svc.cluster.local",
+			hostnameIntraData:    "target-0.target-svc.ns1.svc.cluster.local",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contextConfig := &cmn.Config{}
+			localNet := cmn.LocalNetConfig{
+				Hostname:             tt.hostname,
+				HostnameIntraControl: tt.hostnameIntraControl,
+				HostnameIntraData:    tt.hostnameIntraData,
+				Port:                 8080,
+				PortIntraControl:     9080,
+				PortIntraData:        10080,
+			}
+			err := localNet.Validate(contextConfig)
+			tassert.CheckFatal(t, err)
+		})
+	}
+}
+
+// TestLocalNetConfigValidate_OverlappingHostDifferentPort verifies that same hostname
+// with different ports produces a warning but no error (for hostNetwork deployments)
+func TestLocalNetConfigValidate_OverlappingHostDifferentPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string // Used for all three: public, control, and data
+	}{
+		{
+			name:     "IP address",
+			hostname: "192.0.2.1",
+		},
+		{
+			name:     "podDNS format (hostNetwork scenario)",
+			hostname: "target-0.target-svc.ns.svc.cluster.local",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contextConfig := &cmn.Config{}
+			localNet := cmn.LocalNetConfig{
+				Hostname:             tt.hostname,
+				HostnameIntraControl: tt.hostname, // Same as public
+				HostnameIntraData:    tt.hostname, // Same as public
+				Port:                 8080,
+				PortIntraControl:     9080,  // Different port
+				PortIntraData:        10080, // Different port
+			}
+			err := localNet.Validate(contextConfig)
+			// Should NOT return an error - just warns
+			tassert.CheckFatal(t, err)
+		})
+	}
+}
+
+// TestLocalNetConfigValidate_OverlappingHostAndPort verifies that same hostname
+// AND same port produces an error
+func TestLocalNetConfigValidate_OverlappingHostAndPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string
+	}{
+		{
+			name:     "IP address",
+			hostname: "192.0.2.1",
+		},
+		{
+			name:     "podDNS format",
+			hostname: "target-0.target-svc.ns.svc.cluster.local",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contextConfig := &cmn.Config{}
+			localNet := cmn.LocalNetConfig{
+				Hostname:             tt.hostname,
+				HostnameIntraControl: tt.hostname,    // Same as public
+				HostnameIntraData:    "198.51.100.1", // Different
+				Port:                 8080,
+				PortIntraControl:     8080, // Same port - should error!
+				PortIntraData:        10080,
+			}
+			err := localNet.Validate(contextConfig)
+			tassert.Fatalf(t, err != nil, "expected error when hostname and port overlap, got nil")
+		})
+	}
+}
+
+// TestLocalNetConfigValidate_OverlappingDataHostAndPort verifies that same hostname
+// AND same port for data network produces an error
+func TestLocalNetConfigValidate_OverlappingDataHostAndPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string
+	}{
+		{
+			name:     "IP address",
+			hostname: "192.0.2.1",
+		},
+		{
+			name:     "podDNS format",
+			hostname: "target-0.target-svc.ns.svc.cluster.local",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contextConfig := &cmn.Config{}
+			localNet := cmn.LocalNetConfig{
+				Hostname:             tt.hostname,
+				HostnameIntraControl: "198.51.100.1",
+				HostnameIntraData:    tt.hostname, // Same as public
+				Port:                 8080,
+				PortIntraControl:     9080,
+				PortIntraData:        8080, // Same port - should error!
+			}
+			err := localNet.Validate(contextConfig)
+			tassert.Fatalf(t, err != nil, "expected error when data hostname and port overlap, got nil")
+		})
+	}
+}

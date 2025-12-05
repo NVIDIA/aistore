@@ -2127,11 +2127,19 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) error {
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
 
 	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraControl); over {
-		return fmt.Errorf("public (%s) and intra-cluster control (%s) share the same: %q",
+		if c.Port == c.PortIntraControl {
+			return fmt.Errorf("public (%s) and intra-cluster control (%s) share the same IP and port: %s:%d",
+				c.Hostname, c.HostnameIntraControl, addr, c.Port)
+		}
+		nlog.Warningf("public (%s) and intra-cluster control (%s) share the same IP: %q",
 			c.Hostname, c.HostnameIntraControl, addr)
 	}
 	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraData); over {
-		return fmt.Errorf("public (%s) and intra-cluster data (%s) share the same: %q",
+		if c.Port == c.PortIntraData {
+			return fmt.Errorf("public (%s) and intra-cluster data (%s) share the same IP and port: %s:%d",
+				c.Hostname, c.HostnameIntraData, addr, c.Port)
+		}
+		nlog.Warningf("public (%s) and intra-cluster data (%s) share the same IP: %q",
 			c.Hostname, c.HostnameIntraData, addr)
 	}
 	if addr, over := ipsOverlap(c.HostnameIntraControl, c.HostnameIntraData); over {

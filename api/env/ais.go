@@ -54,5 +54,11 @@ const (
 	AisK8sPublicHostname       = "AIS_PUBLIC_HOSTNAME"
 	AisK8sClusterDomain        = "AIS_K8S_CLUSTER_DOMAIN"
 	AisK8sHostNetwork          = "HOST_NETWORK"
+	AisK8sPublicDNSMode        = "AIS_PUBLIC_DNS_MODE"
 	AisK8sEnableExternalAccess = "ENABLE_EXTERNAL_ACCESS"
+
+	// AisK8sPublicDNSMode values
+	PubNetDNSModeIP   string = "IP"
+	PubNetDNSModeNode string = "Node"
+	PubNetDNSModePod  string = "Pod"
 )
