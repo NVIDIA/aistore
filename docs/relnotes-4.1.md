@@ -1,4 +1,4 @@
-# AIStore v4.1 RC1 Release Notes
+# AIStore 4.1 Release Notes
 
 ## Overview
 
@@ -50,16 +50,60 @@ Client and tooling updates include a new `Batch` API in the Python SDK, extended
 
 ## Authentication and Security
 
-The authentication configuration covers two independent concerns:
+AIS v4.1 introduces a standardized JWT validation model, reorganized configuration for external authentication, and an expanded cluster-key mechanism for securing intra-cluster redirects. Together, these changes provide clearer semantics, better interoperability with third-party identity providers, and more uniform behavior across proxies and targets.
 
-* external user authentication via JWT/OIDC tokens, and
-* internal cluster security for intra-cluster operations.
+### JWT Validation Model and Token Requirements
 
-### External User Authentication
+AIS uses JWTs to both authenticate and authorize requests. Version 4.1 formalizes this process and documents the complete validation flow in [`auth_validation.md`](https://github.com/NVIDIA/aistore/blob/main/docs/auth_validation.md).
 
-The authentication configuration for external users (JWT/OIDC tokens) has been reorganized but remains backward compatible with the v4.0 format. The new structure separates signature parameters, required claims, and OIDC issuer handling. Token verification supports both symmetric (HMAC) and asymmetric (RSA) algorithms and validates standard JWT fields such as `aud`.
+Tokens may be issued by the first-party AuthN service or by compatible third-party identity providers (Keycloak, Auth0, custom OAuth services). AIS makes authorization decisions directly from JWT claims; no external role lookups are performed during request execution.
 
-The v4.0 format continues to be accepted:
+When `auth.enabled=true` is set in the cluster configuration, proxies validate tokens before routing requests to targets; targets verify redirect signatures when cluster-key signing is enabled.
+
+#### Token Requirements
+
+AIS accepts tokens signed with supported HMAC or RSA algorithms (`HS256/384/512`, `RS256/384/512`).
+All tokens must include the standard `sub` and `exp` claims; `aud` and `iss` are validated when required by configuration.
+
+AIS also recognizes several AIS-specific claims:
+
+- `admin`: Full administrative access; overrides all other claims
+- `clusters`: Cluster-scoped permissions (specific cluster UUID or wildcard)
+- `buckets`: Bucket-scoped permissions tied to individual buckets within a cluster
+
+Cluster and bucket permissions use the access-flag bitmask defined in `api/apc/access.go`.
+
+#### Signature Verification: Static or OIDC
+
+AIS supports two mutually exclusive approaches for signature verification:
+
+1. **Static verification (`auth.signature`)**
+   - HMAC (shared secret) or RSA public-key–based
+   - Suitable for the AIS AuthN service or controlled token issuers
+   - Verifies tokens using the configured secret or public key
+
+2. **OIDC verification (`auth.oidc`)**
+   - Automatic discovery using `/.well-known/openid-configuration`
+   - JWKS retrieval and caching with periodic refresh
+   - Validates issuer (`iss`) against `allowed_iss`
+   - Supports custom CA bundles for TLS verification
+
+Both modes accept standard `Authorization: Bearer <token>` headers and AWS-compatible `X-Amz-Security-Token`.
+
+#### Authentication Flow
+
+1. Extract token from `Authorization` or `X-Amz-Security-Token`.
+2. Validate signature via static credentials or OIDC discovery.
+3. Check standard claims (`sub`, `exp`, and optionally `aud`, `iss`).
+4. Evaluate AIS-specific claims (`admin`, `clusters`, `buckets`) to authorize the operation.
+5. If cluster-key signing is enabled, sign redirect URLs before forwarding to a target; targets verify signatures prior to execution.
+
+This flow applies to all AIS APIs, including S3-compatible requests.
+
+### Configuration Changes and Compatibility (v4.0 => v4.1)
+
+The authentication configuration has been reorganized for clarity in v4.1, but the previous format remains fully supported:
+
 ```json
 {
   "auth": {
@@ -67,9 +111,10 @@ The v4.0 format continues to be accepted:
     "secret": "your-hmac-secret"
   }
 }
-```
+````
 
-The new v4.1 structure introduces more explicit fields:
+Version 4.1 introduces explicit sections for signature verification, required claims, and OIDC issuer configuration:
+
 ```json
 {
   "auth": {
@@ -89,13 +134,15 @@ The new v4.1 structure introduces more explicit fields:
 }
 ```
 
-OIDC handling includes JWKS caching, issuer validation, and optional custom CA bundles. S3 client calls that rely on STS-style authentication can now interoperate with JWTs where applicable. The token cache has been sharded to reduce contention.
+OIDC handling includes JWKS caching, issuer validation, and optional CA bundles.
+Token-cache sharding reduces lock contention under heavy concurrency.
+
+See the **JWT Validation Model and Token Requirements** subsection above for validation flow and claim semantics.
 
 ### Cluster-Key Authentication
 
-A separate cluster-internal authentication mechanism provides HMAC-based security to complement edge-based access control.
-
-This design allows AIS proxies (gateways) to handle JWT validation and access control at the edge, while AIS targets (storage servers) can independently validate user requests arriving on public ports.
+Cluster-key authentication provides HMAC-based signing for internal redirect URLs.
+It is independent from user JWT authentication and ensures that targets accept only authenticated, correctly routed internal redirects.
 
 ```json
 {
@@ -103,33 +150,16 @@ This design allows AIS proxies (gateways) to handle JWT validation and access co
     "cluster_key": {
       "enabled": true,
       "ttl": "24h",              // 0 = never expire, min: 1h
-      "nonce_window": "1m",      // Clock skew tolerance (max: 10m)
+      "nonce_window": "1m",      // Clock-skew tolerance (max: 10m)
       "rotation_grace": "1m"     // Accept old+new key during rotation (max: 1h)
     }
   }
 }
 ```
 
-This mechanism is independent of external user authentication and addresses internal cluster security concerns.
-
----
-
-## Chunked Objects
-
-The chunked-object subsystem adds a new hard limit on maximum monolithic object size. This prevents ingestion of extremely large single-object payloads that exceed the cluster’s capacity to process them. The existing soft `objsize_limit` must fit within the hard limit.
-
-```json
-{
-  "chunks": {
-    "objsize_limit": "100GiB",
-    "max_monolithic_size": "1TiB",
-    "chunk_size": "1GiB",
-    "checkpoint_every": 128
-  }
-}
-```
-
-The `max_monolithic_size` value is validated against a fixed range (1 GiB–1 TiB). Auto-chunking for cold GETs is now controlled by bucket properties and integrated with blob downloader behavior. The manifest format introduced in v4.0 continues to be used.
+When enabled, the primary proxy generates a versioned secret and distributes it via metasync.
+Proxies sign redirect URLs after validating the caller’s token; targets verify the signature before performing redirected operations.
+The mechanism enforces correct routing, provides defense-in-depth against forged redirect traffic, and integrates with timestamp and nonce validation.
 
 ---
 
@@ -155,15 +185,96 @@ Configuration parameters include chunk size and worker count, with automatic thr
 
 ## Rechunk Job
 
-A new job (“rechunk”) rewrites existing objects using updated chunk parameters. This is useful when bucket-level chunking policies change or when an existing dataset must be restructured for more predictable retrieval patterns.
+AIS v4.1 introduces a new “rechunk” xaction that converts existing objects between monolithic and chunked representations based on updated bucket-level chunking policies.
+
+The job rewrites objects in place according to the specified threshold and chunk size, allowing datasets to be reorganized without re-uploading data.
+
+Rechunking is useful when:
+
+- bucket chunking parameters (`objsize_limit`, `chunk_size`) change (see example below);
+- a dataset originally stored as monolithic objects must be reshaped for faster ML-oriented access patterns;
+- an existing chunked dataset must be normalized to new chunk sizes;
+- auto-chunking behavior is enabled or disabled for cold GETs or blob-downloader workflows.
+
+Here's a default bucket configuration (that can be updated at any time):
+
+```console
+$ ais bucket props show BUCKET chunks --json
+{
+    "chunks": {
+        "objsize_limit": "0B",
+        "max_monolithic_size": "1TiB",
+        "chunk_size": "1GiB"
+    }
+}
+```
+
+### Behavior
+
+The rechunk job processes all (or prefix-filtered) objects in a bucket and rewrites them according to the active or explicitly provided chunking configuration:
+
+- Objects **below** `objsize_limit` => rewritten as **monolithic**
+- Objects **at or above** `objsize_limit` => rewritten into **chunks** of `chunk_size`
+- Setting `objsize_limit=0` restores all objects as monolithic
+- Regardless of configuration, objects larger than the bucket’s `max_monolithic_size` are always chunked for correctness and manageability
+
+Rechunking preserves object content and metadata; only the physical storage layout changes.
+The job emits standard xaction progress snapshots and integrates with unified load and throttling.
+
+### Usage
+
+```console
+$ ais rechunk BUCKET [--chunk-size SIZE] [--objsize-limit SIZE] [--prefix PREFIX]
+```
+
+* Chunking parameters may be provided explicitly or derived from current bucket properties.
+* When only one of the two size parameters is provided, AIS prompts for confirmation before starting the job.
+* Prefix filters can be embedded directly in the bucket URI (e.g.: `ais://bucket/prefix/` or `gs://bucket/prefix`, etc.).
+
+### Operational Notes
+
+* Rechunking can be run online; objects remain readable throughout the operation.
+* The job honors cluster load advisories and backs off under pressure.
+* Only the storage representation changes; object versions, checksums, and names remain intact.
+* Rechunk integrates with the chunk-manifest (ufest) format introduced in v4.0.
+* Rechunked objects immediately benefit from GetBatch and blob-downloader optimizations.
 
 ---
 
 ## Unified Load and Throttling
 
-A new package (`cmn/load`) unifies load evaluation across the cluster. The load vector combines memory usage, CPU load, disk utilization, network activity, and file-descriptor pressure. Subsystems that previously used independent throttling heuristics now rely on a shared advisory mechanism.
+AIS v4.1 introduces a unified load-evaluation subsystem used across the cluster to provide consistent backpressure when the system becomes resource-constrained. Previously, individual components implemented their own heuristics. The new `cmn/load` package provides a single mechanism for assessing system pressure and generating throttling recommendation for callers.
 
-The unified logic is used by GetBatch, blob downloader, the transport layer, and general xaction control. This results in consistent backpressure signals and more predictable behavior during high load.
+### Five-Dimensional Load Vector
+
+System load is now evaluated along five independent dimensions:
+
+- Memory pressure
+- CPU load averages
+- Goroutine count
+- Disk utilization
+- File-descriptor usage (reserved for future use)
+
+Each dimension is graded from **Low → Moderate → High → Critical**, and the highest observed level influences throttling behavior. Memory pressure has the highest priority; critical memory immediately triggers aggressive back-off.
+
+### Throttling Advice
+
+Subsystems request a `load.Advice` object that determines:
+
+- **How long to sleep** (if throttling is necessary)
+- **How frequently to check** current load
+- **The highest pressure dimension** observed
+
+Stateful `load.Advice` adapts sampling frequency and back-off automatically. Data-heavy operations (GET, PUT, EC encoding, mirroring, GetBatch, chunked I/O, blob downloader) slow down more aggressively than metadata-only operations (LRU eviction, space cleanup, storage summaries).
+
+The load system is now used across codebase, including:
+
+- GetBatch (that may throttle itself or return **HTTP 429** when OOM)
+- Blob downloader (ditto)
+- Rechunk; other long-running xactions (jobs)
+- EC and mirroring
+
+The unified load subsystem is intended to improve cluster stability, avoid cascading failures under pressure, and ensure that long-running jobs behave predictably in constrained environments.
 
 ---
 
@@ -198,18 +309,64 @@ Specific changes include:
 
 ## Multipart Upload
 
-Multipart upload support is now implemented consistently across Azure and GCP backends. Other backend improvements include corrected range-read size reporting for GCP and adherence to S3’s UTC `Last-Modified` format. The set of provider behaviors is now more uniform across cloud backends.
+AIS v4.1 unifies multipart upload support across all major cloud backends and standardizes how AIS initiates, tracks, and completes multipart sessions. Client behavior (CLI, SDKs, aisloader) now follows a consistent interface regardless of the underlying cloud provider.
 
-**Azure Backend:**
-- Native multipart upload support via Azure Blob Storage SDK
-- Automatic part management and completion
+Multipart uploads are fully integrated with AIS’s chunked-object subsystem. Uploaded parts become standard AIS chunks, and the final object is represented using the same chunk-manifest format as any other chunked object.
 
-**GCP Backend:**
-- Multipart upload implementation via direct HTTP client using GCP's XML API
-- Raw HTTP requests to XML API endpoints (GCP Go SDK lacks native XML multipart support)
-- Part upload tracking and finalization
+This ensures consistent behavior across subsystems and worflows including GET, GetBatch, prefetch, rechunk, and blob-downloader.
 
-The multipart implementation now exposes a consistent interface across cloud providers, with part-level retry and error handling and automatic cleanup of parts if an upload is aborted.
+### Unified Backend
+
+**AWS / S3-compatible backends**
+- Respect bucket-level multipart size thresholds (`extra.aws.multipart_size`)
+- Full support for create → put-part → complete → abort lifecycle
+- Compatibility option to disable multipart uploads for providers that reject `aws-chunked-encoding`
+
+**Azure Backend**
+- Native multipart upload via the Azure Blob Storage SDK
+- Automatic staging, part management, and commit semantics
+- Transparent retry and part cleanup
+
+**GCP Backend**
+- Multipart upload implemented via direct XML API requests
+- Raw HTTP calls used due to lack of multipart support in the official Go SDK
+- Corrected range-read metadata reporting and consistent `Last-Modified` formatting
+- Reliable part tracking and final assembly
+
+**OCI and AIS**
+- Multipart flow aligned with S3 semantics
+- Unified part-numbering, checksum propagation, and cleanup logic
+
+Across all providers, multipart uploads benefit from:
+
+- part-level retry with content-length and checksum validation
+- automatic removal of partial uploads when an MPU is aborted
+- unified error propagation and clearer diagnostics
+- consistent final-object metadata regardless of provider
+
+### Operational Improvements
+
+- Multipart uploads integrate with the unified load and throttling system, backing off under memory or disk pressure.
+- Large-object PUT performance improves significantly due to parallel part uploads.
+- AIS now cleans up orphaned multipart parts when sessions are aborted (and is prepared for future space-cleanup extensions).
+- Multipart uploads interoperate cleanly with object versioning and bucket-level provider properties.
+
+### CLI and `aisloader`
+
+**AIS CLI** exposes `ais object mpu` with full support for:
+
+- `create` (session initialization)
+- `put-part` (parallel uploads)
+- `complete` (final assembly)
+- `abort` (cleanup of uploaded parts)
+
+**aisloader** adds:
+- `-multipart-chunks` to enable multipart PUTs
+- `-pctmultipart` to mix multipart and single-part uploads across workloads
+
+These controls make it possible to benchmark multipart performance and retry behavior across cloud environments.
+
+Multipart uploads in v4.1 provide a consistent, reliable, and cloud-agnostic way to ingest large objects, with improved failure handling and operator visibility.
 
 ---
 

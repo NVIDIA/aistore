@@ -1,10 +1,10 @@
-# GetBatch: Multi-Object Retrieval API
+# GetBatch: Distributed Multi-Object Retrieval
 
 ## Overview
 
 GetBatch is AIStore's high-performance API for retrieving multiple objects and/or archived files in a single request. It assembles the requested data into a TAR (or compressed) archive and delivers it as a continuous stream.
 
-> GetBatch is implemented by the extended action (job) codenamed "x-moss" and is available via `/v1/ml/moss` API endpoint.
+> GetBatch is implemented by the [eXtended Action](/docs/overview.md#xaction) (job). Internally, the job is codenamed x-moss. The respective API endpoint: `/v1/ml/moss`.
 
 Regardless of retrieval source (in-cluster objects, remote objects, or shard extractions), GetBatch always preserves the **exact ordering** of request entries in both streaming and buffered modes.
 
