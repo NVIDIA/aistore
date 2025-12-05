@@ -1,6 +1,5 @@
 - name: Run aisloader "{{ bench_type }}" on bucket {{ bucket }}
   hosts: aisloader_hosts
-  gather_facts: no
   vars_files:
     - "vars/bench.yaml"
 
@@ -49,6 +48,7 @@
   - name: Fetch the output files from remote
     fetch:
       src: "{{ item.path }}"
-      dest: ../output/{{ bench_type }}/{{ bucket_name }}/
+      dest: >-
+        ../output/{{ bench_type }}/{{ bucket_name }}{% if batch_size is defined %}/{{ batch_size }}{% endif %}/
       flat: yes
     with_items: "{{ outfiles.files }}"
