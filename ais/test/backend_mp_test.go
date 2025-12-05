@@ -344,7 +344,7 @@ func TestBackendMPFileReaderWriter(t *testing.T) {
 				}
 				if roc != stream {
 					errsMutex.Lock()
-					errs = append(errs, fmt.Errorf("streams[%v].(Re-)Open() returned roc != sterams[i]", stream.index))
+					errs = append(errs, fmt.Errorf("streams[%v].(Re-)Open() returned roc != streams[i]", stream.index))
 					errsMutex.Unlock()
 					wg.Done()
 					return

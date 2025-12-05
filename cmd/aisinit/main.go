@@ -147,7 +147,7 @@ func main() {
 	//   "Node" - Use Kubernetes node name (spec.nodeName). Useful when node names are
 	//            resolvable DNS names (e.g., AWS EC2 private DNS like ip-10-0-1-5.ec2.internal).
 	//            but using "Pod" DNS + host networking in environments that support it may be
-	//            preferrable to allow more specificity.
+	//            preferable to allow more specificity.
 	//
 	//   "Pod" - Use pod DNS name (pod.service.namespace.svc.cluster.local). With hostNetwork,
 	//           pod DNS resolves to the host IP, enabling TLS with wildcard certs matching

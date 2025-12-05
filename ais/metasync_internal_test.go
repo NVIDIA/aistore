@@ -721,7 +721,7 @@ func TestMetasyncMembership(t *testing.T) {
 		savedCnt := cnt.Load()
 		time.Sleep(time.Millisecond * 300)
 		if cnt.Load() != savedCnt {
-			t.Fatal("Sync call didn't stop after traget is deleted")
+			t.Fatal("Sync call didn't stop after target is deleted")
 		}
 
 		syncer.Stop(nil)

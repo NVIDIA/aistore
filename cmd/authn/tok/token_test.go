@@ -58,7 +58,7 @@ var (
 		},
 		MinCacheRefreshInterval: nil,
 	}
-	// Invalid for both disovery and JWKS
+	// Invalid for both discovery and JWKS
 	invalidIssuerURLs = []string{
 		"http://not-https.com/jwks",  // not https
 		"not-absolute",               // not absolute

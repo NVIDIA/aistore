@@ -825,7 +825,7 @@ loop:
 
 func (ct *chunkTask) advance(nextRoff int64) *chunkTask {
 	if ct.sgl != nil {
-		ct.sgl.Reset() // re-use the SGL for the next chunk
+		ct.sgl.Reset() // reuse the SGL for the next chunk
 	}
 	ct.written = 0
 	ct.roff = nextRoff

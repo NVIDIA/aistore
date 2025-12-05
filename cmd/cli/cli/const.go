@@ -888,7 +888,7 @@ var (
 		Usage: "TAR file format selection (one of \"" + dfltTform + "\", \"USTAR\", \"PAX\", or \"GNU\")",
 	}
 
-	// (ETL, dSort, get-batch) specificaton
+	// (ETL, dSort, get-batch) specification
 	// see also: lhotseManifestFlag
 	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
 

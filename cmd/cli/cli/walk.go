@@ -23,7 +23,7 @@ import (
 // (no regex)
 
 type (
-	// Struct to keep info groupped by file extension.
+	// Struct to keep info grouped by file extension.
 	// Properties start with capital for reflexion (templates)
 	counter struct {
 		Cnt  int64

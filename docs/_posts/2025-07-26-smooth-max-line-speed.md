@@ -36,7 +36,7 @@ However, in the real world, data doesn't just teleport. It needs to be packaged,
 This overhead isn’t just one thing; it’s a stack of small but measurable costs:
 
 * L3/L4 protocol headers: IPv4 + TCP add a minimum of 40B (52B with common SACK/TSopt options). Maybe the least expense, especially at Jumbo frames and also because LRO/GRO reduce the number of packet headers the host sees (by coalescing them).
-* TLS handshake, TLS 5-byte headers, and TLS encyption (if HTTPS is used).
+* TLS handshake, TLS 5-byte headers, and TLS encryption (if HTTPS is used).
 * Memory copies: the default TCP path copies payload once into kernel space and once via DMA.
 * Context‑switch overhead (syscalls + IRQs).
 

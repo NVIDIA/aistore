@@ -59,7 +59,7 @@ class TestETLOps(unittest.TestCase):
         # Try to delete the bucket
         self.bucket.delete(missing_ok=True)
 
-        # Try to delete the intialized ETLs
+        # Try to delete the initialized ETLs
         try:
             self.client.etl(self.etl_name).stop()
             self.client.etl(self.etl_name).delete()

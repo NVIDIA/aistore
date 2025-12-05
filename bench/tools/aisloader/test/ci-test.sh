@@ -52,7 +52,7 @@ parse_duration() {
     elif [[ $d =~ ^([0-9]+)s$ ]]; then
         echo ${BASH_REMATCH[1]}
     else
-        echo 60  # default to 60s if unparseable
+        echo 60  # default to 60s if unparsable
     fi
 }
 
