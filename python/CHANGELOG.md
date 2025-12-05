@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.18.0] - 2025-12-05
+
 ### Changed
 
 - Update to Pydantic v2 for all API type parsing.
