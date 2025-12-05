@@ -2,7 +2,9 @@
 
 ## Overview
 
-AIStore v4.1 extends the functionality introduced in v4.0 with a set of changes aimed at improving multi-object retrieval for ML workloads, strengthening authentication, and unifying system behavior under load. Several subsystems were restructured for clarity, consistency, and better operational characteristics. Configuration files and client tooling were updated accordingly.
+AIStore **4.1** delivers upgrades across retrieval, security, and cluster operation. The GetBatch API is significantly expanded for ML training workloads, with client-side streaming, improved resilience and error handling under resource shortages. Authentication is redesigned with OIDC support, structured JWT validation, and cluster-key HMAC signing for HTTP redirects. This release also adds the rechunk job for converting datasets between monolithic and chunked layouts, unifies multipart-upload behavior across all cloud backends, and enhances the blob downloader with load-aware throttling. The Python SDK advances to v1.18 with a redesigned Batch API and revised timeout configuration. Configuration validation is strengthened throughout, including automatic migration from v4.0 auth settings.
+
+This release arrives with over 200 commits since [v4.0](https://github.com/NVIDIA/aistore/releases/tag/v1.4.0) and maintains backward compatibility, supporting rolling upgrades.
 
 ---
 
