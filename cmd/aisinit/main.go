@@ -135,18 +135,37 @@ func main() {
 	localConf.HostNet.HostnameIntraControl = podDNS
 	localConf.HostNet.HostnameIntraData = podDNS
 
+	// publicDNSMode controls how the public hostname is determined for external client access.
+	// This affects TLS certificate validation since clients connect using this hostname.
+	//
+	// Modes:
+	//   "IP" (default) - Use host IP address. Simple but requires IP SANs in TLS certs.
+	//                    With hostNetwork, hostname is cleared and discovered at runtime.
+	//                    For clusters which use auto scaling, consider using Node or Pod
+	//                    modes instead since the host IP will change.
+	//
+	//   "Node" - Use Kubernetes node name (spec.nodeName). Useful when node names are
+	//            resolvable DNS names (e.g., AWS EC2 private DNS like ip-10-0-1-5.ec2.internal).
+	//            but using "Pod" DNS + host networking in environments that support it may be
+	//            preferrable to allow more specificity.
+	//
+	//   "Pod" - Use pod DNS name (pod.service.namespace.svc.cluster.local). With hostNetwork,
+	//           pod DNS resolves to the host IP, enabling TLS with wildcard certs matching
+	//           *.service.namespace.svc.cluster.local. Recommended for hostNetwork + TLS.
+	//
+	// When using the ais-operator, it sets the publicHostName to the node name for Node mode
+	// and the host IP for IP mode via the downward API based on the provided publicNetDNSMode in the
+	// AIStore spec.
 	switch publicDNSMode {
 	case env.PubNetDNSModePod:
-		// Using pod DNS allows for simpler TLS certificates, and is viable when target pods are
-		// deployed with host networking since pod DNS resolves to the host IP
 		localConf.HostNet.Hostname = podDNS
 	case env.PubNetDNSModeNode, env.PubNetDNSModeIP:
-		// For Node and IP modes, use the publicHostName set by the operator via downward API
-		// (spec.nodeName for Node mode, status.hostIP for IP mode)
 		localConf.HostNet.Hostname = publicHostName
 	default:
 		nlog.Warningf("unknown AIS_PUBLIC_DNS_MODE %q, defaulting to '%s' for Hostname", publicDNSMode, publicHostName)
-		// fall back to publicHostName, if it is empty then ais node will discover IP at startup
+		// Fall back to publicHostName; if it is empty then aisnode will discover IP at startup.
+		// We do not error here to preserve backwards compatibility for deployments that are using
+		// ais-init:latest without a newer version of the ais-operator.
 		localConf.HostNet.Hostname = publicHostName
 	}
 
