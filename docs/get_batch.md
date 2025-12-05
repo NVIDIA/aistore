@@ -199,7 +199,7 @@ Each entry in the `in` array can specify:
 
 ## Python Integrations
 
-GetBatch is not limited to the Go API - it is also integrated with Python data loading stacks in two ways:
+GetBatch also offers robust integration with Python data pipelines, with official support in both the AIStore Python SDK and third-party libraries:
 
 ### 1. AIStore Python SDK
 
@@ -285,7 +285,6 @@ loaded_cut_set = ais_batch_loader(cut_set)
 # Pass the loaded cut-set to DataLoaders
 ```
 
-
 **See also:**
 
 A complete, runnable example for batch loading audios from AIStore with Lhotse is available in [here](https://github.com/lhotse-speech/lhotse/blob/master/examples/06-train-ais-batch.ipynb):
@@ -312,7 +311,32 @@ Lhotse CutSet => AISBatchLoader => AIStore Python SDK => GetBatch API => Trainin
 See also:
 - [AIStore in NeMo workflows](https://docs.nvidia.com/nemo-framework/) (data loading section)
 
-### 3. PyTorch Integration
+### 3. NeMo Framework Integration
+
+[NVIDIA NeMo](https://github.com/NVIDIA/NeMo) is an end-to-end platform for building and training state-of-the-art AI models, including Automatic Speech Recognition (ASR), Natural Language Processing (NLP), and Text-to-Speech (TTS).
+
+GetBatch is now integrated into the Lhotse-based [ASR dataloader](https://github.com/NVIDIA-NeMo/NeMo/commit/914c9ce7a54de813e04226dd44277fe159c07a75). Instead of fetching individual audio files from AIStore during training, the dataloader now batches all required samples for an epoch or mini-batch into a single GetBatch request. This reduces network overhead and improves data loading throughput for large-scale ASR training.
+
+**Enabling GetBatch:**
+
+```bash
+export USE_AIS_GET_BATCH=true
+```
+
+A single environment variable activates batch loading for ASR training pipelines using Lhotse+AIStore. No code changes required.
+
+**How it works:**
+1. Dataloader collects all audio file paths needed for the current batch
+2. Issues single GetBatch request to AIStore (replaces N individual GETs)
+3. AIStore returns TAR archive with all samples in order
+4. Dataloader extracts and feeds samples to the training loop
+
+This same pattern can be integrated in other NeMo training pipelines (NLP, TTS, multimodal) where datasets are stored in AIStore, providing similar performance benefits for data-intensive workloads.
+
+**See also:**
+- [NeMo ASR documentation](https://docs.nvidia.com/nemo-framework/user-guide/latest/nemotoolkit/asr/intro.html)
+
+### 4. PyTorch Integration
 
 The [AIStore PyTorch Plugin](https://github.com/NVIDIA/aistore/tree/main/python/aistore/pytorch) provides `AISBatchIterDataset`, an iterable-style dataset that uses GetBatch API for efficient multi-worker data loading with automatic batching and streaming support.
 
