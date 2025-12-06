@@ -950,9 +950,9 @@ func _moveMarkers(avail MPI, from *Mountpath) {
 				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())
 			)
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
-			if err != nil && cos.IsNotExist(err) {
-				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
-				mfs.hc.FSHC(err, mi, "")
+			if err != nil && !cos.IsNotExist(err) {
+				nlog.Errorf("Failed to move marker %q to %q: %v", fromPath, toPath, err)
+				mfs.hc.FSHC(err, mi, fromPath)
 				ok = false
 			}
 		}

@@ -147,7 +147,7 @@ func (lom *LOM) _cf(fqn string) (fh *os.File, err error) {
 		}
 		return fh, err
 	case !cos.IsNotExist(err):
-		T.FSHC(err, lom.Mountpath(), "")
+		T.FSHC(err, lom.Mountpath(), fqn)
 		return nil, err
 	}
 

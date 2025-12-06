@@ -825,7 +825,7 @@ func (j *clnJ) rmEmptyDir(fqn string) {
 	fh, err := os.Open(fqn)
 	if err != nil {
 		xcln.AddErr(fmt.Errorf("check-empty-dir: open %q: %v", fqn, err))
-		core.T.FSHC(err, j.mi, "")
+		core.T.FSHC(err, j.mi, fqn)
 		return
 	}
 	names, ern := fh.Readdirnames(1)
