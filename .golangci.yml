@@ -209,6 +209,10 @@ linters:
       # linters:
       #   - staticcheck
       # text: "ST1005:"
+      - linters:
+          - revive
+        text: "avoid meaningless package names"
+        source: "package api"
 
 formatters:
   enable:
