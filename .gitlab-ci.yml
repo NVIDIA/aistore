@@ -581,6 +581,7 @@ test:short:oci:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "oc://ais-ci"
+  timeout: 2h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual

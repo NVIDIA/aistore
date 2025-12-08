@@ -160,6 +160,24 @@ var (
 // - On success: Compute checksum, persist manifest via lom.CompleteUfest(), update stats
 // - On error/abort: Clean up via manifest.Abort(), update error stats
 // =====================================================================================
+// Abort Flow:
+// -----------
+// Abort() signals via Base.Abort() (sends to ChanAbort) and returns immediately.
+// It does NOT wait for workers - cleanup happens in the main thread:
+//
+// Worker mode (runWorkers):
+//  1. Main thread receives <-ChanAbort(), jumps to cleanup
+//  2. close(workCh) signals workers to exit
+//  3. wg.Wait() blocks until all workers complete their current do() call
+//  4. Returns error -> finalize() -> manifest.Abort() cleans up chunk files
+//
+// Serial mode (runSerial):
+//  1. IsAborted() checked between chunks -> returns error
+//  2. finalize() -> manifest.Abort() cleans up chunk files
+//
+// Note: manifest.Abort() is called only AFTER all I/O has stopped.
+//
+// =====================================================================================
 func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.RenewRes {
 	debug.Assert(oa != nil)
 	var (
@@ -373,11 +391,11 @@ func (r *XactBlobDl) runSerial() error {
 
 	worker := r.newWorker()
 	tsk := &chunkTask{name: r.Name() + "_chunk_task", roff: r.nextRoff}
-	debug.IncCounter(tsk.name)
 	defer tsk.cleanup()
 	if r.args.RespWriter != nil {
 		// in the serial case, we use a single chunkTask and a single SGL for the entire download
 		// this SGL will be used to write the data to the RespWriter, and it will be freed upon completion
+		debug.IncCounter(tsk.name)
 		tsk.sgl = core.T.PageMM().NewSGL(r.chunkSize)
 	}
 
@@ -532,11 +550,9 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 		// Increment blob-download specific GET error count
 		tstats.IncWith(stats.ErrGetBlobCount, r.vlabs)
 
-		// non-abort error: abort the xaction
-		if err != cmn.ErrXactUserAbort {
-			if r.manifest != nil {
-				r.manifest.Abort(lom)
-			}
+		// cleanup the manifest for both user abort and runtime error abort
+		if r.manifest != nil {
+			r.manifest.Abort(lom)
 		}
 	}
 
@@ -544,21 +560,8 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 	r.Finish()
 }
 
-func (r *XactBlobDl) Abort(err error) bool {
-	if !r.Base.Abort(err) { // already aborted?
-		return false
-	}
-	r.wg.Wait()
-	if r.manifest != nil {
-		r.manifest.Abort(r.args.Lom)
-	}
-
-	return true
-}
-
 func (r *XactBlobDl) newWorker() *worker {
-	w := &worker{parent: r, adv: r.adv} // note: advice is copied by value
-	return w
+	return &worker{parent: r, adv: r.adv} // note: advice is copied by value
 }
 
 func (r *XactBlobDl) startWorkers() {
@@ -573,10 +576,10 @@ func (r *XactBlobDl) startWorkers() {
 		tsk := &chunkTask{name: r.Name() + "_chunk_task_" + strconv.Itoa(i), roff: r.nextRoff}
 		if r.args.RespWriter != nil {
 			tsk.sgl = core.T.PageMM().NewSGL(r.chunkSize)
+			debug.IncCounter(tsk.name)
 		}
 		r.workCh <- tsk
 		r.nextRoff += r.chunkSize
-		debug.IncCounter(tsk.name)
 	}
 }
 
@@ -835,8 +838,8 @@ func (ct *chunkTask) advance(nextRoff int64) *chunkTask {
 func (ct *chunkTask) cleanup() {
 	if ct.sgl != nil {
 		ct.sgl.Free()
+		debug.DecCounter(ct.name)
 	}
-	debug.DecCounter(ct.name)
 }
 
 func drainTaskCh(ch chan *chunkTask) {

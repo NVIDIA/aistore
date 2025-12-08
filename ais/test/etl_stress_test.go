@@ -85,6 +85,7 @@ func TestETLTargetDown(t *testing.T) {
 	})
 
 	t.Run("target_force_shutdown", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{Long: true}) // TODO: enable in short mode
 		name, xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 		tlog.Logln("Waiting for ETL to process a few objects...")

@@ -227,14 +227,19 @@ func TestBlobDownloadAbort(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			// Wait for the xaction to finish aborting
+			// NOTE: Must check IsFinished(), not !IsRunning().
+			// IsRunning() returns false as soon as Abort() is called,
+			// but finalize() (which calls manifest.Abort) runs AFTER that.
 			tlog.Logfln("Waiting for blob download to finish aborting")
 			xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
-				tid, _, err := snaps.RunningTarget("")
-				if err != nil {
-					return false, false
+				for _, tsnaps := range snaps {
+					for _, snap := range tsnaps {
+						if !snap.IsFinished() {
+							return false, false
+						}
+					}
 				}
-				finished := tid == "" // not running = finished
-				return finished, false
+				return true, false
 			}
 			err = api.WaitForXactionNode(baseParams, &args, xactFinished)
 			tassert.CheckFatal(t, err)
@@ -248,6 +253,92 @@ func TestBlobDownloadAbort(t *testing.T) {
 			tlog.Logfln("Blob download abort test completed successfully")
 		})
 	}
+}
+
+func TestBlobDownloadAbortByKind(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
+	const (
+		objSize    = 32 * cos.MiB
+		chunkSize  = 8 * cos.MiB
+		numWorkers = 4
+		numObjs    = 15
+	)
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		prefix     = "blob-abort-kind/" + trand.String(5)
+		xids       = make([]string, numObjs)
+	)
+
+	m := ioContext{
+		t:         t,
+		bck:       cliBck,
+		num:       numObjs,
+		fileSize:  objSize,
+		fixedSize: true,
+		prefix:    prefix,
+	}
+
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, Long: true})
+
+	m.init(true /*cleanup*/)
+	initMountpaths(t, proxyURL)
+
+	tlog.Logfln("Provisioning %d objects of %s each", numObjs, cos.ToSizeIEC(objSize, 0))
+	m.remotePuts(true /*evict*/)
+
+	tlog.Logfln("Starting blob download for %d objects", numObjs)
+	blobMsg := &apc.BlobMsg{
+		ChunkSize:  chunkSize,
+		FullSize:   objSize,
+		NumWorkers: numWorkers,
+	}
+	for i, objName := range m.objNames {
+		xid, err := api.BlobDownload(baseParams, m.bck, objName, blobMsg)
+		tassert.CheckFatal(t, err)
+		xids[i] = xid
+	}
+
+	// Immediately abort ALL blob downloads by kind (no xid specified)
+	tlog.Logfln("Aborting all blob downloads by kind")
+	abortArgs := xact.ArgsMsg{Kind: apc.ActBlobDl}
+	err := api.AbortXaction(baseParams, &abortArgs)
+	tassert.CheckFatal(t, err)
+
+	// Wait for all blob download jobs to finish (aborted status)
+	tlog.Logfln("Waiting for all blob downloads to finish")
+	xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
+		for _, tsnaps := range snaps {
+			for _, snap := range tsnaps {
+				if !snap.IsFinished() {
+					return false, false
+				}
+			}
+		}
+		return true, false
+	}
+
+	for _, xid := range xids {
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+		err = api.WaitForXactionNode(baseParams, &args, xactFinished)
+		tassert.CheckFatal(t, err)
+	}
+	tlog.Logfln("All blob downloads aborted or finished")
+
+	// Evict all objects to clean up any that completed successfully before abort
+	tlog.Logfln("Evicting all objects to ensure clean state")
+	for _, objName := range m.objNames {
+		_ = api.EvictObject(baseParams, m.bck, objName)
+	}
+
+	// Validate no chunks on disk for all objects
+	tlog.Logfln("Validating no leftover chunks on disk for all objects")
+	for _, objName := range m.objNames {
+		m.validateChunksOnDisk(m.bck, objName, 0)
+	}
+
+	tlog.Logfln("Blob download abort-by-kind test completed successfully")
 }
 
 func TestPrefetchWithBlobThreshold(t *testing.T) {
