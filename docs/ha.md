@@ -4,6 +4,7 @@
     - [Election](#election)
     - [Non-electable gateways](#non-electable-gateways)
     - [Metasync](#metasync)
+- [Data Plane Availability](#data-plane-availability)
 - [References](#references)
 
 ## Highly Available Control Plane
@@ -62,7 +63,16 @@ AIStore cluster can be *stretched* to collocate its redundant gateways with the 
 
 By design, AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](https://github.com/NVIDIA/aistore/blob/main/ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
 
+## Data Plane Availability
+
+While the control plane handles node membership and consistency of the cluster-level metadata, the data plane has its own resilience mechanisms:
+
+* [Filesystem Health Checker](/docs/fshc.md) - detects and isolates faulty storage
+* [Data Protection](/docs/overview.md#data-protection) - data protection across nodes
+* [Global Rebalancing](/docs/rebalance.md) - automatic data redistribution upon [node lifecycle](/docs/lifecycle_node.md) events
+
 ## References
 
 * [Node lifecycle: maintenance mode, rebalance/rebuild, shutdown, decommission](/docs/lifecycle_node.md)
 * [Blog: Split-brain is Inevitable](https://aistore.nvidia.com/blog/2025/02/16/split-brain-blog)
+* [Filesystem Health Checker](/docs/fshc.md)

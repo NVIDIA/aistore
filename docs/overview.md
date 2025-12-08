@@ -72,6 +72,23 @@ AIS target mountpath is a formatted disk (or RAID volume) **plus** a directory t
 
 > **Note on Kubernetes deployments**: While AIStore natively supports hot-plugging mountpaths at runtime, this capability is limited in Kubernetes environments. Kubernetes (as of v1.33) does not support attaching new Persistent Volumes to running pods. In production Kubernetes deployments, adding new storage typically requires a controlled pod restart (meaning, zero-downtime is not possible without specialized extensions).
 
+
+#### Mountpath Health Checking (FSHC)
+
+AIS targets continuously monitor the health of their mountpaths using a lightweight [Filesystem Health Checker](/docs/fshc.md).
+
+FSHC detects I/O-level failures early, classifies them as **FAULTED** or **DEGRADED**, and
+immediately disables affected (faulted or degraded) mountpaths to preserve data integrity and cluster availability.
+
+FSHC performs:
+
+* root-level filesystem checks (with a single retry for network-attached storage),
+* randomized read/write sampling under each mountpath,
+* two-pass error evaluation with configurable thresholds,
+* immediate disablement of mountpaths that exceed the allowed error limits.
+
+For a detailed description and configuration guidance, see: [Filesystem Health Checker](/docs/fshc.md)
+
 ---
 
 ### Proxy

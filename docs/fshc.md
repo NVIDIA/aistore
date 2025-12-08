@@ -13,10 +13,9 @@ Robust detection and isolation of faulty local storage
 - [5. How FSHC Works](#5-how-fshc-works)
   - [5.1 Failure classification: FAULTED vs DEGRADED](#51-failure-classification-faulted-vs-degraded)
   - [5.2 Per-mountpath state](#52-per-mountpath-state)
-  - [5.3 FSHC test sequence](#53-fshc-test-sequence)
-  - [5.4 Error evaluation](#54-error-evaluation)
-  - [5.5 Disable behavior](#55-disable-behavior)
-  - [5.6 Re-enabling](#56-re-enabling)
+  - [5.3 FSHC sequence](#53-fshc-sequence)
+  - [5.4 Error Thresholds and Mountpath Disabling Logic](#54-error-thresholds-and-mountpath-disabling-logic)
+  - [5.5 Re-enabling](#55-re-enabling)
 - [6. Operational Guidance](#6-operational-guidance)
   - [6.1 Production-grade hardware](#61-production-grade-hardware-nvmessd-datacenter-nodes)
   - [6.2 Development, laptops, workstations](#62-development-laptops-workstations)
@@ -198,7 +197,7 @@ FSHC classifies failures into two categories:
 
 ## 5.2 Per-mountpath state
 
-A `ror` structure tracks:
+An internal `[mpath => ror]` structure tracks:
 
 * `last`: time when last check finished,
 * `running`: non-zero if a test is currently running.
@@ -210,7 +209,13 @@ FSHC ensures:
 
 This prevents cascading failures from snowballing into constant disk hammering.
 
-## 5.3 FSHC test sequence
+## 5.3 FSHC sequence
+
+> FSHC always retries once before declaring a mountpath FAULTED. It performs two passes (see next section) when checking a mountpath for I/O errors. In addition, it applies a single delayed retry to eliminate spurious errors from network-attached storage. This one-shot retry is used for:
+>
+> * root `stat` on the mountpath,
+> * opening the mountpath root,
+> * depth-0 directory operations in the sampler.
 
 ### Step 1: fstat on mountpath root
 
@@ -248,18 +253,16 @@ FSHC:
 
 Write errors often show the earliest signs of underlying corruption.
 
-## 5.4 Error evaluation
+## 5.4 Error Thresholds and Mountpath Disabling Logic
 
 FSHC runs exactly two passes:
 
 * **Pass 1**: `test_files` samples
 * **Pass 2**: increases test count and may raise `maxerrs` slightly
 
-If `readErrors + writeErrors >= error_limit` after both passes → **disable** as **DEGRADED**.
+If `readErrors + writeErrors >= error_limit` after both passes, FSHC disables the mountpath as **DEGRADED**.
 
-If errors exist but remain below the limit → a warning is logged, but the mountpath remains enabled.
-
-## 5.5 Disable behavior
+If errors exist but remain below the limit, FSHC logs a warning but leaves the mountpath enabled.
 
 Upon disable:
 
@@ -273,7 +276,7 @@ The disable reason (FAULTED or DEGRADED) is logged for operator reference.
 
 Disable is **immediate and permanent** until operator intervention.
 
-## 5.6 Re-enabling
+## 5.5 Re-enabling
 
 Auto-recovery is not implemented.
 
