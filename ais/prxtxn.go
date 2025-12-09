@@ -195,7 +195,7 @@ func (c *txnCln) createDstBck(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, waitmsy
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
-func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Header) error {
+func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Header, skipLookup ...bool) error {
 	var (
 		bprops  *cmn.Bprops
 		backend = bck.Backend()
@@ -207,7 +207,8 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 	// validate & assign bprops
 	switch {
 	case remoteHdr != nil: // remote exists
-		remoteProps := defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+		bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
+		remoteProps := bargs.inheritMerge()
 		if bprops == nil {
 			bprops = remoteProps
 		} else {
@@ -221,22 +222,26 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		}
 	case backend != nil: // remote backend exists
 		if bprops == nil {
-			bprops = defaultBckProps(bckPropsArgs{bck: bck})
+			bargs := bckPropsArgs{bck: bck}
+			bprops = bargs.inheritMerge()
 		}
 		bmd := p.owner.bmd.get()
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
-	case bck.IsRemote(): // can't create cloud buckets (NIE/NSY)
-		if bck.IsCloud() {
-			return cmn.NewErrNotImpl("create", bck.Provider+"(cloud) bucket")
-		}
-		if bck.IsHT() {
-			return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
-		}
-		// can do remote ais though
-		if !bck.IsRemoteAIS() {
-			return cmn.NewErrUnsupp("create", bck.Provider+":// bucket")
+	case bck.IsHT():
+		return cmn.NewErrNotImpl("create", "bucket for HTTP provider")
+	case bck.IsCloud():
+		debug.Assert(len(skipLookup) > 0 && skipLookup[0])
+		fallthrough
+	default:
+		// three distinct cases here:
+		// ais:// buckets
+		// ais://@remais/bucket
+		// s3://, gs://, etc. with --skip-lookup
+		if bprops == nil {
+			bargs := bckPropsArgs{bck: bck}
+			bprops = bargs.inheritMerge()
 		}
 	}
 
@@ -248,9 +253,6 @@ func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *c
 		nlp = newBckNLP(bck)
 		bmd = p.owner.bmd.get()
 	)
-	if bprops == nil { // inherit (all) cluster defaults
-		bprops = defaultBckProps(bckPropsArgs{bck: bck})
-	}
 
 	// 1. try add
 	nlp.Lock()
@@ -423,7 +425,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 			}
 			bargs.hdr = remoteBckProps
 		}
-		nprops = defaultBckProps(bargs)
+		nprops = bargs.inheritMerge()
 	default:
 		return "", fmt.Errorf(fmtErrInvaldAction, msg.Action, []string{apc.ActSetBprops, apc.ActResetBprops})
 	}
@@ -1014,7 +1016,8 @@ func bmodCpProps(ctx *bmdModifier, clone *bucketMD) error {
 	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
 		bckTo.Props = bprops.Clone()
 	} else {
-		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
+		bargs := bckPropsArgs{bck: bckTo}
+		bckTo.Props = bargs.inheritMerge()
 	}
 	added := clone.add(bckTo, bckTo.Props)
 	debug.Assert(added)
@@ -1213,9 +1216,9 @@ func (r *_tcbfin) cb(nl nl.Listener) {
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
 }
 
-//////////////////////////
-// ETL Init Transaction //
-//////////////////////////
+//////////
+// ETL Init Transaction
+//////////
 
 // etlInitTxn is an atomic transaction that initializes ETL pods on the nodes and connect them with of all participant targets
 // etlMD and stages won't be updated in this call (caller's responsibility)
@@ -1272,3 +1275,10 @@ func etlTxnBegin(c *txnCln, initMsg etl.InitMsg) (podMap etl.PodMap, err error) 
 	}
 	return podMap, nil
 }
+
+//
+// common (prx|tgt)txn
+//
+
+// returns (uname, nlc) pair to lock/unlock buckets
+func newBckNLP(b *meta.Bck) core.NLP { return core.NewNLP(b.MakeUname("")) }

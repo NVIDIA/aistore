@@ -1510,14 +1510,6 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-	case apc.ActAddRemoteBck:
-		if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
-			return
-		}
-		if err := p.createBucket(msg, bck, nil); err != nil {
-			p.writeErr(w, r, err, crerrStatus(err))
-		}
-		return
 	case apc.ActPrefetchObjects:
 		// TODO: GET vs SYNC?
 		if err := cmn.ValidateRemoteBck(apc.ActPrefetchObjects, bck.Bucket()); err != nil {
@@ -1589,6 +1581,9 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	var (
 		remoteHdr http.Header
 		bucket    = bck.Name
+		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
+		// with alternative access profile and/or endpoint
+		skipLookup bool
 	)
 	if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 		return
@@ -1604,32 +1599,21 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		bck.Provider = apc.AIS
 	}
 
-	if bck.IsRemote() {
-		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
-		// with alternative access profile and/or endpoint
-		// TODO:
-		// change bucket props - and the BMD meta-version - to have Flags int64 for
-		// the bits that'll include "renamed" (instead of the current `Props.Renamed`)
-		// and "added-with-no-head"; use the latter to synchronize Cloud props once
-		// connected
-		if cos.IsParseBool(query.Get(apc.QparamDontHeadRemote)) {
-			if !bck.IsCloud() {
-				p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))
-				return
-			}
-			msg.Action = apc.ActAddRemoteBck // NOTE: substituting action in the message
+	// TODO:
+	// `--skip-lookup` comes with an obligation to either:
+	//   a) synchronize remote bucket properties later, or
+	//   b) remove erroneously added buckets altogether.
+	// Make this flag an advanced-usage escape hatch and support a regular
+	// flow for adding remote buckets with access-related props (e.g., extra.aws.profile, extra.aws.endpoint).
 
-			// NOTE: inherit cluster defaults
-			config := cmn.GCO.Get()
-			bprops := bck.Bucket().DefaultProps(&config.ClusterConfig)
-			bprops.SetProvider(bck.Provider)
-
-			if err := p._createBucketWithProps(msg, bck, bprops); err != nil {
-				p.writeErr(w, r, err, crerrStatus(err))
-			}
+	if skipLookup = cos.IsParseBool(query.Get(apc.QparamDontHeadRemote)); skipLookup {
+		if !bck.IsCloud() {
+			p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))
 			return
 		}
-
+		msg.Action = apc.ActAddRemoteBck // substituting action in the message
+	}
+	if bck.IsRemote() && !skipLookup {
 		// remote: check existence and get (cloud) props
 		rhdr, code, err := p.headRemoteBck(bck.RemoteBck(), nil)
 		if err != nil {
@@ -1643,6 +1627,7 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		remoteHdr = rhdr
 		msg.Action = apc.ActAddRemoteBck // ditto
 	}
+
 	// props-to-update at creation time
 	if msg.Value != nil {
 		propsToUpdate := cmn.BpropsToSet{}
@@ -1651,7 +1636,8 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 			return
 		}
 		// Make and validate new bucket props.
-		bck.Props = defaultBckProps(bckPropsArgs{bck: bck})
+		bargs := bckPropsArgs{bck: bck}
+		bck.Props = bargs.inheritMerge()
 		nprops, err := p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.writeErr(w, r, err)
@@ -1670,17 +1656,19 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 						bck.Cname(""), backend.Cname(""), err)
 					return
 				}
-				args := bctx{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
-				args.createAIS = false
-				if _, err = args.try(); err != nil {
-					return
+				if !skipLookup {
+					args := bctx{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
+					args.createAIS = false
+					if _, err = args.try(); err != nil {
+						return
+					}
 				}
 			}
 		}
 		// Send all props to the target
 		msg.Value = bck.Props
 	}
-	if err := p.createBucket(msg, bck, remoteHdr); err != nil {
+	if err := p.createBucket(msg, bck, remoteHdr, skipLookup); err != nil {
 		p.writeErr(w, r, err, crerrStatus(err))
 	}
 }

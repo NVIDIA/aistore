@@ -330,7 +330,8 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 	if bctx.dontAddRemote {
 		var err error
 		if bck.IsRemoteAIS() {
-			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+			bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
+			bck.Props, err = bargs.makeRemote()
 		} else {
 			// Background (#18995):
 			//
@@ -343,7 +344,8 @@ func (bctx *bctx) _try() (*meta.Bck, int, error) {
 			// The returned bucket props will have its BID == 0 (zero), which also means:
 			// this bucket is not initialized and/or not present in BMD.
 
-			bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
+			bargs := bckPropsArgs{bck: bck, hdr: remoteHdr}
+			bck.Props = bargs.inheritMerge()
 		}
 		return bck, 0, err
 	}

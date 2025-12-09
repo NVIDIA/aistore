@@ -474,17 +474,17 @@ func loadBMDFromMpath(mpath *fs.Mountpath, path string) (bmd *bucketMD) {
 
 func hasEnoughBMDCopies() bool { return fs.CountPersisted(fname.Bmd) >= bmdCopies }
 
-//////////////////////////
-// default bucket props //
-//////////////////////////
+//////////////////
+// bckPropsArgs //
+//////////////////
 
 type bckPropsArgs struct {
 	bck *meta.Bck   // Base bucket for determining default bucket props.
 	hdr http.Header // Header with remote bucket properties.
 }
 
-// Convert HEAD(bucket) response to cmn.Bprops (compare with `defaultBckProps`)
-func remoteBckProps(args bckPropsArgs) (props *cmn.Bprops, err error) {
+// convert HEAD(bucket) response to cmn.Bprops
+func (args *bckPropsArgs) makeRemote() (props *cmn.Bprops, err error) {
 	props = &cmn.Bprops{}
 	err = cmn.IterFields(props, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := textproto.CanonicalMIMEHeaderKey(tag)
@@ -495,16 +495,11 @@ func remoteBckProps(args bckPropsArgs) (props *cmn.Bprops, err error) {
 		// single-value
 		return field.SetValue(args.hdr.Get(headerName), true /*force*/), false
 	}, cmn.IterOpts{OnlyRead: false})
-	return
+	return props, err
 }
 
-// Used to initialize "local" bucket, in particular when there's a remote one
-// (compare with `remoteBckProps` above)
-// See also:
-//   - github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties
-//   - cmn.BpropsToSet
-//   - cmn.Bck.DefaultProps
-func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {
+// inherit, merge remote props if any, and validate
+func (args *bckPropsArgs) inheritMerge() (props *cmn.Bprops) {
 	config := cmn.GCO.Get()
 	props = args.bck.Bucket().DefaultProps(&config.ClusterConfig)
 	props.SetProvider(args.bck.Provider)
@@ -515,18 +510,19 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {
 	case args.bck.Backend() != nil:
 		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck.String(), args.hdr)
 	case args.bck.IsRemote():
-		debug.Assert(args.hdr != nil)
 		props.Versioning.Enabled = false
-		props = mergeRemoteBckProps(props, args.hdr)
+		if args.hdr != nil { // may be nil when `--skip-lookup` ie., apc.QparamDontHeadRemote
+			props = args.merge(props, args.hdr)
+		}
 	default:
 		debug.Assert(false)
 	}
 	err := props.Validate(9999 /*targetCnt*/)
 	debug.AssertNoErr(err)
-	return
+	return props
 }
 
-func mergeRemoteBckProps(props *cmn.Bprops, header http.Header) *cmn.Bprops {
+func (*bckPropsArgs) merge(props *cmn.Bprops, header http.Header) *cmn.Bprops {
 	debug.Assert(len(header) > 0)
 	switch props.Provider {
 	case apc.AWS:
@@ -544,6 +540,3 @@ func mergeRemoteBckProps(props *cmn.Bprops, header http.Header) *cmn.Bprops {
 	}
 	return props
 }
-
-// returns (uname, nlc) pair to lock/unlock buckets
-func newBckNLP(b *meta.Bck) core.NLP { return core.NewNLP(b.MakeUname("")) }

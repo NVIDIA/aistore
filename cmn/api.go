@@ -167,7 +167,7 @@ type (
 // See also:
 //   - github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties
 //   - BpropsToSet (above)
-//   - ais.defaultBckProps()
+//   - bckPropsArgs.inheritMerge()
 func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	lru := c.LRU
 	if bck.IsAIS() {
