@@ -1,28 +1,27 @@
 # GetBatch: Distributed Multi-Object Retrieval
 
-## Overview
+GetBatch is AIStore's high-performance API for retrieving multiple objects and/or archived files in a single request. Behind the scenes, GetBatch assembles the requested data from across the cluster and delivers the result as a continuous serialized stream.
 
-GetBatch is AIStore's high-performance API for retrieving multiple objects and/or archived files in a single request. It assembles the requested data into a TAR (or compressed) archive and delivers it as a continuous stream.
-
-> GetBatch is implemented by the [eXtended Action](/docs/overview.md#xaction) (job). Internally, the job is codenamed x-moss. The respective API endpoint: `/v1/ml/moss`.
-
-Regardless of retrieval source (in-cluster objects, remote objects, or shard extractions), GetBatch always preserves the **exact ordering** of request entries in both streaming and buffered modes.
+Regardless of retrieval source (in-cluster objects, remote objects, or shard extractions), GetBatch always preserves the exact ordering of request entries in both streaming and buffered modes.
 
 Other supported capabilities include:
 
-- Fetch thousands of objects in strict user-specified order
-- Extract specific files from distributed shard archives (TAR/ZIP/TGZ/LZ4)
+- Fetching thousands of objects in strict user-specified order
+- Extracting specific files from distributed shard archives (TAR, TAR.GZ, TAR.LZ4, ZIP)
 - Cross-bucket retrieval in a single request
 - Graceful handling of missing data
 - Streaming or buffered delivery
 
+> GetBatch is implemented by the [eXtended Action](/docs/overview.md#xaction) (job). Internally, the job is codenamed `x-moss`. The respective API endpoint is: `/v1/ml/moss`.
+
 > Note: buffered mode always returns both metadata (that describes the output) and the resulting serialized archive containing all requested data items.
 
-> Note: for TGZ, both .tgz and .tar.gz are accepted (and interchangeable) aliases - both denote the same exact format.
+> Note: for TAR.GZ, both .tgz and .tar.gz are accepted (and interchangeable) aliases - both denote the same exact format.
 
 **A Note on HTTP Semantics**
 
 GetBatch uses **HTTP GET with a JSON request body**, which is:
+
 - Permitted by [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html) - HTTP semantics allow message bodies in GET requests.
 - Necessary for this API, as the list of requested objects can contain thousands of entries that would exceed URL length limits.
 - Semantically correct - the operation is idempotent (pure data retrieval with no server-side state changes).
@@ -30,7 +29,7 @@ GetBatch uses **HTTP GET with a JSON request body**, which is:
 Rest of this document is structured as follows:
 
 **Table of Contents**
-* [Overview](#overview)
+
 * [Supported APIs](#supported-apis)
 * [Terminology](#terminology)
 * [When to Use GetBatch](#when-to-use-getbatch)
