@@ -132,6 +132,11 @@ type (
 		size    int64
 	}
 
+	SectionWriter struct {
+		w      io.WriterAt
+		offset int64
+	}
+
 	// WriterOnly is a helper struct to hide `io.ReaderFrom` interface implementation
 	// As far as http.ResponseWriter (and its underlying tcp conn.), the following are tradeoffs:
 	// [-] sendfile (when sending), or
@@ -178,6 +183,7 @@ var (
 	_ ReadOpenCloser = (*nopOpener)(nil)
 
 	_ io.WriteCloser = (*nopWriteCloser)(nil)
+	_ io.Writer      = (*SectionWriter)(nil)
 )
 
 ///////////////
@@ -397,6 +403,22 @@ func (mw *WriterMulti) Write(b []byte) (int, error) {
 }
 
 func (mw *WriterMulti) Size() int64 { return mw.size }
+
+///////////////////
+// SectionWriter //
+///////////////////
+
+// NewSectionWriter returns a SectionWriter that writes to w starting at offset.
+// This is the write equivalent of `cos.NewSectionReader`
+func NewSectionWriter(w io.WriterAt, offset int64) *SectionWriter {
+	return &SectionWriter{w: w, offset: offset}
+}
+
+func (sw *SectionWriter) Write(p []byte) (n int, err error) {
+	n, err = sw.w.WriteAt(p, sw.offset)
+	sw.offset += int64(n)
+	return
+}
 
 ////////////
 // Buffer //
