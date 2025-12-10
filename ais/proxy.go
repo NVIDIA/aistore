@@ -1723,6 +1723,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if err := _checkObjMv(bck, msg, apireq); err != nil {
 			p.statsT.IncBck(stats.ErrRenameCount, bck.Bucket())
 			p.writeErr(w, r, err)
+			return
 		}
 		p.redirectAction(w, r, bck, apireq.items[1], msg)
 		p.statsT.IncBck(stats.RenameCount, bck.Bucket())
