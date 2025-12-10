@@ -1577,14 +1577,50 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 	return bckTo, ecode, nil
 }
 
+// create-bucket semantics
+//
+// AIS buckets (ais://):
+//   * `ActCreateBck` for non-remote ais:// buckets does not call any
+//     external backend. We just validate props and register the bucket in BMD.
+//
+// Remote buckets (cloud, remote AIS, etc.):
+//   * By default, `ActCreateBck` for remote buckets is a two-step operation:
+//       1) HEAD the remote bucket on a random target to verify existence and
+//          discover backend-specific properties (region, versioning, etc.).
+//       2) If HEAD succeeds, register the bucket in BMD as `ActAddRemoteBck`.
+//   * If the user passes creation-time properties (e.g., `extra.aws.profile`,
+//     `extra.aws.endpoint`), the proxy sends them as "one-shot" bprops to a
+//     target via `ActHeadBckWith` (POST /v1/buckets/<name>). The target:
+//       - uses those props to build the backend client,
+//       - performs HEAD(remote) with that configuration,
+//       - returns headers back to the proxy if successful.
+//   * Any failure during this HEAD(remote) step (bad credentials/profile,
+//     invalid endpoint, etc.) is *fatal* for create: the bucket is not added
+//     to BMD and the error is propagated back to the caller. Only specific
+//     4xx codes (e.g., 400/404) may be remapped to `ErrNotImpl` to indicate
+//     that "create <provider> bucket" is not supported.
+//
+// `--skip-lookup` (QparamDontHeadRemote):
+//   * Advanced escape hatch for cloud buckets only.
+//   * Skips the HEAD(remote) step entirely and registers the remote bucket in
+//     BMD based solely on name + provider + provided props.
+//   * This is only useful when remote access CANNOT be validated at create-time
+//     (e.g., credentials not yet usable), but it comes with an OBLIGATION:
+//       - subsequent operations (ls/get/put) may fail loudly if the config
+//         is wrong or the bucket does not actually exist.
+//
+// Idempotence and existing BMD entries:
+//   * If a remote bucket is already present in BMD and the user issues another
+//     create for the same name (e.g., `ais bucket create s3://foo --props=...`),
+//     the semantics are effectively "ensure bucket exists + update props".
+//   * On the target side, bucket Init() prefers props loaded from BMD. As a result,
+//     the HEAD(remote) used during this second create may run with the existing
+//     stored props rather than the new ones supplied in the request.
+//   * Changing cloud credentials/endpoint for an already-registered bucket
+//     should therefore be done via the dedicated "set bucket properties" API,
+//     not by re-running `propsToUpdate`.
+
 func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *meta.Bck) {
-	var (
-		remoteHdr http.Header
-		bucket    = bck.Name
-		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
-		// with alternative access profile and/or endpoint
-		skipLookup bool
-	)
 	if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 		return
 	}
@@ -1592,6 +1628,8 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		p.writeErr(w, r, err)
 		return
 	}
+
+	bucket := bck.Name
 	if p.forwardCP(w, r, msg, bucket) {
 		return
 	}
@@ -1599,76 +1637,105 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 		bck.Provider = apc.AIS
 	}
 
-	// TODO:
-	// `--skip-lookup` comes with an obligation to either:
-	//   a) synchronize remote bucket properties later, or
-	//   b) remove erroneously added buckets altogether.
-	// Make this flag an advanced-usage escape hatch and support a regular
-	// flow for adding remote buckets with access-related props (e.g., extra.aws.profile, extra.aws.endpoint).
-
-	if skipLookup = cos.IsParseBool(query.Get(apc.QparamDontHeadRemote)); skipLookup {
-		if !bck.IsCloud() {
-			p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))
-			return
-		}
-		msg.Action = apc.ActAddRemoteBck // substituting action in the message
-	}
-	if bck.IsRemote() && !skipLookup {
-		// remote: check existence and get (cloud) props
-		rhdr, code, err := p.headRemoteBck(bck.RemoteBck(), nil)
-		if err != nil {
-			if msg.Action == apc.ActCreateBck && (code == http.StatusNotFound || code == http.StatusBadRequest) {
-				code = http.StatusNotImplemented
-				err = cmn.NewErrNotImpl("create", bck.Provider+" bucket")
-			}
-			p.writeErr(w, r, err, code)
-			return
-		}
-		remoteHdr = rhdr
-		msg.Action = apc.ActAddRemoteBck // ditto
-	}
-
-	// props-to-update at creation time
+	// 1. props-to-update at creation time
+	var propsToUpdate *cmn.BpropsToSet
 	if msg.Value != nil {
-		propsToUpdate := cmn.BpropsToSet{}
-		if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
+		propsToUpdate = &cmn.BpropsToSet{}
+		if err := cos.MorphMarshal(msg.Value, propsToUpdate); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
 		// Make and validate new bucket props.
 		bargs := bckPropsArgs{bck: bck}
 		bck.Props = bargs.inheritMerge()
-		nprops, err := p.makeNewBckProps(bck, &propsToUpdate, true /*creating*/)
+		nprops, err := p.makeNewBckProps(bck, propsToUpdate, true /*creating*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
+
+		// usage: a) creation-time => target; b) extra.aws and the like, to connect
 		bck.Props = nprops
-		if backend := bck.Backend(); backend != nil {
-			if err := backend.Validate(); err != nil {
-				p.writeErrf(w, r, "cannot create %s: invalid backend %s, err: %v", bck.Cname(""), backend.Cname(""), err)
+	}
+
+	// 2. validate `backend_bck` if present
+	if backendBck := bck.Backend(); backendBck != nil {
+		if err := backendBck.Validate(); err != nil {
+			p.writeErrf(w, r, "cannot create %s: invalid backend bucket %s, err: %v", bck.Cname(""), backendBck.Cname(""), err)
+			return
+		}
+		if err := backendBck.InitNoBackend(p.owner.bmd); err != nil {
+			if !cmn.IsErrRemoteBckNotFound(err) {
+				p.writeErrf(w, r, "cannot create %s: failing to initialize backend bucket %s, err: %v",
+					bck.Cname(""), backendBck.Cname(""), err)
 				return
 			}
-			// Initialize backend bucket.
-			if err := backend.InitNoBackend(p.owner.bmd); err != nil {
-				if !cmn.IsErrRemoteBckNotFound(err) {
-					p.writeErrf(w, r, "cannot create %s: failing to initialize backend %s, err: %v",
-						bck.Cname(""), backend.Cname(""), err)
-					return
-				}
-				if !skipLookup {
-					args := bctx{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
-					args.createAIS = false
-					if _, err = args.try(); err != nil {
-						return
-					}
-				}
-			}
 		}
-		// Send all props to the target
-		msg.Value = bck.Props
 	}
-	if err := p.createBucket(msg, bck, remoteHdr, skipLookup); err != nil {
+
+	// 3. plain ais://bucket-name with no nothing
+	if !bck.IsRemote() {
+		if err := p.createBucket(msg, bck, nil); err != nil {
+			p.writeErr(w, r, err, crerrStatus(err))
+		}
+		return
+	}
+
+	// note: mutate original action message
+	origAction := msg.Action
+	msg.Action = apc.ActAddRemoteBck
+	msg.Value = bck.Props
+
+	// 4. `--skip-lookup` is for cloud buckets (advanced usage only)
+	skipLookup := cos.IsParseBool(query.Get(apc.QparamDontHeadRemote))
+	if skipLookup {
+		if !bck.IsCloud() {
+			p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))
+			return
+		}
+		if err := p.createBucket(msg, bck, nil /*remoteHdr*/, true /*skipLookup*/); err != nil {
+			p.writeErr(w, r, err, crerrStatus(err))
+		}
+		return
+	}
+
+	// 5. continue with HEAD(remote-bucket)
+	var (
+		rembck    = bck.RemoteBck()
+		remoteHdr http.Header
+		ecode     int
+		err       error
+	)
+	if propsToUpdate != nil && propsToUpdate.Extra != nil {
+		remoteHdr, ecode, err = p.headRemoteBckWithProps(rembck, bck.Props)
+	} else {
+		remoteHdr, ecode, err = p.headRemoteBck(rembck, nil /*query*/)
+	}
+	if err != nil {
+		// user-friendly:
+		if origAction == apc.ActCreateBck && (ecode == http.StatusNotFound || ecode == http.StatusBadRequest) {
+			ecode = http.StatusNotImplemented
+			err = cmn.NewErrNotImpl("create", bck.Provider+" bucket")
+		}
+		p.writeErr(w, r, err, ecode)
+		return
+	}
+
+	// 6. lazy-add backend_bck if present (and not skip-lookup)
+	if backend := bck.Backend(); backend != nil {
+		args := bctx{p: p, w: w, r: r, bck: backend, msg: msg, query: query}
+		args.createAIS = false
+		if _, err = args.try(); err != nil {
+			return
+		}
+	}
+
+	// 7. finally
+	if bck.Props == nil {
+		bargs := bckPropsArgs{bck: bck}
+		bck.Props = bargs.inheritMerge() // all cluster-defaults
+	}
+	if err := p.createBucket(msg, bck, remoteHdr); err != nil {
 		p.writeErr(w, r, err, crerrStatus(err))
 	}
 }
@@ -2843,10 +2910,30 @@ func (p *proxy) _getSI(osi *meta.Snode) (si *meta.Snode, err error) {
 }
 
 func (p *proxy) headRemoteBck(bck *cmn.Bck, query url.Values) (http.Header, int, error) {
+	path := apc.URLPathBuckets.Join(bck.Name)
+	q := bck.AddToQuery(query)
+	hreq := cmn.HreqArgs{Method: http.MethodHead, Path: path, Query: q}
+	return p._bhead(bck, &hreq)
+}
+
+func (p *proxy) headRemoteBckWithProps(bck *cmn.Bck, oneshotBprops *cmn.Bprops) (http.Header, int, error) {
 	var (
-		path = apc.URLPathBuckets.Join(bck.Name)
-		smap = p.owner.smap.get()
+		q    = bck.AddToQuery(nil)
+		msg  = p.newAmsgActVal(apc.ActHeadBckWith, oneshotBprops)
+		body = cos.MustMarshal(msg)
+
+		hreq = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Path:   apc.URLPathBuckets.Join(bck.Name),
+			Query:  q,
+			Body:   body,
+		}
 	)
+	return p._bhead(bck, &hreq)
+}
+
+func (p *proxy) _bhead(bck *cmn.Bck, hreq *cmn.HreqArgs) (http.Header, int, error) {
+	smap := p.owner.smap.get()
 	tsi, err := smap.GetRandTarget()
 	if err != nil {
 		return nil, 0, err
@@ -2863,12 +2950,11 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, query url.Values) (http.Header, int,
 	// call
 	var (
 		hdr   http.Header
-		q     = bck.AddToQuery(query)
 		cargs = allocCargs()
 	)
 	{
 		cargs.si = tsi
-		cargs.req = cmn.HreqArgs{Method: http.MethodHead, Path: path, Query: q}
+		cargs.req = *hreq
 		cargs.timeout = apc.DefaultTimeout
 	}
 

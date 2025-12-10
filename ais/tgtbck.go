@@ -438,6 +438,18 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
+
+	// create-bucket => HEAD(remote) flow
+	if msg.Action == apc.ActHeadBckWith {
+		oneshotBprops := cmn.Bprops{}
+		if err := cos.MorphMarshal(msg.Value, &oneshotBprops); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		t._bckhead(w, r, apireq, &oneshotBprops)
+		return
+	}
+
 	// extra check
 	t.ensureLatestBMD(msg, r)
 	if err := apireq.bck.Init(t.owner.bmd); err != nil {
@@ -518,64 +530,77 @@ func (t *target) runPrefetch(xactID string, bck *meta.Bck, prfMsg *apc.PrefetchM
 }
 
 // HEAD /v1/buckets/bucket-name
+// see related:
+// - t.httpbckpost() + apc.ActHeadBckWith
+// - p.headRemoteBck()
 func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	var (
-		bucketProps cos.StrKVs
-		err         error
-		ctx         = context.Background()
-		hdr         = w.Header()
-		code        int
-	)
-	if err = t.parseReq(w, r, apireq); err != nil {
+	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	inBMD := true
-	if err = apireq.bck.Init(t.owner.bmd); err != nil {
-		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
-			t.writeErr(w, r, err)
+	t._bckhead(w, r, apireq, nil)
+}
+
+func (t *target) _bckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest, oneshotBprops *cmn.Bprops) {
+	var (
+		bck   = apireq.bck
+		inBMD = true
+	)
+	errV := bck.Init(t.owner.bmd)
+	if errV != nil {
+		if !cmn.IsErrRemoteBckNotFound(errV) { // is ais
+			t.writeErr(w, r, errV)
 			return
 		}
 		inBMD = false
+
+		// when called via ActHeadBckWith, apireq.bck.Props are one-shot props (not coming from BMD)
+		bck.Props = oneshotBprops
+	} else if oneshotBprops != nil {
+		nlog.Warningf("%s: bucket %s is already in BMD; ignoring creation-time props (use bucket props API or CLI to update)", t, bck)
 	}
 	if cmn.Rom.V(5, cos.ModAIS) {
 		pid := apireq.query.Get(apc.QparamPID)
-		nlog.Infoln(r.Method, apireq.bck, "<=", pid)
+		nlog.Infoln(r.Method, bck, "<=", pid)
 	}
 
-	debug.Assert(!apireq.bck.IsAIS())
+	debug.Assert(!bck.IsAIS())
 
-	if apireq.bck.IsHT() {
+	ctx := context.Background()
+	if bck.IsHT() {
 		originalURL := apireq.query.Get(apc.QparamOrigURL)
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
-			err = cmn.NewErrRemBckNotFound(apireq.bck.Bucket())
+			err := cmn.NewErrRemBckNotFound(bck.Bucket())
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
 		}
 	}
+
 	// + cloud
-	bp := t.Backend(apireq.bck)
-	bucketProps, code, err = bp.HeadBucket(ctx, apireq.bck)
+	bp := t.Backend(bck)
+	bpropsKV, code, err := bp.HeadBucket(ctx, bck)
 	if err != nil {
 		if !inBMD {
 			if code == http.StatusNotFound {
 				t.writeErr(w, r, err, code, Silent)
 			} else {
-				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
+				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", bck, err, code)
 				t._erris(w, r, err, code, cos.IsParseBool(apireq.query.Get(apc.QparamSilent)))
 			}
 			return
 		}
-		nlog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck.String(), err, code)
-		bucketProps = make(cos.StrKVs)
-		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
-		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
+		nlog.Warningf("%s: bucket %s, err: %v(%d)", t, bck.String(), err, code)
+		bpropsKV = make(cos.StrKVs)
+		bpropsKV[apc.HdrBackendProvider] = bck.Provider
+		bpropsKV[apc.HdrRemoteOffline] = strconv.FormatBool(bck.IsRemote())
 	}
-	for k, v := range bucketProps {
-		if k == apc.HdrBucketVerEnabled && apireq.bck.Props != nil {
-			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
+
+	hdr := w.Header()
+	for k, v := range bpropsKV {
+		if k == apc.HdrBucketVerEnabled && bck.Props != nil {
+			if curr := strconv.FormatBool(bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
-				nlog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck.String(), v, curr)
+				nlog.Errorf("%s: %s versioning got out of sync: %s != %s", t, bck.String(), v, curr)
 			}
 		}
 		hdr.Set(k, v)

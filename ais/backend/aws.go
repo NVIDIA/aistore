@@ -94,23 +94,23 @@ func NewAWS(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 
 const gotBucketLocation = "got_bucket_location"
 
-func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, _ error) {
+func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	var (
 		cloudBck = bck.RemoteBck()
 		sessConf = sessConf{bck: cloudBck}
 	)
 	svc, err := sessConf.s3client("")
 	if err != nil {
-		return nil, 0, err
+		return nil, http.StatusInternalServerError, err
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infoln("[head_bucket]", cloudBck.Name)
 	}
 	if sessConf.region == "" {
 		var region string
-		if region, err = getBucketLocation(svc, cloudBck.Name); err != nil {
-			ecode, err = awsErrorToAISError(err, cloudBck, "")
-			return nil, ecode, err
+		if region, err = _location(svc, cloudBck.Name); err != nil {
+			ecode, errV := awsErrorToAISError(err, cloudBck, "")
+			return nil, ecode, errV
 		}
 		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln("get-bucket-location", cloudBck.Name, "region", region)
@@ -120,20 +120,44 @@ func (*s3bp) HeadBucket(_ context.Context, bck *meta.Bck) (bckProps cos.StrKVs, 
 	}
 
 	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
-	bckProps = make(cos.StrKVs, 4)
+	bckProps := make(cos.StrKVs, 4)
 	bckProps[apc.HdrBackendProvider] = apc.AWS
 	bckProps[apc.HdrS3Region] = sessConf.region
 	bckProps[apc.HdrS3Endpoint] = ""
 	if bck.Props != nil {
 		bckProps[apc.HdrS3Endpoint] = bck.Props.Extra.AWS.Endpoint
 	}
-	versioned, errV := getBucketVersioning(svc, cloudBck)
+	versioned, errV := _versioning(svc, cloudBck)
 	if errV != nil {
-		ecode, err = awsErrorToAISError(errV, cloudBck, "")
+		ecode, err := awsErrorToAISError(errV, cloudBck, "")
 		return nil, ecode, err
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
 	return bckProps, 0, nil
+}
+
+func _location(svc *s3.Client, bckName string) (region string, err error) {
+	resp, err := svc.GetBucketLocation(context.Background(), &s3.GetBucketLocationInput{
+		Bucket: aws.String(bckName),
+	})
+	if err != nil {
+		return
+	}
+	region = string(resp.LocationConstraint)
+	if region == "" {
+		region = env.AwsDefaultRegion() // env "AWS_REGION" or "us-east-1" - in that order
+	}
+	return
+}
+
+func _versioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {
+	input := &s3.GetBucketVersioningInput{Bucket: aws.String(bck.Name)}
+	result, err := svc.GetBucketVersioning(context.Background(), input)
+	if err != nil {
+		return false, err
+	}
+	enabled = result.Status == types.BucketVersioningStatusEnabled
+	return
 }
 
 //
@@ -816,7 +840,9 @@ func (sessConf *sessConf) s3client(tag string) (*s3.Client, error) {
 	// slow path
 	cfg, err := loadConfig(endpoint, profile)
 	if err != nil {
-		return nil, err
+		// normalize s3 error
+		_, errV := awsErrorToAISError(err, sessConf.bck, "")
+		return nil, errV
 	}
 
 	svc := s3.NewFromConfig(cfg, sessConf.options)
@@ -930,30 +956,6 @@ func getS3ConfFiles() (confFiles, credFiles []string) {
 		if strings.Contains(entry.Name(), s3CredIndicator) {
 			credFiles = append(credFiles, filepath.Join(s3Dir, entry.Name()))
 		}
-	}
-	return
-}
-
-func getBucketVersioning(svc *s3.Client, bck *cmn.Bck) (enabled bool, errV error) {
-	input := &s3.GetBucketVersioningInput{Bucket: aws.String(bck.Name)}
-	result, err := svc.GetBucketVersioning(context.Background(), input)
-	if err != nil {
-		return false, err
-	}
-	enabled = result.Status == types.BucketVersioningStatusEnabled
-	return
-}
-
-func getBucketLocation(svc *s3.Client, bckName string) (region string, err error) {
-	resp, err := svc.GetBucketLocation(context.Background(), &s3.GetBucketLocationInput{
-		Bucket: aws.String(bckName),
-	})
-	if err != nil {
-		return
-	}
-	region = string(resp.LocationConstraint)
-	if region == "" {
-		region = env.AwsDefaultRegion() // env "AWS_REGION" or "us-east-1" - in that order
 	}
 	return
 }

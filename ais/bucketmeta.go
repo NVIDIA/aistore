@@ -508,7 +508,9 @@ func (args *bckPropsArgs) inheritMerge() (props *cmn.Bprops) {
 	case args.bck.IsAIS():
 		debug.Assert(args.hdr == nil)
 	case args.bck.Backend() != nil:
-		debug.Assertf(args.hdr == nil, "%s, hdr=%+v", args.bck.String(), args.hdr)
+		// TODO:
+		// - for buckets with a backend, `hdr` (HEAD(remote) headers) is currently ignored
+		// - revisit when/if there's a need to merge selected backend_bck properties
 	case args.bck.IsRemote():
 		props.Versioning.Enabled = false
 		if args.hdr != nil { // may be nil when `--skip-lookup` ie., apc.QparamDontHeadRemote
