@@ -1,7 +1,10 @@
+//go:build linux
+
 // Package fs: internal unit test for fs package
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
+
 package fs
 
 import (

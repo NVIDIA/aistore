@@ -7,6 +7,7 @@ package fs
 import (
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 )
 
@@ -17,14 +18,15 @@ func (mi *Mountpath) resolveFS() error {
 	}
 
 	charsToString := func(x []int8) string {
-		s := ""
+		var b strings.Builder
+		b.Grow(len(x))
 		for _, c := range x {
 			if c == 0 {
 				break
 			}
-			s += string(uint8(c))
+			b.WriteByte(byte(c))
 		}
-		return s
+		return b.String()
 	}
 
 	mi.Fs = charsToString(fsStats.Fstypename[:])

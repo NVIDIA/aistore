@@ -99,4 +99,4 @@ func (mem *MemStat) host() error {
 	return nil
 }
 
-func (*MemStat) container() error { return errors.New("Darwin: cannot get container memory stats") }
+func (*MemStat) container() error { return errors.New("darwin: cannot get container memory stats") }
