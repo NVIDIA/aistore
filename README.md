@@ -10,23 +10,23 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 
 ## Features
 
-* ✅ **Multi-Cloud Access:** Seamlessly access and manage content across multiple [cloud backends](/docs/overview.md#at-a-glance) (including AWS S3, GCS, Azure, and OCI), with the additional benefit of fast-tier performance and configurable data redundancy.
+* ✅ **Multi-Cloud Access:** Seamlessly access and manage content across multiple [cloud backends](/docs/overview.md#at-a-glance) (including AWS S3, GCS, Azure, and OCI), with fast-tier performance, configurable redundancy, and namespace-aware bucket identity (same-name buckets can coexist across accounts, endpoints, and providers).
 * ✅ **Deploy Anywhere:** AIS runs on any Linux machine, virtual or physical. Deployment options range from a single [Docker container](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md) and [Google Colab](https://aistore.nvidia.com/blog/2024/09/18/google-colab-aistore) to petascale [Kubernetes clusters](https://github.com/NVIDIA/ais-k8s). There are [no built-in limitations](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#no-limitations-principle) on deployment size or functionality.
-* ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points.
+* ✅ **High Availability:** Redundant control and data planes. Self-healing, end-to-end protection, n-way mirroring, and erasure coding. Arbitrary number of lightweight access points (AIS proxies).
 * ✅ **HTTP-based API:** A feature-rich, native API (with user-friendly SDKs for Go and Python), and compliant [Amazon S3 API](/docs/s3compat.md) for running unmodified S3 clients.
 * ✅ **Monitoring:** Comprehensive observability with integrated Prometheus metrics, Grafana dashboards, detailed logs with configurable verbosity, and CLI-based performance tracking for complete cluster visibility and troubleshooting. See [AIStore Observability](/docs/monitoring-overview.md) for details.
 * ✅ **Chunked Objects:** High-performance chunked object representation, with independently retrievable chunks, metadata v2, and checksum-protected manifests. Supports rechunking, parallel reads, and seamless integration with [Get-Batch](/docs/get_batch.md), [blob-downloader](/docs/blob_downloader.md), and multipart uploads to supported cloud backends.
-* ✅ **JWT Authentication and Authorization:** [Validates request JWTs](/docs/auth_validation.md) to provide cluster- and bucket-level access control via static keys or dynamic OIDC issuer JWKS lookup.
-* ✅ **Secure Redirects:** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key (stored in memory only).
-* ✅ **Load-Aware Throttling:** Dynamic request throttling based on a five-dimensional load vector (CPU, memory, disk, FDs, goroutines) to protect AIS clusters under stress.
-* ✅ **Unified Namespace:** Attach AIS clusters together to provide fast, unified access to the entirety of hosted datasets, allowing users to reference shared buckets with cluster-specific identifiers.
+* ✅ **JWT Authentication and Authorization:** [Validates request JWTs](/docs/auth_validation.md) to provide cluster- and bucket-level access control using static keys or dynamic OIDC issuer JWKS lookup.
+* ✅ **Secure Redirects:** Configurable cryptographic signing of redirect URLs using HMAC-SHA256 with a versioned cluster key (distributed via metasync, stored in memory only).
+* ✅ **Load-Aware Throttling:** Dynamic request throttling based on a multi-dimensional load vector (CPU, memory, disk, file descriptors, goroutines) to protect AIS clusters under stress.
+* ✅ **Unified Namespace:** Attach AIS clusters together to provide unified access to datasets across independent clusters, allowing users to reference shared buckets with cluster-specific identifiers.
 * ✅ **Turn-key Cache:** In addition to robust data protection features, AIS offers a per-bucket configurable LRU-based cache with eviction thresholds and storage capacity watermarks.
 * ✅ **ETL Offload:** Execute I/O intensive data transformations [close to the data](/docs/etl.md), either inline (on-the-fly as part of each read request) or offline (batch processing, with the destination bucket populated with transformed results).
-* ✅ **Get-Batch:** Retrieve multiple objects and/or [archived files](/docs/archive.md) with a single call. Designed for ML/AI pipelines, [Get-Batch](/docs/get_batch.md) fetches an entire training batch in one operation, assembling a TAR (or other supported [serialization format](/docs/archive.md)) that contains all requested items in the exact user-specified order.
+* ✅ **Get-Batch:** Retrieve multiple objects and/or [archived files](/docs/archive.md) with a single call. Designed for ML/AI pipelines, [Get-Batch](/docs/get_batch.md) fetches an entire training batch in one operation, assembling a TAR (or other supported [serialization formats](/docs/archive.md)) that contains all requested items in the exact user-specified order.
 * ✅ **Data Consistency:** Guaranteed [consistency](/docs/overview.md#read-after-write-consistency) across all gateways, with [write-through](/docs/overview.md#write-through) semantics in presence of [remote backends](/docs/overview.md#backend-provider).
-* ✅ **Serialization & Sharding:** Native support for TAR, TGZ, TAR.LZ4, and ZIP [archives](/docs/archive.md) for efficient storage and processing of small-file datasets. Features include seamless integration with existing unmodified workflows across all APIs and subsystems.
+* ✅ **Serialization & Sharding:** Native, first-class support for TAR, TGZ, TAR.LZ4, and ZIP [archives](/docs/archive.md) for efficient storage and processing of small-file datasets. Features include seamless integration with existing unmodified workflows across all APIs and subsystems.
 * ✅ **Kubernetes:** For production, AIS runs natively on Kubernetes. The dedicated [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository includes the AIS K8s Operator, Ansible playbooks, Helm charts, and deployment guidance.
-* ✅ **Batch Jobs:** More than 30 cluster-wide [batch operations](/docs/batch.md) that you can start, monitor, and control otherwise - the list currently includes:
+* ✅ **Batch Jobs:** More than 30 cluster-wide [batch operations](/docs/batch.md) that you can start, monitor, and control otherwise. The list currently includes:
 
 ```console
 $ ais show job --help
@@ -142,7 +142,7 @@ Let others know your project is powered by high-performance AI storage:
 
 * [Overview and Design](/docs/overview.md)
 * [Getting Started](/docs/getting_started.md)
-* [Buckets and Bucket Management](/docs/bucket.md)
+* [AIS Buckets: Design and Operations](/docs/bucket.md)
 * [Observability](/docs/monitoring-overview.md)
 * [Technical Blog](https://aistore.nvidia.com/blog)
 * [S3 Compatibility](/docs/s3compat.md)

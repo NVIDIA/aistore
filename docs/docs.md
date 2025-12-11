@@ -12,6 +12,7 @@ redirect_from:
 - [Main README](/README.md)
 - [In-depth Overview](/docs/overview.md)
 - [Getting Started](/docs/getting_started.md)
+- [AIS Buckets: Design and Operations](/docs/bucket.md)
 - [CLI: overview](/docs/cli.md)
 - [CLI: reference guide](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md#cli-reference)
 - [Technical Blog](https://aistore.nvidia.com/blog)

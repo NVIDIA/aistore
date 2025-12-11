@@ -37,7 +37,7 @@ The full taxonomy of the supported backends is shown below (and note that AIS su
 
 Further:
 
-* For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and more usage examples, see [in-depth overview](/docs/bucket.md)
+* For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and usage examples, see [AIS Buckets: Design and Operations](/docs/bucket.md)
 * For API reference, see [APIs](/docs/overview.md#aistore-api).
 * For AIS command-line management, see [CLI](cli.md).
 

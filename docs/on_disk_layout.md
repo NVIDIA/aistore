@@ -1,14 +1,4 @@
-AIStore 3.0 introduced new on-disk layout that addressed several motivations including (but not limited to) the motivation to support multiple remote backends.
-
-One of those remote backends can be AIStore itself, with immediate availability of AIS-to-AIS caching and a gamut of related data recovery capabilities.
-
-At a high level:
-
-- in addition to checksum, all metadata (including object metadata) is versioned to provide for **backward compatibility** when (and *if*) there are any future changes;
-- cluster-wide control structures -  in particular, cluster map and bucket metadata - are now uniformly GUID-protected and LZ4-compressed;
-- bucket metadata is replicated, with multiple protected and versioned copies stored on data drives of **all** storage targets in a cluster.
-
-In addition, AIS supports configurable namespaces whereby users can choose to group selected buckets for the purposes of physical isolation from all other buckets and datasets, and/or applying common (for this group) storage management policies: erasure coding, n-way mirroring, etc. But more about it later.
+AIStore's on-disk layout supports multiple remote backends, configurable namespaces, and AIS-to-AIS caching with full data recovery capabilities.
 
 Here's a simplified drawing depicting two [providers](/docs/providers.md), AIS and AWS, and two buckets, `ABC` and `XYZ`, respectively. In the picture, `mpath` is a single [mountpath](/docs/configuration.md) - a single disk **or** a volume formatted with a local filesystem of choice, **and** a local directory (`mpath/`):
 
@@ -21,6 +11,46 @@ Needless to say, the same exact structure reproduces itself across all AIS stora
 With namespaces, the picture becomes only slightly more complicated. The following shows two AIS buckets, `DEF` and `GHJ`, under their respective user-defined namespaces called `#namespace-local` and `#namespace-remote`.  Unlike a local namespace of *this* cluster, the remote one would have to be prefixed with UUID - to uniquely identify another AIStore cluster hosting `GHJ` (in this example) and from where this bucket's content will be replicated or cached, on-demand or via Prefetch API and [similar](/docs/overview.md#existing-datasets).
 
 ![on-disk hierarchy with namespaces](/docs/images/PBCT-with-namespaces.png)
+
+### Example
+
+Say, we have an `gs://llm-data` bucket, and an object "images/dog.jpeg" in it. Given two different bucket's namespaces, the respective FQNs inside AIStore may look like:
+
+```
+   /vdi/@gcp/#prod/llm-data/%ob/images/dog.jpeg
+
+and
+
+   /vdh/@gcp/#dev/llm-data/%ob/images/dog.jpeg
+```
+
+where:
+
+| Component | Example 1 | Example 2 | Meaning |
+|-----------|-----------|-----------|---------|
+| Mountpath | `/vdi` | `/vdh` | Physical (mounted) device |
+| Provider | `gcp` | `gcp` | Backend provider |
+| Namespace | `#prod` | `#dev` | Account, profile, or user-defined alias |
+| Bucket | `llm-data` | `llm-data` | Bucket name |
+| Content type | `%ob` | `%ob` | Content kind: objects, EC slices, chunks, manifests |
+| Object | `images/dog.jpeg` | `images/dog.jpeg` | Object name (preserves virtual directory structure) |
+
+### Content types
+
+Within each bucket directory, AIS organizes content by type:
+
+| Marker | Constant | Content |
+|--------|----------|---------|
+| `%ob` | `fs.ObjCT` | Object data |
+| `%wk` | `fs.WorkCT` | Work/temporary files |
+| `%ec` | `fs.ECSliceCT` | Erasure-coded slices |
+| `%mt` | `fs.ECMetaCT` | Erasure-coded metadata |
+| `%ch` | `fs.ChunkCT` | Chunked object data |
+| `%ut` | `fs.ChunkMetaCT` | Chunked object metadata |
+| `%ds` | `fs.DsortFileCT` | Distributed sort files |
+| `%dw` | `fs.DsortWorkCT` | Distributed sort work |
+
+> See the [source](https://github.com/NVIDIA/aistore/blob/main/fs/content.go) for the most updated enumeration.
 
 ### References
 

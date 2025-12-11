@@ -1,854 +1,958 @@
-A **bucket** is a named container for objects: files with associated metadata. Buckets are the primary unit of data organization and policy application in AIStore (AIS).
+# AIS Buckets: Design and Operations
 
-> Object metadata includes: checksum, version, references to copies (replicas), size, last access time, source bucket (assuming [remote backend](/docs/overview.md#backend-provider), custom user-defined attributes, and more.
+A **bucket** is a named container for objects (files with associated metadata). Buckets are the primary unit of data organization and policy application in AIStore.
 
-AIS uses a **flat hierarchy**: `bucket-name/object-name`. However, it supports [virtual directories](/docs/howto_virt_dirs.md) through prefix-based naming and offers recursive and non-recursive operations on them.
+> Object metadata includes: checksum, version, size, access time, custom attributes, and references to copies/slices.
 
-AIS buckets are **configurable** at creation time or runtime and support per-bucket overrides of [global defaults](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L93). By default, created buckets **inherit** global configuration. Each bucket is, effectively, a point of applying (per-bucket) management policies that include:
+AIS uses a **flat hierarchy**: `bucket-name/object-name` key space. It supports [virtual directories](/docs/howto_virt_dirs.md) through prefix-based naming with recursive and non-recursive operations.
 
-- Data protection (checksumming, erasure coding, mirroring)
-- Versioning and validation
-- Access controls
-- Rate limiting (frontend/backend)
-- Caching and eviction (via LRU)
+This document is organized in two parts:
 
-AIS supports multiple [storage backends](/docs/overview.md#backend-provider):
+- [**Part I: Design**](#part-i-design) — covers the bucket abstraction, identity model, namespaces, remote clusters, and backend buckets
+- [**Part II: How-To**](#part-ii-how-to) — practical operations: working with same-name buckets, prefetch/evict, access control, provider configuration, and [CLI](/docs/cli.md) reference
 
-| Type              | Description                          | Example Name                  |
-| ----------------- | ------------------------------------ | ----------------------------- |
-| AIS Bucket        | Native bucket managed by AIS         | `ais://mybucket`              |
-| Remote AIS Bucket | Bucket in a remote AIS cluster       | `ais://@cluster/mybucket`     |
-| Cloud Bucket      | Remote bucket (e.g., S3, GCS, Azure) | `s3://dataset`                |
-| Backend Bucket    | AIS bucket linked to a remote bucket | `ais://cachebucket → s3://x`  |
+---
 
-> See [Unified Namespace](/docs/overview.md#unified-namespace) for details on remote AIS clusters.
+# **Part I: Design**
 
-One major distinction between an AIS bucket (e.g., `ais://mybucket`) and a remote bucket (e.g., `ais://@cluster/mybucket`, `s3://dataset`, etc.) boils down to the fact that - [for a variety of real-life reasons](/docs/out_of_band.md) - **in-cluster** content of the remote bucket may be different from its remote content.
+AIS does not treat a bucket as a passive container. A bucket is a *logical namespace* that AIS materializes lazily (for remote backends), configures dynamically, and manages cluster-wide.
 
-> Note that the terms **in-cluster** and **cached** are used interchangeably throughout the entire documentation and CLI.
+**Table of Contents**
+1. [Motivation](#motivation)
+   - [Implicit creation](#implicit-creation)
+   - [Explicit creation](#explicit-creation)
+   - [Stable, global identity](#stable-global-identity)
+2. [The Bucket](#the-bucket)
+   - [Provider](#provider)
+   - [Namespace](#namespace)
+   - [Properties (`Bprops`)](#properties-bprops)
+   - [Feature Flags](#feature-flags)
+3. [Bucket Lifecycle](#bucket-lifecycle)
+   - [Implicit creation (lazy discovery)](#implicit-creation-lazy-discovery)
+   - [Explicit creation](#explicit-creation-1)
+   - [Deletion and eviction](#deletion-and-eviction)
+4. [Namespaces](#namespaces)
+   - [Syntax](#syntax)
+   - [In BMD](#in-bmd)
+5. [Remote AIS Clusters](#remote-ais-clusters)
+   - [Attaching clusters](#attaching-clusters)
+   - [Accessing remote buckets](#accessing-remote-buckets)
+   - [Namespace encoding](#namespace-encoding)
+6. [Backend Buckets](#backend-buckets)
+   - [Creating backend relationships](#creating-backend-relationships)
+   - [Use cases](#use-cases)
+   - [Disconnecting](#disconnecting)
 
-Further, remote buckets and `ais://` buckets support the same API with the following distinction:
+## Motivation
 
-1. Remote buckets can be *prefetched* and *evicted* from AIS, entirely or selectively.
-2. `ais://` buckets can be created, renamed, and deleted via AIS's native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
-3. For remote buckets, AIS supports **on-the-fly** creation. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
+The idea is to provide a unified storage abstraction. Instead of maintaining different APIs for in-cluster storage, Cloud providers, other remote backends - AIS exposes everything through a single, consistent bucket abstraction.
 
+The design goals were (and remain):
 
-Finally, AIS supports multiple storage **backends**, including its own:
+* **Operational Simplicity**: Eliminate "registration overhead." If a bucket exists in the backend, it should be immediately usable in AIS.
+* **Provider Agnostic**: The API remains identical whether the data resides on local NVMe drives, a remote AIS cluster, or a public cloud provider.
+* **Dynamic Configuration**: Buckets are not passive containers; they are logical namespaces where data protection (EC, Mirroring) and caching policies (LRU) are applied dynamically.
 
-![Supported Backends](images/supported-backends.png)
+Users interact with buckets uniformly, regardless of where they live:
+* Local disks (AIS provider)
+* AWS, GCP, Azure, OCI
+* S3-compatible systems (SwiftStack, Cloudian, MinIO, Oracle OCI, etc.)
+* Other AIS clusters
 
-Respectively, the supported cloud storages include:
+The provider and namespace differentiate the backend; the API stays the same.
 
-* [Amazon S3 buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html)
-* [Google Cloud (GCP) buckets](https://cloud.google.com/storage/docs/key-terms#buckets)
-* [Microsoft Azure Blob containers](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction)
-* [Oracle Cloud Infrastructure (OCI) buckets](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingbuckets.htm)
+| Type | Description | Example |
+|------|-------------|---------|
+| AIS Bucket | Native bucket managed by _this_ cluster (the one addressed by the AIS endpoint that you have) | `ais://mybucket` |
+| Remote AIS Bucket | Bucket in a remote AIS cluster | `ais://@remais/mybucket` |
+| Cloud Bucket | Remote bucket (S3, GCS, Azure, OCI) | `s3://dataset` |
+| Backend Bucket | AIS bucket linked to a remote bucket | `ais://cache => s3://origin` |
 
-> For multiple supported ways to populate an AIS cluster with data from remote buckets, see [existing datasets](/docs/overview.md#existing-datasets).
+### Implicit vs Explicit creation
 
-## Bucket Properties
+Another core design goal was to eliminate boilerplate.
 
-Properties of any given bucket can be viewed and/or modified using CLI, for instance: `ais bucket props show BUCKET --json`,
+Remote buckets normally require no registration. If a bucket exists in the remote backend (Cloud, Remote AIS, etc.) and is accessible, AIS makes it immediately usable.
+Buckets are added lazily, on first reference, without a separate creation step.
 
-The list will contain several sections that can be also viewed individually - e.g. erasure coding: `ais bucket props BUCKET ec`
+Explicit creation is supported for cases where additional control is required - credentials, endpoints, namespaces, or properties that must be set before first access.
 
-The table below contains a few - not all - of those sections and their respective properties.
+Further details - in section [Bucket Lifecycle](#bucket-lifecycle) below.
 
-| Category | Property | Description |
-|----------|----------|-------------|
-| **Backend** | `provider` | "ais", "aws" or "s3", "azure" or "az", "gcp" or "gs", "oci" |
-| | `backend_bck` | Reference to a remote bucket (if any) |
-| **Authentication and Access control** | `access` | [Authentication and Access control](/docs/authn.md) |
-| **Feature flags** | `features` | [Feature flags](/docs/feature_flags.md) |
-| **Checksumming** | `checksum.type` | Checksum algorithm (xxhash2, md5, etc.) |
-| | `checksum.validate_cold_get` | Validate checksums on cold GETs |
-| | `checksum.validate_warm_get` | Validate checksums on warm GETs |
-| | `checksum.validate_obj_move` | Validate checksums during object movement |
-| | `checksum.enable_read_range` | Enable checksum validation for range reads |
-| **Mirroring** | `mirror.enabled` | Enable object replication |
-| | `mirror.copies` | Number of replicas to maintain |
-| | `mirror.burst_buffer` | Size of the replication buffer |
-| **Erasure Coding** | `ec.enabled` | Enable erasure coding |
-| | `ec.data_slices` | Number of data slices |
-| | `ec.parity_slices` | Number of parity slices |
-| | `ec.objsize_limit` | Minimum object size for EC (smaller objects use mirroring) |
-| | `ec.compression` | When to compress EC slices ("never", "always", etc.) |
-| | `ec.disk_only` | Store EC data only on disk (not in memory) |
-| **LRU** | `lru.enabled` | Enable LRU eviction |
-| | `lru.dont_evict_time` | Minimum time before eviction |
-| | `lru.capacity_upd_time` | Frequency of capacity updates |
-| **Versioning** | `versioning.enabled` | Enable object versioning |
-| | `versioning.validate_warm_get` | Validate object versions on warm GETs |
-| | `versioning.synchronize` | Synchronize object versions with backend |
-| **Rate Limiting** | `rate_limit.backend.enabled` | Enable rate limits for backend requests |
-| | `rate_limit.backend.max_tokens` | Maximum operations per interval |
-| | `rate_limit.frontend.enabled` | Enable rate limits for client requests |
-| **Write Policy** | `write_policy.data` | Data write policy ("immediate", "never", etc.) |
-| | `write_policy.md` | Metadata write policy |
-| **Provider-Specific** | `extra.aws.cloud_region` | AWS region |
-| | `extra.http` | HTTP-specific settings |
+### Stable, global identity
 
-### Bucket Properties (JSON)
+Once added to BMD, a bucket's identity becomes cluster-wide and immutable:
 
-The table below presents selected bucket properties with a focus on their raw JSON structure. It complements the higher-level summary above and is especially useful when configuring buckets via API or editing JSON directly. Some entries may partially duplicate earlier content.
+> **Identity = Provider + Namespace + Name**
 
-| Bucket Property | JSON | Description | Fields |
-| --- | --- | --- | --- |
-| Provider | `provider` | "ais", "aws", "azure", "gcp", or "ht" | `"provider": "ais"/"aws"/"azure"/"gcp"/"ht"` |
-| Cksum | `checksum` | Please refer to [Supported Checksums and Brief Theory of Operations](checksum.md) | |
-| LRU | `lru` | Configuration for [LRU](storage_svcs.md#lru). `space.lowwm` and `space.highwm` is the used capacity low-watermark and high-watermark (% of total local storage capacity) respectively. `space.out_of_space` if exceeded, the target starts failing new PUTs and keeps failing them until its local used-cap gets back below `space.highwm`. `dont_evict_time` denotes the period of time during which eviction of an object is forbidden [atime, atime + `dont_evict_time`]. `capacity_upd_time` denotes the frequency at which AIStore updates local capacity utilization. `enabled` LRU will only run when set to true. | `"lru": {"dont_evict_time": "120m", "capacity_upd_time": "10m", "enabled": bool }`. Note: `space.*` are cluster level properties. |
-| Mirror | `mirror` | Configuration for [Mirroring](storage_svcs.md#n-way-mirror). `copies` represents the number of local copies. `burst_buffer` represents channel buffer size. `enabled` will only generate local copies when set to true. | `"mirror": { "copies": int64, "burst_buffer": int64, "enabled": bool }` |
-| EC | `ec` | Configuration for [erasure coding](storage_svcs.md#erasure-coding). `objsize_limit` is the limit in which objects below this size are replicated instead of EC'ed. `data_slices` represents the number of data slices. `parity_slices` represents the number of parity slices/replicas. `enabled` represents if EC is enabled. | `"ec": { "objsize_limit": int64, "data_slices": int, "parity_slices": int, "enabled": bool }` |
-| Versioning | `versioning` | Configuration for object versioning support where `enabled` represents if object versioning is enabled for a bucket. For remote bucket versioning must be enabled in the corresponding backend (e.g. Amazon S3). `validate_warm_get`: determines if the object's version is checked | `"versioning": { "enabled": true, "validate_warm_get": false }`|
-| AccessAttrs | `access` | Bucket access [attributes](#bucket-access-attributes). Default value is 0 - full access | `"access": "0" ` |
-| BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
-| Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
+AIS never guesses or rewrites identity. `s3://#ns1/bucket` and `s3://#ns2/bucket` are distinct buckets.
 
-### System Properties
+---
 
-The following properties are system-managed and cannot be directly modified:
+## The Bucket
 
-- `bid`: Unique bucket ID
-- `created`: Bucket creation timestamp (in nanoseconds since Unix epoch)
-- `Renamed`: Original name if bucket was renamed
-
-Additionally, AIStore supports **vendor-specific configuration** on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
-
-* named AWS profiles (with alternative credentials and/or region)
-* s3 endpoints
-
-(**) Terminology-wise, when we say "s3 bucket" or "google cloud bucket" we in fact reference a bucket in an AIS cluster that is either:
-
-* (A) denoted with the respective `s3:` or `gs:` protocol schema, or
-* (B) is a differently named AIS (that is, `ais://`) bucket that has its `backend_bck` property referencing the s3 (or google cloud) bucket in question.
-
-> For examples and **usage**, grep docs for `backend_bck` or see [AWS profiles and alternative s3 endpoints](/docs/cli/aws_profile_endpoint.md).
-
-All the [supported storage services](storage_svcs.md) equally apply to all storage backends with only a few exceptions. The following table summarizes them.
-
-| Kind | Description | Conventional Storage Services |
-| --- | --- | --- |
-| AIS buckets | buckets that are **not** 3rd party backend-based. AIS buckets store user objects and support user-specified bucket properties (e.g., 3 copies). AIS (`ais://`) buckets can be created through the . Similar to remote buckets, ais buckets are distributed and balanced, content-wise, across the entire AIS cluster. | [Checksumming](storage_svcs.md#checksumming), [LRU (advanced usage)](storage_svcs.md#lru-for-local-buckets), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing), [Rate Limiting](/docs/rate_limit.md) |
-| remote buckets | When AIS is deployed as a fast tier, remote buckets can be viewed and accessed through HTTP-based APIs (S3-compatible, native [Go](https://github.com/NVIDIA/aistore/tree/main/api), or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) or [CLI](/docs/cli.md), just like `ais://` buckets. In this case, AIS creates **in-cluster** instances of those buckets. | [Checksumming](storage_svcs.md#checksumming), [LRU](storage_svcs.md#lru), [Erasure Coding](storage_svcs.md#erasure-coding), [Local Mirroring and Load Balancing](storage_svcs.md#local-mirroring-and-load-balancing), [Rate Limiting](/docs/rate_limit.md) |
-
-Remote buckets and AIS (`ais://`) buckets support the same API with the following distinction:
-
-* Remote buckets can be *prefetched* and *evicted* from AIS, entirely or selectively.
-* `ais://` buckets can be created, renamed, and deleted via native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
-* For remote buckets, AIS supports **on-the-fly creation**. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
-
------------
-
-Rest of this document is structured as follows:
-
-- [Default Bucket Properties](#default-bucket-properties)
-  - [Examples: specifying non-default bucket properties at creation time](#examples-specifying-non-default-bucket-properties-at-creation-time)
-- [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
-- [List Buckets](#list-buckets)
-- [AIS Bucket](#ais-bucket)
-  - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
-  - [CLI: specifying and listing remote buckets](#cli-specifying-and-listing-remote-buckets)
-  - [CLI: working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
-- [Remote Bucket](#remote-bucket)
-  - [Public Cloud Buckets](#public-cloud-buckets)
-  - [Remote AIS cluster](#remote-ais-cluster)
-  - [Prefetch/Evict Objects](#prefetchevict-objects)
-    - [Example prefetching objects](#example-prefetching-objects)
-  - [Evict Remote Bucket](#evict-remote-bucket)
-- [Backend Bucket](#backend-bucket)
-  - [AIS bucket as a reference](#ais-bucket-as-a-reference)
-- [Bucket Access Attributes](#bucket-access-attributes)
-- [AWS-specific configuration](#aws-specific-configuration)
-- [List Objects](#list-objects)
-  - [Options](#options)
-  - [Results](#results)
-
-## Default Bucket Properties
-
-By default, created buckets **inherit** their properties from the cluster-wide global [configuration](configuration.md).
-Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration")
-is protected (versioned, checksummed) and replicated across the entire cluster.
-
-**Important**:
-
-* Bucket properties can be changed at any time via Go `api.SetBucketProps`, or the respective [Python API](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk), or CLI.
-* In addition, `api.CreateBucket` allows to specify (non-default) properties at bucket creation time.
-* Inherited defaults include (but are not limited to) checksum, LRU, versioning, n-way mirroring, and erasure-coding configurations.
-* By default, LRU is disabled for AIS (`ais://`) buckets.
-
-Bucket creation operation allows to override the **inherited defaults**, which include:
-
-| Configuration section | References |
-| --- | --- |
-| Backend | [Backend Provider](/docs/overview.md#backend-provider) |
-| Checksum | [Supported Checksums and Brief Theory of Operations](checksum.md) |
-| LRU | [Storage Services: LRU](storage_svcs.md#lru) |
-| N-way mirror | [Storage Services: n-way mirror](storage_svcs.md#n-way-mirror) |
-| Versioning | --- |
-| Access | [Bucket Access Attributes](#bucket-access-attributes) |
-| Erasure Coding | [Storage Services: erasure coding](storage_svcs.md#erasure-coding) |
-| Metadata Persistence | --- |
-
-There are several possible (distinct) reasons to specify bucket props at creation time - when you need to:
-
-* set bucket properties before first access
-* attach multiple same-name cloud buckets under different namespaces (e.g., 's3://#ns1/bucket', 's3://#ns2/bucket')
-* register a bucket that is not (yet) accessible with default credentials (with '--skip-lookup')
-
-Examples follow below:
-
-### Examples: specifying non-default bucket properties at creation time
-
-```console
-$ ais create ais://abc --props="mirror.enabled=true mirror.copies=4"
-
-# or, same using JSON:
-$ ais create ais://abc --props='{"mirror": {"enabled": true, "copies": 4}}'
+```
+          ┌────────────── Bucket Identity ─────────────┐
+          │                                            │
+          │   ( Provider ,  Namespace ,  Name )        │
+          │                                            │
+          └────────────────────────────────────────────┘
+                           │
+                           ▼
+                 ┌────────────────────┐
+                 │     Properties     │
+                 │      (Bprops)      │
+                 └────────────────────┘
 ```
 
-```console
-# add S3 bucket using a non-default cloud profile:
+**Example: S3 bucket with namespace**
 
-$ ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'
+```
+        ┌───────────────────────────────────────┐
+        │ Identity:                             │
+        │    • Provider:    aws                 │
+        │    • Namespace:   #prod-account       │
+        │    • Name:        logs                │
+        │                                       │
+        │ Bprops:                               │
+        │    • versioning.enabled = true        │
+        │    • extra.aws.profile = prod         │
+        │    • mirror.copies = 2                │
+        └───────────────────────────────────────┘
 ```
 
-```console
-# attach S3-compatible bucket via namespace '#myaccount':
+**Example: AIS bucket with backend**
 
-$ ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'
+```
+        ┌───────────────────────────────────────┐
+        │ Identity:                             │
+        │    • Provider:    ais                 │
+        │    • Namespace:   (global)            │
+        │    • Name:        cache               │
+        │                                       │
+        │ Bprops:                               │
+        │    • backend_bck = s3://source-logs   │
+        │    • lru.enabled = true               │
+        └───────────────────────────────────────┘
 ```
 
-```console
-## advanced: register bucket without verifying its existence/accessibility (use with care):
+### Provider
 
-$ ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'
+Indicates the storage backend:
+
+| Provider | Backend |
+|----------|---------|
+| `ais` | Native AIS bucket |
+| `aws` or `s3` | Amazon S3 or S3-compatible |
+| `gcp` or `gs` | Google Cloud Storage |
+| `azure` | Azure Blob Storage |
+| `oci` | Oracle Cloud Infrastructure |
+
+Remote AIS clusters use the `ais` provider with a namespace referencing the cluster alias or UUID:
+
+```
+ais://@remais/bucket
 ```
 
-## Inherited Bucket Properties and LRU
+### Namespace
 
-* [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `space.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
-* An important knob is `lru.enabled` that defines whether a given bucket can be a subject of LRU eviction in the first place.
-* By default, all LRU settings are [inherited](#default-bucket-properties) by a newly created bucket from [default (global, cluster-wide) configuration](configuration.md#cluster-and-node-configuration).
-* However, those inherited defaults can be changed - [overridden](#default-bucket-properties) - both at bucket creation time, and/or at any later time.
+Namespaces disambiguate buckets that share the same name.
 
-Useful CLI commands include:
+Originally, all cloud buckets had an implicit *global* namespace. That model breaks when:
 
-```console
-# CLI to conveniently _toggle_ LRU eviction on and off on a per-bucket basis:
-$ ais bucket lru ...
+* Different AWS accounts contain same-name buckets
+* S3-compatible endpoints host same-name buckets
+* SwiftStack/Cloudian accounts scope buckets by user
 
-# Reset bucket properties to cluster-wide defaults:
-$ ais bucket props reset ...
+Namespaces fix this:
 
-# Evict any given bucket based on a user-defined _template_.
-# The command is one of the many supported _multi-object_ operations that run asynchronously
-# and handle arbitrary (list, range, prefix)-defined templates.
-$ ais bucket evict ...
+```
+s3://#account1/images
+s3://#account2/images
 ```
 
-See also:
+These resolve to:
 
-* [CLI: Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
-* [CLI: Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
-* [CLI documentation and examples](/docs/cli/bucket.md)
-
-## List Buckets
-
-To list all buckets, both _present_ in the cluster and remote, simply run:
-
-* `ais ls --all`
-
-Other useful variations of the command include:
-
-* `ais ls s3`            - list only those s3 buckets that are _present_ in the cluster
-* `ais ls gs`            - GCP buckets
-* `ais ls ais`           - list _all_ AIS buckets
-* `ais ls ais://@ --all` - list _all_ remote AIS buckets (i.e., buckets in all remote AIS clusters currently attached)
-
-And more:
-
-* `ais ls s3: --all --regex abc`  - list _all_ s3 buckets that match a given regex ("abc", in the example) 
-* `ais ls gs: --summary`          - report usage statistics: numbers of objects and total sizes
-
-### See also
-
-* `ais ls --help`
-* [CLI: `ais ls`](/docs/cli/bucket.md)
-
-## AIS Bucket
-
-AIS (`ais://`) buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
-
-AIS (`ais://`) buckets can be created using native HTTP-based ([Go](https://github.com/NVIDIA/aistore/tree/main/api) or [Python](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)) API, or [CLI](/docs/cli.md).
-
-New ais buckets must be given a unique name that does not duplicate any existing ais bucket.
-
-If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
-For details, see [S3 compatibility](/docs/s3compat.md).
-
-## CLI: create, rename and, destroy ais bucket
-
-To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
-
-```console
-$ ais create ais://yt8m
-$ ais bucket mv ais://yt8m ais://yt8m_extended
-$ ais bucket rm ais://yt8m_extended
+```go
+Bck{Provider: "aws", Ns: Ns{Name: "account1"}, Name: "images"}
+Bck{Provider: "aws", Ns: Ns{Name: "account2"}, Name: "images"}
 ```
 
-Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
+They are independent in every way - separate BMD entries, credentials, and [on-disk paths](#appendix-a-on-disk-layout).
 
-## CLI: specifying and listing remote buckets
+> **Note**: The `Ns` struct has two fields: UUID (for remote AIS clusters) and Name (for logical namespaces). For cloud buckets, namespace identifier (e.g., #prod in s3://#prod/bucket) enables multiple same-name buckets with different credentials or endpoints.
 
-To list absolutely _all_ buckets that your AIS cluster has access to, run `ais ls`.
+For remote AIS clusters, the namespace _additionally_ carries the cluster's UUID:
 
-To lists all remote (and only remote) buckets, use: `ais ls @`. For example:
-
-```console
-$ ais ls @
-
-AIS Buckets (1)
-  ais://@U-0MEX8oYt/abc
-GCP Buckets (7)
-  gcp://lpr-foo
-  gcp://lpr-bar
-  ... (another 5 buckets omitted)
+```go
+ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "<cluster-uuid>"}, Name: "bucket"}
 ```
 
-This example assumes that there's a remote AIS cluster identified by its UUID `U-0MEX8oYt` and previously [attached](#cli-working-with-remote-ais-cluster) to the "local" one.
+> **Note**: The bucket namespace you choose - whether it represents an AWS profile, a GCS account, or simply a human-readable alias - becomes part of the bucket's physical [on-disk path](#appendix-a-on-disk-layout). What starts as a logical identifier materializes into on-disk naming structure.
 
-Notice the naming notiation reference remote AIS buckets: prefix `@` in the full bucket name indicates remote cluster's UUIDs.
+### Properties (`Bprops`)
 
-> Complete bucket naming specification includes bucket name, backend provider and namespace (which in turn includes UUID and optional sub-name, etc.). The spec can be found in this [source](/cmn/bucket.go).
+Bucket properties - stored in BMD, inherited from cluster config, overridable per-bucket - control data protection (checksums, EC, mirroring), chunked representation, versioning, LRU eviction, rate limiting, access permissions, provider-specific settings, and more.
 
-And here are CLI examples of listing buckets by a given provider:
+The properties:
+* are **inherited** from cluster-wide configuration at bucket creation time;
+* can be overridden at creation time and/or at any time via `ais bucket props set` or the corresponding Go or Python API;
+* are applied cluster-wide via metasync;
+* include data layout, checksumming, EC/mirroring, LRU, rate limiting, backend linkage, access control, and more.
 
-### List Google buckets:
+At the top level:
+
+| JSON key       | Type              | What it controls                                                            |
+| -------------- | ----------------- | --------------------------------------------------------------------------- |
+| `provider`     | `string`          | Backend provider (`ais`, `aws`, `gcp`, `azure`, `oci`, `hdfs`, `ht`, …).    |
+| `backend_bck`  | `Bck`             | Optional "backend bucket" AIS proxies to (see [Backend Buckets](#backend-buckets)). |
+| `write_policy` | `WritePolicyConf` | When/how metadata is persisted (`immediate`, `delayed`, `never`).           |
+| `checksum`     | `CksumConf`       | Checksum algorithm and validation policies for cold/warm GET.               |
+| `versioning`   | `VersionConf`     | Versioning enablement and synchronization with the backend.                 |
+| `mirror`       | `MirrorConf`      | N-way mirroring (on/off, number of copies).                                 |
+| `ec`           | `ECConf`          | Erasure coding (data/parity slices, size thresholds).                       |
+| `chunks`       | `ChunksConf`      | Chunked-object layout and multipart-upload behavior.                        |
+| `lru`          | `LRUConf`         | LRU caching policy: watermarks, enable/disable.                             |
+| `rate_limit`   | `RateLimitConf`   | Frontend and backend rate limiting (bursty/adaptive shaping).               |
+| `extra`        | `ExtraProps`      | Provider-specific extras (e.g., `extra.aws.profile`, `extra.aws.endpoint`). |
+| `access`       | `AccessAttrs`     | Bucket access mask (GET, PUT, DELETE, etc.).                                |
+| `features`     | `feat.Flags`      | [Feature flags](#feature-flags) to flip assorted defaults (e.g., S3 path-style). |
+| `bid`          | `uint64`          | Unique bucket ID (assigned by AIS, read-only).                              |
+| `created`      | `int64`           | Bucket creation time (Unix timestamp, read-only).                           |
+| `renamed`      | `string`          | **Deprecated**: non-empty only for buckets that have been renamed.          |
+
 ```console
-$ ais ls gs://
-# or, same:
-$ ais ls gs:
+# Validate remote version and, possibly, update in-cluster ("cached") copy;
+# delete in-cluster object if its remote counterpart does not exist
+ais create gs://abc --props="versioning.validate_warm_get=false versioning.synchronize=true"
 
-GCP Buckets (7)
-  gcp://lpr-foo
-  gcp://lpr-bar
-  ...
+# Enable mirroring at creation time
+ais create ais://abc --props="mirror.enabled=true mirror.copies=3"
+
+# Or using JSON:
+ais create ais://abc --props='{"mirror": {"enabled": true, "copies": 3}}'
+
+# Enable mirroring and tweak checksum configuration
+ais create ais://abc \
+  --props='{
+    "mirror":   {"enabled": true, "copies": 3},
+    "checksum": {"type": "xxhash", "validate_warm_get": true}
+  }'
+
+# Configure a cloud bucket with provider-specific extras and rate limiting
+ais create s3://logs \
+  --props='{
+    "extra":      {"aws": {"profile": "prod", "endpoint": "https://s3.example.com"}},
+    "rate_limit": {"backend": {"enabled": true, "max_bps": "800MB"}}
+  }'
 ```
 
-### List AIS buckets:
+### Feature Flags
+
+[Feature flags](/docs/feature_flags.md) are a 64-bit bitmask controlling assorted runtime behaviors. Most flags are cluster-wide, but a subset can be configured per-bucket.
+
+#### Bucket-level flags
+
+| Flag | Tags | Description |
+|------|------|-------------|
+| `Skip-Loading-VersionChecksum-MD` | `perf,integrity-` | Skip loading existing object's metadata (version, checksum) |
+| `Fsync-PUT` | `integrity+,overhead` | Sync object payload to stable storage on PUT |
+| `S3-Presigned-Request` | `s3,security,compat` | Pass-through presigned S3 requests for backend authentication |
+| `S3-Use-Path-Style` | `s3,compat` | Use path-style S3 addressing (e.g., `s3.amazonaws.com/BUCKET/KEY`) |
+| `Resume-Interrupted-MPU` | `mpu,ops` | Resume interrupted multipart uploads |
+| ... | ... | ... |
+
+> For the full list, see this separate [Feature Flags](/docs/feature_flags.md) document.
+
+#### Tag meanings
+
+- `integrity+` — enhances data safety
+- `integrity-` — trades safety for performance
+- `perf` — performance optimization
+- `overhead` — may impact performance
+- `s3,compat` — S3 compatibility
+
+#### Setting bucket features
+
 ```console
-$ ais ls ais://
-# or, same:
-$ ais ls ais:
+# View available bucket features
+ais bucket props set ais://mybucket features <TAB-TAB>
+
+# Enable a feature
+ais bucket props set ais://mybucket features S3-Presigned-Request
+
+# Enable multiple features
+ais bucket props set ais://mybucket features Fsync-PUT S3-Use-Path-Style
+
+# Reset to defaults (none)
+ais bucket props set ais://mybucket features none
 ```
 
-### List remote AIS buckets:
-```console
-$ ais ls ais://@
+> Some flags are mutually exclusive. For example, `Disable-Cold-GET` and `Streaming-Cold-GET` cannot both be set — the system will reject the configuration. For complete details on all feature flags (cluster-wide and bucket-level), see [Feature Flags](/docs/feature_flags.md).
+
+## Bucket Lifecycle
+
+The distinction between implicit bucket discovery and explicit creation is best summarized by the AIS [CLI](/docs/cli.md) itself.
+When you run `ais create --help`, it outlines the specific scenarios where 'on-the-fly' discovery isn't enough:
+
+
 ```
-
-## CLI: working with remote AIS cluster
-
-AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md#remote-ais-cluster).
-
-The following example creates an attachment between two clusters, lists all remote buckets, and then list objects in one of those remote buckets (see comments inline):
-
-```console
-$ # Attach remote AIS cluster and assign it an alias `teamZ` (for convenience and for future reference):
-$ ais cluster attach teamZ=http://cluster.ais.org:51080
-Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
-$
-$ # The cluster at http://cluster.ais.org:51080 is now persistently attached:
-$ ais show remote-cluster
-UUID      URL                            Alias     Primary      Smap   Targets  Online
-MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
-$
-$ # List all buckets in all remote clusters
-$ # Notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
-$ # `ais://@` translates as "AIS backend provider, any remote cluster"
-$
-$ ais ls ais://@
-AIS Buckets (4)
-	  ais://@MCBgkFqp/imagenet
-	  ais://@MCBgkFqp/coco
-	  ais://@MCBgkFqp/imagenet-augmented
-	  ais://@MCBgkFqp/imagenet-inflated
-$
-$ # List all buckets in the remote cluster with UUID = MCBgkFqp
-$ # Notice the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
-$
-$ ais ls ais://@MCBgkFqp
-AIS Buckets (4)
-	  ais://@MCBgkFqp/imagenet
-	  ais://@MCBgkFqp/coco
-	  ais://@MCBgkFqp/imagenet-augmented
-	  ais://@MCBgkFqp/imagenet-inflated
-$
-$ # List all buckets with name matching the regex pattern "tes*"
-$ ais ls --regex "tes*"
-AWS Buckets (3)
-  aws://test1
-  aws://test2
-  aws://test2
-$
-$ # We can conveniently keep using our previously selected alias for the remote cluster -
-$ # The following lists selected remote bucket using the cluster's alias:
-$ ais ls ais://@teamZ/imagenet-augmented
-NAME              SIZE
-train-001.tgz     153.52KiB
-train-002.tgz     136.44KiB
-...
-$
-$ # The same, but this time using the cluster's UUID:
-$ ais ls ais://@MCBgkFqp/imagenet-augmented
-NAME              SIZE
-train-001.tgz     153.52KiB
-train-002.tgz     136.44KiB
-...
-```
-
-# Remote Bucket
-
-Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure/OCI) when AIS is deployed as [fast tier](overview.md#fast-tier).
-Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure/OCI).
-
-> By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
-
-## Public Cloud Buckets
-
-Public Google Storage supports limited access to its data.
-If AIS cluster is deployed with Google Cloud enabled (Google Storage is selected as 3rd party Backend provider when [deploying an AIS cluster](/docs/getting_started.md#local-playground)), it allows a few operations without providing credentials:
-HEAD a bucket, list bucket's content, GET an object, and HEAD an object.
-The example shows accessing a private GCP bucket and a public GCP one without user authorization.
-
-```console
-$ # Listing objects of a private bucket
-$ ais ls gs://ais-ic
-Bucket "gcp://ais-ic" does not exist
-$
-$ # Listing a public bucket
-$ ais ls gs://pub-images --limit 3
-NAME                         SIZE
-images-shard.ipynb           101.94KiB
-images-train-000000.tar      964.77MiB
-images-train-000001.tar      964.74MiB
-```
-
-Even if an AIS cluster is deployed without Cloud support, it is still possible to access public GCP and AWS buckets.
-Run downloader to copy data from a public Cloud bucket to an AIS bucket and then use the AIS bucket.
-Example shows how to download data from public Google storage:
-
-```console
-$ ais create ais://images
-"ais://images" bucket created
-$ ais start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
-Z8WkHxwIrr
-Run `ais show job download Z8WkHxwIrr` to monitor the progress of downloading.
-$ ais wait download Z8WkHxwIrr # or, same: ais wait Z8WkHxwIrr
-$ ais ls ais://images
-NAME                         SIZE
-images-train-000000.tar      964.77MiB
-images-train-000001.tar      964.74MiB
-```
-
-> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
-
-## Remote AIS cluster
-
-AIS cluster can be *attached* to another one which provides immediate capability for one cluster to "see" and transparently access the other's buckets and objects.
-
-The functionality is termed [global namespace](providers.md#remote-ais-cluster) and is further described in the [backend providers](providers.md) readme.
-
-To support global namespace, bucket names include `@`-prefixed cluster UUID. For remote AIS clusters, remote UUID and remote aliases can be used interchangeably.
-
-For example, `ais://@remais/abc` would translate as AIS backend provider, where remote cluster would have `remais` alias.
-
-Example working with remote AIS cluster (as well as easy-to-use scripts) can be found at:
-
-* [readme for developers](development.md)
-* [working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
-
-## Prefetch/Evict Objects
-
-Objects within remote buckets are automatically fetched into storage targets when accessed through AIS, and _may be_ evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
-
-Objects are prefetched or evicted using [List/Range Operations](batch.md#listrange-operations).
-
-For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 remote bucket `abc`, run:
-
-```console
-$ ais start prefetch aws://abc --list o1,o2,o3
-```
-
-To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the remote bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
-
-```console
-$ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
-```
-
-### See also
-
-* [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
-* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
-
-## Example prefetching objects
-
-This example demonstrates how to prefetch objects from a remote bucket, and how to monitor the progress of the operation.
-
-### Checking cached objects
-
-First, let's check which objects are currently stored in-cluster (if any):
-
-```console
-$ ais ls s3://cloud-bucket --cached
-NAME     SIZE
-1000052  1.00MiB
-10000a2  1.00MiB
-10000b4  1.00MiB
-10000bd  1.00MiB
-...
-```
-
-### Evicting cached objects
-
-There are 3 (**three**) ways to carry out the eviction operation:
-
-1. Evict an **entire** remote bucket (data + metadata).
-2. Evict **only the data**, retaining bucket metadata.
-3. Evict a **subset of objects** using a prefix, template, or list.
-
-> The **template** is usually an optional prefix, range (Bash expansion, e.g., `{start..end}`), and optional suffix.
-
-For instance, to remove all in-cluster content while preserving the bucket's metadata:
-
-```console
-$ ais evict s3://cloud-bucket --keep-md
-Evicted s3://cloud-bucket contents from aistore: the bucket is now empty
-
-$ ais ls s3://cloud-bucket --cached
-NAME     SIZE
-```
-
-> Note that the terms **"in-cluster" and "cached" are used interchangeably** throughout the entire documentation.
-
-### Prefetching objects
-
-To prefetch objects with a specific prefix from a cloud bucket:
-
-```console
-$ ais prefetch s3://cloud-bucket --prefix 10 --num-workers 16
-
-prefetch-objects[MV4ex8u6h]: prefetch "10" from s3://cloud-bucket. To monitor the progress, run 'ais show job MV4ex8u6h'
-```
-
-> The prefix in the example is "10"
-
-### Monitoring progress
-
-You can monitor the progress of the prefetch operation using the `ais show job prefetch` command. Add the `--refresh` flag followed by a time in seconds to get automatic updates:
-
-```console
-$ ais show job prefetch
-
-prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[0,6])
-NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
-KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
-XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 4               4.00MiB         18:28:55        -       Running
-YMjtIJKL         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
-oJXtMNOP         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 6               6.00MiB         18:28:55        -       Running
-vWrtQRST         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
-ybTtUVWX         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
-                                Total:                                  30              30.00MiB ✓
-```
-
-The output shows statistics for each node in the AIStore cluster:
-- NODE: The name of the node
-- ID: The job ID
-- KIND: The type of operation
-- BUCKET: Source bucket
-- OBJECTS: Number of objects processed
-- BYTES: Amount of data prefetched
-- START: Job start time
-- END: Job end time (empty if job is still running)
-- STATE: Current job state
-
-The output also includes a "Total" row at the bottom that provides cluster-wide aggregated values for the number of objects prefetched and bytes transferred. The checkmark (✓) indicates that all nodes are reporting byte statistics.
-
-You can see the progress over time with automatic refresh:
-
-```console
-$ ais show job prefetch --refresh 10
-
-prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[8,32])
-NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
-KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 27              27.00MiB        18:28:55        -       Running
-XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 23              23.00MiB        18:28:55        -       Running
-YMjtIJKL         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 41              41.00MiB        18:28:55        -       Running
-oJXtMNOP         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 34              34.00MiB        18:28:55        -       Running
-vWrtQRST         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 23              23.00MiB        18:28:55        -       Running
-ybTtUVWX         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 31              31.00MiB        18:28:55        -       Running
-                                Total:                                  179             179.00MiB ✓
-```
-
-### Stopping jobs
-
-To stop all in-progress jobs:
-
-```console
-$ ais stop --all
-```
-
-This will stop all running jobs. To stop a specific job, use `ais stop job JOB_ID`.
-
-## Evict Remote Bucket
-
-This is `ais bucket evict` command but most of the time we'll be using its `ais evict` alias:
-
-```console
-$ ais evict --help
+$ ais create --help
 NAME:
-   ais evict - (alias for "bucket evict") Evict one remote bucket, multiple remote buckets, or
-     selected objects in a given remote bucket or buckets,
-     e.g.:
-     - evict gs://abc                                          - evict entire bucket from aistore: remove all "cached" gs://abc objects _and_ bucket metadata;
-     - evict gs://abc --keep-md                                - same as above but keep bucket metadata;
-     - evict gs:                                               - evict all GCP buckets from the cluster;
-     - evict gs://abc --prefix images/                         - evict all gs://abc objects from the virtual subdirectory "images";
-     - evict gs://abc/images/                                  - same as above;
-     - evict gs://abc/images/ --nr                             - same as above, but do not recurse into virtual subdirs;
-     - evict gs://abc --template images/                       - same as above;
-     - evict gs://abc --template "shard-{0000..9999}.tar.lz4"  - evict the matching range (prefix + brace expansion);
-     - evict "gs://abc/shard-{0000..9999}.tar.lz4"             - same as above (notice BUCKET/TEMPLATE argument in quotes)
-
-USAGE:
-   ais evict BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...] [command options]
-
-OPTIONS:
-   dry-run           Preview the results without really running the action
-   keep-md           Keep bucket metadata
-   list              Comma-separated list of object or file names, e.g.:
-                     --list 'o1,o2,o3'
-                     --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-                     or, when listing files and/or directories:
-                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
-   non-recursive,nr  Non-recursive operation, e.g.:
-                     - 'ais ls gs://bucket/prefix --nr'   - list objects and/or virtual subdirectories with names starting with the specified prefix;
-                     - 'ais ls gs://bucket/prefix/ --nr'  - list contained objects and/or immediately nested virtual subdirectories _without_ recursing into the latter;
-                     - 'ais prefetch s3://bck/abcd --nr'  - prefetch a single named object (see 'ais prefetch --help' for details);
-                     - 'ais rmo gs://bucket/prefix --nr'  - remove a single object with the specified name (see 'ais rmo --help' for details)
-   non-verbose,nv    Non-verbose (quiet) output, minimized reporting, fewer warnings
-   prefix            Select virtual directories or objects with names starting with the specified prefix, e.g.:
-                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
-                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
-   progress          Show progress bar(s) and progress of execution in real time
-   refresh           Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   skip-lookup       Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
-                      1) adding remote bucket to aistore without first checking the bucket's accessibility
-                         (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
-                      2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
-   template          Template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
-                     (with optional steps and gaps), e.g.:
-                     --template "" # (an empty or '*' template matches everything)
-                     --template 'dir/subdir/'
-                     --template 'shard-{1000..9999}.tar'
-                     --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                     and similarly, when specifying files and directories:
-                     --template '/home/dir/subdir/'
-                     --template "/abc/prefix-{0010..9999..2}-suffix"
-   timeout           Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   verbose,v         Verbose output
-   wait              Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   help, h           Show help
+   ais create - (alias for "bucket create") Create AIS buckets or explicitly attach remote buckets with non-default credentials/properties.
+     Normally, AIS auto-adds remote buckets on first access (ls/get/put): when a user references a new bucket,
+     AIS looks it up behind the scenes, confirms its existence and accessibility, and "on-the-fly" updates its
+     cluster-wide global (BMD) metadata containing bucket definitions, management policies, and properties.
+     Use this command when you need to:
+       1) create an ais:// bucket in this cluster;
+       2) create a bucket in a remote AIS cluster (e.g., 'ais://@remais/BUCKET');
+       3) set up a cloud bucket with a custom profile and/or endpoint/region;
+       4) set bucket properties before first access;
+       5) attach multiple same-name cloud buckets under different namespaces (e.g., 's3://#ns1/bucket', 's3://#ns2/bucket');
+       6) and finally, register a cloud bucket that is not (yet) accessible (advanced-usage '--skip-lookup' option).
+...
 ```
 
-Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
+### Implicit creation (lazy discovery)
 
-For remote buckets, AIS supports **on-the-fly** creation. When user references a new bucket, AIS looks it up behind the scenes, confirms its existence and accessibility, and updates its own cluster-wide global metadata that contains bucket definitions, associated management policies, and properties.
-
-In an evict-bucket operation with **no** arguments (see above), AIS will remove all traces of the remote bucket within the AIS cluster. This effectively resets the AIS cluster to the point before any requests to the bucket have been made. This does not affect the objects stored within the remote bucket.
-
-For example, to evict `s3://abc` completely from the AIS cluster, run:
+On first reference:
 
 ```console
-$ ais bucket evict aws://abc
+ais ls s3://images --all
+ais get s3://logs/foo.txt
 ```
 
-### See also
+AIS:
 
-* [Operations on Lists and Ranges (and entire buckets)](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)
-* to fully synchronize in-cluster content with remote backend, please refer to [out of band updates](/docs/out_of_band.md)
+1. Parses the bucket URI into internal control structure (`cmn.Bck`)
+2. Checks BMD for existing entry
+3. If missing: performs `HEAD(bucket)` to validate access
+4. Inserts the bucket into BMD with default properties
+5. Metasyncs the latter to all nodes
 
-## Backend Bucket
+This behavior is foundational, motivated by removing the operational overhead of bucket management.
 
-So far, we have covered AIS and remote buckets. These abstractions are sufficient for almost all use cases. But there are times when we would like to download objects from an existing remote bucket and then make use of the features available only for AIS buckets.
+### Explicit creation
 
-One way of accomplishing that could be:
-1. Prefetch cloud objects.
-2. Create AIS bucket.
-3. Use the bucket-copying [API](http_api.md) or [CLI](/docs/cli/bucket.md) to copy over the objects from the remote bucket to the newly created AIS bucket.
-
-However, the extra-copying involved may prove to be time and/or space consuming. Hence, AIS-supported capability to establish an **ad-hoc** 1-to-1 relationship between a given AIS bucket and an existing cloud (*backend*).
-
-> As aside, the term "backend" - something that is on the back, usually far (or farther) away - is often used for data redundancy, data caching, and/or data sharing. AIS *backend bucket* allows to achieve all of the above.
-
-For example:
+Invoked with:
 
 ```console
-$ ais create abc
-"abc" bucket created
-$ ais bucket props set ais://abc backend_bck=gcp://xyz
-Bucket props successfully updated
+ais create s3://bucket --props="extra.aws.profile=prod"
 ```
 
-After that, you can access all objects from `gcp://xyz` via `ais://abc`. **On-demand persistent caching** (from the `gcp://xyz`) becomes then automatically available, as well as **all other AIS-supported storage services** configurable on a per-bucket basis.
+AIS:
 
-For example:
+1. Parses URI and properties
+2. Issues `HEAD` (unless `--skip-lookup` or bucket already in BMD)
+3. Creates BMD entry with specified properties
+4. Metasyncs to all nodes
+
+Use `--skip-lookup` when default credentials cannot access the bucket:
 
 ```console
-$ ais ls gcp://xyz
-NAME		 SIZE		 VERSION
-shard-0.tar	 2.50KiB	 1
-shard-1.tar	 2.50KiB	 1
-$ ais ls ais://abc
-NAME		 SIZE		 VERSION
-shard-0.tar	 2.50KiB	 1
-shard-1.tar	 2.50KiB	 1
-$ ais get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
-"shard-0.tar" has the size 2.50KiB (2560 B)
-$ ais ls ais://abc --cached
-NAME		 SIZE		 VERSION
-shard-0.tar	 2.50KiB	 1
-$ ais bucket props set ais://abc backend_bck=none # disconnect backend bucket
-Bucket props successfully updated
-$ ais ls ais://abc
-NAME		 SIZE		 VERSION
-shard-0.tar	 2.50KiB	 1
+ais create s3://restricted --skip-lookup \
+  --props="extra.aws.profile=special"
 ```
 
-For more examples please refer to [CLI docs](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
+### Deletion and eviction
 
-## AIS bucket as a reference
-
-Stated differently, aistore bucket itself can serve as a reference to another bucket. E.g., you could have, say, `ais://llm-latest` to always point to whatever is the latest result of a data prep service.
+**AIS buckets:**
 
 ```console
-### create an arbitrary bucket (say, `ais://llm-latest`) and always use it to reference the latest augmented results
-
-$ ais create ais://llm-latest
-$ ais bucket props set ais://llm-latest backend_bck=gs://llm-augmented-2023-12-04
-
-### next day, when the data prep service produces a new derivative:
-
-$ ais bucket props set ais://llm-latest backend_bck=gs://llm-augmented-2023-12-05
-
-### and keep using the same static name, etc.
+ais bucket rm ais://bucket
 ```
 
-Caching wise, when you walk `ais://llm-latest` (or any other aistore bucket with a remote backend), aistore will make sure to perform remote (cold) GETs to update itself when and if required, etc.
+Destroys the bucket and all objects permanently.
 
-> In re "cold GET" vs "warm GET" performance, see [AIStore as a Fast Tier Storage](https://aistore.nvidia.com/blog/2023/11/27/aistore-fast-tier) blog.
-
-## Bucket Access Attributes
-
-Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
-
-| Operation | Bit Mask |
-| --- | --- |
-| GET | 0x1 |
-| HEAD | 0x2 |
-| PUT, APPEND | 0x4 |
-| Cold GET | 0x8 |
-| DELETE | 0x16 |
-
-For instance, to make bucket `abc` read-only, execute the following [AIS CLI](/docs/cli.md) command:
+**Cloud buckets:**
 
 ```console
-$ ais bucket props abc 'access=ro'
+ais bucket rm s3://bucket
+# or equivalently:
+ais evict s3://bucket
 ```
 
-The same expressed via `curl` will look as follows:
+Removes AIS state (BMD entry, cached objects). Cloud data remains untouched.
+
+**Eviction options:**
+
+| Command | Effect |
+|---------|--------|
+| `ais evict s3://bucket` | Remove BMD entry and all cached objects |
+| `ais evict s3://bucket --keep-md` | Keep BMD entry, remove cached objects |
+| `ais evict s3://bucket --prefix images/` | Evict only matching objects |
+| `ais evict s3://bucket --template "shard-{0..999}.tar"` | Evict by template |
+
+Eviction is namespace-aware:
 
 ```console
-$ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "set-bprops", "value": {"access": 18446744073709551587}}' http://localhost:8080/v1/buckets/abc
+ais evict s3://#prod/data     # only this namespace
+ais evict s3://#dev/data      # independent operation
 ```
 
-> `18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)`
+> See also: [Three Ways to Evict Remote Bucket](/docs/cli/evicting_buckets_andor_data.md)
 
-## AWS-specific configuration
+---
 
-AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket that is backed up by an AWS S3 bucket (**) can be configured to use alternative:
+## Namespaces
 
-* named AWS profiles (with alternative credentials and/or region)
-* alternative s3 endpoints
+Namespaces solve real-world scenarios that global namespace cannot handle:
 
-For background and usage examples, please see [CLI: AWS-specific bucket configuration](/docs/cli/aws_profile_endpoint.md).
+* **Account-scoped buckets** - SwiftStack, Cloudian bucket names are per-account
+* **Multiple credentials** - Different AWS profiles with overlapping bucket names
+* **Environment separation** - Same bucket name across dev/staging/prod
+* **Multiple endpoints** - Oracle OCI, SwiftStack, and AWS S3 in the same cluster
+
+### Syntax
+
+```
+<provider>://#<namespace>/<bucket>
+```
+
+Examples:
+
+```console
+# Two buckets named "data", different AWS accounts
+ais create s3://#prod/data --props="extra.aws.profile=prod-account"
+ais create s3://#dev/data --props="extra.aws.profile=dev-account"
+
+# SwiftStack with account-scoped buckets
+ais create s3://#swift-tenant/bucket \
+  --props="extra.aws.profile=swift extra.aws.endpoint=https://swift.example.com"
+
+# S3-compatible with custom endpoint
+ais create s3://#minio/images \
+  --props="extra.aws.endpoint=http://minio.local:9000"
+```
+
+> **Note**: The bucket namespace you choose - whether it represents an AWS profile, a GCS account, or simply a human-readable alias - becomes part of the bucket's physical [on-disk path](#appendix-a-on-disk-layout).
+
+### In BMD
+
+Metadata-wise, each bucket receives:
+
+* A unique BID (bucket ID)
+* Its own bucket props (`Bprops`)
+* Its own credential configuration
+
+---
+
+## Remote AIS Clusters
+
+AIS clusters can attach to each other, forming a global namespace of distributed datasets.
+
+### Attaching clusters
+
+```console
+# Attach with alias
+ais cluster remote-attach remais=http://remote-proxy:8080
+
+# Verify attachment
+ais show remote-cluster
+```
+
+### Accessing remote buckets
+
+```console
+# List all remote AIS buckets
+ais ls ais://@
+
+# List buckets in specific remote cluster
+ais ls ais://@remais/
+
+# Access objects
+ais get ais://@remais/bucket/object local-file
+```
+
+### Namespace encoding
+
+The alias resolves to the remote cluster's UUID, stored in the namespace:
+
+```go
+ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "Cjl2Ht4gE"}, Name: "bucket"}
+```
+
+> See also: [Remote AIS Cluster](/docs/providers.md#remote-ais-cluster)
+
+---
+
+## Backend Buckets
+
+Backend buckets represent **indirection** - an AIS bucket that proxies to a remote bucket. This is fundamentally different from namespaces.
+
+| Aspect | Namespace | Backend Bucket |
+|--------|-----------|----------------|
+| Purpose | Disambiguate identity | Proxy/cache |
+| Bucket count | 1 (the cloud bucket itself) | 2 (AIS + cloud) |
+| On-disk path | `@aws/#ns/bucket/` | `@ais/cache-bucket/` |
+| Use case | Multi-account, multi-endpoint | Caching, ETL, aliasing |
+
+> **Note:** See section [Working with Same-Name Remote Buckets](#working-with-same-name-remote-buckets) below for further guidelines and usage examples.
+
+### Creating backend relationships
+
+```console
+ais create ais://cache
+ais bucket props set ais://cache backend_bck=s3://origin
+```
+
+Now reads/writes to `ais://cache` transparently forward to `s3://origin`.
+
+### Use cases
+
+**Hot cache for cold storage:**
+
+```console
+ais create ais://hot-cache
+ais bucket props set ais://hot-cache backend_bck=s3://cold-archive lru.enabled=true
+```
+
+**Dataset aliasing:**
+
+```console
+# Always point to latest processed dataset
+ais create ais://dataset-latest
+ais bucket props set ais://dataset-latest backend_bck=gs://processed-2024-01-15
+
+# Update when new version available
+ais bucket props set ais://dataset-latest backend_bck=gs://processed-2024-01-20
+```
+
+**Access control:**
+
+```console
+# Expose subset of cloud data under controlled name
+ais create ais://public-subset
+ais bucket props set ais://public-subset backend_bck=s3://internal-data
+```
+
+### Disconnecting
+
+```console
+ais bucket props set ais://cache backend_bck=none
+```
+
+Cached objects remain in the AIS bucket.
+
+> See also: [Backend Bucket CLI examples](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket)
+
+--------------------
+
+# **Part II: How-To**
+
+**Table of Contents**
+1. [Working with Same-Name Remote Buckets](#working-with-same-name-remote-buckets)
+   - [Option A: Namespaces (direct access)](#option-a-namespaces-direct-access)
+   - [Option B: Backend buckets (via AIS proxy)](#option-b-backend-buckets-via-ais-proxy)
+   - [Which to use?](#which-to-use)
+2. [Prefetch and Evict](#prefetch-and-evict)
+   - [Prefetching](#prefetching)
+   - [Monitoring prefetch](#monitoring-prefetch)
+   - [Evicting](#evicting)
+3. [Access Control](#access-control)
+   - [Setting access](#setting-access)
+   - [Predefined values](#predefined-values)
+4. [Provider-Specific Configuration](#provider-specific-configuration)
+   - [AWS / S3-compatible](#aws--s3-compatible)
+   - [Google Cloud](#google-cloud)
+   - [Azure](#azure)
+5. [List Objects](#list-objects)
+   - [Basic usage](#basic-usage)
+   - [Properties](#properties)
+   - [Flags](#flags)
+   - [Pagination](#pagination)
+6. [Operations Summary](#operations-summary)
+7. [CLI Quick Reference](#cli-quick-reference)
+
+## Working with Same-Name Remote Buckets
+
+A common scenario: you have buckets with identical names across different AWS accounts, S3-compatible endpoints, or cloud providers. AIS handles this two ways.
+
+### Option A: Namespaces (direct access)
+
+Create each bucket with its own namespace and credentials:
+
+```console
+ais create s3://#prod/data --props="extra.aws.profile=prod-account"
+ais create s3://#dev/data --props="extra.aws.profile=dev-account"
+```
+
+Now `s3://#prod/data` and `s3://#dev/data` are distinct buckets - separate BMD entries, separate on-disk paths, separate credentials. Access them directly:
+
+```console
+ais ls s3://#prod/data
+ais get s3://#dev/data/file.txt ./local
+```
+
+### Option B: Backend buckets (via AIS proxy)
+
+Create AIS buckets that front the remote buckets:
+
+```console
+# First, create the namespaced S3 buckets with proper credentials
+ais create s3://#prod/data --props="extra.aws.profile=prod-account"
+ais create s3://#dev/data --props="extra.aws.profile=dev-account"
+
+# Then create AIS buckets fronting them
+ais create ais://prod-data --props="backend_bck=s3://#prod/data"
+ais create ais://dev-data --props="backend_bck=s3://#dev/data"
+```
+
+Access through the AIS buckets:
+
+```console
+ais ls ais://prod-data
+
+## GET and discard locally, with a side effect of **cold-GET**ting an object from remote storage
+ais get ais://dev-data/images.jpg /dev/null
+```
+
+### Which to use?
+
+| Scenario | Recommended |
+|----------|-------------|
+| Direct multi-account access, no caching logic | Namespaces (Option A) |
+| Need LRU eviction, local caching policies | Backend buckets (Option B) |
+| ETL pipelines, dataset transformation | Backend buckets (Option B) |
+| Want to rename or alias cloud buckets | Backend buckets (Option B) |
+| Simplest setup, fewest moving parts | Namespaces (Option A) |
+
+Namespaces give you direct access with minimal overhead. Backend buckets add a layer of indirection but unlock full AIS bucket capabilities - LRU, mirroring, erasure coding, and transformation pipelines.
+
+Note that Option B requires the namespaced S3 bucket to exist first. You can't skip straight to `backend_bck=s3://data` with custom credentials - AIS needs to resolve the backend bucket, which requires proper credentials already in place. Create the namespaced cloud bucket first, then front it with an AIS bucket if needed.
+
+> See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
+
+---
+
+## Prefetch and Evict
+
+### Prefetching
+
+Proactively fetch objects from remote storage into AIS cache:
+
+```console
+# Prefetch by list
+ais prefetch s3://bucket --list "obj1,obj2,obj3"
+
+# Prefetch by prefix
+ais prefetch s3://bucket --prefix "images/"
+
+# Prefetch by template
+ais prefetch s3://bucket --template "shard-{0000..0999}.tar"
+
+# With parallelism control
+ais prefetch s3://bucket --prefix data/ --num-workers 16
+```
+
+### Monitoring prefetch
+
+```console
+# Check progress
+ais show job prefetch
+
+# With auto-refresh
+ais show job prefetch --refresh 5
+
+# Wait for completion
+ais wait prefetch JOB_ID
+```
+
+### Evicting
+
+Remove cached objects (cloud data untouched):
+
+```console
+# Evict entire bucket
+ais evict s3://bucket
+
+# Keep metadata, remove objects
+ais evict s3://bucket --keep-md
+
+# Evict by prefix
+ais evict s3://bucket --prefix old-data/
+
+# Evict by template
+ais evict s3://bucket --template "temp-{0..999}.dat"
+```
+
+> **Note:** The terms "cached" and "in-cluster" are used interchangeably. A "cached" object is one that exists in AIS storage regardless of its origin.
+
+---
+
+## Access Control
+
+Bucket access is controlled by a 64-bit `access` property. Bits map to operations:
+
+> **Note**: When [enabled](docs/authn.md), access permissions are enforced by AIS and apply to both local and backend operations; misconfiguration can block cold GETs or deletes. See [version 4.1 release notes](https://github.com/NVIDIA/aistore/releases/tag/v1.4.1#authentication-and-security) for additional pointers on the topics of authentication and security.
+
+| Operation | Bit | Hex |
+|-----------|-----|-----|
+| GET | 0 | 0x1 |
+| HEAD | 1 | 0x2 |
+| PUT, APPEND | 2 | 0x4 |
+| Cold GET | 3 | 0x8 |
+| DELETE | 4 | 0x10 |
+
+### Setting access
+
+```console
+# Make bucket read-only
+ais bucket props set ais://data access=ro
+
+# Disable DELETE
+ais bucket props set ais://data access=0xFFFFFFFFFFFFFFEF
+```
+
+### Predefined values
+
+| Name | Meaning |
+|------|---------|
+| `ro` | Read-only (GET + HEAD) |
+| `rw` | Full access (default) |
+
+> See also: [Authentication and Access Control](/docs/authn.md)
+
+---
+
+## Provider-Specific Configuration
+
+### AWS / S3-compatible
+
+| Property | Description |
+|----------|-------------|
+| `extra.aws.profile` | Named AWS profile from `~/.aws/credentials` |
+| `extra.aws.endpoint` | Custom S3 endpoint URL |
+| `extra.aws.region` | Region override |
+
+```console
+# Use named profile
+ais create s3://bucket --props="extra.aws.profile=production"
+
+# S3-compatible endpoint (SwiftStack, Oracle OCI, AWS S3, etc.)
+ais create s3://#minio/bucket \
+  --props="extra.aws.endpoint=http://minio:9000 extra.aws.profile=minio-creds"
+```
+
+> See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
+
+### Google Cloud
+
+| Property | Description |
+|----------|-------------|
+| `extra.gcp.project_id` | GCP project ID |
+
+### Azure
+
+| Property | Description |
+|----------|-------------|
+| `extra.azure.account_name` | Storage account name |
+| `extra.azure.account_key` | Storage account key |
+
+---
 
 ## List Objects
 
-**Note**: some of the following content **may be outdated**. For the most recent updates, please check:
+`ListObjects` and `ListObjectsPage` API (Go and Python) return object names and properties. For large - many millions of objects - buckets we strongly recommend the "paginated" version of the API.
 
-- [List objects](/docs/cli/bucket.md#list-objects)
-* [`ais ls`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/bucket.md#list-objects)
-* [Virtual directories](/docs/howto_virt_dirs.md)
+AIS CLI supports both - a quick glance at `ais ls --help` will provide an idea of all (numerous) supported options.
 
-`ListObjects` API returns a page of object names and, optionally, their properties (including sizes, access time, checksums), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
+### Basic usage
 
-> Go [ListObjects](https://github.com/NVIDIA/aistore/blob/main/api/bucket.go) API
+As always with AIS CLI, a quick look at the command's help (`ais ls --help` in this case) _may_ save time.
 
-When a cluster is rebalancing, the returned list of objects can be incomplete due to objects are being migrated.
-The returned [result](#list-result) has non-zero value(the least significant bit is set to `1`) to indicate that the list was generated when the cluster was unstable.
-To get the correct list, either re-request the list after the rebalance ends or read the list with [the option](#list-options) `SelectMisplaced` enabled.
-In the latter case, the list may contain duplicated entries.
+```console
+# When remote bucket does not exist in AIS _and_ is accessible with default profile/endpoint
+$ ais ls s3://bucket
+Error: ErrRemoteBckNotFound: aws bucket "s3://ais-vm" does not exist
+Tip: use '--all' to list all objects including remote
 
-### Options
+# and note: `--all` can be used just once and only when the remote is not in AIS
+$ ais ls s3://bucket --all --limit 4
+```
 
-The properties-and-options specifier must be a JSON-encoded structure, for instance `{"props": "size"}` (see examples).
-An empty structure `{}` results in getting just the names of the objects (from the specified bucket) with no other metadata.
+More basic examples follow below:
 
-| Property/Option | Description | Value |
-| --- | --- | --- |
-| `uuid` | ID of the list objects operation | After initial request to list objects the `uuid` is returned and should be used for subsequent requests. The ID ensures integrity between next requests. |
-| `pagesize` | The maximum number of object names returned in response | For AIS buckets default value is `10000`. For remote buckets this value varies as each provider has it's own maximum page size. |
-| `props` | The properties of the object to return | A comma-separated string containing any combination of: `name,size,version,checksum,atime,location,copies,ec,status` (if not specified, props are set to `name,size,version,checksum,atime`). <sup id="a1">[1](#ft1)</sup> |
-| `prefix` | The prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
-| `start_after` | Name of the object after which the listing should start | For example, `start_after = "baa"` will include object `object_name = "caa"` but will not `object_name = "ba"` nor `object_name = "aab"`. |
-| `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
-| `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
-| `flags` | Advanced filter options | A bit field of [ListObjsMsg extended flags](/cmn/api.go). |
+```console
+# List all objects
+ais ls s3://bucket
 
-ListObjsMsg extended flags:
+# List with prefix
+ais ls s3://bucket --prefix images/
 
-| Name | Value | Description |
-| --- | --- | --- |
-| `SelectCached` | `1` | For remote buckets only: return only objects that are cached on AIS drives, i.e. objects that can be read without accessing to the Cloud |
-| `SelectMisplaced` | `2` | Include objects that are on incorrect target or mountpath |
-| `SelectDeleted` | `4` | Include objects marked as deleted |
-| `SelectArchDir` | `8` | If an object is an archive, include its content into object list |
-| `SelectOnlyNames` | `16` | Do not retrieve object attributes for faster bucket listing. In this mode, all fields of the response, except object names and statuses, are empty |
+# Same as above
+ais ls s3://bucket/images/
 
-We say that "an object is cached" to indicate two separate things:
+# List cached only
+ais ls s3://bucket --cached
 
-* The object was originally downloaded from a remote bucket, bucket in a remote AIS cluster, or an HTTP(s) based dataset;
-* The object is stored in the AIS cluster.
+# Summary (counts and sizes)
+ais ls s3://bucket --summary
+```
 
-In other words, the term "cached" is simply a **shortcut** to indicate the object's immediate availability without the need to go and check the object's original location. Being "cached" does not have any implications on object's persistence: "cached" objects, similar to those objects that originated in a given AIS cluster, are stored with arbitrary (per bucket configurable) levels of redundancy, etc. In short, the same storage policies apply to "cached" and "non-cached".
+### Properties
 
-Note that the list generated with `SelectMisplaced` option may have duplicated entries.
-E.g, after rebalance the list can contain two entries for the same object:
-a misplaced one (from original location) and real one (from the new location).
+Request specific properties with `--props`:
 
- <a name="ft1">1</a>) The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (`""`). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
+| Property | Description |
+|----------|-------------|
+| `name` | Object name (always included) |
+| `size` | Object size |
+| `version` | Object version |
+| `checksum` | Object checksum |
+| `atime` | Last access time |
+| `location` | Target and mountpath |
+| `copies` | Number of copies |
+| `ec` | Erasure coding info |
+| `status` | Object status |
 
-### Results
+```console
+ais ls s3://bucket --props "name,size,atime,copies"
+```
 
-The result may contain all bucket objects(if a bucket is small) or only the current page. The struct includes fields:
+### Flags
 
-| Field | JSON Value | Description |
-| --- | --- | --- |
-| UUID | `uuid` | Unique ID of the listing operation. Pass it to all consecutive list requests to read the next page of objects. If UUID is empty, the server starts listing objects from the first page |
-| Entries | `entries` | A page of objects and their properties |
-| ContinuationToken | `continuation_token` | The token to request the next page of objects. Empty value means that it is the last page |
-| Flags | `flags` | Extra information - a bit-mask field. `0x0001` bit indicates that a rebalance was running at the time the list was generated |
+| Flag | Description |
+|------|-------------|
+| `--cached` | Only objects present in AIS |
+| `--all` | Include all buckets (remote and present) |
+| `--regex` | Filter by regex pattern |
+| `--summary` | Show aggregate statistics |
+| `--limit N` | Return at most N objects |
+
+### Pagination
+
+For large buckets, results are paginated:
+
+```console
+# API returns continuation_token for next page
+# CLI handles pagination automatically
+ais ls s3://large-bucket --limit 10000
+```
+
+> See also: [CLI: List Objects](/docs/cli/bucket.md#list-objects)
+
+---
+
+## Operations Summary
+
+| Command | Behavior |
+|---------|----------|
+| `ais ls <bucket>` | List objects; implicit create for remote buckets |
+| `ais create <bucket>` | Explicit creation with optional properties |
+| `ais bucket rm <ais-bucket>` | Destroy AIS bucket and all objects |
+| `ais bucket rm <cloud-bucket>` | Remove from BMD, evict cached objects |
+| `ais evict <bucket>` | Same as rm for cloud buckets |
+| `ais prefetch <bucket>` | Proactively cache remote objects |
+| `ais bucket props set` | Update properties, metasync cluster-wide |
+| `ais bucket props reset` | Restore cluster defaults |
+| `ais bucket props show` | Display current properties |
+
+All operations respect namespaces. `ais ls s3://#ns1/bucket` and `ais ls s3://#ns2/bucket` operate on different buckets.
+
+---
+
+## CLI Quick Reference
+
+```console
+# ─────────────────────────────────────────────────────────────
+# Implicit creation - bucket added on first access
+# ─────────────────────────────────────────────────────────────
+ais ls s3://my-bucket
+ais get s3://my-bucket/file.txt ./local-file
+
+# ─────────────────────────────────────────────────────────────
+# Explicit creation - custom credentials
+# ─────────────────────────────────────────────────────────────
+ais create s3://my-bucket --props="extra.aws.profile=prod"
+
+# ─────────────────────────────────────────────────────────────
+# Namespaced buckets - same name, different accounts
+# ─────────────────────────────────────────────────────────────
+ais create s3://#acct1/data --props="extra.aws.profile=acct1"
+ais create s3://#acct2/data --props="extra.aws.profile=acct2"
+
+# ─────────────────────────────────────────────────────────────
+# Skip lookup - bucket exists but default creds can't reach it
+# ─────────────────────────────────────────────────────────────
+ais create s3://restricted --skip-lookup \
+  --props="extra.aws.profile=special"
+
+# ─────────────────────────────────────────────────────────────
+# Remote AIS cluster
+# ─────────────────────────────────────────────────────────────
+ais cluster remote-attach remais=http://remote:8080
+ais ls ais://@remais/
+ais create ais://@remais/new-bucket
+
+# ─────────────────────────────────────────────────────────────
+# Backend buckets - AIS bucket fronting cloud
+# ─────────────────────────────────────────────────────────────
+ais create ais://cache
+ais bucket props set ais://cache backend_bck=s3://origin
+
+# ─────────────────────────────────────────────────────────────
+# Prefetch and evict
+# ─────────────────────────────────────────────────────────────
+ais prefetch s3://bucket --prefix data/
+ais evict s3://bucket --keep-md
+
+# ─────────────────────────────────────────────────────────────
+# Properties
+# ─────────────────────────────────────────────────────────────
+ais bucket props show s3://bucket
+ais bucket props set s3://bucket mirror.enabled=true mirror.copies=2
+ais bucket props reset s3://bucket
+```
+
+--------------------
+
+## Appendix A: On-Disk Layout
+
+**Note:** This section is provided for advanced troubleshooting and debugging only.
+
+The bucket identity you specify in CLI or API - provider, namespace, bucket name - materializes as directory structure on every [mountpath](/docs/overview.md#mountpath). This isn't just metadata; it's physical layout.
+
+Say, we have an S3 bucket called `s3://dataset`, and an object `images/cat.jpg` in it. Given two different bucket namespaces, the respective FQNs inside AIStore may look like:
+
+```
+/ais/mp1/@aws/#prod/dataset/%ob/images/cat.jpg
+
+and
+
+/ais/mp4/@aws/#dev/dataset/%ob/images/cat.jpg
+```
+
+where:
+
+| Component | Example 1 | Example 2 | Meaning |
+|-----------|-----------|-----------|---------|
+| Mountpath | `/ais/mp1` | `/ais/mp4` | Physical disk or partition |
+| Provider | `@aws` | `@aws` | Backend provider |
+| Namespace | `#prod` | `#dev` | Account, profile, or user-defined alias |
+| Bucket | `dataset` | `dataset` | Bucket name |
+| Content type | `%ob` | `%ob` | Content kind: objects, EC slices, chunks, metadata |
+| Object | `images/cat.jpg` | `images/cat.jpg` | Object name (preserves virtual directory structure) |
+
+> Note: disk partitioning not recommended, may degrade performance.
+
+The namespace you choose - whether it maps to an AWS profile, a SwiftStack account, or just a human-readable tag like `#prod` - becomes a physical directory on every target node. This guarantees:
+
+- **Isolation**: `s3://#acct1/data` and `s3://#acct2/data` never share storage paths
+- **No collision**: Same-name buckets with different namespaces coexist without conflict
+
+What starts as a logical identifier in `ais create s3://#prod/bucket` ends up as `/mpath/@aws/#prod/bucket/` on disk.
+
+> For details, see [On-Disk Layout](/docs/on_disk_layout.md) document.
+
+---
+
+## References
+
+* [Backend Providers](/docs/providers.md)
+* [Storage Services](/docs/storage_svcs.md)
+* [Configuration](/docs/configuration.md)
+* [CLI: Bucket Commands](/docs/cli/bucket.md)
+* [CLI: AWS Profiles and Endpoints](/docs/cli/aws_profile_endpoint.md)
+* [Authentication](/docs/authn.md)
+* [Out-of-Band Updates](/docs/out_of_band.md)

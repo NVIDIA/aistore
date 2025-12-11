@@ -55,9 +55,9 @@ To deploy a new local AIS cluster with AuthN enabled, follow these steps:
     ```
 
 > **Note:** When deploying AIStore with AuthN, an `admin` user is created by default with `admin` privileges.
-> 
+>
 > The default password for the `admin` user **must** be set with the environment variable `AIS_AUTHN_SU_PASS`.
-> 
+>
 > For the list of environment variables, refer to the [Environment and Configuration](#environment-and-configuration) section below.
 
 2. Deploy the cluster with AuthN enabled and the required environment variables :
