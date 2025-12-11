@@ -12,10 +12,13 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
 // Default values for multipart download
@@ -41,13 +44,39 @@ type (
 		ChunkSize int64
 		// ObjectSize can be set to skip the HEAD request (optional, 0 means auto-detect)
 		ObjectSize int64
+		// optional progress callback
+		Callback  MpdCB
+		CallAfter time.Duration
 	}
+
+	MpdCounter struct {
+		callback  MpdCB
+		startTime int64
+		callAfter int64
+		current   int64 // bytes downloaded (atomic)
+		total     int64
+		done      bool
+	}
+	MpdCB func(*MpdCounter)
 
 	// Internal: represents a chunk to download
 	mptDownloadChunk struct {
 		index  int   // chunk index for ordering
 		offset int64 // start offset in the object
 		length int64 // length of this chunk
+	}
+
+	// Internal: worker context for multipart download
+	mpdWorker struct {
+		ctx     context.Context
+		cancel  context.CancelFunc
+		bp      BaseParams
+		bck     cmn.Bck
+		objName string
+		writer  io.WriterAt
+		chunkCh <-chan mptDownloadChunk
+		errCh   chan<- error
+		counter *MpdCounter
 	}
 )
 
@@ -189,7 +218,16 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		chunkCh   = make(chan mptDownloadChunk, numChunks)
 		errCh     = make(chan error, numChunks)
 		errs      = make([]error, 0, numChunks)
+		counter   *MpdCounter
 	)
+	if args.Callback != nil {
+		counter = &MpdCounter{
+			callback:  args.Callback,
+			startTime: mono.NanoTime(),
+			total:     objectSize,
+		}
+		counter.callAfter = counter.startTime + args.CallAfter.Nanoseconds()
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -208,11 +246,21 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 	}
 	close(chunkCh)
 
+	w := &mpdWorker{
+		ctx:     ctx,
+		cancel:  cancel,
+		bp:      bp,
+		bck:     bck,
+		objName: objName,
+		writer:  args.Writer,
+		chunkCh: chunkCh,
+		errCh:   errCh,
+		counter: counter,
+	}
+
 	var wg sync.WaitGroup
 	for range numWorkers {
-		wg.Go(func() {
-			mptDownloadWorker(ctx, cancel, bp, bck, objName, args.Writer, chunkCh, errCh)
-		})
+		wg.Go(w.run)
 	}
 
 	// Wait for all workers to complete
@@ -223,21 +271,33 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		errs = append(errs, err)
 	}
 
+	// final callback
+	if counter != nil {
+		counter.finish()
+		counter.callback(counter)
+	}
+
 	return errors.Join(errs...)
 }
 
-// mptDownloadWorker is a worker goroutine that downloads chunks from the work channel
-func mptDownloadWorker(ctx context.Context, cancel context.CancelFunc, bp BaseParams, bck cmn.Bck, objName string, writer io.WriterAt, chunkCh <-chan mptDownloadChunk, errCh chan<- error) {
-	for chunk := range chunkCh {
+func (w *mpdWorker) run() {
+	for chunk := range w.chunkCh {
 		select {
-		case <-ctx.Done():
+		case <-w.ctx.Done():
 			return
 		default:
 		}
-		if err := mptDownloadChunkRange(bp, bck, objName, writer, chunk); err != nil {
-			cancel() // signal others to stop
-			errCh <- err
+		if err := mptDownloadChunkRange(w.bp, w.bck, w.objName, w.writer, chunk); err != nil {
+			w.cancel() // signal others to stop
+			w.errCh <- err
 			return
+		}
+		// progress callback
+		if w.counter != nil {
+			atomic.AddInt64(&w.counter.current, chunk.length)
+			if w.counter.mustCall() {
+				w.counter.callback(w.counter)
+			}
 		}
 	}
 }
@@ -264,3 +324,17 @@ func mptDownloadChunkRange(bp BaseParams, bck cmn.Bck, objName string, writer io
 
 	return nil
 }
+
+////////////////
+// MpdCounter //
+////////////////
+
+func (c *MpdCounter) IsFinished() bool { return c.done }
+func (c *MpdCounter) Current() int64   { return atomic.LoadInt64(&c.current) }
+func (c *MpdCounter) Total() int64     { return c.total }
+
+func (c *MpdCounter) mustCall() bool {
+	return c.callAfter == c.startTime || mono.NanoTime() >= c.callAfter
+}
+
+func (c *MpdCounter) finish() { c.done = true }
