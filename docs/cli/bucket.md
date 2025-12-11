@@ -46,6 +46,50 @@ rmb             bucket rm
 
 Create bucket(s).
 
+```console
+$ ais create --help
+NAME:
+   ais create - (alias for "bucket create") Create AIS buckets or explicitly attach remote buckets with non-default credentials/properties.
+     Normally, AIS auto-adds remote buckets on first access (ls/get/put): when a user references a new bucket,
+     AIS looks it up behind the scenes, confirms its existence and accessibility, and "on-the-fly" updates its
+     cluster-wide global (BMD) metadata containing bucket definitions, management policies, and properties.
+     Use this command when you need to:
+       1) create an ais:// bucket in this cluster;
+       2) create a bucket in a remote AIS cluster (e.g., 'ais://@remais/BUCKET');
+       3) set up a cloud bucket with a custom profile and/or endpoint/region;
+       4) set bucket properties before first access;
+       5) attach multiple same-name cloud buckets under different namespaces (e.g., 's3://#ns1/bucket', 's3://#ns2/bucket');
+       6) and finally, register a cloud bucket that is not (yet) accessible (advanced-usage '--skip-lookup' option).
+   Examples:
+     - ais create ais://mybucket                                                                              - create AIS bucket 'mybucket' (must be done explicitly);
+     - ais create ais://@remais/BUCKET                                                                        - create a bucket in a remote AIS cluster referenced by the cluster's alias or UUID;
+     - ais create s3://mybucket                                                                               - add existing cloud (S3) bucket; normally AIS would auto-add it on first access;
+     - ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'                - add S3 bucket using a non-default cloud profile;
+     - ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'  - attach S3-compatible bucket via namespace '#myaccount';
+     - ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'                                 - advanced: register bucket without verifying its existence/accessibility (use with care).
+
+
+USAGE:
+   ais create BUCKET [BUCKET...] [command options]
+
+OPTIONS:
+   force,f       Force execution of the command (caution: advanced usage only)
+   ignore-error  Ignore "soft" failures such as "bucket already exists", etc.
+   props         Create bucket with the specified (non-default) properties, e.g.:
+                 * ais create ais://mmm --props="versioning.validate_warm_get=false versioning.synchronize=true"
+                 * ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'
+                 * ais create s3://bbb --props='extra.cloud.profile=prod extra.cloud.endpoint=https://s3.example.com'
+                 Tips:
+                   1) Use '--props' to override properties that a new bucket would normally inherit from cluster config at creation time.
+                   2) Use '--props' to set up an existing cloud bucket with a custom profile and/or custom endpoint/region.
+                 See also: 'ais bucket props show' and 'ais bucket props set'
+   skip-lookup   Do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:
+                  1) adding remote bucket to aistore without first checking the bucket's accessibility
+                     (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)
+                  2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed
+   help, h       Show help
+```
+
 ### Examples
 
 #### Create AIS bucket

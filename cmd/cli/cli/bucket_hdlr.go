@@ -55,6 +55,27 @@ Usage examples:
   (see docs/cli for details)
 `
 
+// ais create
+const createBucketUsage = "" +
+	"Create AIS buckets or explicitly attach remote buckets with non-default credentials/properties.\n" +
+	"\tNormally, AIS auto-adds remote buckets on first access (ls/get/put): when a user references a new bucket,\n" +
+	"\tAIS looks it up behind the scenes, confirms its existence and accessibility, and \"on-the-fly\" updates its\n" +
+	"\tcluster-wide global (BMD) metadata containing bucket definitions, management policies, and properties.\n" +
+	"\tUse this command when you need to:\n" +
+	indent1 + "\t  1) create an ais:// bucket in this cluster;\n" +
+	indent1 + "\t  2) create a bucket in a remote AIS cluster (e.g., 'ais://@remais/BUCKET');\n" +
+	indent1 + "\t  3) set up a cloud bucket with a custom profile and/or endpoint/region;\n" +
+	indent1 + "\t  4) set bucket properties before first access;\n" +
+	indent1 + "\t  5) attach multiple same-name cloud buckets under different namespaces (e.g., 's3://#ns1/bucket', 's3://#ns2/bucket');\n" +
+	indent1 + "\t  6) and finally, register a cloud bucket that is not (yet) accessible (advanced-usage '--skip-lookup' option).\n" +
+	indent1 + "Examples:\n" +
+	indent1 + "\t- ais create ais://mybucket\t- create AIS bucket 'mybucket' (must be done explicitly);\n" +
+	indent1 + "\t- ais create ais://@remais/BUCKET\t- create a bucket in a remote AIS cluster referenced by the cluster's alias or UUID;\n" +
+	indent1 + "\t- ais create s3://mybucket\t- add existing cloud (S3) bucket; normally AIS would auto-add it on first access;\n" +
+	indent1 + "\t- ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'\t- add S3 bucket using a non-default cloud profile;\n" +
+	indent1 + "\t- ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'\t- attach S3-compatible bucket via namespace '#myaccount';\n" +
+	indent1 + "\t- ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'\t- advanced: register bucket without verifying its existence/accessibility (use with care).\n"
+
 // ais cp
 //
 //nolint:dupword // intentional
@@ -336,7 +357,7 @@ var (
 			makeAlias(&showCmdBucket, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:      commandCreate,
-				Usage:     "Create ais buckets",
+				Usage:     createBucketUsage,
 				ArgsUsage: bucketsArgument,
 				Flags:     sortFlags(bucketCmdsFlags[commandCreate]),
 				Action:    createBucketHandler,

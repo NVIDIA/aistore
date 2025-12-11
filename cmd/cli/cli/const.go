@@ -610,15 +610,16 @@ var (
 		Usage: "Ignore \"soft\" failures such as \"bucket already exists\", etc.",
 	}
 
-	// TODO: ditto `--select` (to select object props)
-
 	bucketPropsFlag = cli.StringFlag{
 		Name: "props",
 		Usage: "Create bucket with the specified (non-default) properties, e.g.:\n" +
 			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.synchronize=true\"\n" +
 			indent1 + "\t* ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'\n" +
-			indent1 + "\t(tip: use '--props' to override properties that a new bucket inherits from cluster config at creation time;\n" +
-			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
+			indent1 + "\t* ais create s3://bbb --props='extra.cloud.profile=prod extra.cloud.endpoint=https://s3.example.com'\n" +
+			"\tTips:\n" +
+			indent1 + "\t  1) Use '--props' to override properties that a new bucket would normally inherit from cluster config at creation time.\n" +
+			indent1 + "\t  2) Use '--props' to set up an existing cloud bucket with a custom profile and/or custom endpoint/region.\n" +
+			indent1 + "\tSee also: 'ais bucket props show' and 'ais bucket props set'",
 	}
 
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "Force execution of the command " + advancedUsageOnly}

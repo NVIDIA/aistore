@@ -143,6 +143,7 @@ Remote buckets and AIS (`ais://`) buckets support the same API with the followin
 Rest of this document is structured as follows:
 
 - [Default Bucket Properties](#default-bucket-properties)
+  - [Examples: specifying non-default bucket properties at creation time](#examples-specifying-non-default-bucket-properties-at-creation-time)
 - [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
 - [List Buckets](#list-buckets)
 - [AIS Bucket](#ais-bucket)
@@ -189,13 +190,39 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 | Erasure Coding | [Storage Services: erasure coding](storage_svcs.md#erasure-coding) |
 | Metadata Persistence | --- |
 
-Example specifying (non-default) bucket properties at creation time:
+There are several possible (distinct) reasons to specify bucket props at creation time - when you need to:
+
+* set bucket properties before first access
+* attach multiple same-name cloud buckets under different namespaces (e.g., 's3://#ns1/bucket', 's3://#ns2/bucket')
+* register a bucket that is not (yet) accessible with default credentials (with '--skip-lookup')
+
+Examples follow below:
+
+### Examples: specifying non-default bucket properties at creation time
 
 ```console
 $ ais create ais://abc --props="mirror.enabled=true mirror.copies=4"
 
 # or, same using JSON:
 $ ais create ais://abc --props='{"mirror": {"enabled": true, "copies": 4}}'
+```
+
+```console
+# add S3 bucket using a non-default cloud profile:
+
+$ ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'
+```
+
+```console
+# attach S3-compatible bucket via namespace '#myaccount':
+
+$ ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'
+```
+
+```console
+## advanced: register bucket without verifying its existence/accessibility (use with care):
+
+$ ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'
 ```
 
 ## Inherited Bucket Properties and LRU
