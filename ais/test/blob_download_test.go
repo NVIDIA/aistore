@@ -234,7 +234,7 @@ func TestBlobDownloadAbort(t *testing.T) {
 			xactFinished := func(snaps xact.MultiSnap) (bool, bool) {
 				for _, tsnaps := range snaps {
 					for _, snap := range tsnaps {
-						if !snap.IsFinished() {
+						if !snap.IsFinished() && !snap.IsAborted() {
 							return false, false
 						}
 					}
