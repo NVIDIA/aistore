@@ -1,0 +1,4 @@
+"ais://$BUCKET_1" created
+^PUT.*=> ais://$BUCKET_1/mpd_test.bin$
+
+^GET mpd_test.bin from ais://$BUCKET_1.*$

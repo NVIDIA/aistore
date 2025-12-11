@@ -17,6 +17,7 @@ ls      promote    archive      concat       rm           evict        mv
   - [Get object and print it to standard output](#get-object-and-print-it-to-standard-output)
   - [Check if object is _cached_](#check-if-object-is-cached)
   - [Read range](#read-range)
+  - [Multipart Download](#multipart-download)
 - [GET multiple objects](#get-multiple-objects)
 - [GET archived content](#get-archived-content)
 - [Print object content](#print-object-content)
@@ -106,7 +107,9 @@ OPTIONS:
    --archregx value     Specifies prefix, suffix, substring, WebDataset key, _or_ a general-purpose regular expression
                         to select possibly multiple matching archived files from a given shard;
                         is used in combination with '--archmode' ("matching mode") option
-   --blob-download      Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects
+   --blob-download      Use blob-downloader to fetch large objects from remote backend into AIStore cluster (see docs/blob_downloader.md)
+   --mpd                Use multipart download to read large objects from AIStore cluster to the client-side;
+                        for single-object only; use '--chunk-size' and '--num-workers' to configure
    --cached             Only get in-cluster objects, i.e., objects from the respective remote bucket that are present ("cached") in the cluster
    --check-cached       Check whether a given named object is present in cluster
                         (applies only to buckets with remote backend)
@@ -136,13 +139,13 @@ OPTIONS:
                         - 'ais ls gs://abc/dir --limit 1234 --cached --props size,custom,atime'  - list no more than 1234 objects
                         - 'ais get gs://abc /dev/null --prefix dir --limit 1234'                 - get --/--
                         - 'ais scrub gs://abc/dir --limit 1234'                                  - scrub --/-- (default: 0)
-   --num-workers value  Number of concurrent blob-downloading workers (readers); system default when omitted or zero (default: 0)
+   --num-workers value  Number of concurrent workers for --blob-download or --mpd; system default when omitted or zero (default: 0)
    --offset value       Object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
    --prefix value       Get objects with names starting with the specified prefix, e.g.:
                         '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
                         a/b that have their names (relative to this directory) starting with 'c';
                         '--prefix ""' - get entire bucket (all objects)
-   --progress           Show progress bar(s) and progress of execution in real time
+   --progress           Multi-object progress: show progress bar for number of objects processed (see 'GET multiple objects' below)
    --refresh value      Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                         valid time units: ns, us (or µs), ms, s (default), m, h
    --silent             Server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
@@ -252,9 +255,33 @@ $ ls -al /tmp/w | awk '{print $5,$9}'
 10 copy3.md
 ```
 
+## Multipart Download
+
+Use `--mpd` for client-side concurrent range-based download with **built-in** progress bar. This is useful for large objects where you want to see download progress and potentially benefit from parallel chunk downloads.
+
+> **`--mpd` vs `--blob-download`**: These are different mechanisms for different purposes:
+> - `--mpd` (multipart download): **Client-side** - downloads object from AIStore to client using concurrent range requests
+> - `--blob-download`: **Server-side** - fetches object from remote backend (e.g., S3, GCS) into AIStore cluster for caching; see [blob_downloader.md](/docs/blob_downloader.md)
+
+> Note: `--mpd` is for single-object download only and includes its own progress bar automatically. For multi-object downloads (using `--prefix`), use `--progress` instead to track the number of objects processed.
+
+```console
+# Basic multipart download with progress bar
+$ ais get ais://bucket/large-file.bin ./local-file.bin --mpd
+large-file.bin 4.00 GiB / 4.00 GiB [======================================] 00:00:15 1.2 GiB/s
+GET ais://bucket/large-file.bin
+
+# With custom chunk size and number of workers
+$ ais get s3://bucket/huge-object ./output --mpd --chunk-size 16mb --num-workers 32
+large-file.bin 4.00 GiB / 4.00 GiB [======================================] 00:00:15 1.2 GiB/s
+GET s3://bucket/huge-object
+```
+
 # GET multiple objects
 
-Note that destination in this case is a local directory and that (an empty) prefix indicates getting entire bucket; see `--help` for details.
+Use `--prefix` to download multiple objects at once. Note that destination in this case is a local directory and that (an empty) prefix indicates getting entire bucket; see `--help` for details.
+
+Use `--progress` to show multi-object progress (number of objects processed). This is different from `--mpd` which has its own built-in progress bar for single-object downloads.
 
 ```console
 $ ais get s3://abc /tmp/w --prefix "" --progress

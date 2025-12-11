@@ -1,0 +1,22 @@
+# Test multipart download (--mpd) produces identical results to regular get
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+
+# Create a 10MB test file with random content
+dd if=/dev/urandom of=/tmp/mpd_test_src.bin bs=1M count=10 2>/dev/null
+ais object put /tmp/mpd_test_src.bin ais://$BUCKET_1/mpd_test.bin
+
+# Get object using regular method
+ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_regular.bin --yes
+
+# Get object using multipart download
+ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_multipart.bin --mpd --yes // IGNORE
+
+# Compare files - diff produces no output if identical (exit 0)
+diff /tmp/mpd_regular.bin /tmp/mpd_multipart.bin
+
+# Test with custom chunk size and workers
+ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_custom.bin --mpd --chunk-size 1mb --num-workers 4 --yes // IGNORE
+diff /tmp/mpd_test_src.bin /tmp/mpd_custom.bin
+
+# Cleanup
+rm -f /tmp/mpd_test_src.bin /tmp/mpd_regular.bin /tmp/mpd_multipart.bin /tmp/mpd_custom.bin // IGNORE

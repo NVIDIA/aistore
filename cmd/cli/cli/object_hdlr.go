@@ -30,6 +30,7 @@ const objGetUsage = "Get an object, a shard, an archived file, or a range of byt
 	indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);\n" +
 	indent4 + "\t- '--extract' or '--archpath' to extract archived content;\n" +
 	indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
+	indent4 + "\t- '--mpd' for client-side multipart download with progress bar;\n" +
 	indent4 + "\t- '-v' to produce verbose output when getting multiple objects."
 
 const objPutUsage = "PUT or append one file, one directory, or multiple files and/or directories.\n" +
@@ -131,6 +132,8 @@ var (
 			blobDownloadFlag,
 			chunkSizeFlag,
 			numBlobWorkersFlag,
+			// multipart download (client-side)
+			mpdFlag,
 			// archive
 			archpathGetFlag,
 			archmimeFlag,

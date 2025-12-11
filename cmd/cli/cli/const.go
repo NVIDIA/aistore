@@ -590,8 +590,11 @@ var (
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "Display tables without headers"}
 	noFooterFlag = cli.BoolFlag{Name: "no-footers,F", Usage: "Display tables without footers"}
 
-	progressFlag = cli.BoolFlag{Name: "progress", Usage: "Show progress bar(s) and progress of execution in real time"}
-	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "Preview the results without really running the action"}
+	progressFlag = cli.BoolFlag{
+		Name:  "progress",
+		Usage: "Show progress bar(s) and progress of execution in real time; 'object get' with multiple objects: show number of objects processed",
+	}
+	dryRunFlag = cli.BoolFlag{Name: "dry-run", Usage: "Preview the results without really running the action"}
 
 	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "Verbose output"}
 	verboseJobFlag = cli.BoolFlag{Name: verboseFlag.Name, Usage: "Show extended statistics"}
@@ -1078,7 +1081,13 @@ var (
 
 	blobDownloadFlag = cli.BoolFlag{
 		Name:  apc.ActBlobDl,
-		Usage: "Utilize built-in blob-downloader (and the corresponding alternative datapath) to read very large remote objects",
+		Usage: "Use blob-downloader to fetch large objects from remote backend into AIStore cluster (see docs/blob_downloader.md)",
+	}
+
+	mpdFlag = cli.BoolFlag{
+		Name: "mpd",
+		Usage: "Use multipart download to read large objects from AIStore cluster to the client-side;\n" +
+			indent4 + "\tfor single-object download only; use '--chunk-size' and '--num-workers' to configure",
 	}
 
 	// num-workers
