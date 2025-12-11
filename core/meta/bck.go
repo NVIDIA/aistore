@@ -216,9 +216,9 @@ func (b *Bck) init(bmd *BMD) error {
 	switch {
 	case b.Provider == "": // ais: is the default
 		b.Provider = apc.AIS
-		bmd.initBckGlobalNs(b)
-	case apc.IsRemoteProvider(b.Provider):
-		bmd.initBck(b)
+		fallthrough
+	case apc.IsRemoteProvider(b.Provider) && b.Ns.IsGlobal():
+		bmd.initBckGlob(b)
 	default:
 		b.Props, _ = bmd.Get(b)
 	}

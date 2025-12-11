@@ -213,7 +213,8 @@ func (m *BMD) numBuckets(checkEmpty bool) (na, nar, nc, no int) {
 	return na, nar, nc, no
 }
 
-func (m *BMD) initBckGlobalNs(bck *Bck) bool {
+// ais:// and cloud buckets with implicit global namespace
+func (m *BMD) initBckGlob(bck *Bck) bool {
 	namespaces, ok := m.Providers[bck.Provider]
 	if !ok {
 		return false
@@ -228,20 +229,6 @@ func (m *BMD) initBckGlobalNs(bck *Bck) bool {
 		bck.Props = p
 	}
 	return present
-}
-
-func (m *BMD) initBck(bck *Bck) {
-	namespaces, ok := m.Providers[bck.Provider]
-	if !ok {
-		return
-	}
-	for nsUname, buckets := range namespaces {
-		if p, present := buckets[bck.Name]; present {
-			bck.Props = p
-			bck.Ns = cmn.ParseNsUname(nsUname)
-			return
-		}
-	}
 }
 
 func (m *BMD) getAllByName(bckName string) (all []Bck) {
