@@ -195,7 +195,7 @@ Cluster config updated
 
 By default, created and added (ie., discovered upon remote lookup) buckets inherit their properties from the cluster.
 
-> For background and details, see [Default Bucket Properties](/docs/bucket.md#default-bucket-properties).
+> For background and details, see [Bucket Properties](/docs/bucket.md#bucket-properties).
 
 It is possible, however, to change the defaults both at bucket creation time and/or at any later time.
 

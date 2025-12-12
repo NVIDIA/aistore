@@ -40,7 +40,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadR
 		}
 		return fmt.Errorf("failed to create %q: %v", bck.String(), err)
 	}
-	// NOTE: see docs/bucket.md#default-bucket-properties
+	// see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket-properties
 	fmt.Fprintf(c.App.Writer, "%q created\n", bck.Cname(""))
 	return
 }

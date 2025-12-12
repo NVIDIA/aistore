@@ -25,7 +25,7 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
 2. [The Bucket](#the-bucket)
    - [Provider](#provider)
    - [Namespace](#namespace)
-   - [Properties (`Bprops`)](#properties-bprops)
+   - [Bucket Properties](#bucket-properties)
    - [Feature Flags](#feature-flags)
 3. [Bucket Lifecycle](#bucket-lifecycle)
    - [Implicit creation (lazy discovery)](#implicit-creation-lazy-discovery)
@@ -190,7 +190,7 @@ ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "<cluster-uuid>"}, Nam
 
 > **Note**: The bucket namespace you choose - whether it represents an AWS profile, a GCS account, or simply a human-readable alias - becomes part of the bucket's physical [on-disk path](#appendix-a-on-disk-layout). What starts as a logical identifier materializes into on-disk naming structure.
 
-### Properties (`Bprops`)
+### Bucket Properties
 
 Bucket properties - stored in BMD, inherited from cluster config, overridable per-bucket - control data protection (checksums, EC, mirroring), chunked representation, versioning, LRU eviction, rate limiting, access permissions, provider-specific settings, and more.
 

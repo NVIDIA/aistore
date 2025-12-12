@@ -87,7 +87,7 @@ same.
 ! ais put -r -y <path_to_dataset> ais://caltech256/
 ```
 
-> OUTPUT:<br>"ais://caltech256" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)<br>
+> OUTPUT:<br>"ais://caltech256" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket-properties)<br>
 > Files to upload:<br>
     EXTENSION	 COUNT	 SIZE<br>
                     1	 3.06KiB<br>

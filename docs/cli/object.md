@@ -1855,7 +1855,7 @@ OPTIONS:
    help, h           Show help
 ```
 
-[Evict](/docs/bucket.md#prefetchevict-objects) object(s) from a bucket that has [remote backend](/docs/bucket.md).
+[Evict](/docs/bucket.md#prefetch-and-evict) object(s) from a bucket that has [remote backend](/docs/bucket.md).
 
 * NOTE: for each space-separated object name CLI sends a separate request.
 * For multi-object eviction that operates on a `--list` or `--template`, please see: [Operations on Lists and Ranges (and entire buckets)](#operations-on-lists-and-ranges-and-entire-buckets) below.
@@ -2082,8 +2082,11 @@ OPTIONS:
 Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
 
 ### See also
-* [Prefetch/Evict objects](/docs/bucket.md#prefetchevict-objects)
-* Similar to delete, evict and copy operations, `prefetch`also supports embedded prefix - see [disambiguating multi-object operation](#disambiguating-multi-object-operation)
+* [Prefetch and Evict](/docs/bucket.md#prefetch-and-evict)
+
+**Note:** Similar to delete, evict and copy operations, `prefetch` also supports embedded prefix - see:
+
+* [Disambiguating multi-object operation](#disambiguating-multi-object-operation)
 
 ## Example prefetching objects
 

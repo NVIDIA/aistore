@@ -1128,7 +1128,7 @@ OPTIONS:
    --help, -h        Show help
 ```
 
-If `BUCKET` is omitted, the command *applies* to all [AIS buckets](/docs/bucket.md#ais-bucket).
+If `BUCKET` is omitted, the command *applies* to all [AIS buckets](/docs/bucket.md).
 
 The output includes the total number of objects in a bucket, the bucket's size (bytes, megabytes, etc.), and the percentage of the total capacity used by the bucket.
 
@@ -1301,12 +1301,11 @@ All options are required and must be greater than `0`.
 
 Overall, the topic called "bucket properties" is rather involved and includes sub-topics "bucket property inheritance" and "cluster-wide global defaults". For background, please first see:
 
-* [Default Bucket Properties](/docs/bucket.md#default-bucket-properties)
-* [Inherited Bucket Properties and LRU](/docs/bucket.md#inherited-bucket-properties-and-lru)
+* [Bucket Properties](/docs/bucket.md#bucket-properties)
 * [Backend Provider](/docs/overview.md#backend-provider)
 * [Global cluster-wide configuration](/docs/configuration.md#cluster-and-node-configuration).
 
-Now, as far as CLI, run the following to list [properties](/docs/bucket.md#properties-and-options) of the specified bucket.
+Now, as far as CLI, run the following to list [properties](/docs/bucket.md#bucket-properties) of the specified bucket.
 By default, a certain compact form of bucket props sections is presented.
 
 `ais bucket props show BUCKET [PROP_PREFIX] [command options]`
