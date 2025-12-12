@@ -588,9 +588,14 @@ func (worker *tcbworker) do(lif core.LIF, buf []byte) bool {
 		return true
 	}
 	if err := r.copier.do(a, lom, r.dm); err != nil {
+		// Do not add to the filter if there was an error (e.g., "not found"),
+		// so that prune can recognize and delete destination objects whose sources have been removed.
 		return r.IsAborted()
 	}
 	if args.Msg.Sync {
+		// Only successfully copied objects are added to the filter.
+		// Objects NOT in the filter will be checked against the source
+		// if source doesn't exist, prune deletes them from the destination.
 		r.prune.filter.Insert(cos.UnsafeB(lom.Uname()))
 	}
 	return false

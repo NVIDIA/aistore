@@ -242,8 +242,8 @@ class TestBucketOps(ParallelTestBase):
         self.assertTrue(result.success)
         self.assertEqual(num_obj, len(to_bck.list_all_objects()))
 
-        # randomly delete 10% of the objects
-        num_to_del = int(num_obj * 0.1)
+        # randomly delete 50% of the objects
+        num_to_del = int(num_obj * 0.5)
 
         # out of band delete
         for obj_name in random.sample(obj_names, num_to_del):
