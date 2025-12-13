@@ -1,8 +1,13 @@
 # AIS Buckets: Design and Operations
 
-A **bucket** is a named container for objects (files with associated metadata). Buckets are the primary unit of data organization and policy application in AIStore.
+A **bucket** is a named container for objects - monolithic files or chunked representations - with associated metadata.
 
-> Object metadata includes: checksum, version, size, access time, custom attributes, and references to copies/slices.
+Buckets are the primary unit of data organization and policy application in AIStore (AIS).
+
+> Object metadata includes checksum, version, size, access time, replica/EC placement, unique bucket ID (`BID`), and custom user-defined attributes.
+> For remote buckets, AIS may also store backend-specific metadata such as ETag, LastModified timestamps, backend version identifiers, and provider checksums when available.
+>
+> Metadata v2 includes additional flags used by AIS features (for example, chunked object representation).
 
 AIS uses a **flat hierarchy**: `bucket-name/object-name` key space. It supports [virtual directories](/docs/howto_virt_dirs.md) through prefix-based naming with recursive and non-recursive operations.
 
@@ -204,7 +209,7 @@ At the top level:
 
 | JSON key       | Type              | What it controls                                                            |
 | -------------- | ----------------- | --------------------------------------------------------------------------- |
-| `provider`     | `string`          | Backend provider (`ais`, `aws`, `gcp`, `azure`, `oci`, `hdfs`, `ht`, …).    |
+| `provider`     | `string`          | Backend provider (`ais`, `aws`, `gcp`, `azure`, `oci`,  …).                 |
 | `backend_bck`  | `Bck`             | Optional "backend bucket" AIS proxies to (see [Backend Buckets](#backend-buckets)). |
 | `write_policy` | `WritePolicyConf` | When/how metadata is persisted (`immediate`, `delayed`, `never`).           |
 | `checksum`     | `CksumConf`       | Checksum algorithm and validation policies for cold/warm GET.               |
