@@ -262,7 +262,7 @@ $ ais start mirror --copies 2 ais://abc
 
 Any of the supported options can be utilized at any time (and without downtime) - the list includes:
 
-1. **cloud backend**  - [Backend Bucket](bucket.md#backend-bucket)
+1. **cloud backend**  - [Backend Bucket](/docs/bucket.md#backend-buckets)
 2. **mirroring** - [N-way mirror](#n-way-mirror)
 3. **copying**  - [Copy (list, range, and/or prefix) selected objects or entire (in-cluster or remote) buckets](/docs/cli/bucket.md#copy-list-range-andor-prefix-selected-objects-or-entire-in-cluster-or-remote-buckets)
 4. **erasure coding** - [Erasure coding](#erasure-coding)

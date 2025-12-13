@@ -24,9 +24,8 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
 
 **Table of Contents**
 1. [Motivation](#motivation)
-   - [Implicit creation](#implicit-creation)
-   - [Explicit creation](#explicit-creation)
-   - [Stable, global identity](#stable-global-identity)
+   - [Creation](#creation)
+   - [Bucket Identity](#bucket-identity)
 2. [The Bucket](#the-bucket)
    - [Provider](#provider)
    - [Namespace](#namespace)
@@ -73,18 +72,16 @@ The provider and namespace differentiate the backend; the API stays the same.
 | Cloud Bucket | Remote bucket (S3, GCS, Azure, OCI) | `s3://dataset` |
 | Backend Bucket | AIS bucket linked to a remote bucket | `ais://cache => s3://origin` |
 
-### Implicit vs Explicit creation
+### Creation
 
-Another core design goal was to eliminate boilerplate.
+Another core design goal was to eliminate boilerplate: if a bucket exists in the remote backend (Cloud, Remote AIS, etc.) and is accessible, AIS makes it immediately usable.
+Remote buckets are added lazily, on first reference, without a separate creation step.
 
-Remote buckets normally require no registration. If a bucket exists in the remote backend (Cloud, Remote AIS, etc.) and is accessible, AIS makes it immediately usable.
-Buckets are added lazily, on first reference, without a separate creation step.
-
-Explicit creation is supported for cases where additional control is required - credentials, endpoints, namespaces, or properties that must be set before first access.
+Explicit creation is supported when additional control is required - credentials, endpoints, namespaces, or properties that must be set before first access.
 
 Further details - in section [Bucket Lifecycle](#bucket-lifecycle) below.
 
-### Stable, global identity
+### Bucket Identity
 
 Once added to BMD, a bucket's identity becomes cluster-wide and immutable:
 
@@ -197,7 +194,7 @@ ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "<cluster-uuid>"}, Nam
 
 ### Bucket Properties
 
-Bucket properties - stored in BMD, inherited from cluster config, overridable per-bucket - control data protection (checksums, EC, mirroring), chunked representation, versioning, LRU eviction, rate limiting, access permissions, provider-specific settings, and more.
+Bucket properties - stored in BMD, inherited from cluster config, overridable per-bucket - control data protection (checksums, EC, mirroring), chunked representation, versioning and synchronization with remote sources, LRU eviction, rate limiting, access permissions, provider-specific settings, and more.
 
 The properties:
 * are **inherited** from cluster-wide configuration at bucket creation time;
@@ -550,24 +547,27 @@ Cached objects remain in the AIS bucket.
    - [Option A: Namespaces (direct access)](#option-a-namespaces-direct-access)
    - [Option B: Backend buckets (via AIS proxy)](#option-b-backend-buckets-via-ais-proxy)
    - [Which to use?](#which-to-use)
-2. [Prefetch and Evict](#prefetch-and-evict)
+2. [Working with Remote AIS Clusters](#working-with-remote-ais-clusters)
+   - [Attach remote cluster](#attach-remote-cluster)
+   - [List buckets and objects in remote clusters](#list-buckets-and-objects-in-remote-clusters)
+3. [Prefetch and Evict](#prefetch-and-evict)
    - [Prefetching](#prefetching)
    - [Monitoring prefetch](#monitoring-prefetch)
    - [Evicting](#evicting)
-3. [Access Control](#access-control)
+4. [Access Control](#access-control)
    - [Setting access](#setting-access)
    - [Predefined values](#predefined-values)
-4. [Provider-Specific Configuration](#provider-specific-configuration)
+5. [Provider-Specific Configuration](#provider-specific-configuration)
    - [AWS / S3-compatible](#aws--s3-compatible)
    - [Google Cloud](#google-cloud)
    - [Azure](#azure)
-5. [List Objects](#list-objects)
+6. [List Objects](#list-objects)
    - [Basic usage](#basic-usage)
    - [Properties](#properties)
    - [Flags](#flags)
    - [Pagination](#pagination)
-6. [Operations Summary](#operations-summary)
-7. [CLI Quick Reference](#cli-quick-reference)
+7. [Operations Summary](#operations-summary)
+8. [CLI Quick Reference](#cli-quick-reference)
 
 ## Working with Same-Name Remote Buckets
 
@@ -627,6 +627,56 @@ Namespaces give you direct access with minimal overhead. Backend buckets add a l
 Note that Option B requires the namespaced S3 bucket to exist first. You can't skip straight to `backend_bck=s3://data` with custom credentials - AIS needs to resolve the backend bucket, which requires proper credentials already in place. Create the namespaced cloud bucket first, then front it with an AIS bucket if needed.
 
 > See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
+
+---
+
+## Working with Remote AIS Clusters
+
+AIS clusters can be attached to each other, forming a global namespace of all individually hosted datasets. For background and configuration details, see [Remote AIS Cluster](providers.md#remote-ais-cluster).
+
+### Attach remote cluster
+
+```console
+# attach a remote AIS cluster with alias `teamZ`
+$ ais cluster attach teamZ=http://cluster.ais.org:51080
+Remote cluster (teamZ=http://cluster.ais.org:51080) successfully attached
+
+# Verify the attachment
+$ ais show remote-cluster
+
+UUID      URL                            Alias     Primary      Smap   Targets  Online
+MCBgkFqp  http://cluster.ais.org:51080   teamZ     p[primary]   v317   10       yes
+```
+
+### List buckets and objects in remote clusters
+
+```console
+# List all buckets in all remote AIS clusters
+# By convention, `@` prefixes remote cluster UUIDs
+$ ais ls ais://@
+
+AIS Buckets (4)
+  ais://@MCBgkFqp/imagenet
+  ais://@MCBgkFqp/coco
+  ais://@MCBgkFqp/imagenet-augmented
+  ais://@MCBgkFqp/imagenet-inflated
+
+# List buckets in a specific remote cluster (by alias or UUID)
+$ ais ls ais://@teamZ
+
+AIS Buckets (4)
+  ais://@MCBgkFqp/imagenet
+  ais://@MCBgkFqp/coco
+  ais://@MCBgkFqp/imagenet-augmented
+  ais://@MCBgkFqp/imagenet-inflated
+
+# List objects in a remote bucket
+$ ais ls ais://@teamZ/imagenet-augmented
+NAME              SIZE
+train-001.tgz     153.52KiB
+train-002.tgz     136.44KiB
+...
+```
 
 ---
 

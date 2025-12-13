@@ -8,6 +8,7 @@ The rest of this document is structured as follows:
 
 - [At a glance](#at-a-glance)
 - [Terminology](#terminology)
+  - [Bucket](#bucket)
   - [Backend Provider](#backend-provider)
   - [Mountpath](#mountpath)
   - [Proxy](#proxy)
@@ -55,8 +56,24 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 
 ---
 
+### Bucket
+A **bucket** is a named container for objects - monolithic files or chunked representations - with associated metadata. It is the fundamental unit of data organization and data management.
+
+AIS buckets are categorized by their [provider](/docs/bucket.md#provider) and origin. **Native** `ais://` buckets managed by [this cluster](#at-a-glance) are always created explicitly (via `ais create` or the respective Go and/or Python [APIs](#aistore-api)).
+
+Remote buckets (including `s3://`, `gs://`, etc., and `ais://` buckets in remote AIS clusters) are [usually](/docs/bucket.md#creation) discovered and auto-added on-the-fly on first access.
+
+In a cluster, every bucket is assigned a unique, cluster-wide bucket ID (`BID`). Same-name remote buckets with different [namespaces](/docs/bucket.md#bucket-identity) get different IDs.
+Every object a) belongs to exactly one bucket and b) is identified by a unique name within that bucket.
+
+Bucket [properties](/docs/bucket.md#bucket-properties) define data protection (checksums, mirroring, erasure coding), chunked representation, versioning and synchronization with remote sources, access control, backend linkage, feature flags, rate-limit settings, and more.
+
+> See [AIS Buckets: Design and Operations](/docs/bucket.md) for complete description including: identity model, namespaces, lifecycle, and operations.
+
+---
+
 ### Backend Provider
-Backend provider (or simply **backend**) is an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "local" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
+Backend provider (or simply **backend**) is an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "this cluster" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
 
 > See [providers](providers.md) for the current list of supported clouds and instructions on chaining AIS clusters.
 

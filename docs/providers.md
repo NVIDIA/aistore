@@ -2,7 +2,7 @@
 
 Terminology first:
 
-**Backend Provider** is a designed-in [abstraction](https://github.com/NVIDIA/aistore/blob/main/ais/target.go) and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
+**Backend Provider** is a designed-in backend interface [abstraction](https://github.com/NVIDIA/aistore/blob/main/core/backend.go) and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given AIS cluster.
 
 AIStore natively integrates with multiple backend providers:
 
@@ -29,17 +29,19 @@ Here's what happens upon the very first (read or write or list, etc.) access to 
 2. If confirmed, AIS will atomically add the bucket to the BMD (along with its remote properties).
 3. Once all of the above is set and done, AIS will go ahead to perform that original (read or write or list, etc.) operation
 
-> There are advanced-usage type options to skip Steps 1. and 2. above - see e.g. [`LisObjsMsg flags`](https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go#L15-L56)
+> There are advanced-usage type options to skip Steps 1. and 2. above - see e.g. [`LisObjsMsg flags`](https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go)
 
 The full taxonomy of the supported backends is shown below (and note that AIS supports itself on the back as well):
 
 ![Supported Backends](images/supported-backends.png)
 
-Further:
+For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket identity, properties, lifecycle, and associated policies, storage services and usage examples, see the comprehensive:
+* [AIS Buckets: Design and Operations](/docs/bucket.md)
 
-* For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and usage examples, see [AIS Buckets: Design and Operations](/docs/bucket.md)
+And further:
+
 * For API reference, see [APIs](/docs/overview.md#aistore-api).
-* For AIS command-line management, see [CLI](cli.md).
+* For AIS command-line management tool, see [CLI](cli.md).
 
 ## Remote AIS cluster
 
@@ -123,8 +125,8 @@ Configuration-wise, the following two examples specify a single-URL and multi-UR
 
 For more usage examples, please see:
 
-* [working with remote AIS cluster](bucket.md#cli-working-with-remote-ais-cluster)
-* [example: minimal remote cluster](development.md#example-minimal-remote-cluster)
+* [working with remote AIS clusters](/docs/bucket.md#working-with-remote-ais-clusters)
+* [example: minimal remote cluster](/docs/development.md#example-minimal-remote-cluster)
 
 And one more comment:
 
@@ -148,7 +150,7 @@ In each case, we use the vendor's own SDK/API to provide transparent access to C
 
 > Notwithstanding, *remote buckets* will often serve as a fast cache or a fast tier in front of a given 3rd party Cloud storage.
 
-> Note as well that AIS provides [multiple easy ways to populate its *remote buckets*](overview.md#existing-datasets) - including, but not limited to conventional on-demand self-populating dubbed [cold GET](/docs/overview.md#existing-datasets).
+> Note that AIS provides multiple easy ways to [populate](/docs/overview.md#existing-datasets) its remote buckets, including - but not limited to - conventional on-demand, self-populating, dubbed _cold GET_.
 
 ## Example: accessing Cloud storage via remote AIS
 

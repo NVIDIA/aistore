@@ -1,3 +1,19 @@
+## Background and Introduction
+
+A **bucket** is a named container for objects - monolithic files or chunked representations - with associated metadata. It is the fundamental unit of data organization and data management.
+
+AIS buckets are categorized by their [provider](/docs/bucket.md#provider) and origin. **Native** `ais://` buckets managed by [this cluster](#at-a-glance) are always created explicitly (via `ais create` or the respective Go and/or Python [APIs](#aistore-api)).
+
+Remote buckets (including `s3://`, `gs://`, etc., and `ais://` buckets in remote AIS clusters) are [usually](/docs/bucket.md#creation) discovered and auto-added on-the-fly on first access.
+
+In a cluster, every bucket is assigned a unique, cluster-wide bucket ID (`BID`). Same-name remote buckets with different [namespaces](/docs/bucket.md#bucket-identity) get different IDs.
+Every object a) belongs to exactly one bucket and b) is identified by a unique name within that bucket.
+
+Bucket [properties](/docs/bucket.md#bucket-properties) define data protection (checksums, mirroring, erasure coding), chunked representation, versioning and synchronization with remote sources, access control, backend linkage, feature flags, rate-limit settings, and more.
+
+> For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket identity, properties, lifecycle, and associated policies, storage services and usage examples, see the comprehensive:
+> * [AIS Buckets: Design and Operations](/docs/bucket.md)
+
 It is easy to see all CLI operations on *buckets*:
 
 ```console

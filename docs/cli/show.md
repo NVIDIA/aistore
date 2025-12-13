@@ -629,18 +629,18 @@ The following subcommands are currently supported:
    config   show AuthN server configuration
 ```
 
-[Refer to `ais auth` documentation for details and examples.](auth.md#command-list)
+[Refer to `ais auth` documentation for details and examples.](/docs/cli/auth.md#command-list)
 
 
 ## `ais show bucket`
 Show bucket properties.
 
-[Refer to `ais bucket` documentation for details and examples.](bucket.md#show-bucket-properties)
+[Refer to `ais bucket` documentation for details and examples.](/docs/cli/bucket.md#show-bucket-properties)
 
 ## `ais show object`
 Show object details.
 
-[Refer to `ais object` documentation for details and examples.](object.md#show-object-properties)
+[Refer to `ais object` documentation for details and examples.](/docs/cli/object.md#show-object-properties)
 
 ## `ais show storage`
 Show storage usage and utilization in the cluster. Show disks and mountpaths - for a single selected node or for all storage nodes.

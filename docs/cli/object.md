@@ -1957,7 +1957,7 @@ Generally, AIS objects have two kinds of properties: system and, optionally, cus
 
 Custom properties are not impacted by object updates (PUTs) -- a new version of an object simply inherits custom properties of the previous version as is with no changes.
 
-The command's syntax is similar to the one used to assign [bucket properties](bucket.md#set-bucket-properties):
+The command's syntax is similar to the one used to assign [bucket properties](/docs/cli/bucket.md#set-bucket-properties)
 
 `ais object set-custom BUCKET/OBJECT_NAME JSON_SPECIFICATION|KEY=VALUE [KEY=VALUE...]`, [command options]
 
