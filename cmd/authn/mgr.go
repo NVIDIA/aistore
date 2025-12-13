@@ -438,6 +438,9 @@ func (m *mgr) createTokenWithClaims(c *tok.AISClaims) (string, error) {
 	if m.cm.HasHMACSecret() {
 		return tok.CreateHMACTokenStr(c, m.cm.GetSecret())
 	}
+	if pKey := m.cm.GetPrivateKey(); pKey != nil {
+		return tok.CreateRSATokenStr(c, pKey)
+	}
 	return "", errors.New("no valid signing key configured")
 }
 

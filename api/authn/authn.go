@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 func AddUser(bp api.BaseParams, newUser *User) error {
@@ -298,4 +299,30 @@ func SetConfig(bp api.BaseParams, conf *ConfigToUpdate) error {
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	return reqParams.DoRequest()
+}
+
+func GetOIDCConfig(bp api.BaseParams) (*OIDCConfiguration, error) {
+	bp.Method = http.MethodGet
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathOIDC.S
+	}
+	oidcConf := &OIDCConfiguration{}
+	_, err := reqParams.DoReqAny(oidcConf)
+	return oidcConf, err
+}
+
+func GetJWKS(bp api.BaseParams) (jwk.Set, error) {
+	bp.Method = http.MethodGet
+	reqParams := api.AllocRp()
+	defer api.FreeRp(reqParams)
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathJWKS.S
+	}
+	keySet := jwk.NewSet()
+	_, err := reqParams.DoReqAny(keySet)
+	return keySet, err
 }

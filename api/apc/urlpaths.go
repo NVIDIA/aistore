@@ -45,9 +45,12 @@ const (
 
 // AuthN server endpoints (l2)
 const (
-	Users    = "users"
-	Clusters = "clusters"
-	Roles    = "roles"
+	Users      = "users"
+	Clusters   = "clusters"
+	Roles      = "roles"
+	OIDCPrefix = ".well-known"
+	OIDCConfig = "openid-configuration"
+	JWKS       = "jwks.json"
 )
 
 // l3 ---
@@ -197,6 +200,8 @@ var (
 	URLPathUsers    = urlpath(Version, Users)
 	URLPathClusters = urlpath(Version, Clusters)
 	URLPathRoles    = urlpath(Version, Roles)
+	URLPathOIDC     = urlpath(Version, OIDCPrefix, OIDCConfig)
+	URLPathJWKS     = urlpath(Version, OIDCPrefix, JWKS)
 
 	URLPathML = urlpath(Version, ML)
 )

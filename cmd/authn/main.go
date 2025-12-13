@@ -26,13 +26,7 @@ import (
 var (
 	build     string
 	buildtime string
-
-	configPath string
 )
-
-func init() {
-	flag.StringVar(&configPath, "config", "", config.ServiceName+" configuration")
-}
 
 func logFlush() {
 	for {
@@ -42,7 +36,10 @@ func logFlush() {
 }
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "version" {
+	cfgPath := flag.String("config", "", config.ServiceName+" configuration")
+	showVer := flag.Bool("version", false, "print version and exit")
+	flag.Parse()
+	if *showVer || len(os.Args) == 2 && os.Args[1] == "version" {
 		printVer()
 		os.Exit(0)
 	}
@@ -52,10 +49,9 @@ func main() {
 		os.Exit(0)
 	}
 	installSignalHandler()
-	flag.Parse()
 	cm := config.NewConfManager()
-	configDir := getConfigDir()
-	cm.Init(configDir)
+	configDir, configFile := resolveConfigPath(*cfgPath)
+	cm.Init(configFile)
 	updateLogOptions(cm)
 	driver := createDB(configDir)
 	mgr, code, err := newMgr(cm, driver)
@@ -86,17 +82,26 @@ func createDB(configDir string) *kvdb.BuntDriver {
 	return driver
 }
 
-func getConfigDir() (configDir string) {
-	confDirFlag := flag.Lookup("config")
-	if confDirFlag != nil {
-		configDir = confDirFlag.Value.String()
-	}
-	if configDir == "" {
+func resolveConfigPath(flagConf string) (configDir, configFile string) {
+	switch {
+	case flagConf != "":
+		fi, err := os.Stat(flagConf)
+		if err != nil {
+			cos.ExitLogf("Invalid %s configuration path %q: %v", config.ServiceName, flagConf, err)
+		}
+		if fi.IsDir() {
+			configDir = flagConf
+			configFile = filepath.Join(configDir, fname.AuthNConfig)
+		} else {
+			configFile = flagConf
+			configDir = filepath.Dir(flagConf)
+		}
+	case os.Getenv(env.AisAuthConfDir) != "":
 		configDir = os.Getenv(env.AisAuthConfDir)
-	}
-	if configDir == "" {
-		cos.ExitLogf("Missing %s configuration file (to specify, use '-%s' option or '%s' environment)",
-			config.ServiceName, "config", env.AisAuthConfDir)
+		configFile = filepath.Join(configDir, fname.AuthNConfig)
+	default:
+		cos.ExitLogf("Missing %s configuration file (use '-config' or '%s')",
+			config.ServiceName, env.AisAuthConfDir)
 	}
 	return
 }

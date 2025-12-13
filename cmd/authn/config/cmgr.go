@@ -5,10 +5,14 @@
 package config
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,31 +21,34 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 const (
 	ServiceName = "AuthN"
 )
 
+// Constants for creating RSA keys and key set
+const (
+	SigningKeyUsage  = "sig"
+	PublicKeyPEMType = "PUBLIC KEY"
+)
+
 // ConfManager Used by AuthN to interface with the shared authN config used on both API and server-side
 // Provides utilities used only by the authN service (not API)
 type ConfManager struct {
-	conf atomic.Pointer[authn.Config]
-	mu   sync.Mutex
+	filePath string
+	conf     atomic.Pointer[authn.Config]
+	jwks     jwk.Set
+	mu       sync.Mutex
 }
 
 func NewConfManager() *ConfManager {
 	cm := &ConfManager{}
 	cm.conf.Store(&authn.Config{})
-	return cm
-}
-
-func NewConfManagerWithConf(c *authn.Config) *ConfManager {
-	cm := &ConfManager{}
-	cm.conf.Store(c)
 	return cm
 }
 
@@ -82,34 +89,46 @@ func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
 	// re-init to copy into private fields
 	next.Init()
 	cm.conf.Store(&next)
+	if cm.filePath != "" {
+		if err := jsp.SaveMeta(cm.filePath, cm.conf.Load(), nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (cm *ConfManager) Init(configDir string) {
-	conf := cm.conf.Load()
-	if configDir != "" {
-		conf = loadFromDisk(configDir)
+func (cm *ConfManager) Init(configPath string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	conf, err := cm.loadFromDisk(configPath)
+	if err != nil {
+		cos.ExitLogf("%s service failed to start: %v", ServiceName, err)
 	}
 	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
 		conf.Server.Secret = val
 	}
 	conf.Init()
 	cm.conf.Store(conf)
-	if !cm.HasHMACSecret() {
-		cos.ExitLogf("Secret key not provided. Set in config or override with %q", env.AisAuthSecretKey)
+	if cm.HasHMACSecret() {
+		return
+	}
+	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
+	err = cm.createRSA()
+	if err != nil {
+		cos.ExitLogf("Failed to initialize RSA key: %v", err)
 	}
 }
 
-func loadFromDisk(configDir string) *authn.Config {
-	configPath := filepath.Join(configDir, fname.AuthNConfig)
+func (cm *ConfManager) loadFromDisk(configPath string) (*authn.Config, error) {
+	cm.filePath = configPath
 	rawConf := &authn.Config{}
 	if _, err := jsp.LoadMeta(configPath, rawConf); err != nil {
-		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
+		return nil, fmt.Errorf("failed to load configuration from %q: %v", configPath, err)
 	}
 	if rawConf.Verbose() {
 		nlog.Infof("Loaded configuration from %s", configPath)
 	}
-	return rawConf
+	return rawConf, nil
 }
 
 func (cm *ConfManager) SaveToDisk(configPath string) error {
@@ -118,6 +137,29 @@ func (cm *ConfManager) SaveToDisk(configPath string) error {
 
 func (cm *ConfManager) GetLogDir() string {
 	return cos.GetEnvOrDefault(env.AisAuthLogDir, cm.conf.Load().Log.Dir)
+}
+
+func (cm *ConfManager) ParseExternalURL() (*url.URL, error) {
+	raw := cos.GetEnvOrDefault(env.AisAuthExternalURL, cm.conf.Load().Net.ExternalURL)
+	if raw != "" {
+		return url.Parse(raw)
+	}
+	// fallback to localhost if not configured
+	return cm.getLocalHost(), nil
+}
+
+func (cm *ConfManager) getLocalHost() *url.URL {
+	scheme := "http"
+	if cm.IsHTTPS() {
+		scheme = "https"
+	}
+	port := cm.GetPort()
+	u := &url.URL{
+		Scheme: scheme,
+		Host:   "localhost" + port,
+	}
+	nlog.Warningf("No external URL configured for %s; defaulting to %s", ServiceName, u.String())
+	return u
 }
 
 func (cm *ConfManager) IsHTTPS() bool {
@@ -151,10 +193,11 @@ func (cm *ConfManager) IsVerbose() bool {
 }
 
 func (cm *ConfManager) GetSigConf() (*cmn.AuthSignatureConf, error) {
-	if secret := cm.conf.Load().Secret(); secret != "" {
+	conf := cm.conf.Load()
+	if secret := conf.Secret(); secret != "" {
 		return &cmn.AuthSignatureConf{Key: secret, Method: cmn.SigMethodHMAC}, nil
 	}
-	if key := cm.conf.Load().Server.PubKey; key != nil {
+	if key := conf.Server.PubKey; key != nil {
 		// Public key is not sensitive, but must be a censored type in conf
 		return &cmn.AuthSignatureConf{Key: cmn.Censored(*key), Method: cmn.SigMethodRSA}, nil
 	}
@@ -184,10 +227,87 @@ func (cm *ConfManager) GetSecretChecksum() string {
 	return cos.ChecksumB2S(cos.UnsafeB(secret), cos.ChecksumSHA256)
 }
 
-/////////
-// RSA //
-/////////
+//////////////////
+// RSA and OIDC //
+//////////////////
+
+// Updates both the service config and the jwks, must be called under lock
+func (cm *ConfManager) createRSA() error {
+	// Generate RSA256 key pair
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	// Convert to PKIX bytes
+	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return err
+	}
+	// Encode as PEM string
+	pubPem := string(pem.EncodeToMemory(&pem.Block{
+		Type:  PublicKeyPEMType,
+		Bytes: pubBytes,
+	}))
+	cm.setRSAKey(key, pubPem)
+	return cm.createPubJWKS()
+}
+
+// Must be called under lock to enable partial update of config
+func (cm *ConfManager) setRSAKey(pKey *rsa.PrivateKey, pubStr string) {
+	old := cm.conf.Load()
+	next := *old
+	next.SetPrivateKey(pKey)
+	next.Server.PubKey = &pubStr
+	next.Init()
+	cm.conf.Store(&next)
+}
+
+func (cm *ConfManager) GetPrivateKey() *rsa.PrivateKey {
+	return cm.conf.Load().GetPrivateKey()
+}
 
 func (cm *ConfManager) GetPublicKeyString() *string {
 	return cm.conf.Load().Server.PubKey
+}
+
+func (cm *ConfManager) GetKeySet() jwk.Set {
+	return cm.jwks
+}
+
+// Sets jwks for the manger, must be called under lock when creating RSA
+func (cm *ConfManager) createPubJWKS() error {
+	conf := cm.conf.Load()
+	pubJWK, err := createPubJWK(conf.GetPrivateKey())
+	if err != nil {
+		return fmt.Errorf("failed to generate public JWK: %w", err)
+	}
+	keySet := jwk.NewSet()
+	err = keySet.AddKey(pubJWK)
+	if err != nil {
+		return fmt.Errorf("failed to add public key to keyset: %w", err)
+	}
+	cm.jwks = keySet
+	return nil
+}
+
+func createPubJWK(pKey *rsa.PrivateKey) (jwk.Key, error) {
+	jwkKey, err := jwk.FromRaw(pKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid key: %w", err)
+	}
+	// jwk Key does not automatically assign a key ID, so use the utility function to do this
+	err = jwk.AssignKeyID(jwkKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign key id: %w", err)
+	}
+	// Set metadata "alg" and "use"
+	err = jwkKey.Set(jwk.AlgorithmKey, authn.SigningMethodRS256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set algorithm: %w", err)
+	}
+	err = jwkKey.Set(jwk.KeyUsageKey, SigningKeyUsage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set key usage: %w", err)
+	}
+	return jwkKey.PublicKey()
 }

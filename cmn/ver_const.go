@@ -29,7 +29,7 @@ const (
 	VersionAIStore = "4.1"
 	VersionCLI     = "1.22"
 	VersionLoader  = "2.1"
-	VersionAuthN   = "1.3"
+	VersionAuthN   = "1.4"
 )
 
 // NOTE: for (local) LOM meta-versions, see core/lom*

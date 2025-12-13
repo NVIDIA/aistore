@@ -5,9 +5,9 @@
 package config_test
 
 import (
-	"errors"
-	"os"
-	"os/exec"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -19,13 +19,20 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
-// helper to create a minimal valid authn.Config
-func newBaseConfig() *authn.Config {
-	c := &authn.Config{
+func newConfManagerWithConf(t *testing.T, c *authn.Config) *config.ConfManager {
+	path := writeConfToDisk(t, c)
+	cm := config.NewConfManager()
+	cm.Init(path)
+	return cm
+}
+
+// helper to create a minimal valid authn.Config that can be modified before use
+func newConf() *authn.Config {
+	return &authn.Config{
 		Server: authn.ServerConf{
 			Secret: "test-secret",
 			Expire: cos.Duration(time.Hour),
@@ -46,8 +53,21 @@ func newBaseConfig() *authn.Config {
 			Default: cos.Duration(time.Second),
 		},
 	}
+}
+
+// Create and initialize a base config
+func newBaseConfig() *authn.Config {
+	c := newConf()
 	c.Init()
 	return c
+}
+
+func writeConfToDisk(t *testing.T, c *authn.Config) string {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "authn.json")
+	err := jsp.SaveMeta(path, c, nil)
+	tassert.Fatalf(t, err == nil, "failed to write config: %v", err)
+	return path
 }
 
 func compareSecret(t *testing.T, cm *config.ConfManager, expected string) {
@@ -72,17 +92,8 @@ func TestNewConfManagerAndGetConf(t *testing.T) {
 	tassert.Fatal(t, cm.GetConf() != nil, "GetConf returned nil after NewConfManager")
 }
 
-func TestNewConfManagerWithConf(t *testing.T) {
-	base := newBaseConfig()
-	cm := config.NewConfManagerWithConf(base)
-	got := cm.GetConf()
-	tassert.Fatal(t, got != nil, "GetConf returned nil")
-	tassert.Fatalf(t, got.Server.Secret == base.Server.Secret, "expected secret %q, got %q", base.Server.Secret, got.Server.Secret)
-}
-
 func TestUpdateConf(t *testing.T) {
-	base := newBaseConfig()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, newBaseConfig())
 
 	// empty config
 	err := cm.UpdateConf(&authn.ConfigToUpdate{})
@@ -117,61 +128,84 @@ func TestUpdateConf(t *testing.T) {
 }
 
 func TestInitEnv(t *testing.T) {
+	c := newConf()
+	c.Server.Secret = ""
+	c.Init()
+	path := writeConfToDisk(t, c)
 	cm := config.NewConfManager()
 
 	const envSecret = "env-secret-only"
 	t.Setenv(env.AisAuthSecretKey, envSecret)
 
-	cm.Init("") // should not attempt to load from disk
+	cm.Init(path)
 	compareSecret(t, cm, envSecret)
-}
-
-func TestInitNoSecret(t *testing.T) {
-	if os.Getenv("TEST_INIT_NO_SECRET") == "1" {
-		// Init with no secret should exit via cos.ExitLogf
-		cm := config.NewConfManager()
-		// no config dir, no env secret
-		cm.Init("")
-		t.Fatal("Init did not exit as expected")
-	}
-	// Run init in a child process to catch fatal exit
-	cmd := exec.Command(os.Args[0], "-test.run=TestInitNoSecret")
-	cmd.Env = append(os.Environ(), "TEST_INIT_NO_SECRET=1")
-
-	err := cmd.Run()
-	tassert.Fatal(t, err != nil, "expected non-zero exit code")
-	var exitErr *exec.ExitError
-	ok := errors.As(err, &exitErr)
-	tassert.Fatalf(t, ok && exitErr.ExitCode() != 0, "expected process to exit with non-zero code, got %v", err)
+	tassert.Error(t, cm.GetPrivateKey() == nil, "RSA private key not set")
+	tassert.Error(t, cm.GetPublicKeyString() == nil, "RSA public key not set")
 }
 
 func TestInitFromDisk(t *testing.T) {
-	// Clear env var set in pipeline
+	// Clear env var set in pipeline for first write -- use value from disk
 	t.Setenv(env.AisAuthSecretKey, "")
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, fname.AuthNConfig)
 	base := newBaseConfig()
-
-	// write (uninitialized) base config via ConfManager.SaveToDisk
-	cmSave := config.NewConfManagerWithConf(base)
-	if err := cmSave.SaveToDisk(configPath); err != nil {
-		t.Fatalf("failed to save config: %v", err)
-	}
+	path := writeConfToDisk(t, base)
+	cm := config.NewConfManager()
+	cm.Init(path)
+	compareSecret(t, cm, base.Server.Secret)
+	compareExpiry(t, cm, base.Expire())
 
 	// override secret via env
 	const envSecret = "env-secret"
 	t.Setenv(env.AisAuthSecretKey, envSecret)
 
-	cm := config.NewConfManager()
-	cm.Init(dir)
+	cm.Init(path)
 	compareSecret(t, cm, envSecret)
-	compareExpiry(t, cm, base.Expire())
+}
+
+func TestParseExternalURL_Env(t *testing.T) {
+	urlStr := "https://example.com:8443/base"
+	t.Setenv(env.AisAuthExternalURL, urlStr)
+	// Not set in base
+	cm := newConfManagerWithConf(t, newBaseConfig())
+	u, err := cm.ParseExternalURL()
+	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	tassert.Errorf(t, u.String() == urlStr, "expected URL %q, got %q", urlStr, u.String())
+}
+
+func TestParseExternalURL_Conf(t *testing.T) {
+	urlStr := "https://example.com:8443/base"
+	base := newBaseConfig()
+	base.Net.ExternalURL = urlStr
+	cm := newConfManagerWithConf(t, base)
+	u, err := cm.ParseExternalURL()
+	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	tassert.Errorf(t, u.String() == urlStr, "expected URL %q, got %q", urlStr, u.String())
+}
+
+func TestParseExternalURL_FallbackHTTP(t *testing.T) {
+	// First, when not using https
+	expectedURL := "http://localhost:12345"
+	base := newBaseConfig()
+	base.Net.HTTP.UseHTTPS = false
+	cm := newConfManagerWithConf(t, base)
+	u, err := cm.ParseExternalURL()
+	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	tassert.Errorf(t, u.String() == expectedURL, "expected URL %q, got %q", expectedURL, u.String())
+}
+
+func TestParseExternalURL_FallbackHTTPS(t *testing.T) {
+	// First, when not using https
+	expectedURL := "https://localhost:12345"
+	base := newBaseConfig()
+	cm := newConfManagerWithConf(t, base)
+	u, err := cm.ParseExternalURL()
+	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
+	tassert.Errorf(t, u.String() == expectedURL, "expected URL %q, got %q", expectedURL, u.String())
 }
 
 func TestGetLogDir(t *testing.T) {
 	base := newBaseConfig()
 	base.Log.Dir = "/default/log"
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 
 	// default
 	got := cm.GetLogDir()
@@ -187,11 +221,11 @@ func TestGetLogDir(t *testing.T) {
 func TestIsHTTPS(t *testing.T) {
 	base := newBaseConfig()
 	base.Net.HTTP.UseHTTPS = true
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	tassert.Errorf(t, cm.IsHTTPS(), "expected IsHTTPS true when set in config")
 
 	base.Net.HTTP.UseHTTPS = false
-	cm = config.NewConfManagerWithConf(base)
+	cm = newConfManagerWithConf(t, base)
 	tassert.Errorf(t, !cm.IsHTTPS(), "expected IsHTTPS false when config says false and env unset")
 
 	t.Setenv(env.AisAuthUseHTTPS, "true")
@@ -211,7 +245,7 @@ func TestGetServerCertAndKey(t *testing.T) {
 	base.Net.HTTP = *expectedHTTP
 
 	// Use http settings from config
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	validateHTTPConf(t, cm, expectedHTTP)
 
 	envCert := "/env/cert"
@@ -227,7 +261,7 @@ func TestGetServerCertAndKey(t *testing.T) {
 func TestGetPort(t *testing.T) {
 	base := newBaseConfig()
 	base.Net.HTTP.Port = 52001
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 
 	// default from config
 	port := cm.GetPort()
@@ -242,49 +276,48 @@ func TestGetPort(t *testing.T) {
 func TestIsVerbose(t *testing.T) {
 	base := newBaseConfig()
 	base.Log.Level = "4"
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	tassert.Errorf(t, cm.IsVerbose(), "expected IsVerbose true for level 4")
 
 	base.Log.Level = "1"
-	cm = config.NewConfManagerWithConf(base)
+	cm = newConfManagerWithConf(t, base)
 	tassert.Errorf(t, !cm.IsVerbose(), "expected IsVerbose false for level 1")
 }
 
-func TestGetSigConf(t *testing.T) {
+func TestGetSigConf_HMAC(t *testing.T) {
+	// HMAC path -- default base config here has a secret set
 	base := newBaseConfig()
-	// HMAC path
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	sig, err := cm.GetSigConf()
 	tassert.Fatalf(t, err == nil, "GetSigConf failed: %v", err)
 	tassert.Fatalf(t, sig.Method == cmn.SigMethodHMAC, "expected HMAC method, got %v", sig.Method)
 	expectedSec := base.Server.Secret
 	tassert.Fatalf(t, string(sig.Key) == expectedSec, "expected key %q, got %q", expectedSec, sig.Key)
+}
 
-	// RSA path: no secret, but PubKey set
+func TestGetSigConf_RSA(t *testing.T) {
+	base := newBaseConfig()
+	// RSA path: no secret
 	base.Server.Secret = ""
-	pub := "public-key"
-	base.Server.PubKey = &pub
-	base.Init()
-	cm = config.NewConfManagerWithConf(base)
-	sig, err = cm.GetSigConf()
+	cm := newConfManagerWithConf(t, base)
+	sig, err := cm.GetSigConf()
 	tassert.Fatalf(t, err == nil, "GetSigConf failed for RSA: %v", err)
 	tassert.Fatalf(t, sig.Method == cmn.SigMethodRSA, "expected RSA method, got %v", sig.Method)
-	tassert.Fatalf(t, string(sig.Key) == pub, "expected key %q, got %q", pub, sig.Key)
-
-	// invalid: neither secret nor pubkey
-	base.Server.PubKey = nil
-	base.Server.Secret = ""
-	base.Init()
-	cm = config.NewConfManagerWithConf(base)
-	_, err = cm.GetSigConf()
-	tassert.Error(t, err != nil, "expected error when no secret or pubkey")
+	// We don't know pubKey at deploy time, so just make sure it's set and valid
+	tassert.Fatal(t, string(sig.Key) != "", "expected non-nil public key")
+	block, _ := pem.Decode([]byte(sig.Key))
+	tassert.Fatal(t, block != nil, "expected PEM block in public key")
+	var pub any
+	pub, err = x509.ParsePKIXPublicKey(block.Bytes)
+	tassert.Fatalf(t, err == nil, "expected no error parsing RSA public key, got %v", err)
+	_, ok := pub.(*rsa.PublicKey)
+	tassert.Fatal(t, ok, "expected public key string to be valid RSA public key")
 }
 
 func TestGetExpiryAndDefaultTimeout(t *testing.T) {
 	base := newBaseConfig()
 	base.Server.Expire = cos.Duration(3 * time.Hour)
-	base.Init()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 
 	exp := cm.GetExpiry()
 	tassert.Errorf(t, exp == 3*time.Hour, "expected expiry 3h, got %v", exp)
@@ -294,7 +327,7 @@ func TestGetTimeout(t *testing.T) {
 	base := newBaseConfig()
 	confTimeout := 10 * time.Second
 	base.Timeout.Default = cos.Duration(confTimeout)
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	timeout := cm.GetDefaultTimeout()
 	tassert.Errorf(t, timeout == confTimeout, "expected default timeout, got %v", timeout)
 }
@@ -302,13 +335,11 @@ func TestGetTimeout(t *testing.T) {
 func TestHMACSecret(t *testing.T) {
 	base := newBaseConfig()
 	base.Server.Secret = "some-secret"
-	base.Init()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	tassert.Fatal(t, cm.HasHMACSecret(), "expected HasHMACSecret true")
 	tassert.Fatal(t, cm.GetSecret() != "", "expected non-empty secret")
 	base.Server.Secret = ""
-	base.Init()
-	cm = config.NewConfManagerWithConf(base)
+	cm = newConfManagerWithConf(t, base)
 	tassert.Fatal(t, !cm.HasHMACSecret(), "expected HasHMACSecret false")
 	tassert.Fatal(t, cm.GetSecret() == "", "expected empty secret")
 }
@@ -316,31 +347,26 @@ func TestHMACSecret(t *testing.T) {
 func TestGetSecretChecksum(t *testing.T) {
 	base := newBaseConfig()
 	base.Server.Secret = "some-secret"
-	base.Init()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 
-	// checksum should be deterministic and non-empty
 	cs1 := cm.GetSecretChecksum()
 	tassert.Fatal(t, cs1 != "", "expected non-empty checksum")
 
-	// changing secret changes checksum
 	base.Server.Secret = "other-secret"
-	base.Init()
-	cm = config.NewConfManagerWithConf(base)
+	cm = newConfManagerWithConf(t, base)
 	cs2 := cm.GetSecretChecksum()
 	tassert.Fatal(t, cs1 != cs2, "expected checksum to change when secret changes")
 }
 
 func TestGetPublicKeyString(t *testing.T) {
 	base := newBaseConfig()
-	if cm := config.NewConfManagerWithConf(base); cm.GetPublicKeyString() != nil {
+	if cm := newConfManagerWithConf(t, base); cm.GetPublicKeyString() != nil {
 		t.Fatal("expected nil PubKey when not set")
 	}
 
 	pub := "public-key"
 	base.Server.PubKey = &pub
-	base.Init()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, base)
 	if got := cm.GetPublicKeyString(); got == nil || *got != pub {
 		t.Fatalf("expected PubKey %q, got %#v", pub, got)
 	}
@@ -348,8 +374,7 @@ func TestGetPublicKeyString(t *testing.T) {
 
 // TestAuth prefix ensures we run as part of the auth tests with TEST_RACE true to run with go test -race
 func TestAuthConfManagerConcurrency(t *testing.T) {
-	base := newBaseConfig()
-	cm := config.NewConfManagerWithConf(base)
+	cm := newConfManagerWithConf(t, newBaseConfig())
 
 	var started sync.WaitGroup
 	var done sync.WaitGroup

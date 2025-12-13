@@ -10,6 +10,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -234,10 +235,18 @@ func parsePubKey(str string) (*rsa.PublicKey, error) {
 	if str == "" {
 		return nil, nil
 	}
-	// Parse b64-encoded RSA public key from string
-	derBytes, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		return nil, err
+	var derBytes []byte
+	var err error
+
+	// Try PEM format first
+	if block, _ := pem.Decode([]byte(str)); block != nil {
+		derBytes = block.Bytes
+	} else {
+		// Fall back to raw base64 DER
+		derBytes, err = base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("invalid public key format: %w", err)
+		}
 	}
 	pub, err := x509.ParsePKIXPublicKey(derBytes)
 	if err != nil {

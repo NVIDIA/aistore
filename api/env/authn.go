@@ -16,6 +16,7 @@ const (
 	AisAuthConfDir       = "AIS_AUTHN_CONF_DIR"   // contains AuthN config and tokens DB
 	AisAuthLogDir        = "AIS_AUTHN_LOG_DIR"
 	AisAuthLogLevel      = "AIS_AUTHN_LOG_LEVEL"
+	AisAuthExternalURL   = "AIS_AUTHN_EXTERNAL_URL"
 	AisAuthPort          = "AIS_AUTHN_PORT"
 	AisAuthTTL           = "AIS_AUTHN_TTL"
 	AisAuthUseHTTPS      = "AIS_AUTHN_USE_HTTPS"

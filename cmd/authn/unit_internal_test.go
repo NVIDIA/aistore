@@ -7,6 +7,7 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -130,12 +132,20 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 	}
 }
 
-// Create a CM with a pre-configured config struct and skip loading from disk
-func createEmptyCM() *config.ConfManager {
-	conf := &authn.Config{Server: authn.ServerConf{Secret: "mytestsecret"}}
-	cm := config.NewConfManagerWithConf(conf)
-	cm.Init("")
+func createCM(t *testing.T, conf *authn.Config) *config.ConfManager {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "authn.json")
+	err := jsp.SaveMeta(path, conf, nil)
+	tassert.Fatalf(t, err == nil, "failed to write config: %v", err)
+	cm := config.NewConfManager()
+	cm.Init(path)
 	return cm
+}
+
+// Create a CM with a pre-configured config struct
+func createEmptyCM(t *testing.T) *config.ConfManager {
+	conf := &authn.Config{Server: authn.ServerConf{Secret: "mytestsecret"}}
+	return createCM(t, conf)
 }
 
 func createManagerWithAdmin(cm *config.ConfManager, driver kvdb.Driver) (*mgr, error) {
@@ -155,7 +165,7 @@ func createManagerWithAdmin(cm *config.ConfManager, driver kvdb.Driver) (*mgr, e
 
 func TestManager(t *testing.T) {
 	driver := mock.NewDBDriver()
-	cm := createEmptyCM()
+	cm := createEmptyCM(t)
 	// NOTE: new manager initializes users DB and adds a default user as a Guest
 	mgr, err := createManagerWithAdmin(cm, driver)
 	tassert.CheckError(t, err)
@@ -167,7 +177,7 @@ func TestManager(t *testing.T) {
 
 func TestManagerNoAdminPass(t *testing.T) {
 	driver := mock.NewDBDriver()
-	cm := createEmptyCM()
+	cm := createEmptyCM(t)
 	// If no admin password exists in env, initializing manager must fail
 	_, _, err := newMgr(cm, driver)
 	if err == nil {
@@ -184,7 +194,7 @@ func TestToken(t *testing.T) {
 		token string
 	)
 	driver := mock.NewDBDriver()
-	cm := createEmptyCM()
+	cm := createEmptyCM(t)
 	mgr, err := createManagerWithAdmin(cm, driver)
 	tassert.CheckFatal(t, err)
 	createUsers(mgr, t)
@@ -661,5 +671,30 @@ func TestMergeBckACLS(t *testing.T) {
 				t.Errorf("%s[filter: %s]: %v[%v] != %v[%v]", test.title, test.cluFlt, r.Bck, r.Access, test.resACLs[i], test.resACLs[i].Access)
 			}
 		}
+	}
+}
+
+// Test retrieving the max age header for JWKS based on the configured key expiry with bounds
+func TestGetJWKSMaxAge(t *testing.T) {
+	driver := mock.NewDBDriver()
+	tests := []struct {
+		expire time.Duration
+		want   int
+	}{
+		{1 * time.Hour, int((50 * time.Minute).Seconds())},
+		{2 * time.Minute, int((5 * time.Minute).Seconds())},
+		{9000 * time.Hour, int((720 * time.Hour).Seconds())},
+		{0, int((720 * time.Hour).Seconds())},
+	}
+
+	for _, tt := range tests {
+		conf := &authn.Config{Server: authn.ServerConf{Secret: "secret", Expire: cos.Duration(tt.expire)}}
+		cm := createCM(t, conf)
+		mgr, err := createManagerWithAdmin(cm, driver)
+		tassert.CheckFatal(t, err)
+		h := newServer(mgr)
+
+		got := h.getJWKSMaxAge()
+		tassert.Errorf(t, got == tt.want, "getJWKSMaxAge() = %d, want %d", got, tt.want)
 	}
 }

@@ -8,15 +8,18 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 type hserv struct {
@@ -100,6 +103,8 @@ func (h *hserv) registerPublicHandlers() {
 	h.registerHandler(apc.URLPathClusters.S, h.clusterHandler)
 	h.registerHandler(apc.URLPathRoles.S, h.roleHandler)
 	h.registerHandler(apc.URLPathDae.S, h.configHandler)
+	h.registerHandler(apc.URLPathOIDC.S, h.oidcConfigHandler)
+	h.registerHandler(apc.URLPathJWKS.S, h.pubKeyHandler)
 }
 
 func (h *hserv) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -597,8 +602,56 @@ func (h *hserv) httpConfigPut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	err = h.mgr.cm.SaveToDisk(configPath)
-	if err != nil {
-		cmn.WriteErr(w, r, err)
+}
+
+// Handles requests for OIDC config
+//
+//	https://openid.net/specs/openid-connect-discovery-1_0.html
+//	"OpenID Providers supporting Discovery MUST make a JSON document available at the path formed by concatenating
+//	the string /.well-known/openid-configuration to the Issuer"
+func (h *hserv) oidcConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		cmn.WriteErr405(w, r, http.MethodGet)
+		return
 	}
+	// Parse the URL configured for an external client to access this service
+	// Note this is most likely different from what we serve, because of port mappings, tls termination, etc.
+	base, err := h.mgr.cm.ParseExternalURL()
+	if err != nil {
+		cmn.WriteErr(w, r, fmt.Errorf("error parsing configured external URL: %v", err))
+		return
+	}
+	debug.Assert(base != nil)
+	writeJSON(w, authn.NewOIDCConfiguration(base), "get oidc configuration")
+}
+
+func (h *hserv) pubKeyHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		cmn.WriteErr405(w, r, http.MethodGet)
+		return
+	}
+	var set jwk.Set
+	if h.mgr.cm.GetPublicKeyString() == nil {
+		set = jwk.NewSet()
+	} else {
+		set = h.mgr.cm.GetKeySet()
+	}
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d, public", h.getJWKSMaxAge()))
+	writeJSON(w, set, "get public JWKS")
+}
+
+func (h *hserv) getJWKSMaxAge() int {
+	const (
+		cacheMinRefresh = 5 * time.Minute
+		cacheMaxRefresh = 720 * time.Hour
+		cacheWindow     = 10 * time.Minute
+	)
+	exp := h.mgr.cm.GetExpiry()
+	if exp == 0 {
+		return int(cacheMaxRefresh.Seconds())
+	}
+	// Client should refresh "cacheWindow" before the key expiry, bounded by the reasonable age constants
+	ttr := h.mgr.cm.GetExpiry() - cacheWindow
+	maxAge := max(cacheMinRefresh, min(ttr, cacheMaxRefresh))
+	return int(maxAge.Seconds())
 }
