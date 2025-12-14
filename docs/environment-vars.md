@@ -157,6 +157,7 @@ This group of environment variables is used exclusively by development scripts a
 | `NUM_PROXY`  | number of proxies (gateways) in a test cluster |
 | `NUM_CHUNKS` | when greater than zero, specifies the number of chunks each new PUT operation will produce |
 | `SIGN_HMAC`  | when "true", enables HMAC signing and validation of all HTTP redirects |
+| `RAND_NS`  | when "true", generate buckets with random namespaces, e.g.: `ais://#ns123/bucket1`, `s3://#ns456/bucket2`, etc.  |
 
 See also:
 * [scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/scripts/clean_deploy.sh)

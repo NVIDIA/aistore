@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -158,6 +160,7 @@ func (m *ioContext) init(cleanup bool) {
 	}
 	if m.bck.Name == "" {
 		m.bck.Name = trand.String(15)
+		m.bck.Ns = genBucketNs()
 	}
 	if m.bck.Provider == "" {
 		m.bck.Provider = apc.AIS
@@ -959,11 +962,11 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	}{
 		{
 			name: "local",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS, Ns: genBucketNs()},
 		},
 		{
 			name: "remote",
-			bck:  cliBck,
+			bck:  cmn.Bck{Name: cliBck.Name, Provider: cliBck.Provider, Ns: genBucketNs()},
 			skipArgs: tools.SkipTestArgs{
 				Long:      true,
 				RemoteBck: true,
@@ -991,7 +994,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		},
 		{
 			name: "local_3_copies",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS, Ns: genBucketNs()},
 			props: &cmn.BpropsToSet{
 				Mirror: &cmn.MirrorConfToSet{
 					Enabled: apc.Ptr(true),
@@ -1002,7 +1005,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		},
 		{
 			name: "local_ec_2_2",
-			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
+			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS, Ns: genBucketNs()},
 			props: &cmn.BpropsToSet{
 				EC: &cmn.ECConfToSet{
 					DataSlices:   apc.Ptr(2),
@@ -1306,4 +1309,18 @@ func xactSnapRunning(snaps xact.MultiSnap) (running, resetProbeFreq bool) {
 func xactSnapNotRunning(snaps xact.MultiSnap) (bool, bool) {
 	running, resetProbeFreq := xactSnapRunning(snaps)
 	return !running, resetProbeFreq
+}
+
+// randomize buckets' namespaces
+func genBucketNs() cmn.Ns {
+	s := os.Getenv(env.TestRandNs)
+	if s == "" {
+		return cmn.NsGlobal
+	}
+	gen, err := strconv.ParseBool(s)
+	debug.AssertNoErr(err)
+	if !gen {
+		return cmn.NsGlobal
+	}
+	return cmn.Ns{Name: cos.GenTie()}
 }

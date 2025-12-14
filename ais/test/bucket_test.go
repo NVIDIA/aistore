@@ -75,7 +75,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 
 func TestListBuckets(t *testing.T) {
 	var (
-		bck        = cmn.Bck{Name: t.Name() + "Bucket", Provider: apc.AIS}
+		bck        = cmn.Bck{Name: t.Name() + "Bucket", Provider: apc.AIS, Ns: genBucketNs()}
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		pnums      = make(map[string]cmn.Bcks)
@@ -272,7 +272,7 @@ func TestDefaultBucketProps(t *testing.T) {
 		proxyURL     = tools.RandomProxyURL(t)
 		baseParams   = tools.BaseAPIParams(proxyURL)
 		globalConfig = tools.GetClusterConfig(t)
-		bck          = cmn.Bck{Name: testBucketName, Provider: apc.AIS}
+		bck          = cmn.Bck{Name: testBucketName, Provider: apc.AIS, Ns: genBucketNs()}
 	)
 	tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":     "true",
@@ -300,7 +300,7 @@ func TestCreateWithBucketProps(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{Name: testBucketName, Provider: apc.AIS}
+		bck        = cmn.Bck{Name: testBucketName, Provider: apc.AIS, Ns: genBucketNs()}
 	)
 	propsToSet := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{
@@ -336,7 +336,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		exists bool
 	}{
 		{bck: bck, exists: exists},
-		{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10)}},
+		{bck: cmn.Bck{Provider: cliBck.Provider, Name: trand.String(10), Ns: genBucketNs()}},
 	}
 	for _, test := range tests {
 		err := api.CreateBucket(baseParams, test.bck, test.props)
@@ -544,6 +544,7 @@ func TestResetBucketProps(t *testing.T) {
 		bck          = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 		propsToSet = &cmn.BpropsToSet{
 			Cksum: &cmn.CksumConfToSet{
@@ -600,6 +601,7 @@ func TestSetInvalidBucketProps(t *testing.T) {
 		bck        = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 
 		tests = []struct {
@@ -1177,6 +1179,7 @@ func TestListObjects(t *testing.T) {
 		bck = cmn.Bck{
 			Name:     t.Name() + "Bucket",
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 		wg = &sync.WaitGroup{}
 
@@ -1768,6 +1771,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		bck: cmn.Bck{
 			Provider: apc.AIS,
 			Name:     trand.String(10),
+			Ns:       genBucketNs(),
 		},
 	}
 
@@ -1936,6 +1940,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 	)
 
@@ -1990,6 +1995,7 @@ func TestRenameBucketWithRandomMirrorEnable(t *testing.T) {
 		dstBck     = cmn.Bck{
 			Name:     testBucketName + "_new",
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 	)
 
@@ -2052,6 +2058,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		tmpBck     = cmn.Bck{
 			Name:     "tmp_bck_name",
 			Provider: apc.AIS,
+			Ns:       genBucketNs(),
 		}
 	)
 
@@ -2497,6 +2504,7 @@ func TestCopyBucket(t *testing.T) {
 					bck: cmn.Bck{
 						Name:     "src_copy_bck",
 						Provider: apc.AIS,
+						Ns:       genBucketNs(),
 					},
 				}
 				dstms = []*ioContext{
@@ -2506,6 +2514,7 @@ func TestCopyBucket(t *testing.T) {
 						bck: cmn.Bck{
 							Name:     "dst_copy_bck_1",
 							Provider: apc.AIS,
+							Ns:       genBucketNs(),
 						},
 					},
 				}
@@ -2521,6 +2530,7 @@ func TestCopyBucket(t *testing.T) {
 					bck: cmn.Bck{
 						Name:     "dst_copy_bck_2",
 						Provider: apc.AIS,
+						Ns:       genBucketNs(),
 					},
 				})
 				tools.DestroyBucket(t, proxyURL, dstms[1].bck)
@@ -2759,10 +2769,12 @@ func TestCopyBucketChecksumValidation(t *testing.T) {
 				srcBck     = cmn.Bck{
 					Name:     "src_cksum_" + trand.String(6),
 					Provider: apc.AIS,
+					Ns:       genBucketNs(),
 				}
 				dstBck = cmn.Bck{
 					Name:     "dst_cksum_" + trand.String(6),
 					Provider: apc.AIS,
+					Ns:       genBucketNs(),
 				}
 				srcm = &ioContext{
 					t:   t,
@@ -2892,7 +2904,7 @@ func TestCopyBucketSync(t *testing.T) {
 	tassert.Errorf(t, len(lst.Entries) == m.num, "expected %d present (cached) in the source bucket, got %d", m.num, len(lst.Entries))
 
 	// 2. copy cliBck => dstBck
-	dstBck := cmn.Bck{Name: "dst-" + cos.GenTie(), Provider: apc.AIS}
+	dstBck := cmn.Bck{Name: "dst-" + cos.GenTie(), Provider: apc.AIS, Ns: genBucketNs()}
 	tlog.Logfln("first copy %s => %s", m.bck.Cname(""), dstBck.Cname(""))
 	xid, err := api.CopyBucket(baseParams, m.bck, dstBck, &apc.TCBMsg{})
 	tassert.CheckFatal(t, err)
@@ -2948,7 +2960,7 @@ func TestCopyBucketSync(t *testing.T) {
 
 func TestCopyBucketSimple(t *testing.T) {
 	var (
-		srcBck = cmn.Bck{Name: "cpybck_src" + cos.GenTie(), Provider: apc.AIS}
+		srcBck = cmn.Bck{Name: "cpybck_src" + cos.GenTie(), Provider: apc.AIS, Ns: genBucketNs()}
 
 		m = &ioContext{
 			t:         t,
@@ -3049,7 +3061,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected int) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
-		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
+		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS, Ns: genBucketNs()}
 	)
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{Prefix: m.prefix}})

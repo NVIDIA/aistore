@@ -5,6 +5,7 @@
 #   NUM_PROXY    - number of proxies in CI/local test cluster
 #   NUM_CHUNKS   - when >0, number of PUT chunks for io contexts
 #   SIGN_HMAC    - when "true", enables redirect HMAC signing
+#   RAND_NS      - when "true", generate buckets with random namespaces, e.g.: `ais://#ns123/bucket1`, `s3://#ns456/bucket2`, etc.
 # See also:
 # * api/env/README.md
 # * docs/environment-vars.md

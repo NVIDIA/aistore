@@ -460,6 +460,21 @@ test:short:sign_hmac:
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
 
+test:short:rand_ns:
+  <<: *test_short_def
+  variables:
+    BUCKET: "ais://test"
+    RAND_NS: "true"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*sign_rand_ns.*/'
+    - !reference [.test_short_skip_scheduled_template, rules]
+  script:
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
+    - make test-short
+
 test:short:s3-compat:
   <<: *test_short_def
   tags:

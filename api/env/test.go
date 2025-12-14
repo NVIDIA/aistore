@@ -13,4 +13,5 @@ const (
 	TestNumProxy  = "NUM_PROXY"
 	TestNumChunks = "NUM_CHUNKS"
 	TestSignHMAC  = "SIGN_HMAC"
+	TestRandNs    = "RAND_NS"
 )
