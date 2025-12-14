@@ -147,13 +147,16 @@ Indicates the storage backend:
 | `ais` | Native AIS bucket |
 | `aws` or `s3` | Amazon S3 or S3-compatible |
 | `gcp` or `gs` | Google Cloud Storage |
-| `azure` | Azure Blob Storage |
-| `oci` | Oracle Cloud Infrastructure |
+| `azure` or 'az' | Azure Blob Storage |
+| `oci` or `oc' | Oracle Cloud Infrastructure |
 
 Remote AIS clusters use the `ais` provider with a namespace referencing the cluster alias or UUID:
 
 ```
-ais://@remais/bucket
+ais://@remais//bucket-name
+
+# Or alternative syntax using remote cluster's UUID:
+ais://@uuid/bucket-name
 ```
 
 ### Namespace

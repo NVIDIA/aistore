@@ -1,13 +1,13 @@
 ## Introduction
 
-Generally, aistore configuration comprises several sources:
+Generally, AIStore (AIS) configuration comprises several sources:
 
 1. cluster (a.k.a. global) and node (or, local) configurations, the latter further "splitting" into local config per se and local overrides of the inherited cluster config;
 2. `aisnode` [command line](/docs/command_line.md);
 3. environment variables (this document);
 4. finally, assorted low-level constants (also referred to as "hardcoded defaults") that almost never have to change.
 
-This enumeration does _not_ include buckets (and their respective configurations). In aistore, buckets inherit a part of the cluster config that can be further changed on a per-bucket basis - either at creation time or at any later time, etc.
+This enumeration does _not_ include buckets (and their respective configurations). In AIS, buckets inherit a part of the cluster config that can be further changed on a per-bucket basis - either at creation time or at any later time, etc.
 
 > In effect, cluster configuration contains cluster-wide defaults for all AIS buckets, current and future.
 
@@ -17,14 +17,14 @@ For additional references, please see the [last section](#references) in this do
 
 First though, two common rules that, in fact, apply across the board:
 
-* in aistore, all environment settings are **optional**
+* in AIS, all environment settings are **optional**
 * if specified, environment variable will always **override**:
   - the corresponding default *constant* (if exists), and/or
   - persistent *configuration* (again, if the latter exists).
 
 For example:
 
-* in aistore cluster, each node has an `ID`, which is persistent, replicated and unique; at node startup its `ID` can be overridden via `AIS_DAEMON_ID` environment (see below);
+* in [AIS cluster](/docs/overview.md#at-a-glance), each node has an `ID`, which is persistent, replicated and unique; at node startup its `ID` can be overridden via `AIS_DAEMON_ID` environment (see below);
 * environment `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go) in the code;
 * `AIS_USE_HTTPS` takes precedence over `net.http.use_https` value from the [cluster configuration](/docs/configuration.md),
 
@@ -32,7 +32,7 @@ and so on.
 
 ### Table of Contents
 
-The remainder of this text groups aistore environment variables by their respective usages, and is structured as follows:
+The remainder of this text groups AIS environment variables by their respective usages, and is structured as follows:
 
 - [Build Tags](#build-tags)
 - [Primary](#primary)
@@ -80,7 +80,7 @@ TAGS="nethttp debug" make node
 
 ## Primary
 
-Background: in a running aistore cluster, at any point in time there's a single _primary_ gateway that may also be administratively selected, elected, reelected. Hence, two related variables:
+Background: in a running AIS cluster, at any point in time there's a single _primary_ gateway that may also be administratively selected, elected, reelected. Hence, two related variables:
 
 | name | comment |
 | ---- | ------- |
@@ -113,15 +113,15 @@ See also:
 
 ## HTTPS
 
-At first it may sound slightly confusing, but HTTP-wise aistore is both a client and a server.
+At first it may sound slightly confusing, but HTTP-wise AIS is both a client and a server.
 
 All nodes in a cluster talk to each other using HTTP (or HTTPS) - the fact that inevitably implies a certain client-side configuration (and configurability).
 
-In particular, aistore server-side HTTPS environment includes:
+In particular, AIS server-side HTTPS environment includes:
 
 | name | comment |
 | ---- | ------- |
-| `AIS_USE_HTTPS`       | tells aistore to run HTTPS transport (both public and intra-cluster networks)                                |
+| `AIS_USE_HTTPS`       | tells AIS to run HTTPS transport (both public and intra-cluster networks)                                |
 | `AIS_SERVER_CRT`      | TLS certificate (pathname). Required when `AIS_USE_HTTPS` is `true`                                          |
 | `AIS_SERVER_KEY`      | private key (pathname) for the certificate above.                                                            |
 | `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
@@ -132,7 +132,7 @@ In addition, all embedded (intra-cluster) clients in a cluster utilize the follo
 
 | name | comment |
 | ---- | ------- |
-| `AIS_CRT`             | TLS certificate pathname (this and the rest variables in the table are ignored when aistore is AIS_USE_HTTPS==false |
+| `AIS_CRT`             | TLS certificate pathname (this and the rest variables in the table are ignored when AIS is AIS_USE_HTTPS==false |
 | `AIS_CRT_KEY`         | pathname that contains X.509 certificate private key |
 | `AIS_CLIENT_CA`       | certificate authority that authorized (signed) the certificate |
 | `AIS_SKIP_VERIFY_CRT` | when true will skip X.509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
@@ -214,17 +214,17 @@ The implication: it is possible to override one or both of them on a **per-bucke
 
 ### AIS as S3 storage
 
-Environment `S3_ENDPOINT` is _important_, and may be also be a source of minor confusion. The reason: aistore itself provides S3 compatible interface.
+Environment `S3_ENDPOINT` is _important_, and may also be a source of minor confusion. The reason: AIS itself provides S3 compatible interface.
 
-For instance, on the aistore's client side you could say something like:
+For instance, on the client side you could say something like:
 
 ```console
 export S3_ENDPOINT=https://10.0.4.53:51080/s3
 ```
 
-and then run existing S3 applications against an aistore cluster at `10.0.4.53` - with no changes (to the application).
+and then run existing S3 applications against an AIS cluster at `10.0.4.53` - with no changes (to the application).
 
-Moreover, configure aistore to handle S3 requests at its "/" root:
+Moreover, configure AIS to handle S3 requests at its "/" root:
 
 ```console
 $ ais config cluster features S3-API-via-Root
@@ -243,12 +243,12 @@ export S3_ENDPOINT=https://10.0.4.53:51080
 
 and separately:
 
-* you could run existing S3 apps (with no changes) against aistore by using `S3_ENDPOINT` on the client side
+* you could run existing S3 apps (with no changes) against AIS by using `S3_ENDPOINT` on the client side
 
 See also:
 * [AIS buckets](/docs/cli/bucket.md)
 * [Bucket configuration: AWS profiles](/docs/cli/aws_profile_endpoint.md)
-* [Using aistore as S3 endpoint](/docs/s3compat.md)
+* [Using AIS as S3 endpoint](/docs/s3compat.md)
 
 ## Package: stats
 

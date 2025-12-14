@@ -12,6 +12,7 @@ The rest of this document is structured as follows:
   - [Backend Provider](#backend-provider)
   - [Mountpath](#mountpath)
   - [Proxy](#proxy)
+  - [Endpoint](#endpoint)
   - [Read-after-Write Consistency](#read-after-write-consistency)
   - [Xaction](#xaction)
   - [Shard](#shard)
@@ -73,9 +74,11 @@ Bucket [properties](/docs/bucket.md#bucket-properties) define data protection (c
 ---
 
 ### Backend Provider
-Backend provider (or simply **backend**) is an abstraction, and simultaneously an API-supported option that differentiates between "remote" (e.g., `s3://`) and "this cluster" (`ais://`) buckets with respect to a given AIS cluster. AIS [supports multiple storage backends](images/supported-backends.png) including its own.
+Backend Provider is a designed-in backend interface [abstraction](https://github.com/NVIDIA/aistore/blob/main/core/backend.go) and, simultaneously, an API-supported option that allows to delineate between _remote_ and _local_ buckets with respect to a given AIS cluster.
 
-> See [providers](providers.md) for the current list of supported clouds and instructions on chaining AIS clusters.
+AIS [supports multiple storage backends](images/supported-backends.png) including its own (`ais://@uuid` or `ais://@alias` for remote clusters).
+
+> See [providers](/docs/providers.md) for the current list of supported clouds and instructions on chaining AIS clusters.
 
 ---
 
@@ -115,6 +118,23 @@ A disk-less **gateway** that exposes the AIS REST and S3-compatible APIs.
 * Exactly one proxy is elected **primary** (leader); only the primary can update cluster-level metadata including the cluster map.
 * The terms *proxy* and *gateway* are interchangeable.
 * For symmetry we usually deploy one proxy per target, but that is not a requirement.
+
+---
+
+### Endpoint
+
+Cluster's endpoint: HTTPS or HTTP address of **any** AIS proxy (gateway) in [this cluster](/docs/overview.md#at-a-glance).
+
+The options to specify AIS cluster endpoint include (but are not limited to):
+
+* CLI configuration: `ais config cli` (and lookup `cluster.default_ais_host`)
+* `AIS_ENDPOINT` environment that, if present, overrides other defaults.
+
+In a multi-node cluster it is strongly recommended to deploy load balancer on the front, to take advantage of the fact that AIS proxies provide identical APIs and can all be used simultaneously.
+
+See also:
+
+* [Environment Variables](/docs/environment-vars.md)
 
 ---
 

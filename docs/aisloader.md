@@ -2,9 +2,9 @@
 
 AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore) or any S3-compatible backend.
 
-In fact, aisloader can list, write, and read S3(**) buckets _directly_, which makes it quite useful, convenient, and easy to use benchmark to compare storage performance **with** aistore in front of S3 and **without**.
+In fact, aisloader can list, write, and read S3(**) buckets _directly_, which makes it quite useful, convenient, and easy to use benchmark to compare storage performance **with** AIStore in front of S3 and **without**.
 
-> (**) `aisloader` can be further easily extended to work directly with any Cloud storage provider including, but not limited to, aistore-supported GCP, OCI, and Azure.
+> (**) `aisloader` can be further easily extended to work directly with any Cloud storage provider including, but not limited to, AIStore-supported GCP, OCI, and Azure.
 
 In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable) avoiding compute-side bottlenecks (if any) and associated complexity.
 
@@ -403,7 +403,7 @@ Note that this is entirely optional, and therefore an input such as `300` will b
 
 | Environment Variable | Type | Description |
 | -- | -- | -- |
-| `AIS_ENDPOINT` | `string` | Cluster's endpoint: http or https address of any aistore gateway in this cluster. Overrides `ip` and `port` flags. |
+| `AIS_ENDPOINT` | `string` | Cluster's endpoint: http or https address of any AIStore gateway in [this cluster](/docs/overview.md#at-a-glance). Overrides `ip` and `port` flags. |
 
 To state the same slightly differently, cluster endpoint can be defined in two ways:
 
@@ -690,7 +690,7 @@ For the most recently updated command-line options and examples, please run `ais
     $ aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
     ```
 
-**19**. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults. Similar to the previous example, aisloader goes directly to a given S3 endpoint ('-s3endpoint'), and aistore is not being used:
+**19**. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults. Similar to the previous example, aisloader goes directly to a given S3 endpoint ('-s3endpoint'), and AIStore is not being used:
     ```console
      $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
     ```
