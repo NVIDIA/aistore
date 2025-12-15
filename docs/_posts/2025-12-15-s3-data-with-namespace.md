@@ -86,7 +86,7 @@ At runtime, the platform decides which backing data to bind:
 
 * training --> processed dataset
 * validation --> raw dataset
-* debugging --> local copy (or a subset of thereof)
+* debugging --> local copy (or a subset thereof)
 * compliance --> immutable regional mirror
 
 ```text
