@@ -1249,55 +1249,67 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 }
 
 // NOTE: sets whdr.ContentLength = obj-size, with no response body
+//
+// Returns non-standard HTTP status codes:
+// - 409 (Conflict): local and remote object metadata mismatch when latest=true
+// - 410 (Gone): remote backend returned 404 when latest=true (object was deleted remotely)
+// - 429 (TooManyRequests): remote backend is throttling requests
+// - 503 (ServiceUnavailable): remote backend is temporarily unavailable
 func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		started     = mono.NanoTime()
 		fltPresence int
-		exists      = true
+		exists      bool
+		err         error
 	)
 	if tmp := q.Get(apc.QparamFltPresence); tmp != "" {
 		var erp error
 		fltPresence, erp = strconv.Atoi(tmp)
 		debug.AssertNoErr(erp)
 	}
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+
+	// 1. initialize bucket and load LOM
+	if err = lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrBucketNought(err) {
 			return http.StatusNotFound, err
 		}
 		return 0, err
 	}
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err == nil {
-		if apc.IsFltNoProps(fltPresence) {
-			return 0, nil
-		}
+
+	err = lom.Load(true /*cache it*/, false /*locked*/)
+	switch {
+	case err == nil:
+		exists = true
 		if fltPresence == apc.FltExistsOutside {
 			return 0, fmt.Errorf(fmtOutside, lom.Cname(), fltPresence)
 		}
-	} else {
-		if !cmn.IsErrObjNought(err) {
-			return 0, err
+		if apc.IsFltNoProps(fltPresence) {
+			return 0, nil // early return: found locally, no props needed
 		}
-		exists = false
+	case cmn.IsErrObjNought(err):
+		// object not found locally - try restore if requested
 		if fltPresence == apc.FltPresentCluster {
-			// find the object in the local target and restore it to the right location
-			// TODO: must extend this to check whether the object is present in other targets, any disk inside the cluster
+			// try to fix local placement if present-on-this-node-but-misplaced
 			exists = lom.RestoreToLocation()
 		}
+	default:
+		return 0, err
 	}
 
-	if !exists {
-		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			return http.StatusNotFound, cos.NewErrNotFound(t, lom.Cname())
-		}
+	// 2. handle not-found-locally for AIS buckets or presence-required filters
+	if !exists && (bck.IsAIS() || apc.IsFltPresent(fltPresence)) {
+		return http.StatusNotFound, cos.NewErrNotFound(t, lom.Cname())
 	}
 
-	// props
+	// 3. build object properties from local data
 	var (
 		op    = cmn.ObjectProps{Name: lom.ObjName, Bck: *lom.Bucket(), Present: exists}
 		hasEC bool
 	)
 	if exists {
 		op.ObjAttrs = *lom.ObjAttrs()
+
+		// TODO: in `HeadObjectV2`, include location, mirror copies, and EC metadata only if user explicitly requested them
 		op.Location = lom.Location()
 		op.Mirror.Copies = lom.NumCopies()
 		op.Mirror.Paths = lom.MirrorPaths()
@@ -1312,9 +1324,9 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 		}
 	}
 
+	// 4. Cold HEAD: check remote backend if object not found locally or if latest version requested
 	latest := cos.IsParseBool(q.Get(apc.QparamLatestVer))
 	if !exists || latest {
-		// cold HEAD
 		oa, ecode, err := t.HeadCold(lom, r)
 		if err != nil {
 			switch {
@@ -1328,28 +1340,45 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 			return ecode, err
 		}
 		if apc.IsFltNoProps(fltPresence) {
-			return 0, nil
+			return 0, nil // early return: found remotely, no props needed
 		}
 
-		if exists && latest {
+		// reconcile local vs remote attrs
+		switch {
+		case exists && latest:
+			// verify local matches remote (compare with lom.CheckRemoteMD)
 			if e := op.ObjAttrs.CheckEq(oa); e != nil {
-				// (compare with lom.CheckRemoteMD)
-				return http.StatusNotFound, cmn.NewErrRemoteMetadataMismatch(e)
+				return http.StatusConflict, cmn.NewErrRemoteMetadataMismatch(e)
 			}
-		} else {
-			op.ObjAttrs = *oa
+		case !exists:
+			// NOTE: Present stays false after cold HEAD (not cached locally)
+			op.ObjAttrs = *oa // use remote attrs
 			op.ObjAttrs.Atime = 0
 		}
 	}
 
-	// to header
-	cmn.ToHeader(&op.ObjAttrs, whdr, op.ObjAttrs.Size)
+	// 5. serialize to response headers
+	objPropsToHeader(&op, whdr, hasEC)
+
+	// 6. stats
+	delta := mono.SinceNano(started)
+	vlabs := bvlabs(bck)
+	t.statsT.IncWith(stats.HeadCount, vlabs)
+	t.statsT.AddWith(
+		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: delta, VarLabs: vlabs},
+	)
+	return 0, nil
+}
+
+// objPropsToHeader serializes ObjectProps to HTTP response headers for HEAD object
+func objPropsToHeader(op *cmn.ObjectProps, hdr http.Header, hasEC bool) {
+	cmn.ToHeader(&op.ObjAttrs, hdr, op.ObjAttrs.Size)
 	if op.ObjAttrs.Cksum == nil {
 		// cos.Cksum does not have default nil/zero value (reflection)
-		op.ObjAttrs.Cksum = cos.NewCksum("", "")
+		op.ObjAttrs.Cksum = cos.NoneCksum
 	}
-	// TODO: revisit
 	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
+		// TODO: remove in `HeadObjectV2` - must be able to avoid reflection unless user is asking for
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false
 		}
@@ -1362,18 +1391,10 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 			return nil, false
 		}
 		name := cmn.PropToHeader(tag)
-		whdr.Set(name, v)
+		hdr.Set(name, v)
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)
-
-	delta := mono.SinceNano(started)
-	vlabs := bvlabs(bck)
-	t.statsT.IncWith(stats.HeadCount, vlabs)
-	t.statsT.AddWith(
-		cos.NamedVal64{Name: stats.HeadLatencyTotal, Value: delta, VarLabs: vlabs},
-	)
-	return 0, nil
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>
