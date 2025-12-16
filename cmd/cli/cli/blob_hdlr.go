@@ -22,20 +22,26 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
+// TODO: mutating - via warnEscapeObjName - objName(s) containing special symbols (printout may differ)
 func blobDownloadHandler(c *cli.Context) error {
 	var (
 		objNames []string
 		bck      cmn.Bck
 		err      error
 		uri      = c.Args().Get(0)
+		warned   bool
 	)
 	if flagIsSet(c, listFlag) {
 		listObjs := parseStrFlag(c, listFlag)
 		objNames = splitCsv(listObjs)
+		for i, o := range objNames {
+			objNames[i] = warnEscapeObjName(c, o, &warned)
+		}
 		bck, err = parseBckURI(c, uri, true)
 	} else {
 		var objName string
 		bck, objName, err = parseBckObjURI(c, uri, false /*emptyObjnameOK*/)
+		objName = warnEscapeObjName(c, objName, &warned)
 		objNames = []string{objName}
 	}
 	if err != nil {

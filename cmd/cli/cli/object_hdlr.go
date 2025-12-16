@@ -117,8 +117,11 @@ var (
 			nonRecursFlag, // (embedded prefix dopOLTP dop)
 			yesFlag,
 			dontHeadRemoteFlag,
+			encodeObjnameFlag,
 		),
-		commandRename: {},
+		commandRename: {
+			encodeObjnameFlag,
+		},
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
@@ -210,6 +213,7 @@ var (
 			mptPartNumberFlag,
 			progressFlag,
 			verboseFlag,
+			encodeObjnameFlag,
 		},
 		cmdMptComplete: {
 			mptUploadIDFlag,
@@ -413,7 +417,13 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "source and destination are the same object")
 	}
 
-	if err := api.RenameObject(apiBP, bck, oldObj, newObj); err != nil {
+	// encode special symbols if requested
+	var (
+		warned    bool
+		encOldObj = warnEscapeObjName(c, oldObj, &warned)
+		encNewObj = warnEscapeObjName(c, newObj, &warned)
+	)
+	if err := api.RenameObject(apiBP, bck, encOldObj, encNewObj); err != nil {
 		return err
 	}
 
@@ -542,7 +552,12 @@ func putStdin(c *cli.Context, a *putargs) error {
 	if err != nil {
 		return err
 	}
-	if err := putAppendChunks(c, a.dst.bck, a.dst.oname, os.Stdin, cksum.Type(), chunkSize); err != nil {
+	// encode special symbols if requested; or warn
+	var (
+		warned     bool
+		encDstName = warnEscapeObjName(c, a.dst.oname, &warned)
+	)
+	if err := putAppendChunks(c, a.dst.bck, encDstName, os.Stdin, cksum.Type(), chunkSize); err != nil {
 		return err
 	}
 	actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", a.dst.bck.Cname(a.dst.oname)))

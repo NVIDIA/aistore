@@ -293,8 +293,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string, silent bool) (not
 		hargs.FltPresence = apc.FltPresent
 	}
 
+	// TODO: consider moving this bit to callers
+	var (
+		warned     bool
+		encObjName = warnEscapeObjName(c, objName, &warned)
+	)
+
 	// do
-	objProps, err := api.HeadObject(apiBP, bck, objName, hargs)
+	objProps, err := api.HeadObject(apiBP, bck, encObjName, hargs)
 	if err != nil {
 		notfound = cmn.IsStatusNotFound(err)
 		if !notfound {

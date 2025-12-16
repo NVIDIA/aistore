@@ -152,6 +152,7 @@ var (
 			waitJobXactFinishedFlag,
 			latestVerFlag,
 			nonverboseFlag,
+			encodeObjnameFlag,
 		},
 		cmdLRU: {
 			lruBucketsFlag,

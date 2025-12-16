@@ -124,6 +124,7 @@ var (
 		},
 		cmdObject: {
 			etlTransformArgsFlag,
+			encodeObjnameFlag,
 		},
 		cmdBucket: {
 			etlAllObjsFlag,
@@ -816,6 +817,10 @@ func etlObjectHandler(c *cli.Context) error {
 		return errV
 	}
 
+	var (
+		warned     bool
+		encObjName = warnEscapeObjName(c, objName, &warned)
+	)
 	// Parse ETL pipeline or single ETL
 	etlArgs, err := parseETLPipeline(etlNameOrPipeline)
 	if err != nil {
@@ -834,7 +839,7 @@ func etlObjectHandler(c *cli.Context) error {
 		return err
 	}
 
-	_, err = api.ETLObject(apiBP, etlArgs, bck, objName, w)
+	_, err = api.ETLObject(apiBP, etlArgs, bck, encObjName, w)
 	if wfh != nil {
 		cos.Close(wfh)
 		if err != nil {

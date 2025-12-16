@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,6 +41,7 @@ type (
 		cptn       string
 		totalSize  int64
 		dryRun     bool
+		warned     bool
 	}
 	uctx struct {
 		wg            cos.WG
@@ -234,9 +234,7 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 	}
 
 	// encode special symbols
-	if flagIsSet(c, encodeObjnameFlag) {
-		putArgs.ObjName = url.PathEscape(putArgs.ObjName)
-	}
+	putArgs.ObjName = warnEscapeObjName(c, putArgs.ObjName, &p.warned)
 
 	_, err = api.PutObject(&putArgs)
 	return
@@ -480,9 +478,9 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
 	// encode special symbols
-	if flagIsSet(c, encodeObjnameFlag) {
-		putArgs.ObjName = url.PathEscape(putArgs.ObjName)
-	}
+	var warned bool
+	putArgs.ObjName = warnEscapeObjName(c, putArgs.ObjName, &warned)
+
 	iters := 1
 	iters += parseRetriesFlag(c, putRetriesFlag, true /*warn*/)
 
@@ -581,10 +579,6 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 				ObjName:    objName,
 				Reader:     reader,
 				Size:       uint64(n),
-			}
-			// encode special symbols
-			if flagIsSet(c, encodeObjnameFlag) {
-				putArgs.ObjName = url.PathEscape(putArgs.ObjName)
 			}
 			_, err = api.PutObject(&putArgs)
 		} else {

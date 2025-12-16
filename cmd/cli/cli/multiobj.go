@@ -372,8 +372,9 @@ func rmHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
+	var warned bool
 	for shift := range c.Args() {
-		if err := _rmOne(c, shift); err != nil {
+		if err := _rmOne(c, shift, &warned); err != nil {
 			return err
 		}
 	}
@@ -381,12 +382,13 @@ func rmHandler(c *cli.Context) error {
 }
 
 // handle one BUCKET[/OBJECT_NAME_or_TEMPLATE] (command line may contain multiple of those)
-func _rmOne(c *cli.Context, shift int) error {
+func _rmOne(c *cli.Context, shift int, warned *bool) error {
 	uri := preparseBckObjURI(c.Args().Get(shift))
 	bck, objNameOrTmpl, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
 	if err != nil {
 		return err
 	}
+
 	if shouldHeadRemote(c, bck) {
 		bprops, err := headBucket(bck, false /* don't add */)
 		if err != nil {
@@ -404,6 +406,7 @@ func _rmOne(c *cli.Context, shift int) error {
 
 	switch {
 	case oltp.list != "" || oltp.tmpl != "": // 1. multi-obj
+		// TODO: warnEscapeObjName()
 		lrCtx := &lrCtx{oltp.list, oltp.tmpl, bck}
 		return lrCtx.do(c)
 	case oltp.objName == "": // 2. all objects
@@ -419,7 +422,8 @@ func _rmOne(c *cli.Context, shift int) error {
 		return incorrectUsageMsg(c, "to select objects to be removed use one of: (%s or %s or %s)",
 			qflprn(listFlag), qflprn(templateFlag), qflprn(rmrfFlag))
 	default: // 3. one obj
-		err := api.DeleteObject(apiBP, bck, oltp.objName)
+		encObjName := warnEscapeObjName(c, oltp.objName, warned)
+		err := api.DeleteObject(apiBP, bck, encObjName)
 		if err == nil && bck.IsCloud() && oltp.notFound {
 			// [NOTE]
 			// - certain backends return OK when specified object does not exist (see aws.go)

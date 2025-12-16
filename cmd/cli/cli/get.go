@@ -50,8 +50,9 @@ func catHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	var warned bool
 	a := qparamArch{archpath: parseStrFlag(c, archpathGetFlag)}
-	return getObject(c, bck, objName, stdInOut, a, true /*quiet*/, false /*extract*/)
+	return getObject(c, bck, objName, stdInOut, a, &warned, true /*quiet*/, false /*extract*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -183,7 +184,8 @@ func getHandler(c *cli.Context) error {
 	}
 
 	// GET
-	return getObject(c, bck, objName, outFile, a, false /*quiet*/, extract)
+	var warned bool
+	return getObject(c, bck, objName, outFile, a, &warned, false /*quiet*/, extract)
 }
 
 // GET multiple -- currently, only prefix (TODO: list/range)
@@ -312,6 +314,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 		u.barObjs = totalBars[0]
 		u.barSize = totalBars[1]
 	}
+	var warned bool
 	for _, en := range lst.Entries {
 		var shardName string
 
@@ -349,7 +352,9 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 			}
 		}
 		u.wg.Add(1)
-		go u.get(c, bck, en, shardName, outFile, quiet, extract)
+
+		// TODO: racy access to *warned (benign)
+		go u.get(c, bck, en, shardName, outFile, &warned, quiet, extract)
 	}
 	u.wg.Wait()
 
@@ -367,7 +372,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, lsarch, extract bo
 // uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, outFile string, quiet, extract bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, outFile string, warned *bool, quiet, extract bool) {
 	var (
 		a       qparamArch // effectively, ignore user-specified command line and redefine to GET a given shardName
 		objName = entry.Name
@@ -384,7 +389,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 			}
 		}
 	}
-	err := getObject(c, bck, objName, outFile, a, quiet, extract)
+	err := getObject(c, bck, objName, outFile, a, warned, quiet, extract)
 	if err != nil {
 		u.errCount.Inc()
 	}
@@ -402,7 +407,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEnt, shardName, ou
 }
 
 // get one (main function)
-func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArch, quiet, extract bool) error {
+func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArch, warned *bool, quiet, extract bool) error {
 	if outFile == stdInOut && extract {
 		return errors.New("cannot extract archived files to standard output - " + NIY)
 	}
@@ -533,16 +538,14 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, a qparamArc
 	// finally: http query and API call
 	getArgs.Query = a.getQuery(c, &bck)
 
-	// encode special symbols
-	if flagIsSet(c, encodeObjnameFlag) {
-		objName = url.PathEscape(objName)
-	}
+	// encode special symbols if requested
+	encObjName := warnEscapeObjName(c, objName, warned)
 
 	var oah api.ObjAttrs
 	if flagIsSet(c, cksumFlag) {
-		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)
+		oah, err = api.GetObjectWithValidation(apiBP, bck, encObjName, &getArgs)
 	} else {
-		oah, err = api.GetObject(apiBP, bck, objName, &getArgs)
+		oah, err = api.GetObject(apiBP, bck, encObjName, &getArgs)
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) && !a.enabled() {

@@ -1157,3 +1157,42 @@ func parseETLNames(etlNameOrPipeline string) ([]string, error) {
 //
 
 func s2UnixNano(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
+
+//
+// encode special symbols in object name; otherwise warn just once
+// (warned = nil) -> no warning
+//
+
+// encode special symbols in object name for HTTP path usage, or warn only once
+//
+// NOTE:
+// if --encode-objname is set, the name is treated as *raw* and escaped
+// via url.PathEscape no questions asked.
+//
+// translation: double-encoding is a risk;
+// do NOT give CLI already encoded names (e.g. containing "%2F") together with `--encode-objname`
+//
+// TODO: feature: detect potential double-encoding: regex(% followed by 2 hex digits)
+//
+// Warning control:
+//   - warned == nil --> no warning
+//   - warned != nil --> emit at most one warning per invocation
+
+const (
+	fmtWarnSpecial = "name %q contains special symbols; consider using '%s'"
+)
+
+func warnEscapeObjName(c *cli.Context, s string, warned *bool) string {
+	if flagIsSet(c, encodeObjnameFlag) {
+		return url.PathEscape(s)
+	}
+	if warned == nil || *warned {
+		return s
+	}
+	if cmn.HasSpecialSymbols(s) {
+		warn := fmt.Sprintf(fmtWarnSpecial, s, flprn(encodeObjnameFlag))
+		actionWarn(c, warn)
+		*warned = true
+	}
+	return s
+}

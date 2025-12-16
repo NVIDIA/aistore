@@ -81,7 +81,7 @@ var (
 				Name:         cmdCheckLock,
 				Usage:        "Check object lock status (read/write/unlocked)",
 				ArgsUsage:    optionalPrefixArgument,
-				Flags:        []cli.Flag{verbObjPrefixFlag, maxPagesFlag, objLimitFlag, pageSizeFlag},
+				Flags:        []cli.Flag{verbObjPrefixFlag, maxPagesFlag, objLimitFlag, pageSizeFlag, encodeObjnameFlag},
 				Action:       checkObjectLockHandler,
 				BashComplete: bucketCompletions(bcmplop{separator: true}),
 			},
@@ -227,6 +227,8 @@ func checkObjectLockHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	var warned bool
+	objName = warnEscapeObjName(c, objName, &warned)
 
 	// prefix
 	var prefix string

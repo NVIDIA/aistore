@@ -366,3 +366,14 @@ func TestLhotseManifestBatch(t *testing.T) {
 	}
 	tassert.CheckFatal(t, err)
 }
+
+// objnames with special symbols
+func TestSpecialSymbols(t *testing.T) {
+	cmd := exec.Command("./scripts/special-symbols.sh")
+
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}

@@ -33,6 +33,7 @@ var (
 			noHeaderFlag,
 			unitsFlag,
 			silentFlag,
+			encodeObjnameFlag,
 		},
 		cmdCluster: append(
 			longRunFlags,
@@ -279,14 +280,15 @@ func showObjectHandler(c *cli.Context) error {
 		return missingArgumentsError(c, "object name in the form "+objectArgument)
 	}
 	fullObjName := c.Args().Get(0)
-	bck, object, err := parseBckObjURI(c, fullObjName, false)
+	bck, objName, err := parseBckObjURI(c, fullObjName, false)
 	if err != nil {
 		return err
 	}
+
 	if _, err := headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
-	_, err = showObjProps(c, bck, object, false /*silent*/)
+	_, err = showObjProps(c, bck, objName, false /*silent*/)
 	return err
 }
 

@@ -38,7 +38,12 @@ func mptCreateHandler(c *cli.Context) error {
 		}
 	}
 
-	uploadID, err := api.CreateMultipartUpload(apiBP, bck, objName)
+	// encode special symbols if requested
+	var (
+		warned     bool
+		encObjName = warnEscapeObjName(c, objName, &warned)
+	)
+	uploadID, err := api.CreateMultipartUpload(apiBP, bck, encObjName)
 	if err != nil {
 		return err
 	}
@@ -105,7 +110,11 @@ func mptPutHandler(c *cli.Context) error {
 	if objName == "" {
 		return missingArgumentsError(c, "object name")
 	}
-
+	// encode special symbols if requested
+	var (
+		warned     bool
+		encObjName = warnEscapeObjName(c, objName, &warned)
+	)
 	// Get file info
 	finfo, err := os.Stat(filePath)
 	if err != nil {
@@ -127,7 +136,7 @@ func mptPutHandler(c *cli.Context) error {
 		PutArgs: api.PutArgs{
 			BaseParams: apiBP,
 			Bck:        bck,
-			ObjName:    objName,
+			ObjName:    encObjName,
 			Reader:     fh,
 			Size:       uint64(finfo.Size()),
 		},
