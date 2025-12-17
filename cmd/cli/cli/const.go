@@ -192,6 +192,8 @@ const (
 	cmdAuthCluster = cmdCluster
 	cmdAuthToken   = "token"
 	cmdAuthConfig  = cmdConfig
+	cmdAuthOIDC    = "oidc"
+	cmdAuthJWKS    = "jwks"
 
 	// K8s subcommans
 	cmdK8s        = "kubectl"

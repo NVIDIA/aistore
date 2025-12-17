@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -40,6 +41,7 @@ const (
 	flagsAuthRevokeToken = "revoke_token"
 	flagsAuthRoleShow    = "role_show"
 	flagsAuthConfShow    = "conf_show"
+	flagsAuthOIDCShow    = "oidc_show"
 )
 
 const authnUnreachable = `AuthN unreachable at %s. You may need to update AIS CLI configuration or environment variable %s`
@@ -53,7 +55,8 @@ var (
 		flagsAuthRevokeToken: {tokenFileFlag},
 		flagsAuthUserShow:    {nonverboseFlag, verboseFlag},
 		flagsAuthRoleShow:    {nonverboseFlag, verboseFlag, clusterFilterFlag},
-		flagsAuthConfShow:    {jsonFlag},
+		flagsAuthConfShow:    {jsonFlag, noHeaderFlag},
+		flagsAuthOIDCShow:    {jsonFlag, noHeaderFlag},
 	}
 
 	// define separately to allow for aliasing (see alias_hdlr.go)
@@ -87,6 +90,17 @@ var (
 				Usage:  "Show AuthN server configuration",
 				Flags:  sortFlags(authFlags[flagsAuthConfShow]),
 				Action: wrapAuthN(showAuthConfigHandler),
+			},
+			{
+				Name:   cmdAuthOIDC,
+				Usage:  "Show AuthN OIDC configuration",
+				Flags:  sortFlags(authFlags[flagsAuthOIDCShow]),
+				Action: wrapAuthN(showAuthOIDCHandler),
+			},
+			{
+				Name:   cmdAuthJWKS,
+				Usage:  "Show AuthN public JWKS",
+				Action: wrapAuthN(showAuthJWKSHandler),
 			},
 		},
 	}
@@ -725,6 +739,37 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	default:
 		return teb.Print(list, teb.PropValTmpl)
 	}
+}
+
+func showAuthOIDCHandler(c *cli.Context) (err error) {
+	oidc, err := authn.GetOIDCConfig(authParams)
+	if err != nil {
+		return err
+	}
+	list := flattenJSON(oidc, "")
+	usejs := flagIsSet(c, jsonFlag)
+	switch {
+	case usejs:
+		return teb.Print(oidc, teb.PropValTmpl, teb.Jopts(usejs))
+	case flagIsSet(c, noHeaderFlag):
+		return teb.Print(list, teb.PropValTmplNoHdr)
+	default:
+		return teb.Print(list, teb.PropValTmpl)
+	}
+}
+
+func showAuthJWKSHandler(_ *cli.Context) (err error) {
+	rawJSON, err := authn.GetJWKS(authParams)
+	if err != nil {
+		return err
+	}
+
+	// Decode into a generic map for flattening / table output
+	var jwks any
+	if err := json.Unmarshal(*rawJSON, &jwks); err != nil {
+		return err
+	}
+	return teb.Print(jwks, teb.PropValTmpl, teb.Jopts(true))
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

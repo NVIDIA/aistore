@@ -40,6 +40,7 @@ import (
 
 const (
 	keyAndValueSeparator = "="
+	pemKeyIndicator      = "-----BEGIN"
 
 	// Error messages
 	dockerErrMsgFmt = "Failed to discover docker proxy URL: %v.\nUsing default %q.\n"
@@ -728,6 +729,14 @@ func flattenBackends(backends []string) (flat nvpairList) {
 func _toStr(v any) (s string) {
 	m, ok := v.(map[string]any)
 	if !ok {
+		// handle string pointers
+		if strPtr, ok := v.(*string); ok {
+			if strPtr == nil {
+				return ""
+			}
+			val := *strPtr
+			return val
+		}
 		// feature flags: custom formatting
 		if f, ok := v.(feat.Flags); ok {
 			if f == 0 {
@@ -865,6 +874,10 @@ func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 			return nil, false
 		}
 		v := _toStr(field.Value())
+		// Format PEM keys with newline before content for better display
+		if v != "" && strings.Contains(v, pemKeyIndicator) {
+			v = "\n" + v
+		}
 		flat = append(flat, nvpair{Name: tag, Value: v})
 		return nil, false
 	}, opts)
