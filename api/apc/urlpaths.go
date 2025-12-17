@@ -200,8 +200,8 @@ var (
 	URLPathUsers    = urlpath(Version, Users)
 	URLPathClusters = urlpath(Version, Clusters)
 	URLPathRoles    = urlpath(Version, Roles)
-	URLPathOIDC     = urlpath(Version, OIDCPrefix, OIDCConfig)
-	URLPathJWKS     = urlpath(Version, OIDCPrefix, JWKS)
+	URLPathOIDC     = urlpath(OIDCPrefix, OIDCConfig)
+	URLPathJWKS     = urlpath(OIDCPrefix, JWKS)
 
 	URLPathML = urlpath(Version, ML)
 )

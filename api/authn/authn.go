@@ -5,6 +5,7 @@
 package authn
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
@@ -15,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
 func AddUser(bp api.BaseParams, newUser *User) error {
@@ -314,7 +314,10 @@ func GetOIDCConfig(bp api.BaseParams) (*OIDCConfiguration, error) {
 	return oidcConf, err
 }
 
-func GetJWKS(bp api.BaseParams) (jwk.Set, error) {
+// GetJWKS returns the raw JSON from the JWKS endpoint
+// While it may be useful to return the parsed jwk.Set here,
+// this avoids requiring all clients (including CLI) to include the jwx library in dependencies
+func GetJWKS(bp api.BaseParams) (*json.RawMessage, error) {
 	bp.Method = http.MethodGet
 	reqParams := api.AllocRp()
 	defer api.FreeRp(reqParams)
@@ -322,7 +325,7 @@ func GetJWKS(bp api.BaseParams) (jwk.Set, error) {
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathJWKS.S
 	}
-	keySet := jwk.NewSet()
-	_, err := reqParams.DoReqAny(keySet)
-	return keySet, err
+	var raw json.RawMessage
+	_, err := reqParams.DoReqAny(&raw)
+	return &raw, err
 }
