@@ -186,7 +186,6 @@ func (a *authManager) cacheNewToken(ctx context.Context, token string) (claims *
 	// Validate token signature and extract
 	claims, err = a.tokenParser.ValidateToken(ctx, token)
 	if err != nil {
-		nlog.Infoln("Received invalid token, error:", err)
 		return nil, err
 	}
 	// We aren't guaranteed someone else didn't do this, but worth a separate attempt to validate outside of lock
@@ -325,8 +324,7 @@ func (p *proxy) validateToken(ctx context.Context, hdr http.Header) (*tok.AISCla
 	}
 	claims, err := p.authn.validateToken(ctx, tokenHdr.Token)
 	if err != nil {
-		nlog.Errorf("invalid token from header %q: %v ", tokenHdr.Header, err)
-		return nil, err
+		return nil, fmt.Errorf("invalid token from header %q: %w ", tokenHdr.Header, err)
 	}
 	return claims, nil
 }
@@ -362,6 +360,8 @@ func aceErrToCode(err error) (status int) {
 	return status
 }
 
+// Validate the given header contains a token allowing access to the given bucket with the requested permissions
+// All failures must be logged at this level
 func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	var (
 		claims *tok.AISClaims
@@ -376,6 +376,8 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
 			if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
 				err = nil
+			} else {
+				nlog.Warningln("token validation failed:", err)
 			}
 			return err
 		}
@@ -384,6 +386,7 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 			bucket = bck.Bucket()
 		}
 		if err = claims.CheckPermissions(uid, bucket, ace); err != nil {
+			nlog.Warningln("access permission check failed:", err)
 			return err
 		}
 	}
@@ -396,14 +399,18 @@ func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace 
 	// - without AuthN: read-only access, PATCH, and ACL
 	// - with AuthN:    superuser can PATCH and change ACL
 	if !cmn.Rom.AuthEnabled() {
-		ace &^= (apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO)
+		ace &^= apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO
 	} else if claims != nil && claims.IsAdmin {
-		ace &^= (apc.AcePATCH | apc.AceBckSetACL)
+		ace &^= apc.AcePATCH | apc.AceBckSetACL
 	}
 	if ace == 0 {
 		return nil
 	}
-	return bck.Allow(ace)
+	err = bck.Allow(ace)
+	if err != nil {
+		nlog.Warningln("bucket ACL check failed:", err)
+	}
+	return err
 }
 
 /////////////////////
