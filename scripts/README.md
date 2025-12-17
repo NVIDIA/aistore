@@ -52,7 +52,7 @@ $ ./clean_deploy.sh <directory used for $AIS_DIR>
 
 [More details on usage can be found here.](/docs/development.md#clean-deploy)
 
-## boostrap.sh
+## bootstrap.sh
 
 Used internally by almost all our [Makefile](/Makefile) commands.
 

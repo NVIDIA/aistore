@@ -161,7 +161,7 @@ func (ct *CT) Clone(ctType string) (clone *CT) {
 	return clone
 }
 
-// costruct, init bucket and compute HRW
+// construct, init bucket and compute HRW
 // (similar to lom.InitBck())
 func NewCTFromBO(bck *meta.Bck, objName, ctType string, extras ...string) (ct *CT, err error) {
 	ct = &CT{objName: objName, bck: bck, contentType: ctType}
@@ -227,7 +227,7 @@ func (ct *CT) saveAndRename(tmpfqn string, reader io.Reader, buf []byte, cksumTy
 //
 // - LOM.GenFQN(cttype, extras...)
 //   Use when you have an initialized (not necessarily loaded) LOM.
-//  `cttype` must be one of the `fs` declated constants (WorkCT, ChunkCT, ChunkMetaCT, ...).
+//  `cttype` must be one of the `fs` declared constants (WorkCT, ChunkCT, ChunkMetaCT, ...).
 //
 // - CT.GenFQN(cttype, extras...)
 //   Same as above but for an existing CT. If `cttype` is empty, the CT's own

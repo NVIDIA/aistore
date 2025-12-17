@@ -372,7 +372,7 @@ class ETLRuntimeSpec(BaseModel):
 
 class ETLSpecMsg(InitETLArgs):
     """
-    Simplied version for Init Spec ETL args
+    Simplified version for Init Spec ETL args
     """
 
     runtime: ETLRuntimeSpec

@@ -274,7 +274,7 @@ func (cm *ConfManager) GetKeySet() jwk.Set {
 	return cm.jwks
 }
 
-// Sets jwks for the manger, must be called under lock when creating RSA
+// Sets jwks for the manager, must be called under lock when creating RSA
 func (cm *ConfManager) createPubJWKS() error {
 	conf := cm.conf.Load()
 	pubJWK, err := createPubJWK(conf.GetPrivateKey())

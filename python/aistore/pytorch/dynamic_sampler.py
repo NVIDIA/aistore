@@ -32,7 +32,7 @@ class DynamicBatchSampler(torch.utils.data.Sampler):
     Args:
         data_source (AISBaseMapDataset): Base AIS map-style dataset to sample from to create dynamic mini-batches.
         max_batch_size (float): Maximum size of mini-batch in bytes.
-        drop_last (bool, optional): If `True`, then will drop last batch if the batch is not atleast 80% of
+        drop_last (bool, optional): If `True`, then will drop last batch if the batch is not at least 80% of
             `max_batch_size`. Defaults to `False`.
         allow_oversized_samples (bool, optional): If `True`, then any sample that is larger than the `max_batch_size`
             will be processed in its own min-batch by itself instead of being dropped. Defaults to `False`.

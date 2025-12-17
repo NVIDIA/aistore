@@ -20,7 +20,7 @@ import (
 //   include any of those characters, the pattern is considered a prefix and
 //   trailing '*' is added automatically
 // ## Errors ##
-//   Different databases use different ways to returns erros. A driver must
+//   Different databases use different ways to returns errors. A driver must
 //   standardize across.
 
 const CollectionSepa = "##"

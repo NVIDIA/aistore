@@ -366,7 +366,7 @@ func TestMergeCluACLS(t *testing.T) {
 			},
 		},
 		{
-			title: "Update permissions for existing cluster and apend new ones",
+			title: "Update permissions for existing cluster and append new ones",
 			toACLs: []*authn.CluACL{
 				{
 					ID:     "1234",
@@ -585,7 +585,7 @@ func TestMergeBckACLS(t *testing.T) {
 			},
 		},
 		{
-			title: "Update permissions for existing buckets and apend new ones",
+			title: "Update permissions for existing buckets and append new ones",
 			toACLs: []*authn.BckACL{
 				{
 					Bck:    newBck("bck", "ais", "1234"),
