@@ -539,7 +539,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		By("Step 6: Perform atomic completion (production line 426)")
 		lom.SetCksum(&wholeCksum.Cksum)
-		lom.SetCustomKey(cmn.ETag, etag)
+		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 
 		err = lom.CompleteUfest(manifest, false)
 		Expect(err).NotTo(HaveOccurred(), "CompleteUfest should succeed")
@@ -557,7 +557,7 @@ var _ = Describe("MPU-UfestRead", func() {
 		// ETag
 		lomETag, exists := lom.GetCustomKey(cmn.ETag)
 		Expect(exists).To(BeTrue(), "LOM's ETag must exist")
-		Expect(lomETag).To(Equal(etag), "LOM should have correct ETag")
+		Expect(lomETag).To(Equal(cmn.UnquoteCEV(etag)), "LOM should have correct ETag")
 
 		By("Step 8: Verify persistence across LOM reload")
 		freshLom := &core.LOM{}
@@ -575,7 +575,7 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		reloadedETag, exists := freshLom.GetCustomKey(cmn.ETag)
 		Expect(exists).To(BeTrue(), "Reloaded ETag must exist")
-		Expect(reloadedETag).To(Equal(etag), "Reloaded ETag should match")
+		Expect(reloadedETag).To(Equal(cmn.UnquoteCEV(etag)), "Reloaded ETag should match")
 
 		By(fmt.Sprintf("Successfully completed upload with %d parts, total size %d bytes, ETag: %s",
 			numParts, totalFileSize, etag))

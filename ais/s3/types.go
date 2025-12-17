@@ -197,11 +197,11 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		})
 	} else {
 		if v, exists := lom.GetCustomKey(cmn.ETag); exists {
-			hdr.Set(cos.HdrETag, v)
+			hdr.Set(cos.HdrETag, cmn.QuoteETag(v))
 		} else if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
 			debug.Assert(cksum.Val()[0] != '"', cksum.Val())
 			// NOTE: could this object be multipart?
-			hdr.Set(cos.HdrETag, cmn.MD5strToETag(cksum.Value()))
+			hdr.Set(cos.HdrETag, cmn.QuoteETag(cksum.Value()))
 		}
 	}
 

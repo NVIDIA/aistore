@@ -107,7 +107,7 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 				if !lom.IsChunked() {
 					if cksum := lom.Checksum(); !cos.NoneC(cksum) {
 						if cksum.Ty() == cos.ChecksumMD5 && cksum.Val() != "" {
-							md[cmn.ETag] = cmn.MD5strToETag(cksum.Val())
+							md[cmn.ETag] = cksum.Val()
 							added = true
 						}
 					}

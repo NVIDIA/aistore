@@ -446,7 +446,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 
 			// derive etag from chunk MD5 but only when backend didn’t return the former
 			if etag == "" {
-				etag = cmn.MD5hashToETag(chunk.MD5)
+				etag = cmn.MD5ToQuotedETag(chunk.MD5)
 			}
 		} else {
 			// NOTE: not populating chunk.MD5 even if bucket-configured checksum is md5
@@ -526,8 +526,9 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 			lom.SetCustomKey(k, v)
 		}
 	}
-	lom.SetCustomKey(cmn.ETag, etag)
-
+	if etag != "" {
+		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
+	}
 	// atomically flip: persist manifest, mark chunked, persist main
 	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
 	debug.Assertf(!args.locked || lom.IsLocked() == apc.LockWrite, "expecting wlock, have %d", lom.IsLocked())

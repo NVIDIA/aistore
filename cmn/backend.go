@@ -35,7 +35,7 @@ const (
 
 type backendFuncs struct {
 	EncodeVersion  func(v any) (version string, isSet bool)
-	EncodeETag     func(v any) (etag string, isSet bool)
+	EncodeETag     func(v any) (etag string, isSet bool) // NOTE: always return unquoted ETag
 	EncodeCksum    func(v any) (cksumValue string, isSet bool)
 	EncodeMetadata func(metadata map[string]string) (header map[string]string)
 	DecodeMetadata func(header http.Header) (metadata map[string]string)
@@ -47,9 +47,19 @@ func UnquoteCEV(val string) string {
 	return strings.Trim(val, "\"")
 }
 
-// S3 requires that the ETag header value should be enclosed in double quotes
-func MD5hashToETag(md5hash []byte) string { return `"` + hex.EncodeToString(md5hash) + `"` }
-func MD5strToETag(md5val string) string   { return `"` + md5val + `"` }
+// return a quoted ETag intended for two distinct cases:
+// 1) when setting http.Header in the response
+// 2) when populating S3 XML responses
+func QuoteETag(v string) string {
+	debug.Assert(v != "")
+	if v == "" || v[0] == '"' {
+		return v
+	}
+	debug.Assert(!strings.HasPrefix(v, "W/"), v) // weak is not expected
+	return `"` + v + `"`
+}
+
+func MD5ToQuotedETag(md5hash []byte) string { return QuoteETag(hex.EncodeToString(md5hash)) }
 
 // NOTE: hex.DecodeString() won't complain on empty ("") etag - caller must validate
 func ETagToMD5(etag string) ([]byte, error) {
@@ -79,7 +89,7 @@ var BackendHelpers = struct {
 	},
 	Google: backendFuncs{
 		EncodeVersion: googleEncodeVersion,
-		EncodeETag:    _encStr,
+		EncodeETag:    _encStrUnquote,
 		EncodeCksum:   googleEncodeCksum,
 	},
 	OCI: backendFuncs{
@@ -98,13 +108,25 @@ func isS3MultipartEtag(etag string) bool {
 	return strings.Contains(etag, AwsMultipartDelim)
 }
 
-func awsIsVersionSet(version *string) bool {
-	return version != nil && *version != "" && *version != "null"
-}
-
 //
 // common
 //
+
+func _encValidateUnquote(v any, validator func(string) bool) (string, bool) {
+	s, ok := _encValidate(v, validator)
+	if !ok {
+		return "", false
+	}
+	return UnquoteCEV(s), true
+}
+
+func _encStrUnquote(v any) (string, bool) {
+	s, ok := _encStr(v)
+	if !ok {
+		return "", false
+	}
+	return UnquoteCEV(s), true
+}
 
 func _encValidate(v any, validator func(string) bool) (string, bool) {
 	switch x := v.(type) {
@@ -175,8 +197,12 @@ func awsEncodeVersion(v any) (string, bool) {
 	})
 }
 
+func awsIsVersionSet(version *string) bool {
+	return version != nil && *version != "" && *version != "null"
+}
+
 func awsEncodeETag(v any) (string, bool) {
-	return _encValidate(v, nil) // no additional validation
+	return _encValidateUnquote(v, nil)
 }
 
 func awsEncodeCksum(v any) (string, bool) {
@@ -200,7 +226,7 @@ func awsDecodeMetadata(header http.Header) map[string]string {
 // Azure
 
 func azureEncodeETag(v any) (string, bool) {
-	return _encStr(v)
+	return _encStrUnquote(v)
 }
 
 func azureEncodeCksum(v any) (string, bool) {
@@ -258,11 +284,7 @@ func ociEncodeVersion(_ any) (string, bool) {
 }
 
 func ociEncodeETag(v any) (string, bool) {
-	value, isSet := _encValidate(v, nil)
-	if !isSet {
-		return "", false
-	}
-	return UnquoteCEV(value), true
+	return _encValidateUnquote(v, nil)
 }
 
 func ociEncodeCksum(v any) (string, bool) {
@@ -284,5 +306,5 @@ func ociDecodeMetadata(header http.Header) map[string]string {
 // HTTP
 
 func httpEncodeETag(v any) (string, bool) {
-	return _encStr(v)
+	return _encStrUnquote(v)
 }

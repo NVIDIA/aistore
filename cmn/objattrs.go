@@ -150,6 +150,13 @@ func (oa *ObjAttrs) SetCustomKey(k, v string) {
 	if oa.CustomMD == nil {
 		oa.CustomMD = make(cos.StrKVs, 6)
 	}
+	// NOTE: custom MD stores unquoted ETag (see cmn/backend helpers and consistent quoting rules)
+	debug.Func(func() {
+		if k != ETag {
+			return
+		}
+		debug.Assertf(v != "" && v[0] != '"', "empty or quoted ETag %q", v)
+	})
 	oa.CustomMD[k] = v
 }
 

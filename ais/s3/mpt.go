@@ -78,7 +78,7 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 		etag := c.ETag
 		if etag == "" && c.MD5 != nil {
 			debug.Assert(len(c.MD5) == cos.LenMD5Hash)
-			etag = cmn.MD5hashToETag(c.MD5)
+			etag = cmn.MD5ToQuotedETag(c.MD5)
 		}
 		parts = append(parts, types.CompletedPart{
 			ETag:       apc.Ptr(etag),
