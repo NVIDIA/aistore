@@ -138,6 +138,8 @@ AIS never guesses or rewrites identity. `s3://#ns1/bucket` and `s3://#ns2/bucket
         └───────────────────────────────────────┘
 ```
 
+> See also: [Blog: The Many Lives of a Dataset Called "data"](https://aistore.nvidia.com/blog/2025/12/15/s3-data-with-namespace)
+
 ### Provider
 
 Indicates the storage backend:
@@ -194,6 +196,8 @@ ais://@remais/bucket => Bck{Provider: "ais", Ns: Ns{UUID: "<cluster-uuid>"}, Nam
 ```
 
 > **Note**: The bucket namespace you choose - whether it represents an AWS profile, a GCS account, or simply a human-readable alias - becomes part of the bucket's physical [on-disk path](#appendix-a-on-disk-layout). What starts as a logical identifier materializes into on-disk naming structure.
+
+> See also: [Blog: The Many Lives of a Dataset Called "data"](https://aistore.nvidia.com/blog/2025/12/15/s3-data-with-namespace)
 
 ### Bucket Properties
 

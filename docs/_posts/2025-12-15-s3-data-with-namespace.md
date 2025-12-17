@@ -3,7 +3,7 @@ layout: post
 title:  "The Many Lives of a Dataset Called 'data'"
 date:   Dec 15, 2025
 author: Alex Aizman
-categories: aistore bucket-identity namespace backend-provider
+categories: aistore namespace multi-cloud backend federated-storage
 ---
 
 For whatever reason, a bucket called `s3://data` shows up with remarkable frequency as we deploy AIStore (AIS) clusters and populate them with user datasets. Likely for the same reason that `password = password` remains a popular choice.

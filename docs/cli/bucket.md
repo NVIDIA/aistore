@@ -34,8 +34,6 @@ ls              bucket ls
 rmb             bucket rm
 ```
 
-> For types of supported buckets (AIS, Cloud, remote AIS, etc.), bucket management and properties, storage services and more usage examples, see [in-depth overview](/docs/bucket.md).
-
 ## Table of Contents
 - [Create bucket](#create-bucket)
 - [Delete bucket](#delete-bucket)
@@ -163,6 +161,11 @@ $ ais create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": tru
 $ ais create aws://bucket_name
 Create bucket "aws://bucket_name" failed: creating a bucket for any of the cloud or HTTP providers is not supported
 ```
+
+### See also
+
+* [AIS Buckets: Design and Operations: Part II](/docs/bucket.md#part-ii-how-to)
+* [Blog: The Many Lives of a Dataset Called "data"](https://aistore.nvidia.com/blog/2025/12/15/s3-data-with-namespace)
 
 ## Delete bucket
 
@@ -766,6 +769,10 @@ TDXBNBEZNl.tar   8.50KiB         33345a69bade096a30abd42058da4537               
 qFpwOOifUe.tar   8.50KiB         8b5919c0850a07d931c3c46ed9101eab                1622133846120151        no      ok      0
 thmdpZXetG.tar   8.50KiB         cfe0c386e91daa1571d6a659f49b1408                1622137609269706        no      ok      0
 ```
+
+### See also
+
+* [AIS Buckets: Design and Operations: Part II](/docs/bucket.md#part-ii-how-to)
 
 ## Move or Rename a bucket
 
