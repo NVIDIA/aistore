@@ -11,8 +11,7 @@ shard-0.tar      2.50KiB
 shard-1.tar      2.50KiB         
 shard-2.tar      2.50KiB
 NAME             SIZE    
-docs/            
+docs/nested/     
 docs/readme.txt  0B
 NAME                     SIZE    
-docs/nested/             
 docs/nested/deep.txt     0B

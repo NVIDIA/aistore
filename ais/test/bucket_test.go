@@ -3839,11 +3839,11 @@ func TestListObjectsNoRecursion(t *testing.T) {
 			"img-test/obj1", "img-test/vid1", "img-test/pics/obj01",
 			"img003", "img-test/pics/vid01"}
 		tests = []test{
-			{prefix: "", count: 4},
-			{prefix: "img-test", count: 3},
+			{prefix: "", count: 4},         // img001, vid001, img003, img-test/ (dir)
+			{prefix: "img-test", count: 3}, // obj1, vid1, pics/ (dir)
 			{prefix: "img-test/", count: 3},
-			{prefix: "img-test/pics", count: 3},
-			{prefix: "img-test/pics/", count: 3},
+			{prefix: "img-test/pics", count: 2},  // obj01, vid01 (no subdirs)
+			{prefix: "img-test/pics/", count: 2}, // obj01, vid01 (no subdirs)
 		}
 	)
 
