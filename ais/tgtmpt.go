@@ -550,7 +550,7 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		t.statsT.IncWith(t.Backend(lom.Bck()).MetricName(stats.PutCount), vlabs)
 	}
 
-	return etag, 0, nil
+	return cmn.QuoteETag(etag), 0, nil
 }
 
 func (ups *ups) _completeRemote(r *http.Request, lom *core.LOM, uploadID string, body []byte, partList apc.MptCompletedParts) (etag string, ecode int, err error) {

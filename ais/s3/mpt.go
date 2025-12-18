@@ -76,9 +76,13 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 	for i := range manifest.Count() {
 		c := manifest.GetChunk(i+1, true)
 		etag := c.ETag
-		if etag == "" && c.MD5 != nil {
-			debug.Assert(len(c.MD5) == cos.LenMD5Hash)
-			etag = cmn.MD5ToQuotedETag(c.MD5)
+		if etag == "" {
+			if c.MD5 != nil {
+				debug.Assert(len(c.MD5) == cos.LenMD5Hash)
+				etag = cmn.MD5ToQuotedETag(c.MD5)
+			}
+		} else {
+			etag = cmn.QuoteETag(etag)
 		}
 		parts = append(parts, types.CompletedPart{
 			ETag:       apc.Ptr(etag),

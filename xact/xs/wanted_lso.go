@@ -87,7 +87,12 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 				break
 			}
 
-			// synthesize S3-required fields
+			// NOTE:
+			// For S3 list-objects, AIS does NOT issue per-object mtime/stat syscalls.
+			// This is a deliberate scalability choice. List responses use best-effort
+			// metadata only. S3 clients requiring exact values can use HEAD(object) API.
+			// A future feature flag may relax this, but the default favors performance.
+
 			var added bool
 			if md == nil {
 				md = make(cos.StrKVs, 4)
@@ -96,19 +101,9 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 				}
 			}
 			if _, ok := md[cmn.ETag]; !ok {
-				// TODO -- FIXME:
-				// when lom happens to be chunked could still go ahead and load its chunk manifest, etc...
-				// but that'd be just too much;
-				// long term solution: extend `cmn.LsoEnt` with the two fields
-				// (in essence, `api.ListObjectsV2`)
-
-				if !lom.IsChunked() {
-					if cksum := lom.Checksum(); !cos.NoneC(cksum) {
-						if cksum.Ty() == cos.ChecksumMD5 && cksum.Val() != "" {
-							md[cmn.ETag] = cksum.Val()
-							added = true
-						}
-					}
+				if s := lom.ETag(false /*allow to generate*/); s != "" {
+					md[cmn.ETag] = s
+					added = true
 				}
 			}
 			if _, ok := md[cmn.LsoLastModified]; !ok {

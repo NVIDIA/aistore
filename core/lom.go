@@ -297,7 +297,9 @@ func (lom *LOM) LastModifiedLso() string {
 	return ""
 }
 
-func (lom *LOM) ETag() string {
+// allowGen=false: return only existing (custom or MD5) values
+// allowGen=true:  as the name implies
+func (lom *LOM) ETag(allowGen bool) string {
 	// 1. ETag via custom
 	if etag, ok := lom.GetCustomKey(cmn.ETag); ok {
 		debug.Assert(etag != "" && etag[0] != '"')
@@ -310,9 +312,13 @@ func (lom *LOM) ETag() string {
 	}
 
 	// 2. MD5
-	if cksum.Ty() == cos.ChecksumMD5 {
+	if !lom.IsChunked() && cksum.Ty() == cos.ChecksumMD5 {
 		debug.Assert(cksum.Val()[0] != '"', cksum.Val())
 		return cksum.Val()
+	}
+
+	if !allowGen {
+		return ""
 	}
 
 	// 3. make ETag
@@ -330,7 +336,9 @@ func (lom *LOM) ETag() string {
 	return sb.String()
 }
 
+//
 // BID, `lomBID` (type), and the two MetaverLOM_V1 `lomFlags`
+//
 
 func (lom *LOM) bid() uint64             { return lom.md.lid.bid() }
 func (lom *LOM) setbid(bpropsBID uint64) { lom.md.lid = lom.md.lid.setbid(bpropsBID) }

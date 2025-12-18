@@ -195,7 +195,7 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		debug.AssertFunc(func() bool {
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
-	} else if etag := lom.ETag(); etag != "" {
+	} else if etag := lom.ETag(true /*allow to generate*/); etag != "" {
 		debug.Assert(etag[0] != '"', etag)
 		hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
 	}

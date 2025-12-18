@@ -51,7 +51,6 @@ func UnquoteCEV(val string) string {
 // 1) when setting http.Header in the response
 // 2) when populating S3 XML responses
 func QuoteETag(v string) string {
-	debug.Assert(v != "")
 	if v == "" || v[0] == '"' {
 		return v
 	}

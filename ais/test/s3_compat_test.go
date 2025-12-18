@@ -401,6 +401,7 @@ func TestS3ETag(t *testing.T) {
 
 		attrs := oah.Attrs()
 		etag, _ := attrs.GetCustomKey(cmn.ETag)
+		etag = cmn.QuoteETag(etag)
 		md5Hash, _ := attrs.GetCustomKey(cmn.MD5ObjMD)
 		tassert.Errorf(t, etag == *output.ETag, "ETag for PUT does not match (local: %v != remote: %v)", etag, *output.ETag)
 		tassert.Errorf(t, etag == `"`+md5Hash+`"`, "ETag must be equivalent to MD5 hash (etag: %v != md5: %v)", etag, md5Hash)
