@@ -24,7 +24,8 @@ redirect_from:
 - [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore), and also:
   - [pip package](https://pypi.org/project/aistore/)
   - [reference guide](/docs/python_sdk.md)
-- [REST API](/docs/http_api.md)
+- [HTTP API Reference](https://aistore.nvidia.com/docs/http-api)
+  - [curl examples](/docs/http_api.md)
   - [Easy URL](https://github.com/NVIDIA/aistore/blob/main/docs/easy_url.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3compat.md#quick-start-with-s3cmd)

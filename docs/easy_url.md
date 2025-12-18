@@ -144,4 +144,5 @@ Now, if you compare this with the example from the previous section (where we us
 
 ## References
 
-- [REST API](/docs/http_api.md)
+- [HTTP API Reference](https://aistore.nvidia.com/docs/http-api)
+- [curl examples](/docs/http_api.md)

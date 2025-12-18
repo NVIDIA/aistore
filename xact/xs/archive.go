@@ -35,6 +35,7 @@ import (
 )
 
 // TODO:
+// - fix test_archive_objects_without_copy (see comment in the source)
 // - multi-worker list-range iter (see lrit.init)
 // - one source multiple destination buckets (feature)
 

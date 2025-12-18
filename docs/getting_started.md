@@ -699,7 +699,7 @@ NAME     SIZE
 qqq      10B
 ```
 
-#### Example: same as above using [Easy URL](/docs/http_api.md#easy-url)
+#### Example: same as above using [Easy URL](/docs/easy_url.md)
 
 ```console
 ## notice PROVIDER/BUCKET/OBJECT notation

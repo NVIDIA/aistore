@@ -22,7 +22,7 @@ The rest of this document is structured as follows:
 - [Design Philosophy](#design-philosophy)
 - [Original Diagrams](#original-diagrams)
 - [CLI](#cli)
-- [AIStore API](#aistore-api)
+- [AIStore APIs](#aistore-apis)
 - [Traffic Patterns](#traffic-patterns)
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
@@ -60,7 +60,7 @@ All user data is equally distributed (or [balanced](/docs/rebalance.md)) across 
 ### Bucket
 A **bucket** is a named container for objects - monolithic files or chunked representations - with associated metadata. It is the fundamental unit of data organization and data management.
 
-AIS buckets are categorized by their [provider](/docs/bucket.md#provider) and origin. **Native** `ais://` buckets managed by [this cluster](#at-a-glance) are always created explicitly (via `ais create` or the respective Go and/or Python [APIs](#aistore-api)).
+AIS buckets are categorized by their [provider](/docs/bucket.md#provider) and origin. **Native** `ais://` buckets managed by [this cluster](#at-a-glance) are always created explicitly (via `ais create` or the respective Go and/or Python [APIs](#aistore-apis)).
 
 Remote buckets (including `s3://`, `gs://`, etc., and `ais://` buckets in remote AIS clusters) are [usually](/docs/bucket.md#creation) discovered and auto-added on-the-fly on first access.
 
@@ -196,7 +196,7 @@ If the remote `PUT` fails, the whole operation fails and AIS rolls back locally.
 ### Xaction
 Xaction (*eXtended action*) is a supported batch job that executes asynchronously.
 
-All xactions support uniform [API](#aistore-api) and [CLI](#cli) to start, stop, and wait for, as well as common (generic) and job-specific stats.
+All xactions support uniform [API](#aistore-apis) and [CLI](#cli) to start, stop, and wait for, as well as common (generic) and job-specific stats.
 
 Common jobs include erasure coding (EC), n-way mirroring, resharding, transforming a given virtual directory, archiving ([sharding](#shard)) multiple objects, copying remote bucket, and more:
 
@@ -282,11 +282,13 @@ At the time of this writing, AIS CLI is at version (ais version) v1.17 and is ac
 
 ## AIStore APIs
 
-In addition to industry-standard [S3](/docs/s3compat.md), AIS provides its own (value-added) native API that can be (conveniently) called directly from Go and Python programs:
+In addition to industry-standard [S3](/docs/s3compat.md), AIS provides its own (value-added) native API that can be called directly from Go and Python programs:
 
 - [Go API](https://github.com/NVIDIA/aistore/tree/main/api)
-- [Python API](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
-- [HTTP REST](/docs/http_api.md)
+- [Python SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore/sdk)
+- [HTTP API Reference](https://aistore.nvidia.com/docs/http-api)
+  - [curl examples](/docs/http_api.md)
+  - [Easy URL](https://github.com/NVIDIA/aistore/blob/main/docs/easy_url.md)
 
 For Amazon S3 compatibility and related topics, see also:
   - [`s3cmd` client](/docs/s3compat.md#quick-start-with-s3cmd)
@@ -356,7 +358,7 @@ Overall, some of the ways to _get_ an existing dataset _into_ an AIS cluster inc
 
 ### Existing Datasets: Cold GET
 
-If the dataset in question is accessible via S3-like object API, use one of the supported [APIs](#aistore-api) or CLI to read it. Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
+If the dataset in question is accessible via S3-like object API, use one of the supported [APIs](#aistore-apis) or CLI to read it. Just make sure to provision AIS with the corresponding credentials to access the dataset's bucket in the Cloud.
 
 > As far as supported S3-like backends, AIS currently supports Amazon S3, Google Cloud, Microsoft Azure, and Oracle OCI.
 
@@ -527,7 +529,7 @@ See also:
 
 ## HA
 
-AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](#aistore-api).
+AIS features a [highly-available control plane](ha.md) where all gateways are absolutely identical in terms of their (client-accessible) data and control plane [APIs](#aistore-apis).
 
 Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
