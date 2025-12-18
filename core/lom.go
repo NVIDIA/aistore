@@ -7,6 +7,7 @@ package core
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -140,7 +141,7 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 	return lom.md.Size
 }
 
-func (lom *LOM) MtimeUTC() (time.Time, error) { return fs.MtimeUTC(lom.FQN) }
+func (lom *LOM) loaded() bool { return lom.md.lid != 0 } // internal
 
 // low-level access to the os.FileInfo of a chunk or whole file
 func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
@@ -164,6 +165,21 @@ func (lom *LOM) VersionPtr() *string     { return lom.md.Ver }
 func (lom *LOM) SetVersion(ver string)   { lom.md.SetVersion(ver) }
 func (lom *LOM) CopyVersion(oah cos.OAH) { lom.md.CopyVersion(oah) }
 
+func (lom *LOM) IncVersion() error {
+	debug.Assert(lom.Bck().IsAIS())
+	v := lom.md.Version()
+	if v == "" {
+		lom.SetVersion(lomInitialVersion)
+		return nil
+	}
+	ver, err := strconv.Atoi(v)
+	if err != nil {
+		return fmt.Errorf("%s: %v", lom, err)
+	}
+	lom.SetVersion(strconv.Itoa(ver + 1))
+	return nil
+}
+
 func (lom *LOM) Uname() string     { return *lom.md.uname }
 func (lom *LOM) UnamePtr() *string { return lom.md.uname }
 func (lom *LOM) Digest() uint64    { return lom.digest }
@@ -185,6 +201,134 @@ func (lom *LOM) SetCksum(cksum *cos.Cksum) {
 func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
+
+// Object metadata normalization rules: Last-Modified and ETag
+// The following rules define how AIS derives HTTP-visible object metadata
+// (Last-Modified and ETag) in a consistent way across:
+//   - cloud buckets
+//   - AIS buckets
+//   - objects with or without checksums
+// --------------------
+// Last-Modified
+// --------------------
+// 1) If object custom metadata contains `cos.HdrLastModified`
+//    (typically populated from a cloud backend), it ALWAYS takes precedence.
+//    The value is expected to be RFC1123 / http.TimeFormat (GMT), as required
+//    by HTTP and S3 semantics.
+// 2) Otherwise, Last-Modified is derived from the local filesystem mtime
+//    (via syscall) and formatted as http.TimeFormat.
+// Notes:
+// - This keeps HTTP semantics correct (RFC 9110).
+// - List-objects uses cmn.LsoLastModified instead, which is RFC3339 and
+//   intentionally separate.
+// - atime is NOT used for HTTP Last-Modified.
+// --------------------
+// ETag
+// --------------------
+//   * Internally (custom metadata, ObjAttrs):
+//       - ETag is always stored unquoted.
+//   * Externally (HTTP headers, S3 XML responses):
+//       - ETag is always quoted.
+// Precedence and generation rules:
+// 1) If custom metadata contains ETag (typically from a cloud backend),
+//    it always wins and is returned as is (unquoted internally).
+// 2) Otherwise, if the object has an MD5 checksum, the MD5 value is used
+//    as the ETag (still unquoted).
+// 3) Otherwise, if the object has a non-MD5 checksum, a deterministic,
+//    collision-resistant synthetic ETag is generated:
+//        "v1-<checksum>-<mtime>"
+//    where:
+//      - <checksum> is the stored checksum value
+//      - <mtime> is filesystem mtime (via syscall) encoded in base-36
+// Notes:
+// - ETag is treated as an opaque identifier, per S3 specification.
+// - No attempt is made to preserve MD5 semantics unless MD5 actually exists.
+// - Objects explicitly configured to have no checksums intentionally
+//   do not receive an ETag.
+// and finally:
+// - Users who require strict S3-compatible semantics (for example, when
+//   using S3 SDKs such as boto3) are strongly encouraged to configure
+//   MD5 checksums at the bucket level.
+
+func (lom *LOM) LastModified() (time.Time, error) {
+	if s, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
+		if mtime, err := time.Parse(http.TimeFormat, s); err == nil { // GMT/UTC
+			return mtime, nil
+		}
+	}
+	// (note: syscall)
+	return fs.MtimeUTC(lom.FQN)
+}
+
+// (same as above when callers want a string)
+func (lom *LOM) LastModifiedStr() string {
+	if v, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
+		debug.AssertFunc(func() bool {
+			_, err := time.Parse(http.TimeFormat, v)
+			return err == nil
+		})
+		return v
+	}
+	// (note: syscall)
+	mtime, err := fs.MtimeUTC(lom.FQN)
+	if err != nil {
+		nlog.Errorln(lom.Cname(), "unexpected failure to get last-modified:", err)
+		return ""
+	}
+	return mtime.Format(http.TimeFormat)
+}
+
+// NOTE
+// - (list-objects, S3): prefer stored RFC3339 (cmn.LsoLastModified);
+// - else convert Last-Modified (http.TimeFormat) to RFC3339;
+// - else (perf) fall back to atime when available
+func (lom *LOM) LastModifiedLso() string {
+	if s, ok := lom.GetCustomKey(cmn.LsoLastModified); ok {
+		return s
+	}
+	if s, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
+		if mtime, err := time.Parse(http.TimeFormat, s); err == nil { // GMT/UTC
+			return mtime.Format(time.RFC3339)
+		}
+	}
+	if lom.AtimeUnix() != 0 {
+		return lom.Atime().UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
+func (lom *LOM) ETag() string {
+	// 1. ETag via custom
+	if etag, ok := lom.GetCustomKey(cmn.ETag); ok {
+		debug.Assert(etag != "" && etag[0] != '"')
+		return etag
+	}
+
+	cksum := lom.Checksum()
+	if cos.NoneC(cksum) {
+		return "" // (no checksum => no ETag)
+	}
+
+	// 2. MD5
+	if cksum.Ty() == cos.ChecksumMD5 {
+		debug.Assert(cksum.Val()[0] != '"', cksum.Val())
+		return cksum.Val()
+	}
+
+	// 3. make ETag
+	mtime, err := fs.MtimeUTC(lom.FQN)
+	if err != nil {
+		return ""
+	}
+	var sb strings.Builder
+	sb.Grow(len(lom.md.Cksum.Val()) + 24)
+	sb.WriteString("v1-")
+	sb.WriteString(lom.md.Cksum.Val())
+	sb.WriteByte('-')
+	sb.WriteString(strconv.FormatInt(mtime.UnixNano(), 36))
+
+	return sb.String()
+}
 
 // BID, `lomBID` (type), and the two MetaverLOM_V1 `lomFlags`
 
@@ -264,8 +408,6 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 	return
 }
 
-func (lom *LOM) loaded() bool { return lom.md.lid != 0 }
-
 func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
 	tsi, err = smap.HrwHash2T(lom.digest)
 	if err != nil {
@@ -273,21 +415,6 @@ func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err err
 	}
 	local = tsi.ID() == T.SID()
 	return
-}
-
-func (lom *LOM) IncVersion() error {
-	debug.Assert(lom.Bck().IsAIS())
-	v := lom.md.Version()
-	if v == "" {
-		lom.SetVersion(lomInitialVersion)
-		return nil
-	}
-	ver, err := strconv.Atoi(v)
-	if err != nil {
-		return fmt.Errorf("%s: %v", lom, err)
-	}
-	lom.SetVersion(strconv.Itoa(ver + 1))
-	return nil
 }
 
 // Returns stored checksum (if present) and computed checksum (if requested)

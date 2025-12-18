@@ -195,24 +195,14 @@ func SetS3Headers(hdr http.Header, lom *core.LOM) {
 		debug.AssertFunc(func() bool {
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
-	} else {
-		if v, exists := lom.GetCustomKey(cmn.ETag); exists {
-			hdr.Set(cos.HdrETag, cmn.QuoteETag(v))
-		} else if cksum := lom.Checksum(); cksum.Type() == cos.ChecksumMD5 {
-			debug.Assert(cksum.Val()[0] != '"', cksum.Val())
-			// NOTE: could this object be multipart?
-			hdr.Set(cos.HdrETag, cmn.QuoteETag(cksum.Value()))
-		}
+	} else if etag := lom.ETag(); etag != "" {
+		debug.Assert(etag[0] != '"', etag)
+		hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
 	}
 
 	// 2. Last-Modified
-	if v, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
-		hdr.Set(cos.HdrLastModified, v)
-	} else if lom.AtimeUnix() != 0 {
-		// - see "as we do not track mtime we choose to _prefer_ atime" comment above
-		// - http.TimeFormat (string) is GMT, hence UTC
-		atime := lom.Atime()
-		hdr.Set(cos.HdrLastModified, atime.UTC().Format(http.TimeFormat))
+	if s := lom.LastModifiedStr(); s != "" {
+		hdr.Set(cos.HdrLastModified, s)
 	}
 
 	// 3. x-amz-version-id

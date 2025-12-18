@@ -45,7 +45,9 @@ const (
 
 	HdrHSTS = "Strict-Transport-Security"
 
-	HdrLastModified = "Last-Modified" // RFC1123GMT or, same, http.TimeFormat ("Mon, 02 Jan 2006 15:04:05 GMT")
+	// RFC1123GMT or, same, http.TimeFormat ("Mon, 02 Jan 2006 15:04:05 GMT")
+	// see also, and separately, cmn.LsoLastModified (list-objects)
+	HdrLastModified = "Last-Modified"
 )
 
 //

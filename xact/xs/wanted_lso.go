@@ -6,8 +6,6 @@
 package xs
 
 import (
-	"time"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -114,8 +112,9 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 				}
 			}
 			if _, ok := md[cmn.LsoLastModified]; !ok {
-				if mtime, err := lom.MtimeUTC(); err == nil {
-					md[cmn.LsoLastModified] = mtime.Format(time.RFC3339)
+				// best-effort; may fall back to atime
+				if s := lom.LastModifiedLso(); s != "" {
+					md[cmn.LsoLastModified] = s
 					added = true
 				}
 			}

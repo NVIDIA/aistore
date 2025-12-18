@@ -36,7 +36,8 @@ const (
 
 	OrigURLObjMD = "orig_url"
 
-	// RFC3339; see also: cos.HdrLastModified formatted RFC1123GMT
+	// LsoLastModified: RFC3339 (list-objects)
+	// see also, and separately, cos.HdrLastModified: RFC1123GMT / (HTTP header semantics)
 	LsoLastModified = "LastModified"
 
 	// as the name implies
