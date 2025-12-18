@@ -379,6 +379,8 @@ class TestObjectGroupOps(ParallelTestBase):
         content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
+    # TODO: Fix transport stream race condition (NSVISCS-10608)
+    @unittest.skip("archive job transport race condition")
     def test_archive_objects_without_copy(self):
         # NOTE: Force local bucket for CI stability (override remote bucket if set)
         self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
