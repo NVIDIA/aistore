@@ -76,7 +76,6 @@ var (
 	ErrInvalidToken         = errors.New("invalid token")
 	ErrNoSubject            = errors.New("missing 'sub' or 'username' claims")
 	ErrNoToken              = errors.New("token required")
-	ErrNoBearerToken        = errors.New("invalid token: no bearer")
 	ErrTokenExpired         = errors.New("token expired")
 	ErrTokenRevoked         = errors.New("token revoked")
 	supportedSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodRS384.Name, jwt.SigningMethodRS512.Name, jwt.SigningMethodHS256.Name}
@@ -125,8 +124,8 @@ func extractBearerToken(hdr http.Header) (*TokenHdr, error) {
 		return nil, ErrNoToken
 	}
 	before, after, ok := strings.Cut(s, " ")
-	if !ok || before != apc.AuthenticationTypeBearer {
-		return nil, ErrNoBearerToken
+	if !ok || before != apc.AuthenticationTypeBearer || after == "" {
+		return nil, ErrNoToken
 	}
 	return &TokenHdr{Header: apc.HdrAuthorization, Token: after}, nil
 }
