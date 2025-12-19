@@ -573,17 +573,19 @@ There are **no** designed-in limitations on the:
 * numbers of gateways (proxies) and storage targets in AIS cluster
 * object name lengths
 
-Ultimately, the limit on object size may be imposed by a local filesystem of choice and a physical disk capacity. While limit on the cluster size - by the capacity of the hosting AIStore Data Center.
+In practice, limits may be imposed by the underlying storage hardware, local filesystem(s), and their respective semantics.
 
-In v3.26, AIStore has removed the basename and pathname limitations.
+### Long names and filesystem limitations
 
-> On a typical Linux system, you will find that the relevant header(s) define:
+Starting v3.26, AIStore removed the traditional `NAME_MAX`/`PATH_MAX` constraints.
+
+On a typical Linux system, you will find that the relevant header(s) define:
 
 ```console
 #define NAME_MAX 255
 #define PATH_MAX 4096
 ```
 
-Starting v3.26, AIStore supports object names of any length. See also:
-
 * [Examples using extremely long names](https://github.com/NVIDIA/aistore/blob/main/docs/long_names.md)
+
+> **Note**: Future releases may further decouple logical object names from on-disk layout.
