@@ -1395,35 +1395,23 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 		tassert.Fatalf(t, fileCount == 3, "expected 3 files, got %d", fileCount)
 	})
 
+	// NOTE:
+	// objname (e.g.) "aaa/bbb" will collide (`cos.ErrMv`) with a same-name
+	// virtual directory when both land on the same mountpath
 	t.Run("DirNameIsPrefixOfFileName", func(t *testing.T) {
-		// Scenario: Directory name is a string prefix of another file name
-		// Example: "aaa/bbb" (file) and "aaa/bbb/" (directory from "aaa/bbb/111")
-		// This tests the edge case where both file and directory have the same
-		// name prefix, which can cause issues with continuation tokens if not
-		// handled correctly (directory entries need trailing slash to distinguish).
-		//
-		// Additional permutations:
-		// - "aaa/bbb" (file)
-		// - "aaa/bbb/" (directory)
-		// - "aaa/bbb111" (file - name starts with "aaa/bbb" but is not inside the dir)
-		// - "aaa/bbb222" (file - another similar case)
-		//
-		// NOTE: Using fixed prefix to ensure HRW hashing places file "bbb" and
-		// directory "bbb/" on different mountpaths, avoiding filesystem conflict.
 		bck := cmn.Bck{
 			Name:     "NonRecurs_" + path.Base(t.Name()) + cos.GenTie(),
 			Provider: apc.AIS,
 		}
 		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
 		prefix := "dirprefix/"
 		objs := []string{
-			prefix + "aaa",         // file
 			prefix + "aaa/nested",  // makes prefix+"aaa/" a directory
-			prefix + "aaa111",      // file with name that starts with "aaa"
-			prefix + "aaa222",      // another file with similar prefix
-			prefix + "bbb",         // file
+			prefix + "aaa111",      // file with name that starts with "aaa" but is NOT inside "aaa/"
+			prefix + "aaa222",      // another sibling file with similar prefix
 			prefix + "bbb/deep/f1", // makes prefix+"bbb/" a directory
-			prefix + "bbb123",      // file with name that starts with "bbb"
+			prefix + "bbb123",      // file with name that starts with "bbb" but is NOT inside "bbb/"
 			prefix + "zzz",         // trailing file
 		}
 		for _, nm := range objs {
@@ -1437,7 +1425,7 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 			tassert.CheckFatal(t, err)
 		}
 
-		// Use page size of 1 to stress the continuation token mechanism
+		// page size of 1 to stress the continuation token mechanism
 		msg := &apc.LsoMsg{
 			Prefix:   prefix,
 			Flags:    apc.LsNoRecursion,
@@ -1457,45 +1445,40 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 			msg.ContinuationToken = lst.ContinuationToken
 		}
 
-		// Expected entries (in lexicographical order):
-		// 1. prefix+aaa (file)
-		// 2. prefix+aaa/ (directory) - note trailing slash
-		// 3. prefix+aaa111 (file)
-		// 4. prefix+aaa222 (file)
-		// 5. prefix+bbb (file)
-		// 6. prefix+bbb/ (directory) - note trailing slash
-		// 7. prefix+bbb123 (file)
-		// 8. prefix+zzz (file)
-		expectedCount := 8
+		// expected lexicographically:
+		// 1. prefix+aaa/     (directory)
+		// 2. prefix+aaa111   (file)
+		// 3. prefix+aaa222   (file)
+		// 4. prefix+bbb/     (directory)
+		// 5. prefix+bbb123   (file)
+		// 6. prefix+zzz      (file)
+		expectedCount := 6
 		tassert.Fatalf(t, len(allEntries) == expectedCount,
 			"expected %d entries, got %d", expectedCount, len(allEntries))
 
-		// Verify no duplicates
-		seen := make(map[string]bool)
+		seen := make(map[string]bool, expectedCount)
 		for _, e := range allEntries {
 			tassert.Fatalf(t, !seen[e.Name], "duplicate entry %q", e.Name)
 			seen[e.Name] = true
 		}
 
-		// Verify we have both files and directories with same base name
 		expectedEntries := map[string]bool{
-			prefix + "aaa":    false, // file (no trailing slash)
-			prefix + "aaa/":   true,  // directory (trailing slash)
+			prefix + "aaa/":   true,
 			prefix + "aaa111": false,
 			prefix + "aaa222": false,
-			prefix + "bbb":    false, // file
-			prefix + "bbb/":   true,  // directory
+			prefix + "bbb/":   true,
 			prefix + "bbb123": false,
 			prefix + "zzz":    false,
 		}
+
 		for _, e := range allEntries {
 			expectedIsDir, exists := expectedEntries[e.Name]
 			tassert.Fatalf(t, exists, "unexpected entry %q", e.Name)
+
 			isDir := e.IsAnyFlagSet(apc.EntryIsDir)
 			tassert.Fatalf(t, isDir == expectedIsDir,
 				"entry %q: expected isDir=%v, got isDir=%v", e.Name, expectedIsDir, isDir)
 
-			// Verify trailing slash convention
 			if isDir {
 				tassert.Fatalf(t, cos.IsLastB(e.Name, '/'),
 					"directory entry %q missing trailing slash", e.Name)
@@ -1505,7 +1488,6 @@ func TestLsoNoRecursionPagination(t *testing.T) {
 			}
 		}
 
-		// Verify order is lexicographical (important for token correctness)
 		for i := 1; i < len(allEntries); i++ {
 			tassert.Fatalf(t, allEntries[i-1].Name < allEntries[i].Name,
 				"entries not in lexicographical order: %q >= %q",
