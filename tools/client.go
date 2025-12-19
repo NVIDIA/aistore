@@ -221,8 +221,9 @@ func GetProxyReadiness(proxyURL string) error {
 
 func CreateBucket(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BpropsToSet, cleanup bool) {
 	bp := BaseAPIParams(proxyURL)
-	err := api.CreateBucket(bp, bck, props)
-	tassert.CheckFatal(tb, err)
+	if err := api.CreateBucket(bp, bck, props); err != nil {
+		tb.Fatalf("%v: %q", err, bck.String())
+	}
 	if cleanup {
 		tb.Cleanup(func() {
 			DestroyBucket(tb, proxyURL, bck)

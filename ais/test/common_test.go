@@ -42,9 +42,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// more tools
+const (
+	rootDir = "/tmp/ais"
+)
 
-const rebalanceObjectDistributionTestCoef = 0.3
+const (
+	rebalanceObjectDistributionTestCoef = 0.3
+)
 
 const (
 	prefixDir        = "filter"

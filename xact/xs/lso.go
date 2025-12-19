@@ -61,6 +61,7 @@ type (
 			wi           *walkInfo        // walking context and state
 			bp           core.Backend     // t.Backend(bck)
 			wg           sync.WaitGroup   // wait until this walk finishes
+			lastDir      string           // last seen directory name (for dedup - heap output is sorted, so duplicates are adjacent)
 			done         bool             // done walking (indication)
 			wor          bool             // wantOnlyRemote
 			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
@@ -347,6 +348,7 @@ func (r *LsoXact) initWalk() {
 	r.walk.pageCh = make(chan *cmn.LsoEnt, pageChSize)
 	r.walk.done = false
 	r.walk.stopCh = cos.NewStopCh()
+	r.walk.lastDir = "" // reset directory dedup state
 	r.walk.wg.Add(1)
 
 	go r.doWalk(r.msg.Clone())
@@ -403,24 +405,22 @@ func (r *LsoXact) doPage() *LsoRsp {
 	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
 
-// `ais show job` will report the sum of non-replicated obj numbers and
-// sum of obj sizes - for all visited objects
-// Returns the index of the first object in the page that follows the continuation `token`
+// return index of the first object in the page that follows the continuation `token`, as in:
+// - page[:idx] <= token
+// - page[idx:] > token
 func (r *LsoXact) findToken(token string) int {
 	if r.token == token && lsoIsRemote(r.p.Bck, r.msg.IsFlagSet(apc.LsCached)) {
 		return 0
 	}
-	return sort.Search(len(r.page), func(i int) bool { // TODO: revisit
+	return sort.Search(len(r.page), func(i int) bool {
 		return !cmn.TokenGreaterEQ(token, r.page[i].Name)
 	})
 }
 
 func (r *LsoXact) havePage(token string, cnt int64) bool {
-	if r.walk.done {
-		return true
-	}
-	idx := r.findToken(token)
-	return idx+int(cnt) < len(r.page)
+	debug.Assert(!r.walk.done)
+	idx := r.findToken(token) // corresponds to r.page[idx:]
+	return idx+int(cnt) <= len(r.page)
 }
 
 func (r *LsoXact) nextPageR() (err error) {
@@ -576,29 +576,37 @@ func (r *LsoXact) nextPageA() {
 		r._clrPage(0, len(r.page))
 		r.page = r.page[:0]
 	} else {
-		if r.walk.done {
-			return
-		}
+		// filter cached page by token first (regardless of walk.done)
 		r.shiftLastPage(r.msg.ContinuationToken)
 	}
+
 	r.token = r.msg.ContinuationToken
 
-	if r.havePage(r.token, r.msg.PageSize) {
+	// if (a) done walking or (b) already have enough, stop
+	if r.walk.done || r.havePage(r.token, r.msg.PageSize) {
 		return
 	}
+
 	for cnt := int64(0); cnt < r.msg.PageSize; {
-		obj, ok := <-r.walk.pageCh
+		entry, ok := <-r.walk.pageCh
 		if !ok {
 			r.walk.done = true
 			r.resetIdle()
 			break
 		}
-		// Skip until the requested continuation token (TODO: revisit)
-		if cmn.TokenGreaterEQ(r.token, obj.Name) {
+		// [convention] dirnames always have trailing slash, and vice versa
+		// see also: j.opts.IncludeDirs
+		debug.Func(func() {
+			ok := entry.IsAnyFlagSet(apc.EntryIsDir)
+			debug.Assert(ok == cos.IsLastB(entry.Name, '/'), entry.Name)
+		})
+
+		// skip until requested continuation token
+		if cmn.TokenGreaterEQ(r.token, entry.Name) {
 			continue
 		}
 		cnt++
-		r.page = append(r.page, obj)
+		r.page = append(r.page, entry)
 	}
 }
 
@@ -633,7 +641,13 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
 	opts := &fs.WalkBckOpts{
 		ValidateCb: r.validateCb,
-		WalkOpts:   fs.WalkOpts{CTs: []string{fs.ObjCT}, Callback: r.cb, Prefix: msg.Prefix, Sorted: true},
+		WalkOpts: fs.WalkOpts{
+			CTs:         []string{fs.ObjCT},
+			Callback:    r.cb,
+			Prefix:      msg.Prefix,
+			Sorted:      true,
+			IncludeDirs: msg.IsFlagSet(apc.LsNoRecursion), // include directories in heap for non-recursive listing
+		},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	if err := fs.WalkBck(opts); err != nil {
@@ -657,22 +671,48 @@ func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	// no recursion:
-	// - check the level of nesting
-	// - possibly add virt dir entry
-	addDirEntry, errN := cmn.CheckDirNoRecurs(r.walk.wi.msg.Prefix, ct.ObjectName())
-	if addDirEntry {
-		entry := &cmn.LsoEnt{Name: ct.ObjectName(), Flags: apc.EntryIsDir}
+	// no recursion: check nesting level to decide whether to skip walking into this directory
+	// (the directory entry itself will be filtered in r.cb using the same CheckDirNoRecurs logic)
+	_, errN := cmn.CheckDirNoRecurs(r.walk.wi.msg.Prefix, ct.ObjectName())
+	return errN
+}
+
+func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
+	// Handle directory entries (from non-recursive listing with IncludeDirs=true)
+	if de.IsDir() {
+		ct, err := core.NewCTFromFQN(fqn, nil)
+		if err != nil {
+			return nil // skip on error
+		}
+		dirName := ct.ObjectName()
+
+		// Filter: only add directories that should be listed as entries
+		addDirEntry, _ := cmn.CheckDirNoRecurs(r.walk.wi.msg.Prefix, dirName)
+		if !addDirEntry {
+			return nil // not a direct child of prefix, skip
+		}
+
+		// Use trailing slash for directory names to distinguish from files with same name
+		// This ensures lexicographical sorting works correctly: "aaa/bbb" < "aaa/bbb/"
+		debug.Assert(!cos.IsLastB(dirName, filepath.Separator))
+		dirName += cos.PathSeparator
+
+		// Deduplicate: heap output is sorted, so duplicates from different mountpaths are adjacent
+		if dirName == r.walk.lastDir {
+			return nil // skip duplicate
+		}
+		r.walk.lastDir = dirName
+
+		entry := &cmn.LsoEnt{Name: dirName, Flags: apc.EntryIsDir}
 		select {
 		case r.walk.pageCh <- entry:
 		case <-r.walk.stopCh.Listen():
 			return errStopped
 		}
+		return nil
 	}
-	return errN // filepath.SkipDir or nil
-}
 
-func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
+	// Handle file entries
 	entry, err := r.walk.wi.callback(fqn, de)
 	if err != nil || entry == nil {
 		return err

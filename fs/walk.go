@@ -35,13 +35,14 @@ type (
 	walkFunc func(fqn string, de DirEntry) error
 
 	WalkOpts struct {
-		Mi       *Mountpath
-		Callback walkFunc
-		Bck      cmn.Bck
-		Dir      string
-		Prefix   string
-		CTs      []string
-		Sorted   bool // Ignored when using stdlib implementation (always sorted).
+		Mi          *Mountpath
+		Callback    walkFunc
+		Bck         cmn.Bck
+		Dir         string
+		Prefix      string
+		CTs         []string
+		Sorted      bool // Ignored when using stdlib implementation (always sorted).
+		IncludeDirs bool // When true, directories are sent to workCh (for heap sorting) along with files.
 	}
 
 	errCallbackWrapper struct {

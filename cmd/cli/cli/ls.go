@@ -481,8 +481,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 			} else {
 				toPrint = lst.Entries
 			}
-			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, now,
-				pageCounter+1, addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff), allProps)
+			err = printLso(c, toPrint, lstFilter, propsStr, nil /*_listed*/, msg, now,
+				pageCounter+1, addCachedCol, bck.IsRemote(), allProps)
 			if err != nil {
 				return err
 			}
@@ -531,8 +531,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		fmt.Fprintln(c.App.Writer, "No objects in "+bck.Cname(""))
 		return nil
 	}
-	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, now, 0, /*npage*/
-		addCachedCol, bck.IsRemote(), msg.IsFlagSet(apc.LsDiff), allProps)
+	return printLso(c, lst.Entries, lstFilter, propsStr, _listed, msg, now, 0, /*npage*/
+		addCachedCol, bck.IsRemote(), allProps)
 }
 
 func lsoErr(msg *apc.LsoMsg, err error) error {
@@ -592,19 +592,26 @@ func setLsoPage(c *cli.Context, bck cmn.Bck) (pageSize, maxPages, limit int64, e
 }
 
 // NOTE: in addition to CACHED, may also dynamically add STATUS column
-func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, now int64, npage int,
-	addCachedCol, isRemote, addStatusCol, allProps bool) error {
+func printLso(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, _listed *_listed, lsmsg *apc.LsoMsg, now int64, npage int,
+	addCachedCol, isRemote, allProps bool) error {
 	var (
-		numCached      = -1
-		hideHeader     = flagIsSet(c, noHeaderFlag)
-		hideFooter     = flagIsSet(c, noFooterFlag)
-		matched, other = lstFilter.apply(entries)
-		units, errU    = parseUnitsFlag(c, unitsFlag)
-		addChunkedCol  = allProps || flagIsSet(c, chunkedColumnFlag)
+		numCached     = -1
+		hideHeader    = flagIsSet(c, noHeaderFlag)
+		hideFooter    = flagIsSet(c, noFooterFlag)
+		units, errU   = parseUnitsFlag(c, unitsFlag)
+		addChunkedCol = allProps || flagIsSet(c, chunkedColumnFlag)
+		addStatusCol  = lsmsg.IsFlagSet(apc.LsDiff)
+		dirsFirst     = lsmsg.IsFlagSet(apc.LsNoRecursion)
 	)
 	if errU != nil {
 		return errU
 	}
+
+	// optionally, filter and/or sort
+	if dirsFirst {
+		_sortDirsFirst(entries)
+	}
+	matched, other := lstFilter.apply(entries)
 
 	propsList := splitCsv(props)
 
@@ -831,4 +838,24 @@ func (u *_listed) cb(lsoCounter *api.LsoCounter) {
 		sb.WriteByte(' ')
 	}
 	fmt.Fprintf(u.c.App.Writer, "\r%s", sb.String())
+}
+
+func _sortDirsFirst(lst cmn.LsoEntries) {
+	l := len(lst)
+	if l < 2 {
+		return
+	}
+	out := make(cmn.LsoEntries, 0, l)
+	for _, en := range lst {
+		if en.IsAnyFlagSet(apc.EntryIsDir) {
+			debug.Assert(cos.IsLastB(en.Name, '/'), en.Name)
+			out = append(out, en)
+		}
+	}
+	for _, en := range lst {
+		if !en.IsAnyFlagSet(apc.EntryIsDir) {
+			out = append(out, en)
+		}
+	}
+	copy(lst, out)
 }

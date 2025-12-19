@@ -482,10 +482,7 @@ func fmtEntryNameDAC(val string, flags uint16) string {
 		// see related fmtIsChunked() below
 		return val
 	case flags&apc.EntryIsDir == apc.EntryIsDir:
-		debug.Assert(flags&(apc.EntryInArch|apc.EntryIsChunked) == 0)
-		if !cos.IsLastB(val, '/') {
-			val += "/"
-		}
+		debug.Assert(cos.IsLastB(val, '/'), val)
 		return fgreen(val)
 	default:
 		return val

@@ -7,6 +7,7 @@ package fs
 import (
 	"container/heap"
 	"context"
+	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -31,6 +32,7 @@ type (
 		validate walkFunc
 		ctx      context.Context
 		opts     WalkOpts
+		bdir     string // bucket's object directory (root)
 	}
 	wbe struct { // walk bck entry
 		dirEntry DirEntry
@@ -63,6 +65,7 @@ func WalkBck(opts *WalkBckOpts) error {
 			validate: opts.ValidateCb,
 			ctx:      ctx,
 			opts:     opts.WalkOpts,
+			bdir:     mi.MakePathCT(&opts.Bck, ObjCT), // bucket's root directory
 		}
 		jg.opts.Callback = jg.cb // --> jg.validate --> opts.ValidateCb
 		jg.opts.Mi = mi
@@ -121,16 +124,31 @@ func (j *joggerBck) cb(fqn string, de DirEntry) error {
 	default:
 		break
 	}
+	// Skip bucket root directory - it has no valid object name and would break the `ParsedFQN.Init(fqn)` check
+	if de.IsDir() && fqn == j.bdir {
+		return nil // descend into bucket root, but don't add it to workCh
+	}
+
 	if j.validate != nil {
 		if err := j.validate(fqn, de); err != nil {
+			// IncludeDirs: send directory to workCh before returning SkipDir
+			if j.opts.IncludeDirs && de.IsDir() && err == filepath.SkipDir {
+				select {
+				case <-j.ctx.Done():
+					return cmn.NewErrAborted(j.mi.String(), tag, nil)
+				case j.workCh <- &wbe{de, fqn}:
+				}
+			}
 			// If err != filepath.SkipDir, the Walk will propagate the error to group.Go.
 			// Context will be canceled, which then will terminate all running goroutines.
 			return err
 		}
 	}
-	if de.IsDir() {
+	// Skip directories unless IncludeDirs is set
+	if de.IsDir() && !j.opts.IncludeDirs {
 		return nil
 	}
+	// Send files (and directories when IncludeDirs) to workCh
 	select {
 	case <-j.ctx.Done():
 		return cmn.NewErrAborted(j.mi.String(), tag, nil)
@@ -143,9 +161,17 @@ func (j *joggerBck) cb(fqn string, de DirEntry) error {
 // wbeHeap //
 /////////////
 
-func (h wbeHeap) Len() int           { return len(h) }
-func (h wbeHeap) Less(i, j int) bool { return h[i].objName < h[j].objName }
-func (h wbeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h wbeHeap) Len() int { return len(h) }
+func (h wbeHeap) Less(i, j int) bool {
+	if h[i].objName == h[j].objName {
+		// When a file and directory have the same name (e.g., "bbb" file and "bbb/" directory),
+		// file must come before directory to maintain lexicographical order with trailing slash.
+		// This ensures "bbb" < "bbb/" for correct continuation token handling.
+		return !h[i].dirEntry.IsDir() && h[j].dirEntry.IsDir()
+	}
+	return h[i].objName < h[j].objName
+}
+func (h wbeHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 func (h *wbeHeap) Push(x any) {
 	var (

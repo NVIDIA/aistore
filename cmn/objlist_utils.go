@@ -86,11 +86,23 @@ func (be *LsoEnt) CopyWithProps(propsSet cos.StrSet) (ne *LsoEnt) {
 	return
 }
 
+// Sorting list-objects results.
 //
-// sorting and merging functions
-//
+// SortLsoLex() is intended for non-recursive listing where directory entries are included.
+// The default SortLso() uses dirs-first ordering (via `LsoEnt.less`) which groups
+// virtual directories before objects. This breaks token-based pagination because tokens
+// are lexicographical cursors - AIS always returns entries where `name > token`.
 
 func SortLso(entries LsoEntries) { sort.Slice(entries, entries.cmp) }
+
+func SortLsoLex(entries LsoEntries) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Name != entries[j].Name {
+			return entries[i].Name < entries[j].Name
+		}
+		return entries.cmp(i, j) // or compare status/flags deterministically
+	})
+}
 
 // Returns true if the continuation token >= object's name (in other words, the object is
 // already listed and must be skipped). Note that string `>=` is lexicographic.

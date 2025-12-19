@@ -395,7 +395,15 @@ func concatLso(lists []*cmn.LsoRes, lsmsg *apc.LsoMsg) (objs *cmn.LsoRes) {
 	// For corner case: we have objects with replicas on page threshold
 	// we have to sort taking status into account. Otherwise wrong
 	// one(Status=moved) may get into the response
-	cmn.SortLso(objs.Entries)
+	//
+	// For non-recursive mode: use lexicographical sort to keep continuation token semantics.
+	// The "dirs-first" sort order breaks pagination because the token is lexicographical.
+	// See related: _sortDirsFirst() in CLI
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		cmn.SortLsoLex(objs.Entries)
+	} else {
+		cmn.SortLso(objs.Entries)
+	}
 	return objs
 }
 
