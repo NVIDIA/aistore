@@ -185,6 +185,7 @@ class TestObject(unittest.TestCase):
         mock_obj_reader.assert_called_with(
             object_client=mock_obj_client_instance,
             chunk_size=expected_chunk_size,
+            num_workers=None,
         )
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)

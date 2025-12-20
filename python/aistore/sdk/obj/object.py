@@ -185,6 +185,7 @@ class Object:
         latest: bool = False,
         byte_range: Optional[str] = None,
         direct: bool = False,
+        num_workers: Optional[int] = None,
     ) -> ObjectReader:
         """
         Creates and returns an ObjectReader with access to object contents
@@ -203,12 +204,14 @@ class Object:
                 See: https://www.rfc-editor.org/rfc/rfc7233#section-2.1.
             direct (bool, optional): If True, the object content is read directly from the target node,
                 bypassing the proxy.
+            num_workers (Optional[int]): If provided, use concurrent range-reads with this many
+                workers for faster downloads.
 
         Returns:
             ObjectReader: An iterator for streaming object content.
 
         Raises:
-            ValueError: If Byte Range is used with Blob Download.
+            ValueError: If `byte_range` is used with `blob_download_config`.
             requests.RequestException: If an error occurs during the request.
             requests.ConnectionError: If there is a connection error.
             requests.ConnectionTimeout: If the connection times out.
@@ -250,7 +253,21 @@ class Object:
 
         # Byte Range Validation
         if byte_range and blob_download_config:
-            raise ValueError("Cannot use Byte Range with Blob Download.")
+            raise ValueError("Cannot use `byte_range` with `blob_download_config`.")
+
+        # Parallel download validation
+        if num_workers is not None:
+            if num_workers < 2:
+                raise ValueError("`num_workers` must be at least 2.")
+            if byte_range:
+                raise ValueError(
+                    "Cannot use `num_workers` with `byte_range`. "
+                    "Parallel download is for full object retrieval."
+                )
+            if blob_download_config:
+                raise ValueError(
+                    "Cannot use `num_workers` with `blob_download_config`."
+                )
 
         if byte_range:
             # For range formatting, see the spec:
@@ -276,7 +293,11 @@ class Object:
             uname=self.uname if direct else None,
         )
 
-        obj_reader = ObjectReader(object_client=obj_client, chunk_size=chunk_size)
+        obj_reader = ObjectReader(
+            object_client=obj_client,
+            chunk_size=chunk_size,
+            num_workers=num_workers,
+        )
 
         if writer:
             writer.writelines(obj_reader)
@@ -316,7 +337,7 @@ class Object:
             or used to read all content directly.
 
         Raises:
-            ValueError: If Byte Range is used with Blob Download.
+            ValueError: If `byte_range` is used with `blob_download_config`.
             requests.RequestException: If an error occurs during the request.
             requests.ConnectionError: If there is a connection error.
             requests.ConnectionTimeout: If the connection times out.

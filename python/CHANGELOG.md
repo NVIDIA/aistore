@@ -13,6 +13,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   - Fix HTTPS manual redirect to avoid SSL EOF errors when sending request data.
   - Include `Content-Length` header in proxy requests for proper URL signing (previously signed with 0, causing 401 on target).
 
+### Added
+
+- `ParallelContentIterProvider`: A new content iterator that fetches object chunks using concurrent HTTP range-reads while yielding them in sequential order.
+- `num_workers` parameter in `Object.get_reader()`: When specified, uses `ParallelContentIterProvider` for parallel downloads, improving throughput for large objects.
+- `ObjectClient.get_chunk(start, end)`: Fetch a specific byte range of an object. Used for parallel chunk fetching.
+
 ## [1.18.0] - 2025-12-05
 
 ### Changed

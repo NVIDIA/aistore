@@ -7,7 +7,10 @@ from typing import Optional, Generator, Any
 
 import requests
 
-from aistore.sdk.obj.content_iter_provider import ContentIterProvider
+from aistore.sdk.obj.content_iterator import (
+    ContentIterProvider,
+    ParallelContentIterProvider,
+)
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
@@ -22,17 +25,24 @@ class ObjectReader:
         object_client (ObjectClient): Client for making requests to a specific object in AIS
         chunk_size (int, optional): Size of each data chunk to be fetched from the stream.
             Defaults to DEFAULT_CHUNK_SIZE.
+        num_workers (int, optional): If provided, use concurrent range-reads with this
+            many workers.
     """
 
     def __init__(
-        self, object_client: ObjectClient, chunk_size: int = DEFAULT_CHUNK_SIZE
+        self,
+        object_client: ObjectClient,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        num_workers: Optional[int] = None,
     ):
         self._object_client = object_client
         self._chunk_size = chunk_size
-        self._content_provider = ContentIterProvider(
-            self._object_client, self._chunk_size
-        )
         self._attributes = None
+        self._content_provider = (
+            ParallelContentIterProvider(object_client, chunk_size, num_workers)
+            if num_workers
+            else ContentIterProvider(object_client, chunk_size)
+        )
 
     def head(self) -> ObjectAttributes:
         """

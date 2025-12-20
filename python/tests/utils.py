@@ -22,7 +22,7 @@ from requests.exceptions import ChunkedEncodingError
 
 from aistore.sdk import Client, Object
 from aistore.sdk.const import UTF_ENCODING
-from aistore.sdk.obj.content_iter_provider import ContentIterProvider
+from aistore.sdk.obj.content_iterator import ContentIterProvider
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
 from tests.const import KB

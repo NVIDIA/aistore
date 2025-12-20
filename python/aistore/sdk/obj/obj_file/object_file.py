@@ -8,7 +8,7 @@ from urllib3.exceptions import ProtocolError, ReadTimeoutError
 from io import BufferedIOBase, BufferedWriter
 from typing import Optional, Generator
 from overrides import override
-from aistore.sdk.obj.content_iter_provider import ContentIterProvider
+from aistore.sdk.obj.content_iterator import BaseContentIterProvider
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.utils import get_logger
 
@@ -30,11 +30,11 @@ class ObjectFileReader(BufferedIOBase):
     retrieved chunk. The `max_resume` parameter controls how many retry attempts are made before an error is raised.
 
     Args:
-        content_provider (ContentIterProvider): A provider that creates iterators which can fetch object data from AIS in chunks.
+        content_provider (BaseContentIterProvider): A provider that creates iterators which can fetch object data from AIS in chunks.
         max_resume (int): Maximum number of resumes allowed for an ObjectFileReader instance.
     """
 
-    def __init__(self, content_provider: ContentIterProvider, max_resume: int):
+    def __init__(self, content_provider: BaseContentIterProvider, max_resume: int):
         self._content_provider = content_provider
         self._max_resume = max_resume  # Maximum number of resume attempts allowed
         self._reset()

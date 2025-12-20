@@ -2,7 +2,10 @@ import unittest
 from unittest.mock import patch, Mock
 import requests
 
-from aistore.sdk.obj.content_iter_provider import ContentIterProvider
+from aistore.sdk.obj.content_iterator import (
+    ContentIterProvider,
+    ParallelContentIterProvider,
+)
 from aistore.sdk.obj.obj_file.object_file import ObjectFileReader
 from aistore.sdk.obj.object_reader import ObjectReader
 from aistore.sdk.obj.object_attributes import ObjectAttributes
@@ -77,23 +80,18 @@ class TestObjectReader(unittest.TestCase):
         mock_attr.assert_called_with(self.response_headers)
 
     @patch("aistore.sdk.obj.object_reader.ContentIterProvider")
-    def test_iter(self, mock_cont_iter_class):
-        mock_cont_iter, iterable_bytes = self.setup_mock_iterator(mock_cont_iter_class)
+    def test_iter(self, mock_provider_cls):
+        mock_provider = Mock()
+        iterable_bytes = iter(b"test")
+        mock_provider.create_iter.return_value = iterable_bytes
+        mock_provider_cls.return_value = mock_provider
 
+        # Re-create to use the patched provider
+        self.object_reader = ObjectReader(self.object_client)
         res = iter(self.object_reader)
 
-        mock_cont_iter.create_iter.assert_called_with()
+        mock_provider.create_iter.assert_called_with()
         self.assertEqual(iterable_bytes, res)
-
-    def setup_mock_iterator(self, mock_cont_iter_class):
-        # We patch the class, so use it to create a new instance of a mock content iterator
-        mock_cont_iter = Mock()
-        iterable_bytes = iter(b"test")
-        mock_cont_iter.create_iter.return_value = iterable_bytes
-        mock_cont_iter_class.return_value = mock_cont_iter
-        # Re-create to use the patched ContentIterator in constructor
-        self.object_reader = ObjectReader(self.object_client)
-        return mock_cont_iter, iterable_bytes
 
     @patch("aistore.sdk.obj.object_reader.ObjectFileReader", autospec=True)
     def test_as_file(self, mock_obj_file):
@@ -130,3 +128,32 @@ class TestObjectReader(unittest.TestCase):
             str(context.exception),
             "Invalid max_resume (must be a non-negative integer): -1.",
         )
+
+    def test_num_workers_uses_parallel_provider(self):
+        """Test that providing num_workers uses ParallelContentIterProvider."""
+        mock_attrs = Mock()
+        mock_attrs.size = 1000
+        self.object_client.head.return_value = mock_attrs
+        self.object_client.get_range.return_value = b"data"
+
+        reader = ObjectReader(self.object_client, self.chunk_size, num_workers=4)
+
+        # pylint: disable=protected-access
+        self.assertIsInstance(reader._content_provider, ParallelContentIterProvider)
+
+    def test_no_num_workers_uses_sequential_provider(self):
+        """Test that not providing num_workers uses ContentIterProvider."""
+        reader = ObjectReader(self.object_client, self.chunk_size)
+
+        # pylint: disable=protected-access
+        self.assertIsInstance(reader._content_provider, ContentIterProvider)
+
+    def test_num_workers_calls_head(self):
+        """Test that num_workers triggers a HEAD request for object size."""
+        mock_attrs = Mock()
+        mock_attrs.size = 1000
+        self.object_client.head.return_value = mock_attrs
+
+        ObjectReader(self.object_client, self.chunk_size, num_workers=4)
+
+        self.object_client.head.assert_called_once()

@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock
 from aistore.sdk.obj.object_client import ObjectClient
 from aistore.sdk.const import DEFAULT_CHUNK_SIZE
-from aistore.sdk.obj.content_iter_provider import ContentIterProvider
+from aistore.sdk.obj.content_iterator import ContentIterProvider
 from tests.utils import cases
 
 byte_chunks = [b"chunk1", b"chunk2", b"chunk3"]
