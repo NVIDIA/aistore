@@ -51,9 +51,8 @@ type (
 		Hdr http.Header
 	}
 	ResArgs struct {
-		Config            *cmn.Config
-		Smap              *meta.Smap
-		SkipGlobMisplaced bool
+		Config *cmn.Config
+		Smap   *meta.Smap
 	}
 	RebArgs struct {
 		Bck    *meta.Bck // (limited-scope)

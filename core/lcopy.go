@@ -222,15 +222,20 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 // increment the object's num copies by (well) copying the former
 // (compare with lom.Copy2FQN below)
 func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
-	var (
-		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
-		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkCT, fs.WorkfileCopy+"."+lom.ObjName)
-	)
 	debug.Assert(lom.bid() != 0, lom.String())
 	if err := lom._checkBucket(); err != nil {
 		debug.AssertNoErr(err)
 		return err
 	}
+	var (
+		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+		dstlom  = AllocLOM(lom.ObjName)
+	)
+	defer FreeLOM(dstlom)
+	if err := dstlom.InitFQN(copyFQN, lom.Bucket()); err != nil {
+		return err
+	}
+	workFQN := dstlom.GenFQN(fs.WorkCT, fs.WorkfileCopy)
 
 	// copy is a no-op if the destination exists and is identical
 	errExists := cos.Stat(copyFQN)
@@ -269,8 +274,9 @@ add:
 
 // copy object => any local destination
 // recommended for copying between different buckets (compare with lom.Copy() above)
-// NOTE: `lom` source and `dst` must be w-locked
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
+	debug.Assert(lom.IsLocked() >= apc.LockRead, lom.Cname(), " source not locked")
+
 	dst = lom.CloneTo(dstFQN)
 	if err = dst.InitFQN(dstFQN, nil); err == nil {
 		err = lom.copy2fqn(dst, buf)

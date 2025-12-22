@@ -150,7 +150,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
 	if prevActive {
-		nlog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t, action, rmi)
+		nlog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active or recently finished", g.t, action, rmi)
 	} else {
 		nlog.Infof("%s: %q %s: starting to resilver", g.t, action, rmi)
 	}

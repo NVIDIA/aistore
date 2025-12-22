@@ -72,10 +72,8 @@ import (
    b) network error (ErrSBR) with subsequent successful recovery via GFN
 
 TBD:
-   - throttle (observing memory pressure under stress)
-   - stats: (files, objects) separately; Prometheus metrics
-   - mem-pool: basewi; apc.MossReq; apc.MossResp
-   - speed-up via selecting multiple files from a given archive
+   - throttle maybe more aggressively (see load.Advice below)
+   - perf. feature: return unsorted batch
    - range read
 -------------------------------------------------------------------------------------------------------------*/
 

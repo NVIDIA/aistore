@@ -27,7 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-const timedDuration = 4 * time.Second // see also: timedDuration in tgtgfn.go
+const ivalInactive = 4 * time.Second
 
 type (
 	Res struct {
@@ -51,32 +51,39 @@ type (
 
 func New() *Res { return &Res{} }
 
-func (res *Res) IsActive(multiplier int64) (yes bool) {
-	begin := res.begin.Load()
-	if begin == 0 {
-		return
+func (res *Res) IsActive(multiplier int64) bool {
+	if res.begin.Load() != 0 {
+		return true
+	}
+	end := res.end.Load()
+	if end == 0 {
+		return false
 	}
 	now := mono.NanoTime()
-	if now-begin < multiplier*int64(timedDuration) {
-		yes = true
-	} else {
-		end := res.end.Load()
-		yes = end == 0 || time.Duration(now-end) < timedDuration
-	}
-	return
+	return time.Duration(now-end) < time.Duration(multiplier)*ivalInactive
 }
 
-func (res *Res) _begin() {
-	res.begin.Store(mono.NanoTime())
+func (res *Res) _begin() bool {
+	// acquire
+	if !res.begin.CAS(0, 1) {
+		return false
+	}
+	// set start time, clear end
 	res.end.Store(0)
+	res.begin.Store(mono.NanoTime())
+	return true
 }
 
 func (res *Res) _end() {
-	res.end.Store(mono.NanoTime())
+	res.end.Store(mono.NanoTime()) // keep until next resilver
+	res.begin.Store(0)
 }
 
 func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
-	res._begin()
+	if !res._begin() {
+		nlog.Infoln("already running: skip", args.Action, args.Rmi)
+		return
+	}
 	defer res._end()
 
 	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
@@ -106,7 +113,7 @@ func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
 		opts      = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
 			VisitObj: jctx.visitObj,
-			VisitCT:  jctx.visitCT,
+			VisitCT:  jctx.visitECSlice,
 			Slab:     slab,
 			RW:       false, // system-critical to run
 		}
@@ -160,55 +167,10 @@ func wait(jg *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err e
 	}
 }
 
-// Copies a slice and its metafile (if exists) to the current mpath. At the
-// end does proper cleanup: removes ether source files(on success), or
-// destination files(on copy failure)
-func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
-	uname := ct.Bck().MakeUname(ct.ObjectName())
-	destMpath, _, err := fs.Hrw(uname)
-	if err != nil {
-		jg.xres.AddErr(err)
-		nlog.Infoln("Warning:", err)
-		return
-	}
-	if destMpath.Path == ct.Mountpath().Path {
-		return
-	}
-
-	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceCT, ct.ObjectName())
-	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.Mountpath(), destMpath, buf)
-	if err != nil {
-		jg.xres.AddErr(err)
-		return
-	}
-	// Slice without metafile - skip it as unusable, let LRU clean it up
-	if srcMetaFQN == "" {
-		return
-	}
-	if cmn.Rom.V(4, cos.ModReb) {
-		nlog.Infof("%s: moving %q -> %q", core.T, ct.FQN(), destFQN)
-	}
-	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
-		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
-		jg.xres.AddErr(errV, 0)
-		if err = cos.RemoveFile(destMetaFQN); err != nil {
-			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
-			nlog.Infoln("Warning:", errV)
-			jg.xres.AddErr(errV)
-		}
-	}
-	if errMeta := cos.RemoveFile(srcMetaFQN); errMeta != nil {
-		nlog.Warningln("failed to cleanup meta", srcMetaFQN, "[", errMeta, "]")
-	}
-	if errSlice := cos.RemoveFile(ct.FQN()); errSlice != nil {
-		nlog.Warningln("failed to cleanup slice", ct.FQN(), "[", errSlice, "]")
-	}
-}
-
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
+func _cpECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaCT, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
@@ -240,17 +202,6 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		size   int64
 		copied bool
 	)
-
-	if jg.xres.Args.SkipGlobMisplaced {
-		tsi, err := jg.xres.Args.Smap.HrwHash2T(lom.Digest())
-		if err != nil {
-			return err
-		}
-		if tsi.ID() != core.T.SID() {
-			return nil
-		}
-	}
-
 	if !lom.TryLock(true) { // NOTE: skipping busy
 		time.Sleep(time.Second >> 1)
 		if !lom.TryLock(true) {
@@ -277,7 +228,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		}
 		ct := core.NewCTFromLOM(lom, fs.ObjCT)
 		// copy metafile
-		metaOldPath, metaNewPath, err = _moveECMeta(ct, lom.Mountpath(), parsed.Mountpath, buf)
+		metaOldPath, metaNewPath, err = _cpECMeta(ct, lom.Mountpath(), parsed.Mountpath, buf)
 		if err != nil {
 			nlog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v", xname, lom, lom.Mountpath().Path,
 				parsed.Mountpath.Path, err)
@@ -295,12 +246,12 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		retries int
 	)
 redo:
-	mi, isHrw := lom.ToMpath()
+	mi, fixHrw := lom.ToMpath()
 	if mi == nil {
 		goto ret
 	}
 
-	if isHrw {
+	if fixHrw {
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
@@ -324,12 +275,12 @@ redo:
 	// 3. fix copies
 outer:
 	for {
-		// NOTE: do NOT shadow mi/isHrw; they are re-used at 'redo:'.
-		mi, isHrw = lom.ToMpath()
+		// NOTE: do NOT shadow mi/fixHrw; they are re-used at 'redo:'.
+		mi, fixHrw = lom.ToMpath()
 		if mi == nil {
 			break
 		}
-		if isHrw {
+		if fixHrw {
 			// redo hlom in an unlikely event
 			retries++
 			if retries > maxRetries {
@@ -377,6 +328,8 @@ ret:
 }
 
 func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
+	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+
 	// for chunked objects, use Copy2FQN which properly handles chunks
 	if lom.IsChunked() {
 		u, err := core.NewUfest("", lom, true)
@@ -415,13 +368,56 @@ func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *cor
 	return hlom, err
 }
 
-func (jg *joggerCtx) visitCT(ct *core.CT, buf []byte) (err error) {
+func (jg *joggerCtx) visitECSlice(ct *core.CT, buf []byte) (err error) {
 	debug.Assert(ct.ContentType() == fs.ECSliceCT)
 	if !ct.Bck().Props.EC.Enabled {
-		// Since `%ec` directory is inside a bucket, it is safe to skip
-		// the entire `%ec` directory when EC is disabled for the bucket.
 		return filepath.SkipDir
 	}
 	jg._mvSlice(ct, buf)
 	return nil
+}
+
+// Copies a slice and its metafile (if exists) to the current mpath. At the
+// end does proper cleanup: removes either source files(on success), or
+// destination files(on copy failure)
+func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
+	uname := ct.Bck().MakeUname(ct.ObjectName())
+	destMpath, _, err := fs.Hrw(uname)
+	if err != nil {
+		jg.xres.AddErr(err)
+		nlog.Infoln("Warning:", err)
+		return
+	}
+	if destMpath.Path == ct.Mountpath().Path {
+		return
+	}
+
+	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceCT, ct.ObjectName())
+	srcMetaFQN, destMetaFQN, err := _cpECMeta(ct, ct.Mountpath(), destMpath, buf)
+	if err != nil {
+		jg.xres.AddErr(err)
+		return
+	}
+	// Slice without metafile - skip it as unusable, let LRU clean it up
+	if srcMetaFQN == "" {
+		return
+	}
+	if cmn.Rom.V(4, cos.ModReb) {
+		nlog.Infof("%s: moving %q -> %q", core.T, ct.FQN(), destFQN)
+	}
+	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
+		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
+		jg.xres.AddErr(errV, 0)
+		if err = cos.RemoveFile(destMetaFQN); err != nil {
+			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
+			nlog.Infoln("Warning:", errV)
+			jg.xres.AddErr(errV)
+		}
+	}
+	if errMeta := cos.RemoveFile(srcMetaFQN); errMeta != nil {
+		nlog.Warningln("failed to cleanup meta", srcMetaFQN, "[", errMeta, "]")
+	}
+	if errSlice := cos.RemoveFile(ct.FQN()); errSlice != nil {
+		nlog.Warningln("failed to cleanup slice", ct.FQN(), "[", errSlice, "]")
+	}
 }
