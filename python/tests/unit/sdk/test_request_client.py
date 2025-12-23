@@ -179,19 +179,24 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
 
         self.assertEqual(self.mock_response, response)
 
+        # Proxy call: sends empty data but includes Content-Length and Connection headers
+        proxy_headers = self.request_headers.copy()
+        proxy_headers.update({"Connection": "close", "Content-Length": "7"})
         expected_proxy_call = call(
             method,
             expected_url,
-            headers=self.request_headers,
+            headers=proxy_headers,
             allow_redirects=False,
+            data=b"",
             keyword=extra_kw_arg,
         )
+        # Target call: sends actual data
         expected_target_call = call(
             method,
             redirect_url,
             headers=self.request_headers,
-            keyword=extra_kw_arg,
             data=data,
+            keyword=extra_kw_arg,
         )
 
         self.mock_session.request.assert_has_calls(

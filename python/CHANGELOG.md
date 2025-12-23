@@ -6,6 +6,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Fixed
+
+- Fixed HMAC signature mismatch (401 Unauthorized) when using HTTPS with cluster key enabled:
+  - Calculate content length for all data types (bytes, strings, file-like objects) to ensure accurate headers.
+  - Fix HTTPS manual redirect to avoid SSL EOF errors when sending request data.
+  - Include `Content-Length` header in proxy requests for proper URL signing (previously signed with 0, causing 401 on target).
+
 ## [1.18.0] - 2025-12-05
 
 ### Changed

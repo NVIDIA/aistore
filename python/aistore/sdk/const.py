@@ -19,6 +19,7 @@ HEADER_USER_AGENT = "User-Agent"
 HEADER_CONTENT_TYPE = "Content-Type"
 HEADER_CONTENT_LENGTH = "Content-Length"
 HEADER_LOCATION = "Location"
+HEADER_CONNECTION = "Connection"
 # Standard Header Values
 USER_AGENT_BASE = "ais/python"
 JSON_CONTENT_TYPE = "application/json"

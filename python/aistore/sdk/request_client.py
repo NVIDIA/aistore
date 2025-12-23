@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
+import os
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict, Optional, Tuple, Union
 
@@ -12,6 +13,7 @@ from aistore.sdk.const import (
     USER_AGENT_BASE,
     HEADER_CONTENT_TYPE,
     HEADER_AUTHORIZATION,
+    HEADER_CONNECTION,
     HTTPS,
     HEADER_LOCATION,
     STATUS_REDIRECT_PERM,
@@ -20,6 +22,7 @@ from aistore.sdk.const import (
     WHAT_SMAP,
     QPARAM_WHAT,
     HTTP_METHOD_GET,
+    HEADER_CONTENT_LENGTH,
 )
 
 from aistore.sdk.response_handler import ResponseHandler, AISResponseHandler
@@ -27,10 +30,11 @@ from aistore.sdk.retry_manager import RetryManager
 from aistore.sdk.session_manager import SessionManager
 from aistore.version import __version__ as sdk_version
 from aistore.sdk.types import Smap
-from aistore.sdk.utils import decode_response
+from aistore.sdk.utils import decode_response, get_logger
 from aistore.sdk.retry_config import RetryConfig
 
 T = TypeVar("T")
+logger = get_logger(__name__)
 
 
 class RequestClient:
@@ -221,45 +225,212 @@ class RequestClient:
             headers[HEADER_AUTHORIZATION] = f"Bearer {self.token}"
         return headers
 
-    def _request_with_manual_redirect(
-        self, method: str, url: str, headers, **kwargs
-    ) -> Response:
+    def _calculate_content_length(self, data: Union[bytes, str, Any]) -> Optional[int]:
         """
-        Make a request to the proxy, close the session, and use a new session to make a request to the redirected
-        target.
+        Calculate the content length of data for HTTP requests.
 
-        This exists because the current implementation of `requests` does not seem to handle a 307 redirect
-        properly from a server with TLS enabled with data in the request, and will error with the following on the
-        initial connection to the proxy:
-            SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:2406)')
-        Instead, this implementation will not send the data to the proxy, and only use it to access the proper target.
+        Handles multiple data types including bytes, strings, and file-like objects.
 
         Args:
-            method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
-            url (str): Initial AIS url.
-            headers (dict): Extra headers to be passed with the request. Content-Type and User-Agent will be overridden.
-            **kwargs (optional): Optional keyword arguments to pass with the call to request.
+            data: The data whose length needs to be calculated. Can be:
+                - bytes or str: Direct length calculation
+                - File-like object with fileno(): Uses fstat for efficiency
+                - File-like object with seek(): Uses seek to determine size
+                - Other types: Returns None with a warning
 
         Returns:
-            Final response from AIS target
+            The content length in bytes, or None if it cannot be determined
 
+        Raises:
+            IOError: If file operations fail during content length calculation
         """
-        # Do not include data payload in the initial request to the proxy
-        proxy_request_kwargs = {
-            "headers": headers,
+        # Handle direct byte-like data
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            return len(data)
+
+        if isinstance(data, str):
+            # Strings need to be encoded to get accurate byte count
+            return len(data.encode("utf-8"))
+
+        # Handle file-like objects
+        if hasattr(data, "read"):
+            # Try to get file size using fstat (most efficient)
+            if hasattr(data, "fileno"):
+                try:
+                    return os.fstat(data.fileno()).st_size
+                except (AttributeError, OSError) as e:
+                    logger.debug(
+                        "Failed to get file size using fstat: %s. Falling back to seek method.",
+                        str(e),
+                    )
+
+            # Fall back to seek method for file-like objects
+            if hasattr(data, "seek") and hasattr(data, "tell"):
+                try:
+                    current_pos = data.tell()
+                    data.seek(0, os.SEEK_END)  # Seek to end (SEEK_END)
+                    content_length = data.tell()
+                    data.seek(current_pos)  # Restore original position
+                    return content_length
+                except (OSError, IOError) as e:
+                    raise IOError(
+                        f"Failed to determine content length using seek: {e}"
+                    ) from e
+
+        # Unsupported type - warn but don't fail
+        logger.warning(
+            "Cannot determine content length for data of type '%s'. "
+            "Request will proceed without Content-Length header. "
+            "This may cause HMAC signature mismatch errors if cluster authentication is enabled. "
+            "For authenticated clusters, use bytes, str, or file-like objects.",
+            type(data).__name__,
+        )
+        return None
+
+    def _prepare_proxy_request(
+        self, headers: Dict[str, Any], kwargs: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Prepare the request parameters for the initial proxy request.
+
+        When data is present, the Content-Length header is calculated and set if possible,
+        but the actual data is replaced with an empty byte string to avoid
+        SSL EOF errors and improve efficiency.
+
+        Args:
+            headers: Request headers to be sent
+            kwargs: Additional request parameters including optional 'data'
+
+        Returns:
+            Dict containing the prepared request parameters for the proxy
+
+        Raises:
+            IOError: If file operations fail during content length calculation
+        """
+        # Create a copy of headers to avoid mutating the original
+        proxy_headers = {**headers, HEADER_CONNECTION: "close"}
+
+        if "data" not in kwargs:
+            return {
+                "headers": proxy_headers,
+                "allow_redirects": False,
+                **kwargs,
+            }
+
+        # Calculate content length for data
+        try:
+            content_length = self._calculate_content_length(kwargs["data"])
+        except IOError as e:
+            logger.error("Failed to calculate content length: %s", str(e))
+            raise
+
+        # Add Content-Length header only if we could determine it
+        if content_length is not None:
+            proxy_headers[HEADER_CONTENT_LENGTH] = str(content_length)
+
+        # Prepare proxy request without actual data payload
+        # The proxy needs Content-Length for HMAC signature but not the data itself
+        return {
+            "headers": proxy_headers,
             "allow_redirects": False,
+            "data": b"",  # Send empty data to proxy
             **{k: v for k, v in kwargs.items() if k != "data"},
         }
 
-        # Request to proxy, which should redirect
-        resp = self.session_manager.session.request(method, url, **proxy_request_kwargs)
-        if resp.status_code in (STATUS_REDIRECT_PERM, STATUS_REDIRECT_TMP):
-            target_url = resp.headers.get(HEADER_LOCATION)
-            # Redirected request to target
-            resp = self._make_session_request(
+    def _request_with_manual_redirect(
+        self, method: str, url: str, headers: Dict[str, Any], **kwargs
+    ) -> Response:
+        """
+        Execute a request with manual redirect handling for HTTPS connections with data.
+
+        This method implements a two-phase request pattern:
+        1. Send a request to the proxy to obtain the redirect URL
+        2. Send the actual request with data to the redirected target
+
+        This workaround is necessary because the `requests` library does not properly
+        handle 307 redirects from TLS-enabled servers when data is present in the request,
+        resulting in SSL EOF errors: SSLEOFError(8, 'EOF occurred in violation of protocol')
+
+        When cluster authentication is enabled, the proxy requires the Content-Length header
+        to compute the HMAC signature, but the actual data payload is not needed until the
+        request reaches the target node.
+
+        Args:
+            method: HTTP method (e.g., 'GET', 'POST', 'PUT', 'DELETE')
+            url: Initial URL to the AIS proxy
+            headers: HTTP headers to be sent with the request
+            **kwargs: Additional request parameters (e.g., data, params, timeout)
+
+        Returns:
+            Response: The HTTP response from the final target server
+
+        Raises:
+            ValueError: If the proxy does not return a redirect or the redirect URL is missing
+            TypeError: If data type is not supported
+            IOError: If file operations fail during content length calculation
+        """
+        # Prepare request parameters for proxy
+        try:
+            proxy_request_kwargs = self._prepare_proxy_request(headers, kwargs)
+        except (TypeError, IOError) as e:
+            logger.error(
+                "Failed to prepare proxy request for %s %s: %s", method, url, str(e)
+            )
+            raise
+
+        # Send request to proxy to get redirect URL
+        logger.debug("Sending %s request to proxy: %s", method, url)
+        try:
+            proxy_response = self.session_manager.session.request(
+                method, url, **proxy_request_kwargs
+            )
+        except Exception as e:
+            logger.error("Proxy request failed for %s %s: %s", method, url, str(e))
+            raise
+
+        # Extract redirect URL from response
+        target_url = None
+        if proxy_response.status_code in (STATUS_REDIRECT_PERM, STATUS_REDIRECT_TMP):
+            target_url = proxy_response.headers.get(HEADER_LOCATION)
+            logger.debug(
+                "Received redirect (status %d) from proxy to: %s",
+                proxy_response.status_code,
+                target_url,
+            )
+        else:
+            # Not a redirect - return the proxy response and let response handler deal with it
+            logger.warning(
+                "Proxy did not return a redirect response. Status: %d, URL: %s. "
+                "Returning proxy response for downstream handling.",
+                proxy_response.status_code,
+                url,
+            )
+            return proxy_response
+
+        # Close the proxy response since we got a valid redirect
+        proxy_response.close()
+
+        # Validate that we have a target URL
+        if target_url is None:
+            raise ValueError(
+                f"No redirect URL received from proxy for {method} {url}. "
+                f"Expected redirect status code ({STATUS_REDIRECT_PERM} or {STATUS_REDIRECT_TMP}), "
+                f"but got {proxy_response.status_code}."
+            )
+
+        # Send the actual request with data to the target
+        logger.debug("Sending %s request to target: %s", method, target_url)
+        try:
+            target_response = self._make_session_request(
                 method=method, url=target_url, headers=headers, **kwargs
             )
-        return resp
+        except Exception as e:
+            logger.error(
+                "Target request failed for %s %s: %s", method, target_url, str(e)
+            )
+            raise
+
+        return target_response
 
     def _make_session_request(
         self, method: str, url: str, headers: Any, **kwargs
