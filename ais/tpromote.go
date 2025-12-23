@@ -19,7 +19,7 @@ import (
 
 func (t *target) Promote(params *core.PromoteParams) (ecode int, err error) {
 	lom := core.AllocLOM(params.ObjName)
-	if err = lom.InitBck(params.Bck.Bucket()); err == nil {
+	if err = lom.InitBck(params.Bck); err == nil {
 		ecode, err = t._promote(params, lom)
 	}
 	core.FreeLOM(lom)

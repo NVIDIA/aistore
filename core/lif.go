@@ -58,7 +58,7 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 	}
 	b, objName := cmn.ParseUname(lif.uname)
 	lom = AllocLOM(objName)
-	if err = lom.InitBck(&b); err != nil {
+	if err = lom.InitCmnBck(&b); err != nil {
 		FreeLOM(lom)
 		return nil, err
 	}

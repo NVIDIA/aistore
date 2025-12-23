@@ -193,7 +193,7 @@ func checkInvLom(latest time.Time, ctx *core.LsoInvCtx) (time.Time, bool) {
 // get+unzip and write lom
 func (s3bp *s3bp) getInventory(cloudBck *cmn.Bck, ctx *core.LsoInvCtx, csv invT) error {
 	lom := &core.LOM{ObjName: csv.oname}
-	if err := lom.InitBck(cloudBck); err != nil {
+	if err := lom.InitCmnBck(cloudBck); err != nil {
 		return err
 	}
 	lom.SetSize(csv.size)

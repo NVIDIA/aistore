@@ -180,7 +180,7 @@ func (s3bp *s3bp) GetBucketInv(bck *meta.Bck, ctx *core.LsoInvCtx) (int, error) 
 	// one bucket, one inventory, one statically defined name
 	prefix, objName := aiss3.InvPrefObjname(bck.Bucket(), ctx.Name, ctx.ID)
 	lom := core.AllocLOM(objName)
-	if err = lom.InitBck(bck.Bucket()); err != nil {
+	if err = lom.InitBck(bck); err != nil {
 		core.FreeLOM(lom)
 		return 0, err
 	}

@@ -293,7 +293,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 	case apc.ActBlobDl:
 		debug.Assert(msg.Name != "")
 		lom := core.AllocLOM(msg.Name)
-		err := lom.InitBck(&args.Bck)
+		err := lom.InitCmnBck(&args.Bck)
 		if err == nil {
 			params := &core.BlobParams{
 				Lom: lom,

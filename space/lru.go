@@ -340,7 +340,7 @@ func (j *lruJ) visitLOM(parsedFQN *fs.ParsedFQN) {
 }
 
 func (j *lruJ) _visit(lom *core.LOM, parsedFQN *fs.ParsedFQN) (pushed bool) {
-	if err := lom.InitBck(&j.bck); err != nil {
+	if err := lom.InitCmnBck(&j.bck); err != nil {
 		xlru := j.ini.Xaction
 		if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 			nlog.Warningln(j.String(), "bucket gone - aborting:", err)

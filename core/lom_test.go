@@ -126,7 +126,7 @@ var _ = Describe("LOM", func() {
 				fs.Disable(mpaths[2]) // Ensure that it matches desiredLocalFQN
 
 				lom := &core.LOM{ObjName: testObject}
-				err := lom.InitBck(&cmn.Bck{Name: bucketLocalA, Provider: apc.AIS})
+				err := lom.InitCmnBck(&cmn.Bck{Name: bucketLocalA, Provider: apc.AIS})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredLocalFQN))
 
@@ -181,7 +181,7 @@ var _ = Describe("LOM", func() {
 				fs.Disable(mpaths[2])
 
 				lom := &core.LOM{ObjName: testObject}
-				err := lom.InitBck(&cmn.Bck{Name: bucketCloudA, Provider: apc.AWS, Ns: cmn.NsGlobal})
+				err := lom.InitCmnBck(&cmn.Bck{Name: bucketCloudA, Provider: apc.AWS, Ns: cmn.NsGlobal})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(lom.FQN).To(BeEquivalentTo(desiredCloudFQN))
 
@@ -699,7 +699,7 @@ var _ = Describe("LOM", func() {
 			Expect(dst.Lsize(true)).To(BeEquivalentTo(testFileSize))
 
 			hrwLom := &core.LOM{ObjName: lom.ObjName}
-			Expect(hrwLom.InitBck(bck.Bucket())).NotTo(HaveOccurred())
+			Expect(hrwLom.InitBck(bck)).NotTo(HaveOccurred())
 			hrwLom.UncacheUnless()
 
 			// Reload copy, to make sure it is fresh
@@ -1109,7 +1109,7 @@ var _ = Describe("LOM", func() {
 			fs.Disable(mpaths[2]) // ditto
 
 			lomLocal := &core.LOM{ObjName: testObject}
-			err := lomLocal.InitBck(&cmn.Bck{Name: sameBucketName, Provider: apc.AIS})
+			err := lomLocal.InitCmnBck(&cmn.Bck{Name: sameBucketName, Provider: apc.AIS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomLocal.Load(false, false)
 			Expect(cos.IsNotExist(err)).To(BeTrue())
@@ -1122,7 +1122,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.ObjName).To(Equal(testObject))
 
 			lomCloud := &core.LOM{ObjName: testObject}
-			err = lomCloud.InitBck(&cmn.Bck{Name: sameBucketName, Provider: apc.AWS})
+			err = lomCloud.InitBck(&meta.Bck{Name: sameBucketName, Provider: apc.AWS})
 			Expect(err).NotTo(HaveOccurred())
 			err = lomCloud.Load(false, false)
 			Expect(cos.IsNotExist(err)).To(BeTrue())

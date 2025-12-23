@@ -135,10 +135,10 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 	lom := core.AllocLOM(objSrc)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(bckSrc.Bucket()); err != nil {
+	if err := lom.InitBck(bckSrc); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.InitBck(bckSrc.Bucket())
+			err = lom.InitBck(bckSrc)
 		}
 		if err != nil {
 			s3.WriteErr(w, r, err, 0)
@@ -183,10 +183,10 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 }
 
 func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, config *cmn.Config, lom *core.LOM) {
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.InitBck(bck.Bucket())
+			err = lom.InitBck(bck)
 		}
 		if err != nil {
 			s3.WriteErr(w, r, err, 0)
@@ -296,7 +296,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -357,7 +357,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	objName := s3.ObjName(items)
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}

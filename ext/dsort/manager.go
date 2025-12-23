@@ -648,7 +648,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	}
 	lom := core.AllocLOM(hdr.ObjName)
 	defer core.FreeLOM(lom)
-	if err = lom.InitBck(&hdr.Bck); err == nil {
+	if err = lom.InitCmnBck(&hdr.Bck); err == nil {
 		err = lom.Load(false /*cache it*/, false /*locked*/)
 	}
 	if err != nil && !cos.IsNotExist(err) {

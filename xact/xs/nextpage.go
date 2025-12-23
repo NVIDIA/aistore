@@ -127,7 +127,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (lst *cmn.LsoRes, err erro
 // - see also: cmn.ConcatLso
 func (npg *npgCtx) filterAddLmeta(lst *cmn.LsoRes) error {
 	var (
-		bck  = npg.bck.Bucket()
+		bck  = npg.bck
 		post = npg.wi.lomVisitedCb
 		msg  = npg.wi.msg
 		i    int

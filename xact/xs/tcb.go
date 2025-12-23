@@ -450,7 +450,7 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 
 // (note: ObjHdr and its fields must be consumed synchronously)
 func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) error {
-	if err := lom.InitBck(&hdr.Bck); err != nil {
+	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
 		r.AddErr(err, 0)
 		return err
 	}

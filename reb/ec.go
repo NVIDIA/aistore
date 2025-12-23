@@ -108,7 +108,7 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjCT {
 		lom = core.AllocLOM(ct.ObjectName())
-		if err := lom.InitBck(ct.Bck().Bucket()); err != nil {
+		if err := lom.InitBck(ct.Bck()); err != nil {
 			core.FreeLOM(lom)
 			return err
 		}

@@ -326,7 +326,7 @@ func doWithTimeout(reqArgs *cmn.HreqArgs, getBody getBodyFunc, timeout time.Dura
 //////////////
 
 func (pc *pushComm) doRequest(lom *core.LOM, args *core.ETLArgs, latestVer, sync bool) core.ReadResp {
-	if err := lom.InitBck(lom.Bucket()); err != nil {
+	if err := lom.InitBck(lom.Bck()); err != nil {
 		return core.ReadResp{Err: err}
 	}
 	var (

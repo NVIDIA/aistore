@@ -154,7 +154,7 @@ func (p *archFactory) Start() (err error) {
 //////////////
 
 func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
-	if err := archlom.InitBck(&msg.ToBck); err != nil {
+	if err := archlom.InitCmnBck(&msg.ToBck); err != nil {
 		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}

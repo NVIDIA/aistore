@@ -773,10 +773,10 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 }
 
 func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) (*core.LOM, error) {
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.InitBck(bck.Bucket())
+			err = lom.InitBck(bck)
 		}
 		if err != nil {
 			return lom, err
@@ -921,10 +921,10 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// init
-	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.InitBck(apireq.bck.Bucket())
+			err = lom.InitBck(apireq.bck)
 		}
 		if err != nil {
 			t.writeErr(w, r, err)
@@ -1061,7 +1061,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 
 	if msg.Action == apc.ActMptAbort {
 		lom := &core.LOM{ObjName: objName}
-		if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
+		if err := lom.InitBck(apireq.bck); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -1073,7 +1073,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 
 	evict := msg.Action == apc.ActEvictObjects
 	lom := core.AllocLOM(objName)
-	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck); err != nil {
 		t.writeErr(w, r, err)
 		core.FreeLOM(lom)
 		return
@@ -1115,7 +1115,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	switch msg.Action {
 	case apc.ActRenameObject:
 		lom := &core.LOM{ObjName: apireq.items[1]}
-		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+		if err = lom.InitBck(apireq.bck); err != nil {
 			break
 		}
 		if err = t.objMv(lom, msg); err == nil {
@@ -1130,7 +1130,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			blobMsg apc.BlobMsg
 			lom     = &core.LOM{ObjName: msg.Name}
 		)
-		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+		if err = lom.InitBck(apireq.bck); err != nil {
 			break
 		}
 		if err = cos.MorphMarshal(msg.Value, &blobMsg); err != nil {
@@ -1147,10 +1147,10 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 	case apc.ActMptUpload:
 		lom := &core.LOM{ObjName: apireq.items[1]}
-		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+		if err = lom.InitBck(apireq.bck); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				t.BMDVersionFixup(r)
-				err = lom.InitBck(apireq.bck.Bucket())
+				err = lom.InitBck(apireq.bck)
 			}
 			if err != nil {
 				break
@@ -1170,10 +1170,10 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			break
 		}
 		lom := &core.LOM{ObjName: apireq.items[1]}
-		if err = lom.InitBck(apireq.bck.Bucket()); err != nil {
+		if err = lom.InitBck(apireq.bck); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				t.BMDVersionFixup(r)
-				err = lom.InitBck(apireq.bck.Bucket())
+				err = lom.InitBck(apireq.bck)
 			}
 			if err != nil {
 				break
@@ -1209,7 +1209,7 @@ func (t *target) _checkLocked(w http.ResponseWriter, r *http.Request, bck *meta.
 		lom    = core.AllocLOM(objName)
 	)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
@@ -1269,7 +1269,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 	}
 
 	// 1. initialize bucket and load LOM
-	if err = lom.InitBck(bck.Bucket()); err != nil {
+	if err = lom.InitBck(bck); err != nil {
 		if cmn.IsErrBucketNought(err) {
 			return http.StatusNotFound, err
 		}
@@ -1424,7 +1424,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 
 	lom := core.AllocLOM(apireq.items[1] /*objName*/)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
+	if err := lom.InitBck(apireq.bck); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

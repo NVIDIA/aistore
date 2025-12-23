@@ -261,7 +261,7 @@ func (dr *DiffResolver) push(job jobif, d *dispatcher) {
 				// When it is not a sync job, push LOM for a given object
 				// because we need to check if it exists.
 				lom := &core.LOM{ObjName: obj.objName}
-				if err := lom.InitBck(job.Bck()); err != nil {
+				if err := lom.InitCmnBck(job.Bck()); err != nil {
 					dr.Abort(err)
 					return
 				}

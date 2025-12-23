@@ -36,6 +36,7 @@ func NewBaseBownerMock(bcks ...*meta.Bck) *BownerMock {
 		isAis := bck.IsAIS()
 		bck.Props.BID = core.NewBID(uint64(owner.BMD.Version), isAis)
 		owner.Add(bck)
+		owner.BMD.Version++
 	}
 	return owner
 }

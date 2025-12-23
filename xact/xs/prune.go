@@ -93,7 +93,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 	} else {
 		src = core.AllocLOM(dst.ObjName)
 		defer core.FreeLOM(src)
-		if src.InitBck(rp.bckFrom.Bucket()) != nil {
+		if src.InitBck(rp.bckFrom) != nil {
 			return nil
 		}
 	}

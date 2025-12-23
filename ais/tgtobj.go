@@ -702,7 +702,7 @@ do: // retry uplock or ec-recovery, the latter only once
 		doubleCheck, ecode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 		if doubleCheck && err != nil {
 			lom2 := core.AllocLOM(goi.lom.ObjName)
-			er2 := lom2.InitBck(goi.lom.Bucket())
+			er2 := lom2.InitBck(goi.lom.Bck())
 			if er2 == nil {
 				er2 = lom2.Load(true /*cache it*/, false /*locked*/)
 				goi.isIOErr = true
@@ -1688,7 +1688,7 @@ func (coi *coi) do(t *target, dm *bundle.DM, lom *core.LOM) (res xs.CoiRes) {
 	dst := core.AllocLOM(coi.ObjnameTo)
 	defer core.FreeLOM(dst)
 
-	if err := dst.InitBck(coi.BckTo.Bucket()); err != nil {
+	if err := dst.InitBck(coi.BckTo); err != nil {
 		return xs.CoiRes{Err: err}
 	}
 	dstMaxMonoSize := dst.Bprops().Chunks.MaxMonolithicSize

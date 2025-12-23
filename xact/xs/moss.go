@@ -822,9 +822,9 @@ func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, tsi *me
 }
 
 // per-object override, if specified
-func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
+func (r *XactMoss) _bucket(in *apc.MossIn) (*meta.Bck, error) {
 	// default
-	bck := r.Bck().Bucket()
+	bck := r.Bck()
 
 	// uname override
 	if in.Uname != "" {
@@ -832,7 +832,7 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 		if err != nil {
 			return nil, err
 		}
-		return b.Bucket(), nil
+		return b, nil
 	}
 
 	// (bucket, provider) override
@@ -841,7 +841,7 @@ func (r *XactMoss) _bucket(in *apc.MossIn) (*cmn.Bck, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &cmn.Bck{Name: in.Bucket, Provider: np}, nil
+		return &meta.Bck{Name: in.Bucket, Provider: np}, nil
 	}
 
 	if bck == nil {

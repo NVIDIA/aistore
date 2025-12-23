@@ -152,7 +152,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 	// Rx
 	lom := core.AllocLOM(hdr.ObjName)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(&hdr.Bck); err != nil {
+	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
 		nlog.Errorln(err)
 		return nil
 	}
@@ -336,7 +336,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 	}
 
 	lom := core.AllocLOM(hdr.ObjName)
-	if err := lom.InitBck(&hdr.Bck); err != nil {
+	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
 		core.FreeLOM(lom)
 		nlog.Errorln(err)
 		return nil

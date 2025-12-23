@@ -134,7 +134,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				hrwLom := &core.LOM{ObjName: testObjectName}
-				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.InitCmnBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
 				newLom := newBasicLom(localFQN)
@@ -171,7 +171,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).To(HaveOccurred())
 
 				hrwLom := &core.LOM{ObjName: testObjectName}
-				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.InitCmnBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
 				ver := lom.Version()
@@ -213,7 +213,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).To(HaveOccurred())
 
 				hrwLom := &core.LOM{ObjName: testObjectName}
-				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.InitCmnBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
 				lom.UncacheUnless()
@@ -324,7 +324,7 @@ var _ = Describe("LOM Xattributes", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				hrwLom := &core.LOM{ObjName: testObjectName}
-				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
+				Expect(hrwLom.InitCmnBck(&localBck)).NotTo(HaveOccurred())
 				hrwLom.UncacheUnless()
 
 				newLom := newBasicLom(localFQN)

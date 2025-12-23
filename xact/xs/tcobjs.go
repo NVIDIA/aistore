@@ -401,7 +401,7 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 }
 
 func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) (err error) {
-	if err = lom.InitBck(&hdr.Bck); err != nil {
+	if err = lom.InitCmnBck(&hdr.Bck); err != nil {
 		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)

@@ -320,10 +320,10 @@ func (t *target) putObjectETL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom := core.AllocLOM(objName)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
-			err = lom.InitBck(bck.Bucket())
+			err = lom.InitBck(bck)
 		}
 		if err != nil {
 			t.writeErr(w, r, err)

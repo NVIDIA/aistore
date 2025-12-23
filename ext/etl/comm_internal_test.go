@@ -72,7 +72,7 @@ var _ = Describe("CommunicatorTest", func() {
 
 		// Create an object.
 		lom := &core.LOM{ObjName: objName}
-		err = lom.InitBck(clusterBck.Bucket())
+		err = lom.InitBck(clusterBck)
 		Expect(err).NotTo(HaveOccurred())
 		err = createRandomFile(lom.FQN, dataSize)
 		Expect(err).NotTo(HaveOccurred())
@@ -175,7 +175,7 @@ var _ = Describe("CommunicatorTest", func() {
 					Expect(b).To(Equal(transformData))
 				case "offline":
 					lom := &core.LOM{ObjName: objName}
-					err := lom.InitBck(clusterBck.Bucket())
+					err := lom.InitBck(clusterBck)
 					Expect(err).NotTo(HaveOccurred())
 
 					expectedEtlTransformArgs = ""

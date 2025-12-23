@@ -259,7 +259,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) error {
 		shardName = s.Name
 		errCh     = make(chan error, 2)
 	)
-	if err := lom.InitBck(&m.Pars.OutputBck); err != nil {
+	if err := lom.InitCmnBck(&m.Pars.OutputBck); err != nil {
 		return err
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
@@ -955,7 +955,7 @@ func (es *extractShard) _do(lom *core.LOM) error {
 		estimateTotalRecordsSize uint64
 		warnOOM                  bool
 	)
-	if err := lom.InitBck(&m.Pars.InputBck); err != nil {
+	if err := lom.InitCmnBck(&m.Pars.InputBck); err != nil {
 		return err
 	}
 	if _, local, err := lom.HrwTarget(m.smap); err != nil || !local {

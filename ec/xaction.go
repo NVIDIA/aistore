@@ -130,7 +130,7 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (cos.ReadOpenCloser, error) {
 	lom := core.AllocLOM(objName)
 	defer core.FreeLOM(lom)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		return nil, err
 	}
 	lom.Lock(false)

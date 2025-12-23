@@ -83,8 +83,12 @@ func (lom *LOM) InitCT(ct *CT) {
 	lom.md.uname = ct.UnamePtr()
 }
 
-func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
-	lom.bck = *(*meta.Bck)(bck)
+func (lom *LOM) InitCmnBck(bck *cmn.Bck) (err error) {
+	return lom.InitBck((*meta.Bck)(bck))
+}
+
+func (lom *LOM) InitBck(bck *meta.Bck) (err error) {
+	lom.bck = *bck
 	if err = lom.bck.InitFast(T.Bowner()); err != nil {
 		return
 	}

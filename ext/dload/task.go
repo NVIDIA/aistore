@@ -67,7 +67,7 @@ func (task *singleTask) init() {
 }
 
 func (task *singleTask) download(lom *core.LOM) {
-	err := lom.InitBck(task.job.Bck())
+	err := lom.InitCmnBck(task.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
 	}

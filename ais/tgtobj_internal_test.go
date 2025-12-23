@@ -131,7 +131,7 @@ func TestPutObjectChunks(tst *testing.T) {
 			// Set up LOM (using global testBucket that was created in TestMain)
 			lom := core.AllocLOM("test-chunked-obj-" + tt.name)
 			defer core.FreeLOM(lom)
-			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			tassert.CheckFatal(test, err)
 			defer lom.RemoveMain()
 
@@ -191,7 +191,7 @@ func BenchmarkObjPut(b *testing.B) {
 		b.Run(cos.IEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := core.AllocLOM("objname")
 			defer core.FreeLOM(lom)
-			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -238,7 +238,7 @@ func BenchmarkObjAppend(b *testing.B) {
 		b.Run(cos.IEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := core.AllocLOM("objname")
 			defer core.FreeLOM(lom)
-			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -301,7 +301,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 		b.Run(benchName, func(b *testing.B) {
 			lom := core.AllocLOM("objname")
 			defer core.FreeLOM(lom)
-			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
+			err := lom.InitBck(&meta.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
 			}

@@ -36,7 +36,7 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []stri
 		objName = s3.ObjName(items)
 		lom     = &core.LOM{ObjName: objName}
 	)
-	err := lom.InitBck(bck.Bucket())
+	err := lom.InitBck(bck)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -86,7 +86,7 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	// 2. init lom, load/create chunk manifest
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName}
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -149,7 +149,7 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName} // TODO: use core.AllocLOM()
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -211,7 +211,7 @@ func (t *target) abortMptS3(w http.ResponseWriter, r *http.Request, items []stri
 	}
 	objName := s3.ObjName(items)
 	lom := &core.LOM{ObjName: objName}
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -236,7 +236,7 @@ func (t *target) listPartsMptS3(w http.ResponseWriter, r *http.Request, bck *met
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	lom := &core.LOM{ObjName: objName}
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -291,7 +291,7 @@ func (t *target) listUploadsMptS3(w http.ResponseWriter, bck *meta.Bck, q url.Va
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lom *core.LOM, q url.Values) {
 	startTime := mono.NanoTime()
-	if err := lom.InitBck(bck.Bucket()); err != nil {
+	if err := lom.InitBck(bck); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}

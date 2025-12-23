@@ -341,7 +341,7 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {
-	if err := lom.InitBck(r.bck.Bucket()); err != nil {
+	if err := lom.InitBck(r.bck); err != nil {
 		return false, err
 	}
 	// (smap != nil) to filter non-locals

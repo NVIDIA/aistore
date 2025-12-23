@@ -561,7 +561,7 @@ func (j *clnJ) visitCT(parsed *fs.ParsedFQN, fqn string) {
 }
 
 func (j *clnJ) initCTLOM(lom *core.LOM, fqn string) error {
-	err := lom.InitBck(&j.bck)
+	err := lom.InitCmnBck(&j.bck)
 	if err == nil {
 		return nil
 	}
@@ -899,7 +899,7 @@ func (j *clnJ) rmLeftovers(specifier int) {
 				)
 				lom := core.AllocLOM(mlom.ObjName)
 				switch {
-				case lom.InitBck(&j.bck) != nil:
+				case lom.InitCmnBck(&j.bck) != nil:
 					err = os.Remove(fqn)
 					removed = err == nil
 				case lom.FromFS() != nil:

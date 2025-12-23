@@ -279,7 +279,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 		Lom: core.AllocLOM(lom.ObjName),
 		Msg: &apc.BlobMsg{},
 	}
-	if err := params.Lom.InitBck(lom.Bucket()); err != nil {
+	if err := params.Lom.InitBck(lom.Bck()); err != nil {
 		return 0, err
 	}
 	xctn, err := core.T.GetColdBlob(params, oa)

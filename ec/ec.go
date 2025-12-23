@@ -528,7 +528,7 @@ func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) error {
 // lom <= transport.ObjHdr (NOTE: caller must call freeLOM)
 func AllocLomFromHdr(hdr *transport.ObjHdr) (*core.LOM, error) {
 	lom := core.AllocLOM(hdr.ObjName)
-	if err := lom.InitBck(&hdr.Bck); err != nil {
+	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
 		return nil, err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, false /*skip checksum*/)

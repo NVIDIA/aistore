@@ -115,7 +115,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 			// Create LOM for the object to find correct placement
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			wrongMpath := findOtherMpath(lom.Mountpath())
@@ -144,7 +144,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			// Create misplaced object (old enough for removal)
 			objectName := "flagged-misplaced.txt"
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			wrongMpath := findOtherMpath(lom.Mountpath())
@@ -164,7 +164,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		It("should remove zero-size objects when flag is set", func() {
 			objectName := "zero-size-object.txt"
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			oldTime := now.Add(-3 * time.Hour)
@@ -185,7 +185,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			objectName := "recent-misplaced.txt"
 
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			correctMpath := lom.Mountpath()
@@ -225,7 +225,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			objectName := "test-object-for-workfile.txt"
 
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "test-work-tag"
@@ -254,7 +254,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 			objectName := "recent-object-for-workfile.txt"
 
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "recent-work-tag"
@@ -444,7 +444,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	It("removes old orphan chunk with no partial or completed manifest", func() {
 		objName := "cleanup/orphan-no-manifest.bin"
 		lom := &core.LOM{ObjName: objName}
-		err := lom.InitBck(&bck)
+		err := lom.InitCmnBck(&bck)
 		Expect(err).NotTo(HaveOccurred())
 
 		// start a valid mpu session (auto-generated id)
@@ -470,7 +470,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	It("removes stray chunk with mismatched uploadID while keeping completed manifest (HRW-correct)", func() {
 		objName := "cleanup/completed-vs-stray.bin"
 		lom := core.AllocLOM(objName)
-		Expect(lom.InitBck(&bck)).NotTo(HaveOccurred())
+		Expect(lom.InitCmnBck(&bck)).NotTo(HaveOccurred())
 		defer core.FreeLOM(lom)
 
 		u2, err := core.NewUfest("", lom, false /*mustExist*/)
@@ -564,7 +564,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	Describe("Empty directory cleanup", func() {
 		It("should remove already-empty directories during walk", func() {
 			lom := &core.LOM{ObjName: "dir1/dir2/temp-for-empty-dir.txt"}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			createTestLOM(lom.FQN, 512)
@@ -586,7 +586,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		It("should preserve directories with content", func() {
 			lom := &core.LOM{ObjName: "recent-object-in-subdir.txt"}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			subDir := filepath.Join(filepath.Dir(lom.FQN), "subdir-with-content")
@@ -606,7 +606,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	Describe("Global recency guard edge cases", func() {
 		It("should handle the case when object may disappear during cleanup walk", func() {
 			lom := &core.LOM{ObjName: "test-disappearing-object.txt"}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			lom.SetAtimeUnix(now.UnixNano())
@@ -629,7 +629,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 
 		It("should handle misplaced at threshold timing", func() {
 			lom := &core.LOM{ObjName: "threshold-timing.txt"}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			// other
@@ -674,7 +674,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 	Describe("Workfile variations", func() {
 		It("should remove workfiles with invalid encoding", func() {
 			lom := &core.LOM{ObjName: "object-for-invalid-workfiles.txt"}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			workDir := filepath.Dir(lom.GenFQN(fs.WorkCT, "dummy"))
@@ -713,7 +713,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		It("should preserve workfiles with valid encoding but current PID", func() {
 			objectName := "test-object-for-current-workfile.txt"
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "current-work-tag"
@@ -734,7 +734,7 @@ var _ = Describe("AIStore content cleanup tests", func() {
 		It("should remove workfiles from different PID", func() {
 			objectName := "a/b/c/test-object-for-old-pid-workfile.txt"
 			lom := &core.LOM{ObjName: objectName}
-			err := lom.InitBck(&bck)
+			err := lom.InitCmnBck(&bck)
 			Expect(err).NotTo(HaveOccurred())
 
 			workTag := "old-pid-work-tag"
