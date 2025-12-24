@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 from enum import IntFlag
@@ -32,20 +32,12 @@ class AccessAttr(IntFlag):
     ADMIN = 1 << 17
 
     # Derived Roles
-    ACCESS_RO = GET | OBJ_HEAD | LIST_BUCKETS | BCK_HEAD | OBJ_LIST
-    ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE
-    ACCESS_SU = (
-        ACCESS_RW
-        | PROMOTE
-        | OBJ_UPDATE
-        | PATCH
-        | BCK_SET_ACL
-        | SHOW_CLUSTER
-        | CREATE_BUCKET
-        | DESTROY_BUCKET
-        | MOVE_BUCKET
-        | ADMIN
-    )
+    ACCESS_RO = GET | OBJ_HEAD | BCK_HEAD | OBJ_LIST
+    ACCESS_RW = ACCESS_RO | PUT | APPEND | OBJ_DELETE | OBJ_MOVE | PROMOTE
+    CLUSTER_ACCESS_RO = LIST_BUCKETS | SHOW_CLUSTER
+    CLUSTER_ACCESS_RW = CLUSTER_ACCESS_RO | CREATE_BUCKET | DESTROY_BUCKET | MOVE_BUCKET
+    ACCESS_BUCKET_ADMIN = PATCH | BCK_SET_ACL | OBJ_UPDATE
+    ACCESS_SU = ACCESS_RW | ACCESS_BUCKET_ADMIN | CLUSTER_ACCESS_RW | ADMIN
 
     @staticmethod
     def describe(perms: int) -> str:

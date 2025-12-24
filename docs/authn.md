@@ -229,29 +229,29 @@ In this README:
 
 In AIStore, roles define the level of access and the permissions available to users. Here is a detailed explanation of the roles and their associated permissions:
 
-| Permission        | Description                                                 |
-|-------------------|-------------------------------------------------------------|
-| GET               | Allows reading objects.                                     |
-| LIST-OBJECTS      | Allows listing objects within a bucket.                     |
-| LIST-BUCKETS      | Allows listing buckets.                                     |
-| PUT               | Allows writing or uploading objects.                        |
-| DELETE-OBJECT     | Allows deleting objects.                                    |
-| HEAD-OBJECT       | Allows retrieving object metadata.                          |
-| MOVE-OBJECT       | Allows moving objects within or between buckets.            |
-| CREATE-BUCKET     | Allows creating new buckets.                                |
-| DESTROY-BUCKET    | Allows deleting buckets.                                    |
-| HEAD-BUCKET       | Allows retrieving bucket metadata without listing contents. |
-| MOVE-BUCKET       | Allows moving buckets.                                      |
-| UPDATE-OBJECT     | Allows updating object metadata.                            |
-| APPEND            | Allows appending data to an existing object.                |
-| PATCH             | Allows applying patches to objects.                         |
-| SET-BUCKET-ACL    | Allows setting access control lists for buckets.            |
-| SHOW-CLUSTER      | Allows viewing cluster information.                         |
-| PROMOTE           | Allows promoting local files to objects in the cluster.     |
-| ADMIN             | Grants full administrative access to the system.            |
-| ro                | Grants Read Only permissions. (GET, LIST-OBJECTS and LIST-BUCKETS)                 |
-| rw                | Grants Write Only permissions. (GET, PUT, DELETE-OBJECT, HEAD-OBJECT, LIST-OBJECTS, LIST-BUCKETS, MOVE-OBJECT) |
-| su                | Grants Super-User permissions. Can perform all of the above.                  |
+| Permission        | Description                                                                           |
+|-------------------|---------------------------------------------------------------------------------------|
+| `GET`             | Read object contents.                                                                 |
+| `HEAD-OBJECT`     | Read object metadata (properties).                                                    |
+| `PUT`             | Write object.                                                                         |
+| `APPEND`          | Append to object.                                                                     |
+| `DELETE-OBJECT`   | Delete object.                                                                        |
+| `MOVE-OBJECT`     | Move/rename object.                                                                   |
+| `PROMOTE`         | Promote local files.                                                                  |
+| `UPDATE-OBJECT`   | Update object metadata.                                                               |
+| `HEAD-BUCKET`     | Read bucket metadata (properties).                                                    |
+| `LIST-OBJECTS`    | List objects in a bucket.                                                             |
+| `PATCH`           | Set bucket properties.                                                                |
+| `SET-BUCKET-ACL`  | Set bucket permissions.                                                               |
+| `LIST-BUCKETS`    | List all buckets in cluster.                                                          |
+| `SHOW-CLUSTER`    | View cluster information.                                                             |
+| `CREATE-BUCKET`   | Create new bucket.                                                                    |
+| `DESTROY-BUCKET`  | Destroy/delete bucket.                                                                |
+| `MOVE-BUCKET`     | Move/rename bucket.                                                                   |
+| `ADMIN`           | Full administrative access: all cluster operations.                                   |
+| `ro`              | Bucket read-only: `GET`, `HEAD-OBJECT`, `HEAD-BUCKET`, `LIST-OBJECTS`.                |
+| `rw`              | Bucket read-write: `ro` + `PUT`, `APPEND`, `DELETE-OBJECT`, `MOVE-OBJECT`, `PROMOTE`. |
+| `su`              | Super-user: full access to all operations.                                            |
 
 
 ## How to Enable AuthN Server After Deployment

@@ -6,6 +6,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- Sync `AccessAttr` permission constants with Go (`api/apc/access.go`):
+  - `ACCESS_RW` now includes `PROMOTE`.
+  - Added `ACCESS_BUCKET_ADMIN`, `CLUSTER_ACCESS_RO`, `CLUSTER_ACCESS_RW`.
+  - Fixed `ACCESS_RO` to exclude `LIST_BUCKETS` (bucket-level, not cluster-level).
+
 ### Fixed
 
 - Fixed HMAC signature mismatch (401 Unauthorized) when using HTTPS with cluster key enabled:

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import pytest
 
@@ -80,21 +80,12 @@ class TestAuthNRoleManager(AuthNTestBase):
         )
 
         bck_perms = self.role_manager.get(role_name=self.role.name).buckets
-        combined_perms = str(
-            (
-                AccessAttr.GET.value
-                | AccessAttr.OBJ_HEAD.value
-                | AccessAttr.LIST_BUCKETS.value
-                | AccessAttr.BCK_HEAD.value
-                | AccessAttr.OBJ_LIST.value
-            )
-        )
-        self.assertEqual(combined_perms, str(AccessAttr.ACCESS_RO.value))
+        expected_perms = str(AccessAttr.ACCESS_RO.value)
 
         self.assertIn("test-bucket", [perm.bck.name for perm in bck_perms])
         for bck_perm in bck_perms:
             if bck_perm.bck.name == "test-bucket":
-                self.assertEqual(combined_perms, bck_perm.perm)
+                self.assertEqual(expected_perms, bck_perm.perm)
 
     @pytest.mark.authn
     def test_role_perms_cluster_update(self):

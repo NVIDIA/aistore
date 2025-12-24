@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import unittest
@@ -30,7 +30,6 @@ class TestAuthNAccessAttr(unittest.TestCase):
         description = AccessAttr.describe(AccessAttr.ACCESS_RO)
         self.assertIn("GET", description)
         self.assertIn("OBJ_HEAD", description)
-        self.assertIn("LIST_BUCKETS", description)
         self.assertIn("BCK_HEAD", description)
         self.assertIn("OBJ_LIST", description)
         self.assertNotIn("PUT", description)
@@ -39,15 +38,14 @@ class TestAuthNAccessAttr(unittest.TestCase):
         description = AccessAttr.describe(AccessAttr.ACCESS_RW)
         self.assertIn("GET", description)
         self.assertIn("OBJ_HEAD", description)
-        self.assertIn("LIST_BUCKETS", description)
         self.assertIn("BCK_HEAD", description)
         self.assertIn("OBJ_LIST", description)
         self.assertIn("PUT", description)
         self.assertIn("APPEND", description)
         self.assertIn("OBJ_DELETE", description)
         self.assertIn("OBJ_MOVE", description)
+        self.assertIn("PROMOTE", description)
         self.assertNotIn("ADMIN", description)
-        self.assertNotIn("PROMOTE", description)
 
         description = AccessAttr.describe(AccessAttr.ACCESS_SU)
         self.assertIn("GET", description)
@@ -73,13 +71,29 @@ class TestAuthNAccessAttr(unittest.TestCase):
         self.assertTrue(AccessAttr.ACCESS_RO & AccessAttr.GET)
         self.assertTrue(AccessAttr.ACCESS_RO & AccessAttr.OBJ_HEAD)
         self.assertFalse(AccessAttr.ACCESS_RO & AccessAttr.PUT)
-        self.assertFalse(AccessAttr.ACCESS_RO & AccessAttr.ADMIN)
 
     def test_access_rw(self):
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.GET)
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.PUT)
         self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.OBJ_DELETE)
-        self.assertFalse(AccessAttr.ACCESS_RW & AccessAttr.ADMIN)
+        self.assertTrue(AccessAttr.ACCESS_RW & AccessAttr.PROMOTE)
+
+    def test_cluster_access_ro(self):
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RO & AccessAttr.LIST_BUCKETS)
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RO & AccessAttr.SHOW_CLUSTER)
+        self.assertFalse(AccessAttr.CLUSTER_ACCESS_RO & AccessAttr.CREATE_BUCKET)
+
+    def test_cluster_access_rw(self):
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RW & AccessAttr.LIST_BUCKETS)
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RW & AccessAttr.SHOW_CLUSTER)
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RW & AccessAttr.CREATE_BUCKET)
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RW & AccessAttr.DESTROY_BUCKET)
+        self.assertTrue(AccessAttr.CLUSTER_ACCESS_RW & AccessAttr.MOVE_BUCKET)
+
+    def test_access_bucket_admin(self):
+        self.assertTrue(AccessAttr.ACCESS_BUCKET_ADMIN & AccessAttr.PATCH)
+        self.assertTrue(AccessAttr.ACCESS_BUCKET_ADMIN & AccessAttr.BCK_SET_ACL)
+        self.assertTrue(AccessAttr.ACCESS_BUCKET_ADMIN & AccessAttr.OBJ_UPDATE)
 
     def test_access_su(self):
         self.assertTrue(AccessAttr.ACCESS_SU & AccessAttr.GET)

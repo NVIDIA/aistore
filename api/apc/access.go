@@ -1,6 +1,6 @@
 // Package apc: API control messages and constants
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -14,28 +14,30 @@ type AccessAttrs uint64
 
 // ACL aka access permissions
 const (
-	// object level
-	AceGET     = AccessAttrs(1) << iota
-	AceObjHEAD // permission to get object props
-	AcePUT
-	AceAPPEND
-	AceObjDELETE
-	AceObjMOVE
-	AcePromote
-	// TODO: reserving the only perm that must be checked on the target side (NIY)
-	AceObjUpdate
-	// bucket metadata
-	AceBckHEAD   // get bucket props and ACL
+	// object-level
+	AceGET       = AccessAttrs(1) << iota // read object contents
+	AceObjHEAD                            // read object metadata (properties)
+	AcePUT                                // write object
+	AceAPPEND                             // append to object
+	AceObjDELETE                          // delete object
+	AceObjMOVE                            // move/rename object
+	AcePromote                            // promote local files
+	AceObjUpdate                          // update object metadata; TODO: must be checked on target (NIY)
+
+	// bucket-level
+	AceBckHEAD   // read bucket metadata (properties)
 	AceObjLIST   // list objects in a bucket
-	AcePATCH     // set bucket props
+	AcePATCH     // set bucket properties
 	AceBckSetACL // set bucket permissions
-	// cluster level
-	AceListBuckets
-	AceShowCluster
-	AceCreateBucket
-	AceDestroyBucket
-	AceMoveBucket
-	AceAdmin
+
+	// cluster-level
+	AceListBuckets   // list all buckets in cluster
+	AceShowCluster   // view cluster information
+	AceCreateBucket  // create new bucket
+	AceDestroyBucket // destroy/delete bucket
+	AceMoveBucket    // move/rename bucket
+	AceAdmin         // full administrative access: all cluster operations
+
 	// note: must be the last one
 	AceMax
 )
@@ -76,8 +78,11 @@ const (
 	// read-only and read-write access to bucket
 	AccessRO             = AceGET | AceObjHEAD | AceBckHEAD | AceObjLIST
 	AllowReadOnlyAccess  = "ro"
-	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE
+	AccessRW             = AccessRO | AcePUT | AceAPPEND | AceObjDELETE | AceObjMOVE | AcePromote
 	AllowReadWriteAccess = "rw"
+
+	// bucket admin operations
+	AccessBucketAdmin = AcePATCH | AceBckSetACL | AceObjUpdate
 
 	// read-only and read-write access to cluster
 	ClusterAccessRO = AceListBuckets | AceShowCluster

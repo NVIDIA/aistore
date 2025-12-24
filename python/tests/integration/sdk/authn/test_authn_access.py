@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import tempfile
 from typing import List
@@ -171,7 +171,7 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
     def test_access_ro_cluster_wide(self):
         """Test cluster-wide role with read-only permissions."""
         client = self._create_client_with_access(
-            access_attrs=[AccessAttr.ACCESS_RO], scoped=False
+            access_attrs=[AccessAttr.CLUSTER_ACCESS_RO], scoped=False
         )
         client.cluster().list_buckets()
 
@@ -196,7 +196,7 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
     def test_access_rw_cluster_wide(self):
         """Test cluster-wide role with read-write permissions."""
         client = self._create_client_with_access(
-            access_attrs=[AccessAttr.ACCESS_RW], scoped=False
+            access_attrs=[AccessAttr.CLUSTER_ACCESS_RW], scoped=False
         )
         client.cluster().list_buckets()
 

@@ -1,7 +1,7 @@
 // Package tok provides AuthN token (structure and methods)
 // for validation by AIS gateways
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package tok
 
@@ -386,8 +386,12 @@ func (c *AISClaims) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.A
 		return errors.New("empty permissions requested")
 	}
 	sub, _ := c.GetSubject()
-	cluPerms := perms & apc.ClusterAccessRW
-	objPerms := perms & apc.AccessRW
+	cluPerms := perms & (apc.ClusterAccessRW | apc.AceAdmin)
+	objPerms := perms & (apc.AccessRW | apc.AccessBucketAdmin)
+	extra := perms &^ (cluPerms | objPerms)
+	if extra != 0 {
+		return fmt.Errorf("user `%s` has %w: invalid permissions %s", sub, ErrNoPermissions, extra.Describe(false))
+	}
 	cluACL, cluOk := c.aclForCluster(clusterID)
 	if cluPerms != 0 {
 		// Cluster-wide permissions requested

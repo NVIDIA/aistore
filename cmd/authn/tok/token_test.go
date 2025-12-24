@@ -1,6 +1,6 @@
 // Package tok_test includes tests for tok pkg
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  */
 package tok_test
 
@@ -608,4 +608,36 @@ func TestValidateClaims_CertificateValidation(t *testing.T) {
 	parser = tok.NewTokenParser(authConf, kcmWithTrust)
 	_, err = parser.ValidateToken(t.Context(), tk)
 	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")
+}
+
+func TestCheckPermissions_Denied(t *testing.T) {
+	cluID := "clu"
+	bck := &cmn.Bck{Name: "bck", Provider: apc.AIS}
+	noPerms := tok.StandardClaims(futureTime, "user", testAudience, nil, nil)
+
+	for perm := apc.AccessAttrs(1); perm < apc.AceMax; perm <<= 1 {
+		err := noPerms.CheckPermissions(cluID, bck, perm)
+		tassert.Errorf(t, err != nil, "%s should be denied", perm.Describe(false))
+	}
+}
+
+func TestCheckPermissions_Granted(t *testing.T) {
+	cluID := "clu"
+	bck := cmn.Bck{Name: "bck", Provider: apc.AIS}
+	cluScope := apc.ClusterAccessRW | apc.AceAdmin
+
+	for perm := apc.AccessAttrs(1); perm < apc.AceMax; perm <<= 1 {
+		t.Run(perm.Describe(false), func(t *testing.T) {
+			var claims *tok.AISClaims
+			if perm&cluScope != 0 {
+				claims = tok.StandardClaims(futureTime, "user", testAudience, nil,
+					[]*authn.CluACL{{ID: cluID, Access: perm}})
+			} else {
+				claims = tok.StandardClaims(futureTime, "user", testAudience,
+					[]*authn.BckACL{{Bck: cmn.Bck{Name: bck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: cluID}}, Access: perm}}, nil)
+			}
+			err := claims.CheckPermissions(cluID, &bck, perm)
+			tassert.Errorf(t, err == nil, "%s should be allowed, got: %v", perm.Describe(false), err)
+		})
+	}
 }
