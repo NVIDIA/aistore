@@ -273,7 +273,8 @@ add:
 }
 
 // copy object => any local destination
-// recommended for copying between different buckets (compare with lom.Copy() above)
+// usage: copying between different buckets (compare with lom.Copy() above)
+// compare w/ Ufest.Relocate(lom)
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	debug.Assert(lom.IsLocked() >= apc.LockRead, lom.Cname(), " source not locked")
 
@@ -378,7 +379,7 @@ func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
 	dst.SetCksum(&wholeCksum.Cksum)
 
 	// Store the completed manifest for destination
-	err = dstUfest.storeCompleted(dst)
+	err = dstUfest.storeCompleted(dst, false /*override*/)
 	if err != nil {
 		return dstUfest._undoCopy(fmt.Errorf("failed to store completed manifest for destination %s: %w", dst.Cname(), err))
 	}

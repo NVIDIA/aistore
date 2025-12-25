@@ -186,7 +186,7 @@ func (*ups) parsePartNum(s string) (int32, error) {
 
 // (under manifest lock)
 func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts, isS3 bool) (string, error) {
-	if err := manifest.Check(); err != nil {
+	if err := manifest.Check(true /*completed*/); err != nil {
 		return "", err
 	}
 	if _, err := _checkParts(parts, manifest.Count()); err != nil {
@@ -211,13 +211,6 @@ func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComp
 	if remote /*computed by remote*/ || !isS3 /*native caller*/ {
 		return "" /*etag*/, nil
 	}
-
-	// NOTE [convention]
-	// for chunks `isS3` overrides bucket-configured checksum always requiring MD5
-	// (see putPart)
-
-	debug.Assert(manifest.Count() == 0 || len(manifest.GetChunk(1, true).MD5) == cos.LenMD5Hash)
-
 	return manifest.ETagS3()
 }
 
@@ -240,7 +233,7 @@ func _checkParts(parts apc.MptCompletedParts, count int) (int, error) {
 	}
 	return 0, nil
 
-slow:
+slow: // slow path (same +sort)
 	sort.Slice(parts, func(i, j int) bool {
 		return parts[i].PartNumber < parts[j].PartNumber
 	})
@@ -508,7 +501,9 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() || lom.Bck().IsRemoteGCP() {
 			for i := range args.parts {
 				if args.parts[i].ETag == "" {
-					args.parts[i].ETag = manifest.GetChunk(args.parts[i].PartNumber, true).ETag
+					c, err := manifest.GetChunk(args.parts[i].PartNumber)
+					debug.AssertNoErr(err)
+					args.parts[i].ETag = c.ETag
 				}
 			}
 		}

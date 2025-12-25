@@ -277,8 +277,10 @@ var _ = Describe("LOM Xattributes", func() {
 
 				// Verify individual chunks were copied correctly
 				for i := 1; i <= srcUfest.Count(); i++ {
-					srcChunk := srcUfest.GetChunk(i, false)
-					dstChunk := dstUfest.GetChunk(i, false)
+					srcChunk, err := srcUfest.GetChunk(i)
+					Expect(err).NotTo(HaveOccurred())
+					dstChunk, err := dstUfest.GetChunk(i)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(srcChunk).NotTo(BeNil())
 					Expect(dstChunk).NotTo(BeNil())
 					Expect(srcChunk.Path()).To(BeARegularFile())
@@ -564,9 +566,6 @@ func createChunkedLOM(fqn string, numChunks int) *core.LOM {
 	totalSize := int64(numChunks * chunkSize)
 	lom.SetSize(totalSize)
 
-	// Create main object file
-	createTestFile(fqn, int(totalSize))
-
 	// Create Ufest for chunked upload
 	ufest, err := core.NewUfest("", lom, false)
 	Expect(err).NotTo(HaveOccurred())
@@ -586,8 +585,6 @@ func createChunkedLOM(fqn string, numChunks int) *core.LOM {
 	err = lom.CompleteUfest(ufest, false)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Reload to pick up chunked flag
-	lom.UncacheUnless()
 	Expect(lom.Load(false, false)).NotTo(HaveOccurred())
 	Expect(lom.IsChunked()).To(BeTrue())
 	return lom

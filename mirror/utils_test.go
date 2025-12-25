@@ -158,8 +158,10 @@ var _ = Describe("Mirror", func() {
 
 			// Verify individual chunks were copied correctly
 			for i := 1; i <= srcUfest.Count(); i++ {
-				srcChunk := srcUfest.GetChunk(i, false)
-				dstChunk := dstUfest.GetChunk(i, false)
+				srcChunk, err := srcUfest.GetChunk(i)
+				Expect(err).NotTo(HaveOccurred())
+				dstChunk, err := dstUfest.GetChunk(i)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(srcChunk).NotTo(BeNil())
 				Expect(dstChunk).NotTo(BeNil())
 				Expect(srcChunk.Path()).To(BeARegularFile())

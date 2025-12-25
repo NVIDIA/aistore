@@ -962,8 +962,10 @@ var _ = Describe("LOM", func() {
 
 				// Verify all chunks exist and have correct content
 				for i := 1; i <= srcUfest.Count(); i++ {
-					srcChunk := srcUfest.GetChunk(i, false)
-					dstChunk := dstUfest.GetChunk(i, false)
+					srcChunk, err := srcUfest.GetChunk(i)
+					Expect(err).NotTo(HaveOccurred())
+					dstChunk, err := dstUfest.GetChunk(i)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(srcChunk).NotTo(BeNil())
 					Expect(dstChunk).NotTo(BeNil())
 

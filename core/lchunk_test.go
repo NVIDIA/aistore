@@ -116,7 +116,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify chunk was added through public interface
-			retrievedChunk := manifest.GetChunk(1, false)
+			retrievedChunk, err := manifest.GetChunk(1)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(retrievedChunk).NotTo(BeNil())
 			Expect(retrievedChunk.Path()).To(Equal(chunk.Path()))
 			Expect(retrievedChunk.Size()).To(Equal(chunkSize))
@@ -144,7 +145,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify all chunks are accessible
 			for _, c := range chunks {
-				retrievedChunk := manifest.GetChunk(int(c.num), false)
+				retrievedChunk, err := manifest.GetChunk(int(c.num))
+				Expect(err).NotTo(HaveOccurred())
 				Expect(retrievedChunk).NotTo(BeNil())
 				Expect(retrievedChunk.Size()).To(Equal(c.size))
 			}
@@ -170,9 +172,12 @@ var _ = Describe("Ufest Core Functionality", func() {
 			}
 
 			// Verify chunks are retrievable by number
-			chunk1 := manifest.GetChunk(1, false)
-			chunk2 := manifest.GetChunk(2, false)
-			chunk3 := manifest.GetChunk(3, false)
+			chunk1, err := manifest.GetChunk(1)
+			Expect(err).NotTo(HaveOccurred())
+			chunk2, err := manifest.GetChunk(2)
+			Expect(err).NotTo(HaveOccurred())
+			chunk3, err := manifest.GetChunk(3)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(chunk1).NotTo(BeNil())
 			Expect(chunk2).NotTo(BeNil())
@@ -197,7 +202,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify replacement
-			retrievedChunk := manifest.GetChunk(1, false)
+			retrievedChunk, err := manifest.GetChunk(1)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(retrievedChunk).NotTo(BeNil())
 			Expect(retrievedChunk.Path()).To(Equal(replacementChunk.Path()))
 			Expect(retrievedChunk.Size()).To(Equal(int64(2 * cos.MiB)))
@@ -235,7 +241,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 
 			// Verify all chunks were added
 			for i := 1; i <= numWorkers; i++ {
-				chunk := manifest.GetChunk(i, false)
+				chunk, err := manifest.GetChunk(i)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(chunk).NotTo(BeNil())
 				Expect(chunk.Num()).To(Equal(uint16(i)))
 			}
@@ -264,7 +271,8 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should retrieve existing chunks", func() {
-			chunk := manifest.GetChunk(2, false)
+			chunk, err := manifest.GetChunk(2)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(chunk).NotTo(BeNil())
 			Expect(chunk.Num()).To(Equal(uint16(2)))
 
@@ -274,18 +282,9 @@ var _ = Describe("Ufest Core Functionality", func() {
 		})
 
 		It("should return nil for non-existent chunks", func() {
-			chunk := manifest.GetChunk(99, false)
+			chunk, err := manifest.GetChunk(99)
+			Expect(err).To(HaveOccurred())
 			Expect(chunk).To(BeNil())
-		})
-
-		It("should respect locking parameter", func() {
-			// Test both locked and unlocked access
-			chunk1 := manifest.GetChunk(1, false) // unlocked
-			chunk2 := manifest.GetChunk(1, true)  // locked
-
-			Expect(chunk1).NotTo(BeNil())
-			Expect(chunk2).NotTo(BeNil())
-			Expect(chunk1.Num()).To(Equal(chunk2.Num()))
 		})
 	})
 
@@ -483,8 +482,10 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(loaded.Count()).To(Equal(len(sizes)))
 			Expect(loaded.Size()).To(Equal(u.Size()))
 			for i := 1; i <= len(sizes); i++ {
-				oc := u.GetChunk(i, false)
-				lc := loaded.GetChunk(i, false)
+				oc, err := u.GetChunk(i)
+				Expect(err).NotTo(HaveOccurred())
+				lc, err := loaded.GetChunk(i)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(lc).NotTo(BeNil())
 				Expect(lc.Num()).To(Equal(oc.Num()))
 				Expect(lc.Size()).To(Equal(oc.Size()))
@@ -582,29 +583,6 @@ var _ = Describe("Ufest Core Functionality", func() {
 				"expected ErrLmetaCorrupted or ErrBadCksum for corrupted compressed data")
 		})
 
-	})
-
-	Describe("Locking Behavior", func() {
-		It("should provide proper locking mechanisms", func() {
-			testObjectName := "test-objects/lock-test.bin"
-			localFQN := mix.MakePathFQN(&localBck, fs.ObjCT, testObjectName)
-			lom := newBasicLom(localFQN, cos.MiB)
-			manifest, err := core.NewUfest("test-lock-123", lom, false)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Should be able to use locked operations
-			chunk, err := manifest.NewChunk(1, lom)
-			Expect(err).NotTo(HaveOccurred())
-			chunk.SetCksum(cos.NewCksum(cos.ChecksumOneXxh, "badc0ffee0ddf00d"))
-			err = manifest.Add(chunk, cos.MiB, 1)
-			Expect(err).NotTo(HaveOccurred())
-
-			manifest.Lock()
-			retrievedChunk := manifest.GetChunk(1, true /*locked*/)
-			manifest.Unlock()
-
-			Expect(retrievedChunk).NotTo(BeNil())
-		})
 	})
 
 	Describe("Validation Tests", func() {

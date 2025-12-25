@@ -330,26 +330,15 @@ ret:
 func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
 	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
 
-	// for chunked objects, use Copy2FQN which properly handles chunks
 	if lom.IsChunked() {
 		u, err := core.NewUfest("", lom, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Ufest: %w", err)
 		}
-
 		if err := u.LoadCompleted(lom); err != nil {
-			nlog.Warningf("chunked object %s has inaccessible chunks, skipping relocation: %v", lom.Cname(), err)
 			return nil, err
 		}
-
-		hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
-		hlom, err = lom.Copy2FQN(hrwFQN, buf)
-		if err != nil {
-			return nil, err
-		}
-		// hlom is already loaded by Copy2FQN
-		debug.Assert(hlom.Mountpath().Path == mi.Path)
-		return hlom, nil
+		return u.Relocate(mi, buf)
 	}
 
 	// regular objects use the regular Copy method

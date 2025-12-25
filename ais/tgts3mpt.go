@@ -317,11 +317,8 @@ func (t *target) getPartMptS3(w http.ResponseWriter, r *http.Request, bck *meta.
 	}
 
 	// get specific chunk
-	manifest.Lock()
-	chunk := manifest.GetChunk(int(partNum), true)
-	manifest.Unlock()
-	if chunk == nil {
-		err := fmt.Errorf("part %d not found", partNum)
+	chunk, err := manifest.GetChunk(int(partNum))
+	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}

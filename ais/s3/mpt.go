@@ -74,7 +74,10 @@ func ListParts(manifest *core.Ufest) (parts []types.CompletedPart, ecode int, er
 	manifest.Lock()
 	parts = make([]types.CompletedPart, 0, manifest.Count())
 	for i := range manifest.Count() {
-		c := manifest.GetChunk(i+1, true)
+		c, err := manifest.GetChunk(i + 1)
+		if err != nil {
+			return nil, http.StatusNotFound, err
+		}
 		etag := c.ETag
 		if etag == "" {
 			if c.MD5 != nil {

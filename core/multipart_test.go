@@ -165,6 +165,9 @@ var _ = Describe("MPU-UfestRead", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ufest.Completed()).To(BeTrue())
 
+			err = ufest.ValidateChunkLocations(true /*completed*/)
+			Expect(err).NotTo(HaveOccurred(), "invalid chunk location(s)")
+
 			// Create chunk reader
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -314,6 +317,9 @@ var _ = Describe("MPU-UfestRead", func() {
 
 			err = lom.CompleteUfest(ufest, false)
 			Expect(err).NotTo(HaveOccurred())
+
+			err = ufest.ValidateChunkLocations(true /*completed*/)
+			Expect(err).NotTo(HaveOccurred(), "invalid chunk location(s)")
 
 			reader, err := ufest.NewReader()
 			Expect(err).NotTo(HaveOccurred())
@@ -510,7 +516,8 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		for i := range numParts {
 			expectedPartNum := i + 1
-			actualChunk := manifest.GetChunk(expectedPartNum, true /*locked*/)
+			actualChunk, err := manifest.GetChunk(expectedPartNum)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(actualChunk).NotTo(BeNil(), "Part %d should exist", expectedPartNum)
 			Expect(int(actualChunk.Num())).To(Equal(expectedPartNum),
 				"Part should have correct sequential number")
@@ -518,6 +525,12 @@ var _ = Describe("MPU-UfestRead", func() {
 		}
 
 		manifest.Unlock()
+
+		err = manifest.Check(false /*completed*/)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = manifest.ValidateChunkLocations(false /*completed*/)
+		Expect(err).NotTo(HaveOccurred(), "invalid chunk location(s)")
 
 		By("Step 4: Compute whole-object checksum (production lines 378-395)")
 		wholeCksum := cos.NewCksumHash(cos.ChecksumMD5) // Local bucket uses MD5
@@ -547,6 +560,12 @@ var _ = Describe("MPU-UfestRead", func() {
 		By("Step 7: Verify post-completion state")
 		Expect(manifest.Completed()).To(BeTrue(), "Manifest should be marked completed")
 		Expect(lom.IsChunked()).To(BeTrue(), "LOM should be marked as chunked")
+
+		err = manifest.Check(true /*completed*/)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = manifest.ValidateChunkLocations(true /*completed*/)
+		Expect(err).NotTo(HaveOccurred(), "invalid chunk location(s)")
 
 		// check LOM checksum
 		lomCksum := lom.Checksum()

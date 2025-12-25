@@ -144,8 +144,7 @@ type (
 )
 
 var (
-	errNoChunks   = errors.New("no chunks")
-	errNoChunkOne = errors.New("no chunk #1")
+	errNoChunks = errors.New("no chunks")
 )
 
 ////////////
@@ -210,8 +209,8 @@ func _nolom(lom *LOM) error {
 }
 
 // construct a new chunk and its pathname
-// - `num` is not an index (must start from 1)
-// - chunk #1 stays on the object's mountpath
+// - arg `num` is chunk.num (starts from 1)
+// - chunk #1 stays on the object's mountpath - see chunk1Path()
 // - other chunks get HRW distributed
 func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 	if err := _nolom(u.lom); err != nil {
@@ -231,17 +230,21 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 		return nil, fmt.Errorf("%s: chunk number (%d) exceeds the maximum allowed (%d)", u._utag(lom.Cname()), num, MaxChunkCount)
 	}
 
-	snum := fmt.Sprintf(fmtChunkNum, num)
-
 	// note first chunk's location
 	if num == 1 {
 		return &Uchunk{
-			path: lom.GenFQN(fs.ChunkCT, u.id, snum),
-			num:  uint16(num),
+			path: u.chunk1Path(lom, false /*completed*/),
+			num:  1,
 		}, nil
 	}
 
 	// all the rest chunks
+	return u.newChunk2N(num, lom)
+}
+
+// (note fs.Hrw)
+func (u *Ufest) newChunk2N(num int, lom *LOM) (*Uchunk, error) {
+	snum := fmt.Sprintf(fmtChunkNum, num)
 	hrwkey := u.id + snum
 	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(hrwkey))
 	if err != nil {
@@ -255,6 +258,7 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 	}, nil
 }
 
+// (when manifest may be shared: locking is caller's responsibility)
 func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	// validate
 	if err := _nolom(u.lom); err != nil {
@@ -272,20 +276,20 @@ func (u *Ufest) Add(c *Uchunk, size, num int64) error {
 	c.num = uint16(num)
 
 	u.mu.Lock()
-	defer u.mu.Unlock()
 
 	// add
 	err := u._add(c)
 	if err != nil {
+		u.mu.Unlock()
 		return err
 	}
-
 	// store
 	if n := lom.Bprops().Chunks.CheckpointEvery; n > 0 {
 		if u.count%uint16(n) == 0 {
 			err = u.StorePartial(lom, true)
 		}
 	}
+	u.mu.Unlock()
 	return err
 }
 
@@ -322,21 +326,26 @@ func (u *Ufest) _add(c *Uchunk) error {
 	return nil
 }
 
-func (u *Ufest) GetChunk(num int, locked bool) *Uchunk {
-	if !locked {
-		u.mu.Lock()
-		defer u.mu.Unlock()
-	}
+// (when manifest may be shared: locking is caller's responsibility)
+func (u *Ufest) GetChunk(num int) (*Uchunk, error) {
 	debug.Assert(num > 0, num)
-	if num <= len(u.chunks) && u.chunks[num-1].num == uint16(num) {
-		return &u.chunks[num-1]
+	l := len(u.chunks)
+	if l == 0 {
+		return nil, errNoChunks
 	}
-	for i := range u.chunks {
-		if u.chunks[i].num == uint16(num) {
-			return &u.chunks[i]
+	if num <= l {
+		c := &u.chunks[num-1]
+		if c.num == uint16(num) {
+			return c, nil
 		}
 	}
-	return nil
+	for i := range l {
+		c := &u.chunks[i]
+		if c.num == uint16(num) {
+			return c, nil
+		}
+	}
+	return nil, cos.NewErrNotFound(u.lom, "chunk "+strconv.Itoa(num))
 }
 
 func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
@@ -345,13 +354,8 @@ func (u *Ufest) removeChunks(lom *LOM, exceptFirst bool) {
 		skip uint16
 	)
 	if exceptFirst {
-		c, err := u.firstChunk()
-		if err != nil {
-			nlog.ErrorDepth(1, u._utag(lom.Cname()), err)
-			return
-		}
+		c := u.firstChunk()
 		skip = c.num
-		debug.Assert(c.num == 1) // validated by u.firstChunk()
 	}
 	for i := range u.chunks {
 		c := &u.chunks[i]
@@ -462,10 +466,16 @@ func (u *Ufest) load(completed bool) error {
 	if err := u.fread(csgl, completed); err != nil {
 		return u._errLoad(tag, u.lom.Cname(), err)
 	}
-	return u._load(csgl, tag)
+	if err := u._load(csgl); err != nil {
+		return u._errLoad(tag, u.lom.Cname(), err)
+	}
+	if err := u.Check(completed); err != nil {
+		return u._errLoad(tag, u.lom.Cname(), cmn.NewErrLmetaCorrupted(err))
+	}
+	return nil
 }
 
-func (u *Ufest) _load(csgl *memsys.SGL, tag string) error {
+func (u *Ufest) _load(csgl *memsys.SGL) error {
 	totalSize := csgl.Size()
 	if totalSize < int64(cos.SizeXXHash64) {
 		return fmt.Errorf("manifest too short: %d bytes", totalSize)
@@ -481,8 +491,7 @@ func (u *Ufest) _load(csgl *memsys.SGL, tag string) error {
 	h := onexxh.NewS64(cos.MLCG32)
 	err := u._decompress(io.TeeReader(compressedReader, h))
 	if err != nil {
-		e := fmt.Errorf("failed to load %s %s: %v", tag, u._utag(u.lom.Cname()), err)
-		return cmn.NewErrLmetaCorrupted(e)
+		return cmn.NewErrLmetaCorrupted(err)
 	}
 
 	return u._validate(csgl, h, givenID)
@@ -504,8 +513,6 @@ func (u *Ufest) _decompress(compressedReader io.Reader) error {
 		return fmt.Errorf("failed to unpack: %w", err)
 	}
 
-	debug.Assert(u.validNums() == nil)
-
 	return nil
 }
 
@@ -524,8 +531,6 @@ func (u *Ufest) _validate(csgl io.Reader, h *onexxh.XXHash64, givenID string) er
 	if expectedChecksum != actualChecksum {
 		return cos.NewErrMetaCksum(expectedChecksum, actualChecksum, utag)
 	}
-
-	debug.Assert(u.validNums() == nil)
 
 	if givenID != "" && givenID != u.id {
 		return fmt.Errorf("loaded %s has different ID: given %q vs stored %q", u._utag(u.lom.Cname()), givenID, u.id)
@@ -557,13 +562,15 @@ func (u *Ufest) _rtag() string {
 	return "chunked content[" + cname + _atid + u.id + "]"
 }
 
-func (u *Ufest) storeCompleted(lom *LOM) error {
+func (u *Ufest) storeCompleted(lom *LOM, overrideCompleted bool) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
 	// validate
-	if err := u._errCompleted(lom); err != nil {
-		return err
+	if !overrideCompleted {
+		if err := u._errCompleted(lom); err != nil {
+			return err
+		}
 	}
 	if u.count == 0 || int(u.count) != len(u.chunks) {
 		return fmt.Errorf("%s: num %d vs %d", u._itag(lom.Cname()), u.count, len(u.chunks))
@@ -582,20 +589,17 @@ func (u *Ufest) storeCompleted(lom *LOM) error {
 		return fmt.Errorf("%s: total size mismatch (%d vs %d)", u._itag(lom.Cname()), total, lsize)
 	}
 
-	if err := u.validNums(); err != nil {
+	if err := u.Check(true /*completed*/); err != nil {
 		return fmt.Errorf("%s: failed to store, err: %v", u._itag(lom.Cname()), err)
 	}
 
 	// fixup chunk #1
-	c, e := u.firstChunk()
-	if e != nil {
-		return e
-	}
+	c := u.firstChunk()
 	orig := c.path
 	if err := lom.RenameFinalize(c.path); err != nil {
 		return err
 	}
-	c.path = lom.FQN
+	c.path = u.chunk1Path(lom, true /*completed*/)
 
 	// store
 	u.flags |= flCompleted
@@ -622,6 +626,7 @@ func (u *Ufest) storeCompleted(lom *LOM) error {
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
 	} else {
 		c.path = orig
+		debug.AssertNoErr(u.ValidateChunkLocations(true))
 	}
 	return err
 }
@@ -629,24 +634,6 @@ func (u *Ufest) storeCompleted(lom *LOM) error {
 func (u *Ufest) _errCompleted(lom *LOM) error {
 	if u.Completed() {
 		return errors.New(u._itag(lom.Cname()) + ": already completed")
-	}
-	return nil
-}
-
-func (u *Ufest) validNums() error {
-	if u.count == 0 {
-		return errNoChunks
-	}
-	for i := range u.chunks {
-		c := &u.chunks[i]
-		if c.num <= 0 || c.num > u.count {
-			return fmt.Errorf("chunk %d has invalid number (%d/%d)", i, c.num, u.count)
-		}
-		for j := range i {
-			if u.chunks[j].num == c.num {
-				return fmt.Errorf("duplicate chunk number %d at positions %d and %d", c.num, i, j)
-			}
-		}
 	}
 	return nil
 }
@@ -662,8 +649,8 @@ func (u *Ufest) StorePartial(lom *LOM, locked bool) error {
 	if err := cos.ValidateManifestID(u.id); err != nil {
 		return fmt.Errorf("partial %s: %v", u._utag(lom.Cname()), err)
 	}
-	if u.count == 0 {
-		return fmt.Errorf("partial %s must have at least one chunk", u._utag(lom.Cname()))
+	if err := u.Check(false /*completed*/); err != nil {
+		return fmt.Errorf("%s: failed to store partial, err: %v", u._itag(lom.Cname()), err)
 	}
 
 	u.flags &^= flCompleted // always incomplete here
@@ -688,9 +675,7 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
 		return fmt.Errorf("cannot store %s: %v", u._utag(lom.Cname()), err)
 	}
 
-	debug.Assert(u.validNums() == nil)
-
-	// Calculate checksum WHILE compressing using MultiWriter
+	// checksum while compressing
 	h := onexxh.NewS64(cos.MLCG32)
 	mw := io.MultiWriter(sgl, h)
 	zw := lz4.NewWriter(mw)
@@ -710,32 +695,91 @@ func (u *Ufest) _store(lom *LOM, sgl *memsys.SGL, completed bool) error {
 	return u.fwrite(lom, sgl, completed)
 }
 
-// note that Add() keeps chunks sorted by their respective numbers,
-// so u.chunks[0] is the lowest present at any time
-func (u *Ufest) firstChunk() (*Uchunk, error) {
-	debug.AssertFunc(func() bool {
-		for i := 1; i < len(u.chunks); i++ {
-			if u.chunks[i-1].num > u.chunks[i].num {
-				return false
-			}
-		}
-		return true
-	})
+//
+// chunk validations
+//
 
-	if err := u.Check(); err != nil {
-		return nil, err
-	}
-	return &u.chunks[0], nil
-}
-
-func (u *Ufest) Check() error {
+func (u *Ufest) Check(completed bool) error {
 	if len(u.chunks) == 0 {
 		return errNoChunks
 	}
-	if u.chunks[0].num != 1 {
-		return errNoChunkOne
+
+	// (same as target's MPU complete() --> _checkParts())
+	if completed {
+		if len(u.chunks) != int(u.count) {
+			return fmt.Errorf("chunk counting error: count=%d vs len=%d", u.count, len(u.chunks))
+		}
+		for i := range u.count {
+			c := &u.chunks[i]
+			if c.num != i+1 {
+				return fmt.Errorf("chunk at (%d) has invalid number %d (count=%d)", i, c.num, u.count)
+			}
+		}
+		return nil
+	}
+
+	for i := 1; i < len(u.chunks); i++ {
+		a, b := &u.chunks[i-1], &u.chunks[i]
+		if a.num == 0 || a.num > MaxChunkCount {
+			return fmt.Errorf("chunk at (%d) has invalid number %d", i, a.num)
+		}
+		if a.num >= b.num {
+			return fmt.Errorf("chunks are not ascending in numbers: (%d: %d) vs (%d: %d)",
+				i-1, a.num, i, b.num)
+		}
 	}
 	return nil
+}
+
+// note: used only in tests and asserts
+func (u *Ufest) ValidateChunkLocations(completed bool) error {
+	l := len(u.chunks)
+	if l == 0 {
+		return errNoChunks
+	}
+	if completed && !u.Completed() {
+		return errors.New("expecting completed manifest")
+	}
+	for i := range l {
+		num := i + 1
+		c, err := u.GetChunk(num)
+		if err != nil {
+			return err
+		}
+		var exp string
+		if c == u.firstChunk() {
+			exp = u.chunk1Path(u.lom, completed)
+		} else {
+			b, err := u.newChunk2N(num, u.lom)
+			if err != nil {
+				return err
+			}
+			exp = b.path
+		}
+		if c.path != exp {
+			return fmt.Errorf("chunk at (%d) has invalid location: expecting %q, got %q", i, exp, c.path)
+		}
+	}
+	return nil
+}
+
+//
+// helpers for: first chunk and chunk #1
+//
+
+// return the lowest currently present (note: u.Add() keeps sorted order)
+func (u *Ufest) firstChunk() *Uchunk {
+	debug.Assert(len(u.chunks) > 0)
+	return &u.chunks[0]
+}
+
+// return the path chunk #1 must have
+func (u *Ufest) chunk1Path(lom *LOM, completed bool) string {
+	if completed {
+		return lom.FQN
+	}
+	snum := fmt.Sprintf(fmtChunkNum, 1)
+	return lom.GenFQN(fs.ChunkCT, u.id, snum)
 }
 
 //
@@ -844,15 +888,12 @@ func (u *Ufest) ETagS3() (string, error) {
 // TODO: avoid the extra pass by accumulating during AddPart/StorePartial or by caching a tree-hash
 // see also: s3/mpt for ListParts
 func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
-	debug.Assert(u.count > 0 && int(u.count) == len(u.chunks), "invalid chunks num ", u.count, " vs ", len(u.chunks))
-
-	c, err := u.firstChunk()
-	if err != nil {
-		return err
-	}
-
-	var written int64
-	buf, slab := g.pmm.AllocSize(c.size)
+	debug.AssertNoErr(u.Check(false /*completed*/)) // minimal assert; caller's responsible for more
+	var (
+		written   int64
+		c         = u.firstChunk()
+		buf, slab = g.pmm.AllocSize(c.size)
+	)
 	defer slab.Free(buf)
 
 	for i := range u.count {
@@ -1147,8 +1188,8 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 		}
 	}
 
-	lom.SetSize(u.size) // note: storeCompleted still performs non-debug validation
-	if err := u.storeCompleted(lom); err != nil {
+	lom.SetSize(u.size)
+	if err := u.storeCompleted(lom, false /*override*/); err != nil {
 		u.Abort(lom)
 		return err
 	}
@@ -1364,4 +1405,203 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 		err = io.EOF
 	}
 	return n, err
+}
+
+// Relocate a chunked object to its canonical location(s) without making extra copies;
+// must be called under LOM write-lock.
+// Relocate is a single-threaded operation: the caller must NOT share this Ufest instance
+// across goroutines.
+// See also:
+// - lom.Copy2FQN()
+
+type (
+	// work
+	moveRec struct {
+		src     string
+		dst     string
+		dstWork string
+		chunk   *Uchunk
+	}
+	moveRecs []moveRec
+	// result
+	moveRes struct {
+		err        error
+		oldPaths   []string
+		cnt        int
+		firstMoved bool
+	}
+)
+
+func (recs moveRecs) cleanup() {
+	for i := range recs {
+		_ = cos.RemoveFile(recs[i].dstWork)
+	}
+}
+
+func (u *Ufest) Relocate(hrwMi *fs.Mountpath, buf []byte) (*LOM, error) {
+	lom := u.lom
+
+	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
+	debug.Assert(lom.IsChunked())
+
+	if err := u.Check(true /*completed*/); err != nil {
+		return nil, err
+	}
+
+	var (
+		oldManifestFQN = lom.GenFQN(fs.ChunkMetaCT)
+		dstObjFQN      = hrwMi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+	)
+
+	res := u.reloc(hrwMi, dstObjFQN, buf)
+	if res.err != nil {
+		return nil, res.err
+	}
+
+	// nothing to do
+	if !res.firstMoved && res.cnt == 0 {
+		return lom, nil
+	}
+
+	// only chunks 2..N moved: re-persist manifest with updated paths
+	if !res.firstMoved {
+		if err := u.storeCompleted(lom, true /*override*/); err != nil {
+			return nil, err
+		}
+		u.relocCleanup(res.oldPaths)
+		return lom, nil
+	}
+
+	// chunk #1 moved: initialize hlom at canonical location
+	hlom := &LOM{}
+	if err := hlom.InitFQN(dstObjFQN, lom.Bucket()); err != nil {
+		return nil, err
+	}
+	debug.Assert(hlom.Mountpath().Path == hrwMi.Path, hlom.Mountpath().Path, " vs ", hrwMi.Path)
+	hlom.CopyAttrs(lom, false /*skip checksum*/)
+
+	// persist completed manifest at new location
+	u.lom = hlom // ostensibly, to pass assert(validate-locations)
+	if err := u.storeCompleted(hlom, true /*override*/); err != nil {
+		return nil, err
+	}
+
+	// persist parent LOM
+	hlom.SetSize(u.size)
+	hlom.setlmfl(lmflChunk)
+	if err := hlom.PersistMain(true /*chunked*/); err != nil {
+		return nil, err
+	}
+
+	// cleanup (old chunks + old manifest)
+	u.relocCleanup(res.oldPaths)
+	if err := cos.RemoveFile(oldManifestFQN); err != nil {
+		nlog.Warningf("%s: failed to remove old manifest %q: %v", lom.Cname(), oldManifestFQN, err)
+	}
+
+	return hlom, nil
+}
+
+func (u *Ufest) reloc(hrwMi *fs.Mountpath, dstObjFQN string, buf []byte) moveRes {
+	var recs = make(moveRecs, 0, u.count)
+
+	// 1) build recs
+	for i := range u.chunks {
+		chunk := &u.chunks[i]
+
+		// resolve current chunk path => mountpath
+		var parsed fs.ParsedFQN
+		if err := parsed.Init(chunk.path); err != nil {
+			return moveRes{err: err}
+		}
+
+		// compute destination path
+		var dst string
+		switch chunk.num {
+		case 1:
+			debug.Assert(i == 0, "expecting first chunk at index 0")
+			if parsed.Mountpath.Path == hrwMi.Path {
+				if chunk.path != dstObjFQN {
+					// (unlikely)
+					err := fmt.Errorf("%s: chunk #1 path mismatch: have %q, want %q", u.lom.Cname(), chunk.path, dstObjFQN)
+					debug.AssertNoErr(err)
+					return moveRes{err: err}
+				}
+				continue // nothing to do
+			}
+			dst = dstObjFQN
+		default:
+			c, err := u.newChunk2N(int(chunk.num), u.lom)
+			if err != nil {
+				return moveRes{err: err}
+			}
+			if c.path == chunk.path {
+				continue // nothing to do
+			}
+			dst = c.path
+		}
+
+		dstWork := dst + ".reloc." + cos.GenTie()
+		recs = append(recs, moveRec{src: chunk.path, dst: dst, dstWork: dstWork, chunk: chunk})
+	}
+
+	if len(recs) == 0 {
+		return moveRes{} // nothing to do
+	}
+
+	// 2) copy all to dstWork; rollback on failure
+	for i := range recs {
+		rec := &recs[i]
+		if _, _, err := cos.CopyFile(rec.src, rec.dstWork, buf, cos.ChecksumNone); err != nil {
+			recs[:i].cleanup()
+			return moveRes{err: err}
+		}
+	}
+
+	// 3) finalize
+	for i := range recs {
+		rec := &recs[i]
+		_ = cos.RemoveFile(rec.dst)
+		if err := os.Rename(rec.dstWork, rec.dst); err != nil {
+			// rollback: remove already-published dst files + remaining work files
+			for k := range i {
+				if e := cos.RemoveFile(recs[k].dst); e != nil {
+					nlog.Warningln("rollback:", u.lom.Cname(), e)
+				}
+			}
+			recs[i:].cleanup()
+			return moveRes{err: err}
+		}
+	}
+
+	// 4) update in-memory chunk paths; collect old paths
+	var (
+		res    = moveRes{oldPaths: make([]string, 0, len(recs))}
+		except = make(cos.StrSet, len(recs))
+	)
+	for i := range recs {
+		except.Set(recs[i].dst) // (not to delete)
+	}
+	for i := range recs {
+		rec := &recs[i]
+		debug.Assert(rec.src != rec.dst)
+		if !except.Contains(rec.src) {
+			res.oldPaths = append(res.oldPaths, rec.src)
+		}
+
+		rec.chunk.path = rec.dst
+		if rec.chunk.num == 1 {
+			res.firstMoved = true
+		}
+	}
+	res.cnt = len(recs)
+	return res
+}
+
+func (*Ufest) relocCleanup(oldPaths []string) {
+	for _, p := range oldPaths {
+		if err := cos.RemoveFile(p); err != nil {
+			nlog.Warningf("reloc cleanup: failed to remove %q: %v", p, err)
+		}
+	}
 }

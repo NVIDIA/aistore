@@ -45,6 +45,7 @@ func TestDummy(t *testing.T) {
 	newConfig(tmpDir, numMpaths)
 
 	_ = newLOM(t, bcks[0], objName, 123)
+	_ = newChunkedLOM(t, bcks[0], objName, 20, 123)
 }
 
 //
@@ -85,6 +86,7 @@ func newBBB(buckets ...string) (meta.Bowner, []*meta.Bck) {
 }
 
 func newLOM(t *testing.T, bck *meta.Bck, objName string, size int64) *core.LOM {
+	t.Helper()
 	var (
 		wfh    *os.File
 		reader readers.Reader
@@ -115,5 +117,39 @@ ret:
 	lom.Lock(true /*exclusive*/)
 	lom.PersistMain(false /*chunked*/)
 	lom.Unlock(true)
+	return lom
+}
+
+func newChunkedLOM(t *testing.T, bck *meta.Bck, objName string, numChunks int, sizeChunk int64) *core.LOM {
+	t.Helper()
+	lom := &core.LOM{ObjName: objName}
+	err := lom.InitBck(bck)
+	tassert.CheckFatal(t, err)
+
+	totalSize := int64(numChunks) * sizeChunk
+	lom.SetSize(totalSize)
+
+	// Create Ufest for chunked upload
+	ufest, err := core.NewUfest("", lom, false)
+	tassert.CheckFatal(t, err)
+
+	// Create chunks
+	for i := 1; i <= numChunks; i++ {
+		chunk, err := ufest.NewChunk(i, lom)
+		tassert.CheckFatal(t, err)
+
+		createTestFile(t, bck, chunk.Path(), sizeChunk)
+
+		err = ufest.Add(chunk, sizeChunk, int64(i))
+		tassert.CheckFatal(t, err)
+	}
+
+	err = lom.CompleteUfest(ufest, false)
+	tassert.CheckFatal(t, err)
+
+	err = lom.Load(false, false)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatal(t, lom.IsChunked(), "expecting lom _chunked_ upon loading")
 	return lom
 }

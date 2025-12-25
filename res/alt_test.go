@@ -104,6 +104,93 @@ func TestResilver_DisableEnable(t *testing.T) {
 	assertAllAtCurrentHRW(t, bck, objs)
 }
 
+func TestUfestRelocate_ChunkedOne(t *testing.T) {
+	const (
+		numMpaths = 3
+		bucket    = "ut-relocate-chunked"
+		objName   = "a/b/c/chunked-obj"
+		numChunks = 10
+		chunkSize = int64(16 * cos.KiB)
+	)
+
+	// init target + fs
+	bowner, bck := newBownerAndBck(bucket)
+	target := mock.NewTarget(bowner)
+	tmpDir := t.TempDir()
+
+	mpaths := make([]string, 0, numMpaths)
+	for i := range numMpaths {
+		mpaths = append(mpaths, filepath.Join(tmpDir, fmt.Sprintf("mpath-%d", i)))
+	}
+
+	initFS(t, mpaths, target.SID())
+	_ = initConfig(t, tmpDir, numMpaths)
+
+	// compute HRW mountpath for the object
+	uname := bck.MakeUname(objName)
+	hrwMi, _, err := fs.Hrw(uname)
+	tassert.CheckFatal(t, err)
+
+	// pick a different mountpath to intentionally misplace the object (chunk #1)
+	srcMi := pickDifferentMpath(t, hrwMi.Path)
+	tassert.Fatalf(t, srcMi != nil && srcMi.Path != hrwMi.Path, "setup failed: srcMi == hrwMi (%v)", srcMi)
+
+	// create a completed chunked object on the wrong mountpath
+	lom := createChunkedLOMAt(t, bck, srcMi, objName, numChunks, chunkSize)
+
+	// load completed manifest
+	lom.Lock(true) // --------------------------------- locked
+	u, err := core.NewUfest("", lom, true)
+	tassert.CheckFatal(t, err)
+	err = u.LoadCompleted(lom)
+	tassert.CheckFatal(t, err)
+
+	// capture old manifest fqn
+	// (should be removed after successful relocation when chunk #1 moves)
+	oldManifestFQN := lom.GenFQN(fs.ChunkMetaCT)
+
+	// relocate
+	buf := make([]byte, 128*cos.KiB)
+	hlom, err := u.Relocate(hrwMi, buf)
+	lom.Unlock(true) // --------------------------------- unlocked
+
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, hlom != nil, "expected non-nil hlom")
+
+	// new canonical FQN for chunk #1
+	dstObjFQN := hrwMi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
+
+	// assert returned LOM points to HRW
+	tassert.Fatalf(t, hlom.FQN == dstObjFQN, "hlom fqn mismatch: have %q, want %q", hlom.FQN, dstObjFQN)
+	tassert.Fatalf(t, hlom.Mountpath().Path == hrwMi.Path, "hlom mountpath mismatch: have %q, want %q", hlom.Mountpath().Path, hrwMi.Path)
+
+	// chunk #1 exists at HRW
+	tassert.CheckFatal(t, cos.Stat(dstObjFQN))
+
+	// old chunk #1 path should be gone (moved, not copied)
+	oldObjFQN := srcMi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
+	err = cos.Stat(oldObjFQN)
+	tassert.Fatalf(t, err != nil, "expected old object fqn to be gone: %q", oldObjFQN)
+
+	// completed manifest exists at new location
+	newManifestFQN := hlom.GenFQN(fs.ChunkMetaCT)
+	tassert.CheckFatal(t, cos.Stat(newManifestFQN))
+
+	// old completed manifest removed (best-effort; expect not-exist on success path)
+	err = cos.Stat(oldManifestFQN)
+	tassert.Fatalf(t, err != nil, "expected old manifest to be removed: %q", oldManifestFQN)
+
+	// re-validate relocated (chunked) hlom
+	hlom.Lock(true) // --------------------------------- locked
+	u, err = core.NewUfest("", hlom, true)
+	tassert.CheckFatal(t, err)
+	err = u.LoadCompleted(hlom)
+	tassert.CheckFatal(t, err)
+	err = u.ValidateChunkLocations(true /*completed*/)
+	tassert.CheckFatal(t, err)
+	hlom.Unlock(true) // --------------------------------- unlocked
+}
+
 //
 // Resilver runner
 //
@@ -146,8 +233,19 @@ func assertAllAtCurrentHRW(t *testing.T, bck *meta.Bck, objNames []string) {
 }
 
 //
-// Object creation (plain objects, persisted metadata)
+// Object creation (plain and chunked)
 //
+
+func createTestFile(t *testing.T, bck *meta.Bck, fqn string, size int64) {
+	wfh, err := cos.CreateFile(fqn)
+	tassert.CheckFatal(t, err)
+	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: bck.CksumConf().Type})
+	tassert.CheckFatal(t, err)
+	_, err = io.Copy(wfh, r)
+	_ = r.Close()
+	tassert.CheckFatal(t, err)
+	_ = wfh.Close()
+}
 
 func createPlainObjectAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName string, size int64) {
 	t.Helper()
@@ -166,16 +264,9 @@ func createPlainObjectAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName 
 	defer lom.Unlock(true)
 
 	// write payload
-	wfh, err := cos.CreateFile(fqn)
-	tassert.CheckFatal(t, err)
 	if size > 0 {
-		r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: bck.CksumConf().Type})
-		tassert.CheckFatal(t, err)
-		_, err = io.Copy(wfh, r)
-		_ = r.Close()
-		tassert.CheckFatal(t, err)
+		createTestFile(t, bck, fqn, size)
 	}
-	_ = wfh.Close()
 
 	// persist metadata
 	lom.SetSize(size)
@@ -183,6 +274,44 @@ func createPlainObjectAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName 
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	err = lom.PersistMain(false /*chunked*/)
 	tassert.CheckFatal(t, err)
+}
+
+func createChunkedLOMAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName string, numChunks int, sizeChunk int64) *core.LOM {
+	t.Helper()
+
+	fqn := mi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
+	err := cos.CreateDir(filepath.Dir(fqn))
+	tassert.CheckFatal(t, err)
+
+	lom := &core.LOM{ObjName: objName}
+	err = lom.InitFQN(fqn, bck.Bucket())
+	tassert.CheckFatal(t, err)
+
+	totalSize := int64(numChunks) * sizeChunk
+	lom.SetSize(totalSize)
+
+	ufest, err := core.NewUfest("", lom, false)
+	tassert.CheckFatal(t, err)
+
+	for i := 1; i <= numChunks; i++ {
+		chunk, err := ufest.NewChunk(i, lom)
+		tassert.CheckFatal(t, err)
+
+		createTestFile(t, bck, chunk.Path(), sizeChunk)
+
+		err = ufest.Add(chunk, sizeChunk, int64(i))
+		tassert.CheckFatal(t, err)
+	}
+
+	err = lom.CompleteUfest(ufest, false)
+	tassert.CheckFatal(t, err)
+
+	lom.UncacheUnless()
+	err = lom.Load(false, false)
+	tassert.CheckFatal(t, err)
+
+	tassert.Fatal(t, lom.IsChunked(), "expecting lom _chunked_ upon loading")
+	return lom
 }
 
 //
