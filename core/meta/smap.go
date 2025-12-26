@@ -470,6 +470,26 @@ func (m *Smap) HasActiveTs(except string) bool {
 	return false
 }
 
+func (m *Smap) SameTargets(other *Smap) bool {
+	for tid, t := range m.Tmap {
+		if t.InMaintOrDecomm() {
+			continue
+		}
+		if !other.Tmap.Contains(tid) {
+			return false
+		}
+	}
+	for tid, t := range other.Tmap {
+		if t.InMaintOrDecomm() {
+			continue
+		}
+		if !m.Tmap.Contains(tid) {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *Smap) HasPeersToRebalance(except string) bool {
 	for tid, t := range m.Tmap {
 		if tid == except {

@@ -400,11 +400,10 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 
 	// prior to opening streams:
 	// not every change in Smap warants a different rebalance but this one (below) definitely does
+	// check for post-renew change
 	smap := core.T.Sowner().Get()
-
-	// TODO: same count is good but not enough
 	if smap.Version != rargs.smap.Version {
-		if smap.CountActiveTs() != rargs.smap.CountActiveTs() {
+		if !smap.SameTargets(rargs.smap) {
 			debug.Assert(smap.Version > rargs.smap.Version)
 			err := fmt.Errorf("%s post-renew change %s => %s", rargs.xreb, rargs.smap.StringEx(), smap.StringEx())
 			rargs.xreb.Abort(err)
@@ -413,7 +412,6 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 			nlog.Errorln(err)
 			return false
 		}
-		nlog.Warningln(rargs.logHdr, "post-renew change:", rargs.smap.StringEx(), "=>", smap.StringEx(), "- proceeding anyway")
 	}
 	reb.smap.Store(rargs.smap)
 
