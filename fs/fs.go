@@ -571,7 +571,7 @@ func New(fshc HC, num int) (blockDevs ios.BlockDevs) {
 	return blockDevs
 }
 
-// used only in tests
+// used only in tests (NOTE: mfs.hc remains nil)
 func TestNew(iostater ios.IOS) {
 	const num = 10
 	mfs = &MFS{fsIDs: make(map[cos.FsID]string, num)}

@@ -83,6 +83,9 @@ var all sync.Map // [mpath => ror]
 func NewFSHC(t disabler) (f *FSHC) { return &FSHC{t: t} }
 
 func (*FSHC) IsErr(err error) bool {
+	if cos.IsNotExist(err) {
+		return false
+	}
 	return cmn.IsErrGetCap(err) || cmn.IsErrMpathCheck(err) || cos.IsIOError(err)
 }
 
@@ -241,7 +244,11 @@ func _rw(mi *fs.Mountpath, fqn string, numFiles, fsize, maxerrs int) (etag strin
 	// 1. Read the fqn that caused the error, if defined and is a file.
 	if fqn != "" {
 		nlog.Infoln("1. read one failed fqn:", fqn)
-		if finfo, err := os.Stat(fqn); err == nil && !finfo.IsDir() {
+		if finfo, err := os.Stat(fqn); err != nil {
+			if !cos.IsNotExist(err) && cos.IsIOError(err) {
+				rerrs++ // not a read error; counting anyway
+			}
+		} else if !finfo.IsDir() {
 			numReads++
 			if err := _read(fqn); err != nil && !cos.IsNotExist(err) {
 				nlog.Errorln(fqn, "[", err, "]")

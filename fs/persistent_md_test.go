@@ -55,14 +55,14 @@ func TestMarkers(t *testing.T) {
 		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(fname.RebalanceMarker, mockst)
+	fs.RemoveMarker(fname.RebalanceMarker, mockst, false)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},
 		markerEntry{marker: fname.ResilverMarker, exists: true},
 	)
 
-	fs.RemoveMarker(fname.ResilverMarker, mockst)
+	fs.RemoveMarker(fname.ResilverMarker, mockst, false)
 
 	checkMarkersExist(t,
 		markerEntry{marker: fname.RebalanceMarker, exists: false},

@@ -283,8 +283,8 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		nlog.Infof("%s: nothing to do: %s, %s", logHdr, smap.StringEx(), bmd.StringEx())
 		reb.stages.stage.Store(rebStageDone)
 		reb.dm.UnregRecv()
-		fs.RemoveMarker(fname.RebalanceMarker, extArgs.Tstats)
-		fs.RemoveMarker(fname.NodeRestartedPrev, extArgs.Tstats)
+		fs.RemoveMarker(fname.RebalanceMarker, extArgs.Tstats, false /*stopping*/)
+		fs.RemoveMarker(fname.NodeRestartedPrev, extArgs.Tstats, false)
 		rargs.xreb.Finish()
 		return
 	}
@@ -380,22 +380,22 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 		return false
 	}
 	xctn := rns.Entry.Get()
-	rargs.xreb = xctn.(*xs.Rebalance)
-	if rargs.xreb.RebID() != rargs.id {
-		// (unlikely)
-		err := fmt.Errorf("FATAL: reb-id mismatch: %d != %d", rargs.xreb.RebID(), rargs.id)
-		debug.AssertNoErr(err)
+	xreb, ok := xctn.(*xs.Rebalance)
+	debug.Assert(ok)
+
+	reb.mu.Lock() // --------------------------------------------------------------------------
+
+	if xreb.RebID() != rargs.id {
+		reb.mu.Unlock()
+		err := fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
+		debug.AssertNoErr(err) // (unlikely)
 		nlog.Errorln(err)
 		return false
 	}
 
-	extArgs.Notif.Xact = rargs.xreb
-	rargs.xreb.AddNotif(extArgs.Notif)
-
-	reb.mu.Lock() // ----------------------------------------
-
+	rargs.xreb = xreb
 	reb.stages.stage.Store(rebStageInit)
-	reb.setXact(rargs.xreb)
+	reb.setXact(xreb)
 	reb.id.Store(rargs.id)
 
 	// prior to opening streams:
@@ -405,12 +405,8 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	if smap.Version != rargs.smap.Version {
 		if !smap.SameTargets(rargs.smap) {
 			debug.Assert(smap.Version > rargs.smap.Version)
-			err := fmt.Errorf("%s post-renew change %s => %s", rargs.xreb, rargs.smap.StringEx(), smap.StringEx())
-			rargs.xreb.Abort(err)
-			reb.setXact(nil)
-			reb.mu.Unlock()
-			nlog.Errorln(err)
-			return false
+			err := fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
+			return reb.undoRenew(rargs, err)
 		}
 	}
 	reb.smap.Store(rargs.smap)
@@ -427,12 +423,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 			reb.dm = dm
 		}
 		if err := reb.beginStreams(rargs); err != nil {
-			rargs.xreb.Abort(err)
-			reb.setXact(nil)
-			reb.smap.Store(nil)
-			reb.mu.Unlock()
-			nlog.Errorln(err)
-			return false
+			return reb.undoRenew(rargs, err)
 		}
 	}
 
@@ -450,21 +441,28 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
 		err := cos.Ternary(fatalErr != nil, fatalErr, writeErr)
 		_, _ = reb.endStreams(err)
-		rargs.xreb.Abort(err)
-		reb.setXact(nil)
-		reb.smap.Store(nil)
-		reb.mu.Unlock()
-		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
-		return false
+		return reb.undoRenew(rargs, err)
 	}
 
 	// 5. ready - can receive objects
 	reb.stages.cleanup()
 
-	reb.mu.Unlock() // ----------------------------------------
+	reb.mu.Unlock() // --------------------------------------------------------------------------
 
-	nlog.Infoln(rargs.logHdr, "- running", rargs.xreb.String())
+	extArgs.Notif.Xact = xreb
+	xreb.AddNotif(extArgs.Notif)
+
+	nlog.Infoln(rargs.logHdr, "- running", xreb.String())
 	return true
+}
+
+func (reb *Reb) undoRenew(rargs *rebArgs, err error) bool {
+	rargs.xreb.Abort(err)
+	reb.setXact(nil)
+	reb.smap.Store(nil)
+	reb.mu.Unlock()
+	nlog.ErrorDepth(1, err)
+	return false
 }
 
 func (reb *Reb) beginStreams(rargs *rebArgs) error {
@@ -719,10 +717,10 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 
 	// cleanup markers
 	if que != core.QuiAborted && que != core.QuiTimeout {
-		if errM := fs.RemoveMarker(fname.RebalanceMarker, tstats); errM == nil {
+		if fs.RemoveMarker(fname.RebalanceMarker, tstats, false /*stopping*/) {
 			nlog.Infoln(rargs.logHdr, "removed marker ok")
 		}
-		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
+		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats, false /*stopping*/)
 	}
 
 	reb.mu.Lock() // ---------------------------------------

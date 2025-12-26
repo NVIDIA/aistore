@@ -34,54 +34,82 @@ func MarkerExists(marker string) bool {
 	return CountPersisted(markerPath) > 0
 }
 
-func PersistMarker(marker string) (fatalErr, writeErr error) {
+// create (up to) numMarkers marker files across available mountpaths:
+// - try to keep exactly `numMarkers` copies: if there are more, remove extra;
+// - if there are fewer, it creates new ones
+// return fatalErr when ended up with no markers
+// on any other (unlikely) failure:
+// - warn and trigger FSHC (with its subsequent cos.IsIOError filter)
+func PersistMarker(marker string) (fatalErr, warnErr error) {
 	var (
 		cnt     int
 		relname = filepath.Join(fname.MarkersDir, marker)
 		avail   = GetAvail()
 	)
 	if len(avail) == 0 {
-		fatalErr = cmn.ErrNoMountpaths
-		return fatalErr, writeErr
+		return cmn.ErrNoMountpaths, nil
 	}
 	for _, mi := range avail {
 		fpath := filepath.Join(mi.Path, relname)
-		if err := cos.Stat(fpath); err == nil {
+
+		// existing marker
+		err := cos.Stat(fpath)
+		if err == nil {
 			cnt++
 			if cnt > numMarkers {
 				if err := cos.RemoveFile(fpath); err != nil {
-					if writeErr == nil {
-						writeErr = err
-					}
+					warnErr = cos.Ternary(warnErr == nil, err, warnErr)
 					nlog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
+					mfs.hc.FSHC(err, mi, fpath)
 				} else {
 					cnt--
 				}
 			}
-		} else if cnt < numMarkers {
-			if file, err := cos.CreateFile(fpath); err == nil {
-				writeErr = err
-				file.Close()
-				cnt++
-			} else {
+			continue
+		}
+
+		if !cos.IsNotExist(err) {
+			warnErr = cos.Ternary(warnErr == nil, err, warnErr)
+			mfs.hc.FSHC(err, mi, fpath)
+		}
+
+		// no marker on this path: create if needed
+		if cnt < numMarkers {
+			file, err := cos.CreateFile(fpath)
+			if err != nil {
+				warnErr = cos.Ternary(warnErr == nil, err, warnErr)
 				nlog.Errorf("Failed to create %q marker: %v", fpath, err)
+				mfs.hc.FSHC(err, mi, fpath)
+				continue
 			}
+
+			if err := file.Close(); err != nil {
+				warnErr = cos.Ternary(warnErr == nil, err, warnErr)
+				nlog.Errorf("Failed to close %q marker: %v", fpath, err)
+			}
+			cnt++
 		}
 	}
+
 	if cnt == 0 {
-		fatalErr = fmt.Errorf("failed to persist %q marker (%d)", marker, len(avail))
+		fatalErr = fmt.Errorf("failed to persist %q marker (num avail: %d)", marker, len(avail))
 	}
-	return fatalErr, writeErr
+	return fatalErr, warnErr
 }
 
-func RemoveMarker(marker string, stup cos.StatsUpdater) (err error) {
+func RemoveMarker(marker string, stup cos.StatsUpdater, stopping bool) (ok bool) {
 	var (
 		avail   = GetAvail()
 		relname = filepath.Join(fname.MarkersDir, marker)
 	)
+	ok = true
 	for _, mi := range avail {
-		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {
-			err = er1
+		fpath := filepath.Join(mi.Path, relname)
+		if err := cos.RemoveFile(fpath); err != nil {
+			ok = false
+			if !stopping {
+				mfs.hc.FSHC(err, mi, fpath)
+			}
 		}
 	}
 	switch marker {
@@ -92,7 +120,7 @@ func RemoveMarker(marker string, stup cos.StatsUpdater) (err error) {
 	case fname.NodeRestartedPrev:
 		stup.ClrFlag(cos.NodeAlerts, cos.NodeRestarted)
 	}
-	return err
+	return ok
 }
 
 // PersistOnMpaths persists `what` on mountpaths under "mountpath.Path/path" filename.

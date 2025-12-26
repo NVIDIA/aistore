@@ -159,7 +159,7 @@ func wait(jg *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err e
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
-			if err = fs.RemoveMarker(fname.ResilverMarker, tstats); err == nil {
+			if fs.RemoveMarker(fname.ResilverMarker, tstats, false /*stopping*/) {
 				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
 			}
 			return

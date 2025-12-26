@@ -481,8 +481,8 @@ func (t *target) Run() error {
 	cos.Close(db) // close kv db
 
 	// gracefully
-	fs.RemoveMarker(fname.NodeRestartedPrev, t.statsT)
-	fs.RemoveMarker(fname.NodeRestartedMarker, t.statsT)
+	fs.RemoveMarker(fname.NodeRestartedPrev, t.statsT, true)
+	fs.RemoveMarker(fname.NodeRestartedMarker, t.statsT, true)
 	return err
 }
 
