@@ -24,16 +24,12 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-func (reb *Reb) _recvErr(err error) error {
-	if err == nil {
-		return nil
-	}
-	if xreb := reb.xctn(); xreb != nil {
-		xreb.Abort(err)
-		reb.lazydel.stop()
-	}
+func (reb *Reb) _recvAbrt(err error, xreb *xs.Rebalance) error {
+	xreb.Abort(err)
+	reb.lazydel.stop()
 	return nil
 }
 
@@ -43,25 +39,37 @@ func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 		nlog.Errorln(err)
 		return err
 	}
+
+	// guard
+	xreb := reb.xctn()
+	if xreb == nil || xreb.IsDone() || xreb.IsAborted() || xreb.RebID() != reb.rebID() {
+		return nil
+	}
+	smap := reb.smap.Load()
+	if smap == (*meta.Smap)(nil) {
+		nlog.Warningln("nil Smap during Rx", reb.rebID())
+		return nil
+	}
+
 	reb.lastrx.Store(mono.NanoTime())
 
-	smap, err := reb._waitForSmap()
-	if err != nil {
-		return reb._recvErr(err)
-	}
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
-		nlog.Errorf("g[%d]: failed to recv recv-obj action (regular or EC): %v", reb.RebID(), err)
-		return reb._recvErr(err)
+		nlog.Errorf("g[%d]: failed to recv recv-obj action (regular or EC): %v", reb.rebID(), err)
+		return reb._recvAbrt(err, xreb)
 	}
 	if act == rebMsgRegular {
-		err := reb.recvObjRegular(hdr, smap, unpacker, objReader)
-		return reb._recvErr(err)
+		if err := reb.recvObjRegular(hdr, smap, unpacker, objReader, xreb); err != nil {
+			return reb._recvAbrt(err, xreb)
+		}
+		return nil
 	}
 	debug.Assertf(act == rebMsgEC, "act=%d", act)
-	err = reb.recvECData(hdr, unpacker, objReader)
-	return reb._recvErr(err)
+	if err := reb.recvECData(hdr, unpacker, objReader, xreb); err != nil {
+		return reb._recvAbrt(err, xreb)
+	}
+	return nil
 }
 
 func (reb *Reb) recvAckNtfn(hdr *transport.ObjHdr, _ io.Reader, err error) error {
@@ -69,68 +77,67 @@ func (reb *Reb) recvAckNtfn(hdr *transport.ObjHdr, _ io.Reader, err error) error
 		nlog.Errorln(err)
 		return err
 	}
+
+	// guard
+	xreb := reb.xctn()
+	if xreb == nil || xreb.IsDone() || xreb.IsAborted() || xreb.RebID() != reb.rebID() {
+		return nil
+	}
+	smap := reb.smap.Load()
+	if smap == (*meta.Smap)(nil) {
+		nlog.Warningln("nil Smap during Rx", reb.rebID())
+		return nil
+	}
+
 	reb.lastrx.Store(mono.NanoTime())
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	act, err := unpacker.ReadByte()
 	if err != nil {
-		err := fmt.Errorf("g[%d]: failed to unpack control (ack, ntfn) message type: %v", reb.RebID(), err)
-		return reb._recvErr(err)
+		err := fmt.Errorf("g[%d]: failed to unpack control (ack, ntfn) message type: %v", reb.rebID(), err)
+		return reb._recvAbrt(err, xreb)
 	}
 
 	switch act {
 	case rebMsgEC:
 		err = reb.recvECAck(hdr, unpacker)
 	case rebMsgRegular:
-		err = reb.recvRegularAck(hdr, unpacker)
+		err = reb.recvRegularAck(hdr, unpacker, xreb)
 	case rebMsgNtfn:
 		var ntfn stageNtfn
 		err = unpacker.ReadAny(&ntfn)
 		if err == nil {
-			reb._handleNtfn(&ntfn)
+			reb._handleNtfn(&ntfn, xreb, smap)
 		}
 	default:
-		err = fmt.Errorf("g[%d]: invalid ACK message type '%d' (expecting '%d')", reb.RebID(), act, rebMsgRegular)
+		err = fmt.Errorf("g[%d]: invalid ACK message type '%d' (expecting '%d')", reb.rebID(), act, rebMsgRegular)
 	}
-
-	return reb._recvErr(err)
+	if err != nil {
+		return reb._recvAbrt(err, xreb)
+	}
+	return nil
 }
 
-func (reb *Reb) _handleNtfn(ntfn *stageNtfn) {
-	var (
-		rebID = reb.RebID()
-		rsmap = reb.smap.Load()
-		xreb  = reb.xctn()
-	)
-	if xreb == nil {
-		if reb.stages.stage.Load() != rebStageInactive {
-			nlog.Errorln(reb.logHdr(rebID, rsmap), "nil rebalancing xaction")
-		}
-		return
-	}
-	if xreb.IsAborted() {
-		return
-	}
-
-	reb.lastrx.Store(mono.NanoTime())
+func (reb *Reb) _handleNtfn(ntfn *stageNtfn, xreb *xs.Rebalance, smap *meta.Smap) {
+	rebID := reb.rebID()
+	debug.Assertf(xreb.RebID() == rebID, "xreb=%s rebID=%d", xreb, rebID) // checked by the caller
 
 	switch {
 	case rebID == ntfn.rebID: // same stage
 		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
 		if ntfn.stage == rebStageAbort {
 			otherStage := stages[ntfn.stage]
-			loghdr := reb.logHdr(rebID, rsmap)
+			loghdr := reb.logHdr(rebID, smap)
 			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
 			xreb.Abort(cmn.NewErrAborted(xreb.Name(), loghdr, err))
 		}
 	case rebID > ntfn.rebID: // other's old
-		loghdr := reb.logHdr(rebID, rsmap)
+		loghdr := reb.logHdr(rebID, smap)
 		nlog.Warningln(loghdr, reb.warnID(ntfn.rebID, ntfn.daemonID))
 	default: // other's newer
-		loghdr := reb.logHdr(rebID, rsmap)
+		loghdr := reb.logHdr(rebID, smap)
 		err := fmt.Errorf("%s: %s", loghdr, reb.warnID(ntfn.rebID, ntfn.daemonID))
-		xreb.Abort(err)
-		reb.lazydel.stop()
+		reb._recvAbrt(err, xreb)
 	}
 }
 
@@ -138,13 +145,13 @@ func (reb *Reb) _handleNtfn(ntfn *stageNtfn) {
 // regular (non-EC) receive
 //
 
-func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
+func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader, xreb *xs.Rebalance) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
-		nlog.Errorf("g[%d]: failed to parse ACK: %v", reb.RebID(), err)
+		nlog.Errorf("g[%d]: failed to parse ACK: %v", reb.rebID(), err)
 		return err
 	}
-	if ack.rebID != reb.RebID() {
+	if ack.rebID != reb.rebID() {
 		nlog.Warningln("received", hdr.Cname(), reb.warnID(ack.rebID, ack.daemonID))
 		return nil
 	}
@@ -164,10 +171,9 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 			nlog.Warningln(warn)
 		}
 	} else if stage < rebStageTraverse {
-		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.RebID(), meta.Tname(tsid), lom, stages[stage])
+		nlog.Errorf("%s g[%d]: early receive from %s %s (stage %s)", core.T, reb.rebID(), meta.Tname(tsid), lom, stages[stage])
 	}
 
-	xreb := reb.xctn()
 	latestVer, sync := _latestVer(lom.VersionConf(), xreb.Args.Flags)
 
 	//
@@ -215,13 +221,13 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 					lom.Unlock(true)
 				}
 				if errDel != nil {
-					nlog.Errorf("%s g[%d]: failed to sync-delete %s: %v", core.T, reb.RebID(), lom, errDel)
+					nlog.Errorf("%s g[%d]: failed to sync-delete %s: %v", core.T, reb.rebID(), lom, errDel)
 				} else {
 					// TODO -- FIXME: optimize vlabs out
 					vlabs := map[string]string{"bucket": lom.Bck().Cname("")}
 					core.T.StatsUpdater().IncWith(stats.RemoteDeletedDelCount, vlabs)
 					if cmn.Rom.V(5, cos.ModReb) {
-						nlog.Infof("%s g[%d]: sync-deleted %s", core.T, reb.RebID(), lom)
+						nlog.Infof("%s g[%d]: sync-deleted %s", core.T, reb.rebID(), lom)
 					}
 				}
 				goto drain
@@ -303,12 +309,12 @@ func _latestVer(conf cmn.VersionConf, flags uint32) (latestVer, sync bool) {
 func (reb *Reb) regACK(smap *meta.Smap, hdr *transport.ObjHdr, tsid string) error {
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
-		err := fmt.Errorf("g[%d]: %s is not in the %s", reb.RebID(), meta.Tname(tsid), smap)
+		err := fmt.Errorf("g[%d]: %s is not in the %s", reb.rebID(), meta.Tname(tsid), smap)
 		nlog.Errorln(err)
 		return err
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := &regularAck{rebID: reb.RebID(), daemonID: core.T.SID()}
+		ack := &regularAck{rebID: reb.rebID(), daemonID: core.T.SID()}
 		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
@@ -319,9 +325,9 @@ func (reb *Reb) regACK(smap *meta.Smap, hdr *transport.ObjHdr, tsid string) erro
 	return nil
 }
 
-func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) error {
+func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, xreb *xs.Rebalance) error {
 	var (
-		rebID = reb.RebID()
+		rebID = reb.rebID()
 		ack   = &regularAck{}
 	)
 	if err := unpacker.ReadAny(ack); err != nil {
@@ -334,6 +340,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 		nlog.Warningln("ACK from", ack.daemonID, "[", reb.warnID(ack.rebID, ack.daemonID), "]")
 		return nil
 	}
+	debug.Assert(xreb.RebID() == rebID)
 
 	lom := core.AllocLOM(hdr.ObjName)
 	if err := lom.InitCmnBck(&hdr.Bck); err != nil {
@@ -345,7 +352,7 @@ func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) 
 	// [NOTE]
 	// - remove migrated object and copies (unless disallowed by feature flag)
 	// - free pending (original) transmitted LOM
-	reb.ackLomAck(lom, rebID)
+	reb.ackLomAck(lom, rebID, xreb)
 	core.FreeLOM(lom)
 
 	return nil
@@ -359,7 +366,7 @@ func (reb *Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err 
 	ack := &ecAck{}
 	err = unpacker.ReadAny(ack)
 	if err != nil {
-		nlog.Errorf("g[%d]: failed to unpack EC ACK for %s: %v", reb.RebID(), hdr.Cname(), err)
+		nlog.Errorf("g[%d]: failed to unpack EC ACK for %s: %v", reb.rebID(), hdr.Cname(), err)
 	}
 	return
 }
@@ -388,7 +395,7 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	return ctMeta.Write(bytes.NewReader(mdBytes), -1, "" /*work fqn*/)
 }
 
-func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
+func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader, xreb *xs.Rebalance) error {
 	ct, err := core.NewCTFromBO(meta.CloneBck(&hdr.Bck), hdr.ObjName, fs.ECSliceCT)
 	if err != nil {
 		return err
@@ -415,7 +422,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
 	}
 	// Save received CT to local drives
-	err = reb.saveCTToDisk(req, hdr, reader)
+	err = reb.saveCTToDisk(req, hdr, reader, xreb)
 	if err != nil {
 		if errRm := cos.RemoveFile(ct.FQN()); errRm != nil {
 			nlog.Errorln(err, "nested err: failed to remove", ct.FQN(), "[", errRm, "]")
@@ -430,12 +437,12 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	// Send local slice
 	if moveTo != nil {
 		req.md.SliceID = md.SliceID
-		if err = reb.sendFromDisk(ct, req.md, moveTo, workFQN); err != nil {
+		if err = reb.sendFromDisk(ct, req.md, moveTo, xreb, workFQN); err != nil {
 			nlog.Errorln("failed to move slice to", moveTo, "[", err, "]")
 		}
 	}
 	// Broadcast updated MD
-	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: ecActUpdateMD}
+	ntfnMD := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID(), md: req.md, action: ecActUpdateMD}
 	nodes := req.md.RemoteTargets()
 
 	err = nil // keep the first errSend (TODO: count failures)
@@ -443,7 +450,6 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
 			continue
 		}
-		xreb := reb.xctn()
 		if xreb.IsAborted() {
 			break
 		}
@@ -460,16 +466,16 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 }
 
 // receiving EC CT
-func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) error {
+func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader, xreb *xs.Rebalance) error {
 	req := &stageNtfn{}
 	err := unpacker.ReadAny(req)
 	if err != nil {
 		err = fmt.Errorf("%s recvECData: invalid stage notification from t[%s] for %s: %v", core.T, hdr.SID, hdr.Cname(), err)
 		return err
 	}
-	if req.rebID != reb.rebID.Load() {
+	if req.rebID != reb.rebID() {
 		nlog.Warningf("%s: not yet started or already finished rebalancing (%d, %d) - dropping EC MD for %s from t[%s]",
-			core.T, req.rebID, reb.rebID.Load(), hdr.Cname(), hdr.SID)
+			core.T, req.rebID, reb.rebID(), hdr.Cname(), hdr.SID)
 		return nil
 	}
 	if req.action == ecActUpdateMD {
@@ -479,7 +485,7 @@ func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, read
 		}
 		return nil
 	}
-	if err := reb.receiveCT(req, hdr, reader); err != nil {
+	if err := reb.receiveCT(req, hdr, reader, xreb); err != nil {
 		err = fmt.Errorf("%s g[%d]: failed to receive CT from t[%s] for %s: %v", core.T, req.rebID, hdr.SID, hdr.Cname(), err)
 		nlog.Errorln(err)
 		return err

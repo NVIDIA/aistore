@@ -29,7 +29,7 @@ func (reb *Reb) RebStatus(status *Status) {
 	// rlock
 	reb.mu.Lock()
 	status.Stage = reb.stages.stage.Load()
-	status.RebID = reb.rebID.Load()
+	status.RebID = reb.rebID()
 	status.SmapVersion = tsmap.Version
 	smap := reb.smap.Load()
 	if smap != nil {
@@ -51,7 +51,7 @@ func (reb *Reb) RebStatus(status *Status) {
 					core.T, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
-				debug.Assertf(reb.RebID() == xreb.RebID(), "rebID[%d] vs %s", reb.RebID(), xreb)
+				debug.Assertf(reb.rebID() == xreb.RebID(), "rebID[%d] vs %s", reb.rebID(), xreb)
 			}
 		}
 	} else if status.Running {

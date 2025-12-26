@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -21,19 +20,24 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-func (reb *Reb) RebID() int64           { return reb.rebID.Load() }
+func (reb *Reb) rebID() int64           { return reb.id.Load() }
 func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 
 // (limited usage; compare with `abortAll` below)
 func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
-	if xreb := reb.xctn(); xreb != nil {
-		// double-check
-		smap := reb.smap.Load()
-		if smap.Version == olderSmapV {
-			if xreb.Abort(err) {
-				nlog.Warningf("%v - aborted", err)
-				reb.lazydel.stop()
-			}
+	xreb := reb.xctn()
+	if xreb == nil {
+		return
+	}
+	// double-check
+	smap := reb.smap.Load()
+	if smap == nil {
+		return
+	}
+	if smap.Version == olderSmapV {
+		if xreb.Abort(err) {
+			nlog.Warningf("%v - aborted", err)
+			reb.lazydel.stop()
 		}
 	}
 }
@@ -71,37 +75,12 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 
 func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
 	const warn = "t[%s] runs %s g[%d] (local g[%d])"
-	if id := reb.RebID(); id < remoteID {
+	if id := reb.rebID(); id < remoteID {
 		s = fmt.Sprintf(warn, tid, "newer", remoteID, id)
 	} else {
 		s = fmt.Sprintf(warn, tid, "older", remoteID, id)
 	}
 	return s
-}
-
-func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
-	smap = reb.smap.Load()
-	if smap != nil {
-		return
-	}
-	var (
-		config = cmn.GCO.Get()
-		sleep  = cmn.Rom.CplaneOperation()
-		maxwt  = config.Rebalance.DestRetryTime.D()
-		curwt  time.Duration
-	)
-	maxwt = min(maxwt, config.Timeout.SendFile.D()/3)
-	nlog.Warningf("%s: waiting to start...", core.T)
-	time.Sleep(sleep)
-	for curwt < maxwt {
-		smap = reb.smap.Load()
-		if smap != nil {
-			return
-		}
-		time.Sleep(sleep)
-		curwt += sleep
-	}
-	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", core.T)
 }
 
 // Rebalance moves to the next stage:
@@ -113,7 +92,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 
 	// notify all
 	var (
-		ntfn = &stageNtfn{daemonID: core.T.SID(), stage: newStage, rebID: reb.RebID()}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), stage: newStage, rebID: reb.rebID()}
 		hdr  = transport.ObjHdr{}
 	)
 	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
@@ -124,8 +103,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 }
 
 // Aborts global rebalance and notifies all other targets.
-func (reb *Reb) abortAll(err error) {
-	xreb := reb.xctn()
+func (reb *Reb) abortAll(err error, xreb *xs.Rebalance) {
 	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
@@ -133,7 +111,7 @@ func (reb *Reb) abortAll(err error) {
 	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
 
 	var (
-		ntfn = &stageNtfn{daemonID: core.T.SID(), rebID: reb.RebID(), stage: rebStageAbort}
+		ntfn = &stageNtfn{daemonID: core.T.SID(), rebID: reb.rebID(), stage: rebStageAbort}
 		hdr  = transport.ObjHdr{}
 	)
 	hdr.Opaque = ntfn.NewPack(rebMsgNtfn)
@@ -168,7 +146,7 @@ func (reb *Reb) cleanupLomAck(lom *core.LOM) {
 }
 
 // called by recvRegularAck
-func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64) {
+func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64, xreb *xs.Rebalance) {
 	lomAck := reb.lomAcks()[lom.CacheIdx()]
 
 	lomAck.mu.Lock()
@@ -186,7 +164,6 @@ func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64) {
 	core.FreeLOM(lomOrig)
 
 	// counting acknowledged migrations (as initiator)
-	xreb := reb.xctn()
 	xreb.ObjsAdd(1, size)
 
 	// NOTE: rm migrated object (and local copies, if any) right away

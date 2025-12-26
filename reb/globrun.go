@@ -73,10 +73,10 @@ type (
 		}
 		lazydel lazydel
 		// (smap, xreb) + atomic state
-		rebID atomic.Int64
+		id atomic.Int64
 		// quiescence
 		lastrx atomic.Int64 // mono time
-		// this state
+		// renewal and fini()
 		mu sync.Mutex
 	}
 	ExtArgs struct {
@@ -216,7 +216,7 @@ func _preempt2(logHdr string, id int64) bool {
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
 func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
-	if reb.rebID.Load() == extArgs.NID {
+	if reb.rebID() == extArgs.NID {
 		return
 	}
 
@@ -255,7 +255,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	if !_pingall(rargs) {
 		return
 	}
-	if reb.rebID.Load() == extArgs.NID {
+	if reb.rebID() == extArgs.NID {
 		return
 	}
 	if err := reb.dm.RegRecv(); err != nil {
@@ -381,30 +381,41 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	}
 	xctn := rns.Entry.Get()
 	rargs.xreb = xctn.(*xs.Rebalance)
+	if rargs.xreb.RebID() != rargs.id {
+		// (unlikely)
+		err := fmt.Errorf("FATAL: reb-id mismatch: %d != %d", rargs.xreb.RebID(), rargs.id)
+		debug.AssertNoErr(err)
+		nlog.Errorln(err)
+		return false
+	}
 
 	extArgs.Notif.Xact = rargs.xreb
 	rargs.xreb.AddNotif(extArgs.Notif)
 
-	reb.mu.Lock()
+	reb.mu.Lock() // ----------------------------------------
 
 	reb.stages.stage.Store(rebStageInit)
 	reb.setXact(rargs.xreb)
-	reb.rebID.Store(rargs.id)
+	reb.id.Store(rargs.id)
 
 	// prior to opening streams:
 	// not every change in Smap warants a different rebalance but this one (below) definitely does
 	smap := core.T.Sowner().Get()
-	if smap.CountActiveTs() != rargs.smap.CountActiveTs() {
-		debug.Assert(smap.Version > rargs.smap.Version)
-		err := fmt.Errorf("%s post-renew change %s => %s", rargs.xreb, rargs.smap.StringEx(), smap.StringEx())
-		rargs.xreb.Abort(err)
-		reb.mu.Unlock()
-		nlog.Errorln(err)
-		return false
-	}
+
+	// TODO: same count is good but not enough
 	if smap.Version != rargs.smap.Version {
+		if smap.CountActiveTs() != rargs.smap.CountActiveTs() {
+			debug.Assert(smap.Version > rargs.smap.Version)
+			err := fmt.Errorf("%s post-renew change %s => %s", rargs.xreb, rargs.smap.StringEx(), smap.StringEx())
+			rargs.xreb.Abort(err)
+			reb.setXact(nil)
+			reb.mu.Unlock()
+			nlog.Errorln(err)
+			return false
+		}
 		nlog.Warningln(rargs.logHdr, "post-renew change:", rargs.smap.StringEx(), "=>", smap.StringEx(), "- proceeding anyway")
 	}
+	reb.smap.Store(rargs.smap)
 
 	// 3. init streams and data structures
 	if haveStreams {
@@ -419,6 +430,8 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 		}
 		if err := reb.beginStreams(rargs); err != nil {
 			rargs.xreb.Abort(err)
+			reb.setXact(nil)
+			reb.smap.Store(nil)
 			reb.mu.Unlock()
 			nlog.Errorln(err)
 			return false
@@ -438,18 +451,19 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	// 4. create persistent mark
 	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
 		err := cos.Ternary(fatalErr != nil, fatalErr, writeErr)
-		reb.endStreams(err, rargs.logHdr)
+		_, _ = reb.endStreams(err)
 		rargs.xreb.Abort(err)
+		reb.setXact(nil)
+		reb.smap.Store(nil)
 		reb.mu.Unlock()
 		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
 		return false
 	}
 
 	// 5. ready - can receive objects
-	reb.smap.Store(rargs.smap)
 	reb.stages.cleanup()
 
-	reb.mu.Unlock()
+	reb.mu.Unlock() // ----------------------------------------
 
 	nlog.Infoln(rargs.logHdr, "- running", rargs.xreb.String())
 	return true
@@ -465,11 +479,11 @@ func (reb *Reb) beginStreams(rargs *rebArgs) error {
 	return nil
 }
 
-func (reb *Reb) endStreams(err error, loghdr string) {
-	if !reb.stages.stage.CAS(rebStageFin, rebStageFinStreams) {
-		nlog.Warningln(loghdr, "stage", reb.stages.stage.Load())
-	}
+func (reb *Reb) endStreams(err error) (ok bool, stage uint32) {
+	stage = reb.stages.stage.Load()
+	ok = reb.stages.stage.CAS(rebStageFin, rebStageFinStreams)
 	reb.dm.Close(err)
+	return
 }
 
 // when at least one bucket has EC enabled
@@ -713,27 +727,49 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev, tstats)
 	}
 
-	reb.endStreams(err, rargs.logHdr)
+	reb.mu.Lock() // ---------------------------------------
+
+	if xctn := reb.xctn(); xctn == nil || xctn.ID() != xreb.ID() { // (unlikely)
+		reb.mu.Unlock()
+		return
+	}
+	ok, curStage := reb.endStreams(err)
 	reb.filterGFN.Reset()
 
 	xreb.ToStats(&stats)
+
+	var finStats string
 	if stats.Objs > 0 || stats.OutObjs > 0 || stats.InObjs > 0 {
 		s, e := jsoniter.MarshalIndent(&stats, "", " ")
 		debug.AssertNoErr(e)
-		nlog.Infoln(string(s))
+		finStats = string(s)
 	}
 	reb.stages.stage.Store(rebStageDone)
 	reb.stages.cleanup()
 
 	reb.dm.UnregRecv()
 	xreb.Finish()
+
+	xname := xreb.String()
+
+	reb.setXact(nil)
+	reb.smap.Store(nil)
+
+	reb.mu.Unlock() // ---------------------------------------
+
+	if !ok {
+		nlog.Warningln(rargs.logHdr, "ended streams when curr. stage:", stages[curStage])
+	}
+	if finStats != "" {
+		nlog.Infoln(finStats)
+	}
 	switch {
 	case que != core.QuiAborted && que != core.QuiTimeout && cnt == 0:
-		nlog.Infoln(rargs.logHdr, "done", xreb.String())
+		nlog.Infoln(rargs.logHdr, "done", xname)
 	case cnt == 0:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "]", xreb.String())
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "]", xname)
 	default:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "errs =", cnt, "]", xreb.String())
+		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "errs =", cnt, "]", xname)
 	}
 }
 
@@ -903,7 +939,7 @@ func _getReader(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
 
 func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
 	var (
-		ack    = regularAck{rebID: rj.m.RebID(), daemonID: core.T.SID()}
+		ack    = regularAck{rebID: rj.m.rebID(), daemonID: core.T.SID()}
 		o      = transport.AllocSend()
 		opaque = ack.NewPack()
 	)

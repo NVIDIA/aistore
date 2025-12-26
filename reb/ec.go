@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // High level overview of how EC rebalance works.
@@ -94,7 +95,7 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs 
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, workFQN ...string) error {
+func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, xreb *xs.Rebalance, workFQN ...string) error {
 	var (
 		lom    *core.LOM
 		fqn    = ct.FQN()
@@ -138,7 +139,7 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 	}
 
 	// transmit
-	ntfn := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: md, action: action}
+	ntfn := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID(), md: md, action: action}
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: md.Size}}
 	o.Hdr.Bck.Copy(ct.Bck().Bucket())
@@ -154,8 +155,7 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 		return fmt.Errorf("failed to send slices to nodes [%s..]: %v", target.ID(), err)
 	}
 
-	xctn := reb.xctn()
-	xctn.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
+	xreb.OutObjsAdd(1, o.Hdr.ObjAttrs.Size)
 	return nil
 }
 
@@ -163,24 +163,21 @@ func (reb *Reb) sendFromDisk(ct *core.CT, md *ec.Metadata, target *meta.Snode, w
 //  1. Full object/replica is received
 //  2. A CT is received and this target is not the default target (it
 //     means that the CTs came from default target after EC had been rebuilt)
-func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader) (err error) {
-	var (
-		bck  = meta.CloneBck(&hdr.Bck)
-		xctn = reb.xctn()
-	)
+func (*Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Reader, xreb *xs.Rebalance) (err error) {
+	bck := meta.CloneBck(&hdr.Bck)
 	if ern := bck.Init(core.T.Bowner()); ern != nil {
 		return ern
 	}
 
 	md := ntfn.md.NewPack()
 	if ntfn.md.SliceID != 0 {
-		args := &ec.WriteArgs{Reader: data, MD: md, Xact: xctn}
+		args := &ec.WriteArgs{Reader: data, MD: md, Xact: xreb}
 		err = ec.WriteSliceAndMeta(hdr, args)
 	} else {
 		var lom *core.LOM
 		lom, err = ec.AllocLomFromHdr(hdr)
 		if err == nil {
-			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: xctn}
+			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: xreb}
 			err = ec.WriteReplicaAndMeta(lom, args)
 		}
 		core.FreeLOM(lom)
@@ -233,7 +230,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 			return tsi, nil
 		}
 		if err != nil {
-			nlog.Errorf("g[%d]: failed to read EC meta from %s: %v", reb.RebID(), tsi.StringEx(), err)
+			nlog.Errorf("g[%d]: failed to read EC meta from %s: %v", reb.rebID(), tsi.StringEx(), err)
 		}
 	}
 	return nil, errors.New("no _free_ targets")
@@ -283,10 +280,13 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 }
 
 func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
-	xctn := reb.xctn()
-	if err := xctn.AbortErr(); err != nil {
+	xreb := reb.xctn()
+	debug.Assert(xreb != nil)
+	debug.Assertf(xreb.RebID() == reb.rebID(), "xreb mismatch: %s vs %d", xreb, reb.rebID())
+
+	if err := xreb.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations
-		nlog.Infoln(xctn.Name(), "walk-ec aborted", err)
+		nlog.Infoln(xreb.Name(), "walk-ec aborted", err)
 		return err
 	}
 
@@ -337,5 +337,5 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	if err != nil {
 		return nil
 	}
-	return reb.sendFromDisk(ct, md, hrwTarget)
+	return reb.sendFromDisk(ct, md, hrwTarget, xreb)
 }
