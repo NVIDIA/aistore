@@ -44,9 +44,13 @@ const (
 	OrigFntl = "orig_fntl"
 )
 
+const (
+	maxSizeCustomKVs = 2 * cos.KiB
+)
+
 // object properties
-// NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined
-// NOTE: compare with `apc.LsoMsg`
+// embeds system `ObjAttrs` that in turn includes custom user-defined
+// (compare with `apc.LsoMsg`)
 type ObjectProps struct {
 	Bck Bck `json:"bucket"`
 	ObjAttrs
@@ -231,8 +235,9 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 	}
 }
 
-// NOTE: returning checksum separately for subsequent validation
-func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
+// return checksum separately for subsequent validation
+// parse and set custom metadata, if available
+func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, err error) {
 	if ty := hdr.Get(apc.HdrObjCksumType); ty != "" {
 		val := hdr.Get(apc.HdrObjCksumVal)
 		cksum = cos.NewCksum(ty, val)
@@ -251,13 +256,37 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 	if v := hdr.Get(apc.HdrObjVersion); v != "" {
 		oa.Ver = &v
 	}
-	custom := hdr[http.CanonicalHeaderKey(apc.HdrObjCustomMD)]
-	for _, v := range custom {
-		entry := strings.SplitN(v, "=", 2)
-		debug.Assert(len(entry) == 2)
-		oa.SetCustomKey(entry[0], entry[1])
+
+	// custom metadata: total size limited
+	if custom, ok := hdr[apc.HdrObjCustomMD]; ok {
+		var (
+			size int
+			keys = make([]string, 0, 10)
+		)
+		for _, kvs := range custom {
+			kv := strings.SplitN(kvs, "=", 2)
+			if len(kv) != 2 {
+				oa._undoCustom(keys)
+				return nil, fmt.Errorf("custom metadata: invalid format %q (expecting key=value)", kvs)
+			}
+			size += len(kv[0]) + len(kv[1])
+			if size > maxSizeCustomKVs {
+				oa._undoCustom(keys)
+				return nil, fmt.Errorf("custom metadata: total size exceeds %d bytes", maxSizeCustomKVs)
+			}
+			oa.SetCustomKey(kv[0], kv[1])
+			keys = append(keys, kv[0])
+		}
 	}
-	return
+	return cksum, nil
+}
+
+// by implication, prior to FromHeader call obj attrs are not supposed to contain any custom keys,
+// or at least not those that could've been overwritten
+func (oa *ObjAttrs) _undoCustom(keys []string) {
+	for i := len(keys) - 1; i >= 0; i-- {
+		oa.DelCustomKey(keys[i])
+	}
 }
 
 // local <=> remote equality in the context of cold-GET and download. This function

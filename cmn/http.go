@@ -8,6 +8,7 @@ package cmn
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -171,15 +172,9 @@ func WriteErrJSON(w http.ResponseWriter, r *http.Request, out any, err error) er
 	return err
 }
 
-// Copies headers from original request(from client) to
-// a new one(inter-cluster call)
-func CopyHeaders(dst, src http.Header) {
-	for k, values := range src {
-		for _, v := range values {
-			dst.Set(k, v)
-		}
-	}
-}
+// shallow copy http headers
+// inlining but keeping it for now (to maybe add checks if need be)
+func CopyHeaders(dst, src http.Header) { maps.Copy(dst, src) }
 
 func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
 	val := os.Getenv(apc.EnvReadHeaderTimeout)

@@ -145,15 +145,18 @@ type (
 //
 
 // poi.restful entry point
-func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
-	{
-		poi.oreq = r
-		poi.r = r.Body
-		poi.resphdr = resphdr
-		poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
-		poi.cksumToUse = poi.lom.ObjAttrs().FromHeader(r.Header)
-		poi.owt = cmn.OwtPut // default
+func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err error) {
+	poi.oreq = r
+	poi.r = r.Body
+	poi.resphdr = resphdr
+	poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
+	poi.owt = cmn.OwtPut // default
+
+	oah := poi.lom.ObjAttrs()
+	if poi.cksumToUse, err = oah.FromHeader(r.Header); err != nil {
+		return 0, err
 	}
+
 	if dpq.sys.owt != "" {
 		poi.owt.FromS(dpq.sys.owt)
 	}
@@ -1085,8 +1088,14 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 		return false
 	}
 
-	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
+	oah := lom.ObjAttrs()
+	cksumToUse, err := oah.FromHeader(resp.Header)
+	if err != nil { // unlikely
+		debug.AssertNoErr(err)
+		nlog.Errorln("invalid obj attrs from neighbor:", err)
+	}
 	workFQN := lom.GenFQN(fs.WorkCT, fs.WorkfileRemote)
+
 	poi := allocPOI()
 	{
 		poi.t = goi.t

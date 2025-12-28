@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -176,7 +177,9 @@ func (oah *ObjAttrs) Size() int64 {
 }
 
 func (oah *ObjAttrs) Attrs() (out cmn.ObjAttrs) {
-	out.Cksum = out.FromHeader(oah.wrespHeader)
+	var err error
+	out.Cksum, err = out.FromHeader(oah.wrespHeader)
+	debug.AssertNoErr(err)
 	return out
 }
 
@@ -451,7 +454,11 @@ func headobj(reqParams *ReqParams, noprops bool) (*cmn.ObjectProps, error) {
 
 	// first, cnm.ObjAttrs (compare with `t.objHead`)
 	op := &cmn.ObjectProps{}
-	op.Cksum = op.ObjAttrs.FromHeader(hdr)
+	op.Cksum, err = op.ObjAttrs.FromHeader(hdr)
+	if err != nil {
+		debug.AssertNoErr(err)
+		return nil, err
+	}
 
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
