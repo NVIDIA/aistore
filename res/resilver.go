@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -27,24 +29,28 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-const ivalInactive = 4 * time.Second
+const (
+	ivalInactive = 4 * time.Second
+	retrySleep   = 200 * time.Millisecond
+)
 
 type (
 	Res struct {
-		// last or current resilver's time interval
-		begin atomic.Int64
-		end   atomic.Int64
+		xres ratomic.Pointer[xs.Resilver]
+		end  atomic.Int64
+		mu   sync.Mutex
 	}
 	Args struct {
 		UUID            string
 		Notif           *xact.NotifXact
 		Rmi             *fs.Mountpath
+		WG              *sync.WaitGroup
 		Action          string
 		PostDD          func(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error)
 		Custom          xreg.ResArgs
 		SingleRmiJogger bool
 	}
-	joggerCtx struct {
+	jogger struct {
 		xres *xs.Resilver
 	}
 )
@@ -52,113 +58,161 @@ type (
 func New() *Res { return &Res{} }
 
 func (res *Res) IsActive(multiplier int64) bool {
-	if res.begin.Load() != 0 {
-		return true
+	xres := res.xctn()
+	if xres != nil {
+		if xres.IsAborted() {
+			return false
+		}
+		if !xres.IsDone() {
+			return true
+		}
 	}
 	end := res.end.Load()
-	if end == 0 {
+	if end == 0 || multiplier == 0 {
 		return false
 	}
-	now := mono.NanoTime()
-	return time.Duration(now-end) < time.Duration(multiplier)*ivalInactive
+	return mono.Since(end) < time.Duration(multiplier)*ivalInactive
 }
 
-func (res *Res) _begin() bool {
-	// acquire
-	if !res.begin.CAS(0, 1) {
-		return false
-	}
-	// set start time, clear end
-	res.end.Store(0)
-	res.begin.Store(mono.NanoTime())
-	return true
+func (res *Res) xctn() *xs.Resilver { return res.xres.Load() }
+
+func (res *Res) CurrentXactID() string {
+	xres := res.xctn()
+	return cos.Ternary(xres == nil, "", xres.ID())
 }
 
-func (res *Res) _end() {
-	res.end.Store(mono.NanoTime()) // keep until next resilver
-	res.begin.Store(0)
+func (res *Res) Abort(err error) (aborted bool) {
+	if r := res.xres.Load(); r != nil {
+		aborted = r.Abort(err)
+	}
+	return
 }
 
-func (res *Res) RunResilver(args *Args, tstats cos.StatsUpdater) {
-	if !res._begin() {
-		nlog.Infoln("already running: skip", args.Action, args.Rmi)
-		return
-	}
-	defer res._end()
-
-	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
-		nlog.Errorln("FATAL:", fatalErr, "WRITE:", writeErr)
-		return
-	}
-
+func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	avail, _ := fs.Get()
 	if len(avail) < 1 {
+		if args.WG != nil {
+			args.WG.Done()
+		}
 		nlog.Errorln(cmn.ErrNoMountpaths)
 		return
 	}
 
-	xctn := xreg.RenewResilver(args.UUID, &args.Custom)
-	xres, ok := xctn.(*xs.Resilver)
-	debug.Assert(ok)
-	if args.Notif != nil {
-		args.Notif.Xact = xres
-		xres.AddNotif(args.Notif)
+	xres := res.initRenew(args)
+	if args.WG != nil {
+		args.WG.Done()
+	}
+	if xres == nil {
+		return
 	}
 
-	// jogger group
+	// jgroup
 	var (
-		jg        *mpather.Jgroup
+		jgroup    *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		jctx      = &joggerCtx{xres: xres}
+		j         = &jogger{xres: xres}
 		opts      = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
-			VisitObj: jctx.visitObj,
-			VisitCT:  jctx.visitECSlice,
+			VisitObj: j.visitObj,
+			VisitCT:  j.visitECSlice,
 			Slab:     slab,
-			RW:       false, // system-critical to run
+			RW:       true,
 		}
 	)
 	debug.AssertNoErr(err)
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
-		jg = mpather.NewJoggerGroup(opts, args.Custom.Config, args.Rmi)
+		jgroup = mpather.NewJoggerGroup(opts, args.Custom.Config, args.Rmi)
 		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jg = mpather.NewJoggerGroup(opts, args.Custom.Config, nil)
+		jgroup = mpather.NewJoggerGroup(opts, args.Custom.Config, nil)
 		if args.Rmi != nil {
-			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.NumJ())
+			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jgroup.NumJ())
 		} else {
-			nlog.Infof("%s, num %d", xres.Name(), jg.NumJ())
+			nlog.Infof("%s, num %d", xres.Name(), jgroup.NumJ())
 		}
 	}
 
 	// run and block waiting
 	res.end.Store(0)
-	jg.Run()
-	err = wait(jg, xres, tstats)
+	jgroup.Run()
+	err = wait(jgroup, xres, tstats)
 	if err != nil {
 		xres.AddErr(err)
 	}
+
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
 		args.PostDD(args.Rmi, args.Action, xres, err)
 	}
+
 	xres.Finish()
+
+	res.mu.Lock()
+	res.end.Store(mono.NanoTime())
+	res.xres.Store(nil)
+	res.mu.Unlock()
+}
+
+func (res *Res) initRenew(args *Args) *xs.Resilver {
+	rns := xreg.RenewResilver(args.UUID, &args.Custom)
+	if rns.Err == nil && rns.IsRunning() {
+		// retry just once
+		time.Sleep(retrySleep)
+		rns = xreg.RenewResilver(args.UUID, &args.Custom)
+	}
+	if rns.Err != nil {
+		return nil
+	}
+	if rns.IsRunning() {
+		nlog.Warningf("%s: failed to start/preempt for xid=%q: %s is still running", args.Action, args.UUID, rns.Entry.Get().Name())
+		return nil
+	}
+	xctn := rns.Entry.Get()
+	xres := xctn.(*xs.Resilver)
+
+	debug.Func(func() {
+		if r := res.xctn(); r != nil {
+			debug.Assertf(r.IsDone() || r.IsAborted(), "%s: (done=%t, aborted=%t)", r, r.IsDone(), r.IsAborted())
+		}
+	})
+	debug.Assertf(xres.ID() == args.UUID, "res-id mismatch: %q vs %q", xres.Name(), args.UUID)
+
+	res.mu.Lock() // --------------------------------------
+
+	fatalErr, warnErr := fs.PersistMarker(fname.ResilverMarker, true /*quiet*/)
+	if fatalErr != nil {
+		xres.Abort(fatalErr)
+		res.mu.Unlock()
+		return nil
+	}
+	res.xres.Store(xres)
+
+	res.mu.Unlock() // ------------------------------------
+
+	if warnErr != nil {
+		nlog.Warningln(warnErr)
+	}
+	if args.Notif != nil {
+		args.Notif.Xact = xres
+		xres.AddNotif(args.Notif)
+	}
+	return xres
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func wait(jg *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err error) {
+func wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err error) {
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
-			if err = jg.Stop(); err != nil {
+			if err = jgroup.Stop(); err != nil {
 				xres.AddErr(err, 0)
 			} else {
-				nlog.Infoln(core.T.String()+":", xres.Name(), "aborted, cause:", errCause)
+				nlog.Infoln(core.T.String(), xres.Name(), "aborted, cause:", errCause)
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
-		case <-jg.ListenFinished():
+		case <-jgroup.ListenFinished():
 			if fs.RemoveMarker(fname.ResilverMarker, tstats, false /*stopping*/) {
 				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
 			}
@@ -191,14 +245,14 @@ func _cpECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (strin
 
 // TODO: revisit EC bits and check for OOS preemptively
 // NOTE: not deleting extra copies - delegating to `storage cleanup`
-func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
+func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	const (
 		maxRetries = 3
 	)
 	var (
 		orig   = lom
 		hlom   *core.LOM
-		xname  = jg.xres.Name()
+		xname  = j.xres.Name()
 		size   int64
 		copied bool
 	)
@@ -213,7 +267,7 @@ func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		lom = orig
 		lom.Unlock(true)
 		if copied && errHrw == nil {
-			jg.xres.ObjsAdd(1, size)
+			j.xres.ObjsAdd(1, size)
 		}
 	}()
 
@@ -252,18 +306,18 @@ redo:
 	}
 
 	if fixHrw {
-		hlom, errHrw = jg.fixHrw(lom, mi, buf)
+		hlom, errHrw = j.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
 				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
-				jg.xres.AddErr(errV, 0)
+				j.xres.AddErr(errV, 0)
 			}
 			// EC cleanup and return
 			if metaNewPath != "" {
 				if errHrw = os.Remove(metaNewPath); errHrw != nil {
 					errV := fmt.Errorf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
 					nlog.Infoln("Warning:", errV)
-					jg.xres.AddErr(errV, 0)
+					j.xres.AddErr(errV, 0)
 				}
 			}
 			return errHrw
@@ -290,7 +344,7 @@ outer:
 				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
-				jg.xres.AddErr(errHrw, 0)
+				j.xres.AddErr(errHrw, 0)
 				return errHrw
 			}
 			copied = false
@@ -305,16 +359,16 @@ outer:
 		case cos.IsErrOOS(err):
 			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			err = cmn.NewErrAborted(xname, "", errV)
-			jg.xres.Abort(err)
+			j.xres.Abort(err)
 			break outer
 		case !cos.IsNotExist(err) && !cos.IsErrNotFound(err):
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
 			nlog.Infoln("Warning:", errV)
-			jg.xres.AddErr(errV)
+			j.xres.AddErr(errV)
 			break outer
 		default:
 			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
-			jg.xres.AddErr(errV)
+			j.xres.AddErr(errV)
 		}
 	}
 ret:
@@ -327,7 +381,7 @@ ret:
 	return nil
 }
 
-func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
+func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
 	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
 
 	if lom.IsChunked() {
@@ -357,23 +411,23 @@ func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *cor
 	return hlom, err
 }
 
-func (jg *joggerCtx) visitECSlice(ct *core.CT, buf []byte) (err error) {
+func (j *jogger) visitECSlice(ct *core.CT, buf []byte) (err error) {
 	debug.Assert(ct.ContentType() == fs.ECSliceCT)
 	if !ct.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}
-	jg._mvSlice(ct, buf)
+	j._mvSlice(ct, buf)
 	return nil
 }
 
 // Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes either source files(on success), or
 // destination files(on copy failure)
-func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
+func (j *jogger) _mvSlice(ct *core.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := fs.Hrw(uname)
 	if err != nil {
-		jg.xres.AddErr(err)
+		j.xres.AddErr(err)
 		nlog.Infoln("Warning:", err)
 		return
 	}
@@ -384,7 +438,7 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceCT, ct.ObjectName())
 	srcMetaFQN, destMetaFQN, err := _cpECMeta(ct, ct.Mountpath(), destMpath, buf)
 	if err != nil {
-		jg.xres.AddErr(err)
+		j.xres.AddErr(err)
 		return
 	}
 	// Slice without metafile - skip it as unusable, let LRU clean it up
@@ -396,11 +450,11 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
-		jg.xres.AddErr(errV, 0)
+		j.xres.AddErr(errV, 0)
 		if err = cos.RemoveFile(destMetaFQN); err != nil {
 			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
 			nlog.Infoln("Warning:", errV)
-			jg.xres.AddErr(errV)
+			j.xres.AddErr(errV)
 		}
 	}
 	if errMeta := cos.RemoveFile(srcMetaFQN); errMeta != nil {

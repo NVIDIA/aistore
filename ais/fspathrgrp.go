@@ -6,7 +6,7 @@ package ais
 
 import (
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,6 +20,12 @@ import (
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
+)
+
+const (
+	fmtfsprun = "%s: %q %s: starting to resilver"
+
+	preemptSleep = 100 * time.Millisecond
 )
 
 type fsprungroup struct {
@@ -59,20 +65,31 @@ func (g *fsprungroup) attachMpath(mpath string, label cos.MountpathLabel) (added
 	return
 }
 
-func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
-	fspathsConfigAddDel(mi.Path, true /*add*/)
+func (g *fsprungroup) _postAdd(action string, ami *fs.Mountpath) {
+	fspathsConfigAddDel(ami.Path, true /*add*/)
+
+	prev := g.preempt(action, ami)
+	if prev {
+		nlog.Warningf(fmtfsprun, g.t, action, ami)
+	} else {
+		nlog.Infof(fmtfsprun, g.t, action, ami)
+	}
+
 	go func() {
 		config := cmn.GCO.Get()
-		if config.Resilver.Enabled {
-			g.t.runResilver(&res.Args{Custom: xreg.ResArgs{Config: config}}, nil /*wg*/)
+		if !config.Resilver.Enabled {
+			return
 		}
-		xreg.RenewMakeNCopies(cos.GenUUID(), action)
+		args := &res.Args{
+			Custom: xreg.ResArgs{Config: config},
+		}
+		g.t.runResilver(args)
 	}()
 
-	g.checkEnable(action, mi)
+	g.checkEnable(action, ami)
 
 	tstats := g.t.statsT.(*stats.Trunner)
-	for _, disk := range mi.Disks {
+	for _, disk := range ami.Disks {
 		tstats.RegDiskMetrics(g.t.si, disk)
 	}
 }
@@ -119,7 +136,8 @@ func (g *fsprungroup) rescanMpath(mpath string, dontResilver bool) error {
 	if !dontResilver {
 		config := cmn.GCO.Get()
 		if config.Resilver.Enabled {
-			go g.t.runResilver(&res.Args{Custom: xreg.ResArgs{Config: config}}, nil /*wg*/)
+			args := &res.Args{Custom: xreg.ResArgs{Config: config}}
+			go g.t.runResilver(args)
 		}
 	}
 	return warn
@@ -148,25 +166,37 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return rmi, nil
 	}
 
-	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
-	if prevActive {
-		nlog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active or recently finished", g.t, action, rmi)
+	prev := g.preempt(action, rmi)
+	if prev {
+		nlog.Warningf(fmtfsprun, g.t, action, rmi)
 	} else {
-		nlog.Infof("%s: %q %s: starting to resilver", g.t, action, rmi)
+		nlog.Infof(fmtfsprun, g.t, action, rmi)
 	}
+
+	marked := xreg.GetResilverMarked()
 	args := &res.Args{
 		Rmi:             rmi,
 		Action:          action,
-		PostDD:          g.postDD,    // callback when done
-		SingleRmiJogger: !prevActive, // NOTE: optimization for the special/common case
+		PostDD:          g.postDD, // callback when done
+		SingleRmiJogger: !prev && !marked.Interrupted,
 		Custom:          xreg.ResArgs{Config: config},
 	}
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go g.t.runResilver(args, wg)
-	wg.Wait()
+	go g.t.runResilver(args)
 
 	return rmi, nil
+}
+
+func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool {
+	prevActive := g.t.res.IsActive(1 /*ivalInactive*/)
+	if !prevActive {
+		return false
+	}
+
+	err := fmt.Errorf("%s: %q %s: starting to resilver when previous (resilvering) is active or recently finished", g.t, action, mi)
+	if g.t.res.Abort(err) {
+		time.Sleep(preemptSleep)
+	}
+	return true
 }
 
 func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error) {

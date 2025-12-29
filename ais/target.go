@@ -518,10 +518,15 @@ func (t *target) goresilver(config *cmn.Config, interrupted bool) {
 	} else if daemon.resilver.required {
 		nlog.Infoln("Starting resilver, reason:", daemon.resilver.reason)
 	}
-	t.runResilver(&res.Args{Custom: xreg.ResArgs{Config: config}}, nil /*wg*/)
+	t.runResilver(&res.Args{Custom: xreg.ResArgs{Config: config}})
 }
 
-func (t *target) runResilver(args *res.Args, wg *sync.WaitGroup) {
+func (t *target) runResilver(args *res.Args) {
+	// [convention] Non-empty UUID means admin–initiated job
+	// (with AIS proxy then generating cluster-wide UUID);
+	// the WG barrier ensures all targets become visible at the same time.
+	debug.Assert(args.UUID == "" || args.WG != nil)
+
 	// with no cluster-wide UUID it's a local run
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()
@@ -533,11 +538,7 @@ func (t *target) runResilver(args *res.Args, wg *sync.WaitGroup) {
 	debug.Assert(args.Custom.Config != nil)
 	smap := t.owner.smap.get()
 	args.Custom.Smap = &smap.Smap
-
-	if wg != nil {
-		wg.Done() // compare w/ xact.GoRunW(()
-	}
-	t.res.RunResilver(args, t.statsT)
+	t.res.Run(args, t.statsT)
 }
 
 func (t *target) endStartupStandby() (err error) {
@@ -597,9 +598,9 @@ func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 			return
 		}
 		t.statsT.SetFlag(cos.NodeAlerts, cos.NodeRestarted)
-		fs.PersistMarker(fname.NodeRestartedPrev)
+		fs.PersistMarker(fname.NodeRestartedPrev, false /*quiet*/)
 	}
-	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
+	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker, false /*quiet*/)
 	return
 }
 

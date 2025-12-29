@@ -454,10 +454,13 @@ func (reb *Reb) _renew(rargs *rebArgs, xreb *xs.Rebalance, haveStreams bool) err
 	}
 
 	// 4. create persistent mark
-	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
-		err := cos.Ternary(fatalErr != nil, fatalErr, writeErr)
-		_, _ = reb.endStreams(err)
-		return err
+	fatalErr, warnErr := fs.PersistMarker(fname.RebalanceMarker, true /*quiet*/)
+	if fatalErr != nil {
+		_, _ = reb.endStreams(fatalErr)
+		return fatalErr
+	}
+	if warnErr != nil {
+		nlog.Warningln(core.T.String(), xreb.Name(), "[ mark err:", warnErr, "]")
 	}
 
 	reb.setXact(xreb)

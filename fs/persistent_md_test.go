@@ -37,7 +37,7 @@ func TestMarkers(t *testing.T) {
 		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 
-	fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
+	fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker, false /*quiet*/)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 
@@ -46,7 +46,7 @@ func TestMarkers(t *testing.T) {
 		markerEntry{marker: fname.ResilverMarker, exists: false},
 	)
 
-	fatalErr, writeErr = fs.PersistMarker(fname.ResilverMarker)
+	fatalErr, writeErr = fs.PersistMarker(fname.ResilverMarker, false /*quiet*/)
 	tassert.CheckFatal(t, fatalErr)
 	tassert.CheckFatal(t, writeErr)
 

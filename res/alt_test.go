@@ -5,9 +5,10 @@
 package res_test
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,12 +16,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/res"
-	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -88,7 +88,7 @@ func TestResilver_DisableEnable(t *testing.T) {
 
 	// resilver and check
 	runResilver(t, config, rmi, apc.ActMountpathDisable)
-	assertAllAtCurrentHRW(t, bck, objs)
+	assertLocations(t, bck, objs)
 
 	// disable (as in: commit)
 	disabledMi, err := fs.Disable(mpathToToggle)
@@ -101,7 +101,7 @@ func TestResilver_DisableEnable(t *testing.T) {
 	tassert.Errorf(t, enabledMi != nil, "expected enabled mountpath, got nil: %q", mpathToToggle)
 
 	runResilver(t, config, disabledMi, apc.ActMountpathEnable)
-	assertAllAtCurrentHRW(t, bck, objs)
+	assertLocations(t, bck, objs)
 }
 
 func TestUfestRelocate_ChunkedOne(t *testing.T) {
@@ -211,159 +211,160 @@ func runResilver(t *testing.T, config *cmn.Config, rmi *fs.Mountpath, action str
 	}
 
 	tstats := mock.NewStatsTracker()
-	r.RunResilver(args, tstats)
+	r.Run(args, tstats)
 }
 
-//
-// Assertions
-//
-
-func assertAllAtCurrentHRW(t *testing.T, bck *meta.Bck, objNames []string) {
-	t.Helper()
-
-	for _, objName := range objNames {
-		uname := bck.MakeUname(objName)
-		hrwMi, _, err := fs.Hrw(uname)
-		tassert.CheckFatal(t, err)
-
-		fqn := hrwMi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
-		err = cos.Stat(fqn)
-		tassert.Fatalf(t, err == nil, "missing at HRW: %q (fqn=%q, err=%v)", objName, fqn, err)
-	}
-}
-
-//
-// Object creation (plain and chunked)
-//
-
-func createTestFile(t *testing.T, bck *meta.Bck, fqn string, size int64) {
-	wfh, err := cos.CreateFile(fqn)
-	tassert.CheckFatal(t, err)
-	r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: bck.CksumConf().Type})
-	tassert.CheckFatal(t, err)
-	_, err = io.Copy(wfh, r)
-	_ = r.Close()
-	tassert.CheckFatal(t, err)
-	_ = wfh.Close()
-}
-
-func createPlainObjectAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName string, size int64) {
-	t.Helper()
-
-	fqn := mi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
-	err := cos.CreateDir(filepath.Dir(fqn))
-	tassert.CheckFatal(t, err)
-
-	// init LOM bound to that fqn
-	lom := &core.LOM{ObjName: objName}
-	err = lom.InitFQN(fqn, bck.Bucket())
-	tassert.CheckFatal(t, err)
-
-	// lock to match normal invariants for create+persist
-	lom.Lock(true)
-	defer lom.Unlock(true)
-
-	// write payload
-	if size > 0 {
-		createTestFile(t, bck, fqn, size)
-	}
-
-	// persist metadata
-	lom.SetSize(size)
-	lom.IncVersion()
-	lom.SetAtimeUnix(time.Now().UnixNano())
-	err = lom.PersistMain(false /*chunked*/)
-	tassert.CheckFatal(t, err)
-}
-
-func createChunkedLOMAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName string, numChunks int, sizeChunk int64) *core.LOM {
-	t.Helper()
-
-	fqn := mi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
-	err := cos.CreateDir(filepath.Dir(fqn))
-	tassert.CheckFatal(t, err)
-
-	lom := &core.LOM{ObjName: objName}
-	err = lom.InitFQN(fqn, bck.Bucket())
-	tassert.CheckFatal(t, err)
-
-	totalSize := int64(numChunks) * sizeChunk
-	lom.SetSize(totalSize)
-
-	ufest, err := core.NewUfest("", lom, false)
-	tassert.CheckFatal(t, err)
-
-	for i := 1; i <= numChunks; i++ {
-		chunk, err := ufest.NewChunk(i, lom)
-		tassert.CheckFatal(t, err)
-
-		createTestFile(t, bck, chunk.Path(), sizeChunk)
-
-		err = ufest.Add(chunk, sizeChunk, int64(i))
-		tassert.CheckFatal(t, err)
-	}
-
-	err = lom.CompleteUfest(ufest, false)
-	tassert.CheckFatal(t, err)
-
-	lom.UncacheUnless()
-	err = lom.Load(false, false)
-	tassert.CheckFatal(t, err)
-
-	tassert.Fatal(t, lom.IsChunked(), "expecting lom _chunked_ upon loading")
-	return lom
-}
-
-//
-// FS / config / bucket scaffolding
-//
-
-func initFS(t *testing.T, mpaths []string, targetID string) {
-	t.Helper()
-
-	fs.TestNew(nil)
-	for _, mpath := range mpaths {
-		err := cos.CreateDir(mpath)
-		tassert.CheckFatal(t, err)
-
-		_, err = fs.Add(mpath, targetID) // test helper from fs.go
-		tassert.CheckFatal(t, err)
-	}
-}
-
-func initConfig(t *testing.T, dir string, numMpaths int) *cmn.Config {
-	t.Helper()
-
-	config := cmn.GCO.BeginUpdate()
-	config.ConfigDir = dir
-	config.LogDir = dir
-	config.TestFSP.Count = numMpaths
-	config.Log.Level = "3"
-	config.Disk.DiskUtilLowWM = 50
-	config.Disk.DiskUtilHighWM = 80
-	config.Disk.DiskUtilMaxWM = 90
-	cmn.GCO.CommitUpdate(config)
-	cmn.Rom.Set(&config.ClusterConfig)
-	return config
-}
-
-func newBownerAndBck(name string) (meta.Bowner, *meta.Bck) {
-	b := meta.NewBck(
-		name, apc.AIS, cmn.NsGlobal,
-		&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumOneXxh}},
+// This test validates:
+// - resilver starts under topology change
+// - mid-flight abort works
+// - a subsequent resilver run completes
+// - objects are present at HRW under the final topology.
+func TestResilver_PreemptAddDisable(t *testing.T) {
+	const (
+		numBaseMpaths  = 3
+		numExtraMpaths = 1
+		minRelocations = 25 // ensure we actually have work after topology change
+		maxObjects     = 5000
+		plainObjSize   = 64 * cos.KiB
+		numChunkedObjs = 20
+		numChunks      = 8
+		chunkSize      = 16 * cos.KiB
+		waitStartTO    = 3 * time.Second
+		waitProgressTO = 10 * time.Second
+		waitAbortTO    = 10 * time.Second
+		waitDoneTO     = 60 * time.Second
 	)
-	return mock.NewBaseBownerMock(b), b
-}
+	const bucket = "ut-resilver-preempt"
 
-func pickDifferentMpath(t *testing.T, notPath string) *fs.Mountpath {
-	t.Helper()
+	// Init target + config + xreg
+	bowner, bcks := newBBB(bucket) // helper from res/unit_test.go
+	_ = mock.NewTarget(bowner)
 
-	avail := fs.GetAvail()
-	for p, mi := range avail {
-		if p != notPath && !mi.IsAnySet(fs.FlagWaitingDD) {
-			return mi
+	tmpDir := t.TempDir()
+	targetID := "t1" // stable test id; fs.Add wants one
+
+	// Prepare mountpaths
+	base := make([]string, 0, numBaseMpaths+numExtraMpaths)
+	for i := range numBaseMpaths + numExtraMpaths {
+		base = append(base, filepath.Join(tmpDir, fmt.Sprintf("mpath-%d", i)))
+	}
+
+	// Start with only the base mountpaths registered (topology A)
+	initFS(t, base[:numBaseMpaths], targetID)      // helper from res/unit_test.go
+	config := initConfig(t, tmpDir, numBaseMpaths) // helper from res/unit_test.go
+	xreg.Init()
+	xs.Treg(nil)
+
+	bck := bcks[0]
+
+	// Create objects canonical under topology A.
+	// We'll later add an extra mountpath; some objects should then become misplaced.
+	objNames := make([]string, 0, 2048)
+	createdAt := make(map[string]string, 2048) // obj -> mountpath path (under A)
+
+	// Plain objects
+	for i := range maxObjects {
+		obj := fmt.Sprintf("a/b/c/plain-%06d", i)
+		lom := newLOM(t, bck, obj, plainObjSize) // canonical HRW under A
+		objNames = append(objNames, obj)
+		createdAt[obj] = lom.Mountpath().Path
+	}
+
+	// Chunked objects (also canonical under A)
+	for i := range numChunkedObjs {
+		obj := fmt.Sprintf("a/b/c/chunked-%03d", i)
+		lom := newChunkedLOM(t, bck, obj, numChunks, chunkSize)
+		objNames = append(objNames, obj)
+		createdAt[obj] = lom.Mountpath().Path
+	}
+
+	// Add an extra mountpath (topology B)
+	tlog.Logln("1. Add an extra mountpath (topology B)")
+	extraMpath := base[numBaseMpaths]
+	tassert.CheckFatal(t, cos.CreateDir(extraMpath))
+	_, err := fs.Add(extraMpath, targetID)
+	tassert.CheckFatal(t, err)
+
+	// Ensure we have enough keys that changed HRW under topology B
+	relocations := 0
+	for _, obj := range objNames {
+		uname := bck.MakeUname(obj)
+		hrwMi, _, err := fs.Hrw(uname) // HRW under B now
+		tassert.CheckFatal(t, err)
+		if createdAt[obj] != hrwMi.Path {
+			relocations++
 		}
 	}
-	tassert.CheckFatal(t, fmt.Errorf("no alternative mountpath besides %q", notPath))
-	return nil
+	tassert.Fatalf(t, relocations >= minRelocations,
+		"insufficient HRW changes after adding mpath: have %d, want >= %d (consider increasing object count)",
+		relocations, minRelocations)
+
+	// Resilver controller
+	tlog.Logln("2. Start resilver #1")
+	r := res.New()
+	tstats := mock.NewStatsTracker()
+
+	// Start resilver A (under topology B) in a goroutine; use WG barrier
+	wgA := &sync.WaitGroup{}
+	wgA.Add(1)
+	uuidA := cos.GenUUID()
+	argsA := &res.Args{
+		UUID:   uuidA,
+		WG:     wgA,
+		Action: apc.ActMountpathAttach,
+		Custom: xreg.ResArgs{Config: config},
+	}
+	go r.Run(argsA, tstats)
+
+	// Wait until initRenew done and xaction is registered/owned
+	wgA.Wait()
+	xidA := waitNonEmptyXid(t, r, waitStartTO)
+	_ = xidA // should equal uuidA logically, but we won't assert that here
+
+	tlog.Logfln("3. Resilver %q is now running", xidA)
+
+	// Ensure A is actually doing work before preempting (avoid “aborted before first visit”)
+	waitProgressBySnap(t, xidA, waitProgressTO)
+
+	// Preempt: abort A, then disable the extra mountpath (topology C ~ A)
+	tlog.Logfln("4. Abort %q and begin disable/detach (DD) transition", xidA)
+	r.Abort(errors.New("test preempt: disable newly added mountpath"))
+
+	// Disable the extra mountpath to revert topology
+	flags := fs.FlagWaitingDD
+	rmi, _, _, err := fs.BeginDD(apc.ActMountpathDisable, flags, extraMpath)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, rmi != nil, "BeginDD returned nil mi for %q", extraMpath)
+	_, err = fs.Disable(extraMpath)
+	tassert.CheckFatal(t, err)
+
+	// Start resilver B (under topology C) in a goroutine; WG barrier again
+	tlog.Logln("5. Start resilver #2")
+	wgB := &sync.WaitGroup{}
+	wgB.Add(1)
+	uuidB := cos.GenUUID()
+	argsB := &res.Args{
+		UUID:   uuidB,
+		WG:     wgB,
+		Action: apc.ActMountpathDisable,
+		Custom: xreg.ResArgs{Config: config},
+	}
+	go r.Run(argsB, tstats)
+
+	wgB.Wait()
+	xidB := waitNonEmptyXid(t, r, waitStartTO)
+	tassert.Fatalf(t, xidB != xidA, "expected a new resilver xaction id after restart (A=%q, B=%q)", xidA, xidB)
+
+	tlog.Logfln("6. Resilver #2 %q is now running", xidB)
+
+	// Verify A aborted (via xreg)
+	waitAborted(t, xidA, waitAbortTO)
+
+	// Wait for B to complete (via xreg)
+	waitDone(t, xidB, waitDoneTO)
+
+	// Final: all objects must exist at current HRW under topology C
+	assertLocations(t, bck, objNames)
+
+	tlog.Logln("7. Done")
 }

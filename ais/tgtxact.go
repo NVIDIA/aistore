@@ -279,8 +279,9 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 			Custom: xreg.ResArgs{
 				Config: cmn.GCO.Get(),
 			},
+			WG: wg,
 		}
-		go t.runResilver(resargs, wg)
+		go t.runResilver(resargs)
 		wg.Wait()
 	case apc.ActRechunk:
 		return t.runRechunk(args.ID, bck, &xreg.RechunkArgs{

@@ -7,7 +7,6 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -22,11 +21,9 @@ func RenewRebalance(id int64, args *RebArgs) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewResilver(id string, args *ResArgs) core.Xact {
+func RenewResilver(id string, args *ResArgs) RenewRes {
 	e := dreg.nonbckXacts[apc.ActResilver].New(Args{UUID: id, Custom: args}, nil)
-	rns := dreg.renew(e, nil)
-	debug.Assert(!rns.IsRunning()) // NOTE: resilver is always preempted
-	return rns.Entry.Get()
+	return dreg.renew(e, nil)
 }
 
 func RenewElection() RenewRes {

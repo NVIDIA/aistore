@@ -40,7 +40,7 @@ func MarkerExists(marker string) bool {
 // return fatalErr when ended up with no markers
 // on any other (unlikely) failure:
 // - warn and trigger FSHC (with its subsequent cos.IsIOError filter)
-func PersistMarker(marker string) (fatalErr, warnErr error) {
+func PersistMarker(marker string, quiet bool) (fatalErr, warnErr error) {
 	var (
 		cnt     int
 		relname = filepath.Join(fname.MarkersDir, marker)
@@ -59,7 +59,9 @@ func PersistMarker(marker string) (fatalErr, warnErr error) {
 			if cnt > numMarkers {
 				if err := cos.RemoveFile(fpath); err != nil {
 					warnErr = cos.Ternary(warnErr == nil, err, warnErr)
-					nlog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
+					if !quiet {
+						nlog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
+					}
 					mfs.hc.FSHC(err, mi, fpath)
 				} else {
 					cnt--
@@ -78,14 +80,18 @@ func PersistMarker(marker string) (fatalErr, warnErr error) {
 			file, err := cos.CreateFile(fpath)
 			if err != nil {
 				warnErr = cos.Ternary(warnErr == nil, err, warnErr)
-				nlog.Errorf("Failed to create %q marker: %v", fpath, err)
+				if !quiet {
+					nlog.Errorf("Failed to create %q marker: %v", fpath, err)
+				}
 				mfs.hc.FSHC(err, mi, fpath)
 				continue
 			}
 
 			if err := file.Close(); err != nil {
 				warnErr = cos.Ternary(warnErr == nil, err, warnErr)
-				nlog.Errorf("Failed to close %q marker: %v", fpath, err)
+				if !quiet {
+					nlog.Errorf("Failed to close %q marker: %v", fpath, err)
+				}
 			}
 			cnt++
 		}

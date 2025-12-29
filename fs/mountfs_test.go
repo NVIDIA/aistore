@@ -287,7 +287,7 @@ func TestMoveMarkers(t *testing.T) {
 
 			mpath := createMountpath(t)
 
-			fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker)
+			fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker, false /*quiet*/)
 			tassert.CheckFatal(t, fatalErr)
 			tassert.CheckFatal(t, writeErr)
 
