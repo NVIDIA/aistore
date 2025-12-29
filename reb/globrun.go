@@ -383,20 +383,36 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	xreb, ok := xctn.(*xs.Rebalance)
 	debug.Assert(ok)
 
-	reb.mu.Lock() // --------------------------------------------------------------------------
+	reb.mu.Lock() // ----------------------------
+	origSmap, origStage := reb.smap.Load(), reb.stages.stage.Load()
+	err := reb._renew(rargs, xreb, haveStreams)
 
+	if err == nil {
+		reb.mu.Unlock() // ok ------
+		extArgs.Notif.Xact = xreb
+		xreb.AddNotif(extArgs.Notif)
+		nlog.Infoln(rargs.logHdr, "- running", xreb.String())
+		return true
+	}
+
+	if rargs.xreb == xreb {
+		xreb.Abort(err)
+		reb.setXact(nil)
+	}
+	reb.smap.Store(origSmap)
+	reb.stages.stage.Store(origStage)
+	reb.mu.Unlock() // fail ------
+
+	nlog.Errorln(err)
+	return false
+}
+
+func (reb *Reb) _renew(rargs *rebArgs, xreb *xs.Rebalance, haveStreams bool) error {
 	if xreb.RebID() != rargs.id {
-		reb.mu.Unlock()
-		err := fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
-		debug.AssertNoErr(err) // (unlikely)
-		nlog.Errorln(err)
-		return false
+		return fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
 	}
 
 	rargs.xreb = xreb
-	reb.stages.stage.Store(rebStageInit)
-	reb.setXact(xreb)
-	reb.id.Store(rargs.id)
 
 	// prior to opening streams:
 	// not every change in Smap warants a different rebalance but this one (below) definitely does
@@ -405,13 +421,13 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	if smap.Version != rargs.smap.Version {
 		if !smap.SameTargets(rargs.smap) {
 			debug.Assert(smap.Version > rargs.smap.Version)
-			err := fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
-			return reb.undoRenew(rargs, err)
+			return fmt.Errorf("%s post-renew change %s => %s", xreb, rargs.smap.StringEx(), smap.StringEx())
 		}
 	}
 	reb.smap.Store(rargs.smap)
 
 	// 3. init streams and data structures
+	reb.stages.stage.Store(rebStageInit)
 	if haveStreams {
 		dmExtra := bundle.Extra{
 			RecvAck:     reb.recvAckNtfn,
@@ -423,7 +439,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 			reb.dm = dm
 		}
 		if err := reb.beginStreams(rargs); err != nil {
-			return reb.undoRenew(rargs, err)
+			return err
 		}
 	}
 
@@ -441,28 +457,15 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	if fatalErr, writeErr := fs.PersistMarker(fname.RebalanceMarker); fatalErr != nil || writeErr != nil {
 		err := cos.Ternary(fatalErr != nil, fatalErr, writeErr)
 		_, _ = reb.endStreams(err)
-		return reb.undoRenew(rargs, err)
+		return err
 	}
+
+	reb.setXact(xreb)
+	reb.id.Store(rargs.id)
 
 	// 5. ready - can receive objects
 	reb.stages.cleanup()
-
-	reb.mu.Unlock() // --------------------------------------------------------------------------
-
-	extArgs.Notif.Xact = xreb
-	xreb.AddNotif(extArgs.Notif)
-
-	nlog.Infoln(rargs.logHdr, "- running", xreb.String())
-	return true
-}
-
-func (reb *Reb) undoRenew(rargs *rebArgs, err error) bool {
-	rargs.xreb.Abort(err)
-	reb.setXact(nil)
-	reb.smap.Store(nil)
-	reb.mu.Unlock()
-	nlog.ErrorDepth(1, err)
-	return false
+	return nil
 }
 
 func (reb *Reb) beginStreams(rargs *rebArgs) error {

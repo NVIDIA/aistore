@@ -196,6 +196,11 @@ func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, final
 	// Start rechunk with new config
 	tlog.Logfln("Starting rechunk (approach=%s, limit=%s, chunkSize=%s)...", approach, cos.ToSizeIEC(finalLimit, 0), cos.ToSizeIEC(chunkSize, 0))
 	xid, err := startRechunk(t, baseParams, bck, finalLimit, chunkSize, approach)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		xid, err = startRechunk(t, baseParams, bck, finalLimit, chunkSize, approach)
+	}
+
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 

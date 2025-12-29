@@ -107,7 +107,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *meta.Snode) (rebID str
 }
 
 func PromptWaitOnHerr(herr *cmn.ErrHTTP) {
-	const sleep = 10 * time.Second
+	const sleep = 30 * time.Second
 	tlog.Logfln("Warning: %v", herr)
 	tlog.Logfln("Warning: waiting %v and retrying...", sleep)
 	time.Sleep(sleep)
