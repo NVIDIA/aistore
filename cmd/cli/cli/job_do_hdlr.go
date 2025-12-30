@@ -62,9 +62,26 @@ const downloadUsage = "Download files and objects from remote sources, e.g.:\n" 
 	indent1 + "\t- 'ais download --hf-dataset squad --hf-file train-v1.1.json ais://local/ --hf-auth'\t- download dataset file with authentication;\n" +
 	indent1 + "\t- 'ais download --hf-model bert-large-uncased ais://local/ --blob-threshold 100MB'\t- download model with size-based routing (large files get individual jobs)."
 
-const resilverUsage = "Resilver user data on a given target (or all targets in the cluster); entails:\n" +
-	indent1 + "\t- fix data redundancy with respect to bucket configuration;\n" +
-	indent1 + "\t- remove migrated objects and old/obsolete workfiles."
+const resilverUsage = "Resilver user data on a given target (or all targets in the cluster).\n" +
+	indent1 + "Resilvering entails:\n" +
+	indent1 + "\t- restoring data redundancy with respect to bucket configuration (mirrors, EC);\n" +
+	indent1 + "\t- relocating misplaced objects (or their respective chunks) to their canonical locations;\n" +
+	indent1 + "\t- removing obsolete workfiles and stale object replicas.\n" +
+	indent1 + "\n" +
+	indent1 + "Typical use cases include:\n" +
+	indent1 + "\t- reattaching or enabling mountpaths after disk replacement;\n" +
+	indent1 + "\t- recovering from partial disk failures or transient I/O errors;\n" +
+	indent1 + "\t- reconciling data layout after interrupted maintenance.\n" +
+	indent1 + "\n" +
+	indent1 + "Usage examples:\n" +
+	indent1 + "\t- 'ais job start resilver'\t- start cluster-wide resilvering (all targets);\n" +
+	indent1 + "\t- 'ais start resilver t[XYZ]'\t- resilver a specific target;\n" +
+	indent1 + "\t- 'ais start resilver t[XYZ] --wait'\t- wait for resilver completion;\n" +
+	indent1 + "\t- 'ais job start resilver t[XYZ] --timeout 30m'\t- wait up to 30 minutes;\n" +
+	indent1 + "\n" +
+	indent1 + "If a resilver is already running, the command will report it and\n" +
+	indent1 + "prompt for confirmation before starting a new one.\n" +
+	indent1 + "To monitor progress, run 'ais show job resilver'."
 
 const stopUsage = "Terminate a single batch job or multiple jobs, e.g.:\n" +
 	indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given (multi-object copy/transform) job identified by its unique ID;\n" +

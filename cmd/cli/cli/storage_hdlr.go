@@ -41,15 +41,93 @@ type bsummCtx struct {
 	res     cmn.AllBsummResults
 }
 
-var scrubUsage = "Check in-cluster content for misplaced objects, objects that have insufficient numbers of copies, zero size, and more\n" +
-	indent1 + "e.g.:\n" +
-	indent1 + "\t* ais storage validate \t- validate all in-cluster buckets;\n" +
-	indent1 + "\t* ais scrub \t- same as above;\n" +
-	indent1 + "\t* ais storage validate ais \t- validate (a.k.a. scrub) all ais:// buckets;\n" +
-	indent1 + "\t* ais scrub s3 \t- ditto, all s3:// buckets;\n" +
-	indent1 + "\t* ais scrub s3 --refresh 10\t- same as above while refreshing runtime counter(s) every 10s;\n" +
-	indent1 + "\t* ais scrub gs://abc/images/\t- validate part of the gcp bucket under 'images/`;\n" +
-	indent1 + "\t* ais scrub gs://abc --prefix images/\t- same as above."
+const scrubUsage = "Validate in-cluster content for inconsistencies and data placement issues.\n" +
+	indent1 + "The scrub operation checks for:\n" +
+	indent1 + "\t- misplaced objects;\n" +
+	indent1 + "\t- insufficient number of replicas or EC slices;\n" +
+	indent1 + "\t- zero-size or otherwise invalid objects;\n" +
+	indent1 + "\t- stale or orphaned metadata.\n" +
+	indent1 + "\n" +
+	indent1 + "Typical use cases:\n" +
+	indent1 + "\t- verifying cluster health after failures or maintenance;\n" +
+	indent1 + "\t- validating data placement after mountpath or disk operations;\n" +
+	indent1 + "\t- diagnosing unexpected object access errors.\n" +
+	indent1 + "\n" +
+	indent1 + "Examples:\n" +
+	indent1 + "\t- 'ais storage validate'\t- validate all in-cluster buckets;\n" +
+	indent1 + "\t- 'ais scrub'\t- same as above;\n" +
+	indent1 + "\t- 'ais scrub ais://bucket'\t- validate a specific AIS bucket;\n" +
+	indent1 + "\t- 'ais scrub gs://abc/images/'\t- validate part of the GCP bucket under \"images/\";\n" +
+	indent1 + "\t- 'ais scrub gs://abc --prefix images/'\t- same as above using an explicit prefix."
+
+// {verb}-mountpath usage:
+const (
+	mpathDisableUsage = "Disable mountpath (deactivate but keep in target's volume for future re-enable).\n" +
+		indent1 + "\n" +
+		indent1 + "Disabling a mountpath temporarily removes it from active use while preserving its\n" +
+		indent1 + "registration in the target's volume configuration. By default, data is resilvered\n" +
+		indent1 + "(relocated) to remaining mountpaths to maintain redundancy.\n" +
+		indent1 + "\n" +
+		indent1 + "Use cases:\n" +
+		indent1 + "\t- temporary disk maintenance or diagnostics;\n" +
+		indent1 + "\t- isolating a failing disk before replacement;\n" +
+		indent1 + "\t- testing cluster behavior with reduced capacity.\n" +
+		indent1 + "\n" +
+		indent1 + "Examples:\n" +
+		indent1 + "\t- 'ais storage mountpath disable t[abc]=/mnt/disk1'\t- disable and resilver;\n" +
+		indent1 + "\t- 'ais storage mountpath disable t[abc]=/mnt/disk1 --no-resilver'\t- disable without resilvering (caution: data may be at risk);\n" +
+		indent1 + "\t- 'ais storage mountpath disable t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- disable multiple.\n" +
+		indent1 + "\n" +
+		indent1 + "To reactivate, use 'ais storage mountpath enable'.\n" +
+		indent1 + "For permanent removal, use 'ais storage mountpath detach' instead."
+
+	mpathDetachUsage = "Detach mountpath from a target (disable and remove from target's volume).\n" +
+		indent1 + "\n" +
+		indent1 + "Detaching permanently removes the mountpath from the target's configuration.\n" +
+		indent1 + "By default, data is resilvered to remaining mountpaths before removal.\n" +
+		indent1 + "\n" +
+		indent1 + "Use cases:\n" +
+		indent1 + "\t- permanent disk removal or replacement;\n" +
+		indent1 + "\t- decommissioning storage capacity;\n" +
+		indent1 + "\t- hardware upgrade (remove old, attach new).\n" +
+		indent1 + "\n" +
+		indent1 + "Examples:\n" +
+		indent1 + "\t- 'ais storage mountpath detach t[abc]=/mnt/disk1'\t- detach and resilver;\n" +
+		indent1 + "\t- 'ais storage mountpath detach t[abc]=/mnt/disk1 --no-resilver'\t- detach without resilvering (caution: data loss if not replicated);\n" +
+		indent1 + "\t- 'ais storage mountpath detach t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- detach multiple.\n" +
+		indent1 + "\n" +
+		indent1 + "Unlike 'disable', detached mountpaths must be re-attached (not re-enabled).\n" +
+		indent1 + "To add back, use 'ais storage mountpath attach'."
+
+	mpathEnableUsage = "Re-enable a previously disabled mountpath.\n" +
+		indent1 + "\n" +
+		indent1 + "Enabling reactivates a disabled mountpath and triggers resilvering to restore\n" +
+		indent1 + "proper data placement and redundancy.\n" +
+		indent1 + "\n" +
+		indent1 + "Examples:\n" +
+		indent1 + "\t- 'ais storage mountpath enable t[abc]=/mnt/disk1'\t- enable and resilver;\n" +
+		indent1 + "\t- 'ais storage mountpath enable t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- enable multiple.\n" +
+		indent1 + "\n" +
+		indent1 + "Note: only works for mountpaths that were previously disabled.\n" +
+		indent1 + "For newly attached disks, use 'ais storage mountpath attach'."
+
+	mpathAttachUsage = "Attach a new mountpath to a target node.\n" +
+		indent1 + "\n" +
+		indent1 + "Attaching adds a new disk (mountpath) to the target's storage pool and triggers\n" +
+		indent1 + "resilvering to populate it with data according to bucket configurations.\n" +
+		indent1 + "\n" +
+		indent1 + "Use cases:\n" +
+		indent1 + "\t- expanding storage capacity;\n" +
+		indent1 + "\t- replacing a detached disk;\n" +
+		indent1 + "\t- adding disks to a new target.\n" +
+		indent1 + "\n" +
+		indent1 + "Examples:\n" +
+		indent1 + "\t- 'ais storage mountpath attach t[abc]=/mnt/disk1'\t- attach and resilver;\n" +
+		indent1 + "\t- 'ais storage mountpath attach t[abc]=/mnt/disk1 --label ssd'\t- attach with label;\n" +
+		indent1 + "\t- 'ais storage mountpath attach t[abc]=/mnt/disk1 t[abc]=/mnt/disk2'\t- attach multiple.\n" +
+		indent1 + "\n" +
+		indent1 + "The mountpath must be a valid mounted filesystem accessible by the target."
+)
 
 var (
 	mpathCmdsFlags = map[string][]cli.Flag{
@@ -69,7 +147,7 @@ var (
 			makeAlias(&showCmdMpath, &mkaliasOpts{newName: commandShow}),
 			{
 				Name:         cmdMpathAttach,
-				Usage:        "Attach mountpath to a given target node",
+				Usage:        mpathAttachUsage,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        sortFlags(mpathCmdsFlags[cmdMpathAttach]),
 				Action:       mpathAttachHandler,
@@ -77,14 +155,14 @@ var (
 			},
 			{
 				Name:         cmdMpathEnable,
-				Usage:        "(Re)enable target's mountpath",
+				Usage:        mpathEnableUsage,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Action:       mpathEnableHandler,
 				BashComplete: suggestMpathEnable,
 			},
 			{
 				Name:         cmdMpathDetach,
-				Usage:        "Detach mountpath from a target node (disable and remove it from the target's volume)",
+				Usage:        mpathDetachUsage,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        sortFlags(mpathCmdsFlags["default"]),
 				Action:       mpathDetachHandler,
@@ -92,7 +170,7 @@ var (
 			},
 			{
 				Name:         cmdMpathDisable,
-				Usage:        "Disable mountpath (deactivate but keep in a target's volume for possible future activation)",
+				Usage:        mpathDisableUsage,
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        sortFlags(mpathCmdsFlags["default"]),
 				Action:       mpathDisableHandler,
@@ -221,7 +299,11 @@ var (
 			mpathCmd,
 			showCmdDisk,
 			cleanupCmd,
-			makeAlias(&jobStartResilver, &mkaliasOpts{}),
+			makeAlias(&jobStartResilver, &mkaliasOpts{
+				replace: cos.StrKVs{
+					"ais job start resilver": "ais storage resilver",
+				},
+			}),
 		},
 	}
 )
