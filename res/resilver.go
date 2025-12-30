@@ -78,7 +78,10 @@ func (res *Res) xctn() *xs.Resilver { return res.xres.Load() }
 
 func (res *Res) CurrentXactID() string {
 	xres := res.xctn()
-	return cos.Ternary(xres == nil, "", xres.ID())
+	if xres == nil {
+		return ""
+	}
+	return xres.ID()
 }
 
 func (res *Res) Abort(err error) (aborted bool) {

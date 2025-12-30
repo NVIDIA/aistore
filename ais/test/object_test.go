@@ -2501,6 +2501,10 @@ func TestMultipartUploadAndCopyBucket(t *testing.T) {
 	// Step 2: Copy bucket
 	tlog.Logfln("Copying bucket with %d chunked files: %s -> %s", numObjects, bck.Name, dstBck.Name)
 	xid, err := api.CopyBucket(baseParams, bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{}, ContinueOnError: true})
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		xid, err = api.CopyBucket(baseParams, bck, dstBck, &apc.TCBMsg{CopyBckMsg: apc.CopyBckMsg{}, ContinueOnError: true})
+	}
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {

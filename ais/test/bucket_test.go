@@ -1069,6 +1069,10 @@ func TestRenameBucketEmpty(t *testing.T) {
 	// Rename it
 	tlog.Logfln("rename %s => %s", srcBck.String(), dstBck.String())
 	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		uuid, err = api.RenameBucket(baseParams, srcBck, dstBck)
+	}
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: uuid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}

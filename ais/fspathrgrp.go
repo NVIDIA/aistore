@@ -22,12 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
-const (
-	fmtfsprun = "%s: %q %s: starting to resilver"
-
-	preemptSleep = 100 * time.Millisecond
-)
-
 type fsprungroup struct {
 	t      *target
 	newVol bool
@@ -68,12 +62,7 @@ func (g *fsprungroup) attachMpath(mpath string, label cos.MountpathLabel) (added
 func (g *fsprungroup) _postAdd(action string, ami *fs.Mountpath) {
 	fspathsConfigAddDel(ami.Path, true /*add*/)
 
-	prev := g.preempt(action, ami)
-	if prev {
-		nlog.Warningf(fmtfsprun, g.t, action, ami)
-	} else {
-		nlog.Infof(fmtfsprun, g.t, action, ami)
-	}
+	g.preempt(action, ami)
 
 	go func() {
 		config := cmn.GCO.Get()
@@ -167,12 +156,6 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	}
 
 	prev := g.preempt(action, rmi)
-	if prev {
-		nlog.Warningf(fmtfsprun, g.t, action, rmi)
-	} else {
-		nlog.Infof(fmtfsprun, g.t, action, rmi)
-	}
-
 	marked := xreg.GetResilverMarked()
 	args := &res.Args{
 		Rmi:             rmi,
@@ -186,16 +169,38 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	return rmi, nil
 }
 
-func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool {
-	prevActive := g.t.res.IsActive(1 /*ivalInactive*/)
-	if !prevActive {
+func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
+	const (
+		preemptSleep = time.Second
+	)
+	var (
+		res = g.t.res
+		xid = res.CurrentXactID()
+	)
+	if xid == "" {
 		return false
 	}
 
-	err := fmt.Errorf("%s: %q %s: starting to resilver when previous (resilvering) is active or recently finished", g.t, action, mi)
-	if g.t.res.Abort(err) {
-		time.Sleep(preemptSleep)
+	xres, err := xreg.GetXact(xid)
+	debug.AssertNoErr(err)
+	if xres == nil {
+		debug.Assertf(false, "expecting xres[%s] to stay in x-registry for a while", xid)
+		return true
 	}
+	if xres.IsAborted() {
+		return true
+	}
+	if xres.IsDone() {
+		time.Sleep(preemptSleep >> 2) // just finished; Res atomic state
+		return false
+	}
+
+	err = fmt.Errorf("%s: %q %s: starting new resilver", g.t, action, mi)
+	if res.Abort(err) {
+		return true
+	}
+	time.Sleep(preemptSleep)
+	debug.Assert(xres.IsAborted() || xres.IsDone(), xres.String())
 	return true
 }
 
