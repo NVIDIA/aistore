@@ -221,6 +221,7 @@ var (
 			mpathCmd,
 			showCmdDisk,
 			cleanupCmd,
+			makeAlias(&jobStartResilver, &mkaliasOpts{}),
 		},
 	}
 )

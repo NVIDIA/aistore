@@ -36,9 +36,10 @@ const (
 
 type (
 	Res struct {
-		xres ratomic.Pointer[xs.Resilver]
-		end  atomic.Int64
-		mu   sync.Mutex
+		xres  ratomic.Pointer[xs.Resilver]
+		end   atomic.Int64
+		nbusy atomic.Int64
+		mu    sync.Mutex
 	}
 	Args struct {
 		UUID            string
@@ -51,6 +52,7 @@ type (
 		SingleRmiJogger bool
 	}
 	jogger struct {
+		p    *Res
 		xres *xs.Resilver
 	}
 )
@@ -113,7 +115,7 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	var (
 		jgroup    *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		j         = &jogger{xres: xres}
+		j         = &jogger{p: res, xres: xres}
 		opts      = &mpather.JgroupOpts{
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
 			VisitObj: j.visitObj,
@@ -156,6 +158,10 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	res.end.Store(mono.NanoTime())
 	res.xres.Store(nil)
 	res.mu.Unlock()
+
+	if n := res.nbusy.Load(); n > 0 {
+		nlog.Warningf("%s done (skipped %d busy)", xres.Name(), n)
+	}
 }
 
 func (res *Res) initRenew(args *Args) *xs.Resilver {
@@ -260,11 +266,13 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		copied bool
 	)
 	if !lom.TryLock(true) { // NOTE: skipping busy
-		time.Sleep(time.Second >> 1)
-		if !lom.TryLock(true) {
-			return nil
+		j.p.nbusy.Inc()
+		if cmn.Rom.V(4, cos.ModReb) {
+			nlog.Warningln("skipping busy:", lom.Cname())
 		}
+		return nil
 	}
+
 	// cleanup
 	defer func() {
 		lom = orig

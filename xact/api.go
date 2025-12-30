@@ -17,6 +17,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -634,4 +637,30 @@ func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
 		end = time.Now()
 	}
 	return end.Sub(start), nil
+}
+
+func (xs MultiSnap) ToJSON(tid string, indent bool) ([]byte, error) {
+	out := make(map[string][]string, len(xs))
+	for sid, snaps := range xs {
+		if tid != "" && sid != tid {
+			continue
+		}
+		l := len(snaps)
+		if l == 0 {
+			continue
+		}
+		xids := make([]string, 0, l)
+		for _, xsnap := range snaps {
+			debug.Assert(xsnap.ID != "")
+			xids = append(xids, xsnap.ID)
+		}
+		out[meta.Tname(sid)] = xids
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	if indent {
+		return jsoniter.MarshalIndent(out, "", "    ")
+	}
+	return jsoniter.Marshal(out)
 }

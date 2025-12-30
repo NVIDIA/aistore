@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -405,7 +406,27 @@ func startResilverHandler(c *cli.Context) error {
 		}
 		tid = tsi.ID()
 	}
-	xargs := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: tid}
+
+	// check for running resilver
+	xargs := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: tid, OnlyRunning: true}
+	xs, err := api.QueryXactionSnaps(apiBP, &xargs)
+	if err != nil {
+		return V(err)
+	}
+	if len(xs) > 0 {
+		running, err := xs.ToJSON(tid, true /*indent*/)
+		if err != nil {
+			return err
+		}
+		if running != nil {
+			fmt.Fprintf(c.App.Writer, "Resilvering already in progress:\n%s\n", string(running))
+			if !confirm(c, "Start new (and possibly abort the current one(s))?") {
+				return nil
+			}
+		}
+	}
+
+	xargs.OnlyRunning = false // reset
 	return startXaction(c, &xargs, "")
 }
 
@@ -431,9 +452,17 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 
 	debug.Assert(xact.IsValidUUID(xid), xid)
 
-	if xargs.Kind == apc.ActRebalance {
+	switch xargs.Kind {
+	case apc.ActRebalance:
 		actionDone(c, "Started global rebalance. To monitor the progress, run 'ais show rebalance'")
-	} else {
+	case apc.ActResilver:
+		const add = " To monitor the progress, run 'ais show job " + apc.ActResilver + "'"
+		if xargs.DaemonID != "" {
+			actionDone(c, fmt.Sprintf("Started %s on %s."+add, apc.ActResilver, meta.Tname(xargs.DaemonID)))
+		} else {
+			actionDone(c, fmt.Sprintf("Started %s[%s] simultaneously on all targets."+add, apc.ActResilver, xid))
+		}
+	default:
 		actionX(c, xargs, "")
 	}
 
