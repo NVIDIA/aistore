@@ -1596,7 +1596,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		if err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), ecode)
 		}
-	default: // target
+	default: // target // TODO: lookup RebalanceSkippedMarker and related comments
 		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && !inMaint
 		nlog.Infof("%s: %s reb=%t", p, msg.Action, reb)
 		if reb {

@@ -639,8 +639,31 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	}
 }
 
+func (t *target) _dontResilver(w http.ResponseWriter, r *http.Request) (dontResilver, ok bool) {
+	q := r.URL.Query()
+	dontResilver = cos.IsParseBool(q.Get(apc.QparamDontResilver))
+	active := t.res.IsActive(0)
+
+	if dontResilver && active {
+		t.writeErrMsg(w, r, "cannot use --no-resilver (or the respective query parameter) while resilver is in progress")
+		return false, false
+	}
+	config := cmn.GCO.Get()
+	confDisabled := !config.Resilver.Enabled
+	if confDisabled && active {
+		// may lead to loss of user data
+		// TODO see also ResilverSkippedMarker and comments
+		nlog.Errorln("Warning: resilvering is disabled via cluster or target's config while previous/current resilvering is still active")
+	}
+
+	return dontResilver, true
+}
+
 func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
+	dontResilver, ok := t._dontResilver(w, r)
+	if !ok {
+		return
+	}
 	disabledMi, err := t.fsprg.disableMpath(mpath, dontResilver)
 	if err != nil {
 		if cmn.IsErrMpathNotFound(err) {
@@ -657,7 +680,10 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 }
 
 func (t *target) rescanMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
+	dontResilver, ok := t._dontResilver(w, r)
+	if !ok {
+		return
+	}
 	err := t.fsprg.rescanMpath(mpath, dontResilver)
 	if err == nil {
 		return
@@ -687,7 +713,10 @@ func (t *target) fshcMpath(w http.ResponseWriter, r *http.Request, mpath string)
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
-	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
+	dontResilver, ok := t._dontResilver(w, r)
+	if !ok {
+		return
+	}
 	if _, err := t.fsprg.detachMpath(mpath, dontResilver); err != nil {
 		t.writeErr(w, r, err)
 	}

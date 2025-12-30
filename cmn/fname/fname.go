@@ -44,6 +44,16 @@ const (
 	Token = "auth.token"
 
 	// Markers: per mountpath
+
+	// TODO add the two distinct "skipped" markers:
+	//   - ResilverSkippedMarker
+	//   - RebalanceSkippedMarker
+	// Semantics:
+	//   * written when the respective operation is intentionally skipped
+	//     (eg. `--no-resilver`, `--no-rebalance`, config-disabled, or equivalent admin choice)
+	//   * must not be interpreted as "interrupted", "failed", or "in-progress"
+	//   * e.g. usage: SingleRmiJogger
+
 	MarkersDir          = ".ais.markers"
 	ResilverMarker      = "resilver"
 	RebalanceMarker     = "rebalance"

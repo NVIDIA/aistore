@@ -831,27 +831,27 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 }
 
 // begin (disable | detach) transaction: CoW-mark the corresponding mountpath
-func BeginDD(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, noResil bool, err error) {
+func BeginDD(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, alreadyDD bool, err error) {
 	var cleanMpath string
 	debug.Assert(cos.BitFlags(flags).IsAnySet(cos.BitFlags(FlagWaitingDD)))
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
 	mfs.mu.Lock()
-	mi, numAvail, noResil, err = begdd(action, flags, cleanMpath)
+	mi, numAvail, alreadyDD, err = begdd(action, flags, cleanMpath)
 	mfs.mu.Unlock()
 	return
 }
 
 // under lock
-func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, noResil bool, err error) {
+func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, alreadyDD bool, err error) {
 	var (
 		avail, disabled = Get()
 		exists          bool
 	)
 	// dd inactive
 	if _, exists = avail[mpath]; !exists {
-		noResil = true
+		alreadyDD = true
 		if mi, exists = disabled[mpath]; !exists {
 			err = cmn.NewErrMpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 			return

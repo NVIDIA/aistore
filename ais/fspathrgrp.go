@@ -133,24 +133,30 @@ func (g *fsprungroup) rescanMpath(mpath string, dontResilver bool) error {
 }
 
 func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (*fs.Mountpath, error) {
-	rmi, numAvail, noResil, err := fs.BeginDD(action, flags, mpath)
+	t := g.t
+	rmi, numAvail, alreadyDD, err := fs.BeginDD(action, flags, mpath)
 	if err != nil || rmi == nil {
 		return nil, err
 	}
 	if numAvail == 0 {
-		nlog.Errorf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
+		nlog.Errorf("%s: lost (via %q) the last available mountpath %q", t.si, action, rmi)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // go ahead to disable/detach
-		g.t.disable()
+
+		// NOTE: disable this target (it's a brick but still can be revitalized)
+		t.disable()
 		return rmi, nil
 	}
 
 	core.LcacheClearMpath(rmi)
 
 	config := cmn.GCO.Get()
-	if noResil || dontResilver || !config.Resilver.Enabled {
-		nlog.Infoln(g.t.String(), "action", action, rmi.String(), "- not resilvering:")
-		nlog.Infoln("noResil (action done?):", noResil, "dontResilver:", dontResilver,
-			"config enabled:", config.Resilver.Enabled)
+	confDisabled := !config.Resilver.Enabled
+
+	// TODO: lookup ResilverSkippedMarker and related comments
+
+	if alreadyDD || dontResilver || confDisabled {
+		nlog.Infoln(t.String(), "action", action, rmi.String(), "- not resilvering:")
+		nlog.Infoln("[ already disabled or detached:", alreadyDD, "--no-resilver:", dontResilver, "disabled via config:", confDisabled, "]")
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
 		return rmi, nil
 	}
@@ -160,24 +166,24 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	args := &res.Args{
 		Rmi:             rmi,
 		Action:          action,
-		PostDD:          g.postDD, // callback when done
-		SingleRmiJogger: !prev && !marked.Interrupted,
+		PostDD:          g.postDD,                     // callback when done
+		SingleRmiJogger: !prev && !marked.Interrupted, // NOTE: future: also gate on !marked.Skipped once ResilverSkippedMarker gets added
 		Custom:          xreg.ResArgs{Config: config},
 	}
-	go g.t.runResilver(args)
+	go t.runResilver(args)
 
 	return rmi, nil
 }
 
 func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 	const (
-		preemptSleep = time.Second
+		preemptSleep = 200 * time.Millisecond
 	)
 	var (
 		res = g.t.res
 		xid = res.CurrentXactID()
 	)
-	if xid == "" {
+	if xid == "" { // finished ok or never ran
 		return false
 	}
 
@@ -191,7 +197,7 @@ func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 		return true
 	}
 	if xres.IsDone() {
-		time.Sleep(preemptSleep >> 2) // just finished; Res atomic state
+		time.Sleep(preemptSleep) // just finished; Res atomic state
 		return false
 	}
 
