@@ -200,7 +200,7 @@ func (p *proxy) Run() error {
 	// startup sequence - see earlystart.go for the steps and commentary
 	p.bootstrap()
 
-	p.authn = newAuthManager(config)
+	p.authn = newAuthManager(config, p.statsT)
 
 	p.rproxy.init()
 

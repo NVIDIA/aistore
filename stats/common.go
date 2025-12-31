@@ -344,8 +344,9 @@ func (r *runner) regCommon(snode *meta.Snode) {
 // as cos.StatsUpdater
 //
 
-func (r *runner) Inc(name string)            { r.core.inc(name) }
-func (r *runner) Add(name string, val int64) { r.core.add(name, val) }
+func (r *runner) Inc(name string)                  { r.core.inc(name) }
+func (r *runner) Add(name string, val int64)       { r.core.add(name, val) }
+func (r *runner) Observe(name string, val float64) { r.core.observe(name, val) }
 
 // (prometheus with variable labels)
 func (r *runner) AddWith(nvs ...cos.NamedVal64) {

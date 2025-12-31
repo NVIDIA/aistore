@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/stats"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -35,6 +36,8 @@ type (
 		jwksClient *http.Client
 		// Exposed config options for the JWK client and cache
 		cacheConfig *CacheConfig
+		// Optional stats tracker when used by AIS nodes
+		statsT stats.Tracker
 	}
 
 	keyCache struct {
@@ -60,6 +63,12 @@ type (
 	discoverResp struct {
 		JWKSURI string `json:"jwks_uri"`
 	}
+
+	// JWKSRoundTripper wraps http.RoundTripper to track latency of JWKS fetches
+	JWKSRoundTripper struct {
+		base   http.RoundTripper
+		statsT stats.Tracker
+	}
 )
 
 var ErrNoJWKSForIssuer = errors.New("no JWKS entry exists for issuer")
@@ -70,16 +79,20 @@ const (
 	defaultOIDCDiscoveryRetryDelay = cos.PollSleepShort
 	oidcDiscoveryEndpoint          = "/.well-known/openid-configuration"
 	maxKidLength                   = 256
+	keyFetchURLJWK                 = "/jwk"
+	keyFetchURLKey                 = "/key"
+	keyFetchURLCert                = "/cert"
 )
 
 // NewKeyCacheManager creates an instance of KeyCacheManager with an unpopulated cache
 // After creating, call Init with a long-lived context to create a key cache
 // Optionally, also pre-populate the cache to register and preload the allowed issuers
-func NewKeyCacheManager(oidc *cmn.OIDCConf, client *http.Client, cacheConf *CacheConfig) *KeyCacheManager {
+func NewKeyCacheManager(oidc *cmn.OIDCConf, client *http.Client, cacheConf *CacheConfig, statsT stats.Tracker) *KeyCacheManager {
 	return &KeyCacheManager{
 		allowedIss:  newAllowSet(oidc),
 		jwksClient:  client,
 		cacheConfig: newCacheConfig(cacheConf),
+		statsT:      statsT,
 	}
 }
 
@@ -106,6 +119,30 @@ func newCacheConfig(conf *CacheConfig) *CacheConfig {
 	return conf
 }
 
+func NewJWKSRoundTripper(base http.RoundTripper, statsT stats.Tracker) *JWKSRoundTripper {
+	return &JWKSRoundTripper{
+		base:   base,
+		statsT: statsT,
+	}
+}
+
+// RoundTrip implements http.RoundTripper with additional stats wrapping
+func (jrt *JWKSRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	started := time.Now()
+	resp, err := jrt.base.RoundTrip(req)
+	elapsed := time.Since(started)
+	// Specific histogram for key fetches.
+	// Not comprehensive but includes commonly used `.well-known/jwks.json`,`/oauth2/v1/keys`,`/openid-connect/certs`
+	if strings.Contains(req.URL.Path, keyFetchURLJWK) ||
+		strings.Contains(req.URL.Path, keyFetchURLKey) ||
+		strings.Contains(req.URL.Path, keyFetchURLCert) {
+		jrt.statsT.Observe(stats.AuthJWKSHist, elapsed.Seconds())
+	} else {
+		jrt.statsT.Observe(stats.AuthIssHist, elapsed.Seconds())
+	}
+	return resp, err
+}
+
 func (km *KeyCacheManager) isInitialized() bool {
 	return km.keyCache != nil
 }
@@ -116,6 +153,12 @@ func (km *KeyCacheManager) Init(rootCtx context.Context) {
 	km.keyCache = &keyCache{
 		jwksCache:    jwk.NewCache(rootCtx),
 		issuerToJWKS: make(map[string]string, len(km.allowedIss)),
+	}
+}
+
+func (km *KeyCacheManager) IncCounter(metric string) {
+	if km.statsT != nil {
+		km.statsT.Inc(metric)
 	}
 }
 
@@ -235,10 +278,12 @@ func getKeyID(tok *jwt.Token) (string, error) {
 func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any, error) {
 	keySet, err := km.getKeySetFromCache(ctx, iss)
 	if err != nil {
+		km.IncCounter(stats.AuthInvalidIssCount)
 		return nil, fmt.Errorf("failed to get keyset for issuer %s: %v", iss, err)
 	}
 	jwKey, found := keySet.LookupKeyID(kid)
 	if !found {
+		km.IncCounter(stats.AuthInvalidKidCount)
 		return nil, fmt.Errorf("key with kid %s not found for issuer %s", kid, iss)
 	}
 	var pubKey any

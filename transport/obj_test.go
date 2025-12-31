@@ -64,6 +64,7 @@ var _ cos.StatsUpdater = (*dummyStatsTracker)(nil)
 
 func (*dummyStatsTracker) Add(string, int64)                                         {}
 func (*dummyStatsTracker) Inc(string)                                                {}
+func (*dummyStatsTracker) Observe(string, float64)                                   {}
 func (*dummyStatsTracker) Get(string) int64                                          { return 0 }
 func (*dummyStatsTracker) AddWith(...cos.NamedVal64)                                 {}
 func (*dummyStatsTracker) IncWith(string, map[string]string)                         {}

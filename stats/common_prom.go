@@ -221,14 +221,29 @@ func (r *runner) reg(snode *meta.Snode, name, kind string, extra *Extra) {
 			v.iprom = counter{metric}
 			promRegistry.MustRegister(metric)
 		}
-
+	case KindHistogram:
+		buckets := extra.Buckets
+		if buckets == nil {
+			// Default buckets for latency in seconds
+			buckets = []float64{0.01, 0.1, 1, 10}
+		}
+		opts := prometheus.HistogramOpts{
+			Namespace:   "ais",
+			Subsystem:   snode.Type(),
+			Name:        metricName,
+			Help:        help,
+			ConstLabels: constLabs,
+			Buckets:     buckets,
+		}
+		hist := prometheus.NewHistogram(opts)
+		promRegistry.MustRegister(hist)
+		v.iprom = histogram{hist}
 	case KindLatency:
 		// computed over 'periodic.stats_time'; used for logs; hidden from prometheus (v3.26)
 		v.iprom = latency{}
 	case KindThroughput:
 		// ditto (v3.26)
 		v.iprom = throughput{}
-
 	default:
 		opts := prometheus.GaugeOpts{Namespace: "ais", Subsystem: snode.Type(), Name: metricName, Help: help, ConstLabels: constLabs}
 		if len(extra.VarLabs) > 0 {

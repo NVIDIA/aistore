@@ -86,10 +86,10 @@ const (
 // authManager //
 /////////////////
 
-func newAuthManager(config *cmn.Config) *authManager {
+func newAuthManager(config *cmn.Config, statsT stats.Tracker) *authManager {
 	rootCtx, rootCancel := context.WithCancel(context.Background())
-	keyCacheClient := newKeyCacheClient(config)
-	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil)
+	keyCacheClient := newKeyCacheClient(config, statsT)
+	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil, statsT)
 	keyCacheManager.Init(rootCtx)
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), TokenParserInitTimeout)
 	defer cancel()
@@ -105,7 +105,7 @@ func newAuthManager(config *cmn.Config) *authManager {
 }
 
 // Define the client used by the key cache manager for contacting token issuers
-func newKeyCacheClient(config *cmn.Config) *http.Client {
+func newKeyCacheClient(config *cmn.Config, statsT stats.Tracker) *http.Client {
 	var tls cmn.TLSArgs
 	// Set our own certificate, key, and verification settings from AIS network config
 	if config.Net.HTTP.UseHTTPS {
@@ -132,7 +132,13 @@ func newKeyCacheClient(config *cmn.Config) *http.Client {
 		IdleConnsPerHost: KeyCacheIdleConnsPerHost,
 		MaxIdleConns:     maxIdleConns,
 	}
-	return cmn.NewClientTLS(transport, tls, false)
+	client := cmn.NewClientTLS(transport, tls, false)
+
+	// Wrap the transport with a custom type to inject stats tracking
+	if statsT != nil {
+		client.Transport = tok.NewJWKSRoundTripper(client.Transport, statsT)
+	}
+	return client
 }
 
 func (a *authManager) stop() {
@@ -315,6 +321,7 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 // Returned claims will always be non-nil if no error is returned
 func (p *proxy) validateToken(ctx context.Context, hdr http.Header) (*tok.AISClaims, error) {
 	claims, err := p.extractAndValidate(ctx, hdr)
+	p.statsT.Inc(stats.AuthTotalCount)
 
 	if err != nil {
 		p.statsT.Inc(stats.AuthFailCount)
@@ -429,6 +436,7 @@ func (p *proxy) checkTokenAccess(claims *tok.AISClaims, bck *meta.Bck, ace apc.A
 			nlog.Warningln("bucket access check failed:", err)
 		}
 	}
+	p.statsT.Inc(stats.ACLTotalCount)
 	if err != nil {
 		p.statsT.Inc(stats.ACLDeniedCount)
 	}

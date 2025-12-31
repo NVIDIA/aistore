@@ -32,6 +32,7 @@ type (
 		add(parent *statsValue, val int64)
 		addWith(parent *statsValue, nv cos.NamedVal64)
 		set(parent *statsValue, val int64)
+		observe(parent *statsValue, val float64)
 	}
 
 	latency    struct{}
@@ -41,6 +42,7 @@ type (
 	counterVec struct{ *prometheus.CounterVec }
 	gauge      struct{ prometheus.Gauge }
 	gaugeVec   struct{ *prometheus.GaugeVec }
+	histogram  struct{ prometheus.Histogram }
 )
 
 // interface guard
@@ -52,6 +54,7 @@ var (
 	_ iprom = (*counterVec)(nil)
 	_ iprom = (*gauge)(nil)
 	_ iprom = (*gaugeVec)(nil)
+	_ iprom = (*histogram)(nil)
 )
 
 //
@@ -143,21 +146,38 @@ func (v gaugeVec) addWith(parent *statsValue, nv cos.NamedVal64) {
 	v.With(nv.VarLabs).Add(float64(nv.Value))
 }
 
+func (h histogram) observe(parent *statsValue, val float64) {
+	ratomic.AddInt64(&parent.numSamples, 1)
+	ratomic.AddInt64(&parent.cumulative, int64(val))
+	h.Observe(val)
+}
+
 // illegal impl. placeholders - see "fat interface" note above
 
-func (counter) incWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
-func (counter) addWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
-func (counter) set(*statsValue, int64)              { debug.Assert(false) }
-func (counterVec) inc(*statsValue)                  { debug.Assert(false) }
-func (counterVec) add(*statsValue, int64)           { debug.Assert(false) }
-func (counterVec) set(*statsValue, int64)           { debug.Assert(false) }
-func (gauge) incWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
-func (gauge) addWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
-func (gaugeVec) inc(*statsValue)                    { debug.Assert(false) }
-func (gaugeVec) add(*statsValue, int64)             { debug.Assert(false) }
-func (gaugeVec) set(*statsValue, int64)             { debug.Assert(false) }
-func (latency) set(*statsValue, int64)              { debug.Assert(false) }
-func (throughput) set(*statsValue, int64)           { debug.Assert(false) }
+func (counter) incWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
+func (counter) addWith(*statsValue, cos.NamedVal64)   { debug.Assert(false) }
+func (counter) set(*statsValue, int64)                { debug.Assert(false) }
+func (counter) observe(*statsValue, float64)          { debug.Assert(false) }
+func (counterVec) inc(*statsValue)                    { debug.Assert(false) }
+func (counterVec) add(*statsValue, int64)             { debug.Assert(false) }
+func (counterVec) set(*statsValue, int64)             { debug.Assert(false) }
+func (counterVec) observe(*statsValue, float64)       { debug.Assert(false) }
+func (gauge) incWith(*statsValue, cos.NamedVal64)     { debug.Assert(false) }
+func (gauge) addWith(*statsValue, cos.NamedVal64)     { debug.Assert(false) }
+func (gauge) observe(*statsValue, float64)            { debug.Assert(false) }
+func (gaugeVec) inc(*statsValue)                      { debug.Assert(false) }
+func (gaugeVec) add(*statsValue, int64)               { debug.Assert(false) }
+func (gaugeVec) set(*statsValue, int64)               { debug.Assert(false) }
+func (gaugeVec) observe(*statsValue, float64)         { debug.Assert(false) }
+func (latency) set(*statsValue, int64)                { debug.Assert(false) }
+func (latency) observe(*statsValue, float64)          { debug.Assert(false) }
+func (throughput) set(*statsValue, int64)             { debug.Assert(false) }
+func (throughput) observe(*statsValue, float64)       { debug.Assert(false) }
+func (histogram) inc(*statsValue)                     { debug.Assert(false) }
+func (histogram) incWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
+func (histogram) add(*statsValue, int64)              { debug.Assert(false) }
+func (histogram) addWith(*statsValue, cos.NamedVal64) { debug.Assert(false) }
+func (histogram) set(*statsValue, int64)              { debug.Assert(false) }
 
 // coreStats
 
@@ -180,6 +200,12 @@ func (s *coreStats) set(name string, val int64) {
 	debug.Assertf(ok, "invalid metric name %q", name)
 
 	v.iprom.set(v, val)
+}
+
+func (s *coreStats) observe(name string, val float64) {
+	v, ok := s.Tracker[name]
+	debug.Assertf(ok, "invalid metric name %q", name)
+	v.iprom.observe(v, val)
 }
 
 func (s *coreStats) addWith(nv cos.NamedVal64) {

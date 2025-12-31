@@ -17,16 +17,23 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
-const numProxyStats = 30 // approx. initial
+const numProxyStats = 35 // approx. initial
 
 // Authentication and Authorization metrics
 const (
+	AuthTotalCount        = "auth.total.n"
 	AuthSuccessCount      = "auth.success.n"
 	AuthFailCount         = "auth.fail.n"
 	AuthNoTokenCount      = "auth.notoken.n"
 	AuthInvalidTokenCount = "auth.invalidtoken.n"
+	AuthInvalidIssCount   = "auth.invalidiss.n"
+	AuthInvalidKidCount   = "auth.invalidkid.n"
 	AuthExpiredTokenCount = "auth.expiredtoken.n"
+	ACLTotalCount         = "acl.total.n"
 	ACLDeniedCount        = "acl.denied.n"
+
+	AuthIssHist  = "auth.iss"
+	AuthJWKSHist = "auth.jwks"
 )
 
 type Prunner struct {
@@ -67,6 +74,11 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 }
 
 func (r *Prunner) regAuth(snode *meta.Snode) {
+	r.reg(snode, AuthTotalCount, KindCounter,
+		&Extra{
+			Help: "total number of token validation attempts",
+		},
+	)
 	r.reg(snode, AuthSuccessCount, KindCounter,
 		&Extra{
 			Help: "total number of successful authentications",
@@ -87,14 +99,41 @@ func (r *Prunner) regAuth(snode *meta.Snode) {
 			Help: "authentication failures due to invalid token",
 		},
 	)
+	r.reg(snode, AuthInvalidIssCount, KindCounter,
+		&Extra{
+			Help: "authentication failures due to invalid token issuer",
+		},
+	)
+	r.reg(snode, AuthInvalidKidCount, KindCounter,
+		&Extra{
+			Help: "authentication failures due to invalid token key ID",
+		},
+	)
 	r.reg(snode, AuthExpiredTokenCount, KindCounter,
 		&Extra{
 			Help: "authentication failures due to expired token",
 		},
 	)
+	r.reg(snode, ACLTotalCount, KindCounter,
+		&Extra{
+			Help: "total number of ACL permission checks",
+		},
+	)
 	r.reg(snode, ACLDeniedCount, KindCounter,
 		&Extra{
 			Help: "total number of ACL permission denials",
+		},
+	)
+	r.reg(snode, AuthIssHist, KindHistogram,
+		&Extra{
+			Help:    "histogram of request latency for dynamic issuers, in seconds",
+			Buckets: []float64{.05, 0.2, 5},
+		},
+	)
+	r.reg(snode, AuthJWKSHist, KindHistogram,
+		&Extra{
+			Help:    "histogram of request latency for JWKS fetches, in seconds",
+			Buckets: []float64{.05, 0.2, 5},
 		},
 	)
 }

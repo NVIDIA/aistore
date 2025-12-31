@@ -18,6 +18,7 @@ type (
 	StatsUpdater interface {
 		Inc(name string)
 		Add(name string, val int64)
+		Observe(name string, val float64)
 		SetFlag(name string, set NodeStateFlags)
 		ClrFlag(name string, clr NodeStateFlags)
 		SetClrFlag(name string, set, clr NodeStateFlags)

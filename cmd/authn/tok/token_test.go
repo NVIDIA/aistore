@@ -434,7 +434,7 @@ func setupTokenTestEnv(t *testing.T, init bool) testTokenEnv {
 	// Set up the TLS config and get the config for our client
 	authConf := &cmn.AuthConf{OIDC: oidcConf}
 	client := getKeyCacheClient(t, oidcS.Certificate())
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, client, nil)
+	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, client, nil, nil)
 	tkParser := tok.NewTokenParser(authConf, keyCacheManager)
 	tassert.Fatalf(t, err == nil, "Failed to create token parser: %v", err)
 	if init {
@@ -542,7 +542,7 @@ func TestValidateToken_IssLookupNotAllowed(t *testing.T) {
 	env := setupTokenTestEnv(t, true)
 	// Empty allowed issuer fails validation
 	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{}}}
-	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil)
+	keyCacheManager := tok.NewKeyCacheManager(authConf.OIDC, nil, nil, nil)
 	initKeyCacheManager(t, keyCacheManager)
 	emptyTkParser := tok.NewTokenParser(authConf, keyCacheManager)
 	basicAdminClaims.Issuer = env.oidcSrv.URL
@@ -565,7 +565,7 @@ func TestKeyCacheManager_Population_InvalidDiscovery(t *testing.T) {
 	// Test that an invalid discovery URL raises an error when initializing a KeyCacheManager
 	for _, url := range invalidIssuerURLs {
 		authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{url}}}
-		kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), nil)
+		kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), nil, nil)
 		kcm.Init(t.Context())
 		err := kcm.PopulateJWKSCache(t.Context())
 		tassert.Errorf(
@@ -579,7 +579,7 @@ func TestKeyCacheManager_Population_UnresponsiveDiscovery(t *testing.T) {
 	// Test that a valid but unresponsive discovery URL does NOT raise an error when initializing a KeyCacheManager
 	validURL := "https://missing-host:1234"
 	authConf := &cmn.AuthConf{OIDC: &cmn.OIDCConf{AllowedIssuers: []string{validURL}}}
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), cacheConfNoRetry)
+	kcm := tok.NewKeyCacheManager(authConf.OIDC, getKeyCacheClient(t, nil), cacheConfNoRetry, nil)
 	kcm.Init(t.Context())
 	err := kcm.PopulateJWKSCache(t.Context())
 	tassert.Errorf(
@@ -594,7 +594,7 @@ func TestValidateClaims_CertificateValidation(t *testing.T) {
 	authConf := &cmn.AuthConf{OIDC: oidcConf}
 	// Add OIDC server WITHOUT adding certificate to trusted certs
 	clientNoTrust := getKeyCacheClient(t, nil)
-	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry)
+	kcm := tok.NewKeyCacheManager(authConf.OIDC, clientNoTrust, cacheConfNoRetry, nil)
 	// No error, but issuer isn't added
 	initKeyCacheManager(t, kcm)
 	parser := tok.NewTokenParser(authConf, kcm)
@@ -604,7 +604,7 @@ func TestValidateClaims_CertificateValidation(t *testing.T) {
 	tassert.Error(t, err != nil, "Token validation should fail without certificate trust on issuer")
 	// Recreate with client using trusted certificate
 	clientWithTrust := getKeyCacheClient(t, env.oidcSrv.Certificate())
-	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry)
+	kcmWithTrust := tok.NewKeyCacheManager(authConf.OIDC, clientWithTrust, cacheConfNoRetry, nil)
 	parser = tok.NewTokenParser(authConf, kcmWithTrust)
 	_, err = parser.ValidateToken(t.Context(), tk)
 	tassert.Error(t, err != nil, "Token parser initialization should succeed with issuer certificate trust")

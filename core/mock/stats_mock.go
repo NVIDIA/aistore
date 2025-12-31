@@ -30,6 +30,7 @@ func (*StatsTracker) Inc(string)                                                
 func (*StatsTracker) IncWith(string, map[string]string)                         {}
 func (*StatsTracker) IncBck(string, *cmn.Bck)                                   {}
 func (*StatsTracker) Add(string, int64)                                         {}
+func (*StatsTracker) Observe(string, float64)                                   {}
 func (*StatsTracker) SetFlag(string, cos.NodeStateFlags)                        {}
 func (*StatsTracker) ClrFlag(string, cos.NodeStateFlags)                        {}
 func (*StatsTracker) SetClrFlag(string, cos.NodeStateFlags, cos.NodeStateFlags) {}

@@ -31,8 +31,9 @@ const (
 
 	KindSpecial = "special" // uptime
 
-	KindGauge              = "gauge"  // disk I/O
-	KindComputedThroughput = "compbw" // disk read/write throughput
+	KindGauge              = "gauge"     // disk I/O
+	KindHistogram          = "histogram" // direct latency metrics (no internal aggregation)
+	KindComputedThroughput = "compbw"    // disk read/write throughput
 
 	KindLatency    = "latency" // computed internally over 'periodic.stats_time' (milliseconds)
 	KindThroughput = "bw"      // ditto (MB/s)
@@ -114,7 +115,8 @@ type (
 		Labels  cos.StrKVs // static or (same) constant
 		StrName string
 		Help    string
-		VarLabs []string // variable labels: {VlabBucket, ...}
+		VarLabs []string  // variable labels: {VlabBucket, ...}
+		Buckets []float64 // histogram buckets (optional, defaults provided)
 	}
 )
 
