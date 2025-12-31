@@ -14,11 +14,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
-const numProxyStats = 24 // approx. initial
+const numProxyStats = 30 // approx. initial
 
-// NOTE: currently, proxy's stats == common and hardcoded
+// Authentication and Authorization metrics
+const (
+	AuthSuccessCount      = "auth.success.n"
+	AuthFailCount         = "auth.fail.n"
+	AuthNoTokenCount      = "auth.notoken.n"
+	AuthInvalidTokenCount = "auth.invalidtoken.n"
+	AuthExpiredTokenCount = "auth.expiredtoken.n"
+	ACLDeniedCount        = "acl.denied.n"
+)
 
 type Prunner struct {
 	runner
@@ -43,6 +52,7 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 	r.core.init(numProxyStats)
 
 	r.regCommon(p.Snode()) // common metrics
+	r.regAuth(p.Snode())
 
 	r.core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
 	r.ctracker = make(copyTracker, numProxyStats)
@@ -54,6 +64,39 @@ func (r *Prunner) Init(p core.Node) *atomic.Bool {
 
 	r.sorted = make([]string, 0, numProxyStats)
 	return &r.runner.startedUp
+}
+
+func (r *Prunner) regAuth(snode *meta.Snode) {
+	r.reg(snode, AuthSuccessCount, KindCounter,
+		&Extra{
+			Help: "total number of successful authentications",
+		},
+	)
+	r.reg(snode, AuthFailCount, KindCounter,
+		&Extra{
+			Help: "total number of failed authentication attempts",
+		},
+	)
+	r.reg(snode, AuthNoTokenCount, KindCounter,
+		&Extra{
+			Help: "authentication failures due to missing token",
+		},
+	)
+	r.reg(snode, AuthInvalidTokenCount, KindCounter,
+		&Extra{
+			Help: "authentication failures due to invalid token",
+		},
+	)
+	r.reg(snode, AuthExpiredTokenCount, KindCounter,
+		&Extra{
+			Help: "authentication failures due to expired token",
+		},
+	)
+	r.reg(snode, ACLDeniedCount, KindCounter,
+		&Extra{
+			Help: "total number of ACL permission denials",
+		},
+	)
 }
 
 //

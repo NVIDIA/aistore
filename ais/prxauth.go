@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 
 	onexxh "github.com/OneOfOne/xxhash"
 )
@@ -227,12 +228,8 @@ func (p *proxy) validateEnableAuth(r *http.Request, clone *cmn.AuthConf, toUpdat
 	}
 
 	claims, err := p.validateToken(r.Context(), r.Header)
-	if err != nil || claims == nil {
-		reason := "no claims in provided token"
-		if err != nil {
-			reason = err.Error()
-		}
-		return http.StatusUnauthorized, fmt.Errorf("enabling JWT/OIDC auth requires a valid token (%s)", reason)
+	if err != nil {
+		return http.StatusUnauthorized, fmt.Errorf("enabling JWT/OIDC auth requires a valid token [err: %v]", err)
 	}
 	if !claims.IsAdmin {
 		return http.StatusUnauthorized, errors.New("enabling JWT/OIDC auth requires a token with an 'admin' claim")
@@ -314,17 +311,41 @@ func (p *proxy) delToken(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Validate the token found in the given header, return claims, and update metrics
+// Returned claims will always be non-nil if no error is returned
+func (p *proxy) validateToken(ctx context.Context, hdr http.Header) (*tok.AISClaims, error) {
+	claims, err := p.extractAndValidate(ctx, hdr)
+
+	if err != nil {
+		p.statsT.Inc(stats.AuthFailCount)
+		switch {
+		case errors.Is(err, tok.ErrNoToken):
+			p.statsT.Inc(stats.AuthNoTokenCount)
+		case errors.Is(err, tok.ErrInvalidToken):
+			p.statsT.Inc(stats.AuthInvalidTokenCount)
+		case errors.Is(err, tok.ErrTokenExpired):
+			p.statsT.Inc(stats.AuthExpiredTokenCount)
+		}
+	} else {
+		p.statsT.Inc(stats.AuthSuccessCount)
+	}
+	return claims, err
+}
+
 // Validates a token from the request header.
 // Supports both standard Bearer tokens and X-Amz-Security-Token
 // as fallback for AWS SDK compatibility.
-func (p *proxy) validateToken(ctx context.Context, hdr http.Header) (*tok.AISClaims, error) {
+func (p *proxy) extractAndValidate(ctx context.Context, hdr http.Header) (*tok.AISClaims, error) {
 	tokenHdr, err := tok.ExtractToken(hdr)
 	if err != nil {
 		return nil, err
 	}
 	claims, err := p.authn.validateToken(ctx, tokenHdr.Token)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token from header %q: %w ", tokenHdr.Header, err)
+		return nil, fmt.Errorf("invalid token from header %q: %w", tokenHdr.Header, err)
+	}
+	if claims == nil {
+		return nil, fmt.Errorf("token from header %q has no claims: %w", tokenHdr.Header, tok.ErrInvalidToken)
 	}
 	return claims, nil
 }
@@ -363,54 +384,76 @@ func aceErrToCode(err error) (status int) {
 // Validate the given header contains a token allowing access to the given bucket with the requested permissions
 // All failures must be logged at this level
 func (p *proxy) access(ctx context.Context, hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
-	var (
-		claims *tok.AISClaims
-		bucket *cmn.Bck
-	)
+	// Skip internal calls
 	if p.checkIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
-	if cmn.Rom.AuthEnabled() { // config.Auth.Enabled
-		claims, err = p.validateToken(ctx, hdr)
+
+	// If auth is NOT enabled, only check bucket properties
+	if !cmn.Rom.AuthEnabled() {
+		if bck == nil {
+			return nil
+		}
+		// With Auth disabled, always allow read-only access, PATCH, and ACL
+		ace &^= apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO
+		err = bck.Allow(ace)
 		if err != nil {
-			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
-			if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
-				err = nil
-			} else {
-				nlog.Warningln("token validation failed:", err)
-			}
-			return err
+			nlog.Warningln("bucket access check failed:", err)
 		}
-		uid := p.owner.smap.Get().UUID
-		if bck != nil {
-			bucket = bck.Bucket()
-		}
-		if err = claims.CheckPermissions(uid, bucket, ace); err != nil {
-			nlog.Warningln("access permission check failed:", err)
-			return err
-		}
-	}
-	if bck == nil {
-		// cluster ACL: create/list buckets, node management, etc.
-		return nil
+		return err
 	}
 
-	// bucket access conventions:
-	// - without AuthN: read-only access, PATCH, and ACL
-	// - with AuthN:    superuser can PATCH and change ACL
-	if !cmn.Rom.AuthEnabled() {
-		ace &^= apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO
-	} else if claims != nil && claims.IsAdmin {
-		ace &^= apc.AcePATCH | apc.AceBckSetACL
-	}
-	if ace == 0 {
-		return nil
-	}
-	err = bck.Allow(ace)
+	// Validate token and parse claims ONCE
+	claims, err := p.validateToken(ctx, hdr)
 	if err != nil {
-		nlog.Warningln("bucket ACL check failed:", err)
+		// NOTE: making exception to allow 3rd party clients read remote ht://bucket
+		if errors.Is(err, tok.ErrNoToken) && bck != nil && bck.IsHT() {
+			err = nil
+		} else {
+			nlog.Warningln("token validation failed:", err)
+		}
+		return err
+	}
+	return p.checkTokenAccess(claims, bck, ace)
+}
+
+func (p *proxy) checkTokenAccess(claims *tok.AISClaims, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
+	if bck == nil {
+		err = p.checkClaimPermissions(claims, nil, ace)
+		if err != nil {
+			nlog.Warningln("cluster access check failed:", err)
+		}
+	} else {
+		err = p.checkBucketAccess(claims, bck, ace)
+		if err != nil {
+			nlog.Warningln("bucket access check failed:", err)
+		}
+	}
+	if err != nil {
+		p.statsT.Inc(stats.ACLDeniedCount)
 	}
 	return err
+}
+
+// checkClaimPermissions validates claims have the required permissions
+func (p *proxy) checkClaimPermissions(claims *tok.AISClaims, bucket *cmn.Bck, ace apc.AccessAttrs) error {
+	if claims == nil {
+		return tok.ErrInvalidToken
+	}
+	uid := p.owner.smap.Get().UUID
+	return claims.CheckPermissions(uid, bucket, ace)
+}
+
+func (p *proxy) checkBucketAccess(claims *tok.AISClaims, bck *meta.Bck, ace apc.AccessAttrs) error {
+	err := p.checkClaimPermissions(claims, bck.Bucket(), ace)
+	if err != nil {
+		return err
+	}
+	// If an admin, bucket properties for access still apply, but admin can always patch and set ACL
+	if claims.IsAdmin {
+		ace &^= apc.AcePATCH | apc.AceBckSetACL
+	}
+	return bck.Allow(ace)
 }
 
 /////////////////////
