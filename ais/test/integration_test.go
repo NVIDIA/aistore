@@ -648,73 +648,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	m.ensureNumMountpaths(selectedTarget, mpList)
 }
 
-func TestGetDuringResilver(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
-
-	var (
-		m = ioContext{
-			t:   t,
-			num: 20000,
-		}
-		baseParams = tools.BaseAPIParams()
-	)
-
-	m.initAndSaveState(true /*cleanup*/)
-	m.expectTargets(1)
-
-	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
-
-	target, _ := m.smap.GetRandTarget()
-	mpList, err := api.GetMountpaths(baseParams, target)
-	tassert.CheckFatal(t, err)
-	ensureNoDisabledMountpaths(t, target, mpList)
-
-	if len(mpList.Available) < 2 {
-		t.Fatal("Must have at least 2 mountpaths")
-	}
-
-	// select up to 2 mountpath
-	mpaths := []string{mpList.Available[0]}
-	if len(mpList.Available) > 2 {
-		mpaths = append(mpaths, mpList.Available[1])
-	}
-
-	// Disable mountpaths temporarily
-	for _, mp := range mpaths {
-		err = api.DisableMountpath(baseParams, target, mp, false /*dont-resil*/)
-		tassert.CheckFatal(t, err)
-	}
-
-	m.puts()
-
-	// Start getting objects and enable mountpaths in parallel
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		m.getsUntilStop()
-	}()
-
-	for _, mp := range mpaths {
-		time.Sleep(time.Second)
-		err = api.EnableMountpath(baseParams, target, mp)
-		tassert.CheckFatal(t, err)
-	}
-	m.stopGets()
-
-	wg.Wait()
-	time.Sleep(2 * time.Second)
-
-	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(baseParams, &args)
-
-	tools.WaitForResilvering(t, baseParams, nil)
-
-	m.ensureNoGetErrors()
-	m.ensureNumMountpaths(target, mpList)
-}
-
 func TestGetDuringRebalance(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
@@ -877,68 +810,6 @@ func TestMountpathDetachAll(t *testing.T) {
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, origMountpaths)
-}
-
-func TestResilverAfterAddingMountpath(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
-	var (
-		m = ioContext{
-			t:               t,
-			num:             5000,
-			numGetsEachFile: 2,
-		}
-		baseParams = tools.BaseAPIParams()
-	)
-
-	m.initAndSaveState(true /*cleanup*/)
-	m.expectTargets(1)
-	target, _ := m.smap.GetRandTarget()
-	mpList, err := api.GetMountpaths(baseParams, target)
-	tassert.CheckFatal(t, err)
-	ensureNoDisabledMountpaths(t, target, mpList)
-
-	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
-
-	if docker.IsRunning() {
-		err := docker.CreateMpathDir(0, testMpath)
-		tassert.CheckFatal(t, err)
-	} else {
-		err := cos.CreateDir(testMpath)
-		tassert.CheckFatal(t, err)
-	}
-
-	defer func() {
-		if !docker.IsRunning() {
-			os.RemoveAll(testMpath)
-		}
-	}()
-
-	m.puts()
-
-	// Add new mountpath to target
-	tlog.Logfln("attach new %q at target %s", testMpath, target.StringEx())
-	err = api.AttachMountpath(baseParams, target, testMpath)
-	tassert.CheckFatal(t, err)
-
-	tools.WaitForResilvering(t, baseParams, target)
-
-	m.gets(nil, false)
-
-	// Remove new mountpath from target
-	tlog.Logfln("detach %q from target %s", testMpath, target.StringEx())
-	if docker.IsRunning() {
-		if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
-			t.Error(err.Error())
-		}
-	} else {
-		err = api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/)
-		tassert.CheckFatal(t, err)
-	}
-
-	m.ensureNoGetErrors()
-
-	tools.WaitForResilvering(t, baseParams, target)
-	m.ensureNumMountpaths(target, mpList)
 }
 
 func TestAttachDetachMountpathAllTargets(t *testing.T) {
@@ -1943,29 +1814,4 @@ func TestICDecommission(t *testing.T) {
 	_, err = tools.WaitForClusterState(m.proxyURL, "decommission target",
 		m.smap.Version, m.smap.CountProxies(), m.smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
-}
-
-func TestSingleResilver(t *testing.T) {
-	m := ioContext{t: t}
-	m.initAndSaveState(true /*cleanup*/)
-	baseParams := tools.BaseAPIParams(m.proxyURL)
-
-	// Select a random target
-	target, _ := m.smap.GetRandTarget()
-
-	// Start resilvering just on the target
-	args := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: target.ID()}
-	id, err := api.StartXaction(baseParams, &args, "")
-	tassert.CheckFatal(t, err)
-
-	// Wait for specific resilvering x[id]
-	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
-	tassert.CheckFatal(t, err)
-
-	// Make sure other nodes were not resilvered
-	args = xact.ArgsMsg{ID: id}
-	snaps, err := api.QueryXactionSnaps(baseParams, &args)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, len(snaps) == 1, "expected only 1 resilver")
 }

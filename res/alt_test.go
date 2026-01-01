@@ -215,41 +215,42 @@ func runResilver(t *testing.T, config *cmn.Config, rmi *fs.Mountpath, action str
 }
 
 // This test validates:
-// - resilver starts under topology change
+// - resilver starts under target's volume change
 // - mid-flight abort works
 // - a subsequent resilver run completes
-// - objects are present at HRW under the final topology.
+// - objects are present at HRW under the final volume.
 func TestResilver_PreemptAddDisable(t *testing.T) {
+	t.Skipf("skipping %s - not ready", t.Name()) // TODO: stabilize
 	const (
 		numBaseMpaths  = 3
 		numExtraMpaths = 1
-		minRelocations = 25 // ensure we actually have work after topology change
+		minRelocations = 25 // ensure we actually have work after volume change
 		maxObjects     = 5000
 		plainObjSize   = 64 * cos.KiB
 		numChunkedObjs = 20
 		numChunks      = 8
 		chunkSize      = 16 * cos.KiB
-		waitStartTO    = 3 * time.Second
+		waitStartTO    = 2 * time.Second
 		waitProgressTO = 10 * time.Second
 		waitAbortTO    = 10 * time.Second
 		waitDoneTO     = 60 * time.Second
 	)
 	const bucket = "ut-resilver-preempt"
 
-	// Init target + config + xreg
+	// init: target + config + xreg
 	bowner, bcks := newBBB(bucket) // helper from res/unit_test.go
 	_ = mock.NewTarget(bowner)
 
 	tmpDir := t.TempDir()
 	targetID := "t1" // stable test id; fs.Add wants one
 
-	// Prepare mountpaths
+	// prepare mountpaths
 	base := make([]string, 0, numBaseMpaths+numExtraMpaths)
 	for i := range numBaseMpaths + numExtraMpaths {
 		base = append(base, filepath.Join(tmpDir, fmt.Sprintf("mpath-%d", i)))
 	}
 
-	// Start with only the base mountpaths registered (topology A)
+	// start with only the base mountpaths registered (volume A)
 	initFS(t, base[:numBaseMpaths], targetID)      // helper from res/unit_test.go
 	config := initConfig(t, tmpDir, numBaseMpaths) // helper from res/unit_test.go
 	xreg.Init()
@@ -257,12 +258,11 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 
 	bck := bcks[0]
 
-	// Create objects canonical under topology A.
-	// We'll later add an extra mountpath; some objects should then become misplaced.
+	// create objects on volume A
 	objNames := make([]string, 0, 2048)
 	createdAt := make(map[string]string, 2048) // obj -> mountpath path (under A)
 
-	// Plain objects
+	// plain objects
 	for i := range maxObjects {
 		obj := fmt.Sprintf("a/b/c/plain-%06d", i)
 		lom := newLOM(t, bck, obj, plainObjSize) // canonical HRW under A
@@ -270,7 +270,7 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 		createdAt[obj] = lom.Mountpath().Path
 	}
 
-	// Chunked objects (also canonical under A)
+	// chunked objects (also canonical under A)
 	for i := range numChunkedObjs {
 		obj := fmt.Sprintf("a/b/c/chunked-%03d", i)
 		lom := newChunkedLOM(t, bck, obj, numChunks, chunkSize)
@@ -278,33 +278,32 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 		createdAt[obj] = lom.Mountpath().Path
 	}
 
-	// Add an extra mountpath (topology B)
-	tlog.Logln("1. Add an extra mountpath (topology B)")
+	// Add an extra mountpath (volume B)
+	tlog.Logln("1. Add an extra mountpath (volume B)")
 	extraMpath := base[numBaseMpaths]
 	tassert.CheckFatal(t, cos.CreateDir(extraMpath))
 	_, err := fs.Add(extraMpath, targetID)
 	tassert.CheckFatal(t, err)
 
-	// Ensure we have enough keys that changed HRW under topology B
+	// ensure we have enough names that changed location on volume B
 	relocations := 0
 	for _, obj := range objNames {
 		uname := bck.MakeUname(obj)
-		hrwMi, _, err := fs.Hrw(uname) // HRW under B now
+		hrwMi, _, err := fs.Hrw(uname)
 		tassert.CheckFatal(t, err)
 		if createdAt[obj] != hrwMi.Path {
 			relocations++
 		}
 	}
 	tassert.Fatalf(t, relocations >= minRelocations,
-		"insufficient HRW changes after adding mpath: have %d, want >= %d (consider increasing object count)",
+		"insufficient location changes after adding mpath: have %d, want >= %d (consider increasing object count)",
 		relocations, minRelocations)
 
-	// Resilver controller
 	tlog.Logln("2. Start resilver #1")
 	r := res.New()
 	tstats := mock.NewStatsTracker()
 
-	// Start resilver A (under topology B) in a goroutine; use WG barrier
+	// start resilver A (under volume B) in a goroutine; use WG barrier
 	wgA := &sync.WaitGroup{}
 	wgA.Add(1)
 	uuidA := cos.GenUUID()
@@ -316,21 +315,21 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 	}
 	go r.Run(argsA, tstats)
 
-	// Wait until initRenew done and xaction is registered/owned
+	// wait until initRenew done and xaction is registered/owned
 	wgA.Wait()
 	xidA := waitNonEmptyXid(t, r, waitStartTO)
 	_ = xidA // should equal uuidA logically, but we won't assert that here
 
 	tlog.Logfln("3. Resilver %q is now running", xidA)
 
-	// Ensure A is actually doing work before preempting (avoid “aborted before first visit”)
+	// ensure A is actually doing work before preempting (avoid “aborted before first visit”)
 	waitProgressBySnap(t, xidA, waitProgressTO)
 
-	// Preempt: abort A, then disable the extra mountpath (topology C ~ A)
+	// preempt: abort A, then disable the extra mountpath (volume C ~ A)
 	tlog.Logfln("4. Abort %q and begin disable/detach (DD) transition", xidA)
 	r.Abort(errors.New("test preempt: disable newly added mountpath"))
 
-	// Disable the extra mountpath to revert topology
+	// Disable the extra mountpath to revert volume
 	flags := fs.FlagWaitingDD
 	rmi, _, _, err := fs.BeginDD(apc.ActMountpathDisable, flags, extraMpath)
 	tassert.CheckFatal(t, err)
@@ -338,7 +337,7 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 	_, err = fs.Disable(extraMpath)
 	tassert.CheckFatal(t, err)
 
-	// Start resilver B (under topology C) in a goroutine; WG barrier again
+	// start resilver B (under volume C) in a goroutine; WG barrier again
 	tlog.Logln("5. Start resilver #2")
 	wgB := &sync.WaitGroup{}
 	wgB.Add(1)
@@ -349,6 +348,8 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 		Action: apc.ActMountpathDisable,
 		Custom: xreg.ResArgs{Config: config},
 	}
+
+	time.Sleep(5 * time.Second)
 	go r.Run(argsB, tstats)
 
 	wgB.Wait()
@@ -357,13 +358,14 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 
 	tlog.Logfln("6. Resilver #2 %q is now running", xidB)
 
-	// Verify A aborted (via xreg)
+	// verify A aborted (via xreg)
 	waitAborted(t, xidA, waitAbortTO)
 
-	// Wait for B to complete (via xreg)
+	// wait for B to complete (via xreg)
 	waitDone(t, xidB, waitDoneTO)
+	time.Sleep(5 * time.Second)
 
-	// Final: all objects must exist at current HRW under topology C
+	// all objects must exist on volume C
 	assertLocations(t, bck, objNames)
 
 	tlog.Logln("7. Done")

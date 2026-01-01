@@ -92,7 +92,7 @@ func assertLocations(t *testing.T, bck *meta.Bck, objNames []string) {
 
 		fqn := hrwMi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
 		err = cos.Stat(fqn)
-		tassert.Fatalf(t, err == nil, "missing at HRW: %q (fqn=%q, err=%v)", objName, fqn, err)
+		tassert.Fatalf(t, err == nil, "missing: %q (fqn=%q, err=%v)", bck.Cname(objName), fqn, err)
 	}
 }
 
@@ -265,14 +265,19 @@ func createChunkedLOMAt(t *testing.T, bck *meta.Bck, mi *fs.Mountpath, objName s
 // (IV) Wait helpers (keep tight; avoid random sleeps).
 //
 
+const (
+	pollSleep = 10 * time.Millisecond
+)
+
 func waitNonEmptyXid(t *testing.T, r *res.Res, timeout time.Duration) string {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	var elapsed time.Duration
+	for elapsed < timeout {
 		if xid := r.CurrentXactID(); xid != "" {
 			return xid
 		}
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(pollSleep)
+		elapsed += pollSleep
 	}
 	t.Fatal("timeout waiting for CurrentXactID() to become non-empty")
 	return ""
@@ -280,8 +285,8 @@ func waitNonEmptyXid(t *testing.T, r *res.Res, timeout time.Duration) string {
 
 func waitProgressBySnap(t *testing.T, xid string, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	var elapsed time.Duration
+	for elapsed < timeout {
 		xctn, err := xreg.GetXact(xid)
 		tassert.CheckFatal(t, err)
 		if xctn != nil {
@@ -290,35 +295,38 @@ func waitProgressBySnap(t *testing.T, xid string, timeout time.Duration) {
 				return
 			}
 		}
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(pollSleep)
+		elapsed += pollSleep
 	}
 	t.Fatalf("timeout waiting for progress (xid=%q)", xid)
 }
 
 func waitAborted(t *testing.T, xid string, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	var elapsed time.Duration
+	for elapsed < timeout {
 		xctn, err := xreg.GetXact(xid)
 		tassert.CheckFatal(t, err)
 		if xctn != nil && xctn.IsAborted() {
 			return
 		}
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(pollSleep)
+		elapsed += pollSleep
 	}
 	t.Fatalf("timeout waiting for abort (xid=%q)", xid)
 }
 
 func waitDone(t *testing.T, xid string, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	var elapsed time.Duration
+	for elapsed < timeout {
 		xctn, err := xreg.GetXact(xid)
 		tassert.CheckFatal(t, err)
 		if xctn != nil && xctn.IsDone() {
 			return
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(pollSleep)
+		elapsed += pollSleep
 	}
 	t.Fatalf("timeout waiting done (xid=%q)", xid)
 }

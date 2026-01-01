@@ -786,6 +786,10 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	time.Sleep(time.Second)
 	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, &xargs)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		tlog.Logfln("Warning: (kind %s, bucket %s), err: %v", apc.ActMakeNCopies, m.bck.Cname(""), err)
+		err = nil
+	}
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies

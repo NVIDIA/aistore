@@ -19,7 +19,7 @@ import (
 const (
 	minMemFree      = cos.GiB + cos.GiB>>1 // default minimum memory (see description above)
 	minMemFreeTests = cos.MiB * 128        // minimum free to run tests
-	maxMemUsedTests = cos.GiB * 10         // maximum tests allowed to allocate
+	maxMemUsedTests = cos.GiB * 20         // maximum tests allowed to allocate
 )
 
 var (
@@ -158,9 +158,10 @@ func (r *MMSA) Init(maxUse int64) {
 			r.MinFree = min(r.MinFree, x)
 		}
 	}
-	if maxUse > 0 {
+	if maxUse > 0 && free > uint64(maxUse) {
 		r.MinFree = max(r.MinFree, free-uint64(maxUse))
 	}
+
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
 	}
