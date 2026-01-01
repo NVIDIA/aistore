@@ -60,7 +60,7 @@ jobs:
     if: ${{ inputs.build_util_image }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -79,7 +79,7 @@ jobs:
     if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -98,7 +98,7 @@ jobs:
     if: ${{ inputs.build_aisinit_image || github.event_name == 'push' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -117,7 +117,7 @@ jobs:
     if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -136,7 +136,7 @@ jobs:
     if: ${{ inputs.build_cluster_minimal_image }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -155,7 +155,7 @@ jobs:
     if: ${{ inputs.build_authn_image }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -174,7 +174,7 @@ jobs:
     if: ${{ inputs.build_gitlab_ci_image }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
