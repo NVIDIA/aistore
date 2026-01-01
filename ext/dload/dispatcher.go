@@ -472,8 +472,8 @@ func (ss *startupSema) markStarted() { ss.started.Store(true) }
 
 func (ss *startupSema) waitForStartup() {
 	const (
-		sleep   = 500 * time.Millisecond
-		timeout = 10 * time.Second
+		sleep   = cos.PollSleepLong
+		timeout = max(10*time.Second, 10*cos.PollSleepLong)
 		errmsg  = "FATAL: dispatcher takes too much time to start"
 	)
 	if ss.started.Load() {

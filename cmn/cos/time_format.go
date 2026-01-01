@@ -7,8 +7,6 @@ package cos
 import (
 	"fmt"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // in addition to standard layouts at /usr/local/go/src/time/format.go
@@ -41,23 +39,6 @@ func FormatNowStamp() string { return FormatTime(time.Now(), StampMicro) }
 
 // https://github.com/golang/go/issues/33597
 func IsTimeZero(t time.Time) bool { return t.IsZero() || t.UTC().Unix() == 0 }
-
-// wait duration => probing frequency
-func ProbingFrequency(dur time.Duration) time.Duration {
-	sleep := min(dur>>3, time.Second)
-	sleep = max(dur>>6, sleep)
-	return max(sleep, 100*time.Millisecond)
-}
-
-// constrain duration `d` to the closed interval [mind, maxd]
-// (see also: ClampInt)
-func ClampDuration(d, mind, maxd time.Duration) time.Duration {
-	debug.Assert(mind <= maxd, mind, " vs ", maxd)
-	if d < mind {
-		return mind
-	}
-	return min(d, maxd)
-}
 
 // FormatMilli returns a duration formatted as milliseconds. For values bigger
 // than millisecond, it returns an integer number "#ms". For values smaller than

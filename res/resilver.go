@@ -31,7 +31,7 @@ import (
 
 const (
 	ivalInactive = 4 * time.Second
-	retrySleep   = 200 * time.Millisecond
+	retrySleep   = cos.PollSleepMedium
 )
 
 type (

@@ -24,7 +24,7 @@ import (
 
 const (
 	deletedRoot = ".$deleted"
-	desleep     = 256 * time.Millisecond
+	desleep     = cos.PollSleepMedium
 	deretries   = 3
 )
 

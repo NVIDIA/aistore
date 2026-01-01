@@ -1116,7 +1116,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if len(bcks) > 0 {
 		bck = bcks[0]
 	}
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(cos.PollSleepMedium)
 	newBucketMD, err := t.getPrimaryBMD(bck.Name)
 	if err != nil {
 		nlog.Errorln(err)

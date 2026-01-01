@@ -177,7 +177,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 	const (
-		preemptSleep = 200 * time.Millisecond
+		preemptSleep = cos.PollSleepShort
 	)
 	var (
 		res  = g.t.res

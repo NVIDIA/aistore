@@ -56,7 +56,7 @@ type (
 
 const (
 	initPollInterval = 10 * time.Microsecond
-	maxPollInterval  = 100 * time.Millisecond
+	maxPollInterval  = max(cos.PollSleepShort, initPollInterval*100)
 	iniNamelockCap   = 96
 )
 

@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -66,7 +67,7 @@ var ErrNoJWKSForIssuer = errors.New("no JWKS entry exists for issuer")
 const (
 	defaultMinCacheRefreshInterval = 15 * time.Minute
 	defaultOIDCDiscoveryRetries    = 3
-	defaultOIDCDiscoveryRetryDelay = 200 * time.Millisecond
+	defaultOIDCDiscoveryRetryDelay = cos.PollSleepShort
 	oidcDiscoveryEndpoint          = "/.well-known/openid-configuration"
 	maxKidLength                   = 256
 )

@@ -299,7 +299,7 @@ func (txns *txns) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err err
 // poll for 'done'
 func (txns *txns) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
 	var (
-		sleep       = 100 * time.Millisecond
+		sleep       = cos.PollSleepShort
 		done, found bool
 	)
 	for total := sleep; ; {

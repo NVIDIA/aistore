@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	waitSelfJoin = 300 * time.Millisecond
+	waitSelfJoin = cos.PollSleepMedium
 	waitStandby  = 5 * time.Second
 )
 

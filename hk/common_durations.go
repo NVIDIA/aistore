@@ -8,6 +8,7 @@ package hk
 import "time"
 
 // common cleanup-related durations
+// see also: cmn/cos/common_durations
 
 const (
 	// hk timers

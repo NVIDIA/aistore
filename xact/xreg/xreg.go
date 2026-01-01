@@ -40,9 +40,10 @@ const (
 	initialCap       = 256  // initial capacity
 	keepOldThreshold = 1024 // keep so many
 
-	waitPrevAborted     = 2 * time.Second
-	waitTerminalCleanup = 500 * time.Millisecond // registry housekeeping when TOCTOU
-	waitLimitedCoex     = 3 * time.Second
+	waitPrevAborted = 2 * time.Second
+	waitLimitedCoex = 5 * time.Second
+
+	waitTerminalCleanup = cos.PollSleepLong // registry housekeeping when TOCTOU
 )
 
 type WPR int

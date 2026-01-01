@@ -275,7 +275,7 @@ func (lwg *LimitedWaitGroup) Wait() {
 //
 
 const (
-	chanFullSleep = 100 * time.Millisecond
+	chanFullSleep = PollSleepShort
 )
 
 type (

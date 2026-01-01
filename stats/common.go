@@ -55,8 +55,8 @@ const (
 
 // periodic
 const (
-	maxLogSizeCheckTime = time.Hour              // periodically check the logs for max accumulated size
-	startupSleep        = 300 * time.Millisecond // periodically poll ClusterStarted()
+	maxLogSizeCheckTime = time.Hour         // periodically check the logs for max accumulated size
+	startupSleep        = cos.PollSleepLong // periodically poll ClusterStarted()
 )
 
 const (
