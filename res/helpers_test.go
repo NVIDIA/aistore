@@ -19,9 +19,9 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -86,13 +86,23 @@ func assertLocations(t *testing.T, bck *meta.Bck, objNames []string) {
 	t.Helper()
 
 	for _, objName := range objNames {
-		uname := bck.MakeUname(objName)
-		hrwMi, _, err := fs.Hrw(uname)
+		lom := &core.LOM{ObjName: objName}
+		err := lom.InitBck(bck)
 		tassert.CheckFatal(t, err)
 
-		fqn := hrwMi.MakePathFQN(bck.Bucket(), fs.ObjCT, objName)
-		err = cos.Stat(fqn)
-		tassert.Fatalf(t, err == nil, "missing: %q (fqn=%q, err=%v)", bck.Cname(objName), fqn, err)
+		err = lom.Load(false, false)
+		tassert.CheckFatal(t, err)
+
+		fqnM := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ChunkMetaCT, objName)
+		if lom.IsChunked() {
+			if err := cos.Stat(fqnM); err != nil {
+				tassert.Fatalf(t, false, "missing manifest: %q (meta fqn=%q, err=%v)", lom.Cname(), fqnM, err)
+			}
+		} else {
+			if err := cos.Stat(fqnM); err == nil {
+				tassert.Fatalf(t, false, "not expecting to find manifest: %q (meta fqn=%q)", lom.Cname(), fqnM)
+			}
+		}
 	}
 }
 
@@ -269,20 +279,6 @@ const (
 	pollSleep = 10 * time.Millisecond
 )
 
-func waitNonEmptyXid(t *testing.T, r *res.Res, timeout time.Duration) string {
-	t.Helper()
-	var elapsed time.Duration
-	for elapsed < timeout {
-		if xid := r.CurrentXactID(); xid != "" {
-			return xid
-		}
-		time.Sleep(pollSleep)
-		elapsed += pollSleep
-	}
-	t.Fatal("timeout waiting for CurrentXactID() to become non-empty")
-	return ""
-}
-
 func waitProgressBySnap(t *testing.T, xid string, timeout time.Duration) {
 	t.Helper()
 	var elapsed time.Duration
@@ -291,7 +287,7 @@ func waitProgressBySnap(t *testing.T, xid string, timeout time.Duration) {
 		tassert.CheckFatal(t, err)
 		if xctn != nil {
 			s := xctn.Snap()
-			if s.Stats.Objs > 0 || s.Stats.Bytes > 0 {
+			if s.Stats.Objs >= 10 || s.Stats.Bytes >= 64*cos.KiB {
 				return
 			}
 		}
@@ -301,14 +297,20 @@ func waitProgressBySnap(t *testing.T, xid string, timeout time.Duration) {
 	t.Fatalf("timeout waiting for progress (xid=%q)", xid)
 }
 
-func waitAborted(t *testing.T, xid string, timeout time.Duration) {
+func waitLikelyAborted(t *testing.T, xid string, timeout time.Duration) {
 	t.Helper()
 	var elapsed time.Duration
 	for elapsed < timeout {
 		xctn, err := xreg.GetXact(xid)
 		tassert.CheckFatal(t, err)
-		if xctn != nil && xctn.IsAborted() {
-			return
+		if xctn != nil {
+			if xctn.IsAborted() {
+				return
+			}
+			if xctn.IsDone() {
+				tlog.Logfln("Warning: %s finished before preemption; consider increasing object count/relocations", xctn)
+				return
+			}
 		}
 		time.Sleep(pollSleep)
 		elapsed += pollSleep

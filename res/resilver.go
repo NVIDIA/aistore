@@ -60,7 +60,7 @@ type (
 func New() *Res { return &Res{} }
 
 func (res *Res) IsActive(multiplier int64) bool {
-	xres := res.xctn()
+	xres := res.GetXact()
 	if xres != nil {
 		if xres.IsAborted() {
 			return false
@@ -76,15 +76,7 @@ func (res *Res) IsActive(multiplier int64) bool {
 	return mono.Since(end) < time.Duration(multiplier)*ivalInactive
 }
 
-func (res *Res) xctn() *xs.Resilver { return res.xres.Load() }
-
-func (res *Res) CurrentXactID() string {
-	xres := res.xctn()
-	if xres == nil {
-		return ""
-	}
-	return xres.ID()
-}
+func (res *Res) GetXact() *xs.Resilver { return res.xres.Load() }
 
 func (res *Res) Abort(err error) (aborted bool) {
 	if r := res.xres.Load(); r != nil {
@@ -182,7 +174,7 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 	xres := xctn.(*xs.Resilver)
 
 	debug.Func(func() {
-		if r := res.xctn(); r != nil {
+		if r := res.GetXact(); r != nil {
 			debug.Assertf(r.IsDone() || r.IsAborted(), "%s: (done=%t, aborted=%t)", r, r.IsDone(), r.IsAborted())
 		}
 	})

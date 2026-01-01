@@ -5,7 +5,6 @@
 package res_test
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
@@ -220,21 +220,24 @@ func runResilver(t *testing.T, config *cmn.Config, rmi *fs.Mountpath, action str
 // - a subsequent resilver run completes
 // - objects are present at HRW under the final volume.
 func TestResilver_PreemptAddDisable(t *testing.T) {
-	t.Skipf("skipping %s - not ready", t.Name()) // TODO: stabilize
 	const (
 		numBaseMpaths  = 3
 		numExtraMpaths = 1
-		minRelocations = 25 // ensure we actually have work after volume change
-		maxObjects     = 5000
-		plainObjSize   = 64 * cos.KiB
-		numChunkedObjs = 20
+		maxObjects     = 10000
+		plainObjSize   = cos.KiB
+		numChunkedObjs = 2000
 		numChunks      = 8
-		chunkSize      = 16 * cos.KiB
+		chunkSize      = 13 * cos.KiB
 		waitStartTO    = 2 * time.Second
 		waitProgressTO = 10 * time.Second
 		waitAbortTO    = 10 * time.Second
 		waitDoneTO     = 60 * time.Second
+
+		// ensure we actually have work after volume change
+		minRelocations = (maxObjects + numChunkedObjs) / (numBaseMpaths + 1) / 2
 	)
+	debug.Assert(minRelocations > 50)
+
 	const bucket = "ut-resilver-preempt"
 
 	// init: target + config + xreg
@@ -317,25 +320,17 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 
 	// wait until initRenew done and xaction is registered/owned
 	wgA.Wait()
-	xidA := waitNonEmptyXid(t, r, waitStartTO)
-	_ = xidA // should equal uuidA logically, but we won't assert that here
-
-	tlog.Logfln("3. Resilver %q is now running", xidA)
+	xidA := uuidA
+	tlog.Logfln("3. Resilver #1 %q is now running", xidA)
 
 	// ensure A is actually doing work before preempting (avoid “aborted before first visit”)
 	waitProgressBySnap(t, xidA, waitProgressTO)
-
-	// preempt: abort A, then disable the extra mountpath (volume C ~ A)
-	tlog.Logfln("4. Abort %q and begin disable/detach (DD) transition", xidA)
-	r.Abort(errors.New("test preempt: disable newly added mountpath"))
 
 	// Disable the extra mountpath to revert volume
 	flags := fs.FlagWaitingDD
 	rmi, _, _, err := fs.BeginDD(apc.ActMountpathDisable, flags, extraMpath)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, rmi != nil, "BeginDD returned nil mi for %q", extraMpath)
-	_, err = fs.Disable(extraMpath)
-	tassert.CheckFatal(t, err)
 
 	// start resilver B (under volume C) in a goroutine; WG barrier again
 	tlog.Logln("5. Start resilver #2")
@@ -349,21 +344,19 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 		Custom: xreg.ResArgs{Config: config},
 	}
 
-	time.Sleep(5 * time.Second)
 	go r.Run(argsB, tstats)
 
-	wgB.Wait()
-	xidB := waitNonEmptyXid(t, r, waitStartTO)
-	tassert.Fatalf(t, xidB != xidA, "expected a new resilver xaction id after restart (A=%q, B=%q)", xidA, xidB)
-
-	tlog.Logfln("6. Resilver #2 %q is now running", xidB)
-
 	// verify A aborted (via xreg)
-	waitAborted(t, xidA, waitAbortTO)
+	waitLikelyAborted(t, xidA, waitAbortTO)
+
+	xidB := uuidB
+	tlog.Logfln("6. Resilver #2 %q is now running", xidB)
 
 	// wait for B to complete (via xreg)
 	waitDone(t, xidB, waitDoneTO)
-	time.Sleep(5 * time.Second)
+
+	_, err = fs.Disable(extraMpath)
+	tassert.CheckFatal(t, err)
 
 	// all objects must exist on volume C
 	assertLocations(t, bck, objNames)

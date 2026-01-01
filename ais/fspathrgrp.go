@@ -180,18 +180,11 @@ func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 		preemptSleep = 200 * time.Millisecond
 	)
 	var (
-		res = g.t.res
-		xid = res.CurrentXactID()
+		res  = g.t.res
+		xres = res.GetXact()
 	)
-	if xid == "" { // finished ok or never ran
+	if xres == nil { // finished ok or never ran
 		return false
-	}
-
-	xres, err := xreg.GetXact(xid)
-	debug.AssertNoErr(err)
-	if xres == nil {
-		debug.Assertf(false, "expecting xres[%s] to stay in x-registry for a while", xid)
-		return true
 	}
 	if xres.IsAborted() {
 		return true
@@ -201,7 +194,7 @@ func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 		return false
 	}
 
-	err = fmt.Errorf("%s: %q %s: starting new resilver", g.t, action, mi)
+	err := fmt.Errorf("%s: %q %s: starting new resilver", g.t, action, mi)
 	if res.Abort(err) {
 		return true
 	}
