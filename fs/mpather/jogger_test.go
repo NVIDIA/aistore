@@ -44,7 +44,7 @@ func TestJoggerGroup(t *testing.T) {
 			return nil
 		},
 	}
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -83,7 +83,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 		},
 		DoLoad: mpather.Load,
 	}
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
 
 	jg.Run()
 	<-jg.ListenFinished()
@@ -119,7 +119,7 @@ func TestJoggerGroupError(t *testing.T) {
 			return errors.New("oops")
 		},
 	}
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -172,7 +172,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 			return nil
 		},
 	}
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -227,7 +227,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 			return nil
 		},
 	}
-	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), nil)
+	jg := mpather.NewJgroup(opts, cmn.GCO.Get(), nil)
 	jg.Run()
 	<-jg.ListenFinished()
 

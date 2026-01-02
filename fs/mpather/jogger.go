@@ -77,7 +77,7 @@ type (
 	}
 )
 
-func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup {
+func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup {
 	var (
 		joggers map[string]*jogger
 		avail   = fs.GetAvail()

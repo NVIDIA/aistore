@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -31,15 +30,15 @@ import (
 
 const (
 	ivalInactive = 4 * time.Second
-	retrySleep   = cos.PollSleepMedium
 )
 
 type (
 	Res struct {
-		xres  ratomic.Pointer[xs.Resilver]
-		end   atomic.Int64
-		nbusy atomic.Int64
-		mu    sync.Mutex
+		xres   *xs.Resilver
+		jgroup *mpather.Jgroup
+		end    atomic.Int64
+		nbusy  atomic.Int64
+		mu     sync.Mutex
 	}
 	Args struct {
 		UUID            string
@@ -76,13 +75,33 @@ func (res *Res) IsActive(multiplier int64) bool {
 	return mono.Since(end) < time.Duration(multiplier)*ivalInactive
 }
 
-func (res *Res) GetXact() *xs.Resilver { return res.xres.Load() }
+func (res *Res) GetXact() *xs.Resilver {
+	res.mu.Lock()
+	xres := res.xres
+	res.mu.Unlock()
+	return xres
+}
 
 func (res *Res) Abort(err error) (aborted bool) {
-	if r := res.xres.Load(); r != nil {
-		aborted = r.Abort(err)
+	res.mu.Lock()
+	xres := res.xres
+	jgroup := res.jgroup
+	if xres != nil {
+		res.jgroup = nil
 	}
-	return
+	res.mu.Unlock()
+	if xres == nil {
+		return false
+	}
+	aborted = xres.Abort(err)
+	if !aborted {
+		return false
+	}
+
+	if jgroup != nil {
+		_ = jgroup.Stop()
+	}
+	return true
 }
 
 func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
@@ -120,10 +139,10 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
-		jgroup = mpather.NewJoggerGroup(opts, args.Custom.Config, args.Rmi)
+		jgroup = mpather.NewJgroup(opts, args.Custom.Config, args.Rmi)
 		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jgroup = mpather.NewJoggerGroup(opts, args.Custom.Config, nil)
+		jgroup = mpather.NewJgroup(opts, args.Custom.Config, nil)
 		if args.Rmi != nil {
 			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jgroup.NumJ())
 		} else {
@@ -131,13 +150,20 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 		}
 	}
 
-	// run and block waiting
-	res.end.Store(0)
-	jgroup.Run()
-	err = wait(jgroup, xres, tstats)
-	if err != nil {
-		xres.AddErr(err)
+	res.mu.Lock() // 2nd --------------------------------------
+	if xres != res.xres {
+		// (unlikely)
+		res.mu.Unlock()
+		_ = jgroup.Stop()
+		return
 	}
+	res.end.Store(0)
+	res.jgroup = jgroup
+	res.mu.Unlock() //  --------------------------------------
+
+	// run and block waiting
+	jgroup.Run()
+	res.wait(jgroup, xres, tstats)
 
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
@@ -147,8 +173,11 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	xres.Finish()
 
 	res.mu.Lock()
-	res.end.Store(mono.NanoTime())
-	res.xres.Store(nil)
+	if xres == res.xres {
+		res.end.Store(mono.NanoTime())
+		res.xres = nil
+		res.jgroup = nil
+	}
 	res.mu.Unlock()
 
 	if n := res.nbusy.Load(); n > 0 {
@@ -158,20 +187,17 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 
 func (res *Res) initRenew(args *Args) *xs.Resilver {
 	rns := xreg.RenewResilver(args.UUID, &args.Custom)
-	if rns.Err == nil && rns.IsRunning() {
-		// retry just once
-		time.Sleep(retrySleep)
-		rns = xreg.RenewResilver(args.UUID, &args.Custom)
-	}
 	if rns.Err != nil {
-		return nil
-	}
-	if rns.IsRunning() {
-		nlog.Warningf("%s: failed to start/preempt for xid=%q: %s is still running", args.Action, args.UUID, rns.Entry.Get().Name())
+		debug.Assertf(!cmn.IsErrXactUsePrev(rns.Err), "not expecting %v(%T)", rns.Err, rns.Err)
+		nlog.Errorln("failed to start", args.Action, "renewal err:", rns.Err)
 		return nil
 	}
 	xctn := rns.Entry.Get()
 	xres := xctn.(*xs.Resilver)
+	if rns.IsRunning() {
+		nlog.Warningf("%s: start/preempt race [%q, %s]", args.Action, args.UUID, xres.Name())
+		return nil
+	}
 
 	debug.Func(func() {
 		if r := res.GetXact(); r != nil {
@@ -180,7 +206,7 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 	})
 	debug.Assertf(xres.ID() == args.UUID, "res-id mismatch: %q vs %q", xres.Name(), args.UUID)
 
-	res.mu.Lock() // --------------------------------------
+	res.mu.Lock() // 1st --------------------------------------
 
 	fatalErr, warnErr := fs.PersistMarker(fname.ResilverMarker, true /*quiet*/)
 	if fatalErr != nil {
@@ -188,7 +214,7 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 		res.mu.Unlock()
 		return nil
 	}
-	res.xres.Store(xres)
+	res.xres = xres
 
 	res.mu.Unlock() // ------------------------------------
 
@@ -203,16 +229,22 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) (err error) {
+func (res *Res) wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) {
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
-			if err = jgroup.Stop(); err != nil {
-				xres.AddErr(err, 0)
-			} else {
-				nlog.Infoln(core.T.String(), xres.Name(), "aborted, cause:", errCause)
+			err := jgroup.Stop()
+			res.mu.Lock()
+			if res.jgroup == jgroup {
+				res.jgroup = nil
 			}
-			return cmn.NewErrAborted(xres.Name(), "", errCause)
+			res.mu.Unlock()
+			if !xres.IsAborted() {
+				e := cos.Ternary(errCause == nil, err, errCause)
+				xres.Abort(e)
+				nlog.Warningln(xres.Name(), "stopped: [", errCause, err, "]")
+			}
+			return
 		case <-jgroup.ListenFinished():
 			if fs.RemoveMarker(fname.ResilverMarker, tstats, false /*stopping*/) {
 				nlog.Infoln(core.T.String()+":", xres.Name(), "removed marker ok")
@@ -257,6 +289,11 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		size   int64
 		copied bool
 	)
+
+	if j.xres.IsAborted() {
+		return nil
+	}
+
 	if !lom.TryLock(true) { // NOTE: skipping busy
 		j.p.nbusy.Inc()
 		if cmn.Rom.V(4, cos.ModReb) {
@@ -418,6 +455,9 @@ func (j *jogger) visitECSlice(ct *core.CT, buf []byte) (err error) {
 	debug.Assert(ct.ContentType() == fs.ECSliceCT)
 	if !ct.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
+	}
+	if j.xres.IsAborted() {
+		return nil
 	}
 	j._mvSlice(ct, buf)
 	return nil

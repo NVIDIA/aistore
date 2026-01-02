@@ -177,28 +177,24 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 func (g *fsprungroup) preempt(action string, mi *fs.Mountpath) bool /*prev*/ {
 	const (
-		preemptSleep = cos.PollSleepShort
+		sleep = cos.PollSleepShort
 	)
-	var (
-		res  = g.t.res
-		xres = res.GetXact()
-	)
+	res := g.t.res
+	// try to abort an active resilver, if any
+	if res.Abort(fmt.Errorf("%v: %q, %s", cmn.ErrXactRenewAbort, action, mi)) {
+		return true
+	}
+	xres := res.GetXact()
 	if xres == nil { // finished ok or never ran
 		return false
 	}
-	if xres.IsAborted() {
-		return true
-	}
 	if xres.IsDone() {
-		time.Sleep(preemptSleep) // just finished; Res atomic state
+		time.Sleep(sleep) // just finished; Res atomic state
 		return false
 	}
 
-	err := fmt.Errorf("%s: %q %s: starting new resilver", g.t, action, mi)
-	if res.Abort(err) {
-		return true
-	}
-	time.Sleep(preemptSleep)
+	// (unlikely)
+	time.Sleep(sleep)
 	debug.Assert(xres.IsAborted() || xres.IsDone(), xres.String())
 	return true
 }

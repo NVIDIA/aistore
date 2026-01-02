@@ -773,6 +773,10 @@ func (r *RenewBase) Str(kind string) string {
 // RenewRes //
 //////////////
 
+// note:
+// for a newly constructed instance x-registry always returns RenewRes{Entry: entry}
+// with empty rns.UUID
+// in other words, IsRunning() can only be true when we are using xprev
 func (rns *RenewRes) IsRunning() bool {
 	if rns.UUID == "" {
 		return false

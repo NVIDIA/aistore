@@ -174,7 +174,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 		}
 	}
 
-	jg := mpather.NewJoggerGroup(opts, r.config, nil)
+	jg := mpather.NewJgroup(opts, r.config, nil)
 	jg.Run()
 
 	select {
