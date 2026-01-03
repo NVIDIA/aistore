@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -25,17 +26,15 @@ type stdlib struct{}
 // continue walking if there is a problem with a bucket. Also we count "soft"
 // errors and abort if we reach certain amount of them.
 func (ew *errCallbackWrapper) PathWalkError(_ string, err error) error {
-	if cmn.IsErrBucketLevel(err) {
+	switch {
+	case err == ErrWalkStopped, cmn.IsErrBucketLevel(err), ew.counter.Load() > errThreshold:
 		return err
-	}
-	if ew.counter.Load() > errThreshold {
-		return err
-	}
-	if cmn.IsErrObjLevel(err) {
+	case cmn.IsErrObjLevel(err):
 		ew.counter.Inc()
 		return nil
+	default:
+		return err
 	}
-	return err
 }
 
 //nolint:unused // alternative implementation; unused because godirwalk is hardcoded in walk.go
@@ -61,6 +60,9 @@ func (stdlib) walk(fqns []string, opts *WalkOpts) error {
 		if cmn.IsErrMpathNotFound(err1) {
 			nlog.Errorln(err1)
 			continue
+		}
+		if err1 == ErrWalkStopped {
+			break
 		}
 		if cmn.IsErrAborted(err1) {
 			if err == nil {

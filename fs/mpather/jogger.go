@@ -5,11 +5,11 @@
 package mpather
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -22,8 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-
-	"golang.org/x/sync/errgroup"
 )
 
 // walk all or selected buckets, one at a time
@@ -38,6 +36,7 @@ const (
 type (
 	JgroupOpts struct {
 		onFinish    func()
+		Parent      cos.Stopper // TODO -- FIXME: start using xaction parent
 		VisitObj    func(lom *core.LOM, buf []byte) error
 		VisitCT     func(ct *core.CT, buf []byte) error
 		Slab        *memsys.Slab
@@ -55,22 +54,26 @@ type (
 	// call callback on each of the encountered object. When jogger encounters
 	// error it stops and informs other joggers about the error (so they stop too).
 	Jgroup struct {
-		wg          *errgroup.Group
-		joggers     map[string]*jogger
-		finishedCh  cos.StopCh // when all joggers are done
+		wg         sync.WaitGroup
+		joggers    map[string]*jogger
+		stopCh     cos.StopCh // group stop (first error or external Stop)
+		finishedCh cos.StopCh // when all joggers are done
+
 		finishedCnt atomic.Uint32
+
+		errOnce sync.Once
+		err     error
 	}
 
 	// jogger is being run on each mountpath and executes fs.Walk which call
 	// provided callback.
 	jogger struct {
-		ctx       context.Context
 		opts      *JgroupOpts
 		mi        *fs.Mountpath
 		bdir      string // mi.MakePath(bck)
 		objPrefix string // fully-qualified prefix, as in: join(bdir, opts.Prefix)
 		config    *cmn.Config
-		stopCh    cos.StopCh
+		stopCh    *cos.StopCh // shared group stop
 		buf       []byte
 		numvis    atomic.Int64 // counter: num visited objects
 		adv       load.Advice  // throttle
@@ -82,12 +85,14 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 		joggers map[string]*jogger
 		avail   = fs.GetAvail()
 		la      = len(avail)
-		wg, ctx = errgroup.WithContext(context.Background())
-		jg      = &Jgroup{wg: wg}
+		jg      = &Jgroup{}
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
 	opts.onFinish = jg.markFinished
+
+	jg.stopCh.Init()
+	jg.finishedCh.Init()
 
 	switch {
 	case smi != nil: // selected mountpath
@@ -95,7 +100,7 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 			nlog.Errorln(smi.String(), "is not available, nothing to do")
 		} else {
 			joggers = make(map[string]*jogger, 1)
-			joggers[smi.Path] = newJogger(ctx, opts, smi, config)
+			joggers[smi.Path] = newJogger(opts, smi, config, &jg.stopCh)
 		}
 	case opts.PerBucket:
 		debug.Assert(len(opts.Buckets) > 1)
@@ -107,13 +112,13 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 			uname := bck.MakeUname("")
 			for _, mi := range avail {
 				k := mi.Path + "|" + cos.UnsafeS(uname)
-				joggers[k] = newJogger(ctx, &nopts, mi, config)
+				joggers[k] = newJogger(&nopts, mi, config, &jg.stopCh)
 			}
 		}
 	default:
 		joggers = make(map[string]*jogger, la)
 		for _, mi := range avail {
-			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
+			joggers[mi.Path] = newJogger(opts, mi, config, &jg.stopCh)
 		}
 	}
 
@@ -123,11 +128,11 @@ func NewJgroup(opts *JgroupOpts, config *cmn.Config, smi *fs.Mountpath) *Jgroup 
 			_, disabled := fs.Get()
 			nlog.Errorf("%v: avail=%v, disabled=%v", cmn.ErrNoMountpaths, avail, disabled)
 		}
+		jg.stopCh.Close()
+		jg.finishedCh.Close()
 	}
 
 	jg.joggers = joggers
-	jg.finishedCh.Init()
-
 	return jg
 }
 
@@ -141,21 +146,24 @@ func (jg *Jgroup) NumVisits() (n int64) {
 }
 
 func (jg *Jgroup) Run() {
-	for _, jogger := range jg.joggers {
-		jg.wg.Go(jogger.run)
+	for _, j := range jg.joggers {
+		jg.wg.Add(1)
+		go func(j *jogger) {
+			defer jg.wg.Done()
+			if err := j.run(); err != nil {
+				jg.setErr(err)
+			}
+		}(j)
 	}
 }
 
 func (jg *Jgroup) Stop() error {
-	for _, jogger := range jg.joggers {
-		jogger.abort()
-	}
-	return jg.wg.Wait()
+	jg.stopCh.Close()
+	jg.wg.Wait()
+	return jg.err
 }
 
-func (jg *Jgroup) ListenFinished() <-chan struct{} {
-	return jg.finishedCh.Listen()
-}
+func (jg *Jgroup) ListenFinished() <-chan struct{} { return jg.finishedCh.Listen() }
 
 func (jg *Jgroup) markFinished() {
 	if n := jg.finishedCnt.Inc(); n == uint32(len(jg.joggers)) {
@@ -163,12 +171,23 @@ func (jg *Jgroup) markFinished() {
 	}
 }
 
-func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config) (j *jogger) {
+func (jg *Jgroup) setErr(err error) {
+	debug.Assert(err != fs.ErrWalkStopped, "walk-stopped sentinel must be consumed by fs.walk")
+	if err == nil || cmn.IsErrAborted(err) {
+		return
+	}
+	jg.errOnce.Do(func() {
+		jg.err = err
+		jg.stopCh.Close()
+	})
+}
+
+func newJogger(opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config, stopCh *cos.StopCh) (j *jogger) {
 	j = &jogger{
-		ctx:    ctx,
 		opts:   opts,
 		mi:     mi,
 		config: config,
+		stopCh: stopCh,
 	}
 	if opts.Prefix != "" {
 		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjCT) // this mountpath's bucket dir that contains objects
@@ -176,8 +195,6 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 	}
 	// throttling context
 	j.adv.Init(load.FlMem|load.FlDsk, &load.Extra{Mi: j.mi, Cfg: &j.config.Disk, RW: j.opts.RW})
-
-	j.stopCh.Init()
 	return
 }
 
@@ -249,7 +266,7 @@ func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 	}
 	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
 		aborted, errV := j.runBck(bck.Bucket())
-		if err != nil {
+		if errV != nil {
 			errs.Add(errV)
 			err = &errs
 		}
@@ -294,8 +311,8 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	if err := j.checkStopped(); err != nil {
-		return err
+	if j.stopped() {
+		return fs.ErrWalkStopped
 	}
 	if err := j.visitFQN(fqn, j.buf); err != nil {
 		return err
@@ -351,15 +368,20 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (err error) {
 
 func (j *jogger) visitCT(ct *core.CT, buf []byte) error { return j.opts.VisitCT(ct, buf) }
 
-func (j *jogger) checkStopped() error {
+func (j *jogger) stopped() bool {
+	var xabortCh <-chan error // nil
+	if j.opts.Parent != nil {
+		xabortCh = j.opts.Parent.ChanAbort()
+	}
 	select {
-	case <-j.ctx.Done(): // Some other worker has exited with error and canceled context.
-		return j.ctx.Err()
-	case <-j.stopCh.Listen(): // Worker has been aborted.
-		return cmn.NewErrAborted(j.String(), "mpath-jog", nil)
+	// 1. jgroup.Stop()
+	case <-j.stopCh.Listen():
+		return true
+	// 2. (optional) parent xaction aborted
+	// caller is expected to prioritize xact.AbortErr() over the one returned by jgroup.Stop()
+	case <-xabortCh:
+		return true
 	default:
-		return nil
+		return false
 	}
 }
-
-func (j *jogger) abort() { j.stopCh.Close() }

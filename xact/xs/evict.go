@@ -39,7 +39,6 @@ var (
 	_ core.Xact      = (*evictDelete)(nil)
 	_ xreg.Renewable = (*evdFactory)(nil)
 	_ lrwi           = (*evictDelete)(nil)
-	_ lrxact         = (*evictDelete)(nil)
 )
 
 //

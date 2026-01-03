@@ -92,7 +92,6 @@ type (
 // interface guard
 var (
 	_ core.Xact      = (*XactArch)(nil)
-	_ lrxact         = (*XactArch)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
 )

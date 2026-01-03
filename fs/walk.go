@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"errors"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -60,6 +61,11 @@ type (
 		mpathChildren(opts *WalkOpts) ([]string, error)
 	}
 )
+
+// NOTE:
+// ErrWalkStopped is a control-flow sentinel used to halt walking.
+// Must not be wrapped (compare by `==`) and must not escape fs.walk().
+var ErrWalkStopped = errors.New("fs.walk stopped")
 
 // /////////////////////////////////
 // HARDCODED TO GODIRWALK IMPLEMENTATION FOR BETTER MEMORY EFFICIENCY (15-30%)

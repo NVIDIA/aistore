@@ -76,7 +76,6 @@ type (
 // interface guard
 var (
 	_ core.Xact      = (*XactTCO)(nil)
-	_ lrxact         = (*XactTCO)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 	_ lrwi           = (*tcowi)(nil)
 	_ lrwi           = (*syncwi)(nil)

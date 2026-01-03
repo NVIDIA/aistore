@@ -43,15 +43,6 @@ type (
 	lrwi interface {
 		do(*core.LOM, *lrit, []byte)
 	}
-	// a strict subset of core.Xact, includes only the methods
-	// lrit needs for itself
-	lrxact interface {
-		Abort(error) bool
-		IsAborted() bool // used exclusively to break iteration
-		IsDone() bool    // ditto
-		Name() string
-		ChanAbort() <-chan error
-	}
 
 	// running concurrency
 	lrpair struct {
@@ -64,7 +55,7 @@ type (
 
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
-		parent lrxact
+		parent cos.Stopper
 		bck    *meta.Bck
 		msg    *apc.ListRange      // traverse: msg
 		pt     *cos.ParsedTemplate // traverse: template
@@ -85,7 +76,7 @@ type (
 // lrit //
 //////////
 
-func (r *lrit) init(xctn lrxact, msg *apc.ListRange, bck *meta.Bck, lsflags uint64, numWorkers, confBurst int) error {
+func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags uint64, numWorkers, confBurst int) error {
 	l := fs.NumAvail()
 	if l == 0 {
 		xctn.Abort(cmn.ErrNoMountpaths)

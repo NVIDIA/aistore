@@ -47,7 +47,6 @@ func (r *BckJog) Wait() error {
 		}
 		return cmn.NewErrAborted(r.Name(), "x-bck-jog", errCause)
 	case <-r.joggers.ListenFinished():
-		err := r.joggers.Stop()
-		return err
+		return r.joggers.Stop()
 	}
 }

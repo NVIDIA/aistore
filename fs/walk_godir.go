@@ -31,17 +31,15 @@ var _ DirEntry = (*godirwalk.Dirent)(nil)
 // continue walking if there is a problem with a bucket. Also we count "soft"
 // errors and abort if we reach certain amount of them.
 func (ew *errCallbackWrapper) PathErrToAction(_ string, err error) godirwalk.ErrorAction {
-	if cmn.IsErrBucketLevel(err) {
+	switch {
+	case err == ErrWalkStopped, cmn.IsErrBucketLevel(err), ew.counter.Load() > errThreshold:
 		return godirwalk.Halt
-	}
-	if ew.counter.Load() > errThreshold {
-		return godirwalk.Halt
-	}
-	if cmn.IsErrObjLevel(err) {
+	case cmn.IsErrObjLevel(err):
 		ew.counter.Inc()
 		return godirwalk.SkipNode
+	default:
+		return godirwalk.Halt
 	}
-	return godirwalk.Halt
 }
 
 func (opts *WalkOpts) cb(fqn string, de *godirwalk.Dirent) error {
@@ -68,6 +66,9 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 		if cmn.IsErrMpathNotFound(err1) {
 			nlog.Errorln(err1) // mountpath is getting detached or disabled
 			continue
+		}
+		if err1 == ErrWalkStopped {
+			break
 		}
 		if cmn.IsErrAborted(err1) {
 			// Errors different from cmn.ErrAborted should not be overwritten
