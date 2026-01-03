@@ -7,6 +7,7 @@ package integration_test
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -130,76 +131,48 @@ func (c *resilverStressCtx) getSnap(t *testing.T, xs xact.MultiSnap, xid string)
 	return nil, false
 }
 
-// return the currently running resilver on the target (if any)
-func (c *resilverStressCtx) runningResilverOnTarget(t *testing.T, xs xact.MultiSnap) (*core.Snap, bool) {
-	t.Helper()
-	snaps, ok := xs[c.target.ID()]
-	if !ok {
-		return nil, false
-	}
-	for _, s := range snaps {
-		if s.IsRunning() {
-			return s, true
-		}
-	}
-	return nil, false
-}
-
 // wait until some resilver is running on this target; return its UUID
 func (c *resilverStressCtx) waitResilverStartOnTarget(t *testing.T, bp api.BaseParams) string {
 	t.Helper()
-	var elapsed time.Duration
-	for elapsed < resilShortTimeout {
-		xs := c.queryResilver(t, bp, true /*onlyRunning*/)
-		if snap, ok := c.runningResilverOnTarget(t, xs); ok {
-			return snap.ID
-		}
-		time.Sleep(resilShortPoll)
-		elapsed += resilShortPoll
+	xargs := xact.ArgsMsg{
+		Kind:        apc.ActResilver,
+		DaemonID:    c.target.ID(),
+		OnlyRunning: true,
+		Timeout:     resilShortTimeout,
 	}
-	tassert.Fatalf(t, false, "resilver did not start within %v", resilShortTimeout)
-	return ""
-}
-
-// wait until a *new* resilver UUID (different from prev) is running on this target
-func (c *resilverStressCtx) waitResilverStartNewID(t *testing.T, bp api.BaseParams, prev string) string {
-	t.Helper()
-	var elapsed time.Duration
-	for elapsed < resilShortTimeout {
-		xs := c.queryResilver(t, bp, true /*onlyRunning*/)
-		if snap, ok := c.runningResilverOnTarget(t, xs); ok && snap.ID != "" && snap.ID != prev {
-			return snap.ID
-		}
-		time.Sleep(resilShortPoll)
-		elapsed += resilShortPoll
-	}
-	// best-effort: if we never observe a new ID, that usually means "prev finished fast" or "same batch id reused"
-	return ""
+	xid, _, err := api.WaitForSnapsStarted(bp, &xargs)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, xid != "", "resilver did not start within %v", resilShortTimeout)
+	return xid
 }
 
 func (c *resilverStressCtx) waitResilverFinishAny(t *testing.T, bp api.BaseParams) {
 	t.Helper()
-	xargs := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: c.target.ID(), Timeout: resilLongTimeout}
-	_, err := api.WaitForXactionIC(bp, &xargs)
+	xargs := xact.ArgsMsg{
+		Kind:     apc.ActResilver,
+		DaemonID: c.target.ID(),
+		Timeout:  resilLongTimeout,
+	}
+	// resilver does NOT notify IC; must use snaps-based wait
+	_, err := api.WaitForSnaps(bp, &xargs, nil)
 	tassert.CheckFatal(t, err)
 }
 
 // wait until there's no running resilver on the target
 func (c *resilverStressCtx) waitNoRunningResilver(t *testing.T, bp api.BaseParams) {
 	t.Helper()
-
-	var elapsed time.Duration
-	for elapsed < resilLongTimeout {
-		xs := c.queryResilver(t, bp, true /*onlyRunning*/)
-		// xs is MultiSnap: presence of any snap in xs[c.target.ID()] means running.
-		if snaps, ok := xs[c.target.ID()]; !ok || len(snaps) == 0 {
-			return
-		}
-		time.Sleep(resilLongPoll)
-		elapsed += resilLongPoll
+	xargs := xact.ArgsMsg{
+		Kind:        apc.ActResilver,
+		DaemonID:    c.target.ID(),
+		OnlyRunning: true, // if anything is running, it will show up here
+		Timeout:     resilLongTimeout,
 	}
-
-	t.Fatalf("resilver still running on %s after %v", c.target.StringEx(), resilLongTimeout)
+	cond := func(ms xact.MultiSnap) (done, reset bool) {
+		_, running, _ := ms.AggregateState("")
+		return !running, false // empty snaps => running=false => done
+	}
+	_, err := api.WaitForSnaps(bp, &xargs, cond)
+	tassert.CheckFatal(t, err)
 }
 
 // barrier:
@@ -208,11 +181,11 @@ func (c *resilverStressCtx) waitNoRunningResilver(t *testing.T, bp api.BaseParam
 func (c *resilverStressCtx) barrier(t *testing.T, bp api.BaseParams, _ int /*expectedDisabled*/) {
 	t.Helper()
 	c.waitNoRunningResilver(t, bp)
-	c.waitMountpathsStable(t, bp) // ignore disabled count here (by design)
+	c.waitPostDD(t, bp) // ignore disabled count here (by design)
 }
 
-// wait until the target is not in the middle of its DD transition
-func (c *resilverStressCtx) waitMountpathsStable(t *testing.T, bp api.BaseParams) *apc.MountpathList {
+// wait until the target - all mountpaths - is not in the middle of its DD transition
+func (c *resilverStressCtx) waitPostDD(t *testing.T, bp api.BaseParams) *apc.MountpathList {
 	t.Helper()
 
 	var elapsed time.Duration
@@ -229,6 +202,27 @@ func (c *resilverStressCtx) waitMountpathsStable(t *testing.T, bp api.BaseParams
 
 	tassert.Fatalf(t, false, "mountpaths did not stabilize (waiting-dd non-empty) within %v", resilLongTimeout)
 	return nil
+}
+
+// wait until the specified mountpath is not in the middle of its DD transition
+// (i.e., is not listed under WaitingDD).
+func (c *resilverStressCtx) waitMpathPostDD(t *testing.T, bp api.BaseParams, mp string) {
+	t.Helper()
+
+	var elapsed time.Duration
+	for elapsed < resilLongTimeout {
+		mpl, err := api.GetMountpaths(bp, c.target)
+		tassert.CheckFatal(t, err)
+
+		if !slices.Contains(mpl.WaitingDD, mp) {
+			return
+		}
+
+		time.Sleep(resilShortPoll)
+		elapsed += resilShortPoll
+	}
+
+	tassert.Fatalf(t, false, "mountpath %q did not stabilize (still in waiting-dd) within %v", mp, resilLongTimeout)
 }
 
 // conventional validation using API
@@ -256,38 +250,6 @@ func (c *resilverStressCtx) validateAPIOnly(t *testing.T) {
 	// EC
 	c.ec.gets(nil, true /*withValidation*/)
 	c.ec.ensureNoGetErrors()
-}
-
-// We only *require* that it is NOT running.
-func (c *resilverStressCtx) verifyNotRunningIfPresent(t *testing.T, bp api.BaseParams, xid string) {
-	t.Helper()
-
-	xargs := xact.ArgsMsg{Kind: apc.ActResilver, ID: xid, DaemonID: c.target.ID()}
-	xs, err := api.QueryXactionSnaps(bp, &xargs)
-	tassert.CheckFatal(t, err)
-
-	if len(xs) == 0 {
-		tlog.Logfln("verifyNotRunning: no snaps found for %s (skipping)", xid)
-		return
-	}
-
-	snap, ok := c.getSnap(t, xs, xid)
-	if !ok {
-		tlog.Logfln("verifyNotRunning: snap for %s not found on %s (skipping)", xid, c.target.ID())
-		return
-	}
-
-	if snap.IsRunning() {
-		tassert.Fatalf(t, false, "resilver %s is still running (expected done/aborted)", xid)
-		return
-	}
-
-	// informational only
-	if snap.IsAborted() {
-		tlog.Logfln("resilver %s was aborted (abort-err=%q err=%q)", xid, snap.AbortErr, snap.Err)
-	} else {
-		tlog.Logfln("resilver %s finished (aborted=%v abort-err=%q err=%q)", xid, snap.AbortedX, snap.AbortErr, snap.Err)
-	}
 }
 
 func (c *resilverStressCtx) validateAllData(t *testing.T, stage string) {
@@ -463,24 +425,12 @@ func testAdisableDisablePreempt(t *testing.T, c *resilverStressCtx) {
 	err := api.DisableMountpath(bp, c.target, mp1, false /*dontResilver*/)
 	tassert.CheckFatal(t, err)
 
-	r1id := c.waitResilverStartOnTarget(t, bp)
-	tlog.Logfln("R1 started: %s", r1id)
-
-	time.Sleep(time.Second) // let it run a bit
+	// wait for DD transition before stacking another disable
+	c.waitMpathPostDD(t, bp, mp1)
 
 	tlog.Logfln("Disabling %s (should preempt R1)...", mp2)
 	err = api.DisableMountpath(bp, c.target, mp2, false /*dontResilver*/)
 	tassert.CheckFatal(t, err)
-
-	// Ideally: observe a *new* running UUID. If we don't, treat as "R1 finished fast or reused".
-	r2id := c.waitResilverStartNewID(t, bp, r1id)
-	if r2id != "" && r2id != r1id {
-		tlog.Logfln("R2 started: %s (preempted R1: %s)", r2id, r1id)
-		// No aborted assertions yet; just ensure the previous one is not still running if it’s queryable.
-		c.verifyNotRunningIfPresent(t, bp, r1id)
-	} else {
-		tlog.Logfln("Did not observe a distinct R2 UUID (R1 may have finished quickly or UUID reused)")
-	}
 
 	// while mountpaths are disabled, some objects/chunks may be inaccessible
 	c.barrier(t, bp, -1)

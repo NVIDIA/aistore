@@ -528,8 +528,14 @@ func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error
 	return "", nil, nil
 }
 
-// (all targets, all xactions)
-func (xs MultiSnap) IsIdle(xid string) (aborted, running, notstarted bool) {
+// return:
+// `aborted`    => any selected xaction aborted on any target
+// `running`    => any selected xaction currently running on any target
+// `notstarted` => selected xaction not yet visible / not started on any target
+// selection:
+// - xid != "": the specified xaction UUID (all targets)
+// - xid == "": all UUIDs present in this MultiSnap (all targets)
+func (xs MultiSnap) AggregateState(xid string) (aborted, running, notstarted bool) {
 	if xid != "" {
 		debug.Assert(IsValidUUID(xid), xid)
 		return xs._get(xid)

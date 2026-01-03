@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
@@ -195,7 +196,7 @@ type consIdle struct {
 }
 
 func (ci *consIdle) check(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
-	aborted, running, notstarted := snaps.IsIdle(ci.xid)
+	aborted, running, notstarted := snaps.AggregateState(ci.xid)
 	if aborted {
 		return true, false
 	}
@@ -238,20 +239,9 @@ func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err
 // - xact.IdlesBeforeFinishing()
 // - x-resilver (as it usually runs on a single node)
 func WaitForXactionNode(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
-	if args.Kind != "" {
-		if err := xact.CheckValidKind(args.Kind); err != nil {
-			return err
-		}
+	if err := _validateXargs(args); err != nil {
+		return err
 	}
-	if args.ID != "" {
-		if err := xact.CheckValidUUID(args.ID); err != nil {
-			return err
-		}
-	}
-	if args.Kind == "" && args.ID == "" {
-		return fmt.Errorf("cannot wait for xaction given '%s' - expecting a valid kind and/or UUID", args.String())
-	}
-
 	_, err := _waitx(bp, args, fn)
 	return err
 }
@@ -283,9 +273,12 @@ func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bo
 				}
 			}
 		}
-		canRetry := err == nil || cos.IsErrRetriableConn(err) || cmn.IsStatusServiceUnavailable(err)
-		if done || !canRetry /*fail*/ {
+		if err != nil && !_isRetriable(err) {
 			return status, err
+		}
+		if done {
+			debug.AssertNoErr(err)
+			return status, nil
 		}
 		time.Sleep(sleep)
 		sleep = min(maxSleep, sleep+sleep/2)
@@ -294,6 +287,28 @@ func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bo
 			return nil, fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
 		}
 	}
+}
+
+//
+// helpers
+//
+
+// `args` filter must contain at least kind or UUID
+func _validateXargs(args *xact.ArgsMsg) error {
+	if args.Kind == "" && args.ID == "" {
+		return fmt.Errorf("api.xaction: missing selector (expecting kind and/or UUID): %s", args.String())
+	}
+	if args.Kind != "" {
+		if err := xact.CheckValidKind(args.Kind); err != nil {
+			return err
+		}
+	}
+	if args.ID != "" {
+		if err := xact.CheckValidUUID(args.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func _times(args *xact.ArgsMsg) (time.Duration, time.Duration) {
@@ -305,4 +320,8 @@ func _times(args *xact.ArgsMsg) (time.Duration, time.Duration) {
 		total = xact.DefWaitTimeLong
 	}
 	return total, min(xact.MaxProbingFreq, cos.ProbingFrequency(total))
+}
+
+func _isRetriable(err error) bool {
+	return cos.IsErrRetriableConn(err) || cmn.IsStatusServiceUnavailable(err)
 }
