@@ -66,6 +66,7 @@ func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 	r = &xactLLC{}
 	mpopts := &mpather.JgroupOpts{
+		Parent:   r,
 		CTs:      []string{fs.ObjCT},
 		VisitObj: func(*core.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,

@@ -104,6 +104,7 @@ func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		mpopts    = &mpather.JgroupOpts{
+			Parent:   r,
 			CTs:      []string{fs.ObjCT},
 			VisitObj: r.do,
 			Slab:     slab,

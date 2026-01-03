@@ -155,6 +155,7 @@ func (r *XactBckEncode) Run(gowg *sync.WaitGroup) {
 	gowg.Done()
 
 	opts := &mpather.JgroupOpts{
+		Parent:   r,
 		CTs:      []string{fs.ObjCT},
 		VisitObj: r.encode,
 		DoLoad:   mpather.Load,

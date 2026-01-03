@@ -34,11 +34,10 @@ const (
 
 type (
 	Res struct {
-		xres   *xs.Resilver
-		jgroup *mpather.Jgroup
-		end    atomic.Int64
-		nbusy  atomic.Int64
-		mu     sync.Mutex
+		xres  *xs.Resilver
+		end   atomic.Int64
+		nbusy atomic.Int64
+		mu    sync.Mutex
 	}
 	Args struct {
 		UUID            string
@@ -85,23 +84,11 @@ func (res *Res) GetXact() *xs.Resilver {
 func (res *Res) Abort(err error) (aborted bool) {
 	res.mu.Lock()
 	xres := res.xres
-	jgroup := res.jgroup
-	if xres != nil {
-		res.jgroup = nil
-	}
 	res.mu.Unlock()
 	if xres == nil {
 		return false
 	}
-	aborted = xres.Abort(err)
-	if !aborted {
-		return false
-	}
-
-	if jgroup != nil {
-		_ = jgroup.Stop()
-	}
-	return true
+	return xres.Abort(err)
 }
 
 func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
@@ -128,6 +115,7 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		j         = &jogger{p: res, xres: xres}
 		opts      = &mpather.JgroupOpts{
+			Parent:   xres,
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
 			VisitObj: j.visitObj,
 			VisitCT:  j.visitECSlice,
@@ -158,12 +146,11 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 		return
 	}
 	res.end.Store(0)
-	res.jgroup = jgroup
 	res.mu.Unlock() //  --------------------------------------
 
 	// run and block waiting
 	jgroup.Run()
-	res.wait(jgroup, xres, tstats)
+	wait(jgroup, xres, tstats)
 
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
@@ -176,7 +163,6 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	if xres == res.xres {
 		res.end.Store(mono.NanoTime())
 		res.xres = nil
-		res.jgroup = nil
 	}
 	res.mu.Unlock()
 
@@ -229,21 +215,11 @@ func (res *Res) initRenew(args *Args) *xs.Resilver {
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func (res *Res) wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) {
+func wait(jgroup *mpather.Jgroup, xres *xs.Resilver, tstats cos.StatsUpdater) {
 	for {
 		select {
-		case errCause := <-xres.ChanAbort():
-			err := jgroup.Stop()
-			res.mu.Lock()
-			if res.jgroup == jgroup {
-				res.jgroup = nil
-			}
-			res.mu.Unlock()
-			if !xres.IsAborted() {
-				e := cos.Ternary(errCause == nil, err, errCause)
-				xres.Abort(e)
-				nlog.Warningln(xres.Name(), "stopped: [", errCause, err, "]")
-			}
+		case <-xres.ChanAbort():
+			_ = jgroup.Stop()
 			return
 		case <-jgroup.ListenFinished():
 			if fs.RemoveMarker(fname.ResilverMarker, tstats, false /*stopping*/) {

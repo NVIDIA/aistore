@@ -251,6 +251,7 @@ func (r *XactTCB) init(uuid, kind string, slab *memsys.Slab, config *cmn.Config,
 		args   = r.args
 		msg    = r.args.Msg
 		mpopts = &mpather.JgroupOpts{
+			Parent:   r,
 			CTs:      []string{fs.ObjCT},
 			VisitObj: r.do,
 			Prefix:   msg.Prefix,

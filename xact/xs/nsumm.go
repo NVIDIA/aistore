@@ -101,6 +101,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	}
 
 	opts := &mpather.JgroupOpts{
+		Parent:      r,
 		CTs:         []string{fs.ObjCT},
 		Prefix:      p.msg.Prefix,
 		VisitObj:    r.visitObj,

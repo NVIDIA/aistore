@@ -36,7 +36,7 @@ const (
 type (
 	JgroupOpts struct {
 		onFinish    func()
-		Parent      cos.Stopper // TODO -- FIXME: start using xaction parent
+		Parent      cos.Stopper // optional: stop walk when parent xaction aborts
 		VisitObj    func(lom *core.LOM, buf []byte) error
 		VisitCT     func(ct *core.CT, buf []byte) error
 		Slab        *memsys.Slab
@@ -54,15 +54,13 @@ type (
 	// call callback on each of the encountered object. When jogger encounters
 	// error it stops and informs other joggers about the error (so they stop too).
 	Jgroup struct {
-		wg         sync.WaitGroup
-		joggers    map[string]*jogger
-		stopCh     cos.StopCh // group stop (first error or external Stop)
-		finishedCh cos.StopCh // when all joggers are done
-
+		err         error
+		joggers     map[string]*jogger
+		stopCh      cos.StopCh // group stop (first error or external Stop)
+		finishedCh  cos.StopCh // when all joggers are done
+		wg          sync.WaitGroup
+		errOnce     sync.Once
 		finishedCnt atomic.Uint32
-
-		errOnce sync.Once
-		err     error
 	}
 
 	// jogger is being run on each mountpath and executes fs.Walk which call
@@ -70,13 +68,13 @@ type (
 	jogger struct {
 		opts      *JgroupOpts
 		mi        *fs.Mountpath
-		bdir      string // mi.MakePath(bck)
-		objPrefix string // fully-qualified prefix, as in: join(bdir, opts.Prefix)
 		config    *cmn.Config
-		stopCh    *cos.StopCh // shared group stop
-		buf       []byte
-		numvis    atomic.Int64 // counter: num visited objects
+		stopCh    *cos.StopCh  // shared group stop
+		bdir      string       // mi.MakePath(bck)
+		objPrefix string       // fully-qualified prefix, as in: join(bdir, opts.Prefix)
+		buf       []byte       // for visit*() callbacks
 		adv       load.Advice  // throttle
+		numvis    atomic.Int64 // counter: num visited objects
 	}
 )
 

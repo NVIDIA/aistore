@@ -38,8 +38,8 @@ type (
 		opts     *WorkerGroupOpts
 		mi       *fs.Mountpath
 		workCh   chan core.LIF
-		chanFull cos.ChanFull
 		stopCh   cos.StopCh
+		chanFull cos.ChanFull
 	}
 )
 
