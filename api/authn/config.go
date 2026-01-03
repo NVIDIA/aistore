@@ -45,6 +45,8 @@ type (
 		// Also used to determine max-age for client caches of JWKS
 		Expire cos.Duration `json:"expiration_time"`
 		PubKey *string      `json:"public_key"`
+		// Size of RSA private key to generate
+		RSAKeyBits int `json:"rsa_key_bits"`
 	}
 	TimeoutConf struct {
 		Default cos.Duration `json:"default_timeout"`
