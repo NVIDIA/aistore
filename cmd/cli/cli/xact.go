@@ -86,7 +86,7 @@ func waitXact(args *xact.ArgsMsg) error {
 	}
 
 	if xact.IdlesBeforeFinishing(kind) {
-		return api.WaitForXactionIdle(apiBP, args)
+		return api.WaitForSnapsIdle(apiBP, args)
 	}
 	// otherwise, IC
 	status, err := api.WaitForXactionIC(apiBP, args)

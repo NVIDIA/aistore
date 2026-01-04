@@ -518,7 +518,7 @@ func (c *snapsFinished) check(snaps MultiSnap) (bool, bool, error) {
 	}
 
 	// kind-only: require seeing at least one running xaction, then stable "emptiness"
-	if !snaps.HasUUIDs() {
+	if !snaps.hasUUIDs() {
 		if !c.seen {
 			return false, false, nil
 		}
@@ -587,8 +587,10 @@ func (args *ArgsMsg) Started() SnapsCond {
 // Wait until the xaction becomes idle for numConsecutiveIdle consecutive polls.
 // Use for xactions that "idle before finishing"
 // (distributed batch jobs that may have gaps between work items).
-// NOTE: an idle xaction is still running - it just has no work to do at the moment.
-// Sets OnlyRunning=true automatically.
+// - not all xactions have 'idle' state
+// - to find out which ones, use IdlesBeforeFinishing(kind) API helper.
+// - as far as querying and waiting, also note that an idle xaction is still running -
+//   it just has no work at the moment  (and for a while)
 
 type snapsIdle struct {
 	id      string
@@ -664,7 +666,7 @@ func (xs MultiSnap) GetUUIDs() []string {
 	return uuids.ToSlice()
 }
 
-func (xs MultiSnap) HasUUIDs() bool {
+func (xs MultiSnap) hasUUIDs() bool {
 	for _, snaps := range xs {
 		if len(snaps) > 0 {
 			return true

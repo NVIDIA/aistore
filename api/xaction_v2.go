@@ -64,6 +64,7 @@ func GetSnaps(bp BaseParams, args *xact.ArgsMsg) (xact.MultiSnap, error) {
 }
 
 // Wait for a given on-demand xaction to become idle.
+// See related xact.IdlesBeforeFinishing()
 func WaitForSnapsIdle(bp BaseParams, args *xact.ArgsMsg) error {
 	_, err := WaitForSnaps(bp, args, args.Idle())
 	return err
@@ -107,12 +108,17 @@ func WaitForStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Stat
 	return pollStatus(bp, args, cond)
 }
 
-// GetStatus queries IC once (no polling).
+// Query IC once (no polling).
 func GetStatus(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
 	if err := _validateXargs(args); err != nil {
 		return nil, err
 	}
 	return GetOneXactionStatus(bp, args)
+}
+
+// Usage: xactions that report status back to IC (e.g. rebalance).
+func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
+	return WaitForStatus(bp, args, nil)
 }
 
 //

@@ -13,8 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -183,58 +181,6 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 	_, err = reqParams.DoReqAny(out)
 	FreeRp(reqParams)
 	return
-}
-
-// WaitForXactionIC:
-// - applies xact.ArgsMsg to query xactions, then
-// - waits for those selected xactions to complete.
-// Use it only for global xactions that execute on all targets and report status back to IC
-// (e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
-	return _waitx(bp, args, nil)
-}
-
-// TODO: `status` is currently always nil when we wait with a (`fn`) callback
-// TODO: un-defer cancel()
-func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) (status *nl.Status, err error) {
-	var (
-		elapsed         time.Duration
-		begin           = mono.NanoTime()
-		total, maxSleep = _times(args)
-		sleep           = xact.MinPollTime
-	)
-	for {
-		var done bool
-		if fn == nil {
-			status, err = GetOneXactionStatus(bp, args)
-			done = err == nil && status.IsFinished() && elapsed >= xact.MinPollTime
-		} else {
-			var (
-				snaps          xact.MultiSnap
-				resetProbeFreq bool
-			)
-			snaps, err = QueryXactionSnaps(bp, args)
-			if err == nil {
-				done, resetProbeFreq = fn(snaps)
-				if resetProbeFreq {
-					sleep = xact.MinPollTime
-				}
-			}
-		}
-		if err != nil && !_isRetriable(err) {
-			return status, err
-		}
-		if done {
-			debug.AssertNoErr(err)
-			return status, nil
-		}
-		time.Sleep(sleep)
-		sleep = min(maxSleep, sleep+sleep/2)
-
-		if elapsed = mono.Since(begin); elapsed >= total {
-			return nil, fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
-		}
-	}
 }
 
 //
