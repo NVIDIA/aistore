@@ -345,16 +345,7 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {
 	} else {
 		time.Sleep(2 * controlPlaneSleep)
 	}
-	allFinished := func(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
-		tid, xsnap, err := snaps.RunningTarget("")
-		tassert.CheckFatal(t, err)
-		if tid != "" {
-			tlog.Logfln("t[%s]: x-%s[%s] is running", tid, xsnap.Kind, xsnap.ID)
-			return false, false
-		}
-		return true, true
-	}
-	err := api.WaitForXactionNode(bp, &args, allFinished)
+	_, err := api.WaitForSnaps(bp, &args, args.NotRunning())
 	tassert.CheckFatal(t, err)
 }
 

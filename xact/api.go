@@ -37,7 +37,6 @@ const (
 )
 
 // global waiting tunables
-// (used in: `api.WaitForXactionIC` and `api.WaitForXactionNode`)
 const (
 	DefWaitTimeShort = time.Minute        // zero `ArgsMsg.Timeout` defaults to
 	DefWaitTimeLong  = 7 * 24 * time.Hour // when `ArgsMsg.Timeout` is negative
@@ -50,7 +49,11 @@ const (
 	// 1: fully rely on xact.IsIdle() logic with no extra checks whatsoever
 	// 2: one additional IsIdle() call after MinPollTime
 	// 3: two additional IsIdle() calls spaced at MinPollTime interval, and so on.
-	NumConsecutiveIdle = 2
+	numConsecutiveIdle = 2
+
+	// stability window for kind-only wait-for-finished
+	// (see snapsFinished below)
+	numConsecutiveEmpty = 3
 )
 
 // ArgsMsg.Flags
@@ -417,6 +420,28 @@ func CheckValidUUID(id string) (err error) {
 	return err
 }
 
+//////////////
+// QueryMsg (internal usage)
+//////////////
+
+func (msg *QueryMsg) String() (s string) {
+	if msg.ID == "" {
+		s = "x-" + msg.Kind
+	} else {
+		s = fmt.Sprintf("x-%s[%s]", msg.Kind, msg.ID)
+	}
+	if !msg.Bck.IsEmpty() {
+		s += "-" + msg.Bck.String()
+	}
+	if msg.DaemonID != "" {
+		s += "-node[" + msg.DaemonID + "]"
+	}
+	if msg.OnlyRunning != nil && *msg.OnlyRunning {
+		s += "-only-running"
+	}
+	return
+}
+
 /////////////
 // ArgsMsg //
 /////////////
@@ -451,26 +476,151 @@ func (args *ArgsMsg) String() string {
 	return sb.String()
 }
 
-//////////////
-// QueryMsg //
-//////////////
+//
+// SnapsCond: condition functions for snaps-based polling (api.WaitForSnaps)
+//
 
-func (msg *QueryMsg) String() (s string) {
-	if msg.ID == "" {
-		s = "x-" + msg.Kind
-	} else {
-		s = fmt.Sprintf("x-%s[%s]", msg.Kind, msg.ID)
+// SnapsCond is the condition function signature for snaps-based polling.
+// Returns:
+//   - done: whether to stop waiting
+//   - reset: whether to reset polling sleep back to MinPollTime
+//   - err: error to propagate (stops polling immediately)
+type SnapsCond func(MultiSnap) (done, reset bool, err error)
+
+// --- Finished condition ---
+//
+// Notice the distinction between Finished and NotRunning (below)
+//
+// - args.ID != "": wait for that UUID to become visible and reach a terminal state
+//   (finished OR aborted).
+// - kind-only wait (args.ID == ""): require seeing at least one matching xaction first,
+//   then complete when no matching *running* xactions are visible anymore (stable empty snaps).
+//   This relies on args.OnlyRunning=true (set below) to avoid stale completed jobs.
+
+type snapsFinished struct {
+	id    string
+	seen  bool
+	empty int
+}
+
+func (c *snapsFinished) check(snaps MultiSnap) (bool, bool, error) {
+	if c.id != "" {
+		// specific UUID: wait until observed and terminal (finished OR aborted)
+		for _, tsnaps := range snaps {
+			for _, snap := range tsnaps {
+				if snap.ID == c.id {
+					return snap.IsFinished() || snap.IsAborted(), false, nil
+				}
+			}
+		}
+		// keep polling
+		return false, false, nil
 	}
-	if !msg.Bck.IsEmpty() {
-		s += "-" + msg.Bck.String()
+
+	// kind-only: require seeing at least one running xaction, then stable "emptiness"
+	if !snaps.HasUUIDs() {
+		if !c.seen {
+			return false, false, nil
+		}
+		c.empty++
+		return c.empty >= numConsecutiveEmpty, true, nil // "reset" => probe sooner after progress
 	}
-	if msg.DaemonID != "" {
-		s += "-node[" + msg.DaemonID + "]"
+
+	c.seen = true
+	c.empty = 0
+	return false, false, nil
+}
+
+func (args *ArgsMsg) Finished() SnapsCond {
+	if args.ID == "" {
+		args.OnlyRunning = true
 	}
-	if msg.OnlyRunning != nil && *msg.OnlyRunning {
-		s += "-only-running"
+	return (&snapsFinished{id: args.ID}).check
+}
+
+// --- NotRunning condition ---
+// Succeed immediately if nothing is running.
+// Unlike Finished, this has no "seen" tracking - use for pre-condition checks
+// ("make sure nothing's running before I start") rather than post-action waits
+// ("started and completed").
+
+type snapsNotRunning struct {
+	id string
+}
+
+func (c *snapsNotRunning) check(snaps MultiSnap) (bool, bool, error) {
+	_, running, _ := snaps.AggregateState(c.id)
+	return !running, false, nil
+}
+
+func (args *ArgsMsg) NotRunning() SnapsCond {
+	return (&snapsNotRunning{id: args.ID}).check
+}
+
+// --- Started condition ---
+// Wait until the xaction is visible/running.
+// NOTE: waiting for a job to start, especially cluster-wide, is inherently racy -
+// it depends on per-target workload, server hardware, network, etc. Use with caution!
+
+type snapsStarted struct {
+	id string
+}
+
+func (c *snapsStarted) check(snaps MultiSnap) (bool, bool, error) {
+	if c.id != "" {
+		_, _, notstarted := snaps.AggregateState(c.id)
+		return !notstarted, true, nil
 	}
-	return
+	// kind-only: wait until something is running
+	_, snap, err := snaps.RunningTarget("")
+	if err != nil {
+		return true, false, err // ambiguity: multiple running UUIDs
+	}
+	return snap != nil, true, nil
+}
+
+func (args *ArgsMsg) Started() SnapsCond {
+	return (&snapsStarted{id: args.ID}).check
+}
+
+// --- Idle condition ---
+// Wait until the xaction becomes idle for numConsecutiveIdle consecutive polls.
+// Use for xactions that "idle before finishing"
+// (distributed batch jobs that may have gaps between work items).
+// NOTE: an idle xaction is still running - it just has no work to do at the moment.
+// Sets OnlyRunning=true automatically.
+
+type snapsIdle struct {
+	id      string
+	cnt     int
+	delayed bool
+}
+
+func (c *snapsIdle) check(snaps MultiSnap) (bool, bool, error) {
+	aborted, running, notstarted := snaps.AggregateState(c.id)
+	if aborted {
+		return true, false, nil
+	}
+	if running {
+		c.cnt = 0
+		return false, false, nil
+	}
+	if notstarted && c.cnt == 0 {
+		// preserve legacy behavior: avoid mistaking "not yet visible" for "idle"
+		if !c.delayed {
+			time.Sleep(min(2*MinPollTime, 4*time.Second))
+			c.delayed = true
+		}
+		return false, false, nil
+	}
+	// idle
+	c.cnt++
+	return c.cnt >= numConsecutiveIdle, true, nil
+}
+
+func (args *ArgsMsg) Idle() SnapsCond {
+	args.OnlyRunning = true
+	return (&snapsIdle{id: args.ID}).check
 }
 
 ///////////////
@@ -512,6 +662,30 @@ func (xs MultiSnap) GetUUIDs() []string {
 		}
 	}
 	return uuids.ToSlice()
+}
+
+func (xs MultiSnap) HasUUIDs() bool {
+	for _, snaps := range xs {
+		if len(snaps) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (xs MultiSnap) singleUUID() (xid string, ok bool) {
+	for _, snaps := range xs {
+		for _, s := range snaps {
+			if xid == "" {
+				xid = s.ID
+				continue
+			}
+			if s.ID != xid {
+				return "", false
+			}
+		}
+	}
+	return xid, xid != ""
 }
 
 func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error) {
@@ -579,10 +753,9 @@ func (xs MultiSnap) _get(xid string) (aborted, running, notstarted bool) {
 
 func (xs MultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
 	if xid == "" {
-		uuids := xs.GetUUIDs()
-		l := len(uuids)
-		debug.Assert(l == 1, uuids[:min(l, 4)], "( len:", l, " )")
-		xid = uuids[0]
+		var ok bool
+		xid, ok = xs.singleUUID()
+		debug.Assert(ok, "expected exactly one uuid in snaps")
 	}
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {
@@ -598,9 +771,9 @@ func (xs MultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
 
 func (xs MultiSnap) ByteCounts(xid string) (locBytes, outBytes, inBytes int64) {
 	if xid == "" {
-		uuids := xs.GetUUIDs()
-		debug.Assert(len(uuids) == 1, uuids)
-		xid = uuids[0]
+		var ok bool
+		xid, ok = xs.singleUUID()
+		debug.Assert(ok, "expected exactly one uuid in snaps")
 	}
 	for _, snaps := range xs {
 		for _, xsnap := range snaps {

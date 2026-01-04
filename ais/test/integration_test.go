@@ -1444,7 +1444,7 @@ func TestRenewRebalance(t *testing.T) {
 	// Step 4: Re-register target (triggers rebalance)
 	m.stopMaintenance(target)
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
-	err := api.WaitForXactionNode(baseParams, &xargs, xactSnapRunning)
+	_, err := api.WaitForSnaps(baseParams, &xargs, xargs.Started())
 	tassert.CheckError(t, err)
 	tlog.Logfln("rebalance started")
 
@@ -1599,7 +1599,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 
 	// Wait for async mirroring to finish
 	flt := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck}
-	api.WaitForXactionIdle(baseParams, &flt)
+	api.WaitForSnapsIdle(baseParams, &flt)
 	time.Sleep(time.Second) // pending writes
 
 	// GET
@@ -1717,7 +1717,7 @@ func TestICRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
-	api.WaitForXactionNode(baseParams, &xargs, xactSnapRunning)
+	_, _ = api.WaitForSnaps(baseParams, &xargs, xargs.Started())
 
 	tlog.Logfln("Killing %s", icNode.StringEx())
 	// cmd and args are the original command line of how the proxy is started

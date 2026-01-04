@@ -478,7 +478,7 @@ func TestSameBucketName(t *testing.T) {
 
 	// Wait for xaction to complete
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	err = api.WaitForXactionNode(baseParams, &args, xactSnapNotRunning)
+	_, err = api.WaitForSnaps(baseParams, &args, args.NotRunning())
 	tassert.CheckFatal(t, err)
 
 	// Query the xaction snaps directly to get errors
@@ -1324,7 +1324,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 
 	// Wait for async mirroring to finish
 	flt := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck}
-	api.WaitForXactionIdle(baseParams, &flt)
+	api.WaitForSnapsIdle(baseParams, &flt)
 	time.Sleep(time.Second)
 
 	err = api.EvictRemoteBucket(baseParams, m.bck, keepMD)

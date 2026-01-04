@@ -504,7 +504,7 @@ func TestRechunkWhenRebRes(t *testing.T) {
 	tlog.Logfln("Rebalance started with ID: %s", rebID)
 
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
-	err = api.WaitForXactionNode(baseParams, &xargs, xactSnapRunning)
+	_, err = api.WaitForSnaps(baseParams, &xargs, xargs.Started())
 	tassert.CheckError(t, err)
 	tlog.Logln("Rebalance is now running")
 

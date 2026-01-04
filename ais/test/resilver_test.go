@@ -140,18 +140,22 @@ func (c *resilverStressCtx) waitResilverStartOnTarget(t *testing.T, bp api.BaseP
 		OnlyRunning: true,
 		Timeout:     resilShortTimeout,
 	}
-	xid, _, err := api.WaitForSnapsStarted(bp, &xargs)
+	snaps, err := api.WaitForSnaps(bp, &xargs, xargs.Started())
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, xid != "", "resilver did not start within %v", resilShortTimeout)
-	return xid
+
+	_, snap, err := snaps.RunningTarget("")
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, snap != nil, "resilver did not start within %v", resilShortTimeout)
+	return snap.ID
 }
 
 func (c *resilverStressCtx) waitResilverFinishAny(t *testing.T, bp api.BaseParams) {
 	t.Helper()
 	xargs := xact.ArgsMsg{
-		Kind:     apc.ActResilver,
-		DaemonID: c.target.ID(),
-		Timeout:  resilLongTimeout,
+		Kind:        apc.ActResilver,
+		DaemonID:    c.target.ID(),
+		OnlyRunning: true,
+		Timeout:     resilLongTimeout,
 	}
 	// resilver does NOT notify IC; must use snaps-based wait
 	_, err := api.WaitForSnaps(bp, &xargs, nil)
@@ -162,16 +166,11 @@ func (c *resilverStressCtx) waitResilverFinishAny(t *testing.T, bp api.BaseParam
 func (c *resilverStressCtx) waitNoRunningResilver(t *testing.T, bp api.BaseParams) {
 	t.Helper()
 	xargs := xact.ArgsMsg{
-		Kind:        apc.ActResilver,
-		DaemonID:    c.target.ID(),
-		OnlyRunning: true, // if anything is running, it will show up here
-		Timeout:     resilLongTimeout,
+		Kind:     apc.ActResilver,
+		DaemonID: c.target.ID(),
+		Timeout:  resilLongTimeout,
 	}
-	cond := func(ms xact.MultiSnap) (done, reset bool) {
-		_, running, _ := ms.AggregateState("")
-		return !running, false // empty snaps => running=false => done
-	}
-	_, err := api.WaitForSnaps(bp, &xargs, cond)
+	_, err := api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
 	tassert.CheckFatal(t, err)
 }
 
@@ -385,7 +384,7 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 
 	// wait for mirroring
 	xargs := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: bckMirrored, Timeout: resilLongTimeout}
-	api.WaitForXactionIdle(tools.BaseAPIParams(purl), &xargs)
+	api.WaitForSnapsIdle(tools.BaseAPIParams(purl), &xargs)
 
 	// EC
 	c.ec = &ioContext{
@@ -402,7 +401,7 @@ func createAndPopulateResilverBuckets(t *testing.T, c *resilverStressCtx) {
 
 	// wait for EC encoding
 	xargs = xact.ArgsMsg{Kind: apc.ActECPut, Bck: bckEC, Timeout: resilLongTimeout}
-	api.WaitForXactionIdle(tools.BaseAPIParams(purl), &xargs)
+	api.WaitForSnapsIdle(tools.BaseAPIParams(purl), &xargs)
 
 	totalObjects := numRegular + numChunked + numMirrored + numEC
 	tlog.Logfln("All %d objects created across 4 buckets", totalObjects)
@@ -442,11 +441,8 @@ func testAdisableDisablePreempt(t *testing.T, c *resilverStressCtx) {
 	err = api.EnableMountpath(bp, c.target, mp2)
 	tassert.CheckFatal(t, err)
 
-	// barrier:
-	// - no waiting-dd
-	// - no running resilver
-	// - all mpaths enabled
-	c.barrier(t, bp, 0)
+	c.waitResilverFinishAny(t, bp)
+
 	ensureNumMountpaths(t, c.target, &apc.MountpathList{Available: c.origMpaths})
 
 	c.validateAllData(t, "after-A-reenable")

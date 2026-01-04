@@ -185,46 +185,6 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 	return
 }
 
-//
-// TODO: use `xact.IdlesBeforeFinishing` to provide a single unified wait-for API
-//
-
-type consIdle struct {
-	xid     string
-	cnt     int
-	delayed bool
-}
-
-func (ci *consIdle) check(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
-	aborted, running, notstarted := snaps.AggregateState(ci.xid)
-	if aborted {
-		return true, false
-	}
-	if running {
-		ci.cnt = 0
-		return false, false
-	}
-	if notstarted && ci.cnt == 0 {
-		if !ci.delayed {
-			time.Sleep(min(2*xact.MinPollTime, 4*time.Second))
-			ci.delayed = true
-		}
-		return false, false
-	}
-	// is idle
-	ci.cnt++
-	return ci.cnt >= xact.NumConsecutiveIdle, true
-}
-
-// WaitForXactionIdle waits for a given on-demand xaction to be idle.
-func WaitForXactionIdle(bp BaseParams, args *xact.ArgsMsg) (err error) {
-	ci, running := &consIdle{xid: args.ID}, args.OnlyRunning
-	args.OnlyRunning = true
-	err = WaitForXactionNode(bp, args, ci.check)
-	args.OnlyRunning = running
-	return err
-}
-
 // WaitForXactionIC:
 // - applies xact.ArgsMsg to query xactions, then
 // - waits for those selected xactions to complete.
@@ -232,18 +192,6 @@ func WaitForXactionIdle(bp BaseParams, args *xact.ArgsMsg) (err error) {
 // (e.g. rebalance).
 func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
 	return _waitx(bp, args, nil)
-}
-
-// WaitForXactionNode waits for a given xaction to complete.
-// Use for xactions that do _not_ report their status to IC members, namely:
-// - xact.IdlesBeforeFinishing()
-// - x-resilver (as it usually runs on a single node)
-func WaitForXactionNode(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
-	if err := _validateXargs(args); err != nil {
-		return err
-	}
-	_, err := _waitx(bp, args, fn)
-	return err
 }
 
 // TODO: `status` is currently always nil when we wait with a (`fn`) callback

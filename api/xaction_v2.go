@@ -35,94 +35,27 @@ import (
 //
 
 //
-// built-in conditions
+// Snaps-based API ----------------------------------------------------------------
 //
 
-// return:
-//   - done: whether to stop waiting
-//   - reset: whether to reset polling sleep back to xact.MinPollTime
-type SnapsCond func(xact.MultiSnap) (done, reset bool)
-
-// return:
-//   - done: whether to stop waiting
-//   - reset: whether to reset polling sleep back to xact.MinPollTime (rarely needed)
-type StatusCond func(*nl.Status) (done, reset bool)
-
-// Wait until the selected xaction(s) are no longer running.
-// If id is empty, it applies to all UUIDs present in the returned snaps (kind-filtered server-side).
-func SnapsFinished(id string) SnapsCond {
-	// when waiting kind-only, avoid finishing immediately on an empty snapshot
-	// (e.g., transient visibility, or "not yet visible" early in the wait)
-	var seen bool
-	return func(snaps xact.MultiSnap) (bool, bool) {
-		if id == "" {
-			uuids := snaps.GetUUIDs()
-			if len(uuids) == 0 {
-				if !seen {
-					return false, false
-				}
-			} else {
-				seen = true
-			}
-		}
-		aborted, running, _ := snaps.AggregateState(id)
-		return aborted || !running, false
-	}
-}
-
-// Wait until the selected xaction becomes idle for
-// xact.NumConsecutiveIdle polls. Use this for xactions that "idle before finishing".
-func SnapsConsecutiveIdle(id string) SnapsCond {
-	var (
-		cnt     int
-		delayed bool
-	)
-	return func(snaps xact.MultiSnap) (done, reset bool) {
-		aborted, running, notstarted := snaps.AggregateState(id)
-		if aborted {
-			return true, false
-		}
-		if running {
-			cnt = 0
-			return false, true // progress: probe sooner
-		}
-		if notstarted && cnt == 0 {
-			// preserve legacy behavior: avoid mistaking "not yet visible" for "idle"
-			if !delayed {
-				time.Sleep(min(2*xact.MinPollTime, 4*time.Second))
-				delayed = true
-			}
-			return false, false
-		}
-		// idle
-		cnt++
-		return cnt >= xact.NumConsecutiveIdle, false
-	}
-}
-
-func StatusFinished(st *nl.Status) (bool, bool) { return st.IsFinished(), false }
-
-//
-// Snaps-based API
-//
-
-// Poll QueryXactionSnaps until cond returns done=true.
-// If cond is nil, it waits until selected xaction(s) are no longer running (finished or aborted).
-//
-// If args.ID is provided, the wait is for that UUID.
-// If args.ID is empty (kind-only), the wait is for "no longer running" across UUIDs present
-// in the returned snaps (server-side kind filter applies).
-func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond SnapsCond) (xact.MultiSnap, error) {
+// Poll QueryXactionSnaps() until `cond` returns done=true; if `cond` is nil, default to args.Finished()
+func WaitForSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.MultiSnap, error) {
 	if err := _validateXargs(args); err != nil {
 		return nil, err
 	}
+
+	// some built-in conditions (args.Finished/args.Idle) may temporarily change args.OnlyRunning
+	orig := args.OnlyRunning
+	defer func() { args.OnlyRunning = orig }()
+
 	if cond == nil {
-		cond = SnapsFinished(args.ID)
+		cond = args.Finished()
 	}
+
 	return pollSnaps(bp, args, cond)
 }
 
-// Query just once (no polling)
+// Query once (no polling).
 func GetSnaps(bp BaseParams, args *xact.ArgsMsg) (xact.MultiSnap, error) {
 	if err := _validateXargs(args); err != nil {
 		return nil, err
@@ -130,66 +63,51 @@ func GetSnaps(bp BaseParams, args *xact.ArgsMsg) (xact.MultiSnap, error) {
 	return QueryXactionSnaps(bp, args)
 }
 
-// Wait until it can observe a selected xaction as *running* and returns its UUID.
-// This is the "no extra network round-trip" helper for flows where the UUID is not known upfront.
-// - If args.ID is set: waits until that UUID becomes visible (not "notstarted") and returns it.
-// - If args.ID is empty: waits until any matching xaction is running, returns its UUID.
-// NOTE:
-// Waiting for a job to start, especially cluster-wide, is inherently racy - it depends on per-target
-// workload, server hardware, network, etc. Use with caution!
-func WaitForSnapsStarted(bp BaseParams, args *xact.ArgsMsg) (xid string, snaps xact.MultiSnap, err error) {
-	if err := _validateXargs(args); err != nil {
-		return "", nil, err
-	}
-	var runErr error
-	cond := func(ms xact.MultiSnap) (bool, bool) {
-		if args.ID != "" {
-			_, _, notstarted := ms.AggregateState(args.ID)
-			if notstarted {
-				return false, false
-			}
-			xid = args.ID
-			return true, true
-		}
-		// discover a single running UUID (preferred) and surface ambiguity
-		_, snap, err := ms.RunningTarget("")
-		if err != nil {
-			runErr = err
-			return true, false // stop polling; caller will return runErr
-		}
-		if snap != nil {
-			xid = snap.ID
-			return true, true
-		}
-		return false, false
-	}
-
-	snaps, err = pollSnaps(bp, args, cond)
-	if err == nil && runErr != nil {
-		return "", snaps, runErr
-	}
-	return xid, snaps, err
+// Wait for a given on-demand xaction to become idle.
+func WaitForSnapsIdle(bp BaseParams, args *xact.ArgsMsg) error {
+	_, err := WaitForSnaps(bp, args, args.Idle())
+	return err
 }
 
 //
-// Status-based API
+// Status-based API ---------------------------------------------------------------
 //
 
-// Poll GetOneXactionStatus until cond returns done=true.
-// If cond is nil, it waits until status.IsFinished().
+// Condition function signature for status-based polling.
+// Returns:
+//   - done: whether to stop waiting
+//   - reset: whether to reset polling sleep back to xact.MinPollTime (rarely needed)
+//   - err: error to propagate (stops polling immediately)
+type StatusCond func(*nl.Status) (done, reset bool, err error)
+
+// --- Finished condition ---
+
+func statusFinished(st *nl.Status) (bool, bool, error) {
+	return st.IsFinished(), false, nil
+}
+
+// StatusFinished waits until status.IsFinished() returns true.
+func StatusFinished() StatusCond {
+	return statusFinished
+}
+
 //
-// Note: kind-only waits are supported (args.ID empty). Server-side filtering applies.
+// Status-based wait/get functions
+//
+
+// WaitForStatus polls GetOneXactionStatus until cond returns done=true.
+// If cond is nil, it waits until status.IsFinished().
 func WaitForStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Status, error) {
 	if err := _validateXargs(args); err != nil {
 		return nil, err
 	}
 	if cond == nil {
-		cond = StatusFinished
+		cond = StatusFinished()
 	}
 	return pollStatus(bp, args, cond)
 }
 
-// Query IC once (no polling)
+// GetStatus queries IC once (no polling).
 func GetStatus(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
 	if err := _validateXargs(args); err != nil {
 		return nil, err
@@ -201,7 +119,7 @@ func GetStatus(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
 // Internal polling (shared backoff logic)
 //
 
-func pollSnaps(bp BaseParams, args *xact.ArgsMsg, cond SnapsCond) (xact.MultiSnap, error) {
+func pollSnaps(bp BaseParams, args *xact.ArgsMsg, cond xact.SnapsCond) (xact.MultiSnap, error) {
 	return pollAny("api.wait-snaps",
 		args,
 		func() (xact.MultiSnap, error) { return QueryXactionSnaps(bp, args) },
@@ -215,8 +133,8 @@ func pollStatus(bp BaseParams, args *xact.ArgsMsg, cond StatusCond) (*nl.Status,
 		cond)
 }
 
-// common polling loop used by both snaps- and status-based waiters
-func pollAny[T any](prefix string, args *xact.ArgsMsg, apicb func() (T, error), cond func(T) (done, reset bool)) (T, error) {
+// pollAny is the common polling loop used by both snaps- and status-based waiters.
+func pollAny[T any](prefix string, args *xact.ArgsMsg, apicb func() (T, error), cond func(T) (bool, bool, error)) (T, error) {
 	var (
 		total, maxSleep = _times(args)
 		sleep           = xact.MinPollTime
@@ -238,7 +156,11 @@ func pollAny[T any](prefix string, args *xact.ArgsMsg, apicb func() (T, error), 
 		} else {
 			lastGood = val
 			hasGood = true
-			done, reset := cond(val)
+
+			done, reset, condErr := cond(val)
+			if condErr != nil {
+				return val, condErr
+			}
 			if done {
 				return val, nil
 			}

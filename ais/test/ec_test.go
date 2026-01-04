@@ -513,7 +513,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 	}
 	wg.Wait()
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
+	api.WaitForSnapsIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
 }
 
 func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt string, objCount int) {
@@ -831,12 +831,12 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 				defer func() {
 					tlog.Logln("Wait for PUTs to finish...")
 					args := xact.ArgsMsg{Kind: apc.ActECPut}
-					err := api.WaitForXactionIdle(baseParams, &args)
+					err := api.WaitForSnapsIdle(baseParams, &args)
 					tassert.CheckError(t, err)
 
 					clearAllECObjects(t, bck, true, o)
 					reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-					err = api.WaitForXactionIdle(baseParams, &reqArgs)
+					err = api.WaitForSnapsIdle(baseParams, &reqArgs)
 					tassert.CheckError(t, err)
 				}()
 
@@ -2063,7 +2063,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 
 	// Wait for ec to finish
 	flt := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	_ = api.WaitForXactionIdle(baseParams, &flt)
+	_ = api.WaitForSnapsIdle(baseParams, &flt)
 }
 
 func TestECRebalance(t *testing.T) {
@@ -2132,7 +2132,7 @@ func TestECMountpaths(t *testing.T) {
 	}
 
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
+	api.WaitForSnapsIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
 }
 
 // The test only checks that the number of object after rebalance equals
@@ -2542,7 +2542,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		}
 	}()
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: startTimeout}
-	err = api.WaitForXactionNode(baseParams, &xargs, xactSnapRunning)
+	_, err = api.WaitForSnaps(baseParams, &xargs, xargs.Started())
 	tassert.CheckError(t, err)
 
 	err = api.AbortXaction(baseParams, &xargs)
@@ -2852,10 +2852,10 @@ func TestECBckEncodeRecover(t *testing.T) {
 
 			// First, wait for EC-encode xaction to complete
 			reqArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECEncode, Bck: bck}
-			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
+			api.WaitForSnapsIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
 			// Second, wait for EC-recover xaction to complete
 			reqECArgs := xact.ArgsMsg{ID: xid, Kind: apc.ActECRespond, Bck: bck}
-			api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqECArgs)
+			api.WaitForSnapsIdle(tools.BaseAPIParams(proxyURL), &reqECArgs)
 
 			// [RETRY]
 			var errStr string

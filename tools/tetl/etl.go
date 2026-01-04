@@ -315,7 +315,7 @@ func WaitForFinished(bp api.BaseParams, xid, kind string, timeout time.Duration)
 	tlog.Logfln("Waiting for ETL x-%s[%s] to finish...", kind, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
 	if xact.IdlesBeforeFinishing(kind) {
-		err = api.WaitForXactionIdle(bp, &args)
+		err = api.WaitForSnapsIdle(bp, &args)
 	} else {
 		_, err = api.WaitForXactionIC(bp, &args)
 	}

@@ -289,7 +289,7 @@ func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode
 	case xid != "" && test.singleTarget: // 2. single-target xaction
 		xargs.DaemonID = target.ID()
 		tlog.Logfln("Waiting for %s(%s=>%s) at %s", xname, tempdir, m.bck.String(), target.StringEx())
-		err := api.WaitForXactionNode(baseParams, &xargs, xactSnapNotRunning)
+		_, err := api.WaitForSnaps(baseParams, &xargs, xargs.NotRunning())
 		tassert.CheckFatal(t, err)
 	default: // 3. synchronous execution
 		tlog.Logfln("Promoting without xaction (%s=>%s)", tempdir, m.bck.String())

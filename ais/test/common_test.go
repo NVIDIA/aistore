@@ -933,7 +933,7 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 	tassert.Fatalf(m.t, xact.IsValidRebID(rebID), "invalid reb ID %q", rebID)
 
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
-	api.WaitForXactionNode(bp, &xargs, xactSnapRunning)
+	api.WaitForSnaps(bp, &xargs, xargs.Started())
 
 	return rebID
 }
@@ -1302,21 +1302,6 @@ func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 		}
 	}
 	return cmn.Bck{}, fmt.Errorf("new bucket is not found (old: %v, new: %v)", oldList, newList)
-}
-
-// xaction is running
-func xactSnapRunning(snaps xact.MultiSnap) (running, resetProbeFreq bool) {
-	tid, _, err := snaps.RunningTarget("")
-	debug.AssertNoErr(err)
-	running = tid != ""
-	resetProbeFreq = !running // e.g. idle
-	return
-}
-
-// finished = did start in the past (use check above to confirm) and currently not running
-func xactSnapNotRunning(snaps xact.MultiSnap) (bool, bool) {
-	running, resetProbeFreq := xactSnapRunning(snaps)
-	return !running, resetProbeFreq
 }
 
 // randomize buckets' namespaces

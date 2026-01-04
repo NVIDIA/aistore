@@ -464,7 +464,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	}
 	// wait for pending writes (of the copies)
 	args := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck}
-	api.WaitForXactionIdle(baseParams, &args)
+	api.WaitForSnapsIdle(baseParams, &args)
 
 	tlog.Logfln("List %s new versions", m.bck.String())
 	msg = &apc.LsoMsg{}
@@ -953,7 +953,7 @@ func makeNCopies(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, ncopies i
 	tassert.CheckFatal(t, err)
 
 	args = xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: bck}
-	api.WaitForXactionIdle(baseParams, &args)
+	api.WaitForSnapsIdle(baseParams, &args)
 }
 
 func TestRemoteBucketMirror(t *testing.T) {
@@ -1761,7 +1761,7 @@ func TestCopyBucket(t *testing.T) {
 				// TODO -- FIXME: remove/simplify-out this `if` here and elsewhere
 				var args = xact.ArgsMsg{ID: uuid, Timeout: tools.CopyBucketTimeout}
 				if test.evictRemoteSrc {
-					err := api.WaitForXactionIdle(baseParams, &args)
+					err := api.WaitForSnapsIdle(baseParams, &args)
 					tassert.CheckFatal(t, err)
 				} else {
 					args.Kind = apc.ActCopyBck // wait for TCB idle (different x-kind than TCO)
@@ -2730,14 +2730,14 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	// wait for mirroring
 	if mirrored {
 		args := xact.ArgsMsg{Kind: apc.ActPutCopies, Bck: m.bck, Timeout: xactTimeout}
-		api.WaitForXactionIdle(baseParams, &args)
+		api.WaitForSnapsIdle(baseParams, &args)
 		// NOTE: ref 1377
 		m.ensureNumCopies(baseParams, copyCnt, false /*greaterOk*/)
 	}
 	// wait for erasure-coding
 	if eced {
 		args := xact.ArgsMsg{Kind: apc.ActECPut, Bck: m.bck, Timeout: xactTimeout}
-		api.WaitForXactionIdle(baseParams, &args)
+		api.WaitForSnapsIdle(baseParams, &args)
 	}
 
 	// read all

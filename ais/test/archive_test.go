@@ -369,7 +369,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 			var lstToAppend *cmn.LsoRes
 			for ii := range 2 {
-				api.WaitForXactionIdle(baseParams, &flt)
+				api.WaitForSnapsIdle(baseParams, &flt)
 
 				tlog.Logfln("List %s", bckTo.String())
 				msg := &apc.LsoMsg{Prefix: "test_"}
@@ -423,7 +423,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 				time.Sleep(10 * time.Second)
 				flt := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
-				api.WaitForXactionIdle(baseParams, &flt)
+				api.WaitForSnapsIdle(baseParams, &flt)
 			}
 
 			var (
@@ -555,7 +555,7 @@ func TestAppendToArch(t *testing.T) {
 			}
 
 			wargs := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
-			api.WaitForXactionIdle(baseParams, &wargs)
+			api.WaitForSnapsIdle(baseParams, &wargs)
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
 			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
@@ -613,7 +613,7 @@ func TestAppendToArch(t *testing.T) {
 			if test.multi {
 				time.Sleep(4 * time.Second)
 				wargs := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
-				api.WaitForXactionIdle(baseParams, &wargs)
+				api.WaitForSnapsIdle(baseParams, &wargs)
 			}
 
 			lsmsg.SetFlag(apc.LsArchDir)
