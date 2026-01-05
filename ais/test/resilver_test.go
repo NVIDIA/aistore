@@ -64,7 +64,7 @@ func TestResilverStress(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			purl := tools.RandomProxyURL(t)
 			bp := tools.BaseAPIParams(purl)
-			t.Cleanup(func() { c.restoreEnabledMountpaths(t, bp) })
+			t.Cleanup(func() { c.restoreMountpaths(t, bp) })
 			fn(t, c)
 		})
 	}
@@ -101,11 +101,88 @@ func newResilverStressCtx(t *testing.T) *resilverStressCtx {
 	}
 }
 
-func (c *resilverStressCtx) restoreEnabledMountpaths(t *testing.T, bp api.BaseParams) {
+// (best-effort)
+func (c *resilverStressCtx) restoreMountpaths(t *testing.T, bp api.BaseParams) {
 	t.Helper()
-	for _, mp := range c.origMpaths {
-		_ = api.EnableMountpath(bp, c.target, mp)
+
+	deadline := time.Now().Add(resilLongTimeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		mpl, err := api.GetMountpaths(bp, c.target)
+		if err != nil {
+			lastErr = err
+			time.Sleep(resilShortPoll)
+			continue
+		}
+
+		// 1) attach back anything baseline that is neither available nor disabled nor waiting-dd
+		for _, mp := range c.origMpaths {
+			if slices.Contains(mpl.Available, mp) || slices.Contains(mpl.Disabled, mp) || slices.Contains(mpl.WaitingDD, mp) {
+				continue
+			}
+			if err := api.AttachMountpath(bp, c.target, mp, ""); err != nil {
+				lastErr = err
+			}
+		}
+
+		// 2) enable baseline mountpaths that are disabled
+		for _, mp := range c.origMpaths {
+			if !slices.Contains(mpl.Disabled, mp) {
+				continue
+			}
+			if err := api.EnableMountpath(bp, c.target, mp); err != nil {
+				lastErr = err
+			}
+		}
+
+		// 3) wait for transitions to settle (best-effort)
+		mpl = c.waitPostDDNoFatal(t, bp)
+		if mpl == nil {
+			// couldn't obtain a stable view; retry
+			time.Sleep(resilShortPoll)
+			continue
+		}
+
+		// success: all baseline mountpaths are available and none are disabled
+		ok := true
+		for _, mp := range c.origMpaths {
+			if !slices.Contains(mpl.Available, mp) || slices.Contains(mpl.Disabled, mp) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return
+		}
+
+		time.Sleep(resilShortPoll)
 	}
+
+	_, err := api.GetMountpaths(bp, c.target)
+	if err != nil {
+		tlog.Logfln("cleanup restoreMountpaths: target=%s: failed to query mountpaths at end: %v (lastErr=%v)",
+			c.target.ID(), err, lastErr)
+	}
+}
+
+// cleanup-safe variant of waitPostDD
+func (c *resilverStressCtx) waitPostDDNoFatal(t *testing.T, bp api.BaseParams) *apc.MountpathList {
+	t.Helper()
+
+	deadline := time.Now().Add(resilLongTimeout)
+	for time.Now().Before(deadline) {
+		mp, err := api.GetMountpaths(bp, c.target)
+		if err != nil {
+			time.Sleep(resilLongPoll)
+			continue
+		}
+		if len(mp.WaitingDD) == 0 {
+			return mp
+		}
+		time.Sleep(resilLongPoll)
+	}
+	return nil
 }
 
 // query resilver snaps (optionally only running) for the selected target
@@ -160,6 +237,54 @@ func (c *resilverStressCtx) waitResilverFinishAny(t *testing.T, bp api.BaseParam
 	// resilver does NOT notify IC; must use snaps-based wait
 	_, err := api.WaitForSnaps(bp, &xargs, nil)
 	tassert.CheckFatal(t, err)
+}
+
+func (c *resilverStressCtx) waitMpathNotAvailable(t *testing.T, bp api.BaseParams, mp string) {
+	t.Helper()
+	var elapsed time.Duration
+	for elapsed < resilLongTimeout {
+		mpl, err := api.GetMountpaths(bp, c.target)
+		tassert.CheckFatal(t, err)
+		if !slices.Contains(mpl.Available, mp) && !slices.Contains(mpl.WaitingDD, mp) {
+			return
+		}
+		time.Sleep(resilShortPoll)
+		elapsed += resilShortPoll
+	}
+	tassert.Fatalf(t, false, "mountpath %q still available (or waiting-dd) after %v", mp, resilLongTimeout)
+}
+
+func (c *resilverStressCtx) waitMpathAvailable(t *testing.T, bp api.BaseParams, mp string) {
+	t.Helper()
+	var elapsed time.Duration
+	for elapsed < resilLongTimeout {
+		mpl, err := api.GetMountpaths(bp, c.target)
+		tassert.CheckFatal(t, err)
+		if slices.Contains(mpl.Available, mp) && !slices.Contains(mpl.WaitingDD, mp) {
+			return
+		}
+		time.Sleep(resilShortPoll)
+		elapsed += resilShortPoll
+	}
+	tassert.Fatalf(t, false, "mountpath %q did not become available after %v", mp, resilLongTimeout)
+}
+
+// start-window: if resilver doesn't start soon, don't hang for a minute
+// NOTE motivation: faster timeout
+func (c *resilverStressCtx) waitResilverFinishIfStarted(t *testing.T, bp api.BaseParams, why string) {
+	t.Helper()
+	xargs := xact.ArgsMsg{
+		Kind:        apc.ActResilver,
+		DaemonID:    c.target.ID(),
+		OnlyRunning: true,
+		Timeout:     resilShortTimeout,
+	}
+	_, err := api.WaitForSnaps(bp, &xargs, xargs.Started())
+	if err != nil {
+		tlog.Logfln("No resilver started (%s) within %v; continuing", why, resilShortTimeout)
+		return
+	}
+	c.waitNoRunningResilver(t, bp)
 }
 
 // wait until there's no running resilver on the target
@@ -413,7 +538,7 @@ func testAdisableDisablePreempt(t *testing.T, c *resilverStressCtx) {
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 
-	tlog.Logln("=== SCENARIO A: disable -> disable (preemption) ===")
+	tlog.Logln("=== disable -> disable (preemption) ===")
 
 	mp1, mp2 := c.origMpaths[0], c.origMpaths[1]
 
@@ -455,7 +580,7 @@ func testBdisableEnableToggle(t *testing.T, c *resilverStressCtx) {
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 
-	tlog.Logln("=== SCENARIO B: disable -> enable (quick toggle) ===")
+	tlog.Logln("=== disable -> enable (quick toggle) ===")
 
 	mp1 := c.origMpaths[0]
 
@@ -497,11 +622,10 @@ func testBdisableEnableToggle(t *testing.T, c *resilverStressCtx) {
 
 func testCdetachAttachCycle(t *testing.T, c *resilverStressCtx) {
 	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO: enable
-
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 
-	tlog.Logln("=== SCENARIO C: detach -> attach (full cycle) ===")
+	tlog.Logln("=== detach -> attach (full cycle) ===")
 
 	mp1 := c.origMpaths[0]
 
@@ -509,14 +633,17 @@ func testCdetachAttachCycle(t *testing.T, c *resilverStressCtx) {
 	err := api.DetachMountpath(bp, c.target, mp1, false /*dontResilver*/)
 	tassert.CheckFatal(t, err)
 
-	c.waitResilverFinishAny(t, bp)
+	c.waitMpathNotAvailable(t, bp, mp1)
+	c.waitResilverFinishIfStarted(t, bp, "after detach")
+
 	c.validateAllData(t, "after-C-detach")
 
 	tlog.Logfln("Attaching %s...", mp1)
 	err = api.AttachMountpath(bp, c.target, mp1, "")
 	tassert.CheckFatal(t, err)
 
-	c.waitResilverFinishAny(t, bp)
+	c.waitMpathAvailable(t, bp, mp1)
+	c.waitResilverFinishIfStarted(t, bp, "after attach")
 	ensureNumMountpaths(t, c.target, &apc.MountpathList{Available: c.origMpaths})
 	c.validateAllData(t, "after-C")
 
@@ -529,7 +656,7 @@ func testDrapidFire(t *testing.T, c *resilverStressCtx) {
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 
-	tlog.Logln("=== SCENARIO D: rapid fire (stress) ===")
+	tlog.Logln("=== rapid fire (stress) ===")
 
 	mp1, mp2, mp3 := c.origMpaths[0], c.origMpaths[1], c.origMpaths[2]
 
@@ -575,7 +702,7 @@ func testEnoResilverGuard(t *testing.T, c *resilverStressCtx) {
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 
-	tlog.Logln("=== SCENARIO E: --no-resilver with active resilver (should fail) ===")
+	tlog.Logln("=== --no-resilver with active resilver (should fail) ===")
 
 	mp1, mp2 := c.origMpaths[0], c.origMpaths[1]
 
