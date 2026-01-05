@@ -394,7 +394,10 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		}
 		sgl.Free()
 	default:
-		// utilize TeeReader to simultaneously write => backend
+		// high memory pressure:
+		// - use TeeReader to stream directly => backend
+		// - no retries - reader not seekable
+		// - e.g. see related: `s3NoRetry`
 		backend = t.Backend(lom.Bck())
 		expectedSize = rsize
 		tr := io.NopCloser(io.TeeReader(reader, mw))

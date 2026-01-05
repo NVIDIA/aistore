@@ -76,7 +76,11 @@ func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uplo
 		pts := aiss3.NewPresignedReq(oreq, lom, r, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			return "", resp.StatusCode, err
+			// resp may be nil on error
+			if resp != nil {
+				return "", resp.StatusCode, err
+			}
+			return "", 0, err
 		}
 		if resp != nil {
 			etag, _ := h.EncodeETag(resp.Header.Get(cos.HdrETag))
@@ -97,17 +101,31 @@ func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uplo
 			ContentLength: &size,
 		}
 	)
+
 	svc, errN := sessConf.s3client("[put_mpt_part]")
 	if errN != nil && cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Warningln(errN)
 	}
 
-	out, err := svc.UploadPart(context.Background(), &input)
+	// disable retries if the reader is not seekable (to avoid "failed to rewind transport stream for retry")
+	var (
+		_, seekable = r.(io.ReadSeeker)
+		ctx         = context.Background()
+		out         *s3.UploadPartOutput
+		err         error
+	)
+	if seekable {
+		out, err = svc.UploadPart(ctx, &input)
+	} else {
+		out, err = svc.UploadPart(ctx, &input, func(o *s3.Options) {
+			o.Retryer = s3NoRetry
+		})
+	}
+
 	if err != nil {
 		ecode, errV := awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", ecode, errV
 	}
-
 	etag, _ := h.EncodeETag(out.ETag)
 	return etag, 0, nil
 }

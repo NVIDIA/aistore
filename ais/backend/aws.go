@@ -66,6 +66,13 @@ var (
 	awsProfile string
 )
 
+// S3 retryer with retries disabled (when reader is not seekable)
+var (
+	s3NoRetry = retry.NewStandard(func(o *retry.StandardOptions) {
+		o.MaxAttempts = 1
+	})
+)
+
 // interface guard
 var _ core.Backend = (*s3bp)(nil)
 
