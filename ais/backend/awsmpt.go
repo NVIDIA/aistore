@@ -76,11 +76,7 @@ func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uplo
 		pts := aiss3.NewPresignedReq(oreq, lom, r, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			// resp may be nil on error
-			if resp != nil {
-				return "", resp.StatusCode, err
-			}
-			return "", 0, err
+			return "", _awsPresignedStatus(resp), err
 		}
 		if resp != nil {
 			etag, _ := h.EncodeETag(resp.Header.Get(cos.HdrETag))
@@ -138,7 +134,7 @@ func (*s3bp) CompleteMpt(lom *core.LOM, oreq *http.Request, uploadID string, obo
 		pts := aiss3.NewPresignedReq(oreq, lom, io.NopCloser(bytes.NewReader(obody)), oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			return "", "", resp.StatusCode, err
+			return "", "", _awsPresignedStatus(resp), err
 		}
 		if resp != nil {
 			result, err := aiss3.DecodeXML[aiss3.CompleteMptUploadResult](resp.Body)
@@ -194,7 +190,7 @@ func (*s3bp) AbortMpt(lom *core.LOM, oreq *http.Request, uploadID string) (ecode
 		pts := aiss3.NewPresignedReq(oreq, lom, oreq.Body, oreq.URL.Query())
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			return resp.StatusCode, err
+			return _awsPresignedStatus(resp), err
 		}
 		if resp != nil {
 			return resp.StatusCode, nil

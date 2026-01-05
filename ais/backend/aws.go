@@ -503,7 +503,7 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
 		resp, err := pts.DoHead(core.T.DataClient())
 		if err != nil {
-			return nil, resp.StatusCode, err
+			return nil, _awsPresignedStatus(resp), err
 		}
 		if resp != nil {
 			oa = resp.ObjAttrs()
@@ -578,7 +578,7 @@ func (s3bp *s3bp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, oreq *
 		pts := aiss3.NewPresignedReq(oreq, lom, nil, q)
 		resp, err := pts.DoReader(core.T.DataClient())
 		if err != nil {
-			res = core.GetReaderResult{Err: err, ErrCode: resp.StatusCode}
+			res = core.GetReaderResult{Err: err, ErrCode: _awsPresignedStatus(resp)}
 			goto finalize
 		}
 		if resp != nil {
@@ -704,7 +704,7 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 		pts := aiss3.NewPresignedReq(oreq, lom, r, q)
 		resp, err := pts.Do(core.T.DataClient())
 		if err != nil {
-			return resp.StatusCode, err
+			return _awsPresignedStatus(resp), err
 		}
 		if resp != nil {
 			uploadOutput = &s3manager.UploadOutput{
@@ -1037,4 +1037,11 @@ func _awsErr(awsError error, code string) error {
 		}
 	}
 	return errors.New(aiss3.ErrPrefix + "[" + strings.TrimSuffix(msg, ".") + "]")
+}
+
+func _awsPresignedStatus(resp *aiss3.PresignedResp) int {
+	if resp == nil {
+		return 0
+	}
+	return resp.StatusCode
 }
