@@ -100,12 +100,6 @@ const (
 	sizeLoad = MaxChunkCount * estPackedChunkSize
 )
 
-const (
-	// 0001..9999 are zero-padded for lexicographic order
-	// >=10000 uses raw num - update when needed
-	fmtChunkNum = "%04d"
-)
-
 // single flag so far
 const (
 	flCompleted uint16 = 1 << 0 // Ufest.flags
@@ -242,9 +236,51 @@ func (u *Ufest) NewChunk(num int, lom *LOM) (*Uchunk, error) {
 	return u.newChunk2N(num, lom)
 }
 
-// (note fs.Hrw)
+// effectively, "%04d"
+// >=10000 uses raw num (update when needed)
+func formatCnum(num int) string {
+	if uint(num) >= 10000 {
+		return strconv.Itoa(num)
+	}
+	var b [4]byte
+	b[3] = byte('0' + num%10)
+	num /= 10
+	b[2] = byte('0' + num%10)
+	num /= 10
+	b[1] = byte('0' + num%10)
+	num /= 10
+	b[0] = byte('0' + num%10)
+	return string(b[:])
+}
+
+// check whether completed chunks are properly located
+func (u *Ufest) IsHRW(avail fs.MPI) (bool, error) {
+	debug.Assert(u.lom.IsHRW(), "must be already checked by the caller")
+	debug.Assert(u.Completed(), "ditto (don't call with partial)")
+	for i := range u.chunks {
+		c := &u.chunks[i]
+		switch c.num {
+		case 1:
+			if c.path != u.lom.FQN {
+				return false, nil
+			}
+		default:
+			hrwkey := u.id + formatCnum(int(c.num))
+			mi, _ /*digest*/, err := avail.Hrw(cos.UnsafeB(hrwkey))
+			if err != nil {
+				return false, err
+			}
+			if !mi.HasPath(c.path) {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// (note fs.Hrw => fs.GetAvail())
 func (u *Ufest) newChunk2N(num int, lom *LOM) (*Uchunk, error) {
-	snum := fmt.Sprintf(fmtChunkNum, num)
+	snum := formatCnum(num)
 	hrwkey := u.id + snum
 	mi, _ /*digest*/, err := fs.Hrw(cos.UnsafeB(hrwkey))
 	if err != nil {
@@ -778,8 +814,7 @@ func (u *Ufest) chunk1Path(lom *LOM, completed bool) string {
 	if completed {
 		return lom.FQN
 	}
-	snum := fmt.Sprintf(fmtChunkNum, 1)
-	return lom.GenFQN(fs.ChunkCT, u.id, snum)
+	return lom.GenFQN(fs.ChunkCT, u.id, formatCnum(1))
 }
 
 //
@@ -1503,7 +1538,13 @@ func (u *Ufest) Relocate(hrwMi *fs.Mountpath, buf []byte) (*LOM, error) {
 }
 
 func (u *Ufest) reloc(hrwMi *fs.Mountpath, dstObjFQN string, buf []byte) moveRes {
-	var recs = make(moveRecs, 0, u.count)
+	var (
+		dstlom = &LOM{}
+		recs   = make(moveRecs, 0, u.count)
+	)
+	if err := dstlom.InitFQN(dstObjFQN, u.lom.Bucket()); err != nil {
+		return moveRes{err: err}
+	}
 
 	// 1) build recs
 	for i := range u.chunks {
@@ -1531,7 +1572,7 @@ func (u *Ufest) reloc(hrwMi *fs.Mountpath, dstObjFQN string, buf []byte) moveRes
 			}
 			dst = dstObjFQN
 		default:
-			c, err := u.newChunk2N(int(chunk.num), u.lom)
+			c, err := u.newChunk2N(int(chunk.num), dstlom)
 			if err != nil {
 				return moveRes{err: err}
 			}

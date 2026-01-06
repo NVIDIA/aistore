@@ -143,6 +143,28 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 
 func (lom *LOM) loaded() bool { return lom.md.lid != 0 } // internal
 
+// A note on having (redundant, in-memory only) lom.HrwFQN field: pros and cons
+// pros:
+// - list-objects performance where we check for both misplaced objects and copies with a
+//   missing main replica; recomputng fs.Hrw() for every listed object would be a price to pay
+// cons:
+// - 24 bytes extra; cached consistency versus mountpath verbs (attach|detach|enable|disable)
+
+func (lom *LOM) IsHRW() bool {
+	p := &lom.FQN
+	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
+}
+
+// given an existing (on-disk) object, determines whether it is a _copy_
+// (compare with isMirror below)
+func (lom *LOM) IsCopy() bool {
+	if lom.IsHRW() {
+		return false
+	}
+	_, ok := lom.md.copies[lom.FQN] // (compare w/ lom.haveMpath())
+	return ok
+}
+
 // low-level access to the os.FileInfo of a chunk or whole file
 func (lom *LOM) Fstat(getAtime bool) (size, atimefs int64, mtime time.Time, _ error) {
 	finfo, err := os.Lstat(lom.FQN)
@@ -359,12 +381,6 @@ func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
 func (lom *LOM) GetCustomKey(key string) (string, bool) { return lom.md.GetCustomKey(key) }
 func (lom *LOM) SetCustomKey(key, value string)         { lom.md.SetCustomKey(key, value) }
 func (lom *LOM) DelCustomKey(key string)                { lom.md.DelCustomKey(key) }
-
-// subj to resilvering
-func (lom *LOM) IsHRW() bool {
-	p := &lom.FQN
-	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
-}
 
 // assorted _convenient_ accessors
 func (lom *LOM) Bck() *meta.Bck                 { return &lom.bck }

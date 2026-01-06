@@ -621,7 +621,6 @@ func testBdisableEnableToggle(t *testing.T, c *resilverStressCtx) {
 }
 
 func testCdetachAttachCycle(t *testing.T, c *resilverStressCtx) {
-	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO: enable
 	purl := tools.RandomProxyURL(t)
 	bp := tools.BaseAPIParams(purl)
 

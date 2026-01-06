@@ -42,17 +42,6 @@ func (lom *LOM) GetCopies() fs.MPI {
 	return lom.md.copies
 }
 
-// given an existing (on-disk) object, determines whether it is a _copy_
-// (compare with isMirror below)
-func (lom *LOM) IsCopy() bool {
-	if lom.IsHRW() {
-		return false
-	}
-	// misplaced or a copy
-	_, ok := lom.md.copies[lom.FQN]
-	return ok
-}
-
 // determines whether the two LOM _structures_ represent objects that must be _copies_ of each other
 // (compare with IsCopy above)
 func (lom *LOM) isMirror(dst *LOM) bool {
@@ -521,47 +510,6 @@ func (lom *LOM) haveMpath(mpath string) bool {
 		}
 	}
 	return false
-}
-
-// must be called under w-lock
-// returns mountpath to relocate or copy this lom, or nil if none required/available
-// return fixHrw = true when lom is currently misplaced
-// - checks hrw location first, and
-// - checks copies (if any) against the current configuration and available mountpaths;
-// - does not check `fstat` in either case (TODO: configurable or scrub);
-func (lom *LOM) ToMpath() (mi *fs.Mountpath, fixHrw bool) {
-	var (
-		avail         = fs.GetAvail()
-		hrwMi, _, err = fs.Hrw(cos.UnsafeB(*lom.md.uname))
-	)
-	if err != nil {
-		nlog.Errorln(err)
-		return nil, false
-	}
-	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))
-	if lom.mi.Path != hrwMi.Path {
-		return hrwMi, true // fixHrw
-	}
-	mirror := lom.MirrorConf()
-	if !mirror.Enabled || mirror.Copies < 2 {
-		return nil, false
-	}
-	// count copies vs. configuration
-	// take into account mountpath flags but stop short of `fstat`-ing
-	expCopies, gotCopies := int(mirror.Copies), 0
-	for fqn, mpi := range lom.md.copies {
-		mpathInfo, ok := avail[mpi.Path]
-		if !ok || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
-			lom.delCopyMd(fqn)
-		} else {
-			gotCopies++
-		}
-	}
-	if expCopies <= gotCopies {
-		return nil, false
-	}
-	mi = lom.LeastUtilNoCopy() // NOTE: nil when not enough mountpaths
-	return mi, false
 }
 
 func (lom *LOM) MirrorPaths() []string {

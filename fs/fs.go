@@ -229,6 +229,13 @@ func (mi *Mountpath) SetDaemonIDXattr(tid string) error {
 	return SetXattr(mi.Path, nodeXattrID, []byte(tid))
 }
 
+// has-path method
+// correctness is additionally enforced via cmn.IsNestedMpath() (to disallow nested mountpaths)
+func (mi *Mountpath) HasPath(path string) bool {
+	l := len(mi.Path)
+	return len(path) > l && path[:l] == mi.Path && path[l] == filepath.Separator
+}
+
 // make-path methods
 
 func (mi *Mountpath) makePathBuf(bck *cmn.Bck, contentType string, extra int) (buf []byte) {

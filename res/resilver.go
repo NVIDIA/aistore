@@ -50,8 +50,9 @@ type (
 		SingleRmiJogger bool
 	}
 	jogger struct {
-		p    *Res
-		xres *xs.Resilver
+		p     *Res
+		xres  *xs.Resilver
+		avail fs.MPI
 	}
 )
 
@@ -113,7 +114,7 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	var (
 		jgroup    *mpather.Jgroup
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		j         = &jogger{p: res, xres: xres}
+		j         = &jogger{p: res, xres: xres, avail: avail}
 		opts      = &mpather.JgroupOpts{
 			Parent:   xres,
 			CTs:      []string{fs.ObjCT, fs.ECSliceCT},
@@ -316,11 +317,10 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		retries int
 	)
 redo:
-	mi, fixHrw := lom.ToMpath()
+	mi, fixHrw := lom.ToMpath(j.avail)
 	if mi == nil {
 		goto ret
 	}
-
 	if fixHrw {
 		hlom, errHrw = j.fixHrw(lom, mi, buf)
 		if errHrw != nil {
@@ -345,8 +345,7 @@ redo:
 	// 3. fix copies
 outer:
 	for {
-		// NOTE: do NOT shadow mi/fixHrw; they are re-used at 'redo:'.
-		mi, fixHrw = lom.ToMpath()
+		mi, fixHrw = lom.ToMpathCopies(j.avail)
 		if mi == nil {
 			break
 		}
@@ -408,6 +407,16 @@ func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.L
 		if err := u.LoadCompleted(lom); err != nil {
 			return nil, err
 		}
+
+		/* NOTE: alternatively, copy all chunks instead of relocating
+		   hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
+		   hlom, err = lom.Copy2FQN(hrwFQN, buf)
+		   if err != nil {
+		           return nil, err
+		   }
+		   return hlom, nil
+		*/
+
 		return u.Relocate(mi, buf)
 	}
 

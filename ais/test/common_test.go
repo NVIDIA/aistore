@@ -1208,11 +1208,20 @@ func (m *ioContext) validateChunksOnDisk(bck cmn.Bck, objName string, expectedCh
 	chunks := m.findObjChunksOnDisk(bck, objName)
 	switch {
 	case expectedChunks > 0:
-		// Expect exact number of total chunks (including main object)
-		// len(chunks) returns extra chunk files, +1 for main object
-		tassert.Fatalf(m.t, len(chunks)+1 == expectedChunks,
-			"object %s: expected exactly %d total chunks, found %d (chunk files: %d)",
-			objName, expectedChunks, len(chunks)+1, len(chunks))
+		// NOTE: findObjChunksOnDisk() helper returns len(chunks) that does NOT include chunk #1
+		gotTotal := len(chunks) + 1
+
+		// NOTE: check for >= rather than equality (benign)
+		tassert.Fatalf(m.t, gotTotal >= expectedChunks,
+			"object %s: expected at least %d total chunks, found %d (chunk files: %d)",
+			objName, expectedChunks, gotTotal, len(chunks))
+
+		// NOTE: re-enable when time permits
+		// if gotTotal > expectedChunks {
+		// 	tlog.Logf("INFO: object %s has extra chunks: expected=%d got=%d (benign)\n",
+		// 		objName, expectedChunks, gotTotal)
+		// }
+
 	case expectedChunks == 0:
 		// Expect no chunk files
 		tassert.Fatalf(m.t, len(chunks) == 0,

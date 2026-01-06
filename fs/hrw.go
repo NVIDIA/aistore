@@ -17,9 +17,13 @@ import (
 // See also: core/meta/hrw.go
 
 func Hrw(uname []byte) (mi *Mountpath, digest uint64, err error) {
+	avail := GetAvail()
+	return avail.Hrw(uname)
+}
+
+func (avail MPI) Hrw(uname []byte) (mi *Mountpath, digest uint64, err error) {
 	var (
-		maxH  uint64
-		avail = GetAvail()
+		maxH uint64
 	)
 	digest = onexxh.Checksum64S(uname, cos.MLCG32)
 	for _, mpathInfo := range avail {
