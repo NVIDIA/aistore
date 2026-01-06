@@ -161,19 +161,17 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return rmi, nil
 	}
 
-	// Use all joggers (multi-jogger mode) when:
+	// Always use multi-jogger mode, and in particular when:
 	// - preempting an existing resilver (prev=true): ensures complete coverage across all mountpaths
 	// - resuming interrupted resilver (marked.Interrupted=true): continues with same parallelism
-	// - FIXME: single-jogger mode may result in missing chunks after apc.ActMountpathDetach
-	prev := g.preempt(action, rmi)
-	marked := xreg.GetResilverMarked()
-	allJoggers := prev || marked.Interrupted || action == apc.ActMountpathDetach
+	// - when we have chunked objects (with possibly misplaced chunks but not the main one..)
+	// TODO: remove SingleRmiJogger from res.Args
 
 	args := &res.Args{
 		Rmi:             rmi,
 		Action:          action,
 		PostDD:          g.postDD, // callback when done
-		SingleRmiJogger: !allJoggers,
+		SingleRmiJogger: false,
 		Custom:          xreg.ResArgs{Config: config},
 	}
 	go t.runResilver(args)

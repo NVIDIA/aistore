@@ -1093,7 +1093,7 @@ func initOnce() {
 	cmn.GCO.CommitUpdate(config)
 }
 
-func initMountpaths(t *testing.T, proxyURL string) {
+func initMountpaths(t *testing.T, proxyURL string, disabledOk ...bool) {
 	t.Helper()
 
 	isLocal, err := tools.IsClusterLocal()
@@ -1106,13 +1106,16 @@ func initMountpaths(t *testing.T, proxyURL string) {
 	fs.TestNew(nil)
 	_onceInit.Do(initOnce)
 
+	dok := len(disabledOk) > 0 && disabledOk[0]
+
 	baseParams := tools.BaseAPIParams(proxyURL)
 	smap := tools.GetClusterMap(t, proxyURL)
 	for _, target := range smap.Tmap {
 		mpathList, err := api.GetMountpaths(baseParams, target)
 		tassert.CheckFatal(t, err)
-		ensureNoDisabledMountpaths(t, target, mpathList)
-
+		if !dok {
+			ensureNoDisabledMountpaths(t, target, mpathList)
+		}
 		for _, mpath := range mpathList.Available {
 			fs.Add(mpath, target.ID())
 		}

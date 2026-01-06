@@ -396,7 +396,7 @@ func (c *resilverStressCtx) validateAllData(t *testing.T, stage string) {
 	// validateChunksOnDisk() below uses fs.WalkBck() which requires test-side fs mountpath map.
 	// This is only meaningful for local deployments; initMountpaths() will skip otherwise.
 	purl := tools.RandomProxyURL(t)
-	initMountpaths(t, purl)
+	initMountpaths(t, purl, true /*disabled Ok */)
 
 	for i, objName := range c.chk.objNames {
 		c.chk.validateChunksOnDisk(c.chk.bck, objName, c.chk.chunksConf.numChunks)
@@ -558,7 +558,7 @@ func testAdisableDisablePreempt(t *testing.T, c *resilverStressCtx) {
 
 	// while mountpaths are disabled, some objects/chunks may be inaccessible
 	c.barrier(t, bp, -1)
-	tlog.Logln("Mountpaths disabled; skipping validation until re-enable")
+	c.validateAllData(t, "after-disable-mp1-mp2")
 
 	tlog.Logfln("Re-enabling %s and %s...", mp1, mp2)
 	err = api.EnableMountpath(bp, c.target, mp1)
