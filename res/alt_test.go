@@ -88,6 +88,9 @@ func TestResilver_DisableEnable(t *testing.T) {
 
 	// resilver and check
 	runResilver(t, config, rmi, apc.ActMountpathDisable)
+
+	time.Sleep(time.Second) // TODO -- FIXME: remove (a rare, intermittent failure)
+
 	assertLocations(t, bck, objs)
 
 	// disable (as in: commit)

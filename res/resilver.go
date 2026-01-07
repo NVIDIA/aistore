@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,16 @@ import (
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
+// TODO:
+// - revisit EC bits and check for OOS preemptively
+// - not deleting extra copies - delegating to `storage cleanup`
+// - skipping _busy_ objects w/ TryLock + retries
+// - non-immediate write policy (lom.WritePolicy().IsImmediate())
+
 const (
 	ivalInactive = 4 * time.Second
+	busySleep    = 10 * time.Millisecond
+	busyRetries  = 5
 )
 
 type (
@@ -53,6 +62,8 @@ type (
 		p     *Res
 		xres  *xs.Resilver
 		avail fs.MPI
+		// work
+		sentinel string
 	}
 )
 
@@ -253,29 +264,52 @@ func _cpECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (strin
 	return "", "", err
 }
 
-// TODO: revisit EC bits and check for OOS preemptively
-// NOTE: not deleting extra copies - delegating to `storage cleanup`
+func (j *jogger) lock(lom *core.LOM) (locked bool) {
+	if lom.TryLock(true) {
+		return true
+	}
+
+	shouldRetry := lom.IsHRW()
+	if !shouldRetry {
+		mirror := lom.MirrorConf()
+		shouldRetry = mirror.Enabled && mirror.Copies >= 2
+	}
+	if !shouldRetry {
+		goto busy
+	}
+
+	for range busyRetries {
+		if j.xres.IsAborted() {
+			return false
+		}
+		time.Sleep(busySleep)
+		if lom.TryLock(true) {
+			return true
+		}
+	}
+busy:
+	if lom.IsHRW() {
+		j.p.nbusy.Inc()
+		if cmn.Rom.V(4, cos.ModReb) {
+			nlog.Warningln("skipping busy:", lom.Cname())
+		}
+	}
+	return false
+}
+
 func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
-	const (
-		maxRetries = 3
-	)
 	var (
-		orig   = lom
-		hlom   *core.LOM
-		xname  = j.xres.Name()
-		size   int64
-		copied bool
+		orig  = lom
+		hlom  *core.LOM
+		xname = j.xres.Name()
+		size  int64
 	)
 
 	if j.xres.IsAborted() {
 		return nil
 	}
 
-	if !lom.TryLock(true) { // NOTE: skipping busy
-		j.p.nbusy.Inc()
-		if cmn.Rom.V(4, cos.ModReb) {
-			nlog.Warningln("skipping busy:", lom.Cname())
-		}
+	if !j.lock(lom) {
 		return nil
 	}
 
@@ -283,12 +317,13 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	defer func() {
 		lom = orig
 		lom.Unlock(true)
-		if copied && errHrw == nil {
-			j.xres.ObjsAdd(1, size)
-		}
 	}()
 
-	// 1. fix EC metafile
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return nil
+	}
+
+	// fix EC metafile
 	var metaOldPath, metaNewPath string
 	if !lom.IsHRW() && lom.ECEnabled() {
 		var parsed fs.ParsedFQN
@@ -307,18 +342,22 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 		}
 	}
 
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		return nil
+	if lom.IsCopy() {
+		if j.sentinel == "" {
+			const (
+				maxRune = "\U0010FFFF" // max Unicode value
+			)
+			j.sentinel = strings.Repeat(maxRune, 4)
+		}
+		return j.visitCopy(lom, buf)
 	}
 
 	size = lom.Lsize()
-	// 2. fix hrw location; fail and subsequently abort if unsuccessful
-	var (
-		retries int
-	)
-redo:
 	mi, fixHrw := lom.ToMpath(j.avail)
 	if mi == nil {
+		if err := j.fixCopies(lom, buf); err != nil {
+			return err
+		}
 		goto ret
 	}
 	if fixHrw {
@@ -339,53 +378,15 @@ redo:
 			return errHrw
 		}
 		lom = hlom
-		copied = true
+		j.xres.ObjsAdd(1, size)
+	} else {
+		hlom = lom
 	}
 
-	// 3. fix copies
-outer:
-	for {
-		mi, fixHrw = lom.ToMpathCopies(j.avail)
-		if mi == nil {
-			break
-		}
-		if fixHrw {
-			// redo hlom in an unlikely event
-			retries++
-			if retries > maxRetries {
-				hmi := "???"
-				if hlom != nil && hlom.Mountpath() != nil {
-					hmi = hlom.Mountpath().String()
-				}
-				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
-					xname, orig, orig.Mountpath(), hmi, mi)
-				j.xres.AddErr(errHrw, 0)
-				return errHrw
-			}
-			copied = false
-			lom, hlom = orig, nil
-			time.Sleep(cmn.Rom.CplaneOperation() / 2)
-			goto redo
-		}
-		err := lom.Copy(mi, buf)
-		switch {
-		case err == nil:
-			copied = true
-		case cos.IsErrOOS(err):
-			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
-			err = cmn.NewErrAborted(xname, "", errV)
-			j.xres.Abort(err)
-			break outer
-		case !cos.IsNotExist(err) && !cos.IsErrNotFound(err):
-			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
-			nlog.Infoln("Warning:", errV)
-			j.xres.AddErr(errV)
-			break outer
-		default:
-			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
-			j.xres.AddErr(errV)
-		}
+	if err := j.fixCopies(hlom, buf); err != nil {
+		return err
 	}
+
 ret:
 	// EC: remove old metafile
 	if metaOldPath != "" {
@@ -396,7 +397,8 @@ ret:
 	return nil
 }
 
-func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
+// 'mi' here is HRW mountpath (and the copying destination) under current (avail) volume
+func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, _ error) {
 	debug.Assertf(lom.IsLocked() == apc.LockWrite, "%s must be w-locked (have %d)", lom.Cname(), lom.IsLocked())
 
 	if lom.IsChunked() {
@@ -421,9 +423,14 @@ func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.L
 	}
 
 	// regular objects use the regular Copy method
-	if err = lom.Copy(mi, buf); err != nil {
+	if err := lom.Copy(mi, buf); err != nil {
 		return nil, err
 	}
+
+	return _loadHlom(lom, mi)
+}
+
+func _loadHlom(lom *core.LOM, mi *fs.Mountpath) (hlom *core.LOM, err error) {
 	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
 	hlom = &core.LOM{}
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
@@ -432,8 +439,60 @@ func (*jogger) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.L
 	debug.Assert(hlom.Mountpath().Path == mi.Path)
 
 	// reload; cache iff write-policy != immediate
-	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)
+	err = hlom.Load(false, true /*locked*/)
 	return hlom, err
+}
+
+func (j *jogger) visitCopy(lom *core.LOM, buf []byte) error {
+	mi, fixHrw := lom.ToMpath(j.avail)
+	if mi == nil || !fixHrw {
+		return nil // nothing to do
+	}
+	isPrimary, mainExists := lom.IsPrimaryCopy(j.avail, mi, j.sentinel)
+	if !isPrimary || mainExists {
+		return nil
+	}
+
+	// this jogger owns canonical copy - use it to restore main replica
+	hlom, err := j.fixHrw(lom, mi, buf)
+	if err != nil {
+		j.xres.AddErr(err)
+		return err
+	}
+	debug.Assert(hlom.Mountpath().Path == mi.Path)
+	j.xres.ObjsAdd(1, lom.Lsize())
+
+	// this same designated jogger goes ahead to restore copies
+	return j.fixCopies(hlom, buf)
+}
+
+func (j *jogger) fixCopies(hlom *core.LOM, buf []byte) (abortErr error) {
+	const (
+		fmterr = "failed to copy %s to %s, err: %v"
+	)
+	exp, got := hlom.CleanupCopies(j.avail)
+	for got < exp {
+		mi := hlom.LeastUtilNoCopy()
+		if mi == nil {
+			return nil // not enough mountpaths
+		}
+		err := hlom.Copy(mi, buf)
+		switch {
+		case err == nil:
+			got++
+		case cos.IsErrOOS(err):
+			j.xres.Abort(err)
+			return err
+		case !cos.IsNotExist(err) && !cos.IsErrNotFound(err):
+			errV := fmt.Errorf(fmterr, hlom.Cname(), mi, err)
+			nlog.Infoln("Warning:", errV)
+			j.xres.AddErr(errV)
+		default:
+			errV := fmt.Errorf(fmterr, hlom.Cname(), mi, err)
+			j.xres.AddErr(errV)
+		}
+	}
+	return nil
 }
 
 func (j *jogger) visitECSlice(ct *core.CT, buf []byte) (err error) {

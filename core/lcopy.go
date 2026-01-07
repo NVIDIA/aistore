@@ -210,6 +210,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 
 // increment the object's num copies by (well) copying the former
 // (compare with lom.Copy2FQN below)
+// TODO: add T.FSHC() calls _after_ having disambiguated source vs destination (to blame)
 func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 	debug.Assert(lom.bid() != 0, lom.String())
 	if err := lom._checkBucket(); err != nil {
@@ -245,6 +246,7 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 		return err
 	}
 	if err := cos.Rename(workFQN, copyFQN); err != nil {
+		T.FSHC(err, mi, copyFQN)
 		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !cos.IsNotExist(errRemove) {
 			nlog.Errorln("nested err:", errRemove)
 		}

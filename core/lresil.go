@@ -18,6 +18,7 @@ import (
 // - checks hrw location first, and
 // - checks copies (if any) against the current configuration and available mountpaths;
 // - does not check `fstat` in either case
+// (usage: resilvering)
 func (lom *LOM) ToMpath(avail fs.MPI) (*fs.Mountpath, bool /*fix HRW*/) {
 	debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked")
 
@@ -51,40 +52,43 @@ func (lom *LOM) ToMpath(avail fs.MPI) (*fs.Mountpath, bool /*fix HRW*/) {
 	return hrwMi, !ok
 }
 
-func (lom *LOM) ToMpathCopies(avail fs.MPI) (*fs.Mountpath, bool /*fix HRW*/) {
-	// given (verb => abort => new run) mountpaths should be stable during resilver
-	// TODO: remove
-	hrwMi, _, err := avail.Hrw(cos.UnsafeB(*lom.md.uname))
-	if err != nil {
-		nlog.Errorln(err)
-		return nil, false
+// deterministically pick a copy to restore any missing ones
+// must be called under w-lock
+// (usage: resilvering)
+func (lom *LOM) IsPrimaryCopy(avail fs.MPI, hmi *fs.Mountpath, sentinel string) (isPrimary, mainExists bool) {
+	debug.Assert(lom.IsCopy(), lom.Cname(), "must be a copy")
+	selected := sentinel
+	for fqn, mi := range lom.md.copies {
+		if _, ok := avail[mi.Path]; !ok { // not skipping fs.FlagWaitingDD mountpaths
+			continue
+		}
+		if err := cos.Stat(fqn); err != nil {
+			continue
+		}
+		mainExists = mainExists || mi.Path == hmi.Path
+		selected = min(fqn, selected)
 	}
-	if lom.mi.Path != hrwMi.Path {
-		return hrwMi, true
-	}
+	return lom.FQN == selected, mainExists
+}
 
-	// check copies, if any
+// remove stale copy metadata entries (copies on unavailable or
+// disabled mountpaths) and return the expected number of copies per config
+// and the actual number of valid copies remaining;
+// must be called under w-lock
+// (usage: resilvering)
+func (lom *LOM) CleanupCopies(avail fs.MPI) (exp, got int) {
 	mirror := lom.MirrorConf()
 	if !mirror.Enabled || mirror.Copies < 2 {
-		return nil, false
+		return
 	}
-
-	// count copies vs. configuration
-	// take into account mountpath flags but stop short of `fstat`-ing
-	expCopies, gotCopies := int(mirror.Copies), 0
+	exp, got = int(mirror.Copies), 0
 	for fqn, mpi := range lom.md.copies {
 		mpathInfo, ok := avail[mpi.Path]
 		if !ok || mpathInfo.IsAnySet(fs.FlagWaitingDD) {
 			lom.delCopyMd(fqn)
 		} else {
-			gotCopies++
+			got++
 		}
 	}
-	if expCopies <= gotCopies {
-		return nil, false
-	}
-
-	// NOTE: nil when not enough mountpaths
-	mi := lom.LeastUtilNoCopy()
-	return mi, false
+	return
 }
