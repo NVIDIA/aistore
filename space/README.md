@@ -30,7 +30,7 @@ it does not coordinate across targets.
 
 Any file with `mtime + dont_cleanup_time > now` is skipped to avoid racing against:
 
-- Slice => metafile write sequences
+- EC slice => metafile write sequences
 - Replica => metafile write sequences
 - Other concurrent operations
 

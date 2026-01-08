@@ -214,7 +214,6 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) error {
 	debug.Assert(lom.bid() != 0, lom.String())
 	if err := lom._checkBucket(); err != nil {
-		debug.AssertNoErr(err)
 		return err
 	}
 	var (
