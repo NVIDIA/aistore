@@ -360,10 +360,17 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
+	dpq := dpqAlloc()
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		dpqFree(dpq)
+		t.writeErr(w, r, err)
+		return
+	}
 
 	lom := core.AllocLOM(objName)
-	ecode, err := t.objHead(r, w.Header(), r.URL.Query(), bck, lom)
+	ecode, err := t.objHead(r, w.Header(), dpq, bck, lom)
 	core.FreeLOM(lom)
+	dpqFree(dpq)
 	if err != nil {
 		// always silent (compare w/ httpobjhead)
 		t.writeErr(w, r, err, ecode, Silent)

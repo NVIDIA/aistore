@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -707,7 +706,7 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpobjget(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodHead:
-		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		t.httpobjhead(w, r, apireq)
 		apiReqFree(apireq)
 	case http.MethodPut:
@@ -1231,23 +1230,38 @@ func (t *target) _checkLocked(w http.ResponseWriter, r *http.Request, bck *meta.
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	if err := t.parseReq(w, r, apireq); err != nil {
+	var (
+		err   error
+		ecode int
+	)
+	if err = t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
+	err = apireq.dpq.parse(r.URL.RawQuery)
+	if err != nil {
+		debug.AssertNoErr(err)
+		t.writeErr(w, r, err)
+		return
+	}
 	if cmn.Rom.Features().IsSet(feat.EnforceIntraClusterAccess) {
 		// validates that the request is internal (by a node in the same cluster)
-		if isRedirect(query) == "" && t.checkIntraCall(r.Header, false) != nil {
+		if apireq.dpq.isRedirect() == "" && t.checkIntraCall(r.Header, false) != nil {
 			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected (remaddr=%s)",
 				t.si, r.Method, r.RemoteAddr)
 			return
 		}
 	}
-	lom := core.AllocLOM(objName)
-	ecode, err := t.objHead(r, w.Header(), query, bck, lom)
+
+	lom := core.AllocLOM(apireq.items[1])
+	switch {
+	case apireq.dpq.get(apc.QparamProps) != "":
+		ecode, err = t.objHeadV2(r, w.Header(), apireq.dpq, apireq.bck, lom)
+	default:
+		ecode, err = t.objHead(r, w.Header(), apireq.dpq, apireq.bck, lom)
+	}
 	core.FreeLOM(lom)
 	if err != nil {
-		t._erris(w, r, err, ecode, cos.IsParseBool(query.Get(apc.QparamSilent)))
+		t._erris(w, r, err, ecode, apireq.dpq.silent)
 	}
 }
 
@@ -1258,14 +1272,14 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 // - 410 (Gone): remote backend returned 404 when latest=true (object was deleted remotely)
 // - 429 (TooManyRequests): remote backend is throttling requests
 // - 503 (ServiceUnavailable): remote backend is temporarily unavailable
-func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *meta.Bck, lom *core.LOM) (int, error) {
+func (t *target) objHead(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.Bck, lom *core.LOM) (int, error) {
 	var (
 		started     = mono.NanoTime()
 		fltPresence int
 		exists      bool
 		err         error
 	)
-	if tmp := q.Get(apc.QparamFltPresence); tmp != "" {
+	if tmp := dpq.get(apc.QparamFltPresence); tmp != "" {
 		var erp error
 		fltPresence, erp = strconv.Atoi(tmp)
 		debug.AssertNoErr(erp)
@@ -1312,7 +1326,6 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 	if exists {
 		op.ObjAttrs = *lom.ObjAttrs()
 
-		// TODO: in `HeadObjectV2`, include location, mirror copies, and EC metadata only if user explicitly requested them
 		op.Location = lom.Location()
 		op.Mirror.Copies = lom.NumCopies()
 		op.Mirror.Paths = lom.MirrorPaths()
@@ -1328,7 +1341,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, q url.Values, bck *m
 	}
 
 	// 4. Cold HEAD: check remote backend if object not found locally or if latest version requested
-	latest := cos.IsParseBool(q.Get(apc.QparamLatestVer))
+	latest := dpq.latestVer
 	if !exists || latest {
 		oa, ecode, err := t.HeadCold(lom, r)
 		if err != nil {
@@ -1381,7 +1394,6 @@ func objPropsToHeader(op *cmn.ObjectProps, hdr http.Header, hasEC bool) {
 		op.ObjAttrs.Cksum = cos.NoneCksum
 	}
 	errIter := cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
-		// TODO: remove in `HeadObjectV2` - must be able to avoid reflection unless user is asking for
 		if !hasEC && strings.HasPrefix(tag, "ec.") {
 			return nil, false
 		}

@@ -474,6 +474,64 @@ func headobj(reqParams *ReqParams, noprops bool) (*cmn.ObjectProps, error) {
 	return op, err
 }
 
+// HeadObjectV2 performs HEAD request with selective property retrieval.
+//
+// EXPERIMENTAL: This API is experimental and may change in future releases.
+//
+// Returns ObjectPropsV2 with only the requested properties populated (via `props` parameter).
+// Use comma-separated property names from apc.GetProps* constants.
+//
+// Example:
+//
+//	props := apc.GetPropsSize + apc.LsPropsSepa + apc.GetPropsChecksum
+//	opV2, err := api.HeadObjectV2(bp, bck, objName, props, args)
+func HeadObjectV2(bp BaseParams, bck cmn.Bck, objName, props string, args HeadArgs) (op *cmn.ObjectPropsV2, err error) {
+	q := qalloc()
+	bck.SetQuery(q)
+	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
+	if args.Silent {
+		q.Set(apc.QparamSilent, "true")
+	}
+	if args.LatestVer {
+		q.Set(apc.QparamLatestVer, "true")
+	}
+	if args.ValidateCksum {
+		q.Set(apc.QparamValidateCksum, "true")
+	}
+
+	if props == "" {
+		props = apc.GetPropsNameSize // default
+	}
+	q.Set(apc.QparamProps, props)
+
+	reqParams := AllocRp()
+	bp.Method = http.MethodHead
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
+		reqParams.Query = q
+	}
+	op, err = headobjV2(reqParams, args.FltPresence == apc.FltPresentNoProps, props)
+
+	FreeRp(reqParams)
+	qfree(q)
+	return op, err
+}
+
+func headobjV2(reqParams *ReqParams, noprops bool, props string) (*cmn.ObjectPropsV2, error) {
+	hdr, _, err := reqParams.doReqHdr()
+	if err != nil {
+		return nil, err
+	}
+	if noprops {
+		return nil, err
+	}
+
+	op := &cmn.ObjectPropsV2{}
+	op.FromHeaders(hdr, props)
+	return op, nil
+}
+
 // SetObjectCustomProps ================================================================================
 //
 // Given cos.StrKVs (map[string]string) keys and values, sets object's custom properties.

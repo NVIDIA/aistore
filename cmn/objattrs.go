@@ -48,38 +48,92 @@ const (
 	maxSizeCustomKVs = 2 * cos.KiB
 )
 
-// object properties
-// embeds system `ObjAttrs` that in turn includes custom user-defined
-// (compare with `apc.LsoMsg`)
-type ObjectProps struct {
-	Bck Bck `json:"bucket"`
-	ObjAttrs
-	Name     string `json:"name"`
-	Location string `json:"location"` // see also `GetPropsLocation`
-	Mirror   struct {
-		Paths  []string `json:"paths,omitempty"`
-		Copies int      `json:"copies,omitempty"`
-	} `json:"mirror"`
+type (
+	// object properties
+	// NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined
+	// NOTE: compare with `apc.LsoMsg`
+	ObjectProps struct {
+		Bck Bck `json:"bucket"`
+		ObjAttrs
+		Name     string `json:"name"`
+		Location string `json:"location"` // see also `GetPropsLocation`
+		Mirror   Mirror `json:"mirror"`
+		EC       EC     `json:"ec"`
+		Present  bool   `json:"present"`
+	}
+	ObjectPropsV2 struct {
+		Bck Bck `json:"bucket"`
+		ObjAttrs
+		Name         string `json:"name"`
+		LastModified string `json:"last_modified"`
+		ETag         string `json:"etag"` // entity tag
+
+		// advanced fields - only provide when user explicitly requested
+		EC       *EC     `json:"ec,omitempty"`
+		Mirror   *Mirror `json:"mirror,omitempty"`
+		Chunks   *Chunks `json:"chunks,omitempty"`
+		Location *string `json:"location,omitempty"`
+
+		Present bool `json:"present"` // true if object is present in cluster
+	}
+)
+
+type (
+	// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
+	ObjAttrs struct {
+		Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
+		CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
+		Ver      *string    `json:"version,omitempty"`   // object version
+		Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
+		Size     int64      `json:"size,omitempty"`      // object size (bytes)
+	}
 	EC struct {
 		Generation   int64 `json:"generation"`
 		DataSlices   int   `json:"data"`
 		ParitySlices int   `json:"parity"`
 		IsECCopy     bool  `json:"replicated"`
-	} `json:"ec"`
-	Present bool `json:"present"`
+	}
+	Mirror struct {
+		Paths  []string `json:"paths,omitempty"`
+		Copies int      `json:"copies,omitempty"`
+	}
+	Chunks struct {
+		ChunkCount   int   `json:"count"`          // number of chunks
+		MaxChunkSize int64 `json:"max_chunk_size"` // size of the largest chunk (bytes)
+	}
+)
+
+type headerSerializer interface {
+	ToHeader(http.Header)
 }
 
-// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
-type ObjAttrs struct {
-	Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
-	CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
-	Ver      *string    `json:"version,omitempty"`   // object version
-	Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
-	Size     int64      `json:"size,omitempty"`      // object size (bytes)
+// validateToHeaderCoverage ensures ToHeader() method sets headers for all struct fields.
+// This runs at init time to catch missing ToHeader updates when new fields are added.
+func validateToHeaderCoverage(v headerSerializer, prefix string) {
+	hdr := make(http.Header, 4)
+	v.ToHeader(hdr)
+
+	// Use IterFields to get all field tags, then check each has a corresponding header
+	// Note: IterFields on standalone struct returns "generation", but props2hdr has "ec.generation"
+	err := IterFields(v, func(tag string, _ IterField) (error, bool) {
+		fullTag := prefix + "." + tag
+		headerName := props2hdr[fullTag]
+		if hdr.Get(headerName) == "" {
+			debug.Assert(false, "ToHeader method missing field: ", fullTag,
+				" (header: ", headerName, ") - update ", prefix, ".ToHeader()")
+		}
+		return nil, false
+	}, IterOpts{OnlyRead: true})
+	debug.AssertNoErr(err)
 }
 
 // interface guard
-var _ cos.OAH = (*ObjAttrs)(nil)
+var (
+	_ cos.OAH          = (*ObjAttrs)(nil)
+	_ headerSerializer = (*EC)(nil)
+	_ headerSerializer = (*Mirror)(nil)
+	_ headerSerializer = (*Chunks)(nil)
+)
 
 // static map: [internal (json) obj prop => canonical http header]
 var (
@@ -87,16 +141,34 @@ var (
 )
 
 func InitObjProps2Hdr() {
-	props2hdr = make(cos.StrKVs, 18)
+	props2hdr = make(cos.StrKVs, 24)
 
+	// Register V1 property tags
 	op := &ObjectProps{}
 	err := IterFields(op, func(tag string, _ IterField) (error, bool) {
 		name := apc.PropToHeader(tag)
 		props2hdr[tag] = name // internal (json) obj prop => canonical http header
 		return nil, false
 	}, IterOpts{OnlyRead: false})
+	debug.AssertNoErr(err)
 
-	debug.Assert(err == nil && len(props2hdr) <= 18, "err: ", err, " len: ", len(props2hdr))
+	// Register V2-specific property tags (e.g., chunks.*)
+	opV2 := &ObjectPropsV2{}
+	err = IterFields(opV2, func(tag string, _ IterField) (error, bool) {
+		if _, exists := props2hdr[tag]; !exists {
+			name := apc.PropToHeader(tag)
+			props2hdr[tag] = name
+		}
+		return nil, false
+	}, IterOpts{OnlyRead: false})
+	debug.AssertNoErr(err)
+
+	// Validate ToHeader methods cover all fields - create fake instances, then verify all fields are in the resulting headers
+	debug.Func(func() {
+		validateToHeaderCoverage(&EC{Generation: 1, DataSlices: 2, ParitySlices: 1, IsECCopy: true}, "ec")
+		validateToHeaderCoverage(&Mirror{Copies: 2, Paths: []string{"/tmp"}}, "mirror")
+		validateToHeaderCoverage(&Chunks{ChunkCount: 10, MaxChunkSize: 1024}, "chunks")
+	})
 }
 
 // (compare with apc.PropToHeader)
@@ -104,6 +176,30 @@ func PropToHeader(prop string) string {
 	headerName, ok := props2hdr[prop]
 	debug.Assert(ok, "unknown obj prop: ", prop) // NOTE: assuming, InitObjProps2Hdr captures all statically
 	return headerName
+}
+
+//
+// ToHeader methods - serialize struct fields to HTTP headers without reflection
+// NOTE: when adding new fields to these structs, update the corresponding ToHeader method
+//
+
+func (ec *EC) ToHeader(hdr http.Header) {
+	hdr.Set(PropToHeader("ec.generation"), strconv.FormatInt(ec.Generation, 10))
+	hdr.Set(PropToHeader("ec.data"), strconv.Itoa(ec.DataSlices))
+	hdr.Set(PropToHeader("ec.parity"), strconv.Itoa(ec.ParitySlices))
+	hdr.Set(PropToHeader("ec.replicated"), strconv.FormatBool(ec.IsECCopy))
+}
+
+func (m *Mirror) ToHeader(hdr http.Header) {
+	hdr.Set(PropToHeader("mirror.copies"), strconv.Itoa(m.Copies))
+	if len(m.Paths) > 0 {
+		hdr.Set(PropToHeader("mirror.paths"), strings.Join(m.Paths, ","))
+	}
+}
+
+func (c *Chunks) ToHeader(hdr http.Header) {
+	hdr.Set(PropToHeader("chunks.count"), strconv.Itoa(c.ChunkCount))
+	hdr.Set(PropToHeader("chunks.max_chunk_size"), strconv.FormatInt(c.MaxChunkSize, 10))
 }
 
 func (oa *ObjAttrs) String() string {
@@ -287,6 +383,59 @@ func (oa *ObjAttrs) _undoCustom(keys []string) {
 	for i := len(keys) - 1; i >= 0; i-- {
 		oa.DelCustomKey(keys[i])
 	}
+}
+
+// FromHeaders deserializes ObjectPropsV2 from HTTP response headers.
+// Used by HeadObjectV2 API to parse selective property responses.
+func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) {
+	// parse base ObjAttrs
+	cksum, err := op.ObjAttrs.FromHeader(hdr)
+	debug.AssertNoErr(err)
+	op.Cksum = cksum
+
+	// Parse present header (indicates if object is cached locally)
+	if v := hdr.Get(apc.PropToHeader("present")); v != "" {
+		op.Present = cos.IsParseBool(v)
+	}
+
+	op.LastModified = hdr.Get(cos.HdrLastModified)
+	op.ETag = hdr.Get(cos.HdrETag)
+
+	// Parse optional fields based on requested properties
+	for prop := range strings.SplitSeq(props, apc.LsPropsSepa) {
+		prop = strings.TrimSpace(prop)
+		if prop == "" {
+			continue
+		}
+		switch prop {
+		case apc.GetPropsLocation:
+			v := hdr.Get(apc.PropToHeader(prop))
+			op.Location = &v
+		case apc.GetPropsCopies:
+			op.Mirror = &Mirror{}
+			fieldFromHeader(op.Mirror, "mirror", hdr)
+		case apc.GetPropsEC:
+			op.EC = &EC{}
+			fieldFromHeader(op.EC, "ec", hdr)
+		case apc.GetPropsChunked:
+			op.Chunks = &Chunks{}
+			fieldFromHeader(op.Chunks, "chunks", hdr)
+		}
+	}
+}
+
+// fieldFromHeader populates struct fields from HTTP headers using IterFields.
+// The prefix is prepended to each field tag to form the header name (e.g., "mirror" + "copies" -> "Ais-Mirror-Copies").
+func fieldFromHeader(v any, prefix string, hdr http.Header) {
+	err := IterFields(v, func(tag string, field IterField) (error, bool) {
+		name := apc.PropToHeader(prefix + "." + tag)
+		val, ok := hdr[name]
+		if !ok {
+			return nil, false
+		}
+		return field.SetValue(val[0], true /*force*/), false
+	}, IterOpts{OnlyRead: false})
+	debug.AssertNoErr(err)
 }
 
 // local <=> remote equality in the context of cold-GET and download. This function
