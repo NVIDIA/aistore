@@ -9,10 +9,10 @@ package backend
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -74,7 +74,7 @@ func (bp *ocibp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 	return uploadID, ecode, err
 }
 
-func (bp *ocibp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (bp *ocibp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	var (
 		cloudBck          = lom.Bck().RemoteBck()
 		partNumInt        = int(partNum)

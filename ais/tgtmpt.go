@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -367,20 +368,6 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		buf, slab := t.gmm.AllocSize(rsize)
 		expectedSize, err = io.CopyBuffer(mw, reader, buf)
 		slab.Free(buf)
-	case lom.Bck().IsRemoteAzure():
-		backend = t.Backend(lom.Bck())
-		sgl := t.gmm.NewSGL(rsize)
-		mw.Append(sgl)
-		expectedSize, err = io.Copy(mw, reader)
-
-		if err == nil {
-			// NOTE: Azure backend requires io.ReadSeekCloser for the `PutMptPart` method
-			seekableReader := memsys.NewReader(sgl)
-			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, seekableReader, req, uploadID, expectedSize, int32(args.partNum))
-			remotePutLatency = mono.SinceNano(remoteStart)
-		}
-		sgl.Free()
 	case t.gmm.Pressure() < memsys.PressureHigh:
 		// write 1) locally + sgl + checksums; 2) write sgl => backend
 		backend = t.Backend(lom.Bck())
@@ -388,22 +375,37 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		mw.Append(sgl)
 		expectedSize, err = io.Copy(mw, reader)
 		if err == nil {
+			// NOTE: memsys.Reader wrapper required:
+			// - Azure: seekable (io.ReadSeekCloser) for SDK's seek-based retry
+			// - Remote AIS: retriable (cos.ReadOpenCloser) for DoWithRetry (reader.Open() on retry)
+			rdr := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, sgl, req, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(lom, rdr, req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
 	default:
-		// high memory pressure:
-		// - use TeeReader to stream directly => backend
-		// - no retries - reader not seekable
-		// - e.g. see related: `s3NoRetry`
+		// high memory pressure
+		time.Sleep(cos.PollSleepLong) // wait for memory pressure to decrease
+		if t.gmm.Pressure() >= memsys.PressureHigh {
+			e := fmt.Errorf("memory pressure is too high: %d, put part rejected", t.gmm.Pressure())
+			nlog.Errorln(e)
+			err = cmn.NewErrTooManyRequests(e, http.StatusTooManyRequests)
+			ecode = http.StatusTooManyRequests
+			break
+		}
+
 		backend = t.Backend(lom.Bck())
-		expectedSize = rsize
-		tr := io.NopCloser(io.TeeReader(reader, mw))
-		remoteStart := mono.NanoTime()
-		etag, ecode, err = backend.PutMptPart(lom, tr, req, uploadID, expectedSize, int32(args.partNum))
-		remotePutLatency = mono.SinceNano(remoteStart)
+		sgl := t.gmm.NewSGL(rsize)
+		mw.Append(sgl)
+		expectedSize, err = io.Copy(mw, reader)
+		if err == nil {
+			rdr := memsys.NewReader(sgl)
+			remoteStart := mono.NanoTime()
+			etag, ecode, err = backend.PutMptPart(lom, rdr, req, uploadID, expectedSize, int32(args.partNum))
+			remotePutLatency = mono.SinceNano(remoteStart)
+		}
+		sgl.Free()
 	}
 
 	// validate, finalize

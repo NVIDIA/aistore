@@ -68,7 +68,7 @@ func (*s3bp) StartMpt(lom *core.LOM, oreq *http.Request) (id string, ecode int, 
 	return id, ecode, err
 }
 
-func (*s3bp) PutMptPart(lom *core.LOM, r io.ReadCloser, oreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (*s3bp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, oreq *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	h := cmn.BackendHelpers.Amazon
 
 	// presigned

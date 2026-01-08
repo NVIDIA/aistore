@@ -53,7 +53,7 @@ func (*azbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int, err
 	return uploadID, 0, nil
 }
 
-func (azbp *azbp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uploadID string, _ int64, partNum int32) (string, int, error) {
+func (azbp *azbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, _ int64, partNum int32) (string, int, error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName

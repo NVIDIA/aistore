@@ -7,13 +7,13 @@
 package backend
 
 import (
-	"io"
 	"net/http"
 	"net/url"
 
 	s3types "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -26,7 +26,7 @@ func StartMptOCI(core.Backend, *core.LOM, *http.Request, url.Values) (string, in
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("start-mpt", mock)
 }
 
-func PutMptPartOCI(core.Backend, *core.LOM, io.ReadCloser, *http.Request, url.Values, string, int64, int32) (string, int, error) {
+func PutMptPartOCI(core.Backend, *core.LOM, cos.ReadOpenCloser, *http.Request, url.Values, string, int64, int32) (string, int, error) {
 	return "", http.StatusBadRequest, cmn.NewErrUnsupp("put-mpt-part", mock)
 }
 

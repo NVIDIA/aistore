@@ -5,7 +5,6 @@
 package backend
 
 import (
-	"io"
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api"
@@ -32,7 +31,7 @@ func (m *AISbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int, 
 	return uploadID, http.StatusOK, err
 }
 
-func (m *AISbp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (m *AISbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	var (
 		remAis    *remAis
 		remoteBck = lom.Bck().Clone()
@@ -50,7 +49,7 @@ func (m *AISbp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uplo
 			BaseParams: remAis.bpL,
 			Bck:        remoteBck,
 			ObjName:    lom.ObjName,
-			Reader:     r.(cos.ReadOpenCloser),
+			Reader:     r,
 			Size:       uint64(size),
 		},
 		PartNumber: int(partNum),

@@ -5,7 +5,6 @@
 package backend
 
 import (
-	"io"
 	"net/http"
 	"time"
 
@@ -226,7 +225,7 @@ func (b *base) StartMpt(*core.LOM, *http.Request) (string, int, error) {
 	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload start", b.provider)
 }
 
-func (b *base) PutMptPart(*core.LOM, io.ReadCloser, *http.Request, string, int64, int32) (string, int, error) {
+func (b *base) PutMptPart(*core.LOM, cos.ReadOpenCloser, *http.Request, string, int64, int32) (string, int, error) {
 	return "", http.StatusNotImplemented, cmn.NewErrUnsupp("multipart upload part", b.provider)
 }
 

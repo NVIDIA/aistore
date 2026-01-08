@@ -102,7 +102,7 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int
 	return result.UploadID, 0, nil
 }
 
-func (gsbp *gsbp) PutMptPart(lom *core.LOM, r io.ReadCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
+func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	cloudBck := lom.Bck().RemoteBck()
 
 	reqArgs := cmn.AllocHra()
