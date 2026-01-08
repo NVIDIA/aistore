@@ -25,9 +25,9 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
-///////////////////////
-// public interfaces //
-///////////////////////
+//
+// public interfaces
+//
 
 type ETLServer interface {
 	Transform(input io.ReadCloser, path, etlArgs string) (reader io.ReadCloser, size int64, err error)
@@ -43,7 +43,7 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 	}
 
 	base := &etlServerBase{
-		endpoint:     fmt.Sprintf("%s:%d", ipAddress, port),
+		endpoint:     cmn.HostPort(ipAddress, strconv.Itoa(port)),
 		aisTargetURL: aisTargetURL,
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -64,9 +64,9 @@ func Run(etlSvr ETLServer, ipAddress string, port int) error {
 	return http.ListenAndServe(base.endpoint, nil)
 }
 
-//////////////////////////////
-// internal implementations //
-//////////////////////////////
+//
+// internal
+//
 
 type (
 	etlServerBase struct {

@@ -123,7 +123,7 @@ echo "9. out-of-band DELETE"
 AIS_ENDPOINT=$rendpoint ais object rm "$rbucket/lorem-duis" 1>/dev/null || exit $?
 
 ## '--yes' to auto-confirm non-existence
-echo "10. prefetch without '--latesti --yes': expecting no changes"
+echo "10. prefetch without '--latest --yes': expecting no changes"
 ais prefetch "$bucket/lorem-duis" --wait --yes
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }

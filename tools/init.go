@@ -141,6 +141,9 @@ func InitLocalCluster() {
 		proxyURL    = defaultProxyURL
 	)
 
+	// FIXME:
+	// - hardcoded schema
+	// - use cmn.HostPort instead
 	if docker.IsRunning() {
 		clusterType = ClusterTypeDocker
 		proxyURL = "http://" + primaryHostIP + ":" + port

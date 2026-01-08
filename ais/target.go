@@ -326,7 +326,8 @@ func (t *target) initHostIP(config *cmn.Config) {
 	}
 	t.si.PubNet.Hostname = extAddr.String()
 	t.si.PubNet.Port = strconv.Itoa(extPort)
-	t.si.PubNet.URL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+	ep := cmn.HostPort(t.si.PubNet.Hostname, t.si.PubNet.Port)
+	t.si.PubNet.URL = cmn.ProtoEndpoint(config.Net.HTTP.Proto, ep)
 
 	nlog.Infoln("AIS_HOST_IP:", hostIP, "pub:", t.si.URL(cmn.NetPublic))
 
@@ -625,7 +626,8 @@ func (red *redial) acked() bool {
 		for elapsed := time.Duration(0); elapsed < red.totalTout; elapsed += sleep {
 			ctx := context.Background()
 			dialer := &net.Dialer{Timeout: red.dialTout}
-			if _, err = dialer.DialContext(ctx, "tcp4", addr); err != nil {
+			netFam := cmn.AddrToNetworkFamily(addr)
+			if _, err = dialer.DialContext(ctx, netFam, addr); err != nil {
 				break
 			}
 			once = true

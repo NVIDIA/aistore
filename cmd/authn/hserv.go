@@ -49,6 +49,11 @@ func (h *hserv) failAction(w http.ResponseWriter, r *http.Request, action, what 
 	cmn.WriteErr(w, r, err, code)
 }
 
+// NOTE: all interfaces (IPv4 and IPv6)
+func _listenAddr(port string) string {
+	return ":" + port
+}
+
 // Run public server to manage users and generate tokens
 func (h *hserv) Run() error {
 	var (
@@ -56,12 +61,12 @@ func (h *hserv) Run() error {
 		err     error
 	)
 
-	portStr = h.mgr.cm.GetPort()
-	nlog.Infof("Listening on %s", portStr)
+	laddr := _listenAddr(h.mgr.cm.GetPort())
+	nlog.Infoln("Listening on", laddr)
 
 	h.registerPublicHandlers()
 	h.s = &http.Server{
-		Addr:              portStr,
+		Addr:              laddr,
 		Handler:           h.mux,
 		ReadHeaderTimeout: apc.ReadHeaderTimeout,
 	}

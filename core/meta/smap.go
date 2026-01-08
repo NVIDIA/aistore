@@ -353,19 +353,18 @@ func (e *errNetInfoChanged) Error() string {
 	return fmt.Sprintf("%s: %s %s vs %s", e.sname, e.tag, e.nep, e.oep)
 }
 
-func _ep(hostname, port string) string { return hostname + ":" + port }
-
 func (ni *NetInfo) Init(proto, hostname, port string) {
-	ep := _ep(hostname, port)
+	ep := cmn.HostPort(hostname, port)
 	ni.Hostname = hostname
 	ni.Port = port
-	ni.URL = proto + "://" + ep // rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
+
+	ni.URL = cmn.ProtoEndpoint(proto, ep)
 	ni.tcpEndpoint = ep
 }
 
 func (ni *NetInfo) TCPEndpoint() string {
 	if ni.tcpEndpoint == "" {
-		ni.tcpEndpoint = _ep(ni.Hostname, ni.Port)
+		ni.tcpEndpoint = cmn.HostPort(ni.Hostname, ni.Port)
 	}
 	return ni.tcpEndpoint
 }

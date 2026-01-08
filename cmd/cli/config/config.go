@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
@@ -22,7 +23,6 @@ import (
 // default pathname: $HOME/.config/ais/cli
 
 const (
-	urlFmt           = "%s://%s:%d"
 	defaultAISIP     = "127.0.0.1"
 	defaultAISPort   = 8080
 	defaultAuthNPort = 52001
@@ -103,12 +103,12 @@ func init() {
 	if value := os.Getenv(env.AisUseHTTPS); cos.IsParseBool(value) {
 		proto = "https"
 	}
-	aisURL := fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAISPort)
+	aisURL := cmn.ProtoHostPort(proto, defaultAISIP, defaultAISPort)
 	defaultConfig = Config{
 		Cluster: ClusterConfig{
 			URL:               aisURL,
 			DefaultAISHost:    aisURL,
-			DefaultDockerHost: fmt.Sprintf(urlFmt, proto, defaultDockerIP, defaultAISPort),
+			DefaultDockerHost: cmn.ProtoHostPort(proto, defaultDockerIP, defaultAISPort),
 			SkipVerifyCrt:     cos.IsParseBool(os.Getenv(env.AisSkipVerifyCrt)),
 		},
 		Timeout: TimeoutConfig{
@@ -118,7 +118,7 @@ func init() {
 			HTTPTimeout:    0,
 		},
 		Auth: AuthConfig{
-			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
+			URL: cmn.ProtoHostPort(proto, defaultAISIP, defaultAuthNPort),
 		},
 		Aliases:         DefaultAliasConfig,
 		DefaultProvider: apc.AIS,

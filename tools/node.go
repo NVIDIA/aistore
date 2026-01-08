@@ -67,12 +67,13 @@ func (n nodesCnt) satisfied(actual int) bool {
 func WaitNodePubAddrNotInUse(si *meta.Snode, timeout time.Duration) error {
 	var (
 		addr     = si.PubNet.TCPEndpoint()
+		netFam   = cmn.AddrToNetworkFamily(addr)
 		interval = controlPlaneSleep
 	)
 	tlog.Logfln("Waiting for %s to shutdown (and stop listening)", si.StringEx())
 	time.Sleep(interval) // not immediate
 	for elapsed := time.Duration(0); elapsed < timeout; elapsed += interval {
-		if _, err := net.DialTimeout("tcp4", addr, interval); err != nil {
+		if _, err := net.DialTimeout(netFam, addr, interval); err != nil {
 			time.Sleep(interval)
 			return nil
 		}

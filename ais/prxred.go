@@ -40,8 +40,8 @@ func (p *proxy) redurl(r *http.Request, si *meta.Snode, smapVer, now int64, netI
 			remote = r.RemoteAddr
 			local  bool
 		)
-		if colon := strings.Index(remote, ":"); colon != -1 {
-			remote = remote[:colon]
+		if host, _, err := net.SplitHostPort(remote); err == nil {
+			remote = host
 		}
 		if ip := net.ParseIP(remote); ip != nil {
 			local = p.si.LocalNet.Contains(ip)

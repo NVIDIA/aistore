@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1097,10 +1098,13 @@ func parseURLToSource(rawURL string) (dlSource, error) {
 			prefix: strings.TrimPrefix(fullPath, "/"),
 		}
 	case apc.AISScheme:
-		// TODO: add support for the remote cluster
-		scheme = "http" // TODO: How about `https://`?
-		if !strings.Contains(host, ":") {
-			host += ":8080" // TODO: What if host is listening on `:80` so we don't need port?
+		// TODO:
+		// - add support for the remote cluster
+		// - must handle https://
+		// - default port hardcoded
+		scheme = "http"
+		if _, _, err := net.SplitHostPort(host); err != nil {
+			host = cmn.HostPort(host, "8080")
 		}
 		fullPath = path.Join(apc.Version, apc.Objects, fullPath)
 	case "":

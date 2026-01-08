@@ -265,12 +265,12 @@ func TestGetPort(t *testing.T) {
 
 	// default from config
 	port := cm.GetPort()
-	tassert.Errorf(t, port == ":52001", "expected :52001, got %q", port)
+	tassert.Errorf(t, port == "52001", "expected 52001, got %q", port)
 
 	// env override
 	t.Setenv(env.AisAuthPort, "9999")
 	port = cm.GetPort()
-	tassert.Errorf(t, cm.GetPort() == ":9999", "expected :9999, got %q", port)
+	tassert.Errorf(t, cm.GetPort() == "9999", "expected 9999, got %q", port)
 }
 
 func TestIsVerbose(t *testing.T) {

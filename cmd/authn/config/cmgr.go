@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -158,9 +159,10 @@ func (cm *ConfManager) getLocalHost() *url.URL {
 		scheme = "https"
 	}
 	port := cm.GetPort()
+	host := cmn.HostPort("localhost", port)
 	u := &url.URL{
 		Scheme: scheme,
-		Host:   "localhost" + port,
+		Host:   host,
 	}
 	nlog.Warningf("No external URL configured for %s; defaulting to %s", ServiceName, u.String())
 	return u
@@ -182,14 +184,12 @@ func (cm *ConfManager) GetServerKey() string {
 	return cos.GetEnvOrDefault(env.AisAuthServerKey, cm.conf.Load().Net.HTTP.Key)
 }
 
-func (cm *ConfManager) GetPort() string {
-	portStr := os.Getenv(env.AisAuthPort)
-	if portStr == "" {
-		portStr = fmt.Sprintf(":%d", cm.conf.Load().Net.HTTP.Port)
-	} else {
-		portStr = ":" + portStr
+func (cm *ConfManager) GetPort() (s string) {
+	s = os.Getenv(env.AisAuthPort)
+	if s == "" {
+		s = strconv.Itoa(cm.conf.Load().Net.HTTP.Port)
 	}
-	return portStr
+	return
 }
 
 func (cm *ConfManager) IsVerbose() bool {
