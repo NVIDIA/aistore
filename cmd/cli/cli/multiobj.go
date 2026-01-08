@@ -539,6 +539,7 @@ func (lr *lrCtx) do(c *cli.Context) error {
 	if errV != nil {
 		return V(errV)
 	}
+	debug.Assert(xact.IsValidKind(kind))
 
 	// 4. format
 	var (
@@ -597,7 +598,7 @@ func (lr *lrCtx) do(c *cli.Context) error {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
-	xargs := xact.ArgsMsg{ID: xid, Kind: xname, Timeout: timeout}
+	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
 	if err := waitXact(&xargs); err != nil {
 		return err
 	}

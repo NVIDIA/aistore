@@ -81,6 +81,10 @@ func waitXact(args *xact.ArgsMsg) error {
 	kind, xname := xact.GetKindName(args.Kind)
 	debug.Assert(kind != "")
 
+	// normalize: args.Kind may be display-name
+	// (for usability, CLI must support kind and display-name interchangeably)
+	args.Kind = kind
+
 	if kind == apc.ActBlobDl {
 		return waitXactBlob(args)
 	}
