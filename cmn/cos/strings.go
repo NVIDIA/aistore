@@ -4,6 +4,8 @@
  */
 package cos
 
+import "math"
+
 const _dfltLen = 16
 
 func BHead(b []byte, ls ...int) string {
@@ -72,3 +74,24 @@ func Plural(num int) (s string) {
 }
 
 func StrDup(s string) string { return string([]byte(s)) }
+
+// Entropy calculates the Shannon entropy of the given string
+func Entropy(s string) float64 {
+	if s == "" {
+		return 0
+	}
+
+	// Count byte frequencies.
+	counts := make(map[byte]int)
+	for i := range len(s) {
+		counts[s[i]]++
+	}
+
+	n := float64(len(s))
+	var h float64
+	for _, c := range counts {
+		p := float64(c) / n
+		h -= p * math.Log2(p)
+	}
+	return h
+}

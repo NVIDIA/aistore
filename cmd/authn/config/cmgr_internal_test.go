@@ -49,3 +49,73 @@ func TestGetSigConf_Invalid(t *testing.T) {
 	_, err := cm.GetSigConf()
 	tassert.Error(t, err != nil, "expected error when no secret or pubKey")
 }
+
+func TestValidatePassphrase(t *testing.T) {
+	tests := []struct {
+		name      string
+		envValue  string
+		envSet    bool
+		wantPass  string
+		wantError bool
+	}{
+		{
+			name:      "env not set",
+			envSet:    false,
+			wantPass:  "",
+			wantError: false,
+		},
+		{
+			name:      "env set empty",
+			envSet:    true,
+			wantPass:  "",
+			wantError: true,
+		},
+		{
+			name:      "minimum length",
+			envValue:  "word123!",
+			envSet:    true,
+			wantError: false,
+		},
+		{
+			name:      "low entropy",
+			envValue:  "aaa bbb ccc",
+			envSet:    true,
+			wantError: true,
+		},
+		{
+			name:      "with space",
+			envValue:  "my pass phrase",
+			envSet:    true,
+			wantError: false,
+		},
+		{
+			name:      "with tab",
+			envValue:  "valid\tpass",
+			envSet:    true,
+			wantError: true,
+		},
+		{
+			name:      "with newline",
+			envValue:  "valid\npass",
+			envSet:    true,
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envSet {
+				t.Setenv("AIS_AUTHN_PRIVATE_KEY_PASS", tt.envValue)
+			}
+
+			gotPass, err := validatePassphrase()
+
+			if tt.wantError {
+				tassert.Errorf(t, err != nil, "expected error for passphrase %q", tt.envValue)
+			} else {
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, string(gotPass) == tt.envValue, "got passphrase %q, expected %q", gotPass, tt.envValue)
+			}
+		})
+	}
+}

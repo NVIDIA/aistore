@@ -24,7 +24,8 @@ const (
 	AisAuthServerKey      = "AIS_SERVER_KEY"
 	AisAuthSecretKey      = "AIS_AUTHN_SECRET_KEY"
 	AisAuthPrivateKeyFile = "AIS_AUTHN_PRIVATE_KEY_FILE"
-	AisAuthPublicKey      = "AIS_AUTHN_PUBLIC_KEY" // for asymmetric tokens
+	AisAuthPrivateKeyPass = "AIS_AUTHN_PRIVATE_KEY_PASS" // optional passphrase for encrypting private key on disk
+	AisAuthPublicKey      = "AIS_AUTHN_PUBLIC_KEY"       // for asymmetric tokens
 	AisAuthAdminUsername  = "AIS_AUTHN_SU_NAME"
 	AisAuthAdminPassword  = "AIS_AUTHN_SU_PASS"
 )

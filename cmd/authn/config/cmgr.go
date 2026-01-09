@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,10 +35,12 @@ const (
 
 // Constants for creating RSA keys and key set
 const (
-	SigningKeyUsage   = "sig"
-	PublicKeyPEMType  = "PUBLIC KEY"
-	PrivateKeyPEMType = "PRIVATE KEY"
-	MinRSAKeyBits     = 2048
+	SigningKeyUsage      = "sig"
+	PublicKeyPEMType     = "PUBLIC KEY"
+	PrivateKeyPEMType    = "PRIVATE KEY"
+	MinRSAKeyBits        = 2048
+	MinPassphraseLength  = 8
+	MinPassphraseEntropy = 3
 )
 
 // ConfManager Used by AuthN to interface with the shared authN config used on both API and server-side
@@ -237,7 +240,11 @@ func (cm *ConfManager) initRSA(configPath string) {
 		configDir := filepath.Dir(configPath)
 		keyFilePath = filepath.Join(configDir, fname.AuthNRSAKey)
 	}
-	cm.rsaMgr = NewRSAKeyManager(keyFilePath, cm.conf.Load().Server.RSAKeyBits)
+	passphrase, err := validatePassphrase()
+	if err != nil {
+		cos.ExitLogf("Failed RSA key passphrase validation for %s: %v", env.AisAuthPrivateKeyPass, err)
+	}
+	cm.rsaMgr = NewRSAKeyManager(keyFilePath, cm.conf.Load().Server.RSAKeyBits, passphrase)
 	if err := cm.rsaMgr.Init(); err != nil {
 		cos.ExitLogf("Failed to initialize RSA key: %v", err)
 	}
@@ -246,6 +253,24 @@ func (cm *ConfManager) initRSA(configPath string) {
 	if err := cm.createPubJWKS(); err != nil {
 		cos.ExitLogf("Failed to initialize JWKS from RSA key: %v", err)
 	}
+}
+
+func validatePassphrase() (cmn.Censored, error) {
+	passphrase, found := os.LookupEnv(env.AisAuthPrivateKeyPass)
+	if !found {
+		return "", nil
+	}
+	if len(passphrase) < MinPassphraseLength {
+		return "", fmt.Errorf("too short (must be at least %d characters)", MinPassphraseLength)
+	}
+	if cos.Entropy(passphrase) < MinPassphraseEntropy {
+		return "", errors.New("passphrase strength too low. Try increasing length or complexity")
+	}
+	disallowed := "\t\n\r"
+	if strings.ContainsAny(passphrase, disallowed) {
+		return "", fmt.Errorf("cannot contain whitespace escape sequences: %q", disallowed)
+	}
+	return cmn.Censored(passphrase), nil
 }
 
 // If called outside init, must be called under lock to enable partial update of config
