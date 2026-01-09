@@ -93,7 +93,8 @@ const (
 
 // verbs
 func SupportedPermissions() []string {
-	accList := []string{"ro", "rw", "su"}
+	accList := make([]string, 0, 3+len(accessOp))
+	accList = append(accList, "ro", "rw", "su")
 	for _, v := range accessOp {
 		accList = append(accList, v)
 	}

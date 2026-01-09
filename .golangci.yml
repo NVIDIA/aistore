@@ -156,6 +156,7 @@ linters:
       # By default, all analyzers are enabled.
       disable:
         - omitzero
+        # stringscut
 
     depguard:
       rules:
@@ -190,6 +191,8 @@ linters:
           - noctx
           - govet
           - modernize
+          - prealloc
+          - nolintlint
       - path: bench/
         linters:
           - nakedret
@@ -201,6 +204,7 @@ linters:
           - noctx
           - govet
           - modernize
+          - prealloc
 
       # Exclude some `staticcheck` messages.
       - linters:
