@@ -190,8 +190,7 @@ func TestMultipartDownloadEdgeCases(t *testing.T) {
 		err = api.MultipartDownload(baseParams, bck, objName, &api.MultipartDownloadArgs{
 			Writer:     file,
 			NumWorkers: 4,
-			ChunkSize:  cos.MiB,
-			// ObjectSize not set - should auto-detect via HEAD
+			// ChunkSize and ObjectSize not set - should auto-detect via HEAD
 		})
 		tassert.CheckFatal(t, err)
 		file.Close()

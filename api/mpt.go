@@ -23,8 +23,8 @@ import (
 
 // Default values for multipart download
 const (
-	DefaultMptDownloadWorkers   = 16
-	DefaultMptDownloadChunkSize = 8 * cos.MiB
+	defaultMptDownloadWorkers   = 16
+	defaultMptDownloadChunkSize = 8 * cos.MiB
 )
 
 type (
@@ -194,57 +194,73 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 	// Apply defaults
 	numWorkers := args.NumWorkers
 	if numWorkers <= 0 {
-		numWorkers = DefaultMptDownloadWorkers
-	}
-	chunkSize := args.ChunkSize
-	if chunkSize <= 0 {
-		chunkSize = DefaultMptDownloadChunkSize
-	}
-
-	objectSize := args.ObjectSize
-	if objectSize <= 0 {
-		objProps, err := HeadObject(bp, bck, objName, HeadArgs{})
-		if err != nil {
-			return fmt.Errorf("failed to get object properties: %w", err)
-		}
-		objectSize = objProps.Size
-	}
-	if objectSize <= 0 {
-		return fmt.Errorf("invalid object size: %d", objectSize)
+		numWorkers = defaultMptDownloadWorkers
 	}
 
 	var (
-		numChunks = (objectSize + chunkSize - 1) / chunkSize // ceiling division
-		chunkCh   = make(chan mptDownloadChunk, numChunks)
-		errCh     = make(chan error, numChunks)
-		errs      = make([]error, 0, numChunks)
+		chunkSize  = args.ChunkSize
+		objectSize = args.ObjectSize
+	)
+
+	// Validate: either both must be provided (positive) or neither
+	if chunkSize < 0 {
+		return fmt.Errorf("invalid chunk size: %d", chunkSize)
+	}
+	if objectSize < 0 {
+		return fmt.Errorf("invalid object size: %d", objectSize)
+	}
+	if chunkSize > 0 && objectSize == 0 {
+		return errors.New("ChunkSize is set but ObjectSize is missing")
+	}
+	if objectSize > 0 && chunkSize == 0 {
+		return errors.New("ObjectSize is set but ChunkSize is missing")
+	}
+
+	// Neither provided - do HEAD to get both
+	if chunkSize == 0 {
+		opV2, err := HeadObjectV2(bp, bck, objName, apc.GetPropsChunked, HeadArgs{})
+		if err != nil {
+			return fmt.Errorf("failed to get object properties: %w", err)
+		}
+		objectSize = opV2.Size
+		if objectSize <= 0 {
+			return fmt.Errorf("invalid object size: %d", objectSize)
+		}
+		if opV2.Chunks != nil && opV2.Chunks.MaxChunkSize > 0 {
+			chunkSize = opV2.Chunks.MaxChunkSize
+		} else {
+			chunkSize = defaultMptDownloadChunkSize
+		}
+	}
+
+	// Update args with resolved values
+	args.NumWorkers = numWorkers
+	args.ChunkSize = chunkSize
+	args.ObjectSize = objectSize
+
+	return multipartDownload(bp, bck, objName, args)
+}
+
+// multipartDownload performs the actual concurrent range-based download.
+func multipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *MultipartDownloadArgs) error {
+	var (
+		numChunks = (args.ObjectSize + args.ChunkSize - 1) / args.ChunkSize // ceiling division
+		chunkCh   = make(chan mptDownloadChunk, min(numChunks, int64(args.NumWorkers*2)))
+		errCh     = make(chan error, args.NumWorkers)
+		errs      = make([]error, 0, args.NumWorkers)
 		counter   *MpdCounter
 	)
 	if args.Callback != nil {
 		counter = &MpdCounter{
 			callback:  args.Callback,
 			startTime: mono.NanoTime(),
-			total:     objectSize,
+			total:     args.ObjectSize,
 		}
 		counter.callAfter = counter.startTime + args.CallAfter.Nanoseconds()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	for i := range numChunks {
-		offset := i * chunkSize
-		length := chunkSize
-		if offset+length > objectSize {
-			length = objectSize - offset // last chunk may be smaller
-		}
-		chunkCh <- mptDownloadChunk{
-			index:  int(i),
-			offset: offset,
-			length: length,
-		}
-	}
-	close(chunkCh)
 
 	w := &mpdWorker{
 		ctx:     ctx,
@@ -258,10 +274,26 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		counter: counter,
 	}
 
+	// Start workers first so they can consume while we produce
 	var wg sync.WaitGroup
-	for range numWorkers {
+	for range args.NumWorkers {
 		wg.Go(w.run)
 	}
+
+	// Produce chunks - workers consume concurrently
+	for i := range numChunks {
+		offset := i * args.ChunkSize
+		length := args.ChunkSize
+		if offset+length > args.ObjectSize {
+			length = args.ObjectSize - offset // last chunk may be smaller
+		}
+		chunkCh <- mptDownloadChunk{
+			index:  int(i),
+			offset: offset,
+			length: length,
+		}
+	}
+	close(chunkCh)
 
 	// Wait for all workers to complete
 	wg.Wait()
@@ -277,6 +309,9 @@ func MultipartDownload(bp BaseParams, bck cmn.Bck, objName string, args *Multipa
 		counter.callback(counter)
 	}
 
+	if len(errs) == 0 {
+		return nil
+	}
 	return errors.Join(errs...)
 }
 
@@ -334,7 +369,8 @@ func (c *MpdCounter) Current() int64   { return atomic.LoadInt64(&c.current) }
 func (c *MpdCounter) Total() int64     { return c.total }
 
 func (c *MpdCounter) mustCall() bool {
-	return c.callAfter == c.startTime || mono.NanoTime() >= c.callAfter
+	// Only call if callAfter was explicitly set (callAfter > startTime) and time has elapsed
+	return c.callAfter > c.startTime && mono.NanoTime() >= c.callAfter
 }
 
 func (c *MpdCounter) finish() { c.done = true }

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 var (
@@ -40,6 +41,14 @@ func main() {
 	reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: *size, CksumType: cos.ChecksumNone})
 	api.PutObject(&api.PutArgs{BaseParams: bp, Bck: bck, ObjName: objName, Reader: reader, Size: uint64(*size)})
 	defer api.DeleteObject(bp, bck, objName)
+
+	// rechunk the object with the specified chunk size
+	xid, err := api.RechunkBucket(bp, bck, 0 /*objSizeLimit*/, *chunk, "" /*prefix*/)
+	if err != nil {
+		fmt.Printf("rechunk failed: %v\n", err)
+		return
+	}
+	api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid})
 
 	fmt.Printf("Object: %s, Workers: %d, Chunk: %s\n\n", cos.ToSizeIEC(*size, 0), *workers, cos.ToSizeIEC(*chunk, 0))
 
