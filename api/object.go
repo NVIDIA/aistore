@@ -528,7 +528,9 @@ func headobjV2(reqParams *ReqParams, noprops bool, props string) (*cmn.ObjectPro
 	}
 
 	op := &cmn.ObjectPropsV2{}
-	op.FromHeaders(hdr, props)
+	if err := op.FromHeaders(hdr, props); err != nil {
+		return nil, err
+	}
 	return op, nil
 }
 

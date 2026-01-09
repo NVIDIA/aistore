@@ -105,15 +105,16 @@ type (
 
 type headerSerializer interface {
 	ToHeader(http.Header)
+	FromHeader(http.Header) error
 }
 
-// validateToHeaderCoverage ensures ToHeader() method sets headers for all struct fields.
-// This runs at init time to catch missing ToHeader updates when new fields are added.
+// validateToHeaderCoverage ensures ToHeader() and FromHeader() methods cover all struct fields.
+// This runs at init time to catch missing updates when new fields are added.
 func validateToHeaderCoverage(v headerSerializer, prefix string) {
 	hdr := make(http.Header, 4)
 	v.ToHeader(hdr)
 
-	// Use IterFields to get all field tags, then check each has a corresponding header
+	// 1. Verify ToHeader sets all fields
 	// Note: IterFields on standalone struct returns "generation", but props2hdr has "ec.generation"
 	err := IterFields(v, func(tag string, _ IterField) (error, bool) {
 		fullTag := prefix + "." + tag
@@ -125,6 +126,11 @@ func validateToHeaderCoverage(v headerSerializer, prefix string) {
 		return nil, false
 	}, IterOpts{OnlyRead: true})
 	debug.AssertNoErr(err)
+
+	// 2. Verify FromHeader parses all fields (round-trip test)
+	if err := v.FromHeader(hdr); err != nil {
+		debug.Assert(false, "FromHeader failed: ", err.Error(), " - update ", prefix, ".FromHeader()")
+	}
 }
 
 // interface guard
@@ -200,6 +206,61 @@ func (m *Mirror) ToHeader(hdr http.Header) {
 func (c *Chunks) ToHeader(hdr http.Header) {
 	hdr.Set(PropToHeader("chunks.count"), strconv.Itoa(c.ChunkCount))
 	hdr.Set(PropToHeader("chunks.max_chunk_size"), strconv.FormatInt(c.MaxChunkSize, 10))
+}
+
+//
+// FromHeader methods - deserialize struct fields from HTTP headers without reflection
+//
+
+func (ec *EC) FromHeader(hdr http.Header) error {
+	var err error
+	if v := hdr.Get(apc.PropToHeader("ec.generation")); v != "" {
+		if ec.Generation, err = strconv.ParseInt(v, 10, 64); err != nil {
+			return fmt.Errorf("invalid ec.generation %q: %w", v, err)
+		}
+	}
+	if v := hdr.Get(apc.PropToHeader("ec.data")); v != "" {
+		if ec.DataSlices, err = strconv.Atoi(v); err != nil {
+			return fmt.Errorf("invalid ec.data %q: %w", v, err)
+		}
+	}
+	if v := hdr.Get(apc.PropToHeader("ec.parity")); v != "" {
+		if ec.ParitySlices, err = strconv.Atoi(v); err != nil {
+			return fmt.Errorf("invalid ec.parity %q: %w", v, err)
+		}
+	}
+	if v := hdr.Get(apc.PropToHeader("ec.replicated")); v != "" {
+		ec.IsECCopy = cos.IsParseBool(v)
+	}
+	return nil
+}
+
+func (m *Mirror) FromHeader(hdr http.Header) error {
+	var err error
+	if v := hdr.Get(apc.PropToHeader("mirror.copies")); v != "" {
+		if m.Copies, err = strconv.Atoi(v); err != nil {
+			return fmt.Errorf("invalid mirror.copies %q: %w", v, err)
+		}
+	}
+	if v := hdr.Get(apc.PropToHeader("mirror.paths")); v != "" {
+		m.Paths = strings.Split(v, ",")
+	}
+	return nil
+}
+
+func (c *Chunks) FromHeader(hdr http.Header) error {
+	var err error
+	if v := hdr.Get(apc.PropToHeader("chunks.count")); v != "" {
+		if c.ChunkCount, err = strconv.Atoi(v); err != nil {
+			return fmt.Errorf("invalid chunks.count %q: %w", v, err)
+		}
+	}
+	if v := hdr.Get(apc.PropToHeader("chunks.max_chunk_size")); v != "" {
+		if c.MaxChunkSize, err = strconv.ParseInt(v, 10, 64); err != nil {
+			return fmt.Errorf("invalid chunks.max_chunk_size %q: %w", v, err)
+		}
+	}
+	return nil
 }
 
 func (oa *ObjAttrs) String() string {
@@ -426,10 +487,12 @@ func (oa *ObjAttrs) _undoCustom(keys []string) {
 
 // FromHeaders deserializes ObjectPropsV2 from HTTP response headers.
 // Used by HeadObjectV2 API to parse selective property responses.
-func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) {
+func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) error {
 	// parse base ObjAttrs
 	cksum, err := op.ObjAttrs.FromHeader(hdr)
-	debug.AssertNoErr(err)
+	if err != nil {
+		return err
+	}
 	op.Cksum = cksum
 
 	// Parse present header (indicates if object is cached locally)
@@ -452,29 +515,22 @@ func (op *ObjectPropsV2) FromHeaders(hdr http.Header, props string) {
 			op.Location = &v
 		case apc.GetPropsCopies:
 			op.Mirror = &Mirror{}
-			fieldFromHeader(op.Mirror, "mirror", hdr)
+			if err := op.Mirror.FromHeader(hdr); err != nil {
+				return err
+			}
 		case apc.GetPropsEC:
 			op.EC = &EC{}
-			fieldFromHeader(op.EC, "ec", hdr)
+			if err := op.EC.FromHeader(hdr); err != nil {
+				return err
+			}
 		case apc.GetPropsChunked:
 			op.Chunks = &Chunks{}
-			fieldFromHeader(op.Chunks, "chunks", hdr)
+			if err := op.Chunks.FromHeader(hdr); err != nil {
+				return err
+			}
 		}
 	}
-}
-
-// fieldFromHeader populates struct fields from HTTP headers using IterFields.
-// The prefix is prepended to each field tag to form the header name (e.g., "mirror" + "copies" -> "Ais-Mirror-Copies").
-func fieldFromHeader(v any, prefix string, hdr http.Header) {
-	err := IterFields(v, func(tag string, field IterField) (error, bool) {
-		name := apc.PropToHeader(prefix + "." + tag)
-		val, ok := hdr[name]
-		if !ok {
-			return nil, false
-		}
-		return field.SetValue(val[0], true /*force*/), false
-	}, IterOpts{OnlyRead: false})
-	debug.AssertNoErr(err)
+	return nil
 }
 
 // local <=> remote equality in the context of cold-GET and download. This function

@@ -101,7 +101,9 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 
 	// Build and serialize to response headers (V2: selective properties)
 	requestedProps := dpq.get(apc.QparamProps)
-	_objHeadV2(lom, exists, attrs, requestedProps, whdr)
+	if err := _objHeadV2(lom, exists, attrs, requestedProps, whdr); err != nil {
+		return http.StatusBadRequest, err
+	}
 
 	delta := mono.SinceNano(started)
 	vlabs := bvlabs(bck)
@@ -113,7 +115,7 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 }
 
 // serialize assorted properties to response header
-func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps string, hdr http.Header) {
+func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps string, hdr http.Header) error {
 	var (
 		withChecksum     bool
 		withAtime        bool
@@ -129,6 +131,8 @@ func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps 
 				continue
 			}
 			switch prop {
+			// name and size are always included (no-op, but valid props)
+			case apc.GetPropsName, apc.GetPropsSize:
 			// base attrs (via cmn.ToHeaderV2)
 			case apc.GetPropsChecksum:
 				withChecksum = true
@@ -171,6 +175,8 @@ func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps 
 					_chunksHeadV2(lom, hdr)
 					lom.Unlock(false)
 				}
+			default:
+				return fmt.Errorf("invalid property %q in props list", prop)
 			}
 		}
 	}
@@ -193,6 +199,7 @@ func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps 
 			hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
 		}
 	}
+	return nil
 }
 
 // TODO: revisit to consider average chunk size, and more

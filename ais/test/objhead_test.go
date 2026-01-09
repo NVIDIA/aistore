@@ -5,6 +5,8 @@
 package integration_test
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -221,8 +223,6 @@ func TestObjHeadLatestVersion(t *testing.T) {
 
 // TestObjHeadV2Selective tests the V2 HEAD endpoint with selective property retrieval
 func TestObjHeadV2Selective(t *testing.T) {
-	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO -- FIXME: re-enable
-
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -263,15 +263,22 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
 		tassert.Fatalf(t, opV2.Size == objSize, "size mismatch: expected %d, got %d", objSize, opV2.Size)
-		tassert.Fatalf(t, opV2.Cksum != nil && opV2.Cksum.Type() == cos.ChecksumOneXxh, "checksum should be present and XXHash, got %s", opV2.Cksum.Type())
-		tassert.Fatalf(t, opV2.Cksum.Val() == r.Cksum().Val(), "checksum value should be equal")
-		tassert.Fatalf(t, opV2.LastModified != "", "last-modified should be present")
-		tassert.Fatalf(t, opV2.ETag != "", "etag should be present")
 
 		// These fields should NOT be populated (not requested)
+		tassert.Fatalf(t, opV2.LastModified == "", "last-modified should be empty")
+		tassert.Fatalf(t, opV2.ETag == "", "etag should be empty")
 		tassert.Fatalf(t, opV2.Location == nil, "location should be nil (not requested)")
 		tassert.Fatalf(t, opV2.Mirror == nil, "mirror should be nil (not requested)")
 		tassert.Fatalf(t, opV2.EC == nil, "EC should be nil (not requested)")
+	})
+
+	t.Run("WithChecksum", func(t *testing.T) {
+		opV2, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, api.HeadArgs{})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
+		tassert.Fatalf(t, opV2.Cksum != nil, "checksum should be present")
+		tassert.Fatalf(t, opV2.Cksum.Type() == cos.ChecksumOneXxh, "checksum should be XXHash, got %s", opV2.Cksum.Type())
+		tassert.Fatalf(t, opV2.Cksum.Val() == r.Cksum().Val(), "checksum value should be equal")
 	})
 
 	t.Run("LastModifiedUpdates", func(t *testing.T) {
@@ -288,7 +295,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Get initial LastModified
-		opV2Before, err := api.HeadObjectV2(baseParams, bck, testObjName, "", api.HeadArgs{})
+		opV2Before, err := api.HeadObjectV2(baseParams, bck, testObjName, apc.GetPropsLastModified, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2Before.LastModified != "", "initial last-modified should be present")
 		tlog.Logf("Initial LastModified: %s\n", opV2Before.LastModified)
@@ -307,7 +314,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Get updated LastModified
-		opV2After, err := api.HeadObjectV2(baseParams, bck, testObjName, "", api.HeadArgs{})
+		opV2After, err := api.HeadObjectV2(baseParams, bck, testObjName, apc.GetPropsLastModified, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2After.LastModified != "", "updated last-modified should be present")
 		tlog.Logf("Updated LastModified: %s\n", opV2After.LastModified)
@@ -370,6 +377,22 @@ func TestObjHeadV2Selective(t *testing.T) {
 
 		// EC should NOT be populated (not requested)
 		tassert.Fatalf(t, opV2.EC == nil, "EC should be nil (not requested)")
+	})
+
+	t.Run("InvalidProperty", func(t *testing.T) {
+		// Request an invalid property - should return 400 Bad Request
+		props := apc.GetPropsSize + apc.LsPropsSepa + "invalid_prop"
+		_, err := api.HeadObjectV2(baseParams, bck, objName, props, api.HeadArgs{})
+		tassert.Fatalf(t, err != nil, "expected error for invalid property")
+
+		// Verify it's a 400 Bad Request with the expected message
+		herr, ok := err.(*cmn.ErrHTTP)
+		tassert.Fatalf(t, ok, "expected ErrHTTP, got %T", err)
+		tassert.Fatalf(t, herr.Status == http.StatusBadRequest,
+			"expected status 400, got %d", herr.Status)
+		tassert.Fatalf(t, strings.Contains(herr.Message, "invalid property") &&
+			strings.Contains(herr.Message, "invalid_prop"),
+			"expected error message about invalid property, got: %s", herr.Message)
 	})
 
 	t.Run("WithChunks", func(t *testing.T) {
@@ -445,8 +468,6 @@ func TestObjHeadV2Selective(t *testing.T) {
 
 // TestObjHeadV2RemoteBucket tests V2 HEAD with remote cloud bucket
 func TestObjHeadV2RemoteBucket(t *testing.T) {
-	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO -- FIXME: re-enable
-
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (
@@ -474,7 +495,7 @@ func TestObjHeadV2RemoteBucket(t *testing.T) {
 
 	// Test 1: Request selective properties while cached
 	t.Run("CachedSelectiveProps", func(t *testing.T) {
-		opV2, err := api.HeadObjectV2(baseParams, bck, objName, "", api.HeadArgs{})
+		opV2, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
 		tassert.Fatalf(t, opV2.Size == objSize, "size mismatch")
@@ -489,7 +510,7 @@ func TestObjHeadV2RemoteBucket(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Request selective properties - should trigger cold HEAD
-		opV2, err := api.HeadObjectV2(baseParams, bck, objName, "", api.HeadArgs{})
+		opV2, err := api.HeadObjectV2(baseParams, bck, objName, apc.GetPropsChecksum, api.HeadArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, opV2 != nil, "props should not be nil")
 		tassert.Fatalf(t, opV2.Size == objSize, "size mismatch after cold HEAD: expected %d, got %d", objSize, opV2.Size)
