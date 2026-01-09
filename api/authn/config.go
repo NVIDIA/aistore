@@ -1,11 +1,10 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
 import (
-	"crypto/rsa"
 	"strconv"
 	"time"
 
@@ -37,10 +36,9 @@ type (
 		UseHTTPS    bool   `json:"use_https"`
 	}
 	ServerConf struct {
-		psecret *string         `json:"-"`
-		pexpire *cos.Duration   `json:"-"`
-		pKey    *rsa.PrivateKey `json:"-"`
-		Secret  string          `json:"secret"`
+		psecret *string       `json:"-"`
+		pexpire *cos.Duration `json:"-"`
+		Secret  string        `json:"secret"`
 		// Determines when the secret or key expires
 		// Also used to determine max-age for client caches of JWKS
 		Expire cos.Duration `json:"expiration_time"`
@@ -88,7 +86,5 @@ func (c *Config) Verbose() bool {
 	return level > 3
 }
 
-func (c *Config) SetPrivateKey(key *rsa.PrivateKey) { c.Server.pKey = key }
-func (c *Config) GetPrivateKey() *rsa.PrivateKey    { return c.Server.pKey }
-func (c *Config) Secret() cmn.Censored              { return cmn.Censored(*c.Server.psecret) }
-func (c *Config) Expire() time.Duration             { return time.Duration(*c.Server.pexpire) }
+func (c *Config) Secret() cmn.Censored  { return cmn.Censored(*c.Server.psecret) }
+func (c *Config) Expire() time.Duration { return time.Duration(*c.Server.pexpire) }

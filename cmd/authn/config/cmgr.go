@@ -1,14 +1,11 @@
 // Package config manages config for the auth service
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package config
 
 import (
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/url"
@@ -19,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
@@ -45,11 +43,11 @@ const (
 // ConfManager Used by AuthN to interface with the shared authN config used on both API and server-side
 // Provides utilities used only by the authN service (not API)
 type ConfManager struct {
-	filePath    string
-	keyFilePath string
-	conf        atomic.Pointer[authn.Config]
-	jwks        jwk.Set
-	mu          sync.Mutex
+	filePath string
+	rsaMgr   *RSAKeyManager
+	conf     atomic.Pointer[authn.Config]
+	jwks     jwk.Set
+	mu       sync.Mutex
 }
 
 func NewConfManager() *ConfManager {
@@ -117,11 +115,7 @@ func (cm *ConfManager) Init(configPath string) {
 		return
 	}
 	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
-	cm.initKeyFile(configPath)
-	err = cm.initRSA()
-	if err != nil {
-		cos.ExitLogf("Failed to initialize RSA key: %v", err)
-	}
+	cm.initRSA(configPath)
 }
 
 func (cm *ConfManager) loadFromDisk(configPath string) (*authn.Config, error) {
@@ -235,128 +229,39 @@ func (cm *ConfManager) GetSecretChecksum() string {
 // RSA and OIDC //
 //////////////////
 
-// Determine location for private key persistence
-func (cm *ConfManager) initKeyFile(configPath string) {
+func (cm *ConfManager) initRSA(configPath string) {
+	var keyFilePath string
 	if pFile := os.Getenv(env.AisAuthPrivateKeyFile); pFile != "" {
-		cm.keyFilePath = pFile
+		keyFilePath = pFile
 	} else {
 		configDir := filepath.Dir(configPath)
-		cm.keyFilePath = filepath.Join(configDir, fname.AuthNRSAKey)
+		keyFilePath = filepath.Join(configDir, fname.AuthNRSAKey)
+	}
+	cm.rsaMgr = NewRSAKeyManager(keyFilePath, cm.conf.Load().Server.RSAKeyBits)
+	if err := cm.rsaMgr.Init(); err != nil {
+		cos.ExitLogf("Failed to initialize RSA key: %v", err)
+	}
+
+	cm.updateConfPubKey()
+	if err := cm.createPubJWKS(); err != nil {
+		cos.ExitLogf("Failed to initialize JWKS from RSA key: %v", err)
 	}
 }
 
-// Initialize an RSA key pair, using one from disk if provided
-// Must only be called at init time -- key rotation not yet implemented
-func (cm *ConfManager) initRSA() error {
-	// Try to load existing key
-	err := cm.loadRSAFromDisk()
-	if err == nil {
-		nlog.Infof("Loaded existing RSA private key from %s", cm.keyFilePath)
-		return nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		nlog.Infof("No RSA key found on disk at %q", cm.keyFilePath)
-	} else {
-		nlog.Infof("Failed to load RSA key from file %q [err: %v]", cm.keyFilePath, err)
-	}
-	// Generate RSA key pair based on length from config
-	key, err := rsa.GenerateKey(rand.Reader, cm.GetKeySize())
-	if err != nil {
-		return err
-	}
-	nlog.Infof("Generated new RSA key pair with modulus size %d bytes", key.Size())
-	err = cm.setRSAFromPrivate(key)
-	if err != nil {
-		return err
-	}
-	return cm.saveRSAToDisk()
-}
-
-func (cm *ConfManager) loadRSAFromDisk() error {
-	fi, err := os.Stat(cm.keyFilePath)
-	if err != nil {
-		return fmt.Errorf("stat key file: %w", err)
-	}
-	if fi.IsDir() {
-		return errors.New("key file is a directory")
-	}
-	if fi.Size() == 0 {
-		return errors.New("key file is empty")
-	}
-	keyBytes, err := os.ReadFile(cm.keyFilePath)
-	if err != nil {
-		return fmt.Errorf("read key file: %w", err)
-	}
-	block, _ := pem.Decode(keyBytes)
-	if block == nil {
-		return errors.New("decoding private key PEM block failed")
-	}
-	keyAny, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return fmt.Errorf("parse PKCS8 private key: %w", err)
-	}
-	key, ok := keyAny.(*rsa.PrivateKey)
-	if !ok {
-		return errors.New("key type invalid")
-	}
-	if keyErr := key.Validate(); keyErr != nil {
-		return fmt.Errorf("key validation failed: %w", keyErr)
-	}
-	return cm.setRSAFromPrivate(key)
-}
-
-// Updates both the service config and the jwks
-// If called from outside init, must be called under lock
-func (cm *ConfManager) setRSAFromPrivate(key *rsa.PrivateKey) error {
-	// Convert to PKIX bytes
-	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return err
-	}
-	// Encode as PEM string
-	pubPem := string(pem.EncodeToMemory(&pem.Block{
-		Type:  PublicKeyPEMType,
-		Bytes: pubBytes,
-	}))
-	cm.setRSAKey(key, pubPem)
-	return cm.createPubJWKS()
-}
-
-// Must be called under lock to enable partial update of config
-func (cm *ConfManager) setRSAKey(pKey *rsa.PrivateKey, pubStr string) {
+// If called outside init, must be called under lock to enable partial update of config
+func (cm *ConfManager) updateConfPubKey() {
 	old := cm.conf.Load()
 	next := *old
-	next.SetPrivateKey(pKey)
-	next.Server.PubKey = &pubStr
+	next.Server.PubKey = apc.Ptr(cm.rsaMgr.GetPublicKeyPEM())
 	next.Init()
 	cm.conf.Store(&next)
 }
 
-func (cm *ConfManager) saveRSAToDisk() error {
-	privateKey := cm.GetPrivateKey()
-	if privateKey == nil {
-		return errors.New("no private key to save")
-	}
-	keyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		return fmt.Errorf("failed to marshal private key: %w", err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  PrivateKeyPEMType,
-		Bytes: keyBytes,
-	})
-
-	// Write to file with restricted permissions (0600 - owner read/write only)
-	if err := os.WriteFile(cm.keyFilePath, keyPEM, 0o600); err != nil {
-		return fmt.Errorf("failed to write RSA key to %s: %w", cm.keyFilePath, err)
-	}
-
-	nlog.Infof("Saved RSA private key to %s", cm.keyFilePath)
-	return nil
-}
-
 func (cm *ConfManager) GetPrivateKey() *rsa.PrivateKey {
-	return cm.conf.Load().GetPrivateKey()
+	if cm.rsaMgr == nil {
+		return nil
+	}
+	return cm.rsaMgr.GetPrivateKey()
 }
 
 func (cm *ConfManager) GetPublicKeyString() *string {
@@ -367,18 +272,9 @@ func (cm *ConfManager) GetKeySet() jwk.Set {
 	return cm.jwks
 }
 
-func (cm *ConfManager) GetKeySize() int {
-	bits := cm.conf.Load().Server.RSAKeyBits
-	if bits < MinRSAKeyBits {
-		return MinRSAKeyBits
-	}
-	return bits
-}
-
 // Sets jwks for the manager, must be called under lock when creating RSA
 func (cm *ConfManager) createPubJWKS() error {
-	conf := cm.conf.Load()
-	pubJWK, err := createPubJWK(conf.GetPrivateKey())
+	pubJWK, err := createPubJWK(cm.rsaMgr.GetPrivateKey())
 	if err != nil {
 		return fmt.Errorf("failed to generate public JWK: %w", err)
 	}
