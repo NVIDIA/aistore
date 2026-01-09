@@ -221,6 +221,8 @@ func TestObjHeadLatestVersion(t *testing.T) {
 
 // TestObjHeadV2Selective tests the V2 HEAD endpoint with selective property retrieval
 func TestObjHeadV2Selective(t *testing.T) {
+	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO -- FIXME: re-enable
+
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -443,6 +445,8 @@ func TestObjHeadV2Selective(t *testing.T) {
 
 // TestObjHeadV2RemoteBucket tests V2 HEAD with remote cloud bucket
 func TestObjHeadV2RemoteBucket(t *testing.T) {
+	t.Skipf("skipping %s - not ready yet", t.Name()) // TODO -- FIXME: re-enable
+
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (

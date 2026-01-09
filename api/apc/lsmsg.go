@@ -142,8 +142,11 @@ const (
 	GetPropsCustom   = "custom"
 	GetPropsLocation = "location" // advanced usage
 
-	// 4.0 and future use
+	// 4.0
 	GetPropsChunked = "chunked"
+	// 4.2
+	GetPropsLastModified = "last-modified"
+	GetPropsETag         = "etag"
 )
 
 const GetPropsNameSize = GetPropsName + LsPropsSepa + GetPropsSize

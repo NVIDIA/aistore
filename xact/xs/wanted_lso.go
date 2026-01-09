@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"time"
+
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -93,23 +95,28 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 			// metadata only. S3 clients requiring exact values can use HEAD(object) API.
 			// A future feature flag may relax this, but the default favors performance.
 
-			var added bool
+			var (
+				mtimeStr string
+				mtime    time.Time
+				added    bool
+			)
 			if md == nil {
 				md = make(cos.StrKVs, 4)
 				if en.Custom != "" {
 					cmn.S2CustomMD(md, en.Custom, en.Version)
 				}
 			}
-			if _, ok := md[cmn.ETag]; !ok {
-				if s := lom.ETag(false /*allow to generate*/); s != "" {
-					md[cmn.ETag] = s
+			if _, ok := md[cmn.LsoLastModified]; !ok {
+				// best-effort; may fall back to atime
+				mtimeStr, mtime = lom.LastModifiedLso()
+				if mtimeStr != "" {
+					md[cmn.LsoLastModified] = mtimeStr
 					added = true
 				}
 			}
-			if _, ok := md[cmn.LsoLastModified]; !ok {
-				// best-effort; may fall back to atime
-				if s := lom.LastModifiedLso(); s != "" {
-					md[cmn.LsoLastModified] = s
+			if _, ok := md[cmn.ETag]; !ok {
+				if s := lom.ETag(mtime, false /*allow syscall*/); s != "" {
+					md[cmn.ETag] = s
 					added = true
 				}
 			}

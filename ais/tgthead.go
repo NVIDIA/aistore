@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
@@ -62,6 +64,8 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 		}
 	}
 
+	whdr.Set(apc.PropToHeader("present"), strconv.FormatBool(exists))
+
 	// Cold HEAD: check remote backend if object not found locally or if latest version requested
 	var attrs *cmn.ObjAttrs
 	latest := dpq.latestVer
@@ -97,7 +101,7 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 
 	// Build and serialize to response headers (V2: selective properties)
 	requestedProps := dpq.get(apc.QparamProps)
-	writeObjPropsV2ToHeader(lom, exists, attrs, requestedProps, whdr)
+	_objHeadV2(lom, exists, attrs, requestedProps, whdr)
 
 	delta := mono.SinceNano(started)
 	vlabs := bvlabs(bck)
@@ -108,68 +112,112 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 	return 0, nil
 }
 
-// writeObjPropsV2ToHeader serializes selective properties to HTTP headers
-func writeObjPropsV2ToHeader(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps string, hdr http.Header) {
-	if attrs.Cksum == nil {
-		attrs.Cksum = cos.NoneCksum
-	}
-	// Serialize base ObjAttrs to headers
-	cmn.ToHeader(attrs, hdr, attrs.Size)
-
-	// Set present header
-	hdr.Set(apc.PropToHeader("present"), strconv.FormatBool(exists))
-
-	if !exists {
-		return
-	}
-
-	hdr.Set(cos.HdrLastModified, lom.LastModifiedStr())
-	if etag := lom.ETag(true /*allowGen*/); etag != "" {
-		hdr.Set(cos.HdrETag, etag)
-	}
-
-	// Populate optional fields based on requested properties
-	for prop := range strings.SplitSeq(requestedProps, apc.LsPropsSepa) {
-		prop = strings.TrimSpace(prop)
-		switch prop {
-		case apc.GetPropsLocation:
-			hdr.Set(cmn.PropToHeader("location"), lom.Location())
-		case apc.GetPropsCopies:
-			mirror := cmn.Mirror{Copies: lom.NumCopies(), Paths: lom.MirrorPaths()}
-			mirror.ToHeader(hdr)
-		case apc.GetPropsEC:
-			if lom.ECEnabled() {
-				if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
-					ecmd := &cmn.EC{
-						Generation:   md.Generation,
-						DataSlices:   md.Data,
-						ParitySlices: md.Parity,
-						IsECCopy:     md.IsCopy,
-					}
-					ecmd.ToHeader(hdr)
-				}
+// serialize assorted properties to response header
+func _objHeadV2(lom *core.LOM, exists bool, attrs *cmn.ObjAttrs, requestedProps string, hdr http.Header) {
+	var (
+		withChecksum     bool
+		withAtime        bool
+		withVersion      bool
+		withCustom       bool
+		withLastModified bool
+		withETag         bool
+	)
+	if requestedProps != "" {
+		for prop := range strings.SplitSeq(requestedProps, apc.LsPropsSepa) {
+			prop = strings.TrimSpace(prop)
+			if prop == "" {
+				continue
 			}
-		case apc.GetPropsChunked:
-			if lom.IsChunked() {
-				ufest, err := core.NewUfest("", lom, true /*mustExist*/)
-				if err == nil {
-					lom.Lock(false)
-					if err = ufest.LoadCompleted(lom); err == nil {
-						var maxChunkSize int64
-						count := ufest.Count()
-						for i := 1; i <= count; i++ {
-							if chunk, errChunk := ufest.GetChunk(i); errChunk == nil && chunk != nil {
-								if chunkSize := chunk.Size(); chunkSize > maxChunkSize {
-									maxChunkSize = chunkSize
-								}
-							}
+			switch prop {
+			// base attrs (via cmn.ToHeaderV2)
+			case apc.GetPropsChecksum:
+				withChecksum = true
+			case apc.GetPropsAtime:
+				withAtime = true
+			case apc.GetPropsVersion:
+				withVersion = true
+			case apc.GetPropsCustom:
+				withCustom = true
+			case apc.GetPropsLastModified:
+				withLastModified = true
+			case apc.GetPropsETag:
+				withETag = true
+
+			// extended attrs
+			case apc.GetPropsLocation:
+				if exists {
+					hdr.Set(cmn.PropToHeader("location"), lom.Location())
+				}
+			case apc.GetPropsCopies:
+				if exists {
+					mirror := cmn.Mirror{Copies: lom.NumCopies(), Paths: lom.MirrorPaths()}
+					mirror.ToHeader(hdr)
+				}
+			case apc.GetPropsEC:
+				if exists && lom.ECEnabled() {
+					if md, err := ec.ObjectMetadata(lom.Bck(), lom.ObjName); err == nil {
+						ecmd := &cmn.EC{
+							Generation:   md.Generation,
+							DataSlices:   md.Data,
+							ParitySlices: md.Parity,
+							IsECCopy:     md.IsCopy,
 						}
-						chunks := &cmn.Chunks{ChunkCount: count, MaxChunkSize: maxChunkSize}
-						chunks.ToHeader(hdr)
+						ecmd.ToHeader(hdr)
 					}
+				}
+			case apc.GetPropsChunked:
+				if exists && lom.IsChunked() {
+					lom.Lock(false)
+					_chunksHeadV2(lom, hdr)
 					lom.Unlock(false)
 				}
 			}
 		}
 	}
+
+	// serialize requested base attrs: atime, checksum, etc.
+	cmn.ToHeaderV2(attrs, hdr, withChecksum, withAtime, withVersion, withCustom)
+
+	// finally, ETag and LastModified (NOTE: may execute syscall)
+	var (
+		mtimeStr string
+		mtime    time.Time
+	)
+	if withLastModified {
+		if mtimeStr, mtime = lom.LastModifiedStr(); mtimeStr != "" {
+			hdr.Set(cos.HdrLastModified, mtimeStr)
+		}
+	}
+	if withETag {
+		if etag := lom.ETag(mtime, true /*allow syscall*/); etag != "" { // empty w/ no checksum
+			hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
+		}
+	}
+}
+
+// TODO: revisit to consider average chunk size, and more
+func _chunksHeadV2(lom *core.LOM, hdr http.Header) {
+	ufest, err := core.NewUfest("", lom, true /*mustExist*/)
+	if err != nil {
+		nlog.Errorln(err, "[", lom.Cname(), "]") // (unlikely)
+		return
+	}
+	if err = ufest.LoadCompleted(lom); err != nil {
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Warningln(err, "[", lom.Cname(), "]")
+		}
+		return
+	}
+
+	var maxChunkSize int64
+	count := ufest.Count()
+	for i := 1; i <= count; i++ {
+		if chunk, errChunk := ufest.GetChunk(i); errChunk == nil && chunk != nil {
+			if chunkSize := chunk.Size(); chunkSize > maxChunkSize {
+				maxChunkSize = chunkSize
+			}
+		}
+	}
+	chunks := &cmn.Chunks{ChunkCount: count, MaxChunkSize: maxChunkSize}
+	chunks.ToHeader(hdr)
 }

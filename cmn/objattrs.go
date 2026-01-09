@@ -331,6 +331,45 @@ func ToHeader(oah cos.OAH, hdr http.Header, size int64, cksums ...*cos.Cksum) {
 	}
 }
 
+// ToHeaderV2 selectively serializes ObjAttrs to response headers (caller decides which fields to include).
+// - always set Content-Length (including 0)
+// - set checksum/atime/version/custom only when the corresponding `with*` is true
+// - do not set standard ETag from CustomMD (caller's responsibility).
+func ToHeaderV2(attrs *ObjAttrs, hdr http.Header, withChecksum, withAtime, withVersion, withCustom bool, cksums ...*cos.Cksum) {
+	debug.Assert(hdr != nil)
+
+	hdr.Set(cos.HdrContentLength, strconv.FormatInt(attrs.Size, 10))
+
+	if withChecksum {
+		var cksum *cos.Cksum
+		if len(cksums) > 0 {
+			cksum = cksums[0]
+		} else {
+			cksum = attrs.Checksum()
+		}
+		if !cos.NoneC(cksum) {
+			hdr.Set(apc.HdrObjCksumType, cksum.Ty())
+			hdr.Set(apc.HdrObjCksumVal, cksum.Val())
+		}
+	}
+	if withAtime {
+		if at := attrs.AtimeUnix(); at != 0 {
+			hdr.Set(apc.HdrObjAtime, unixNano2S(at))
+		}
+	}
+	if withVersion {
+		if v := attrs.Version(true); v != "" {
+			hdr.Set(apc.HdrObjVersion, v)
+		}
+	}
+	if withCustom {
+		custom := attrs.GetCustomMD()
+		for k, v := range custom {
+			hdr.Add(apc.HdrObjCustomMD, k+"="+v)
+		}
+	}
+}
+
 // return checksum separately for subsequent validation
 // parse and set custom metadata, if available
 func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, err error) {

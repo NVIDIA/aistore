@@ -190,19 +190,23 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes) {
 }
 
 func SetS3Headers(hdr http.Header, lom *core.LOM) {
-	// 1. ETag (must be a quoted string: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
+	// 1. Last-Modified
+	var (
+		mtime    time.Time
+		mtimeStr string
+	)
+	if mtimeStr, mtime = lom.LastModifiedStr(); mtimeStr != "" {
+		hdr.Set(cos.HdrLastModified, mtimeStr)
+	}
+
+	// 2. ETag (must be a quoted string: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag)
 	if etag := hdr.Get(cos.HdrETag); etag != "" {
 		debug.AssertFunc(func() bool {
 			return etag[0] == '"' && etag[len(etag)-1] == '"'
 		})
-	} else if etag := lom.ETag(true /*allow to generate*/); etag != "" {
+	} else if etag := lom.ETag(mtime, true /*allow syscall*/); etag != "" {
 		debug.Assert(etag[0] != '"', etag)
 		hdr.Set(cos.HdrETag, cmn.QuoteETag(etag))
-	}
-
-	// 2. Last-Modified
-	if s := lom.LastModifiedStr(); s != "" {
-		hdr.Set(cos.HdrLastModified, s)
 	}
 
 	// 3. x-amz-version-id

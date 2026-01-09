@@ -283,45 +283,50 @@ func (lom *LOM) LastModified() (time.Time, error) {
 }
 
 // (same as above when callers want a string)
-func (lom *LOM) LastModifiedStr() string {
+func (lom *LOM) LastModifiedStr() (string, time.Time) {
 	if v, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
 		debug.AssertFunc(func() bool {
 			_, err := time.Parse(http.TimeFormat, v)
 			return err == nil
 		})
-		return v
+		return v, time.Time{}
 	}
 	// (note: syscall)
 	mtime, err := fs.MtimeUTC(lom.FQN)
 	if err != nil {
 		nlog.Errorln(lom.Cname(), "unexpected failure to get last-modified:", err)
-		return ""
+		return "", time.Time{}
 	}
-	return mtime.Format(http.TimeFormat)
+	return mtime.Format(http.TimeFormat), mtime
 }
 
-// NOTE
-// - (list-objects, S3): prefer stored RFC3339 (cmn.LsoLastModified);
-// - else convert Last-Modified (http.TimeFormat) to RFC3339;
-// - else (perf) fall back to atime when available
-func (lom *LOM) LastModifiedLso() string {
+// NOTE:
+//   - (list-objects, S3): prefer stored RFC3339 (cmn.LsoLastModified);
+//   - else convert Last-Modified (http.TimeFormat) to RFC3339;
+//   - else (perf) fall back to atime when available
+//   - clients requiring strict S3 semantics with ais:// buckets must use HEAD(object)
+//     (which is allowed to execute syscalls)
+func (lom *LOM) LastModifiedLso() (string, time.Time) {
 	if s, ok := lom.GetCustomKey(cmn.LsoLastModified); ok {
-		return s
+		mtime, _ := time.Parse(time.RFC3339, s)
+		return s, mtime
 	}
 	if s, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
 		if mtime, err := time.Parse(http.TimeFormat, s); err == nil { // GMT/UTC
-			return mtime.Format(time.RFC3339)
+			return mtime.Format(time.RFC3339), mtime
 		}
 	}
 	if lom.AtimeUnix() != 0 {
-		return lom.Atime().UTC().Format(time.RFC3339)
+		atime := lom.Atime().UTC()
+		// making an exception but only for atime string
+		return atime.Format(time.RFC3339), time.Time{}
 	}
-	return ""
+	return "", time.Time{}
 }
 
 // allowGen=false: return only existing (custom or MD5) values
 // allowGen=true:  as the name implies
-func (lom *LOM) ETag(allowGen bool) string {
+func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 	// 1. ETag via custom
 	if etag, ok := lom.GetCustomKey(cmn.ETag); ok {
 		debug.Assert(etag != "" && etag[0] != '"')
@@ -339,15 +344,28 @@ func (lom *LOM) ETag(allowGen bool) string {
 		return cksum.Val()
 	}
 
-	if !allowGen {
-		return ""
+	// 3. mtime
+	if mtime.IsZero() {
+		if mtimeStr, ok := lom.GetCustomKey(cos.HdrLastModified); ok {
+			tm, err := time.Parse(http.TimeFormat, mtimeStr)
+			if err == nil {
+				mtime = tm
+			}
+		}
+		if mtime.IsZero() {
+			if !allowSyscall {
+				return ""
+			}
+			debug.Assert(lom.bck.RemoteBck() == nil, "must consistently use remote mtime")
+			t, err := fs.MtimeUTC(lom.FQN)
+			if err != nil {
+				return ""
+			}
+			mtime = t
+		}
 	}
 
-	// 3. make ETag
-	mtime, err := fs.MtimeUTC(lom.FQN)
-	if err != nil {
-		return ""
-	}
+	// 4. make ETag
 	var sb strings.Builder
 	sb.Grow(len(lom.md.Cksum.Val()) + 24)
 	sb.WriteString("v1-")
