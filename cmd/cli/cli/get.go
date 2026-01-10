@@ -825,6 +825,9 @@ func mpdGet(c *cli.Context, bck cmn.Bck, objName string, wfh *os.File, quiet boo
 	err := api.MultipartDownload(apiBP, bck, objName, &mpdArgs)
 
 	if progress != nil {
+		if err != nil {
+			bar.Abort(true) // abort progress bar on error
+		}
 		progress.Wait()
 	}
 	if err != nil {

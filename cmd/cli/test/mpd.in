@@ -15,8 +15,11 @@ ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_multipart.bin --mpd --yes /
 diff /tmp/mpd_regular.bin /tmp/mpd_multipart.bin
 
 # Test with custom chunk size and workers
-ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_custom.bin --mpd --chunk-size 1mb --num-workers 4 --yes // IGNORE
+ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_custom.bin --mpd -num-workers 4 --yes // IGNORE
 diff /tmp/mpd_test_src.bin /tmp/mpd_custom.bin
+
+# Negative Test
+ais object get ais://$BUCKET_1/mpd_test.bin /tmp/mpd_custom.bin --mpd --chunk-size 1mb --num-workers 4 --yes // FAIL "Error: ChunkSize is set but ObjectSize is missing"
 
 # Cleanup
 rm -f /tmp/mpd_test_src.bin /tmp/mpd_regular.bin /tmp/mpd_multipart.bin /tmp/mpd_custom.bin // IGNORE
