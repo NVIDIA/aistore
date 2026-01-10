@@ -5,8 +5,6 @@
 package sys
 
 import (
-	"strings"
-
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -33,7 +31,7 @@ func (mem *MemStat) Get() error {
 	return mem.container()
 }
 
-func (mem *MemStat) Str(sb *strings.Builder) {
+func (mem *MemStat) Str(sb *cos.SB) {
 	sb.WriteString("used ")
 	sb.WriteString(cos.IEC(int64(mem.Used), 0))
 	sb.WriteString(", ")

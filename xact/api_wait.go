@@ -6,10 +6,10 @@ package xact
 
 import (
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // global waiting tunables
@@ -58,27 +58,27 @@ type (
 )
 
 func (args *ArgsMsg) String() string {
-	var sb strings.Builder
-	sb.Grow(128)
+	var sb cos.SB
+	sb.Init(128)
 	sb.WriteString("xa-")
 	sb.WriteString(args.Kind)
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	if args.ID != "" {
 		sb.WriteString(args.ID)
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	if !args.Bck.IsEmpty() {
-		sb.WriteByte('-')
+		sb.WriteUint8('-')
 		sb.WriteString(args.Bck.String())
 	}
 	if args.Timeout > 0 {
-		sb.WriteByte('-')
+		sb.WriteUint8('-')
 		sb.WriteString(args.Timeout.String())
 	}
 	if args.DaemonID != "" {
 		sb.WriteString("-node[")
 		sb.WriteString(args.DaemonID)
-		sb.WriteByte(']')
+		sb.WriteUint8(']')
 	}
 	if args.Flags > 0 {
 		sb.WriteString("-0x")

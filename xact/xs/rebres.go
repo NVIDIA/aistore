@@ -8,11 +8,11 @@ package xs
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -124,8 +124,8 @@ func newRebalance(p *rebFactory) (xreb *Rebalance, err error) {
 }
 
 func (xreb *Rebalance) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(80)
+	var sb cos.SB
+	sb.Init(80)
 	if xreb.Args.Bck != nil {
 		sb.WriteString(xreb.Args.Bck.Cname(xreb.Args.Prefix))
 	}
@@ -142,7 +142,7 @@ func (xreb *Rebalance) CtlMsg() string {
 	}
 	if fl&xact.FlagSync != 0 {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		first = false
 		sb.WriteString("sync")
@@ -150,7 +150,7 @@ func (xreb *Rebalance) CtlMsg() string {
 	}
 	if fl != 0 {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("0x")
 		sb.WriteString(strconv.FormatUint(uint64(fl), 16))

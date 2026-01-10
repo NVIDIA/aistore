@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -279,8 +278,8 @@ func (p *clnP) rmMisplaced() bool {
 func (j *clnJ) String() string { return j.name }
 
 func (j *clnJ) _str() string {
-	var sb strings.Builder
-	sb.Grow(128)
+	var sb cos.SB
+	sb.Init(128)
 	sb.WriteString(j.ini.Xaction.Name())
 	sb.WriteString("-j[")
 	sb.WriteString(j.mi.Path)
@@ -293,7 +292,7 @@ func (j *clnJ) _str() string {
 	if _, ok := j.keepMisplaced(); ok {
 		sb.WriteString("--k") // keep misplaced
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }
 

@@ -253,18 +253,18 @@ func (cl *certLoader) do(compare bool) (err error) {
 
 func (x *xcert) String() string {
 	var (
-		sb        strings.Builder
+		sb        cos.SB
 		notBefore = x.notBefore.String()
 		notAfter  = x.notAfter.String()
 		l         = len(x.parent.certFile) + 1 + len(notBefore) + 1 + len(notAfter) + 1
 	)
-	sb.Grow(l)
+	sb.Init(l)
 	sb.WriteString(x.parent.certFile)
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	sb.WriteString(notBefore)
-	sb.WriteByte(',')
+	sb.WriteUint8(',')
 	sb.WriteString(notAfter)
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	return sb.String()
 }

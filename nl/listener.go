@@ -6,7 +6,6 @@ package nl
 
 import (
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -218,16 +217,16 @@ func (nlb *ListenerBase) Status() *Status {
 	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), EndTimeX: nlb.EndTimeX.Load(), AbortedX: nlb.IsAborted()}
 }
 
-func (nlb *ListenerBase) _name(l int) *strings.Builder {
-	var sb strings.Builder
+func (nlb *ListenerBase) _name(l int) *cos.SB {
+	var sb cos.SB
 	l += 3 + len(nlb.Kind()) + 1 + len(nlb.UUID()) + 1
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString("nl-")
 	sb.WriteString(nlb.Kind())
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	sb.WriteString(nlb.UUID())
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return &sb
 }
 
@@ -247,10 +246,10 @@ func (nlb *ListenerBase) String() string {
 		sb.WriteString(nlb.Cause())
 	}
 	if bcks := nlb.Bcks(); len(bcks) > 0 {
-		sb.WriteByte('-')
+		sb.WriteUint8('-')
 		sb.WriteString(bcks[0].String())
 		if len(bcks) > 1 {
-			sb.WriteByte('-')
+			sb.WriteUint8('-')
 			sb.WriteString(bcks[1].String())
 		}
 	}
@@ -261,7 +260,7 @@ func (nlb *ListenerBase) String() string {
 			res = "-done"
 		}
 		tm = cos.FormatNanoTime(tfin, cos.StampMicro)
-		sb.WriteByte('-')
+		sb.WriteUint8('-')
 		sb.WriteString(tm)
 		sb.WriteString(res)
 		return sb.String()
@@ -269,9 +268,9 @@ func (nlb *ListenerBase) String() string {
 	if finCount > 0 {
 		sb.WriteString("(cnt=")
 		sb.WriteString(strconv.Itoa(finCount))
-		sb.WriteByte('/')
+		sb.WriteUint8('/')
 		sb.WriteString(strconv.Itoa(len(nlb.Srcs)))
-		sb.WriteByte(')')
+		sb.WriteUint8(')')
 	}
 	return sb.String()
 }

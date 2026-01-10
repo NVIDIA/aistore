@@ -7,8 +7,8 @@ package memsys
 
 import (
 	"strconv"
-	"strings"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
 )
@@ -147,7 +147,7 @@ func (r *MMSA) Pressure(mems ...*sys.MemStat) int {
 	return p
 }
 
-func (r *MMSA) _p2s(sb *strings.Builder, mem *sys.MemStat) {
+func (r *MMSA) _p2s(sb *cos.SB, mem *sys.MemStat) {
 	sb.WriteString("pressure '")
 	p := r.Pressure(mem)
 	sb.WriteString(memPressureText[p])
@@ -155,6 +155,6 @@ func (r *MMSA) _p2s(sb *strings.Builder, mem *sys.MemStat) {
 	if crit := r.swap.crit.Load(); crit > 0 {
 		sb.WriteString(", swapping(")
 		sb.WriteString(strconv.Itoa(int(crit)))
-		sb.WriteByte(')')
+		sb.WriteUint8(')')
 	}
 }

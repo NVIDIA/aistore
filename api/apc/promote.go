@@ -4,7 +4,7 @@
  */
 package apc
 
-import "strings"
+import "github.com/NVIDIA/aistore/cmn/cos"
 
 // common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 // swagger:model
@@ -22,7 +22,7 @@ type PromoteArgs struct {
 	SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 }
 
-func (msg *PromoteArgs) Str(sb *strings.Builder) {
+func (msg *PromoteArgs) Str(sb *cos.SB) {
 	sb.WriteString("src:")
 	sb.WriteString(msg.SrcFQN)
 	sb.WriteString(", dst:")
@@ -39,15 +39,15 @@ func (msg *PromoteArgs) Str(sb *strings.Builder) {
 		sb.WriteString("non-recurs")
 	}
 	if msg.OverwriteDst {
-		sb.WriteByte(',')
+		sb.WriteUint8(',')
 		sb.WriteString("overwrite")
 	}
 	if msg.DeleteSrc {
-		sb.WriteByte(',')
+		sb.WriteUint8(',')
 		sb.WriteString("delete-src")
 	}
 	if msg.SrcIsNotFshare {
-		sb.WriteByte(',')
+		sb.WriteUint8(',')
 		sb.WriteString("not-file-share")
 	}
 }

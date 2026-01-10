@@ -7,7 +7,6 @@ package mirror
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -97,8 +96,8 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 }
 
 func (r *mncXact) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(64)
+	var sb cos.SB
+	sb.Init(64)
 	sb.WriteString(r.p.args.Tag)
 	sb.WriteString(", copies:")
 	sb.WriteString(strconv.Itoa(r.p.args.Copies))

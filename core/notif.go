@@ -5,8 +5,9 @@
 package core
 
 import (
-	"strings"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // On the sending side, intra-cluster notification is a tuple containing answers
@@ -57,16 +58,16 @@ type (
 
 func (msg *NotifMsg) String() (s string) {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 5 + len(msg.Kind) + 1 + len(msg.UUID) + 1 + 2 + len(msg.NodeID) + 7 + len(msg.ErrMsg)
 	)
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString("nmsg-")
 	sb.WriteString(msg.Kind)
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	sb.WriteString(msg.UUID)
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	if msg.NodeID != "" {
 		sb.WriteString("<=")
 		sb.WriteString(msg.NodeID)

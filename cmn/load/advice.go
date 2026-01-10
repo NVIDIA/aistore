@@ -5,7 +5,6 @@
 package load
 
 import (
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -155,8 +154,8 @@ func (a *Advice) DskLoad() Load { return dskOf(a.loads) }
 //
 
 func (a *Advice) String() string {
-	var sb strings.Builder
-	sb.Grow(92)
+	var sb cos.SB
+	sb.Init(92)
 
 	sb.WriteString("load=")
 	sb.WriteString(Text[a.Load])
@@ -185,14 +184,14 @@ func (a *Advice) String() string {
 			sb.WriteString(" [")
 			first = false
 		} else {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 		sb.WriteString(d.name)
-		sb.WriteByte('=')
+		sb.WriteUint8('=')
 		sb.WriteString(Text[d.l])
 	}
 	if !first {
-		sb.WriteByte(']')
+		sb.WriteUint8(']')
 	}
 	return sb.String()
 }

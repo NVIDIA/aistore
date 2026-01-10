@@ -132,27 +132,27 @@ func (n Ns) String() string {
 		return ""
 	}
 
-	var sb strings.Builder
-	sb.Grow(n.Len() + 1)
+	var sb cos.SB
+	sb.Init(n.Len() + 1)
 	n._str(&sb)
 
 	return sb.String()
 }
 
-func (n Ns) _str(sb *strings.Builder) {
+func (n Ns) _str(sb *cos.SB) {
 	if n.IsGlobal() {
 		return
 	}
 	if n.IsAnyRemote() {
-		sb.WriteByte(apc.NsUUIDPrefix)
+		sb.WriteUint8(apc.NsUUIDPrefix)
 		return
 	}
 	if n.UUID != "" {
-		sb.WriteByte(apc.NsUUIDPrefix)
+		sb.WriteUint8(apc.NsUUIDPrefix)
 		sb.WriteString(n.UUID)
 	}
 	if n.Name != "" {
-		sb.WriteByte(apc.NsNamePrefix)
+		sb.WriteUint8(apc.NsNamePrefix)
 		sb.WriteString(n.Name)
 	}
 }
@@ -221,13 +221,13 @@ func (b *Bck) Equal(other *Bck) bool {
 }
 
 func (b *Bck) String() string {
-	var sb strings.Builder
-	sb.Grow(64)
+	var sb cos.SB
+	sb.Init(64)
 	b.Str(&sb)
 	return sb.String()
 }
 
-func (b *Bck) Str(sb *strings.Builder) {
+func (b *Bck) Str(sb *cos.SB) {
 	if b.Ns.IsGlobal() {
 		if b.Provider == "" {
 			sb.WriteString(b.Name)
@@ -240,7 +240,7 @@ func (b *Bck) Str(sb *strings.Builder) {
 		sb.WriteString(apc.ToScheme(b.Provider))
 		sb.WriteString(apc.BckProviderSeparator)
 		b.Ns._str(sb)
-		sb.WriteByte('/')
+		sb.WriteUint8('/')
 		sb.WriteString(b.Name)
 	}
 	if back := b.Backend(); back != nil {
@@ -317,8 +317,8 @@ func (b *Bck) ValidateName() error {
 
 // canonical name, with or without object
 func (b *Bck) Cname(objname string) (s string) {
-	var sb strings.Builder
-	sb.Grow(len(b.Name) + len(objname) + b.Ns.Len() + 16)
+	var sb cos.SB
+	sb.Init(len(b.Name) + len(objname) + b.Ns.Len() + 16)
 
 	sb.WriteString(apc.ToScheme(b.Provider))
 	sb.WriteString(apc.BckProviderSeparator)
@@ -327,13 +327,13 @@ func (b *Bck) Cname(objname string) (s string) {
 		sb.WriteString(b.Name)
 	} else {
 		b.Ns._str(&sb)
-		sb.WriteByte('/')
+		sb.WriteUint8('/')
 		sb.WriteString(b.Name)
 	}
 	if objname == "" {
 		return sb.String()
 	}
-	sb.WriteByte(filepath.Separator)
+	sb.WriteUint8(filepath.Separator)
 	sb.WriteString(objname)
 	return sb.String()
 }
@@ -513,9 +513,9 @@ func (qbck QueryBcks) String() string {
 			return apc.ToScheme(p) + apc.BckProviderSeparator
 		}
 		var (
-			sb strings.Builder
+			sb cos.SB
 		)
-		sb.Grow(qbck.Ns.Len() + 8)
+		sb.Init(qbck.Ns.Len() + 8)
 		sb.WriteString(apc.ToScheme(p))
 		sb.WriteString(apc.BckProviderSeparator)
 		qbck.Ns._str(&sb)

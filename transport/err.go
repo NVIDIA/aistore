@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
@@ -57,8 +58,8 @@ func (e *ErrStreamTerm) Error() string {
 	debug.Assert(e.err != nil)
 	debug.Assert(strings.Contains(e.loghdr, e.dst), e.loghdr, " vs ", e.dst)
 
-	var sb strings.Builder
-	sb.Grow(256)
+	var sb cos.SB
+	sb.Init(256)
 	sb.WriteString(e.loghdr)
 	sb.WriteString(" terminated [reason: '")
 	sb.WriteString(e.reason)
@@ -66,11 +67,11 @@ func (e *ErrStreamTerm) Error() string {
 	if e.ctx != "" {
 		sb.WriteString("ctx: ")
 		sb.WriteString(e.ctx)
-		sb.WriteByte(' ')
+		sb.WriteUint8(' ')
 	}
 	sb.WriteString("err: ")
 	sb.WriteString(e.err.Error())
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }
 
@@ -82,10 +83,10 @@ func (e *ErrStreamTerm) Unwrap() error { return e.err }
 
 func (e *ErrSBR) Error() string {
 	debug.Assert(strings.Contains(e.loghdr, e.sid), e.loghdr, " vs ", e.sid)
-	var sb strings.Builder
-	sb.Grow(256)
+	var sb cos.SB
+	sb.Init(256)
 	sb.WriteString(e.loghdr)
-	sb.WriteByte(' ')
+	sb.WriteUint8(' ')
 	sb.WriteString(e.code)
 	sb.WriteString(":[")
 	if e.ctx != "" {
@@ -94,12 +95,12 @@ func (e *ErrSBR) Error() string {
 	}
 	if e.err != nil {
 		if e.ctx != "" {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 		sb.WriteString("err: ")
 		sb.WriteString(e.err.Error())
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }
 

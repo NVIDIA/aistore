@@ -7,7 +7,6 @@ package mirror
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -131,8 +130,8 @@ func (r *XactPut) CtlMsg() string {
 	if !r.mirror.Enabled {
 		return "mirror disabled"
 	}
-	var sb strings.Builder
-	sb.Grow(32)
+	var sb cos.SB
+	sb.Init(32)
 	sb.WriteString("copies:")
 	sb.WriteString(strconv.FormatInt(r.mirror.Copies, 10))
 	sb.WriteString(", burst:")

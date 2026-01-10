@@ -7,7 +7,6 @@ package xs
 
 import (
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -80,8 +79,8 @@ func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is called before Run()
 
 func (r *XactDirPromote) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(128)
+	var sb cos.SB
+	sb.Init(128)
 	r.p.args.Str(&sb)
 	return sb.String()
 }

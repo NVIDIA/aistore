@@ -63,3 +63,21 @@ func (sb *SB) WriteUint8(c byte) { sb.buf = append(sb.buf, c) }
 
 func (sb *SB) WriteString(s string) { sb.buf = append(sb.buf, s...) }
 func (sb *SB) WriteBytes(b []byte)  { sb.buf = append(sb.buf, b...) }
+
+// usage:
+// - when reusing the same buffer, use Reset()
+// - otherwise, Init()
+func (sb *SB) Init(want int) {
+	debug.Assert(len(sb.buf) == 0, "illegal usage (Init after Write?)")
+	sb.buf = make([]byte, 0, want)
+}
+
+func (sb *SB) Grow(n int) {
+	if cap(sb.buf)-len(sb.buf) >= n {
+		return
+	}
+	ncap := max(len(sb.buf)+n, 2*cap(sb.buf))
+	buf := make([]byte, len(sb.buf), ncap)
+	copy(buf, sb.buf)
+	sb.buf = buf
+}

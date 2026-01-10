@@ -141,22 +141,22 @@ func excludeLoopbackIP() bool {
 // given configured list of hostnames, return the first one matching local unicast IPv4
 func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		n  = len(locIPs)
 		l  = 2 + 31*n
 	)
-	sb.Grow(l)
-	sb.WriteByte('[')
+	sb.Init(l)
+	sb.WriteUint8('[')
 	for i, lip := range locIPs {
 		sb.WriteString(lip.ipv4)
 		sb.WriteString("(MTU=")
 		sb.WriteString(strconv.Itoa(lip.mtu))
-		sb.WriteByte(')')
+		sb.WriteUint8(')')
 		if i < n-1 {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	sips := sb.String()
 	nlog.Infoln("local IPv4:", sips)

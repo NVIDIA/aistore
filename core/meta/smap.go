@@ -410,13 +410,13 @@ func (m *Smap) StringEx() string {
 	}
 
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 80
 	)
-	sb.Grow(l)
+	sb.Init(l)
 	sb.WriteString("Smap v")
 	sb.WriteString(strconv.FormatInt(m.Version, 10))
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	sb.WriteString(m.UUID)
 	if m.Primary == nil {
 		sb.WriteString(", nil]")
@@ -428,20 +428,20 @@ func (m *Smap) StringEx() string {
 	_counts(&sb, m.CountTargets(), m.CountActiveTs())
 	sb.WriteString(", p=")
 	_counts(&sb, m.CountProxies(), m.CountActivePs())
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	return sb.String()
 }
 
-func _counts(sb *strings.Builder, all, active int) {
+func _counts(sb *cos.SB, all, active int) {
 	if all == active {
 		sb.WriteString(strconv.Itoa(all))
 	} else {
-		sb.WriteByte('(')
+		sb.WriteUint8('(')
 		sb.WriteString(strconv.Itoa(active))
-		sb.WriteByte('/')
+		sb.WriteUint8('/')
 		sb.WriteString(strconv.Itoa(all))
-		sb.WriteByte(')')
+		sb.WriteUint8(')')
 	}
 }
 

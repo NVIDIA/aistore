@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"io"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -495,12 +494,12 @@ func (r *XactTCB) Abort(err error) bool {
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.args }
 
 func (r *XactTCB) _name(fromCname, toCname string, numJoggers int) {
-	var sb strings.Builder
-	sb.Grow(80)
+	var sb cos.SB
+	sb.Init(80)
 	sb.WriteString(r.Base.Cname())
 	sb.WriteString("-p") // as in: "parallelism"
 	sb.WriteString(strconv.Itoa(numJoggers))
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(fromCname)
 	sb.WriteString("=>")
 	sb.WriteString(toCname)
@@ -519,7 +518,7 @@ func (r *XactTCB) CtlMsg() string { return r.formatCtlMsg(false) }
 
 func (r *XactTCB) formatCtlMsg(rename bool) string {
 	var (
-		sb        strings.Builder
+		sb        cos.SB
 		msg       = r.args.Msg
 		fromCname = r.args.BckFrom.Cname(msg.Prefix)
 		toCname   = r.args.BckTo.Cname(msg.Prepend)
@@ -534,7 +533,7 @@ func (r *XactTCB) formatCtlMsg(rename bool) string {
 		tag = "cp: "
 	}
 
-	sb.Grow(80)
+	sb.Init(80)
 	msg.Str(&sb, fromCname, toCname, tag)
 	return sb.String()
 }

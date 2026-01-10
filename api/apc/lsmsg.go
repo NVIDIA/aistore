@@ -228,7 +228,7 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	return s
 }
 
-func (lsmsg *LsoMsg) Str(cname string, sb *strings.Builder) {
+func (lsmsg *LsoMsg) Str(cname string, sb *cos.SB) {
 	sb.WriteString(cname)
 	if lsmsg.Props != "" {
 		sb.WriteString(", props:")
@@ -240,7 +240,7 @@ func (lsmsg *LsoMsg) Str(cname string, sb *strings.Builder) {
 	}
 }
 
-func (lsmsg *LsoMsg) appendFlags(sb *strings.Builder) {
+func (lsmsg *LsoMsg) appendFlags(sb *cos.SB) {
 	flags := make([]string, 0, 8)
 
 	if lsmsg.IsFlagSet(LsCached) {

@@ -1110,9 +1110,9 @@ func (h *htrun) logerr(tag string, v any, err error) {
 
 	// build msg
 	var (
-		sb strings.Builder
+		sb cos.SB
 	)
-	sb.Grow(cos.KiB)
+	sb.Init(cos.KiB)
 	sb.WriteString(fmt.Sprintf(efmt, err))
 
 	for i := 1; i < 4; i++ {
@@ -1125,7 +1125,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		}
 		f := filepath.Base(file)
 		sb.WriteString(f)
-		sb.WriteByte(':')
+		sb.WriteUint8(':')
 		sb.WriteString(strconv.Itoa(line))
 	}
 	msg := sb.String()

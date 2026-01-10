@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -345,17 +344,17 @@ func (r *XactBlobDl) Name() string { return r.Base.Name() + "/" + r.args.Lom.Obj
 func (r *XactBlobDl) Size() int64  { return r.fullSize }
 
 func (r *XactBlobDl) String() string {
-	var sb strings.Builder
-	sb.Grow(len(r.args.Lom.ObjName) + 3*16)
+	var sb cos.SB
+	sb.Init(len(r.args.Lom.ObjName) + 3*16)
 	sb.WriteString("-[")
 	sb.WriteString(r.args.Lom.ObjName)
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(strconv.FormatInt(r.fullSize, 10))
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(strconv.FormatInt(r.chunkSize, 10))
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(strconv.Itoa(r.numWorkers))
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return r.Base.String() + sb.String()
 }
 
@@ -659,8 +658,8 @@ func (r *XactBlobDl) cleanup() {
 }
 
 func (r *XactBlobDl) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(128)
+	var sb cos.SB
+	sb.Init(128)
 
 	sb.WriteString(r.args.Lom.Cname())
 

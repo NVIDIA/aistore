@@ -248,15 +248,15 @@ func (r *Trunner) InitCDF(config *cmn.Config) error {
 
 func (r *Trunner) _dmetric(disk, metric string) string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = len(diskMetricLabel) + 1 + len(disk) + 1 + len(metric)
 	)
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString(diskMetricLabel)
-	sb.WriteByte('.')
+	sb.WriteUint8('.')
 	sb.WriteString(disk)
-	sb.WriteByte('.')
+	sb.WriteUint8('.')
 	sb.WriteString(metric)
 	fullname := sb.String()
 
@@ -880,11 +880,11 @@ func (r *Trunner) logCapacity(now int64) {
 		}
 		if unique { // to avoid log duplication
 			var (
-				sb    strings.Builder
+				sb    cos.SB
 				label = cdf.Label.ToLog()
 				l     = 48 + len(mpath) + len(label)
 			)
-			sb.Grow(l)
+			sb.Init(l)
 
 			sb.WriteString(mpath)
 			sb.WriteString(label)
@@ -894,7 +894,7 @@ func (r *Trunner) logCapacity(now int64) {
 			} else {
 				sb.WriteString(": used ")
 				sb.WriteString(strconv.Itoa(int(cdf.Capacity.PctUsed)))
-				sb.WriteByte('%')
+				sb.WriteUint8('%')
 				sb.WriteString(", avail ")
 				sb.WriteString(cos.IEC(int64(cdf.Capacity.Avail), 2))
 			}
@@ -950,7 +950,7 @@ func (r *Trunner) _jobs(verbose bool) string {
 		r.xallRun.Idle = orig
 	}
 
-	var sb strings.Builder
+	var sb cos.SB
 	_more(&sb, r.xallRun.Running, "running")
 	_more(&sb, r.xallRun.Idle, "idle")
 
@@ -962,7 +962,7 @@ func (r *Trunner) _jobs(verbose bool) string {
 	return ln
 }
 
-func _more(sb *strings.Builder, xnames []string, prefix string) {
+func _more(sb *cos.SB, xnames []string, prefix string) {
 	l := len(xnames)
 	if l == 0 {
 		return
@@ -984,7 +984,7 @@ func _more(sb *strings.Builder, xnames []string, prefix string) {
 	}
 }
 
-func _apps(sb *strings.Builder, prefix string, items []string, total int) {
+func _apps(sb *cos.SB, prefix string, items []string, total int) {
 	l := len(prefix)
 	l += 12             // count
 	l += len(items) - 1 // times sepa
@@ -994,12 +994,12 @@ func _apps(sb *strings.Builder, prefix string, items []string, total int) {
 	sb.Grow(l)
 
 	sb.WriteString(prefix)
-	sb.WriteByte('(')
+	sb.WriteUint8('(')
 	sb.WriteString(strconv.Itoa(total))
 	sb.WriteString("): ")
 	sb.WriteString(items[0])
 	for _, s := range items[1:] {
-		sb.WriteByte(' ')
+		sb.WriteUint8(' ')
 		sb.WriteString(s)
 	}
 }

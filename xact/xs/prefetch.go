@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -231,14 +230,14 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 }
 
 func (r *prefetch) _whinge(lom *core.LOM, size int64) {
-	var sb strings.Builder
-	sb.Grow(256)
+	var sb cos.SB
+	sb.Init(256)
 	sb.WriteString(r.Name())
 	sb.WriteString(": prefetching large size ")
 	sb.WriteString(cos.IEC(size, 1))
 	sb.WriteString(" with blob-downloading disabled [")
 	sb.WriteString(lom.Cname())
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	if size >= 5*cos.GiB {
 		nlog.Errorln(sb.String())
 	} else {
@@ -433,13 +432,13 @@ func (pebl *pebl) busy() bool {
 }
 
 func (pebl *pebl) str() string {
-	var sb strings.Builder
+	var sb cos.SB
 
 	pebl.mu.Lock()
 	n := int(pebl.num())
-	sb.Grow(max(256, n*64))
+	sb.Init(max(256, n*64))
 
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 
 	for i, xctn := range pebl.pending {
 		sb.WriteString(xctn.Name())
@@ -449,6 +448,6 @@ func (pebl *pebl) str() string {
 	}
 	pebl.mu.Unlock()
 
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }

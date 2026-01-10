@@ -7,8 +7,9 @@ package fs
 import (
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func (mi *Mountpath) resolveFS() error {
@@ -18,15 +19,15 @@ func (mi *Mountpath) resolveFS() error {
 	}
 
 	charsToString := func(x []int8) string {
-		var b strings.Builder
-		b.Grow(len(x))
+		var sb cos.SB
+		sb.Init(len(x))
 		for _, c := range x {
 			if c == 0 {
 				break
 			}
-			b.WriteByte(byte(c))
+			sb.WriteUint8(byte(c))
 		}
-		return b.String()
+		return sb.String()
 	}
 
 	mi.Fs = charsToString(fsStats.Fstypename[:])

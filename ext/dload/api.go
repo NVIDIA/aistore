@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"path"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -201,11 +200,11 @@ func (j *Job) PendingCnt() int {
 
 func (j *Job) String() string {
 	var (
-		sb       strings.Builder
+		sb       cos.SB
 		pending  = j.PendingCnt()
 		finished = j.JobFinished()
 	)
-	sb.Grow(256)
+	sb.Init(256)
 
 	sb.WriteString(j.ID)
 	if j.Description != "" {

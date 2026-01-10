@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -87,8 +86,8 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMs
 }
 
 func (r *evictDelete) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(80)
+	var sb cos.SB
+	sb.Init(80)
 	r.msg.Str(&sb, r.lrit.lrp == lrpPrefix)
 	if r.msg.NonRecurs {
 		sb.WriteString(", non-recurs")

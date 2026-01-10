@@ -7,7 +7,6 @@ package reb
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -47,28 +46,28 @@ func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(xctn) }
 
 func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 64
 	)
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString(core.T.String())
 	sb.WriteString("[g")
 	sb.WriteString(strconv.FormatInt(rebID, 10)) // (compare with `xact.RebID2S`)
-	sb.WriteByte(',')
+	sb.WriteUint8(',')
 	if smap != nil {
-		sb.WriteByte('v')
+		sb.WriteUint8('v')
 		sb.WriteString(strconv.FormatInt(smap.Version, 10))
 	} else {
 		sb.WriteString("v<???>")
 	}
 	if len(initializing) > 0 {
-		sb.WriteByte(']')
+		sb.WriteUint8(']')
 		return sb.String() // "%s[g%d,%s]"
 	}
-	sb.WriteByte(',')
+	sb.WriteUint8(',')
 	sb.WriteString(stages[reb.stages.stage.Load()])
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	return sb.String() // "%s[g%d,%s,%s]"
 }

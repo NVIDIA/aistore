@@ -10,7 +10,6 @@ package hk
 import (
 	"os/signal"
 	"runtime"
-	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -33,7 +32,7 @@ func (hk *hk) handleSignal(s syscall.Signal) error {
 	if s == syscall.SIGHUP {
 		// no-op: show up in the log with some useful info
 		var (
-			sb  strings.Builder
+			sb  cos.SB
 			mem sys.MemStat
 			ngr = runtime.NumGoroutine()
 		)

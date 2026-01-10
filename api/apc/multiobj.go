@@ -7,7 +7,6 @@ package apc
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -36,7 +35,7 @@ type (
 func (lrm *ListRange) IsList() bool      { return len(lrm.ObjNames) > 0 }
 func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 
-func (lrm *ListRange) Str(sb *strings.Builder, isPrefix bool) {
+func (lrm *ListRange) Str(sb *cos.SB, isPrefix bool) {
 	switch {
 	case isPrefix:
 		if cos.MatchAll(lrm.Template) {
@@ -72,8 +71,8 @@ type PrefetchMsg struct {
 
 // +ctlmsg
 func (msg *PrefetchMsg) Str(isPrefix bool) string {
-	var sb strings.Builder
-	sb.Grow(80)
+	var sb cos.SB
+	sb.Init(80)
 	msg.ListRange.Str(&sb, isPrefix)
 	if msg.BlobThreshold > 0 {
 		msg.delim(&sb)
@@ -96,7 +95,7 @@ func (msg *PrefetchMsg) Str(isPrefix bool) string {
 	return sb.String()
 }
 
-func (*PrefetchMsg) delim(sb *strings.Builder) {
+func (*PrefetchMsg) delim(sb *cos.SB) {
 	if sb.Len() > 0 {
 		sb.WriteString(", ")
 	}

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	ratomic "sync/atomic"
 
@@ -152,8 +151,8 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 }
 
 func (r *XactNsumm) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(96)
+	var sb cos.SB
+	sb.Init(96)
 	p, msg := r.p, r.p.msg
 	msg.Str(p.Bck.Cname(msg.Prefix), &sb)
 	return sb.String()

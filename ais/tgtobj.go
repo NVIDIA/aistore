@@ -365,10 +365,10 @@ func (poi *putOI) stats() {
 // verbose only
 func (poi *putOI) loghdr() string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 128
 	)
-	sb.Grow(l)
+	sb.Init(l)
 	sb.WriteString(poi.owt.String())
 	sb.WriteString(", ")
 	sb.WriteString(poi.lom.Cname())

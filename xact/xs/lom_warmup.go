@@ -7,11 +7,11 @@ package xs
 
 import (
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -91,8 +91,8 @@ func (r *xactLLC) CtlMsg() string {
 	if nv == 0 {
 		return ""
 	}
-	var sb strings.Builder
-	sb.Grow(16)
+	var sb cos.SB
+	sb.Init(16)
 	sb.WriteString(", visited:")
 	sb.WriteString(strconv.FormatInt(nv, 10))
 	return sb.String()

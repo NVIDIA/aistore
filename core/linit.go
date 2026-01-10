@@ -6,7 +6,6 @@ package core
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -105,18 +104,18 @@ func (lom *LOM) InitBck(bck *meta.Bck) (err error) {
 
 func (lom *LOM) String() string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 2 + len(lom.bck.Name) + 1 + len(lom.ObjName) + 4
 	)
-	sb.Grow(l)
+	sb.Init(l)
 	sb.WriteString("o[")
 	sb.WriteString(lom.bck.Name)
-	sb.WriteByte('/')
+	sb.WriteUint8('/')
 	sb.WriteString(lom.ObjName)
 	if !lom.loaded() {
 		sb.WriteString("(-)")
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }
 

@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -193,8 +192,8 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 /////////////
 
 func (r *LsoXact) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(160)
+	var sb cos.SB
+	sb.Init(160)
 	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)
 	if r.nextToken != "" {
 		sb.WriteString(", paging")

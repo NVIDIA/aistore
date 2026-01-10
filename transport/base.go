@@ -12,7 +12,6 @@ import (
 	"path"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -370,20 +369,20 @@ func dryrun() (dryrun bool) {
 
 func _loghdr(trname, from, to string, transmit, compressed bool) string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = len(trname) + len(from) + len(to) + 16
 	)
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString(trname)
-	sb.WriteByte('[')
+	sb.WriteUint8('[')
 	if compressed {
 		sb.WriteString("(z)")
 	}
 	sb.WriteString(from)
 	sb.WriteString(cos.Ternary(transmit, "=>", "<="))
 	sb.WriteString(to)
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }
 

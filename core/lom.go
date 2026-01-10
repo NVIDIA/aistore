@@ -366,11 +366,11 @@ func (lom *LOM) ETag(mtime time.Time, allowSyscall bool) string {
 	}
 
 	// 4. make ETag
-	var sb strings.Builder
-	sb.Grow(len(lom.md.Cksum.Val()) + 24)
+	var sb cos.SB
+	sb.Init(len(lom.md.Cksum.Val()) + 24)
 	sb.WriteString("v1-")
 	sb.WriteString(lom.md.Cksum.Val())
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(strconv.FormatInt(mtime.UnixNano(), 36))
 
 	return sb.String()

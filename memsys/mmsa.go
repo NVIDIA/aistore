@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -178,9 +177,9 @@ func (r *MMSA) Str(mem *sys.MemStat) string {
 	}
 
 	var (
-		sb strings.Builder
+		sb cos.SB
 	)
-	sb.Grow(80)
+	sb.Init(80)
 	sb.WriteString(r.Name)
 	sb.WriteString("[(")
 	mem.Str(&sb)

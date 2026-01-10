@@ -378,14 +378,14 @@ func ParseAtTemplate(template string) (pt ParsedTemplate, _ error) {
 			err    error
 			tr     = TemplateRange{}
 			left   = strings.IndexByte(template, '@')
-			sb     strings.Builder
+			sb     SB
 			number string
 		)
 		if left == -1 {
 			break
 		}
 		for left++; len(template) > left && unicode.IsDigit(rune(template[left])); left++ {
-			sb.WriteByte(template[left])
+			sb.WriteUint8(template[left])
 		}
 		number = sb.String()
 

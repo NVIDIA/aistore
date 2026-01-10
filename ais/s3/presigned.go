@@ -57,29 +57,29 @@ func makeS3URL(requestStyle, region, bucketName, objName, query string) (string,
 	switch requestStyle {
 	// `virtual-hosted` style is used by default as this is default in S3.
 	case virtualHostedRequestStyle, "":
-		b := &strings.Builder{}
-		b.Grow(8 + len(bucketName) + 4 + len(region) + 15 + len(objName) + 1 + len(query))
-		b.WriteString("https://")
-		b.WriteString(bucketName)
-		b.WriteString(".s3.")
-		b.WriteString(region)
-		b.WriteString(".amazonaws.com/")
-		b.WriteString(objName)
-		b.WriteByte('?')
-		b.WriteString(query)
-		return b.String(), nil
+		var sb cos.SB
+		sb.Init(8 + len(bucketName) + 4 + len(region) + 15 + len(objName) + 1 + len(query))
+		sb.WriteString("https://")
+		sb.WriteString(bucketName)
+		sb.WriteString(".s3.")
+		sb.WriteString(region)
+		sb.WriteString(".amazonaws.com/")
+		sb.WriteString(objName)
+		sb.WriteUint8('?')
+		sb.WriteString(query)
+		return sb.String(), nil
 	case pathRequestStyle:
-		b := &strings.Builder{}
-		b.Grow(11 + len(region) + 15 + len(bucketName) + 1 + len(objName) + 1 + len(query))
-		b.WriteString("https://s3.")
-		b.WriteString(region)
-		b.WriteString(".amazonaws.com/")
-		b.WriteString(bucketName)
-		b.WriteByte('/')
-		b.WriteString(objName)
-		b.WriteByte('?')
-		b.WriteString(query)
-		return b.String(), nil
+		var sb cos.SB
+		sb.Init(11 + len(region) + 15 + len(bucketName) + 1 + len(objName) + 1 + len(query))
+		sb.WriteString("https://s3.")
+		sb.WriteString(region)
+		sb.WriteString(".amazonaws.com/")
+		sb.WriteString(bucketName)
+		sb.WriteUint8('/')
+		sb.WriteString(objName)
+		sb.WriteUint8('?')
+		sb.WriteString(query)
+		return sb.String(), nil
 	default:
 		return "", fmt.Errorf("unrecognized request style provided: %v", requestStyle)
 	}

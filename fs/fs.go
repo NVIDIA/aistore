@@ -1391,11 +1391,11 @@ func (cs *CapStatus) IsNil() bool { return cs.TotalUsed == 0 && cs.TotalAvail ==
 
 func (cs *CapStatus) String() string {
 	var (
-		sb         strings.Builder
+		sb         cos.SB
 		totalUsed  = cos.IEC(int64(cs.TotalUsed), 1)
 		totalAvail = cos.IEC(int64(cs.TotalAvail), 1)
 	)
-	sb.Grow(80)
+	sb.Init(80)
 	sb.WriteString("cap(used ")
 	sb.WriteString(totalUsed)
 	sb.WriteString(", avail ")
@@ -1406,7 +1406,7 @@ func (cs *CapStatus) String() string {
 	sb.WriteString(strconv.Itoa(int(cs.PctAvg)))
 	sb.WriteString("%, max=")
 	sb.WriteString(strconv.Itoa(int(cs.PctMax)))
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	switch {
 	case cs.IsOOS():
@@ -1414,7 +1414,7 @@ func (cs *CapStatus) String() string {
 	case int64(cs.PctMax) > cs.HighWM:
 		sb.WriteString(", high-wm")
 	}
-	sb.WriteByte(')')
+	sb.WriteUint8(')')
 	return sb.String()
 }
 
@@ -1444,21 +1444,21 @@ func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 
 func (mpi MPI) String() string {
 	var (
-		sb   strings.Builder
+		sb   cos.SB
 		i, l int
 	)
 	for key := range mpi {
 		l += len(key) + 1
 	}
-	sb.Grow(l + 2)
-	sb.WriteByte('[')
+	sb.Init(l + 2)
+	sb.WriteUint8('[')
 	for key := range mpi {
 		sb.WriteString(key)
 		i++
 		if i < l-1 {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 	return sb.String()
 }

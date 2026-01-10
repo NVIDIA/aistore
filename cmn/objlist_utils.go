@@ -199,23 +199,23 @@ var (
 // - `OrigFntl` always excepted (and possibly other TBD internal keys)
 func CustomMD2S(md cos.StrKVs) string {
 	var (
-		sb   strings.Builder
+		sb   cos.SB
 		l    = len(md)
 		prev bool
 	)
-	sb.Grow(256)
+	sb.Init(256)
 
-	sb.WriteByte(cusbeg)
+	sb.WriteUint8(cusbeg)
 	for _, k := range stdCustomProps {
 		v, ok := md[k]
 		if !ok {
 			continue
 		}
 		if prev {
-			sb.WriteByte(cusdlm)
+			sb.WriteUint8(cusdlm)
 		}
 		sb.WriteString(k)
-		sb.WriteByte(cusepa)
+		sb.WriteUint8(cusepa)
 		sb.WriteString(v)
 		prev = true
 		l--
@@ -230,40 +230,40 @@ func CustomMD2S(md cos.StrKVs) string {
 				continue
 			}
 			if prev {
-				sb.WriteByte(cusdlm)
+				sb.WriteUint8(cusdlm)
 			}
 			sb.WriteString(k)
-			sb.WriteByte(cusepa)
+			sb.WriteUint8(cusepa)
 			sb.WriteString(v)
 			prev = true
 		}
 	}
-	sb.WriteByte(cusend)
+	sb.WriteUint8(cusend)
 	return sb.String()
 }
 
 // (compare w/ CustomMD2S above)
 func CustomProps2S(nvs ...string) string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  int
 	)
 	for _, s := range nvs {
 		l += len(s) + 2
 	}
-	sb.Grow(l + 2)
+	sb.Init(l + 2)
 
 	np := len(nvs)
-	sb.WriteByte(cusbeg)
+	sb.WriteUint8(cusbeg)
 	for i := 0; i < np; i += 2 {
 		sb.WriteString(nvs[i])
-		sb.WriteByte(cusepa)
+		sb.WriteUint8(cusepa)
 		sb.WriteString(nvs[i+1])
 		if i < np-2 {
-			sb.WriteByte(cusdlm)
+			sb.WriteUint8(cusdlm)
 		}
 	}
-	sb.WriteByte(cusend)
+	sb.WriteUint8(cusend)
 
 	return sb.String()
 }

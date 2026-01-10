@@ -399,7 +399,7 @@ func (e *ETLSpecMsg) ParsePodSpec() (*corev1.Pod, error) {
 }
 
 func (e *ETLSpecMsg) FormatEnv() string {
-	var b strings.Builder
+	var b cos.SB
 	b.WriteString("[")
 	for i, env := range e.Runtime.Env {
 		b.WriteString(fmt.Sprintf("{\"%s\":\"%s\"}", env.Name, env.Value))

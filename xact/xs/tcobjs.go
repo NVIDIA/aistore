@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -430,12 +429,12 @@ func (r *XactTCO) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM
 }
 
 func (r *XactTCO) CtlMsg() string {
-	var sb strings.Builder
+	var sb cos.SB
 	n := r.wiCnt.Load()
 	if n == 0 {
-		sb.Grow(64)
+		sb.Init(64)
 	} else {
-		sb.Grow(64 + 100*int(n))
+		sb.Init(64 + 100*int(n))
 	}
 	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl: ", "cp :")
 	sb.WriteString(tag)
@@ -461,7 +460,7 @@ func (r *XactTCO) CtlMsg() string {
 		}
 		wi.append(&sb)
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	return sb.String()
 }
@@ -491,7 +490,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 	}
 }
 
-func (wi *tcowi) append(sb *strings.Builder) {
+func (wi *tcowi) append(sb *cos.SB) {
 	msg := wi.msg
 
 	msg.ListRange.Str(sb, wi.lrp == lrpPrefix)
@@ -512,21 +511,21 @@ func (wi *tcowi) append(sb *strings.Builder) {
 	}
 	if msg.Sync {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("sync")
 		first = false
 	}
 	if msg.TCBMsg.NonRecurs {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("non-recurs")
 		first = false
 	}
 	if msg.ContinueOnError {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("continue-on-error")
 	}

@@ -8,7 +8,6 @@ package xs
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -197,8 +196,8 @@ func (r *xactRechunk) Run(wg *sync.WaitGroup) {
 func (r *xactRechunk) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *xactRechunk) CtlMsg() string {
-	var sb strings.Builder
-	sb.Grow(96)
+	var sb cos.SB
+	sb.Init(96)
 
 	sb.WriteString("objsize-limit:")
 	sb.WriteString(cos.ToSizeIEC(r.args.ObjSizeLimit, 0))

@@ -4,7 +4,7 @@
  */
 package apc
 
-import "strings"
+import "github.com/NVIDIA/aistore/cmn/cos"
 
 type (
 	// to generate bucket summary (or summaries)
@@ -38,7 +38,7 @@ type (
 	}
 )
 
-func (msg *BsummCtrlMsg) Str(cname string, sb *strings.Builder) {
+func (msg *BsummCtrlMsg) Str(cname string, sb *cos.SB) {
 	sb.WriteString(cname)
 
 	sb.WriteString(", flags:")
@@ -49,14 +49,14 @@ func (msg *BsummCtrlMsg) Str(cname string, sb *strings.Builder) {
 	}
 	if msg.BckPresent {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("bck-present")
 		first = false
 	}
 	if msg.DontAddRemote {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("don't-add")
 	}

@@ -870,8 +870,8 @@ func (r *XactMoss) CtlMsg() string {
 		return ""
 	}
 
-	var sb strings.Builder
-	sb.Grow(256)
+	var sb cos.SB
+	sb.Init(256)
 
 	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB avg-wait:2.3ms reqs:123 bewarm:on)
 
@@ -886,26 +886,26 @@ func (r *XactMoss) CtlMsg() string {
 	ocnt := tstats.Get(stats.GetBatchObjCount)
 	if ocnt > 0 {
 		if sb.Len() > 0 {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 		sb.WriteString("objs: [")
 		sb.WriteString(strconv.FormatInt(ocnt, 10))
-		sb.WriteByte(' ')
+		sb.WriteUint8(' ')
 		osize := tstats.Get(stats.GetBatchObjSize)
 		sb.WriteString(cos.IEC(osize, 2))
-		sb.WriteByte(']')
+		sb.WriteUint8(']')
 	}
 	fcnt := tstats.Get(stats.GetBatchFileCount)
 	if fcnt > 0 {
 		if sb.Len() > 0 {
-			sb.WriteByte(' ')
+			sb.WriteUint8(' ')
 		}
 		sb.WriteString("files: [")
 		sb.WriteString(strconv.FormatInt(fcnt, 10))
-		sb.WriteByte(' ')
+		sb.WriteUint8(' ')
 		fsize := tstats.Get(stats.GetBatchFileSize)
 		sb.WriteString(cos.IEC(fsize, 2))
-		sb.WriteByte(']')
+		sb.WriteUint8(']')
 	}
 
 	sb.WriteString(", bewarm:")

@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -304,12 +303,12 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 }
 
 func (r *XactArch) CtlMsg() string {
-	var sb strings.Builder
+	var sb cos.SB
 	n := r.wiCnt.Load()
 	if n == 0 {
-		sb.Grow(64)
+		sb.Init(64)
 	} else {
-		sb.Grow(64 + 80*int(n))
+		sb.Init(64 + 80*int(n))
 	}
 	sb.WriteString(r.Bck().Cname(""))
 	if r.bckTo != nil {
@@ -337,7 +336,7 @@ func (r *XactArch) CtlMsg() string {
 		wi.append(&sb)
 		first = false
 	}
-	sb.WriteByte(']')
+	sb.WriteUint8(']')
 
 	return sb.String()
 }
@@ -769,7 +768,7 @@ func (wi *archwi) finalize() (int64, error) {
 	return wi.cksum.Size, nil
 }
 
-func (wi *archwi) append(sb *strings.Builder) {
+func (wi *archwi) append(sb *cos.SB) {
 	msg := wi.msg
 	msg.ListRange.Str(sb, wi.lrp == lrpPrefix)
 
@@ -790,14 +789,14 @@ func (wi *archwi) append(sb *strings.Builder) {
 	}
 	if msg.InclSrcBname {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		first = false
 		sb.WriteString("incl-src-bname")
 	}
 	if msg.AppendIfExists {
 		if !first {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 		}
 		sb.WriteString("append-iff")
 	}

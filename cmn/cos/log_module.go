@@ -7,7 +7,6 @@ package cos
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -89,11 +88,11 @@ func (l LogLevel) String() (s string) {
 		return
 	}
 
-	var sb strings.Builder
-	sb.Grow(len(Mods) * 16)
+	var sb SB
+	sb.Init(len(Mods) * 16)
 	for i, sm := range Mods {
 		if modules&(1<<i) != 0 {
-			sb.WriteByte(',')
+			sb.WriteUint8(',')
 			sb.WriteString(sm)
 			n++
 		}

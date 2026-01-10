@@ -7,7 +7,6 @@ package xact
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -323,13 +322,13 @@ func (xctn *Base) Name() string { return xctn._nam }
 
 func (xctn *Base) String() string {
 	var (
-		sb strings.Builder
+		sb cos.SB
 		l  = 256
 	)
-	sb.Grow(l)
+	sb.Init(l)
 
 	sb.WriteString(xctn._nam)
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(cos.FormatTime(xctn.StartTime(), cos.StampMicro))
 
 	if !xctn.IsDone() { // ok to (rarely) miss _aborted_ state as this is purely informational
@@ -339,7 +338,7 @@ func (xctn *Base) String() string {
 	if xctn.IsAborted() {
 		sb.WriteString(fmt.Sprintf("-[abrt: %v]", xctn.AbortErr()))
 	}
-	sb.WriteByte('-')
+	sb.WriteUint8('-')
 	sb.WriteString(etime)
 
 	return sb.String()

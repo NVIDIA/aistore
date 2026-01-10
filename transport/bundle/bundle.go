@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"maps"
 	"strconv"
-	"strings"
 	"sync"
 	ratomic "sync/atomic"
 
@@ -118,21 +117,21 @@ func (sb *Streams) String() string { return sb.lid }
 
 // (compare w/ transport._loghdr)
 func (sb *Streams) _lid() string {
-	var s strings.Builder
-	s.Grow(20 + len(sb.trname))
+	var s cos.SB
+	s.Init(20 + len(sb.trname))
 
 	s.WriteString(cos.Ternary(sb.extra.Compressed(), "sb(z)-[", "sb-["))
 	s.WriteString(core.T.SID())
 	if sb.network != cmn.NetIntraData {
-		s.WriteByte('-')
+		s.WriteUint8('-')
 		s.WriteString(sb.network)
 	}
 	s.WriteString("-v")
 	s.WriteString(strconv.FormatInt(sb.smap.Version, 10))
-	s.WriteByte('-')
+	s.WriteUint8('-')
 	s.WriteString(sb.trname)
 
-	s.WriteByte(']')
+	s.WriteUint8(']')
 
 	return s.String()
 }
