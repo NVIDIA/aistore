@@ -329,8 +329,17 @@ func GetStatus(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
 }
 
 // Usage: xactions that report status back to IC (e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (*nl.Status, error) {
-	return WaitForStatus(bp, args, nil)
+func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (out *nl.Status, err error) {
+	out, err = WaitForStatus(bp, args, nil)
+	if err == nil || !args.OnlyRunning || args.ID != "" || args.Kind == "" {
+		return
+	}
+	// (404 + only-running + by-kind) == ok
+	herr, ok := err.(*cmn.ErrHTTP)
+	if ok && herr.Status == http.StatusNotFound {
+		err = nil
+	}
+	return
 }
 
 //

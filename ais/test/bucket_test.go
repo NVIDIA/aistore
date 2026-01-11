@@ -1230,6 +1230,8 @@ func TestRenameBucketTwice(t *testing.T) {
 	m.initAndSaveState(false /*cleanup*/)
 	m.expectTargets(1)
 
+	ensureICvsSnapsConsistency(baseParams, apc.ActRebalance)
+
 	srcBck := m.bck
 	tools.CreateBucket(t, m.proxyURL, srcBck, nil, false /*cleanup*/)
 	defer func() {

@@ -244,7 +244,8 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	})
 	if nl == nil {
 		smap := ic.p.owner.smap.get()
-		err := fmt.Errorf("nl not found: %s, %s", smap.StrIC(ic.p.si), msg)
+		s := "nl [" + smap.StrIC(ic.p.si) + ", " + msg.String() + "]"
+		err := cos.NewErrNotFound(ic.p, s)
 		ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 		return
 	}

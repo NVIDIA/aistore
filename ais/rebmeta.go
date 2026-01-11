@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 	ratomic "sync/atomic"
 
@@ -222,7 +223,21 @@ func rmdSync(m *rmdModifier, clone *rebMD) {
 
 // see `receiveRMD` (upon termination, notify IC)
 func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
-	nl := xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, nil)
+	var (
+		nl        *xact.NotifXactListener
+		tids      []string
+		notifiers meta.NodeMap
+	)
+	if m.smapCtx.msg.Action == apc.ActSelfJoinTarget {
+		tids = m.cur.TargetIDs
+
+		debug.Assertf(len(tids) > 0 && slices.Contains(tids, m.smapCtx.nsi.ID()),
+			"expecting RMD/Smap consistency, got %v vs %q", tids, m.smapCtx.nsi.ID())
+
+		notifiers = m.smapCtx.smap.Tmap.ActiveMap()
+		notifiers[m.smapCtx.nsi.ID()] = m.smapCtx.nsi
+	}
+	nl = xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, notifiers)
 	nl = nl.WithCause(m.smapCtx.msg.Action)
 	nl.SetOwner(equalIC)
 

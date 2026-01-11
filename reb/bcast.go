@@ -230,6 +230,11 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		reb.abortAll(err, rargs.xreb)
 		return status, false
 	}
+
+	if status.RebID == 0 && !status.Running {
+		nlog.Warningf("%s: %s[%s, v%d] starting up - joining", rargs.logHdr, tname, otherXid, status.RebVersion)
+	}
+
 	if xreb.IsAborted() {
 		return status, false
 	}

@@ -38,8 +38,6 @@ import (
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -781,53 +779,6 @@ func (m *ioContext) stopGets() {
 	m.stopCh <- struct{}{}
 }
 
-func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies int, greaterOk bool) {
-	m.t.Helper()
-	time.Sleep(time.Second)
-	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
-	_, err := api.WaitForXactionIC(baseParams, &xargs)
-	if err != nil && strings.Contains(err.Error(), "not found") {
-		tlog.Logfln("Warning: (kind %s, bucket %s), err: %v", apc.ActMakeNCopies, m.bck.Cname(""), err)
-		err = nil
-	}
-	tassert.CheckFatal(m.t, err)
-
-	// List Bucket - primarily for the copies
-	msg := &apc.LsoMsg{Flags: apc.LsCached, Prefix: m.prefix}
-	msg.AddProps(apc.GetPropsCopies, apc.GetPropsAtime, apc.GetPropsStatus)
-	objectList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
-	tassert.CheckFatal(m.t, err)
-
-	total := 0
-	copiesToNumObjects := make(map[int]int)
-	for _, entry := range objectList.Entries {
-		if entry.Atime == "" {
-			m.t.Errorf("%s: access time is empty", m.bck.Cname(entry.Name))
-		}
-		total++
-		if greaterOk && int(entry.Copies) > expectedCopies {
-			copiesToNumObjects[expectedCopies]++
-		} else {
-			copiesToNumObjects[int(entry.Copies)]++
-		}
-	}
-	tlog.Logfln("objects (total, copies) = (%d, %v)", total, copiesToNumObjects)
-	if total != m.num {
-		m.t.Errorf("list_objects: expecting %d objects, got %d", m.num, total)
-	}
-
-	if len(copiesToNumObjects) != 1 {
-		s, _ := jsoniter.MarshalIndent(copiesToNumObjects, "", " ")
-		m.t.Errorf("some objects do not have expected number of copies: %s", s)
-	}
-
-	for copies := range copiesToNumObjects {
-		if copies != expectedCopies {
-			m.t.Errorf("Expecting %d objects all to have %d replicas, got: %d", total, expectedCopies, copies)
-		}
-	}
-}
-
 func (m *ioContext) nextObjName() string {
 	if m.objIdx >= len(m.objNames) {
 		m.t.Fatal("not enough objects to get next object name")
@@ -836,73 +787,6 @@ func (m *ioContext) nextObjName() string {
 	objName := m.objNames[m.objIdx]
 	m.objIdx++
 	return objName
-}
-
-func (m *ioContext) ensureNoGetErrors() {
-	m.t.Helper()
-	if m.numGetErrs.Load() > 0 {
-		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
-	}
-}
-
-func (m *ioContext) ensureNumMountpaths(target *meta.Snode, mpList *apc.MountpathList) {
-	ensureNumMountpaths(m.t, target, mpList)
-}
-
-func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
-	t.Helper()
-	tname := target.StringEx()
-	baseParams := tools.BaseAPIParams()
-	mpl, err := api.GetMountpaths(baseParams, target)
-	tassert.CheckFatal(t, err)
-	for range 6 {
-		if len(mpl.Available) == len(mpList.Available) &&
-			len(mpl.Disabled) == len(mpList.Disabled) &&
-			len(mpl.WaitingDD) == len(mpList.WaitingDD) {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	if len(mpl.Available) != len(mpList.Available) {
-		t.Errorf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
-			tname, len(mpl.Available), mpl.WaitingDD, mpl.Disabled, len(mpList.Available))
-	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
-		t.Errorf("%s ended up with (dd=%v, disabled=%v) mountpaths, expecting (%v and %v), respectively",
-			tname, mpl.WaitingDD, mpl.Disabled, mpList.WaitingDD, mpList.Disabled)
-	}
-}
-
-func ensureNoDisabledMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
-	t.Helper()
-	for range 6 {
-		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	if len(mpList.WaitingDD) != 0 || len(mpList.Disabled) != 0 {
-		t.Fatalf("%s: disabled mountpaths at the start of the %q (avail=%d, dd=%v, disabled=%v)\n",
-			target.StringEx(), t.Name(), len(mpList.Available), mpList.WaitingDD, mpList.Disabled)
-	}
-}
-
-// background: shuffle=on increases the chance to have still-running rebalance
-// at the beginning of a new rename, rebalance, copy-bucket and similar
-func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
-	herr, ok := err.(*cmn.ErrHTTP)
-	if !ok {
-		return false
-	}
-	if herr.TypeCode != "ErrLimitedCoexistence" {
-		return false
-	}
-
-	tools.PromptWaitOnHerr(herr)
-
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(baseParams, &args)
-	time.Sleep(5 * time.Second)
-	return true
 }
 
 func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
@@ -1328,4 +1212,15 @@ func genBucketNs() cmn.Ns {
 		return cmn.NsGlobal
 	}
 	return cmn.Ns{Name: cos.GenTie()}
+}
+
+// TODO -- FIXME:
+// - use isErrNotFound() across the board
+// - unify; remove all strings.Contains("not found") and similar
+func isErrNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	herr := cmn.AsErrHTTP(err)
+	return herr != nil && herr.Status == http.StatusNotFound
 }

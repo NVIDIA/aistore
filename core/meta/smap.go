@@ -716,6 +716,14 @@ func (m *Smap) PubNet2Node(hostport string) *Snode {
 
 func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaeID] = snode }
 
+func (m NodeMap) IDs() []string {
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {

@@ -912,12 +912,17 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	baseParams := tools.BaseAPIParams(m.smap.Primary.PubNet.URL) // NOTE: only primary has self-removed
 
+	ensureICvsSnapsConsistency(baseParams, apc.ActRebalance)
+
 	// Remove all mountpaths on the target
 	target, _ := m.smap.GetRandTarget()
 	tname := target.StringEx()
 	origMountpaths, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	ensureNoDisabledMountpaths(t, target, origMountpaths)
+
+	rebargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+	_, _ = api.WaitForXactionIC(baseParams, &rebargs)
 
 	if len(origMountpaths.WaitingDD) != 0 || len(origMountpaths.Disabled) != 0 {
 		tlog.Logfln("Warning %s: orig mountpaths (avail=%d, dd=%d, disabled=%d)", tname,
@@ -941,7 +946,7 @@ func TestMountpathDisableAll(t *testing.T) {
 		if len(disabled) != 0 {
 			tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)",
 				tname)
-			args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
+			args := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
 			_, _ = api.WaitForXactionIC(baseParams, &args)
 
 			tools.WaitForResilvering(t, baseParams, nil)
@@ -955,8 +960,8 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	tlog.Logfln("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)", tname)
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(baseParams, &args)
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
+	_, _ = api.WaitForXactionIC(baseParams, &xargs)
 
 	// Check if mountpaths were actually disabled
 	time.Sleep(time.Second)
@@ -983,7 +988,7 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
-	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, &args)
 
 	tools.WaitForResilvering(t, baseParams, target)
@@ -1205,10 +1210,8 @@ func TestAtimeColdGet(t *testing.T) {
 	timeAfterPut := time.Now()
 
 	// Perform the COLD get
-	oah, err := api.GetObject(baseParams, bck, objectName, nil)
+	_, err := api.GetObject(baseParams, bck, objectName, nil)
 	tassert.CheckFatal(t, err)
-
-	tlog.Logfln("%+v", oah) // DEBUG
 
 	getAtime, getAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
 	tassert.Fatalf(t, !getAtime.IsZero(), "GET atime is zero")
