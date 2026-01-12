@@ -243,6 +243,7 @@ lint:go:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
+    - golangci-lint config verify
     - make lint
 
 lint:python:
