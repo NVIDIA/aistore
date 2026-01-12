@@ -672,11 +672,10 @@ func (r *runner) Stop(err error) {
 	close(r.stopCh)
 }
 
-// [log] serialize itself (slightly more efficiently than JSON)
+// [log] serialize periodic counters (exclude per-disk metrics; those are logged separately)
 func (r *runner) write(sgl *memsys.SGL, target, idle bool) {
 	var (
-		next  bool
-		disks bool // whether to write target disk metrics
+		next bool
 	)
 	// sort names
 	if len(r.sorted) != len(r.ctracker) {
@@ -696,10 +695,8 @@ func (r *runner) write(sgl *memsys.SGL, target, idle bool) {
 		if v.Value == 0 || n == Uptime { // always skip zeros and uptime
 			continue
 		}
-		if isDiskMetric(n) {
-			if isDiskUtilMetric(n) && v.Value > minLogDiskUtil {
-				disks = true // not idle - all
-			}
+		debug.Assert((isDiskMetric(n) && target) || !isDiskMetric(n))
+		if target && isDiskMetric(n) {
 			continue
 		}
 		if idle && n == KeepAliveLatency {
@@ -713,18 +710,6 @@ func (r *runner) write(sgl *memsys.SGL, target, idle bool) {
 		sgl.WriteByte(':')
 		sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // raw value
 		next = true
-	}
-	if disks {
-		debug.Assert(target)
-		for n, v := range r.ctracker {
-			if v.Value == 0 || !isDiskMetric(n) {
-				continue
-			}
-			sgl.WriteByte(',')
-			sgl.Write(cos.UnsafeB(n))
-			sgl.WriteByte(':')
-			sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // ditto
-		}
 	}
 	sgl.WriteByte('}')
 }
