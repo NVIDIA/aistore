@@ -27,29 +27,29 @@ import (
 func TestMaintenanceOnOff(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
 	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
 	smap := tools.GetClusterMap(t, proxyURL)
 
 	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
 
 	// Invalid target case
 	msg := &apc.ActValRmNode{DaemonID: "fakeID", SkipRebalance: true}
-	_, err := tools.StartMaintenance(baseParams, msg)
+	_, err := tools.StartMaintenance(bp, msg)
 	tassert.Fatalf(t, err != nil, "Maintenance for invalid daemon ID succeeded")
 
 	mntTarget, _ := smap.GetRandTarget()
 	msg.DaemonID = mntTarget.ID()
-	baseParams := tools.BaseAPIParams(proxyURL)
-	_, err = tools.StartMaintenance(baseParams, msg)
+	_, err = tools.StartMaintenance(bp, msg)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
 		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
-	_, err = api.StopMaintenance(baseParams, msg)
+	_, err = api.StopMaintenance(bp, msg)
 	tassert.CheckFatal(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target is back",
 		smap.Version, smap.CountActivePs(), smap.CountTargets())
 	tassert.CheckFatal(t, err)
-	_, err = api.StopMaintenance(baseParams, msg)
+	_, err = api.StopMaintenance(bp, msg)
 	tassert.Fatalf(t, err != nil, "Canceling maintenance must fail for 'normal' daemon")
 }
 
@@ -67,7 +67,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 			proxyURL:  proxyURL,
 		}
 		proxyURL    = tools.RandomProxyURL(t)
-		baseParams  = tools.BaseAPIParams(proxyURL)
+		bp          = tools.BaseAPIParams(proxyURL)
 		origEntries = make(map[string]*cmn.LsoEnt, 1500)
 	)
 
@@ -78,7 +78,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map
 	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
-	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -90,16 +90,16 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tsi, _ := m.smap.GetRandTarget()
 	tlog.Logfln("Put target %s in maintenance mode", tsi.StringEx())
 	actVal := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
-	rebID, err := tools.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(bp, actVal)
 	tassert.CheckFatal(t, err)
 
 	defer func() {
-		rebID, err = api.StopMaintenance(baseParams, actVal)
+		rebID, err = api.StopMaintenance(bp, actVal)
 		tassert.CheckFatal(t, err)
 		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActivePs(), m.smap.CountTargets())
 		args := xact.ArgsMsg{ID: rebID, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -107,10 +107,10 @@ func TestMaintenanceListObjects(t *testing.T) {
 		m.smap.Version, m.smap.CountActivePs(), m.smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 
 	// 3. Check if we can list all the objects
-	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err = api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -131,25 +131,25 @@ func TestMaintenanceMD(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		smap       = tools.GetClusterMap(t, proxyURL)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		proxyURL = tools.RandomProxyURL(t)
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bp       = tools.BaseAPIParams(proxyURL)
 
 		dcmTarget, _  = smap.GetRandTarget()
-		allTgtsMpaths = tools.GetTargetsMountpaths(t, smap, baseParams)
+		allTgtsMpaths = tools.GetTargetsMountpaths(t, smap, bp)
 	)
 
 	tlog.Logfln("targets: %d, proxies: %d", smap.CountActiveTs(), smap.CountActivePs())
 
 	t.Cleanup(func() {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		api.WaitForXactionIC(baseParams, &args)
+		api.WaitForXactionIC(bp, &args)
 	})
 
 	tlog.Logfln("Decommission %s", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true, KeepInitialConfig: true}
-	_, err := tools.DecommissionNode(baseParams, msg)
+	_, err := tools.DecommissionNode(bp, msg)
 	tassert.CheckFatal(t, err)
 
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(),
@@ -191,12 +191,12 @@ func TestMaintenanceMD(t *testing.T) {
 func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal, Long: true})
 	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		smap       = tools.GetClusterMap(t, proxyURL)
-		baseParams = tools.BaseAPIParams(proxyURL)
-		objCount   = 100
-		objPath    = "ic-decomm/"
-		fileSize   = cos.KiB
+		proxyURL = tools.RandomProxyURL(t)
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bp       = tools.BaseAPIParams(proxyURL)
+		objCount = 100
+		objPath  = "ic-decomm/"
+		fileSize = cos.KiB
 
 		dcmTarget, _         = smap.GetRandTarget()
 		origTargetCount      = smap.CountTargets()
@@ -210,7 +210,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(fileSize), CksumType: cos.ChecksumCesXxh})
 		_, err := api.PutObject(&api.PutArgs{
-			BaseParams: baseParams,
+			BaseParams: bp,
 			Bck:        bck,
 			ObjName:    objName,
 			Reader:     r,
@@ -222,7 +222,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tlog.Logfln("Decommission %s", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true, KeepInitialConfig: true}
-	rebID, err := tools.DecommissionNode(baseParams, msg)
+	rebID, err := tools.DecommissionNode(bp, msg)
 	tassert.CheckError(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned",
 		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
@@ -240,10 +240,10 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 
 	msgList := &apc.LsoMsg{Prefix: objPath}
-	lst, err := api.ListObjects(baseParams, bck, msgList, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msgList, api.ListArgs{})
 	tassert.CheckError(t, err)
 	if lst != nil && len(lst.Entries) != objCount {
 		t.Errorf("Wrong number of objects: have %d, expected %d", len(lst.Entries), objCount)
@@ -270,19 +270,19 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	if dcm != nil {
 		tlog.Logfln("Canceling maintenance for %s", dcm.ID())
 		args := xact.ArgsMsg{Kind: apc.ActRebalance}
-		err = api.AbortXaction(baseParams, &args)
+		err = api.AbortXaction(bp, &args)
 		tassert.CheckError(t, err)
 		val := &apc.ActValRmNode{DaemonID: dcm.ID()}
-		rebID, err = api.StopMaintenance(baseParams, val)
+		rebID, err = api.StopMaintenance(bp, val)
 		tassert.CheckError(t, err)
-		tools.WaitForRebalanceByID(t, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, bp, rebID)
 	} else {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckError(t, err)
 	}
 
-	lst, err = api.ListObjects(baseParams, bck, msgList, api.ListArgs{})
+	lst, err = api.ListObjects(bp, bck, msgList, api.ListArgs{})
 	tassert.CheckError(t, err)
 	if lst != nil && len(lst.Entries) != objCount {
 		t.Errorf("Invalid number of objects: %d, expected %d", len(lst.Entries), objCount)
@@ -314,9 +314,9 @@ func TestMaintenanceRebalance(t *testing.T) {
 			numGetsEachFile: 1,
 			proxyURL:        proxyURL,
 		}
-		actVal     = &apc.ActValRmNode{}
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		actVal   = &apc.ActValRmNode{}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
@@ -328,11 +328,11 @@ func TestMaintenanceRebalance(t *testing.T) {
 	tlog.Logfln("Removing %s", tsi.StringEx())
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := tools.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(bp, actVal)
 	tassert.CheckError(t, err)
 	defer func() {
 		if !restored {
-			rebID, err := api.StopMaintenance(baseParams, actVal)
+			rebID, err := api.StopMaintenance(bp, actVal)
 			tassert.CheckError(t, err)
 			_, err = tools.WaitForClusterState(
 				proxyURL,
@@ -340,11 +340,11 @@ func TestMaintenanceRebalance(t *testing.T) {
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tools.WaitForRebalanceByID(t, baseParams, rebID)
+			tools.WaitForRebalanceByID(t, bp, rebID)
 		}
-		tools.ClearMaintenance(baseParams, tsi)
+		tools.ClearMaintenance(bp, tsi)
 	}()
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 
 	smap, err := tools.WaitForClusterState(
 		proxyURL,
@@ -357,7 +357,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	m.gets(nil, false)
 	m.ensureNoGetErrors()
 
-	rebID, err = api.StopMaintenance(baseParams, actVal)
+	rebID, err = api.StopMaintenance(bp, actVal)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(
 		proxyURL,
@@ -368,7 +368,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 	restored = true
 	m.smap = smap
 
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 }
 
 func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
@@ -387,8 +387,8 @@ func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
 				multipart: true,
 			},
 		}
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 	)
 
 	if testing.Short() {
@@ -403,18 +403,18 @@ func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
 	m.puts()
 	tsi, _ := m.smap.GetRandTarget()
 	tlog.Logfln("Removing %s", tsi.StringEx())
-	rebID, err := tools.StartMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+	rebID, err := tools.StartMaintenance(bp, &apc.ActValRmNode{DaemonID: tsi.ID()})
 	tassert.CheckError(t, err)
 
 	maintenanceStopped := false
 	t.Cleanup(func() {
 		if !maintenanceStopped {
-			stopMaintenance(t, baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
+			stopMaintenance(t, bp, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
 		}
-		tools.ClearMaintenance(baseParams, tsi)
+		tools.ClearMaintenance(bp, tsi)
 	})
 
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 
 	smap, err := tools.WaitForClusterState(proxyURL, "target removed from the cluster", m.smap.Version, origProxyCnt, origTargetCount-1, tsi.ID())
 	tassert.CheckFatal(t, err)
@@ -423,7 +423,7 @@ func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
 	m.gets(nil, true)
 	m.ensureNoGetErrors()
 
-	rebID, err = stopMaintenance(t, baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
+	rebID, err = stopMaintenance(t, bp, &apc.ActValRmNode{DaemonID: tsi.ID()}, proxyURL, m.smap.Version, origProxyCnt, origTargetCount)
 	tassert.CheckFatal(t, err)
 	maintenanceStopped = true
 
@@ -431,17 +431,17 @@ func TestMaintenanceRebalanceWithChunkedObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	m.smap = smap
 
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 }
 
-func stopMaintenance(t *testing.T, baseParams api.BaseParams, actVal *apc.ActValRmNode, proxyURL string, smapVersion int64, origProxyCnt, origTargetCount int) (string, error) {
-	rebID, err := api.StopMaintenance(baseParams, actVal)
+func stopMaintenance(t *testing.T, bp api.BaseParams, actVal *apc.ActValRmNode, proxyURL string, smapVersion int64, origProxyCnt, origTargetCount int) (string, error) {
+	rebID, err := api.StopMaintenance(bp, actVal)
 	if err != nil {
 		return "", err
 	}
 	_, err = tools.WaitForClusterState(proxyURL, "target joined (cleanup)", smapVersion, origProxyCnt, origTargetCount)
 	if err == nil {
-		tools.WaitForRebalanceByID(t, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, bp, rebID)
 	}
 	return rebID, nil
 }
@@ -459,9 +459,9 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 			numGetsEachFile: 1,
 			proxyURL:        proxyURL,
 		}
-		actVal     = &apc.ActValRmNode{}
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		actVal   = &apc.ActValRmNode{}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
@@ -476,14 +476,14 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	tlog.Logfln("Removing %s", tsi.StringEx())
 	restored := false
 	actVal.DaemonID = tsi.ID()
-	rebID, err := tools.StartMaintenance(baseParams, actVal)
+	rebID, err := tools.StartMaintenance(bp, actVal)
 	tassert.CheckFatal(t, err)
 	defer func() {
 		if !stopped {
 			m.stopGets()
 		}
 		if !restored {
-			rebID, err := api.StopMaintenance(baseParams, actVal)
+			rebID, err := api.StopMaintenance(bp, actVal)
 			tassert.CheckFatal(t, err)
 			_, err = tools.WaitForClusterState(
 				proxyURL,
@@ -491,11 +491,11 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
-			tools.WaitForRebalanceByID(t, baseParams, rebID)
+			tools.WaitForRebalanceByID(t, bp, rebID)
 		}
-		tools.ClearMaintenance(baseParams, tsi)
+		tools.ClearMaintenance(bp, tsi)
 	}()
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 
 	smap, err := tools.WaitForClusterState(
 		proxyURL,
@@ -509,7 +509,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	stopped = true
 	m.ensureNoGetErrors()
 
-	rebID, err = api.StopMaintenance(baseParams, actVal)
+	rebID, err = api.StopMaintenance(bp, actVal)
 	tassert.CheckFatal(t, err)
 	restored = true
 	smap, err = tools.WaitForClusterState(
@@ -519,7 +519,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 	)
 	tassert.CheckFatal(t, err)
 	m.smap = smap
-	tools.WaitForRebalanceByID(t, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, bp, rebID)
 }
 
 func TestNodeShutdown(t *testing.T) {

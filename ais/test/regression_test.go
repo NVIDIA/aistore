@@ -59,8 +59,8 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 			fileSize: cos.KiB,
 		}
 
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 	)
 
 	if docker.IsRunning() {
@@ -88,7 +88,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	err := os.WriteFile(fqn, []byte("this file has been corrupted"), cos.PermRWR)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
+	_, err = api.GetObjectWithValidation(bp, m.bck, objName, nil)
 	tassert.Errorf(t, err != nil, "error is nil, expected error getting corrupted object")
 }
 
@@ -111,7 +111,7 @@ func TestRenameBucket(t *testing.T) {
 			Provider: apc.AIS,
 		}
 		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		bp         = tools.BaseAPIParams(proxyURL)
 		renamedBck = cmn.Bck{
 			Name:     bck.Name + "_" + cos.GenTie(),
 			Provider: apc.AIS,
@@ -124,7 +124,7 @@ func TestRenameBucket(t *testing.T) {
 				tools.DestroyBucket(t, proxyURL, renamedBck)
 			})
 
-			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: bck.Provider}, apc.FltPresent)
+			bcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: bck.Provider}, apc.FltPresent)
 			tassert.CheckFatal(t, err)
 
 			regData := regressionTestData{
@@ -149,7 +149,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			num:      2036,
 			fileSize: cos.KiB,
 		}
-		baseParams = tools.BaseAPIParams(proxyURL)
+		bp = tools.BaseAPIParams(proxyURL)
 
 		xid string
 		err error
@@ -159,16 +159,16 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	m.puts()
 
 	if rtd.rename {
-		xid, err = api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
-		if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		xid, err = api.RenameBucket(bp, rtd.bck, rtd.renamedBck)
+		if err != nil && ensurePrevRebalanceIsFinished(bp, err) {
 			// can retry
-			xid, err = api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+			xid, err = api.RenameBucket(bp, rtd.bck, rtd.renamedBck)
 		}
 		tassert.CheckFatal(t, err)
 
 		tlog.Logfln("Renamed %s => %s", rtd.bck.String(), rtd.renamedBck.String())
 		if rtd.wait {
-			postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames, xid)
+			postRenameWaitAndCheck(t, bp, rtd, m.num, m.objNames, xid)
 		}
 		m.bck = rtd.renamedBck
 	}
@@ -183,15 +183,15 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	if !rtd.rename || rtd.wait {
 		m.del()
 	} else {
-		postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames, xid)
+		postRenameWaitAndCheck(t, bp, rtd, m.num, m.objNames, xid)
 		m.del()
 	}
 }
 
 //nolint:gocritic // ignoring (regressionTestData) hugeParam
-func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string, xid string) {
+func postRenameWaitAndCheck(t *testing.T, bp api.BaseParams, rtd regressionTestData, numPuts int, objNames []string, xid string) {
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
-	_, err := api.WaitForXactionIC(baseParams, &xargs)
+	_, err := api.WaitForXactionIC(bp, &xargs)
 	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			smap := tools.GetClusterMap(t, proxyURL)
@@ -203,7 +203,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 	} else {
 		tlog.Logfln("rename-bucket[%s] %s => %s done", xid, rtd.bck.String(), rtd.renamedBck.String())
 	}
-	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: rtd.bck.Provider}, apc.FltPresent)
+	bcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: rtd.bck.Provider}, apc.FltPresent)
 	tassert.CheckFatal(t, err)
 
 	if len(bcks) != rtd.numBuckets {
@@ -225,7 +225,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBck.String())
 	}
 
-	lst, err := api.ListObjects(baseParams, rtd.renamedBck, nil, api.ListArgs{})
+	lst, err := api.ListObjects(bp, rtd.renamedBck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	unique := make(map[string]bool)
 	for _, e := range lst.Entries {
@@ -257,10 +257,10 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 
 func TestRenameObjects(t *testing.T) {
 	var (
-		renameStr  = "rename"
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
+		renameStr = "rename"
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		bck       = cmn.Bck{
 			Name:     t.Name(),
 			Provider: apc.AIS,
 		}
@@ -281,7 +281,7 @@ func TestRenameObjects(t *testing.T) {
 		newObjName := path.Join(renameStr, objName) + ".renamed" // objName fqn
 		newObjNames = append(newObjNames, newObjName)
 
-		err := api.RenameObject(baseParams, bck, objName, newObjName)
+		err := api.RenameObject(bp, bck, objName, newObjName)
 		tassert.CheckFatal(t, err)
 
 		i++
@@ -292,7 +292,7 @@ func TestRenameObjects(t *testing.T) {
 
 	// Check that renamed objects exist.
 	for _, newObjName := range newObjNames {
-		_, err := api.GetObject(baseParams, bck, newObjName, nil)
+		_, err := api.GetObject(bp, bck, newObjName, nil)
 		tassert.CheckError(t, err)
 	}
 }
@@ -340,6 +340,8 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		bytesSentOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsOutObjSize)
 		bytesRecvOrig[targetID] = tools.GetNamedStatsVal(targetStats, cos.StreamsInObjSize)
 	}
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
 
 	// Step 1: Unregister multiple targets
 	removed := make(map[string]*meta.Snode, m.smap.CountActiveTs()-1)
@@ -348,14 +350,14 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		for _, tgt := range removed {
 			rebID = m.stopMaintenance(tgt)
 		}
-		tools.WaitForRebalanceByID(t, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, bp, rebID)
 	}()
 
 	targets := m.smap.Tmap.ActiveNodes()
 	for i := range targetsToUnregister {
 		tlog.Logfln("Put %s in maintenance (no rebalance)", targets[i].StringEx())
 		args := &apc.ActValRmNode{DaemonID: targets[i].ID(), SkipRebalance: true}
-		_, err := api.StartMaintenance(baseParams, args)
+		_, err := api.StartMaintenance(bp, args)
 		tassert.CheckFatal(t, err)
 		removed[targets[i].ID()] = targets[i]
 	}
@@ -387,8 +389,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logfln("Stopping GETs...")
 	m.stopGets()
 
-	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalAndResil(t, baseParams)
+	tools.WaitForRebalAndResil(t, bp)
 
 	clusterStats = tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
@@ -408,20 +409,20 @@ func TestReregisterMultipleTargets(t *testing.T) {
 
 func TestGetNodeStats(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
-	baseParams := tools.BaseAPIParams(proxyURL)
+	bp := tools.BaseAPIParams(proxyURL)
 	smap := tools.GetClusterMap(t, proxyURL)
 
 	proxy, err := smap.GetRandProxy(false)
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%s:", proxy.StringEx())
-	stats, err := api.GetDaemonStats(baseParams, proxy)
+	stats, err := api.GetDaemonStats(bp, proxy)
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%+v", stats)
 
 	target, err := smap.GetRandTarget()
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%s:", target.StringEx())
-	stats, err = api.GetDaemonStats(baseParams, target)
+	stats, err = api.GetDaemonStats(bp, target)
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%+v", stats)
 }
@@ -430,12 +431,13 @@ func TestGetClusterStats(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
 	cluStats := tools.GetClusterStats(t, proxyURL)
+	bp := tools.BaseAPIParams(proxyURL)
 
 	for tid, vStats := range cluStats.Target {
 		tsi := smap.GetNode(tid)
 		tname := tsi.StringEx()
 		tassert.Fatalf(t, tsi != nil, "%s is nil", tid)
-		tStats, err := api.GetDaemonStats(baseParams, tsi)
+		tStats, err := api.GetDaemonStats(bp, tsi)
 		tassert.CheckFatal(t, err)
 
 		vCDF := vStats.Tcdf
@@ -458,8 +460,8 @@ func TestGetClusterStats(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 
 		m = &ioContext{
 			t:      t,
@@ -475,7 +477,7 @@ func TestLRU(t *testing.T) {
 	m.remotePuts(false /*evict*/)
 
 	// NOTE: cannot "fight" atimes here, need to unload all cached LOMs
-	err := api.ClearLcache(baseParams, "" /*all targets*/)
+	err := api.ClearLcache(bp, "" /*all targets*/)
 	tassert.CheckFatal(t, err)
 
 	m.backdateLocalObjs(time.Hour * 3)
@@ -540,11 +542,11 @@ func TestLRU(t *testing.T) {
 	})
 
 	tlog.Logln("starting LRU...")
-	xid, err := api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActLRU}, "")
+	xid, err := api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActLRU}, "")
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActLRU, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Check results
@@ -576,9 +578,9 @@ func TestPrefetchList(t *testing.T) {
 				numChunks: 4, // will create 4 chunks
 			},
 		}
-		bck        = cliBck
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
+		bck      = cliBck
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
 	)
 
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
@@ -590,32 +592,32 @@ func TestPrefetchList(t *testing.T) {
 	// 2. Evict those objects from the cache and prefetch them
 	tlog.Logfln("Evicting and prefetching %d objects", len(m.objNames))
 	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: m.objNames}}
-	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
+	xid, err := api.EvictMultiObj(bp, bck, evdMsg)
 	if err != nil {
 		t.Error(err)
 	}
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// 3. Prefetch evicted objects
 	{
 		var msg apc.PrefetchMsg
 		msg.ObjNames = m.objNames
-		xid, err = api.Prefetch(baseParams, bck, &msg)
+		xid, err = api.Prefetch(bp, bck, &msg)
 		if err != nil {
 			t.Error(err)
 		}
 	}
 
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure that all the prefetches occurred.
 	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
-	snaps, err := api.QueryXactionSnaps(baseParams, &xargs)
+	snaps, err := api.QueryXactionSnaps(bp, &xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(m.num) {
@@ -624,7 +626,7 @@ func TestPrefetchList(t *testing.T) {
 
 	msg := &apc.LsoMsg{}
 	msg.SetFlag(apc.LsCached)
-	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != m.num {
 		t.Errorf("list-objects %s: expected %d, got %d", bck.String(), m.num, len(lst.Entries))
@@ -636,15 +638,15 @@ func TestPrefetchList(t *testing.T) {
 func TestDeleteList(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
-			err        error
-			prefix     = "__listrange/tstf-"
-			wg         = &sync.WaitGroup{}
-			objCnt     = 100
-			errCh      = make(chan error, objCnt)
-			files      = make([]string, 0, objCnt)
-			proxyURL   = tools.RandomProxyURL(t)
-			baseParams = tools.BaseAPIParams(proxyURL)
-			b          = bck.Clone()
+			err      error
+			prefix   = "__listrange/tstf-"
+			wg       = &sync.WaitGroup{}
+			objCnt   = 100
+			errCh    = make(chan error, objCnt)
+			files    = make([]string, 0, objCnt)
+			proxyURL = tools.RandomProxyURL(t)
+			bp       = tools.BaseAPIParams(proxyURL)
+			b        = bck.Clone()
 		)
 
 		// 1. Put files to delete
@@ -667,16 +669,16 @@ func TestDeleteList(t *testing.T) {
 
 		// 2. Delete the objects
 		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: files}}
-		xid, err := api.DeleteMultiObj(baseParams, b, evdMsg)
+		xid, err := api.DeleteMultiObj(bp, b, evdMsg)
 		tassert.CheckError(t, err)
 
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
 		msg := &apc.LsoMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
+		bktlst, err := api.ListObjects(bp, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -695,7 +697,7 @@ func TestPrefetchRange(t *testing.T) {
 			ordered:  true,
 		}
 		proxyURL      = tools.RandomProxyURL(t)
-		baseParams    = tools.BaseAPIParams(proxyURL)
+		bp            = tools.BaseAPIParams(proxyURL)
 		prefetchRange = "{1..150}"
 		bck           = cliBck
 	)
@@ -726,25 +728,25 @@ func TestPrefetchRange(t *testing.T) {
 	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
 	tlog.Logfln("Evicting and prefetching %d objects (range: %s)", len(files), rng)
 	evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: rng}}
-	xid, err := api.EvictMultiObj(baseParams, bck, evdMsg)
+	xid, err := api.EvictMultiObj(bp, bck, evdMsg)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	{
 		var msg apc.PrefetchMsg
 		msg.Template = rng
-		xid, err = api.Prefetch(baseParams, bck, &msg)
+		xid, err = api.Prefetch(bp, bck, &msg)
 		tassert.CheckError(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckFatal(t, err)
 	}
 
 	// 4. Ensure all done
 	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
-	snaps, err := api.QueryXactionSnaps(baseParams, &xargs)
+	snaps, err := api.QueryXactionSnaps(bp, &xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(len(files)) {
@@ -753,7 +755,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	msg := &apc.LsoMsg{Prefix: m.prefix}
 	msg.SetFlag(apc.LsCached)
-	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) < len(files) {
 		t.Errorf("list-objects %s/%s: expected %d, got %d", bck.String(), m.prefix, len(files), len(lst.Entries))
@@ -788,7 +790,7 @@ func TestDeleteRange(t *testing.T) {
 			wg             = &sync.WaitGroup{}
 			errCh          = make(chan error, objCnt)
 			proxyURL       = tools.RandomProxyURL(t)
-			baseParams     = tools.BaseAPIParams(proxyURL)
+			bp             = tools.BaseAPIParams(proxyURL)
 			b              = bck.Clone()
 		)
 
@@ -810,15 +812,15 @@ func TestDeleteRange(t *testing.T) {
 		// 2. Delete the small range of objects
 		tlog.Logfln("Delete in range %s", smallrange)
 		evdSmallMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: smallrange}}
-		xid, err := api.DeleteMultiObj(baseParams, b, evdSmallMsg)
+		xid, err := api.DeleteMultiObj(bp, b, evdSmallMsg)
 		tassert.CheckError(t, err)
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
 		msg := &apc.LsoMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
+		bktlst, err := api.ListObjects(bp, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
@@ -840,14 +842,14 @@ func TestDeleteRange(t *testing.T) {
 		tlog.Logfln("Delete in range %s", bigrange)
 		// 4. Delete the big range of objects
 		evdBigMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: bigrange}}
-		xid, err = api.DeleteMultiObj(baseParams, b, evdBigMsg)
+		xid, err = api.DeleteMultiObj(bp, b, evdBigMsg)
 		tassert.CheckError(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, &args)
+		_, err = api.WaitForXactionIC(bp, &args)
 		tassert.CheckFatal(t, err)
 
 		// 5. Check to see that all the files have been deleted
-		bktlst, err = api.ListObjects(baseParams, b, msg, api.ListArgs{})
+		bktlst, err = api.ListObjects(bp, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -873,7 +875,7 @@ func TestStressDeleteRange(t *testing.T) {
 		objNamePrefix = "__listrange/tstf-"
 		partialRange  = fmt.Sprintf("%s{%d..%d}", objNamePrefix, 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		fullRange     = fmt.Sprintf("%s{0..%d}", objNamePrefix, numFiles)
-		baseParams    = tools.BaseAPIParams(proxyURL)
+		bp            = tools.BaseAPIParams(proxyURL)
 		bck           = cmn.Bck{
 			Name:     testBucketName,
 			Provider: apc.AIS,
@@ -898,7 +900,7 @@ func TestStressDeleteRange(t *testing.T) {
 			for j := range numFiles / numReaders {
 				objName := fmt.Sprintf("%s%d", objNamePrefix, i*numFiles/numReaders+j)
 				putArgs := api.PutArgs{
-					BaseParams: baseParams,
+					BaseParams: bp,
 					Bck:        bck,
 					ObjName:    objName,
 					Cksum:      reader.Cksum(),
@@ -918,16 +920,16 @@ func TestStressDeleteRange(t *testing.T) {
 	// 2. Delete a range of objects
 	tlog.Logfln("Deleting objects in range: %s", partialRange)
 	evdPartialMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: partialRange}}
-	xid, err := api.DeleteMultiObj(baseParams, bck, evdPartialMsg)
+	xid, err := api.DeleteMultiObj(bp, bck, evdPartialMsg)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &apc.LsoMsg{Prefix: objNamePrefix}
-	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d",
@@ -951,15 +953,15 @@ func TestStressDeleteRange(t *testing.T) {
 	// 4. Delete the entire range of objects
 	tlog.Logfln("Deleting objects in range: %s", fullRange)
 	evdFullMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: nil, Template: fullRange}}
-	xid, err = api.DeleteMultiObj(baseParams, bck, evdFullMsg)
+	xid, err = api.DeleteMultiObj(bp, bck, evdFullMsg)
 	tassert.CheckError(t, err)
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted
 	msg = &apc.LsoMsg{Prefix: objNamePrefix}
-	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err = api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(lst.Entries))

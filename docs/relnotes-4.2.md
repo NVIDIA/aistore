@@ -198,6 +198,8 @@ Corrected non-recursive listing (`ls --nr`) semantics for AIS buckets:
 <a name="global-rebalance"></a>
 ## Global Rebalance
 
+Some of the notable changes made rebalance renewal and finalization more atomic by introducing a critical section that serializes rebalance runs and protects shared global state together with xaction renewal as a single unit.
+
 Improved state management and error handling:
 
 - **Atomic xaction binding** - serialize `initRenew()` and `fini()` for symmetric state transitions
