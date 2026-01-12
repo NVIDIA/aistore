@@ -536,6 +536,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	const minNumNodes = 2
 	var (
 		proxyURL = tools.GetPrimaryURL()
+		bp       = tools.BaseAPIParams(proxyURL)
 		smap     = tools.GetClusterMap(t, proxyURL)
 		node     *meta.Snode
 		err      error
@@ -565,14 +566,14 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	// 1. Shutdown a random node.
-	_, cmd, rebID, err := tools.ShutdownNode(baseParams, node)
+	_, cmd, rebID, err := tools.ShutdownNode(bp, node)
 
 	tassert.CheckFatal(t, err)
 	if nodeType == apc.Target && origTargetCount > 1 {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 		for range 3 {
-			status, err := api.WaitForXactionIC(baseParams, &xargs)
+			status, err := api.WaitForXactionIC(bp, &xargs)
 			if err == nil {
 				tlog.Logfln("%v", status)
 				break
@@ -605,14 +606,16 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		"node should be in maintenance mode after restart")
 
 	// 4. Remove the node from maintenance.
-	_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: node.ID()})
+	_, err = api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: node.ID()})
 	tassert.CheckError(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance",
 		smap.Version, origProxyCnt, origTargetCount)
 	tassert.CheckError(t, err)
 
 	if nodeType == apc.Target {
-		tools.WaitForRebalAndResil(t, baseParams)
+		args := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+		status, err := api.WaitForXactionIC(bp, &args)
+		tlog.Logfln("wait-reb result: status=%v err=%v", status, err)
 	}
 }
 
@@ -632,7 +635,7 @@ func TestShutdownListObjects(t *testing.T) {
 			proxyURL:  proxyURL,
 		}
 		proxyURL    = tools.RandomProxyURL(t)
-		baseParams  = tools.BaseAPIParams(proxyURL)
+		bp          = tools.BaseAPIParams(proxyURL)
 		origEntries = make(map[string]*cmn.LsoEnt, m.num)
 	)
 
@@ -644,7 +647,7 @@ func TestShutdownListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map.
 	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
-	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -654,7 +657,7 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// 2. Shut down a random target.
 	tsi, _ := m.smap.GetRandTarget()
-	_, cmd, rebID, err := tools.ShutdownNode(baseParams, tsi)
+	_, cmd, rebID, err := tools.ShutdownNode(bp, tsi)
 	tassert.CheckFatal(t, err)
 
 	// Restore target after test is over.
@@ -669,23 +672,23 @@ func TestShutdownListObjects(t *testing.T) {
 		// first, activate target, second, wait-for-cluster-state
 		time.Sleep(time.Second)
 
-		_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+		_, err = api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: tsi.ID()})
 		if err != nil {
 			time.Sleep(3 * time.Second)
-			_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+			_, err = api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: tsi.ID()})
 		}
 		tassert.CheckError(t, err)
 		_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance", m.smap.Version, 0, origTargetCount)
 		tassert.CheckError(t, err)
 
-		tools.WaitForRebalAndResil(t, baseParams)
+		tools.WaitForRebalAndResil(t, bp)
 	})
 
 	if origTargetCount > 1 {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 		for range 3 {
-			status, err := api.WaitForXactionIC(baseParams, &xargs)
+			status, err := api.WaitForXactionIC(bp, &xargs)
 			if err == nil {
 				tlog.Logfln("%v", status)
 				break
@@ -705,7 +708,7 @@ func TestShutdownListObjects(t *testing.T) {
 		return
 	}
 	tlog.Logln("Listing objects")
-	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	lst, err = api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))

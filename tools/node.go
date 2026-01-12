@@ -311,6 +311,12 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			if !expTgt.satisfied(smap.CountActiveTs()) || !expPrx.satisfied(smap.CountActivePs()) {
 				return nil, fmt.Errorf("%s updated and does not satisfy the state condition anymore", smap.StringEx())
 			}
+
+			xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: RebalanceTimeout}
+			if ns, err := api.GetOneXactionStatus(bp, &xargs); err == nil {
+				tlog.Logfln("Warning: %s still running", ns.String())
+			}
+
 			return smap, nil
 		}
 		lastVer = smap.Version

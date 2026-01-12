@@ -224,27 +224,59 @@ func rmdSync(m *rmdModifier, clone *rebMD) {
 // see `receiveRMD` (upon termination, notify IC)
 func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	var (
+		tsi  *meta.Snode // case: apc.ActStopMaintenance
+		tids []string    // case: apc.ActSelfJoinTarget
+
 		nl        *xact.NotifXactListener
-		tids      []string
 		notifiers meta.NodeMap
+		action    = m.smapCtx.msg.Action
 	)
-	if m.smapCtx.msg.Action == apc.ActSelfJoinTarget {
+	switch action {
+	case apc.ActSelfJoinTarget:
+		// manually add joining target to notifiers
+		debug.Assert(m.smapCtx.nsi != nil) // ('n' for "new")
 		tids = m.cur.TargetIDs
 
 		debug.Assertf(len(tids) > 0 && slices.Contains(tids, m.smapCtx.nsi.ID()),
 			"expecting RMD/Smap consistency, got %v vs %q", tids, m.smapCtx.nsi.ID())
 
+		// expecting 'rebalanced-finished' notification from the joining target as well
 		notifiers = m.smapCtx.smap.Tmap.ActiveMap()
 		notifiers[m.smapCtx.nsi.ID()] = m.smapCtx.nsi
+
+	case apc.ActStopMaintenance:
+		// manually add (maintenance => active) target to notifiers
+		debug.AssertNoErr(cos.ValidateDaemonID(m.smapCtx.sid))
+
+		si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
+		debug.Assertf(si != nil, "%s: missing %s in %s", apc.ActStopMaintenance, m.smapCtx.sid, m.smapCtx.smap.StringEx())
+
+		notifiers = m.smapCtx.smap.Tmap.ActiveMap()
+		if si != nil && si.IsTarget() {
+			// as far as rebalancing, proxy stop-maintenance is inconsequential
+			tsi = si
+			notifiers[tsi.ID()] = tsi
+		}
 	}
+	//
+	// construct notification listener and start listening (in prxnotif)
+	//
 	nl = xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, notifiers)
-	nl = nl.WithCause(m.smapCtx.msg.Action)
+	nl = nl.WithCause(action)
 	nl.SetOwner(equalIC)
 
 	nl.F = m.log
 	if cb != nil {
 		nl.F = cb
 	}
+
+	if tsi != nil {
+		// apc.ActStopMaintenance: the target is transitioning: maintenance => active
+		// - the target is excluded from nl.ActiveSrsc via NewNLB=>ActiveSrcs=>ActiveMap() construction
+		// - add it back
+		nl.ActiveSrcs[tsi.ID()] = tsi
+	}
+
 	err := m.p.notifs.add(nl)
 	debug.AssertNoErr(err)
 }
