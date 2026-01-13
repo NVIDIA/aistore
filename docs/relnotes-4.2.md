@@ -1,37 +1,38 @@
 # AIStore 4.2 Release Notes
 
-## Overview
+AIStore **4.2** focuses on resilver correctness and reliability, authentication and observability, API modernization, and operational fixes across backends and tooling.
 
-AIStore **4.2** focuses on resilver reliability, authentication/authorization, observability, and API modernization.
+The [resilver](https://github.com/NVIDIA/aistore/blob/main/docs/resilver.md) subsystem was substantially rewritten, introducing deterministic copy selection,
+explicit preemption on [mountpath](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#mountpath) events, and full support for chunked object relocation.
 
-AIS [resilver](https://github.com/NVIDIA/aistore/blob/main/docs/resilver.md) is substantially rewritten with deterministic copy selection, proper preemption on mountpath events, and full support for chunked object relocation.
+Authentication enhancements include Prometheus metrics for AuthN, persistent RSA key pairs, and OIDC-compatible discovery and JWKS endpoints,
+improving both security posture and production visibility.
 
-Authentication gains Prometheus metrics and persistent RSA key pairs for AuthN.
+New APIs replace legacy polling with explicit condition-based waiting for xactions and introduce a chunk-aware `HEAD(object)`,
+enabling more scalable job monitoring and efficient large-object access.
 
-New Go APIs replace legacy polling with explicit condition-based waiting for xactions and introduce chunk-aware HEAD(object). List-objects (API) now correctly handles non-recursive walks on AIS buckets.
+List-objects APIs now correctly handle non-recursive walks on AIS buckets, while the Python SDK and CLI add faster, chunk-aware download paths with parallelism and progress reporting.
 
-The Python SDK adds concurrent range-read downloads for chunked objects, and the CLI gains multipart download support with progress reporting.
+Overall, this release reduces recovery risk during disk churn, improves observability and correctness under load, and modernizes long-standing APIs - without breaking existing clients.
 
-This release significantly reduces recovery risk during disk churn, improves visibility into authentication failures in production, and modernizes long-standing APIs without breaking existing clients.
-
-This release maintains full backward compatibility with [v4.1](https://github.com/NVIDIA/aistore/releases/tag/v1.4.1) and prior releases.
+AIStore 4.2 maintains full backward compatibility with [v4.1](https://github.com/NVIDIA/aistore/releases/tag/v1.4.1) and earlier releases.
 
 ---
 
-**Table of Contents**
+## Table of Contents
 
 1. [Resilver](#resilver)
 2. [Authentication and Observability](#authentication-and-observability)
-3. [New Go APIs](#new-go-apis)
+3. [New APIs](#new-apis)
    - 3.1 [Xaction v2](#xaction-v2)
    - 3.2 [Object HEAD v2](#object-head-v2)
 4. [List Objects: Non-Recursive Walks](#list-objects-non-recursive-walks)
-5. [Multipart and Backend Fixes](#multipart-and-backend-fixes)
+5. [Multipart transfers (downloads, uploads, and backend interoperability)](#multipart-transfers)
 6. [Global Rebalance](#global-rebalance)
-7. [FSHC Improvements](#fshc-improvements)
+7. [Filesystem Health Checker](#fshc)
 8. [ETag and Last-Modified Normalization](#etag-and-last-modified-normalization)
 9. [Python SDK](#python-sdk)
-10. [CLI Enhancements](#cli-enhancements)
+10. [CLI](#cli)
 11. [Documentation](#documentation)
 12. [Build and CI](#build-and-ci)
 
@@ -40,17 +41,22 @@ This release maintains full backward compatibility with [v4.1](https://github.co
 <a name="resilver"></a>
 ## Resilver
 
-Major rewrite of the resilver xaction for correctness and reliability. The previous implementation relied on retry-based copying loops that could leave objects in inconsistent states; v4.2 introduces deterministic copy selection and explicit lifecycle management.
+[Resilver](https://github.com/NVIDIA/aistore/blob/main/docs/resilver.md) is AIStore’s node-local counterpart to [global rebalance](#global-rebalance): it redistributes objects across a target’s mountpaths to restore correct placement and redundancy after volume changes (attach, detach, enable, disable).
+
+Version 4.2 introduces a major rewrite of the resilver xaction for correctness and reliability. The previous implementation relied on retry-based copying loops that could leave objects in inconsistent states; the new implementation uses deterministic copy (object replica) selection and explicit lifecycle management.
+
+Resilver is a _single-target_ operation: cluster-wide execution is now disallowed to prevent cross-target interference; attempts to start resilver without a target ID are rejected by both the CLI and by AIStore's itself (i.e., calling the API directly without a target ID will also fail).
+
+> [Mountpath](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#mountpath) event-triggered resilvers remain internal and continue to register with [IC](#xaction-v2) automatically (the events are: enable, disable, attach, and detach).
 
 Key changes:
 
 - **Deterministic primary copy selection**
 - **Preemption on mountpath events** - disable/detach/attach/enable operations now abort any running resilver xaction and restart appropriately; handles back-to-back mountpath events without data loss
-- **Chunked object relocation** - with step-wise implementation and rollback/cleanup on any error; validates chunk placement
-- **Mountpath Jogger lifecycle improvements** - filesystem walks terminate when parent xaction aborts
-- **Concurrent access fixes**
-
-As of 4.2, AIS resilver ensures that each stored object (including chunked objects) is rebuilt from a single, well-defined source copy or fails atomically, with no partial visibility.
+- **Chunked object relocation** - step-wise relocation with rollback and cleanup on error; validates chunk placement
+- **Mountpath jogger lifecycle improvements** - filesystem walks terminate when the parent xaction aborts
+- **Concurrent access fixes** across shared resilver state
+- **Runtime progress visibility** - live counters (visited objects, active workers) via 'ais show job' CLI
 
 New documentation: [`docs/resilver.md`](https://github.com/NVIDIA/aistore/blob/main/docs/resilver.md)
 
@@ -67,21 +73,30 @@ New documentation: [`docs/resilver.md`](https://github.com/NVIDIA/aistore/blob/m
 ---
 
 <a name="authentication-and-observability"></a>
-
-<a name="authentication-and-observability"></a>
 ## Authentication and Observability
 
-Building on v4.1's authentication improvements, this release adds OIDC-compatible discovery + JWKS endpoints
+Building on v4.1 authentication improvements, this release adds OIDC-compatible discovery and JWKS endpoints, persistent RSA key pairs, and production-grade observability for AuthN.
 
-> AuthN serves /.well-known/openid-configuration and publishes its public JWKS for RSA verification
+AuthN now supports both HMAC-SHA256 and RSA (RS256) token signing. When no HMAC secret is provided via config or `AIS_AUTH_SECRET_KEY`, AuthN will initialize and persist an RSA keypair on disk and use it to issue RS256-signed JWTs.
 
-- **Token signing methods: HMAC-SHA256 and RSA (RS256)** - AuthN can issue RSA-signed JWTs in addition to HMAC
-- **Persistent RSA key pairs for AuthN** - Persistent RSA key pairs for AuthN - RSA private key is loaded from disk if present; otherwise generated once and saved (key rotation not yet implemented)
-- **OIDC discovery + JWKS endpoints** - AuthN can serve `/.well-known/openid-configuration` and publish its public JWKS for RSA verification
-- **Cluster validation handshake** - cluster registration now validates either the HMAC secret checksum or the RSA public key, depending on the configured signing method
-- **Prometheus metrics and latency histograms** - counters for invalid issuer/kid, and latency tracking for OIDC discovery and JWKS/key fetches
-- **Improved logging** on token and ACL failures, and stricter permission validation (including admin/bucket-admin permission types)
-- **CLI enhancements** - view OIDC config and display RSA public keys via `ais authn`
+From the operational perspective, the important changes include:
+
+* OIDC discovery + JWKS endpoints: AuthN now serves /.well-known/openid-configuration and a public JWKS endpoint for RS256 verification; JWKS responses include cache control based on token expiry.
+* Cluster validation handshake updated: cluster registration validates either the HMAC secret checksum or the RSA public key, depending on the configured signing method.
+
+Key changes:
+
+- **Token signing methods** - HMAC-SHA256 and RSA (RS256)
+- **Persistent RSA key pairs for AuthN** - RSA private key is loaded from disk if present; otherwise generated once and persisted (key rotation not yet implemented)
+- **OIDC discovery and JWKS endpoints** - publish configuration and public keys for standard JWT verification flows
+- **Cluster validation handshake** - cluster registration validates either the HMAC secret checksum or the RSA public key, depending on signing method
+- **Prometheus metrics for OIDC/JWKS**: counters for invalid iss/kid, plus latency histograms for issuer discovery and key fetches.
+- **Improved logging and validation** - clearer token and ACL failure diagnostics; stricter permission checks (including admin and bucket-admin)
+
+And separately, CLI:
+
+- `ais authn` command, to inspect OIDC configuration and display RSA public keys
+- `ais authn oidc` and `ais authn jwks` to display discovery and JWKS output (JSON or table)
 
 ### Commit Highlights
 
@@ -93,36 +108,56 @@ Building on v4.1's authentication improvements, this release adds OIDC-compatibl
 * [48b830470](https://github.com/NVIDIA/aistore/commit/48b830470): CLI: view OIDC config and show RSA public key
 * [df8f9e764](https://github.com/NVIDIA/aistore/commit/df8f9e764): Fix CheckPermissions to validate all permission types
 
-
 ---
 
-<a name="new-go-apis"></a>
-## New Go APIs
+<a name="new-apis"></a>
+## New APIs
 
 <a name="xaction-v2"></a>
 ### 3.1 Xaction v2
 
-New Go API with explicit separation between IC-notifying and non-IC xactions. This replaces the legacy `_waitx()` polling machinery with condition-based waiting.
+Xaction (*eXtended action*) is AIStore’s abstraction for asynchronous batch jobs. All xactions expose a uniform API and CLI for starting, stopping, waiting, and reporting both generic and job-specific statistics.
 
-**Background**: IC (Information Center) is implemented by 3 AIS gateways (one primary + 2 random). Targets asynchronously notify IC of xaction progress via `nl.Status`, eliminating the need to poll each target. Not all xactions emit IC notifications, which necessitates snapshot-based waiting.
+Version 4.2 introduces explicit separation between IC-notifying and non-IC
+[xactions](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#xaction),
+replacing legacy polling with condition-based waiting and formalizing two observation modes:
 
-**Status-based** (IC-notifying xactions):
-- `WaitForStatus`, `GetStatus`
+- **IC-based status observation** for xactions that actively report progress via IC
+- **Snapshot-based observation** for xactions that do not
 
-**Snaps-based** (non-IC xactions):
-- `WaitForSnaps`, `GetSnaps`, `WaitForSnapsStarted`, `WaitForSnapsIdle`
+For IC-notifying xactions, this avoids polling every target and makes waiting scale
+predictably even in large clusters. Snapshot-based xactions continue to use explicit
+snapshot inspection.
 
-**Built-in conditions** as `xact.ArgsMsg` methods:
-- `Finished()` - terminal state (finished/aborted)
-- `NotRunning()` - not currently running
-- `Started()` - at least one matching xaction observed
-- `Idle()` - consecutive empty snapshots
+> **Background**: IC (Information Center) runs on three AIS gateways (one primary and
+> two random). Targets asynchronously notify IC of xaction progress, eliminating
+> per-target polling.
+
+#### Observation APIs
+
+| Observation type | API | Semantics |
+|------------------|-----|-----------|
+| **Status-based (IC)** | `GetStatus` | Return current status as reported by IC |
+| | `WaitForStatus` | Block until a condition is satisfied using IC-reported status |
+| **Snapshot-based** | `GetSnaps` | Fetch current xaction snapshots |
+| | `WaitForSnaps` | Wait until a snapshot-based condition is satisfied |
+| | `WaitForSnapsStarted` | Wait until at least one matching xaction is observed |
+| | `WaitForSnapsIdle` | Wait until snapshots become empty (xaction quiescence) |
+
+#### Built-in Conditions
+
+Conditions are expressed as `xact.ArgsMsg` methods and apply to waiting APIs:
+
+| Condition | Meaning |
+|----------|---------|
+| `Finished()` | Xaction reached a terminal state (finished or aborted) |
+| `NotRunning()` | No matching xaction is currently running |
+| `Started()` | At least one matching xaction has been observed |
+| `Idle()` | Consecutive empty snapshots observed |
 
 Conditions that require `OnlyRunning=true` set it automatically.
 
-The legacy polling helpers are now considered deprecated and will be removed in a future release.
-
-> **Note**: Python SDK updates supporting the same v2 job-wait semantics are planned for an upcoming release.
+> **Note**: Python SDK support for the same v2 job-wait semantics is planned for an upcoming release.
 
 ### Commit Highlights
 
@@ -132,22 +167,30 @@ The legacy polling helpers are now considered deprecated and will be removed in 
 * [56e11b2c66](https://github.com/NVIDIA/aistore/commit/56e11b2c66): Reorg and document xaction-v2 APIs
 * [3aa6b770d](https://github.com/NVIDIA/aistore/commit/3aa6b770d): CLI: multi-object jobs wait on xkind (not xname)
 
+---
+
 <a name="object-head-v2"></a>
 ### 3.2 Object HEAD v2
 
-Chunk-aware object HEAD with selective header emission for reduced overhead:
+AIStore 4.2 introduces **Object HEAD v2**, a chunk-aware, opt-in extension of the existing HEAD(object) API that allows clients to request
+structured object metadata with lower overhead and clearer access semantics.
 
-- Parse `props` parameter to emit only requested headers
-- Factor in chunked header logic
-- Unified Last-Modified/ETag derivation from a single mtime source
-- Micro-optimizations for header serialization
+Unlike the legacy HEAD path, Object HEAD v2 can selectively emit metadata fields based on the requested `props` set, avoiding unnecessary work and header serialization.
 
-Object HEAD v2 is behavior-preserving for existing clients and only affects internal execution paths unless explicitly requested via `props`.
+When requested, it exposes chunk layout information (count and maximum chunk size), enabling clients to efficiently plan parallel range reads without additional probing.
+
+Metadata derivation was also tightened and made more consistent. `Last-Modified` and `ETag` handling was normalized across native AIS, S3 compatibility paths,
+list-objects fast paths, and multipart workflows, eliminating several long-standing edge cases.
+
+Object HEAD v2 is **fully backward-compatible**: existing clients continue to observe identical behavior unless the v2 properties are explicitly requested.
+
+> Disclaimer: Object HEAD v2 is new and considered experimental in 4.2. While fully backward-compatible, its control structure and exposed fields
+> may evolve during the 4.2 lifecycle as additional SDKs adopt it.
 
 ### Commit Highlights
 
-* [4a1519fc6](https://github.com/NVIDIA/aistore/commit/4a1519fc6): Rewrite target's ObjHeadV2; unify Last-Modified/ETag
-* [ce25a7ec4](https://github.com/NVIDIA/aistore/commit/ce25a7ec4): Introduce object HEAD v2 for chunk-aware GET
+* [4a1519fc6](https://github.com/NVIDIA/aistore/commit/4a1519fc6): Rewrite target ObjHeadV2; unify Last-Modified and ETag derivation
+* [ce25a7ec4](https://github.com/NVIDIA/aistore/commit/ce25a7ec4): Introduce object HEAD v2 for chunk-aware access
 * [b12e0b3c0](https://github.com/NVIDIA/aistore/commit/b12e0b3c0): Refactor object HEAD workflow and error handling
 
 ---
@@ -155,12 +198,12 @@ Object HEAD v2 is behavior-preserving for existing clients and only affects inte
 <a name="list-objects-non-recursive-walks"></a>
 ## List Objects: Non-Recursive Walks
 
-Corrected non-recursive listing (`ls --nr`) semantics for AIS buckets:
+Corrected non-recursive listing semantics (`ls --nr`) for AIS buckets:
 
-- **Directory entries included** with new `IncludeDirs` walk option
+- **Directory entries included** via new `IncludeDirs` walk option
 - **Trailing `/` convention** enforced for directory names
 - **Lexicographical ordering** for continuation tokens in non-recursive mode
-- **Pagination fixes** across pages with mixed dirs/files content
+- **Pagination fixes** across pages with mixed directory/file content
 
 ### Commit Highlights
 
@@ -169,27 +212,33 @@ Corrected non-recursive listing (`ls --nr`) semantics for AIS buckets:
 
 ---
 
-<a name="multipart-and-backend-fixes"></a>
-## Multipart and Backend Fixes
+<a name="multipart-transfers"></a>
+## Multipart transfers (downloads, uploads, and backend interoperability)
 
-**Retry correctness**
-- **SGL offset corruption fix** - wrap SGL in `memsys.Reader` for backends requiring seekable/retriable readers (Azure, remote AIS)
+This release significantly improves multipart data transfers across the entire stack, covering client-side downloads, server-side multipart uploads, and backend-specific interoperability.
 
-**Memory pressure handling**
-- Wait and retry under memory pressure; reject with HTTP 429 if allocation fails
+Client-side multipart download is now available via `ais get --mpd`, enabling concurrent HTTP range reads with progress reporting.
+When chunk size or object size are not explicitly provided, the implementation leverages the new `HeadObjectV2` API to discover object size and chunk layout,
+ensuring efficient and predictable parallelization for large objects.
 
-**Backend-specific fixes**
-- **S3 backend** - disable retries for non-seekable readers; fix nil deref in presigned-request response path
+Multipart uploads now respect backend retry behavior and avoid holding excess memory or open streams across retries.
+Part uploads to remote backends consistently use retriable and/or seekable readers, ensuring correctness for providers that rely on stream rewind during retries (notably Azure and remote AIS).
 
-**Long-running job cleanup**
-- **Copy-bucket sync** - fix detection of remotely-deleted objects from destination
-- **Blob downloader abort** - make `Abort()` non-blocking; cleanup via `finalize()` in `Run()` path
+Under high memory pressure, AIS now applies explicit backpressure: the target waits briefly for pressure to subside and returns HTTP 429 ("Too Many Requests")
+when safe buffering remains impossible, replacing the previous best-effort streaming fallback.
+
+Backend-specific fixes further improve robustness and protocol compatibility.
+S3 multipart handling now normalizes ETag quoting and derivation, disables retries for non-seekable readers to avoid SDK rewind failures, and fixes edge cases in presigned-request error handling.
+
+Manifest validation and part lookup paths were tightened to fail fast on missing or inconsistent state, preventing silent corruption and improving error diagnostics.
+
+Together, these changes make multipart transfers more reliable and predictable across heterogeneous backends and large deployments.
 
 ### Commit Highlights
 
 * [aa5a32bdd](https://github.com/NVIDIA/aistore/commit/aa5a32bdd): Fix corrupted SGL offset on retry for remote AIS backend
 * [21088dd26](https://github.com/NVIDIA/aistore/commit/21088dd26): S3 backend: disable retries for non-seekable readers
-* [2400cf111](https://github.com/NVIDIA/aistore/commit/2400cf111): S3 backend: fix nil deref in presigned-request response
+* [2400cf111](https://github.com/NVIDIA/aistore/commit/2400cf111): S3 backend: fix nil deref in presigned-request response path
 * [3d8b2e67d](https://github.com/NVIDIA/aistore/commit/3d8b2e67d): Fix copy-bucket sync not detecting remotely-deleted objects
 * [d1bdc5f52](https://github.com/NVIDIA/aistore/commit/d1bdc5f52): Fix blob download abort timeout by making Abort() non-blocking
 
@@ -198,34 +247,47 @@ Corrected non-recursive listing (`ls --nr`) semantics for AIS buckets:
 <a name="global-rebalance"></a>
 ## Global Rebalance
 
-Some of the notable changes made rebalance renewal and finalization more atomic by introducing a critical section that serializes rebalance runs and protects shared global state together with xaction renewal as a single unit.
+Global rebalance is a special cluster-wide [xaction](#xaction-v2) that handles cluster [membership](https://github.com/NVIDIA/aistore/blob/main/docs/lifecycle_node.md) changes.
+It is orchestrated by the primary (gateway), is configurable, and can also be started manually by an admin (e.g., `ais start rebalance`).
 
-Improved state management and error handling:
+Rebalance start and completion are now serialized under a single critical section that atomically binds the renewed xaction to the singleton’s internal state (cluster map, stage, and job ID).
+This prevents races during rapid, back-to-back membership changes.
 
+Additional improvements:
+
+- **Completion reporting** - fix cases where rebalance could be reported as finished prematurely, causing query and wait APIs to return early during membership changes
 - **Atomic xaction binding** - serialize `initRenew()` and `fini()` for symmetric state transitions
-- **Identity check in fini()** - guard against unlikely race conditions
-- **Persistent markers** trigger FSHC on I/O errors, ensuring repeated rebalance failures surface as mountpath health issues
-- **Clarified post-renew Smap change** - same-targets validation (not same-count)
+- **Identity checks** - guard against unlikely race conditions
+- **Persistent markers** - trigger [FSHC](#fshc) on I/O errors, surfacing repeated rebalance failures as mountpath health issues
+- **Post-renew Smap handling** - validate same-targets (not same-count) and proceed safely on benign version bumps
 
 ### Commit Highlights
 
+* [a74af7d097](https://github.com/NVIDIA/aistore/commit/a74af7d097): Fix premature rebalance completion reporting during membership changes
 * [90ab46e1e](https://github.com/NVIDIA/aistore/commit/90ab46e1e): Guard atomic state; reset published pointers
 * [8c97b2e6a](https://github.com/NVIDIA/aistore/commit/8c97b2e6a): Persistent markers to trigger FSHC
 * [570af0e42](https://github.com/NVIDIA/aistore/commit/570af0e42): Clarify post-renew Smap change
 
 ---
 
-<a name="fshc-improvements"></a>
-## FSHC Improvements
+<a name="fshc"></a>
+## Filesystem Health Checker
 
-Filesystem Health Checker gains failure classification and bounded sampling:
+Filesystem Health Checker (FSHC) was improved to better distinguish fatal mountpath (disk) failures from transient I/O errors (noise), while preventing runaway re-check loops under repeated errors.
 
-- **FAULTED vs DEGRADED** - root stat/fsid/open failures classified as FAULTED (immediate disable); I/O errors during sampling classified as DEGRADED
-- **Bounded sampling loop** - prevents unbounded retries on dying disks
-- **Single-delay retry** for root-level failures (accommodates network storage transients such as NFS/NVMesh)
-- **Avoid false positives** - skip FSHC trigger on ENOENT markers and empty directories
+Key changes:
 
-For example, transient network storage hiccups no longer immediately disable mountpaths.
+- **Failure classification: FAULTED vs DEGRADED**
+  - **FAULTED**: root-level failures (mount root `stat`, filesystem identity mismatch, cannot open mount root) disable the mountpath immediately.
+  - **DEGRADED**: sampling read/write errors disable the mountpath only if the combined error count exceeds the configured threshold.
+- **Bounded sampling**
+  - FSHC runs *exactly two passes* of file sampling (read + write/fsync), stopping early when thresholds are exceeded.
+- **One-shot delayed retry**
+  - Root checks (and select depth-0 sampling operations) retry once with a short delay to avoid false positives from transient hiccups (common with network-attached storage).
+- **Per-mountpath scheduling**
+  - Checks are serialized per mountpath and rate-limited (minimum interval between runs), preventing repeated errors from triggering constant disk hammering.
+- **Avoid false positives**
+  - FSHC does not trigger on benign conditions such as `ENOENT` and other known non-disk failure paths.
 
 New documentation: [`docs/fshc.md`](https://github.com/NVIDIA/aistore/blob/main/docs/fshc.md)
 
@@ -234,17 +296,15 @@ New documentation: [`docs/fshc.md`](https://github.com/NVIDIA/aistore/blob/main/
 * [6a1284ae1](https://github.com/NVIDIA/aistore/commit/6a1284ae1): FAULTED/DEGRADED classification; bounded sampling
 * [eefa2ae6a](https://github.com/NVIDIA/aistore/commit/eefa2ae6a): Add single-delay retry; refactor unit tests
 
----
-
 <a name="etag-and-last-modified-normalization"></a>
 ## ETag and Last-Modified Normalization
 
 Strict consistency for metadata handling across the codebase:
 
-- **Unquoted internally, quoted on the wire** - response headers and S3 XML responses
-- **lom.ETag()** - uses custom (cloud) ETag if available, MD5 when available, otherwise generates a stable synthetic value
-- **lom.LastModified() / lom.LastModifiedLso()** - avoid mtime syscalls in list-objects fast paths
-- **S3 list-objects** - amend wanted metadata (best-effort, no syscalls)
+- **Unquoted internally, quoted on the wire** - applies to headers and S3 XML responses
+- **`lom.ETag()`** - prefer custom cloud ETag; fall back to MD5 when available; otherwise generate a stable synthetic value
+- **`lom.LastModified()` / `lom.LastModifiedLso()`** - avoid mtime syscalls in list-objects fast paths
+- **S3 list-objects** - amend wanted metadata on a best-effort basis without extra syscalls
 
 These changes unify metadata semantics across native AIS, S3 compatibility paths, and list-objects fast paths.
 
@@ -259,13 +319,20 @@ These changes unify metadata semantics across native AIS, S3 compatibility paths
 <a name="python-sdk"></a>
 ## Python SDK
 
-- **Concurrent range-read downloads** - `ParallelContentIterProvider` fetches chunks using concurrent HTTP range-reads while yielding in sequential order
-- **num_workers parameter** in `Object.get_reader()` triggers parallel download
-- **Multipart download API** with progress report callbacks
-- **HMAC and content-length fixes** - calculate content length for all data types; fix HTTPS manual redirect SSL EOF errors
-- **WaitResult dataclass** for consistent job-wait API
+The Python SDK gained **chunk-aware range reading** built on the new, **experimental `HeadObjectV2` API**.
+The API exposes object chunk layout (`ObjectPropsV2.Chunks`), allowing the SDK to issue **correct, chunk-aligned HTTP range requests** and assemble results in order.
+This enables optional **parallel reads for large objects** via `Object.get_reader(num_workers=N)`, particularly beneficial for erasure-coded and chunked objects.
 
-> **Note**: Python SDK will be soon updated to support the same v2 job-wait semantics.
+> `HeadObjectV2` is introduced as an **experimental interface in 4.2**; while the semantics are stable, the underlying control structures may evolve during the 4.2 iteration.
+
+HTTPS and cluster-key authentication reliability was improved by fixing HMAC signature mismatches on redirects (HTTP 401) through correct `Content-Length` handling for byte buffers, strings, and file-like objects,
+and by refining redirect logic to avoid SSL EOF errors when request bodies are present.
+
+Job-waiting behavior was unified across long-running operations. `Job.wait()`, `wait_for_idle()`, `wait_single_node()`, and `Dsort.wait()` now return a structured `WaitResult` (success flag, error, and completion time),
+improving timeout handling and diagnostics for aborted or preempted jobs.
+
+Finally, Python access-control constants were synchronized with AIS semantics.
+This includes updated read/write scopes, corrected cluster-level access flags, and alignment with bucket-admin permissions to match the server-side authorization model.
 
 ### Commit Highlights
 
@@ -277,22 +344,38 @@ These changes unify metadata semantics across native AIS, S3 compatibility paths
 
 ---
 
-<a name="cli-enhancements"></a>
-## CLI Enhancements
+<a name="cli"></a>
+## CLI
 
-- **Multipart download** - `ais get --mpd` with configurable `--chunk-size` and `--num-workers`; progress bar support
-- **Resilver shortcut** - `ais storage resilver` (alias for `ais job start resilver`); confirms when already running
-- **Special character encoding** - `--encode` option across put/get/remove/rename operations; centralized `warnEscapeObjName()`
-- **Extended help** - `ais create --help` enumerates six usage patterns with examples
-- **Mountpath commands** - extended usage for attach/detach/enable/disable
+The CLI now provides safer handling of object names containing special symbols across more commands.
+The existing `--encode-objname` option is recognized in additional code paths (including GET/PUT, rename, multipart, ETL object, and others).
+When the flag isn’t provided and the name appears to require escaping, the CLI emits a one-time warning suggesting `--encode-objname`.
 
-These changes reduce friction for large object workflows and improve safety around object naming across platforms.
+> Note: do not combine `--encode-objname` with already-escaped names to avoid double-encoding.
+
+For large downloads, `ais get` adds `--mpd` for client-side multipart (HTTP range) download of a single object, with a progress bar.
+Related flags (`--chunk-size`, `--num-workers`) are now validated and require either `--mpd` or `--blob-download`.
+
+> Note: the `ais get` command-line options `--mpd` and `--blob-download` are mutually exclusive.
+
+Authentication tooling is expanded with `ais auth show oidc` and `ais auth show jwks`, providing direct visibility into AuthN OIDC configuration and public JWKS.
+
+Resilvering commands were tightened to require an explicit target ID and now detect and warn about an already running resilver before starting a new one.
+Several usage and help texts were improved, and `ais ls --no-recursion` now lists directories before objects.
+
+In short, the release includes:
+
+- **Multipart download** - `ais get --mpd` with configurable `--chunk-size` and `--num-workers`, including progress bar support
+- **Resilver shortcut** - `ais storage resilver` alias; confirmation when a resilver is already running
+- **Special character encoding** - `--encode-objname` across put/get/remove/rename; centralized warning
+- **Extended help** - `ais create --help` now enumerates six common usage patterns with examples
+- **Mountpath commands** - expanded usage text for attach/detach/enable/disable
 
 ### Commit Highlights
 
 * [876264b9c](https://github.com/NVIDIA/aistore/commit/876264b9c): Add client-side multipart download to `ais get`
-* [08eb7224a](https://github.com/NVIDIA/aistore/commit/08eb7224a): Add `ais storage resilver` alias; confirm when running
-* [48d247d7c](https://github.com/NVIDIA/aistore/commit/48d247d7c): Warn/encode special symbols in objname across operations
+* [08eb7224a](https://github.com/NVIDIA/aistore/commit/08eb7224a): Add `ais storage resilver` alias; confirm when already running
+* [48d247d7c](https://github.com/NVIDIA/aistore/commit/48d247d7c): Warn/encode special symbols in object names across operations
 * [bb44f2179](https://github.com/NVIDIA/aistore/commit/bb44f2179): Add extended `ais create --help`
 * [e2837ed8b](https://github.com/NVIDIA/aistore/commit/e2837ed8b): Add extended usage for mountpath commands
 
@@ -319,10 +402,12 @@ These changes reduce friction for large object workflows and improve safety arou
 <a name="build-and-ci"></a>
 ## Build and CI
 
-- **IPv6-safe parsing and host:port string conversions** - unify host:port and URL construction; remove IPv4-only assumptions
-- **Darwin builds** - minor refactor and test updates
-- **GitLab CI** - enable remais in long tests; add pipeline to randomize bucket namespacing
-- **Dependency bumps**:
+Build, CI, and dependency updates:
+
+- **IPv6-safe parsing and host:port conversions** - unify host:port and URL construction; remove IPv4-only assumptions
+- **Darwin builds** - minor refactors and test updates
+- **GitLab CI** - enable remais in long tests; randomize bucket namespacing
+- **Dependency updates**
   - actions/checkout v5 => v6
   - actions/upload-artifact v5 => v6
   - actions/download-artifact v6 => v7
@@ -330,7 +415,7 @@ These changes reduce friction for large object workflows and improve safety arou
   - GCS SDK 1.57 => 1.58
   - AWS SDK 1.39 => 1.40
   - fasthttp 1.67 => 1.68
-- **Parallel Docker builds** in CI workflow
+- **Parallel Docker builds** in CI workflows
 
 ### Commit Highlights
 
@@ -338,4 +423,4 @@ These changes reduce friction for large object workflows and improve safety arou
 * [ece283da6](https://github.com/NVIDIA/aistore/commit/ece283da6): GitLab CI: enable remais in long tests
 * [d2aa6a1fc](https://github.com/NVIDIA/aistore/commit/d2aa6a1fc): Add pipeline to randomize bucket namespacing
 * [97da81299](https://github.com/NVIDIA/aistore/commit/97da81299): Parallelize Docker image builds
-* [0af6a913d](https://github.com/NVIDIA/aistore/commit/0af6a913d): Upgrade all OSS packages
+* [0af6a913d](https://github.com/NVIDIA/aistore/commit/0af6a913d): Upgrade OSS dependencies

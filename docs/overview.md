@@ -194,9 +194,8 @@ If the remote `PUT` fails, the whole operation fails and AIS rolls back locally.
 ---
 
 ### Xaction
-Xaction (*eXtended action*) is a supported batch job that executes asynchronously.
 
-All xactions support uniform [API](#aistore-apis) and [CLI](#cli) to start, stop, and wait for, as well as common (generic) and job-specific stats.
+Xaction (*eXtended action*) is AIStore’s abstraction for asynchronous batch jobs. All xactions expose a uniform [API](#aistore-apis) and [CLI](#cli) for starting, stopping, waiting, and reporting both generic and job-specific statistics.
 
 Common jobs include erasure coding (EC), n-way mirroring, resharding, transforming a given virtual directory, archiving ([sharding](#shard)) multiple objects, copying remote bucket, and more:
 

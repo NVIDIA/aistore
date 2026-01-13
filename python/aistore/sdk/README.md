@@ -130,7 +130,7 @@ os.environ["AIS_AUTHN_TOKEN"] = "your-auth-token"
 os.environ["AIS_CONNECT_TIMEOUT"] = "5"
 os.environ["AIS_READ_TIMEOUT"] = "30"
 os.environ["AIS_MAX_CONN_POOL"] = "20"
-os.environ["AIS_CLIENT_CA"] = "/path/to/client_ca.crt
+os.environ["AIS_CLIENT_CA"] = "/path/to/client_ca.crt"
 
 # Client will use the environment variables
 client = Client("https://localhost:8080")
