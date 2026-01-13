@@ -1,6 +1,6 @@
 // Package res provides local volume resilvering upon mountpath-attach and similar
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package res
 
@@ -31,7 +31,6 @@ import (
 )
 
 // TODO:
-// - add CtlMsg() w/ (jgroup.NumVisits() and related runtime)
 // - revisit EC bits and check for OOS preemptively
 // - not deleting extra copies - delegating to `storage cleanup`
 // - skipping _busy_ objects w/ TryLock + retries
@@ -45,10 +44,9 @@ const (
 
 type (
 	Res struct {
-		xres  *xs.Resilver
-		end   atomic.Int64
-		nbusy atomic.Int64
-		mu    sync.Mutex
+		xres *xs.Resilver
+		end  atomic.Int64
+		mu   sync.Mutex
 	}
 	Args struct {
 		UUID            string
@@ -164,6 +162,7 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	res.mu.Unlock() //  --------------------------------------
 
 	// run and block waiting
+	xres.SetJgroup(jgroup)
 	jgroup.Run()
 	wait(jgroup, xres, tstats)
 
@@ -182,11 +181,13 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	res.mu.Unlock()
 
 	s := "num objects visited: " + strconv.FormatInt(jgroup.NumVisits(), 10)
-	if n := res.nbusy.Load(); n > 0 {
+	if n := xres.Nbusy.Load(); n > 0 {
 		nlog.Warningf("%s done [%s, skipped busy: %d]", xres.Name(), s, n)
 	} else {
 		nlog.Infof("%s done [%s]", xres.Name(), s)
 	}
+
+	xres.SetJgroup(nil)
 }
 
 func (res *Res) initRenew(args *Args) *xs.Resilver {
@@ -295,7 +296,7 @@ func (j *jogger) lock(lom *core.LOM) (locked bool) {
 	}
 busy:
 	if lom.IsHRW() {
-		j.p.nbusy.Inc()
+		j.xres.Nbusy.Inc()
 		if cmn.Rom.V(4, cos.ModReb) {
 			nlog.Warningln("skipping busy:", lom.Cname())
 		}

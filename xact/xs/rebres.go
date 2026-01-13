@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -41,6 +43,11 @@ type (
 	}
 	Resilver struct {
 		Args *xreg.ResArgs
+		// runtime
+		Nbusy   atomic.Int64
+		nvisits atomic.Int64 // last val
+		jgroup  ratomic.Pointer[mpather.Jgroup]
+		// base
 		xact.Base
 	}
 )
@@ -205,6 +212,37 @@ func newResilver(p *resFactory) (xres *Resilver) {
 
 func (*Resilver) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+func (xres *Resilver) SetJgroup(jgroup *mpather.Jgroup) { xres.jgroup.Store(jgroup) }
+
+func (xres *Resilver) CtlMsg() string {
+	var (
+		jgroup  = xres.jgroup.Load()
+		nvisits = xres.nvisits.Load()
+		sb      cos.SB
+	)
+	sb.Init(64)
+
+	// visited so far
+	if jgroup != nil {
+		nvisits = jgroup.NumVisits()
+		xres.nvisits.Store(nvisits)
+	}
+	if nvisits > 0 {
+		sb.WriteString("visited:")
+		sb.WriteString(strconv.FormatInt(nvisits, 10))
+	}
+
+	// skipped busy
+	if n := xres.Nbusy.Load(); n > 0 {
+		if sb.Len() > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("skipped-busy:")
+		sb.WriteString(strconv.FormatInt(n, 10))
+	}
+	return sb.String()
+}
+
 func (xres *Resilver) String() string {
 	if xres == nil {
 		return "<xres-nil>"
@@ -212,5 +250,4 @@ func (xres *Resilver) String() string {
 	return xres.Base.String()
 }
 
-func (*Resilver) CtlMsg() string        { return "" }
 func (xres *Resilver) Snap() *core.Snap { return xres.Base.NewSnap(xres) }

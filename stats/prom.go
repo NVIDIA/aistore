@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and export metrics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
