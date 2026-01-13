@@ -474,10 +474,14 @@ func startXaction(c *cli.Context, xargs *xact.ArgsMsg, extra string) error {
 		actionDone(c, "Started global rebalance. To monitor the progress, run 'ais show rebalance'")
 	case apc.ActResilver:
 		const add = " To monitor the progress, run 'ais show job " + apc.ActResilver + "'"
+		var s string
+		if xid != "" {
+			s = "[" + xid + "]"
+		}
 		if xargs.DaemonID != "" {
-			actionDone(c, fmt.Sprintf("Started %s on %s."+add, apc.ActResilver, meta.Tname(xargs.DaemonID)))
+			actionDone(c, fmt.Sprintf("Started %s%s on %s."+add, apc.ActResilver, s, meta.Tname(xargs.DaemonID)))
 		} else {
-			actionDone(c, fmt.Sprintf("Started %s[%s] simultaneously on all targets."+add, apc.ActResilver, xid))
+			actionDone(c, fmt.Sprintf("Started %s%s simultaneously on all targets."+add, apc.ActResilver, s))
 		}
 	default:
 		actionX(c, xargs, "")

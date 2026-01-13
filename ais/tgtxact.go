@@ -271,8 +271,8 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		wg.Add(1)
 		if args.ID == "" {
 			args.ID = cos.GenUUID()
-			xid = args.ID
 		}
+		xid = args.ID
 		resargs := &res.Args{
 			UUID:  args.ID,
 			Notif: notif,
@@ -281,6 +281,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 			},
 			WG: wg,
 		}
+
 		go t.runResilver(resargs)
 		wg.Wait()
 	case apc.ActRechunk:
