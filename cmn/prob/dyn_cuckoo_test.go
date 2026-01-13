@@ -45,6 +45,9 @@ var _ = Describe("Filter", func() {
 	filter := prob.NewDefaultFilter()
 
 	BeforeEach(func() {
+		if testing.Short() {
+			Skip("skipping prob_test in short mode")
+		}
 		filter.Reset()
 	})
 
