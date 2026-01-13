@@ -96,6 +96,13 @@ class Batch:
 
         self.extractor = ExtractorManager().get_extractor(output_format)
 
+    @property
+    def requests_list(self) -> List[MossIn]:
+        """
+        Return the list of MossIn requests in the batch.
+        """
+        return self.request.moss_in
+
     def _add_objects(self, objects: Union[List[Object], Object, str, List[str]]):
         """
         Internal helper to add objects in bulk.
@@ -265,13 +272,13 @@ class Batch:
         Raises:
             ValueError: If no objects added to batch
         """
-        if not self.request.moss_in:
+        if not self.requests_list:
             logger.error("Cannot execute batch: no objects added")
             raise ValueError("No objects added to batch")
 
         logger.debug(
             "Executing batch get: objects=%d, format=%s, streaming=%s, raw=%s",
-            len(self.request.moss_in),
+            len(self.requests_list),
             self.request.output_format,
             self.request.streaming_get,
             raw,
@@ -383,7 +390,7 @@ class Batch:
         Returns:
             int: Number of objects in the batch
         """
-        return len(self.request.moss_in)
+        return len(self.requests_list)
 
     def __repr__(self) -> str:
         """

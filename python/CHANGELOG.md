@@ -25,6 +25,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `ParallelContentIterProvider`: A new content iterator that fetches object chunks using concurrent HTTP range-reads while yielding them in sequential order.
 - `num_workers` parameter in `Object.get_reader()`: When specified, uses `ParallelContentIterProvider` for parallel downloads, improving throughput for large objects.
 - `ObjectClient.get_chunk(start, end)`: Fetch a specific byte range of an object. Used for parallel chunk fetching.
+- Introduced a new property `requests_list` in the Batch class to return the list of MossIn requests in the batch.
 
 ## [1.18.0] - 2025-12-05
 
