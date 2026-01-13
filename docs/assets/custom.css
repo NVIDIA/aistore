@@ -124,3 +124,16 @@ img[alt="AIS-ETL Overview"] {
   background: #044289;
   transform: translateY(0);
 }
+
+.legal-disclosures {
+  font-size: 0.8em;
+  text-align: center;
+}
+
+.legal-disclosures a {
+  margin: 0 0.5em;
+}
+
+.legal-disclosures span {
+  color: #e8e8e8;
+}
