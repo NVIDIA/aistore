@@ -522,17 +522,30 @@ func (t *target) goresilver(config *cmn.Config, interrupted bool) {
 }
 
 func (t *target) runResilver(args *res.Args) {
-	// [convention] Non-empty UUID means admin–initiated job
-	// (with AIS proxy then generating cluster-wide UUID);
-	// the WG barrier ensures all targets become visible at the same time.
-	debug.Assert(args.UUID == "" || args.WG != nil)
-
-	// with no cluster-wide UUID it's a local run
+	// expecting proxy to assign UUID when called via API
+	debug.Assert(args.UUID != "" || !args.AdminAPI)
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()
+	}
+
+	if !args.AdminAPI {
+		// when triggered by mountpath event:
+		// - register with IC (to make the job is visible/queryable)
+		// - set up _finished_ notification
+		// (in the admin path, proxy does both)
 		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
+
+		if args.Notif == nil { // (currently, always true)
+			args.Notif = &xact.NotifXact{
+				Base: nl.Base{
+					When: core.UponTerm,
+					Dsts: []string{equalIC},
+					F:    t.notifyTerm,
+				},
+			}
+		}
 	}
 
 	debug.Assert(args.Custom.Config != nil)

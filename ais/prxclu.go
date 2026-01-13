@@ -1295,7 +1295,10 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 // xstart: rebalance, resilver, other "startables" (see xaction/api.go)
 // +gen:payload apc.ActXactStart={"action": "start-xaction", "name": "rebalance"}
 func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	var xargs xact.ArgsMsg
+	var (
+		xargs        xact.ArgsMsg
+		singleTarget *meta.Snode
+	)
 	if msg.Value != nil {
 		if err := cos.MorphMarshal(msg.Value, &xargs); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -1324,8 +1327,8 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S}
 
-	switch {
-	case xargs.Kind == apc.ActBlobDl:
+	switch xargs.Kind {
+	case apc.ActBlobDl:
 		// validate; select one target
 		args.smap = p.owner.smap.get()
 		tsi, err := p.blobdl(args.smap, &xargs, msg)
@@ -1336,14 +1339,23 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 		args._selected(tsi)
 		args.req.Body = cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs, Name: msg.Name})
-	case xargs.Kind == apc.ActResilver && xargs.DaemonID != "":
+	case apc.ActResilver:
+		if xargs.DaemonID == "" {
+			freeBcArgs(args)
+			err := cmn.NewErrUnsupp("run resilver", "on all targets in the cluster")
+			p.writeErr(w, r, err, http.StatusNotImplemented)
+			return
+		}
 		args.smap = p.owner.smap.get()
 		tsi := args.smap.GetTarget(xargs.DaemonID)
 		if tsi == nil {
+			freeBcArgs(args)
 			err := &errNodeNotFound{p.si, args.smap, "cannot resilver", xargs.DaemonID}
 			p.writeErr(w, r, err)
 			return
 		}
+		singleTarget = tsi
+		xargs.ID = cos.GenUUID() // assign UUID
 		args._selected(tsi)
 		args.req.Body = cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
 	default:
@@ -1357,23 +1369,29 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	freeBcArgs(args)
 
 	for _, res := range results {
-		if res.err == nil {
-			if xargs.Kind == apc.ActResilver && xargs.DaemonID != "" {
-				// - UUID assigned by the selected target (see above)
-				// - not running notif listener for blob downloads - may reconsider
-				xargs.ID = string(res.bytes)
-			}
-			continue
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr())
+			freeBcastRes(results)
+			return
 		}
-		p.writeErr(w, r, res.toErr())
-		freeBcastRes(results)
-		return
+		debug.Func(func() {
+			if xargs.Kind != apc.ActResilver {
+				return
+			}
+			xid := string(res.bytes)
+			debug.Assertf(xargs.ID == xid, "expecting proxy-assigned UUID %q, got %q", xargs.ID, xid)
+		})
 	}
 	freeBcastRes(results)
 
+	// IC to listen on
 	if xargs.ID != "" {
 		smap := p.owner.smap.get()
-		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
+		var srcs meta.NodeMap
+		if singleTarget != nil {
+			srcs = meta.NodeMap{singleTarget.ID(): singleTarget}
+		}
+		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, srcs)
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})
 		writeXid(w, xargs.ID)
 	}

@@ -279,7 +279,8 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 			Custom: xreg.ResArgs{
 				Config: cmn.GCO.Get(),
 			},
-			WG: wg,
+			WG:       wg,
+			AdminAPI: true,
 		}
 
 		go t.runResilver(resargs)

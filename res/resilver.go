@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ import (
 )
 
 // TODO:
+// - add CtlMsg() w/ (jgroup.NumVisits() and related runtime)
 // - revisit EC bits and check for OOS preemptively
 // - not deleting extra copies - delegating to `storage cleanup`
 // - skipping _busy_ objects w/ TryLock + retries
@@ -57,6 +59,7 @@ type (
 		PostDD          func(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error)
 		Custom          xreg.ResArgs
 		SingleRmiJogger bool
+		AdminAPI        bool
 	}
 	jogger struct {
 		p     *Res
@@ -178,8 +181,11 @@ func (res *Res) Run(args *Args, tstats cos.StatsUpdater) {
 	}
 	res.mu.Unlock()
 
+	s := "num objects visited: " + strconv.FormatInt(jgroup.NumVisits(), 10)
 	if n := res.nbusy.Load(); n > 0 {
-		nlog.Warningf("%s done (skipped %d busy)", xres.Name(), n)
+		nlog.Warningf("%s done [%s, skipped busy: %d]", xres.Name(), s, n)
+	} else {
+		nlog.Infof("%s done [%s]", xres.Name(), s)
 	}
 }
 

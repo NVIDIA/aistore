@@ -368,6 +368,7 @@ const (
 	// nodes
 	nodeIDArgument            = "NODE_ID"
 	optionalNodeIDArgument    = "[NODE_ID]"
+	targetIDArgument          = "TARGET_ID"
 	optionalTargetIDArgument  = "[TARGET_ID]"
 	joinNodeArgument          = "IP:PORT"
 	nodeMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
