@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.19.0] - 2026-01-14
+
 ### Changed
 
 - Sync `AccessAttr` permission constants with Go (`api/apc/access.go`):
