@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1377,12 +1378,44 @@ func CapStatusGetWhat() (fsInfo apc.CapacityInfo) {
 ///////////////
 
 // note: conditioning on max, not avg
-func (cs *CapStatus) Err() (err error) {
+func (cs *CapStatus) Err() error {
+	testing := cmn.Rom.TestingEnv()
+once:
 	oos := cs.IsOOS()
-	if oos || int64(cs.PctMax) > cs.HighWM {
-		err = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.HighWM, 0 /*cleanup wm*/, cs.PctMax, oos)
+	debug.Assertf(!oos || int64(cs.PctMax) > cs.HighWM, "oos %t vs (%d, %d)", oos, cs.PctMax, cs.HighWM)
+
+	switch {
+	case oos:
+		return cs.emit(oos)
+	case int64(cs.PctMax) <= cs.HighWM:
+		return nil
+	case !testing:
+		return cs.emit(oos)
 	}
-	return
+
+	//
+	// integration testing env-s may be severely constrained
+	//
+	avail := GetAvail()
+	for _, mi := range avail {
+		mi.RemoveDeleted("cap-err-testing-env")
+	}
+	runtime.Gosched()
+
+	cs2, _, errCap := CapRefresh(cmn.GCO.Get(), nil /*tcdf*/)
+	if errCap != nil {
+		return errCap
+	}
+	if int64(cs2.PctMax) <= cs2.HighWM {
+		nlog.Infoln("cap refresh: stale", cs.String(), "=> actual", cs2.String())
+	}
+	cs = &cs2
+	testing = false
+	goto once
+}
+
+func (cs *CapStatus) emit(oos bool) error {
+	return cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.HighWM, 0 /*cleanup wm*/, cs.PctMax, oos)
 }
 
 func (cs *CapStatus) IsOOS() bool { return int64(cs.PctMax) > cs.OOS }

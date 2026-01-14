@@ -36,7 +36,7 @@ func (mi *Mountpath) TempDir(dir string) string {
 	return filepath.Join(mi.Path, deletedRoot, dir)
 }
 
-func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
+func (mi *Mountpath) RemoveDeleted(tag string) (rerr error) {
 	delroot := mi.DeletedRoot()
 	dentries, err := os.ReadDir(delroot)
 	if err != nil {
@@ -49,7 +49,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 	for _, dent := range dentries {
 		fqn := filepath.Join(delroot, dent.Name())
 		if !dent.IsDir() {
-			err := fmt.Errorf("%s: unexpected non-directory item %q in 'deleted'", who, fqn)
+			err := fmt.Errorf("%s: unexpected non-directory item %q in 'deleted'", tag, fqn)
 			debug.AssertNoErr(err)
 			nlog.Errorln(err)
 			continue
@@ -58,7 +58,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 			continue
 		}
 		if !cos.IsNotExist(err) {
-			nlog.Errorf("%s: failed to remove %q from 'deleted', err %v", who, fqn, err)
+			nlog.Errorf("%s: failed to remove %q from 'deleted', err %v", tag, fqn, err)
 			if rerr == nil {
 				rerr = err
 			}

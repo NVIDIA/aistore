@@ -65,8 +65,19 @@ jobs:
         run: |
           sudo sysctl -w vm.swappiness=10
 
+      - name: Free disk space
+        run: |
+          echo "== before =="
+          df -kh
+          du -sh /usr/local/lib/android /usr/share/dotnet 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          echo "== after =="
+          df -kh
+
       - name: Run and test AIStore
         run: |
           export GOPATH="$(go env GOPATH)"
-          scripts/clean_deploy.sh --target-cnt 3 --proxy-cnt 1 --mountpath-cnt 2
-          NUM_PROXY=1 NUM_TARGET=3 BUCKET="ais://test" make test-short
+          export NUM_PROXY=6 NUM_TARGET=6 MPATH_CNT=4
+          scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $MPATH_CNT --deployment all --remote-proxy-cnt 2 --remote-target-cnt 3
+          BUCKET="ais://test" make test-short
