@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -156,9 +158,15 @@ func (p *tcoFactory) Start() error {
 
 	r.copier.r = r
 
-	// limited use (compare w/ tcb sntl.init)
-	r.sntl.r = r
-	r.sntl.nat = nat
+	// sentinels, to coordinate finishing, aborting, and progress;
+	if nat > 1 {
+		// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
+		r.sntl.init(r, smap, nat)
+	} else {
+		// single-target: limited init (no DM, no coordination needed)
+		r.sntl.r = r
+		r.sntl.nat = nat
+	}
 
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
@@ -201,6 +209,9 @@ func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 	r.pend.mtx.Lock()
 
 	r.pend.m[msg.TxnUUID] = wi
+	// Initialize pend.n here (not in doMsg) to prevent race where OpcDone
+	// arrives before doMsg sets pend.n. sntl.nat is valid since Start() ran.
+	wi.pend.n.Store(int64(r.sntl.nat - 1))
 	r.wiCnt.Inc()
 
 	r.pend.mtx.Unlock()
@@ -239,7 +250,6 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 		r.Abort(err)
 		return true // stop
 	}
-	wi.pend.n.Store(int64(r.sntl.nat - 1)) // must dec down to zero
 
 	var (
 		lrit    = &lrit{}
@@ -307,7 +317,8 @@ outer:
 				break outer
 			}
 			if r.p.dm != nil {
-				r.sntl.bcast(msg.TxnUUID, r.p.dm, nil) // (compare w/ r.ID below)
+				// Per-transaction OpcDone: finished sending objects for this txn
+				r.sntl.bcast(msg.TxnUUID, r.p.dm, nil)
 			}
 		case <-r.IdleTimer():
 			break outer
@@ -315,12 +326,23 @@ outer:
 			break outer
 		}
 	}
+
+	// quiesce and close DM (compare w/ tcb.go)
 	if r.p.dm != nil {
-		if err := r.AbortErr(); err != nil {
-			if !isErrRecvAbort(err) {
-				r.sntl.bcast(r.ID(), r.p.dm, err)
+		abortErr := r.AbortErr()
+		// Xaction-level OpcDone: whole xaction is done, entering Quiesce
+		r.sntl.bcast(r.ID(), r.p.dm, abortErr)
+		if abortErr == nil { // done
+			r.sntl.initLast(mono.NanoTime())
+			qui := r.Quiesce(r.qival(), r.qcb) // wait for others
+			if qui == core.QuiAborted {
+				err := r.AbortErr()
+				debug.Assert(err != nil)
+				r.sntl.bcast(r.ID(), r.p.dm, err) // broadcast: abort
 			}
 		}
+		r.p.dm.Close(r.AbortErr())
+		r.p.dm.UnregRecv()
 	}
 
 	// finish the ETL session, if any
@@ -328,7 +350,9 @@ outer:
 		r.transform.Finish(nil)
 	}
 
-	r.fin(true /*unreg Rx*/) // TODO: compare w/ tcb quiescing
+	r.sntl.cleanup()
+	r.Finish()
+
 	if r.ErrCnt() > 0 {
 		// (see "expecting errors" and cleanup)
 		r.pend.mtx.Lock()
@@ -339,6 +363,25 @@ outer:
 	if a := r.chanFull.Load(); a > 0 {
 		nlog.Warningln(r.Name(), "work channel full (final)", a)
 	}
+}
+
+//
+// quiesce
+// TODO: refactor - currently duplicates tcb.go
+//
+
+func (r *XactTCO) qival() time.Duration {
+	return cos.ClampDuration(r.config.Timeout.MaxHostBusy.D(), 10*time.Second, time.Minute)
+}
+
+func (r *XactTCO) qcb(tot time.Duration) core.QuiRes {
+	nwait := r.sntl.pend.n.Load()
+	if nwait > 0 {
+		// have "pending" targets
+		progressTimeout := max(r.config.Timeout.SendFile.D(), time.Minute)
+		return r.sntl.qcb(r.p.dm, tot, r.qival(), progressTimeout, r.ErrCnt())
+	}
+	return core.QuiDone
 }
 
 //
@@ -363,28 +406,42 @@ ex:
 }
 
 // (note: ObjHdr and its fields must be consumed synchronously)
+// TODO: refactor - currently duplicates tcb.go
 func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
 		case transport.OpcDone:
-			uuid := cos.UnsafeS(hdr.Opaque) // txnUUID
+			// Two types of OpcDone - distinguished by whether uuid matches a txnUUID:
+			uuid := cos.UnsafeS(hdr.Opaque)
 			r.pend.mtx.Lock()
 			wi, ok := r.pend.m[uuid]
-			if !ok {
-				r.pend.mtx.Unlock()
-				_, err := r.JoinErr()
-				return err
-			}
-			n := wi.pend.n.Dec()
-			if n == 0 {
-				r.wiCnt.Dec()
-			}
 			r.pend.mtx.Unlock()
+			if ok {
+				// (1) Per-txn OpcDone (sent after doMsg, see: sntl.bcast(msg.TxnUUID...))
+				//     Sender finished copying objects for this specific transaction.
+				n := wi.pend.n.Dec()
+				if n == 0 {
+					r.wiCnt.Dec()
+				}
+			} else {
+				// (2) Xaction-level OpcDone (sent before Quiesce, see: sntl.bcast(r.ID()...))
+				//     Sender's whole xaction is done; mark them complete for Quiesce.
+				r.sntl.rxDone(hdr)
+			}
 		case transport.OpcAbort:
 			uuid := cos.UnsafeS(hdr.Opaque)
 			debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID())
-
 			r.sntl.rxAbort(hdr)
+		case transport.OpcRequest:
+			// progress request during quiesce - respond with current count
+			o := transport.AllocSend()
+			o.Hdr.Opcode = transport.OpcResponse
+			b := make([]byte, cos.SizeofI64)
+			binary.BigEndian.PutUint64(b, uint64(r.Objs()))
+			o.Hdr.Opaque = b
+			r.p.dm.Bcast(o, nil)
+		case transport.OpcResponse:
+			r.sntl.rxProgress(hdr)
 		default:
 			return abortOpcode(r, hdr.Opcode)
 		}
