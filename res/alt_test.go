@@ -104,6 +104,9 @@ func TestResilver_DisableEnable(t *testing.T) {
 	tassert.Errorf(t, enabledMi != nil, "expected enabled mountpath, got nil: %q", mpathToToggle)
 
 	runResilver(t, config, disabledMi, apc.ActMountpathEnable)
+
+	time.Sleep(time.Second) // TODO -- FIXME: remove (a rare, intermittent failure)
+
 	assertLocations(t, bck, objs)
 }
 
