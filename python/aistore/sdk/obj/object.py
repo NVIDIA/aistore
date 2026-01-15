@@ -156,6 +156,11 @@ class Object:
         """
         Requests object properties and returns headers. Updates props.
 
+        Deprecation notice:
+            This is the legacy HEAD(object) v1 call. It remains supported in AIS 4.2,
+            but new development should target Object HEAD v2 when available in the SDK.
+            The v1 path is planned for removal in a future major release.
+
         Returns:
             Response header with the object properties.
 

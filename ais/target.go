@@ -1242,6 +1242,14 @@ func (t *target) _checkLocked(w http.ResponseWriter, r *http.Request, bck *meta.
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
+//
+// Deprecation notice:
+// - This is the legacy HEAD(object) v1 API.
+// - It remains fully supported in v4.2, but new development should target Object HEAD v2.
+// - The v1 path is planned for removal in a future major release.
+//
+// See also: target.objHeadV2()
+
 func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		err   error

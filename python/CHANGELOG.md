@@ -8,6 +8,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [1.19.0] - 2026-01-14
 
+### Deprecated
+
+- Legacy `HEAD(object)` v1 API is now deprecated.
+  - Existing calls remain fully supported in 1.19.x.
+  - New development should target the chunk-aware Object HEAD v2 API.
+  - The v1 path is planned for removal in a future major release.
+
 ### Changed
 
 - Sync `AccessAttr` permission constants with Go (`api/apc/access.go`):

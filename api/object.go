@@ -414,6 +414,13 @@ func TransformObject(bp BaseParams, args *TransformArgs) error {
 // Returns object properties; can be conventionally used to establish in-cluster presence.
 // - fltPresence:  as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
 // - silent==true: not to log (not-found) error
+//
+// Deprecation notice:
+// - This is the legacy HEAD(object) v1 API.
+// - It remains fully supported in v4.2, but new development should target Object HEAD v2.
+// - The v1 path is planned for removal in a future major release.
+//
+// See also: HeadObjectV2()
 
 func HeadObject(bp BaseParams, bck cmn.Bck, objName string, args HeadArgs) (op *cmn.ObjectProps, err error) {
 	q := qalloc()
