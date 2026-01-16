@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1400,16 +1399,22 @@ once:
 	for _, mi := range avail {
 		mi.RemoveDeleted("cap-err-testing-env")
 	}
-	runtime.Gosched()
 
-	cs2, _, errCap := CapRefresh(cmn.GCO.Get(), nil /*tcdf*/)
-	if errCap != nil {
-		return errCap
+	// recompute capacity directly (cannot call CapRefresh())
+	config := cmn.GCO.Get()
+	var pctMax int32
+	for _, mi := range avail {
+		c, err := mi.getCapacity(config, true /*refresh*/)
+		if err != nil {
+			continue
+		}
+		pctMax = max(pctMax, c.PctUsed)
 	}
-	if int64(cs2.PctMax) <= cs2.HighWM {
-		nlog.Infoln("cap refresh: stale", cs.String(), "=> actual", cs2.String())
+	if int64(pctMax) <= config.Space.HighWM {
+		nlog.Infoln("cap: stale", cs.PctMax, "=> actual", pctMax)
+		return nil
 	}
-	cs = &cs2
+
 	testing = false
 	goto once
 }
