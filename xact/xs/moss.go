@@ -87,9 +87,6 @@ const (
 	// - stays enabled for the entire lifetime
 	bewarmSize = cos.MiB
 
-	// the number of GFN recovery requests by a work item = min(gfnMaxCount, config.GetBatch.MaxSoftErrs)
-	gfnMaxCount = 3
-
 	// next(i) poll interval: a fraction of configured timeout
 	pollDiv = 8
 )
@@ -122,7 +119,8 @@ type (
 			cnt  int64
 		}
 		wait int64 // Rx wait: time spent waiting to receive entries from peers
-		ngfn int   // num successful GFN requests by this wi
+		ngfn int   // total num GFN requests by this wi
+		errn int   // GFN failures; converted to missing-entry when ContinueOnErr=true
 	}
 	basewi struct {
 		// Tx/Rx shared state
@@ -163,12 +161,8 @@ type (
 		bewarm  *work.Pool
 		pending sync.Map // [wid => *basewi]
 		xact.DemandBase
-		activeWG sync.WaitGroup // when pending
-		lastLog  atomic.Int64   // last log timestamp (sparse)
-		gfn      struct {       // counts
-			ok   atomic.Int32
-			fail atomic.Int32
-		}
+		activeWG     sync.WaitGroup // when pending
+		lastLog      atomic.Int64   // last log timestamp (sparse)
 		advNextCheck atomic.Int64
 	}
 )
@@ -357,12 +351,6 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 
 // terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(now int64) (d time.Duration) {
-	if cmn.Rom.V(5, cos.ModXs) {
-		if ok, fail := r.gfn.ok.Load(), r.gfn.fail.Load(); ok+fail > 0 {
-			nlog.Infoln(r.Name(), "GFN: [", ok, fail, "]")
-		}
-	}
-
 	// cleanup abandoned wi-s
 	r.gcAbandoned(now, 32 /*max-iters*/)
 
@@ -945,6 +933,12 @@ func (wi *basewi) cleanup() bool {
 	if wi.stats.wait > 0 {
 		tstats.Add(stats.GetBatchRxWaitTotal, wi.stats.wait)
 	}
+	if wi.stats.ngfn > 0 {
+		tstats.Add(stats.GetBatchCountGFN, int64(wi.stats.ngfn))
+	}
+	if wi.stats.errn > 0 {
+		tstats.Add(stats.GetBatchErrCountGFN, int64(wi.stats.errn))
+	}
 
 	// TODO: core.Xact to count archived files separately
 	wi.r.ObjsAdd(int(wi.stats.obj.cnt+wi.stats.fil.cnt), wi.stats.obj.size+wi.stats.fil.size)
@@ -1225,7 +1219,7 @@ func (wi *basewi) next(i int) (int, error) {
 		case !isErrHole(err):
 			return nextIdx, err
 		default:
-			if wi.stats.ngfn >= min(gfnMaxCount, r.config.GetBatch.MaxSoftErrs) {
+			if r.config.GetBatch.IsDisabledGFN() || wi.stats.ngfn >= r.config.GetBatch.MaxGFN {
 				return nextIdx, err
 			}
 		}
@@ -1234,6 +1228,8 @@ func (wi *basewi) next(i int) (int, error) {
 	out, nameInArch := wi._out(lom, in)
 	if isErrHole(err) {
 		wi.stats.ngfn++
+		// soft err-s include a), b), and c) GFN
+		// see cmn/config comment
 		wi.soft++
 		err = wi.gfn(lom, tsi, in, out, nameInArch, err)
 	} else {
@@ -1286,19 +1282,23 @@ func (wi *basewi) gfn(lom *core.LOM, tsi *meta.Snode, in *apc.MossIn, out *apc.M
 	resp, err := core.T.GetFromNeighbor(params) //nolint:bodyclose // closed below
 
 	if err != nil {
-		nlog.Warningln(wi.r.Name(), wi.wid, "GFN fail:", nameInArch, err)
-		wi.r.gfn.fail.Inc()
+		// GFN failure is not necessarily fatal.
+		// With ContinueOnErr=true, we convert it to a missing-entry (soft error).
+		// Track separately from soft errors since it indicates cluster pressure,
+		// not genuinely missing data.
+		nlog.Warningln(wi.r.Name(), wi.wid, nameInArch, err)
+		wi.stats.errn++
 		if wi.req.ContinueOnErr {
 			return wi.write(lom, in, out, nameInArch)
 		}
 		return errHole // remains orig err
 	}
+
 	defer cos.Close(resp.Body)
 
 	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.Infoln(wi.r.Name(), wi.wid, "GFN ok:", nameInArch)
 	}
-	wi.r.gfn.ok.Inc()
 	if in.ArchPath == "" {
 		oah := cos.SimpleOAH{Size: resp.ContentLength}
 		err = wi._txreg(oah, resp.Body, out, nameInArch)

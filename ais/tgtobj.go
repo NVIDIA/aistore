@@ -1084,7 +1084,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	}
 	resp, err := goi.t.GetFromNeighbor(params) //nolint:bodyclose // closed by poi.put()
 	if err != nil {
-		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
+		nlog.Warningln(err)
 		return false
 	}
 

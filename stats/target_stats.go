@@ -132,11 +132,15 @@ const (
 	GetBatchObjSize   = "getbatch.obj.size"
 	GetBatchFileSize  = "getbatch.file.size"
 
+	// get-batch GFN (get-from-neighbor) recovery stats
+	GetBatchCountGFN = "getbatch.gfn.n" // total GFN requests
+
 	GetBatchRxWaitTotal   = "getbatch.rxwait.ns"
 	GetBatchThrottleTotal = "getbatch.throttle.ns"
 
 	ErrGetBatchCount     = errPrefix + "getbatch.n"
 	GetBatchSoftErrCount = errPrefix + "soft.getbatch.n"
+	GetBatchErrCountGFN  = errPrefix + "gfn.getbatch.n"
 )
 
 // 4, streams (peer-to-peer long-lived connections)
@@ -633,6 +637,13 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 			Help: "get-batch: total cumulative size (bytes) of archived files extracted from shards",
 		},
 	)
+
+	r.reg(snode, GetBatchCountGFN, KindCounter,
+		&Extra{
+			Help: "get-batch: total number of GFN (get-from-neighbor) recovery attempts",
+		},
+	)
+
 	r.reg(snode, GetBatchRxWaitTotal, KindTotal,
 		&Extra{
 			Help: "get-batch: total cumulative time (nanoseconds) spent waiting to receive entries from peer targets",
@@ -643,9 +654,15 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 			Help: "get-batch: total cumulative time (nanoseconds) slept due to resource pressure",
 		},
 	)
+	// get-batch error counts
 	r.reg(snode, GetBatchSoftErrCount, KindCounter,
 		&Extra{
 			Help: "get-batch: number of transient errors (retryable failures under configured limit)",
+		},
+	)
+	r.reg(snode, GetBatchErrCountGFN, KindCounter,
+		&Extra{
+			Help: "get-batch: number of failed GFN recovery attempts",
 		},
 	)
 	r.reg(snode, ErrGetBatchCount, KindCounter,

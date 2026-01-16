@@ -899,7 +899,9 @@ type (
 	}
 )
 
-// ref: https://github.com/NVIDIA/aistore/releases/tag/v1.4.0#getbatch-api-ml-endpoint
+// ref:
+// - https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md
+// - https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
 type (
 	GetBatchConf struct {
 		// Maximum time to wait for remote targets to send their data during
@@ -921,20 +923,34 @@ type (
 		// Max number of soft (recoverable) errors allowed during a single
 		// GetBatch request when ContinueOnErr = true.
 		// A soft error is either:
-		//  - a remote stream-break (ErrSBR) that gets converted into a missing
-		//    entry, OR
-		//  - a timed-out missing entry (technically referred to as a "hole")
-		//    when a (reassembling) AIS target spent up to MaxWait (see above)
-		//    waiting for the input from another node in the cluster.
-		// If MaxSoftErrs == 0, the system default (6) is used.
+		//
+		// a) missing data (404) - object or archived file doesn't exist;
+		// b) remote stream-break (`ErrSBR`) - a temporary failure of a long-lived;
+		//    peer-to-peer connection that gets converted into a special missing entry
+		// c) timeout waiting for peer to "push" next data item (object or archived file),
+		//    with subsequent recovery via direct target-to-target GET dubbed GFN
+		//    (get-from-neighbor).
+		//
+		// Note that GFN is separately configurable (below)
+		//
+		// If MaxSoftErrs == 0, the system default (below) is used.
 		// Once the request exceeds this limit, the target stops treating further
 		// failures as recoverable and aborts the request.
 		MaxSoftErrs int `json:"max_soft_errs,omitempty"`
+
+		// Max number of GFN (get-from-neighbor) recovery attempts per work item.
+		// GFN is a direct target-to-target GET request used when the normal
+		// streaming path times out or fails.
+		//
+		// If MaxGFN == 0, the system default (below) is used.
+		// Set to -1 to disable GFN entirely (fail immediately on holes).
+		MaxGFN int `json:"max_gfn,omitempty"`
 	}
 	GetBatchConfToSet struct {
 		MaxWait          *cos.Duration `json:"max_wait,omitempty"`
 		NumWarmupWorkers *int          `json:"warmup_workers,omitempty"`
 		MaxSoftErrs      *int          `json:"max_soft_errs,omitempty"`
+		MaxGFN           *int          `json:"max_gfn,omitempty"`
 	}
 )
 
@@ -2692,12 +2708,16 @@ const (
 	numWarmupWorkersDisabled = -1
 	numWarmupWorkersDflt     = 2
 
-	GetBatchSoftErrsDflt = 6
+	getBatchSoftErrsDflt = 8
+	getBatchMaxGFN       = 5
+	getBatchDisabledGFN  = -1
 )
 
 func (c *GetBatchConf) WarmupWorkers() int {
 	return cos.Ternary(c.NumWarmupWorkers == numWarmupWorkersDisabled, 0, c.NumWarmupWorkers)
 }
+
+func (c *GetBatchConf) IsDisabledGFN() bool { return c.MaxGFN == getBatchDisabledGFN }
 
 func (c *GetBatchConf) Validate() error {
 	debug.Assert(numWarmupWorkersDisabled < 0 && getBatchWaitDflt > GetBatchWaitMin && GetBatchWaitMin < getBatchWaitMax)
@@ -2716,9 +2736,19 @@ func (c *GetBatchConf) Validate() error {
 		}
 	}
 	if c.MaxSoftErrs == 0 {
-		c.MaxSoftErrs = GetBatchSoftErrsDflt
+		c.MaxSoftErrs = getBatchSoftErrsDflt
 	} else if c.MaxSoftErrs < 0 {
 		return fmt.Errorf("invalid get_batch.max_soft_errs=%d (expecting non-negative integer)", c.MaxSoftErrs)
+	}
+	switch c.MaxGFN {
+	case getBatchDisabledGFN:
+	case 0:
+		c.MaxGFN = getBatchMaxGFN
+	default:
+		if c.MaxGFN < 0 || c.MaxGFN > c.MaxSoftErrs {
+			return fmt.Errorf("invalid get_batch.max_gfn=%d (expecting %d to disable, 0 for default, or range [1, %d])",
+				c.MaxGFN, getBatchDisabledGFN, c.MaxSoftErrs)
+		}
 	}
 	return nil
 }

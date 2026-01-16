@@ -7,6 +7,7 @@ package ais
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -254,5 +255,8 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 	cmn.HreqFree(req)
 	cancel()
 
-	return resp, err
+	if err != nil {
+		return nil, fmt.Errorf("GFN(%s, %s): %w", lom.Cname(), params.Tsi.StringEx(), err)
+	}
+	return resp, nil
 }
