@@ -45,6 +45,10 @@ import (
 )
 
 const (
+	// OCI user metadata keys for AIS checksums (stored via Opc-Meta- prefix)
+	ociChecksumType = "ais-cksum-type"
+	ociChecksumVal  = "ais-cksum-val"
+
 	compartmentOCIDDefault   = ""            // This will trigger a failure on ListBuckets() calls
 	configFilePathDefault    = ".oci/config" // relative to ${HOME}
 	profileDefault           = "DEFAULT"
@@ -561,6 +565,8 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		err         error
 		objectAttrs = lom.ObjAttrs()
 		objectSize  int64
+
+		cksumType, cksumValue = lom.Checksum().Get()
 	)
 
 	if objectAttrs == nil {
@@ -574,11 +580,18 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *
 		return bp.putObjViaMPU(r, lom, objectSize)
 	}
 
+	// Store AIS checksum in OCI user metadata
+	md := map[string]string{
+		ociChecksumType: cksumType,
+		ociChecksumVal:  cksumValue,
+	}
+
 	req := ocios.PutObjectRequest{
 		NamespaceName: &bp.namespace,
 		BucketName:    &cloudBck.Name,
 		ObjectName:    &lom.ObjName,
 		PutObjectBody: r,
+		OpcMeta:       md,
 	}
 
 	resp, err := bp.client.PutObject(ctx, req)
@@ -652,7 +665,7 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 	}
 
 	objAttrs := &cmn.ObjAttrs{
-		CustomMD: make(cos.StrKVs, 3),
+		CustomMD: make(cos.StrKVs, 8),
 		Size:     resp.RawResponse.ContentLength,
 	}
 	objAttrs.CustomMD[cmn.SourceObjMD] = apc.OCI
@@ -661,6 +674,15 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 	}
 	if v, ok := h.EncodeCksum(resp.ContentMd5); ok {
 		objAttrs.CustomMD[cmn.MD5ObjMD] = v
+	}
+
+	// AIS custom checksum from OCI user metadata (see also: PutObj, GetObjReader)
+	if resp.OpcMeta != nil {
+		if cksumType, ok := resp.OpcMeta[ociChecksumType]; ok {
+			if cksumValue, ok := resp.OpcMeta[ociChecksumVal]; ok {
+				objAttrs.SetCksum(cksumType, cksumValue)
+			}
+		}
 	}
 
 	return objAttrs, 0, nil
