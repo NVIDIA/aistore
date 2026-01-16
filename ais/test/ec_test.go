@@ -2752,6 +2752,8 @@ func newObjSlices(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objName 
 
 // Check that BckEncode recovers objects and slices
 func TestECBckEncodeRecover(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+
 	var (
 		bck = cmn.Bck{
 			Name:     testBucketName + "-benc",

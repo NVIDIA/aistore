@@ -25,10 +25,14 @@ const (
 
 func Encode(ws cos.WriterAt, v any, opts Options) error {
 	var (
+		zw  *lz4.Writer
 		h   hash.Hash
 		w   io.Writer = ws
 		off int
 	)
+	//
+	// 1. header
+	//
 	if opts.Signature {
 		var (
 			prefix [prefLen]byte
@@ -52,19 +56,22 @@ func Encode(ws cos.WriterAt, v any, opts Options) error {
 		binary.BigEndian.PutUint32(prefix[off:], flags)
 		off += cos.SizeofI32
 
-		w.Write(prefix[:])
+		if _, err := w.Write(prefix[:]); err != nil {
+			return err
+		}
 		debug.Assert(off == prefLen)
 	}
 	if opts.Checksum {
 		var cksum [cos.SizeXXHash64]byte
-		w.Write(cksum[:]) // reserve for checksum
+		if _, err := w.Write(cksum[:]); err != nil { // reserve for checksum
+			return err
+		}
 	}
 	if opts.Compress {
-		zw := lz4.NewWriter(w)
+		zw = lz4.NewWriter(w)
 		errN := zw.Apply(lz4.BlockSizeOption(lz4BufferSize))
 		debug.AssertNoErr(errN)
 		w = zw
-		defer zw.Close()
 	}
 	if opts.Checksum {
 		h = onexxh.New64()
@@ -72,19 +79,35 @@ func Encode(ws cos.WriterAt, v any, opts Options) error {
 		w = io.MultiWriter(h, w)
 	}
 
-	encoder := cos.JSON.NewEncoder(w)
+	//
+	// 2. data
+	//
+	var (
+		encoder      = cos.JSON.NewEncoder(w)
+		errEn, errCl error
+	)
 	if opts.Indent {
 		encoder.SetIndent("", "  ")
 	}
-	if err := encoder.Encode(v); err != nil {
-		return err
+	errEn = encoder.Encode(v)
+	if zw != nil {
+		errCl = zw.Close()
 	}
+	if errEn != nil {
+		return errEn
+	}
+	if errCl != nil {
+		return errCl
+	}
+
+	//
+	// 3. checksum
+	//
 	if opts.Checksum {
 		if _, err := ws.WriteAt(h.Sum(nil), int64(off)); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
