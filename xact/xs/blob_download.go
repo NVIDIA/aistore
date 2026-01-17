@@ -512,17 +512,10 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 			debug.AssertNoErr(err)
 		} else {
 			debug.Assertf(len(r.pending) == 0, "%s: pending tasks should be all drained, got %d", r.Name(), len(r.pending))
-			if ty := lom.CksumConf().Type; ty != cos.ChecksumNone {
-				cksumH := cos.NewCksumHash(ty)
-				if err = r.manifest.ComputeWholeChecksum(cksumH); err != nil {
-					err = fmt.Errorf("%s: failed to compute whole checksum: %w", r.Name(), err)
-					debug.AssertNoErr(err)
-				}
-				lom.SetCksum(&cksumH.Cksum)
-			}
-			if err == nil {
-				err = lom.CompleteUfest(r.manifest, false /*locked*/)
-			}
+
+			lom.Lock(true)
+			err = r._fini(lom)
+			lom.Unlock(true)
 		}
 	}
 
@@ -557,6 +550,19 @@ func (r *XactBlobDl) finalize(err error, lom *core.LOM, startTime int64) {
 
 	r.cleanup()
 	r.Finish()
+}
+
+func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
+	if ty := lom.CksumConf().Type; ty != cos.ChecksumNone {
+		cksumH := cos.NewCksumHash(ty)
+		if err = r.manifest.ComputeWholeChecksum(cksumH); err == nil {
+			lom.SetCksum(&cksumH.Cksum)
+		}
+	}
+	if err == nil {
+		err = lom.CompleteUfest(r.manifest, true /*locked*/)
+	}
+	return err
 }
 
 func (r *XactBlobDl) newWorker() *worker {

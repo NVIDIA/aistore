@@ -920,10 +920,11 @@ func (u *Ufest) ETagS3() (string, error) {
 }
 
 // reread all chunk payloads to compute a checksum of the given type
-// TODO: avoid the extra pass by accumulating during AddPart/StorePartial or by caching a tree-hash
 // see also: s3/mpt for ListParts
+// TODO: optimize-out; callers to revise locking
 func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
-	debug.AssertNoErr(u.Check(false /*completed*/)) // minimal assert; caller's responsible for more
+	debug.AssertNoErr(u.Check(true /*completed*/))
+	const tag = "[whole-checksum]"
 	var (
 		written   int64
 		c         = u.firstChunk()
@@ -935,7 +936,12 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 		c := &u.chunks[i]
 		fh, err := os.Open(c.path)
 		if err != nil {
-			return err
+			if cos.IsNotExist(err) {
+				if e := u.lom.Load(false, true); e != nil {
+					err = e
+				}
+			}
+			return fmt.Errorf("%s %s chunk %d: %w", tag, u._rtag(), c.num, err)
 		}
 		nn, e := io.CopyBuffer(cksumH.H, fh, buf)
 		cos.Close(fh)
@@ -943,7 +949,7 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 			return e
 		}
 		if nn != c.size {
-			return fmt.Errorf("%s chunk %d: invalid size: written %d, have %d", u._rtag(), c.num, nn, c.size)
+			return fmt.Errorf("%s %s chunk %d: invalid size: written %d, have %d", tag, u._rtag(), c.num, nn, c.size)
 		}
 		written += nn
 	}
@@ -1184,11 +1190,13 @@ func (lom *LOM) CompleteUfest(u *Ufest, locked bool) (err error) {
 	)
 	if prevLom.Load(false /*cache it*/, true /*locked*/) == nil && prevLom.IsChunked() {
 		prevUfest, err = NewUfest("", prevLom, true /*must-exist*/)
-		debug.AssertNoErr(err)
 		if err == nil {
 			// Load old ufest for cleaning up old chunks after successful completion
-			if errLoad := prevUfest.load(true); errLoad != nil {
-				nlog.Errorln("failed to load previous", tagCompleted, prevUfest._utag(prevLom.Cname()), "err:", errLoad)
+			errLoad := prevUfest.load(true)
+			if errLoad != nil {
+				if !cos.IsNotExist(errLoad) {
+					nlog.Errorln("failed to load previous", tagCompleted, prevUfest._utag(prevLom.Cname()), "err:", errLoad)
+				}
 				prevUfest = nil
 			}
 		}

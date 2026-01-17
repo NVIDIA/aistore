@@ -1200,6 +1200,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			uploadID: uploadID,
 			body:     nil,
 			parts:    mptCompletedParts,
+			locked:   false,
 		})
 	case apc.ActCheckLock:
 		t._checkLocked(w, r, apireq.bck, apireq.items[1])

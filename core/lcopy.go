@@ -263,14 +263,28 @@ add:
 }
 
 // copy object => any local destination
-// usage: copying between different buckets (compare with lom.Copy() above)
+// usage:
+// - copying between different buckets (compare with lom.Copy() above)
+// - RestoreToLocation()
 // compare w/ Ufest.Relocate(lom)
 func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 	debug.Assert(lom.IsLocked() >= apc.LockRead, lom.Cname(), " source not locked")
 
 	dst = lom.CloneTo(dstFQN)
 	if err = dst.InitFQN(dstFQN, nil); err == nil {
-		err = lom.copy2fqn(dst, buf)
+		var (
+			nested     error
+			sameBucket bool
+			locked     bool
+		)
+		sameBucket = dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/)
+		err, nested, locked = lom._copy2fqn(dst, buf, sameBucket)
+		if locked {
+			dst.Unlock(true)
+		}
+		if nested != nil && !cos.IsNotExist(nested) {
+			nlog.Errorln("nested err:", nested)
+		}
 	}
 	if err != nil {
 		FreeLOM(dst)
@@ -283,7 +297,7 @@ func (lom *LOM) Copy2FQN(dstFQN string, buf []byte) (dst *LOM, err error) {
 // TODO -- FIXME:
 // - copying the chunks and the manifest not respecting the destination bucket's chunks config
 
-func (lom *LOM) copyChunks(dst *LOM, buf []byte) error {
+func (lom *LOM) _copyChunks(dst *LOM, buf []byte) error {
 	// Load the completed Ufest manifest from source
 	srcUfest, err := NewUfest("", lom, true)
 	if err != nil {
@@ -383,7 +397,7 @@ func (u *Ufest) _undoCopy(err error) error {
 	return err
 }
 
-func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
+func (lom *LOM) _copy2fqn(dst *LOM, buf []byte, sameBucket bool) (err, nested error, locked bool) {
 	var (
 		dstCksum   *cos.CksumHash
 		dstFQN     = dst.FQN
@@ -392,27 +406,29 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 	if dst.isMirror(lom) && lom.md.copies != nil {
 		dst.md.copies = maps.Clone(lom.md.copies)
 	}
-	if !dst.Bck().Equal(lom.Bck(), true /*same ID*/, true /*same backend*/) {
-		// The copy will be in a new bucket - completely separate object. Hence, we have to set initial version.
+	if !sameBucket {
+		// set initial version
 		dst.SetVersion(lomInitialVersion)
 	}
 
 	workFQN := dst.GenFQN(fs.WorkCT, fs.WorkfileCopy)
 	_, dstCksum, err = cos.CopyFile(lom.FQN, workFQN, buf, dstCksumTy)
 	if err != nil {
-		return err
+		return err, nil, false
+	}
+
+	if !sameBucket {
+		locked = dst.TryLock(true)
 	}
 
 	if err = cos.Rename(workFQN, dstFQN); err != nil {
-		if errRemove := cos.RemoveFile(workFQN); errRemove != nil && !cos.IsNotExist(errRemove) {
-			nlog.Errorln("nested err:", errRemove)
-		}
-		return err
+		nested = cos.RemoveFile(workFQN)
+		return err, nested, locked
 	}
 	switch {
 	case lom.IsChunked():
-		if err := lom.copyChunks(dst, buf); err != nil {
-			return err
+		if err := lom._copyChunks(dst, buf); err != nil {
+			return err, nil, locked
 		}
 	case dstCksumTy != cos.ChecksumNone:
 		dst.SetCksum(dstCksum.Clone())
@@ -430,23 +446,20 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mi, lom.mi
 		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
-				if errRemove := cos.RemoveFile(dst.FQN); errRemove != nil {
-					nlog.Errorln("nested err:", errRemove)
-				}
+				nested = cos.RemoveFile(dst.FQN)
 			}
 			// `lom.syncMetaWithCopies()` may have made changes notwithstanding
 			if errPersist := lom.Persist(); errPersist != nil {
-				nlog.Errorln("nested err:", errPersist)
+				err = fmt.Errorf("sync-with-copies: %w, persist: %w", err, errPersist)
 			}
-			return err
+			return err, nested, locked
 		}
 		err = lom.Persist()
 	} else if err = dst.Persist(); err != nil {
-		if errRemove := cos.RemoveFile(dst.FQN); errRemove != nil {
-			nlog.Errorln("nested err:", errRemove)
-		}
+		nested = cos.RemoveFile(dst.FQN)
 	}
-	return err
+
+	return err, nested, locked
 }
 
 // load-balanced GET from replicated lom

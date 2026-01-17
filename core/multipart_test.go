@@ -534,7 +534,9 @@ var _ = Describe("MPU-UfestRead", func() {
 
 		By("Step 4: Compute whole-object checksum (production lines 378-395)")
 		wholeCksum := cos.NewCksumHash(cos.ChecksumMD5) // Local bucket uses MD5
+		manifest.Lom().Lock(false)
 		err = manifest.ComputeWholeChecksum(wholeCksum)
+		manifest.Lom().Unlock(false)
 		Expect(err).NotTo(HaveOccurred(), "Should compute whole checksum successfully")
 
 		// computed checksum must match
