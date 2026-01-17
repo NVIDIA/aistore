@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"path"
 	"runtime"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -237,52 +237,34 @@ func eofOK(err error) error {
 // - flags: msgFl | pduFl | pduLastFl | pduStreamFl
 // - error
 func (it *iterator) nextProtoHdr() (int, uint64, error) {
-	n, err := it.Read(it.hbuf[:sizeProtoHdr])
-	if n < sizeProtoHdr {
+	n, err := io.ReadFull(it, it.hbuf[:sizeProtoHdr])
+	if err != nil {
 		switch {
-		case err == nil:
-			err = it.newErr(io.ErrUnexpectedEOF, sbrProtoHdr, fmt.Sprintf("n=%d", n))
-		case n == 0 && cos.IsOkEOF(err):
+		case cos.IsOkEOF(err):
+			debug.Assertf(n == 0, "ReadFull returns EOF iff n == 0 (%v, %d)", err, n)
 			// ok
-		case n == 0:
-			err = it.newErr(err, sbrProtoHdr, "")
+		case errors.Is(err, io.ErrUnexpectedEOF):
+			err = it.newErr(io.ErrUnexpectedEOF, sbrProtoHdr, "n="+strconv.Itoa(n))
 		default:
-			err = it.newErr(err, sbrProtoHdr, fmt.Sprintf("n=%d", n))
+			err = it.newErr(err, sbrProtoHdr, "n="+strconv.Itoa(n))
 		}
 		return 0, 0, err
 	}
+	debug.Assert(n == sizeProtoHdr, n, " vs ", sizeProtoHdr)
 	// extract and validate hlen
 	return it.extProtoHdr(it.hbuf)
 }
 
 func (it *iterator) nextObj(hlen int) (*objReader, error) {
-	n, err := it.Read(it.hbuf[:hlen])
-	if n < hlen {
-		if err == nil {
-			// [retry] insist on receiving the full length
-			var m int
-			for range maxInReadRetries {
-				runtime.Gosched()
-				m, err = it.Read(it.hbuf[n:hlen])
-				if err != nil {
-					break
-				}
-				// Check for potential overflow before adding
-				debug.Assert(n <= math.MaxInt-m)
-				n += m
-				if n >= hlen {
-					debug.Assert(n == hlen)
-					break
-				}
-			}
+	n, err := io.ReadFull(it, it.hbuf[:hlen])
+	if err != nil {
+		// EOF is never ok here (compare w/ pdu.readHdr)
+		if cos.IsAnyEOF(err) {
+			err = io.ErrUnexpectedEOF
 		}
-		if n < hlen {
-			if err == nil || errors.Is(err, io.EOF) {
-				err = io.ErrUnexpectedEOF
-			}
-			return nil, it.newErr(err, sbrObjHdrTooShort, fmt.Sprintf("%d<%d", n, hlen))
-		}
+		return nil, it.newErr(err, sbrObjHdrTooShort, fmt.Sprintf("%d<%d", n, hlen))
 	}
+	debug.Assert(hlen > 0 && n == hlen, n, " vs ", hlen)
 	hdr := ExtObjHeader(it.hbuf, hlen)
 	if hdr.isFin() {
 		return nil, io.EOF

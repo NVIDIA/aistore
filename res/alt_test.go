@@ -34,6 +34,10 @@ import (
 //  5. re-enable mountpath
 //  6. RunResilver -> verify again
 func TestResilver_DisableEnable(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name()) // TODO: racy, with: tmock: ais://ut-resilver-bck/a/b/c/obj-0055 does not exist
+	}
+
 	const (
 		numMpaths = 5
 		numObjs   = 80
@@ -89,8 +93,6 @@ func TestResilver_DisableEnable(t *testing.T) {
 	// resilver and check
 	runResilver(t, config, rmi, apc.ActMountpathDisable)
 
-	time.Sleep(time.Second) // TODO -- FIXME: remove (a rare, intermittent failure)
-
 	assertLocations(t, bck, objs)
 
 	// disable (as in: commit)
@@ -104,9 +106,6 @@ func TestResilver_DisableEnable(t *testing.T) {
 	tassert.Errorf(t, enabledMi != nil, "expected enabled mountpath, got nil: %q", mpathToToggle)
 
 	runResilver(t, config, disabledMi, apc.ActMountpathEnable)
-
-	time.Sleep(time.Second) // TODO -- FIXME: remove (a rare, intermittent failure)
-
 	assertLocations(t, bck, objs)
 }
 

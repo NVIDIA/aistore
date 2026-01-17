@@ -100,13 +100,15 @@ func (pdu *rpdu) readHdr() error {
 	const (
 		fmterr = "(plen=%d, flags=%s)"
 	)
-	n, err := pdu.parent.body.Read(pdu.buf[:sizeProtoHdr])
-	if n < sizeProtoHdr {
-		if err == nil {
+	n, err := io.ReadFull(pdu.parent.body, pdu.buf[:sizeProtoHdr])
+	if err != nil {
+		// unlike the top-level proto header, EOF here is never ok
+		if cos.IsAnyEOF(err) {
 			err = io.ErrUnexpectedEOF
 		}
 		return pdu.parent.newErr(err, sbrPDUHdrTooShort, fmt.Sprintf("n=%d", n))
 	}
+	debug.Assert(n == sizeProtoHdr, n, " vs ", sizeProtoHdr)
 	// extract/validate
 	pdu.plen, pdu.flags, err = pdu.parent.extProtoHdr(pdu.buf)
 	if err != nil {

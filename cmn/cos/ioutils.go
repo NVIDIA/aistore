@@ -37,7 +37,7 @@ func ReadAllN(r io.Reader, size int64) (b []byte, err error) {
 	// io.Copy may return EOF (or even wrapped EOF) after copying all remaining bytes
 	// if that's the case and ContentLengthUnknown, we treat EOF as ok
 	_, err = io.Copy(buf, r)
-	if err != nil && size == ContentLengthUnknown && errors.Is(err, io.EOF) {
+	if err != nil && size == ContentLengthUnknown && IsOkEOF(err) {
 		err = nil
 	}
 

@@ -197,7 +197,7 @@ func drainEOL(r io.Reader) error {
 		b      [1]byte
 		n, err = r.Read(b[:])
 	)
-	debug.Assert(err == nil || errors.Is(err, io.EOF), err)
+	debug.Assert(err == nil || cos.IsOkEOF(err), err)
 	if n == 0 {
 		return nil
 	}
@@ -206,7 +206,7 @@ func drainEOL(r io.Reader) error {
 		return nil
 	case '\r':
 		n, err = r.Read(b[:])
-		debug.Assert(err == nil || errors.Is(err, io.EOF), err)
+		debug.Assert(err == nil || cos.IsOkEOF(err), err)
 		if n == 0 || b[0] == '\n' {
 			return nil
 		}
