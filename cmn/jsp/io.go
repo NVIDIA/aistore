@@ -8,6 +8,8 @@ package jsp
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"hash"
 	"io"
 
@@ -117,7 +119,7 @@ func Decode(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 			prefix  [prefLen]byte
 			metaVer uint32
 		)
-		if _, err := r.Read(prefix[:]); err != nil {
+		if _, err := io.ReadFull(r, prefix[:]); err != nil {
 			return nil, err
 		}
 		l := len(signature)
@@ -145,8 +147,9 @@ func Decode(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 	}
 
 	if opts.Checksum {
-		return _decksum(r, v, opts, tag)
+		return withChecksum(r, v, opts, tag)
 	}
+	// otherwise, decode without checksum
 	if opts.Compress {
 		r = lz4.NewReader(r)
 	}
@@ -157,9 +160,9 @@ func Decode(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 	return nil, nil
 }
 
-func _decksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
+func withChecksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) {
 	var cksum [cos.SizeXXHash64]byte
-	if _, err := r.Read(cksum[:]); err != nil {
+	if _, err := io.ReadFull(r, cksum[:]); err != nil {
 		return nil, err
 	}
 
@@ -176,13 +179,9 @@ func _decksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) 
 		return nil, err
 	}
 
-	// We have already parsed `v` but there is still the possibility that `\n` remains
-	// not read. Read it to include into the final checksum.
-	b, err := cos.ReadAllN(rr, cos.ContentLengthUnknown)
-	if err != nil {
+	if err := drainEOL(rr); err != nil {
 		return nil, err
 	}
-	debug.Assert(len(b) == 0 || (len(b) == 1 && b[0] == '\n'), b)
 
 	actual := h.Sum(nil)
 	actualCksum := binary.BigEndian.Uint64(actual)
@@ -191,4 +190,28 @@ func _decksum(r io.Reader, v any, opts Options, tag string) (*cos.Cksum, error) 
 	}
 
 	return cos.NewCksum(cos.ChecksumOneXxh, hex.EncodeToString(actual)), nil
+}
+
+func drainEOL(r io.Reader) error {
+	var (
+		b      [1]byte
+		n, err = r.Read(b[:])
+	)
+	debug.Assert(err == nil || errors.Is(err, io.EOF), err)
+	if n == 0 {
+		return nil
+	}
+	switch b[0] {
+	case '\n':
+		return nil
+	case '\r':
+		n, err = r.Read(b[:])
+		debug.Assert(err == nil || errors.Is(err, io.EOF), err)
+		if n == 0 || b[0] == '\n' {
+			return nil
+		}
+		return fmt.Errorf("jsp: trailing garbage (%x, %b) after JSON", b[0], b[0])
+	default:
+		return errors.New("jsp: trailing garbage after JSON (expected optional newline)")
+	}
 }
