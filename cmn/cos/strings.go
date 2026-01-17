@@ -82,7 +82,7 @@ func Entropy(s string) float64 {
 	}
 
 	// Count byte frequencies.
-	counts := make(map[byte]int)
+	counts := make(map[byte]int, 16)
 	for i := range len(s) {
 		counts[s[i]]++
 	}

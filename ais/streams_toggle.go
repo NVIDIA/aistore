@@ -109,7 +109,7 @@ func (f *streamsToggle) respKalive(hdr http.Header, now int64, tout time.Duratio
 	if tout > 0 {
 		v := f.last.Load()
 		last := int64(v & nonpMask)
-		debug.Assert(int64(v) >= 0, f.hdrActive, " invalid timestamp: ", v)
+		debug.Assert(now >= last, f.hdrActive, " now: ", now, " < last: ", last)
 		if last != 0 && time.Duration(now-last) < tout {
 			hdr.Set(f.hdrActive, "true")
 		}
