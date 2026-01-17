@@ -133,7 +133,11 @@ for f in $files; do
   chunk_size
 done
 
+echo "2.a. All downloads must finish -----------------------------------------"
+ais show job blob-download
+
 ## show some tails
+echo "2.b. Show some tails -----------------------------------------"
 echo "..."
 ais show job blob-download --all | tail
 echo "..."
@@ -158,7 +162,17 @@ for f in $files; do
   chunk_size
 done
 
+## uncomment if need be
+## ais show job blob-download | grep Running
+
+echo "3.a. Wait for all blob-downloads (do not run concurrently with other blob-download tests!)"
+ais wait blob-download || exit $?
+
+echo "3.b. All downloads must finish -----------------------------------------"
+ais show job blob-download
+
 ## ditto
+echo "3.c. Show some tails -----------------------------------------"
 echo "..."
 ais show job blob-download --all | tail
 echo "..."

@@ -115,7 +115,7 @@ func waitXactBlob(xargs *xact.ArgsMsg) error {
 		if snap.IsAborted() {
 			return errors.New(snap.AbortErr)
 		}
-		debug.Assert(snap.ID == xargs.ID)
+		debug.Assert(snap.ID == xargs.ID || xargs.ID == "")
 		if snap.IsFinished() {
 			return nil
 		}
