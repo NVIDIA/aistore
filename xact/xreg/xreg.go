@@ -423,7 +423,9 @@ func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.S
 	// TODO: we cannot do this inside `forEach` because - nested locks
 	sts := make([]*core.Snap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
-		sts = append(sts, entry.Get().Snap())
+		if xctn := entry.Get(); xctn != nil {
+			sts = append(sts, xctn.Snap())
+		}
 	}
 	return sts
 }

@@ -32,7 +32,8 @@ type (
 		offlineObjErrs map[string]*cos.Errs // xid of TCB/TCB => errors encountered during offline transformation
 		InlineObjErrs  cos.Errs
 		xact.Base
-		m sync.Mutex // protects offlineErrs
+		ctlmsg string
+		m      sync.Mutex // protects offlineErrs
 	}
 )
 
@@ -77,11 +78,16 @@ func newETL(p *factory) *XactETL {
 		},
 	}
 	xctn.InitBase(p.Args.UUID, p.Kind(), nil)
+	_ = xctn.CtlMsg()
 	return xctn
 }
 
 func (r *XactETL) CtlMsg() string {
-	return r.msg.String()
+	if r.ctlmsg != "" || r.msg == nil {
+		return r.ctlmsg
+	}
+	r.ctlmsg = r.msg.String()
+	return r.ctlmsg
 }
 
 func (*XactETL) Run(*sync.WaitGroup) { debug.Assert(false) }

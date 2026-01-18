@@ -58,6 +58,7 @@ type (
 		pebl   pebl
 		lrit
 		xact.Base
+		ctlmsg    string
 		latestVer bool
 	}
 )
@@ -132,12 +133,16 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
 	}
-
+	_ = r.CtlMsg()
 	return r, nil
 }
 
 func (r *prefetch) CtlMsg() string {
-	return r.msg.Str(r.lrit.lrp == lrpPrefix)
+	if r.ctlmsg != "" || r.msg == nil {
+		return r.ctlmsg
+	}
+	r.ctlmsg = r.msg.Str(r.lrit.lrp == lrpPrefix)
+	return r.ctlmsg
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {

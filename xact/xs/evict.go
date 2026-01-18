@@ -30,6 +30,7 @@ type (
 		msg    *apc.EvdMsg
 		lrit
 		xact.Base
+		ctlmsg string
 	}
 )
 
@@ -81,18 +82,23 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.EvdMs
 		return nil, err
 	}
 	r.InitBase(xargs.UUID, kind, bck)
+	_ = r.CtlMsg()
 
 	return r, nil
 }
 
 func (r *evictDelete) CtlMsg() string {
+	if r.ctlmsg != "" || r.msg == nil {
+		return r.ctlmsg
+	}
 	var sb cos.SB
 	sb.Init(80)
 	r.msg.Str(&sb, r.lrit.lrp == lrpPrefix)
 	if r.msg.NonRecurs {
 		sb.WriteString(", non-recurs")
 	}
-	return sb.String()
+	r.ctlmsg = sb.String()
+	return r.ctlmsg
 }
 
 func (r *evictDelete) Run(wg *sync.WaitGroup) {

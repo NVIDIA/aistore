@@ -68,7 +68,8 @@ type (
 		// mountpath joggers
 		xact.BckJog
 		// details
-		owt cmn.OWT
+		owt    cmn.OWT
+		ctlmsg string
 	}
 )
 
@@ -91,6 +92,7 @@ func (p *tcbFactory) Start() error {
 	if err != nil {
 		return err
 	}
+	_ = xctn.CtlMsg()
 	p.xctn = xctn
 	return nil
 }
@@ -514,9 +516,18 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.args.BckFrom, r.args.BckTo
 }
 
-func (r *XactTCB) CtlMsg() string { return r.formatCtlMsg(false) }
+func (r *XactTCB) CtlMsg() string {
+	if r.ctlmsg != "" {
+		return r.ctlmsg
+	}
+	r.ctlmsg = r.formatCtlMsg(false)
+	return r.ctlmsg
+}
 
 func (r *XactTCB) formatCtlMsg(rename bool) string {
+	if r.args == nil || r.args.Msg == nil || r.args.BckFrom == nil || r.args.BckTo == nil {
+		return ""
+	}
 	var (
 		sb        cos.SB
 		msg       = r.args.Msg
@@ -526,11 +537,11 @@ func (r *XactTCB) formatCtlMsg(rename bool) string {
 	)
 	switch {
 	case rename:
-		tag = "mv: "
+		tag = "mv "
 	case r.Kind() == apc.ActETLBck:
-		tag = "etl: "
+		tag = "etl "
 	default:
-		tag = "cp: "
+		tag = "cp "
 	}
 
 	sb.Init(80)

@@ -320,9 +320,17 @@ func (r *XactArch) CtlMsg() string {
 	}
 
 	// append work items
+	const (
+		maxItems = 8
+	)
+	var s string
 	r.pending.mtx.Lock()
-	wis := make([]*archwi, 0, len(r.pending.m))
+	wis := make([]*archwi, 0, min(len(r.pending.m), maxItems))
 	for _, wi := range r.pending.m {
+		if len(wis) >= maxItems {
+			s = " ..."
+			break
+		}
 		wis = append(wis, wi)
 	}
 	r.pending.mtx.Unlock()
@@ -335,6 +343,9 @@ func (r *XactArch) CtlMsg() string {
 		}
 		wi.append(&sb)
 		first = false
+	}
+	if s != "" {
+		sb.WriteString(s)
 	}
 	sb.WriteUint8(']')
 

@@ -493,7 +493,7 @@ func (r *XactTCO) CtlMsg() string {
 	} else {
 		sb.Init(64 + 100*int(n))
 	}
-	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl: ", "cp :")
+	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl ", "cp ")
 	sb.WriteString(tag)
 	sb.WriteString(r.args.BckFrom.Cname(""))
 	sb.WriteString("=>")

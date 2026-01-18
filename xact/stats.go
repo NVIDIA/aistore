@@ -14,7 +14,12 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-// TODO: (verbose) option to respond with xctn.err.JoinErr()
+// NOTE:
+// CtlMsg() is user-facing (api.QueryXactionSnaps). Keeping `recover() to
+// guard against (extremely) unlikely nil deref accessing old or partially torn-down xactions.
+
+// TODO:
+// - (verbose) option to respond with xctn.err.JoinErr()
 
 func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 	snap = &core.Snap{}
@@ -28,7 +33,7 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 		snap.AbortedX = true
 	}
 	snap.Err = xctn.err.Error()
-	if b := xctn.Bck(); b != nil {
+	if b := xctn.Bck(); b != nil && !b.IsEmpty() {
 		snap.Bck = b.Clone()
 	}
 
@@ -37,7 +42,15 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 
 	snap.IdleX = self.IsIdle()
 
-	snap.CtlMsg = self.CtlMsg()
+	func() {
+		defer func() {
+			if recover() != nil {
+				snap.CtlMsg = ""
+			}
+		}()
+		snap.CtlMsg = self.CtlMsg()
+	}()
+
 	if snap.CtlMsg == "" {
 		return snap
 	}

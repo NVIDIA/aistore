@@ -120,7 +120,7 @@ func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) } // via RunCleanup()
 
 func (r *XactCln) CtlMsg() string {
 	s := r.p.Args.Custom.(string)
-	if r.ini == nil {
+	if r.ini == nil || r.ini.Args == nil {
 		return s
 	}
 	return s + ", " + r.ini.Args.String()

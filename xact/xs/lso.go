@@ -162,7 +162,9 @@ func (p *lsoFactory) Start() error {
 		}
 	}
 
+	_ = r.CtlMsg()
 	p.xctn = r
+
 	return nil
 }
 
@@ -192,6 +194,9 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 /////////////
 
 func (r *LsoXact) CtlMsg() string {
+	if r.msg == nil {
+		return ""
+	}
 	var sb cos.SB
 	sb.Init(160)
 	r.msg.Str(r.p.Bck.Cname(r.msg.Prefix), &sb)

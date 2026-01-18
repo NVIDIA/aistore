@@ -20,6 +20,7 @@ import (
 type (
 	BckRename struct {
 		*XactTCB
+		ctlmsg string
 	}
 	bmvFactory struct {
 		xreg.RenewBase
@@ -71,6 +72,7 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // BckRename //
 ///////////////
 
+// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
 func newBckRename(uuid, kind string, tcbArgs *xreg.TCBArgs) (xctn *BckRename, err error) {
 	xctn = &BckRename{}
 	xtcb, err := newXactTCB(uuid, kind, tcbArgs)
@@ -78,8 +80,8 @@ func newBckRename(uuid, kind string, tcbArgs *xreg.TCBArgs) (xctn *BckRename, er
 		return nil, err
 	}
 	xctn.XactTCB = xtcb
-	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
-	return
+	_ = xctn.CtlMsg()
+	return xctn, nil
 }
 
 // BckRename xaction is a wrapper around XactTCB that adds the following:
@@ -102,7 +104,13 @@ func (r *BckRename) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.XactTCB.args.BckFrom, r.XactTCB.args.BckTo
 }
 
-func (r *BckRename) CtlMsg() string { return r.XactTCB.formatCtlMsg(true /*rename*/) }
+func (r *BckRename) CtlMsg() string {
+	if r.ctlmsg != "" {
+		return r.ctlmsg
+	}
+	r.ctlmsg = r.XactTCB.formatCtlMsg(true /*rename*/)
+	return r.ctlmsg
+}
 
 func (r *BckRename) Snap() (snap *core.Snap) {
 	snap = r.Base.NewSnap(r)

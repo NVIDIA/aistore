@@ -664,6 +664,10 @@ func (r *XactBlobDl) cleanup() {
 }
 
 func (r *XactBlobDl) CtlMsg() string {
+	if r.args == nil || r.args.Lom == nil {
+		return ""
+	}
+
 	var sb cos.SB
 	sb.Init(128)
 

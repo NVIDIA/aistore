@@ -40,6 +40,7 @@ type (
 		buckets []*meta.Bck
 		xact.BckJog
 		oneRes        cmn.BsummResult
+		ctlmsg        string
 		totalDiskSize uint64
 		single        bool
 		listRemote    bool
@@ -147,15 +148,20 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	s := r.CtlMsg()
 	r._nam = r.Base.Name() + "-" + s
 	r._str = r.Base.String() + "-" + s
+
 	return r, nil
 }
 
 func (r *XactNsumm) CtlMsg() string {
+	if r.ctlmsg != "" || r.p == nil || r.p.msg == nil || r.p.Bck == nil {
+		return r.ctlmsg
+	}
 	var sb cos.SB
 	sb.Init(96)
 	p, msg := r.p, r.p.msg
 	msg.Str(p.Bck.Cname(msg.Prefix), &sb)
-	return sb.String()
+	r.ctlmsg = sb.String()
+	return r.ctlmsg
 }
 
 func (r *XactNsumm) Run(started *sync.WaitGroup) {
