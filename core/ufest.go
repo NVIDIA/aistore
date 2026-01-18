@@ -925,6 +925,7 @@ func (u *Ufest) ETagS3() (string, error) {
 func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 	debug.AssertNoErr(u.Check(true /*completed*/))
 	const tag = "[whole-checksum]"
+
 	var (
 		written   int64
 		c         = u.firstChunk()
@@ -934,23 +935,23 @@ func (u *Ufest) ComputeWholeChecksum(cksumH *cos.CksumHash) error {
 
 	for i := range u.count {
 		c := &u.chunks[i]
+
 		fh, err := os.Open(c.path)
 		if err != nil {
-			if cos.IsNotExist(err) {
-				if e := u.lom.Load(false, true); e != nil {
-					err = e
-				}
-			}
-			return fmt.Errorf("%s %s chunk %d: %w", tag, u._rtag(), c.num, err)
+			fs.CleanPathErr(err)
+			return fmt.Errorf("%s %s chunk %d: open: %w", tag, u._rtag(), c.num, err)
 		}
+
 		nn, e := io.CopyBuffer(cksumH.H, fh, buf)
 		cos.Close(fh)
 		if e != nil {
-			return e
+			fs.CleanPathErr(e)
+			return fmt.Errorf("%s %s chunk %d: read: %w", tag, u._rtag(), c.num, e)
 		}
 		if nn != c.size {
 			return fmt.Errorf("%s %s chunk %d: invalid size: written %d, have %d", tag, u._rtag(), c.num, nn, c.size)
 		}
+
 		written += nn
 	}
 

@@ -132,7 +132,7 @@ var (
 //
 // 2. Performs HTTP range request to remote backend
 // 3. Persist chunk:
-//   - Create chunk metadata and chunk file from LOM
+//   - Create chunk manifest and chunk file from LOM
 //   - Copy data from backend reader to multi-writer: chunk file + checksum (+ SGL if RespWriter set)
 //   - Add the chunk to the manifest
 //

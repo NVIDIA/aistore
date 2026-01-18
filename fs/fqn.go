@@ -202,6 +202,10 @@ func CleanPathErr(err error) {
 			what = "ec slice"
 		case ECMetaCT:
 			what = "ec metadata"
+		case ChunkCT:
+			what = "chunk"
+		case ChunkMetaCT:
+			what = "chunk manifest"
 		default:
 			what = fmt.Sprintf("content type '%s'(?)", parsed.ContentType)
 		}

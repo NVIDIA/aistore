@@ -185,8 +185,9 @@ func (*ups) parsePartNum(s string) (int32, error) {
 	}
 }
 
-// (under manifest lock)
-func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts, isS3 bool) (string, error) {
+// validate manifest + parts; optionally compute S3 MPU ETag
+// must be called under manifest lock; does NOT touch LOM or reread data
+func validatePartsEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptCompletedParts, isS3 bool) (etag string, err error) {
 	if err := manifest.Check(true /*completed*/); err != nil {
 		return "", err
 	}
@@ -194,25 +195,25 @@ func validateChecksumEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComp
 		return "", err
 	}
 
-	var (
-		cksumH    *cos.CksumHash
-		bck       = lom.Bck()
-		remote    = bck.IsRemoteS3() || bck.IsRemoteOCI()
-		cksumType = lom.CksumType()
-	)
-	// always bucket policy (and see [convention] below)
-	if cksumType != cos.ChecksumNone {
-		cksumH = cos.NewCksumHash(cksumType)
-		if err := manifest.ComputeWholeChecksum(cksumH); err != nil {
-			return "", err
-		}
-		lom.SetCksum(&cksumH.Cksum)
-	}
+	// NOTE:
+	// ETag is only needed for S3-compat MPU on local buckets.
+	// For cloud buckets, backend is authoritative (and returns its own ETag).
 
-	if remote /*computed by remote*/ || !isS3 /*native caller*/ {
-		return "" /*etag*/, nil
+	if !isS3 || lom.Bck().IsCloud() {
+		return "", nil
 	}
 	return manifest.ETagS3()
+}
+
+func computeWholeChecksum(lom *core.LOM, manifest *core.Ufest) error {
+	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " - accessing: must be locked")
+	debug.Assert(lom.CksumType() != cos.ChecksumNone)
+	cksumH := cos.NewCksumHash(lom.CksumType())
+	if err := manifest.ComputeWholeChecksum(cksumH); err != nil {
+		return err
+	}
+	lom.SetCksum(&cksumH.Cksum)
+	return nil
 }
 
 // make sure that we have all parts in the right order
@@ -493,7 +494,7 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 
 	// validate/enforce parts, compute whole-object checksum and etag
 	manifest.Lock()
-	etag, err := validateChecksumEtag(lom, manifest, args.parts, args.isS3)
+	etag, err := validatePartsEtag(lom, manifest, args.parts, args.isS3)
 	manifest.Unlock()
 	if err != nil {
 		return "", http.StatusBadRequest, err
@@ -529,10 +530,33 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 	if etag != "" {
 		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 	}
+
+	// policy: skip for cloud buckets
+	// TODO:
+	// a) chunks arrive in order => (fast path)
+	// b) mostly in order        => (buffer)
+	// b) out of order           => (defer)
+	var locked bool
+	if lom.CksumType() != cos.ChecksumNone && !lom.Bck().IsCloud() {
+		if !args.locked {
+			lom.Lock(true)
+			locked = true
+		}
+		if err = computeWholeChecksum(lom, manifest); err != nil {
+			if locked {
+				lom.Unlock(true)
+			}
+			return "", 0, err
+		}
+	}
+
 	// atomically flip: persist manifest, mark chunked, persist main
 	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
-	debug.Assertf(!args.locked || lom.IsLocked() == apc.LockWrite, "expecting wlock, have %d", lom.IsLocked())
-	if err = lom.CompleteUfest(manifest, args.locked); err != nil {
+	err = lom.CompleteUfest(manifest, args.locked || locked)
+	if locked {
+		lom.Unlock(true)
+	}
+	if err != nil {
 		nlog.Errorf("upload %q: failed to complete %s locally: %v", uploadID, lom.Cname(), err)
 		return "", http.StatusInternalServerError, err
 	}
