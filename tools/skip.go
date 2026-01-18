@@ -19,6 +19,7 @@ import (
 type SkipTestArgs struct {
 	Bck                   cmn.Bck
 	RequiredDeployment    ClusterType
+	RequiredCloudProvider string
 	MinTargets            int
 	MinProxies            int
 	MinMountpaths         int
@@ -29,7 +30,7 @@ type SkipTestArgs struct {
 	Long                  bool
 	RemoteBck             bool
 	CloudBck              bool
-	RequiredCloudProvider string
+	NotCloudBck           bool
 	K8s                   bool
 	Local                 bool
 }
@@ -68,6 +69,7 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 	if args.CloudBck || args.RequiredCloudProvider != "" {
 		tassert.Fatalf(tb, !args.Bck.IsEmpty(), "bucket is missing in the args")
+		tassert.Fatalf(tb, !args.NotCloudBck, "mutually exclusive requirements: cloud vs non-cloud")
 		cname := args.Bck.Cname("")
 
 		switch {
@@ -82,6 +84,11 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 			if !exists {
 				tb.Skipf("%s requires cloud bucket %s to be in-cluster", tb.Name(), cname)
 			}
+		}
+	} else if args.NotCloudBck {
+		tassert.Fatalf(tb, !args.Bck.IsEmpty(), "bucket is missing in the args")
+		if args.Bck.IsCloud() {
+			tb.Skipf("%s: skipping cloud bucket %s", tb.Name(), args.Bck.Cname(""))
 		}
 	}
 

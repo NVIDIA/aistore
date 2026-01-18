@@ -340,6 +340,8 @@ func TestObjChunkedOverride(t *testing.T) {
 
 // testChunkedOverride tests object upload and override with different chunk configurations
 func testChunkedOverride(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, firstChunked, overrideChunked bool) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Bck: bck, NotCloudBck: true})
+
 	const (
 		objPrefix = "test-chunked-override"
 		numObjs   = 100
