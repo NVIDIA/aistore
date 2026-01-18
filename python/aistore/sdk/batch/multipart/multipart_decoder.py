@@ -22,7 +22,6 @@ from aistore.sdk.batch.multipart.stateful_streaming_parser import (
 from aistore.sdk.batch.errors import MultipartDecodeError
 from aistore.sdk.batch.multipart.body_stream_reader import BodyStreamReader
 
-
 logger = get_logger(__name__)
 
 

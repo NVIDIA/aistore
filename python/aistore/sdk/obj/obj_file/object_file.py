@@ -12,7 +12,6 @@ from aistore.sdk.obj.content_iterator import BaseContentIterProvider
 from aistore.sdk.obj.obj_file.errors import ObjectFileReaderMaxResumeError
 from aistore.sdk.utils import get_logger
 
-
 logger = get_logger(__name__)
 
 

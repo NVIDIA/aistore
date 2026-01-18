@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 from aistore.sdk.types import BucketModel
 
-
 # See ext/dsort/metric.go for cluster-side type definitions
 
 # pylint: disable=too-few-public-methods

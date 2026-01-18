@@ -11,7 +11,6 @@ from pyaisloader.utils.etl_utils import init_etl, cleanup_etls
 
 from aistore.sdk.provider import Provider
 
-
 VERSION = pkg_resources.require("pyaisloader")[0].version
 
 

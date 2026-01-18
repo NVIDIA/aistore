@@ -14,7 +14,6 @@ from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamEx
 from aistore.sdk.const import EXT_TARGZ, EXT_TGZ, EXT_TAR
 from aistore.sdk.utils import get_logger
 
-
 logger = get_logger(__name__)
 
 

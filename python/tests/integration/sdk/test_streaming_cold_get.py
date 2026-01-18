@@ -18,7 +18,6 @@ from tests.const import MIB, GIB, TEST_TIMEOUT
 from aistore.sdk import Bucket, Object, Client
 from aistore.sdk.const import HTTP_METHOD_PATCH
 
-
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 

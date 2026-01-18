@@ -10,7 +10,6 @@ from requests import Response
 from aistore.sdk.batch.types import MossOut, MossReq, MossResp
 from aistore.sdk.utils import get_logger
 
-
 logger = get_logger(__name__)
 
 

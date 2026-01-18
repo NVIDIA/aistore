@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 from sys import getsizeof
 from aistore.pytorch.utils import convert_bytes_to_mb
 
-
 MIN_OBJ_SIZE = 1000  # bytes = 1kb
 MAX_OBJ_SIZE = 1000000  # bytes = 1mb
 NUM_OBJECTS = 100
