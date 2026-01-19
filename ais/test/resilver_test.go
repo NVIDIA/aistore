@@ -767,6 +767,7 @@ func TestSingleResilver(t *testing.T) {
 }
 
 func TestGetDuringResilver(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
 	num := 20_000
 	if testing.Short() {
 		num /= 10
