@@ -767,15 +767,25 @@ func TestSingleResilver(t *testing.T) {
 }
 
 func TestGetDuringResilver(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	num := 20_000
+	if testing.Short() {
+		num /= 10
+	}
+	t.Run("monolithic", func(t *testing.T) { testGetDuringResilver(t, num, false) })
+	t.Run("chunked", func(t *testing.T) { testGetDuringResilver(t, num, true) })
+}
 
+func testGetDuringResilver(t *testing.T, num int, chunked bool) {
 	var (
 		m = ioContext{
 			t:   t,
-			num: 20000,
+			num: num,
 		}
 		bp = tools.BaseAPIParams()
 	)
+	if chunked {
+		m.chunksConf = &ioCtxChunksConf{numChunks: 5}
+	}
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
@@ -814,7 +824,7 @@ func TestGetDuringResilver(t *testing.T) {
 	}()
 
 	for _, mp := range mpaths {
-		sleep := time.Duration(600+rand.IntN(800)) * time.Millisecond
+		sleep := time.Duration(600+rand.IntN(900)) * time.Millisecond
 		tlog.Logln("sleep " + sleep.String() + " ...")
 		time.Sleep(sleep)
 		err = api.EnableMountpath(bp, target, mp)
@@ -823,11 +833,17 @@ func TestGetDuringResilver(t *testing.T) {
 	m.stopGets()
 
 	wg.Wait()
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(bp, &args)
+
+	for _, mp := range mpaths {
+		err = api.EnableMountpath(bp, target, mp)
+		tassert.CheckFatal(t, err)
+	}
+	time.Sleep(time.Second)
 
 	tools.WaitForResilvering(t, bp, nil)
 

@@ -729,8 +729,8 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *
 
 func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 	var (
-		baseParams = tools.BaseAPIParams()
-		totalGets  = m.num * m.numGetsEachFile
+		bp        = tools.BaseAPIParams()
+		totalGets = m.num * m.numGetsEachFile
 	)
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
@@ -743,7 +743,7 @@ func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 	for i := range totalGets {
 		wg.Add(1)
 		go func(idx int) {
-			m.get(baseParams, idx, totalGets, getArgs, withValidation)
+			m.get(bp, idx, totalGets, getArgs, withValidation)
 			wg.Done()
 		}(i)
 	}
