@@ -170,8 +170,11 @@ func (args *ArgsMsg) NotRunning() SnapsCond {
 
 // --- Started condition ---
 // Wait until the xaction is visible/running.
-// NOTE: waiting for a job to start, especially cluster-wide, is inherently racy -
-// it depends on per-target workload, server hardware, network, etc. Use with caution!
+// NOTE:
+// - waiting for a job to start, especially cluster-wide, is inherently racy -
+//   depends on per-target workload, server hardware, network, etc.
+// - callers should treat Started() as a best-effort signal that can be missed
+//   (and treat a missed signal as benign).
 
 type snapsStarted struct {
 	id string

@@ -21,6 +21,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	retriesPollMpaths = 6
+)
+
 func (m *ioContext) ensureNoGetErrors() {
 	m.t.Helper()
 	if m.numGetErrs.Load() > 0 {
@@ -80,32 +84,104 @@ func (m *ioContext) ensureNumMountpaths(target *meta.Snode, mpList *apc.Mountpat
 	ensureNumMountpaths(m.t, target, mpList)
 }
 
+const (
+	tagRecoverMpaths = "post test-fail recovery"
+)
+
+func getCompareMpaths(t *testing.T, bp api.BaseParams, target *meta.Snode, mpList *apc.MountpathList) (mpl *apc.MountpathList, ok bool) {
+	t.Helper()
+
+	var err error
+	mpl, err = api.GetMountpaths(bp, target)
+	tassert.CheckFatal(t, err)
+
+	ok = len(mpl.Available) == len(mpList.Available) &&
+		len(mpl.Disabled) == len(mpList.Disabled) &&
+		len(mpl.WaitingDD) == len(mpList.WaitingDD)
+	return mpl, ok
+}
+
 func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
-	tname := target.StringEx()
-	baseParams := tools.BaseAPIParams()
-	mpl, err := api.GetMountpaths(baseParams, target)
-	tassert.CheckFatal(t, err)
-	for range 6 {
-		if len(mpl.Available) == len(mpList.Available) &&
-			len(mpl.Disabled) == len(mpList.Disabled) &&
-			len(mpl.WaitingDD) == len(mpList.WaitingDD) {
-			break
+	var (
+		mpl      *apc.MountpathList
+		tname    = target.StringEx()
+		bp       = tools.BaseAPIParams()
+		ok       bool
+		recovery bool
+	)
+	for i := 0; i < retriesPollMpaths && !ok; i++ {
+		mpl, ok = getCompareMpaths(t, bp, target, mpList)
+		if !ok {
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
+
 	if len(mpl.Available) != len(mpList.Available) {
 		t.Errorf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
 			tname, len(mpl.Available), mpl.WaitingDD, mpl.Disabled, len(mpList.Available))
+		if !bestEffortReenableDisabledMPs(t, bp, target, mpList, mpl) {
+			return
+		}
+		recovery = true
+		tlog.Logfln("%s: wait resilver started on %s", tagRecoverMpaths, tname)
+		xargs := xact.ArgsMsg{
+			Kind:        apc.ActResilver,
+			DaemonID:    target.ID(),
+			OnlyRunning: false,
+			Timeout:     resilShortTimeout,
+		}
+		_, err := api.WaitForSnaps(bp, &xargs, xargs.Started())
+		if err != nil {
+			tlog.Logfln("Warning: %v", err)
+		}
+
+		tlog.Logfln("%s: wait resilver finished on %s", tagRecoverMpaths, tname)
+		xargs.Timeout = resilLongTimeout
+		xargs.OnlyRunning = true // redundant - xargs.Finished() always sets it
+
+		_, err = api.WaitForSnaps(bp, &xargs, xargs.Finished())
+		tassert.CheckError(t, err)
 	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
 		t.Errorf("%s ended up with (dd=%v, disabled=%v) mountpaths, expecting (%v and %v), respectively",
 			tname, mpl.WaitingDD, mpl.Disabled, mpList.WaitingDD, mpList.Disabled)
 	}
+
+	// ex post facto
+	if recovery {
+		if _, ok := getCompareMpaths(t, bp, target, mpList); ok {
+			tlog.Logfln("%s: success", tagRecoverMpaths)
+		} else {
+			tlog.Logfln("%s: failure", tagRecoverMpaths)
+		}
+	}
+}
+
+func bestEffortReenableDisabledMPs(t *testing.T, bp api.BaseParams, target *meta.Snode,
+	expected, actual *apc.MountpathList) (enabled bool) {
+	t.Helper()
+
+	tname := target.StringEx()
+	for _, mp := range expected.Available {
+		if slices.Contains(actual.Available, mp) {
+			continue
+		}
+		if !slices.Contains(actual.Disabled, mp) {
+			continue // NOTE: won't recover detached mountpaths
+		}
+		if err := api.EnableMountpath(bp, target, mp); err != nil {
+			tlog.Logfln("%s: failed to enable %q on %s: %v", tagRecoverMpaths, mp, tname, err)
+		} else {
+			tlog.Logfln("%s: enabled %q on %s", tagRecoverMpaths, mp, tname)
+			enabled = true
+		}
+	}
+	return enabled
 }
 
 func ensureNoDisabledMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
-	for range 6 {
+	for range retriesPollMpaths {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
 			break
 		}

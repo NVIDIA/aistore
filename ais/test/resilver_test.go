@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"slices"
 	"sync"
@@ -743,24 +744,24 @@ func testEnoResilverGuard(t *testing.T, c *resilverStressCtx) {
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
 	m.initAndSaveState(true /*cleanup*/)
-	baseParams := tools.BaseAPIParams(m.proxyURL)
+	bp := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
 	target, _ := m.smap.GetRandTarget()
 
 	// Start resilvering just on the target
 	args := xact.ArgsMsg{Kind: apc.ActResilver, DaemonID: target.ID()}
-	id, err := api.StartXaction(baseParams, &args, "")
+	id, err := api.StartXaction(bp, &args, "")
 	tassert.CheckFatal(t, err)
 
 	// Wait for specific resilvering x[id]
 	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 
 	// Make sure other nodes were not resilvered
 	args = xact.ArgsMsg{ID: id}
-	snaps, err := api.QueryXactionSnaps(baseParams, &args)
+	snaps, err := api.QueryXactionSnaps(bp, &args)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(snaps) == 1, "expected only 1 resilver")
 }
@@ -773,7 +774,7 @@ func TestGetDuringResilver(t *testing.T) {
 			t:   t,
 			num: 20000,
 		}
-		baseParams = tools.BaseAPIParams()
+		bp = tools.BaseAPIParams()
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
@@ -782,7 +783,7 @@ func TestGetDuringResilver(t *testing.T) {
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target, _ := m.smap.GetRandTarget()
-	mpList, err := api.GetMountpaths(baseParams, target)
+	mpList, err := api.GetMountpaths(bp, target)
 	tassert.CheckFatal(t, err)
 	ensureNoDisabledMountpaths(t, target, mpList)
 
@@ -798,7 +799,7 @@ func TestGetDuringResilver(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
-		err = api.DisableMountpath(baseParams, target, mp, false /*dont-resil*/)
+		err = api.DisableMountpath(bp, target, mp, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -813,8 +814,10 @@ func TestGetDuringResilver(t *testing.T) {
 	}()
 
 	for _, mp := range mpaths {
-		time.Sleep(time.Second)
-		err = api.EnableMountpath(baseParams, target, mp)
+		sleep := time.Duration(600+rand.IntN(800)) * time.Millisecond
+		tlog.Logln("sleep " + sleep.String() + " ...")
+		time.Sleep(sleep)
+		err = api.EnableMountpath(bp, target, mp)
 		tassert.CheckFatal(t, err)
 	}
 	m.stopGets()
@@ -824,9 +827,9 @@ func TestGetDuringResilver(t *testing.T) {
 
 	tlog.Logfln("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)", target.StringEx())
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(baseParams, &args)
+	_, _ = api.WaitForXactionIC(bp, &args)
 
-	tools.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, bp, nil)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, mpList)
@@ -840,13 +843,13 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 			num:             5000,
 			numGetsEachFile: 2,
 		}
-		baseParams = tools.BaseAPIParams()
+		bp = tools.BaseAPIParams()
 	)
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
-	mpList, err := api.GetMountpaths(baseParams, target)
+	mpList, err := api.GetMountpaths(bp, target)
 	tassert.CheckFatal(t, err)
 	ensureNoDisabledMountpaths(t, target, mpList)
 
@@ -870,27 +873,27 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	// Add new mountpath to target
 	tlog.Logfln("attach new %q at target %s", testMpath, target.StringEx())
-	err = api.AttachMountpath(baseParams, target, testMpath)
+	err = api.AttachMountpath(bp, target, testMpath)
 	tassert.CheckFatal(t, err)
 
-	tools.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, bp, target)
 
 	m.gets(nil, false)
 
 	// Remove new mountpath from target
 	tlog.Logfln("detach %q from target %s", testMpath, target.StringEx())
 	if docker.IsRunning() {
-		if err := api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/); err != nil {
+		if err := api.DetachMountpath(bp, target, testMpath, false /*dont-resil*/); err != nil {
 			t.Error(err.Error())
 		}
 	} else {
-		err = api.DetachMountpath(baseParams, target, testMpath, false /*dont-resil*/)
+		err = api.DetachMountpath(bp, target, testMpath, false /*dont-resil*/)
 		tassert.CheckFatal(t, err)
 	}
 
 	m.ensureNoGetErrors()
 
-	tools.WaitForResilvering(t, baseParams, target)
+	tools.WaitForResilvering(t, bp, target)
 	m.ensureNumMountpaths(target, mpList)
 }
 
@@ -939,19 +942,19 @@ func TestECResilver(t *testing.T) {
 }
 
 func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
-	baseParams := tools.BaseAPIParams(proxyURL)
+	bp := tools.BaseAPIParams(proxyURL)
 
-	newLocalBckWithProps(t, baseParams, bck, defaultECBckProps(o), o)
+	newLocalBckWithProps(t, bp, bck, defaultECBckProps(o), o)
 
 	tgtList := o.smap.Tmap.ActiveNodes()
 	tgtLost := tgtList[0]
-	lostFSList, err := api.GetMountpaths(baseParams, tgtLost)
+	lostFSList, err := api.GetMountpaths(bp, tgtLost)
 	tassert.CheckFatal(t, err)
 	if len(lostFSList.Available) < 2 {
 		t.Fatalf("%s has only %d mountpaths, required 2 or more", tgtLost.ID(), len(lostFSList.Available))
 	}
 	lostPath := lostFSList.Available[0]
-	err = api.DetachMountpath(baseParams, tgtLost, lostPath, false /*dont-resil*/)
+	err = api.DetachMountpath(bp, tgtLost, lostPath, false /*dont-resil*/)
 	tassert.CheckFatal(t, err)
 	time.Sleep(time.Second)
 
@@ -962,23 +965,23 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 		go func(i int) {
 			defer wg.Done()
 			objName := fmt.Sprintf(o.pattern, i)
-			createECObject(t, baseParams, bck, objName, i, o)
+			createECObject(t, bp, bck, objName, i, o)
 		}(i)
 	}
 	wg.Wait()
 	tlog.Logfln("Created %d objects", o.objCount)
 
-	err = api.AttachMountpath(baseParams, tgtLost, lostPath)
+	err = api.AttachMountpath(bp, tgtLost, lostPath)
 	tassert.CheckFatal(t, err)
 	// loop above may fail (even if AddMountpath works) and mark a test failed
 	if t.Failed() {
 		t.FailNow()
 	}
 
-	tools.WaitForResilvering(t, baseParams, nil)
+	tools.WaitForResilvering(t, bp, nil)
 
 	msg := &apc.LsoMsg{Props: apc.GetPropsSize}
-	resEC, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	resEC, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("%d objects in %s after rebalance", len(resEC.Entries), bck.String())
 	if len(resEC.Entries) != o.objCount {
@@ -988,7 +991,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	for i := range o.objCount {
 		objName := ecTestDir + fmt.Sprintf(o.pattern, i)
 		hargs := api.HeadArgs{FltPresence: apc.FltPresent}
-		props, err := api.HeadObject(baseParams, bck, objName, hargs)
+		props, err := api.HeadObject(bp, bck, objName, hargs)
 		if err != nil {
 			t.Errorf("HEAD for %s failed: %v", objName, err)
 		} else if props.EC.DataSlices == 0 || props.EC.ParitySlices == 0 {
