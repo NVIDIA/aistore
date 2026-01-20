@@ -6,7 +6,6 @@ package tests_test
 
 import (
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -115,52 +114,6 @@ func TestAuthConfValidateSuccess(t *testing.T) {
 			t.Errorf("AuthConf.Validate() for case [%s] with %#v raised unexpected error: %v", tt.desc, tt.auth, err)
 		}
 	}
-}
-
-func TestAuthConfUnmarshalJSON(t *testing.T) {
-	cases := []struct {
-		input []byte
-		want  cmn.AuthConf
-		desc  string
-	}{
-		{
-			input: []byte(`{"enabled":true,"signature":{"key":"mykey","method":"HS256"},"required_claims":{"aud":["aud"]},"oidc":null}`),
-			want:  cmn.AuthConf{Enabled: true, Signature: &cmn.AuthSignatureConf{Key: "mykey", Method: "HS256"}, RequiredClaims: &cmn.RequiredClaimsConf{Aud: []string{"aud"}}, OIDC: nil},
-			desc:  "current format with signature",
-		},
-		{
-			input: []byte(`{"enabled":false,"signature":null,"oidc":null}`),
-			want:  cmn.AuthConf{Enabled: false, Signature: nil, RequiredClaims: nil, OIDC: nil},
-			desc:  "current format, disabled and nils",
-		},
-	}
-	for _, tt := range cases {
-		var got cmn.AuthConf
-		err := got.UnmarshalJSON(tt.input)
-		tassert.CheckFatal(t, err)
-		tassert.Errorf(t, reflect.DeepEqual(got, tt.want), "UnmarshalJSON returned %+v, want %+v", got, tt.want)
-	}
-}
-
-func TestAuthConfUnmarshalJSON_Legacyv4(t *testing.T) {
-	input := []byte(`{"enabled":true,"secret":"legacykey"}`)
-	want := cmn.AuthConf{
-		Enabled:        true,
-		Signature:      &cmn.AuthSignatureConf{Key: "legacykey", Method: "HS256"},
-		RequiredClaims: nil,
-		OIDC:           nil,
-	}
-	var got cmn.AuthConf
-	err := got.UnmarshalJSON(input)
-	tassert.CheckFatal(t, err)
-	tassert.Errorf(t, reflect.DeepEqual(got, want), "UnmarshalJSON returned %+v, want %+v", got, want)
-}
-
-func TestAuthConfUnmarshalJSON_InvalidInput(t *testing.T) {
-	input := []byte("{invalid json")
-	var got cmn.AuthConf
-	err := got.UnmarshalJSON(input)
-	tassert.Fatal(t, err != nil, "UnmarshalJSON should return an error for invalid input")
 }
 
 func TestAuthSignatureConf_ValidMethods(t *testing.T) {

@@ -645,17 +645,6 @@ type (
 		Enabled       *bool         `json:"enabled,omitempty"`
 	}
 
-	// AuthConfV4 [backwards compatibility]: v4.0 and prior
-	AuthConfV4 struct {
-		Secret  string `json:"secret"`
-		Enabled bool   `json:"enabled"`
-	}
-
-	AuthConfV4ToSet struct {
-		Enabled *bool   `json:"enabled,omitempty"`
-		Secret  *string `json:"secret,omitempty"`
-	}
-
 	AuthConf struct {
 		// Fields for validating JWT signature
 		Signature *AuthSignatureConf `json:"signature,omitempty"`
@@ -1031,7 +1020,6 @@ var (
 var (
 	_ json.Marshaler   = (*BackendConf)(nil)
 	_ json.Unmarshaler = (*BackendConf)(nil)
-	_ json.Unmarshaler = (*AuthConf)(nil)
 	_ json.Marshaler   = (*FSPConf)(nil)
 	_ json.Unmarshaler = (*FSPConf)(nil)
 )
@@ -1963,30 +1951,6 @@ func (c *AuthConf) Validate() error {
 	if c.CSKEnabled() {
 		return c.ClusterKey.validate()
 	}
-	return nil
-}
-
-func (c *AuthConf) UnmarshalJSON(data []byte) error {
-	// Try unmarshalling as the current AuthConf format first
-	type Alias AuthConf
-	var tmp Alias
-	errCurrent := cos.JSON.Unmarshal(data, &tmp)
-	if errCurrent == nil {
-		*c = AuthConf(tmp)
-		return nil
-	}
-
-	// [backwards compatibility] try legacy AuthConfV4
-	var v4 AuthConfV4
-	errLegacy := cos.JSON.Unmarshal(data, &v4)
-	if errLegacy != nil {
-		return fmt.Errorf("failed to parse auth config using current config structure (err: %v) and v4.0 (err: %v)", errCurrent, errLegacy)
-	}
-	c.Enabled = v4.Enabled
-	// All legacy keys are 256 bit HMAC
-	c.Signature = &AuthSignatureConf{Key: Censored(v4.Secret), Method: "HS256"}
-	c.RequiredClaims = nil
-	c.OIDC = nil
 	return nil
 }
 

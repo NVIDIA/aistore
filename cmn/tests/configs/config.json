@@ -122,8 +122,11 @@
 		"enabled":        true
 	},
 	"auth": {
-		"secret":      "aBitLongSecretKey",
-		"enabled":     false
+		"signature": {
+			"key":    "aBitLongSecretKey",
+			"method": "HMAC"
+		},
+		"enabled": false
 	},
 	"keepalivetracker": {
 		"proxy": {
