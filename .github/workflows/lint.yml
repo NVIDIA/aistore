@@ -36,6 +36,6 @@ jobs:
         run: |
           export GOPATH="$(go env GOPATH)"
           make lint
-          TAGS="sharding nethttp debug oteltracing oci aws gcp azure" make lint
+          TAGS="dsort nethttp debug oteltracing oci aws gcp azure" make lint
           make fmt-check
           make spell-check

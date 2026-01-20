@@ -43,4 +43,4 @@ jobs:
           make cli
           make aisloader
           # 8) dsort
-          TAGS=sharding MODE=debug make node
+          TAGS=dsort MODE=debug make node

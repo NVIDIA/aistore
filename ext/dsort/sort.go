@@ -1,4 +1,4 @@
-//go:build sharding
+//go:build dsort
 
 // Package dsort provides APIs for distributed archive file shuffling.
 /*

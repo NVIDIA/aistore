@@ -54,4 +54,4 @@ The second option is the current default.
 
 | build tag | comment |
 | --- | --- |
-| `sharding`| Build `aisnode` with dsort enabled and the respective APIs not stubbed; for details, see docs/dsort.md, api/dsort.go (Go), and python/aistore/sdk/dsort (Python) |
+| `dsort`| Build `aisnode` with dsort runtime enabled and the respective APIs not stubbed; for details, see docs/dsort.md, api/dsort.go (Go), and python/aistore/sdk/dsort (Python) |

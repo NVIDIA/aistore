@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 )
 
-// ISharder executes an initial sharding job with given configuration
+// ISharder executes an initial shard-creation job with given configuration
 type ISharder struct {
 	cfg            *config.Config
 	baseParams     api.BaseParams

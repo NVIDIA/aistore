@@ -1,4 +1,4 @@
-//go:build sharding
+//go:build dsort
 
 // Package ais provides AIStore's proxy and target nodes.
 /*

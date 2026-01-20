@@ -1,4 +1,4 @@
-//go:build sharding
+//go:build dsort
 
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*

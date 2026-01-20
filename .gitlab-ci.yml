@@ -266,7 +266,7 @@ lint:tags:
     - !reference [.default_rules, rules]
     - !reference [.default_run_rules, rules]
   script:
-    - TAGS="sharding nethttp debug oteltracing oci aws gcp azure" make lint-scoped
+    - TAGS="dsort nethttp debug oteltracing oci aws gcp azure" make lint-scoped
 
 build:gendocs:
   stage: build

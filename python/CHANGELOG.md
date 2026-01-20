@@ -8,8 +8,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Changed
 
-- Dsort integration tests are now conditionally skipped when AIStore is built without the `sharding` build tag.
-  - The `/v1/sort` endpoint returns HTTP 501 (Not Implemented) in non-sharding builds.
+- Dsort integration tests are now conditionally skipped when AIStore is built without the `dsort` build tag.
+  - The `/v1/sort` endpoint returns HTTP 501 (Not Implemented) in non-dsort builds.
   - This avoids false failures when running the Python SDK test suite against default AIS builds.
 
 ## [1.19.0] - 2026-01-14

@@ -1,4 +1,4 @@
-// Package test provides E2E tests of AIS CLI
+// Package test_test provides E2E tests of AIS CLI
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  */
@@ -40,7 +40,7 @@ var _ = Describe("E2E CLI Tests", func() {
 	for _, path := range files {
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 
-		if base == "dsort" && !shardingEnabled {
+		if base == "dsort" && !dsortEnabled {
 			continue
 		}
 

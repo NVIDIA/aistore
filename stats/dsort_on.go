@@ -1,4 +1,4 @@
-//go:build sharding
+//go:build dsort
 
 // Package stats provides methods and functionality to register, track, log,
 // and export metrics that, for the most part, include "counter" and "latency" kinds.

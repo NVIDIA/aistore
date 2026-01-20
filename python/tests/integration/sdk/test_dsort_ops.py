@@ -64,7 +64,7 @@ class TestDsortOps(ParallelTestBase):
 
     def setUp(self):
         """
-        Dsort requires build tag `sharding`.
+        Dsort requires build tag `dsort`.
 
         When AIS is built without this tag, the proxy registers a stub handler
         (see `ais/dsort_hdl_stub.go: dsortStubHandler`) which returns:
@@ -77,8 +77,8 @@ class TestDsortOps(ParallelTestBase):
 
         if TestDsortOps._dsort_enabled is None:
             try:
-                # In a sharding build this may succeed or return 4xx if no job exists.
-                # In a non-sharding build it should return 501.
+                # In a `-tags dsort` build this may succeed or return 4xx if no job exists.
+                # Without dsort linkage it should return 501.
                 self.client.dsort().abort()
                 TestDsortOps._dsort_enabled = True
             except Exception as exc:  # pylint: disable=broad-except
@@ -89,7 +89,7 @@ class TestDsortOps(ParallelTestBase):
                     # Any non-501 response means dsort endpoint exists.
                     TestDsortOps._dsort_enabled = True
         if not TestDsortOps._dsort_enabled:
-            self.skipTest("dsort not enabled (build AIS with -tags sharding)")
+            self.skipTest("dsort not enabled (build AIS with -tags dsort)")
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _generate_tar(

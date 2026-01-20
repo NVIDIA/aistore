@@ -1,4 +1,4 @@
-//go:build sharding
+//go:build dsort
 
 // Package integration_test.
 /*
