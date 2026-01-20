@@ -1,3 +1,5 @@
+//go:build sharding
+
 // Package integration_test.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
@@ -7,7 +9,10 @@ package integration_test
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
@@ -314,7 +320,7 @@ func (df *dsortFramework) createInputShards() {
 
 			switch {
 			case df.alg.Kind == dsort.Content:
-				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
+				err = createArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys, df.fixedSize)
 			case df.recordNames != nil:
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
@@ -2525,4 +2531,153 @@ func TestDsortWithTarFormats(t *testing.T) {
 			df.checkOutputShards(5)
 		},
 	)
+}
+
+//
+// assorted buf pools and tarch helpers
+//
+
+var pool1m, pool128k, pool32k sync.Pool
+
+func newBuf(l int) (buf []byte) {
+	switch {
+	case l > cos.MiB:
+		debug.Assertf(false, "buf size exceeds 1MB: %d", l)
+	case l > 128*cos.KiB:
+		return newBuf1m()
+	case l > 32*cos.KiB:
+		return newBuf128k()
+	}
+	return newBuf32k()
+}
+
+func freeBuf(buf []byte) {
+	c := cap(buf)
+	buf = buf[:c]
+	switch c {
+	case cos.MiB:
+		freeBuf1m(buf)
+	case 128 * cos.KiB:
+		freeBuf128k(buf)
+	case 32 * cos.KiB:
+		freeBuf32k(buf)
+	default:
+		debug.Assertf(false, "unexpected buf size: %d", c)
+	}
+}
+
+func newBuf1m() (buf []byte) {
+	if v := pool1m.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, cos.MiB)
+	}
+	return
+}
+
+// TODO: keep slices, not pointers - here and below
+func freeBuf1m(buf []byte) {
+	pool1m.Put(&buf)
+}
+
+func newBuf128k() (buf []byte) {
+	if v := pool128k.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, 128*cos.KiB)
+	}
+	return
+}
+
+func freeBuf128k(buf []byte) {
+	pool128k.Put(&buf)
+}
+
+func newBuf32k() (buf []byte) {
+	if v := pool32k.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, 32*cos.KiB)
+	}
+	return
+}
+
+func freeBuf32k(buf []byte) {
+	pool32k.Put(&buf)
+}
+
+func randomizeSize(size int, seed uint64) int {
+	if size <= 100 {
+		return size
+	}
+	jitter := (int(seed&0x7) - 4) * size / 10
+	return size + jitter
+}
+
+func addBufferToArch(aw archive.Writer, path string, seed uint64, size int, buf []byte, exactSize bool) (uint64, error) {
+	l := size
+	if !exactSize {
+		l = randomizeSize(size, seed)
+	}
+	if buf == nil {
+		buf = newBuf(l)
+		defer freeBuf(buf)
+		buf = buf[:l]
+		for i := 0; i < len(buf)-cos.SizeofI64; i += cos.SizeofI64 {
+			binary.BigEndian.PutUint64(buf[i:], seed+uint64(i))
+		}
+	}
+	reader := bytes.NewBuffer(buf)
+	oah := cos.SimpleOAH{Size: int64(l)}
+	return seed + uint64(l), aw.Write(path, oah, reader)
+}
+
+func createArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fileCnt, fileSize int,
+	customFileType, customFileExt string, missingKeys, exactSize bool) error {
+	aw := archive.NewWriter(ext, w, nil, &archive.Opts{TarFormat: tarFormat})
+	defer aw.Fini()
+
+	seed := uint64(mono.NanoTime())
+	for range fileCnt {
+		fileName := strconv.Itoa(rand.Int()) // generate random names
+		var err error
+		if seed, err = addBufferToArch(aw, fileName+".txt", seed, fileSize, nil, exactSize); err != nil {
+			return err
+		}
+		// If missingKeys enabled we should only add keys randomly
+		if !missingKeys || (missingKeys && rand.IntN(2) == 0) {
+			var buf []byte
+			// random content
+			if err := shard.ValidateContentKeyTy(customFileType); err != nil {
+				return err
+			}
+			switch customFileType {
+			case shard.ContentKeyInt:
+				buf = []byte(strconv.Itoa(rand.Int()))
+			case shard.ContentKeyString:
+				buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
+			case shard.ContentKeyFloat:
+				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
+			default:
+				debug.Assert(false, customFileType) // validated above
+			}
+			if seed, err = addBufferToArch(aw, fileName+customFileExt, seed, len(buf), buf, exactSize); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func createArchCustomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
+	customFileType, customFileExt string, missingKeys, exactSize bool) error {
+	wfh, err := cos.CreateFile(shardName)
+	if err != nil {
+		return err
+	}
+	defer wfh.Close()
+	return createArchCustomFilesToW(wfh, tarFormat, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys, exactSize)
 }

@@ -205,6 +205,9 @@ linters:
           - govet
           - modernize
           - prealloc
+      - path: ext/dsort/
+        linters:
+          - unused
 
       # Exclude some `staticcheck` messages.
       - linters:

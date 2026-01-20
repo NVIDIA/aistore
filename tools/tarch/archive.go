@@ -12,7 +12,6 @@ import (
 	"io"
 	"math/rand/v2"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -129,53 +127,6 @@ func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, f
 		}
 	}
 	return nil
-}
-
-func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fileCnt, fileSize int,
-	customFileType, customFileExt string, missingKeys, exactSize bool) error {
-	aw := archive.NewWriter(ext, w, nil, &archive.Opts{TarFormat: tarFormat})
-	defer aw.Fini()
-
-	seed := uint64(mono.NanoTime())
-	for range fileCnt {
-		fileName := strconv.Itoa(rand.Int()) // generate random names
-		var err error
-		if seed, err = addBufferToArch(aw, fileName+".txt", seed, fileSize, nil, exactSize); err != nil {
-			return err
-		}
-		// If missingKeys enabled we should only add keys randomly
-		if !missingKeys || (missingKeys && rand.IntN(2) == 0) {
-			var buf []byte
-			// random content
-			if err := shard.ValidateContentKeyTy(customFileType); err != nil {
-				return err
-			}
-			switch customFileType {
-			case shard.ContentKeyInt:
-				buf = []byte(strconv.Itoa(rand.Int()))
-			case shard.ContentKeyString:
-				buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
-			case shard.ContentKeyFloat:
-				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
-			default:
-				debug.Assert(false, customFileType) // validated above
-			}
-			if seed, err = addBufferToArch(aw, fileName+customFileExt, seed, len(buf), buf, exactSize); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func CreateArchCustomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
-	customFileType, customFileExt string, missingKeys, exactSize bool) error {
-	wfh, err := cos.CreateFile(shardName)
-	if err != nil {
-		return err
-	}
-	defer wfh.Close()
-	return CreateArchCustomFilesToW(wfh, tarFormat, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys, exactSize)
 }
 
 func newArchReader(mime string, buffer *bytes.Buffer) (ar archive.Reader, err error) {
@@ -288,6 +239,7 @@ func freeBuf(buf []byte) {
 	}
 }
 
+// TODO: keep slices, not pointers - here and below
 func newBuf1m() (buf []byte) {
 	if v := pool1m.Get(); v != nil {
 		pbuf := v.(*[]byte)

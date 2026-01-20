@@ -50,3 +50,8 @@ The second option is the current default.
 | --- | --- |
 | `stdlibwalk`| Instead of [godirwalk](https://github.com/karrick/godirwalk) use `filepath.WalkDir` from the standard library |
 
+## Dsort (distributed shuffle)
+
+| build tag | comment |
+| --- | --- |
+| `sharding`| Build `aisnode` with dsort enabled and the respective APIs not stubbed; for details, see docs/dsort.md, api/dsort.go (Go), and python/aistore/sdk/dsort (Python) |

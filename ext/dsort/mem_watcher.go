@@ -1,3 +1,5 @@
+//go:build sharding
+
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.

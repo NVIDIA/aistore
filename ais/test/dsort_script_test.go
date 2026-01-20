@@ -1,3 +1,5 @@
+//go:build sharding
+
 // Package integration_test.
 /*
  * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.

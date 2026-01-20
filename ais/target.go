@@ -33,7 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dload"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/health"
@@ -472,7 +471,7 @@ func (t *target) Run() error {
 	}
 
 	etl.Tinit()
-	dsort.Tinit(db, config)
+	t.initDsort(db, config) // note: conditional linkage
 	dload.Init(db, &config.Client)
 
 	err = t.htrun.run(config)
@@ -575,31 +574,33 @@ func (t *target) endStartupStandby() (err error) {
 	return
 }
 
+// register API handlers
 func (t *target) initRecvHandlers() {
-	networkHandlers := []networkHandler{
-		{r: apc.Buckets, h: t.bucketHandler, net: accessNetAll},
-		{r: apc.Objects, h: t.objectHandler, net: accessNetAll},
-		{r: apc.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
-		{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
-		{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
-		{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
-		{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
-		{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
-		{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
-		{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
+	networkHandlers := make([]networkHandler, 0, 18)
+	networkHandlers = append(networkHandlers,
+		networkHandler{r: apc.Buckets, h: t.bucketHandler, net: accessNetAll},
+		networkHandler{r: apc.Objects, h: t.objectHandler, net: accessNetAll},
+		networkHandler{r: apc.Daemon, h: t.daemonHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.Metasync, h: t.metasyncHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Health, h: t.healthHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.Xactions, h: t.xactHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.EC, h: t.ecHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Vote, h: t.voteHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Txn, h: t.txnHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.ObjStream, h: transport.RxAnyStream, net: accessControlData},
 
-		{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
-		{r: apc.Sort, h: dsort.TargetHandler, net: accessControlData},
-		{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
+		networkHandler{r: apc.Download, h: t.downloadHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.ETL, h: t.etlHandler, net: accessNetAll},
 
 		// machine learning
-		{r: apc.ML, h: t.mlHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.ML, h: t.mlHandler, net: accessNetPublicControl},
 
-		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
-		{r: "/", h: t.errURL, net: accessNetAll},
+		networkHandler{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
+		networkHandler{r: "/", h: t.errURL, net: accessNetAll},
 
 		// plus, PromHandler() at "/metrics" (see ais/htrun)
-	}
+	)
+	networkHandlers = t.regDsort(networkHandlers)
 	t.regNetHandlers(networkHandlers)
 }
 

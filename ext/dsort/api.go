@@ -21,8 +21,6 @@ const (
 	Content      = "content"      // extract (int, string, float) from a given file, and compare
 )
 
-var algorithms = []string{algDefault, Alphanumeric, MD5, Shuffle, Content, None}
-
 type Algorithm struct {
 	// one of the `algorithms` above
 	Kind string `json:"kind"`

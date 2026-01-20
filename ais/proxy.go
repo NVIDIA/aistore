@@ -34,13 +34,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -207,48 +204,7 @@ func (p *proxy) Run() error {
 	p.notifs.init(p)
 	p.ic.init(p)
 
-	//
-	// REST API: register proxy handlers and start listening
-	//
-	networkHandlers := []networkHandler{
-		{r: apc.Reverse, h: p.reverseHandler, net: accessNetPublicControl},
-
-		// pubnet handlers: cluster must be started
-		{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},
-		{r: apc.Objects, h: p.objectHandler, net: accessNetPublic},
-		{r: apc.Download, h: p.dloadHandler, net: accessNetPublic},
-		{r: apc.ETL, h: p.etlHandler, net: accessNetPublic},
-		{r: apc.Sort, h: p.dsortHandler, net: accessNetPublic},
-
-		{r: apc.IC, h: p.ic.handler, net: accessNetIntraControl},
-		{r: apc.Daemon, h: p.daemonHandler, net: accessNetPublicControl},
-		{r: apc.Cluster, h: p.clusterHandler, net: accessNetPublicControl},
-		{r: apc.Tokens, h: p.tokenHandler, net: accessNetPublic},
-
-		{r: apc.Metasync, h: p.metasyncHandler, net: accessNetIntraControl},
-		{r: apc.Health, h: p.healthHandler, net: accessNetPublicControl},
-		{r: apc.Vote, h: p.voteHandler, net: accessNetIntraControl},
-
-		{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
-		{r: apc.EC, h: p.ecHandler, net: accessNetIntraControl},
-
-		// machine learning
-		{r: apc.ML, h: p.mlHandler, net: accessNetPublic},
-
-		// S3 compatibility
-		{r: "/" + apc.S3, h: p.s3Handler, net: accessNetPublic},
-
-		// "easy URL"
-		{r: "/" + apc.GSScheme, h: p.easyURLHandler, net: accessNetPublic},
-		{r: "/" + apc.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
-		{r: "/" + apc.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
-
-		// S3 compatibility, depending on feature flag
-		{r: "/", h: p.rootHandler, net: accessNetPublic},
-
-		// plus, PromHandler() at "/metrics" (see ais/htrun)
-	}
-	p.regNetHandlers(networkHandlers)
+	p.initRecvHandlers()
 
 	nlog.Infoln(cmn.NetPublic+":", "\t\t", p.si.PubNet.URL)
 	if p.si.PubNet.URL != p.si.ControlNet.URL {
@@ -258,9 +214,54 @@ func (p *proxy) Run() error {
 		nlog.Infoln(cmn.NetIntraData+":", "\t", p.si.DataNet.URL)
 	}
 
-	dsort.Pinit(p, config)
-
+	p.initDsort(config) // note: conditional linkage
 	return p.htrun.run(config)
+}
+
+// register API handlers
+func (p *proxy) initRecvHandlers() {
+	networkHandlers := make([]networkHandler, 0, 28)
+	networkHandlers = append(networkHandlers,
+		networkHandler{r: apc.Reverse, h: p.reverseHandler, net: accessNetPublicControl},
+
+		// pubnet handlers: cluster must be started
+		networkHandler{r: apc.Buckets, h: p.bucketHandler, net: accessNetPublic},
+		networkHandler{r: apc.Objects, h: p.objectHandler, net: accessNetPublic},
+		networkHandler{r: apc.Download, h: p.dloadHandler, net: accessNetPublic},
+		networkHandler{r: apc.ETL, h: p.etlHandler, net: accessNetPublic},
+
+		networkHandler{r: apc.IC, h: p.ic.handler, net: accessNetIntraControl},
+		networkHandler{r: apc.Daemon, h: p.daemonHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.Cluster, h: p.clusterHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.Tokens, h: p.tokenHandler, net: accessNetPublic},
+
+		networkHandler{r: apc.Metasync, h: p.metasyncHandler, net: accessNetIntraControl},
+		networkHandler{r: apc.Health, h: p.healthHandler, net: accessNetPublicControl},
+		networkHandler{r: apc.Vote, h: p.voteHandler, net: accessNetIntraControl},
+
+		networkHandler{r: apc.Notifs, h: p.notifs.handler, net: accessNetIntraControl},
+		networkHandler{r: apc.EC, h: p.ecHandler, net: accessNetIntraControl},
+
+		// machine learning
+		networkHandler{r: apc.ML, h: p.mlHandler, net: accessNetPublic},
+
+		// S3 compatibility
+		networkHandler{r: "/" + apc.S3, h: p.s3Handler, net: accessNetPublic},
+
+		// "easy URL"
+		networkHandler{r: "/" + apc.GSScheme, h: p.easyURLHandler, net: accessNetPublic},
+		networkHandler{r: "/" + apc.AZScheme, h: p.easyURLHandler, net: accessNetPublic},
+		networkHandler{r: "/" + apc.AISScheme, h: p.easyURLHandler, net: accessNetPublic},
+
+		// S3 compatibility, depending on feature flag
+		networkHandler{r: "/", h: p.rootHandler, net: accessNetPublic},
+
+		// plus:
+		// - PromHandler() at "/metrics" (see ais/htrun)
+		// - dsortHandler
+	)
+	networkHandlers = p.regDsort(networkHandlers)
+	p.regNetHandlers(networkHandlers)
 }
 
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {
@@ -2552,100 +2553,6 @@ func (p *proxy) _configURLs(_ *configModifier, clone *globalConfig) (updated boo
 		updated = true
 	}
 	return updated, nil
-}
-
-// +gen:endpoint POST /v1/sort model=[dsort.RequestSpec]
-// +gen:endpoint GET /v1/sort
-// +gen:endpoint DELETE /v1/sort/abort
-// +gen:endpoint DELETE /v1/sort
-// +gen:payload dsort.RequestSpec={"input_bck":{"name":"<input-bucket-name>","provider":"<provider>"},"input_format":{"template":"<input-template>"},"output_format":"<output-template>","output_shard_size":"<shard-size>","input_extension":"<input-ext>","output_extension":"<output-ext>","description":"<description>","algorithm":{"kind":"<algorithm-kind>"}}
-// Start, monitor, abort, or remove distributed sort (dsort) jobs
-func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.cluStartedWithRetry() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		return
-	}
-	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-		return
-	}
-	apiItems, err := cmn.ParseURL(r.URL.Path, apc.URLPathdSort.L, 0, true)
-	if err != nil {
-		p.writeErrURL(w, r)
-		return
-	}
-
-	switch r.Method {
-	case http.MethodPost:
-		// - validate request, check input_bck and output_bck
-		// - start dsort
-		body, err := cos.ReadAllN(r.Body, r.ContentLength)
-		if err != nil {
-			p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive dsort request: %v", err)
-			return
-		}
-		rs := &dsort.RequestSpec{}
-		if err := jsoniter.Unmarshal(body, rs); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "dsort request", cos.BHead(body), err)
-			p.writeErr(w, r, err)
-			return
-		}
-		parsc, err := rs.ParseCtx()
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		bck := meta.CloneBck(&parsc.InputBck)
-		args := bctx{p: p, w: w, r: r, bck: bck, perms: apc.AceObjLIST | apc.AceGET}
-		if _, err = args.initAndTry(); err != nil {
-			return
-		}
-		if !parsc.OutputBck.Equal(&parsc.InputBck) {
-			bckTo := meta.CloneBck(&parsc.OutputBck)
-			bckTo, ecode, err := p.initBckTo(w, r, nil /*query*/, bckTo)
-			if err != nil {
-				return
-			}
-			if ecode == http.StatusNotFound {
-				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
-					return
-				}
-				naction := "dsort-create-output-bck"
-				warnfmt := "%s: %screate 'output_bck' %s with the 'input_bck' (%s) props"
-				if p.forwardCP(w, r, nil /*msg*/, naction, body /*orig body*/) { // to create
-					return
-				}
-				ctx := &bmdModifier{
-					pre:   bmodCpProps,
-					final: p.bmodSync,
-					msg:   &apc.ActMsg{Action: naction},
-					txnID: "",
-					bcks:  []*meta.Bck{bck, bckTo},
-					wait:  true,
-				}
-				if _, err = p.owner.bmd.modify(ctx); err != nil {
-					debug.AssertNoErr(err)
-					err = fmt.Errorf(warnfmt+": %w", p, "failed to ", bckTo.String(), bck.String(), err)
-					p.writeErr(w, r, err)
-					return
-				}
-				nlog.Warningf(warnfmt, p, "", bckTo.String(), bck.String())
-			}
-		}
-		dsort.PstartHandler(w, r, parsc)
-	case http.MethodGet:
-		dsort.PgetHandler(w, r)
-	case http.MethodDelete:
-		switch {
-		case len(apiItems) == 1 && apiItems[0] == apc.Abort:
-			dsort.PabortHandler(w, r)
-		case len(apiItems) == 0:
-			dsort.PremoveHandler(w, r)
-		default:
-			p.writeErrURL(w, r)
-		}
-	default:
-		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
-	}
 }
 
 func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {

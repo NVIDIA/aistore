@@ -7,6 +7,7 @@ package test_test
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/aistore/tools"
@@ -36,9 +37,14 @@ var _ = Describe("E2E CLI Tests", func() {
 		args     = make([]any, 0, len(files)+1)
 	)
 	args = append(args, f.RunE2ETest)
-	for _, fileName := range files {
-		fileName = fileName[:len(fileName)-len(filepath.Ext(fileName))]
-		args = append(args, Entry(fileName, fileName))
+	for _, path := range files {
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+
+		if base == "dsort" && !shardingEnabled {
+			continue
+		}
+
+		args = append(args, Entry(base, base))
 	}
 	DescribeTable("e2e-cli", args...)
 })

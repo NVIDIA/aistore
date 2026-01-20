@@ -1,3 +1,5 @@
+//go:build sharding
+
 // Package shard provides Extract(shard), Create(shard), and associated methods
 // across all supported archival formats (see cmn/archive/mime.go)
 /*

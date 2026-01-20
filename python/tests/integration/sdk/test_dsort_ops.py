@@ -34,6 +34,63 @@ MIN_SHARD_SIZE = 50 * KB
 
 
 class TestDsortOps(ParallelTestBase):
+    # Cache across test methods in this class
+    _dsort_enabled: Optional[bool] = None
+
+    @staticmethod
+    def _extract_status_code(exc: Exception) -> Optional[int]:
+        """
+        Best-effort extraction of HTTP status code from AIS SDK exceptions.
+        We keep it intentionally generic to avoid tight coupling to SDK internals.
+        """
+        # Common patterns: exc.status_code, exc.status, exc.code, exc.response.status_code
+        for attr in ("status_code", "status", "code"):
+            v = getattr(exc, attr, None)
+            if isinstance(v, int):
+                return v
+
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            v = getattr(resp, "status_code", None)
+            if isinstance(v, int):
+                return v
+
+        # Last resort: parse from message (handles wrapped requests.HTTPError etc.)
+        msg = str(exc)
+        if " 501" in msg or "501 " in msg or "status code: 501" in msg:
+            return 501
+
+        return None
+
+    def setUp(self):
+        """
+        Dsort requires build tag `sharding`.
+
+        When AIS is built without this tag, the proxy registers a stub handler
+        (see `ais/dsort_hdl_stub.go: dsortStubHandler`) which returns:
+          - HTTP 200 with an empty list for GET /v1/sort
+          - HTTP 501 (Not Implemented) for POST/DELETE
+
+        We probe using dsort.abort() (DELETE), because GET may be stubbed to 200/[].
+        """
+        super().setUp()
+
+        if TestDsortOps._dsort_enabled is None:
+            try:
+                # In a sharding build this may succeed or return 4xx if no job exists.
+                # In a non-sharding build it should return 501.
+                self.client.dsort().abort()
+                TestDsortOps._dsort_enabled = True
+            except Exception as exc:  # pylint: disable=broad-except
+                status = self._extract_status_code(exc)
+                if status == 501:
+                    TestDsortOps._dsort_enabled = False
+                else:
+                    # Any non-501 response means dsort endpoint exists.
+                    TestDsortOps._dsort_enabled = True
+        if not TestDsortOps._dsort_enabled:
+            self.skipTest("dsort not enabled (build AIS with -tags sharding)")
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _generate_tar(
         self,
