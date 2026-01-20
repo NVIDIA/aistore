@@ -103,14 +103,6 @@ const (
 	CleanupStoreCount = "cleanup.store.n"
 	CleanupStoreSize  = "cleanup.store.size"
 
-	// distributed sort (ext/dsort)
-	DsortCreationReqCount    = "dsort.creation.req.n"
-	DsortCreationRespCount   = "dsort.creation.resp.n"
-	DsortCreationRespLatency = "dsort.creation.resp.ns"
-	DsortExtractShardDskCnt  = "dsort.extract.shard.dsk.n"
-	DsortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
-	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
-
 	// ETL (ext/etl)
 	ETLInlineCount         = "etl.inline.n"
 	ETLInlineLatencyTotal  = "etl.inline.ns.total"
@@ -522,38 +514,6 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		},
 	)
 
-	// dsort
-	r.reg(snode, DsortCreationReqCount, KindCounter,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-	r.reg(snode, DsortCreationRespCount, KindCounter,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-	r.reg(snode, DsortCreationRespLatency, KindLatency,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-	r.reg(snode, DsortExtractShardDskCnt, KindCounter,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-	r.reg(snode, DsortExtractShardMemCnt, KindCounter,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-	r.reg(snode, DsortExtractShardSize, KindSize,
-		&Extra{
-			Help: "dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics",
-		},
-	)
-
 	// ETL inline
 	r.reg(snode, ETLInlineCount, KindCounter,
 		&Extra{
@@ -573,6 +533,9 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 			VarLabs: BckXlabs,
 		},
 	)
+
+	// Dsort (requires `-tags sharding`)
+	r.regDsort(snode)
 
 	// ETL offline
 	r.reg(snode, ETLOfflineCount, KindCounter,
