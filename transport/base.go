@@ -57,6 +57,7 @@ type (
 		dryrun()
 		terminate(error, string) (string, error)
 		doRequest() error
+		reopen() bool
 		inSend() bool
 		abortPending(error, bool)
 		errCmpl(error)
@@ -285,6 +286,11 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 					retry = newRtry(config, s.String())
 				}
 				if retry.timeout(err) {
+					reason = reasonError
+					break
+				}
+
+				if !s.streamer.reopen() {
 					reason = reasonError
 					break
 				}

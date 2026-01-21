@@ -158,6 +158,14 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	freeSend(obj)
 }
 
+// Retry is currently only safe if we haven't sent any bytes yet
+// (neither header nor data).
+// Once any bytes are on the wire, the receiver may have partial state and we'd
+// need protocol-level reset/rewind to safely retry.
+func (s *Stream) reopen() bool {
+	return s.sendoff.off == 0 && s.sendoff.ins == inHdr
+}
+
 func (s *Stream) doRequest() error {
 	s.numCur, s.sizeCur = 0, 0
 	if !s.compressed() {
