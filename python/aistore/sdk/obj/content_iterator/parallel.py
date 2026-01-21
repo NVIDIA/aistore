@@ -3,10 +3,11 @@
 #
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Optional, Tuple
 
 from aistore.sdk.obj.content_iterator.base import BaseContentIterProvider
 from aistore.sdk.obj.object_client import ObjectClient
+from aistore.sdk.const import PROPS_CHUNKED, DEFAULT_PARALLEL_CHUNK_SIZE
 
 
 class ParallelContentIterProvider(BaseContentIterProvider):
@@ -16,21 +17,30 @@ class ParallelContentIterProvider(BaseContentIterProvider):
 
     Args:
         client (ObjectClient): Client for accessing contents of an individual object.
-        chunk_size (int): Size of each chunk of data yielded.
+        chunk_size (Optional[int]): Size of each chunk of data yielded. If None,
+            will attempt to use optimal chunk size from HeadObjectV2 response.
         num_workers (int): Number of concurrent workers for fetching chunks.
     """
 
     def __init__(
         self,
         client: ObjectClient,
-        chunk_size: int,
+        chunk_size: Optional[int],
         num_workers: int,
     ):
-        # TODO: optimal chunk_size information will be included in the HEAD response in HeadObjectV2 API
+        # Fetch object metadata via HeadV2 to get optimal chunk size if available
+        attrs = client.head_v2(PROPS_CHUNKED)
+        self._object_size = attrs.size
+
+        # Use server-provided chunk size if not explicitly specified
+        if chunk_size is None or chunk_size <= 0:
+            if attrs.chunks and attrs.chunks.max_chunk_size > 0:
+                chunk_size = attrs.chunks.max_chunk_size
+            else:
+                chunk_size = DEFAULT_PARALLEL_CHUNK_SIZE
+
         super().__init__(client, chunk_size)
         self._num_workers = num_workers
-        # Fetch object size via HEAD request
-        self._object_size = self.client.head().size
 
     @property
     def num_workers(self) -> int:

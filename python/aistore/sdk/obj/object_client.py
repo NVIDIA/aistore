@@ -6,8 +6,13 @@ from typing import Optional, Tuple, Dict
 
 import requests
 
-from aistore.sdk.const import HTTP_METHOD_GET, HTTP_METHOD_HEAD, HEADER_RANGE
-from aistore.sdk.obj.object_attributes import ObjectAttributes
+from aistore.sdk.const import (
+    HTTP_METHOD_GET,
+    HTTP_METHOD_HEAD,
+    HEADER_RANGE,
+    QPARAM_PROPS,
+)
+from aistore.sdk.obj.object_attributes import ObjectAttributes, ObjectAttributesV2
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.errors import ErrObjNotFound
 
@@ -182,3 +187,32 @@ class ObjectClient:
             HTTP_METHOD_HEAD, path=self._request_path, params=self._request_params
         )
         return ObjectAttributes(resp.headers)
+
+    def head_v2(self, props: str = "") -> ObjectAttributesV2:
+        """
+        Make a HEAD request with selective property retrieval (V2 API).
+
+        EXPERIMENTAL: This API is experimental and may change in future releases.
+
+        This method allows requesting specific object properties, reducing
+        response size and processing overhead when only certain attributes
+        are needed.
+
+        Args:
+            props: Comma-separated list of properties to retrieve.
+                   Available values: name, size, version, checksum, atime, present,
+                   copies, ec, custom, location, chunked, last-modified, etag.
+                   See: https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
+                   If empty, returns default properties (name, size).
+
+        Returns:
+            `ObjectAttributesV2` containing the requested metadata.
+        """
+        params = self._request_params.copy()
+        # Always set props to trigger V2 endpoint; default to "name,size"
+        params[QPARAM_PROPS] = props if props else "name,size"
+
+        resp = self._request_client.request(
+            HTTP_METHOD_HEAD, path=self._request_path, params=params
+        )
+        return ObjectAttributesV2(resp.headers)

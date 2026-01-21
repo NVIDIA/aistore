@@ -1,7 +1,7 @@
 import unittest
 
 from requests.structures import CaseInsensitiveDict
-from aistore.sdk.obj.object_attributes import ObjectAttributes
+from aistore.sdk.obj.object_attributes import ObjectAttributes, ObjectAttributesV2
 
 
 class TestObjectAttributes(unittest.TestCase):
@@ -47,3 +47,35 @@ class TestObjectAttributes(unittest.TestCase):
         self.assertEqual("", attributes.access_time)
         self.assertEqual("", attributes.obj_version)
         self.assertDictEqual({}, attributes.custom_metadata)
+
+
+class TestObjectAttributesV2(unittest.TestCase):
+    """Unit tests for ObjectAttributesV2 V2-specific fields."""
+
+    def test_v2_fields(self):
+        """Test V2-specific fields: last_modified, etag, chunks."""
+        headers = CaseInsensitiveDict(
+            {
+                "Content-Length": "1024",
+                "Last-Modified": "Thu, 15 Jan 2025 10:30:00 GMT",
+                "ETag": '"abc123"',
+                "ais-chunks-count": "256",
+                "ais-chunks-max-chunk-size": "8388608",
+            }
+        )
+        attrs = ObjectAttributesV2(headers)
+
+        # Inherits base
+        self.assertEqual(1024, attrs.size)
+        # V2 fields
+        self.assertEqual("Thu, 15 Jan 2025 10:30:00 GMT", attrs.last_modified)
+        self.assertEqual("abc123", attrs.etag)  # quotes stripped
+        self.assertIsNotNone(attrs.chunks)
+        self.assertEqual(256, attrs.chunks.chunk_count)
+        self.assertEqual(8388608, attrs.chunks.max_chunk_size)
+
+    def test_chunks_none_for_monolithic(self):
+        """Monolithic objects return None for chunks."""
+        headers = CaseInsensitiveDict({"Content-Length": "1024"})
+        attrs = ObjectAttributesV2(headers)
+        self.assertIsNone(attrs.chunks)

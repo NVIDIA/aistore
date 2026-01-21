@@ -117,6 +117,35 @@ class TestObjectClient(
         )
         mock_attr.assert_called_with(self.response_headers)
 
+    @patch("aistore.sdk.obj.object_client.ObjectAttributesV2", autospec=True)
+    def test_head_v2_with_props(self, mock_attr_v2):
+        """Test head_v2() with props parameter."""
+        mock_response = Mock(spec=requests.Response, headers=self.response_headers)
+        self.request_client.request.return_value = mock_response
+
+        res = self.object_client.head_v2(props="chunked")
+
+        self.assertEqual(mock_attr_v2.return_value, res)
+        expected_params = self.params.copy()
+        expected_params["props"] = "chunked"
+        self.request_client.request.assert_called_once_with(
+            HTTP_METHOD_HEAD, path=self.path, params=expected_params
+        )
+        mock_attr_v2.assert_called_with(self.response_headers)
+
+    def test_head_v2_default_props(self):
+        """Test head_v2() defaults to 'name,size' to trigger V2 endpoint."""
+        mock_response = Mock(spec=requests.Response, headers=self.response_headers)
+        self.request_client.request.return_value = mock_response
+
+        self.object_client.head_v2()
+
+        expected_params = self.params.copy()
+        expected_params["props"] = "name,size"
+        self.request_client.request.assert_called_once_with(
+            HTTP_METHOD_HEAD, path=self.path, params=expected_params
+        )
+
     @patch("aistore.sdk.obj.object_client.ObjectClient._retry_with_new_smap")
     def test_obj_not_found_retry(self, mock_retry_with_new_smap):
         """

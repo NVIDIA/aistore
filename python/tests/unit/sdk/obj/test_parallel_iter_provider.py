@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock, patch, call
 
 from aistore.sdk.obj.content_iterator import ParallelContentIterProvider
+from aistore.sdk.const import PROPS_CHUNKED
 
 
 class TestParallelContentIterProvider(unittest.TestCase):
@@ -17,21 +18,23 @@ class TestParallelContentIterProvider(unittest.TestCase):
         self.num_workers = 4
         self.object_size = 350  # Will create 4 chunks: 0-99, 100-199, 200-299, 300-349
 
-        # Mock head() to return object size
+        # Mock head_v2() to return object size and chunk info
         mock_attrs = Mock()
         mock_attrs.size = self.object_size
-        self.mock_client.head.return_value = mock_attrs
+        mock_attrs.chunks = None  # Monolithic object by default
+        self.mock_client.head_v2.return_value = mock_attrs
 
-    def test_init_fetches_object_size(self):
-        """Test that __init__ calls head() to get object size."""
+    def test_init_fetches_object_size_via_head_v2(self):
+        """Test that __init__ calls head_v2() to get object size and chunk info."""
         ParallelContentIterProvider(self.mock_client, self.chunk_size, self.num_workers)
-        self.mock_client.head.assert_called_once()
+        self.mock_client.head_v2.assert_called_once_with(PROPS_CHUNKED)
 
     def test_create_iter_empty_object(self):
         """Test iteration over empty object."""
         mock_attrs = Mock()
         mock_attrs.size = 0
-        self.mock_client.head.return_value = mock_attrs
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
 
         provider = ParallelContentIterProvider(
             self.mock_client, self.chunk_size, self.num_workers
@@ -75,7 +78,8 @@ class TestParallelContentIterProvider(unittest.TestCase):
         """Test object smaller than chunk size."""
         mock_attrs = Mock()
         mock_attrs.size = 50
-        self.mock_client.head.return_value = mock_attrs
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
 
         self.mock_client.get_chunk.return_value = b"small"
 
@@ -124,7 +128,8 @@ class TestParallelContentIterProvider(unittest.TestCase):
             # Setup small object with 2 chunks
             mock_attrs = Mock()
             mock_attrs.size = 200
-            self.mock_client.head.return_value = mock_attrs
+            mock_attrs.chunks = None
+            self.mock_client.head_v2.return_value = mock_attrs
 
             provider = ParallelContentIterProvider(
                 self.mock_client, self.chunk_size, self.num_workers
@@ -156,3 +161,35 @@ class TestParallelContentIterProvider(unittest.TestCase):
             call(300, 350),
         ]
         self.mock_client.get_chunk.assert_has_calls(expected_calls, any_order=True)
+
+    def test_uses_server_chunk_size_when_not_specified(self):
+        """Test that chunk_size from head_v2() is used when chunk_size=None."""
+        mock_attrs = Mock()
+        mock_attrs.size = 800
+        mock_chunks = Mock()
+        mock_chunks.max_chunk_size = 200
+        mock_attrs.chunks = mock_chunks
+        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.get_chunk.return_value = b"x" * 200
+
+        provider = ParallelContentIterProvider(
+            self.mock_client, chunk_size=None, num_workers=4
+        )
+        result = list(provider.create_iter())
+
+        self.assertEqual(len(result), 4)  # 800 / 200 = 4 chunks
+
+    def test_fallback_chunk_size_for_monolithic(self):
+        """Test fallback to DEFAULT_PARALLEL_CHUNK_SIZE when chunks=None."""
+        mock_attrs = Mock()
+        mock_attrs.size = 16 * 1024 * 1024  # 16 MiB
+        mock_attrs.chunks = None
+        self.mock_client.head_v2.return_value = mock_attrs
+        self.mock_client.get_chunk.return_value = b"x" * (8 * 1024 * 1024)
+
+        provider = ParallelContentIterProvider(
+            self.mock_client, chunk_size=None, num_workers=4
+        )
+        result = list(provider.create_iter())
+
+        self.assertEqual(len(result), 2)  # 16 MiB / 8 MiB = 2 chunks

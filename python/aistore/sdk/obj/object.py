@@ -27,6 +27,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_NAME,
     QPARAM_ETL_ARGS,
     QPARAM_LATEST,
+    QPARAM_PROPS,
     QPARAM_SYNC,
     QPARAM_OBJ_TO,
     ACT_PROMOTE,
@@ -51,6 +52,7 @@ from aistore.sdk.types import (
     BlobMsg,
 )
 from aistore.sdk.obj.object_props import ObjectProps
+from aistore.sdk.obj.object_attributes import ObjectAttributesV2
 
 
 @dataclass
@@ -178,6 +180,38 @@ class Object:
         ).headers
         self._props = ObjectProps(headers)
         return headers
+
+    def head_v2(self, props: str = "") -> ObjectAttributesV2:
+        """
+        Make a HEAD request with selective property retrieval (V2 API).
+
+        EXPERIMENTAL: This API is experimental and may change in future releases.
+
+        This method allows requesting specific object properties, reducing
+        response size and processing overhead when only certain attributes
+        are needed.
+
+        Args:
+            props: Comma-separated list of properties to retrieve.
+                   Available values: name, size, version, checksum, atime, present,
+                   copies, ec, custom, location, chunked, last-modified, etag.
+                   See: https://github.com/NVIDIA/aistore/blob/main/api/apc/lsmsg.go
+                   If empty, returns default properties (name, size).
+
+
+        Returns:
+            ObjectAttributesV2: Parsed V2 object attributes (includes chunk info, last-modified, etag).
+        """
+        params = self.query_params.copy()
+        # Always set props to trigger V2 endpoint; default to "name,size"
+        params[QPARAM_PROPS] = props if props else "name,size"
+
+        headers = self._client.request(
+            HTTP_METHOD_HEAD,
+            path=self._object_path,
+            params=params,
+        ).headers
+        return ObjectAttributesV2(headers)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def get_reader(

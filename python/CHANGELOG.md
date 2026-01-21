@@ -6,11 +6,19 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Added
+- `Object.head_v2()` API for selective property retrieval (experimental)
+- `ObjectAttributesV2` with chunk info (`chunk_count`, `max_chunk_size`)
+
 ### Changed
 
 - Dsort integration tests are now conditionally skipped when AIStore is built without the `dsort` build tag.
   - The `/v1/sort` endpoint returns HTTP 501 (Not Implemented) in non-dsort builds.
   - This avoids false failures when running the Python SDK test suite against default AIS builds.
+- Parallel download now uses `head_v2` to get optimal chunk size from server
+
+### Fixed
+- Parallel download was using 32KiB chunks instead of server-provided chunk size
 
 ## [1.19.0] - 2026-01-14
 

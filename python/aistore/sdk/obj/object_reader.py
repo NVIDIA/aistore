@@ -39,7 +39,7 @@ class ObjectReader:
         self._chunk_size = chunk_size
         self._attributes = None
         self._content_provider = (
-            ParallelContentIterProvider(object_client, chunk_size, num_workers)
+            ParallelContentIterProvider(object_client, None, num_workers)
             if num_workers
             else ContentIterProvider(object_client, chunk_size)
         )

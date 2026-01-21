@@ -30,6 +30,8 @@ from tests.const import (
     SMALL_FILE_SIZE,
     OBJ_READ_TYPE_ALL,
     OBJ_READ_TYPE_CHUNK,
+    KIB,
+    MIB,
 )
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
@@ -759,3 +761,82 @@ class TestObjectOps(ParallelTestBase):
         # Verify error content from response body
         self.assertIn("bucket", context.exception.message.lower())
         self.assertIn("does not exist", context.exception.message.lower())
+
+    def test_head_v2_basic(self):
+        """Test head_v2() returns V2 attributes with basic properties."""
+        obj, content = self._create_object_with_content()
+
+        attrs = obj.head_v2("checksum")
+
+        # V2 should return size and standard attributes
+        self.assertEqual(len(content), attrs.size)
+        self.assertNotEqual("", attrs.checksum_type)
+        self.assertNotEqual("", attrs.checksum_value)
+
+    def test_head_v2_chunked_props(self):
+        """Test head_v2() with 'chunked' props returns chunk info or None."""
+        obj, _ = self._create_object_with_content()
+
+        attrs = obj.head_v2(props="chunked")
+
+        # For regular (non-chunked) objects, chunks should be None
+        # This test ensures the API path works correctly
+        self.assertTrue(hasattr(attrs, "chunks"))
+
+    def test_head_v2_last_modified_and_etag(self):
+        """Test head_v2() returns last_modified and etag only when requested."""
+        obj, _ = self._create_object_with_content()
+
+        # Without requesting, should be empty
+        attrs_default = obj.head_v2()
+        self.assertEqual("", attrs_default.last_modified)
+        self.assertEqual("", attrs_default.etag)
+
+        # With last-modified requested
+        attrs_lm = obj.head_v2(props="last-modified")
+        self.assertNotEqual("", attrs_lm.last_modified)
+
+        # With etag requested
+        attrs_etag = obj.head_v2(props="etag")
+        self.assertNotEqual("", attrs_etag.etag)
+        self.assertNotIn('"', attrs_etag.etag)  # quotes should be stripped
+
+        # With both requested
+        attrs_both = obj.head_v2(props="last-modified,etag")
+        self.assertNotEqual("", attrs_both.last_modified)
+        self.assertNotEqual("", attrs_both.etag)
+
+    def test_head_v2_multipart_chunk_info(self):
+        """Test head_v2() returns correct chunk info for multipart uploaded objects."""
+        obj = self._create_object()
+
+        # Create multipart upload with known part sizes
+        mpu = obj.multipart_upload().create()
+
+        part_size = 5 * MIB  # 5 MiB per part
+        num_parts = 3
+        for i in range(1, num_parts + 1):
+            content = b"x" * part_size
+            mpu.add_part(i).put_content(content)
+
+        mpu.complete()
+
+        # Verify head_v2 returns correct chunk info
+        attrs = obj.head_v2(props="chunked")
+
+        self.assertIsNotNone(attrs.chunks)
+        self.assertEqual(num_parts, attrs.chunks.chunk_count)
+        self.assertEqual(part_size, attrs.chunks.max_chunk_size)
+        self.assertEqual(part_size * num_parts, attrs.size)
+
+    @cases(2, 4, 8)
+    def test_parallel_download_various_workers(self, num_workers):
+        """Test parallel download with various worker counts."""
+        content = b"x" * (100 * KIB)
+        obj = self._create_object()
+        obj.get_writer().put_content(content)
+
+        reader = obj.get_reader(num_workers=num_workers)
+        result = b"".join(reader)
+
+        self.assertEqual(content, result)

@@ -5,6 +5,7 @@
 # Units
 GB = 10**9
 KIB = 2**10
+MIB = 2**20
 
 # Archive extensions
 EXT_TAR = ".tar"
@@ -37,6 +38,13 @@ AIS_LOCATION = "ais-location"
 AIS_MIRROR_PATHS = "ais-mirror-paths"
 AIS_MIRROR_COPIES = "ais-mirror-copies"
 AIS_PRESENT = "ais-present"
+# V2-specific headers
+AIS_CHUNKS_COUNT = "ais-chunks-count"
+AIS_CHUNKS_MAX_CHUNK_SIZE = "ais-chunks-max-chunk-size"
+HEADER_LAST_MODIFIED = "Last-Modified"
+HEADER_ETAG = "ETag"
+# V2 property names
+PROPS_CHUNKED = "chunked"
 # Bucket Props Header keys
 HEADER_PREFIX = "ais-"
 HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
@@ -80,6 +88,8 @@ QPARAM_NEW_CUSTOM = "set-new-custom"
 # multipart upload
 QPARAM_MPT_UPLOAD_ID = "uploadId"
 QPARAM_MPT_PART_NO = "partNumber"
+# Query params for V2 HEAD
+QPARAM_PROPS = "props"
 # etl
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_ETL_ARGS = "etl_args"
@@ -153,6 +163,7 @@ ACT_MPT_ABORT = "mpt-abort"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32 * KIB
+DEFAULT_PARALLEL_CHUNK_SIZE = 8 * MIB
 DEFAULT_JOB_WAIT_TIMEOUT = 300
 DEFAULT_DSORT_WAIT_TIMEOUT = 300
 DEFAULT_DATASET_MAX_COUNT = 100000

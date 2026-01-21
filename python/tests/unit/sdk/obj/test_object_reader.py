@@ -133,8 +133,8 @@ class TestObjectReader(unittest.TestCase):
         """Test that providing num_workers uses ParallelContentIterProvider."""
         mock_attrs = Mock()
         mock_attrs.size = 1000
-        self.object_client.head.return_value = mock_attrs
-        self.object_client.get_range.return_value = b"data"
+        mock_attrs.chunks = None  # Monolithic object
+        self.object_client.head_v2.return_value = mock_attrs
 
         reader = ObjectReader(self.object_client, self.chunk_size, num_workers=4)
 
@@ -148,12 +148,13 @@ class TestObjectReader(unittest.TestCase):
         # pylint: disable=protected-access
         self.assertIsInstance(reader._content_provider, ContentIterProvider)
 
-    def test_num_workers_calls_head(self):
-        """Test that num_workers triggers a HEAD request for object size."""
+    def test_num_workers_calls_head_v2(self):
+        """Test that num_workers triggers a HEAD V2 request for object size."""
         mock_attrs = Mock()
         mock_attrs.size = 1000
-        self.object_client.head.return_value = mock_attrs
+        mock_attrs.chunks = None
+        self.object_client.head_v2.return_value = mock_attrs
 
         ObjectReader(self.object_client, self.chunk_size, num_workers=4)
 
-        self.object_client.head.assert_called_once()
+        self.object_client.head_v2.assert_called_once()
