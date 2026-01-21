@@ -56,10 +56,7 @@ func _listenAddr(port string) string {
 
 // Run public server to manage users and generate tokens
 func (h *hserv) Run() error {
-	var (
-		portStr string
-		err     error
-	)
+	var err error
 
 	laddr := _listenAddr(h.mgr.cm.GetPort())
 	nlog.Infoln("Listening on", laddr)
@@ -74,21 +71,25 @@ func (h *hserv) Run() error {
 		h.s.ReadHeaderTimeout = timeout
 	}
 
+	external, err := h.mgr.cm.ParseExternalURL()
+	if err == nil {
+		nlog.Infof("Using %s as externally accessible URL", external)
+	}
 	// Start the appropriate server based on the configuration
 	if h.mgr.cm.IsHTTPS() {
 		// Retrieve and set HTTPS configuration with environment variables taking precedence
 		serverCert := h.mgr.cm.GetServerCert()
 		serverKey := h.mgr.cm.GetServerKey()
-		nlog.Infof("Starting HTTPS server on port%s", portStr)
+		nlog.Infoln("Starting HTTPS server")
 		nlog.Infof("Certificate: %s", serverCert)
 		nlog.Infof("Key: %s", serverKey)
 		err = h.s.ListenAndServeTLS(serverCert, serverKey)
 	} else {
-		nlog.Infof("Starting HTTP server on port%s", portStr)
+		nlog.Infoln("Starting HTTP server")
 		err = h.s.ListenAndServe()
 	}
 
-	if err != nil && err != http.ErrServerClosed {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		nlog.Errorf("Server terminated with error: %v", err)
 		return err
 	}

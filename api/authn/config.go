@@ -22,8 +22,9 @@ type (
 		Timeout TimeoutConf `json:"timeout"`
 	}
 	LogConf struct {
-		Dir   string `json:"dir"`
-		Level string `json:"level"`
+		Dir           string       `json:"dir"`
+		Level         string       `json:"level"`
+		FlushInterval cos.Duration `json:"flush_interval"`
 	}
 	NetConf struct {
 		ExternalURL string   `json:"external_url"`

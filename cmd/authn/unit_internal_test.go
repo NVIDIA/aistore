@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -134,7 +135,7 @@ func testUserDelete(mgr *mgr, t *testing.T) {
 
 func createCM(t *testing.T, conf *authn.Config) *config.ConfManager {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "authn.json")
+	path := filepath.Join(tmp, fname.AuthNConfig)
 	err := jsp.SaveMeta(path, conf, nil)
 	tassert.Fatalf(t, err == nil, "failed to write config: %v", err)
 	cm := config.NewConfManager()

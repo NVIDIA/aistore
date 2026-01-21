@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	ServiceName = "AuthN"
+	ServiceName   = "AuthN"
+	defaultLogDir = "logs"
 )
 
 // Constants for creating RSA keys and key set
@@ -57,6 +58,30 @@ func NewConfManager() *ConfManager {
 	cm := &ConfManager{}
 	cm.conf.Store(&authn.Config{})
 	return cm
+}
+
+func resolveConfigPath(flagConf string) (string, error) {
+	confPath := cos.GetEnvOrDefault(env.AisAuthConfDir, flagConf)
+	if confPath == "" {
+		return "", fmt.Errorf("missing %s configuration file (use '-config' or '%s')",
+			ServiceName, env.AisAuthConfDir)
+	}
+	fi, err := os.Stat(confPath)
+	if err != nil {
+		var e *os.PathError
+		if errors.As(err, &e) {
+			err = e.Err
+		}
+		return "", fmt.Errorf("invalid file path %q: %v", confPath, err)
+	}
+	confPath, err = filepath.Abs(confPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path for %q: %v", confPath, err)
+	}
+	if fi.IsDir() {
+		return filepath.Join(confPath, fname.AuthNConfig), nil
+	}
+	return confPath, nil
 }
 
 // Server setup and general config functions
@@ -96,19 +121,26 @@ func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
 	// re-init to copy into private fields
 	next.Init()
 	cm.conf.Store(&next)
-	if cm.filePath != "" {
-		if err := jsp.SaveMeta(cm.filePath, cm.conf.Load(), nil); err != nil {
-			return err
-		}
-	}
-	return nil
+	return cm.saveToDisk()
 }
 
-func (cm *ConfManager) Init(configPath string) {
-	conf, err := cm.loadFromDisk(configPath)
+func (cm *ConfManager) Init(cfgPathArg string) {
+	filePath, err := resolveConfigPath(cfgPathArg)
+	if err != nil {
+		cos.ExitLogf("Invalid config for %s: %v", ServiceName, err)
+	}
+	cm.filePath = filePath
+	// Load from disk first because log directory is configurable
+	conf, err := cm.loadFromDisk()
 	if err != nil {
 		cos.ExitLogf("%s service failed to start: %v", ServiceName, err)
 	}
+	err = cm.initLogs()
+	if err != nil {
+		cos.ExitLogf("Failed to set up logger: %v", err)
+	}
+	// Log config loading after initializing the logger
+	nlog.Infoln("Loaded configuration from", cm.filePath)
 	if val := os.Getenv(env.AisAuthSecretKey); val != "" {
 		conf.Server.Secret = val
 	}
@@ -118,27 +150,41 @@ func (cm *ConfManager) Init(configPath string) {
 		return
 	}
 	nlog.Infof("No HMAC secret provided via config or %q, initializing with RSA", env.AisAuthSecretKey)
-	cm.initRSA(configPath)
+	cm.initRSA()
 }
 
-func (cm *ConfManager) loadFromDisk(configPath string) (*authn.Config, error) {
-	cm.filePath = configPath
-	rawConf := &authn.Config{}
-	if _, err := jsp.LoadMeta(configPath, rawConf); err != nil {
-		return nil, fmt.Errorf("failed to load configuration from %q: %v", configPath, err)
+func (cm *ConfManager) initLogs() error {
+	logDir := cos.GetEnvOrDefault(env.AisAuthLogDir, cm.conf.Load().Log.Dir)
+	// If not provided, use a subdirectory in the same directory as the config
+	if logDir == "" {
+		logDir = filepath.Join(filepath.Dir(cm.filePath), defaultLogDir)
 	}
-	if rawConf.Verbose() {
-		nlog.Infof("Loaded configuration from %s", configPath)
+	if err := cos.CreateDir(logDir); err != nil {
+		return fmt.Errorf("failed to create log dir %q, err: %v", logDir, err)
+	}
+	nlog.SetPre(logDir, "auth")
+	nlog.Infoln("Logging to", logDir)
+	return nil
+}
+
+func (cm *ConfManager) loadFromDisk() (*authn.Config, error) {
+	rawConf := &authn.Config{}
+	if _, err := jsp.LoadMeta(cm.filePath, rawConf); err != nil {
+		return nil, fmt.Errorf("failed to load configuration from %q: %v", cm.filePath, err)
 	}
 	return rawConf, nil
 }
 
-func (cm *ConfManager) SaveToDisk(configPath string) error {
-	return jsp.SaveMeta(configPath, cm.conf.Load(), nil)
+func (cm *ConfManager) saveToDisk() error {
+	return jsp.SaveMeta(cm.filePath, cm.conf.Load(), nil)
 }
 
-func (cm *ConfManager) GetLogDir() string {
-	return cos.GetEnvOrDefault(env.AisAuthLogDir, cm.conf.Load().Log.Dir)
+func (cm *ConfManager) GetConfDir() string {
+	return filepath.Dir(cm.filePath)
+}
+
+func (cm *ConfManager) GetLogFlushInterval() time.Duration {
+	return cm.conf.Load().Log.FlushInterval.D()
 }
 
 func (cm *ConfManager) ParseExternalURL() (*url.URL, error) {
@@ -232,14 +278,8 @@ func (cm *ConfManager) GetSecretChecksum() string {
 // RSA and OIDC //
 //////////////////
 
-func (cm *ConfManager) initRSA(configPath string) {
-	var keyFilePath string
-	if pFile := os.Getenv(env.AisAuthPrivateKeyFile); pFile != "" {
-		keyFilePath = pFile
-	} else {
-		configDir := filepath.Dir(configPath)
-		keyFilePath = filepath.Join(configDir, fname.AuthNRSAKey)
-	}
+func (cm *ConfManager) initRSA() {
+	keyFilePath := cos.GetEnvOrDefault(env.AisAuthPrivateKeyFile, filepath.Join(filepath.Dir(cm.filePath), fname.AuthNRSAKey))
 	passphrase, err := validatePassphrase()
 	if err != nil {
 		cos.ExitLogf("Failed RSA key passphrase validation for %s: %v", env.AisAuthPrivateKeyPass, err)

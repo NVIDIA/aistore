@@ -132,11 +132,11 @@ func TestInitEnv(t *testing.T) {
 	c.Server.Secret = ""
 	c.Init()
 	path := writeConfToDisk(t, c)
-	cm := config.NewConfManager()
 
 	const envSecret = "env-secret-only"
 	t.Setenv(env.AisAuthSecretKey, envSecret)
 
+	cm := config.NewConfManager()
 	cm.Init(path)
 	compareSecret(t, cm, envSecret)
 	tassert.Error(t, cm.GetPrivateKey() == nil, "RSA private key not set")
@@ -159,6 +159,32 @@ func TestInitFromDisk(t *testing.T) {
 
 	cm.Init(path)
 	compareSecret(t, cm, envSecret)
+}
+
+func TestGetConfDir(t *testing.T) {
+	base := newBaseConfig()
+	path := writeConfToDisk(t, base)
+	cm := config.NewConfManager()
+	cm.Init(path)
+
+	expectedDir := filepath.Dir(path)
+	got := cm.GetConfDir()
+	tassert.Errorf(t, got == expectedDir, "expected %q, got %q", expectedDir, got)
+}
+
+func TestGetLogFlushInterval(t *testing.T) {
+	base := newBaseConfig()
+	expected := 5 * time.Second
+	base.Log.FlushInterval = cos.Duration(expected)
+	cm := newConfManagerWithConf(t, base)
+
+	got := cm.GetLogFlushInterval()
+	tassert.Errorf(t, got == expected, "expected %v, got %v", expected, got)
+
+	base.Log.FlushInterval = 0
+	cm = newConfManagerWithConf(t, base)
+	got = cm.GetLogFlushInterval()
+	tassert.Errorf(t, got == 0, "expected 0, got %v", got)
 }
 
 func TestParseExternalURL_Env(t *testing.T) {
@@ -200,22 +226,6 @@ func TestParseExternalURL_FallbackHTTPS(t *testing.T) {
 	u, err := cm.ParseExternalURL()
 	tassert.Fatalf(t, err == nil, "expected parse with no error, got: %v", err)
 	tassert.Errorf(t, u.String() == expectedURL, "expected URL %q, got %q", expectedURL, u.String())
-}
-
-func TestGetLogDir(t *testing.T) {
-	base := newBaseConfig()
-	base.Log.Dir = "/default/log"
-	cm := newConfManagerWithConf(t, base)
-
-	// default
-	got := cm.GetLogDir()
-	tassert.Errorf(t, got == base.Log.Dir, "expected %q, got %q", base.Log.Dir, got)
-
-	// env override
-	override := "/env/log"
-	t.Setenv(env.AisAuthLogDir, override)
-	got = cm.GetLogDir()
-	tassert.Errorf(t, got == override, "expected %q, got %q", override, got)
 }
 
 func TestIsHTTPS(t *testing.T) {
