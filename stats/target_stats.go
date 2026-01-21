@@ -534,7 +534,7 @@ func (r *Trunner) RegMetrics(snode *meta.Snode) {
 		},
 	)
 
-	// Dsort (requires `-tags dsort`)
+	// Dsort (requires `-tags=dsort`)
 	r.regDsort(snode)
 
 	// ETL offline

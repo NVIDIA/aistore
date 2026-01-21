@@ -22,7 +22,7 @@ import (
 // proxy
 //
 
-const dsortNotEnabled = "dsort not enabled (build with -tags dsort)"
+const dsortNotEnabled = "dsort not enabled (build with -tags=dsort)"
 
 func (*proxy) regDsort(handlers []networkHandler) []networkHandler {
 	return append(handlers, networkHandler{r: apc.Sort, h: dsortStubHandler, net: accessNetPublic})

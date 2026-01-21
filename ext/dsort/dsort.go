@@ -44,8 +44,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const PrefixJobID = "srt-"
-
 type (
 	dsorter interface {
 		shard.ContentLoader

@@ -144,6 +144,14 @@ type (
 )
 
 /////////////
+// Metrics //
+/////////////
+
+func (m *Metrics) ElapsedTime() time.Duration {
+	return m.Creation.End.Sub(m.Extraction.Start)
+}
+
+/////////////
 // JobInfo //
 /////////////
 

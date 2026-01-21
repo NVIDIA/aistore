@@ -746,7 +746,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	m.Metrics.lock()
 	m.Metrics.update()
-	j := m.Metrics.ToJobInfo(m.ManagerUUID, m.Pars)
+	j := m.Metrics.toJobInfo(m.ManagerUUID, m.Pars)
 	j.Metrics = m.Metrics
 	body := cos.MustMarshal(j)
 	m.Metrics.unlock()

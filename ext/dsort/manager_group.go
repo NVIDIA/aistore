@@ -70,7 +70,7 @@ func (mg *managerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 		if descRegex != nil && !descRegex.MatchString(v.Metrics.Description) {
 			continue
 		}
-		job := v.Metrics.ToJobInfo(v.ManagerUUID, v.Pars)
+		job := v.Metrics.toJobInfo(v.ManagerUUID, v.Pars)
 		if onlyActive && job.IsFinished() {
 			continue
 		}
@@ -92,7 +92,7 @@ func (mg *managerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 			continue
 		}
 		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
-			job := m.Metrics.ToJobInfo(m.ManagerUUID, m.Pars)
+			job := m.Metrics.toJobInfo(m.ManagerUUID, m.Pars)
 			if onlyActive && job.IsFinished() {
 				continue
 			}

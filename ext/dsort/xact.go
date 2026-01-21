@@ -94,8 +94,7 @@ func (r *xaction) Snap() (snap *core.Snap) {
 
 	snap.Ext = m.Metrics
 
-	j := m.Metrics.ToJobInfo(r.ID(), m.Pars)
-	snap.StartTime = j.StartedTime
+	j := m.Metrics.toJobInfo(r.ID(), m.Pars)
 	snap.StartTime = j.StartedTime
 	snap.EndTime = j.FinishTime
 	snap.SrcBck = j.SrcBck

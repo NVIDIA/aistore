@@ -139,9 +139,14 @@ cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
 	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 
+## NOTE:
+## - requires '-tags=dsort'
+## - alternatively, split imported ext/dsort/shard/* structures into api.go and api_impl.go
+## - otherwise, TODO:
+##   - introduce ISHARD_BUILD_TAGS := $(BUILD_TAGS) and append to it 'dsort' tag if not already present
 ishard: ## Build ishard CLI binary
 	@echo "Building ishard..."
-	@cd $(BUILD_DIR)/ishard && go build -o $(BUILD_DEST)/ishard *.go
+	@cd $(BUILD_DIR)/ishard && go build -tags=dsort -o $(BUILD_DEST)/ishard *.go
 	@echo "done."
 
 authn: build-authn         ## Build AuthN

@@ -68,10 +68,6 @@ func (m *Metrics) unlock() {
 	m.Extraction.mu.Unlock()
 }
 
-func (m *Metrics) ElapsedTime() time.Duration {
-	return m.Creation.End.Sub(m.Extraction.Start)
-}
-
 // update updates elapsed time for all the metrics.
 // NOTE: must be done under lock every time Metrics are about to be marshaled and sent through the network.
 func (m *Metrics) update() {
@@ -86,7 +82,7 @@ func (m *Metrics) update() {
 	}
 }
 
-func (m *Metrics) ToJobInfo(id string, pars *parsedReqSpec) JobInfo {
+func (m *Metrics) toJobInfo(id string, pars *parsedReqSpec) JobInfo {
 	return JobInfo{
 		ID:                id,
 		SrcBck:            pars.InputBck,

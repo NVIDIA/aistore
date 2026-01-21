@@ -1,8 +1,8 @@
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
-github.com/NVIDIA/aistore v1.4.3-0.20260119181809-bcc54f7b73f4 h1:FbdEUQATlmheDPUbZ7uAj2+p/NbrX97DqneiZRT9BXg=
-github.com/NVIDIA/aistore v1.4.3-0.20260119181809-bcc54f7b73f4/go.mod h1:vcHQ4+HV7rWMqWabeTQzNeAMepMo+UVcz941saSJD9Y=
+github.com/NVIDIA/aistore v1.4.3-0.20260121163536-ae2c7bc81c40 h1:AYTFaBnu627RNntB4W53UyOBrYyBXmS0nqCFskG9HtQ=
+github.com/NVIDIA/aistore v1.4.3-0.20260121163536-ae2c7bc81c40/go.mod h1:vcHQ4+HV7rWMqWabeTQzNeAMepMo+UVcz941saSJD9Y=
 github.com/OneOfOne/xxhash v1.2.8 h1:31czK/TI9sNkxIKfaUfGlU47BAxQ0ztGgd9vPyqimf8=
 github.com/OneOfOne/xxhash v1.2.8/go.mod h1:eZbhyaAYD41SGSSsnmcpxVoRiQ/MPUTjUdIIOT9Um7Q=
 github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmxzcbUokwA=
