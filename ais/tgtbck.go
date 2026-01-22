@@ -469,7 +469,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 			return
 		}
 	case apc.ActRechunk:
-		rechunkMsg := &xreg.RechunkArgs{}
+		rechunkMsg := &apc.RechunkMsg{}
 		if err = cos.MorphMarshal(msg.Value, rechunkMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
@@ -485,7 +485,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 }
 
-func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *xreg.RechunkArgs) (xid string, err error) {
+func (t *target) runRechunk(xactID string, bck *meta.Bck, rechunkMsg *apc.RechunkMsg) (xid string, err error) {
 	if err := xreg.LimitedCoexistence(t.si, bck, apc.ActRechunk); err != nil {
 		return "", err
 	}

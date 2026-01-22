@@ -81,8 +81,8 @@ func RenewBckLoadLomCache(uuid string, bck *meta.Bck) RenewRes {
 	return RenewBucketXact(apc.ActLoadLomCache, bck, Args{UUID: uuid})
 }
 
-func RenewBckRechunks(bck *meta.Bck, uuid string, args *RechunkArgs) RenewRes {
-	return RenewBucketXact(apc.ActRechunk, bck, Args{Custom: args, UUID: uuid})
+func RenewBckRechunks(bck *meta.Bck, uuid string, msg *apc.RechunkMsg) RenewRes {
+	return RenewBucketXact(apc.ActRechunk, bck, Args{Custom: msg, UUID: uuid})
 }
 
 func RenewPutMirror(lom *core.LOM) RenewRes {

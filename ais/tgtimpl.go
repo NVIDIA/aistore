@@ -54,7 +54,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) (err error) {
 		poi.size = params.Size
 		poi.owt = params.OWT
 		poi.skipEC = params.SkipEC
-		poi.coldGET = params.ColdGET
+		poi.skipBackend = params.SkipBackend
 		poi.locked = params.Locked
 	}
 	if poi.owt != cmn.OwtPut {

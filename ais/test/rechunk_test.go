@@ -14,7 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -22,6 +24,15 @@ import (
 )
 
 func TestRechunk(t *testing.T) {
+	runProviderTests(t, testRechunk)
+}
+
+func testRechunk(t *testing.T, bck *meta.Bck) {
+	// Skip mirrored buckets - mirroring and chunking are mutually exclusive
+	if bck.Props.Mirror.Enabled {
+		t.Skip("skipping: mirroring and chunking cannot be enabled together")
+	}
+
 	// 1) provision small and large sized objects in the same bucket with `ioContexts.chunksConf` set to `initialLimit`
 	// 2) rechunk using api.RechunkBucket (direct POST approach)
 	// 3) verify the chunking state of the objects
@@ -78,7 +89,7 @@ func TestRechunk(t *testing.T) {
 	for _, tt := range tests {
 		for _, approach := range []string{"xaction", "post"} {
 			t.Run(tt.name+"/"+approach, func(t *testing.T) {
-				testRechunkScenario(t, tt.smallSize, tt.largeSize, tt.initialLimit, tt.finalLimit, tt.chunkSize, approach)
+				testRechunkScenario(t, bck, tt.smallSize, tt.largeSize, tt.initialLimit, tt.finalLimit, tt.chunkSize, approach)
 			})
 		}
 	}
@@ -87,7 +98,7 @@ func TestRechunk(t *testing.T) {
 // startRechunk triggers rechunk using one of two approaches:
 // - "xaction": Change bucket props + `api.StartXaction`
 // - "post": Direct `api.RechunkBucket` call
-func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64, approach string) (xid string, err error) {
+func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64, prefix, approach string) (xid string, err error) {
 	t.Helper()
 
 	switch approach {
@@ -109,7 +120,7 @@ func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeL
 		return api.StartXaction(baseParams, xargs, "")
 
 	case "post":
-		return api.RechunkBucket(baseParams, bck, objSizeLimit, chunkSize, "" /*prefix*/)
+		return api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{ObjSizeLimit: objSizeLimit, ChunkSize: chunkSize, Prefix: prefix})
 
 	default:
 		t.Fatalf("unknown rechunk approach: %q (must be 'xaction' or 'post')", approach)
@@ -117,30 +128,39 @@ func startRechunk(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objSizeL
 	}
 }
 
-func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, finalLimit, chunkSize int64, approach string) {
+func testRechunkScenario(t *testing.T, bckMeta *meta.Bck, smallSize, largeSize, initialLimit, finalLimit, chunkSize int64, approach string) {
 	var (
 		numSmall   = 5
 		numLarge   = 5
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		bck        = cmn.Bck{
-			Name:     trand.String(10),
-			Provider: apc.AIS,
-		}
+		err        error
 	)
 
-	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	// For file size range calculation, use the original chunkSize to keep object sizes small
+	fileSizeDelta := chunkSize
+
+	// For cloud backends, use 5MiB chunk size (minimum) to avoid exceeding 9999 chunk limit
+	// when adjustFileSizeRange bumps object sizes to 70-140MiB
+	provider := bckMeta.Provider
+	if bckMeta.Backend() != nil {
+		provider = bckMeta.Backend().Provider
+	}
+	if provider == apc.AWS || provider == apc.GCP || provider == apc.OCI {
+		chunkSize = 5 * cos.MiB
+	}
+
 	initMountpaths(t, proxyURL)
 
 	// Save original bucket props for cleanup
-	p, err := api.HeadBucket(baseParams, bck, false)
-	tassert.CheckFatal(t, err)
+	origChunks := bckMeta.Props.Chunks
+	bck := bckMeta.Clone()
 
 	t.Cleanup(func() {
 		_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
 			Chunks: &cmn.ChunksConfToSet{
-				ObjSizeLimit: apc.Ptr(p.Chunks.ObjSizeLimit),
-				ChunkSize:    apc.Ptr(p.Chunks.ChunkSize),
+				ObjSizeLimit: apc.Ptr(origChunks.ObjSizeLimit),
+				ChunkSize:    apc.Ptr(origChunks.ChunkSize),
 			},
 		})
 		tassert.CheckError(t, err)
@@ -160,12 +180,14 @@ func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, final
 	tlog.Logfln("Creating %d small objects (size=%s) and %d large objects (size=%s)...",
 		numSmall, cos.ToSizeIEC(smallSize, 0), numLarge, cos.ToSizeIEC(largeSize, 0))
 
+	// Use unique prefix for isolation in shared remote buckets
+	testPrefix := "rechunk/" + trand.String(8) + "/"
 	mSmall := ioContext{
 		t:             t,
 		bck:           bck,
 		num:           numSmall,
-		fileSizeRange: [2]uint64{uint64(smallSize + 1), uint64(smallSize + chunkSize - 1)},
-		prefix:        "small-",
+		fileSizeRange: [2]uint64{uint64(smallSize + 1), uint64(smallSize + fileSizeDelta - 1)},
+		prefix:        testPrefix + "small-",
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
 	if initialLimit > 0 && smallSize > initialLimit {
@@ -179,9 +201,11 @@ func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, final
 		t:             t,
 		bck:           bck,
 		num:           numLarge,
-		fileSizeRange: [2]uint64{uint64(largeSize + 1), uint64(largeSize + chunkSize - 1)},
-		prefix:        "large-",
+		fileSizeRange: [2]uint64{uint64(largeSize + 1), uint64(largeSize + fileSizeDelta - 1)},
+		prefix:        testPrefix + "large-",
 		chunksConf:    &ioCtxChunksConf{multipart: false},
+
+		skipRemoteEvict: true, // don't evict cached objects from mSmall
 	}
 	if initialLimit > 0 && largeSize > initialLimit {
 		maxSize := int64(mLarge.fileSizeRange[1])
@@ -191,14 +215,14 @@ func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, final
 	mLarge.puts()
 
 	// Verify initial state
-	validateChunking(t, baseParams, bck, initialLimit, chunkSize, &mSmall, &mLarge, "initial")
+	validateChunking(t, baseParams, bck, initialLimit, chunkSize, &mSmall, &mLarge, testPrefix, "initial")
 
-	// Start rechunk with new config
-	tlog.Logfln("Starting rechunk (approach=%s, limit=%s, chunkSize=%s)...", approach, cos.ToSizeIEC(finalLimit, 0), cos.ToSizeIEC(chunkSize, 0))
-	xid, err := startRechunk(t, baseParams, bck, finalLimit, chunkSize, approach)
+	// Start rechunk with new config (only objects with our test prefix)
+	tlog.Logfln("Starting rechunk (approach=%s, limit=%s, chunkSize=%s, prefix=%s)...", approach, cos.ToSizeIEC(finalLimit, 0), cos.ToSizeIEC(chunkSize, 0), testPrefix)
+	xid, err := startRechunk(t, baseParams, bck, finalLimit, chunkSize, testPrefix, approach)
 	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
 		// can retry
-		xid, err = startRechunk(t, baseParams, bck, finalLimit, chunkSize, approach)
+		xid, err = startRechunk(t, baseParams, bck, finalLimit, chunkSize, testPrefix, approach)
 	}
 
 	tassert.CheckFatal(t, err)
@@ -210,7 +234,7 @@ func testRechunkScenario(t *testing.T, smallSize, largeSize, initialLimit, final
 	tassert.CheckFatal(t, err)
 
 	// Verify final state after rechunk
-	validateChunking(t, baseParams, bck, finalLimit, chunkSize, &mSmall, &mLarge, "after rechunk")
+	validateChunking(t, baseParams, bck, finalLimit, chunkSize, &mSmall, &mLarge, testPrefix, "after rechunk")
 
 	tlog.Logfln("SUCCESS: Rechunk completed and validated")
 }
@@ -247,12 +271,13 @@ func TestRechunkAbort(t *testing.T) {
 		tassert.CheckError(t, err)
 	})
 
+	testPrefix := "rechunk-abort/" + trand.String(8) + "/"
 	m := ioContext{
 		t:             t,
 		bck:           bck,
 		num:           numObjs,
 		fileSizeRange: [2]uint64{uint64(objSize), uint64(objSize + chunkSize - 1)},
-		prefix:        "rechunk-abort-",
+		prefix:        testPrefix,
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
 	m.init(true /*cleanup*/)
@@ -260,7 +285,7 @@ func TestRechunkAbort(t *testing.T) {
 
 	// Start rechunk with xaction approach
 	tlog.Logfln("Starting rechunk (limit=%s, chunkSize=%s)...", cos.ToSizeIEC(int64(sizeLimit), 0), cos.ToSizeIEC(int64(chunkSize), 0))
-	xid, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), "xaction")
+	xid, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), testPrefix, "xaction")
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 	tlog.Logfln("Rechunk xaction started with ID: %s", xid)
@@ -368,13 +393,14 @@ func testRechunkTwiceScenario(t *testing.T, firstProps, secondProps chunkProps, 
 	})
 
 	// Create objects as monolithic (no chunking initially)
+	testPrefix := "rechunk-twice/" + trand.String(8) + "/"
 	tlog.Logfln("Creating %d objects (size=%s) as monolithic...", numObjs, cos.ToSizeIEC(int64(objSize), 0))
 	m := ioContext{
 		t:             t,
 		bck:           bck,
 		num:           numObjs,
 		fileSizeRange: [2]uint64{uint64(objSize), uint64(objSize + int(firstProps.chunkSize) - 1)},
-		prefix:        "rechunk-twice-",
+		prefix:        testPrefix,
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
 	m.init(true /*cleanup*/)
@@ -383,7 +409,7 @@ func testRechunkTwiceScenario(t *testing.T, firstProps, secondProps chunkProps, 
 	// Start first rechunk with xaction approach
 	tlog.Logfln("Starting first rechunk (limit=%s, chunkSize=%s)...",
 		cos.ToSizeIEC(firstProps.sizeLimit, 0), cos.ToSizeIEC(firstProps.chunkSize, 0))
-	xid1, err := startRechunk(t, baseParams, bck, firstProps.sizeLimit, firstProps.chunkSize, "xaction")
+	xid1, err := startRechunk(t, baseParams, bck, firstProps.sizeLimit, firstProps.chunkSize, testPrefix, "xaction")
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, xid1 != "", "first rechunk xaction ID should not be empty")
 	tlog.Logfln("First rechunk xaction started with ID: %s", xid1)
@@ -588,7 +614,11 @@ func TestRechunkPrefix(t *testing.T) {
 	// Run rechunk with prefix filter using api.RechunkBucket
 	tlog.Logfln("Starting rechunk with prefix filter %q (limit=%s, chunkSize=%s)...",
 		targetPrefix, cos.ToSizeIEC(int64(sizeLimit), 0), cos.ToSizeIEC(int64(chunkSize), 0))
-	xid, err := api.RechunkBucket(baseParams, bck, int64(sizeLimit), int64(chunkSize), targetPrefix)
+	xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{
+		ObjSizeLimit: int64(sizeLimit),
+		ChunkSize:    int64(chunkSize),
+		Prefix:       targetPrefix,
+	})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 	tlog.Logfln("Rechunk xaction started with ID: %s", xid)
@@ -688,13 +718,14 @@ func TestRechunkIdempotent(t *testing.T) {
 	})
 
 	// Create small objects
+	testPrefix := "rechunk-idempotent/" + trand.String(8) + "/"
 	tlog.Logfln("Creating %d small objects (size=%s)...", numSmall, cos.ToSizeIEC(int64(smallSize), 0))
 	mSmall := ioContext{
 		t:             t,
 		bck:           bck,
 		num:           numSmall,
 		fileSizeRange: [2]uint64{uint64(smallSize), uint64(smallSize + cos.KiB - 1)},
-		prefix:        "small-",
+		prefix:        testPrefix + "small-",
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
 	mSmall.init(true /*cleanup*/)
@@ -707,7 +738,7 @@ func TestRechunkIdempotent(t *testing.T) {
 		bck:           bck,
 		num:           numLarge,
 		fileSizeRange: [2]uint64{uint64(largeSize), uint64(largeSize + cos.KiB - 1)},
-		prefix:        "large-",
+		prefix:        testPrefix + "large-",
 		chunksConf:    &ioCtxChunksConf{multipart: false},
 	}
 	mLarge.init(true /*cleanup*/)
@@ -716,7 +747,7 @@ func TestRechunkIdempotent(t *testing.T) {
 	// First rechunk with xaction approach
 	tlog.Logfln("Starting first rechunk (limit=%s, chunkSize=%s)...",
 		cos.ToSizeIEC(int64(sizeLimit), 0), cos.ToSizeIEC(int64(chunkSize), 0))
-	xid1, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), "xaction")
+	xid1, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), testPrefix, "xaction")
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("First rechunk xaction started with ID: %s", xid1)
 
@@ -728,7 +759,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Validate: only large objects should be chunked
 	tlog.Logln("Validating chunking state after first rechunk...")
-	validateChunking(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), &mSmall, &mLarge, "after first rechunk")
+	validateChunking(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), &mSmall, &mLarge, testPrefix, "after first rechunk")
 
 	// Capture first rechunk state
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
@@ -745,7 +776,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Second rechunk (idempotent - same config, xaction approach)
 	tlog.Logln("Starting second rechunk xaction (idempotent)...")
-	xid2, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), "xaction")
+	xid2, err := startRechunk(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), testPrefix, "xaction")
 	tassert.CheckFatal(t, err)
 	tlog.Logfln("Second rechunk xaction started with ID: %s", xid2)
 
@@ -757,7 +788,7 @@ func TestRechunkIdempotent(t *testing.T) {
 
 	// Validate: chunking state should be identical
 	tlog.Logln("Validating chunking state after second rechunk (should be identical)...")
-	validateChunking(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), &mSmall, &mLarge, "after second rechunk")
+	validateChunking(t, baseParams, bck, int64(sizeLimit), int64(chunkSize), &mSmall, &mLarge, testPrefix, "after second rechunk")
 
 	// Capture second rechunk state
 	lst2, err := api.ListObjects(baseParams, bck, lsmsg, api.ListArgs{})
@@ -787,13 +818,16 @@ func TestRechunkIdempotent(t *testing.T) {
 
 // validateChunking validates chunking state via both list API and disk inspection
 func validateChunking(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, sizeLimit, chunkSize int64,
-	mSmall, mLarge *ioContext, stage string) {
+	mSmall, mLarge *ioContext, testPrefix, stage string) {
 	t.Helper()
 
 	tlog.Logfln("Validating chunking state (%s)...", stage)
 
-	// List objects with chunked property
-	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
+	// Use LsCached to get local metadata (including chunked flag) for remote/backend buckets
+	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked, Prefix: testPrefix}
+	if bck.IsRemote() {
+		lsmsg.Flags = apc.LsCached
+	}
 	lst, err := api.ListObjects(baseParams, bck, lsmsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
@@ -809,8 +843,9 @@ func validateChunking(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, size
 
 	for _, entry := range lst.Entries {
 		isChunked := (entry.Flags & apc.EntryIsChunked) != 0
-		isSmall := strings.HasPrefix(entry.Name, "small-")
-		isLarge := strings.HasPrefix(entry.Name, "large-")
+		// Check if entry name starts with the small/large prefix from ioContext
+		isSmall := strings.HasPrefix(entry.Name, mSmall.prefix)
+		isLarge := strings.HasPrefix(entry.Name, mLarge.prefix)
 
 		if isSmall {
 			smallTotal++
@@ -857,6 +892,12 @@ func validateChunking(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, size
 func validateChunksOnDisk(t *testing.T, m *ioContext, shouldBeChunked bool, chunkSize int64) {
 	t.Helper()
 
+	// Skip on-disk validation for remote buckets - chunk sizes are adjusted
+	// by adjustFileSizeRange() for cloud backends (AWS/GCP require 5MiB minimum)
+	if m.bck.IsRemote() {
+		return
+	}
+
 	for _, objName := range m.objNames {
 		chunks := m.findObjChunksOnDisk(m.bck, objName)
 
@@ -881,4 +922,232 @@ func validateChunksOnDisk(t *testing.T, m *ioContext, shouldBeChunked bool, chun
 			}
 		}
 	}
+}
+
+// TestRechunkSyncRemote tests rechunk with SyncRemote option on remote buckets.
+// For remote buckets: rechunk with SyncRemote=true should upload chunks to remote via multipart.
+//
+// Validation strategy varies by backend:
+//   - S3: Check ETag format (multipart ETags have "-<partcount>" suffix)
+//   - remais: HEAD remote cluster directly to verify chunked status
+//   - Others: Validate operation completes successfully
+func TestRechunkSyncRemote(t *testing.T) {
+	runProviderTests(t, testRechunkSyncRemote)
+}
+
+func testRechunkSyncRemote(t *testing.T, bck *meta.Bck) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		// Use unique prefix for isolation in shared remote buckets
+		testPrefix = "rechunk-sync/" + trand.String(8) + "/"
+		objName    = testPrefix + trand.String(10)
+		// Default sizes for remais (local AIS remote)
+		objSize   = int64(100 * cos.KiB)
+		chunkSize = int64(16 * cos.KiB)
+		sizeLimit = int64(50 * cos.KiB)
+	)
+
+	// Only test SyncRemote on remote buckets (remote or has backend)
+	isRemote := bck.IsRemote() || bck.Backend() != nil
+	if !isRemote {
+		tlog.Logln("Skipping SyncRemote test for local bucket (no remote to sync to)")
+		return
+	}
+
+	// Determine effective provider (for backend buckets, use the backend provider)
+	provider := bck.Provider
+	if bck.Backend() != nil {
+		provider = bck.Backend().Provider
+	}
+
+	// S3/OCI require minimum 5MB part size for multipart uploads
+	if provider == apc.AWS || provider == apc.OCI {
+		objSize = int64(12 * cos.MiB)  // ~12MB object
+		chunkSize = int64(5 * cos.MiB) // 5MB minimum part size
+		sizeLimit = int64(6 * cos.MiB) // trigger chunking for objects > 6MB
+	}
+
+	tlog.Logfln("Testing SyncRemote on bucket %s (provider=%s, objSize=%s, chunkSize=%s)",
+		bck.Cname(""), provider, cos.ToSizeIEC(objSize, 0), cos.ToSizeIEC(chunkSize, 0))
+
+	// Put a large object (will be chunked after rechunk)
+	reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: baseParams,
+		Bck:        bck.Clone(),
+		ObjName:    objName,
+		Reader:     reader,
+		Size:       uint64(objSize),
+	})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		api.DeleteObject(baseParams, bck.Clone(), objName)
+	})
+
+	// Rechunk with SyncRemote=true (only objects with our test prefix)
+	tlog.Logfln("Rechunking with SyncRemote=true (limit=%s, chunkSize=%s, prefix=%s)...",
+		cos.ToSizeIEC(sizeLimit, 0), cos.ToSizeIEC(chunkSize, 0), testPrefix)
+	xid, err := api.RechunkBucket(baseParams, bck.Clone(), &apc.RechunkMsg{
+		ObjSizeLimit: sizeLimit,
+		ChunkSize:    chunkSize,
+		Prefix:       testPrefix, // only rechunk objects with our test prefix
+		SyncRemote:   true,       // sync to remote backend
+	})
+	tassert.CheckFatal(t, err)
+
+	// Wait for rechunk to complete
+	_, err = api.WaitForXactionIC(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck.Clone(), Timeout: 2 * time.Minute})
+	tassert.CheckFatal(t, err)
+
+	// Verify object is chunked locally
+	// Use LsCached to request local/cached metadata (including chunked flag) for cloud buckets
+	lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked, Prefix: objName, Flags: apc.LsCached}
+	lst, err := api.ListObjects(baseParams, bck.Clone(), lsmsg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(lst.Entries) == 1, "expected 1 object, got %d", len(lst.Entries))
+	entry := lst.Entries[0]
+	tassert.Fatalf(t, (entry.Flags&apc.EntryIsChunked) != 0, "object should be chunked after rechunk")
+
+	tlog.Logln("SyncRemote rechunk completed successfully")
+
+	// Provider-specific validation for multipart upload to remote
+	validateSyncRemote(t, baseParams, bck, objName, objSize, chunkSize)
+}
+
+// validateSyncRemote performs provider-specific validation that SyncRemote worked.
+//
+// Validation strategies:
+//   - remais: HEAD remote cluster directly, validate chunk count and max chunk size
+//   - AWS/OCI: Check ETag format (multipart uploads have "-<partcount>" suffix)
+//   - GCS/Azure: TODO - validation not yet implemented
+func validateSyncRemote(t *testing.T, baseParams api.BaseParams, bck *meta.Bck, objName string, objSize, chunkSize int64) {
+	provider := bck.Provider
+	if bck.Backend() != nil {
+		provider = bck.Backend().Provider
+	}
+
+	switch provider {
+	case apc.AIS:
+		// remais: HEAD the remote cluster directly to verify chunked status
+		validateSyncRemoteAIS(t, bck, objName, objSize, chunkSize)
+
+	case apc.AWS, apc.OCI:
+		// AWS S3 and OCI (S3-compatible API) multipart ETags have format: "<md5>-<partcount>"
+		validateSyncRemoteS3(t, baseParams, bck, objName)
+
+	case apc.GCP, apc.Azure:
+		// TODO: GCS and Azure multipart upload validation not yet implemented
+		tlog.Logfln("Provider %q: SyncRemote completed (validation not yet implemented)", provider)
+
+	default:
+		tlog.Logfln("Provider %q: SyncRemote completed (no provider-specific validation)", provider)
+	}
+}
+
+// validateSyncRemoteAIS validates SyncRemote by HEAD-ing the remote AIS cluster directly.
+func validateSyncRemoteAIS(t *testing.T, bck *meta.Bck, objName string, objSize, chunkSize int64) {
+	if tools.RemoteCluster.UUID == "" {
+		tlog.Logln("remais: remote cluster not configured - skipping validation")
+		return
+	}
+
+	// Create BaseParams for the remote cluster
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+
+	// The remote bucket is the same bucket but without the namespace (we're querying remote directly)
+	remoteBck := cmn.Bck{Name: bck.Name, Provider: apc.AIS}
+
+	// HEAD the object on the remote cluster with chunked props
+	props := apc.GetPropsChunked + apc.LsPropsSepa + apc.GetPropsSize
+	opV2, err := api.HeadObjectV2(remoteBP, remoteBck, objName, props, api.HeadArgs{})
+	tassert.CheckFatal(t, err)
+
+	// Validate size
+	tassert.Fatalf(t, opV2.Size == objSize, "remote object size mismatch: expected %d, got %d", objSize, opV2.Size)
+
+	// Validate chunk properties
+	tassert.Fatalf(t, opV2.Chunks != nil, "remote object should have chunks metadata")
+
+	expectedChunkCount := int((objSize + chunkSize - 1) / chunkSize) // ceiling division
+	tassert.Fatalf(t, opV2.Chunks.ChunkCount == expectedChunkCount,
+		"remote chunk count mismatch: expected %d, got %d", expectedChunkCount, opV2.Chunks.ChunkCount)
+	tassert.Fatalf(t, opV2.Chunks.MaxChunkSize > 0 && opV2.Chunks.MaxChunkSize <= chunkSize,
+		"remote max chunk size should be > 0 and <= %d, got %d", chunkSize, opV2.Chunks.MaxChunkSize)
+
+	tlog.Logfln("remais: SyncRemote validated - remote has %d chunks, max size %s",
+		opV2.Chunks.ChunkCount, cos.ToSizeIEC(opV2.Chunks.MaxChunkSize, 0))
+}
+
+// validateSyncRemoteS3 validates SyncRemote for S3-compatible backends (AWS, OCI).
+// Multipart upload ETags have format: "<md5>-<partcount>" (e.g., "d41d8cd98f00b204e9800998ecf8427e-5")
+func validateSyncRemoteS3(t *testing.T, baseParams api.BaseParams, bck *meta.Bck, objName string) {
+	opV2, err := api.HeadObjectV2(baseParams, bck.Clone(), objName, "", api.HeadArgs{})
+	tassert.CheckFatal(t, err)
+
+	etag := opV2.ETag
+	if etag == "" {
+		tlog.Logln("Warning: No ETag returned - cannot validate multipart upload")
+		return
+	}
+
+	tassert.Fatalf(t, cmn.IsS3MultipartEtag(etag),
+		"ETag %q does not indicate multipart upload (expected format: <hash>-<partcount>)", etag)
+
+	tlog.Logfln("S3/OCI: SyncRemote validated - ETag %q indicates multipart upload", etag)
+}
+
+func TestRechunkErrorCapture(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName    = "large-obj"
+		objSize    = 10 * cos.MiB       // 10MiB object
+		chunkSize  = int64(1 * cos.KiB) // 1KiB chunks = 10240 chunks > 9999 limit
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// Create object with checksum for later validation
+	r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: int64(objSize), CksumType: cos.ChecksumNone})
+	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objName, Reader: r, Size: uint64(objSize)})
+	tassert.CheckFatal(t, err)
+
+	// Rechunk with tiny chunk size to exceed 9999 limit
+	xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{ObjSizeLimit: 1, ChunkSize: chunkSize})
+	tassert.CheckFatal(t, err)
+
+	// Wait for xaction to finish AND have error recorded
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Bck: bck, Timeout: time.Minute}
+	var errMsg string
+	finishedWithErr := func(snaps xact.MultiSnap) (done, reset bool, err error) {
+		var finished bool
+		for _, targetSnaps := range snaps {
+			for _, snap := range targetSnaps {
+				if snap.ID == xid {
+					finished = finished || snap.IsFinished()
+					if snap.Err != "" {
+						errMsg = snap.Err
+					}
+				}
+			}
+		}
+		return finished && errMsg != "", false, nil
+	}
+	_, err = api.WaitForSnaps(baseParams, args, finishedWithErr)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, errMsg != "", "expected error but got none")
+	tassert.Fatalf(t, strings.Contains(errMsg, "exceeds the maximum"), "expected 'exceeds the maximum' error, got: %s", errMsg)
+	tlog.Logf("Got expected error: %s\n", errMsg)
+
+	// Verify object is not corrupted: reset reader and compare with fetched object
+	reader, err := r.Open()
+	tassert.CheckFatal(t, err)
+	defer reader.Close()
+	getReader, size, err := api.GetObjectReader(baseParams, bck, objName, nil)
+	tassert.CheckFatal(t, err)
+	defer getReader.Close()
+	tassert.Fatalf(t, size == int64(objSize), "expected size %d, got %d", objSize, size)
+	tassert.Fatalf(t, tools.ReaderEqual(reader, getReader), "content mismatch")
 }

@@ -261,7 +261,7 @@ func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
 		params.Cksum = res.ExpCksum
 		params.Size = res.Size
 		params.Atime = time.Now()
-		params.ColdGET = true
+		params.SkipBackend = true
 	}
 	return params
 }

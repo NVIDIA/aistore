@@ -1170,7 +1170,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 			}
 		}
 		var uploadID string
-		if uploadID, err = t.ups.start(r, lom, false /*coldGET*/); err == nil {
+		if uploadID, err = t.ups.start(r, lom, false /*skipBackend*/); err == nil {
 			writeXid(w, uploadID)
 		}
 	case apc.ActMptComplete:

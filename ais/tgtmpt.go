@@ -41,27 +41,27 @@ type (
 		sync.RWMutex
 	}
 	partArgs struct {
-		req      *http.Request
-		reader   io.ReadCloser
-		lom      *core.LOM
-		manifest *core.Ufest
-		chunk    *core.Uchunk
-		fh       io.WriteCloser
-		uploadID string
-		partNum  int
-		size     int64 // take precedence over req.ContentLength
-		isS3     bool
-		coldGET  bool
+		req         *http.Request
+		reader      io.ReadCloser
+		lom         *core.LOM
+		manifest    *core.Ufest
+		chunk       *core.Uchunk
+		fh          io.WriteCloser
+		uploadID    string
+		partNum     int
+		size        int64 // take precedence over req.ContentLength
+		isS3        bool
+		skipBackend bool
 	}
 	completeArgs struct {
-		r        *http.Request
-		lom      *core.LOM
-		uploadID string
-		body     []byte
-		parts    apc.MptCompletedParts
-		isS3     bool
-		coldGET  bool
-		locked   bool // true if the LOM is already locked by the caller
+		r           *http.Request
+		lom         *core.LOM
+		uploadID    string
+		body        []byte
+		parts       apc.MptCompletedParts
+		isS3        bool
+		skipBackend bool
+		locked      bool // true if the LOM is already locked by the caller
 	}
 )
 
@@ -160,11 +160,14 @@ func (ups *ups) del(id string) {
 
 func (*ups) encodeRemoteMetadata(lom *core.LOM, metadata map[string]string) (md map[string]string) {
 	bck := lom.Bck()
-	if bck.IsRemoteS3() {
+	switch {
+	case bck.IsRemoteS3():
 		md = cmn.BackendHelpers.Amazon.EncodeMetadata(metadata)
-	} else {
-		debug.Assert(bck.IsRemoteOCI())
+	case bck.IsRemoteOCI():
 		md = cmn.BackendHelpers.OCI.EncodeMetadata(metadata)
+	default:
+		// For other remotes (e.g., remais), return metadata as-is
+		md = metadata
 	}
 	return
 }
@@ -254,23 +257,27 @@ slow: // slow path (same +sort)
 // upload API verbs: (start | putPart | complete | abort)
 //
 
-func (ups *ups) start(r *http.Request, lom *core.LOM, coldGET bool) (uploadID string, err error) {
-	uploadID, metadata, err := ups._start(r, lom, coldGET)
+func (ups *ups) start(r *http.Request, lom *core.LOM, skipBackend bool) (uploadID string, err error) {
+	uploadID, metadata, err := ups._start(r, lom, skipBackend)
 	if err != nil {
 		return
 	}
 	return uploadID, ups.init(uploadID, lom, metadata)
 }
 
-func (ups *ups) _start(r *http.Request, lom *core.LOM, coldGET bool) (uploadID string, metadata map[string]string, err error) {
+func (ups *ups) _start(r *http.Request, lom *core.LOM, skipBackend bool) (uploadID string, metadata map[string]string, err error) {
 	bck := lom.Bck()
-	if bck.IsRemote() && !coldGET {
-		// coldGET implies no need to write to backend
+	if bck.IsRemote() && !skipBackend {
+		// Extract metadata:
+		// - from HTTP request headers if available (normal upload path)
+		// - from LOM's existing custom metadata if no request (e.g., rechunk SyncRemote)
 		switch {
-		case bck.IsRemoteS3():
+		case r != nil && bck.IsRemoteS3():
 			metadata = cmn.BackendHelpers.Amazon.DecodeMetadata(r.Header)
-		case bck.IsRemoteOCI():
+		case r != nil && bck.IsRemoteOCI():
 			metadata = cmn.BackendHelpers.OCI.DecodeMetadata(r.Header)
+		default:
+			metadata = lom.GetCustomMD()
 		}
 		uploadID, _, err = ups.t.Backend(bck).StartMpt(lom, r)
 	} else {
@@ -364,7 +371,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		mw               = cos.IniWriterMulti(writers...)
 	)
 	switch {
-	case !remote || args.coldGET:
+	case !remote || args.skipBackend:
 		// no need to write to backend
 		buf, slab := t.gmm.AllocSize(rsize)
 		expectedSize, err = io.CopyBuffer(mw, reader, buf)
@@ -502,7 +509,7 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 
 	// call remote
 	remote := lom.Bck().IsRemote()
-	if remote && !args.coldGET { // coldGET implies no need to write to backend
+	if remote && !args.skipBackend { // skipBackend implies no need to write to backend
 		// NOTE: only OCI, AWS and GCP backends require ETag in the part list
 		if lom.Bck().IsRemoteS3() || lom.Bck().IsRemoteOCI() || lom.Bck().IsRemoteGCP() {
 			for i := range args.parts {

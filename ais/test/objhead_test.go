@@ -425,7 +425,7 @@ func TestObjHeadV2Selective(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// Run rechunk job
-		xid, err := api.RechunkBucket(baseParams, bck, objSizeLimit, chunkSize, "")
+		xid, err := api.RechunkBucket(baseParams, bck, &apc.RechunkMsg{ObjSizeLimit: objSizeLimit, ChunkSize: chunkSize})
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, xid != "", "rechunk xaction ID should not be empty")
 

@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/xact/xreg"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -295,18 +294,14 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 	return err
 }
 
-func RechunkBucket(bp BaseParams, bck cmn.Bck, objSizeLimit, chunkSize int64, prefix string) (xid string, err error) {
+func RechunkBucket(bp BaseParams, bck cmn.Bck, msg *apc.RechunkMsg) (xid string, err error) {
 	q := qalloc()
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActRechunk, Value: &xreg.RechunkArgs{
-			Prefix:       prefix,
-			ObjSizeLimit: objSizeLimit,
-			ChunkSize:    chunkSize,
-		}})
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActRechunk, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.AddToQuery(q)
 	}

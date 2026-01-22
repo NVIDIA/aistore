@@ -101,6 +101,18 @@ func (*PrefetchMsg) delim(sb *cos.SB) {
 	}
 }
 
+// rechunk
+// swagger:model
+// Rechunk transforms object storage format (monolithic <-> chunked).
+// By default, rechunk operates only on in-cluster (cached) objects - it does not
+// fetch objects from remote backends. Use `SyncRemote=true` to also update remote storage.
+type RechunkMsg struct {
+	ObjSizeLimit int64  `json:"objsize-limit"` // 0: disable chunking (restore existing chunks to monolithic); > 0: chunk objects >= this size
+	ChunkSize    int64  `json:"chunk-size"`    // size of each chunk
+	Prefix       string `json:"prefix"`        // only rechunk objects with this prefix
+	SyncRemote   bool   `json:"sync-remote"`   // if true, also write rechunked objects to remote backend (default: false, local-only)
+}
+
 // ArchiveMsg contains the parameters (all except the destination bucket)
 // for archiving multiple objects as one of the supported archive.FileExtensions types
 // at the specified (bucket) destination.

@@ -98,6 +98,7 @@ type (
 		getErrIsFatal       bool
 		silent              bool
 		deleteRemoteBckObjs bool
+		skipRemoteEvict     bool // skip initial evict/delete for remote buckets (useful when multiple ioContexts share a bucket)
 		ordered             bool // true - object names make sequence, false - names are random
 		skipVC              bool // skip loading existing object's metadata (see also: apc.QparamSkipVC and api.PutArgs.SkipVC)
 	}
@@ -175,7 +176,7 @@ func (m *ioContext) init(cleanup bool) {
 	// NOTE: randomize skipVC (may need to assign explicitly in the future)
 	m.skipVC = mono.NanoTime()&1 == 0
 
-	if m.bck.IsRemote() {
+	if m.bck.IsRemote() && !m.skipRemoteEvict {
 		if m.deleteRemoteBckObjs {
 			m.del(-1 /*delete all*/, 0 /* lsmsg.Flags */)
 		} else {

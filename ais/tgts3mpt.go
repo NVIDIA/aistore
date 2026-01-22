@@ -42,7 +42,7 @@ func (t *target) startMptS3(w http.ResponseWriter, r *http.Request, items []stri
 		return
 	}
 
-	uploadID, err := t.ups.start(r, lom, false /*coldGET*/)
+	uploadID, err := t.ups.start(r, lom, false /*skipBackend*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

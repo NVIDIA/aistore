@@ -49,27 +49,27 @@ import (
 
 type (
 	putOI struct {
-		oreq       *http.Request
-		r          io.ReadCloser // content reader
-		xctn       core.Xact     // xaction that puts
-		t          *target       // this
-		lom        *core.LOM     // obj
-		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
-		config     *cmn.Config   // (during this request)
-		resphdr    http.Header   // as implied
-		workFQN    string        // temp fqn to be renamed
-		atime      int64         // access time.Now()
-		ltime      int64         // mono.NanoTime, to measure latency
-		rltime     int64         // mono.NanoTime, to measure remote bucket latency
-		size       int64         // aka Content-Length
-		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
-		restful    bool          // being invoked via RESTful API
-		t2t        bool          // by another target
-		skipEC     bool          // do not erasure-encode when finalizing
-		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
-		coldGET    bool          // (one implication: proceed to write)
-		locked     bool          // true if the LOM is already locked by the caller
-		remoteErr  bool          // to exclude `putRemote` errors when counting soft IO errors
+		oreq        *http.Request
+		r           io.ReadCloser // content reader
+		xctn        core.Xact     // xaction that puts
+		t           *target       // this
+		lom         *core.LOM     // obj
+		cksumToUse  *cos.Cksum    // if available (not `none`), can be validated and will be stored
+		config      *cmn.Config   // (during this request)
+		resphdr     http.Header   // as implied
+		workFQN     string        // temp fqn to be renamed
+		atime       int64         // access time.Now()
+		ltime       int64         // mono.NanoTime, to measure latency
+		rltime      int64         // mono.NanoTime, to measure remote bucket latency
+		size        int64         // aka Content-Length
+		owt         cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
+		restful     bool          // being invoked via RESTful API
+		t2t         bool          // by another target
+		skipEC      bool          // do not erasure-encode when finalizing
+		skipVC      bool          // skip loading existing Version and skip comparing Checksums (skip VC)
+		skipBackend bool          // don't write to backend (e.g., cold-GET caching, rechunk)
+		locked      bool          // true if the LOM is already locked by the caller
+		remoteErr   bool          // to exclude `putRemote` errors when counting soft IO errors
 	}
 
 	getOI struct {
@@ -184,10 +184,9 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		lom      = poi.lom
 		uploadID string
 	)
-	debug.Assertf(!poi.coldGET || poi.locked, "expecting locked LOM for cold-GET")
 
 	debug.Assertf(poi.size > 0, "poi.size is required in chunk, object name: %s", poi.lom.Cname())
-	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.coldGET); err != nil {
+	if uploadID, err = poi.t.ups.start(poi.oreq, lom, poi.skipBackend); err != nil {
 		poi.t.ups.abort(poi.oreq, lom, uploadID)
 		return http.StatusInternalServerError, err
 	}
@@ -211,12 +210,12 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		chunkReader := io.NopCloser(limitedReader)
 
 		args := partArgs{
-			reader:   chunkReader,
-			size:     thisChunkSize,
-			lom:      lom,
-			uploadID: uploadID,
-			partNum:  partNum,
-			coldGET:  poi.coldGET,
+			reader:      chunkReader,
+			size:        thisChunkSize,
+			lom:         lom,
+			uploadID:    uploadID,
+			partNum:     partNum,
+			skipBackend: poi.skipBackend,
 		}
 		etag, ec, er := poi.t.ups.putPart(&args)
 		if er != nil {
@@ -237,14 +236,14 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 	}
 
 	_, ecode, err = poi.t.ups.complete(&completeArgs{
-		r:        poi.oreq,
-		lom:      lom,
-		uploadID: uploadID,
-		body:     nil,
-		parts:    completedParts,
-		isS3:     false,
-		coldGET:  poi.coldGET,
-		locked:   poi.locked,
+		r:           poi.oreq,
+		lom:         lom,
+		uploadID:    uploadID,
+		body:        nil,
+		parts:       completedParts,
+		isS3:        false,
+		skipBackend: poi.skipBackend,
+		locked:      poi.locked,
 	})
 	return ecode, err
 }
@@ -262,7 +261,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	poi.ltime = mono.NanoTime()
 
 	// if checksums match PUT is a no-op
-	if !poi.skipVC && !poi.coldGET {
+	if !poi.skipVC && !poi.skipBackend {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
@@ -379,8 +378,8 @@ func (poi *putOI) loghdr() string {
 	if poi.skipVC {
 		sb.WriteString(", skip-vc")
 	}
-	if poi.coldGET {
-		sb.WriteString(", cold-get")
+	if poi.skipBackend {
+		sb.WriteString(", skip-backend")
 	}
 	if poi.t2t {
 		sb.WriteString(", t2t")
@@ -886,7 +885,7 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 		poi.atime = goi.atime
 		poi.owt = cmn.OwtGet
 		poi.cksumToUse = res.ExpCksum // expected checksum (to validate if the bucket's `validate_cold_get == true`)
-		poi.coldGET = true
+		poi.skipBackend = true
 		poi.locked = true
 	}
 	code, err := poi.putObject()

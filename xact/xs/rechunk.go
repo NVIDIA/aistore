@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -23,6 +24,9 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// Rechunk transforms object storage format (monolithic <-> chunked).
+// By default, rechunk operates only on in-cluster (cached) objects - it does not
+// fetch objects from remote backends. Use `SyncRemote=true` to also update remote storage.
 type (
 	rechunkFactory struct {
 		xreg.RenewBase
@@ -31,7 +35,7 @@ type (
 	}
 	xactRechunk struct {
 		xact.BckJog
-		args *xreg.RechunkArgs
+		args *apc.RechunkMsg
 	}
 )
 
@@ -68,8 +72,8 @@ func (p *rechunkFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.W
 	}
 
 	var (
-		prevArgs = prev.Args.Custom.(*xreg.RechunkArgs)
-		currArgs = p.Args.Custom.(*xreg.RechunkArgs)
+		prevArgs = prev.Args.Custom.(*apc.RechunkMsg)
+		currArgs = p.Args.Custom.(*apc.RechunkMsg)
 		xprev    = prevEntry.Get()
 	)
 
@@ -98,7 +102,7 @@ func (p *rechunkFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.W
 
 func newxactRechunk(p *rechunkFactory) (*xactRechunk, error) {
 	var (
-		args      = p.Args.Custom.(*xreg.RechunkArgs)
+		args      = p.Args.Custom.(*apc.RechunkMsg)
 		r         = &xactRechunk{args: args}
 		config    = cmn.GCO.Get()
 		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
@@ -167,7 +171,8 @@ func (r *xactRechunk) do(lom *core.LOM, _ []byte) error {
 		params.Size = size
 		params.OWT = cmn.OwtChunks
 		params.Atime = lom.Atime()
-		params.Locked = true // see `lom.Lock(true)` above
+		params.Locked = true                    // see `lom.Lock(true)` above
+		params.SkipBackend = !r.args.SyncRemote // default: skip backend (local-only); if SyncRemote=true, also write to remote
 	}
 
 	err = core.T.PutObject(lom, params)
@@ -197,13 +202,16 @@ func (r *xactRechunk) Snap() *core.Snap { return r.Base.NewSnap(r) }
 
 func (r *xactRechunk) CtlMsg() string {
 	var sb cos.SB
-	sb.Init(96)
+	sb.Init(128)
 
 	sb.WriteString("objsize-limit:")
 	sb.WriteString(cos.ToSizeIEC(r.args.ObjSizeLimit, 0))
 	sb.WriteString(", chunk-size:")
 	sb.WriteString(cos.ToSizeIEC(r.args.ChunkSize, 0))
 
+	if r.args.SyncRemote {
+		sb.WriteString(", sync-remote:true")
+	}
 	if r.args.Prefix != "" {
 		sb.WriteString(", prefix:")
 		sb.WriteString(r.args.Prefix)

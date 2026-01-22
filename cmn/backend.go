@@ -103,8 +103,8 @@ var BackendHelpers = struct {
 	},
 }
 
-func isS3MultipartEtag(etag string) bool {
-	return strings.Contains(etag, AwsMultipartDelim)
+func IsS3MultipartEtag(etag string) bool {
+	return strings.Contains(UnquoteCEV(etag), AwsMultipartDelim)
 }
 
 //
@@ -206,7 +206,7 @@ func awsEncodeETag(v any) (string, bool) {
 
 func awsEncodeCksum(v any) (string, bool) {
 	value, isSet := _encValidate(v, func(s string) bool {
-		return !isS3MultipartEtag(s) // reject multipart etags
+		return !IsS3MultipartEtag(s) // reject multipart etags
 	})
 	if !isSet {
 		return "", false

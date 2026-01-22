@@ -286,7 +286,7 @@ func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck, msg *apc.ActMsg) (xid
 		go t.runResilver(resargs)
 		wg.Wait()
 	case apc.ActRechunk:
-		return t.runRechunk(args.ID, bck, &xreg.RechunkArgs{
+		return t.runRechunk(args.ID, bck, &apc.RechunkMsg{
 			ObjSizeLimit: int64(bck.Props.Chunks.ObjSizeLimit),
 			ChunkSize:    int64(bck.Props.Chunks.ChunkSize),
 		})
