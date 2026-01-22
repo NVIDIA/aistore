@@ -212,15 +212,12 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 
 	// for every copy: check hrw mountpath location ("main replica")
 	if local && status == apc.LocIsCopy {
-		var (
-			hlom   = core.AllocLOM("")
-			hrwFQN = *lom.HrwFQN
-		)
-		debug.Assert(hrwFQN != lom.FQN)
-		if err := hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
+		hlom := core.AllocLOM(lom.ObjName)
+		if err := hlom.InitBck(lom.Bck()); err != nil {
 			core.FreeLOM(hlom)
 			return nil, err
 		}
+		debug.Assert(hlom.FQN != lom.FQN)
 		if err := hlom.Load(true /*cache it*/, false /*locked*/); err != nil {
 			status = apc.LocIsCopyMissingObj
 		}

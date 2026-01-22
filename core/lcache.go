@@ -37,9 +37,9 @@ type (
 		mi      *fs.Mountpath
 		wg      *sync.WaitGroup
 		cache   *sync.Map
+		adv     load.Advice // throttle
 		d       time.Duration
 		evicted int64
-		adv     load.Advice // throttle
 	}
 	// termination
 	term struct {

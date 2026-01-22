@@ -1461,10 +1461,10 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 type (
 	// work
 	moveRec struct {
+		chunk   *Uchunk
 		src     string
 		dst     string
 		dstWork string
-		chunk   *Uchunk
 	}
 	moveRecs []moveRec
 	// result

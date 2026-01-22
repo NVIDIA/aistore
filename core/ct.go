@@ -22,7 +22,6 @@ import (
 //////////////////////////////
 
 type CT struct {
-	hrwFQN      *string
 	bck         *meta.Bck
 	mi          *fs.Mountpath
 	uname       *string
@@ -32,6 +31,7 @@ type CT struct {
 	digest      uint64
 	size        int64
 	mtime       int64
+	isHRW       bool
 }
 
 func (ct *CT) FQN() string              { return ct.fqn }
@@ -98,10 +98,10 @@ func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 		fqn:         fqn,
 		objName:     parsed.ObjName,
 		contentType: parsed.ContentType,
-		hrwFQN:      &hrwFQN,
 		bck:         meta.CloneBck(&parsed.Bck),
 		mi:          parsed.Mountpath,
 		digest:      parsed.Digest,
+		isHRW:       fqn == hrwFQN,
 	}
 	if b != nil {
 		err = ct.bck.InitFast(b)

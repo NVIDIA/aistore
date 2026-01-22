@@ -62,9 +62,9 @@ type (
 		bck     meta.Bck
 		ObjName string
 		FQN     string
-		HrwFQN  *string // (=> main replica)
-		md      lmeta   // on-disk metadata
-		digest  uint64  // uname digest
+		md      lmeta  // on-disk metadata
+		digest  uint64 // uname digest
+		isHRW   bool
 	}
 )
 
@@ -143,17 +143,7 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 
 func (lom *LOM) loaded() bool { return lom.md.lid != 0 } // internal
 
-// A note on having (redundant, in-memory only) lom.HrwFQN field: pros and cons
-// pros:
-// - list-objects performance where we check for both misplaced objects and copies with a
-//   missing main replica; recomputng fs.Hrw() for every listed object would be a price to pay
-// cons:
-// - 24 bytes extra; cached consistency versus mountpath verbs (attach|detach|enable|disable)
-
-func (lom *LOM) IsHRW() bool {
-	p := &lom.FQN
-	return lom.HrwFQN == p || lom.FQN == *lom.HrwFQN
-}
+func (lom *LOM) IsHRW() bool { return lom.isHRW }
 
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
@@ -889,7 +879,7 @@ func (lom *LOM) fixupFntl() {
 	}
 	lom.ObjName = fs.ShortenFntl(lom.FQN)                             // noname
 	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName) // nfqn
-	lom.HrwFQN = &lom.FQN
+	lom.isHRW = true
 }
 
 func (lom *LOM) OrigFntl() []string {
@@ -910,11 +900,9 @@ func (lom *LOM) OrigFntl() []string {
 func (lom *LOM) PushFntl(short []string) (saved []string) {
 	saved = []string{lom.FQN, lom.ObjName}
 	lom.FQN, lom.ObjName = short[0], short[1]
-	lom.HrwFQN = &lom.FQN
 	return saved
 }
 
 func (lom *LOM) PopFntl(saved []string) {
 	lom.FQN, lom.ObjName = saved[0], saved[1]
-	lom.HrwFQN = &lom.FQN
 }

@@ -40,7 +40,7 @@ func (lom *LOM) PreInit(fqn string) error {
 		return err
 	}
 	debug.Assert(parsed.ContentType == fs.ObjCT)
-	lom.HrwFQN = &hrwFQN
+	lom.isHRW = hrwFQN == fqn
 	lom.FQN = fqn
 	lom.mi = parsed.Mountpath
 	lom.digest = parsed.Digest
@@ -74,7 +74,7 @@ func (lom *LOM) InitCT(ct *CT) {
 	debug.Assert(ct.contentType == fs.ObjCT)
 	debug.Assert(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
 	lom.FQN = ct.fqn
-	lom.HrwFQN = ct.hrwFQN
+	lom.isHRW = ct.isHRW
 	lom.mi = ct.mi
 	lom.digest = ct.digest
 	lom.ObjName = ct.objName
@@ -98,7 +98,7 @@ func (lom *LOM) InitBck(bck *meta.Bck) (err error) {
 		return
 	}
 	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName)
-	lom.HrwFQN = &lom.FQN
+	lom.isHRW = true
 	return
 }
 

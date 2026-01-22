@@ -122,7 +122,7 @@ var _ = Describe("Mirror", func() {
 			copyCksum, err := copyLOM.ComputeSetCksum(true)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(copyCksum.Value()).To(Equal(newLOM.Checksum().Value()))
-			Expect(copyLOM.HrwFQN).To(BeEquivalentTo(lom.HrwFQN))
+			Expect(copyLOM.IsHRW()).To(BeFalse())
 			Expect(copyLOM.IsCopy()).To(BeTrue())
 			Expect(copyLOM.HasCopies()).To(BeTrue())
 		})
