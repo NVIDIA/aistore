@@ -86,6 +86,33 @@ func (c *txnCln) begin(what fmt.Stringer) (err error) {
 	return err
 }
 
+// beginValidateXid: begin phase with xid validation
+// For xactions using genBEID (like archive, TCO), all targets must return the same xid.
+// If xids differ, abort with ErrBusy.
+func (c *txnCln) beginValidateXid(what fmt.Stringer) (xid string, err error) {
+	results := c.bcast(apc.Begin2PC, c.timeout.netw)
+	for _, res := range results {
+		if res.err != nil {
+			err = res.toErr()
+			c.bcastAbort(what, err)
+			freeBcastRes(results)
+			return "", err
+		}
+		resID := res.header.Get(apc.HdrXactionID)
+		if xid == "" {
+			xid = resID
+		} else if xid != resID {
+			// Different targets generated different xids
+			err = cmn.NewErrBusy("xaction", what.String(), "xid mismatch: "+xid+" vs "+resID+" (from "+res.si.StringEx()+")")
+			c.bcastAbort(what, err)
+			freeBcastRes(results)
+			return "", err
+		}
+	}
+	freeBcastRes(results)
+	return xid, nil
+}
+
 // returns cluster-wide (global) xaction UUID or - for assorted multi-object (list|range) xactions
 // that can be run concurrently - comma-separated list of UUIDs
 func (c *txnCln) commit(what fmt.Stringer, timeout time.Duration) (xid string, all []string, err error) {
@@ -636,8 +663,8 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
 
-	// 2. begin
-	err := c.begin(bckFrom)
+	// 2. begin with xid validation (TCO uses genBEID - need to ensure all targets agree)
+	_, err := c.beginValidateXid(bckFrom)
 	if err != nil {
 		return "", err
 	}
@@ -795,15 +822,13 @@ func bmodUpdateProps(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
-// NOTE: returning a single global UUID or, in a concurrent batch-executing operation,
-// a comma-separated list
+// NOTE: returning a single global UUID (validated in begin phase)
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
 	var all []string // all xaction UUIDs
-
-	// begin
+	// begin with xid validation (archive uses genBEID - need to ensure all targets agree)
 	c := p.newTxnC(msg, bckFrom, false /*waitmsync*/)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
-	if err = c.begin(bckFrom); err != nil {
+	if xid, err = c.beginValidateXid(bckFrom); err != nil {
 		return
 	}
 	// commit

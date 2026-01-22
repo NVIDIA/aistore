@@ -8,6 +8,7 @@ package xs
 import (
 	"archive/tar"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -84,6 +86,8 @@ type (
 			m   map[string]*archwi
 			mtx sync.Mutex
 		}
+		// coordinate finish, abort, progress (compare w/ tcb.go, tcobjs.go)
+		sntl sentinel
 		streamingX
 	}
 )
@@ -132,16 +136,20 @@ func (p *archFactory) Start() (err error) {
 
 	r.DemandBase.Init(p.UUID(), p.kind, p.Bck /*from*/, xact.IdleDefault)
 
-	dmxtra := bundle.Extra{
-		RecvAck:     nil, // no ACKs
-		Config:      r.config,
-		Compression: r.config.Arch.Compression,
-		Multiplier:  r.config.Arch.SbundleMult,
-		SizePDU:     0,
+	nat := r.smap.CountActiveTs()
+	if nat > 1 {
+		dmxtra := bundle.Extra{
+			RecvAck:     nil, // no ACKs
+			Config:      r.config,
+			Compression: r.config.Arch.Compression,
+			Multiplier:  r.config.Arch.SbundleMult,
+			SizePDU:     0,
+		}
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.smap, dmxtra, cmn.OwtPut); err != nil {
+			return err
+		}
 	}
-	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.smap, dmxtra, cmn.OwtPut); err != nil {
-		return err
-	}
+	r.sntl.init(r, r.p.dm, r.config, r.smap, nat)
 
 	xact.GoRunW(r)
 	return nil
@@ -358,14 +366,33 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 
 	select {
 	case <-r.IdleTimer():
-		r.cleanup()
 	case <-r.ChanAbort():
-		r.cleanup()
 	}
+	r.DemandBase.Stop() // prevent new requests from reusing this xaction
+
+	// quiesce and close DM (compare w/ tcb.go, tcobjs.go)
+	if r.p.dm != nil {
+		abortErr := r.AbortErr()
+		r.sntl.bcast("", r.p.dm, abortErr) // broadcast: done | abort
+		if abortErr == nil {               // done
+			r.sntl.initLast(mono.NanoTime())
+			qui := r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
+			if qui == core.QuiAborted {
+				err := r.AbortErr()
+				nlog.Errorln(err)
+				r.sntl.bcast("", r.p.dm, err) // broadcast: abort
+			}
+		}
+		r.p.dm.Close(r.AbortErr())
+		r.p.dm.UnregRecv()
+	}
+	r.sntl.cleanup()
+	r.Finish()
+
+	r.cleanup()
 }
 
 func (r *XactArch) cleanup() {
-	r.streamingX.fin(true /*unreg Rx*/)
 	if r.ErrCnt() == 0 {
 		return
 	}
@@ -410,6 +437,43 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 }
 
 func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
+	// control messages (compare w/ tcb.go, tcobjs.go)
+	// TODO: refactor and consolidate - currently duplicates tcobjs.go
+	if hdr.Opcode != 0 {
+		switch hdr.Opcode {
+		case transport.OpcDone:
+			// Two types of OpcDone - distinguished by whether uuid matches a txnUUID:
+			uuid := cos.UnsafeS(hdr.Opaque)
+			r.pending.mtx.Lock()
+			wi, ok := r.pending.m[uuid]
+			r.pending.mtx.Unlock()
+			if ok {
+				// (1) Per-txn OpcDone: sender finished archiving for this transaction
+				refc := wi.refc.Dec()
+				debug.Assert(refc >= 0)
+			} else {
+				// (2) Xaction-level OpcDone: sender's whole xaction is done
+				r.sntl.rxDone(hdr)
+			}
+		case transport.OpcAbort:
+			r.sntl.rxAbort(hdr)
+		case transport.OpcRequest:
+			// progress request during quiesce - respond with current count
+			o := transport.AllocSend()
+			o.Hdr.Opcode = transport.OpcResponse
+			b := make([]byte, cos.SizeofI64)
+			binary.BigEndian.PutUint64(b, uint64(r.Objs()))
+			o.Hdr.Opaque = b
+			r.p.dm.Bcast(o, nil)
+		case transport.OpcResponse:
+			r.sntl.rxProgress(hdr)
+		default:
+			return abortOpcode(r, hdr.Opcode)
+		}
+		return nil
+	}
+
+	// data: archive an object
 	r.pending.mtx.Lock()
 	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 	r.pending.mtx.Unlock()
@@ -426,14 +490,6 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	}
 	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == cos.UnsafeS(hdr.Opaque))
 
-	// NOTE: best-effort via ref-counting
-	if hdr.Opcode == transport.OpcDone {
-		refc := wi.refc.Dec()
-		debug.Assert(refc >= 0)
-		return nil
-	}
-
-	debug.Assert(hdr.Opcode == 0)
 	err := wi.writer.Write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
 	if err == nil {
 		wi.cnt.Inc()

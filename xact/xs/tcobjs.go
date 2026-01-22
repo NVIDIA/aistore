@@ -158,15 +158,8 @@ func (p *tcoFactory) Start() error {
 
 	r.copier.r = r
 
-	// sentinels, to coordinate finishing, aborting, and progress;
-	if nat > 1 {
-		// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
-		r.sntl.init(r, smap, nat)
-	} else {
-		// single-target: limited init (no DM, no coordination needed)
-		r.sntl.r = r
-		r.sntl.nat = nat
-	}
+	// sentinels, to coordinate finishing, aborting, and progress
+	r.sntl.init(r, r.p.dm, r.config, smap, nat)
 
 	// (rgetstats)
 	if bck := r.args.BckFrom; bck.IsRemote() {
@@ -326,6 +319,7 @@ outer:
 			break outer
 		}
 	}
+	r.DemandBase.Stop() // prevent new requests from reusing this xaction
 
 	// quiesce and close DM (compare w/ tcb.go)
 	if r.p.dm != nil {
@@ -334,10 +328,10 @@ outer:
 		r.sntl.bcast(r.ID(), r.p.dm, abortErr)
 		if abortErr == nil { // done
 			r.sntl.initLast(mono.NanoTime())
-			qui := r.Quiesce(r.qival(), r.qcb) // wait for others
+			qui := r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
 			if qui == core.QuiAborted {
 				err := r.AbortErr()
-				debug.Assert(err != nil)
+				nlog.Errorln(err)
 				r.sntl.bcast(r.ID(), r.p.dm, err) // broadcast: abort
 			}
 		}
@@ -363,25 +357,6 @@ outer:
 	if a := r.chanFull.Load(); a > 0 {
 		nlog.Warningln(r.Name(), "work channel full (final)", a)
 	}
-}
-
-//
-// quiesce
-// TODO: refactor - currently duplicates tcb.go
-//
-
-func (r *XactTCO) qival() time.Duration {
-	return cos.ClampDuration(r.config.Timeout.MaxHostBusy.D(), 10*time.Second, time.Minute)
-}
-
-func (r *XactTCO) qcb(tot time.Duration) core.QuiRes {
-	nwait := r.sntl.pend.n.Load()
-	if nwait > 0 {
-		// have "pending" targets
-		progressTimeout := max(r.config.Timeout.SendFile.D(), time.Minute)
-		return r.sntl.qcb(r.p.dm, tot, r.qival(), progressTimeout, r.ErrCnt())
-	}
-	return core.QuiDone
 }
 
 //

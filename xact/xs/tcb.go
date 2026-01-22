@@ -180,7 +180,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 
 	// sentinels, to coordinate finishing, aborting, and progress;
 	// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
-	r.sntl.init(r, smap, nat)
+	r.sntl.init(r, r.dm, r.Config, smap, nat)
 	return r, nil
 }
 
@@ -343,7 +343,7 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 		r.sntl.bcast("", r.dm, abortErr) // broadcast: done | abort
 		if abortErr == nil {             // done
 			r.sntl.initLast(mono.NanoTime())
-			qui := r.Base.Quiesce(r.qival(), r.qcb) // when done: wait for others
+			qui := r.Base.Quiesce(r.sntl.qival(), r.sntl.qcb) // when done: wait for others
 			if qui == core.QuiAborted {
 				err := r.AbortErr()
 				debug.Assert(err != nil)
@@ -374,20 +374,6 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	if a := r.nwp.chanFull.Load(); a > 0 {
 		nlog.Warningln(r.Name(), "work channel full (final)", a)
 	}
-}
-
-func (r *XactTCB) qival() time.Duration {
-	return cos.ClampDuration(r.Config.Timeout.MaxHostBusy.D(), 10*time.Second, time.Minute)
-}
-
-func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
-	nwait := r.sntl.pend.n.Load()
-	if nwait > 0 {
-		// have "pending" targets
-		progressTimeout := max(r.Config.Timeout.SendFile.D(), time.Minute)
-		return r.sntl.qcb(r.dm, tot, r.qival(), progressTimeout, r.ErrCnt())
-	}
-	return core.QuiDone
 }
 
 func (r *XactTCB) do(lom *core.LOM, buf []byte) error {

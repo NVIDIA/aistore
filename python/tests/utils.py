@@ -5,6 +5,7 @@ import string
 import tarfile
 import io
 import unittest
+import warnings
 from itertools import product
 from pathlib import Path
 from unittest.mock import Mock
@@ -15,6 +16,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
+    retry_if_exception,
 )
 
 import requests
@@ -25,6 +27,7 @@ from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.obj.content_iterator import ContentIterProvider
 from aistore.sdk.response_handler import ResponseHandler
 from aistore.sdk.types import BucketModel
+from aistore.sdk.errors import AISError
 from tests.const import KB
 from tests.integration.sdk import DEFAULT_TEST_CLIENT
 
@@ -298,3 +301,25 @@ def assert_with_retries(
     assertion_fn: Callable[..., None], *args: Any, **kwargs: Any
 ) -> None:
     assertion_fn(*args, **kwargs)
+
+
+def _warn_on_busy_retry(retry_state):
+    exc = retry_state.outcome.exception()
+    warnings.warn(
+        f"ErrBusy (409) encountered, retrying (attempt {retry_state.attempt_number}/5).",
+        RuntimeWarning,
+    )
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=0.4, max=6),
+    retry=retry_if_exception(
+        lambda e: isinstance(e, AISError) and e.status_code == 409
+    ),
+    before_sleep=_warn_on_busy_retry,
+    reraise=True,
+)
+def call_with_busy_retry(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Retry API calls that might fail with ErrBusy (409) due to concurrent requests."""
+    return fn(*args, **kwargs)

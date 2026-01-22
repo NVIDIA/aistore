@@ -29,8 +29,10 @@ type (
 		progress atomic.Int64 // num visited objects
 	}
 	sentinel struct {
-		r    core.Xact
-		pend struct {
+		r      core.Xact
+		dm     *bundle.DM
+		config *cmn.Config
+		pend   struct {
 			m map[string]*apair // map [tid => apair]
 			p []string          // reusable slice [tid]
 			i atomic.Int64      // periodic log & progress
@@ -40,9 +42,15 @@ type (
 	}
 )
 
-func (s *sentinel) init(r core.Xact, smap *meta.Smap, nat int) {
+func (s *sentinel) init(r core.Xact, dm *bundle.DM, config *cmn.Config, smap *meta.Smap, nat int) {
 	s.r = r
+	s.dm = dm
+	s.config = config
 	s.nat = nat
+	if nat <= 1 || dm == nil {
+		return // single-target or no DM: no peers to coordinate with
+	}
+	debug.Assert(config != nil)
 	s.pend.n.Store(int64(nat - 1))
 	s.pend.m = make(map[string]*apair, nat-1)
 	for tid := range smap.Tmap {
@@ -51,7 +59,6 @@ func (s *sentinel) init(r core.Xact, smap *meta.Smap, nat int) {
 		}
 		s.pend.m[tid] = &apair{}
 	}
-	debug.Assert(nat > 1)
 }
 
 func (s *sentinel) cleanup() {
@@ -94,7 +101,21 @@ func (s *sentinel) initLast(now int64) {
 	}
 }
 
-func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, ecnt int) core.QuiRes {
+// Qival returns the quiesce check interval based on config
+func (s *sentinel) qival() time.Duration {
+	return cos.ClampDuration(s.config.Timeout.MaxHostBusy.D(), 10*time.Second, time.Minute)
+}
+
+func (s *sentinel) qcb(tot time.Duration) core.QuiRes {
+	if s.pend.n.Load() == 0 {
+		return core.QuiDone
+	}
+	// have "pending" targets
+	progressTimeout := max(s.config.Timeout.SendFile.D(), time.Minute)
+	return s._qcb(tot, s.qival(), progressTimeout, s.r.ErrCnt())
+}
+
+func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core.QuiRes {
 	i := int64(tot / ival)
 	if i <= s.pend.i.Load() {
 		return core.QuiActive
@@ -106,7 +127,7 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	if ecnt > 0 {
 		nlog.Warningln(s.r.Name(), "quiescing [", tot, "errs:", ecnt, "pending:", s.pend.p, "]")
 	} else {
-		nlog.Warningln(s.r.Name(), "quiescing [", tot, s.pend.p, "]")
+		nlog.Infoln(s.r.Name(), "quiescing [", tot, s.pend.p, "]")
 	}
 	if len(s.pend.p) == 0 {
 		return core.QuiDone
@@ -135,7 +156,7 @@ func (s *sentinel) qcb(dm *bundle.DM, tot, ival, progressTimeout time.Duration, 
 	o := transport.AllocSend()
 	o.Hdr.Opcode = transport.OpcRequest
 
-	if err := dm.Bcast(o, nil); err != nil {
+	if err := s.dm.Bcast(o, nil); err != nil {
 		// (is it too harsh?)
 		nlog.Warningln(s.r.Name(), err)
 		return s._qabort(err)
@@ -212,11 +233,10 @@ func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {
 		debug.Assert(false, "missing apair ", hdr.SID)
 		return
 	}
-	if prev := apair.progress.Swap(numvis); prev != numvis {
-		// target hdr.SID is making progress
-		debug.Assert(prev < numvis)
-		apair.last.Store(mono.NanoTime())
-	}
+	prev := apair.progress.Swap(numvis)
+	debug.Assert(prev <= numvis, "progress regression: ", prev, " > ", numvis)
+	// always update last: receiving a response means the target is alive
+	apair.last.Store(mono.NanoTime())
 
 	if cmn.Rom.V(5, cos.ModXs) {
 		nlog.InfoDepth(1, s.r.Name(), "recv 'progress'", numvis, "from:", meta.Tname(hdr.SID), "pending:", s.pend.n.Load())

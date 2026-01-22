@@ -28,6 +28,7 @@ from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.utils import (
     random_string,
     assert_with_retries,
+    call_with_busy_retry,
 )
 
 
@@ -196,9 +197,8 @@ class TestObjectGroupOps(ParallelTestBase):
         if num_workers is not None:
             copy_kwargs["num_workers"] = num_workers
 
-        copy_job_ids = self.bucket.objects(obj_names=self._get_obj_names()[1:5]).copy(
-            to_bck, **copy_kwargs
-        )
+        obj_group = self.bucket.objects(obj_names=self._get_obj_names()[1:5])
+        copy_job_ids = call_with_busy_retry(obj_group.copy, to_bck, **copy_kwargs)
         for job_id in copy_job_ids:
             result = self.client.job(job_id=job_id).wait_for_idle(
                 timeout=TEST_TIMEOUT_LONG
@@ -367,9 +367,8 @@ class TestObjectGroupOps(ParallelTestBase):
     def _copy_and_check_with_latest(
         self, from_bck, to_bck, obj_name, expected, latest_flag
     ):
-        copy_job_ids = from_bck.objects(obj_names=[obj_name]).copy(
-            to_bck, latest=latest_flag
-        )
+        obj_group = from_bck.objects(obj_names=[obj_name])
+        copy_job_ids = call_with_busy_retry(obj_group.copy, to_bck, latest=latest_flag)
         for job_id in copy_job_ids:
             result = self.client.job(job_id=job_id).wait_for_idle(
                 timeout=TEST_TIMEOUT_LONG
@@ -379,8 +378,6 @@ class TestObjectGroupOps(ParallelTestBase):
         content = to_bck.object(obj_name).get_reader().read_all()
         self.assertEqual(expected, content.decode("utf-8"))
 
-    # TODO: Fix transport stream race condition (NSVISCS-10608)
-    @unittest.skip("archive job transport race condition")
     def test_archive_objects_without_copy(self):
         # NOTE: Force local bucket for CI stability (override remote bucket if set)
         self.bucket = self._create_bucket() if REMOTE_SET else self.bucket
@@ -398,14 +395,14 @@ class TestObjectGroupOps(ParallelTestBase):
         self._create_small_objects()
         archived_obj = dict(list(self.obj_dict.items())[1:5])
 
+        obj_group = src_bck.objects(obj_names=list(archived_obj.keys()))
         if src_bck.name != res_bck.name:
-            arch_job_ids = src_bck.objects(obj_names=list(archived_obj.keys())).archive(
-                archive_name=arch_name,
-                to_bck=res_bck,
+            arch_job_ids = call_with_busy_retry(
+                obj_group.archive, archive_name=arch_name, to_bck=res_bck
             )
         else:
-            arch_job_ids = src_bck.objects(obj_names=list(archived_obj.keys())).archive(
-                archive_name=arch_name
+            arch_job_ids = call_with_busy_retry(
+                obj_group.archive, archive_name=arch_name
             )
 
         for job_id in arch_job_ids:

@@ -59,6 +59,7 @@ type (
 		ChanAbort() <-chan error
 		// err (info)
 		AddErr(error, ...int)
+		ErrCnt() int // used by sentinel and quiesce
 
 		// to support api.QueryXactionSnaps
 		CtlMsg() string

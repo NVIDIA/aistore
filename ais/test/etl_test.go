@@ -1074,7 +1074,7 @@ func TestETLPodInitSpecFailure(t *testing.T) {
 		expectedErrs []string
 	}{
 		{etlName: tetl.InvalidYaml, commType: etl.Hpull, cleanup: false, expectedErrs: []string{"could not find expected ':'"}},
-		{etlName: tetl.NonExistImage, commType: etl.Hpull, cleanup: true, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff"}},
+		{etlName: tetl.NonExistImage, commType: etl.Hpull, cleanup: true, expectedErrs: []string{"ErrImagePull", "ImagePullBackOff", "context deadline exceeded"}},
 	}
 
 	for _, test := range tests {

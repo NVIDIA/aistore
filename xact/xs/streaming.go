@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -30,7 +29,6 @@ const (
 	// TODO -- FIXME: derive from config.Timeout
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
-	waitUnregMax  = 2 * waitUnregRecv
 )
 
 type (
@@ -45,7 +43,6 @@ type (
 		config *cmn.Config
 		xact.DemandBase
 		wiCnt atomic.Int32
-		maxWt time.Duration
 	}
 )
 
@@ -87,6 +84,7 @@ func (p *streamingF) _tag(fromBck, toBck *meta.Bck) (tag []byte) {
 	return tag
 }
 
+// TODO: remove
 func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	var (
 		div = uint64(xact.IdleDefault)
@@ -186,32 +184,4 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 			nlog.Infoln(r.Name(), "done")
 		}
 	}
-}
-
-func (r *streamingX) fin(unreg bool) {
-	if r.DemandBase.IsDone() {
-		// must be aborted
-		r.p.dm.Close(r.Err())
-		r.p.dm.UnregRecv()
-		return
-	}
-	r.DemandBase.Stop()
-	r.p.dm.Close(r.Err())
-	r.Finish()
-	if unreg && r.p.dm != nil {
-		r.maxWt = 0
-		hk.Reg(r.ID()+hk.NameSuffix, r._wurr, waitUnregRecv) // compare w/ lso
-	}
-}
-
-func (r *streamingX) _wurr(int64) time.Duration {
-	if cnt := r.wiCnt.Load(); cnt > 0 {
-		r.maxWt += waitUnregRecv
-		if r.maxWt < waitUnregMax {
-			return waitUnregRecv
-		}
-		nlog.Errorln(r.String(), "unreg timeout", r.maxWt, "count", cnt)
-	}
-	r.p.dm.UnregRecv()
-	return hk.UnregInterval
 }
