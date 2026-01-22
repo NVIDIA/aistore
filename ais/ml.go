@@ -186,7 +186,6 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 			args.req = hreq
 			args.smap = smap
 			args.network = cmn.NetIntraControl
-			args.async = true
 		}
 		nodes := args.selected[:0]
 		for _, si := range smap.Tmap {
@@ -197,8 +196,16 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		args.selected = nodes
 		args.nodeCount = len(nodes)
 
-		_ = p.bcastSelected(args) // async
+		results := p.bcastSelected(args)
 		freeBcArgs(args)
+		for _, res := range results {
+			if res.err != nil {
+				freeBcastRes(results)
+				p.writeErr(w, r, res.toErr(), res.status)
+				return
+			}
+		}
+		freeBcastRes(results)
 	}
 
 	// phase 3: redirect user's GET => DT
@@ -256,11 +263,15 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		designated := ctx.tid == t.SID()
+		// phases 1 or 2
+		var (
+			config     = cmn.GCO.Get()
+			designated = ctx.tid == t.SID()
+		)
 		if designated {
-			ctx.phase1(w, r, smap, nat)
+			ctx.phase1(w, r, config, smap, nat)
 		} else {
-			ctx.phase2(w, r, smap, tsi, nat)
+			ctx.phase2(w, r, config, smap, tsi, nat)
 		}
 
 	// phase 3: redirect; start an assembly
@@ -299,7 +310,7 @@ func (t *target) mlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Phase 1: DT renews x-moss and initializes Rx
-func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, nat int) {
+func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, nat int) {
 	t := ctx.t
 
 	if ctx.xid != placeholderXID {
@@ -345,7 +356,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	receiving := nat > 1 // multi-target cluster: setup Rx
 	if receiving {
 		// open SDM
-		if err := bundle.SDM.Open(); err != nil {
+		if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
 			xmoss.Abort(err)
 			t.writeErr(w, r, err)
 			return
@@ -371,7 +382,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, smap *smapX, 
 }
 
 // Phase 2: Senders open SDM and start sending
-func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, tsi *meta.Snode, nat int) {
+func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, config *cmn.Config, smap *smapX, tsi *meta.Snode, nat int) {
 	debug.Assert(nat > 1)
 	t := ctx.t
 
@@ -401,7 +412,7 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	debug.Assert(ok, xctn.Name())
 
 	// open SDM and start sending
-	if err := bundle.SDM.Open(); err != nil {
+	if err := bundle.SDM.Open(config, &config.GetBatch.XactConf); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

@@ -295,7 +295,7 @@ lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
-	@$(MAKE) -C $(BUILD_DIR)/ishard lint
+	@$(MAKE) -C $(BUILD_DIR)/ishard lint TAGS=dsort     ## NOTE: requires '-tags=dsort'
 
 ## Lint only the go files in the main AIS project included in build tags or .golangci.yml
 lint-scoped:

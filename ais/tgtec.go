@@ -153,10 +153,11 @@ func (t *target) httpecpost(w http.ResponseWriter, r *http.Request) {
 		hk.Reg(hknameEC, closeEc, postpone)
 
 	case apc.ActOpenSDM:
-		hk.UnregIf(hknameSDM, closeSDM) // ditto
-		if err := bundle.SDM.Open(); err != nil {
-			t.writeErr(w, r, err)
-		}
+		// NOTE:
+		// Unlike EC, SDM is opened on-demand by the GetBatch/x-moss 3-phase protocol.
+		// This action exists only to cancel a pending idle-close (HK) and to allow
+		// the primary to track cluster-wide SDM activity time.
+		hk.UnregIf(hknameSDM, closeSDM)
 	case apc.ActCloseSDM:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return

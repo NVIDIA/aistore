@@ -57,19 +57,6 @@ type (
 // global
 var SDM sharedDM
 
-// called upon target startup
-func InitSDM(config *cmn.Config, compression string) {
-	debug.Assert(oldAgeTickCount > 1)
-	extra := Extra{Config: config, Compression: compression}
-
-	// NOTE:
-	// - see bundle.go for Streams.Resync()
-	// - and note that cmn/archive/read returns cos.ReadCloseSizer (not Opener)
-	debug.Assert(extra.Multiplier == 0 || extra.Multiplier == 1, "cannot have many-to-one connections: cannot reopen archived files")
-
-	SDM.dm.init(SDM.trname(), SDM.recv, cmn.OwtNone, extra)
-}
-
 func (*sharedDM) trname() string { return SDMName }
 
 func (sdm *sharedDM) isOpen() bool { return sdm.dm.stage.opened.Load() }
@@ -92,7 +79,10 @@ func (sdm *sharedDM) getActive() string {
 }
 
 // called on-demand
-func (sdm *sharedDM) Open() error {
+// note: config changes (via dm.init) won't take effect until SDM is closed and reopened
+func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
+	debug.Assert(oldAgeTickCount > 1)
+
 	if sdm.isOpen() {
 		return nil
 	}
@@ -102,6 +92,14 @@ func (sdm *sharedDM) Open() error {
 		sdm.ocmu.Unlock()
 		return nil
 	}
+
+	// (re)init for a given 'selected' caller -------------------------------
+	extra := Extra{
+		Config:      config,
+		Compression: selected.Compression,
+		Multiplier:  selected.SbundleMult,
+	}
+	SDM.dm.init(SDM.trname(), SDM.recv, cmn.OwtNone, extra)
 
 	sdm.rxmu.Lock()
 	sdm.receivers = make(map[string]*rxent, iniSdmCap)
@@ -125,7 +123,6 @@ func (sdm *sharedDM) Open() error {
 	return nil
 }
 
-// TODO: prevent a) too-frequent reconnects and/or b) too-many-during-stream's-lifetime :TODO
 func (sdm *sharedDM) reconnect(dstID string, err error) {
 	if !sdm.isOpen() {
 		return
@@ -133,7 +130,11 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 	if e := sdm.dm.data.streams.ReopenPeerStream(dstID); e != nil {
 		err = fmt.Errorf("%s: failed reconnecting to %s (%w --> %w)", sdm.trname(), dstID, err, e)
 		nlog.Errorln(core.T.String(), err, "- closing/aborting...")
-		sdm.Close(err) // NOTE -- TODO: may now close underneath
+
+		// tear down entire SDM bundle
+		// safe to race with (primary => (idle timeout) => apc.ActCloseSDM)
+		// see dm.Close() and dm.UnregRecv()
+		sdm.Close(err)
 		return
 	}
 
@@ -209,10 +210,12 @@ func (sdm *sharedDM) Close(err ...error) error {
 	return nil
 }
 
-// demux-level RegRecv (not to confuse with transport level)
+// demux-level RegRecv (not to confuse with transport-level namesake)
 func (sdm *sharedDM) RegRecv(rx transport.Receiver) {
 	sdm.ocmu.Lock()
 	sdm.rxmu.Lock()
+
+	debug.Assert(sdm.isOpen(), sdm.trname(), ": RegRecv while closed: ", rx.ID())
 	if sdm.isOpen() {
 		en := &rxent{rx: rx}
 		sdm.receivers[rx.ID()] = en

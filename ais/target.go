@@ -43,7 +43,6 @@ import (
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -381,8 +380,6 @@ func (t *target) Run() error {
 	t.setusr1()
 
 	core.Tinit(t, config, true /*run hk*/)
-
-	bundle.InitSDM(config, apc.CompressNever) // shared streams; requires certloader when use-https
 
 	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {

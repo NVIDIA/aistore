@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -438,6 +438,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 	wi.started = now
 
 	if receiving {
+		// insert self to properly demux => receive data (to assemble)
 		if usingPrev {
 			bundle.SDM.UseRecv(r)
 		} else {
@@ -539,7 +540,8 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // send all requested local data => DT (`tsi`)
 // (phase 2)
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string, usingPrev bool) error {
-	// reg recv with a single purpose: to receive transport.OpcAbort
+	// insert self to properly demux => receive sentinels
+	// (currently, only transport.OpcAbort)
 	if usingPrev {
 		bundle.SDM.UseRecv(r)
 	} else {

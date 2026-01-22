@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -100,24 +100,25 @@ type (
 // - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
 type (
 	ClusterConfig struct {
-		Backend     BackendConf     `json:"backend" allow:"cluster"`
 		Ext         any             `json:"ext,omitempty"` // reserved
-		WritePolicy WritePolicyConf `json:"write_policy"`  // object metadata write policy: (immediate | delayed | never)
-		LastUpdated string          `json:"lastupdate_time"`
+		Backend     BackendConf     `json:"backend" allow:"cluster"`
+		Tracing     *TracingConf    `json:"tracing,omitempty"`    // (see gco.Clone())
+		Auth        AuthConf        `json:"auth" allow:"cluster"` // (see gco.Clone())
+		WritePolicy WritePolicyConf `json:"write_policy"`         // object metadata write policy: (immediate | delayed | never)
 		UUID        string          `json:"uuid"`
-		Dsort       DsortConf       `json:"distributed_sort"`
+		LastUpdated string          `json:"lastupdate_time"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
 		Cksum       CksumConf       `json:"checksum" allow:"cluster"`
-		Auth        AuthConf        `json:"auth" allow:"cluster"` // (see gco.Clone())
-		Tracing     *TracingConf    `json:"tracing,omitempty"`    // (see gco.Clone())
 		TCB         TCBConf         `json:"tcb" allow:"cluster"`
 		TCO         TCOConf         `json:"tco" allow:"cluster"`
 		Arch        ArchConf        `json:"arch" allow:"cluster"`
+		Dsort       DsortConf       `json:"distributed_sort"`
 		RateLimit   RateLimitConf   `json:"rate_limit"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
 		Log         LogConf         `json:"log"`
 		EC          ECConf          `json:"ec" allow:"cluster"`
+		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
 		Net         NetConf         `json:"net" allow:"cluster"`
 		Timeout     TimeoutConf     `json:"timeout"`
 		Space       SpaceConf       `json:"space"`
@@ -127,15 +128,14 @@ type (
 		FSHC        FSHCConf        `json:"fshc"`
 		Chunks      ChunksConf      `json:"chunks" allow:"cluster"`
 		LRU         LRUConf         `json:"lru"`
-		Client      ClientConf      `json:"client"`
 		Mirror      MirrorConf      `json:"mirror" allow:"cluster"`
 		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
+		Client      ClientConf      `json:"client"`
 		Downloader  DownloaderConf  `json:"downloader"`
 		Features    feat.Flags      `json:"features,string" allow:"cluster"` // enumerated features to flip assorted global defaults (cmn/feat/feat and docs/feat*)
 		Version     int64           `json:"config_version,string"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
-		GetBatch    GetBatchConf    `json:"get_batch" allow:"cluster"`
 	}
 	// contains ClusterConfig and LocalConfig
 	ConfigToSet struct {
@@ -893,6 +893,10 @@ type (
 // - https://github.com/NVIDIA/aistore/blob/main/docs/monitoring-get-batch.md
 type (
 	GetBatchConf struct {
+		// stream bundle multiplier, et. al - the common knobs
+		// included by all xactions that generate large amounts of intra-cluster traffic
+		XactConf
+
 		// Maximum time to wait for remote targets to send their data during
 		// distributed multi-object/multi-file retrieval. When a sending target
 		// fails or is slow to respond, the designated target (DT) waits up to
@@ -936,6 +940,7 @@ type (
 		MaxGFN int `json:"max_gfn,omitempty"`
 	}
 	GetBatchConfToSet struct {
+		XactConfToSet
 		MaxWait          *cos.Duration `json:"max_wait,omitempty"`
 		NumWarmupWorkers *int          `json:"warmup_workers,omitempty"`
 		MaxSoftErrs      *int          `json:"max_soft_errs,omitempty"`

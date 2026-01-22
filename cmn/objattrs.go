@@ -49,9 +49,7 @@ const (
 )
 
 type (
-	// object properties
-	// NOTE: embeds system `ObjAttrs` that in turn includes custom user-defined
-	// NOTE: compare with `apc.LsoMsg`
+	// NOTE: will be removed in the upcoming releases; use ObjectPropsV2 instead
 	ObjectProps struct {
 		Bck Bck `json:"bucket"`
 		ObjAttrs
@@ -59,22 +57,21 @@ type (
 		Location string `json:"location"` // see also `GetPropsLocation`
 		Mirror   Mirror `json:"mirror"`
 		EC       EC     `json:"ec"`
-		Present  bool   `json:"present"`
+		Present  bool   `json:"present"` // true if object is in-cluster
 	}
+
+	// NOTE: pointer fields are _advanced_ - included only when explicitly requested
 	ObjectPropsV2 struct {
-		Bck Bck `json:"bucket"`
+		EC           *EC     `json:"ec,omitempty"`
+		Mirror       *Mirror `json:"mirror,omitempty"`
+		Chunks       *Chunks `json:"chunks,omitempty"`
+		Location     *string `json:"location,omitempty"`
+		Bck          Bck     `json:"bucket"`
+		Name         string  `json:"name"`
+		LastModified string  `json:"last_modified"`
+		ETag         string  `json:"etag"`
 		ObjAttrs
-		Name         string `json:"name"`
-		LastModified string `json:"last_modified"`
-		ETag         string `json:"etag"` // entity tag
-
-		// advanced fields - only provide when user explicitly requested
-		EC       *EC     `json:"ec,omitempty"`
-		Mirror   *Mirror `json:"mirror,omitempty"`
-		Chunks   *Chunks `json:"chunks,omitempty"`
-		Location *string `json:"location,omitempty"`
-
-		Present bool `json:"present"` // true if object is present in cluster
+		Present bool `json:"present"`
 	}
 )
 
