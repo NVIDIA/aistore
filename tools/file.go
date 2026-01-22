@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
@@ -50,7 +51,7 @@ type (
 
 	ObjectsOut struct {
 		Dir             string
-		Bck             cmn.Bck
+		Bck             *cmn.Bck
 		FQNs            map[string][]string // ContentType => FQN
 		MpathObjectsCnt map[string]int      // mpath -> # objects on the mpath
 	}
@@ -152,7 +153,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		fqns      = make(map[string][]string, len(desc.CTs))
 		mpathCnts = make(map[string]int, desc.MountpathsCnt)
 
-		bck = cmn.Bck{
+		bck = &cmn.Bck{
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 			Ns:       cmn.NsGlobal,
@@ -161,7 +162,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				BID:   0xa5b6e7d8,
 			},
 		}
-		bmd = mock.NewBaseBownerMock((*meta.Bck)(&bck))
+		bmd = mock.NewBaseBownerMock((*meta.Bck)(bck))
 	)
 
 	mios := mock.NewIOS()
@@ -183,34 +184,34 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	core.T = mock.NewTarget(bmd) // a.k.a. tMock
 
-	errs := fs.CreateBucket(&bck, false /*nilbmd*/)
+	errs := fs.CreateBucket(bck, false /*nilbmd*/)
 	if len(errs) > 0 {
 		tassert.CheckFatal(t, errs[0])
 	}
-
-	for _, ct := range desc.CTs {
-		for range ct.ContentCnt {
-			fqn, _, err := core.HrwFQN(&bck, ct.Type, trand.String(15))
+	b := meta.CloneBck(bck)
+	const (
+		wfqnPrefix = "prepare-objects"
+	)
+	for _, ctd := range desc.CTs {
+		for range ctd.ContentCnt {
+			ct, err := core.NewCTFromBO(b, trand.String(15), ctd.Type, wfqnPrefix)
 			tassert.CheckFatal(t, err)
 
-			fqns[ct.Type] = append(fqns[ct.Type], fqn)
+			fqns[ctd.Type] = append(fqns[ctd.Type], ct.FQN())
 
-			f, err := cos.CreateFile(fqn)
+			f, err := cos.CreateFile(ct.FQN())
 			tassert.CheckFatal(t, err)
 			_, _ = cryptorand.Read(buf)
 			_, err = f.Write(buf)
 			f.Close()
 			tassert.CheckFatal(t, err)
 
-			var parsed fs.ParsedFQN
-			err = parsed.Init(fqn)
-			tassert.CheckFatal(t, err)
-			mpathCnts[parsed.Mountpath.Path]++
+			mpathCnts[ct.Mountpath().Path]++
 
-			switch ct.Type {
+			switch ctd.Type {
 			case fs.ObjCT:
-				lom := &core.LOM{}
-				err = lom.InitFQN(fqn, nil)
+				lom := &core.LOM{ObjName: ct.ObjectName()}
+				err = lom.InitBck(b)
 				tassert.CheckFatal(t, err)
 
 				lom.SetSize(desc.ObjectSize)
@@ -219,7 +220,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				tassert.CheckFatal(t, err)
 			case fs.WorkCT, fs.ECSliceCT, fs.ECMetaCT:
 			default:
-				cos.AssertMsg(false, "non-implemented type")
+				debug.Assert(false, "invalid type ", ctd.Type)
 			}
 		}
 	}

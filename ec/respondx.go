@@ -124,13 +124,13 @@ func (*XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 	// responds that it has the object because it has metafile. We delete
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
-	for _, tp := range []string{fs.ECMetaCT, fs.ObjCT, fs.ECSliceCT} {
-		fqnMeta, _, err := core.HrwFQN(bck.Bucket(), tp, objName)
+	for _, contentTy := range []string{fs.ECMetaCT, fs.ObjCT, fs.ECSliceCT} {
+		ct, err := core.NewCTFromBO(bck, objName, contentTy)
 		if err != nil {
 			return err
 		}
-		if err := os.Remove(fqnMeta); err != nil && !cos.IsNotExist(err) {
-			return fmt.Errorf("error removing %s %q: %w", tp, fqnMeta, err)
+		if err := os.Remove(ct.FQN()); err != nil && !cos.IsNotExist(err) {
+			return fmt.Errorf("error removing %q: %w", ct.Cname(), err)
 		}
 	}
 

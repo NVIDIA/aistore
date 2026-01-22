@@ -1,37 +1,27 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
 import (
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 )
 
-func ResolveFQN(fqn string, parsed *fs.ParsedFQN) (hrwFQN string, err error) {
-	if err = parsed.Init(fqn); err != nil {
-		return
+// 1. parse fqn
+// 2. compute hrw fqn (may differ)
+// 3. compute and set digest
+func ResolveFQN(fqn string, parsed *fs.ParsedFQN) (hrwFQN string, _ error) {
+	if err := parsed.Init(fqn); err != nil {
+		return "", err
 	}
 
-	// NOTE: _misplaced_ hrwFQN != fqn is checked elsewhere - see lom.IsHRW()
-
-	var digest uint64
-	hrwFQN, digest, err = HrwFQN(&parsed.Bck, parsed.ContentType, parsed.ObjName)
-	if err != nil {
-		return
+	uname := parsed.Bck.MakeUname(parsed.ObjName)
+	mi, digest, err := fs.Hrw(uname)
+	if err == nil {
+		// may differ from fqn if object is misplaced (see lom.IsHRW)
+		hrwFQN = mi.MakePathFQN(&parsed.Bck, parsed.ContentType, parsed.ObjName)
 	}
 	parsed.Digest = digest
-	return
-}
-
-func HrwFQN(bck *cmn.Bck, contentType, objName string) (fqn string, digest uint64, err error) {
-	var (
-		mi    *fs.Mountpath
-		uname = bck.MakeUname(objName)
-	)
-	if mi, digest, err = fs.Hrw(uname); err == nil {
-		fqn = mi.MakePathFQN(bck, contentType, objName)
-	}
-	return
+	return hrwFQN, err
 }

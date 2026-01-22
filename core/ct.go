@@ -173,13 +173,27 @@ func NewCTFromBO(bck *meta.Bck, objName, ctType string, extras ...string) (ct *C
 }
 
 func (ct *CT) init(extras ...string) error {
-	var digest uint64
 	mi, digest, err := fs.Hrw(ct.bck.MakeUname(ct.objName))
 	if err != nil {
 		return err
 	}
 	ct.mi, ct.digest = mi, digest
-	ct.fqn = ct.GenFQN("", extras...)
+
+	switch ct.contentType {
+	case fs.WorkCT:
+		debug.Assert(len(extras) == 1 && extras[0] != "", "WorkCT requires work prefix")
+		ct.fqn = ct.GenFQN("", extras[0])
+	case fs.ChunkCT:
+		debug.Assert(len(extras) == 2, "ChunkCT requires uploadID and chunk number")
+		ct.fqn = ct.GenFQN("", extras[0], extras[1])
+	case fs.ChunkMetaCT:
+		debug.Assert(len(extras) <= 1, "ChunkMetaCT takes optional uploadID")
+		ct.fqn = ct.GenFQN("", extras...)
+	default:
+		// NOTE: `extras` are only meaningful for Work/Chunk content-types, others ignore them
+		// (may consider asserting though after adding an `if` into tools.PrepareObjects)
+		ct.fqn = ct.GenFQN("")
+	}
 	return nil
 }
 

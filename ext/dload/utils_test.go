@@ -108,7 +108,7 @@ func prepareObject(t *testing.T) *core.LOM {
 		ObjectSize:    1024,
 	})
 	lom := &core.LOM{}
-	err := lom.InitFQN(out.FQNs[fs.ObjCT][0], &out.Bck)
+	err := lom.InitFQN(out.FQNs[fs.ObjCT][0], out.Bck)
 	tassert.CheckFatal(t, err)
 	err = lom.Load(false, false)
 	tassert.CheckFatal(t, err)

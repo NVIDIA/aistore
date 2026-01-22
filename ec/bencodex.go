@@ -241,12 +241,12 @@ func (r *XactBckEncode) encode(lom *core.LOM, _ []byte) error {
 	if !local {
 		return nil
 	}
-	mdFQN, _, err := core.HrwFQN(lom.Bck().Bucket(), fs.ECMetaCT, lom.ObjName)
+	ct, err := core.NewCTFromBO(lom.Bck(), lom.ObjName, fs.ECMetaCT)
 	if err != nil {
 		nlog.Warningln("failed to generate md FQN for", lom.Cname(), "err:", err)
 		return err
 	}
-
+	mdFQN := ct.FQN()
 	md, err := LoadMetadata(mdFQN)
 	// If metafile exists, the object has been already encoded. But for
 	// replicated objects we have to fall through. Otherwise, bencode

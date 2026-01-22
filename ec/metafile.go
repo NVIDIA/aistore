@@ -112,11 +112,11 @@ func (md *Metadata) Clone() *Metadata {
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *meta.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := core.HrwFQN(bck.Bucket(), fs.ECMetaCT, objName)
+	ct, err := core.NewCTFromBO(bck, objName, fs.ECMetaCT)
 	if err != nil {
 		return nil, err
 	}
-	return LoadMetadata(fqn)
+	return LoadMetadata(ct.FQN())
 }
 
 func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {

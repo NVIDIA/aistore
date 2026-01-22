@@ -36,7 +36,7 @@ func TestJoggerGroup(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		Bck: out.Bck,
+		Bck: *out.Bck,
 		CTs: []string{fs.ObjCT},
 		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
@@ -73,7 +73,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		Bck: out.Bck,
+		Bck: *out.Bck,
 		CTs: []string{fs.ObjCT},
 		VisitObj: func(lom *core.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.Lsize() == desc.ObjectSize, "incorrect object size (lom probably not loaded)")
@@ -112,7 +112,7 @@ func TestJoggerGroupError(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		Bck: out.Bck,
+		Bck: *out.Bck,
 		CTs: []string{fs.ObjCT},
 		VisitObj: func(_ *core.LOM, _ []byte) error {
 			counter.Inc()
@@ -159,7 +159,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 	}
 
 	opts := &mpather.JgroupOpts{
-		Bck: out.Bck,
+		Bck: *out.Bck,
 		CTs: []string{fs.ObjCT},
 		VisitObj: func(lom *core.LOM, _ []byte) error {
 			cnt := counters[lom.Mountpath().Path].Inc()
@@ -214,7 +214,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 		counters[ct] = atomic.NewInt32(0)
 	}
 	opts := &mpather.JgroupOpts{
-		Bck: out.Bck,
+		Bck: *out.Bck,
 		CTs: cts,
 		VisitObj: func(_ *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")

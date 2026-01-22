@@ -46,7 +46,7 @@ func TestWorkerGroup(t *testing.T) {
 
 	for _, fqn := range out.FQNs[fs.ObjCT] {
 		lom := &core.LOM{}
-		err := lom.InitFQN(fqn, &out.Bck)
+		err := lom.InitFQN(fqn, out.Bck)
 		tassert.CheckError(t, err)
 
 		err = wg.PostLIF(lom)
