@@ -199,11 +199,14 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		results := p.bcastSelected(args)
 		freeBcArgs(args)
 		for _, res := range results {
-			if res.err != nil {
-				freeBcastRes(results)
-				p.writeErr(w, r, res.toErr(), res.status)
-				return
+			if res.err == nil {
+				continue
 			}
+			err := res.toErr()
+			status := res.status
+			freeBcastRes(results)
+			p.writeErr(w, r, err, status)
+			return
 		}
 		freeBcastRes(results)
 	}
