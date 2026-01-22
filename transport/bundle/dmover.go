@@ -45,6 +45,7 @@ type (
 			regged atomic.Bool
 			opened atomic.Bool
 			laterx atomic.Bool
+			unregg atomic.Bool // in UnregRecv
 		}
 		sizePDU    int32
 		maxHdrSize int32
@@ -162,34 +163,49 @@ func (dm *DM) UnregRecv() {
 	if dm == nil {
 		return
 	}
-	dm.stage.regmtx.Lock()
-	defer dm.stage.regmtx.Unlock()
 
+	dm.stage.regmtx.Lock()
 	if !dm.stage.regged.Load() {
+		dm.stage.regmtx.Unlock()
 		nlog.WarningDepth(1, "duplicated unreg:", dm.String())
 		return
 	}
-	defer dm.stage.regged.Store(false)
 
-	if xctn := dm.xctn(); xctn != nil {
+	// only one UnregRecv() goes through
+	if !dm.stage.unregg.CAS(false, true) {
+		dm.stage.regmtx.Unlock()
+		nlog.WarningDepth(1, "duplicated unreg:", dm.String())
+		return
+	}
+
+	xctn := dm.xctn()
+	if xctn != nil {
+		// quiesce outside locks
+		dm.stage.regmtx.Unlock()
 		timeout := dm.config.Transport.QuiesceTime.D()
 		if xctn.IsAborted() {
 			timeout = time.Second
 		}
 		dm.quiesce(timeout)
+		dm.stage.regmtx.Lock()
 	}
+	defer dm.stage.regmtx.Unlock()
+
 	if err := transport.Unhandle(dm.data.trname); err != nil {
-		nlog.ErrorDepth(1, "FATAL:", err, "[", dm.data.trname, dm.String(), "]")
+		nlog.ErrorDepth(1, err, "[", dm.data.trname, dm.String(), "]")
 	}
 	if dm.useACKs() {
 		if err := transport.Unhandle(dm.ack.trname); err != nil {
-			nlog.ErrorDepth(1, "FATAL:", err, "[", dm.ack.trname, dm.String(), "]")
+			nlog.ErrorDepth(1, err, "[", dm.ack.trname, dm.String(), "]")
 		}
 	}
+
+	dm.stage.regged.Store(false)
+	dm.stage.unregg.Store(false)
 }
 
 func (dm *DM) IsFree() bool {
-	return !dm.stage.regged.Load()
+	return !dm.stage.regged.Load() && !dm.stage.unregg.Load()
 }
 
 func (dm *DM) Open() {
