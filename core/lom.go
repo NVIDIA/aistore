@@ -64,7 +64,6 @@ type (
 		FQN     string
 		md      lmeta  // on-disk metadata
 		digest  uint64 // uname digest
-		isHRW   bool
 	}
 )
 
@@ -143,7 +142,15 @@ func (lom *LOM) Lsize(special ...bool) int64 {
 
 func (lom *LOM) loaded() bool { return lom.md.lid != 0 } // internal
 
-func (lom *LOM) IsHRW() bool { return lom.isHRW }
+func (lom *LOM) IsHRW() bool { return lom.md.flags&lmflHRW != 0 }
+
+func (lom *LOM) setHRW(v bool) {
+	if v {
+		lom.md.flags |= lmflHRW
+	} else {
+		lom.md.flags &^= lmflHRW
+	}
+}
 
 // given an existing (on-disk) object, determines whether it is a _copy_
 // (compare with isMirror below)
@@ -872,14 +879,13 @@ func (lom *LOM) ShortenFntl() []string {
 	return []string{nfqn, noname}
 }
 
-// TODO -- FIXME: revisit metaver v2 usage
 func (lom *LOM) fixupFntl() {
 	if !fs.IsFntl(lom.ObjName) {
 		return
 	}
 	lom.ObjName = fs.ShortenFntl(lom.FQN)                             // noname
 	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjCT, lom.ObjName) // nfqn
-	lom.isHRW = true
+	lom.setHRW(true)
 }
 
 func (lom *LOM) OrigFntl() []string {

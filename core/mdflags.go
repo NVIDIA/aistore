@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -11,8 +11,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// LOM.md.lid (lomBID) MSB => LSB layout
+// (I) Legacy metadata flags (v1 and v2)
 //
+// LOM.md.lid (lomBID) MSB => LSB layout
 // [63]=AisBID | [62:60]=legacy flags (3 bits) | [59:0]=serial
 
 const (
@@ -61,3 +62,14 @@ func (lid lomBID) clrlmfl(fl lomFlags) lomBID {
 	debug.Assert(fl <= lomFlags(flagsV1>>bitshift))
 	return lomBID(uint64(lid) & ^(uint64(fl) << bitshift))
 }
+
+//
+// (II) Metadata version v2 only: lmeta.flags (see description in core/lom_xattr.go)
+//
+
+const (
+	lmflHRW = uint64(1) << 63 // high bit: object is at HRW location (runtime-only)
+)
+
+// runtime-only bits may need a (future) mask, e.g.:
+// lmflRuntimeMask = uint64(0xF) << 60 // bits 60–63

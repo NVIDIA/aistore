@@ -483,7 +483,9 @@ func (md *lmeta) unpack(buf []byte) error {
 			if seen&haveFlags != 0 {
 				return errors.New(badLmeta + " #7")
 			}
-			md.flags = binary.BigEndian.Uint64(record[cos.SizeofI16:])
+			flags := binary.BigEndian.Uint64(record[cos.SizeofI16:])
+			debug.Assert(flags&lmflHRW == 0, "unexpected persisted HRW bit")
+			md.flags = (md.flags & lmflHRW) | (flags &^ lmflHRW)
 			seen |= haveFlags
 		default:
 			return errors.New(badLmeta + " #101")
@@ -535,7 +537,8 @@ func (md *lmeta) pack(mdSize int64) (buf []byte) {
 	buf = _prbp(buf, b8[:], packedLid)
 
 	// flags (v2)
-	binary.BigEndian.PutUint64(b8[:], md.flags)
+	flags := md.flags &^ lmflHRW
+	binary.BigEndian.PutUint64(b8[:], flags)
 	buf = _prb(buf, b8[:], packedFlags)
 
 	// copies
