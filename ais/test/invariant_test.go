@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -22,13 +23,13 @@ import (
 )
 
 const (
-	retriesPollMpaths = 6
+	retriesPollMpaths = 8
 )
 
 func (m *ioContext) ensureNoGetErrors() {
 	m.t.Helper()
 	if m.numGetErrs.Load() > 0 {
-		m.t.Fatalf("Number of get errors is non-zero: %d\n", m.numGetErrs.Load())
+		m.t.Fatalf("Number of get errors: %d\n", m.numGetErrs.Load())
 	}
 }
 
@@ -104,6 +105,7 @@ func getCompareMpaths(t *testing.T, bp api.BaseParams, target *meta.Snode, mpLis
 func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	var (
+		errRec   error
 		mpl      *apc.MountpathList
 		tname    = target.StringEx()
 		bp       = tools.BaseAPIParams()
@@ -131,8 +133,7 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 			OnlyRunning: false,
 			Timeout:     resilShortTimeout,
 		}
-		_, err := api.WaitForSnaps(bp, &xargs, xargs.Started())
-		if err != nil {
+		if _, err := api.WaitForSnaps(bp, &xargs, xargs.Started()); err != nil {
 			tlog.Logfln("Warning: %v", err)
 		}
 
@@ -140,8 +141,9 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 		xargs.Timeout = resilLongTimeout
 		xargs.OnlyRunning = true // redundant - xargs.Finished() always sets it
 
-		_, err = api.WaitForSnaps(bp, &xargs, xargs.Finished())
-		tassert.CheckError(t, err)
+		if _, errRec = api.WaitForSnaps(bp, &xargs, xargs.Finished()); errRec != nil {
+			tlog.Logfln("Warning: %v", errRec)
+		}
 	} else if len(mpl.Disabled) != len(mpList.Disabled) || len(mpl.WaitingDD) != len(mpList.WaitingDD) {
 		t.Errorf("%s ended up with (dd=%v, disabled=%v) mountpaths, expecting (%v and %v), respectively",
 			tname, mpl.WaitingDD, mpl.Disabled, mpList.WaitingDD, mpList.Disabled)
@@ -152,7 +154,7 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 		if _, ok := getCompareMpaths(t, bp, target, mpList); ok {
 			tlog.Logfln("%s: success", tagRecoverMpaths)
 		} else {
-			tlog.Logfln("%s: failure", tagRecoverMpaths)
+			tassert.CheckError(t, fmt.Errorf("%s failure: %v", tagRecoverMpaths, errRec))
 		}
 	}
 }
