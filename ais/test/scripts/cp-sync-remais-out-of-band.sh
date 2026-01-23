@@ -1,5 +1,10 @@
 #!/bin/bash
 
+## Helper function to extract just the count number from "Listed N names ..." output
+get_count() {
+  echo "$1" | awk '{print $2}'
+}
+
 ## Prerequisites: #################################################################################
 # - cloud bucket
 # - aistore cluster
@@ -65,7 +70,7 @@ cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 echo " 2. copy $src => $dst"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
 echo " 3. remove 10 shards from the source"
 ais rmo "$src/$prf/shard-{51..60}.tar" --wait 1>/dev/null 2>&1
@@ -74,7 +79,7 @@ cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 echo " 4. copy $src => $dst w/ synchronization ('--sync' option)"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
 echo " 5. remove another 10 shards"
 ais rmo "$src/$prf/shard-{151..160}.tar" --wait 1>/dev/null 2>&1
@@ -83,7 +88,7 @@ cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 echo " 6. copy multiple objects using bash-expansion defined range and '--sync'"
 ais cp "$src/$prf/shard-{001..500}.tar" $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
 echo " #"
 echo " # out of band DELETE using remote AIS (remais)"
@@ -96,11 +101,11 @@ cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 echo " 8. copy $src => $dst w/ --sync"
 ais cp $src $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
 echo " 9. when copying, we always synchronize content of the in-cluster source as well"
 cnt_src_cached=$(ais ls $src --prefix $prf --cached | grep Listed)
-[[ $cnt_src_cached == $cnt_src ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
+[[ $(get_count "$cnt_src_cached") == $(get_count "$cnt_src") ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
 
 echo "10. use remais to out-of-band remove 10 more shards from $src source"
 AIS_ENDPOINT=$rendpoint ais rmo "$src/$prf/shard-{351..360}.tar" --wait 1>/dev/null 2>&1
@@ -109,11 +114,11 @@ cnt_src=$(ais ls $src --prefix $prf | grep Listed)
 echo "11. copy a range of shards from $src to $dst, and compare"
 ais cp "$src/$prf/shard-{001..500}.tar" $dst --sync --wait 1>/dev/null 2>&1
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
 
 echo "12. and again: when copying, we always synchronize content of the in-cluster source as well"
 cnt_src_cached=$(ais ls $src --prefix $prf --cached | grep Listed)
-[[ $cnt_src_cached == $cnt_src ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
+[[ $(get_count "$cnt_src_cached") == $(get_count "$cnt_src") ]] || { echo "FAIL: '$cnt_src_cached' != '$cnt_src'"; exit 1; }
 
 echo " #"
 echo " # out of band ADD using remote AIS (remais)"
@@ -128,4 +133,4 @@ ais cp "$src/$prf/shard-{001..600}.tar" $dst --sync --wait 1>/dev/null 2>&1
 
 echo "15. compare the contents but NOTE: as of v3.22, this part requires multi-object copy (using '--list' or '--template')"
 cnt_dst=$(ais ls $dst --prefix $prf | grep Listed)
-[[ $cnt_src == $cnt_dst ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
+[[ $(get_count "$cnt_src") == $(get_count "$cnt_dst") ]] || { echo "FAIL: '$cnt_src' != '$cnt_dst'"; exit 1; }
