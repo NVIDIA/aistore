@@ -370,3 +370,23 @@ func ParseUname(uname string, withObjname bool) (*Bck, string, error) {
 		return CloneBck(&bck), objName, nil
 	}
 }
+
+//
+// x-moss and ais/ml helper
+//
+
+func BckFromUBP(uname, bucket, provider string) (*Bck, error) {
+	// uname takes precedence
+	if uname != "" {
+		b, _, err := ParseUname(uname, false)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
+	}
+	if bucket == "" {
+		return nil, nil
+	}
+	np, err := cmn.NormalizeProvider(provider)
+	return &Bck{Name: bucket, Provider: np}, err
+}

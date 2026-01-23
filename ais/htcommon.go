@@ -800,7 +800,7 @@ type apiRequest struct {
 	items  []string // out: URL items after the prefix
 
 	after  int // in: the number of items after the prefix
-	bckIdx int // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
+	bckIdx int // TODO: used only httpecget() - optimize out
 }
 
 var (

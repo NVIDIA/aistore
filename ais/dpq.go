@@ -85,6 +85,9 @@ type (
 
 		// Special use (internal context)
 		isS3 bool // frontend S3 API
+
+		// GetBatch apc.ColocLevel
+		coloc uint8
 	}
 )
 
@@ -183,6 +186,11 @@ func (dpq *dpq) parse(rawQuery string) error {
 		case apc.QparamSync:
 			dpq.sync = cos.IsParseBool(value)
 
+		case apc.QparamColoc:
+			var coloc uint64
+			coloc, err = strconv.ParseUint(value, 10, 8)
+			dpq.coloc = uint8(coloc)
+
 		// System fields
 		case apc.QparamUnixTime:
 			dpq.sys.ptime = value
@@ -207,7 +215,8 @@ func (dpq *dpq) parse(rawQuery string) error {
 
 		// Parameters that don't need unescaping
 		case apc.QparamMptUploadID, apc.QparamMptPartNo, apc.QparamFltPresence, apc.QparamBinfoWithOrWithoutRemote,
-			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs:
+			apc.QparamAppendType, apc.QparamETLName, apc.QparamETLTransformArgs,
+			apc.QparamTID:
 			dpq.m[key] = value
 
 		// Finally, assorted named exceptions that we simply skip, and b) all the rest parameters

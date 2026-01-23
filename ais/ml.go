@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -41,6 +40,8 @@ import (
 // phase 3 (GET): Client → DT (redirected)
 //   DT: Assemble() → Use pre-existing basewi state
 // -----------------------------------------------------------------------
+
+// TODO: add support for apc.ColocTwo
 
 func (p *proxy) mlHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -89,18 +90,19 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 
 	// query params; bucket
 	var (
-		q      = r.URL.Query() // TODO -- FIXME: use dpq
 		bucket string
 		bck    *meta.Bck
 		coloc  apc.ColocLevel
+		dpq    = dpqAlloc()
 	)
-	if s := q.Get(apc.QparamColoc); s != "" {
-		v, err := strconv.ParseUint(s, 10, 8)
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		coloc = apc.ColocLevel(v)
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		p.writeErr(w, r, err)
+		return
+	}
+	defer dpqFree(dpq)
+
+	if dpq.coloc > 0 {
+		coloc = apc.ColocLevel(dpq.coloc)
 		if coloc > apc.ColocTwo {
 			p.writeErr(w, r, fmt.Errorf("invalid '%s=%d' (expecting 0, 1, or 2)", apc.QparamColoc, coloc))
 			return
@@ -113,13 +115,13 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 			bckArgs.p = p
 			bckArgs.w = w
 			bckArgs.r = r
-			bckArgs.query = q
+			bckArgs.dpq = dpq
 			bckArgs.perms = apc.AceGET
 			bckArgs.createAIS = false
 		}
 
 		var err error
-		if bck, err = newBckFromQ(bucket, q, nil); err != nil {
+		if bck, err = newBckFromQ(bucket, nil, dpq); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -164,21 +166,21 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if q == nil {
-		q = url.Values{apc.QparamTID: []string{tsi.ID()}}
+	raw := r.URL.RawQuery
+	if raw == "" {
+		raw = apc.QparamTID + "=" + tsi.ID()
 	} else {
-		q.Set(apc.QparamTID, tsi.ID())
+		raw += "&" + apc.QparamTID + "=" + tsi.ID()
 	}
-
 	// phase 1: call DT
 	var (
 		wid  = cos.GenYAID(p.SID())
 		xid  = placeholderXID
 		hreq = cmn.HreqArgs{
-			Method: http.MethodPost,
-			Path:   tmosspath(bucket, xid, wid, nat),
-			Query:  q,
-			Body:   body,
+			Method:   http.MethodPost,
+			Path:     tmosspath(bucket, xid, wid, nat),
+			RawQuery: raw,
+			Body:     body,
 		}
 	)
 	cargs := allocCargs()
@@ -271,22 +273,21 @@ func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta
 	for i := range req.In {
 		var (
 			in  = &req.In[i]
-			bck = dfltBck
+			err error
+			tsi *meta.Snode
+			bck *meta.Bck
 		)
-		debug.Assert(in.Uname == "", "reuse x-moss _bucket() impl") // TODO -- FIXME
-		if in.Bucket != "" {
-			np, err := cmn.NormalizeProvider(in.Provider)
-			if err != nil {
-				return nil, err
-			}
-			bck = &meta.Bck{Name: in.Bucket, Provider: np}
+		if bck, err = meta.BckFromUBP(in.Uname, in.Bucket, in.Provider); err != nil {
+			return nil, err
+		}
+		if bck == nil {
+			bck = dfltBck
 		}
 		if bck == nil {
 			return nil, fmt.Errorf("missing bucket specification for object %q", in.ObjName)
 		}
 
-		tsi, err := smap.HrwName2T(bck.MakeUname(in.ObjName))
-		if err != nil {
+		if tsi, err = smap.HrwName2T(bck.MakeUname(in.ObjName)); err != nil {
 			return nil, err
 		}
 		tid := tsi.ID()
@@ -300,7 +301,7 @@ func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta
 			score++
 		default:
 			if m == nil {
-				m = make(map[string]int, nat)
+				m = make(map[string]int, min(nat, len(req.In)))
 				m[single] = score
 			}
 			m[tid]++
@@ -564,10 +565,22 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx)
 	}
 	debug.Assert(ctx.nat > 0 && ctx.nat < 10_000, ctx.nat)
 
-	q := r.URL.Query() // TODO: dpq
-	ctx.tid = q.Get(apc.QparamTID)
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
+		t.writeErr(w, r, err)
+		return err
+	}
+
+	ctx.tid = dpq.get(apc.QparamTID)
+	if ctx.tid != "" {
+		if err := cos.ValidateDaemonID(ctx.tid); err != nil {
+			t.writeErr(w, r, err)
+			return err
+		}
+	}
 	if bucket != "" {
-		ctx.bck, err = newBckFromQ(bucket, q, nil)
+		ctx.bck, err = newBckFromQ(bucket, nil, dpq)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return err

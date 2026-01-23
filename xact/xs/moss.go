@@ -813,34 +813,18 @@ func (r *XactMoss) _lom(in *apc.MossIn, smap *meta.Smap) (lom *core.LOM, tsi *me
 
 // per-object override, if specified
 func (r *XactMoss) _bucket(in *apc.MossIn) (*meta.Bck, error) {
+	if bck, err := meta.BckFromUBP(in.Uname, in.Bucket, in.Provider); bck != nil || err != nil {
+		return bck, err
+	}
 	// default
 	bck := r.Bck()
-
-	// uname override
-	if in.Uname != "" {
-		b, _, err := meta.ParseUname(in.Uname, false)
-		if err != nil {
-			return nil, err
-		}
-		return b, nil
+	if bck != nil {
+		return bck, nil
 	}
-
-	// (bucket, provider) override
-	if in.Bucket != "" {
-		np, err := cmn.NormalizeProvider(in.Provider)
-		if err != nil {
-			return nil, err
-		}
-		return &meta.Bck{Name: in.Bucket, Provider: np}, nil
+	if in.ArchPath == "" {
+		return nil, fmt.Errorf("%s: missing bucket specification for object %q", r.Name(), in.ObjName)
 	}
-
-	if bck == nil {
-		if in.ArchPath == "" {
-			return nil, fmt.Errorf("%s: missing bucket specification for object %q", r.Name(), in.ObjName)
-		}
-		return nil, fmt.Errorf("%s: missing bucket specification for archived file %s/%s", r.Name(), in.ObjName, in.ArchPath)
-	}
-	return bck, nil
+	return nil, fmt.Errorf("%s: missing bucket specification for archived file %s/%s", r.Name(), in.ObjName, in.ArchPath)
 }
 
 func (*XactMoss) bewarmFQN(fqn string) {
