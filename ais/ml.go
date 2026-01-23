@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -23,6 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // -----------------------------------------------------------------------
@@ -85,13 +87,27 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// query params; bucket
 	var (
-		q      url.Values
+		q      = r.URL.Query() // TODO -- FIXME: use dpq
 		bucket string
+		bck    *meta.Bck
+		coloc  apc.ColocLevel
 	)
+	if s := q.Get(apc.QparamColoc); s != "" {
+		v, err := strconv.ParseUint(s, 10, 8)
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		coloc = apc.ColocLevel(v)
+		if coloc > apc.ColocTwo {
+			p.writeErr(w, r, fmt.Errorf("invalid '%s=%d' (expecting 0, 1, or 2)", apc.QparamColoc, coloc))
+			return
+		}
+	}
 	if len(items) == 2 {
 		bucket = items[1]
-		q = r.URL.Query()
 		bckArgs := allocBctx()
 		{
 			bckArgs.p = p
@@ -101,31 +117,50 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 			bckArgs.perms = apc.AceGET
 			bckArgs.createAIS = false
 		}
-		if bckArgs.bck, err = newBckFromQ(bucket, q, nil); err != nil {
+
+		var err error
+		if bck, err = newBckFromQ(bucket, q, nil); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		_, err := bckArgs.initAndTry()
+		bckArgs.bck = bck
+		_, err = bckArgs.initAndTry()
 		freeBctx(bckArgs)
 		if err != nil {
 			return
 		}
 	}
 
-	// DT
-	var (
-		smap      = p.owner.smap.get()
-		nat       = smap.CountActiveTs()
-		tsi, errT = smap.HrwTargetTask(cos.GenTie())
-	)
-	if errT != nil {
-		p.writeErr(w, r, errT)
-		return
-	}
-
+	// body
 	body, errB := cmn.ReadBytes(r) // read api.MossReq but not unmarshal it
 	if errB != nil {
 		p.writeErr(w, r, errB)
+		return
+	}
+
+	// DT
+	var (
+		smap = p.owner.smap.get()
+		nat  = smap.CountActiveTs()
+		tsi  *meta.Snode
+		errT error
+	)
+	if coloc >= apc.ColocOne {
+		var req apc.MossReq
+		if err := jsoniter.Unmarshal(body, &req); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		if err := _checkMossEmpty(&req); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		tsi, errT = _selectDT(&req, bck, smap, nat)
+	} else {
+		tsi, errT = smap.HrwTargetTask(cos.GenTie())
+	}
+	if errT != nil {
+		p.writeErr(w, r, errT)
 		return
 	}
 
@@ -220,6 +255,63 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		nlog.Infoln(r.Method, items, "=> redirect to", tsi.String(), "at", redirectURL)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+}
+
+//
+// proxy: select DT when requested via apc.QparamColoc -----------------------------------------
+//
+
+func _selectDT(req *apc.MossReq, dfltBck *meta.Bck, smap *smapX, nat int) (*meta.Snode, error) {
+	var (
+		m      map[string]int // the map of scores or hits: req.In entries => target
+		single string         // when all entries HRW => single target
+		dt     string         // designated target
+		score  int            // max running score
+	)
+	for i := range req.In {
+		var (
+			in  = &req.In[i]
+			bck = dfltBck
+		)
+		debug.Assert(in.Uname == "", "reuse x-moss _bucket() impl") // TODO -- FIXME
+		if in.Bucket != "" {
+			np, err := cmn.NormalizeProvider(in.Provider)
+			if err != nil {
+				return nil, err
+			}
+			bck = &meta.Bck{Name: in.Bucket, Provider: np}
+		}
+		if bck == nil {
+			return nil, fmt.Errorf("missing bucket specification for object %q", in.ObjName)
+		}
+
+		tsi, err := smap.HrwName2T(bck.MakeUname(in.ObjName))
+		if err != nil {
+			return nil, err
+		}
+		tid := tsi.ID()
+
+		switch {
+		case single == "":
+			single = tid
+			dt = tid
+			score = 1
+		case single == tid && m == nil:
+			score++
+		default:
+			if m == nil {
+				m = make(map[string]int, nat)
+				m[single] = score
+			}
+			m[tid]++
+			if score < m[tid] {
+				score = m[tid]
+				dt = tid
+			}
+		}
+	}
+
+	return smap.GetTarget(dt), nil
 }
 
 //
@@ -428,6 +520,13 @@ func (ctx *mossCtx) phase2(w http.ResponseWriter, r *http.Request, config *cmn.C
 	}
 }
 
+func _checkMossEmpty(req *apc.MossReq) (err error) {
+	if len(req.In) == 0 {
+		err = errors.New(apc.Moss + ": empty input")
+	}
+	return
+}
+
 // parse tmosspath()
 func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx) (err error) {
 	var (
@@ -479,8 +578,7 @@ func (t *target) mossparse(w http.ResponseWriter, r *http.Request, ctx *mossCtx)
 	if err := cmn.ReadJSON(w, r, ctx.req); err != nil {
 		return err
 	}
-	if len(ctx.req.In) == 0 {
-		err := errors.New(apc.Moss + ": empty input") // TODO: unify errs
+	if err := _checkMossEmpty(ctx.req); err != nil {
 		t.writeErr(w, r, err)
 		return err
 	}

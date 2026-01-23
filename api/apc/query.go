@@ -214,8 +214,6 @@ const (
 	QparamClusterInfo      = "cii" // true: /Health to return `cos.NodeStateInfo` including cluster metadata versions and state flags
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 
-	QparamTID = "tid" // designated target
-
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
 
 	// dsort
@@ -239,6 +237,10 @@ const (
 	QparamSmapVer = "vpams"
 	QparamNonce   = "x"
 	QparamHMAC    = "u"
+
+	// GetBatch
+	QparamTID   = "tid"   // designated target
+	QparamColoc = "coloc" // colocation hint: enum { 0=ColocNone, 1=ColocOne, 2=ColocTwo }
 )
 
 // QparamWhat enum.

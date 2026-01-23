@@ -38,6 +38,16 @@ import (
 //     - with "__404__/" prefix and zero size
 //     - if you extract resulting TAR you'll find them all in one place: under __404__/<Bucket>/<ObjName>
 //
+// - Colocation hint:
+//   - 0 (default): no optimization - suitable for uniformly distributed data lakes where objects are spread
+//     evenly across all targets
+//   - 1: target-aware - indicates that objects in this batch are collocated on few targets;
+//     proxy will compute HRW distribution and select the optimal distributed target (DT) to minimize
+//     cross-cluster data movement
+//   - 2: target and shard-aware - implies level 1, plus indicates that archpaths are collocated in few shards;
+//     enables additional optimization for archive handle reuse
+//   E.g., use level 1 or 2 when input TARs were constructed to requested batches.
+//
 // - Returned size:
 //   - when the requested file is found the corresponding MossOut.Size will be equal (the number of bytes in the respective TAR-ed payload)
 //     - but when read range is defined: MossOut.Size = (length of this range)
@@ -49,6 +59,14 @@ const (
 const (
 	MossMetaPart = "metadata"
 	MossDataPart = "archive"
+)
+
+type ColocLevel uint8
+
+const (
+	ColocNone ColocLevel = iota // no optimization
+	ColocOne                    // target-aware: when routing request, select DT (leader) to maximize number of entries per target
+	ColocTwo                    // shard-aware: ColocOne + cache hot shards in memory
 )
 
 type (
@@ -66,11 +84,12 @@ type (
 	}
 	// swagger:model
 	MossReq struct {
-		OutputFormat  string   `json:"mime,omitempty"` // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
-		In            []MossIn `json:"in"`             // of arbitrary size >= 1
-		ContinueOnErr bool     `json:"coer,omitempty"` // primary usage: ignore missing files and/or objects - include them under "__404__/" prefix and keep going
-		OnlyObjName   bool     `json:"onob"`           // name-in-archive: default naming convention is <Bucket>/<ObjName>; set this flag to have <ObjName> only
-		StreamingGet  bool     `json:"strm"`           // stream resulting archive prior to finalizing it in memory
+		OutputFormat  string     `json:"mime,omitempty"`  // enum { archive.ExtTar, archive.ExtTGZ, ... } from "cmn/archive/mime.go"; empty string defaults to TAR
+		In            []MossIn   `json:"in"`              // of arbitrary size >= 1
+		ContinueOnErr bool       `json:"coer,omitempty"`  // primary usage: ignore missing files and/or objects - include them under "__404__/" prefix and keep going
+		OnlyObjName   bool       `json:"onob"`            // name-in-archive: default naming convention is <Bucket>/<ObjName>; set this flag to have <ObjName> only
+		StreamingGet  bool       `json:"strm"`            // stream resulting archive prior to finalizing it in memory
+		Colocation    ColocLevel `json:"coloc,omitempty"` // enum { 0=ColocNone, 1=ColocOne, 2=ColocTwo }
 	}
 	// swagger:model
 	MossOut struct {

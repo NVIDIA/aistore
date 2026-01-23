@@ -120,11 +120,14 @@ func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.Mountpath
 	}
 
 	if len(mpl.Available) != len(mpList.Available) {
-		t.Errorf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
+		endedUp := fmt.Sprintf("%s ended up with %d mountpaths (dd=%v, disabled=%v), expecting: %d",
 			tname, len(mpl.Available), mpl.WaitingDD, mpl.Disabled, len(mpList.Available))
 		if !bestEffortReenableDisabledMPs(t, bp, target, mpList, mpl) {
+			t.Error(endedUp)
 			return
 		}
+		tlog.Logfln("Warning: %s", endedUp)
+
 		recovery = true
 		tlog.Logfln("%s: wait resilver started on %s", tagRecoverMpaths, tname)
 		xargs := xact.ArgsMsg{

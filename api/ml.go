@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -44,6 +45,15 @@ import (
 //   - missing files will be present in the resulting TAR
 //     - with "__404__/" prefix and zero size
 //     - if you extract resulting TAR you'll find them all in one place: under __404__/<Bucket>/<ObjName>
+// - Colocation hint:
+//   - 0 (default): no optimization - suitable for uniformly distributed data lakes where objects are spread
+//     evenly across all targets
+//   - 1: target-aware - indicates that objects in this batch are collocated on few targets;
+//     proxy will compute HRW distribution and select the optimal distributed target (DT) to minimize
+//     cross-cluster data movement
+//   - 2: target and shard-aware - implies level 1, plus indicates that archpaths are collocated in few shards;
+//     enables additional optimization for archive handle reuse
+//   E.g., use level 1 or 2 when input TARs were constructed to requested batches.
 // - Returned size:
 //   - when the requested file is found the corresponding MossOut.Size will be equal (the number of bytes in the respective TAR-ed payload)
 //     - but when read range is defined: MossOut.Size = (length of this range)
@@ -138,6 +148,9 @@ func _makeMossReq(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (*ReqParams, url
 	rp.Body = cos.MustMarshal(req)
 	rp.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	rp.Query = q
+	if req.Colocation > apc.ColocNone {
+		q.Set(apc.QparamColoc, strconv.Itoa(int(req.Colocation)))
+	}
 
 	return rp, q, nil
 }
