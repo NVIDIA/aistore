@@ -186,7 +186,7 @@ func (s *base) startSend(streamable fmt.Stringer) (err error) {
 
 func (s *base) newErr(ctx string) error {
 	reason, errT := s.TermInfo()
-	return &ErrStreamTerm{
+	return &errStreamTerm{
 		err:    errT,
 		dst:    s.dstID,
 		loghdr: s.loghdr,

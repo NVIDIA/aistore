@@ -32,7 +32,7 @@ const (
 // (do not wrap %w these errors; use Unwrap)
 type (
 	// Tx
-	ErrStreamTerm struct {
+	errStreamTerm struct {
 		err    error
 		loghdr string
 		dst    string // destination node ID // TODO: needed?
@@ -51,11 +51,12 @@ type (
 )
 
 ///////////////////
-// ErrStreamTerm //
+// errStreamTerm //
 ///////////////////
 
-func (e *ErrStreamTerm) Error() string {
+func (e *errStreamTerm) Error() string {
 	debug.Assert(e.err != nil)
+	debug.Assert(!cos.IsTypedNil(e.err))
 	debug.Assert(strings.Contains(e.loghdr, e.dst), e.loghdr, " vs ", e.dst)
 
 	var sb cos.SB
@@ -75,7 +76,7 @@ func (e *ErrStreamTerm) Error() string {
 	return sb.String()
 }
 
-func (e *ErrStreamTerm) Unwrap() error { return e.err }
+func (e *errStreamTerm) Unwrap() error { return e.err }
 
 ////////////
 // ErrSBR //
