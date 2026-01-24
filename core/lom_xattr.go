@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -274,6 +274,9 @@ func NewErrFailedTo(actor fmt.Stringer, action string, what any, err error, ecod
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
+	if cos.IsTypedNil(err) {
+		err = nil
+	}
 
 	e := &ErrFailedTo{action: action, what: what, err: err}
 	e.actor = thisNodeName
@@ -303,6 +306,7 @@ func IsErrFailedTo(err error) bool {
 // ErrStreamTerminated
 
 func NewErrStreamTerminated(stream string, err error, reason, detail string) *ErrStreamTerminated {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrStreamTerminated{stream: stream, err: err, reason: reason, detail: detail}
 }
 
@@ -320,7 +324,11 @@ func IsErrStreamTerminated(err error) bool {
 // ErrUnsupp & ErrNotImpl
 
 func NewErrUnsupp(action, what string) *ErrUnsupp { return &ErrUnsupp{action: action, what: what} }
-func NewErrUnsuppErr(err error) *ErrUnsupp        { return &ErrUnsupp{err: err} }
+
+func NewErrUnsuppErr(err error) *ErrUnsupp {
+	debug.Assert(!cos.IsTypedNil(err))
+	return &ErrUnsupp{err: err}
+}
 
 func (e *ErrUnsupp) Error() string {
 	if e.err != nil {
@@ -516,6 +524,7 @@ func IsErrCapExceeded(err error) bool {
 // ErrGetCap
 
 func NewErrGetCap(err error) *ErrGetCap {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrGetCap{err: err}
 }
 
@@ -582,6 +591,7 @@ func NewErrInvalidaMountpath(mpath, cause string) *ErrInvalidMountpath {
 // ErrMpathNoDisks
 
 func NewErrMpathNoDisks(mpath, fsname string, err error) *ErrMpathNoDisks {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrMpathNoDisks{mpath: mpath, fs: fsname, err: err}
 }
 
@@ -619,6 +629,7 @@ func IsErrMpathNewDisk(err error) bool {
 // ErrMpathCheck
 
 func NewErrMpathCheck(err error) *ErrMpathCheck {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrMpathCheck{err: err}
 }
 
@@ -634,6 +645,7 @@ func IsErrMpathCheck(err error) bool {
 // ErrInvalidFSPathsConf
 
 func NewErrInvalidFSPathsConf(err error) *ErrInvalidFSPathsConf {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrInvalidFSPathsConf{err}
 }
 
@@ -862,9 +874,13 @@ func IsErrWarning(err error) bool {
 
 // ErrLmetaCorrupted & ErrLmetaNotFound
 
-func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted { return &ErrLmetaCorrupted{err} }
-func (e *ErrLmetaCorrupted) Error() string              { return e.err.Error() }
-func (e *ErrLmetaCorrupted) Unwrap() (err error)        { return e.err }
+func NewErrLmetaCorrupted(err error) *ErrLmetaCorrupted {
+	debug.Assert(!cos.IsTypedNil(err))
+	return &ErrLmetaCorrupted{err}
+}
+
+func (e *ErrLmetaCorrupted) Error() string       { return e.err.Error() }
+func (e *ErrLmetaCorrupted) Unwrap() (err error) { return e.err }
 
 func IsErrLmetaCorrupted(err error) bool {
 	_, ok := err.(*ErrLmetaCorrupted)
@@ -872,6 +888,7 @@ func IsErrLmetaCorrupted(err error) bool {
 }
 
 func NewErrLmetaNotFound(name string, err error) *ErrLmetaNotFound {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrLmetaNotFound{name: name, err: err}
 }
 
@@ -937,6 +954,9 @@ func (e *ErrXactTgtInMaint) Error() string {
 // http.StatusRequestedRangeNotSatisfiable = 416 // RFC 9110, 15.5.17
 
 func NewErrRangeNotSatisfiable(err error, ranges []string, size int64) *ErrRangeNotSatisfiable {
+	if cos.IsTypedNil(err) {
+		err = nil
+	}
 	return &ErrRangeNotSatisfiable{err, ranges, size}
 }
 
@@ -956,6 +976,7 @@ func IsErrRangeNotSatisfiable(err error) bool {
 // ErrTooManyRequests (429, 503)
 
 func NewErrTooManyRequests(err error, status int) *ErrTooManyRequests {
+	debug.Assert(!cos.IsTypedNil(err))
 	return &ErrTooManyRequests{err, status}
 }
 
