@@ -9,6 +9,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 ### Added
 - `Object.head_v2()` API for selective property retrieval (experimental)
 - `ObjectAttributesV2` with chunk info (`chunk_count`, `max_chunk_size`)
+- Add `Colocation` IntEnum and `colocation` parameter to `Batch` for optimization hints (`Colocation.NONE`, `Colocation.TARGET_AWARE`, `Colocation.TARGET_AND_SHARD_AWARE`)
 
 ### Changed
 

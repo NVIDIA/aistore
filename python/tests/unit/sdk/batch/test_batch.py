@@ -17,6 +17,8 @@ from aistore.sdk.batch.extractor.archive_stream_extractor import ArchiveStreamEx
 from aistore.sdk.batch.multipart.multipart_decoder import MultipartDecoder
 from aistore.sdk.batch.types import MossOut, MossResp
 from aistore.sdk.bucket import Bucket
+from aistore.sdk.const import QPARAM_COLOC
+from aistore.sdk.enums import Colocation
 from aistore.sdk.errors import AISError
 from aistore.sdk.obj.object import Object
 from aistore.sdk.request_client import RequestClient
@@ -1233,6 +1235,246 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(self.mock_request_client.request.call_count, 2)
         self.assertEqual(len(result2), 1)
         self.assertEqual(result2[0][0].obj_name, "file2.txt")
+
+    # ===========================================
+    # Colocation Tests
+    # ===========================================
+
+    def test_batch_init_default_colocation(self):
+        """Test Batch initialization with default colocation (Colocation.NONE)."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+        )
+
+        # Default colocation (Colocation.NONE) results in None in MossReq
+        self.assertIsNone(batch.request.colocation)
+
+    def test_batch_init_with_colocation_none(self):
+        """Test Batch initialization with explicit Colocation.NONE."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.NONE,
+        )
+
+        # Colocation.NONE results in None (not serialized to server)
+        self.assertIsNone(batch.request.colocation)
+
+    def test_batch_init_with_colocation_target_aware(self):
+        """Test Batch initialization with Colocation.TARGET_AWARE."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AWARE,
+        )
+
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AWARE)
+
+    def test_batch_init_with_colocation_target_and_shard_aware(self):
+        """Test Batch initialization with Colocation.TARGET_AND_SHARD_AWARE."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AND_SHARD_AWARE,
+        )
+
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
+
+    def test_batch_init_with_invalid_colocation_raises_error(self):
+        """Test Batch initialization with invalid colocation value raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            Batch(
+                self.mock_request_client,
+                objects=["file.txt"],
+                bucket=self.mock_bucket,
+                colocation=4,  # Invalid value
+            )
+
+        self.assertIn("Invalid colocation value: 4", str(context.exception))
+        self.assertIn("Must be 0, 1, or 2", str(context.exception))
+
+    def test_batch_init_with_negative_colocation_raises_error(self):
+        """Test Batch initialization with negative colocation value raises ValueError."""
+        with self.assertRaises(ValueError) as context:
+            Batch(
+                self.mock_request_client,
+                objects=["file.txt"],
+                bucket=self.mock_bucket,
+                colocation=-1,  # Invalid negative value
+            )
+
+        self.assertIn("Invalid colocation value: -1", str(context.exception))
+
+    def test_moss_req_colocation_serialization(self):
+        """Test MossReq colocation field serialization."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AWARE,
+        )
+
+        req_dict = batch.request.dict()
+
+        # Should have 'coloc' alias in serialized dict
+        self.assertIn("coloc", req_dict)
+        self.assertEqual(req_dict["coloc"], Colocation.TARGET_AWARE)
+
+    def test_moss_req_colocation_not_serialized_when_none(self):
+        """Test MossReq colocation field is not serialized when None."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.NONE,
+        )
+
+        req_dict = batch.request.dict()
+
+        # Should NOT have 'coloc' in serialized dict when colocation is None
+        self.assertNotIn("coloc", req_dict)
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_get_batch_with_colocation_query_param(self, mock_extractor_manager_cls):
+        """Test that colocation is passed as query parameter when > Colocation.NONE."""
+        # Setup extractor manager mock
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AWARE,
+            streaming_get=True,
+        )
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file.txt", bucket="test-bucket", provider="ais"),
+                    b"content",
+                ),
+            ]
+        )
+
+        list(batch.get())
+
+        # Verify request was called with coloc query param
+        call_args = self.mock_request_client.request.call_args
+        params = call_args.kwargs.get("params", {})
+
+        self.assertIn(QPARAM_COLOC, params)
+        self.assertEqual(params[QPARAM_COLOC], str(Colocation.TARGET_AWARE.value))
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_get_batch_with_colocation_target_and_shard_aware_query_param(
+        self, mock_extractor_manager_cls
+    ):
+        """Test that Colocation.TARGET_AND_SHARD_AWARE is passed as query parameter."""
+        # Setup extractor manager mock
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AND_SHARD_AWARE,
+            streaming_get=True,
+        )
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file.txt", bucket="test-bucket", provider="ais"),
+                    b"content",
+                ),
+            ]
+        )
+
+        list(batch.get())
+
+        # Verify request was called with coloc query param
+        call_args = self.mock_request_client.request.call_args
+        params = call_args.kwargs.get("params", {})
+
+        self.assertIn(QPARAM_COLOC, params)
+        self.assertEqual(
+            params[QPARAM_COLOC], str(Colocation.TARGET_AND_SHARD_AWARE.value)
+        )
+
+    @patch("aistore.sdk.batch.batch.ExtractorManager")
+    def test_get_batch_without_colocation_no_query_param(
+        self, mock_extractor_manager_cls
+    ):
+        """Test that coloc query param is NOT set when colocation is Colocation.NONE."""
+        # Setup extractor manager mock
+        mock_extractor_manager = mock_extractor_manager_cls.return_value
+        mock_extractor = Mock(spec=ArchiveStreamExtractor)
+        mock_extractor_manager.get_extractor.return_value = mock_extractor
+
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.NONE,
+            streaming_get=True,
+        )
+
+        mock_response = Mock()
+        mock_response.raw = BytesIO(self._create_test_tar())
+        self.mock_request_client.request.return_value = mock_response
+
+        mock_extractor.extract.return_value = iter(
+            [
+                (
+                    MossOut(obj_name="file.txt", bucket="test-bucket", provider="ais"),
+                    b"content",
+                ),
+            ]
+        )
+
+        list(batch.get())
+
+        # Verify request was called WITHOUT coloc query param
+        call_args = self.mock_request_client.request.call_args
+        params = call_args.kwargs.get("params", {})
+
+        self.assertNotIn(QPARAM_COLOC, params)
+
+    def test_clear_preserves_colocation(self):
+        """Test that clear() preserves colocation setting."""
+        batch = Batch(
+            self.mock_request_client,
+            objects=["file.txt"],
+            bucket=self.mock_bucket,
+            colocation=Colocation.TARGET_AND_SHARD_AWARE,
+        )
+
+        # Verify colocation is set
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
+
+        # Clear the batch
+        batch.clear()
+
+        # Colocation should be preserved
+        self.assertEqual(batch.request.colocation, Colocation.TARGET_AND_SHARD_AWARE)
 
     @staticmethod
     def _create_test_tar() -> bytes:

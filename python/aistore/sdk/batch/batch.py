@@ -16,9 +16,11 @@ from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
     HTTP_METHOD_GET,
     JSON_CONTENT_TYPE,
+    QPARAM_COLOC,
     QPARAM_PROVIDER,
     URL_PATH_GB,
 )
+from aistore.sdk.enums import Colocation
 from aistore.sdk.obj.object import Object
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.utils import get_logger
@@ -48,6 +50,7 @@ class Batch:
         cont_on_err: bool = True,
         only_obj_name: bool = False,
         streaming_get: bool = True,
+        colocation: Colocation = Colocation.NONE,
     ):
         """
         Initialize Batch request.
@@ -66,6 +69,10 @@ class Batch:
             cont_on_err (bool): Continue on errors (missing files under __404__/). Defaults to True
             only_obj_name (bool): Use only obj name in archive path. Defaults to False
             streaming_get (bool): Stream resulting archive prior to finalizing it in memory. Defaults to True
+            colocation (Colocation): Colocation hint for optimization. Defaults to Colocation.NONE.
+                - Colocation.NONE: no optimization - suitable for uniformly distributed data
+                - Colocation.TARGET_AWARE: target-aware - objects are collocated on few targets
+                - Colocation.TARGET_AND_SHARD_AWARE: target and shard-aware - enables archive handle reuse
 
         Example:
             # Quick batch with string names
@@ -81,6 +88,18 @@ class Batch:
         self.request_client = request_client
         self.bucket = bucket
 
+        # Validate colocation parameter
+        if (
+            colocation < Colocation.NONE
+            or colocation > Colocation.TARGET_AND_SHARD_AWARE
+        ):
+            raise ValueError(
+                f"Invalid colocation value: {colocation}. Must be 0, 1, or 2:\n"
+                "  - 0 (Colocation.NONE): no optimization - suitable for uniformly distributed data\n"
+                "  - 1 (Colocation.TARGET_AWARE): target-aware - objects are collocated on few targets\n"
+                "  - 2 (Colocation.TARGET_AND_SHARD_AWARE): target and shard-aware - enables archive handle reuse"
+            )
+
         # Initialize MossReq
         self.request = MossReq(
             moss_in=[],
@@ -88,6 +107,7 @@ class Batch:
             cont_on_err=cont_on_err,
             only_obj_name=only_obj_name,
             streaming_get=streaming_get,
+            colocation=colocation if colocation > Colocation.NONE else None,
         )
 
         # Process initial objects if provided
@@ -291,6 +311,9 @@ class Batch:
         if self.bucket:
             url_path = f"{URL_PATH_GB}/{self.bucket.name}"
             params[QPARAM_PROVIDER] = self.bucket.provider.value
+
+        if self.request.colocation and self.request.colocation > Colocation.NONE:
+            params[QPARAM_COLOC] = str(self.request.colocation)
 
         # Execute HTTP request
         response = self.request_client.request(

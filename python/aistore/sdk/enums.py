@@ -1,7 +1,30 @@
 #
-# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
 #
 from enum import IntEnum
+
+
+class Colocation(IntEnum):
+    """
+    Colocation hint for Batch (GetBatch) API optimization.
+
+    See api/apc/ml.go for Go equivalent (ColocLevel).
+
+    NONE - no optimization; suitable for uniformly distributed data lakes
+           where objects are spread evenly across all targets
+    TARGET_AWARE - indicates that objects in this batch are collocated on few targets;
+           proxy will compute HRW distribution and select the optimal distributed
+           target (DT) to minimize cross-cluster data movement
+    TARGET_AND_SHARD_AWARE - implies TARGET_AWARE, plus indicates that archpaths are
+           collocated in few shards; enables additional optimization for archive handle reuse
+
+    E.g., use TARGET_AWARE or TARGET_AND_SHARD_AWARE when input TARs were constructed
+    to match requested batches.
+    """
+
+    NONE = 0
+    TARGET_AWARE = 1
+    TARGET_AND_SHARD_AWARE = 2
 
 
 class FLTPresence(IntEnum):

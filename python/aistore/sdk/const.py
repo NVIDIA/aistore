@@ -271,6 +271,10 @@ GB_OUTPUT_FMT = "mime"
 GB_CONTINUE_ERR = "coer"
 GB_ONLY_OBJ_NAME = "onob"
 GB_STRM_GET = "strm"
+GB_COLOC = "coloc"
+
+# Colocation Query Param
+QPARAM_COLOC = "coloc"
 
 # MossResp structs
 GB_OUT = "out"

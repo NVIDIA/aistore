@@ -24,6 +24,7 @@ from aistore.sdk.const import (
     GB_CONTINUE_ERR,
     GB_ONLY_OBJ_NAME,
     GB_STRM_GET,
+    GB_COLOC,
     GB_SIZE,
     GB_UUID,
 )
@@ -127,6 +128,9 @@ class MossReq(BaseModel):
     streaming_get: Optional[bool] = Field(
         default=None, alias=GB_STRM_GET
     )  # stream resulting archive prior to finalizing it in memory
+    colocation: Optional[int] = Field(
+        default=None, alias=GB_COLOC
+    )  # colocation hint: 0=none, 1=target-aware, 2=target+shard-aware
 
     model_config = {"populate_by_name": True}
 
