@@ -72,6 +72,7 @@ import (
    b) network error (ErrSBR) with subsequent successful recovery via GFN
 
 TBD:
+   - apply embedded XactConf.Burst to `XactMoss.pending` - the semantics of work channel cap
    - throttle maybe more aggressively (see load.Advice below)
    - perf. feature: return unsorted batch
    - range read
@@ -164,6 +165,7 @@ type (
 		activeWG     sync.WaitGroup // when pending
 		lastLog      atomic.Int64   // last log timestamp (sparse)
 		advNextCheck atomic.Int64
+		pendingCnt   atomic.Int64
 	}
 )
 
@@ -469,6 +471,10 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 			nlog.Errorln(core.T.String(), err)
 		}
 		return err
+	}
+
+	if receiving {
+		r.pendingCnt.Inc()
 	}
 	wi.awfin.Store(true)
 
@@ -849,12 +855,22 @@ func (r *XactMoss) CtlMsg() string {
 
 	// (e.g.: pending:2 objs:576730 files:391284 size:8.70GiB avg-wait:2.3ms reqs:123 bewarm:on)
 
-	if pending := r.Pending(); pending > 0 {
+	pdemand, pdt := r.Pending(), r.pendingCnt.Load()
+	if pdt > 0 {
+		sb.WriteString("pending:(")
+		sb.WriteString(strconv.FormatInt(pdemand, 10))
+		sb.WriteString(", ")
+		sb.WriteString(strconv.FormatInt(pdt, 10))
+		sb.WriteUint8(')')
+	} else if pdemand > 0 {
 		sb.WriteString("pending:")
-		sb.WriteString(strconv.FormatInt(pending, 10))
+		sb.WriteString(strconv.FormatInt(pdemand, 10))
 	}
 
-	sb.WriteString(" reqs:")
+	if sb.Len() > 0 {
+		sb.WriteUint8(' ')
+	}
+	sb.WriteString("reqs:")
 	sb.WriteString(strconv.FormatInt(nreq, 10))
 
 	ocnt := tstats.Get(stats.GetBatchObjCount)
@@ -881,11 +897,9 @@ func (r *XactMoss) CtlMsg() string {
 		sb.WriteString(cos.IEC(fsize, 2))
 		sb.WriteUint8(']')
 	}
-
-	sb.WriteString(", bewarm:")
-	bewarm := cos.Ternary(r.bewarm != nil, "on", "off")
-	sb.WriteString(bewarm)
-
+	if r.bewarm != nil {
+		sb.WriteString(" bewarm: on")
+	}
 	if wait := tstats.Get(stats.GetBatchRxWaitTotal); wait > 0 {
 		avg := time.Duration(wait / nreq)
 		sb.WriteString(" avg-wait:")
@@ -907,6 +921,7 @@ func (wi *basewi) cleanup() bool {
 		return false
 	}
 	r := wi.r
+
 	tstats := core.T.StatsUpdater()
 	tstats.Inc(stats.GetBatchCount)
 	tstats.Add(stats.GetBatchObjCount, wi.stats.obj.cnt)
@@ -941,6 +956,9 @@ func (wi *basewi) cleanup() bool {
 	if !wi.receiving() {
 		return true
 	}
+
+	r.pendingCnt.Dec()
+
 	if !wi.req.StreamingGet && wi.sgl != nil { // wi.sgl nil upon early term (e.g. invalid bucket)
 		wi.sgl.Free()
 		wi.sgl = nil

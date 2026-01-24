@@ -211,7 +211,7 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 
 func _jname(xname, xid string) string { return xname + "[" + xid + "]" }
 
-func jobCptn(c *cli.Context, name, xid, ctlmsg string, onlyActive, byTarget bool) {
+func jobCptn(c *cli.Context, name, xid string, ctlmsgs []string, onlyActive, byTarget bool) {
 	var (
 		s, tip string
 	)
@@ -222,8 +222,15 @@ func jobCptn(c *cli.Context, name, xid, ctlmsg string, onlyActive, byTarget bool
 	}
 	if xid != "" {
 		jname := _jname(name, xid)
-		if ctlmsg != "" {
-			actionCptn(c, jname, "(run options:", fcyan(ctlmsg)+")", tip)
+		if len(ctlmsgs) > 0 {
+			var msg string
+			if len(ctlmsgs) == 1 {
+				msg = ctlmsgs[0]
+			} else {
+				// multi-line: preserve all aggregated ctl messages without guessing delimiters
+				msg = "\n  " + strings.Join(ctlmsgs, "\n  ") + "\n"
+			}
+			actionCptn(c, jname, "(ctl:", fcyan(msg)+")", tip)
 		} else {
 			actionCptn(c, jname, tip)
 		}
@@ -297,7 +304,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 			return l, V(err)
 		}
 		if caption {
-			jobCptn(c, cmdDsort, id, "" /*ctlmsg*/, onlyActive, false)
+			jobCptn(c, cmdDsort, id, nil /*ctlmsgs*/, onlyActive, false)
 		}
 		return l, dsortJobsList(c, list, usejs)
 	}
@@ -446,8 +453,11 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 
 	// second, filteredXs => dts templates
 	var (
-		dts    = make([]nodeSnaps, 0, len(filteredXs))
-		ctlmsg string
+		dts = make([]nodeSnaps, 0, len(filteredXs))
+
+		// collected per-target ctl messages (unique, deterministic)
+		ctlmsgs []string
+		seenCtl = make(map[string]struct{}, len(filteredXs))
 
 		totals core.Stats
 
@@ -481,23 +491,15 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		jwfmin[1] = min(jwfmin[1], w)
 		jwfmin[2] = min(jwfmin[2], f)
 
-		// a.k.a "run options"
-		// try to show more but not too much
-		nmsg := snaps[0].CtlMsg
-		switch {
-		case nmsg == "":
-			// do nothing
-		case ctlmsg == "":
-			ctlmsg = nmsg
-		case strings.HasSuffix(ctlmsg, "..."):
-			// do nothing
-		case strings.Contains(ctlmsg, nmsg):
-			// do nothing
-		default:
-			ctlmsg += "; " + nmsg
+		// ctl: try to show more but not too much (but keep it structured)
+		if nmsg := snaps[0].CtlMsg; nmsg != "" {
+			if _, ok := seenCtl[nmsg]; !ok {
+				seenCtl[nmsg] = struct{}{}
+				ctlmsgs = append(ctlmsgs, nmsg)
+			}
 		}
 
-		dts = append(dts, nodeSnaps{DaemonID: tid, XactSnaps: snaps}) // <--- this gets ultimately displayed via static template
+		dts = append(dts, nodeSnaps{DaemonID: tid, XactSnaps: snaps}) // displayed via static template
 
 		// totals
 		for _, xsnap := range snaps {
@@ -514,19 +516,17 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 		return dts[i].DaemonID < dts[j].DaemonID // ascending by node id/name
 	})
 
+	// make ctl deterministic regardless of map iteration order
+	if len(ctlmsgs) > 1 {
+		sort.Strings(ctlmsgs)
+	}
+
 	_, xname := xact.GetKindName(xargs.Kind)
 	if caption {
-		s := _parallelism(jwfmin, jwfmax)
-		if s != "" {
-			ctlmsg = strings.TrimSuffix(ctlmsg, " ")
-			switch ctlmsg {
-			case "":
-				ctlmsg = s
-			default:
-				ctlmsg += ", " + s
-			}
+		if s := _parallelism(jwfmin, jwfmax); s != "" {
+			ctlmsgs = append(ctlmsgs, s)
 		}
-		jobCptn(c, xname, xargs.ID, ctlmsg, xargs.OnlyRunning, xargs.DaemonID != "")
+		jobCptn(c, xname, xargs.ID, ctlmsgs, xargs.OnlyRunning, xargs.DaemonID != "")
 	}
 
 	// multiple target nodes: append totals as a single special `nodeSnap`

@@ -477,7 +477,7 @@ func showETLs(c *cli.Context, xid string, caption bool) (int, error) {
 func showETLJobDetails(c *cli.Context, etlInfo *etl.Info) {
 	details, err := api.ETLGetDetail(apiBP, etlInfo.Name, "" /*xid*/)
 	if err != nil {
-		jobCptn(c, commandETL, etlInfo.XactID, "" /*ctlmsg*/, false /*onlyActive*/, false /*byTarget*/)
+		jobCptn(c, commandETL, etlInfo.XactID, nil /*ctlmsgs*/, false /*onlyActive*/, false /*byTarget*/)
 		return
 	}
 
@@ -512,7 +512,7 @@ func showETLJobDetails(c *cli.Context, etlInfo *etl.Info) {
 		xname = commandETL
 	}
 
-	jobCptn(c, xname, etlInfo.XactID, ctlmsg, false /*onlyActive*/, false /*byTarget*/)
+	jobCptn(c, xname, etlInfo.XactID, []string{ctlmsg}, false /*onlyActive*/, false /*byTarget*/)
 }
 
 func etlList(c *cli.Context, caption bool) (int, error) {
@@ -523,7 +523,7 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 	}
 	if caption {
 		onlyActive := !flagIsSet(c, allJobsFlag)
-		jobCptn(c, commandETL, "" /*xid*/, "" /*ctlmsg*/, onlyActive, false)
+		jobCptn(c, commandETL, "" /*xid*/, nil /*ctlmsgs*/, onlyActive, false)
 	}
 
 	hideHeader := flagIsSet(c, noHeaderFlag)

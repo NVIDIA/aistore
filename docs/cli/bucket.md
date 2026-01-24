@@ -1035,7 +1035,7 @@ You can monitor the progress of the copy operation using the `ais show job copy`
 ```console
 $ ais show job copy --refresh 10
 
-copy-objects[tco-goDbhCxtf] (run options: s3://src-bucket=>ais://dst-bucket prefix:a, parallelism: w[6])
+copy-objects[tco-goDbhCxtf] (ctl: s3://src-bucket=>ais://dst-bucket prefix:a, parallelism: w[6])
 NODE             ID              KIND            SRC BUCKET      DST BUCKET      OBJECTS         BYTES           START           END     STATE
 KactABCD         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 82              11.00MiB        18:04:15        -       Running
 XXytEFGH         tco-goDbhCxtf   copy-listrange  s3://src-bucket ais://dst-bucket 80              8.00MiB         18:04:15        -       Running

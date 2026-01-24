@@ -2139,7 +2139,7 @@ You can monitor the progress of the prefetch operation using the `ais show job p
 ```console
 $ ais show job prefetch
 
-prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[0,6])
+prefetch-objects[MV4ex8u6h] (ctl: prefix:10, workers: 16, parallelism: w[16] chan-full[0,6])
 NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
 KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 5               5.00MiB         18:28:55        -       Running
 XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 4               4.00MiB         18:28:55        -       Running
@@ -2168,7 +2168,7 @@ You can see the progress over time with automatic refresh:
 ```console
 $ ais show job prefetch --refresh 10
 
-prefetch-objects[MV4ex8u6h] (run options: prefix:10, workers: 16, parallelism: w[16] chan-full[8,32])
+prefetch-objects[MV4ex8u6h] (ctl: prefix:10, workers: 16, parallelism: w[16] chan-full[8,32])
 NODE             ID              KIND                    BUCKET          OBJECTS         BYTES           START           END     STATE
 KactABCD         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 27              27.00MiB        18:28:55        -       Running
 XXytEFGH         MV4ex8u6h       prefetch-listrange      s3://cloud-bucket 23              23.00MiB        18:28:55        -       Running

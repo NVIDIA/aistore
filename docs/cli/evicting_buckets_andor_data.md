@@ -124,7 +124,7 @@ $ ais show job evict --all
 
 Example output:
 ```console
-evict-objects[HRdka7fd0] (run options: prefix:copy)
+evict-objects[HRdka7fd0] (ctl: prefix:copy)
 NODE             ID              KIND                    BUCKET          OBJECTS     BYTES       START       END         STATE
 nXItghtr         HRdka7fd0       evict-listrange         s3://ais-aa     69          69.00KiB    10:24:09    10:24:10    Finished
 veFtyrfq         HRdka7fd0       evict-listrange         s3://ais-aa     61          61.00KiB    10:24:09    10:24:10    Finished

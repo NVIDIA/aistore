@@ -359,10 +359,10 @@ Show 2 most recent list jobs:
 
 ```console
 $ ais show job list --top 2
-list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+list[LIM_Ua6LV] (ctl: ais://job-top-test, props:name,size,cached)
 NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
 ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
-list[q9MIgaNLO] (run options: ais://job-top-test, props:name,size,cached) 
+list[q9MIgaNLO] (ctl: ais://job-top-test, props:name,size,cached)
 NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
 ZXzt8081         q9MIgaNLO       list    ais://job-top-test      6               36B     22:29:39        -       Running
 ```
@@ -371,7 +371,7 @@ Show 1 most recent job of any type:
 
 ```console
 $ ais show job --top 1
-list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+list[LIM_Ua6LV] (ctl: ais://job-top-test, props:name,size,cached)
 NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
 ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
 ```
@@ -380,10 +380,10 @@ Show 2 most recent list jobs including finished ones:
 
 ```console
 $ ais show job list --all --top 2
-list[LIM_Ua6LV] (run options: ais://job-top-test, props:name,size,cached) 
+list[LIM_Ua6LV] (ctl: ais://job-top-test, props:name,size,cached)
 NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
 ZXzt8081         LIM_Ua6LV       list    ais://job-top-test      6               36B     22:29:39        -       Running
-list[q9MIgaNLO] (run options: ais://job-top-test, props:name,size,cached) 
+list[q9MIgaNLO] (ctl: ais://job-top-test, props:name,size,cached)
 NODE             ID              KIND    BUCKET                  OBJECTS         BYTES   START           END     STATE
 ZXzt8081         q9MIgaNLO       list    ais://job-top-test      6               36B     22:29:39        -       Running
 ```

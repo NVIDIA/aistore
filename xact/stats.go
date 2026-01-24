@@ -55,7 +55,7 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 		return snap
 	}
 	if !Table[self.Kind()].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
-		nlog.InfoDepth(1, self.Name(), "run options:", snap.CtlMsg)
+		nlog.InfoDepth(1, self.Name(), "ctl:", snap.CtlMsg)
 	}
 
 	return snap

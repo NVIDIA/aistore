@@ -648,34 +648,41 @@ GetBatch exposes Prometheus metrics for:
 ```console
 $ ais show job --refresh 10
 
-get-batch[NeEra51oM] (run options: objs:1398300 size:2.00GiB, reqs:21849, bewarm:on; pending:1 objs:1419972 size:2.03GiB, reqs:22188, bewarm:on; pending:2 objs:1421380 size:2.03GiB, reqs:22210, bewarm:on)
+get-batch[NeEra51oM] (ctl:
+  pending:(1,1) reqs:21849 objs: [1398300 2.00GiB] files: [391284 8.70GiB], bewarm:on avg-wait:2.3ms
+  pending:(2,2) reqs:22188 objs: [1419972 2.03GiB] files: [395120 8.78GiB], bewarm:on avg-wait:2.2ms
+  pending:(3,3) reqs:22210 objs: [1421380 2.03GiB] files: [395940 8.80GiB], bewarm:on avg-wait:2.1ms
+)
 NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
-target1         NeEra51oM       get-batch       ais://nnn       1419972         2.03GiB         14:38:20        -       Running
-target2         NeEra51oM       get-batch       ais://nnn       1421380         2.03GiB         14:38:20        -       Running
-target3         NeEra51oM       get-batch       ais://nnn       1398300         2.00GiB         14:38:20        -       Running
+target1          NeEra51oM       get-batch       ais://nnn       1419972         2.03GiB         14:38:20        -       Running
+target2          NeEra51oM       get-batch       ais://nnn       1421380         2.03GiB         14:38:20        -       Running
+target3          NeEra51oM       get-batch       ais://nnn       1398300         2.00GiB         14:38:20        -       Running
                                 Total:                          4239652         6.06GiB ✓
 ------------------------------------------------------------------------
-get-batch[NeEra51oM] (run options: objs:1606276 size:2.30GiB, reqs:25099, bewarm:on; pending:1 objs:1627780 size:2.33GiB, reqs:25435, bewarm:on; objs:1622980 size:2.32GiB, reqs:25360, bewarm:on)
+get-batch[NeEra51oM] (ctl:
+  pending:(1,1) reqs:25099 objs: [1606276 2.30GiB] files: [445880 9.95GiB], bewarm:on avg-wait:2.0ms
+  pending:(2,2) reqs:25360 objs: [1622980 2.32GiB] files: [450110 10.05GiB], bewarm:on avg-wait:1.9ms
+  pending:(2,2) reqs:25435 objs: [1627780 2.33GiB] files: [451090 10.07GiB], bewarm:on avg-wait:1.9ms
+)
 NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
-target1         NeEra51oM       get-batch       ais://nnn       1627780         2.33GiB         14:38:20        -       Running
-target2         NeEra51oM       get-batch       ais://nnn       1622980         2.32GiB         14:38:20        -       Running
-target3         NeEra51oM       get-batch       ais://nnn       1606276         2.30GiB         14:38:20        -       Running
+target1          NeEra51oM       get-batch       ais://nnn       1627780         2.33GiB         14:38:20        -       Running
+target2          NeEra51oM       get-batch       ais://nnn       1622980         2.32GiB         14:38:20        -       Running
+target3          NeEra51oM       get-batch       ais://nnn       1606276         2.30GiB         14:38:20        -       Running
                                 Total:                          4857036         6.95GiB ✓
 ------------------------------------------------------------------------
-get-batch[NeEra51oM] (run options: objs:1838584 size:2.63GiB, reqs:28729, bewarm:on; pending:2 objs:1826488 size:2.61GiB, reqs:28540, bewarm:on; pending:3 objs:1813892 size:2.59GiB, reqs:28343, bewarm:on)
+get-batch[NeEra51oM] (ctl:
+  pending:(1,1) reqs:28729 objs: [1838584 2.63GiB] files: [512770 11.38GiB], bewarm:on avg-wait:1.8ms
+  pending:(2,2) reqs:28540 objs: [1826488 2.61GiB] files: [510330 11.33GiB], bewarm:on avg-wait:1.8ms
+  pending:(3,3) reqs:28343 objs: [1813892 2.59GiB] files: [507940 11.28GiB], bewarm:on avg-wait:1.7ms
+)
 NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
-target1         NeEra51oM       get-batch       ais://nnn       1838584         2.63GiB         14:38:20        -       Running
-target2         NeEra51oM       get-batch       ais://nnn       1826488         2.61GiB         14:38:20        -       Running
-target3         NeEra51oM       get-batch       ais://nnn       1813892         2.59GiB         14:38:20        -       Running
+target1          NeEra51oM       get-batch       ais://nnn       1838584         2.63GiB         14:38:20        -       Running
+target2          NeEra51oM       get-batch       ais://nnn       1826488         2.61GiB         14:38:20        -       Running
+target3          NeEra51oM       get-batch       ais://nnn       1813892         2.59GiB         14:38:20        -       Running
                                 Total:                          5478964         7.84GiB ✓
-------------------------------------------------------------------------
-get-batch[NeEra51oM] (run options: pending:1 objs:2045932 size:2.93GiB, reqs:31969, bewarm:on; objs:2030828 size:2.90GiB, reqs:31733, bewarm:on; objs:2021444 size:2.89GiB, reqs:31586, bewarm:on)
-NODE             ID              KIND            BUCKET          OBJECTS         BYTES           START           END     STATE
-target1         NeEra51oM       get-batch       ais://nnn       2045932         2.93GiB         14:38:20        -       Running
-target2         NeEra51oM       get-batch       ais://nnn       2030828         2.90GiB         14:38:20        -       Running
-target3         NeEra51oM       get-batch       ais://nnn       2021444         2.89GiB         14:38:20        -       Running
-                                Total:                          6098204         8.72GiB ✓
 ```
+
+> CLI wll render `CtlMsg` output on multiple lines when it includes multiple aggregated messages.
 
 ---
 
