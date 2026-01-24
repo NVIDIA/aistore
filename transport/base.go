@@ -5,6 +5,7 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -210,12 +211,15 @@ func (s *base) TermInfo() (reason string, err error) {
 		s.term.mu.Lock()
 		reason, err = s.term.reason, s.term.err
 		s.term.mu.Unlock()
-		if reason != "" {
+		if reason != "" && err != nil {
 			break
 		}
 		time.Sleep(sleep)
 	}
-	return
+	if err == nil {
+		err = errors.New("terminated: " + reason)
+	}
+	return reason, err
 }
 
 func (s *base) isNextReq() (reason string) {

@@ -702,6 +702,9 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 	if e, ok := err.(*ErrAborted); ok {
 		return e
 	}
+	if cos.IsTypedNil(err) {
+		err = nil
+	}
 	return &ErrAborted{what: what, ctx: ctx, err: err}
 }
 

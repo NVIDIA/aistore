@@ -258,16 +258,6 @@ func CopyProps(src, dst any, asType string, copts ...CopyPropsOpts) error {
 	return _copyProps(srcVal, dstVal, asType, opts)
 }
 
-// copyProps helper: whether v.Kind() supports IsNil()
-func nilable(k reflect.Kind) bool {
-	switch k {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
-		return true
-	default:
-		return false
-	}
-}
-
 // copyProps helper: unwrap up to one pointer and one interface in any order
 // (as we don't have arbitrary nested config structs)
 func peel2(v reflect.Value) reflect.Value {
@@ -363,7 +353,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 				kind = sf.Type.Elem().Kind()
 			}
 			if kind == reflect.Struct {
-				if nilable(srcField.Kind()) && srcField.IsNil() {
+				if cos.Nilable(srcField.Kind()) && srcField.IsNil() {
 					continue
 				}
 				if err := _copyProps(srcField, dstVal, asType, opts); err != nil {
@@ -378,7 +368,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 			continue
 		}
 		// skip nil leaves for nilable kinds (*ToSet style)
-		if nilable(srcField.Kind()) && srcField.IsNil() {
+		if cos.Nilable(srcField.Kind()) && srcField.IsNil() {
 			continue
 		}
 
@@ -408,7 +398,7 @@ func _copyProps(srcVal, dstVal reflect.Value, asType string, opts CopyPropsOpts)
 		// struct recurse vs leaf assign ----------------------
 		//
 		s := peel2(srcField)
-		if nilable(s.Kind()) && s.IsNil() {
+		if cos.Nilable(s.Kind()) && s.IsNil() {
 			continue
 		}
 

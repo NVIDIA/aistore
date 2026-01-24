@@ -58,3 +58,23 @@ func CopyStruct(dst, src any) {
 	starY.Set(starX)
 	reflect.ValueOf(dst).Elem().Set(y.Elem())
 }
+
+// whether v.Kind() supports IsNil()
+func Nilable(k reflect.Kind) bool {
+	switch k {
+	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Func, reflect.Chan, reflect.UnsafePointer:
+		return true
+	default:
+		return false
+	}
+}
+
+// return true if `v` is a typed nil
+// holding a nil pointer of some concrete type
+func IsTypedNil(v any) bool {
+	if v == nil {
+		return false
+	}
+	rv := reflect.ValueOf(v)
+	return Nilable(rv.Kind()) && rv.IsNil()
+}
