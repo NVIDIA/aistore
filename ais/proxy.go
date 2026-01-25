@@ -2648,26 +2648,36 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload m
 }
 
 // refresh local p.remais cache via intra-cluster call to a random target
+// NOTE:
+// - best-effort: provides eventual consistency for remote-AIS metadata
+// TODO:
+// - split blocking path to proceed without retry loops
+// - return the current version and/or error (or success flag)
+// - make remais.Ver atomic
 func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	const maxretries = 5
 	if !p.remais.in.CAS(false, true) {
 		return
 	}
 	var (
-		sleep      = newConfig.Timeout.CplaneOperation.D()
+		sleep      time.Duration
 		retries    = maxretries
+		warn       string
 		over, nver int64
 	)
 	if blocking {
 		retries = 1
 	} else {
+		sleep = newConfig.Timeout.CplaneOperation.D()
 		maxsleep := newConfig.Timeout.MaxKeepalive.D()
 		if uptime := p.keepalive.cluUptime(mono.NanoTime()); uptime < maxsleep {
 			sleep = 2 * maxsleep
 		}
 	}
 	for ; retries > 0; retries-- {
-		time.Sleep(sleep)
+		if !blocking {
+			time.Sleep(sleep)
+		}
 		all, err := p.getRemAisVec(false /*refresh*/)
 		if err != nil {
 			if retries < maxretries {
@@ -2691,7 +2701,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 						break
 					}
 					if b.Alias == a.Alias {
-						nlog.Errorf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
+						warn = fmt.Sprintf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
 					}
 				}
 				if !found {
@@ -2710,6 +2720,9 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	}
 
 	p.remais.in.Store(false)
+	if warn != "" {
+		nlog.Warningln(warn)
+	}
 	nlog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 

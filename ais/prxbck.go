@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -94,24 +96,65 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 	return aliasOrUUID
 }
 
+// Fixup local p.remais cache in the unlikely case it hasn't been populated yet via regular flows:
+// - when a proxy starts up (or restarts), p.remais cache is populated asynchronously via _remais() goroutine
+// - if a request for a remote-ais bucket arrives before the latter completes, p.a2u() (below)
+//   fails to resolve alias to UUID
+
+func (p *proxy) remaisVersionFixup() bool {
+	// NOTE: benign race (monotonic); TODO: consider atomic.Int64
+	if p.remais.Ver != 0 {
+		return true
+	}
+	var ver int64
+	p.remais.mu.RLock()
+	ver = p.remais.Ver
+	p.remais.mu.RUnlock()
+	if ver != 0 {
+		return true
+	}
+
+	config := cmn.GCO.Get()
+	uptime := p.keepalive.cluUptime(mono.NanoTime())
+	if uptime == 0 || uptime > cos.ClampDuration(config.Timeout.JoinAtStartup.D(), time.Minute, 10*time.Minute) {
+		return false
+	}
+	conf := config.Backend.Get(apc.AIS)
+	if conf == nil {
+		return false
+	}
+	aisConf, ok := conf.(cmn.BackendConfAIS)
+	debug.Assertf(ok, "aisConf %T", conf)
+	if !ok || len(aisConf) == 0 {
+		return false
+	}
+
+	nlog.Warningln(p.String(), "remais fixup (starting up w/ _remais() delayed?)")
+	p._remais(&config.ClusterConfig, true /*blocking*/)
+	return true
+}
+
 // initialize bucket and check access permissions
 func (bctx *bctx) init() (int, error) {
 	debug.Assert(bctx.bck != nil)
 
+	p := bctx.p
 	bck := bctx.bck
 
 	// remote ais aliasing
 	if bck.IsRemoteAIS() {
-		if uuid := bctx.p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
-			bctx.modified = true
-			// care of targets
-			query := bctx.query
-			if query == nil {
-				query = bctx.r.URL.Query()
+		if p.remaisVersionFixup() {
+			if uuid := p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
+				bctx.modified = true
+				// care of targets
+				query := bctx.query
+				if query == nil {
+					query = bctx.r.URL.Query()
+				}
+				bck.Ns.UUID = uuid
+				query.Set(apc.QparamNamespace, bck.Ns.Uname())
+				bctx.r.URL.RawQuery = query.Encode()
 			}
-			bck.Ns.UUID = uuid
-			query.Set(apc.QparamNamespace, bck.Ns.Uname())
-			bctx.r.URL.RawQuery = query.Encode()
 		}
 	}
 
@@ -121,9 +164,9 @@ func (bctx *bctx) init() (int, error) {
 
 	var err error
 	if bctx.skipBackend {
-		err = bck.InitNoBackend(bctx.p.owner.bmd)
+		err = bck.InitNoBackend(p.owner.bmd)
 	} else {
-		err = bck.Init(bctx.p.owner.bmd)
+		err = bck.Init(p.owner.bmd)
 	}
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
