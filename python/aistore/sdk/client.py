@@ -6,6 +6,7 @@ import os
 import warnings
 from urllib3 import Retry
 
+from aistore.sdk.enums import Colocation
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.provider import Provider
 from aistore.sdk.const import (
@@ -371,6 +372,7 @@ class Client:
         cont_on_err: bool = True,
         only_obj_name: bool = False,
         streaming_get: bool = True,
+        colocation: Colocation = Colocation.NONE,
     ):
         """
         Factory constructor for Get-Batch API (MOSS - Multi-Object Streaming Service).
@@ -391,6 +393,10 @@ class Client:
             cont_on_err (bool): Continue on errors (missing files under __404__/). Defaults to True
             only_obj_name (bool): Use only obj name in archive path. Defaults to False
             streaming_get (bool): Stream resulting archive prior to finalizing it in memory. Defaults to True
+            colocation (Colocation): Colocation hint for optimization. Defaults to Colocation.NONE.
+                - Colocation.NONE: no optimization - suitable for uniformly distributed data
+                - Colocation.TARGET_AWARE: target-aware - objects are collocated on few targets
+                - Colocation.TARGET_AND_SHARD_AWARE: target and shard-aware - enables archive handle reuse
 
         Returns:
             Batch: Batch object for building and executing Get-Batch requests
@@ -417,4 +423,5 @@ class Client:
             cont_on_err,
             only_obj_name,
             streaming_get,
+            colocation,
         )
