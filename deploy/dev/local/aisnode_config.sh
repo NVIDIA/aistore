@@ -13,7 +13,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"backend": $(make_backend_conf),
 	"mirror": {
 		"copies":       2,
-		"burst_buffer": 128,
+		"burst_buffer": 512,
 		"enabled":      ${AIS_MIRROR_ENABLED:-false}
 	},
 	$(make_tracing_conf)

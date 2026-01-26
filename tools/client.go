@@ -51,7 +51,7 @@ const (
 	MultiProxyTestTimeout = 3 * time.Minute
 
 	DsortFinishTimeout   = 6 * time.Minute
-	RebalanceTimeout     = 2 * time.Minute
+	RebalanceTimeout     = 3 * time.Minute
 	EvictPrefetchTimeout = 2 * time.Minute
 	BucketCleanupTimeout = time.Minute
 

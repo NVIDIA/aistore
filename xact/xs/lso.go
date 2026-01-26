@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -69,6 +70,8 @@ type (
 			remote       bool             // list remote
 		}
 		streamingX
+		adv    load.Advice
+		npages int64
 		lensgl int64 // channel to accumulate listed object entries
 	}
 	LsoRsp struct {
@@ -160,6 +163,17 @@ func (p *lsoFactory) Start() error {
 		if r.msg.IsFlagSet(apc.LsDiff) {
 			r.lpis.Init(r.Bck().Bucket(), r.msg.Prefix, core.T.Sowner().Get())
 		}
+	}
+
+	r.adv.Init(
+		load.FlMem|load.FlCla,
+		&load.Extra{
+			RW: false,
+		},
+	)
+	// and maybe throttle right away
+	if r.adv.Sleep > 0 {
+		time.Sleep(r.adv.Sleep)
 	}
 
 	_ = r.CtlMsg()
@@ -372,6 +386,16 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 }
 
 func (r *LsoXact) doPage() *LsoRsp {
+	// throttle
+	r.npages++
+	if r.adv.ShouldCheck(r.npages) {
+		r.adv.Refresh()
+		if r.adv.Sleep > 0 {
+			time.Sleep(r.adv.Sleep)
+		}
+	}
+
+	// remote
 	if r.walk.remote {
 		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 			// can't extract the next-to-list object name from the remotely generated
@@ -390,6 +414,7 @@ func (r *LsoXact) doPage() *LsoRsp {
 		return &LsoRsp{Lst: page, Status: http.StatusOK}
 	}
 
+	// in-cluster
 	if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 		r.nextPageA()
 	}

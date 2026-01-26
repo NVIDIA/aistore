@@ -113,6 +113,9 @@ ais ls $bucket --all --limit 4
 echo "..."
 files=$(ais ls $bucket --prefix=$subdir/ --name-only -H --no-footers --all | awk '{print $1}')
 
+echo "Wait for updated BMD to propagate..."
+sleep 2
+
 count=0 ## up to max_num_downloads
 
 ## first, run as xaction

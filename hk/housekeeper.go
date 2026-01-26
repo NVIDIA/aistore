@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
-const workChanCap = 128
+const workChanCap = 256
 
 const NameSuffix = ".gc" // reg name suffix
 

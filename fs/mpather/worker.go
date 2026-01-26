@@ -6,9 +6,11 @@ package mpather
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -38,6 +40,8 @@ type (
 		opts     *WorkerGroupOpts
 		mi       *fs.Mountpath
 		workCh   chan core.LIF
+		ntotal   int64
+		adv      load.Advice // throttle
 		stopCh   cos.StopCh
 		chanFull cos.ChanFull
 	}
@@ -45,6 +49,7 @@ type (
 
 func NewWorkerGroup(opts *WorkerGroupOpts) (*WorkerGroup, error) {
 	var (
+		config  = cmn.GCO.Get()
 		avail   = fs.GetAvail()
 		l       = len(avail)
 		workers = make(map[string]*worker, l)
@@ -53,7 +58,7 @@ func NewWorkerGroup(opts *WorkerGroupOpts) (*WorkerGroup, error) {
 		return nil, cmn.ErrNoMountpaths
 	}
 	for _, mi := range avail {
-		workers[mi.Path] = newWorker(opts, mi)
+		workers[mi.Path] = newWorker(opts, mi, config)
 	}
 	wkg := &WorkerGroup{wg: &errgroup.Group{}, workers: workers}
 	return wkg, nil
@@ -95,12 +100,22 @@ func (wkg *WorkerGroup) Stop() (n int) {
 	return
 }
 
-func newWorker(opts *WorkerGroupOpts, mi *fs.Mountpath) (w *worker) {
+func newWorker(opts *WorkerGroupOpts, mi *fs.Mountpath, config *cmn.Config) (w *worker) {
 	w = &worker{
 		opts:   opts,
 		mi:     mi,
 		workCh: make(chan core.LIF, opts.WorkChSize),
 	}
+
+	w.adv.Init(
+		load.FlMem|load.FlCla|load.FlDsk,
+		&load.Extra{
+			Mi:  mi,
+			Cfg: &config.Disk,
+			RW:  true, // this is a write-heavy workload
+		},
+	)
+
 	w.stopCh.Init()
 	return
 }
@@ -119,6 +134,13 @@ func (w *worker) do() error {
 				break
 			}
 			if err = lom.Load(false /*cache it*/, false); err == nil {
+				w.ntotal++
+				if w.adv.ShouldCheck(w.ntotal) {
+					w.adv.Refresh()
+					if w.adv.Sleep > 0 {
+						time.Sleep(w.adv.Sleep)
+					}
+				}
 				w.opts.Callback(lom, buf)
 			} else {
 				core.FreeLOM(lom)
