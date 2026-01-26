@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -144,13 +144,12 @@ func New(config *cmn.Config) *Reb {
 	} else {
 		reb.ecClient = cmn.NewClient(cargs)
 	}
-	dmExtra := bundle.Extra{
-		RecvAck:     reb.recvAckNtfn,
-		Config:      config,
-		Compression: config.Rebalance.Compression,
-		Multiplier:  config.Rebalance.SbundleMult,
+	extra := bundle.Extra{
+		RecvAck:  reb.recvAckNtfn,
+		Config:   config,
+		XactConf: config.Rebalance.XactConf,
 	}
-	reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, dmExtra) // (compare with dm.Renew below)
+	reb.dm = bundle.NewDM(trname, reb.recvObj, cmn.OwtRebalance, extra) // (compare with dm.Renew below)
 
 	reb.lazydel.init()
 
@@ -429,13 +428,12 @@ func (reb *Reb) _renew(rargs *rebArgs, xreb *xs.Rebalance, haveStreams bool) err
 	// 3. init streams and data structures
 	reb.stages.stage.Store(rebStageInit)
 	if haveStreams {
-		dmExtra := bundle.Extra{
-			RecvAck:     reb.recvAckNtfn,
-			Config:      rargs.config,
-			Compression: rargs.config.Rebalance.Compression,
-			Multiplier:  rargs.config.Rebalance.SbundleMult,
+		extra := bundle.Extra{
+			RecvAck:  reb.recvAckNtfn,
+			Config:   rargs.config,
+			XactConf: rargs.config.Rebalance.XactConf,
 		}
-		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, dmExtra); dm != nil {
+		if dm := reb.dm.Renew(trname, reb.recvObj, cmn.OwtRebalance, extra); dm != nil {
 			reb.dm = dm
 		}
 		if err := reb.beginStreams(rargs); err != nil {

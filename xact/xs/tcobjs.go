@@ -144,14 +144,13 @@ func (p *tcoFactory) Start() error {
 
 	// TODO: sentinels require DM; no-DM still requires sentinels
 	if useDM := !r.args.DisableDM; useDM && nat > 1 {
-		dmxtra := bundle.Extra{
-			RecvAck:     nil, // no ACKs
-			Config:      r.config,
-			Compression: r.config.TCO.Compression,
-			Multiplier:  r.config.TCO.SbundleMult,
-			SizePDU:     sizePDU,
+		extra := bundle.Extra{
+			RecvAck:  nil, // no ACKs
+			Config:   r.config,
+			XactConf: config.TCO.XactConf,
+			SizePDU:  sizePDU,
 		}
-		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, smap, dmxtra, r.owt); err != nil {
+		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, smap, extra, r.owt); err != nil {
 			return err
 		}
 	}

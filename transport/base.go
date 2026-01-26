@@ -204,6 +204,8 @@ func (s *base) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. us
 
 func (s *base) IsTerminated() bool { return s.term.done.Load() }
 
+// is only called on terminated screen
+// must always return an err != nil, even after a graceful termination
 func (s *base) TermInfo() (reason string, err error) {
 	// to account for an unlikely delay between done.CAS() and mu.Lock - see terminate()
 	sleep := cos.ProbingFrequency(termErrWait)

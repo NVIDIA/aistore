@@ -104,20 +104,19 @@ func (mgr *Manager) OpenStreams(withRefc bool) {
 		extraReq    = transport.Extra{
 			Parent:      &transport.Parent{SentCB: cbReq},
 			Compression: compression,
+			SbundleMult: config.EC.SbundleMult,
 			Config:      config,
 		}
 	)
 	reqSbArgs := bundle.Args{
-		Multiplier: config.EC.SbundleMult,
-		Extra:      &extraReq,
-		Net:        mgr.netReq,
-		Trname:     ReqStreamName,
+		Extra:  &extraReq,
+		Net:    mgr.netReq,
+		Trname: ReqStreamName,
 	}
 	respSbArgs := bundle.Args{
-		Multiplier: config.EC.SbundleMult,
-		Trname:     RespStreamName,
-		Net:        mgr.netResp,
-		Extra:      &transport.Extra{Compression: compression, Config: config},
+		Trname: RespStreamName,
+		Net:    mgr.netResp,
+		Extra:  &transport.Extra{Compression: compression, SbundleMult: config.EC.SbundleMult, Config: config},
 	}
 
 	mgr.reqBundle.Store(bundle.New(client, reqSbArgs))

@@ -1,7 +1,7 @@
 // Package bundle provides multi-streaming transport with the functionality
 // to dynamically (un)register receive endpoints, establish long-lived flows, and more.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package bundle
 
@@ -32,32 +32,30 @@ type (
 		trname  string
 		net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 	}
+	// additional (and optional) params for new data mover instance
+	Extra struct {
+		// generic knobs { multiplier, burst, ... } from the parent xaction
+		cmn.XactConf
+		// extra
+		RecvAck    transport.RecvObj
+		Config     *cmn.Config
+		SizePDU    int32
+		MaxHdrSize int32
+	}
+	// data mover is an easy-to-use stream bundle
 	DM struct {
-		data        bp // data
-		ack         bp // ACKs and control
-		parent      *transport.Parent
-		config      *cmn.Config
-		compression string // enum { apc.CompressNever, ... }
-		multiplier  int
-		owt         cmn.OWT
-		stage       struct {
+		parent *transport.Parent // optional: (parent xaction, term-cb, sent-cb)
+		data   bp                // data
+		ack    bp                // ACKs and control
+		Extra                    // (embed)
+		owt    cmn.OWT
+		stage  struct {
 			regmtx sync.Mutex
 			regged atomic.Bool
 			opened atomic.Bool
 			laterx atomic.Bool
 			unregg atomic.Bool // in UnregRecv
 		}
-		sizePDU    int32
-		maxHdrSize int32
-	}
-	// additional (and optional) params for new data mover instance
-	Extra struct {
-		RecvAck     transport.RecvObj
-		Config      *cmn.Config
-		Compression string
-		Multiplier  int
-		SizePDU     int32
-		MaxHdrSize  int32
 	}
 )
 
@@ -67,21 +65,18 @@ type (
 // be set to `OwtMigrateRepl`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 
 func NewDM(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
-	debug.Assert(extra.Config != nil)
-	dm := &DM{config: extra.Config}
+	dm := &DM{}
 	dm.init(trname, recvCB, owt, extra)
 	return dm
 }
 
 func (dm *DM) init(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) {
+	debug.Assert(extra.Config != nil)
 	dm.owt = owt
-	dm.multiplier = extra.Multiplier
-	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
-
-	if extra.Compression == "" {
-		extra.Compression = apc.CompressNever
+	dm.Extra = extra
+	if dm.Compression == "" {
+		dm.Compression = apc.CompressNever
 	}
-	dm.compression = extra.Compression
 
 	dm.data.trname, dm.data.recv = trname, recvCB
 	if dm.data.net == "" {
@@ -121,15 +116,19 @@ func (dm *DM) xctn() core.Xact {
 
 // when config changes
 func (dm *DM) Renew(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) *DM {
-	dm.config = extra.Config // always refresh
+	debug.Assert(owt == dm.owt)
+
+	// always refresh
+	dm.Config = extra.Config
+
 	if extra.Compression == "" {
 		extra.Compression = apc.CompressNever
 	}
-	debug.Assert(owt == dm.owt)
-	if dm.multiplier == extra.Multiplier && dm.compression == extra.Compression && dm.sizePDU == extra.SizePDU && dm.maxHdrSize == extra.MaxHdrSize {
+	if dm.XactConf == extra.XactConf && dm.SizePDU == extra.SizePDU && dm.MaxHdrSize == extra.MaxHdrSize {
 		return nil
 	}
-	nlog.Infoln("renew DM", dm.String(), "=> [", extra.Compression, extra.Multiplier, "]")
+
+	nlog.Infoln("renew DM", dm.String(), "=> [", extra.XactConf, "]")
 	return NewDM(trname, recvCB, owt, extra)
 }
 
@@ -182,7 +181,7 @@ func (dm *DM) UnregRecv() {
 	if xctn != nil {
 		// quiesce outside locks
 		dm.stage.regmtx.Unlock()
-		timeout := dm.config.Transport.QuiesceTime.D()
+		timeout := dm.Config.Transport.QuiesceTime.D()
 		if xctn.IsAborted() {
 			timeout = time.Second
 		}
@@ -209,27 +208,30 @@ func (dm *DM) IsFree() bool {
 }
 
 func (dm *DM) Open() {
+	// data
+	extra := &transport.Extra{
+		Config:      dm.Config,
+		Compression: dm.XactConf.Compression,
+		XactBurst:   dm.XactConf.Burst,
+		SbundleMult: dm.XactConf.SbundleMult,
+		SizePDU:     dm.SizePDU,
+		MaxHdrSize:  dm.MaxHdrSize,
+	}
 	dataArgs := Args{
-		Net:    dm.data.net,
-		Trname: dm.data.trname,
-		Extra: &transport.Extra{
-			Compression: dm.compression,
-			Config:      dm.config,
-			SizePDU:     dm.sizePDU,
-			MaxHdrSize:  dm.maxHdrSize,
-		},
-		Ntype:        core.Targets,
-		Multiplier:   dm.multiplier,
+		Net:          dm.data.net,
+		Trname:       dm.data.trname,
+		Extra:        extra,
 		ManualResync: true,
 	}
 	dataArgs.Extra.Parent = dm.parent
 	dm.data.streams = New(dm.data.client, dataArgs)
+
+	// acks back (optional)
 	if dm.useACKs() {
 		ackArgs := Args{
 			Net:          dm.ack.net,
 			Trname:       dm.ack.trname,
-			Extra:        &transport.Extra{Config: dm.config},
-			Ntype:        core.Targets,
+			Extra:        &transport.Extra{Config: dm.Config},
 			ManualResync: true,
 		}
 		ackArgs.Extra.Parent = dm.parent

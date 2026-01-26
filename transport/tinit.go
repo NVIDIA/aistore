@@ -6,14 +6,9 @@ package transport
 
 import (
 	"container/heap"
-	"os"
-	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -60,24 +55,4 @@ func Init(tstats cos.StatsUpdater) *StreamCollector {
 
 	sc = &StreamCollector{}
 	return sc
-}
-
-func burst(extra *Extra) (burst int) {
-	if extra.ChanBurst > 0 {
-		debug.Assert(extra.ChanBurst <= cmn.MaxTransportBurst, extra.ChanBurst)
-		return min(extra.ChanBurst, cmn.MaxTransportBurst)
-	}
-	if burst = extra.Config.Transport.Burst; burst == 0 {
-		burst = cmn.DfltTransportBurst
-	}
-
-	// (feat)
-	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
-		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
-			nlog.Errorln(err)
-		} else {
-			burst = int(burst64)
-		}
-	}
-	return
 }

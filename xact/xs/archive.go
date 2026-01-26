@@ -139,11 +139,10 @@ func (p *archFactory) Start() (err error) {
 	nat := r.smap.CountActiveTs()
 	if nat > 1 {
 		dmxtra := bundle.Extra{
-			RecvAck:     nil, // no ACKs
-			Config:      r.config,
-			Compression: r.config.Arch.Compression,
-			Multiplier:  r.config.Arch.SbundleMult,
-			SizePDU:     0,
+			RecvAck:  nil, // no ACKs
+			Config:   r.config,
+			XactConf: r.config.Arch.XactConf,
+			SizePDU:  0,
 		}
 		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.smap, dmxtra, cmn.OwtPut); err != nil {
 			return err

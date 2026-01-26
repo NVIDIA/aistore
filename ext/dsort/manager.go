@@ -255,14 +255,14 @@ func (m *Manager) initStreams() error {
 	respNetwork := cmn.NetIntraData
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := bundle.Args{
-		Multiplier: config.Dsort.SbundleMult,
-		Net:        respNetwork,
-		Trname:     trname,
-		Ntype:      core.Targets,
+		Net:    respNetwork,
+		Trname: trname,
+		Ntype:  core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			Config:      config,
-			ChanBurst:   1024,
+			SbundleMult: config.Dsort.SbundleMult,
+			XactBurst:   config.Dsort.Burst,
 		},
 	}
 	if err := transport.Handle(trname, m.recvShard); err != nil {

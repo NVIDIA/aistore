@@ -187,8 +187,11 @@ func (p *lsoFactory) beginStreams(r *LsoXact) error {
 		r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 	}
 	trname := "lso-" + p.UUID()
-	dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
-	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, dmxtra)
+	extra := bundle.Extra{
+		XactConf: cmn.XactConf{SbundleMult: 1, Compression: apc.CompressNever}, // NOTE: hardcoded
+		Config:   r.config,
+	}
+	p.dm = bundle.NewDM(trname, r.recv, cmn.OwtPut, extra)
 
 	if err := p.dm.RegRecv(); err != nil {
 		if p.msg.ContinuationToken != "" {

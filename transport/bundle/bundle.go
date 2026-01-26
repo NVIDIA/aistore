@@ -47,7 +47,7 @@ type (
 		network      string
 		lid          string
 		extra        transport.Extra
-		rxNodeType   int // receiving nodes: [Targets, ..., AllNodes ] enum above
+		rxNodeType   int // receiving nodes (currently, only core.Targets from the respective enum)
 		multiplier   int // optionally: multiple streams per destination (round-robin)
 		manualResync bool
 	}
@@ -57,7 +57,6 @@ type (
 		Net          string           // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraData
 		Trname       string           // transport endpoint name
 		Ntype        int              // core.Target (0) by default
-		Multiplier   int              // so-many TCP connections per Rx endpoint, with round-robin
 		ManualResync bool             // auto-resync by default
 	}
 
@@ -88,18 +87,18 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 		client:       cl,
 		network:      args.Net,
 		trname:       args.Trname,
-		rxNodeType:   args.Ntype,
+		rxNodeType:   core.Targets, // NOTE: currently, only target <=> target; other options easy to add if and when
 		manualResync: args.ManualResync,
 	}
 	sb.extra = *args.Extra
-	sb.multiplier = cos.NonZero(args.Multiplier, int(1))
+	sb.multiplier = cos.NonZero(args.Extra.SbundleMult, int(1))
 	if sb.extra.Config == nil {
 		sb.extra.Config = cmn.GCO.Get()
 	}
 
 	// update streams when Smap changes
 	sb.smaplock.Lock()
-	sb.Resync()
+	sb.resync()
 	sb.smaplock.Unlock()
 
 	sb.lid = sb._lid()
@@ -243,7 +242,7 @@ func (sb *Streams) ListenSmapChanged() {
 	}
 
 	sb.smaplock.Lock()
-	sb.Resync()
+	sb.resync()
 	sb.smaplock.Unlock()
 }
 
@@ -322,7 +321,7 @@ func (sb *Streams) apply(action int) {
 
 // Resync streams asynchronously
 // is a slowpath; is called under lock; NOTE: calls stream.Stop()
-func (sb *Streams) Resync() {
+func (sb *Streams) resync() {
 	smap := core.T.Sowner().Get()
 	if smap.Version <= sb.smap.Version {
 		debug.Assertf(smap.Version == sb.smap.Version, "%s[%s]: %s vs %s", sb.trname, sb.lid, smap, sb.smap)
@@ -334,6 +333,19 @@ func (sb *Streams) Resync() {
 		newm []meta.NodeMap
 		node = smap.GetNode(core.T.SID()) // upd flags
 	)
+	if sb.extra.XactBurst > 0 {
+		debug.Assert(sb.rxNodeType == core.Targets)
+		numPeers := smap.CountActiveTs() - 1
+		if numPeers > 0 {
+			// Xactions that use intra-cluster transport may increase burstiness for their own
+			// data movers by setting their XactConf.Burst (work channel cap). Stream bundles
+			// may then derive a per-destination stream burst from XactConf.Burst and the
+			// number of active peers.
+			xburst := cos.DivRound(sb.extra.XactBurst, numPeers)
+			sb.extra.Burst = cos.ClampInt(xburst, max(sb.extra.Config.Transport.Burst, cmn.TransportBurstMin), cmn.TransportBurstMax)
+		}
+	}
+
 	switch sb.rxNodeType {
 	case core.Targets:
 		oldm = []meta.NodeMap{sb.smap.Tmap}
@@ -455,8 +467,10 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 
 	// 2) build new `robin` (same multiplier; consider setting nrobin.i)
 	nrobin := &robin{stsdest: make(stsdest, len(orobin.stsdest))}
+	config := cmn.GCO.Get()
 	for k := range nrobin.stsdest {
 		extra := sb.extra // by value
+		extra.Config = config
 		ns := transport.NewObjStream(sb.client, dstURL, dstID, &extra)
 		nrobin.stsdest[k] = ns
 	}

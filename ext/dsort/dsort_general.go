@@ -135,12 +135,12 @@ func (ds *dsorterGeneral) start() error {
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
-		Multiplier: ds.m.Pars.SbundleMult,
-		Net:        reqNetwork,
-		Trname:     trname,
-		Ntype:      core.Targets,
+		Net:    reqNetwork,
+		Trname: trname,
+		Ntype:  core.Targets,
 		Extra: &transport.Extra{
-			Config: config,
+			Config:      config,
+			SbundleMult: ds.m.Pars.SbundleMult,
 		},
 	}
 	if err := transport.Handle(trname, ds.recvReq); err != nil {
@@ -149,12 +149,12 @@ func (ds *dsorterGeneral) start() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
 	respSbArgs := bundle.Args{
-		Multiplier: ds.m.Pars.SbundleMult,
-		Net:        respNetwork,
-		Trname:     trname,
-		Ntype:      core.Targets,
+		Net:    respNetwork,
+		Trname: trname,
+		Ntype:  core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
+			SbundleMult: ds.m.Pars.SbundleMult,
 			Config:      config,
 		},
 	}

@@ -71,10 +71,12 @@ type (
 		Parent       *Parent
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
 		Compression  string        // see CompressAlways, etc. enum
-		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
-		ChanBurst    int           // overrides config.Transport.Burst
+		XactBurst    int           // parent xaction work chan cap (optional)
+		Burst        int           // this stream's burst capacity (may indirectly relate to the above)
+		SbundleMult  int           // so-many TCP connections per Rx endpoint, with round-robin
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be <= `maxSizePDU`; unknown size _requires_ PDUs
 		MaxHdrSize   int32         // overrides config.Transport.MaxHeaderSize
+		IdleTeardown time.Duration // when exceeded, causes PUT to terminate (and to renew upon the very next send)
 	}
 
 	// _object_ header (not to confuse w/ objects in buckets)
@@ -116,11 +118,11 @@ type (
 ///////////////////
 
 func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream) {
-	if extra == nil {
-		extra = &Extra{Config: cmn.GCO.Get()}
-	} else if extra.Config == nil {
-		extra.Config = cmn.GCO.Get()
-	}
+	// caller is expected to provide:
+	debug.Assert(extra != nil)
+	debug.Assert(extra.Config != nil)
+	debug.Assert(extra.Config.Transport.Burst > 0)
+
 	s = &Stream{}
 	s.initBase(client, dstURL, dstID, extra)
 	s.base.streamer = s
@@ -132,9 +134,12 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	}
 	debug.Assert(s.usePDU() == extra.UsePDU())
 
-	chsize := burst(extra)             // num objects the caller can post without blocking
-	s.workCh = make(chan *Obj, chsize) // Send Queue (SQ)
-	s.cmplCh = make(chan cmpl, chsize) // Send Completion Queue (SCQ)
+	burst := cos.NonZero(extra.Burst, extra.Config.Transport.Burst)
+	if burst <= 0 {
+		burst = cmn.TransportBurstMin // defensive; assert above
+	}
+	s.workCh = make(chan *Obj, burst) // Send Queue (SQ)
+	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)
 	go s.sendLoop(extra.Config, dryrun()) // handle SQ

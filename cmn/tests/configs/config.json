@@ -81,7 +81,7 @@
 	},
 	"transport": {
 		"max_header":		4096,
-		"burst_buffer":		32,
+		"burst_buffer":		256,
 		"idle_teardown":	"4s",
 		"quiescent":		"10s",
 		"lz4_block":		"256kb",

@@ -756,8 +756,20 @@ type (
 	}
 
 	TransportConf struct {
-		MaxHeaderSize int `json:"max_header"`   // max transport header buffer (default=4K)
-		Burst         int `json:"burst_buffer"` // num sends with no back pressure; see also AIS_STREAM_BURST_NUM
+		MaxHeaderSize int `json:"max_header"` // max transport header buffer (default=4K)
+
+		// Burst controls transport send "burstiness" (SQ depth), i.e.
+		// how many objects a sender may enqueue per stream without back-pressure.
+		// This is the cluster-wide default and also a minimum.
+		//
+		// Xactions that use intra-cluster transport may increase burstiness for their own
+		// data movers by setting their XactConf.Burst (work channel cap). Stream bundles
+		// may then derive a per-destination stream burst from XactConf.Burst and the
+		// number of active peers.
+		//
+		// Note: transport.burst_buffer is validated to a non-zero value (default/min).
+		Burst int `json:"burst_buffer"` // num sends with no back pressure
+
 		// two no-new-transmissions durations:
 		// * IdleTeardown: sender terminates the connection (to reestablish it upon the very first/next PDU)
 		// * QuiesceTime:  safe to terminate or transition to the next (in re: rebalance) stage
@@ -2382,8 +2394,8 @@ const (
 	DfltTransportHeader = 4 * cos.KiB   // memsys.PageSize
 	MaxTransportHeader  = 128 * cos.KiB // memsys.MaxPageSlabSize
 
-	DfltTransportBurst = 256
-	MaxTransportBurst  = 4096
+	TransportBurstMin = 256
+	TransportBurstMax = 4096
 )
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
@@ -2393,21 +2405,27 @@ func (c *TransportConf) Validate() (err error) {
 		return fmt.Errorf("invalid transport.block_size %s, expecting one of: [64K, 256K, 1MB, 4MB]",
 			c.LZ4BlockMaxSize)
 	}
-	if c.Burst != 0 {
-		if c.Burst < 32 || c.Burst > MaxTransportBurst {
-			return fmt.Errorf("invalid transport.burst_buffer: %d, expecting [32, 4KiB] range or 0 (default)", c.Burst)
-		}
+	// this is the system-wide default and, simultaneously, the minimum;
+	// xactions that utilize intra-cluster transport may override this knob for themselves
+	// but only indirectly and only by increasing
+	// their respective (work channel) XactConf.Burst
+	if c.Burst == 0 {
+		c.Burst = TransportBurstMin
+	} else if c.Burst < TransportBurstMin || c.Burst > TransportBurstMax {
+		return fmt.Errorf("invalid transport.burst_buffer %d, expecting [%d, %d] range or 0 (default)",
+			c.Burst, TransportBurstMin, TransportBurstMax)
 	}
+
 	if c.MaxHeaderSize != 0 {
 		if c.MaxHeaderSize < 512 || c.MaxHeaderSize > MaxTransportHeader {
-			return fmt.Errorf("invalid transport.max_header: %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
+			return fmt.Errorf("invalid transport.max_header %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
 		}
 	}
 	if c.IdleTeardown.D() < time.Second {
-		return fmt.Errorf("invalid transport.idle_teardown: %v (expecting >= 1s)", c.IdleTeardown)
+		return fmt.Errorf("invalid transport.idle_teardown %v (expecting >= 1s)", c.IdleTeardown)
 	}
 	if c.QuiesceTime.D() < 8*time.Second {
-		return fmt.Errorf("invalid transport.quiescent: %v (expecting >= 8s)", c.QuiesceTime)
+		return fmt.Errorf("invalid transport.quiescent %v (expecting >= 8s)", c.QuiesceTime)
 	}
 	return nil
 }
@@ -2417,6 +2435,9 @@ func (c *TransportConf) Validate() (err error) {
 //////////////
 
 func (c *XactConf) Validate() error {
+	if c.Compression == "" {
+		c.Compression = apc.CompressNever
+	}
 	if !apc.IsValidCompression(c.Compression) {
 		return fmt.Errorf("invalid compression: %q (expecting one of: %v)",
 			c.Compression, apc.SupportedCompression)

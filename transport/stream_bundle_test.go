@@ -177,9 +177,10 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		extra.SizePDU = memsys.DefaultBufSize
 	}
 	extra.Config = config
+	extra.SbundleMult = multiplier
 	_, _ = cryptorand.Read(wbuf)
 	sb := bundle.New(httpclient,
-		bundle.Args{Net: network, Trname: trname, Multiplier: multiplier, Extra: extra})
+		bundle.Args{Net: network, Trname: trname, Extra: extra})
 	var numGs int64 = 6
 	if testing.Short() {
 		numGs = 1

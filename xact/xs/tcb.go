@@ -215,15 +215,14 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 func (r *XactTCB) newDM(sizePDU int32) error {
 	const trname = "tcb-"
 	config := r.BckJog.Config
-	dmExtra := bundle.Extra{
-		RecvAck:     nil, // no ACKs
-		Config:      config,
-		Compression: config.TCB.Compression,
-		Multiplier:  config.TCB.SbundleMult,
-		SizePDU:     sizePDU,
+	extra := bundle.Extra{
+		RecvAck:  nil, // no ACKs
+		Config:   config,
+		XactConf: config.TCB.XactConf,
+		SizePDU:  sizePDU,
 	}
 	// in re cmn.OwtPut: see comment inside _recv()
-	dm := bundle.NewDM(trname+r.ID(), r.recv, r.owt, dmExtra)
+	dm := bundle.NewDM(trname+r.ID(), r.recv, r.owt, extra)
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}

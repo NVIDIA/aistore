@@ -90,6 +90,7 @@ func TestMain(t *testing.M) {
 
 	config := cmn.GCO.BeginUpdate()
 	config.Transport.MaxHeaderSize = memsys.PageSize
+	config.Transport.Burst = 256
 	config.Transport.IdleTeardown = cos.Duration(time.Second)
 	config.Transport.QuiesceTime = cos.Duration(10 * time.Second)
 	config.Log.Level = "3"
@@ -141,7 +142,7 @@ func Example_headers() {
 	defer ts.Close()
 
 	httpclient := transport.NewIntraDataClient()
-	stream := transport.NewObjStream(httpclient, ts.URL, cos.GenTie(), nil)
+	stream := transport.NewObjStream(httpclient, ts.URL, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
 
 	sendText(stream, lorem, duis)
 	stream.Fin()
@@ -222,7 +223,7 @@ func Example_obj() {
 		return
 	}
 	httpclient := transport.NewIntraDataClient()
-	stream := transport.NewObjStream(httpclient, ts.URL+transport.ObjURLPath(trname), cos.GenTie(), nil)
+	stream := transport.NewObjStream(httpclient, ts.URL+transport.ObjURLPath(trname), cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
 	sendText(stream, lorem, duis)
 	sendText(stream, et, temporibus)
 	stream.Fin()
@@ -273,7 +274,7 @@ func TestMultipleNetworks(t *testing.T) {
 
 		httpclient := transport.NewIntraDataClient()
 		url := ts.URL + transport.ObjURLPath(trname)
-		streams = append(streams, transport.NewObjStream(httpclient, url, cos.GenTie(), nil))
+		streams = append(streams, transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()}))
 	}
 
 	totalSend := int64(0)
@@ -310,7 +311,7 @@ func TestSendCallback(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil)
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
 
 	var (
 		totalSend int64
@@ -387,7 +388,7 @@ func TestObjAttrs(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil)
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
 
 	random := newRand(mono.NanoTime())
 	for idx, attrs := range testAttrs {
@@ -445,8 +446,7 @@ func TestCompressedOne(t *testing.T) {
 
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	t.Setenv("AIS_STREAM_BURST_NUM", "2")
-	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Compression: apc.CompressAlways})
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get(), Burst: 2, Compression: apc.CompressAlways})
 
 	slab, _ := memsys.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	random := newRand(mono.NanoTime())
@@ -494,7 +494,7 @@ func TestDryRun(t *testing.T) {
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
-	stream := transport.NewObjStream(nil, "dummy/null", cos.GenTie(), nil)
+	stream := transport.NewObjStream(nil, "dummy/null", cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get()})
 
 	random := newRand(mono.NanoTime())
 	sgl := memsys.PageMM().NewSGL(cos.MiB)
@@ -559,8 +559,7 @@ func TestCompletionCount(t *testing.T) {
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	t.Setenv("AIS_STREAM_BURST_NUM", "256")
-	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), nil) // provide for sizeable queue at any point
+	stream := transport.NewObjStream(httpclient, url, cos.GenTie(), &transport.Extra{Config: cmn.GCO.Get(), Burst: 256}) // provide for sizeable queue at any point
 	random := newRand(mono.NanoTime())
 	rem := int64(0)
 	for idx := range 10000 {
@@ -620,9 +619,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 	httpclient := transport.NewIntraDataClient()
 	url := ts.URL + transport.ObjURLPath(trname)
-	var extra *transport.Extra
+	var extra = &transport.Extra{Config: cmn.GCO.Get()}
 	if compress || usePDU {
-		extra = &transport.Extra{}
 		if compress {
 			extra.Compression = apc.CompressAlways
 		}
