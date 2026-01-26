@@ -211,7 +211,7 @@ func (s *base) TermInfo() (reason string, err error) {
 		s.term.mu.Lock()
 		reason, err = s.term.reason, s.term.err
 		s.term.mu.Unlock()
-		if reason != "" && err != nil {
+		if reason != "" {
 			break
 		}
 		time.Sleep(sleep)
