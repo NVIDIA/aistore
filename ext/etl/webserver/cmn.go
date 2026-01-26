@@ -1,6 +1,6 @@
 // Package webserver provides a framework to impelemnt etl transformation webserver in golang.
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package webserver
 

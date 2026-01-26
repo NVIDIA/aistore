@@ -1,6 +1,6 @@
 // Package uuid_test (gen-uuid vs gen-tie)
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package uuid_test
 

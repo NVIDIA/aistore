@@ -1,6 +1,6 @@
 // Package main provides utility functions for the AIStore API documentation generator.
 //
-// Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 package main
 
 import (

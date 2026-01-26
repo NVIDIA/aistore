@@ -1,6 +1,6 @@
 // Package work provides a bounded worker pool utility for concurrent processing of any kind.
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package work
 

@@ -270,7 +270,6 @@ AIStore is a fully compliant [Prometheus exporter](https://prometheus.io/docs/in
 | name | comment |
 | ---- | ------- |
 | `AIS_STREAM_DRY_RUN` | read and immediately discard all read data (can be used to evaluate client-side throughput) |
-| `AIS_STREAM_BURST_NUM` | overrides `transport.burst_buffer` knob from the [cluster configuration](/docs/configuration.md) |
 
 See also: [streaming intra-cluster transport](https://github.com/NVIDIA/aistore/blob/main/transport/README.md).
 

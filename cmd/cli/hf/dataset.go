@@ -1,6 +1,6 @@
 // Package hf contains HuggingFace integration logic for AIS.
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package hf
 

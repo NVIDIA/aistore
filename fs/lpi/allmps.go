@@ -1,6 +1,6 @@
 // Package lpi: local page iterator
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package lpi
 
