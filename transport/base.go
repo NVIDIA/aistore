@@ -85,9 +85,9 @@ type (
 		term     struct {
 			err    error
 			reason string
-			mu     sync.Mutex
-			done   atomic.Bool
-			once   atomic.Bool // term log
+			mu     sync.Mutex  // guard updating/reading (term.err, term.reason)
+			done   atomic.Bool // CAS to terminate only once
+			once   atomic.Bool // log "dropping..." upon termination (once)
 		}
 		time struct {
 			idleTeardown time.Duration // idle timeout

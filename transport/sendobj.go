@@ -66,15 +66,13 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 	if s.term.reason == "" {
 		s.term.reason = reason
 	}
-	s.Stop()
-	err = s.term.err
 	actReason, actErr = s.term.reason, s.term.err
-	s.cmplCh <- cmpl{err, Obj{Hdr: ObjHdr{Opcode: opcFin}}}
 	s.term.mu.Unlock()
 
-	// Remove stream after lock because we could deadlock between `do()`
-	// (which checks for `Terminated` status) and this function which
-	// would be under lock.
+	s.Stop()
+	s.cmplCh <- cmpl{actErr, Obj{Hdr: ObjHdr{Opcode: opcFin}}}
+
+	// notify stream collector to remove stream and close its workCh
 	gc.remove(&s.base)
 
 	if s.compressed() {
@@ -83,7 +81,7 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 			s.lz4s.zw.Reset(nil)
 		}
 	}
-	return
+	return actReason, actErr
 }
 
 func (s *Stream) initCompression(extra *Extra) {
