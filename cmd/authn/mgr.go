@@ -417,7 +417,7 @@ func (m *mgr) _token(msg *authn.LoginMsg, uInfo *authn.User, cluACLs []*authn.Cl
 		expDelta = *msg.ExpiresIn
 	}
 	if expDelta == 0 {
-		expDelta = foreverTokenTime
+		expDelta = authn.ForeverTokenTime.D()
 	}
 
 	// put all useful info into token: who owns the token, when it was issued,

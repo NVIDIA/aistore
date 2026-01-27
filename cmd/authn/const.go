@@ -4,8 +4,6 @@
  */
 package main
 
-import "time"
-
 const (
 	ClusterOwnerRole = "ClusterOwner"
 	BucketOwnerRole  = "BucketOwner"
@@ -19,8 +17,4 @@ const (
 	clustersCollection = "cluster"
 
 	adminUserID = "admin"
-
-	// ForeverTokenTime is a duration of 20 years, used to define, effectively, no expiration on tokens
-	// Used when user-provided token expiration time is zero
-	foreverTokenTime = 20 * 365 * 24 * time.Hour
 )

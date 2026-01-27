@@ -106,16 +106,9 @@ func TestUpdateConf(t *testing.T) {
 	})
 	tassert.Error(t, err != nil, "expected error for empty secret in config update")
 
-	// invalid duration
-	exp := "not-a-duration"
-	err = cm.UpdateConf(&authn.ConfigToUpdate{
-		Server: &authn.ServerConfToSet{Expire: &exp},
-	})
-	tassert.Error(t, err != nil, "expected error for invalid duration in config update")
-
 	// valid update
 	newSecret := "new-secret"
-	newExpire := "2h"
+	newExpire := 2 * time.Hour
 	err = cm.UpdateConf(&authn.ConfigToUpdate{
 		Server: &authn.ServerConfToSet{
 			Secret: &newSecret,
@@ -125,6 +118,22 @@ func TestUpdateConf(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "UpdateConf failed: %v", err)
 	compareSecret(t, cm, newSecret)
 	compareExpiry(t, cm, 2*time.Hour)
+}
+
+func TestUpdateConfNoExpiry(t *testing.T) {
+	cm := newConfManagerWithConf(t, newBaseConfig())
+
+	// valid update
+	newSecret := "new-secret"
+	err := cm.UpdateConf(&authn.ConfigToUpdate{
+		Server: &authn.ServerConfToSet{
+			Secret: &newSecret,
+		},
+	})
+	tassert.Fatalf(t, err == nil, "UpdateConf failed: %v", err)
+	compareSecret(t, cm, newSecret)
+	actual := cm.GetExpiry()
+	tassert.Errorf(t, actual > 0, "expected expire to be set to some positive default, got %v", actual)
 }
 
 func TestInitEnv(t *testing.T) {
@@ -174,17 +183,12 @@ func TestGetConfDir(t *testing.T) {
 
 func TestGetLogFlushInterval(t *testing.T) {
 	base := newBaseConfig()
-	expected := 5 * time.Second
+	expected := 20 * time.Second
 	base.Log.FlushInterval = cos.Duration(expected)
 	cm := newConfManagerWithConf(t, base)
 
 	got := cm.GetLogFlushInterval()
 	tassert.Errorf(t, got == expected, "expected %v, got %v", expected, got)
-
-	base.Log.FlushInterval = 0
-	cm = newConfManagerWithConf(t, base)
-	got = cm.GetLogFlushInterval()
-	tassert.Errorf(t, got == 0, "expected 0, got %v", got)
 }
 
 func TestParseExternalURL_Env(t *testing.T) {
@@ -416,7 +420,7 @@ func TestAuthConfManagerConcurrency(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateConf failed in concurrent test: %v", err)
 	}
-	newExpiry := "5h"
+	newExpiry := 5 * time.Hour
 
 	if err := cm.UpdateConf(&authn.ConfigToUpdate{
 		Server: &authn.ServerConfToSet{Expire: &newExpiry},

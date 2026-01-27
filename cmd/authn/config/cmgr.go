@@ -39,7 +39,6 @@ const (
 	SigningKeyUsage      = "sig"
 	PublicKeyPEMType     = "PUBLIC KEY"
 	PrivateKeyPEMType    = "PRIVATE KEY"
-	MinRSAKeyBits        = 2048
 	MinPassphraseLength  = 8
 	MinPassphraseEntropy = 3
 )
@@ -91,21 +90,9 @@ func (cm *ConfManager) GetConf() *authn.Config {
 }
 
 func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
-	var newExpiry *cos.Duration
 	// Validate updated values
-	if cu.Server == nil {
-		return errors.New("configuration is empty")
-	}
-	if cu.Server.Secret != nil && *cu.Server.Secret == "" {
-		return errors.New("secret not defined")
-	}
-	if cu.Server.Expire != nil {
-		exp, err := time.ParseDuration(*cu.Server.Expire)
-		if err != nil {
-			return fmt.Errorf("invalid time format %s: %v", *cu.Server.Expire, err)
-		}
-		d := cos.Duration(exp)
-		newExpiry = &d
+	if err := cu.Validate(); err != nil {
+		return fmt.Errorf("invalid config update: %v", err)
 	}
 	// Lock to allow partial updates
 	cm.mu.Lock()
@@ -115,8 +102,13 @@ func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
 	if cu.Server.Secret != nil {
 		next.Server.Secret = *cu.Server.Secret
 	}
-	if newExpiry != nil {
-		next.Server.Expire = *newExpiry
+	if cu.Server.Expire != nil {
+		next.Server.Expire = cos.Duration(*cu.Server.Expire)
+	}
+	// Validate config after updates before storing
+	err := next.Validate()
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %v", err)
 	}
 	// re-init to copy into private fields
 	next.Init()
@@ -171,6 +163,9 @@ func (cm *ConfManager) loadFromDisk() (*authn.Config, error) {
 	rawConf := &authn.Config{}
 	if _, err := jsp.LoadMeta(cm.filePath, rawConf); err != nil {
 		return nil, fmt.Errorf("failed to load configuration from %q: %v", cm.filePath, err)
+	}
+	if err := rawConf.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration from %q: %v", cm.filePath, err)
 	}
 	return rawConf, nil
 }

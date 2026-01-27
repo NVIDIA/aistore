@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
+const keyBits = 2048
+
 func genRandomPassphrase(t *testing.T) cmn.Censored {
 	passBytes := make([]byte, 16)
 	_, err := rand.Read(passBytes)
@@ -25,10 +27,10 @@ func genRandomPassphrase(t *testing.T) cmn.Censored {
 
 func createAndSaveKey(t *testing.T, dst string, passphrase cmn.Censored) *RSAKeyManager {
 	// Create manager with passphrase
-	mgr := NewRSAKeyManager(dst, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(dst, keyBits, passphrase)
 
 	// Generate and set a key
-	key, err := rsa.GenerateKey(rand.Reader, MinRSAKeyBits)
+	key, err := rsa.GenerateKey(rand.Reader, keyBits)
 	tassert.Fatalf(t, err == nil, "failed to generate RSA key: %v", err)
 	err = mgr.setKey(key)
 	tassert.Fatalf(t, err == nil, "failed to set key: %v", err)
@@ -63,7 +65,7 @@ func newTempKeyFile(t *testing.T) string {
 
 // Helper function to use key manager functions to encrypt invalid content for testing
 func encryptInvalid(t *testing.T, keyPath string, passphrase cmn.Censored, content []byte) {
-	mgr := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	encrypted, err := mgr.encryptPrivateKey(content)
 	if err != nil {
 		t.Fatalf("failed to encrypt invalid PKCS8: %v", err)
@@ -80,7 +82,7 @@ func TestRSAKeyManager_SaveAndLoad(t *testing.T) {
 	mgr := createAndSaveKey(t, keyPath, passphrase)
 
 	// Create new manager and load
-	mgr2 := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr2 := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	err := mgr2.loadFromDisk()
 	tassert.CheckFatal(t, err)
 
@@ -94,7 +96,7 @@ func TestRSAKeyManager_LoadNoPassphrase(t *testing.T) {
 	passphrase := genRandomPassphrase(t)
 	createAndSaveKey(t, keyPath, passphrase)
 	// Verify manager without passphrase fails to load
-	mgr2 := NewRSAKeyManager(keyPath, MinRSAKeyBits, "")
+	mgr2 := NewRSAKeyManager(keyPath, keyBits, "")
 	err := mgr2.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail without passphrase")
 }
@@ -104,7 +106,7 @@ func TestRSAKeyManager_LoadInvalidPassphrase(t *testing.T) {
 	passphrase := genRandomPassphrase(t)
 	createAndSaveKey(t, keyPath, passphrase)
 	// Verify manager with invalid passphrase fails to load
-	mgr2 := NewRSAKeyManager(keyPath, MinRSAKeyBits, "valid-but-incorrect-phrase")
+	mgr2 := NewRSAKeyManager(keyPath, keyBits, "valid-but-incorrect-phrase")
 	err := mgr2.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail with incorrect passphrase")
 }
@@ -120,7 +122,7 @@ func TestRSAKeyManager_LoadCorruptedEncryptedKey_TooShort(t *testing.T) {
 		t.Fatalf("failed to write corrupted key file: %v", err)
 	}
 
-	mgr := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	err := mgr.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail with corrupted encrypted key (too short)")
 }
@@ -133,7 +135,7 @@ func TestRSAKeyManager_LoadCorruptedEncryptedKey_InvalidContent(t *testing.T) {
 	// Pass the length check but fail during decryption (invalid PEM block)
 	encryptInvalid(t, keyPath, passphrase, make([]byte, 200))
 
-	mgr := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	err := mgr.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail with invalid key structure")
 }
@@ -146,7 +148,7 @@ func TestRSAKeyManager_LoadCorruptedEncryptedKey_InvalidPEM(t *testing.T) {
 	invalidPEM := []byte("this is random data, not encoded as valid PEM")
 	encryptInvalid(t, keyPath, passphrase, invalidPEM)
 
-	mgr := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	err := mgr.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail with invalid PEM after decryption")
 }
@@ -163,7 +165,7 @@ func TestRSAKeyManager_LoadCorruptedEncryptedKey_InvalidPKCS8(t *testing.T) {
 	})
 	encryptInvalid(t, keyPath, passphrase, invalidPKCS8)
 
-	mgr := NewRSAKeyManager(keyPath, MinRSAKeyBits, passphrase)
+	mgr := NewRSAKeyManager(keyPath, keyBits, passphrase)
 	err := mgr.loadFromDisk()
 	tassert.Fatal(t, err != nil, "expected loadFromDisk to fail with invalid PKCS8 data after decryption")
 }

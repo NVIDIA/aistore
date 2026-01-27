@@ -44,9 +44,6 @@ type RSAKeyManager struct {
 }
 
 func NewRSAKeyManager(keyFilePath string, keySize int, passphrase cmn.Censored) *RSAKeyManager {
-	if keySize < MinRSAKeyBits {
-		keySize = MinRSAKeyBits
-	}
 	return &RSAKeyManager{
 		keySize:     keySize,
 		keyFilePath: keyFilePath,
