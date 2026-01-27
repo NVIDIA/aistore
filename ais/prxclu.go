@@ -153,7 +153,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
-	resRaw, erred := p._tresRaw(w, r, results)
+	resRaw, erred := p._rawResults(w, r, results)
 	if erred {
 		return
 	}
@@ -322,30 +322,75 @@ func (p *proxy) _queryTs(w http.ResponseWriter, r *http.Request, query url.Value
 			return nil, true
 		}
 	}
+
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query, Body: body}
 	args.timeout = cmn.Rom.MaxKeepalive()
+
 	results := p.bcastGroup(args)
+	rawResults, terr, timedOut := _rawResWithTimeout(results)
+	if terr == nil {
+		freeBcArgs(args)
+		return rawResults, false
+	}
+
+	// on client timeout: retry just once with >= 2x timeout
+	if timedOut {
+		config := cmn.GCO.Get()
+		args.timeout = max(args.timeout*2, config.Client.Timeout.D())
+		nlog.Warningln(p.String(), "retrying control-plane timeout (query=", query.Encode(), "):", terr)
+
+		results = p.bcastGroup(args)
+		rawResults, terr, _ = _rawResWithTimeout(results)
+		if terr == nil {
+			freeBcArgs(args)
+			return rawResults, false
+		}
+	}
+
 	freeBcArgs(args)
-	return p._tresRaw(w, r, results)
+	p.writeErr(w, r, terr)
+	return nil, true
 }
 
-func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceResults) (tres cos.JSONRawMsgs, erred bool) {
-	tres = make(cos.JSONRawMsgs, len(results))
+//
+// TODO: refactor and consolidate: _rawResults() vs _rawResWithTimeout()
+//
+
+func (p *proxy) _rawResults(w http.ResponseWriter, r *http.Request, results sliceResults) (cos.JSONRawMsgs, bool) {
+	rawResults := make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			continue
 		}
 		if res.err != nil {
+			if cos.IsErrClientTimeout(res.err) {
+				nlog.Warningln(p.String(), "control-plane timeout calling", res.si.StringEx())
+			}
 			p.writeErr(w, r, res.toErr())
 			freeBcastRes(results)
-			tres, erred = nil, true
-			return
+			return nil, true
 		}
-		tres[res.si.ID()] = res.bytes
+		rawResults[res.si.ID()] = res.bytes
 	}
 	freeBcastRes(results)
-	return
+	return rawResults, false
+}
+
+func _rawResWithTimeout(results sliceResults) (cos.JSONRawMsgs, error, bool /*timed out*/) {
+	rawResults := make(cos.JSONRawMsgs, len(results))
+	for _, res := range results {
+		if res.status == http.StatusNotFound {
+			continue
+		}
+		if res.err != nil {
+			freeBcastRes(results)
+			return nil, res.toErr(), cos.IsErrClientTimeout(res.err)
+		}
+		rawResults[res.si.ID()] = res.bytes
+	}
+	freeBcastRes(results)
+	return rawResults, nil, false
 }
 
 // +gen:endpoint POST /v1/cluster/{operation}

@@ -217,7 +217,9 @@ func (xctn *Base) Finish() {
 	switch {
 	case err == nil:
 		debug.Assert(n == 0, n)
-		nlog.Infoln(xname, "finished") // TODO: consider skipping QuietBrief as well
+		if !Table[xctn.kind].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
+			nlog.Infoln(xname, "finished")
+		}
 		return
 	case Table[xctn.kind].QuietBrief:
 		// skip

@@ -51,11 +51,10 @@ func (xctn *Base) NewSnap(self core.Xact) (snap *core.Snap) {
 		snap.CtlMsg = self.CtlMsg()
 	}()
 
-	if snap.CtlMsg == "" {
-		return snap
-	}
-	if !Table[self.Kind()].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
-		nlog.InfoDepth(1, self.Name(), "ctl:", snap.CtlMsg)
+	if snap.CtlMsg != "" {
+		if !Table[self.Kind()].QuietBrief || cmn.Rom.V(4, cos.ModXs) {
+			nlog.InfoDepth(1, self.Name(), "ctl:", snap.CtlMsg)
+		}
 	}
 
 	return snap
