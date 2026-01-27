@@ -34,12 +34,12 @@ fi
 bucket="ais://@remais/abc"
 
 ## aisloader command line
-minsize="10MiB"
-maxsize="1GiB"
-totalsize="10GiB"
+minsize="1MiB"
+maxsize="256MiB"
+totalsize="2GiB"
 
 ## permutating (1mb, 2mb, 3mb) unless explicitly given in the command line
-chunksize="1MB"
+chunksize="2MB"
 
 ## put some limit to it
 max_num_downloads=30 ########## ---------------------------------------------------------------------
