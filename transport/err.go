@@ -13,6 +13,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
+// Stream termination sentinel error constants
+const (
+	TermEndOfStream = "end-of-stream"
+	TermStopped     = "stopped"
+)
+
 // ErrSBR codes (receive-side stream breakage)
 const (
 	sbrProtoHdr        = "sbr_proto_hdr"      // failed to receive protocol header

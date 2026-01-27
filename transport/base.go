@@ -224,7 +224,11 @@ func (s *base) TermInfo() error {
 		}
 		time.Sleep(sleep)
 	}
-	return errors.New("termination reason unavailable") // (unlikely)
+	// (unlikely)
+	err = errors.New("terminated without term.err")
+	debug.Assert(false, s.String(), " err: ", err)
+	nlog.Errorln(s.String(), "err:", err)
+	return err
 }
 
 // isNextReq returns:

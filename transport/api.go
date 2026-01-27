@@ -31,12 +31,6 @@ const (
 	// see also: cmn/config for (max, default) transport header sizes
 )
 
-// Stream termination sentinel error constants
-const (
-	TermEndOfStream = "end-of-stream"
-	TermStopped     = "stopped"
-)
-
 const sizeofh = int(unsafe.Sizeof(Obj{}))
 
 // ObjHdr represents the transport header passed to recv callbacks.
