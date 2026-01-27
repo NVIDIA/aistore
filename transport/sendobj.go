@@ -55,18 +55,17 @@ var _ streamer = (*Stream)(nil)
 // object stream //
 ///////////////////
 
-func (s *Stream) terminate(err error, reason string) (actReason string, actErr error) {
+// terminate sets the termination error (errEndOfStream, errStopped, or actual error)
+// and returns the effective error after considering any prior termination.
+func (s *Stream) terminate(err error) (actErr error) {
 	ok := s.term.done.CAS(false, true)
 	debug.Assert(ok, s.String())
 
 	s.term.mu.Lock()
 	if s.term.err == nil {
-		s.term.err = err
+		s.term.err = err // errEndOfStream, errStopped, or actual error
 	}
-	if s.term.reason == "" {
-		s.term.reason = reason
-	}
-	actReason, actErr = s.term.reason, s.term.err
+	actErr = s.term.err
 	s.term.mu.Unlock()
 
 	s.Stop()
@@ -81,7 +80,7 @@ func (s *Stream) terminate(err error, reason string) (actReason string, actErr e
 			s.lz4s.zw.Reset(nil)
 		}
 	}
-	return actReason, actErr
+	return actErr
 }
 
 func (s *Stream) initCompression(extra *Extra) {

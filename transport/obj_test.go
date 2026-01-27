@@ -26,6 +26,7 @@ import (
 	"path"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -592,6 +593,10 @@ func TestCompletionCount(t *testing.T) {
 	} else {
 		t.Fatalf("sent %d != %d completed\n", numSent, numCompleted.Load())
 	}
+
+	// Verify termination error is "stopped" (not "end-of-stream")
+	termErr := stream.TermInfo()
+	tassert.Errorf(t, strings.Contains(termErr.Error(), transport.TermStopped), "expected '%s' after Stop(), got %v", transport.TermStopped, termErr)
 }
 
 //
@@ -659,10 +664,10 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		}
 	}
 	stream.Fin()
-	reason, termErr := stream.TermInfo()
-	tassert.Errorf(t, reason != "", "expecting reason for termination")
-	tlog.Logf("stream[%s/%d]: sent %d objects (%d GiB), terminated(%q, %v)\n",
-		trname, sessID, num, size/cos.GiB, reason, termErr)
+	termErr := stream.TermInfo()
+	tassert.Errorf(t, strings.Contains(termErr.Error(), transport.TermEndOfStream), "expected '%s', got %v", transport.TermEndOfStream, termErr)
+	tlog.Logf("stream[%s/%d]: sent %d objects (%d GiB), terminated(%v)\n",
+		trname, sessID, num, size/cos.GiB, termErr)
 
 	if *totalRecv != size {
 		t.Errorf("total received bytes %d is different from expected: %d", *totalRecv, size)

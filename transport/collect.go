@@ -162,7 +162,7 @@ func (gc *collector) Pop() any {
 func (gc *collector) do() {
 	for sessID, s := range gc.streams {
 		if s.IsTerminated() {
-			_, err := s.TermInfo()
+			err := s.TermInfo()
 			if s.time.inSend.Swap(false) {
 				s.streamer.drain(err)
 				s.time.ticks = 1

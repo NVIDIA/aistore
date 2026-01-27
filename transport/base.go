@@ -41,22 +41,25 @@ const (
 	inEOB
 )
 
-const maxInReadRetries = 64 // Tx: lz4 stream read; Rx: partial object header
-
-// termination: reasons
 const (
-	reasonError   = "error"
-	endOfStream   = "end-of-stream"
-	reasonStopped = "stopped"
+	maxInReadRetries = 64 // Tx: lz4 stream read; Rx: partial object header
+	termErrWait      = time.Second
+)
 
-	termErrWait = time.Second
+// Stream termination sentinel errors (not failure conditions).
+// For actual errors, use the error itself.
+var (
+	// errEndOfStream signals normal/graceful stream termination via Fin()
+	errEndOfStream = errors.New(TermEndOfStream)
+	// errStopped signals explicit stream stop request via Stop()
+	errStopped = errors.New(TermStopped)
 )
 
 type (
 	streamer interface {
 		compressed() bool
 		dryrun()
-		terminate(error, string) (string, error)
+		terminate(error) error // returns errEndOfStream, errStopped, or actual error
 		doRequest() error
 		reopen() bool
 		inSend() bool
@@ -83,11 +86,10 @@ type (
 		maxhdr   []byte // transport header buf must be large enough to accommodate max-size for this stream
 		header   []byte // object header (slice of the maxhdr with bucket/objName, etc. fields packed/serialized)
 		term     struct {
-			err    error
-			reason string
-			mu     sync.Mutex  // guard updating/reading (term.err, term.reason)
-			done   atomic.Bool // CAS to terminate only once
-			once   atomic.Bool // log "dropping..." upon termination (once)
+			err  error
+			mu   sync.Mutex  // guard updating/reading (term.err)
+			done atomic.Bool // CAS to terminate only once
+			once atomic.Bool // log "dropping..." upon termination (once)
 		}
 		time struct {
 			idleTeardown time.Duration // idle timeout
@@ -185,12 +187,10 @@ func (s *base) startSend(streamable fmt.Stringer) (err error) {
 }
 
 func (s *base) newErr(ctx string) error {
-	reason, errT := s.TermInfo()
 	return &errStreamTerm{
-		err:    errT,
+		err:    s.TermInfo(), // errEndOfStream, errStopped, or actual error - always non-nil
 		dst:    s.dstID,
 		loghdr: s.loghdr,
-		reason: reason,
 		ctx:    ctx,
 	}
 }
@@ -204,47 +204,52 @@ func (s *base) Abort() { s.Stop() } // (DM =>) SB => s.Abort() sequence (e.g. us
 
 func (s *base) IsTerminated() bool { return s.term.done.Load() }
 
-// is only called on terminated screen
+// TermInfo() is only called on terminated screen
 // must always return an err != nil, even after a graceful termination
-func (s *base) TermInfo() (reason string, err error) {
+//   - errEndOfStream for normal end-of-stream (success via Fin())
+//   - errStopped for explicit stop request (via Stop())
+//   - actual error for failures
+func (s *base) TermInfo() error {
 	// to account for an unlikely delay between done.CAS() and mu.Lock - see terminate()
-	sleep := cos.ProbingFrequency(termErrWait)
+	var (
+		sleep = cos.ProbingFrequency(termErrWait)
+		err   error
+	)
 	for elapsed := time.Duration(0); elapsed < termErrWait; elapsed += sleep {
 		s.term.mu.Lock()
-		reason, err = s.term.reason, s.term.err
+		err = s.term.err
 		s.term.mu.Unlock()
-		if reason != "" {
-			break
+		if err != nil {
+			return err
 		}
 		time.Sleep(sleep)
 	}
-	if err == nil {
-		err = errors.New("terminated: " + reason)
-	}
-	return reason, err
+	return errors.New("termination reason unavailable") // (unlikely)
 }
 
-func (s *base) isNextReq() (reason string) {
+// isNextReq returns:
+//   - errEndOfStream for normal end-of-stream (graceful termination via Fin())
+//   - errStopped for explicit stop request (via Stop())
+//   - nil to continue processing
+func (s *base) isNextReq() error {
 	for {
 		select {
 		case <-s.lastCh.Listen():
 			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "end-of-stream")
 			}
-			reason = endOfStream
-			return
+			return errEndOfStream // Normal termination
 		case <-s.stopCh.Listen():
 			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "stopped")
 			}
-			reason = reasonStopped
-			return
+			return errStopped // Explicit stop
 		case <-s.postCh:
 			s.sessST.Store(active)
 			if cmn.Rom.V(5, cos.ModTransport) {
 				nlog.Infoln(s.String(), "active <- posted")
 			}
-			return
+			return nil // Continue processing
 		}
 	}
 }
@@ -259,9 +264,8 @@ func (s *base) deactivate() (n int, err error) {
 
 func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 	var (
-		err    error
-		reason string
-		retry  *rtry
+		err   error
+		retry *rtry
 	)
 
 	// main loop
@@ -285,47 +289,45 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 					if cmn.Rom.V(4, cos.ModTransport) {
 						nlog.Errorln(s.String(), "not retriable:", err)
 					}
-					reason = reasonError
-					break
+					break // err already set to actual error
 				}
 				if retry == nil {
 					retry = newRtry(config, s.String())
 				}
 				if retry.timeout(err) {
-					reason = reasonError
-					break
+					break // err already set to actual error
 				}
 
 				if !s.streamer.reopen() {
-					reason = reasonError
-					break
+					break // err already set to actual error
 				}
 
 				retry.sleep(err)
 				err = nil
 			}
 		}
-		if reason = s.isNextReq(); reason != "" {
+		if termErr := s.isNextReq(); termErr != nil {
+			err = termErr // errEndOfStream or errStopped
 			break
 		}
 	}
 
-	reason, err = s.streamer.terminate(err, reason)
+	err = s.streamer.terminate(err)
 	s.wg.Done()
 
-	if reason == endOfStream { // ok (via hdr.Opcode = opcFin => lastCh.Close)
+	if err == errEndOfStream { // ok (via hdr.Opcode = opcFin => lastCh.Close)
 		return
 	}
 
 	// termination is caused by anything other than Fin() ---------------
-	// 1) reasonStopped via Stop(), or
+	// 1) errStopped via Stop(), or
 	// 2) broken pipe, connection reset, etc.
 	// steps:
 	// - abort parent xaction if defined AND the parent's TermedCB is nil
 	// - wait and complete
 	// - call parent's TermedCB if defined ---------- (notice "either/OR")
 
-	if reason != reasonStopped {
+	if err != errStopped {
 		if s.parent != nil && s.parent.Xact != nil && s.parent.TermedCB == nil {
 			s.parent.Xact.Abort(s.newErr(""))
 		}
@@ -337,7 +339,7 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
-	if reason != reasonStopped {
+	if err != errStopped {
 		if s.parent != nil && s.parent.TermedCB != nil {
 			s.parent.TermedCB(s.dstID, err)
 		}

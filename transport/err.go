@@ -33,10 +33,9 @@ const (
 type (
 	// Tx
 	errStreamTerm struct {
-		err    error
+		err    error // errEndOfStream=normal, errStopped=stopped, other=error
 		loghdr string
 		dst    string // destination node ID // TODO: needed?
-		reason string
 		ctx    string
 	}
 	// Rx
@@ -62,16 +61,14 @@ func (e *errStreamTerm) Error() string {
 	var sb cos.SB
 	sb.Init(256)
 	sb.WriteString(e.loghdr)
-	sb.WriteString(" terminated [reason: '")
-	sb.WriteString(e.reason)
-	sb.WriteString("' ")
-	if e.ctx != "" {
-		sb.WriteString("ctx: ")
-		sb.WriteString(e.ctx)
-		sb.WriteUint8(' ')
-	}
-	sb.WriteString("err: ")
+	sb.WriteString(" terminated [")
+
 	sb.WriteString(e.err.Error())
+
+	if e.ctx != "" {
+		sb.WriteString(" ctx: ")
+		sb.WriteString(e.ctx)
+	}
 	sb.WriteUint8(']')
 	return sb.String()
 }
