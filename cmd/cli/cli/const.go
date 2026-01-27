@@ -1075,6 +1075,11 @@ var (
 		Name:  "objsize-limit",
 		Usage: "Object size threshold for chunking in IEC or SI units (e.g.: 50MiB, 100mb); objects >= this size will be chunked",
 	}
+	syncRemoteFlag = cli.BoolFlag{
+		Name: "sync-remote",
+		Usage: "Write rechunked objects to remote backend via multipart upload;\n" +
+			indent1 + "\tapplies only to buckets with remote backend (e.g., S3, GCS, remote AIS)",
+	}
 
 	blobThresholdFlag = cli.StringFlag{
 		Name: "blob-threshold",

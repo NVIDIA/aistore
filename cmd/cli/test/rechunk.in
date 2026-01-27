@@ -1,4 +1,3 @@
-// SKIP "CLI rechunk API changed - will re-enable after CLI update"
 # Test rechunk command
 
 # Create bucket

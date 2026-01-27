@@ -141,9 +141,10 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "\t* ais ls s3 --summary --all --dont-add \t- same, without adding non-present buckets to cluster metadata."
 
 // ais rechunk
-const rechunkUsage = "Re-chunk bucket objects based on size threshold. " +
-	"Objects equal to or larger than objsize_limit will be split and stored as multiple chunk_size chunks. " +
-	"Use objsize_limit=0 to restore all objects to monolithic format."
+const rechunkUsage = "Re-chunk bucket objects based on size threshold.\n" +
+	indent1 + "\tObjects equal to or larger than --objsize-limit will be split into --chunk-size chunks.\n" +
+	indent1 + "\tSet --objsize-limit=0 to disable chunking and restore all chunked objects to monolithic format.\n" +
+	indent1 + "\tBy default, rechunk operates only on in-cluster (cached) objects; use --sync-remote to also update remote backend."
 
 // ais bucket ... props
 const setBpropsUsage = "Update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs,\n" +
@@ -277,6 +278,7 @@ var (
 			chunkSizeFlag,
 			objSizeLimitFlag,
 			verbObjPrefixFlag,
+			syncRemoteFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
 		},
@@ -526,7 +528,17 @@ func rechunkBucketHandler(c *cli.Context) error {
 	}
 
 	// Start rechunk
-	xid, err := api.RechunkBucket(apiBP, bck, objSizeLimit, chunkSize, prefix)
+	syncRemote := flagIsSet(c, syncRemoteFlag)
+	if syncRemote && !bck.IsRemote() {
+		return fmt.Errorf("--sync-remote flag only applies to buckets with remote backend (have %s)", bck.Cname(""))
+	}
+	msg := &apc.RechunkMsg{
+		ObjSizeLimit: objSizeLimit,
+		ChunkSize:    chunkSize,
+		Prefix:       prefix,
+		SyncRemote:   syncRemote,
+	}
+	xid, err := api.RechunkBucket(apiBP, bck, msg)
 	if err != nil {
 		return V(err)
 	}
