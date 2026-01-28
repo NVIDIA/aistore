@@ -216,7 +216,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		p.dm.nonpSetActive(mono.NanoTime())
 	}
 
-	// phase 2: async broadcast -> all except DT
+	// phase 2: broadcast -> all except DT
 	if nat > 1 {
 		args := allocBcArgs()
 		{
@@ -232,6 +232,7 @@ func (p *proxy) httpmlget(w http.ResponseWriter, r *http.Request) {
 		}
 		args.selected = nodes
 		args.nodeCount = len(nodes)
+		args.timeout = cmn.Rom.MaxKeepalive()
 
 		results := p.bcastSelected(args)
 		freeBcArgs(args)

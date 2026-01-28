@@ -890,8 +890,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	}
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
-		args.timeout = cmn.Rom.CplaneOperation()
-		debug.Assert(args.timeout != 0)
+		args.timeout = cmn.Rom.MaxKeepalive()
 	}
 
 	switch args.to {
@@ -959,6 +958,9 @@ func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	debug.Assert(len(bargs.selected) > 0)
 	if !bargs.async {
 		results.s = allocBcastRes(len(bargs.selected))
+		if bargs.timeout == 0 {
+			bargs.timeout = cmn.Rom.MaxKeepalive()
+		}
 	}
 	for _, si := range bargs.selected {
 		debug.Assert(si.ID() != h.si.ID())
