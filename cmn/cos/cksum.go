@@ -278,6 +278,73 @@ func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
 }
 
+//
+// CRC32 combine algorithm from zlib (https://github.com/madler/zlib)
+// see zlib's crc32_combine for reference
+//
+
+func gf2MatrixTimes(mat *[32]uint32, vec uint32) (sum uint32) {
+	i := 0
+	for vec != 0 {
+		if vec&1 != 0 {
+			sum ^= mat[i]
+		}
+		vec >>= 1
+		i++
+	}
+	return
+}
+
+func gf2MatrixSquare(square, mat *[32]uint32) {
+	for n := range 32 {
+		square[n] = gf2MatrixTimes(mat, mat[n])
+	}
+}
+
+// CRC32CCombine combines two CRC32C checksums.
+// Given CRC32C(A) and CRC32C(B) with len(B), returns CRC32C(A || B).
+// Runtime: O(log(len2))
+func CRC32CCombine(crc1, crc2 uint32, len2 int64) uint32 {
+	if len2 <= 0 {
+		return crc1
+	}
+
+	var even, odd [32]uint32
+
+	// Initialize odd with CRC32C polynomial (Castagnoli)
+	odd[0] = crc32.Castagnoli
+	var row uint32 = 1
+	for n := 1; n < 32; n++ {
+		odd[n] = row
+		row <<= 1
+	}
+
+	gf2MatrixSquare(&even, &odd)
+	gf2MatrixSquare(&odd, &even)
+
+	crc1n := crc1
+	for {
+		gf2MatrixSquare(&even, &odd)
+		if len2&1 != 0 {
+			crc1n = gf2MatrixTimes(&even, crc1n)
+		}
+		len2 >>= 1
+		if len2 == 0 {
+			break
+		}
+		gf2MatrixSquare(&odd, &even)
+		if len2&1 != 0 {
+			crc1n = gf2MatrixTimes(&odd, crc1n)
+		}
+		len2 >>= 1
+		if len2 == 0 {
+			break
+		}
+	}
+
+	return crc1n ^ crc2
+}
+
 func SupportedChecksums() (types []string) {
 	types = make([]string, 0, len(checksums))
 	for ty := range checksums {

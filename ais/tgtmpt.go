@@ -7,6 +7,7 @@ package ais
 import (
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"sort"
@@ -63,12 +64,24 @@ type (
 		skipBackend bool
 		locked      bool // true if the LOM is already locked by the caller
 	}
+	// partCksums holds checksum state for a single part upload
+	partCksums struct {
+		crc32c  *cos.CksumHash // always computed for local/remote-AIS (for combination)
+		md5     *cos.CksumHash // S3 ETag compatibility
+		sha256  *cos.CksumHash // S3 content-SHA256 header validation
+		partSHA string         // expected SHA256 from request header
+		inOrder bool           // true if this part uses streaming checksum
+	}
 )
 
 func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 	manifest, err := core.NewUfest(id, lom, false /*must-exist*/)
 	if err != nil {
 		return err
+	}
+	// Initialize streaming checksum for non-cloud buckets
+	if !lom.Bck().IsCloud() {
+		manifest.InitStreamingChecksum(lom.CksumType())
 	}
 	ups.Lock()
 	if ups.m == nil {
@@ -208,17 +221,6 @@ func validatePartsEtag(lom *core.LOM, manifest *core.Ufest, parts apc.MptComplet
 	return manifest.ETagS3()
 }
 
-func computeWholeChecksum(lom *core.LOM, manifest *core.Ufest) error {
-	debug.Assert(lom.IsLocked() > apc.LockNone, lom.Cname(), " - accessing: must be locked")
-	debug.Assert(lom.CksumType() != cos.ChecksumNone)
-	cksumH := cos.NewCksumHash(lom.CksumType())
-	if err := manifest.ComputeWholeChecksum(cksumH); err != nil {
-		return err
-	}
-	lom.SetCksum(&cksumH.Cksum)
-	return nil
-}
-
 // make sure that we have all parts in the right order
 func _checkParts(parts apc.MptCompletedParts, count int) (int, error) {
 	if parts == nil {
@@ -322,48 +324,24 @@ func (ups *ups) putPart(args *partArgs) (etag string, ecode int, err error) {
 
 func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 	var (
-		lom          = args.lom
-		req          = args.req
-		reader       = args.reader
-		rsize        = args.size
-		cksumSHA     *cos.CksumHash
-		cksumH       = &cos.CksumHash{}
-		remote       = lom.Bck().IsRemote()
-		writers      = make([]io.Writer, 0, 3)
-		startTime    = mono.NanoTime()
-		partSHA      string
-		checkPartSHA bool
+		lom       = args.lom
+		reader    = args.reader
+		rsize     = args.size
+		startTime = mono.NanoTime()
 	)
-	writers = append(writers, args.fh)
-	if req != nil {
-		partSHA = req.Header.Get(cos.S3HdrContentSHA256)
-		checkPartSHA = partSHA != "" && partSHA != cos.S3UnsignedPayload
-	}
-	if checkPartSHA {
-		cksumSHA = cos.NewCksumHash(cos.ChecksumSHA256)
-		writers = append(writers, cksumSHA.H)
-	}
-	if !remote {
-		if args.isS3 {
-			// NOTE [convention] for chunks `isS3` overrides bucket-configured checksum always requiring MD5
-			cksumH = cos.NewCksumHash(cos.ChecksumMD5)
-			writers = append(writers, cksumH.H)
-		} else if ty := lom.CksumType(); ty != cos.ChecksumNone {
-			debug.Assert(!checkPartSHA)
-			cksumH = cos.NewCksumHash(ty)
-			writers = append(writers, cksumH.H)
-		}
-	}
+
+	// Initialize checksums and get writers
+	pc, writers := initPartChecksums(args)
 
 	if rsize <= 0 {
 		return "", http.StatusBadRequest, fmt.Errorf("%s: put-part invalid size (%d)", lom.Cname(), rsize)
 	}
 
 	// write
-	// for remote buckets, use SGL buffering when memory is available;
-	// fall back to TeeReader to avoid high memory usage under pressure
+	// for remote buckets, use SGL buffering when memory is available
 	var (
 		backend          core.Backend
+		remote           = lom.Bck().IsRemote()
 		uploadID         = args.uploadID
 		expectedSize     int64
 		remotePutLatency int64
@@ -388,7 +366,7 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 			// - Remote AIS: retriable (cos.ReadOpenCloser) for DoWithRetry (reader.Open() on retry)
 			rdr := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, rdr, req, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
@@ -410,10 +388,15 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		if err == nil {
 			rdr := memsys.NewReader(sgl)
 			remoteStart := mono.NanoTime()
-			etag, ecode, err = backend.PutMptPart(lom, rdr, req, uploadID, expectedSize, int32(args.partNum))
+			etag, ecode, err = backend.PutMptPart(lom, rdr, args.req, uploadID, expectedSize, int32(args.partNum))
 			remotePutLatency = mono.SinceNano(remoteStart)
 		}
 		sgl.Free()
+	}
+
+	// Release streaming checksum lock
+	if pc.inOrder {
+		args.manifest.StreamWriteDone()
 	}
 
 	// validate, finalize
@@ -432,38 +415,12 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		return "", ecode, err
 	}
 
-	// finalize (note: expecting the part's remote etag to be md5 checksum)
-	if checkPartSHA {
-		cksumSHA.Finalize()
-		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
-		if !cksumSHA.Equal(recvSHA) {
-			detail := fmt.Sprintf("part %d", args.partNum)
-			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
-			return "", http.StatusBadRequest, err
-		}
+	// Finalize checksums (validate SHA256, store CRC32C and MD5)
+	etag, err = pc.finalize(chunk, args.partNum, etag)
+	if err != nil {
+		return "", http.StatusBadRequest, err
 	}
-
 	chunk.SetETag(etag)
-	if cksumH.H != nil {
-		if args.isS3 {
-			debug.Assert(cksumH.Ty() == cos.ChecksumMD5) // see [convention] above
-			chunk.MD5 = cksumH.H.Sum(nil)
-			debug.Assert(len(chunk.MD5) == cos.LenMD5Hash, len(chunk.MD5))
-
-			// derive etag from chunk MD5 but only when backend didn’t return the former
-			if etag == "" {
-				etag = cmn.MD5ToQuotedETag(chunk.MD5)
-			}
-		} else {
-			// NOTE: not populating chunk.MD5 even if bucket-configured checksum is md5
-			debug.Assert(!checkPartSHA)
-			cksumH.Finalize()
-			chunk.SetCksum(&cksumH.Cksum)
-		}
-	}
-	if checkPartSHA {
-		chunk.SetCksum(&cksumSHA.Cksum)
-	}
 
 	if err := args.manifest.Add(chunk, size, int64(args.partNum)); err != nil {
 		return "", http.StatusInternalServerError, err
@@ -499,7 +456,7 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
 
-	// validate/enforce parts, compute whole-object checksum and etag
+	// validate/enforce parts, compute etag
 	manifest.Lock()
 	etag, err := validatePartsEtag(lom, manifest, args.parts, args.isS3)
 	manifest.Unlock()
@@ -538,23 +495,24 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 	}
 
-	// policy: skip for cloud buckets
-	// TODO:
-	// a) chunks arrive in order => (fast path)
-	// b) mostly in order        => (buffer)
-	// b) out of order           => (defer)
+	// Whole-object checksum strategy:
+	// - Cloud buckets: checksum set by _completeRemote (from cloud provider)
+	// - Local/remote-AIS: use streaming checksum if valid, otherwise CRC32C combination
 	var locked bool
-	if lom.CksumType() != cos.ChecksumNone && !lom.Bck().IsCloud() {
+	if !lom.Bck().IsCloud() {
 		if !args.locked {
 			lom.Lock(true)
 			locked = true
 		}
-		if err = computeWholeChecksum(lom, manifest); err != nil {
+
+		cksum, err := manifest.WholeChecksum()
+		if err != nil {
 			if locked {
 				lom.Unlock(true)
 			}
 			return "", 0, err
 		}
+		lom.SetCksum(cksum)
 	}
 
 	// atomically flip: persist manifest, mark chunked, persist main
@@ -648,4 +606,73 @@ func (ups *ups) _abort(id string, lom *core.LOM) error {
 
 	manifest.Abort(lom)
 	return nil
+}
+
+//
+// part checksums
+//
+
+// initPartChecksums determines which checksums to compute and returns writers for them.
+// Checksum strategy:
+// - Cloud buckets: checksums provided by cloud on CompleteMultipartUpload
+// - Local/remote-AIS: always compute CRC32C; if in-order, also compute streaming checksum
+func initPartChecksums(args *partArgs) (pc partCksums, w []io.Writer) {
+	w = make([]io.Writer, 0, 4)
+	w = append(w, args.fh)
+
+	// S3 content-SHA256 header validation
+	if args.req != nil {
+		pc.partSHA = args.req.Header.Get(cos.S3HdrContentSHA256)
+		if pc.partSHA != "" && pc.partSHA != cos.S3UnsignedPayload {
+			pc.sha256 = cos.NewCksumHash(cos.ChecksumSHA256)
+			w = append(w, pc.sha256.H)
+		}
+	}
+
+	// For non-cloud buckets: compute checksums locally
+	if !args.lom.Bck().IsCloud() {
+		// Always compute CRC32C for chunk combination
+		pc.crc32c = cos.NewCksumHash(cos.ChecksumCRC32C)
+		w = append(w, pc.crc32c.H)
+
+		// Check if part arrives in-order for streaming bucket-configured checksum
+		var streamWriter hash.Hash
+		pc.inOrder, streamWriter = args.manifest.CheckInOrder(args.partNum)
+		if streamWriter != nil {
+			w = append(w, streamWriter)
+		}
+
+		// S3 also needs MD5 for ETag compatibility
+		if args.isS3 {
+			pc.md5 = cos.NewCksumHash(cos.ChecksumMD5)
+			w = append(w, pc.md5.H)
+		}
+	}
+	return pc, w
+}
+
+// finalize validates and stores checksums in the chunk
+func (pc *partCksums) finalize(chunk *core.Uchunk, partNum int, etag string) (string, error) {
+	// Validate SHA256 if provided in request header
+	if pc.sha256 != nil {
+		pc.sha256.Finalize()
+		expected := cos.NewCksum(cos.ChecksumSHA256, pc.partSHA)
+		if !pc.sha256.Equal(expected) {
+			return "", cos.NewErrDataCksum(&pc.sha256.Cksum, expected, fmt.Sprintf("part %d", partNum))
+		}
+	}
+
+	// Store CRC32C in chunk for combination
+	if pc.crc32c != nil {
+		pc.crc32c.Finalize()
+		chunk.SetCksum(&pc.crc32c.Cksum)
+	}
+
+	// S3 compatibility API over ais:// buckets: compute part ETag as MD5 of the part (S3 convention).
+	if pc.md5 != nil {
+		chunk.MD5 = pc.md5.H.Sum(nil)
+		debug.Assert(len(chunk.MD5) == cos.LenMD5Hash, len(chunk.MD5))
+		etag = cmn.MD5ToQuotedETag(chunk.MD5)
+	}
+	return etag, nil
 }

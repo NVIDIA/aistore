@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"sort"
@@ -134,6 +135,11 @@ type (
 		completed atomic.Bool // in-sync with lmflChunk
 		count     uint16      // number of chunks (so far)
 		flags     uint16      // bit flags { completed, ...}
+
+		// in-memory state for streaming checksum (for local buckets with in-order part arrival)
+		streamCksum     *cos.CksumHash // bucket-configured checksum (nil = abandoned or not configured)
+		streamInUse     atomic.Bool    // true if a part is currently writing to streamCksum
+		expectedPartNum uint16         // next expected part number (starts at 1)
 	}
 )
 
@@ -175,10 +181,11 @@ func NewUfest(id string, lom *LOM, mustExist bool) (*Ufest, error) {
 		id = cos.GenTAID(now)
 	}
 	u := &Ufest{
-		id:      id,
-		created: now,
-		chunks:  make([]Uchunk, 0, iniChunksCap),
-		lom:     lom,
+		id:              id,
+		created:         now,
+		chunks:          make([]Uchunk, 0, iniChunksCap),
+		lom:             lom,
+		expectedPartNum: 1, // first expected part number
 	}
 	return u, nil
 }
@@ -194,6 +201,60 @@ func (u *Ufest) ID() string         { return u.id }
 
 func (u *Ufest) Lock()   { u.mu.Lock() }
 func (u *Ufest) Unlock() { u.mu.Unlock() }
+
+// Streaming checksum methods (for in-order part arrival optimization)
+
+// InitStreamingChecksum initializes the streaming checksum with the given type.
+// Must be called before the first part is added.
+func (u *Ufest) InitStreamingChecksum(cksumType string) {
+	if cksumType != "" && cksumType != cos.ChecksumNone {
+		u.streamCksum = cos.NewCksumHash(cksumType)
+	}
+}
+
+// CheckInOrder checks if the given part number is the expected next part.
+// Returns (inOrder, streamWriter) - caller must call StreamWriteDone() after write if inOrder is true.
+func (u *Ufest) CheckInOrder(partNum int) (bool, hash.Hash) {
+	u.Lock()
+	defer u.Unlock()
+
+	// Streaming not available or already abandoned
+	if u.streamCksum == nil {
+		return false, nil
+	}
+
+	// Out-of-order - abandon streaming
+	if uint16(partNum) != u.expectedPartNum {
+		u.streamCksum = nil
+		return false, nil
+	}
+
+	// Try to acquire exclusive write access atomically
+	if !u.streamInUse.CAS(false, true) {
+		// Another writer is active - abandon streaming
+		u.streamCksum = nil
+		return false, nil
+	}
+
+	u.expectedPartNum++
+	return true, u.streamCksum.H
+}
+
+// StreamWriteDone marks the streaming checksum as no longer in use.
+// Must be called after the part write completes if CheckInOrder returned true.
+func (u *Ufest) StreamWriteDone() {
+	u.streamInUse.Store(false)
+}
+
+// FinalizeStreamChecksum finalizes the streaming checksum if valid.
+// Returns the checksum or nil if abandoned/not initialized.
+func (u *Ufest) FinalizeStreamChecksum() *cos.Cksum {
+	if u.streamCksum == nil {
+		return nil
+	}
+	u.streamCksum.Finalize()
+	return &u.streamCksum.Cksum
+}
 
 func _nolom(lom *LOM) error {
 	if lom == nil || lom.mi == nil {
@@ -917,6 +978,46 @@ func (u *Ufest) ETagS3() (string, error) {
 	sum := h.Sum(nil)
 	s := hex.EncodeToString(sum)
 	return cmn.QuoteETag(s + cmn.AwsMultipartDelim + strconv.Itoa(int(u.count))), nil
+}
+
+// WholeChecksum returns the whole-object checksum using the best available method:
+// 1. Streaming checksum (if parts arrived in order)
+// 2. CRC32C combination (if all chunks have CRC32C)
+// 3. Re-read all chunks (last resort)
+func (u *Ufest) WholeChecksum() (*cos.Cksum, error) {
+	// Try streaming checksum first (if parts arrived in order and not abandoned)
+	if cksum := u.FinalizeStreamChecksum(); cksum != nil {
+		return cksum, nil
+	}
+
+	// Fall back to CRC32C combination
+	if cksum, err := u.combineCRC32C(); err == nil {
+		return cksum, nil
+	}
+
+	// Last resort: re-read all chunks
+	cksumH := cos.NewCksumHash(cos.ChecksumCRC32C)
+	if err := u.ComputeWholeChecksum(cksumH); err != nil {
+		return nil, err
+	}
+	return &cksumH.Cksum, nil
+}
+
+func (u *Ufest) combineCRC32C() (*cos.Cksum, error) {
+	debug.AssertNoErr(u.Check(true /*completed*/))
+	if u.count == 0 {
+		return nil, errNoChunks
+	}
+	var combined uint32
+	for i := range u.count {
+		c := &u.chunks[i]
+		if c.cksum == nil || c.cksum.Type() != cos.ChecksumCRC32C {
+			return nil, fmt.Errorf("chunk %d missing CRC32C checksum", c.num)
+		}
+		crc, _ := strconv.ParseUint(c.cksum.Value(), 16, 32)
+		combined = cos.CRC32CCombine(combined, uint32(crc), c.size)
+	}
+	return cos.NewCksum(cos.ChecksumCRC32C, fmt.Sprintf("%08x", combined)), nil
 }
 
 // reread all chunk payloads to compute a checksum of the given type
