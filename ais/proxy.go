@@ -1517,6 +1517,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+		debug.Func(func() {
+			ns := query.Get(apc.QparamNamespace)
+			debug.Assertf(!strings.Contains(ns, "remais"), "query has alias: bck=%s, ns=%s", bck, ns)
+		})
 		if xid, err = p.bcastMultiobj(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return

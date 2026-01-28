@@ -246,6 +246,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 			// remais alias => uuid
 			bck.Ns.UUID = remoteHdr.Get(apc.HdrRemAisUUID)
 			debug.Assert(cos.IsValidUUID(bck.Ns.UUID))
+			debug.Assert(bck.Ns.UUID != "remais", "cannot have remote AIS alias in BMD") // TODO: remove
 		}
 	case backend != nil: // remote backend exists
 		if bprops == nil {

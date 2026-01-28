@@ -49,7 +49,6 @@ type bctx struct {
 	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
 	isPresent      bool // the bucket is confirmed to be present (in the cluster's BMD)
 	exists         bool // remote bucket is confirmed to exist
-	modified       bool // bucket-defining control structure got modified
 }
 
 ////////////////
@@ -145,15 +144,22 @@ func (bctx *bctx) init() (int, error) {
 	if bck.IsRemoteAIS() {
 		if p.remaisVersionFixup() {
 			if uuid := p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
-				bctx.modified = true
-				// care of targets
-				query := bctx.query
-				if query == nil {
-					query = bctx.r.URL.Query()
-				}
+				// substitute remais alias
+				// update both the API's `bck` and original query
 				bck.Ns.UUID = uuid
-				query.Set(apc.QparamNamespace, bck.Ns.Uname())
-				bctx.r.URL.RawQuery = query.Encode()
+				debug.Assert(bctx.dpq != nil || bctx.query != nil)
+				if bctx.dpq != nil {
+					debug.Assert(bctx.query == nil)
+					// dpq fast-path isn't ideal here - we still need to (re)parse
+					// the original URL query
+					bctx.dpq.bck.namespace = bck.Ns.Uname()
+					bctx.query = bctx.r.URL.Query()
+				}
+				if bctx.query != nil {
+					bctx.query.Set(apc.QparamNamespace, bck.Ns.Uname())
+					bctx.r.URL.RawQuery = bctx.query.Encode()
+				}
+				debug.Infof("%s: remais-subst %s query '%s=%s'", p, bck.String(), apc.QparamNamespace, bck.Ns.Uname())
 			}
 		}
 	}
@@ -225,7 +231,9 @@ func (bctx *bctx) accessAllowed(bck *meta.Bck) (ecode int, err error) {
 }
 
 // initAndTry initializes the bucket (proxy-only, as the filename implies).
-// The method _may_ try to add it to the BMD if the bucket doesn't exist.
+// The method _may_:
+// - try to add remote bucket to BMD if it doesn't exist (grep "on-the-fly")
+// - modify and re-encode the original query (`@remais` => UUID)
 // NOTE:
 // - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
 // - for remais buckets: user-provided alias(***)
@@ -283,13 +291,13 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 
 func (bctx *bctx) try() (bck *meta.Bck, _ error) {
 	p := bctx.p
-	bck, ecode, err := bctx._try()
+	bck, ecode, err := bctx._try() // NOTE: shadowing (may get reassigned to BackendBck, if defined)
 	switch {
 	case err == nil || err == errForwarded:
 		return bck, err
 	case cmn.IsErrBucketAlreadyExists(err):
 		// a separate process may have created the bucket, re-init our in-memory bck obj
-		nlog.Infoln(p.String(), err, " - re-initializing bucket")
+		nlog.Infoln(p.String(), err, "- re-initializing bucket")
 		errN := bck.Init(p.owner.bmd)
 		if errN != nil {
 			nlog.Errorf("%s: nested bucket initialization err: %v, %v", p.String(), err, errN)

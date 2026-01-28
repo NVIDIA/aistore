@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -269,10 +270,11 @@ var _ = Describe("Notifications xaction test", func() {
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished
+			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 		})
 
-		It("should accept finished notifications after a target aborts", func() {
+		It("should accept finished notifications after target aborts", func() {
 			stats := finishedXact(xid)
 			abortStats := abortedXact(xid)
 			n.add(nl1)
@@ -282,12 +284,14 @@ var _ = Describe("Notifications xaction test", func() {
 			checkRequest(n, request, http.StatusOK)
 
 			// `nl` should be marked finished when an xaction aborts
+			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(1))
 
 			// Second target sends finished stats
 			request = notifRequest(target2ID, xid, apc.Finished, stats)
 			checkRequest(n, request, http.StatusOK)
+			runtime.Gosched()
 			Expect(nl1.IsFinished()).To(BeTrue())
 			Expect(nl1.FinCount()).To(BeEquivalentTo(2))
 		})
