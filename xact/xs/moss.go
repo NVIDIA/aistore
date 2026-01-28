@@ -72,7 +72,7 @@ import (
    b) network error (ErrSBR) with subsequent successful recovery via GFN
 
 TBD:
-   - apply embedded XactConf.Burst to `XactMoss.pending` - the semantics of work channel cap
+   - gcAbandoned - currently, only via graceful fini(); consider periodic (lazy) alternative
    - throttle maybe more aggressively (see load.Advice below)
    - perf. feature: return unsorted batch
    - range read
@@ -310,6 +310,8 @@ func (r *XactMoss) Abort(err error) bool {
 	r.activeWG.Wait()
 
 	r.pending.Range(r.cleanup)
+	r.pending.Clear()
+	r.pendingCnt.Store(0)
 
 	r.DemandBase.Stop()
 
@@ -317,12 +319,10 @@ func (r *XactMoss) Abort(err error) bool {
 	return true
 }
 
-// pending (sync.Map's) callback to cleanup all pending work items
-func (r *XactMoss) cleanup(key, value any) bool {
+// (Abort, fini) => pending (sync.Map's) callback to cleanup all pending work items
+func (*XactMoss) cleanup(_, value any) bool {
 	wi := value.(*basewi)
-	if wi.cleanup() {
-		r.pending.Delete(key)
-	}
+	wi.cleanup(true)
 	return true
 }
 
@@ -333,15 +333,14 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 		cutoff = now - tout.Nanoseconds()
 	)
 	debug.Assert(maxIters > 0)
-	r.pending.Range(func(k, v any) bool {
+	r.pending.Range(func(_, value any) bool {
 		iters++
 		cont := iters < maxIters
-		wi := v.(*basewi)
+		wi := value.(*basewi)
 		// old enough
 		if wi.started != 0 && wi.started < cutoff {
-			if wi.cleanup() {
+			if wi.cleanup(false) {
 				// not r.DecPending here (these wi-s never incremented)
-				r.pending.Delete(k)
 				if cmn.Rom.V(4, cos.ModXs) {
 					nlog.Infof("%s: GC abandoned wi %q", r.Name(), wi.wid)
 				}
@@ -370,6 +369,8 @@ func (r *XactMoss) fini(now int64) (d time.Duration) {
 		nlog.Infoln(r.Name(), "idle expired [", msg, "]")
 
 		r.pending.Range(r.cleanup)
+		r.pending.Clear()
+		r.pendingCnt.Store(0)
 
 		r.bewarmStop()
 		r.Finish()
@@ -404,12 +405,9 @@ func (r *XactMoss) bewarmStop() {
 
 // (phase 1)
 func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
-	var (
-		now  = mono.NanoTime()
-		resp = &apc.MossResp{UUID: r.ID()}
-		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
-	)
+	now := mono.NanoTime()
 
+	// admission control:
 	// refresh load.Advice periodically; when under stress return 429 or throttle
 	if next := r.advNextCheck.Load(); now >= next {
 		// benign race: temporarily set far-future value to minimize duplicate adv.Refresh()
@@ -436,7 +434,11 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		}
 	}
 
-	// for receiving (DT) and GC (all)
+	// DT's work item
+	var (
+		resp = &apc.MossResp{UUID: r.ID()}
+		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
+	)
 	wi.started = now
 
 	if receiving {
@@ -473,9 +475,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		return err
 	}
 
-	if receiving {
-		r.pendingCnt.Inc()
-	}
+	r.pendingCnt.Inc()
 	wi.awfin.Store(true)
 
 	return nil
@@ -505,7 +505,7 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	if err != nil {
 		core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
 	}
-	wi.cleanup()
+	wi.cleanup(false)
 
 	r.DecPending()
 	return err
@@ -916,7 +916,7 @@ func (r *XactMoss) CtlMsg() string {
 
 func (wi *basewi) receiving() bool { return wi.recv.m != nil }
 
-func (wi *basewi) cleanup() bool {
+func (wi *basewi) cleanup(xdone bool) bool {
 	if !wi.clean.CAS(false, true) {
 		return false
 	}
@@ -953,11 +953,15 @@ func (wi *basewi) cleanup() bool {
 			}
 		}
 	}
+
+	if !xdone {
+		r.pending.Delete(wi.wid)
+		r.pendingCnt.Dec()
+	}
+
 	if !wi.receiving() {
 		return true
 	}
-
-	r.pendingCnt.Dec()
 
 	if !wi.req.StreamingGet && wi.sgl != nil { // wi.sgl nil upon early term (e.g. invalid bucket)
 		wi.sgl.Free()
