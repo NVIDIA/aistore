@@ -33,7 +33,7 @@ AIS does not treat a bucket as a passive container. A bucket is a *logical names
    - [Feature Flags](#feature-flags)
 3. [Bucket Lifecycle](#bucket-lifecycle)
    - [Implicit creation (lazy discovery)](#implicit-creation-lazy-discovery)
-   - [Explicit creation](#explicit-creation-1)
+   - [Explicit creation](#explicit-creation)
    - [Deletion and eviction](#deletion-and-eviction)
 4. [Namespaces](#namespaces)
    - [Syntax](#syntax)
