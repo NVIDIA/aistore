@@ -66,10 +66,17 @@ import (
    Peer-to-peer stream drops/terminations manifest themselves as `transport.ErrSBR` and
    are handled by shared-DM
 
-   Soft errors: any path in the flow that does addMissing() is a soft error irrespective of its
-   original cause that may include:
-   a) missing data (404)
-   b) network error (ErrSBR) with subsequent successful recovery via GFN
+   Soft errors: any execution path that invokes addMissing() is classified as a _soft_ error,
+   irrespective of its original cause; these include:
+
+   a) missing data (404) - object or archived file doesn't exist;
+   b) remote stream-break (`ErrSBR`) - a temporary failure of a long-lived;
+      peer-to-peer connection that gets converted into a special missing entry
+   c) timeout waiting for peer to "push" next data item (object or archived file),
+      with subsequent recovery via direct target-to-target GET dubbed GFN
+      (get-from-neighbor).
+   Note that per-request (maximum number of soft errors) and GFN are separately
+   configurable (https://github.com/NVIDIA/aistore/blob/main/docs/get_batch.md)
 
 TBD:
    - gcAbandoned - currently, only via graceful fini(); consider periodic (lazy) alternative
