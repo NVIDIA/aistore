@@ -594,8 +594,8 @@ type (
 		MaxIdleConns        int          `json:"idle_conns"`
 		// cont-d
 		ClientAuthTLS   int  `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
-		WriteBufferSize int  `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
-		ReadBufferSize  int  `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
+		WriteBufferSize int  `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 64KB (`DefaultWriteBufferSize`)
+		ReadBufferSize  int  `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto (`DefaultReadBufferSize`)
 		UseHTTPS        bool `json:"use_https"`         // use HTTPS
 		SkipVerifyCrt   bool `json:"skip_verify"`       // skip X.509 cert verification (used with self-signed certs)
 		Chunked         bool `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
@@ -2434,6 +2434,15 @@ func (c *TransportConf) Validate() (err error) {
 // XactConf //
 //////////////
 
+const (
+	// The default burst_buffer used when unset (0). Work channel-backed xactions
+	// should normally size their work queues to this value.
+	XactBurstDflt = 256
+
+	xactBurstMin = 32
+	xactBurstMax = 10_000
+)
+
 func (c *XactConf) Validate() error {
 	if c.Compression == "" {
 		c.Compression = apc.CompressNever
@@ -2443,10 +2452,13 @@ func (c *XactConf) Validate() error {
 			c.Compression, apc.SupportedCompression)
 	}
 	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf("invalid bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
+		return fmt.Errorf("invalid bundle_multiplier: %v (expecting range [0, 16])", c.SbundleMult)
 	}
-	if c.Burst < 0 || c.Burst > 10_000 {
-		return fmt.Errorf("invalid burst_buffer: %v (expected range [0, 10000])", c.Burst)
+	if c.Burst == 0 {
+		c.Burst = XactBurstDflt
+	} else if c.Burst < xactBurstMin || c.Burst > xactBurstMax {
+		return fmt.Errorf("invalid burst_buffer: %v (expecting range [%d, %d] or zero for default)",
+			c.Burst, xactBurstMin, xactBurstMax)
 	}
 	return nil
 }

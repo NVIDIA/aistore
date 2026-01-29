@@ -125,7 +125,7 @@ func (p *archFactory) Start() (err error) {
 	// new x-archive
 	var (
 		config = cmn.GCO.Get()
-		burst  = max(minArchWorkChSize, config.Arch.Burst)
+		burst  = max(cmn.XactBurstDflt, config.Arch.Burst)
 		r      = &XactArch{streamingX: streamingX{p: &p.streamingF, config: config}}
 	)
 	r.pending.m = make(map[string]*archwi, burst)
@@ -184,7 +184,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 
 	// set archwi jogger based on the archlom's mountpath
 	var (
-		burst = max(minArchWorkChSize, r.config.Arch.Burst)
+		burst = max(cmn.XactBurstDflt, r.config.Arch.Burst)
 		mi    = archlom.Mountpath()
 	)
 	r.joggers.mtx.Lock()

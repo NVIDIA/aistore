@@ -92,6 +92,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"dest_retry_time":	"2m",
 		"compression":     	"${AIS_REBALANCE_COMPRESSION:-never}",
 		"bundle_multiplier":	${AIS_REBALANCE_BUNDLE_MULTIPLIER:-2},
+		"burst_buffer":         1024,
 		"enabled":         	true
 	},
 	"resilver": {
@@ -218,6 +219,15 @@ cat > $AIS_CONF_FILE <<EOL
 			"max_tokens":        1000,
 			"enabled":           false
 		}
+	},
+	"get_batch": {
+		"compression":       "never",
+		"bundle_multiplier": 0,
+		"burst_buffer":      0,
+		"max_wait":          "10s",
+		"warmup_workers":    1,
+		"max_soft_errs":     8,
+		"max_gfn":           5
 	},
 	"features": "0"
 }

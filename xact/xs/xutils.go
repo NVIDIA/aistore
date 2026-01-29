@@ -87,11 +87,6 @@ func (rate *tcrate) acquire() {
 // num-workers parallelism
 //
 
-const (
-	minTcoWorkChSize  = 256
-	minArchWorkChSize = 256
-)
-
 // workers (tcb and tco, the latter via lrit)
 const (
 	nwpBurstMult = 48 // shared work channel burst multiplier (channel size = burst * num-workers)

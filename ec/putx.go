@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
-* Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -106,8 +106,8 @@ func (r *XactPut) newPutJogger(mi *fs.Mountpath) *putJogger {
 	j := &putJogger{
 		parent: r,
 		mi:     mi,
-		putCh:  make(chan *request, max(putxBurstSize, r.config.EC.Burst)),
-		xactCh: make(chan *request, max(encodeBurstSize, r.config.EC.Burst)),
+		putCh:  make(chan *request, max(cmn.XactBurstDflt, r.config.EC.Burst)),
+		xactCh: make(chan *request, max(cmn.XactBurstDflt, r.config.EC.Burst)),
 	}
 	j.adv.Init(
 		load.FlMem|load.FlCla|load.FlDsk,
