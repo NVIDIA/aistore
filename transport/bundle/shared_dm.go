@@ -51,6 +51,12 @@ type (
 			m   map[string]*transport.ErrSBR
 			mtx sync.RWMutex
 		}
+		stats struct {
+			drops   atomic.Int64
+			nsbrs   atomic.Int64
+			rxerr   atomic.Int64
+			lastSum int64 // hk-only
+		}
 	}
 )
 
@@ -165,10 +171,23 @@ func (sdm *sharedDM) CanSend(sid string) (err error) {
 	return
 }
 
+func (sdm *sharedDM) _stats() {
+	a, b, c := sdm.stats.drops.Load(), sdm.stats.rxerr.Load(), sdm.stats.nsbrs.Load()
+	sum := a + b + c
+	if sdm.stats.lastSum == sum {
+		return // no change
+	}
+	sdm.stats.lastSum = sum
+	nlog.Infoln(sdm.trname(), "stats:", "drops", a, "rxerr", b, "sbrs", c)
+}
+
 func (sdm *sharedDM) housekeep(now int64) time.Duration {
 	if !sdm.isOpen() {
 		return hk.UnregInterval
 	}
+
+	sdm._stats()
+
 	sdm.rxmu.RLock()
 	for _, en := range sdm.receivers {
 		en.ticks.Inc()
@@ -205,6 +224,7 @@ func (sdm *sharedDM) Close(err ...error) error {
 	clear(sdm.sbrs.m)
 	sdm.sbrs.mtx.Unlock()
 
+	sdm._stats()
 	nlog.InfoDepth(1, core.T.String(), "close", sdm.trname())
 	return nil
 }
@@ -254,6 +274,7 @@ func (sdm *sharedDM) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	if err != nil {
 		if e := transport.AsErrSBR(err); e != nil {
+			sdm.stats.nsbrs.Inc()
 			// add and prune
 			sdm.sbrs.mtx.Lock()
 			if sdm.sbrs.m == nil {
@@ -288,7 +309,13 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 	en, ok := sdm.receivers[xid]
 	if !ok {
 		sdm.rxmu.RUnlock()
-		return fmt.Errorf("%s: xid %s not found, dropping recv [oname: %s]", sdm.trname(), xid, hdr.ObjName)
+		transport.DrainAndFreeReader(r)
+		n := sdm.stats.drops.Inc()
+		if n < 5 || n%100 == 0 || cmn.Rom.V(4, cos.ModTransport) {
+			nlog.Warningf("%s: xid %s not found, dropping recv [oname: %s, drops: %d]",
+				sdm.trname(), xid, hdr.ObjName, n)
+		}
+		return nil
 	}
 	sdm.rxmu.RUnlock()
 
@@ -301,6 +328,11 @@ func (sdm *sharedDM) recv(hdr *transport.ObjHdr, r io.Reader, err error) error {
 
 	// note: not holding rxmu locked - race vs UnregRecv possible but benign
 	if err := en.rx.RecvObj(hdr, r, nil); err != nil {
+		n := sdm.stats.rxerr.Inc()
+		if n < 5 || n%100 == 0 || cmn.Rom.V(4, cos.ModTransport) {
+			nlog.Warningf("%s: xid %s recvObj [err: %v, oname: %s, rxerr: %d]",
+				sdm.trname(), xid, err, hdr.ObjName, n)
+		}
 		return err
 	}
 	ticks := en.ticks.Swap(0)
