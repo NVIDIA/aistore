@@ -410,6 +410,12 @@ Needless to say, each of these sub-topics may require additional discussion of:
 * [default settings](bucket.md), and
 * the corresponding performance tradeoffs.
 
+For monolithic objects, AIS targets compute the checksum using the bucket-configured algorithm upon receiving the object. The checksum is stored alongside the object and used for all subsequent integrity validations.
+
+For chunked objects (e.g., via multipart uploads), AIS computes the whole-object checksum using the bucket-configured algorithm whenever parts arrive in sequential order. However, when parts arrive out of order - a common scenario with parallel uploads - AIS automatically switches to CRC32C.
+
+> This is because CRC32C has a mathematical property that allows combining individual part checksums into a whole-object checksum without re-reading the data. For very large objects, this optimization is essential.
+
 ### Erasure Coding vs IO Performance
 
 When an AIS bucket is EC-configured as (D, P), where D is the number of data slices and P - the number of parity slices, the corresponding space utilization ratio is not `(D + P)/D`, as one would assume.
