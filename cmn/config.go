@@ -2396,6 +2396,9 @@ const (
 
 	TransportBurstMin = 256
 	TransportBurstMax = 4096
+
+	DfltTransportTick         = time.Second
+	DfltTransportIdleTeardown = 4 * DfltTransportTick // note: request scope
 )
 
 // NOTE: uncompressed block sizes - the enum currently supported by the github.com/pierrec/lz4
@@ -2421,10 +2424,12 @@ func (c *TransportConf) Validate() (err error) {
 			return fmt.Errorf("invalid transport.max_header %v, expecting (0, 128KiB] range or 0 (default)", c.MaxHeaderSize)
 		}
 	}
-	if c.IdleTeardown.D() < time.Second {
+	if c.IdleTeardown.D() == 0 {
+		c.IdleTeardown = cos.Duration(DfltTransportIdleTeardown)
+	} else if c.IdleTeardown.D() < DfltTransportTick {
 		return fmt.Errorf("invalid transport.idle_teardown %v (expecting >= 1s)", c.IdleTeardown)
 	}
-	if c.QuiesceTime.D() < 8*time.Second {
+	if c.QuiesceTime.D() < max(8*time.Second, 2*DfltTransportIdleTeardown) {
 		return fmt.Errorf("invalid transport.quiescent %v (expecting >= 8s)", c.QuiesceTime)
 	}
 	return nil

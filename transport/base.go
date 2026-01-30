@@ -138,13 +138,10 @@ func (s *Stream) initBase(client Client, dstURL, dstID string, extra *Extra) {
 		s.pdu = newSendPDU(buf)
 	}
 	// idle time
-	if extra.IdleTeardown > 0 {
-		s.time.idleTeardown = extra.IdleTeardown
-	} else {
-		s.time.idleTeardown = cos.NonZero(extra.Config.Transport.IdleTeardown.D(), dfltIdleTeardown)
-	}
-	debug.Assert(s.time.idleTeardown >= dfltTick, s.time.idleTeardown, " vs ", dfltTick)
-	s.time.ticks = int(s.time.idleTeardown / dfltTick)
+	s.time.idleTeardown = cos.NonZero(extra.IdleTeardown, extra.Config.Transport.IdleTeardown.D())
+	debug.Assert(s.time.idleTeardown >= cmn.DfltTransportTick, s.time.idleTeardown, " vs ", cmn.DfltTransportTick)
+
+	s.time.ticks = int(s.time.idleTeardown / cmn.DfltTransportTick)
 
 	sid := core.T.SID()
 	s.loghdr = _loghdr(s.trname, sid, dstID, true, extra.Compressed())

@@ -8,15 +8,14 @@ import (
 	"container/heap"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// transport defaults
+// internal tunables
 const (
-	dfltTick         = time.Second
-	dfltTickIdle     = dfltTick << 8   // (when there are no streams to _collect_)
-	dfltIdleTeardown = 4 * time.Second // (see config.Transport.IdleTeardown)
+	dfltTickIdle = cmn.DfltTransportTick << 8 // (when there are no streams to _collect_)
 )
 
 const (

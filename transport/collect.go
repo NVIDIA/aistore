@@ -8,12 +8,52 @@ import (
 	"container/heap"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
+
+// Stream Collector (gc)
+//
+// This is a slow-path transport-special housekeeper for long-lived streams.
+// Transport stream (or simply "stream") is designed to outlive multiple HTTP requests.
+// The collector uses per-stream countdown in 1-second (cmn.DfltTransportTick) ticks to manage two
+// (separate) things:
+// 1) request lifecycle (idle deactivation)
+// 2) stream lifecycle  (termination/reap)
+//
+// Terminology
+// -----------
+// - Stream: a long-lived sender entity identified by sessID, with session state
+//   s.sessST {active,inactive}
+// - Termination: final stream shutdown (Stop/Fin/reason: error)
+//   (see TermInfo)
+//
+// Idle deactivation (request teardown)
+// --------------------------------------------------------
+// Each stream has a configurable idleTeardown. When a stream stays idle long enough,
+// the collector asks the stream to "deactivate" the current request in-band:
+//   - collector calls streamer.idleTick() (only when not currently inSend)
+//   - Stream.idleTick() CASes sessST: active→inactive and enqueues opcIdleTick
+//   - Stream.Read() consumes opcIdleTick at a safe point and returns io.EOF
+// Result: the current HTTP request ends cleanly; the Stream object remains alive
+// and may be reactivated when new work arrives. No abortPending() is involved.
+//
+// Termination/reap (stream teardown, with subsequent cleanup and drain)
+// -----------------------------------------------------
+// Terminated streams are kept for a short grace period to allow draining/completion.
+// Once the grace countdown expires, the collector performs final cleanup:
+//   - closeAndFree() tears down resources/session
+//   - abortPending(err, completions=true) releases any remaining waiters
+// This is distinct from idle deactivation: it is a one-way stream shutdown.
+//
+// Summary
+// -----------------------------------------------------
+// - idleTeardown affects request churn (active => inactive via opcIdleTick);
+// - termination paths trigger abortPending() to prevent stranded waiters.
 
 type (
 	ctrl struct { // add/del channel to/from collector
@@ -37,12 +77,6 @@ var (
 
 // interface guard
 var _ cos.Runner = (*StreamCollector)(nil)
-
-// Stream Collector:
-// 1. controls stream activation (followed by connection establishment and HTTP PUT), and
-//    deactivation (teardown)
-// 2. provides each stream with its own idle timer (with timeout measured in ticks - see tickUnit)
-// 3. deactivates idle streams
 
 func (*StreamCollector) Name() string { return "stream-collector" }
 
@@ -96,7 +130,7 @@ func (gc *collector) run() {
 				gc.streams[s.sessID] = s
 				heap.Push(gc, s)
 				if gc.none.CAS(true, false) {
-					gc.ticker.Reset(dfltTick)
+					gc.ticker.Reset(cmn.DfltTransportTick)
 					prev = mono.NanoTime()
 				}
 			} else if ok {
@@ -189,7 +223,7 @@ func (gc *collector) do() {
 		if s.time.ticks > 0 {
 			continue
 		}
-		gc.update(s, int(s.time.idleTeardown/dfltTick))
+		gc.update(s, int(s.time.idleTeardown/cmn.DfltTransportTick))
 		if s.time.inSend.Swap(false) {
 			continue
 		}
