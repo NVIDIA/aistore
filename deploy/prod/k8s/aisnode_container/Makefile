@@ -25,6 +25,8 @@ BASE_IMAGE      ?=
 BUILD_MODE      ?=
 # Build tags to build `aisnode` binary.
 BUILD_TAGS      ?=
+# Commit SHA to add to the image for labeling.
+COMMIT_SHA      ?=
 
 BUILD_ARGS = --build-arg "mode=$(BUILD_MODE)" --build-arg "providers=$(AIS_BACKEND_PROVIDERS)" --build-arg "tags=$(BUILD_TAGS)"
 ifneq ("$(INSTALLER_IMAGE)","")
@@ -35,6 +37,10 @@ ifneq ("$(BUILDER_IMAGE)","")
 endif
 ifneq ("$(BASE_IMAGE)","")
 	BUILD_ARGS += --build-arg "BASE_IMAGE=$(BASE_IMAGE)"
+endif
+# Add commit SHA label if provided
+ifneq ("$(COMMIT_SHA)","")
+	BUILD_ARGS += --label "org.opencontainers.image.revision=$(COMMIT_SHA)"
 endif
 
 

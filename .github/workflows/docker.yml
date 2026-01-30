@@ -45,6 +45,7 @@ on:
         description: 'Tag of all the selected images'
         required: true
         default: 'latest'
+        type: string
 
 env:
   UTIL_IMAGE: 'aistorage/ais-util'
@@ -90,7 +91,7 @@ jobs:
       - name: Build and push `aisnode` image
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}" make -e all
+          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}" COMMIT_SHA="${{ github.sha }}" make -e all
           popd
 
   build-ais-init:
@@ -109,7 +110,7 @@ jobs:
       - name: Build and push `ais-init` image
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisinit_container
-          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}" make -e all
+          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}" COMMIT_SHA="${{ github.sha }}" make -e all
           popd
 
   build-aisnode-tracing:
@@ -128,7 +129,7 @@ jobs:
       - name: Build and push `aisnode` image with tracing support
         run: |
           pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'latest' }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
+          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
           popd
 
   build-cluster-minimal:

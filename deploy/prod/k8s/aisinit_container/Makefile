@@ -16,6 +16,16 @@ IMAGE_TAG    ?= .must_set_in_environment
 BUILDER_IMAGE   ?=
 # Image that is used in final stage.
 BASE_IMAGE      ?=
+# Commit SHA to add to the image for labeling.
+COMMIT_SHA      ?=
+
+# Build arguments
+BUILD_ARGS ?=
+
+# Add commit SHA label if provided
+ifneq ("$(COMMIT_SHA)","")
+	BUILD_ARGS += --label "org.opencontainers.image.revision=$(COMMIT_SHA)"
+endif
 
 .PHONY: all
 all: build push
