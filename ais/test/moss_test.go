@@ -194,6 +194,15 @@ func TestMoss(t *testing.T) {
 
 	oconfig := tools.GetClusterConfig(t)
 
+	// HACK for test.withMissing _not_ to fail on soft errors (roughly, 400/3)
+	s := "134"
+	tlog.Logfln("Set get_batch.max_soft_errs=%s", s)
+	tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
+	t.Cleanup(func() {
+		s := strconv.Itoa(oconfig.GetBatch.MaxSoftErrs)
+		tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
+	})
+
 	for _, test := range tests {
 		t.Run(test.name(), func(t *testing.T) {
 			m := ioContext{
@@ -212,15 +221,6 @@ func TestMoss(t *testing.T) {
 
 			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			m.init(true /*cleanup*/)
-
-			if test.withMissing {
-				s := strconv.Itoa(numPlainObjs)
-				tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
-				t.Cleanup(func() {
-					s := strconv.Itoa(oconfig.GetBatch.MaxSoftErrs)
-					tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
-				})
-			}
 
 			if test.inputFormat == "" {
 				testMossPlainObjects(t, &m, &test, numPlainObjs)

@@ -231,6 +231,13 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 		prevBck = r.Bck()
 		currBck = p.Bck
 	)
+	if prevBck != nil && prevBck.IsEmpty() { // normalize (x-base has cmn.Bck in its state)
+		prevBck = nil
+	}
+	if currBck != nil && currBck.IsEmpty() { // (unlikely)
+		debug.Assert(false)
+		currBck = nil
+	}
 
 	switch {
 	case prevBck == nil && currBck == nil:
