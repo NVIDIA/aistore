@@ -79,10 +79,8 @@ func (ups *ups) init(id string, lom *core.LOM, rmd map[string]string) error {
 	if err != nil {
 		return err
 	}
-	// Initialize streaming checksum for non-cloud buckets
-	if !lom.Bck().IsCloud() {
-		manifest.InitStreamingChecksum(lom.CksumType())
-	}
+	// Initialize streaming checksum for bucket-configured type
+	manifest.InitStreamingChecksum(lom.CksumType())
 	ups.Lock()
 	if ups.m == nil {
 		ups.m = make(map[string]up, iniCapUploads)
@@ -495,25 +493,21 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		lom.SetCustomKey(cmn.ETag, cmn.UnquoteCEV(etag))
 	}
 
-	// Whole-object checksum strategy:
-	// - Cloud buckets: checksum set by _completeRemote (from cloud provider)
-	// - Local/remote-AIS: use streaming checksum if valid, otherwise CRC32C combination
+	// Whole-object checksum: use streaming checksum if valid, otherwise CRC32C combination
 	var locked bool
-	if !lom.Bck().IsCloud() {
-		if !args.locked {
-			lom.Lock(true)
-			locked = true
-		}
-
-		cksum, err := manifest.WholeChecksum()
-		if err != nil {
-			if locked {
-				lom.Unlock(true)
-			}
-			return "", 0, err
-		}
-		lom.SetCksum(cksum)
+	if !args.locked {
+		lom.Lock(true)
+		locked = true
 	}
+
+	cksum, err := manifest.WholeChecksum()
+	if err != nil {
+		if locked {
+			lom.Unlock(true)
+		}
+		return "", 0, err
+	}
+	lom.SetCksum(cksum)
 
 	// atomically flip: persist manifest, mark chunked, persist main
 	// NOTE: coldGET implies the LOM's lock has been promoted to wlock
@@ -614,8 +608,8 @@ func (ups *ups) _abort(id string, lom *core.LOM) error {
 
 // initPartChecksums determines which checksums to compute and returns writers for them.
 // Checksum strategy:
-// - Cloud buckets: checksums provided by cloud on CompleteMultipartUpload
-// - Local/remote-AIS: always compute CRC32C; if in-order, also compute streaming checksum
+// - Always compute CRC32C for chunk combination (cheap, can be combined without re-reading)
+// - If parts arrive in-order, also compute streaming bucket-configured checksum
 func initPartChecksums(args *partArgs) (pc partCksums, w []io.Writer) {
 	w = make([]io.Writer, 0, 4)
 	w = append(w, args.fh)
@@ -629,25 +623,23 @@ func initPartChecksums(args *partArgs) (pc partCksums, w []io.Writer) {
 		}
 	}
 
-	// For non-cloud buckets: compute checksums locally
-	if !args.lom.Bck().IsCloud() {
-		// Always compute CRC32C for chunk combination
-		pc.crc32c = cos.NewCksumHash(cos.ChecksumCRC32C)
-		w = append(w, pc.crc32c.H)
+	// Always compute CRC32C for chunk combination
+	pc.crc32c = cos.NewCksumHash(cos.ChecksumCRC32C)
+	w = append(w, pc.crc32c.H)
 
-		// Check if part arrives in-order for streaming bucket-configured checksum
-		var streamWriter hash.Hash
-		pc.inOrder, streamWriter = args.manifest.CheckInOrder(args.partNum)
-		if streamWriter != nil {
-			w = append(w, streamWriter)
-		}
-
-		// S3 also needs MD5 for ETag compatibility
-		if args.isS3 {
-			pc.md5 = cos.NewCksumHash(cos.ChecksumMD5)
-			w = append(w, pc.md5.H)
-		}
+	// Check if part arrives in-order for streaming bucket-configured checksum
+	var streamWriter hash.Hash
+	pc.inOrder, streamWriter = args.manifest.CheckInOrder(args.partNum)
+	if streamWriter != nil {
+		w = append(w, streamWriter)
 	}
+
+	// S3 also needs MD5 for ETag compatibility
+	if args.isS3 {
+		pc.md5 = cos.NewCksumHash(cos.ChecksumMD5)
+		w = append(w, pc.md5.H)
+	}
+
 	return pc, w
 }
 

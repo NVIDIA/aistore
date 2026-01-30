@@ -815,7 +815,7 @@ func TestColdGetChunked(t *testing.T) {
 		longOnly      bool   // run only with long tests
 	}{
 		// Cold GET scenarios (evicted): chunking based on size limit
-		{name: "chunked-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: true, longOnly: true},     // exceeds limit => chunks
+		{name: "chunked-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: true, evict: true, longOnly: false},    // exceeds limit => chunks
 		{name: "chunked-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: true, evict: true, longOnly: true},      // doesn't exceed => monolithic
 		{name: "monolithic-src-evict-exceeds", objSize: 1 * cos.GiB, sourceChunked: false, evict: true, longOnly: true}, // exceeds limit => chunks
 		{name: "monolithic-src-evict-small", objSize: 48 * cos.MiB, sourceChunked: false, evict: true, longOnly: true},  // doesn't exceed => monolithic
