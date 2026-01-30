@@ -81,8 +81,8 @@ type (
 		Server *ServerConfToSet `json:"auth"`
 	}
 	ServerConfToSet struct {
-		Secret *string        `json:"secret,omitempty"`
-		Expire *time.Duration `json:"expiration_time,omitempty"`
+		Secret *string       `json:"secret,omitempty"`
+		Expire *cos.Duration `json:"expiration_time,omitempty"`
 	}
 	// TokenList is a list of tokens pushed by authn
 	TokenList struct {

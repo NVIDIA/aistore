@@ -517,6 +517,14 @@ test:short:authn:
     - ais auth login $AIS_AUTHN_SU_NAME -p $AIS_AUTHN_SU_PASS
     - make test-run
     - ais auth logout
+  rules:
+      - !reference [ .default_test_rules, rules ]
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*authn.*/'
+      - *authn_changes_rule
+      - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        when: manual
+        allow_failure: true
 
 test:short:https:
   <<: *test_short_def

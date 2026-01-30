@@ -108,7 +108,7 @@ func TestUpdateConf(t *testing.T) {
 
 	// valid update
 	newSecret := "new-secret"
-	newExpire := 2 * time.Hour
+	newExpire := cos.Duration(2 * time.Hour)
 	err = cm.UpdateConf(&authn.ConfigToUpdate{
 		Server: &authn.ServerConfToSet{
 			Secret: &newSecret,
@@ -420,7 +420,7 @@ func TestAuthConfManagerConcurrency(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateConf failed in concurrent test: %v", err)
 	}
-	newExpiry := 5 * time.Hour
+	newExpiry := cos.Duration(5 * time.Hour)
 
 	if err := cm.UpdateConf(&authn.ConfigToUpdate{
 		Server: &authn.ServerConfToSet{Expire: &newExpiry},

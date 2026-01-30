@@ -103,7 +103,7 @@ func (cm *ConfManager) UpdateConf(cu *authn.ConfigToUpdate) error {
 		next.Server.Secret = *cu.Server.Secret
 	}
 	if cu.Server.Expire != nil {
-		next.Server.Expire = cos.Duration(*cu.Server.Expire)
+		next.Server.Expire = *cu.Server.Expire
 	}
 	// Validate config after updates before storing
 	err := next.Validate()
