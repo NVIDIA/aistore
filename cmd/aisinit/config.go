@@ -125,8 +125,8 @@ var (
 
 	defaultLog = aiscmn.LogConf{
 		Level:     "3",
-		MaxSize:   cos.SizeIEC(4 * cos.MiB),
-		MaxTotal:  cos.SizeIEC(128 * cos.MiB),
+		MaxSize:   cos.SizeIEC(64 * cos.MiB),
+		MaxTotal:  cos.SizeIEC(512 * cos.MiB),
 		FlushTime: cos.Duration(time.Minute),
 		StatsTime: cos.Duration(3 * time.Minute),
 	}
