@@ -142,6 +142,7 @@ type (
 		stats   moss
 		aw      archive.Writer
 		r       *XactMoss
+		config  *cmn.Config
 		smap    *meta.Smap
 		req     *apc.MossReq
 		resp    *apc.MossResp
@@ -165,7 +166,6 @@ type (
 	XactMoss struct {
 		gmm     *memsys.MMSA
 		smm     *memsys.MMSA
-		config  *cmn.Config
 		bewarm  *work.Pool
 		pending sync.Map // [wid => *basewi]
 		xact.DemandBase
@@ -262,17 +262,17 @@ func (p *mossFactory) WhenPrevIsRunning(prev xreg.Renewable) (xreg.WPR, error) {
 
 func newMoss(p *mossFactory) *XactMoss {
 	r := &XactMoss{
-		gmm:    memsys.PageMM(),
-		smm:    memsys.ByteMM(),
-		config: cmn.GCO.Get(),
+		gmm: memsys.PageMM(),
+		smm: memsys.ByteMM(),
 	}
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, mossIdleTime, r.fini)
 
 	// best-effort `bewarm` for pagecache warming-up
 	s := "without"
 	v := "[]"
-	if num := r.config.GetBatch.WarmupWorkers(); num > 0 {
-		adv := r.newAdvice()
+	config := cmn.GCO.Get()
+	if num := config.GetBatch.WarmupWorkers(); num > 0 {
+		adv := newAdvice(config)
 		if adv.Load < load.High {
 			r.bewarm = work.New(num, num /*work-chan cap*/, r.bewarmFQN, r.ChanAbort())
 			s = "with"
@@ -418,7 +418,7 @@ func (r *XactMoss) bewarmStop() {
 //    - asm() refreshes as prescribed (adv.ShouldCheck(i)) ---------------
 
 // (phase 1)
-func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
+func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap, wid string, receiving, usingPrev bool) error {
 	now := mono.NanoTime()
 
 	// admission control:
@@ -427,7 +427,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 		// benign race: temporarily set far-future value to minimize duplicate adv.Refresh()
 		r.advNextCheck.Store(now + int64(time.Hour))
 
-		adv := r.newAdvice()
+		adv := newAdvice(config)
 		ival := advIval(adv.Load)
 		r.advNextCheck.Store(now + int64(ival))
 
@@ -451,7 +451,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, smap *meta.Smap, wid string, receivi
 	// DT's work item
 	var (
 		resp = &apc.MossResp{UUID: r.ID()}
-		wi   = basewi{r: r, smap: smap, req: req, resp: resp, wid: wid}
+		wi   = basewi{r: r, config: cmn.GCO.Get(), smap: smap, req: req, resp: resp, wid: wid}
 	)
 	wi.started = now
 
@@ -1093,7 +1093,7 @@ func (wi *basewi) waitFlushRx(i int) (int, error) {
 	var (
 		elapsed        time.Duration
 		recvDrainBurst = cos.ClampInt(8, 1, cap(wi.recv.ch)>>1)
-		timeout        = wi.r.config.GetBatch.MaxWait.D()
+		timeout        = wi.config.GetBatch.MaxWait.D()
 		pollIval       = cos.Ternary(timeout > pollDiv*cmn.GetBatchWaitMin, timeout/pollDiv, cmn.GetBatchWaitMin)
 	)
 	for {
@@ -1241,7 +1241,7 @@ func (wi *basewi) next(i int) (int, error) {
 		case !isErrHole(err):
 			return nextIdx, err
 		default:
-			if r.config.GetBatch.IsDisabledGFN() || wi.stats.ngfn >= r.config.GetBatch.MaxGFN {
+			if wi.config.GetBatch.IsDisabledGFN() || wi.stats.ngfn >= wi.config.GetBatch.MaxGFN {
 				return nextIdx, err
 			}
 		}
@@ -1451,27 +1451,22 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
-func (wi *basewi) _errSoft() error {
-	config := cmn.GCO.Get()
-	limit := config.GetBatch.MaxSoftErrs
-	if wi.soft < limit {
-		return nil
-	}
+func (wi *basewi) _errSoft(limit int) error {
 	return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", wi.r.Name(), wi.wid, wi.soft, limit)
 }
 
 func (wi *basewi) asm() error {
-	r := wi.r
-	adv := r.newAdvice()
-	l := len(wi.req.In)
+	var (
+		r   = wi.r
+		adv = newAdvice(wi.config)
+		l   = len(wi.req.In)
+	)
 	for i := 0; i < l; {
 		if r.IsAborted() || r.IsDone() {
 			return nil
 		}
-		if limit := r.config.GetBatch.MaxSoftErrs; wi.soft > limit {
-			if err := wi._errSoft(); err != nil {
-				return err
-			}
+		if limit := wi.config.GetBatch.MaxSoftErrs; wi.soft > limit {
+			return wi._errSoft(limit)
 		}
 		j, err := wi.next(i)
 		if err != nil {
@@ -1516,10 +1511,8 @@ func (wi *basewi) flushRx() error {
 		}
 		if entry.mopaque.missing {
 			wi.soft++
-			if limit := wi.r.config.GetBatch.MaxSoftErrs; wi.soft > limit {
-				if err := wi._errSoft(); err != nil {
-					return err
-				}
+			if limit := wi.config.GetBatch.MaxSoftErrs; wi.soft > limit {
+				return wi._errSoft(limit)
 			}
 		}
 
@@ -1742,8 +1735,8 @@ func isErrHole(err error) bool {
 // load.Advice helpers
 //
 
-func (r *XactMoss) newAdvice() (adv load.Advice) {
-	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &r.config.Disk, RW: true})
+func newAdvice(config *cmn.Config) (adv load.Advice) {
+	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: &config.Disk, RW: true})
 	adv.Refresh()
 	return
 }

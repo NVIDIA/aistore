@@ -459,7 +459,7 @@ func (ctx *mossCtx) phase1(w http.ResponseWriter, r *http.Request, config *cmn.C
 			return
 		}
 	}
-	if err := xmoss.PrepRx(ctx.req, &smap.Smap, ctx.wid, receiving, usingPrev); err != nil {
+	if err := xmoss.PrepRx(ctx.req, config, &smap.Smap, ctx.wid, receiving, usingPrev); err != nil {
 		var ecode int
 		if !cmn.IsErrTooManyRequests(err) {
 			xmoss.Abort(err)
