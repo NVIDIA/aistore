@@ -1451,6 +1451,15 @@ func (wi *basewi) addMissing(err error, nameInArch string, out *apc.MossOut) err
 	return nil
 }
 
+func (wi *basewi) _errSoft() error {
+	config := cmn.GCO.Get()
+	limit := config.GetBatch.MaxSoftErrs
+	if wi.soft < limit {
+		return nil
+	}
+	return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", wi.r.Name(), wi.wid, wi.soft, limit)
+}
+
 func (wi *basewi) asm() error {
 	r := wi.r
 	adv := r.newAdvice()
@@ -1460,7 +1469,9 @@ func (wi *basewi) asm() error {
 			return nil
 		}
 		if limit := r.config.GetBatch.MaxSoftErrs; wi.soft > limit {
-			return fmt.Errorf("%s: work item %q exceeded soft-errors limit: %d (max: %d)", r.Name(), wi.wid, wi.soft, limit)
+			if err := wi._errSoft(); err != nil {
+				return err
+			}
 		}
 		j, err := wi.next(i)
 		if err != nil {
@@ -1502,6 +1513,14 @@ func (wi *basewi) flushRx() error {
 		if entry.isEmpty() {
 			debug.Assert(entry.mopaque == nil)
 			return nil
+		}
+		if entry.mopaque.missing {
+			wi.soft++
+			if limit := wi.r.config.GetBatch.MaxSoftErrs; wi.soft > limit {
+				if err := wi._errSoft(); err != nil {
+					return err
+				}
+			}
 		}
 
 		wi.recv.mtx.Unlock() //--------------

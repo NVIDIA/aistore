@@ -194,10 +194,6 @@ func TestMoss(t *testing.T) {
 
 	oconfig := tools.GetClusterConfig(t)
 
-	// HACK for test.withMissing _not_ to fail on soft errors (roughly, 400/3)
-	s := "134"
-	tlog.Logfln("Set get_batch.max_soft_errs=%s", s)
-	tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
 	t.Cleanup(func() {
 		s := strconv.Itoa(oconfig.GetBatch.MaxSoftErrs)
 		tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
@@ -222,6 +218,25 @@ func TestMoss(t *testing.T) {
 			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			m.init(true /*cleanup*/)
 
+			// when injecting missing entries:
+			// - compute expected soft errors
+			// - update 'get_batch.max_soft_errs' config
+			if test.withMissing {
+				var n int
+				if test.inputFormat == "" {
+					// start with numPlainObjs and inject missing -
+					// every mossMissingRatio-th entry.
+					n = numPlainObjs
+				} else {
+					// the name must be self-explanatory
+					n = numArchives * _numPerArchToRequest(numInArch)
+				}
+
+				limit := cos.DivRound(n, mossMissingRatio) + 1
+				s := strconv.Itoa(limit)
+				tools.SetClusterConfig(t, cos.StrKVs{"get_batch.max_soft_errs": s})
+				tlog.Logfln("Set get_batch.max_soft_errs=%s", s)
+			}
 			if test.inputFormat == "" {
 				testMossPlainObjects(t, &m, &test, numPlainObjs)
 			} else {
@@ -288,6 +303,8 @@ func testMossPlainObjects(t *testing.T, m *ioContext, test *mossConfig, numObjs 
 	}
 }
 
+func _numPerArchToRequest(numInArch int) int { return max(numInArch/5, 3) }
+
 func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives, numInArch int) {
 	// Track actual files created in each archive for accurate retrieval
 	type archiveInfo struct {
@@ -335,7 +352,7 @@ func testMossArchives(t *testing.T, m *ioContext, test *mossConfig, numArchives,
 	var mossIn []apc.MossIn
 	for _, archInfo := range archives {
 		// Add a few files from each archive
-		numToRequest := min(len(archInfo.filePaths), max(numInArch/5, 3))
+		numToRequest := min(len(archInfo.filePaths), _numPerArchToRequest(numInArch))
 		for j := range numToRequest {
 			entry := apc.MossIn{
 				ObjName:  archInfo.name,
