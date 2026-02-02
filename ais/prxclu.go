@@ -42,8 +42,16 @@ func (p *proxy) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		p.httpclupost(w, r)
 	case http.MethodPut:
+		if !p.ClusterStarted() {
+			// TODO: may requre preventive return from assorted paths (see e.g. xstatusOne)
+			nlog.Warningln("cluster not started:", r.Method, r.URL.RawQuery)
+		}
 		p.httpcluput(w, r)
 	case http.MethodDelete:
+		if !p.ClusterStarted() {
+			// TODO: ditto
+			nlog.Warningln("cluster not started:", r.Method, r.URL.RawQuery)
+		}
 		p.httpcludel(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost, http.MethodPut)
@@ -131,6 +139,10 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 // apc.WhatQueryXactStats (NOTE: may poll for quiescence)
 func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	if !p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
 		return

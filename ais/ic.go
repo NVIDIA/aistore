@@ -167,6 +167,10 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Values) {
+	if !ic.p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	msg := &xact.QueryMsg{}
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
@@ -208,6 +212,10 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 }
 
 func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
+	if !ic.p.ClusterStarted() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 	var (
 		nl  nl.Listener
 		bck *meta.Bck
