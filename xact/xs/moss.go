@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,7 +56,6 @@ import (
                       ├── shared-dm.recvd[i] = ...     ←  data-items from other targets via recv()
                       │
                       └── stream TAR         ←  in-order via flushRx()
-
    senders (T1..Tn)
        └── shared-DM.Send(req, smap, DT)
               └── for locality(data-item) == self:
@@ -68,7 +68,6 @@ import (
 
    Soft errors: any execution path that invokes addMissing() is classified as a _soft_ error,
    irrespective of its original cause; these include:
-
    a) missing data (404) - object or archived file doesn't exist;
    b) remote stream-break (`ErrSBR`) - a temporary failure of a long-lived;
       peer-to-peer connection that gets converted into a special missing entry
@@ -87,6 +86,9 @@ TBD:
 
 // hardcoded tunables
 const (
+	mossIdleTime    = xact.IdleDefault                         // xact.Demand idle-ness
+	mossAbandonTime = max(mossIdleTime, cmn.SharedStreamsDflt) // work item GC (10m)
+
 	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
 	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
 
@@ -97,6 +99,9 @@ const (
 
 	// next(i) poll interval: a fraction of configured timeout
 	pollDiv = 8
+
+	// max slice cap to reuse
+	poolMaxCap = 512
 )
 
 type (
@@ -136,7 +141,7 @@ type (
 			ch   chan int
 			m    []rxentry
 			next int
-			mtx  *sync.Mutex
+			mtx  sync.Mutex
 		}
 		timer   *time.Timer
 		stats   moss
@@ -151,8 +156,10 @@ type (
 		sid     string      // current sender ID
 		started int64       // (mono)
 		soft    int         // number of soft errors must be <= maxSoftErrs; see definition above
-		clean   atomic.Bool
-		awfin   atomic.Bool
+		clean   atomic.Bool // true: wi.cleanup() done _or_ recycled via mem-pool
+		demand  atomic.Bool // true: DemandBase.IncPending() done
+		awfin   atomic.Bool // true: need to close (outgoing) archive writer
+		inRx    atomic.Int32
 	}
 	buffwi struct {
 		*basewi
@@ -182,10 +189,6 @@ type (
 		lh  cos.LomReader
 		buf []byte
 	}
-)
-
-const (
-	mossIdleTime = xact.IdleDefault
 )
 
 // interface guard
@@ -343,7 +346,7 @@ func (*XactMoss) cleanup(_, value any) bool {
 func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 	var (
 		iters  int
-		tout   = max(mossIdleTime, time.Minute)
+		tout   = mossAbandonTime
 		cutoff = now - tout.Nanoseconds()
 	)
 	debug.Assert(maxIters > 0)
@@ -353,11 +356,14 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 		wi := value.(*basewi)
 		// old enough
 		if wi.started != 0 && wi.started < cutoff {
+			demand := wi.demand.CAS(true, false)
 			if wi.cleanup(false) {
-				// not r.DecPending here (these wi-s never incremented)
 				if cmn.Rom.V(4, cos.ModXs) {
 					nlog.Infof("%s: GC abandoned wi %q", r.Name(), wi.wid)
 				}
+			}
+			if demand {
+				r.DecPending()
 			}
 		}
 		return cont
@@ -366,13 +372,13 @@ func (r *XactMoss) gcAbandoned(now int64, maxIters int) {
 
 // terminate via (<-- xact.Demand <-- hk)
 func (r *XactMoss) fini(now int64) (d time.Duration) {
-	// cleanup abandoned wi-s
-	r.gcAbandoned(now, 32 /*max-iters*/)
-
 	switch {
 	case r.IsAborted() || r.IsDone():
 		return hk.UnregInterval
 	case r.Pending() > 0:
+		// best-effort cleanup abandoned wi-s, if any
+		r.gcAbandoned(now, 32 /*max-iters*/)
+		// and keep going
 		return mossIdleTime
 	default:
 		r.SetStopping()
@@ -451,9 +457,17 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 	// DT's work item
 	var (
 		resp = &apc.MossResp{UUID: r.ID()}
-		wi   = basewi{r: r, config: cmn.GCO.Get(), smap: smap, req: req, resp: resp, wid: wid}
+		wi   = allocMossWi()
 	)
-	wi.started = now
+	{
+		wi.r = r
+		wi.config = cmn.GCO.Get()
+		wi.smap = smap
+		wi.req = req
+		wi.resp = resp
+		wi.wid = wid
+		wi.started = now
+	}
 
 	if receiving {
 		// insert self to properly demux => receive data (to assemble)
@@ -463,9 +477,13 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 			bundle.SDM.RegRecv(r)
 		}
 		// Rx state
-		wi.recv.m = make([]rxentry, len(req.In))    // preallocate
+		l := len(req.In)
+		if cap(wi.recv.m) < l {
+			wi.recv.m = make([]rxentry, len(req.In))
+		} else {
+			wi.recv.m = wi.recv.m[:l]
+		}
 		wi.recv.ch = make(chan int, len(req.In)<<1) // extra cap
-		wi.recv.mtx = &sync.Mutex{}
 
 		if time.Duration(wi.started-r.lastLog.Load()) > sparseLog {
 			// log and `ais show job`
@@ -479,16 +497,18 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 		wi.timer.Stop()
 	}
 
-	if a, loaded := r.pending.LoadOrStore(wid, &wi); loaded {
+	if a, loaded := r.pending.LoadOrStore(wid, wi); loaded {
 		old := a.(*basewi)
 		age := mono.Since(old.started)
 		err := fmt.Errorf("%s: work item %q already exists for %v (duplicate WID generated?)", r.Name(), wid, age)
-		if age > mossIdleTime {
+		if age >= mossAbandonTime {
 			nlog.Errorln(core.T.String(), err)
 		}
 		return err
 	}
 
+	debug.Assert(!wi.demand.Load())
+	wi.clean.Store(false) // (see also: freeMossWi)
 	r.pendingCnt.Inc()
 	wi.awfin.Store(true)
 
@@ -509,19 +529,21 @@ func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string)
 	wi := a.(*basewi)
 	debug.Assert(wid == wi.wid)
 
-	if wi.clean.Load() {
-		return fmt.Errorf("%s: work item %q is no longer available (stale)", r.Name(), wid)
-	}
-
 	r.IncPending()
+	wi.demand.Store(true) // for DecPending symmetry
 
 	err := r.asm(req, w, wi)
 	if err != nil {
 		core.T.StatsUpdater().Inc(stats.ErrGetBatchCount)
 	}
-	wi.cleanup(false)
 
-	r.DecPending()
+	demand := wi.demand.CAS(true, false)
+	if wi.cleanup(false) {
+		freeMossWi(wi)
+	}
+	if demand {
+		r.DecPending()
+	}
 	return err
 }
 
@@ -795,15 +817,22 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader, err error) 
 	}
 	wi := a.(*basewi)
 
-	// already cleaned-up via gcAbandoned()? drop as well
-	if wi.clean.Load() {
+	// already cleaned up via gcAbandoned()? drop silently
+	if mopaque.wid != wi.wid || wi.clean.Load() {
 		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Infof("%s: wi %q is already clean/done - dropping", r.Name(), wi.wid)
 		}
 		return nil
 	}
 
-	debug.Assert(mopaque.wid == wi.wid)
+	// protect Rx path from untimely cleanup
+	wi.inRx.Inc()
+	if mopaque.wid != wi.wid || wi.clean.Load() {
+		wi.inRx.Dec()
+		return nil // (unlikely; drop silently)
+	}
+	defer wi.inRx.Dec()
+
 	debug.Assert(wi.receiving())
 	return wi.recvObj(int(mopaque.index), hdr, reader, mopaque)
 }
@@ -934,7 +963,23 @@ func (wi *basewi) cleanup(xdone bool) bool {
 	if !wi.clean.CAS(false, true) {
 		return false
 	}
+
+	for spins := 0; wi.inRx.Load() > 0; spins++ {
+		if spins < 10 {
+			runtime.Gosched()
+		} else {
+			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
+		}
+	}
+
 	r := wi.r
+	if !xdone { // when xdone == true: full cleanup via parent's Range(r.cleanup)
+		_, loaded := r.pending.LoadAndDelete(wi.wid)
+		debug.Assert(loaded, "work item not found:", wi.wid)
+		if loaded {
+			r.pendingCnt.Dec()
+		}
+	}
 
 	tstats := core.T.StatsUpdater()
 	tstats.Inc(stats.GetBatchCount)
@@ -958,7 +1003,7 @@ func (wi *basewi) cleanup(xdone bool) bool {
 	// TODO: core.Xact to count archived files separately
 	wi.r.ObjsAdd(int(wi.stats.obj.cnt+wi.stats.fil.cnt), wi.stats.obj.size+wi.stats.fil.size)
 
-	if wi.awfin.CAS(false, true) {
+	if wi.aw != nil && wi.awfin.CAS(false, true) {
 		err := wi.aw.Fini()
 		wi.aw = nil
 		if err != nil {
@@ -968,9 +1013,9 @@ func (wi *basewi) cleanup(xdone bool) bool {
 		}
 	}
 
-	if !xdone {
-		r.pending.Delete(wi.wid)
-		r.pendingCnt.Dec()
+	if wi.resp != nil {
+		clear(wi.resp.Out)
+		wi.resp.Out = nil
 	}
 
 	if !wi.receiving() {
@@ -991,7 +1036,11 @@ func (wi *basewi) cleanup(xdone bool) bool {
 		}
 	}
 	clear(wi.recv.m)
-	wi.recv.m = nil
+	if cap(wi.recv.m) <= max(len(wi.req.In), poolMaxCap) {
+		wi.recv.m = wi.recv.m[:0]
+	} else {
+		wi.recv.m = nil
+	}
 	wi.recv.mtx.Unlock()
 
 	// finally

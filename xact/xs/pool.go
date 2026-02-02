@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -12,6 +12,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 )
 
+//
+// Lso
+//
+
 const maxEntries = apc.MaxPageSizeAIS
 
 var (
@@ -21,15 +25,6 @@ var (
 		},
 	}
 	entry0 cmn.LsoEnt
-)
-
-var (
-	coiPool = sync.Pool{
-		New: func() any {
-			return new(CoiParams)
-		},
-	}
-	coi0 CoiParams
 )
 
 func allocLsoEntries() cmn.LsoEntries {
@@ -55,6 +50,19 @@ func freeLsoEntries(entries cmn.LsoEntries) {
 	lstPool.Put(&entries)
 }
 
+//
+// COI
+//
+
+var (
+	coiPool = sync.Pool{
+		New: func() any {
+			return new(CoiParams)
+		},
+	}
+	coi0 CoiParams
+)
+
 func AllocCOI() *CoiParams {
 	return coiPool.Get().(*CoiParams)
 }
@@ -62,4 +70,31 @@ func AllocCOI() *CoiParams {
 func FreeCOI(a *CoiParams) {
 	*a = coi0
 	coiPool.Put(a)
+}
+
+//
+// Moss
+//
+
+var (
+	mossPool = sync.Pool{
+		New: func() any {
+			return new(basewi)
+		},
+	}
+	basewi0 basewi
+)
+
+func allocMossWi() *basewi {
+	return mossPool.Get().(*basewi)
+}
+
+// TODO: reuse resp.Out cap
+func freeMossWi(a *basewi) {
+	a.clean.Store(true)
+	rxents := a.recv.m
+	*a = basewi0 //nolint:govet // reset; atomic.noCopy does not apply
+	a.clean.Store(true)
+	a.recv.m = rxents
+	mossPool.Put(a)
 }
