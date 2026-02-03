@@ -89,6 +89,8 @@ const (
 	mossIdleTime    = xact.IdleDefault                         // xact.Demand idle-ness
 	mossAbandonTime = max(mossIdleTime, cmn.SharedStreamsDflt) // work item GC (10m)
 
+	cleanupRxTimeout = max(xact.IdleDefault, mossAbandonTime/2) // max time to wait on `inRx` ref-count (unlikely)
+
 	sparseLog    = time.Minute // low-level stats: total processed files, objects, etc.
 	sparseAdvice = time.Minute // initial interval to check memory, CPU, etc.
 
@@ -964,15 +966,33 @@ func (wi *basewi) cleanup(xdone bool) bool {
 		return false
 	}
 
+	var (
+		r       = wi.r
+		started int64
+	)
 	for spins := 0; wi.inRx.Load() > 0; spins++ {
-		if spins < 10 {
+		switch {
+		case spins < 10:
 			runtime.Gosched()
-		} else {
+		case spins == 10:
+			started = mono.NanoTime()
+			fallthrough
+		case spins < 100:
 			time.Sleep(min(time.Second, time.Millisecond*time.Duration(spins)))
+		default:
+			debug.Assert(started != 0)
+			if dur := mono.Since(started); dur >= cleanupRxTimeout {
+				err := fmt.Errorf("FATAL: wi.cleanup timed out waiting for inRx to drain [%s,  %q, %v]", r.Name(), wi.wid, dur)
+				r.AddErr(err, 0)
+				if _, loaded := r.pending.LoadAndDelete(wi.wid); loaded {
+					r.pendingCnt.Dec()
+				}
+				return false // not freeing to pool - the state is uncertain
+			}
+			time.Sleep(time.Second)
 		}
 	}
 
-	r := wi.r
 	if !xdone { // when xdone == true: full cleanup via parent's Range(r.cleanup)
 		_, loaded := r.pending.LoadAndDelete(wi.wid)
 		debug.Assert(loaded, "work item not found:", wi.wid)
