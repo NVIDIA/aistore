@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 //
@@ -82,7 +83,7 @@ var (
 			return new(basewi)
 		},
 	}
-	basewi0 basewi
+	basewi0 basewi // basewi0.clean == true via Tinit (pooled wi-s start in "already cleaned" state)
 )
 
 func allocMossWi() *basewi {
@@ -91,10 +92,9 @@ func allocMossWi() *basewi {
 
 // TODO: reuse resp.Out cap
 func freeMossWi(a *basewi) {
-	a.clean.Store(true)
+	debug.Assert(basewi0.clean.Load()) // (see Tinit)
 	rxents := a.recv.m
 	*a = basewi0 //nolint:govet // reset; atomic.noCopy does not apply
-	a.clean.Store(true)
 	a.recv.m = rxents
 	mossPool.Put(a)
 }

@@ -7,23 +7,42 @@ package xs
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 // for additional startup-time reg-s see lru, downloader, ec
-func Preg() {
+func Pinit() {
 	xreg.RegNonBckXact(&eleFactory{})
 }
 
-func Treg(coi COI) {
-	// scope: global and multi-bucket
+//
+// Tinit (as in: target init) must be called exactly once during target initialization.
+// It initializes xs package globals and registers xaction factories.
+//
+
+var (
+	allLsoFlags map[string]cos.BitFlags // `apc.LsoMsg` flags
+)
+
+func Tinit(coi COI) {
+	// init static map
+	allLsoFlags = make(map[string]cos.BitFlags, len(apc.GetPropsAll))
+	for i, n := range apc.GetPropsAll {
+		allLsoFlags[n] = cos.BitFlags(1) << i
+	}
+
+	// (see freeMossWi)
+	basewi0.clean.Store(true)
+
+	// xreg scope: global and multi-bucket
 	xreg.RegNonBckXact(&eleFactory{})
 	xreg.RegNonBckXact(&resFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
 	xreg.RegNonBckXact(&nsummFactory{})
 	xreg.RegNonBckXact(&mossFactory{})
 
-	// scope: bucket
+	// xreg scope: bucket
 	xreg.RegBckXact(&bmvFactory{})
 	xreg.RegBckXact(&evdFactory{kind: apc.ActEvictObjects})
 	xreg.RegBckXact(&evdFactory{kind: apc.ActDeleteObjects})
@@ -36,11 +55,12 @@ func Treg(coi COI) {
 	xreg.RegBckXact(&lsoFactory{streamingF: streamingF{kind: apc.ActList}})
 	xreg.RegBckXact(&blobFactory{})
 
+	xreg.RegBckXact(&rechunkFactory{kind: apc.ActRechunk})
+
+	// assign COI singleton
 	gcoi = coi
 	xreg.RegBckXact(&tcbFactory{kind: apc.ActCopyBck})
 	xreg.RegBckXact(&tcbFactory{kind: apc.ActETLBck})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActETLObjects}})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActCopyObjects}})
-
-	xreg.RegBckXact(&rechunkFactory{kind: apc.ActRechunk})
 }

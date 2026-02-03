@@ -58,7 +58,7 @@ func TestResilver_DisableEnable(t *testing.T) {
 	initFS(t, mpaths, target.SID())
 	config := initConfig(t, tmpDir, numMpaths)
 	xreg.Init()
-	xs.Treg(nil)
+	xs.Tinit(nil)
 	// END init target --------------------------------------------------------------
 
 	// create objects: half on non-HRW mountpath to force relocation
@@ -262,7 +262,7 @@ func TestResilver_PreemptAddDisable(t *testing.T) {
 	initFS(t, base[:numBaseMpaths], targetID)      // helper from res/unit_test.go
 	config := initConfig(t, tmpDir, numBaseMpaths) // helper from res/unit_test.go
 	xreg.Init()
-	xs.Treg(nil)
+	xs.Tinit(nil)
 
 	bck := bcks[0]
 

@@ -15,21 +15,9 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-// `apc.LsoMsg` flags
-
-var (
-	allmap map[string]cos.BitFlags
-)
-
-func init() {
-	allmap = make(map[string]cos.BitFlags, len(apc.GetPropsAll))
-	for i, n := range apc.GetPropsAll {
-		allmap[n] = cos.BitFlags(1) << i
-	}
-}
-
 func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
-	for prop, fl := range allmap {
+	debug.Assert(len(allLsoFlags) == len(apc.GetPropsAll)) // (the map is statically initialized - see Tinit)
+	for prop, fl := range allLsoFlags {
 		if msg.WantProp(prop) {
 			flags = flags.Set(fl)
 		}
@@ -41,7 +29,7 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 	var (
 		checkVchanged = wi.msg.IsFlagSet(apc.LsDiff)
 	)
-	for name, fl := range allmap {
+	for name, fl := range allLsoFlags {
 		if !wi.wanted.IsSet(fl) {
 			continue
 		}
