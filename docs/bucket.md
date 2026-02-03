@@ -575,6 +575,8 @@ Cached objects remain in the AIS bucket.
    - [Pagination](#pagination)
 7. [Operations Summary](#operations-summary)
 8. [CLI Quick Reference](#cli-quick-reference)
+9. [Appendix A: On-Disk Layout](#appendix-a-on-disk-layout)
+10. [Reference](#references)
 
 ## Working with Same-Name Remote Buckets
 
@@ -971,7 +973,7 @@ ais bucket props reset s3://bucket
 
 ## Appendix A: On-Disk Layout
 
-**Note:** This section is provided for advanced troubleshooting and debugging only.
+**Note:** This section is provided for advanced [troubleshooting](/docs/troubleshooting.md) and debugging only.
 
 The bucket identity you specify in CLI or API - provider, namespace, bucket name - materializes as directory structure on every [mountpath](/docs/overview.md#mountpath). This isn't just metadata; it's physical layout.
 
@@ -1018,3 +1020,4 @@ What starts as a logical identifier in `ais create s3://#prod/bucket` ends up as
 * [CLI: AWS Profiles and Endpoints](/docs/cli/aws_profile_endpoint.md)
 * [Authentication](/docs/authn.md)
 * [Out-of-Band Updates](/docs/out_of_band.md)
+* [Troubleshooting AIStore](/docs/troubleshooting.md)
