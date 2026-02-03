@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import warnings
@@ -218,7 +218,7 @@ class Object:
         self,
         archive_config: Optional[ArchiveConfig] = None,
         blob_download_config: Optional[BlobDownloadConfig] = None,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        chunk_size: Optional[int] = None,
         etl: Optional[ETLConfig] = None,
         writer: Optional[BufferedWriter] = None,
         latest: bool = False,
@@ -233,7 +233,9 @@ class Object:
         Args:
             archive_config (Optional[ArchiveConfig]): Settings for archive extraction.
             blob_download_config (Optional[BlobDownloadConfig]): Settings for using blob download.
-            chunk_size (int, optional): Chunk size to use while reading from stream.
+            chunk_size (Optional[int]): Chunk size in bytes. For parallel downloads (num_workers
+                set), defaults to the server-provided optimal size. For sequential reads,
+                defaults to DEFAULT_CHUNK_SIZE.
             etl (Optional[ETLConfig]): Settings for ETL-specific operations (name, args).
             writer (Optional[BufferedWriter]): User-provided writer for writing content output.
                 The user is responsible for closing the writer.
@@ -244,7 +246,8 @@ class Object:
             direct (bool, optional): If True, the object content is read directly from the target node,
                 bypassing the proxy.
             num_workers (Optional[int]): If provided, use concurrent range-reads with this many
-                workers for faster downloads.
+                workers for faster downloads. Uses ProcessPoolExecutor with shared memory for
+                optimal throughput.
 
         Returns:
             ObjectReader: An iterator for streaming object content.
@@ -329,7 +332,9 @@ class Object:
             params=params,
             headers=headers,
             byte_range=byte_range_tuple,
-            uname=self.uname if direct else None,
+            uname=(
+                self.uname if direct or (num_workers is not None) else None
+            ),  # Auto-enable direct mode for parallel downloads to skip proxy redirects
         )
 
         obj_reader = ObjectReader(

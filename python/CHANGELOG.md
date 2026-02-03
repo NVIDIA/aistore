@@ -6,6 +6,11 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+### Changed
+
+- Parallel download switch from `ThreadPoolExecutor` to `ProcessPoolExecutor` with shared memory ring buffer for parallel chunk fetching
+- Parallel download auto-enables direct mode (bypasses proxy) to avoid redundant redirect overhead
+
 ## [1.20.0] - 2026-02-10
 
 ### Added
@@ -21,6 +26,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - Parallel download now uses `head_v2` to get optimal chunk size from server
 
 ### Fixed
+
 - Parallel download was using 32KiB chunks instead of server-provided chunk size
 
 ## [1.19.0] - 2026-01-14

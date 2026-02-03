@@ -156,16 +156,18 @@ class ObjectClient:
 
         return self._make_get_request(headers, stream)
 
-    def get_chunk(self, start: int, end: int) -> bytes:
+    def get_chunk(self, start: int, end: int) -> requests.Response:
         """
-        Fetch a specific byte range of the object as a chunk.
+        Fetch a specific byte range of the object as a streaming response.
+
+        Use response.iter_content() to read the data in small pieces.
 
         Args:
             start (int): Start byte offset (inclusive).
             end (int): End byte offset (exclusive).
 
         Returns:
-            bytes: The chunk content.
+            requests.Response: Streaming response. Caller should close it.
 
         Raises:
             ErrObjNotFound: If the object is not found and cannot be retried.
@@ -173,7 +175,7 @@ class ObjectClient:
         """
         headers = self._request_headers.copy() if self._request_headers else {}
         headers[HEADER_RANGE] = f"bytes={start}-{end - 1}"
-        return self._make_get_request(headers, stream=False).content
+        return self._make_get_request(headers, stream=True)
 
     def head(self) -> ObjectAttributes:
         """

@@ -32,16 +32,16 @@ class ObjectReader:
     def __init__(
         self,
         object_client: ObjectClient,
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        chunk_size: Optional[int] = None,
         num_workers: Optional[int] = None,
     ):
         self._object_client = object_client
         self._chunk_size = chunk_size
         self._attributes = None
         self._content_provider = (
-            ParallelContentIterProvider(object_client, None, num_workers)
+            ParallelContentIterProvider(object_client, chunk_size, num_workers)
             if num_workers
-            else ContentIterProvider(object_client, chunk_size)
+            else ContentIterProvider(object_client, chunk_size or DEFAULT_CHUNK_SIZE)
         )
 
     def head(self) -> ObjectAttributes:
@@ -137,6 +137,6 @@ class ObjectReader:
         Make a request to get a stream from the provided object and yield chunks of the stream content.
 
         Returns:
-            Generator[bytes, None, None]: An iterator over each chunk of bytes in the object.
+            Generator[bytes, None, None]: An iterator over each chunk of bytes in the object
         """
         return self._content_provider.create_iter()

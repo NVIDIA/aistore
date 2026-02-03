@@ -18,7 +18,6 @@ from aistore.sdk.provider import Provider
 from aistore.sdk.blob_download_config import BlobDownloadConfig
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
-    DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_PATCH,
     QPARAM_ARCHPATH,
     QPARAM_ARCHREGX,
@@ -166,7 +165,7 @@ class TestObject(unittest.TestCase):
         expected_byte_range_tuple = kwargs.pop(
             "expected_byte_range_tuple", (None, None)
         )
-        expected_chunk_size = kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+        expected_chunk_size = kwargs.get("chunk_size", None)
         expected_uname = kwargs.pop("expected_uname", None)
 
         res = self.object.get_reader(**kwargs)

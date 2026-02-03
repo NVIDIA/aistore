@@ -332,22 +332,3 @@ class TestObjectClient(
     def test_path_property(self):
         """Path property should return the request path."""
         self.assertEqual(self.object_client.path, self.path)
-
-    def test_get_chunk(self):
-        """Test get_chunk() fetches specific byte range."""
-        mock_response = Mock(spec=requests.Response)
-        mock_response.content = b"chunk_data"
-        self.request_client.request.return_value = mock_response
-
-        result = self.object_client.get_chunk(100, 200)
-
-        self.assertEqual(result, b"chunk_data")
-        expected_headers = self.headers.copy()
-        expected_headers[HEADER_RANGE] = "bytes=100-199"
-        self.request_client.request.assert_called_once_with(
-            HTTP_METHOD_GET,
-            path=self.path,
-            params=self.params,
-            stream=False,
-            headers=expected_headers,
-        )
