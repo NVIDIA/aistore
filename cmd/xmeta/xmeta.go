@@ -140,7 +140,7 @@ func main() {
 	newFlag.Parse(os.Args[1:])
 	if flags.help || len(os.Args[1:]) == 0 {
 		newFlag.Usage()
-		fmt.Print(helpMsg) //nolint:govet // "has possible Printf formatting directive" - no, it doesn't
+		os.Stdout.WriteString(helpMsg)
 		os.Exit(0)
 	}
 

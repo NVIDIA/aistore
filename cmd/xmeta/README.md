@@ -171,6 +171,12 @@ go install -ldflags="-s -w" ./cmd/xmeta
 xmeta -h
 ```
 
+or, same:
+
+```console
+xmeta   ## run with empty command line
+```
+
 ---
 
 ## Metadata Extraction & Formatting
