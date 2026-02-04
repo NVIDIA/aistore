@@ -47,8 +47,10 @@ type bctx struct {
 	dontAddRemote  bool // do not create (ie., add -> BMD) remote bucket on the fly
 	dontHeadRemote bool // do not HEAD remote bucket (to find out whether it exists and/or get properties)
 	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
-	isPresent      bool // the bucket is confirmed to be present (in the cluster's BMD)
-	exists         bool // remote bucket is confirmed to exist
+
+	// out
+	isPresent bool // the bucket is confirmed to be present (in the cluster's BMD) // caution wrt mem-pool
+	exists    bool // remote bucket is confirmed to exist                          // ditto; httpbckhead
 }
 
 ////////////////

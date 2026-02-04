@@ -625,10 +625,21 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		summMsg.Prefix = cos.TrimPrefix(summMsg.Prefix)
 		if qbck.IsBucket() {
 			bck := (*meta.Bck)(qbck)
-			bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
-			bckArgs.createAIS = false
-			bckArgs.dontHeadRemote = summMsg.BckPresent
-			if _, err := bckArgs.initAndTry(); err != nil {
+			bckArgs := allocBctx()
+			{
+				bckArgs.p = p
+				bckArgs.w = w
+				bckArgs.r = r
+				bckArgs.msg = msg
+				bckArgs.perms = apc.AceBckHEAD
+				bckArgs.bck = bck
+				bckArgs.dpq = dpq
+				bckArgs.createAIS = false
+				bckArgs.dontHeadRemote = summMsg.BckPresent
+			}
+			_, err := bckArgs.initAndTry()
+			freeBctx(bckArgs)
+			if err != nil {
 				return
 			}
 		}
@@ -682,22 +693,33 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		p.writeErr(w, r, err)
 		return
 	}
-	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
-	bckArgs.createAIS = false
 
-	if lsmsg.IsFlagSet(apc.LsBckPresent) {
-		bckArgs.dontHeadRemote = true
-		bckArgs.dontAddRemote = true
-	} else {
-		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote)
-		bckArgs.dontAddRemote = lsmsg.IsFlagSet(apc.LsDontAddRemote)
+	// bucket
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.msg = msg
+		bckArgs.perms = apc.AceObjLIST
+		bckArgs.bck = bck
+		bckArgs.dpq = dpq
+		bckArgs.createAIS = false
+		if lsmsg.IsFlagSet(apc.LsBckPresent) {
+			bckArgs.dontHeadRemote = true
+			bckArgs.dontAddRemote = true
+		} else {
+			bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote)
+			bckArgs.dontAddRemote = lsmsg.IsFlagSet(apc.LsDontAddRemote)
+		}
 	}
-
-	// do
 	bck, errN := bckArgs.initAndTry()
+	freeBctx(bckArgs)
 	if errN != nil {
 		return
 	}
+
+	// do
 	p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg)
 }
 
@@ -931,20 +953,36 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 	perms := cos.Ternary(delObjs, apc.AceObjDELETE, apc.AceDestroyBucket)
 
 	// 2. bucket
-	bck := apireq.bck
-	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: perms, bck: bck, dpq: apireq.dpq, query: apireq.query}
-	bckArgs.createAIS = false
+	var (
+		bck   = apireq.bck
+		e     error
+		ecode int
+	)
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.msg = msg
+		bckArgs.perms = perms
+		bckArgs.bck = bck
+		bckArgs.dpq = apireq.dpq
+		bckArgs.query = apireq.query
+		bckArgs.createAIS = false
+	}
 	if msg.Action == apc.ActEvictRemoteBck {
-		var ecode int
 		bckArgs.dontHeadRemote = true // unconditionally
-		ecode, err = bckArgs.init()
-		if err != nil {
-			if ecode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {
-				p.writeErr(w, r, err, ecode)
+		ecode, e = bckArgs.init()
+		if e != nil {
+			if ecode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(e) {
+				p.writeErr(w, r, e, ecode)
 			}
-			return
 		}
-	} else if bck, err = bckArgs.initAndTry(); err != nil {
+	} else {
+		bck, e = bckArgs.initAndTry()
+	}
+	freeBctx(bckArgs)
+	if e != nil {
 		return
 	}
 
@@ -1210,6 +1248,8 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
+	// bucket
 	bucket := apiItems[0]
 	bck, err := newBckFromQ(bucket, query, nil)
 	if err != nil {
@@ -1219,11 +1259,23 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
-	bckArgs := bctx{p: p, w: w, r: r, bck: bck, msg: msg, query: query}
-	bckArgs.createAIS = false
-	if bck, err = bckArgs.initAndTry(); err != nil {
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.bck = bck
+		bckArgs.msg = msg
+		bckArgs.query = query
+		bckArgs.createAIS = false
+	}
+	bck, err = bckArgs.initAndTry()
+	freeBctx(bckArgs)
+	if err != nil {
 		return
 	}
+
+	// action
 	switch msg.Action {
 	case apc.ActArchive:
 		var (
@@ -1321,15 +1373,25 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	}
 
-	bckArgs := bctx{p: p, w: w, r: r, bck: bck, perms: apc.AccessNone /* access checked below */, msg: msg, query: query}
-	bckArgs.createAIS = false
-	if bck, err = bckArgs.initAndTry(); err != nil {
+	// bucket
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.bck = bck
+		bckArgs.perms = apc.AccessNone // access checked below
+		bckArgs.msg = msg
+		bckArgs.query = query
+		bckArgs.createAIS = false
+	}
+	bck, err = bckArgs.initAndTry()
+	freeBctx(bckArgs)
+	if err != nil {
 		return
 	}
 
-	//
-	// POST {action} on bucket
-	//
+	// POST {action}
 	var xid string
 	switch msg.Action {
 	case apc.ActMoveBck:
@@ -1771,21 +1833,34 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 
+	// bucket
 	bck := apireq.bck
-	bckArgs := bctx{p: p, w: w, r: r, msg: msg, perms: apc.AccessNone /* access checked below */, bck: bck}
-	bckArgs.createAIS = false
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.msg = msg
+		bckArgs.perms = apc.AccessNone /* access checked below */
+		bckArgs.bck = bck
+		bckArgs.dpq = apireq.dpq
+		bckArgs.query = apireq.query
+		bckArgs.createAIS = false
 
-	// for actions that either don't support remote buckets, or don't require that the target remote bucket exists in the cluster,
-	// set dontHeadRemote to skip adding remote bucket.
-	switch msg.Action {
-	case apc.ActRenameObject, apc.ActCheckLock:
-		bckArgs.dontHeadRemote = true
+		// for actions that either don't support remote buckets, or don't require that the target remote bucket exists in the cluster,
+		// set dontHeadRemote to skip adding remote bucket.
+		switch msg.Action {
+		case apc.ActRenameObject, apc.ActCheckLock:
+			bckArgs.dontHeadRemote = true
+		}
 	}
-
-	if _, err := bckArgs.initAndTry(); err != nil {
+	_, e := bckArgs.initAndTry()
+	freeBctx(bckArgs)
+	if e != nil {
 		return
 	}
 
+	// action
 	switch msg.Action {
 	case apc.ActRenameObject:
 		if err := p.checkAccess(w, r, bck, apc.AceObjMOVE); err != nil {
@@ -1901,10 +1976,10 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 	}
 
-	err := p.parseReq(w, r, apireq)
-	if err != nil {
+	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
+
 	bckArgs := bctx{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.dontAddRemote = apireq.dpq.dontAddRemote // QparamDontAddRemote
 
@@ -1916,6 +1991,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		status      int
 	)
 	if flt := dpq.get(apc.QparamFltPresence); flt != "" {
+		var err error
 		fltPresence, err = strconv.Atoi(flt)
 		if err != nil {
 			p.writeErrf(w, r, "%s: parse 'flt-presence': %w", p, err)
@@ -1944,9 +2020,10 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err != nil {
 		return
 	}
+	isPresent, exists := bckArgs.isPresent, bckArgs.exists
 
 	// 1. bucket is present (and was present prior to this call), and we are done with it here
-	if bckArgs.isPresent {
+	if isPresent {
 		if fltPresence == apc.FltExistsOutside {
 			nlog.Warningf("bucket %s is present, flt %d=\"outside\" not implemented yet", bck.Cname(""), fltPresence)
 		}
@@ -1956,6 +2033,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 				p.writeErr(w, r, err)
 				return
 			}
+			// TODO: review IsBckPresent vs p.bsummhead() success
 			if info != nil {
 				info.IsBckPresent = true
 			}
@@ -1966,7 +2044,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// 2. bucket is remote and does exist
 	debug.Assert(bck.IsRemote(), bck.String())
-	debug.Assert(bckArgs.exists)
+	debug.Assert(exists)
 
 	// [filtering] when the bucket that must be present is not
 	if apc.IsFltPresent(fltPresence) {
@@ -1974,12 +2052,8 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 
-	var (
-		bprops *cmn.Bprops
-		bmd    = p.owner.bmd.get()
-	)
-	bprops, bckArgs.isPresent = bmd.Get(bck)
-	if bprops != nil {
+	bmd := p.owner.bmd.get()
+	if bprops, _ := bmd.Get(bck); bprops != nil {
 		// just added via bckArgs.initAndTry() above, with dontAdd == false
 		bck.Props = bprops
 	} // otherwise, keep bck.Props as per (#18995)
@@ -2023,7 +2097,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		xid           string
 		nprops        *cmn.Bprops // complete instance of bucket props with propsToUpdate changes
 	)
-	if err = p.parseReq(w, r, apireq); err != nil {
+	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
 	if msg, err = p.readActionMsg(w, r); err != nil {
@@ -2041,16 +2115,31 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 	if propsToUpdate.Access != nil {
 		perms |= apc.AceBckSetACL
 	}
-	bckArgs := bctx{p: p, w: w, r: r, bck: bck, msg: msg, skipBackend: true,
-		perms: perms, dpq: apireq.dpq, query: apireq.query}
-	bckArgs.createAIS = false
-	if bck, err = bckArgs.initAndTry(); err != nil {
+
+	// bucket
+	bckArgs := allocBctx()
+	{
+		bckArgs.p = p
+		bckArgs.w = w
+		bckArgs.r = r
+		bckArgs.bck = bck
+		bckArgs.msg = msg
+		bckArgs.skipBackend = true
+		bckArgs.perms = perms
+		bckArgs.dpq = apireq.dpq
+		bckArgs.query = apireq.query
+		bckArgs.createAIS = false
+	}
+	bck, err = bckArgs.initAndTry()
+	freeBctx(bckArgs)
+	if err != nil {
 		return
 	}
-	if err = _checkAction(msg, apc.ActSetBprops, apc.ActResetBprops); err != nil {
+	if err := _checkAction(msg, apc.ActSetBprops, apc.ActResetBprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
+
 	// make and validate new props
 	if nprops, err = p.makeNewBckProps(bck, &propsToUpdate); err != nil {
 		p.writeErr(w, r, err)
@@ -2061,13 +2150,25 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		backendBck := meta.CloneBck(&nprops.BackendBck)
 		backendBck.Props = nil
 
-		args := bctx{p: p, w: w, r: r, bck: backendBck, msg: msg, dpq: apireq.dpq, query: apireq.query}
-		args.createAIS = false
-		if _, err = args.initAndTry(); err != nil {
+		bckArgs := allocBctx()
+		{
+			bckArgs.p = p
+			bckArgs.w = w
+			bckArgs.r = r
+			bckArgs.bck = backendBck
+			bckArgs.msg = msg
+			bckArgs.dpq = apireq.dpq
+			bckArgs.query = apireq.query
+			bckArgs.createAIS = false
+		}
+		_, err := bckArgs.initAndTry()
+		freeBctx(bckArgs)
+		if err != nil {
 			return
 		}
+
 		// init and validate
-		if err = p.initBackendProp(nprops); err != nil {
+		if err := p.initBackendProp(nprops); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
