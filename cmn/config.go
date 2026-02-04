@@ -570,13 +570,22 @@ type (
 	}
 
 	NetConf struct {
-		L4   L4Conf   `json:"l4"`
+		// layer 4 (read-only)
+		L4 L4Conf `json:"l4"`
+
 		HTTP HTTPConf `json:"http"`
+
+		// cluster-wide default (read-only)
+		// in the future, use LocalNetConfig to override (e.g., pub: IPv6, intra: IPv4)
+		UseIPv6 bool `json:"use_ipv6"`
 	}
 	NetConfToSet struct {
 		HTTP *HTTPConfToSet `json:"http,omitempty"`
 	}
 
+	// L4Conf: transport layer (level 4 in ISO/OSI) configuration.
+	// Read-only.
+	// Applies to both IPv4 and IPv6.
 	L4Conf struct {
 		Proto         string `json:"proto"`           // tcp, udp
 		SndRcvBufSize int    `json:"sndrcv_buf_size"` // SO_RCVBUF and SO_SNDBUF

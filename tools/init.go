@@ -149,6 +149,10 @@ func InitLocalCluster() {
 		proxyURL = "http://" + primaryHostIP + ":" + port
 	}
 
+	if v := os.Getenv(env.AisUseIPv6); cos.IsParseBool(v) {
+		transportArgs.UseIPv6 = true
+	}
+
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'
 	// Many of the other packages do not accept the 'url' flag
 	if cliAISURL := os.Getenv(env.AisEndpoint); cliAISURL != "" {

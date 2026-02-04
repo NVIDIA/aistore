@@ -175,6 +175,7 @@ type (
 		sndRcvBufSize int
 		sync.Mutex
 		lowLatencyToS bool
+		useIPv6       bool
 	}
 
 	nlogWriter struct{}
@@ -523,10 +524,19 @@ func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Co
 		server.s.ReadHeaderTimeout = timeout
 	}
 
-	// set sock options on the server side; NOTE https exclusion
+	// NOTE: socket-level options (SO_RCVBUF / SO_SNDBUF, IP_TOS / IPV6_TCLASS)
+	// are currently applied via http.Server.ConnState at StateNew, which
+	// requires the connection to be a *net.TCPConn - to obtain syscall.RawConn.
+	// When HTTPS is enabled, the connection passed to ConnState is *tls.Conn
+	// (wrapped TCP), making a direct TCP assertion invalid.
+	//
+	// TODO: for HTTPS, consider moving the code to the Accept() path _or_ using
+	// net.ListenConfig.Control before TLS wrapping.
+
 	if (server.sndRcvBufSize > 0 || server.lowLatencyToS) && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener
 	}
+
 	server.s.TLSConfig = tlsConf
 	server.Unlock()
 
@@ -602,12 +612,20 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 	}
 	tcpconn, ok := c.(*net.TCPConn)
 	debug.Assert(ok)
+
+	// detect actual IP version from the connection
+	// (may differ from config in misconfigurations (or future dual-stack))
+	useIPv6 := server.useIPv6
+	if ra, ok := tcpconn.RemoteAddr().(*net.TCPAddr); ok && ra.IP != nil {
+		useIPv6 = ra.IP.To4() == nil
+	}
+
 	rawconn, err := tcpconn.SyscallConn()
 	if err != nil {
 		nlog.Errorln("FATAL tcpconn.SyscallConn err:", err) // (unlikely)
 		return
 	}
-	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize, LowLatencyToS: server.lowLatencyToS}
+	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize, LowLatencyToS: server.lowLatencyToS, UseIPv6: useIPv6}
 	args.ServerControl(rawconn)
 }
 

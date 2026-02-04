@@ -44,6 +44,7 @@ func ValidatePort(port int) (int, error) {
 	return port, nil
 }
 
+// TODO -- FIXME: git grep -n '\.To4()', and similar
 func Host2IP(host string, local bool) (net.IP, error) {
 	timeout := max(time.Second, Rom.MaxKeepalive())
 	if local {

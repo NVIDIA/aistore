@@ -58,6 +58,7 @@ type (
 		ReadBufferSize   int
 		UseHTTPProxyEnv  bool
 		LowLatencyToS    bool
+		UseIPv6          bool // usage: set-socket syscalls (cmn/network_unix)
 	}
 	TLSArgs struct {
 		ClientCA    string

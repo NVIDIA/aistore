@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -48,7 +48,7 @@ func (args *TransportArgs) clientControl() cntlFunc {
 //--------------------------- low level internals
 //
 
-func (args *TransportArgs) setSockSndRcv(_, _ string, c syscall.RawConn) (err error) {
+func (args *TransportArgs) setSockSndRcv(_, _ string, c syscall.RawConn) error {
 	return c.Control(args._sndrcv)
 }
 
@@ -61,16 +61,21 @@ func (args *TransportArgs) _sndrcv(fd uintptr) {
 	_croak(err)
 }
 
-func (args *TransportArgs) setSockToS(_, _ string, c syscall.RawConn) (err error) {
+func (args *TransportArgs) setSockToS(_, _ string, c syscall.RawConn) error {
 	return c.Control(args._tos)
 }
 
-func (*TransportArgs) _tos(fd uintptr) {
-	err := syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+func (args *TransportArgs) _tos(fd uintptr) {
+	var err error
+	if args.UseIPv6 {
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, lowDelayToS)
+	} else {
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+	}
 	_croak(err)
 }
 
-func (args *TransportArgs) setSockSndRcvToS(_, _ string, c syscall.RawConn) (err error) {
+func (args *TransportArgs) setSockSndRcvToS(_, _ string, c syscall.RawConn) error {
 	return c.Control(args._sndrcvtos)
 }
 
@@ -81,7 +86,11 @@ func (args *TransportArgs) _sndrcvtos(fd uintptr) {
 	err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.SndRcvBufSize)
 	_croak(err)
 
-	err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+	if args.UseIPv6 {
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, lowDelayToS)
+	} else {
+		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+	}
 	_croak(err)
 }
 

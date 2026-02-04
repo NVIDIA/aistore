@@ -47,31 +47,112 @@ type (
 		Start, Length int64
 	}
 
-	// Local unicast IP info
-	localIPv4Info struct {
-		ipv4 string
-		mtu  int
+	// local unicast (IP, MTU)
+	localIPInfo struct {
+		ip  string
+		mtu int
 	}
 )
 
 func (na netAccess) isSet(flag netAccess) bool { return na&flag == flag }
 
-func (addr *localIPv4Info) String() string {
-	return fmt.Sprintf("IP: %s (MTU %d)", addr.ipv4, addr.mtu)
+func (addr *localIPInfo) String() string {
+	return fmt.Sprintf("IP: %s (MTU %d)", addr.ip, addr.mtu)
 }
 
-func (addr *localIPv4Info) warn() {
+func (addr *localIPInfo) warn() {
 	if addr.mtu <= 1500 {
 		nlog.Warningln("Warning: small MTU")
 	}
 }
 
 //
-// IPV4
+// local IP discovery + selection
+//
+
+// returns a list of local unicast IPs (and their MTU)
+func getLocalIPs(config *cmn.Config) ([]*localIPInfo, error) {
+	if config.Net.UseIPv6 {
+		return _getLocalIPv6s(config)
+	}
+	return _getLocalIPv4s(config)
+}
+
+//
+// IPv6
+//
+
+// returns a list of local unicast (IPv6, MTU)
+//
+// Notes:
+// - exclude link-local (fe80::/10) - non-rountable, requiring zone ID
+// - loopback handling matches IPv4 path:
+//   - exclude in K8s
+//   - in non-K8s: exclude unless local playground
+func _getLocalIPv6s(config *cmn.Config) ([]*localIPInfo, error) {
+	iflist, ei := net.Interfaces()
+	if ei != nil {
+		return nil, fmt.Errorf("failed to get network interfaces: %w", ei)
+	}
+
+	addrlist := make([]*localIPInfo, 0, 4)
+	for _, intf := range iflist {
+		ifAddrs, e := intf.Addrs()
+		// skip invalid interfaces
+		if e != nil {
+			continue
+		}
+
+		for _, ifAddr := range ifAddrs {
+			ipnet, ok := ifAddr.(*net.IPNet)
+			if !ok || ipnet.IP == nil {
+				continue
+			}
+			ip := ipnet.IP
+			if ip.To4() != nil {
+				continue
+			}
+			if ip = ip.To16(); ip == nil {
+				continue
+			}
+
+			if ip.IsLoopback() {
+				// K8s: always exclude loopback
+				if k8s.IsK8s() {
+					continue
+				}
+				// non K8s and fspaths:
+				if !config.TestingEnv() {
+					if excludeLoopbackIP() {
+						nlog.Warningln("(non-K8s, fspaths) deployment: excluding loopback IP:", ip)
+						continue
+					}
+				}
+			}
+
+			// avoid zone-id requirements in advertised/dialed addresses
+			if ip.IsLinkLocalUnicast() {
+				continue
+			}
+			if ip.IsUnspecified() || ip.IsMulticast() {
+				continue
+			}
+
+			addrlist = append(addrlist, &localIPInfo{ip: ip.String(), mtu: intf.MTU})
+		}
+	}
+	if len(addrlist) == 0 {
+		return nil, errors.New("the host does not have any IPv6 addresses")
+	}
+	return addrlist, nil
+}
+
+//
+// IPv4
 //
 
 // returns a list of local unicast (IPv4, MTU)
-func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
+func _getLocalIPv4s(config *cmn.Config) ([]*localIPInfo, error) {
 	addrs, ea := net.InterfaceAddrs()
 	if ea != nil {
 		return nil, fmt.Errorf("failed to get host unicast IPs: %w", ea)
@@ -81,9 +162,9 @@ func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
 		return nil, fmt.Errorf("failed to get network interfaces: %w", ei)
 	}
 
-	addrlist := make([]*localIPv4Info, 0, 4)
+	addrlist := make([]*localIPInfo, 0, 4)
 	for _, addr := range addrs {
-		curr := &localIPv4Info{}
+		curr := &localIPInfo{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
 			if ipnet.IP.IsLoopback() {
 				// K8s: always exclude 127.0.0.1 loopback
@@ -103,7 +184,7 @@ func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
 			if ipnet.IP.To4() == nil {
 				continue
 			}
-			curr.ipv4 = ipnet.IP.String()
+			curr.ip = ipnet.IP.String()
 		}
 
 		for _, intf := range iflist {
@@ -113,7 +194,7 @@ func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
 				continue
 			}
 			for _, ifAddr := range ifAddrs {
-				if ipnet, ok := ifAddr.(*net.IPNet); ok && ipnet.IP.To4() != nil && ipnet.IP.String() == curr.ipv4 {
+				if ipnet, ok := ifAddr.(*net.IPNet); ok && ipnet.IP.To4() != nil && ipnet.IP.String() == curr.ip {
 					curr.mtu = intf.MTU
 					addrlist = append(addrlist, curr)
 					break
@@ -131,6 +212,7 @@ func getLocalIPv4s(config *cmn.Config) ([]*localIPv4Info, error) {
 }
 
 // HACK to accommodate non-K8s (docker and non-containerized) deployments
+// TODO -- FIXME: review IPv6-wise, and maybe remove
 func excludeLoopbackIP() bool {
 	if _, present := os.LookupEnv("AIS_LOCAL_PLAYGROUND"); present {
 		return false
@@ -138,8 +220,25 @@ func excludeLoopbackIP() bool {
 	return true
 }
 
-// given configured list of hostnames, return the first one matching local unicast IPv4
-func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
+func _stripBrackets(host string) string {
+	host = strings.TrimSpace(host)
+	if len(host) >= 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		return host[1 : len(host)-1]
+	}
+	return host
+}
+
+func _isIPv6(ip net.IP) bool {
+	return ip != nil && ip.To16() != nil && ip.To4() == nil
+}
+
+func _isIPv4(ip net.IP) bool {
+	return ip != nil && ip.To4() != nil
+}
+
+// given configured list of hostnames, return the first one matching local unicast IP
+// (IPv4 or IPv6, as prescribed)
+func _selectHost(locIPs []*localIPInfo, hostnames []string, useIPv6 bool) (string, error) {
 	var (
 		sb cos.SB
 		n  = len(locIPs)
@@ -148,7 +247,7 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 	sb.Init(l)
 	sb.WriteUint8('[')
 	for i, lip := range locIPs {
-		sb.WriteString(lip.ipv4)
+		sb.WriteString(lip.ip)
 		sb.WriteString("(MTU=")
 		sb.WriteString(strconv.Itoa(lip.mtu))
 		sb.WriteUint8(')')
@@ -159,26 +258,47 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 	sb.WriteUint8(']')
 
 	sips := sb.String()
-	nlog.Infoln("local IPv4:", sips)
+	if useIPv6 {
+		nlog.Infoln("local IPv6:", sips)
+	} else {
+		nlog.Infoln("local IPv4:", sips)
+	}
 	nlog.Infoln("configured:", hostnames)
 
 	for i, host := range hostnames {
 		host = strings.TrimSpace(host)
-		var ipv4 string
-		if net.ParseIP(host) != nil { // parses as IP
-			ipv4 = host
-		} else {
-			ip, err := cmn.Host2IP(host, true /*local*/)
-			if err != nil {
-				nlog.Errorln("failed to resolve hostname(?)", host, "err:", err, "[idx:", i, len(hostnames))
+		if host == "" {
+			continue
+		}
+
+		// allow bracketed literals: [2001:db8::1]
+		hostNoBr := _stripBrackets(host)
+
+		var ipstr string
+		if pip := net.ParseIP(hostNoBr); pip != nil { // parses as IP literal
+			if useIPv6 && !_isIPv6(pip) {
 				continue
 			}
-			ipv4 = ip.String()
-			nlog.Infoln("resolved hostname", host, "to IP addr", ipv4)
+			if !useIPv6 && !_isIPv4(pip) {
+				continue
+			}
+			ipstr = pip.String()
+		} else {
+			ip, err := cmn.Host2IP(hostNoBr, true /*local*/)
+			if err != nil {
+				nlog.Errorln("failed to resolve hostname(?)", hostNoBr, "err:", err, "[idx:", i, len(hostnames))
+				continue
+			}
+			if useIPv6 != _isIPv6(ip) {
+				continue
+			}
+			ipstr = ip.String()
+			nlog.Infoln("resolved hostname", hostNoBr, "to IP addr", ipstr)
 		}
+
 		for _, addr := range locIPs {
-			if addr.ipv4 == ipv4 {
-				nlog.Infoln("selected: hostname", host, "IP", ipv4)
+			if addr.ip == ipstr {
+				nlog.Infoln("selected: hostname", host, "IP", ipstr)
 				return host, nil
 			}
 		}
@@ -189,16 +309,16 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 	return "", err
 }
 
-// given a list of local IPv4s return the best fit to listen on
-func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
+// given a list of local IP addresses return the best fit to listen on
+func _localIP(addrList []*localIPInfo, useIPv6 bool) (ip net.IP, _ error) {
 	l := len(addrList)
 	if l == 0 {
 		return nil, errors.New("no unicast addresses to choose from")
 	}
 
 	if l == 1 {
-		if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
-			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
+		if ip = net.ParseIP(addrList[0].ip); ip == nil {
+			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ip)
 		}
 		nlog.Infoln("Found a single", addrList[0].String())
 		addrList[0].warn()
@@ -206,12 +326,13 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 	}
 
 	// NOTE:
-	// - try using environment to eliminate ambiguity
-	// - env.AisPubIPv4CIDR ("AIS_PUBLIC_IP_CIDR") takes precedence
+	// - try using env-based CIDR disambiguation for local IP selection
+	// - env.AisPubCIDR = "AIS_PUBLIC_IP_CIDR" takes precedence
+	// - applies to both IPv4 and IPv6
 	var (
 		selected     = -1
 		parsed       net.IP
-		network, err = _parseCIDR(env.AisLocalRedirectCIDR, env.AisPubIPv4CIDR)
+		network, err = _parseCIDR(env.AisLocalRedirectCIDR, env.AisPubCIDR)
 	)
 	if err != nil {
 		return nil, err
@@ -220,13 +341,21 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 		goto warn // ------>
 	}
 	for j := range l {
-		if ip = net.ParseIP(addrList[j].ipv4); ip == nil {
-			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
+		if ip = net.ParseIP(addrList[j].ip); ip == nil {
+			return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ip)
 		}
+		// enforce family
+		if useIPv6 && !_isIPv6(ip) {
+			continue
+		}
+		if !useIPv6 && !_isIPv4(ip) {
+			continue
+		}
+
 		if network.Contains(ip) {
 			if selected >= 0 {
 				return nil, fmt.Errorf("CIDR network %s contains multiple local unicast IPs: %s and %s",
-					network, addrList[selected].ipv4, addrList[j].ipv4)
+					network, addrList[selected].ip, addrList[j].ip)
 			}
 			selected, parsed = j, ip
 		}
@@ -235,7 +364,7 @@ func _localIP(addrList []*localIPv4Info) (ip net.IP, _ error) {
 		nlog.Warningln("CIDR network", network.String(), "does not contain any local unicast IPs")
 		goto warn
 	}
-	nlog.Infoln("CIDR network", network.String(), "contains a single local unicast IP:", addrList[selected].ipv4)
+	nlog.Infoln("CIDR network", network.String(), "contains a single local unicast IP:", addrList[selected].ip)
 	addrList[selected].warn()
 	return parsed, nil
 
@@ -247,13 +376,13 @@ warn:
 
 	tag := "the first"
 	selected = 0
-	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
-		return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ipv4)
+	if ip = net.ParseIP(addrList[0].ip); ip == nil {
+		return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ip)
 	}
 	// local playground and multiple choice with no IPs configured: insist on selecting loopback
 	if !ip.IsLoopback() && cmn.Rom.TestingEnv() && l > 1 {
 		for j := 1; j < l; j++ {
-			if ip1 := net.ParseIP(addrList[j].ipv4); ip1 != nil && ip1.IsLoopback() {
+			if ip1 := net.ParseIP(addrList[j].ip); ip1 != nil && ip1.IsLoopback() {
 				selected, ip = j, ip1
 				tag = "loopback"
 				break
@@ -283,42 +412,42 @@ func _parseCIDR(name, name2 string) (*net.IPNet, error) {
 	return network, nil
 }
 
-func multihome(configuredIPv4s string) (pub string, extra []string) {
-	if i := strings.IndexByte(configuredIPv4s, cmn.HostnameListSepa[0]); i <= 0 {
-		cos.ExitAssertLog(i < 0, "invalid format:", configuredIPv4s)
-		return configuredIPv4s, nil
+func multihome(configuredAddrs string) (pub string, extra []string) {
+	if i := strings.IndexByte(configuredAddrs, cmn.HostnameListSepa[0]); i <= 0 {
+		cos.ExitAssertLog(i < 0, "invalid format:", configuredAddrs)
+		return configuredAddrs, nil
 	}
 
 	// trim + validation
-	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
+	lst := strings.Split(configuredAddrs, cmn.HostnameListSepa)
 	pub, extra = strings.TrimSpace(lst[0]), lst[1:]
 	for i := range extra {
 		extra[i] = strings.TrimSpace(extra[i])
-		cos.ExitAssertLog(extra[i] != "", "invalid format (empty value):", configuredIPv4s)
-		cos.ExitAssertLog(extra[i] != pub, "duplicated addr or hostname:", configuredIPv4s)
+		cos.ExitAssertLog(extra[i] != "", "invalid format (empty value):", configuredAddrs)
+		cos.ExitAssertLog(extra[i] != pub, "duplicated addr or hostname:", configuredAddrs)
 		for j := range i {
-			cos.ExitAssertLog(extra[i] != extra[j], "duplicated addr or hostname:", configuredIPv4s)
+			cos.ExitAssertLog(extra[i] != extra[j], "duplicated addr or hostname:", configuredAddrs)
 		}
 	}
 	nlog.Infof("multihome: %s and %v", pub, extra)
 	return pub, extra
 }
 
-// choose one of the local IPv4s if local config doesn't contain (explicitly) specified
-func initNetInfo(ni *meta.NetInfo, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (err error) {
+// choose one of the local IPs if local config doesn't contain (explicitly) specified
+func initNetInfo(ni *meta.NetInfo, addrList []*localIPInfo, proto, configuredAddrs, port string, useIPv6 bool) (err error) {
 	var (
 		ip   net.IP
 		host string
 	)
-	if configuredIPv4s == "" {
-		if ip, err = _localIP(addrList); err == nil {
+	if configuredAddrs == "" {
+		if ip, err = _localIP(addrList, useIPv6); err == nil {
 			ni.Init(proto, ip.String(), port)
 		}
 		return
 	}
 
-	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
-	if host, err = _selectHost(addrList, lst); err == nil {
+	lst := strings.Split(configuredAddrs, cmn.HostnameListSepa)
+	if host, err = _selectHost(addrList, lst, useIPv6); err == nil {
 		ni.Init(proto, host, port)
 	}
 	return

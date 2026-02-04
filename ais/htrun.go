@@ -363,20 +363,20 @@ func (h *htrun) init(config *cmn.Config) {
 
 	// PubNet enable tracing when configuration is set.
 	muxers := newMuxers(tracing.IsEnabled())
-	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
+	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: config.Net.UseIPv6}
 	g.netServ.control = g.netServ.pub // if not separately configured, intra-control net is public
 	if config.HostNet.UseIntraControl {
 		// TODO: for now tracing is always disabled for intra-cluster traffic.
 		// Allow enabling through config.
 		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true}
+		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true, useIPv6: config.Net.UseIPv6}
 	}
 	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
 	if config.HostNet.UseIntraData {
 		// TODO: for now tracing is always disabled for intra-data traffic.
 		// Allow enabling through config.
 		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
+		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: config.Net.UseIPv6}
 	}
 
 	h.owner.smap = newSmapOwner(config)
@@ -402,7 +402,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		port     = strconv.Itoa(config.HostNet.Port)
 		proto    = config.Net.HTTP.Proto
 	)
-	addrList, err := getLocalIPv4s(config)
+	addrList, err := getLocalIPs(config)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
@@ -428,8 +428,8 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		// public hostname could be a load balancer's external IP or a service DNS
 		nlog.Infoln("K8s deployment: skipping hostname validation for", config.HostNet.Hostname)
 		pubAddr.Init(proto, pub, port)
-	} else if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port); err != nil {
-		cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
+	} else if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port, config.Net.UseIPv6); err != nil {
+		cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetPublic, err)
 	}
 
 	// multi-home (when config.HostNet.Hostname is a comma-separated list)
@@ -452,9 +452,9 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	ctrlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport)
+		err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport, config.Net.UseIPv6)
 		if err != nil {
-			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
+			cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraControl, err)
 		}
 		var s string
 		if config.HostNet.HostnameIntraControl != "" {
@@ -465,9 +465,9 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	dataAddr = pubAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
-		err = initNetInfo(&dataAddr, addrList, proto, config.HostNet.HostnameIntraData, idport)
+		err = initNetInfo(&dataAddr, addrList, proto, config.HostNet.HostnameIntraData, idport, config.Net.UseIPv6)
 		if err != nil {
-			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
+			cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraData, err)
 		}
 		var s string
 		if config.HostNet.HostnameIntraData != "" {
@@ -628,7 +628,7 @@ func (h *htrun) run(config *cmn.Config) error {
 	} else if len(h.si.PubExtra) > 0 {
 		for _, pubExtra := range h.si.PubExtra {
 			debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
-			server := &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize}
+			server := &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize, useIPv6: config.Net.UseIPv6}
 			go func() {
 				_ = server.listen(pubExtra.TCPEndpoint(), logger, tlsConf, config)
 			}()

@@ -23,16 +23,16 @@ const (
 	// 2. at node startup: when present with multiple choices, select one matching local unicast IP
 	//    to use it as node's public interface
 	AisLocalRedirectCIDR = "AIS_CLUSTER_CIDR"
-	AisPubIPv4CIDR       = "AIS_PUBLIC_IP_CIDR"
+	AisPubCIDR           = "AIS_PUBLIC_IP_CIDR"
+
+	// false or not set: IPv4 (default)
+	AisUseIPv6 = "AIS_USE_IPv6"
 
 	//
-	// HTTPS
-	// for details and background, see: https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https
+	// HTTPS (see https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https)
 	//
 
-	// false: HTTP transport, with all the TLS config (below) ignored
-	// true:  HTTPS/TLS
-	// for details and background, see: https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md#https
+	// false or not set: HTTP transport, with all the TLS config (below) ignored; true:  HTTPS/TLS
 	AisUseHTTPS = "AIS_USE_HTTPS"
 
 	// TLS: client side

@@ -229,6 +229,7 @@ func rpTransport(config *cmn.Config) *http.Transport {
 			IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 			IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 			MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
+			UseIPv6:          config.Net.UseIPv6,
 		})
 	)
 	if config.Net.HTTP.UseHTTPS {

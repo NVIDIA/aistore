@@ -67,6 +67,7 @@ func initCtrlClient(config *cmn.Config) {
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
 		LowLatencyToS:    true,
+		UseIPv6:          config.Net.UseIPv6,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.control = cmn.NewIntraClientTLS(cargs, config)
