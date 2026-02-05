@@ -1,7 +1,7 @@
 """
 Utils for AIS PyTorch Plugin
 
-Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 """
 
 from urllib.parse import urlunparse

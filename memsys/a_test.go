@@ -2,7 +2,7 @@
 // with io.Reader and io.Writer interfaces on top of a scatter-gather lists
 // (of reusable buffers)
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys_test
 
