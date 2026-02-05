@@ -5,13 +5,16 @@
 package meta
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -264,53 +267,82 @@ func (d *Snode) HasURL(rawURL string) bool {
 		nlog.Errorf("failed to parse raw URL %q: %v", rawURL, err)
 		return false
 	}
+
 	var (
-		host, port = u.Hostname(), u.Port()
-		isIP       = net.ParseIP(host) != nil
-		nis        = []NetInfo{d.PubNet, d.ControlNet, d.DataNet}
-		numIPs     int
-		sameHost   bool
-		samePort   bool
+		host, port         = u.Hostname(), u.Port()
+		nis                = []NetInfo{d.PubNet, d.ControlNet, d.DataNet}
+		sameHost, samePort bool
 	)
 	for _, ni := range nis {
-		if ni.Hostname == host {
-			if ni.Port == port {
-				return true
-			}
-			sameHost = true
-		} else if ni.Port == port {
-			samePort = true
+		if ni.Hostname == host && ni.Port == port {
+			return true
 		}
-		if net.ParseIP(ni.Hostname) != nil {
-			numIPs++
+		if ni.Hostname == host {
+			sameHost = true
+		}
+		if ni.Port == port {
+			samePort = true
 		}
 	}
 	if sameHost && samePort {
 		nlog.Warningln("assuming that", d.StrURLs(), "\"contains\"", rawURL)
 		return true
 	}
-	if (numIPs > 0 && isIP) || (numIPs == 0 && !isIP) {
-		return false
-	}
 
-	// slow path: locally resolve (hostname => IPv4) and compare
-	rip, err := cmn.ParseHost2IP(host, true /*local*/)
+	rips, err := _resolveAll(host)
 	if err != nil {
 		nlog.Warningln(host, err)
 		return false
 	}
+
 	for _, ni := range nis {
-		nip, err := cmn.ParseHost2IP(ni.Hostname, true /*local*/)
+		if ni.Port != port {
+			continue
+		}
+		nips, err := _resolveAll(ni.Hostname)
 		if err != nil {
 			nlog.Warningln(ni.Hostname, err)
-			return false
+			continue // try other ni's; don't fail the entire check
 		}
-		if rip.Equal(nip) && ni.Port == port {
-			return true
+		for _, rip := range rips {
+			if slices.ContainsFunc(nips, rip.Equal) {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+// Slow path: canonicalize by resolving to IP sets (order-independent).
+// - rawURL may contain a hostname (e.g. "localhost", runner hostname, DNS name)
+// - Snode URLs may contain IP literals
+// - resolver ordering differs across environments (e.g., localhost => ::1, 127.0.0.1)
+func _resolveAll(h string) ([]net.IP, error) {
+	if ip := net.ParseIP(h); ip != nil {
+		// Keep as-is: could be v4 or v6 (including bracket-stripped already by url.Parse)
+		return []net.IP{ip}, nil
+	}
+
+	timeout := max(time.Second, cmn.Rom.CplaneOperation())
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	ips := make([]net.IP, 0, len(addrs))
+	for _, a := range addrs {
+		ip := a.IP
+		if cmn.IsDialableHostIP(ip) {
+			ips = append(ips, ip)
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no dialable IPs for %q (have %v)", h, addrs)
+	}
+	return ips, nil
 }
 
 func (d *Snode) IsProxy() bool  { return d.DaeType == apc.Proxy }

@@ -403,7 +403,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		proto    = config.Net.HTTP.Proto
 		useIPv6  = config.Net.UseIPv6
 	)
-	addrList, err := getLocalIPs(config, useIPv6)
+	addrList, err := getLocalIPs(useIPv6)
 	if err != nil {
 		if !useIPv6 {
 			cos.ExitLogf("failed to get local IPv4 addr list: %v", err)
@@ -412,7 +412,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		var nested error
 
 		useIPv6 = false
-		addrList, nested = getLocalIPs(config, false)
+		addrList, nested = getLocalIPs(false /*useIPv6*/)
 		if nested != nil {
 			cos.ExitLogf("failed to get local IP addr list: %v (nested: %v)", err, nested)
 		}

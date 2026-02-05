@@ -71,11 +71,11 @@ func (addr *localIPInfo) warn() {
 //
 
 // returns a list of local unicast IPs (and their MTU)
-func getLocalIPs(config *cmn.Config, useIPv6 bool) ([]*localIPInfo, error) {
+func getLocalIPs(useIPv6 bool) ([]*localIPInfo, error) {
 	if useIPv6 {
-		return _getLocalIPv6s(config)
+		return _getLocalIPv6s()
 	}
-	return _getLocalIPv4s(config)
+	return _getLocalIPv4s()
 }
 
 //
@@ -83,13 +83,11 @@ func getLocalIPs(config *cmn.Config, useIPv6 bool) ([]*localIPInfo, error) {
 //
 
 // returns a list of local unicast (IPv6, MTU)
-//
-// Notes:
 // - exclude link-local (fe80::/10) - non-rountable, requiring zone ID
 // - loopback handling matches IPv4 path:
 //   - exclude in K8s
 //   - in non-K8s: exclude unless local playground
-func _getLocalIPv6s(config *cmn.Config) ([]*localIPInfo, error) {
+func _getLocalIPv6s() ([]*localIPInfo, error) {
 	iflist, ei := net.Interfaces()
 	if ei != nil {
 		return nil, fmt.Errorf("failed to get network interfaces: %w", ei)
@@ -121,13 +119,6 @@ func _getLocalIPv6s(config *cmn.Config) ([]*localIPInfo, error) {
 				if k8s.IsK8s() {
 					continue
 				}
-				// non K8s and fspaths:
-				if !config.TestingEnv() {
-					if excludeLoopbackIP() {
-						nlog.Warningln("(non-K8s, fspaths) deployment: excluding loopback IP:", ip)
-						continue
-					}
-				}
 			}
 
 			// avoid zone-id requirements in advertised/dialed addresses
@@ -152,7 +143,7 @@ func _getLocalIPv6s(config *cmn.Config) ([]*localIPInfo, error) {
 //
 
 // returns a list of local unicast (IPv4, MTU)
-func _getLocalIPv4s(config *cmn.Config) ([]*localIPInfo, error) {
+func _getLocalIPv4s() ([]*localIPInfo, error) {
 	addrs, ea := net.InterfaceAddrs()
 	if ea != nil {
 		return nil, fmt.Errorf("failed to get host unicast IPs: %w", ea)
@@ -170,15 +161,6 @@ func _getLocalIPv4s(config *cmn.Config) ([]*localIPInfo, error) {
 				// K8s: always exclude 127.0.0.1 loopback
 				if k8s.IsK8s() {
 					continue
-				}
-				// non K8s and fspaths:
-				if !config.TestingEnv() {
-					if excludeLoopbackIP() {
-						if ipnet.IP.To4() != nil {
-							nlog.Warningln("(non-K8s, fspaths) deployment: excluding loopback IP:", ipnet.IP)
-						}
-						continue
-					}
 				}
 			}
 			if ipnet.IP.To4() == nil {
@@ -209,15 +191,6 @@ func _getLocalIPv4s(config *cmn.Config) ([]*localIPInfo, error) {
 		return nil, errors.New("the host does not have any IPv4 addresses")
 	}
 	return addrlist, nil
-}
-
-// HACK to accommodate non-K8s (docker and non-containerized) deployments
-// TODO -- FIXME: review IPv6-wise, and maybe remove
-func excludeLoopbackIP() bool {
-	if _, present := os.LookupEnv("AIS_LOCAL_PLAYGROUND"); present {
-		return false
-	}
-	return true
 }
 
 func _stripBrackets(host string) string {
@@ -366,18 +339,14 @@ func _localIP(addrList []*localIPInfo, useIPv6 bool) (ip net.IP, _ error) {
 	return parsed, nil
 
 warn:
-	// TODO:
-	// to reduce ambiguity
-	// parse `config.Proxy.PrimaryURL` for network that must further _contain_ IP to select
-	// from multiple `addrList` entries
-
 	tag := "the first"
 	selected = 0
 	if ip = net.ParseIP(addrList[0].ip); ip == nil {
 		return nil, fmt.Errorf(fmtErrParseIP, addrList[0].ip)
 	}
-	// local playground and multiple choice with no IPs configured: insist on selecting loopback
-	if !ip.IsLoopback() && cmn.Rom.TestingEnv() && l > 1 {
+
+	// with multiple IPs, no CIDR disambiguation, and testing env - select loopback when:
+	if l > 1 && !ip.IsLoopback() && cmn.Rom.TestingEnv() {
 		for j := 1; j < l; j++ {
 			if ip1 := net.ParseIP(addrList[j].ip); ip1 != nil && ip1.IsLoopback() {
 				selected, ip = j, ip1
@@ -386,6 +355,7 @@ warn:
 			}
 		}
 	}
+
 	nlog.Warningln("given multiple choice, selecting", tag, addrList[selected].String())
 	addrList[selected].warn()
 
