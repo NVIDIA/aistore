@@ -332,18 +332,15 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 
 	// fix EC metafile
 	var metaOldPath, metaNewPath string
-	if !lom.IsHRW() && lom.ECEnabled() {
-		uname := lom.Uname()
-		hrwMi, _, err := j.avail.Hrw(cos.UnsafeB(uname))
-		if err != nil {
-			j.xres.AddErr(err, 0)
-			return nil
-		}
-		// copy metafile
-		metaOldPath, metaNewPath, err = _cpECMeta(lom, lom.Mountpath(), hrwMi, buf)
-		if err != nil {
-			j.xres.AddErr(err)
-			return nil
+	if lom.ECEnabled() {
+		if hrwMi, misplaced := lom.ToMpath(j.avail); misplaced {
+			// copy metafile
+			var err error
+			metaOldPath, metaNewPath, err = _cpECMeta(lom, lom.Mountpath(), hrwMi, buf)
+			if err != nil {
+				j.xres.AddErr(err)
+				return nil
+			}
 		}
 	}
 
