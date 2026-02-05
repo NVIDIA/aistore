@@ -333,7 +333,7 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	// fix EC metafile
 	var metaOldPath, metaNewPath string
 	if lom.ECEnabled() {
-		if hrwMi, misplaced := lom.ToMpath(j.avail); misplaced {
+		if hrwMi, ok := lom.Hrw(j.avail); !ok {
 			// copy metafile
 			var err error
 			metaOldPath, metaNewPath, err = _cpECMeta(lom, lom.Mountpath(), hrwMi, buf)
@@ -355,14 +355,11 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	}
 
 	size = lom.Lsize()
-	mi, fixHrw := lom.ToMpath(j.avail)
+	mi, ok := lom.HrwWithChunks(j.avail)
 	if mi == nil {
-		if err := j.fixCopies(lom, buf); err != nil {
-			return err
-		}
 		goto ret
 	}
-	if fixHrw {
+	if !ok {
 		hlom, errHrw = j.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
@@ -446,8 +443,8 @@ func _loadHlom(lom *core.LOM, mi *fs.Mountpath) (hlom *core.LOM, err error) {
 }
 
 func (j *jogger) visitCopy(lom *core.LOM, buf []byte) error {
-	mi, fixHrw := lom.ToMpath(j.avail)
-	if mi == nil || !fixHrw {
+	mi, ok := lom.HrwWithChunks(j.avail)
+	if mi == nil || ok {
 		return nil // nothing to do
 	}
 	isPrimary, mainExists := lom.IsPrimaryCopy(j.avail, mi, j.sentinel)

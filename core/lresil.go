@@ -12,29 +12,42 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-// must be called under w-lock
-// returns mountpath to relocate or copy this lom, or nil if none required/available
-// return fixHrw = true when lom is currently misplaced
-// - checks hrw location first, and
-// - checks copies (if any) against the current configuration and available mountpaths;
-// - does not check `fstat` in either case
-// (usage: resilvering)
-func (lom *LOM) ToMpath(avail fs.MPI) (*fs.Mountpath, bool /*fix HRW*/) {
+//
+// LOM methods to support resilver
+//
+
+// return expected (HRW) mountpath and whether the object is properly located (ie, not misplaced)
+func (lom *LOM) Hrw(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
 	debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked")
 
 	hrwMi, _, err := avail.Hrw(cos.UnsafeB(*lom.md.uname))
 	if err != nil {
-		nlog.Errorln(err)
+		nlog.Warningln(err)
 		return nil, false
 	}
 	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))
 
-	if lom.mi.Path != hrwMi.Path {
-		return hrwMi, true
+	return hrwMi, lom.mi.Path == hrwMi.Path
+}
+
+// return expected (HRW) mountpath and whether the object - possibly chunked -
+// is properly located (ie, not misplaced)
+func (lom *LOM) HrwWithChunks(avail fs.MPI) (*fs.Mountpath, bool /*ok*/) {
+	hrwMi, ok := lom.Hrw(avail)
+	switch {
+	case hrwMi == nil:
+		return nil, false // (fs.Hrw() checks for DD flags)
+	case !ok:
+		return hrwMi, false // misplaced
+	case !lom.IsChunked():
+		return hrwMi, true // ok
 	}
-	if !lom.IsChunked() {
-		return nil, false
-	}
+
+	//
+	// chunks require additional checking
+	//
+	debug.Assert(lom.IsLocked() == apc.LockWrite, lom.Cname(), "expecting w-locked")
+
 	u, err := NewUfest("", lom, true /*must-exist*/)
 	if err != nil {
 		nlog.Warningln(err)
@@ -44,12 +57,11 @@ func (lom *LOM) ToMpath(avail fs.MPI) (*fs.Mountpath, bool /*fix HRW*/) {
 		nlog.Warningln(err)
 		return nil, false
 	}
-	ok, err := u.IsHRW(avail)
-	if err != nil {
+	if ok, err = u.IsHRW(avail); err != nil {
 		nlog.Warningln(err)
 		return nil, false
 	}
-	return hrwMi, !ok
+	return hrwMi, ok
 }
 
 // deterministically pick a copy to restore any missing ones
