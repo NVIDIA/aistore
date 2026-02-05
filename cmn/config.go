@@ -575,8 +575,14 @@ type (
 
 		HTTP HTTPConf `json:"http"`
 
-		// cluster-wide default (read-only)
-		// in the future, use LocalNetConfig to override (e.g., pub: IPv6, intra: IPv4)
+		// cluster-wide user preference (read-only)
+		// when true: prefer IPv6, fall back to IPv4 if no usable v6 addresses
+		// when false: use IPv4 (default)
+		//
+		// NOTE:
+		// in the future:
+		// - use LocalNetConfig to override (e.g., pub: IPv6, intra: IPv4)
+		// - add a feature flag to enforce IPv6-only (and disallow IPv4 fallback)
 		UseIPv6 bool `json:"use_ipv6"`
 	}
 	NetConfToSet struct {

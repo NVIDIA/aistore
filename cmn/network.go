@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -44,10 +45,10 @@ func ValidatePort(port int) (int, error) {
 	return port, nil
 }
 
-// TODO -- FIXME: git grep -n '\.To4()', and similar
-func Host2IP(host string, local bool) (net.IP, error) {
+// resolve `host` and returns the first usable (TCP dialable) IP address (v4 or v6)
+func Host2IP(host string, localTimeout bool) (net.IP, error) {
 	timeout := max(time.Second, Rom.MaxKeepalive())
-	if local {
+	if localTimeout {
 		timeout = max(time.Second, Rom.CplaneOperation())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -57,23 +58,72 @@ func Host2IP(host string, local bool) (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// pass 1: prefer non-loopback if possible
 	for _, addr := range addrs {
-		if ip := addr.IP.To4(); ip != nil {
+		ip := addr.IP
+		if IsDialableHostIP(ip) && !ip.IsLoopback() {
+			return ip, nil
+		}
+	}
+	// pass 2 (fallback)
+	for _, addr := range addrs {
+		ip := addr.IP
+		if IsDialableHostIP(ip) {
 			return ip, nil
 		}
 	}
 
-	// return err
-	ips := make([]net.IP, len(addrs))
-	for i, addr := range addrs {
-		ips[i] = addr.IP
+	// return detailed error
+	ips := make([]net.IP, 0, len(addrs))
+	for _, addr := range addrs {
+		ips = append(ips, addr.IP)
 	}
-	return nil, fmt.Errorf("failed to locally resolve %q (have IPs %v)", host, ips)
+	return nil, fmt.Errorf("failed to resolve dialable IP for %q (have IPs %v)", host, ips)
+}
+
+// check whether `ip` is usable for TCP dialing
+// in particular:
+// - reject IPv6 link-local
+// - reject multicast and unspecified
+// - allow loopback
+func IsDialableHostIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	ip4 := ip.To4()
+	if ip4 != nil {
+		return !ip4.IsUnspecified() && !ip4.IsMulticast()
+	}
+
+	ip16 := ip.To16()
+	if ip16 == nil {
+		return false // invalid
+	}
+
+	// filter IPv6
+	if ip16.IsUnspecified() || ip16.IsMulticast() {
+		return false
+	}
+	if ip16.IsLinkLocalUnicast() {
+		return false // link-local requires a zone
+	}
+	if ip16[0] == 0x20 && ip16[1] == 0x01 && ip16[2] == 0x0d && ip16[3] == 0xb8 {
+		return false // reject RFC 3849 documentation prefix: 2001:db8::/32
+	}
+
+	return true
 }
 
 func ParseHost2IP(host string, local bool) (net.IP, error) {
 	ip := net.ParseIP(host)
 	if ip != nil {
+		if !IsDialableHostIP(ip) {
+			warn := fmt.Errorf("ParseHost2IP: %s (%s) is not dialable", host, ip.String())
+			debug.Assert(false, warn)
+			nlog.Warningln(warn)
+		}
 		return ip, nil // is a parse-able IP addr
 	}
 	return Host2IP(host, local)

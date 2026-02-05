@@ -71,8 +71,8 @@ func (addr *localIPInfo) warn() {
 //
 
 // returns a list of local unicast IPs (and their MTU)
-func getLocalIPs(config *cmn.Config) ([]*localIPInfo, error) {
-	if config.Net.UseIPv6 {
+func getLocalIPs(config *cmn.Config, useIPv6 bool) ([]*localIPInfo, error) {
+	if useIPv6 {
 		return _getLocalIPv6s(config)
 	}
 	return _getLocalIPv4s(config)
@@ -276,10 +276,7 @@ func _selectHost(locIPs []*localIPInfo, hostnames []string, useIPv6 bool) (strin
 
 		var ipstr string
 		if pip := net.ParseIP(hostNoBr); pip != nil { // parses as IP literal
-			if useIPv6 && !_isIPv6(pip) {
-				continue
-			}
-			if !useIPv6 && !_isIPv4(pip) {
+			if useIPv6 != _isIPv6(pip) {
 				continue
 			}
 			ipstr = pip.String()

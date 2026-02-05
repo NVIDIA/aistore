@@ -401,10 +401,31 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		dataAddr meta.NetInfo
 		port     = strconv.Itoa(config.HostNet.Port)
 		proto    = config.Net.HTTP.Proto
+		useIPv6  = config.Net.UseIPv6
 	)
-	addrList, err := getLocalIPs(config)
+	addrList, err := getLocalIPs(config, useIPv6)
 	if err != nil {
-		cos.ExitLogf("failed to get local IP addr list: %v", err)
+		if !useIPv6 {
+			cos.ExitLogf("failed to get local IPv4 addr list: %v", err)
+		}
+		// v6 was explicitly requested (and failed) - try fallback to IPv4
+		var nested error
+
+		useIPv6 = false
+		addrList, nested = getLocalIPs(config, false)
+		if nested != nil {
+			cos.ExitLogf("failed to get local IP addr list: %v (nested: %v)", err, nested)
+		}
+		nlog.Warningf("no usable IPv6 addresses found (%v) - falling back to IPv4 ...", err)
+
+		// update net servers that were initialized with useIPv6=true
+		g.netServ.pub.useIPv6 = false
+		if config.HostNet.UseIntraControl {
+			g.netServ.control.useIPv6 = false
+		}
+		if config.HostNet.UseIntraData {
+			g.netServ.data.useIPv6 = false
+		}
 	}
 
 	if l := len(addrList); l > 1 {
@@ -428,7 +449,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		// public hostname could be a load balancer's external IP or a service DNS
 		nlog.Infoln("K8s deployment: skipping hostname validation for", config.HostNet.Hostname)
 		pubAddr.Init(proto, pub, port)
-	} else if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port, config.Net.UseIPv6); err != nil {
+	} else if err = initNetInfo(&pubAddr, addrList, proto, config.HostNet.Hostname, port, useIPv6); err != nil {
 		cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetPublic, err)
 	}
 
@@ -452,7 +473,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	ctrlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport, config.Net.UseIPv6)
+		err = initNetInfo(&ctrlAddr, addrList, proto, config.HostNet.HostnameIntraControl, icport, useIPv6)
 		if err != nil {
 			cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraControl, err)
 		}
@@ -465,7 +486,7 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	dataAddr = pubAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
-		err = initNetInfo(&dataAddr, addrList, proto, config.HostNet.HostnameIntraData, idport, config.Net.UseIPv6)
+		err = initNetInfo(&dataAddr, addrList, proto, config.HostNet.HostnameIntraData, idport, useIPv6)
 		if err != nil {
 			cos.ExitLogf("failed to select %s IP/hostname: %v", cmn.NetIntraData, err)
 		}
@@ -626,17 +647,27 @@ func (h *htrun) run(config *cmn.Config) error {
 	if h.pubAddrAny(config) {
 		ep = ":" + h.si.PubNet.Port
 	} else if len(h.si.PubExtra) > 0 {
+		// multihome: listen on additional configured pub addr-s
 		for _, pubExtra := range h.si.PubExtra {
-			debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
-			server := &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize, useIPv6: config.Net.UseIPv6}
-			go func() {
-				_ = server.listen(pubExtra.TCPEndpoint(), logger, tlsConf, config)
-			}()
-			g.netServ.pubExtra = append(g.netServ.pubExtra, server)
+			h._listen(pubExtra, logger, tlsConf, config, g.netServ.pub.useIPv6)
 		}
 	}
 
 	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
+}
+
+func (h *htrun) _listen(pubExtra meta.NetInfo, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config, useIPv6 bool) {
+	debug.Assert(pubExtra.Port == h.si.PubNet.Port, "expecting the same TCP port for all multi-home interfaces")
+	server := &netServer{
+		muxers:        g.netServ.pub.muxers,
+		sndRcvBufSize: g.netServ.pub.sndRcvBufSize,
+		useIPv6:       useIPv6, // in fact, expecting the same TCP port _and_ the same IP family as PubNet
+	}
+	ep := pubExtra.TCPEndpoint()
+	go func() {
+		_ = server.listen(ep, logger, tlsConf, config)
+	}()
+	g.netServ.pubExtra = append(g.netServ.pubExtra, server)
 }
 
 // return true to start listening on `INADDR_ANY:PubNet.Port`
