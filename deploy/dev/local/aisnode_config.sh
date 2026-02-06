@@ -144,7 +144,8 @@ cat > $AIS_CONF_FILE <<EOL
 			"read_buffer_size":   ${HTTP_READ_BUFFER_SIZE:-0},
 			"chunked_transfer":   ${AIS_HTTP_CHUNKED_TRANSFER:-true},
 			"skip_verify":        ${AIS_SKIP_VERIFY_CRT:-false}
-		}
+		},
+		"use_ipv6":          ${AIS_USE_IPv6:-false}
 	},
 	"fshc": {
 		"test_files":     4,

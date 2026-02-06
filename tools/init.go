@@ -26,8 +26,7 @@ import (
 )
 
 const (
-	defaultProxyURL = "http://localhost:8080"      // the url for the cluster's proxy (local)
-	dockerEnvFile   = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
+	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 )
 
 const (
@@ -138,8 +137,27 @@ func InitLocalCluster() {
 		primaryHostIP, port = envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
 		clusterType = ClusterTypeLocal
-		proxyURL    = defaultProxyURL
+
+		// primary endpoint & URL
+		ep       = os.Getenv(env.AisEndpoint)
+		useIPv6  = os.Getenv(env.AisUseIPv6)
+		proxyURL string
 	)
+	switch {
+	case ep != "":
+		if strings.HasPrefix(ep, "http") {
+			proxyURL = ep
+		} else {
+			proxyURL = "http://" + ep
+		}
+	default:
+		tlog.Logfln("Warning: env %q not set - using hardcoded http:// and :8080", env.AisEndpoint)
+		if cos.IsParseBool(useIPv6) {
+			proxyURL = "http://[::1]:8080"
+		} else {
+			proxyURL = "http://localhost:8080"
+		}
+	}
 
 	// FIXME:
 	// - hardcoded schema

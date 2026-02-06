@@ -546,14 +546,19 @@ test:short:https:
       when: manual
       allow_failure: true
 
-test:short:s3rproxy:
-  <<: *test_short_skip_scheduled_def
+test:short:ipv6:
+  <<: *test_short_def
   variables:
+    AIS_USE_IPv6: "true"
     BUCKET: "ais://ais-ci"
-    RE: "S3"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*ipv6.*/'
+    - !reference [.test_short_skip_scheduled_template, rules]
   script:
-    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
-    - ais config cluster features S3-Reverse-Proxy
+    - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - make test-short
 
 test:short:aws:

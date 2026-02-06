@@ -278,3 +278,20 @@ make_tracing_conf() {
 
   echo "${tracing_conf}"
 }
+
+#
+# IPv6 helpers
+#
+
+make_url() {
+  local host="$1" port="$2"
+  local scheme="http"
+  $AIS_USE_HTTPS && scheme="https"
+  if [[ "$host" == \[* ]]; then
+    echo "${scheme}://${host}:${port}"
+  elif [[ "$host" == *:* ]]; then
+    echo "${scheme}://[${host}]:${port}"
+  else
+    echo "${scheme}://${host}:${port}"
+  fi
+}

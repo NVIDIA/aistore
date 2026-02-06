@@ -56,10 +56,15 @@ fi
 AISTORE_PATH=$(cd "$(dirname "$0")/../../../"; pwd -P)
 source $AISTORE_PATH/deploy/dev/utils.sh
 
+# IPv4 is default; for IPv6: set AIS_USE_IPv6=true
+AIS_USE_IPv6=${AIS_USE_IPv6:-false}
+
+# HTTP(S)
 AIS_USE_HTTPS=${AIS_USE_HTTPS:-false}
 AIS_HTTP_CHUNKED_TRANSFER=true
 HTTP_WRITE_BUFFER_SIZE=65536
 HTTP_READ_BUFFER_SIZE=65536
+
 if [[ -z $DEPLOY_AS_NEXT_TIER ]]; then
   PORT=${PORT:-8080}
   PORT_INTRA_CONTROL=${PORT_INTRA_CONTROL:-9080}
@@ -72,10 +77,8 @@ else
   NEXT_TIER="_next"
 fi
 PRIMARY_HOST=${AIS_PRIMARY_HOST:-localhost}
-AIS_PRIMARY_URL="http://$PRIMARY_HOST:$PORT"
-if $AIS_USE_HTTPS; then
-  AIS_PRIMARY_URL="https://$PRIMARY_HOST:$PORT"
-fi
+AIS_PRIMARY_URL=$(make_url ${PRIMARY_HOST} ${PORT})
+
 LOG_ROOT="${LOG_ROOT:-/tmp/ais}${NEXT_TIER}"
 #### Authentication setup #########
 AIS_AUTHN_ENABLED="${AIS_AUTHN_ENABLED:-false}"
@@ -142,10 +145,7 @@ rm $TMPF 2>/dev/null
   fi
   if [[ ${PROXY_CNT} -gt 1 ]] ; then
     AIS_DISCOVERY_PORT=$((PORT + 1))
-    AIS_DISCOVERY_URL="http://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
-    if $AIS_USE_HTTPS; then
-      AIS_DISCOVERY_URL="https://$PRIMARY_HOST:$AIS_DISCOVERY_PORT"
-    fi
+    AIS_DISCOVERY_URL=$(make_url ${PRIMARY_HOST} ${AIS_DISCOVERY_PORT})
   fi
 
   START=0
@@ -195,6 +195,7 @@ if [ "${!#}" != "--dont-generate-configs" ]; then
     AIS_CONF_FILE="$AIS_CONF_DIR/ais.json"
     AIS_LOCAL_CONF_FILE="$AIS_CONF_DIR/ais_local.json"
     AIS_LOG_DIR="$LOG_ROOT/$c/log"
+
     source "${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh"
 
     ((PORT++))
