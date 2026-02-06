@@ -420,12 +420,8 @@ func (h *htrun) initSnode(config *cmn.Config) {
 
 		// update net servers that were initialized with useIPv6=true
 		g.netServ.pub.useIPv6 = false
-		if config.HostNet.UseIntraControl {
-			g.netServ.control.useIPv6 = false
-		}
-		if config.HostNet.UseIntraData {
-			g.netServ.data.useIPv6 = false
-		}
+		g.netServ.control.useIPv6 = false
+		g.netServ.data.useIPv6 = false
 	}
 
 	if l := len(addrList); l > 1 {

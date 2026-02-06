@@ -254,7 +254,7 @@ func _selectHost(locIPs []*localIPInfo, hostnames []string, useIPv6 bool) (strin
 			}
 			ipstr = pip.String()
 		} else {
-			ip, err := cmn.Host2IP(hostNoBr, true /*local*/)
+			ip, err := cmn.Host2IP(hostNoBr, true /*local*/, useIPv6)
 			if err != nil {
 				nlog.Errorln("failed to resolve hostname(?)", hostNoBr, "err:", err, "[idx:", i, len(hostnames))
 				continue

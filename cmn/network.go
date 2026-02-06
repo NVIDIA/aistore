@@ -46,7 +46,7 @@ func ValidatePort(port int) (int, error) {
 }
 
 // resolve `host` and returns the first usable (TCP dialable) IP address (v4 or v6)
-func Host2IP(host string, localTimeout bool) (net.IP, error) {
+func Host2IP(host string, localTimeout, preferV6 bool) (net.IP, error) {
 	timeout := max(time.Second, Rom.MaxKeepalive())
 	if localTimeout {
 		timeout = max(time.Second, Rom.CplaneOperation())
@@ -59,14 +59,39 @@ func Host2IP(host string, localTimeout bool) (net.IP, error) {
 		return nil, err
 	}
 
-	// pass 1: prefer non-loopback if possible
+	// pass 1: prefer non-loopback, matching preferred address family
+	for _, addr := range addrs {
+		ip := addr.IP
+		if !IsDialableHostIP(ip) || ip.IsLoopback() {
+			continue
+		}
+		isV6 := ip.To4() == nil
+		if preferV6 == isV6 {
+			return ip, nil
+		}
+	}
+
+	// pass 2: non-loopback, any family (fallback)
 	for _, addr := range addrs {
 		ip := addr.IP
 		if IsDialableHostIP(ip) && !ip.IsLoopback() {
 			return ip, nil
 		}
 	}
-	// pass 2 (fallback)
+
+	// pass 3: loopback, preferred family first
+	for _, addr := range addrs {
+		ip := addr.IP
+		if !IsDialableHostIP(ip) {
+			continue
+		}
+		isV6 := ip.To4() == nil
+		if preferV6 == isV6 {
+			return ip, nil
+		}
+	}
+
+	// pass 4: any dialable (last resort)
 	for _, addr := range addrs {
 		ip := addr.IP
 		if IsDialableHostIP(ip) {
@@ -116,7 +141,7 @@ func IsDialableHostIP(ip net.IP) bool {
 	return true
 }
 
-func ParseHost2IP(host string, local bool) (net.IP, error) {
+func ParseHost2IP(host string, localTimeout, preferV6 bool) (net.IP, error) {
 	ip := net.ParseIP(host)
 	if ip != nil {
 		if !IsDialableHostIP(ip) {
@@ -126,7 +151,7 @@ func ParseHost2IP(host string, local bool) (net.IP, error) {
 		}
 		return ip, nil // is a parse-able IP addr
 	}
-	return Host2IP(host, local)
+	return Host2IP(host, localTimeout, preferV6)
 }
 
 func AddrToNetworkFamily(addr string) string {

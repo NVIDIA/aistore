@@ -515,7 +515,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname, false /*local*/); err != nil {
+	// in re useIPv6 - joining node must have the same
+	if _, err := cmn.ParseHost2IP(nsi.PubNet.Hostname, false /*local*/, g.netServ.control.useIPv6); err != nil {
 		p.writeErrf(w, r, "%s: failed to %s %s: invalid hostname: %v", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}
