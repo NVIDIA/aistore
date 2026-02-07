@@ -148,6 +148,9 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 					// read-only:
 					// - allocate a temporary struct just for iteration
 					// - do not assign it back to the parent (`allocatedStruct` remains false)
+					// TODO:
+					// revisit the case when `nil` parent is also `omitempty` - which at the very
+					// least means that we don't want to show its (zero-valued) fields in the viewing mode
 					tmp := reflect.New(srcValField.Type().Elem())
 					srcValField = tmp.Elem()
 				} else {

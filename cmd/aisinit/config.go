@@ -77,17 +77,6 @@ var (
 		Enabled:       true,
 	}
 
-	defaultDsort = aiscmn.DsortConf{
-		XactConf:            defaultXconf,
-		DuplicatedRecords:   aiscmn.IgnoreReaction,
-		MissingShards:       aiscmn.IgnoreReaction,
-		EKMMalformedLine:    aisapc.Abort,
-		EKMMissingKey:       aisapc.Abort,
-		DefaultMaxMemUsage:  "80%",
-		DsorterMemThreshold: "100GB",
-		CallTimeout:         cos.Duration(10 * time.Minute),
-	}
-
 	defaultDownloader = aiscmn.DownloaderConf{
 		Timeout: cos.Duration(time.Hour),
 	}
@@ -229,6 +218,7 @@ var (
 	}
 )
 
+// [removed in 4.3] Dsort: defaultDsort
 func newDefaultConfig() *aiscmn.ClusterConfig {
 	return &aiscmn.ClusterConfig{
 		Auth:        defaultAuth,
@@ -241,7 +231,6 @@ func newDefaultConfig() *aiscmn.ClusterConfig {
 		Disk:        defaultDisk,
 		Net:         defaultNet,
 		FSHC:        defaultFSHC,
-		Dsort:       defaultDsort,
 		Downloader:  defaultDownloader,
 		EC:          defaultEC,
 		Chunks:      defaultChunks,

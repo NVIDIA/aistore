@@ -100,11 +100,12 @@ type (
 // - is at your own risk otherwise; such changes may cause inconsistent behavior across the cluster.
 type (
 	ClusterConfig struct {
-		Ext         any             `json:"ext,omitempty"` // reserved
+		Ext         any             `json:"ext,omitempty"`              // reserved
+		Tracing     *TracingConf    `json:"tracing,omitempty"`          // see gco.Clone(); build tag
+		Dsort       *DsortConf      `json:"distributed_sort,omitempty"` // ditto; build tag
+		Auth        AuthConf        `json:"auth" allow:"cluster"`       // ditto
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
-		Tracing     *TracingConf    `json:"tracing,omitempty"`    // (see gco.Clone())
-		Auth        AuthConf        `json:"auth" allow:"cluster"` // (see gco.Clone())
-		WritePolicy WritePolicyConf `json:"write_policy"`         // object metadata write policy: (immediate | delayed | never)
+		WritePolicy WritePolicyConf `json:"write_policy"` // object metadata: (immediate | delayed | never)
 		UUID        string          `json:"uuid"`
 		LastUpdated string          `json:"lastupdate_time"`
 		Proxy       ProxyConf       `json:"proxy" allow:"cluster"`
@@ -112,7 +113,6 @@ type (
 		TCB         TCBConf         `json:"tcb" allow:"cluster"`
 		TCO         TCOConf         `json:"tco" allow:"cluster"`
 		Arch        ArchConf        `json:"arch" allow:"cluster"`
-		Dsort       DsortConf       `json:"distributed_sort"`
 		RateLimit   RateLimitConf   `json:"rate_limit"`
 		Keepalive   KeepaliveConf   `json:"keepalivetracker"`
 		Rebalance   RebalanceConf   `json:"rebalance" allow:"cluster"`
@@ -132,7 +132,7 @@ type (
 		Periodic    PeriodConf      `json:"periodic" allow:"cluster"`
 		Client      ClientConf      `json:"client"`
 		Downloader  DownloaderConf  `json:"downloader"`
-		Features    feat.Flags      `json:"features,string" allow:"cluster"` // enumerated features to flip assorted global defaults (cmn/feat/feat and docs/feat*)
+		Features    feat.Flags      `json:"features,string" allow:"cluster"` // to flip assorted global defaults (see cmn/feat/feat and docs/feat*)
 		Version     int64           `json:"config_version,string"`
 		Versioning  VersionConf     `json:"versioning" allow:"cluster"`
 		Resilver    ResilverConf    `json:"resilver"`
@@ -165,9 +165,11 @@ type (
 		Transport   *TransportConfToSet   `json:"transport,omitempty"`
 		Memsys      *MemsysConfToSet      `json:"memsys,omitempty"`
 		TCB         *TCBConfToSet         `json:"tcb,omitempty"`
+		TCO         *TCOConfToSet         `json:"tco,omitempty"`
+		Arch        *ArchConfToSet        `json:"arch,omitempty"`
 		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
 		Proxy       *ProxyConfToSet       `json:"proxy,omitempty"`
-		RateLimit   *RateLimitConfToSet   `json:"rate_limit"`
+		RateLimit   *RateLimitConfToSet   `json:"rate_limit,omitempty"`
 		Features    *feat.Flags           `json:"features,string,omitempty"`
 		GetBatch    *GetBatchConfToSet    `json:"get_batch,omitempty"`
 
@@ -569,13 +571,14 @@ type (
 		Sync            *bool `json:"synchronize,omitempty"`
 	}
 
+	// NetConf: restart required for changes (see ConfigRestartRequired)
 	NetConf struct {
 		// layer 4 (read-only)
 		L4 L4Conf `json:"l4"`
 
 		HTTP HTTPConf `json:"http"`
 
-		// cluster-wide user preference (read-only)
+		// cluster-wide user preference
 		// when true: prefer IPv6, fall back to IPv4 if no usable v6 addresses
 		// when false: use IPv4 (default)
 		//
@@ -586,7 +589,8 @@ type (
 		UseIPv6 bool `json:"use_ipv6"`
 	}
 	NetConfToSet struct {
-		HTTP *HTTPConfToSet `json:"http,omitempty"`
+		HTTP    *HTTPConfToSet `json:"http,omitempty"`
+		UseIPv6 *bool          `json:"use_ipv6,omitempty"`
 	}
 
 	// L4Conf: transport layer (level 4 in ISO/OSI) configuration.
@@ -805,6 +809,7 @@ type (
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
 
+	// MemsysConf: restart required for changes (see ConfigRestartRequired).
 	MemsysConf struct {
 		MinFree        cos.SizeIEC  `json:"min_free"`
 		DefaultBufSize cos.SizeIEC  `json:"default_buf"`
@@ -975,9 +980,11 @@ type (
 	}
 )
 
-// assorted named fields that require (cluster | node) restart for changes to make an effect
-// (used by CLI)
-var ConfigRestartRequired = [...]string{"auth.secret", "memsys", "net"}
+// assorted named fields and prefixes that require (cluster | node) restart for
+// changes to take an effect; note:
+// - this is NOT a "read-only" list
+// - used by CLI to warn
+var ConfigRestartRequired = [...]string{"memsys", "net"}
 
 //
 // config meta-versioning & serialization
@@ -1020,7 +1027,6 @@ var (
 	_ validator = (*AuthConf)(nil)
 	_ validator = (*HTTPConf)(nil)
 	_ validator = (*DownloaderConf)(nil)
-	_ validator = (*DsortConf)(nil)
 	_ validator = (*TransportConf)(nil)
 	_ validator = (*MemsysConf)(nil)
 	_ validator = (*TCBConf)(nil)
@@ -2191,59 +2197,6 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) error {
 	return nil
 }
 
-///////////////
-// DsortConf //
-///////////////
-
-const (
-	IgnoreReaction = "ignore"
-	WarnReaction   = "warn"
-	AbortReaction  = "abort"
-)
-
-const _idsort = "invalid distributed_sort."
-
-var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
-
-func (c *DsortConf) Validate() (err error) {
-	if c.SbundleMult < 0 || c.SbundleMult > 16 {
-		return fmt.Errorf(_idsort+"bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
-	}
-	if !apc.IsValidCompression(c.Compression) {
-		return fmt.Errorf(_idsort+"compression: %q (expecting one of: %v)", c.Compression, apc.SupportedCompression)
-	}
-	return c.ValidateWithOpts(false)
-}
-
-func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
-	f := func(reaction string) bool {
-		return ((allowEmpty && reaction == "") || slices.Contains(SupportedReactions, reaction))
-	}
-
-	const s = "expecting one of:"
-	if !f(c.DuplicatedRecords) {
-		return fmt.Errorf(_idsort+"duplicated_records: %s (%s %v)", c.DuplicatedRecords, s, SupportedReactions)
-	}
-	if !f(c.MissingShards) {
-		return fmt.Errorf(_idsort+"missing_shards: %s (%s %v)", c.MissingShards, s, SupportedReactions)
-	}
-	if !f(c.EKMMalformedLine) {
-		return fmt.Errorf(_idsort+"ekm_malformed_line: %s (%s %v)", c.EKMMalformedLine, s, SupportedReactions)
-	}
-	if !f(c.EKMMissingKey) {
-		return fmt.Errorf(_idsort+"ekm_missing_key: %s (%s %v)", c.EKMMissingKey, s, SupportedReactions)
-	}
-	if !allowEmpty {
-		if _, err := cos.ParseQuantity(c.DefaultMaxMemUsage); err != nil {
-			return fmt.Errorf(_idsort+"default_max_mem_usage: %s (err: %v)", c.DefaultMaxMemUsage, err)
-		}
-	}
-	if _, err := cos.ParseSize(c.DsorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DsorterMemThreshold != "") {
-		return fmt.Errorf(_idsort+"dsorter_mem_threshold: %s (err: %v)", c.DsorterMemThreshold, err)
-	}
-	return nil
-}
-
 /////////////
 // FSPConf //
 /////////////
@@ -2860,6 +2813,8 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	} else {
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
+
+	dropDsortConfig(config) // 4.3 update: conditional linkage
 
 	nlog.SetPost(config.Log.ToStderr, int64(config.Log.MaxSize))
 

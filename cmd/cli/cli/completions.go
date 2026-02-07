@@ -33,6 +33,9 @@ const (
 	confLogModules = "log.modules"
 )
 
+// NOTE: duplicated from cmn/dsort_on
+var dsortSupportedReactions = []string{"ignore", "warn", "abort"}
+
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
@@ -52,10 +55,10 @@ var (
 		"compression.checksum":                apc.SupportedCompression[:],
 		"rebalance.compression":               apc.SupportedCompression[:],
 		"distributed_sort.compression":        apc.SupportedCompression[:],
-		"distributed_sort.duplicated_records": cmn.SupportedReactions,
-		"distributed_sort.ekm_malformed_line": cmn.SupportedReactions,
-		"distributed_sort.ekm_missing_key":    cmn.SupportedReactions,
-		"distributed_sort.missing_shards":     cmn.SupportedReactions,
+		"distributed_sort.duplicated_records": dsortSupportedReactions,
+		"distributed_sort.ekm_malformed_line": dsortSupportedReactions,
+		"distributed_sort.ekm_missing_key":    dsortSupportedReactions,
+		"distributed_sort.missing_shards":     dsortSupportedReactions,
 		"auth.enabled":                        supportedBool,
 		"checksum.enabl_read_range":           supportedBool,
 		"checksum.validate_cold_get":          supportedBool,

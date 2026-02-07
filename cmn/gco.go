@@ -85,12 +85,8 @@ func (gco *gco) Clone() *Config {
 	if src.Tracing != nil {
 		v := *src.Tracing
 		dst.Tracing = &v
-
-		// 4.1 update: pointer and `omitempty`
-		if !dst.Tracing.Enabled && dst.Tracing.ExporterEndpoint == "" {
-			dst.Tracing = nil
-		}
 	}
+
 	return dst
 }
 
@@ -124,6 +120,16 @@ func (gco *gco) GetInitialGconfPath() string     { return *gco.confPath.Load() }
 func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
 	config := gco.Clone()
 	config.ClusterConfig = *cluConfig
+
+	// post-4.1 fixup: pointer and `omitempty`
+	if config.Tracing != nil {
+		if !config.Tracing.Enabled && config.Tracing.ExporterEndpoint == "" {
+			config.Tracing = nil
+		}
+	}
+	// post-4.2 fixup: dsort is conditionally linked ("go:build dsort")
+	dropDsortConfig(config)
+
 	override := gco.GetOverride()
 	if override != nil {
 		err = config.UpdateClusterConfig(override, apc.Daemon, CopyPropsOpts{Transient: false, IgnoreScope: true}) // update and validate
