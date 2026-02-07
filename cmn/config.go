@@ -101,7 +101,7 @@ type (
 type (
 	ClusterConfig struct {
 		Ext         any             `json:"ext,omitempty"`              // reserved
-		Tracing     *TracingConf    `json:"tracing,omitempty"`          // see gco.Clone(); build tag
+		Tracing     *TracingConf    `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
 		Dsort       *DsortConf      `json:"distributed_sort,omitempty"` // ditto; build tag
 		Auth        AuthConf        `json:"auth" allow:"cluster"`       // ditto
 		Backend     BackendConf     `json:"backend" allow:"cluster"`
