@@ -251,7 +251,7 @@ func (t *target) aisbp() *backend.AISbp {
 //
 
 func (t *target) init(config *cmn.Config) {
-	t.initSnode(config)
+	t.initPhase1(config)
 
 	// (a) get node ID from command-line or env var (see envDaemonID())
 	// (b) load existing node ID (replicated xattr at roots of respective mountpaths)
@@ -376,7 +376,7 @@ func (t *target) Run() error {
 		cos.ExitLog(err)
 	}
 	config := cmn.GCO.Get()
-	t.htrun.init(config)
+	t.htrun.initPhase2(config)
 	t.setusr1()
 
 	core.Tinit(t, config, true /*run hk*/)

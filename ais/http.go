@@ -54,7 +54,7 @@ func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
 	}
 }
 
-func initCtrlClient(config *cmn.Config) {
+func initCtrlClient(config *cmn.Config, useIPv6 bool) {
 	const (
 		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
 		defaultControlReadBufferSize  = 16 * cos.KiB
@@ -67,7 +67,7 @@ func initCtrlClient(config *cmn.Config) {
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
 		LowLatencyToS:    true,
-		UseIPv6:          config.Net.UseIPv6,
+		UseIPv6:          useIPv6,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.control = cmn.NewIntraClientTLS(cargs, config)
@@ -77,7 +77,7 @@ func initCtrlClient(config *cmn.Config) {
 }
 
 // wbuf/rbuf - when not configured use AIS defaults (to override the usual 4KB)
-func initDataClient(config *cmn.Config) {
+func initDataClient(config *cmn.Config, useIPv6 bool) {
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
 	if wbuf == 0 {
 		wbuf = cmn.DefaultWriteBufferSize
@@ -92,6 +92,7 @@ func initDataClient(config *cmn.Config) {
 		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
+		UseIPv6:          useIPv6,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.data = cmn.NewIntraClientTLS(cargs, config)
@@ -99,8 +100,9 @@ func initDataClient(config *cmn.Config) {
 		g.client.data = cmn.NewClient(cargs)
 	}
 
-	// The g.client.data is used for the AWS MPT/presigned URL features.
-	// Enable tracing on the data client to capture traces for related AWS client calls.
+	// TODO:
+	// tracing policy for intra-cluster HTTP (control and data, both)
+	// should be unified; transport streams (and data movers) - are separate
 	g.client.data = tracing.NewTraceableClient(g.client.data)
 }
 

@@ -341,59 +341,13 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 	}
 }
 
-func (h *htrun) init(config *cmn.Config) {
-	// before newTLS() below & before intra-cluster clients
-	if config.Net.HTTP.UseHTTPS {
-		if err := certloader.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
-			cos.ExitLog(err)
-		}
-	}
-
-	initCtrlClient(config)
-	initDataClient(config)
-
-	load.Init()
-
-	tcpbuf := config.Net.L4.SndRcvBufSize
-	if h.si.IsProxy() {
-		tcpbuf = 0
-	} else if tcpbuf == 0 {
-		tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
-	}
-
-	// PubNet enable tracing when configuration is set.
-	muxers := newMuxers(tracing.IsEnabled())
-	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: config.Net.UseIPv6}
-	g.netServ.control = g.netServ.pub // if not separately configured, intra-control net is public
-	if config.HostNet.UseIntraControl {
-		// TODO: for now tracing is always disabled for intra-cluster traffic.
-		// Allow enabling through config.
-		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true, useIPv6: config.Net.UseIPv6}
-	}
-	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
-	if config.HostNet.UseIntraData {
-		// TODO: for now tracing is always disabled for intra-data traffic.
-		// Allow enabling through config.
-		muxers = newMuxers(false /*enableTracing*/)
-		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: config.Net.UseIPv6}
-	}
-
-	h.owner.smap = newSmapOwner(config)
-	h.owner.rmd = newRMDOwner(config)
-	h.owner.rmd.load()
-	h.owner.csk.init()
-
-	h.gmm = memsys.PageMM()
-	h.gmm.RegWithHK()
-	h.smm = memsys.ByteMM()
-	h.smm.RegWithHK()
-
-	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
-}
-
-// steps 1 thru 4
-func (h *htrun) initSnode(config *cmn.Config) {
+// resolve node networking and initialize Snode (steps 1 thru 4); in particular:
+// - pick addresses
+// - decide effective IP family
+// - initialize effective networking state (do not mutate config)
+// - init net servers/muxers
+// see also: docs/networking.md
+func (h *htrun) initPhase1(config *cmn.Config) {
 	var (
 		pubAddr  meta.NetInfo
 		pubExtra []meta.NetInfo
@@ -530,6 +484,30 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		copy(h.si.PubExtra, pubExtra)
 		nlog.Infof("%s (multihome) access: %v and %v", cmn.NetPublic, pubAddr, h.si.PubExtra)
 	}
+
+	tcpbuf := config.Net.L4.SndRcvBufSize
+	if h.si.IsProxy() {
+		tcpbuf = 0
+	} else if tcpbuf == 0 {
+		tcpbuf = cmn.DefaultSndRcvBufferSize // ditto: targets use AIS default when not configured
+	}
+
+	// pub-net first
+	muxers := newMuxers(tracing.IsEnabled())
+	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6}
+
+	// intra-control and intra-data
+	// note: separate config and isolated bandwidth - strongly recommended
+	g.netServ.control = g.netServ.pub
+	if config.HostNet.UseIntraControl {
+		muxers = newMuxers(false /*enableTracing*/)
+		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0, lowLatencyToS: true, useIPv6: useIPv6}
+	}
+	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
+	if config.HostNet.UseIntraData {
+		muxers = newMuxers(false /*enableTracing*/)
+		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf, useIPv6: useIPv6}
+	}
 }
 
 func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 int, use2 bool, tag string) {
@@ -539,6 +517,39 @@ func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 
 	if ip1.Hostname == ip2.Hostname && port1 == port2 {
 		cos.ExitLogf("%s: cannot use the same IP:port (%s) for two networks", tag, ip1)
 	}
+}
+
+// phase2 init (part of the Run()):
+// - TLS/clients
+// - metadata owners (singletons)
+// - cluster key
+// - housekeep: memsys; rate-limit-prune
+func (h *htrun) initPhase2(config *cmn.Config) {
+	debug.Assert(g.netServ.control != nil && g.netServ.data != nil && g.netServ.pub != nil) // (phase1 above)
+
+	// before newTLS() below & before intra-cluster clients
+	if config.Net.HTTP.UseHTTPS {
+		if err := certloader.Init(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey, h.statsT); err != nil {
+			cos.ExitLog(err)
+		}
+	}
+
+	initCtrlClient(config, g.netServ.control.useIPv6)
+	initDataClient(config, g.netServ.data.useIPv6)
+
+	load.Init()
+
+	h.owner.smap = newSmapOwner(config)
+	h.owner.rmd = newRMDOwner(config)
+	h.owner.rmd.load()
+	h.owner.csk.init()
+
+	h.gmm = memsys.PageMM()
+	h.gmm.RegWithHK()
+	h.smm = memsys.ByteMM()
+	h.smm.RegWithHK()
+
+	hk.Reg("rate-limit"+hk.NameSuffix, h.ratelim.housekeep, hk.PruneRateLimiters)
 }
 
 // at startup, check this Snode vs locally stored Smap replica (NOTE: some errors are FATAL)

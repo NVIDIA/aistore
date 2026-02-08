@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -65,13 +65,13 @@ func TestMain(m *testing.M) {
 	config.Log.Level = "3"
 	co := newConfigOwner(config)
 	t = newTarget(co)
-	t.initSnode(config)
+	t.initPhase1(config)
 	tid, _ := initTID(config)
 	t.si.Init(tid, apc.Target)
 
 	fs.Add(testMountpath, t.SID())
 
-	t.htrun.init(config)
+	t.htrun.initPhase2(config)
 	t.ups.t = t
 
 	t.statsT = mock.NewStatsTracker()

@@ -87,6 +87,8 @@ const (
 /////////////////
 
 func newAuthManager(config *cmn.Config, statsT stats.Tracker) *authManager {
+	debug.Assert(g.netServ.pub != nil)
+
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 	keyCacheClient := newKeyCacheClient(config, statsT)
 	keyCacheManager := tok.NewKeyCacheManager(config.Auth.OIDC, keyCacheClient, nil, statsT)
@@ -131,7 +133,7 @@ func newKeyCacheClient(config *cmn.Config, statsT stats.Tracker) *http.Client {
 		Timeout:          KeyCacheTimeout,
 		IdleConnsPerHost: KeyCacheIdleConnsPerHost,
 		MaxIdleConns:     maxIdleConns,
-		UseIPv6:          config.Net.UseIPv6,
+		UseIPv6:          g.netServ.pub.useIPv6,
 	}
 	client := cmn.NewClientTLS(transport, tls, false)
 

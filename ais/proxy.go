@@ -83,7 +83,7 @@ var _ cos.Runner = (*proxy)(nil)
 func (*proxy) Name() string { return apc.Proxy } // as cos.Runner
 
 func (p *proxy) init(config *cmn.Config) {
-	p.initSnode(config)
+	p.initPhase1(config)
 
 	// (a) get node ID from command-line or env var (see envDaemonID())
 	// (b) load existing ID from config file stored under local config `confdir` (compare w/ target)
@@ -184,7 +184,7 @@ func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebal
 // start proxy runner
 func (p *proxy) Run() error {
 	config := cmn.GCO.Get()
-	p.htrun.init(config)
+	p.htrun.initPhase2(config)
 	p.setusr1()
 	p.owner.bmd = newBMDOwnerPrx(config)
 	p.owner.etl = newEtlMDOwnerPrx(config)

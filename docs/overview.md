@@ -472,8 +472,8 @@ Similar to the AIS gateways, AIS storage targets can join and leave at any momen
 
 ## Networking
 
-Architecture-wise, aistore is built to support 3 (three) logical networks:
-* user-facing public and, possibly, **multi-home**) network interface
+Architecture-wise, AIS is built to support 3 (three) logical networks:
+* user-facing public and, possibly, **multi-home** network interface
 * intra-cluster control, and
 * intra-cluster data
 
@@ -530,7 +530,8 @@ And that's all: add the second NIC (second IPv4 addr `10.50.56.206` above) with 
 
 See also:
 
-* [aistore configuration](configuration.md)
+* [Networking Model](/docs/networking.md)
+* [AIS configuration](/docs/configuration.md)
 
 ## HA
 
