@@ -26,17 +26,19 @@ const (
 )
 
 type global struct {
-	tstats cos.StatsUpdater // strict subset of stats.Tracker interface (the minimum required)
-	mm     *memsys.MMSA
+	tstats     cos.StatsUpdater // strict subset of stats.Tracker interface (the minimum required)
+	mm         *memsys.MMSA
+	preferIPv6 bool
 }
 
 var (
 	g global
 )
 
-func Init(tstats cos.StatsUpdater) *StreamCollector {
+func Init(tstats cos.StatsUpdater, preferIPv6 bool) *StreamCollector {
 	g.mm = memsys.PageMM()
 	g.tstats = tstats
+	g.preferIPv6 = preferIPv6
 
 	nextSessionID.Store(100)
 	for i := range numHmaps {

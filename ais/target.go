@@ -297,8 +297,8 @@ func (t *target) init(config *cmn.Config) {
 
 	t.fsprg.init(t, newVol) // subgroup of the daemon.rg rungroup
 
-	sc := transport.Init(ts) // init transport sub-system
-	daemon.rg.add(sc)        // new stream collector
+	sc := transport.Init(ts, g.netServ.data.useIPv6) // init transport sub-system
+	daemon.rg.add(sc)                                // new stream collector
 
 	t.fshc = health.NewFSHC(t)
 
