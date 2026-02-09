@@ -23,22 +23,26 @@ Separately, AIS runs an additional distinct intra-cluster data plane:
     - used by target-to-target GET/PUT paths (related term: "GFN")
     - configured via host_net.{hostname_intra_data,port_intra_data}
 
+```
         Target A                         Target B
      ┌───────────┐                    ┌───────────┐
      │ net/http  │  HTTP DataNet      │ net/http  │
      │ handlers  │◄──────────────────►│ handlers  │
      └───────────┘                    └───────────┘
+```
 
 (B) Transport/bundle streams (data movers)
     - high-volume streaming (rebalance, resilver, get-batch streams, etc.)
     - uses AIStore transport subsystem (bundle/DM/shared-DM, fasthttp, PDUs, etc.)
     - separate from net/http muxers and http.Clients
 
+```
         Target A                          Target B
      ┌───────────┐   transport streams  ┌───────────┐
      │ transport │◄════════════════════►│ transport │
      │ bundle/DM │   (PDU/streaming)    │ bundle/DM │
      └───────────┘                      └───────────┘
+```
 
 See also: [transport package: README](https://github.com/NVIDIA/aistore/blob/main/transport/README.md)
 
@@ -68,6 +72,7 @@ Rest of this document is structured as follows:
 ### Logical vs Physical Networks
 
 The presence of three logical networks **does not require** three physical networks:
+```
                      ┌───────────────────────────────────────┐
                      │               Clients                 │
                      │   ais CLI / SDK / notebooks / tools   │
@@ -97,6 +102,7 @@ The presence of three logical networks **does not require** three physical netwo
 │ * "PubNet/CtlNet/DataNet" are logical networks - may alias to one fabric. │
 │ * Multi-homing applies to PubNet (multiple listen addresses).             │
 └───────────────────────────────────────────────────────────────────────────┘
+```
 
 If multiple logical networks resolve to the same address and port, AIS **aliases** them internally and operates correctly over a single interface.
 
