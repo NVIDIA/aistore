@@ -371,11 +371,6 @@ func (h *htrun) initPhase1(config *cmn.Config) {
 			cos.ExitLogf("failed to get local IP addr list: %v (nested: %v)", err, nested)
 		}
 		nlog.Warningf("no usable IPv6 addresses found (%v) - falling back to IPv4 ...", err)
-
-		// update net servers that were initialized with useIPv6=true
-		g.netServ.pub.useIPv6 = false
-		g.netServ.control.useIPv6 = false
-		g.netServ.data.useIPv6 = false
 	}
 
 	if l := len(addrList); l > 1 {
