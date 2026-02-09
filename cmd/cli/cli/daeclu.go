@@ -166,6 +166,17 @@ func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.St
 	out.WriteString(title)
 	out.WriteString("\n")
 	out.WriteString(teb.ClusterSummary)
+
+	// Show Smap-advertised primary endpoint only if it differs from CLI endpoint.
+	// Avoid redundancy; keep it out of JSON mode.
+	if !usejs && smap != nil && smap.Primary != nil {
+		if u := smap.Primary.PubNet.URL; u != "" && !_sameURL(u, body.Endpoint) {
+			out.WriteString("   Primary (Smap):\t")
+			out.WriteString(u)
+			out.WriteString("\n")
+		}
+	}
+
 	return teb.Print(body, out.String(), teb.Jopts(usejs))
 }
 
@@ -688,4 +699,18 @@ func _detectBackend() string {
 		return "None"
 	}
 	return strings.Join(cloudBackends, ", ")
+}
+
+// extra check to take care of (the most common) local loopback
+func _sameURL(a, b string) bool {
+	switch {
+	case a == b:
+		return true
+	case strings.Contains(a, "localhost") && strings.Contains(b, "127.0.0.1"):
+		return true
+	case strings.Contains(b, "localhost") && strings.Contains(a, "127.0.0.1"):
+		return true
+	default:
+		return false
+	}
 }

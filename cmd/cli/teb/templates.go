@@ -35,7 +35,7 @@ const (
 	//
 	indent1 = "   "
 
-	ClusterSummary = indent1 + "Endpoint:\t{{.Endpoint}}\n" +
+	ClusterSummary = indent1 + "CLI Endpoint:\t{{.Endpoint}}\n" +
 		indent1 + "Proxies:\t{{FormatProxiesSumm .Smap}}\n" +
 		indent1 + "Targets:\t{{FormatTargetsSumm .Smap .NumDisks}}\n" +
 		indent1 + "Capacity:\t{{.Capacity}}\n" +
