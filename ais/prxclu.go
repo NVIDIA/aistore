@@ -2332,7 +2332,8 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 		return false
 	}
 	prev := ctx.smap
-	if prev.CountActiveTs() == 0 {
+	// no rebalance when no active targets (before or after this change)
+	if prev.CountActiveTs() == 0 || cur.CountActiveTs() == 0 {
 		return false
 	}
 	if ctx.interrupted || ctx.restarted {
