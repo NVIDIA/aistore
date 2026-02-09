@@ -571,7 +571,9 @@ type (
 		Sync            *bool `json:"synchronize,omitempty"`
 	}
 
-	// NetConf: restart required for changes (see ConfigRestartRequired)
+	// NetConf: network configuration
+	// Note: restart required for changes (see ConfigRestartRequired)
+	// ref: docs/networking.md
 	NetConf struct {
 		// layer 4 (read-only)
 		L4 L4Conf `json:"l4"`

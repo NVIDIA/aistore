@@ -57,6 +57,7 @@ AISTORE_PATH=$(cd "$(dirname "$0")/../../../"; pwd -P)
 source $AISTORE_PATH/deploy/dev/utils.sh
 
 # IPv4 is default; for IPv6: set AIS_USE_IPv6=true
+# See also: [docs/networking.md](https://github.com/NVIDIA/aistore/blob/main/docs/networking.md)
 AIS_USE_IPv6=${AIS_USE_IPv6:-false}
 
 # HTTP(S)

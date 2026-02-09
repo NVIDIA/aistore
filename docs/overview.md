@@ -530,7 +530,7 @@ And that's all: add the second NIC (second IPv4 addr `10.50.56.206` above) with 
 
 See also:
 
-* [Networking Model](/docs/networking.md)
+* [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
 * [AIS configuration](/docs/configuration.md)
 
 ## HA

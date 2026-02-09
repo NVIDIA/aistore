@@ -1,5 +1,10 @@
 Here's a quick sequence with detailed comments inline.
 
+But first:
+
+> **Operational note**: As with any cluster-wide configuration change that rebuilds cluster metadata (e.g., cluster map a.k.a. Smap), it is good practice to periodically back up cluster-level metadata (BMD, Smap, configuration). This is not specific to HTTP <=> HTTPS.
+
+
 ## From HTTP to HTTPS
 
 This assumes that [X.509 certificate already exists](getting_started.md#setting-up-https-locally) and the (HTTP-based) cluster is up and running. All we need to do at this point is switch it to HTTPS.

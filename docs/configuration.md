@@ -79,6 +79,7 @@ See also:
 
 * [Backend providers and supported backends](/docs/providers.md)
 * [Disable/Enable cloud backend at runtime](/docs/cli/advanced.mdi#disableenable-cloud-backend-at-runtime)
+* [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
 
 ## Configuring for production
 
@@ -154,9 +155,10 @@ The example above may serve as a simple illustration whereby `t[fbarswQP]` becom
 
 ## References
 
-* For Kubernetes deployment, please refer to a separate [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository that also contains [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md) and its configuration-defining [resources](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/config.go).
-* To configure an optional AIStore authentication server, run `$ AIS_AUTHN_ENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](/docs/authn.md).
-* AIS [CLI](/docs/cli.md) is an easy-to-use convenient command-line management/monitoring tool. To get started with CLI, run `make cli` (that generates `ais` executable) and follow the prompts.
+1. [Networking Model: three logical networks and additional intra-cluster data plane](/docs/networking.md)
+2. For Kubernetes deployment, please refer to a separate [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository that also contains:
+   * [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/blob/main/operator/README.md) and its configuration-defining
+   * [resources](https://github.com/NVIDIA/ais-k8s/blob/main/operator/pkg/resources/cmn/config.go).
 
 ## Cluster and Node Configuration
 

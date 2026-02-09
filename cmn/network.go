@@ -46,6 +46,7 @@ func ValidatePort(port int) (int, error) {
 }
 
 // resolve `host` and returns the first usable (TCP dialable) IP address (v4 or v6)
+// ref: docs/networking.md
 func Host2IP(host string, localTimeout, preferV6 bool) (net.IP, error) {
 	timeout := max(time.Second, Rom.MaxKeepalive())
 	if localTimeout {

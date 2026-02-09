@@ -143,6 +143,7 @@ Let others know your project is powered by high-performance AI storage:
 ## More Docs & Guides
 
 * [Overview and Design](/docs/overview.md)
+* [Networking Model](/docs/networking.md)
 * [Getting Started](/docs/getting_started.md)
 * [AIS Buckets: Design and Operations](/docs/bucket.md)
 * [Observability](/docs/monitoring-overview.md)
