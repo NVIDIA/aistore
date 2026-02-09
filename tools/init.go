@@ -168,7 +168,7 @@ func InitLocalCluster() {
 	}
 
 	if v := os.Getenv(env.AisUseIPv6); cos.IsParseBool(v) {
-		transportArgs.UseIPv6 = true
+		transportArgs.PreferIPv6 = true
 	}
 
 	// This is needed for testing on Kubernetes if we want to run 'make test-XXX'

@@ -1,7 +1,7 @@
 // Package xmeta provides low-level tools to format or extract
 // into plain text some of the AIS control structures.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 

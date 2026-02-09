@@ -67,11 +67,14 @@ func (args *TransportArgs) setSockToS(_, _ string, c syscall.RawConn) error {
 
 func (args *TransportArgs) _tos(fd uintptr) {
 	var err error
-	if args.UseIPv6 {
+	if args.PreferIPv6 {
 		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, lowDelayToS)
-	} else {
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+		if err == nil {
+			return
+		}
+		// dual-stack dialer may have created a v4 socket — fall through
 	}
+	err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
 	_croak(err)
 }
 
@@ -86,11 +89,14 @@ func (args *TransportArgs) _sndrcvtos(fd uintptr) {
 	err = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, args.SndRcvBufSize)
 	_croak(err)
 
-	if args.UseIPv6 {
+	if args.PreferIPv6 {
 		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, lowDelayToS)
-	} else {
-		err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
+		if err == nil {
+			return
+		}
+		// dual-stack dialer (ditto)
 	}
+	err = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, lowDelayToS)
 	_croak(err)
 }
 

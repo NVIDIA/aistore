@@ -133,7 +133,7 @@ func newKeyCacheClient(config *cmn.Config, statsT stats.Tracker) *http.Client {
 		Timeout:          KeyCacheTimeout,
 		IdleConnsPerHost: KeyCacheIdleConnsPerHost,
 		MaxIdleConns:     maxIdleConns,
-		UseIPv6:          g.netServ.pub.useIPv6,
+		PreferIPv6:       g.netServ.pub.useIPv6,
 	}
 	client := cmn.NewClientTLS(transport, tls, false)
 

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -58,7 +58,7 @@ type (
 		ReadBufferSize   int
 		UseHTTPProxyEnv  bool
 		LowLatencyToS    bool
-		UseIPv6          bool // usage: set-socket syscalls (cmn/network_unix)
+		PreferIPv6       bool // usage: set-socket syscalls (cmn/network_unix)
 	}
 	TLSArgs struct {
 		ClientCA    string

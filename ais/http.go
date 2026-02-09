@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -54,7 +54,7 @@ func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
 	}
 }
 
-func initCtrlClient(config *cmn.Config, useIPv6 bool) {
+func initCtrlClient(config *cmn.Config, preferIPv6 bool) {
 	const (
 		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
 		defaultControlReadBufferSize  = 16 * cos.KiB
@@ -67,7 +67,7 @@ func initCtrlClient(config *cmn.Config, useIPv6 bool) {
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
 		LowLatencyToS:    true,
-		UseIPv6:          useIPv6,
+		PreferIPv6:       preferIPv6,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.control = cmn.NewIntraClientTLS(cargs, config)
@@ -77,7 +77,7 @@ func initCtrlClient(config *cmn.Config, useIPv6 bool) {
 }
 
 // wbuf/rbuf - when not configured use AIS defaults (to override the usual 4KB)
-func initDataClient(config *cmn.Config, useIPv6 bool) {
+func initDataClient(config *cmn.Config, preferIPv6 bool) {
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
 	if wbuf == 0 {
 		wbuf = cmn.DefaultWriteBufferSize
@@ -92,7 +92,7 @@ func initDataClient(config *cmn.Config, useIPv6 bool) {
 		IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 		IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 		MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
-		UseIPv6:          useIPv6,
+		PreferIPv6:       preferIPv6,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		g.client.data = cmn.NewIntraClientTLS(cargs, config)

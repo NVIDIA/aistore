@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -176,6 +176,57 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 // Proxy/gateway that is, potentially, the leader of the cluster.
 // It waits a configured time for other nodes to join,
 // discovers cluster-wide metadata, and resolve remaining conflicts.
+//
+// Background:
+//   - Each proxy/gateway stores a local copy of the cluster map (Smap)
+//   - Each Smap instance is versioned; the versioning is monotonic (increasing)
+//   - Only the primary (leader) proxy distributes Smap updates to all other clustered nodes
+//   - Bootstrap sequence includes /steps/ intended to resolve all the usual conflicts that may arise.
+//
+// Primary startup and node net-info updates (e.g., IPv4 <-> IPv6 switch):
+//
+// Leader election and Smap assembly happen in stages. Understanding the sequence
+// is key to understanding how network address changes propagate:
+//
+//   1. Primary starts with a fresh Smap seeded with self. The loaded Smap, if any,
+//      contributes only UUID and Version - its Pmap/Tmap entries are intentionally
+//      discarded during this first phase. This eliminates stale-address conflicts and
+//      helps the primary determine whether it is truly the designated leader
+//      (with no prior joins, the chances of a "change-of-mind" are minimized).
+//
+//   2. acceptRegistrations(): primary waits for nodes to self-join. Each joining
+//      node reports its CURRENT net-info (addresses discovered at startup using
+//      the effective IP family from config). Joins are handled by _joinKalive(),
+//      which during early startup (!ClusterStarted) takes a fast path: putNode()
+//      unconditionally inserts the node into the Smap. Since the working Smap
+//      has no prior entries for these nodes (step 1), this is always a "new join"
+//      (osi == nil from the current Smap's perspective) - no reconciliation needed.
+//
+//   3. regpoolMaxVer(): after registration closes, the primary reconciles metadata
+//      versions (Smap, BMD, RMD, Config) from the regpool - i.e., from what the
+//      joining nodes reported. _updNetInfo() iterates the regpool and compares
+//      each node's net-info against the CURRENT Smap (via NetEq). If addresses
+//      differ, putNode() overwrites the entry. In the typical restart scenario,
+//      nodes already have correct addresses from step 2, so _updNetInfo is a no-op.
+//
+//      _updNetInfo matters in multi-proxy deployments where a joining node's regReq
+//      carries a stale Smap (from a previous run) with outdated addresses for OTHER
+//      nodes. In that case, regpoolMaxVer may adopt the higher-version Smap, and
+//      _updNetInfo corrects any stale entries using the freshly reported net-info.
+//
+//   4. discoverMeta(): final consistency check - primary broadcasts to all nodes,
+//      collects max-version metadata, and merges. At this point, all net-info
+//      is already current.
+//
+// In short: IP/hostname address changes propagate naturally
+// through the "new join" path at step 2. No special-case handling is required -
+// nodes discover their addresses at startup, report them on join, and the primary
+// builds the Smap from scratch with current information.
+//
+// The rereg() path (in httpclupost / _joinKalive) handles address changes AFTER
+// the cluster is fully started - e.g., a node restarts with a new IP while the
+// cluster is running.
+
 func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets int, prim primRes) {
 	var (
 		smap          = newSmap()

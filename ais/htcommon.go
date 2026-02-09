@@ -625,7 +625,7 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 		nlog.Errorln("FATAL tcpconn.SyscallConn err:", err) // (unlikely)
 		return
 	}
-	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize, LowLatencyToS: server.lowLatencyToS, UseIPv6: useIPv6}
+	args := cmn.TransportArgs{SndRcvBufSize: server.sndRcvBufSize, LowLatencyToS: server.lowLatencyToS, PreferIPv6: useIPv6}
 	args.ServerControl(rawconn)
 }
 

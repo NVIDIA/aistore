@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -229,7 +229,7 @@ func rpTransport(config *cmn.Config) *http.Transport {
 			IdleConnTimeout:  config.Net.HTTP.IdleConnTimeout.D(),
 			IdleConnsPerHost: config.Net.HTTP.MaxIdleConnsPerHost,
 			MaxIdleConns:     config.Net.HTTP.MaxIdleConns,
-			UseIPv6:          g.netServ.control.useIPv6,
+			PreferIPv6:       g.netServ.control.useIPv6,
 		})
 	)
 	if config.Net.HTTP.UseHTTPS {
