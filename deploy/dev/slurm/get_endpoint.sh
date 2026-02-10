@@ -6,7 +6,7 @@
 #############################################
 
 JOB_ID=${1}
-LUSTRE_BASE="/lustre/fsw/portfolios/av/users/abhgaikwad/aistore"
+SHARED_FS_BASE="<SHARED_FS_PATH>/aistore"      # e.g., /lustre/users/$USER/aistore, /gpfs/home/$USER/aistore
 
 if [ -z "${JOB_ID}" ]; then
     echo "Usage: $0 <job_id>"
@@ -16,7 +16,7 @@ if [ -z "${JOB_ID}" ]; then
     exit 1
 fi
 
-ENDPOINT_FILE="${LUSTRE_BASE}/jobs/${JOB_ID}/endpoint.txt"
+ENDPOINT_FILE="${SHARED_FS_BASE}/jobs/${JOB_ID}/endpoint.txt"
 
 if [ -f "${ENDPOINT_FILE}" ]; then
     ENDPOINT=$(cat ${ENDPOINT_FILE})

@@ -14,11 +14,12 @@ set -e
 #############################################
 # CONFIGURATION - UPDATE THESE PATHS
 #############################################
-# LUSTRE_BASE: Shared filesystem path (accessible from all nodes) for storing configs, logs, and job metadata
+# SHARED_FS_BASE: Shared filesystem path (accessible from all nodes) for storing configs, logs, and job metadata
+#                 e.g., Lustre, GPFS, NFS
 # BIN_DIR:     Path to AIStore binaries (aisnode, ais) on shared filesystem
-# DATA_PATH:   Node-local fast storage path for caching data (NVMe, SSD, RAID scratch)
+# DATA_PATH:   Node-local fast storage path for data (NVMe, HDD, RAID scratch)
 
-LUSTRE_BASE="<SHARED_FS_PATH>/aistore"      # e.g., /lustre/users/$USER/aistore, /gpfs/home/$USER/aistore
+SHARED_FS_BASE="<SHARED_FS_PATH>/aistore"      # e.g., /lustre/users/$USER/aistore, /gpfs/home/$USER/aistore
 BIN_DIR="<SHARED_FS_PATH>/aistore/bin"      # e.g., /lustre/users/$USER/aistore/bin
 DATA_PATH="<LOCAL_SCRATCH_PATH>/aistore"    # e.g., /raid/scratch/aistore, /mnt/nvme0/aistore
 
@@ -69,7 +70,7 @@ for i in "${!NODES_ARRAY[@]}"; do
 done
 
 # Create a shared config directory for this job
-JOB_CONFIG_DIR="${LUSTRE_BASE}/jobs/${SLURM_JOB_ID}"
+JOB_CONFIG_DIR="${SHARED_FS_BASE}/jobs/${SLURM_JOB_ID}"
 mkdir -p ${JOB_CONFIG_DIR}
 
 # Get IP addresses for all nodes and save to shared file
@@ -112,7 +113,7 @@ DATA_PORT="$5"
 TARGET_PUBLIC_PORT="$6"
 TARGET_CONTROL_PORT="$7"
 TARGET_DATA_PORT="$8"
-LUSTRE_BASE="$9"
+SHARED_FS_BASE="$9"
 SLURM_JOB_ID="${10}"
 DATA_PATH="${11}"
 
@@ -128,7 +129,7 @@ echo "[${HOSTNAME}] Starting AIStore (Node ${NODE_INDEX}, IP: ${NODE_IP})"
 
 # Create directories
 NODE_CONFIG_DIR="${JOB_CONFIG_DIR}/node_${NODE_INDEX}"
-NODE_LOG_DIR="${LUSTRE_BASE}/logs/job_${SLURM_JOB_ID}/node_${NODE_INDEX}"
+NODE_LOG_DIR="${SHARED_FS_BASE}/logs/job_${SLURM_JOB_ID}/node_${NODE_INDEX}"
 
 mkdir -p ${NODE_CONFIG_DIR}/proxy
 mkdir -p ${NODE_CONFIG_DIR}/target
@@ -277,7 +278,7 @@ srun --ntasks-per-node=1 --unbuffered --export=ALL bash ${NODE_SCRIPT} \
     "${TARGET_PUBLIC_PORT}" \
     "${TARGET_CONTROL_PORT}" \
     "${TARGET_DATA_PORT}" \
-    "${LUSTRE_BASE}" \
+    "${SHARED_FS_BASE}" \
     "${SLURM_JOB_ID}" \
     "${DATA_PATH}" &
 
@@ -299,7 +300,7 @@ echo "Nodes:        ${NUM_NODES}"
 echo "Primary:      http://${PRIMARY_IP}:${PUBLIC_PORT}"
 echo ""
 echo "Config dir:   ${JOB_CONFIG_DIR}"
-echo "Logs dir:     ${LUSTRE_BASE}/logs/job_${SLURM_JOB_ID}"
+echo "Logs dir:     ${SHARED_FS_BASE}/logs/job_${SLURM_JOB_ID}"
 echo ""
 echo "To use the cluster:"
 echo "  export AIS_ENDPOINT=http://${PRIMARY_IP}:${PUBLIC_PORT}"

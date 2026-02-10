@@ -24,7 +24,7 @@ Slurm is typically used to submit training jobs on GPU clusters. Modern GPU node
 
 **The Problem**: Training jobs frequently fetch data from remote object stores (S3, GCS, etc.) or shared filesystems (Lustre, GPFS), which can become bottlenecks due to network latency and bandwidth limitations.
 
-**The Solution**: Deploy AIStore directly on the Slurm nodes to create a high-performance, local caching layer:
+**The Solution**: Deploy AIStore directly on the Slurm nodes to create a high-performance, fast-tier local storage layer:
 
 1. **Allocate resources** — Request nodes with local storage via Slurm
 2. **Deploy AIStore** — Run this deployment to spin up AIStore across all allocated nodes
@@ -35,9 +35,9 @@ Slurm is typically used to submit training jobs on GPU clusters. Modern GPU node
 
 | Benefit | Description |
 |---------|-------------|
-| **Fast Tier Storage** | Data is cached on local NVMe/SSD drives, providing significantly faster read speeds compared to remote storage |
+| **Fast Tier Storage** | Data is stored on local NVMe/SSD drives, providing significantly faster read speeds compared to remote storage |
 | **Reduced Network Load** | Frequently accessed data is served locally, reducing pressure on shared filesystems and network |
-| **Seamless Integration** | AIStore acts as a transparent caching proxy—your training code can use standard S3-compatible APIs |
+| **Seamless Integration** | AIStore is a fully compliant S3-compatible storage solution—your training code works with standard S3 APIs |
 | **Scalable** | Add more nodes to increase both storage capacity and aggregate bandwidth |
 
 ### Architecture
@@ -69,18 +69,18 @@ AIStore runs on the **same GPU nodes** where your training job will execute. Thi
 │  └────────────────────┘  └────────────────────┘  └────────────────────┘     │
 │              │                     │                     │                  │
 │              └─────────────────────┼─────────────────────┘                  │
-│                                    │ cache miss                             │
+│                                    │ If not found locally                   │
 │                                    ▼                                        │
 └────────────────────────────────────┼────────────────────────────────────────┘
                                      │
                               ┌──────▼──────┐
                               │   Remote    │
                               │   Storage   │
-                              │ (S3/Lustre) │
+                              │     (S3)    │
                               └─────────────┘
 ```
 
-**Data Flow**: Training jobs read from AIStore → AIStore fetches from remote storage on cache miss → subsequent reads are served from fast local disks.
+**Data Flow**: Training jobs read from AIStore → AIStore fetches from remote storage if the object is not found locally → subsequent reads are served from fast local disks.
 
 ---
 
@@ -131,13 +131,13 @@ Edit the top of `aistore_cluster.sh` to set these paths for your environment:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `LUSTRE_BASE` | Shared filesystem path for configs and logs | `$SHARED_FS/aistore` |
+| `SHARED_FS_BASE` | Shared filesystem path for configs and logs | `$SHARED_FS/aistore` |
 | `BIN_DIR` | Path where AIStore binaries are stored | `$SHARED_FS/aistore/bin` |
-| `DATA_PATH` | Local disk path for storing cached data | `$LOCAL_SCRATCH/aistore/data` |
+| `DATA_PATH` | Local disk path for storing data | `$LOCAL_SCRATCH/aistore/data` |
 
 ```bash
 # Configuration paths (edit these in aistore_cluster.sh)
-LUSTRE_BASE="$SHARED_FS/aistore"           # e.g., /lustre/users/$USER/aistore
+SHARED_FS_BASE="$SHARED_FS/aistore"           # e.g., /lustre/users/$USER/aistore
 BIN_DIR="$SHARED_FS/aistore/bin"           # e.g., /lustre/users/$USER/aistore/bin
 DATA_PATH="$LOCAL_SCRATCH/aistore/data"    # e.g., /raid/scratch/aistore/data
 ```
@@ -274,7 +274,7 @@ Now submit your training job, pointing it to the AIStore endpoint:
 # In your training script or job submission
 export AIS_ENDPOINT=http://<primary_ip>:51080
 
-# Your training code can now use AIStore for fast local caching
+# Your training code can now use AIStore as a fast-tier local storage
 ```
 
 ### 6. Stop the Cluster
@@ -315,7 +315,7 @@ scancel <job_id>
 After deployment, the following structure is created on the shared filesystem:
 
 ```
-${LUSTRE_BASE}/
+${SHARED_FS_BASE}/
 ├── bin/
 │   ├── aisnode              # AIStore daemon binary
 │   └── ais                  # AIStore CLI binary
@@ -343,7 +343,7 @@ ${LUSTRE_BASE}/
 
 ### Local Data Storage
 
-Each node stores cached object data locally at the configured `DATA_PATH`:
+Each node stores object data locally at the configured `DATA_PATH`:
 
 ```
 ${DATA_PATH}/   # e.g., /raid/scratch/aistore/data/ or your custom fspaths
@@ -364,16 +364,16 @@ tail -f aistore_<job_id>.err
 
 ```bash
 # Proxy logs
-tail -f ${LUSTRE_BASE}/logs/job_<job_id>/node_0/proxy/aisnode.log
+tail -f ${SHARED_FS_BASE}/logs/job_<job_id>/node_0/proxy/aisnode.log
 
 # Target logs
-tail -f ${LUSTRE_BASE}/logs/job_<job_id>/node_0/target/aisnode.log
+tail -f ${SHARED_FS_BASE}/logs/job_<job_id>/node_0/target/aisnode.log
 ```
 
 ### Verify Cluster Health
 
 ```bash
-export AIS_ENDPOINT=$(cat ${LUSTRE_BASE}/jobs/<job_id>/endpoint.txt)
+export AIS_ENDPOINT=$(cat ${SHARED_FS_BASE}/jobs/<job_id>/endpoint.txt)
 ais show cluster
 ais show cluster stats
 ```
