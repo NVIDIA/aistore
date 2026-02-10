@@ -68,10 +68,10 @@ REG_CMD=(
   --url "$GITLAB_HOST"
   --token "$RUNNER_TOKEN"
   --executor docker
-  --docker-image ubuntu:22.04
+  --docker-image ubuntu:24.04
+  --docker-network-mode "ci-net"
   --docker-privileged=true
-  --docker-extra-hosts "host.docker.internal:host-gateway"
-  --docker-volumes "/etc/containers/registries.d:/etc/containers/registries.d:ro"
+  --docker-volumes "/etc/containers/registries.conf.d:/etc/containers/registries.conf.d:ro"
 )
 if [ -n "$DATA_ROOT" ]; then
   REG_CMD+=(

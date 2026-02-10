@@ -195,6 +195,8 @@ security:sonarqube:
 
 build:k8s:
   stage: build
+  tags:
+    - $RUNNER_TAG
   image: quay.io/buildah/stable
   variables:
     # Use vfs with buildah. Docker offers overlayfs as a default, but Buildah
@@ -208,6 +210,7 @@ build:k8s:
     - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_TOKEN $CI_REGISTRY
     - buildah login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN docker.io
   script:
+    - buildah info
     - buildah images
     - buildah build -t $FQ_AISNODE_IMAGE_NAME
       -f deploy/prod/k8s/aisnode_container/Dockerfile
@@ -215,6 +218,7 @@ build:k8s:
       --build-arg providers="gcp aws oci"
       --build-arg INSTALLER_IMAGE="docker.io/library/debian:bookworm"
       --build-arg BUILDER_IMAGE="docker.io/library/golang:1.25"
+      --build-arg tags="ci"
     - buildah push $FQ_AISNODE_IMAGE_NAME
     - buildah build -t $FQ_AISINIT_IMAGE_NAME
       -f deploy/prod/k8s/aisinit_container/Dockerfile

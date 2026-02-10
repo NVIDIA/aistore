@@ -79,10 +79,10 @@ setup_registry() {
   fi
 
   echo "Setting up pull-through registry cache"
-  sudo mkdir -p "$REGISTRY_DIR" /etc/containers/registries.d
+  sudo mkdir -p "$REGISTRY_DIR" /etc/containers/registries.conf.d
   sudo chown 1000:1000 "$REGISTRY_DIR"
 
-  sudo tee /etc/containers/registries.d/registries.conf <<EOF
+  sudo tee /etc/containers/registries.conf.d/registries.conf <<EOF
 unqualified-search-registries = ["docker.io"]
 
 [[registry]]
@@ -90,18 +90,35 @@ prefix   = "docker.io"
 location = "docker.io"
 
   [[registry.mirror]]
-  location = "host.docker.internal:$REGISTRY_PORT"
+  location = "registry-proxy:$REGISTRY_PORT"
   insecure = true
 EOF
 
-  docker run -d --name registry-proxy --restart=always -p $REGISTRY_PORT:5000 \
-    -v "$REGISTRY_DIR:/var/lib/registry" \
-    -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io \
-    registry:2
+  DOCKER_RUN_CMD=(
+    docker run -d --name registry-proxy --restart=always -p 127.0.0.1:"$REGISTRY_PORT":5000
+    --network ci-net
+    -v "$REGISTRY_DIR:/var/lib/registry"
+    -e REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io
+  )
+
+  if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
+    DOCKER_RUN_CMD+=(
+      -e "REGISTRY_PROXY_USERNAME=$REGISTRY_USERNAME"
+      -e "REGISTRY_PROXY_PASSWORD=$REGISTRY_PASSWORD"
+    )
+  fi
+
+  DOCKER_RUN_CMD+=(registry:2)
+  "${DOCKER_RUN_CMD[@]}"
 
   echo "Registry setup completed successfully!"
   echo "- Pull-through registry cache running on port $REGISTRY_PORT"
   echo "- Registry cache storage: $REGISTRY_DIR"
-  echo "- Registry configuration: /etc/containers/registries.d/registries.conf"
+  echo "- Registry configuration: /etc/containers/registries.conf.d/registries.conf"
+  if [[ -n "$REGISTRY_USERNAME" ]]; then
+    echo "- Registry credentials configured for user: $REGISTRY_USERNAME"
+  else
+    echo "- Registry running without authentication (anonymous pulls only)"
+  fi
 }
 
