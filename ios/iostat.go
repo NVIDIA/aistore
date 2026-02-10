@@ -1,7 +1,7 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
@@ -25,8 +25,14 @@ import (
 const statsdir = "/sys/class/block"
 
 // public
+
+const (
+	FlagRotational = 1 << 0
+	FlagNVMe
+)
+
 type (
-	FsDisks map[string]int64 // disk name => sector size
+	FsDisks map[string]DiskInfo // disk name => (sector size, flags)
 
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil

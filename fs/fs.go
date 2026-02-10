@@ -38,7 +38,9 @@ const nodeXattrID = "user.ais.daemon_id"
 const (
 	FlagBeingDisabled uint64 = 1 << iota
 	FlagBeingDetached
-	FlagDisabledByFSHC // TODO -- FIXME: niy
+	FlagDisabledByFSHC // reserved
+	FlagRotational     // <= ios.FlagRotational
+	FlagNVMe           // <= ios.FlagNVMe
 )
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
@@ -149,17 +151,32 @@ func (mi *Mountpath) IsAnySet(flags uint64) bool {
 	return cos.IsAnySetfAtomic(&mi.flags, flags)
 }
 
+func (mi *Mountpath) IsRotational() bool {
+	return cos.IsSetfAtomic(&mi.flags, FlagRotational)
+}
+
+func (mi *Mountpath) IsNVMe() bool {
+	return cos.IsSetfAtomic(&mi.flags, FlagNVMe)
+}
+
 func (mi *Mountpath) String() string {
 	s := mi.Label.ToLog()
 	if mi.info == "" {
+		dt := ", ssd"
+		switch {
+		case mi.IsRotational():
+			dt = ", hdd"
+		case mi.IsNVMe():
+			dt = ", nvme"
+		}
 		switch len(mi.Disks) {
 		case 0:
 			// where `fs=` is a block device (or its partition) formatted with a given filesystem (e.g., xfs)
-			mi.info = fmt.Sprintf("mp[%s, fs=%s%s]", mi.Path, mi.Fs, s)
+			mi.info = fmt.Sprintf("mp[%s, fs=%s%s%s]", mi.Path, mi.Fs, s, dt)
 		case 1:
-			mi.info = fmt.Sprintf("mp[%s, %s%s]", mi.Path, mi.Disks[0], s)
+			mi.info = fmt.Sprintf("mp[%s, %s%s%s]", mi.Path, mi.Disks[0], s, dt)
 		default:
-			mi.info = fmt.Sprintf("mp[%s, %v%s]", mi.Path, mi.Disks, s)
+			mi.info = fmt.Sprintf("mp[%s, %v%s%s]", mi.Path, mi.Disks, s, dt)
 		}
 	}
 	if !mi.IsAnySet(FlagWaitingDD) {
@@ -340,7 +357,15 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 }
 
 func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
+	mi.info = ""
 	mi.Disks = fsdisks.ToSlice()
+	for _, info := range fsdisks {
+		if info.Flags&ios.FlagRotational != 0 {
+			cos.SetfAtomic(&mi.flags, FlagRotational)
+			break
+		}
+	}
+	_ = mi.String() // cache
 }
 
 // CapRefresh: available/used capacity
@@ -436,7 +461,6 @@ func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, bloc
 		}
 	}
 	mi._setDisks(fsdisks)
-	_ = mi.String() // assign mi.info if not yet
 	avail[mi.Path] = mi
 	return nil
 }

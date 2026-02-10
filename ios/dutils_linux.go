@@ -1,7 +1,7 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -37,9 +38,13 @@ const (
 const initialNumDevs = 16
 
 type (
+	DiskInfo struct {
+		Size  uint32
+		Flags uint32
+	}
 	blockDev struct {
 		name     string
-		blksize  int64
+		info     DiskInfo
 		children BlockDevs
 	}
 
@@ -53,19 +58,19 @@ var (
 func (bd *blockDev) MarshalJSON() ([]byte, error) {
 	l := len(bd.children)
 	if l == 0 {
-		if bd.blksize == 512 {
+		if bd.info.Size == 512 {
 			return cos.UnsafeB(bd.name), nil
 		}
-		s := fmt.Sprintf("%s(block=%d)", bd.name, bd.blksize)
+		s := fmt.Sprintf("%s(block=%d)", bd.name, bd.info.Size)
 		return cos.UnsafeB(s), nil
 	}
 
 	a := make([]string, l)
 	for i, c := range bd.children {
-		if bd.blksize == 512 {
+		if bd.info.Size == 512 {
 			a[i] = c.name
 		} else {
-			a[i] = fmt.Sprintf("%s(block=%d)", c.name, c.blksize)
+			a[i] = fmt.Sprintf("%s(block=%d)", c.name, c.info.Size)
 		}
 	}
 	s := fmt.Sprintf("%s %v", bd.name, a)
@@ -191,7 +196,11 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 			}
 		}
 
-		name := dirent.Name()
+		var (
+			kname   = dirent.Name()
+			name    = kname
+			blksize uint32
+		)
 		if strings.HasPrefix(name, "dm-") {
 			// If this is "device mapper" we have to read the name from `{dir}/dm/name` file.
 			data, err := os.ReadFile(filepath.Join(devDirPath, "dm", "name"))
@@ -201,8 +210,8 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 			name = strings.TrimSpace(string(data))
 		}
 
-		// Try to read block size of this device/partition.
-		blksize, err := _readAny[int64](filepath.Join(devDirPath, "queue", "physical_block_size"))
+		// 1. block size of this device/partition
+		size, err := _readAny[int64](filepath.Join(devDirPath, "queue", "physical_block_size"))
 		if err != nil {
 			switch {
 			case err == errEmptyPhysBlock:
@@ -210,17 +219,38 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 				continue
 			case errors.Is(err, fs.ErrNotExist) && parent != nil:
 				// Inherit value from parent if physical_block_size file does not exist
-				blksize = parent.blksize
+				blksize = parent.info.Size
 			default:
 				// Real error when reading
 				return nil, err
 			}
+		} else {
+			debug.Assert(size >= 0 && size < math.MaxUint32)
+			blksize = uint32(size)
+		}
+
+		// 2. flags
+		var flags uint32
+		rot, err := _readAny[int64](filepath.Join(devDirPath, "queue", "rotational"))
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) && parent != nil {
+				flags = parent.info.Flags
+			}
+			// else default to 0 (non-rotational)
+		} else if rot != 0 {
+			flags = FlagRotational
+		}
+
+		// TODO: prefix match won't work for device-mapped NVMe (non-rotational implies "ssd")
+		if strings.HasPrefix(kname, "nvme") && (flags&FlagRotational) == 0 {
+			flags |= FlagNVMe
 		}
 
 		bd := &blockDev{
-			name:    name,
-			blksize: blksize,
+			name: name,
+			info: DiskInfo{Size: blksize, Flags: flags},
 		}
+
 		{
 			// Process all partitions.
 			bd.children, err = _lsblk(devDirPath, bd)
@@ -267,16 +297,16 @@ func findDevs(blockDevs BlockDevs, trimmedFS string, label cos.MountpathLabel, d
 	for _, bd := range blockDevs {
 		// by dev name
 		if bd.name == trimmedFS {
-			disks[bd.name] = bd.blksize
+			disks[bd.name] = bd.info
 			continue
 		}
 		// NOTE: by label
 		if label != "" && strings.Contains(bd.name, string(label)) {
-			disks[bd.name] = bd.blksize
+			disks[bd.name] = bd.info
 			continue
 		}
 		if len(bd.children) > 0 && _match(bd.children, trimmedFS) {
-			disks[bd.name] = bd.blksize
+			disks[bd.name] = bd.info
 		}
 	}
 }
