@@ -130,7 +130,7 @@ func (t *target) inlineETL(w http.ResponseWriter, r *http.Request, dpq *dpq, lom
 	comm, errN := etl.GetCommunicator(dpq.get(apc.QparamETLName))
 	if errN != nil {
 		switch {
-		case cos.IsErrNotFound(errN):
+		case cos.IsNotExist(errN):
 			smap := t.owner.smap.Get()
 			pub := smap.Primary.URL(cmn.NetPublic)
 			err := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint", errN, pub)
@@ -201,7 +201,7 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string)
 func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	health, err := etl.PodHealth(etlName)
 	if err != nil {
-		if cos.IsErrNotFound(err) {
+		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)
@@ -245,7 +245,7 @@ func (t *target) detailsETL(w http.ResponseWriter, r *http.Request, dpq *dpq, et
 func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	metricMsg, err := etl.PodMetrics(etlName)
 	if err != nil {
-		if cos.IsErrNotFound(err) {
+		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)

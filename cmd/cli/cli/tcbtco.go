@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -73,7 +73,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		}
 		err := copyObject(c, bckFrom, objFrom, bckTo, objTo)
 		if err != nil {
-			if cos.IsErrNotFound(err) && strings.Contains(err.Error(), bckFrom.Cname(objFrom)) {
+			if cos.IsNotExist(err) && strings.Contains(err.Error(), bckFrom.Cname(objFrom)) {
 				err = fmt.Errorf("source object %q not found (did you mean to copy multiple objects with prefix %q?)", bckFrom.Cname(objFrom), objFrom)
 			}
 		}

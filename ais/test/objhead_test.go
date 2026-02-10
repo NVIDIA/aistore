@@ -94,7 +94,7 @@ func TestObjHeadFlt(t *testing.T) {
 		// FltPresentNoProps should now fail - object not cached (though it exists remotely)
 		_, err = api.HeadObject(baseParams, evictBck, evictObj, api.HeadArgs{FltPresence: apc.FltPresentNoProps})
 		tassert.Fatalf(t, err != nil, "FltPresentNoProps should fail for evicted (non-cached) object")
-		tassert.Fatalf(t, cos.IsNotExist(err, 0), "should return 404 when not cached locally")
+		tassert.Fatalf(t, isErrNotFound(err), "should return 404 when not cached locally")
 	})
 
 	// Test FltExistsOutside - should fail (object IS cached)
@@ -107,7 +107,7 @@ func TestObjHeadFlt(t *testing.T) {
 	t.Run("NotFound_FltPresent", func(t *testing.T) {
 		_, err := api.HeadObject(baseParams, bck, "non-existent", api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.Fatalf(t, err != nil, "HEAD on non-existent object should fail")
-		tassert.Fatalf(t, cos.IsNotExist(err, 0), "should return 404")
+		tassert.Fatalf(t, isErrNotFound(err), "should return 404")
 	})
 }
 
@@ -162,7 +162,7 @@ func TestObjHeadRemoteEvicted(t *testing.T) {
 	t.Run("FltPresent_AfterEvict", func(t *testing.T) {
 		_, err := api.HeadObject(baseParams, bck, objName, api.HeadArgs{FltPresence: apc.FltPresent})
 		tassert.Fatalf(t, err != nil, "FltPresent should fail for evicted object")
-		tassert.Fatalf(t, cos.IsNotExist(err, 0), "should return 404 for evicted + FltPresent")
+		tassert.Fatalf(t, isErrNotFound(err), "should return 404 for evicted + FltPresent")
 	})
 
 	// Test FltExistsOutside after eviction - should succeed

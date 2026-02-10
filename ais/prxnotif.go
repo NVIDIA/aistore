@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -470,7 +470,8 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 				// likely didn't start yet - skipping
 				continue
 			}
-			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si.StringEx())
+			err := cos.NewErrNotFoundFmt(res.si, "%s at %s", nl, res.si.StringEx())
+
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()

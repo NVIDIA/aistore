@@ -1276,7 +1276,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	)
 
 	// assign status (in order of priority)
-	if cos.IsErrNotFound(err) {
+	if cos.IsNotExist(err) {
 		// NOTE: override opts[0] status, e.g.: "remote cluster "uuid" does not exist, status=500"
 		status = http.StatusNotFound
 	} else if l > 0 {

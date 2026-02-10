@@ -5,7 +5,6 @@
 package xact
 
 import (
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -221,7 +220,7 @@ var Table = map[string]Descriptor{
 func GetDescriptor(kindOrName string) (string, Descriptor, error) {
 	kind, dtor := getDtor(kindOrName)
 	if dtor == nil {
-		return "", Descriptor{}, fmt.Errorf("not found xaction %q", kindOrName)
+		return "", Descriptor{}, cos.NewErrNotFoundFmt(nil, "xaction kind (or name) %q", kindOrName)
 	}
 	return kind, *dtor, nil
 }

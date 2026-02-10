@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -111,7 +111,7 @@ func (lom *LOM) GetROC(latestVer, sync bool) (resp ReadResp) {
 	}
 
 	lom.Unlock(false)
-	if !cos.IsNotExist(loadErr, 0) {
+	if !cos.IsNotExist(loadErr) {
 		resp.Err = cmn.NewErrFailedTo(T, "ldp-load", lom.Cname(), loadErr)
 		return resp
 	}

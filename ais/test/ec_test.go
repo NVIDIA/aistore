@@ -144,7 +144,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		}
 		stat, err := os.Stat(fqn)
 		if err != nil {
-			if cos.IsNotExist(err) {
+			if isErrNotFound(err) {
 				return nil
 			}
 			return err

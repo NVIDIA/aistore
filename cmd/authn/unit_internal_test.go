@@ -1,6 +1,6 @@
 // Package main contains the independent authentication server for AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -62,7 +62,7 @@ func createUsers(mgr *mgr, t *testing.T) {
 func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
 	for _, username := range users {
 		_, err := mgr.delUser(username)
-		if err != nil && (!cos.IsErrNotFound(err) || !skipNotExist) {
+		if err != nil && (!cos.IsNotExist(err) || !skipNotExist) {
 			t.Errorf("Failed to delete user %s: %v", username, err)
 		}
 	}

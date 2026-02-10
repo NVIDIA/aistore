@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const procmounts = "/proc/mounts"
@@ -82,7 +84,7 @@ outer:
 		return "", "", fmt.Errorf("FATAL: failed reading Linux %q, err: %w", procmounts, err)
 	}
 	if bestMatch == "" {
-		return "", "", fmt.Errorf("failed to resolve mountpath %q: mount point not found", mountpath)
+		return "", "", cos.NewErrNotFoundFmt(nil, "mount point for mountpath %q", mountpath)
 	}
 	return fs, fsType, nil
 }

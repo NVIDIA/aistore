@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -349,7 +349,7 @@ func PodMetrics(etlName string) (*CPUMemUsed, error) {
 	if err == nil {
 		return &CPUMemUsed{TargetID: core.T.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
-	if cos.IsErrNotFound(err) {
+	if cos.IsNotExist(err) {
 		return nil, err
 	}
 	if metricsErr := client.CheckMetricsAvailability(); metricsErr != nil {

@@ -461,7 +461,7 @@ func (sb *Streams) ReopenPeerStream(dstID string) error {
 	si := sb.smap.GetNode(dstID)
 	if si == nil {
 		// (unlikely - checked above)
-		return fmt.Errorf("%s: destination %q not found in the streams' %s", sb, dstID, sb.smap.StringEx())
+		return cos.NewErrNotFoundFmt(sb, "destination %q (%s)", dstID, sb.smap.StringEx())
 	}
 	dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname)
 

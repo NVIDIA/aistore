@@ -83,7 +83,7 @@ begin:
 	}
 	if selfIC {
 		if !exists && !retry {
-			err := fmt.Errorf("x-[%s] not found (%s)", uuid, smap.StrIC(ic.p.si))
+			err := cos.NewErrNotFoundFmt(ic.p.si, "x-[%s]", uuid)
 			ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return true
 		}

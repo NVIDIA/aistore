@@ -1,6 +1,6 @@
 // Package authn provides AuthN API over HTTP(S)
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package authn
 
@@ -42,8 +42,8 @@ func LoadToken(tokenFile string) (string /*token value*/, error) {
 	// load
 	_, err := jsp.LoadMeta(tokenFile, &token)
 	if err != nil {
-		if cos.IsNotExist(err) {
-			return "", fmt.Errorf("token file %q does not exist", tokenFile)
+		if e := cos.ClientNotExist(err, "token file"); e != err {
+			return "", e
 		}
 		return "", fmt.Errorf("failed to load token from %q: %v", tokenFile, err)
 	}

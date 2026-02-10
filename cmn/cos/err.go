@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	iofs "io/fs"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,16 +58,36 @@ type (
 
 var errBufferUnderrun = errors.New("buffer underrun")
 
-// ErrNotFound
+// ErrNotFound and IsNotExist ==========================================================
+
+// * ErrNotFound is AIStore generic "missing entity" error.
+// * IsNotExist(err) is a broad predicate that _additionally_ includes OS-level absence (os.IsNotExist).
+//
+// Usage:
+// - Use ErrNotFound when the *category* is "not present" but the missing thing is not one of the
+//   strongly-typed AIS errors (bucket/object/etc.), or when the caller wants a uniform "missing"
+//   signal across subsystems (xactions, ETL metadata, internal registries).
+// - ErrNotFound is intentionally generic: its message is expected to read naturally as
+//   "<prefix or parent or context>: <what> does not exist".
+//
+// When NOT to use ErrNotFound:
+// - Do not use it when a typed AIS error exists. Those errors have stable tcode/status
+//   mapping, client expectations, and specialized context, e.g.:
+//   * cmn.ErrBckNotFound / cmn.ErrRemoteBckNotFound
+// - Do not double-wrap an existing typed "not found" into another ErrNotFound.
 
 // note: where == nil is fine
 func NewErrNotFound(where fmt.Stringer, what string) *ErrNotFound {
 	return &ErrNotFound{where: where, what: what}
 }
 
+func NewErrNotFoundFmt(where fmt.Stringer, format string, a ...any) *ErrNotFound {
+	return &ErrNotFound{where: where, what: fmt.Sprintf(format, a...)}
+}
+
 func (e *ErrNotFound) Error() string {
 	s := e.what
-	if !strings.Contains(s, "not exist") && !strings.Contains(s, "not found") {
+	if !strings.Contains(s, "does not exist") && !strings.Contains(s, "not found") {
 		s += " does not exist"
 	}
 	if e.where == nil {
@@ -76,15 +96,12 @@ func (e *ErrNotFound) Error() string {
 	return e.where.String() + ": " + s
 }
 
-// TODO -- FIXME: deprecated and must be eventually absorbed into IsNotExist() below
-func IsErrNotFound(err error) bool {
-	if _, ok := err.(*ErrNotFound); ok {
-		return true
-	}
-	return err != nil && strings.Contains(err.Error(), "does not exist")
+func (*ErrNotFound) Is(target error) bool {
+	return target == fs.ErrNotExist || target == os.ErrNotExist
 }
 
-// non-existence checker that must be used instead of the one above;
+// non-existence checker that must be consistently used to indicate
+// (not-found / not-exists) errors of any kind
 // includes:
 // - 404 when/if provided
 // - cos.ErrNotFound
@@ -94,7 +111,20 @@ func IsNotExist(err error, ecode ...int) bool {
 	if len(ecode) > 0 && ecode[0] == http.StatusNotFound {
 		return true
 	}
-	return IsErrNotFound(err) || errors.Is(err, iofs.ErrNotExist) || errors.Is(err, syscall.ENOENT)
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOENT)
+}
+
+// client-side non-existence helper
+func ClientNotExist(err error, what string) error {
+	if err == nil {
+		return nil
+	}
+	// PathError already contains the path; don’t repeat it
+	var pe *fs.PathError
+	if errors.As(err, &pe) && (os.IsNotExist(err) || errors.Is(err, syscall.ENOENT)) {
+		return NewErrNotFound(nil, what)
+	}
+	return err
 }
 
 // ErrAlreadyExists
@@ -185,7 +215,7 @@ func (e *Errs) Unwrap() []error {
 //
 
 func IsPathErr(err error) bool {
-	var pathErr *iofs.PathError
+	var pathErr *fs.PathError
 	return errors.As(err, &pathErr)
 }
 

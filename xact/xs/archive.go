@@ -760,7 +760,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	if wi.wfh == nil {
 		lom.Unlock(false)
 		// NOTE: unexpected and unlikely - aborting
-		err = fmt.Errorf("%s: destination %q does not exist (not open)", wi.r.Name(), wi.fqn)
+		err := cos.NewErrNotFoundFmt(wi.r, "archive destination is not ready for %q", lom.Cname())
 		wi.r.Abort(err)
 		return
 	}

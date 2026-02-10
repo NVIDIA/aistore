@@ -204,7 +204,7 @@ func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
 		}
 	}
 	if !found {
-		return 0, fmt.Errorf("xaction (job) UUID=%q not found", xid)
+		return 0, cos.NewErrNotFoundFmt(nil, "xaction UUID=%q", xid)
 	}
 	if running {
 		end = time.Now()

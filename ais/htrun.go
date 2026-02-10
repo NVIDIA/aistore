@@ -2447,7 +2447,9 @@ func (h *htrun) isReady() bool {
 	}
 	if !h.ClusterStarted() {
 		smap := h.owner.smap.get()
-		debug.Assert(smap.isValid())
+		if smap == nil || !smap.isValid() {
+			return false
+		}
 		return h.si.IsProxy() && smap.isPrimary(h.si) && smap.isValid()
 	}
 	return true

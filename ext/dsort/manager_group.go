@@ -80,7 +80,7 @@ func (mg *managerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 	// Always check persistent db
 	records, code, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		if !cos.IsErrNotFound(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorln(err, code)
 		}
 		return jobsInfos
@@ -118,7 +118,7 @@ func (mg *managerGroup) Get(managerUUID string, inclArchived bool) (*Manager, bo
 	if !exists && inclArchived {
 		key := path.Join(managersKey, managerUUID)
 		if code, err := mg.db.Get(dsortCollection, key, &manager); err != nil {
-			if !cos.IsErrNotFound(err) {
+			if !cos.IsNotExist(err) {
 				nlog.Errorln(err, code)
 			}
 			return nil, false
@@ -178,7 +178,7 @@ func (mg *managerGroup) housekeep(int64) time.Duration {
 
 	records, code, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		if cos.IsErrNotFound(err) {
+		if cos.IsNotExist(err) {
 			return regularInterval
 		}
 		nlog.Errorln(err, code)

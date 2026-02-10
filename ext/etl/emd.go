@@ -74,7 +74,7 @@ func (e *MD) Add(msg InitMsg, stage Stage, podMap PodMap) error {
 		return nil
 	}
 	if _, ok := e.ETLs[msg.Name()]; !ok && stage == Aborted {
-		return fmt.Errorf("cannot add %s to stage %s: not exists", msg.Cname(), stage)
+		return cos.NewErrNotFoundFmt(e, "cannot add %s to stage %s", msg.Cname(), stage)
 	}
 	e.ETLs[msg.Name()] = ETLEntity{InitMsg: msg, Stage: stage, PodMap: podMap}
 	return nil

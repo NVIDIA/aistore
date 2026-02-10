@@ -284,7 +284,7 @@ func (km *KeyCacheManager) getPubKey(ctx context.Context, iss, kid string) (any,
 	jwKey, found := keySet.LookupKeyID(kid)
 	if !found {
 		km.IncCounter(stats.AuthInvalidKidCount)
-		return nil, fmt.Errorf("key with kid %s not found for issuer %s", kid, iss)
+		return nil, fmt.Errorf("unrecognized key id %s for issuer %s", kid, iss)
 	}
 	var pubKey any
 	if err = jwKey.Raw(&pubKey); err != nil {
@@ -392,7 +392,7 @@ func (km *KeyCacheManager) makeDiscoveryRequest(ctx context.Context, reqURL, iss
 		return "", err
 	}
 	if meta.JWKSURI == "" {
-		return "", fmt.Errorf("jwks_uri not found in metadata for issuer %s", issuer)
+		return "", fmt.Errorf("missing jwks_uri in issuer %s metadata", issuer)
 	}
 	return meta.JWKSURI, nil
 }

@@ -522,7 +522,7 @@ func (r *XactMoss) PrepRx(req *apc.MossReq, config *cmn.Config, smap *meta.Smap,
 func (r *XactMoss) Assemble(req *apc.MossReq, w http.ResponseWriter, wid string) error {
 	a, loaded := r.pending.Load(wid)
 	if !loaded {
-		err := fmt.Errorf("%s: work item %q not found (prep-rx not done?)", r.Name(), wid)
+		err := cos.NewErrNotFoundFmt(r, "work item %q (prep-rx not done?)", wid)
 		if cmn.Rom.V(4, cos.ModXs) {
 			nlog.Errorln(core.T.String(), err)
 		}

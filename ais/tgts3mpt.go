@@ -1,6 +1,6 @@
 // Package ais provides AIStore's proxy and target nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -102,7 +102,7 @@ func (t *target) putPartMptS3(w http.ResponseWriter, r *http.Request, items []st
 	}
 	etag, ecode, err := t.ups.putPart(&args)
 	// convert to s3 error
-	if cos.IsErrNotFound(err) {
+	if cos.IsNotExist(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
 		return
 	}
@@ -178,7 +178,7 @@ func (t *target) completeMptS3(w http.ResponseWriter, r *http.Request, items []s
 		isS3:     true,
 	})
 	// convert generic error to s3 error
-	if cos.IsErrNotFound(err) {
+	if cos.IsNotExist(err) {
 		s3.WriteMptErr(w, r, s3.NewErrNoSuchUpload(uploadID, nil), ecode, lom, uploadID)
 		return
 	}

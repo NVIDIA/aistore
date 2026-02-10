@@ -81,7 +81,7 @@ func (wkg *WorkerGroup) PostLIF(lom *core.LOM) error {
 	mi := lom.Mountpath()
 	worker, ok := wkg.workers[mi.Path]
 	if !ok {
-		return fmt.Errorf("post-lif: %s not found", mi)
+		return cos.NewErrNotFoundFmt(nil, "post-lif: %s", mi)
 	}
 	l, c := len(worker.workCh), cap(worker.workCh)
 	worker.chanFull.Check(l, c)

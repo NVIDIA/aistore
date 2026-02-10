@@ -1215,9 +1215,7 @@ func genBucketNs() cmn.Ns {
 	return cmn.Ns{Name: cos.GenTie()}
 }
 
-// TODO -- FIXME:
-// - use isErrNotFound() across the board
-// - unify; remove all strings.Contains("not found") and similar
+// use isErrNotFound() consistently
 func isErrNotFound(err error) bool {
 	if err == nil {
 		return false

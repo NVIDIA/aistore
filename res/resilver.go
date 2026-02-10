@@ -362,7 +362,7 @@ func (j *jogger) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	if !ok {
 		hlom, errHrw = j.fixHrw(lom, mi, buf)
 		if errHrw != nil {
-			if !cos.IsNotExist(errHrw) && !cos.IsErrNotFound(errHrw) {
+			if !cos.IsNotExist(errHrw) {
 				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
 				j.xres.AddErr(errV, 0)
 			}
@@ -482,7 +482,7 @@ func (j *jogger) fixCopies(hlom *core.LOM, buf []byte) (abortErr error) {
 		case cos.IsErrOOS(err):
 			j.xres.Abort(err)
 			return err
-		case !cos.IsNotExist(err) && !cos.IsErrNotFound(err):
+		case !cos.IsNotExist(err):
 			errV := fmt.Errorf(fmterr, hlom.Cname(), mi, err)
 			nlog.Infoln("Warning:", errV)
 			j.xres.AddErr(errV)

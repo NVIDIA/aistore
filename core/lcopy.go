@@ -72,7 +72,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 	// 1. Delete all copies from the metadata
 	for _, copyFQN := range copiesFQN {
 		if _, ok := lom.md.copies[copyFQN]; !ok {
-			return fmt.Errorf("lom %s(num: %d): copy %s does not exist", lom, numCopies, copyFQN)
+			return cos.NewErrNotFoundFmt(lom, "copy %s (num: %d)", copyFQN, numCopies)
 		}
 		lom.delCopyMd(copyFQN)
 	}

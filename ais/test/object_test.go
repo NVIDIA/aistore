@@ -569,7 +569,7 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
-	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+	if !isErrNotFound(err) {
 		t.Errorf("Local file %s not deleted", fileName1)
 	}
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
@@ -689,7 +689,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	// Check that cloud object is deleted
 	_, err = api.HeadObject(baseParams, bckRemote, fileName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
-	if !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+	if !isErrNotFound(err) {
 		t.Errorf("Remote file %s not deleted", fileName)
 	}
 
@@ -1639,7 +1639,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	case isChunked && !strings.Contains(herr.Message, "truncated"):
 		t.Errorf("Expected chunk truncated error on a GET for a corrupted object, got [%v]", herr)
-	case !isChunked && !cos.IsErrNotFound(herr):
+	case !isChunked && !isErrNotFound(herr):
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%v]", herr)
 	}
 }
@@ -1976,7 +1976,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		}
 
 		_, err = api.HeadObject(baseParams, bck, fileName, api.HeadArgs{FltPresence: apc.FltExists})
-		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
+		if !isErrNotFound(err) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
 		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)

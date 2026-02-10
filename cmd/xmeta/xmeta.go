@@ -210,7 +210,7 @@ func editVMD() error {
 	// find and update
 	mi, ok := vmd.Mountpaths[mpath]
 	if !ok {
-		return fmt.Errorf("mountpath %q not found in VMD (%s)", mpath, vmd.String())
+		return cos.NewErrNotFoundFmt(vmd, "mountpath %q", mpath)
 	}
 	if mi.Enabled == value {
 		action := "enabled"

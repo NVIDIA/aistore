@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -142,7 +142,8 @@ func (task *singleTask) _dlocal(lom *core.LOM, timeout time.Duration) (bool /*er
 func (task *singleTask) _dput(lom *core.LOM, req *http.Request, resp *http.Response) (bool /*err is fatal*/, error) {
 	if resp.StatusCode >= http.StatusBadRequest {
 		if resp.StatusCode == http.StatusNotFound {
-			return false, cmn.NewErrHTTP(req, fmt.Errorf("%q does not exist", task.obj.link), http.StatusNotFound)
+			e := cos.NewErrNotFound(nil, task.obj.link)
+			return false, cmn.NewErrHTTP(req, e, http.StatusNotFound)
 		}
 		return false, cmn.NewErrHTTP(req,
 			fmt.Errorf("failed to download %q: status %d", task.obj.link, resp.StatusCode),

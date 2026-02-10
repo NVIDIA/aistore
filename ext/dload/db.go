@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -49,7 +49,7 @@ func newDownloadDB(driver kvdb.Driver) *downloaderDB {
 func (db *downloaderDB) errors(id string) (errs []TaskErrInfo, _ error) {
 	key := path.Join(downloaderErrors, id)
 	if code, err := db.driver.Get(downloaderCollection, key, &errs); err != nil {
-		if !cos.IsErrNotFound(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorln(err, code)
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	key := path.Join(downloaderTasks, id)
 	if code, err := db.driver.Get(downloaderCollection, key, &tasks); err != nil {
-		if !cos.IsErrNotFound(err) {
+		if !cos.IsNotExist(err) {
 			nlog.Errorln(err, code)
 			return nil, err
 		}

@@ -1304,6 +1304,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	}
 	if status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/); err == nil {
 		if len(status.Errs) > 0 {
+			// TODO: status.Errs[].Err is string-only; prefer checking an error/status code when available.
 			if strings.Contains(status.Errs[0].Err, "does not exist") {
 				return
 			}
