@@ -2446,11 +2446,14 @@ func (h *htrun) isReady() bool {
 		return false
 	}
 	if !h.ClusterStarted() {
+		if !h.si.IsProxy() {
+			return false
+		}
 		smap := h.owner.smap.get()
 		if smap == nil || !smap.isValid() {
 			return false
 		}
-		return h.si.IsProxy() && smap.isPrimary(h.si) && smap.isValid()
+		return smap.isPrimary(h.si)
 	}
 	return true
 }
