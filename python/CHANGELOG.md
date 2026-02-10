@@ -6,6 +6,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## Unreleased
 
+## [1.20.0] - 2026-02-10
+
 ### Added
 - `Object.head_v2()` API for selective property retrieval (experimental)
 - `ObjectAttributesV2` with chunk info (`chunk_count`, `max_chunk_size`)
