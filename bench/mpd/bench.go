@@ -25,6 +25,7 @@ var (
 	size       = flag.Int64("size", 1*cos.GiB, "Object size")
 	workers    = flag.Int("workers", 16, "Multipart download workers")
 	chunk      = flag.Int64("chunk", 8*cos.MiB, "Chunk size")
+	buffer     = flag.Int64("buffer", 0, "MultipartDownloadStream ring buffer size (0 = default)")
 	iterations = flag.Int("n", 3, "Iterations")
 )
 
@@ -43,7 +44,7 @@ func main() {
 	defer api.DeleteObject(bp, bck, objName)
 
 	// rechunk the object with the specified chunk size
-	xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{ChunkSize: *chunk})
+	xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{ChunkSize: *chunk, ObjSizeLimit: *size - 1})
 	if err != nil {
 		fmt.Printf("rechunk failed: %v\n", err)
 		return
@@ -87,8 +88,44 @@ func main() {
 	}
 	multiAvg := multiTotal / time.Duration(*iterations)
 
-	fmt.Printf("\nAvg: GetObjectReader=%.2f MiB/s, MultipartDownload=%.2f MiB/s, Speedup=%.2fx\n",
+	// benchmark MultipartDownloadStream
+	fmt.Println("\nMultipartDownloadStream:")
+	var streamTotal time.Duration
+	for i := range *iterations {
+		file, _ := os.CreateTemp("", "stream-*.bin")
+		start := time.Now()
+		r, err := api.MultipartDownloadStream(bp, bck, objName, &api.MpdStreamArgs{
+			NumWorkers: *workers,
+			ChunkSize:  *chunk,
+			ObjectSize: *size,
+			BufferSize: *buffer,
+		})
+		if err != nil {
+			fmt.Printf("stream open failed: %v\n", err)
+			file.Close()
+			os.Remove(file.Name())
+			return
+		}
+		_, err = io.Copy(file, r)
+		r.Close()
+		if err != nil {
+			fmt.Printf("stream copy failed: %v\n", err)
+			file.Close()
+			os.Remove(file.Name())
+			return
+		}
+		elapsed := time.Since(start)
+		file.Close()
+		os.Remove(file.Name())
+		streamTotal += elapsed
+		fmt.Printf("  %d: %.2f MiB/s\n", i+1, float64(*size)/elapsed.Seconds()/1048576)
+	}
+	streamAvg := streamTotal / time.Duration(*iterations)
+
+	fmt.Printf("\nAvg: GetObjectReader=%.2f MiB/s, MultipartDownload=%.2f MiB/s, MultipartDownloadStream=%.2f MiB/s, Speedup(mpd)=%.2fx, Speedup(stream)=%.2fx\n",
 		float64(*size)/singleAvg.Seconds()/1048576,
 		float64(*size)/multiAvg.Seconds()/1048576,
-		singleAvg.Seconds()/multiAvg.Seconds())
+		float64(*size)/streamAvg.Seconds()/1048576,
+		singleAvg.Seconds()/multiAvg.Seconds(),
+		singleAvg.Seconds()/streamAvg.Seconds())
 }

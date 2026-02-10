@@ -7,8 +7,10 @@ package integration_test
 import (
 	"bytes"
 	"crypto/md5"
+	"io"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -96,6 +98,85 @@ func TestMultipartDownload(t *testing.T) {
 				"size mismatch: got %d, expected %d", len(downloaded), tc.size)
 
 			downloadedMD5 := md5.Sum(downloaded)
+			tassert.Fatalf(t, origMD5 == downloadedMD5, "content mismatch: MD5 differs")
+
+			tlog.Logfln("  OK: content verified")
+		})
+	}
+}
+
+// TestMultipartDownloadStream tests the api.MultipartDownloadStream API.
+func TestMultipartDownloadStream(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName    = "mpds-test-" + trand.String(6)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	tests := []struct {
+		name       string
+		size       int64
+		workers    int
+		chunkSize  int64
+		bufferSize int64 // 0 = default (numWorkers * chunkSize)
+	}{
+		{"small-1worker", 64 * cos.KiB, 1, 16 * cos.KiB, 0},
+		{"small-4workers", 256 * cos.KiB, 4, 32 * cos.KiB, 0},
+		{"medium-8workers", 8 * cos.MiB, 8, cos.MiB, 0},
+		// Backpressure: buffer holds only 2 chunks, fewer slots than workers
+		{"backpressure-2slots", 8 * cos.MiB, 8, cos.MiB, 2 * cos.MiB},
+		// Minimal: buffer = 1 chunk, effectively sequential
+		{"minimal-buffer", 4 * cos.MiB, 4, cos.MiB, cos.MiB},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			name := objName + "-" + tc.name
+			tlog.Logfln("Testing %s: size=%s, workers=%d, chunk=%s, buf=%s",
+				tc.name, cos.ToSizeIEC(tc.size, 0), tc.workers,
+				cos.ToSizeIEC(tc.chunkSize, 0), cos.ToSizeIEC(tc.bufferSize, 0))
+
+			// Create object with random content
+			reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: tc.size, CksumType: cos.ChecksumNone})
+			tassert.CheckFatal(t, err)
+
+			_, err = api.PutObject(&api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        bck,
+				ObjName:    name,
+				Reader:     reader,
+				Size:       uint64(tc.size),
+			})
+			tassert.CheckFatal(t, err)
+			defer api.DeleteObject(baseParams, bck, name)
+
+			// Get original content for comparison
+			var origBuf bytes.Buffer
+			_, err = api.GetObject(baseParams, bck, name, &api.GetArgs{Writer: &origBuf})
+			tassert.CheckFatal(t, err)
+			origMD5 := md5.Sum(origBuf.Bytes())
+
+			// Download via MultipartDownloadStream
+			streamReader, err := api.MultipartDownloadStream(baseParams, bck, name, &api.MpdStreamArgs{
+				NumWorkers: tc.workers,
+				ChunkSize:  tc.chunkSize,
+				ObjectSize: tc.size,
+				BufferSize: tc.bufferSize,
+			})
+			tassert.CheckFatal(t, err)
+
+			var downloadBuf bytes.Buffer
+			_, err = downloadBuf.ReadFrom(streamReader)
+			tassert.CheckFatal(t, err)
+			streamReader.Close()
+
+			tassert.Fatalf(t, int64(downloadBuf.Len()) == tc.size,
+				"size mismatch: got %d, expected %d", downloadBuf.Len(), tc.size)
+
+			downloadedMD5 := md5.Sum(downloadBuf.Bytes())
 			tassert.Fatalf(t, origMD5 == downloadedMD5, "content mismatch: MD5 differs")
 
 			tlog.Logfln("  OK: content verified")
@@ -198,5 +279,81 @@ func TestMultipartDownloadEdgeCases(t *testing.T) {
 		downloaded, err := os.ReadFile(file.Name())
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, md5.Sum(downloaded) == origMD5, "content mismatch")
+	})
+}
+
+// TestMultipartDownloadStreamClose tests early Close() behavior on the stream reader.
+func TestMultipartDownloadStreamClose(t *testing.T) {
+	const objSize = 8 * cos.MiB
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName    = "mpds-close-" + trand.String(6)
+	)
+
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	// Create test object
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: objSize, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{
+		BaseParams: baseParams, Bck: bck, ObjName: objName, Reader: reader, Size: uint64(objSize),
+	})
+	tassert.CheckFatal(t, err)
+	defer api.DeleteObject(baseParams, bck, objName)
+
+	streamArgs := &api.MpdStreamArgs{
+		NumWorkers: 4, ChunkSize: cos.MiB, ObjectSize: objSize,
+	}
+
+	t.Run("close-immediately", func(t *testing.T) {
+		tlog.Logfln("Open stream and close immediately")
+		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, r.Close())
+	})
+
+	t.Run("close-after-partial-read", func(t *testing.T) {
+		tlog.Logfln("Read partial content then close")
+		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		tassert.CheckFatal(t, err)
+
+		buf := make([]byte, 2*cos.MiB)
+		n, err := io.ReadFull(r, buf)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, n == 2*cos.MiB, "expected 2MiB, got %d", n)
+
+		tassert.CheckFatal(t, r.Close())
+		tlog.Logfln("  OK: read %d bytes, closed cleanly", n)
+	})
+
+	t.Run("close-while-reading", func(t *testing.T) {
+		tlog.Logfln("Close from another goroutine while reading")
+		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		tassert.CheckFatal(t, err)
+
+		// Let the reader start consuming
+		buf := make([]byte, cos.MiB)
+		_, err = io.ReadFull(r, buf)
+		tassert.CheckFatal(t, err)
+
+		// Close from another goroutine after a brief delay
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			r.Close()
+		}()
+
+		// Keep reading — expect io.ErrClosedPipe eventually
+		for {
+			_, err = r.Read(buf)
+			if err != nil {
+				break
+			}
+		}
+		tassert.Fatalf(t, err == io.ErrClosedPipe || err == io.EOF,
+			"expected ErrClosedPipe or EOF, got: %v", err)
+		tlog.Logfln("  OK: got expected error: %v", err)
 	})
 }
