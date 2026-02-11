@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -26,21 +26,30 @@ func (f BitFlags) IsAnySet(flags BitFlags) bool {
 	return f&flags != 0
 }
 
+//
 // atomic
+//
 
-// "set" as in: "add"
-func SetfAtomic(f *uint64, flags uint64) (ok bool) {
-	return atomic.CompareAndSwapUint64(f, *f, *f|flags)
+func SetFlag(f *uint64, flags uint64) {
+	for {
+		o := atomic.LoadUint64(f)
+		n := o | flags
+		if atomic.CompareAndSwapUint64(f, o, n) || o == n {
+			return
+		}
+	}
 }
 
-func ClearfAtomic(f *uint64, flags uint64) (ok bool) {
-	return atomic.CompareAndSwapUint64(f, *f, *f&^flags)
+func ClrFlag(f *uint64, flags uint64) {
+	for {
+		o := atomic.LoadUint64(f)
+		n := o &^ flags
+		if atomic.CompareAndSwapUint64(f, o, n) || o == n {
+			return
+		}
+	}
 }
 
-func IsSetfAtomic(f *uint64, flags uint64) (yes bool) {
-	return atomic.LoadUint64(f)&flags == flags
-}
-
-func IsAnySetfAtomic(f *uint64, flags uint64) (yes bool) {
+func IsAnySetFlag(f *uint64, flags uint64) bool {
 	return atomic.LoadUint64(f)&flags != 0
 }

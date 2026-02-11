@@ -143,21 +143,11 @@ func (mi *Mountpath) CheckFS() (err error) {
 }
 
 // flags
-func (mi *Mountpath) SetFlags(flags uint64) (ok bool) {
-	return cos.SetfAtomic(&mi.flags, flags)
-}
+func (mi *Mountpath) SetFlags(flags uint64) { cos.SetFlag(&mi.flags, flags) }
 
-func (mi *Mountpath) IsAnySet(flags uint64) bool {
-	return cos.IsAnySetfAtomic(&mi.flags, flags)
-}
-
-func (mi *Mountpath) IsRotational() bool {
-	return cos.IsSetfAtomic(&mi.flags, FlagRotational)
-}
-
-func (mi *Mountpath) IsNVMe() bool {
-	return cos.IsSetfAtomic(&mi.flags, FlagNVMe)
-}
+func (mi *Mountpath) IsAnySet(flags uint64) bool { return cos.IsAnySetFlag(&mi.flags, flags) }
+func (mi *Mountpath) IsRotational() bool         { return cos.IsAnySetFlag(&mi.flags, FlagRotational) }
+func (mi *Mountpath) IsNVMe() bool               { return cos.IsAnySetFlag(&mi.flags, FlagNVMe) }
 
 func (mi *Mountpath) String() string {
 	s := mi.Label.ToLog()
@@ -358,15 +348,38 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 
 func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 	mi.info = ""
+	if len(fsdisks) == 0 {
+		cos.ClrFlag(&mi.flags, FlagRotational|FlagNVMe)
+		_ = mi.String()
+		return
+	}
+
+	// (in re: hybrid raid)
+	// mountpath is rotational if there's at least one hdd
+	// mountpath is nvme iff all its disks are nvme
+	var (
+		set = FlagNVMe
+		clr = FlagRotational
+	)
+	mi.info = ""
 	mi.Disks = fsdisks.ToSlice()
 	for _, info := range fsdisks {
 		if info.Flags&ios.FlagRotational != 0 {
-			cos.SetfAtomic(&mi.flags, FlagRotational)
+			set = FlagRotational
+			clr = FlagNVMe
 			break
 		}
-		if info.Flags&ios.FlagNVMe != 0 {
-			cos.SetfAtomic(&mi.flags, FlagNVMe)
+		if info.Flags&ios.FlagNVMe == 0 {
+			clr |= FlagNVMe
+			set &^= FlagNVMe
 		}
+	}
+	pf := &mi.flags
+	if set > 0 {
+		cos.SetFlag(pf, set)
+	}
+	if clr > 0 && cos.IsAnySetFlag(pf, clr) {
+		cos.ClrFlag(pf, clr)
 	}
 	_ = mi.String() // cache
 }
@@ -413,12 +426,12 @@ func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config, block
 	if err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
-	cos.ClearfAtomic(&mi.flags, FlagWaitingDD|FlagDisabledByFSHC)
+	cos.ClrFlag(&mi.flags, FlagWaitingDD|FlagDisabledByFSHC)
 	return err
 }
 
 func (mi *Mountpath) AddDisabled(disabled MPI) {
-	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+	cos.ClrFlag(&mi.flags, FlagWaitingDD)
 	disabled[mi.Path] = mi
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
@@ -498,7 +511,7 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 }
 
 func (mi *Mountpath) ClearDD() {
-	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+	cos.ClrFlag(&mi.flags, FlagWaitingDD)
 }
 
 func (mi *Mountpath) diskSize() (size uint64) {
@@ -544,7 +557,7 @@ func (mi *Mountpath) _cdf(tcdf *Tcdf) *CDF {
 
 //nolint:staticcheck // making an exception for Warning
 func (mi *Mountpath) RescanDisks() (warn, err error) {
-	res := mfs.ios.RescanDisks(mi.Path, mi.Fs, mi.Disks) // TODO -- FIXME: comments inside
+	res := mfs.ios.RescanDisks(mi.Path, mi.Fs, mi.Disks) // TODO: comments inside
 	if res.Fatal != nil {
 		return nil, res.Fatal
 	}
@@ -778,7 +791,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMi *Mount
 			mi, ok = availableCopy[cleanMpath]
 			debug.Assert(ok)
 			nlog.Warningln(mi.String()+":", "re-enabling during dd-transition")
-			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+			cos.ClrFlag(&mi.flags, FlagWaitingDD)
 			enabledMi = mi
 			putAvailMPI(availableCopy)
 		} else if cmn.Rom.V(4, cos.ModFS) {
@@ -900,8 +913,7 @@ func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail i
 	// dd active
 	clone := _cloneOne(avail)
 	mi = clone[mpath]
-	ok := mi.SetFlags(flags)
-	debug.Assert(ok, mi.String()) // under lock
+	mi.SetFlags(flags)
 	putAvailMPI(clone)
 	numAvail = len(clone) - 1
 	return
@@ -929,7 +941,7 @@ func Disable(mpath string, cb ...func()) (*Mountpath, error) {
 			return nil, err
 		}
 		availableCopy, disabledCopy := cloneMPI()
-		cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
+		cos.ClrFlag(&mi.flags, FlagWaitingDD)
 		disabledCopy[cleanMpath] = mi
 
 		config := cmn.GCO.Get()

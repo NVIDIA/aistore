@@ -225,7 +225,7 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 				return nil, err
 			}
 		} else {
-			debug.Assert(size >= 0 && size < math.MaxUint32)
+			debug.Assert(size >= 0 && size < math.MaxUint32, size)
 			blksize = uint32(size)
 		}
 
