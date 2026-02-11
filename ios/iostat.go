@@ -27,7 +27,7 @@ const statsdir = "/sys/class/block"
 // public
 
 const (
-	FlagRotational = 1 << 0
+	FlagRotational = 1 << iota
 	FlagNVMe
 )
 

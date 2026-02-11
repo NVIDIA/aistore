@@ -231,19 +231,17 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 
 		// 2. flags
 		var flags uint32
-		rot, err := _readAny[int64](filepath.Join(devDirPath, "queue", "rotational"))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) && parent != nil {
-				flags = parent.info.Flags
+		if parent != nil {
+			flags = parent.info.Flags
+		} else {
+			rot, err := _readAny[int64](filepath.Join(devDirPath, "queue", "rotational"))
+			if err == nil && rot != 0 {
+				flags = FlagRotational
 			}
-			// else default to 0 (non-rotational)
-		} else if rot != 0 {
-			flags = FlagRotational
-		}
-
-		// TODO: prefix match won't work for device-mapped NVMe (non-rotational implies "ssd")
-		if strings.HasPrefix(kname, "nvme") && (flags&FlagRotational) == 0 {
-			flags |= FlagNVMe
+			// TODO: prefix match won't work for device-mapped NVMe (non-rotational implies "ssd")
+			if strings.HasPrefix(kname, "nvme") && (flags&FlagRotational) == 0 {
+				flags |= FlagNVMe
+			}
 		}
 
 		bd := &blockDev{

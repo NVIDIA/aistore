@@ -364,6 +364,9 @@ func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 			cos.SetfAtomic(&mi.flags, FlagRotational)
 			break
 		}
+		if info.Flags&ios.FlagNVMe != 0 {
+			cos.SetfAtomic(&mi.flags, FlagNVMe)
+		}
 	}
 	_ = mi.String() // cache
 }
