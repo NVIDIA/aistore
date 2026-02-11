@@ -134,7 +134,12 @@ func fs2disks(mpath, fsname string, label cos.MountpathLabel, blockDevs BlockDev
 // private
 //
 
-// (see recursion below)
+// notice two orthogonal recursion paths:
+// 1. _lsblk() recurses parent -> children (partitions, holders) to build the block device tree
+//    as exposed by sysfs
+// 2. _mediaFlags() recurses device -> slaves to look _through_ device-mapper/md/LVM stacks
+//    at the actual underlying hardware
+
 func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 	if parentDir == "" {
 		debug.Assert(parent == nil)
@@ -231,16 +236,16 @@ func _lsblk(parentDir string, parent *blockDev) (BlockDevs, error) {
 
 		// 2. flags
 		var flags uint32
-		if parent != nil {
-			flags = parent.info.Flags
+		if parent == nil {
+			// root device
+			flags = _mediaFlags(devDirPath, kname, nil)
 		} else {
-			rot, err := _readAny[int64](filepath.Join(devDirPath, "queue", "rotational"))
-			if err == nil && rot != 0 {
-				flags = FlagRotational
-			}
-			// TODO: prefix match won't work for device-mapped NVMe (non-rotational implies "ssd")
-			if strings.HasPrefix(kname, "nvme") && (flags&FlagRotational) == 0 {
-				flags |= FlagNVMe
+			flags = parent.info.Flags
+			slaves, err := os.ReadDir(filepath.Join(devDirPath, "slaves"))
+			if err == nil && len(slaves) > 0 {
+				mf := _mediaFlags(devDirPath, kname, slaves)
+				flags &^= (FlagRotational | FlagNVMe)
+				flags |= mf
 			}
 		}
 
@@ -320,4 +325,50 @@ func _match(blockDevs BlockDevs, device string) bool {
 		}
 	}
 	return false
+}
+
+// If device has underlying "slaves":
+// - rotational if any slave is rotational
+// - nvme iff all slaves are nvme (and none rotational)
+// Otherwise, fall back to leaf inference:
+// - rotational from `queue/rotational`
+// - nvme from kernel name prefix ("nvme*") when non-rotational
+func _mediaFlags(devDirPath, kname string, slaves []os.DirEntry) (flags uint32) {
+	var err error
+	if len(slaves) == 0 {
+		slavesDir := filepath.Join(devDirPath, "slaves")
+		slaves, err = os.ReadDir(slavesDir)
+	}
+
+	// 1. aggregate slaves
+	if err == nil && len(slaves) > 0 {
+		allNVMe := true
+		for _, s := range slaves {
+			sname := s.Name()
+			// slave paths live under /sys/class/block/<name>
+			sdir := filepath.Join(sysBlockPath, sname)
+			f := _mediaFlags(sdir, sname, nil) // recurs
+			if f&FlagRotational != 0 {
+				return FlagRotational
+			}
+			if f&FlagNVMe == 0 {
+				allNVMe = false
+			}
+		}
+		if allNVMe {
+			flags |= FlagNVMe
+		}
+		return flags
+	}
+
+	// 2. leaf
+	if rot, err := _readAny[int64](filepath.Join(devDirPath, "queue", "rotational")); err == nil && rot != 0 {
+		flags = FlagRotational
+	}
+
+	// prefix match won't work for device-mapped NVMe; dm/md stacks are handled above via "slaves"
+	if strings.HasPrefix(kname, "nvme") && (flags&FlagRotational) == 0 {
+		flags |= FlagNVMe
+	}
+	return flags
 }
