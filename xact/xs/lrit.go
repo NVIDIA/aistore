@@ -98,16 +98,16 @@ func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags
 	}
 
 	// run single-threaded
-	if numWorkers == nwpNone {
+	if numWorkers == NwpNone {
 		return nil
 	}
 
 	// tune up: media-aware default + load-based clamping
-	numWorkers, err := tuneNumWorkers(r.parent.Name(), numWorkers, l)
+	numWorkers, err := TuneNumWorkers(r.parent.Name(), numWorkers, l)
 	if err != nil {
 		return err
 	}
-	if numWorkers == nwpNone {
+	if numWorkers == NwpNone {
 		return nil
 	}
 
@@ -140,7 +140,7 @@ func (r *lrit) _iniNwp(numWorkers, confBurst int) {
 	}
 
 	// [burst] work channel capacity: up to 4 pending work items per
-	chsize := cos.ClampInt(numWorkers*nwpBurstMult, confBurst, nwpBurstMax)
+	chsize := cos.ClampInt(numWorkers*NwpBurstMult, confBurst, NwpBurstMax)
 	r.nwp.workCh = make(chan lrpair, chsize)
 	nlog.Infoln(r.parent.Name(), "workers:", numWorkers)
 }

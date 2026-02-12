@@ -133,10 +133,10 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 
 	// unlike tco and other lrit-based xactions,
 	// tcb - via xact.BckJog - employs conventional mountpath joggers;
-	// `nwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
+	// `NwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
 	// msg.NumWorkers == 0 triggers system tune-up (media + load) default.
 	l := fs.NumAvail()
-	numWorkers, err := tuneNumWorkers(r.Name(), msg.NumWorkers, l)
+	numWorkers, err := TuneNumWorkers(r.Name(), msg.NumWorkers, l)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (r *XactTCB) _iniNwp(numWorkers int) {
 	for range numWorkers {
 		r.nwp.workers = append(r.nwp.workers, tcbworker{r})
 	}
-	chsize := cos.ClampInt(numWorkers*nwpBurstMult, r.Config.TCB.Burst, nwpBurstMax)
+	chsize := cos.ClampInt(numWorkers*NwpBurstMult, r.Config.TCB.Burst, NwpBurstMax)
 	r.nwp.workCh = make(chan core.LIF, chsize)
 	r.nwp.stopCh = cos.NewStopCh()
 	nlog.Infoln(r.Name(), "workers:", numWorkers)

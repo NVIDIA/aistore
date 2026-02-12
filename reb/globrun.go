@@ -71,6 +71,7 @@ type (
 			ts      int64      // last time we have recomputed
 			mtx     sync.Mutex
 		}
+		// [run] lazy delete migrated objects
 		lazydel lazydel
 		// (smap, xreb) + atomic state
 		id atomic.Int64
@@ -112,7 +113,8 @@ type (
 		config *cmn.Config
 		xreb   *xs.Rebalance
 		bck    *meta.Bck // advanced usage, limited scope
-		apaths fs.MPI
+		nwp    *nwp      // run rebWorker
+		avail  fs.MPI
 		logHdr string
 		prefix string // ditto, as in: traverse only bck[/prefix]
 		id     int64
@@ -308,9 +310,13 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 
 	extArgs.Tstats.SetFlag(cos.NodeAlerts, cos.Rebalancing)
 
-	// run
+	// run: nwp workers (if any), lazy deletion, rebalance joggers (no-EC[, EC))
+	if !rargs.ecUsed {
+		reb.runNwp(rargs)
+	}
 	go reb.lazydel.run(rargs.xreb, rargs.config, rargs.id)
 	err := reb.run(rargs)
+
 	if err == nil {
 		errCnt := reb.rebWaitAck(rargs)
 		if errCnt == 0 {
@@ -366,7 +372,7 @@ func _pingall(rargs *rebArgs) bool {
 		nlog.Errorln(rargs.logHdr, "not starting: ping err-s", errCnt)
 		return false
 	}
-	rargs.apaths = fs.GetAvail()
+	rargs.avail = fs.GetAvail()
 	return true
 }
 
@@ -525,7 +531,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 		wg  = &sync.WaitGroup{}
 		ver = rargs.smap.Version
 	)
-	for _, mi := range rargs.apaths {
+	for _, mi := range rargs.avail {
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: rargs.xreb, wg: wg},
 			rargs:      rargs,
@@ -535,6 +541,13 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 		go rl.jog(mi)
 	}
 	wg.Wait()
+
+	// drain workers
+	if nwp := rargs.nwp; nwp != nil {
+		close(nwp.workCh)
+		nwp.wg.Wait()
+		debug.Assert(len(rargs.nwp.workCh) == 0)
+	}
 
 	if err := rargs.xreb.AbortErr(); err != nil {
 		nlog.Warningln(rargs.logHdr, "finish no-ec run, abort joggers: [", err, "]")
@@ -606,8 +619,8 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 
 		// NOTE: requires locally migrated objects *not* to be removed at the src
 		aPaths, _ := fs.Get()
-		if len(aPaths) > len(rargs.apaths) {
-			nlog.Warningf("%s mountpath changes detected (%d, %d)", rargs.logHdr, len(aPaths), len(rargs.apaths))
+		if len(aPaths) > len(rargs.avail) {
+			nlog.Warningf("%s mountpath changes detected (%d, %d)", rargs.logHdr, len(aPaths), len(rargs.avail))
 		}
 
 		// 8. synchronize

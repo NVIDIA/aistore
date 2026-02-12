@@ -51,7 +51,7 @@ func (reb *Reb) runECjoggers(rargs *rebArgs) {
 		wg = &sync.WaitGroup{}
 		b  = rargs.bck // limited scope
 	)
-	for _, mi := range rargs.apaths {
+	for _, mi := range rargs.avail {
 		bck := cmn.Bck{Provider: apc.AIS}
 		if b != nil {
 			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
@@ -60,7 +60,7 @@ func (reb *Reb) runECjoggers(rargs *rebArgs) {
 		go reb.jogEC(mi, &bck, wg, rargs)
 	}
 	for _, provider := range rargs.config.Backend.Providers {
-		for _, mi := range rargs.apaths {
+		for _, mi := range rargs.avail {
 			bck := cmn.Bck{Provider: provider.Name}
 			if b != nil {
 				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}

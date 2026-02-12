@@ -584,7 +584,7 @@ func (r *XactTCO) prune(pruneit *lrit, smap *meta.Smap, pt *cos.ParsedTemplate, 
 	var syncit lrit
 	debug.Assert(pruneit.lrp == lrpRange)
 
-	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, lsflags, nwpDflt, r.config.TCO.Burst)
+	err := syncit.init(pruneit.parent, pruneit.msg, rp.bckTo, lsflags, NwpDflt, r.config.TCO.Burst)
 	debug.AssertNoErr(err)
 	syncit.pt = pt
 	syncwi := &syncwi{&rp} // reusing only prune.do (and not init/run/wait)

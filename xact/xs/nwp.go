@@ -34,22 +34,22 @@ import (
 // - SSD:   4 workers per mountpath
 // - HDD:   1 worker  per mountpath
 //
-// tuneNumWorkers() - the main function below - does both:
+// TuneNumWorkers() - the main function below - does both:
 // - computing the default number of workers,
 // - throttling (or clamping) the latter down based on current system load
 // =======================================================================================
 
 // shared work channel sizing
 const (
-	nwpBurstMult = 48   // channel size = burst * num-workers
-	nwpBurstMax  = 4096 // upper bound on channel size
+	NwpBurstMult = 48   // channel size = burst * num-workers
+	NwpBurstMax  = 8192 // upper bound on (shared) workCh size
 )
 
 // num-workers specials
 const (
-	nwpNone = -1 // no workers: iterated LOMs executed by the iterating goroutine
-	nwpMin  = 2  // throttled minimum
-	nwpDflt = 0  // resolve at runtime via defaultNW()
+	NwpNone = -1 // no workers: iterated LOMs executed by the iterating goroutine
+	NwpMin  = 2  // throttled minimum
+	NwpDflt = 0  // resolve at runtime via defaultNW()
 )
 
 // media-type multipliers (workers per mountpath)
@@ -83,21 +83,21 @@ func _defaultNW(numMpaths int) int {
 // - xname: xaction name (for logging)
 // - numWorkers (when non-zero): requested number of workers
 // - numMpaths: number of available mountpaths
-func tuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
+func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 	const memExtremeMsg = "extreme memory pressure"
 	var (
 		ngr     = runtime.NumGoroutine()
 		ngrLoad = load.Gor(ngr)
 	)
 	// 1. apply system default
-	if numWorkers == nwpDflt {
+	if numWorkers == NwpDflt {
 		numWorkers = _defaultNW(numMpaths)
 	}
 
 	// 2. goroutine load
 	if ngrLoad == load.Critical {
 		nlog.Warningln(xname, stats.NgrPrompt, ngr)
-		return nwpNone, nil
+		return NwpNone, nil
 	}
 
 	numWorkers = min(sys.MaxParallelism()+4, numWorkers)
@@ -116,12 +116,12 @@ func tuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 		if !cmn.Rom.TestingEnv() {
 			return 0, errors.New(xname + ": " + memExtremeMsg + " - not starting")
 		}
-		return nwpNone, nil
+		return NwpNone, nil
 	case load.High:
 		if ngrLoad == load.High {
-			return nwpNone, nil
+			return NwpNone, nil
 		}
-		numWorkers = min(nwpMin+1, numWorkers)
+		numWorkers = min(NwpMin+1, numWorkers)
 	}
 
 	// 4. CPU load averages
@@ -131,9 +131,9 @@ func tuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 			nlog.Warningln(xname, "high load [", lv, wm, "]")
 		}
 		if ngrLoad == load.High {
-			return nwpNone, nil
+			return NwpNone, nil
 		}
-		numWorkers = min(nwpMin, numWorkers)
+		numWorkers = min(NwpMin, numWorkers)
 	}
 
 	return numWorkers, nil
