@@ -215,11 +215,13 @@ func showThroughputHandler(c *cli.Context) error {
 		switch kind {
 		case stats.KindCounter:
 			if name == stats.GetCount || name == stats.PutCount ||
+				name == stats.GetBatchCount || name == stats.GetBatchObjCount || name == stats.GetBatchFileCount ||
 				strings.HasSuffix(name, "."+stats.GetCount) || strings.HasSuffix(name, "."+stats.PutCount) {
 				selected[name] = kind
 			}
 		case stats.KindSize:
 			if name == stats.GetSize || name == stats.PutSize ||
+				name == stats.GetBatchObjSize || name == stats.GetBatchFileSize ||
 				strings.HasSuffix(name, "."+stats.GetSize) || strings.HasSuffix(name, "."+stats.PutSize) {
 				selected[name] = kind
 
