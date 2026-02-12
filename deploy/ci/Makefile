@@ -1,8 +1,8 @@
 DOCKER          ?= docker
 REGISTRY_URL    ?= docker.io
-CI_IMAGE        ?= aistorage/gitlab-ci
+IMAGE_REPO      ?= aistorage/gitlab-ci
 IMAGE_TAG       ?= latest
-IMAGE_URL = $(REGISTRY_URL)/$(CI_IMAGE):$(IMAGE_TAG)
+IMAGE_URL = $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
 
 all: build push
 

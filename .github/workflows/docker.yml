@@ -5,12 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      build_util_image:
-        description: 'Build ais-util image (aistorage/ais-util)'
-        required: true
-        type: boolean
-        default: false
-
       build_aisnode_image:
         description: 'Build aisnode image (aistorage/aisnode)'
         required: true
@@ -23,14 +17,20 @@ on:
         type: boolean
         default: false
 
-      build_cluster_minimal_image:
-        description: 'Build cluster-minimal image (aistorage/cluster-minimal)'
+      build_authn_image:
+        description: 'Build AuthN image (aistorage/authn)'
         required: true
         type: boolean
         default: false
 
-      build_authn_image:
-        description: 'Build AuthN (aistorage/authn)'
+      build_util_image:
+        description: 'Build ais-util image (aistorage/ais-util)'
+        required: true
+        type: boolean
+        default: false
+
+      build_cluster_minimal_image:
+        description: 'Build cluster-minimal image (aistorage/cluster-minimal)'
         required: true
         type: boolean
         default: false
@@ -42,149 +42,89 @@ on:
         default: false
 
       image_tag:
-        description: 'Tag of all the selected images'
+        description: 'Tag for all selected images'
         required: true
         default: 'latest'
         type: string
 
-env:
-  UTIL_IMAGE: 'aistorage/ais-util'
-  AISNODE_IMAGE: 'aistorage/aisnode'
-  AISINIT_IMAGE: 'aistorage/ais-init'
-  CLUSTER_MINIMAL_IMAGE: 'aistorage/cluster-minimal'
-  CI_IMAGE: 'aistorage/gitlab-ci'
-  AUTHN_IMAGE: 'aistorage/authn'
-
 jobs:
-  build-ais-util:
-    runs-on: ubuntu-latest
-    if: ${{ inputs.build_util_image }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push `ais-util` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisutil_container
-          IMAGE_REPO="${{ env.UTIL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-          popd
-
-  build-aisnode:
-    runs-on: ubuntu-latest
+  aisnode:
     if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/aisnode
+      image_tag: ${{ inputs.image_tag || 'dev' }}
+      context_dir: deploy/prod/k8s/aisnode_container
+      commit_sha: ${{ github.sha }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+  aisnode-tracing:
+    if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/aisnode
+      image_tag: ${{ inputs.image_tag && format('{0}-oteltracing', inputs.image_tag) || 'dev-oteltracing' }}
+      context_dir: deploy/prod/k8s/aisnode_container
+      build_tags: oteltracing
+      commit_sha: ${{ github.sha }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push `aisnode` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}" COMMIT_SHA="${{ github.sha }}" make -e all
-          popd
-
-  build-ais-init:
-    runs-on: ubuntu-latest
+  ais-init:
     if: ${{ inputs.build_aisinit_image || github.event_name == 'push' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/ais-init
+      image_tag: ${{ inputs.image_tag || 'dev' }}
+      context_dir: deploy/prod/k8s/aisinit_container
+      commit_sha: ${{ github.sha }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push `ais-init` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisinit_container
-          IMAGE_REPO="${{ env.AISINIT_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}" COMMIT_SHA="${{ github.sha }}" make -e all
-          popd
-
-  build-aisnode-tracing:
-    runs-on: ubuntu-latest
-    if: ${{ inputs.build_aisnode_image || github.event_name == 'push' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push `aisnode` image with tracing support
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/aisnode_container
-          IMAGE_REPO="${{ env.AISNODE_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag || 'dev' }}-oteltracing" BUILD_TAGS="oteltracing" make -e all
-          popd
-
-  build-cluster-minimal:
-    runs-on: ubuntu-latest
-    if: ${{ inputs.build_cluster_minimal_image }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push `cluster-minimal` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/docker/single
-          IMAGE_REPO="${{ env.CLUSTER_MINIMAL_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-          popd
-
-  build-authn:
-    runs-on: ubuntu-latest
+  authn:
     if: ${{ inputs.build_authn_image }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/authn
+      image_tag: ${{ inputs.image_tag }}
+      context_dir: deploy/prod/k8s/authn_container
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+  ais-util:
+    if: ${{ inputs.build_util_image }}
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/ais-util
+      image_tag: ${{ inputs.image_tag }}
+      context_dir: deploy/prod/k8s/aisutil_container
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push `authn` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/prod/k8s/authn_container
-          IMAGE_REPO="${{ env.AUTHN_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make all
-          popd
+  cluster-minimal:
+    if: ${{ inputs.build_cluster_minimal_image }}
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/cluster-minimal
+      image_tag: ${{ inputs.image_tag }}
+      context_dir: deploy/prod/docker/single
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  build-gitlab-ci:
-    runs-on: ubuntu-latest
+  gitlab-ci:
     if: ${{ inputs.build_gitlab_ci_image }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push `gitlab-ci` image
-        run: |
-          pushd $GITHUB_WORKSPACE/deploy/ci
-          CI_IMAGE="${{ env.CI_IMAGE }}" IMAGE_TAG="${{ inputs.image_tag }}" make -e all
-          popd
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: aistorage/gitlab-ci
+      image_tag: ${{ inputs.image_tag }}
+      context_dir: deploy/ci
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

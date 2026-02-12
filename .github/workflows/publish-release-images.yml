@@ -1,0 +1,44 @@
+name: Publish Release Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  aisnode:
+    strategy:
+      matrix:
+        include:
+          # aisnode
+          - image_name: aistorage/aisnode
+            image_tag: ${{ github.ref_name }}
+            context_dir: deploy/prod/k8s/aisnode_container
+          - image_name: aistorage/aisnode
+            image_tag: latest
+            context_dir: deploy/prod/k8s/aisnode_container
+          # aisnode tracing
+          - image_name: aistorage/aisnode
+            image_tag: ${{ github.ref_name }}-oteltracing
+            context_dir: deploy/prod/k8s/aisnode_container
+            build_tags: oteltracing
+          - image_name: aistorage/aisnode
+            image_tag: latest-oteltracing
+            context_dir: deploy/prod/k8s/aisnode_container
+            build_tags: oteltracing
+          # ais-init
+          - image_name: aistorage/ais-init
+            image_tag: ${{ github.ref_name }}
+            context_dir: deploy/prod/k8s/aisinit_container
+          - image_name: aistorage/ais-init
+            image_tag: latest
+            context_dir: deploy/prod/k8s/aisinit_container
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_name: ${{ matrix.image_name }}
+      image_tag: ${{ matrix.image_tag }}
+      context_dir: ${{ matrix.context_dir }}
+      build_tags: ${{ matrix.build_tags }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
