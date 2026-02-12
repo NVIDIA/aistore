@@ -131,31 +131,22 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 		return r, nil // ---->
 	}
 
-	// - unlike tco and other lrit-based xactions,
-	//   tcb - via xact.BckJog - employs conventional mountpath joggers;
-	// - `nwpNone` (serial execution) not supported;
-	// - num-workers cannot be less than the number of mountpaths (and joggers)
-	// - not using any workers - is the supported default.
-
-	if msg.NumWorkers > 0 {
-		var (
-			l = fs.NumAvail()
-			n = max(msg.NumWorkers, l)
-		)
-		numWorkers, err := clampNumWorkers(r.Name(), n, l)
-		if err != nil {
-			return nil, err
-		}
-		if n != numWorkers {
-			nlog.Warningln(r.Name(), "throttle num-workers:", numWorkers, "[ from", n, "]")
-		}
-		if numWorkers >= l {
-			// delegate intra-cluster copying/transforming to additional workers;
-			// run them in parallel with traversing joggers;
-			r._iniNwp(numWorkers)
-		} else {
-			nlog.Warningln(r.Name(), "workers: 0 (ignoring ", msg.NumWorkers, "under load)")
-		}
+	// unlike tco and other lrit-based xactions,
+	// tcb - via xact.BckJog - employs conventional mountpath joggers;
+	// `nwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
+	// msg.NumWorkers == 0 triggers system tune-up (media + load) default.
+	l := fs.NumAvail()
+	numWorkers, err := tuneNumWorkers(r.Name(), msg.NumWorkers, l)
+	if err != nil {
+		return nil, err
+	}
+	if numWorkers >= l && !msg.DryRun {
+		// exclude dry-run (uses joggers-only path for correct accounting);
+		// delegate intra-cluster copying/transforming to additional workers;
+		// run them in parallel with traversing joggers
+		r._iniNwp(numWorkers)
+	} else if msg.NumWorkers > l {
+		nlog.Warningln(r.Name(), "workers: 0 (ignoring ", msg.NumWorkers, "under load)")
 	}
 
 	// TODO: Revisit `r.args.DisableDM` — consider removing it.

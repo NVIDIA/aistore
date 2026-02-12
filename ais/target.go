@@ -281,7 +281,7 @@ func (t *target) init(config *cmn.Config) {
 		RandomTID:     generated,
 	}
 	newVol := volume.Init(t, config, vini)
-	fs.ComputeDiskSize()
+	fs.DiskSizeMedia()
 
 	t.initHostIP(config)
 	daemon.rg.add(t)

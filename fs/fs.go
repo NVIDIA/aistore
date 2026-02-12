@@ -38,12 +38,19 @@ const nodeXattrID = "user.ais.daemon_id"
 const (
 	FlagBeingDisabled uint64 = 1 << iota
 	FlagBeingDetached
-	FlagDisabledByFSHC // reserved
-	FlagRotational     // <= ios.FlagRotational
-	FlagNVMe           // <= ios.FlagNVMe
+	FlagDisabledByFSHC
+	// media type
+	flagRotational
+	flagNVMe
 )
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
+
+const (
+	_ssd  = ", ssd"
+	_hdd  = ", hdd"
+	_nvme = ", nvme"
+)
 
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
@@ -90,6 +97,8 @@ type (
 		cs        CapStatus
 		csExpires atomic.Int64
 		totalSize atomic.Uint64
+
+		flags uint64
 
 		mu sync.Mutex
 	}
@@ -146,27 +155,27 @@ func (mi *Mountpath) CheckFS() (err error) {
 func (mi *Mountpath) SetFlags(flags uint64) { cos.SetFlag(&mi.flags, flags) }
 
 func (mi *Mountpath) IsAnySet(flags uint64) bool { return cos.IsAnySetFlag(&mi.flags, flags) }
-func (mi *Mountpath) IsRotational() bool         { return cos.IsAnySetFlag(&mi.flags, FlagRotational) }
-func (mi *Mountpath) IsNVMe() bool               { return cos.IsAnySetFlag(&mi.flags, FlagNVMe) }
+func (mi *Mountpath) IsRotational() bool         { return cos.IsAnySetFlag(&mi.flags, flagRotational) }
+func (mi *Mountpath) IsNVMe() bool               { return cos.IsAnySetFlag(&mi.flags, flagNVMe) }
 
 func (mi *Mountpath) String() string {
 	s := mi.Label.ToLog()
 	if mi.info == "" {
-		dt := ", ssd"
+		mediaTy := _ssd
 		switch {
 		case mi.IsRotational():
-			dt = ", hdd"
+			mediaTy = _hdd
 		case mi.IsNVMe():
-			dt = ", nvme"
+			mediaTy = _nvme
 		}
 		switch len(mi.Disks) {
 		case 0:
 			// where `fs=` is a block device (or its partition) formatted with a given filesystem (e.g., xfs)
-			mi.info = fmt.Sprintf("mp[%s, fs=%s%s%s]", mi.Path, mi.Fs, s, dt)
+			mi.info = fmt.Sprintf("mp[%s, fs=%s%s%s]", mi.Path, mi.Fs, s, mediaTy)
 		case 1:
-			mi.info = fmt.Sprintf("mp[%s, %s%s%s]", mi.Path, mi.Disks[0], s, dt)
+			mi.info = fmt.Sprintf("mp[%s, %s%s%s]", mi.Path, mi.Disks[0], s, mediaTy)
 		default:
-			mi.info = fmt.Sprintf("mp[%s, %v%s%s]", mi.Path, mi.Disks, s, dt)
+			mi.info = fmt.Sprintf("mp[%s, %v%s%s]", mi.Path, mi.Disks, s, mediaTy)
 		}
 	}
 	if !mi.IsAnySet(FlagWaitingDD) {
@@ -349,7 +358,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 	mi.info = ""
 	if len(fsdisks) == 0 {
-		cos.ClrFlag(&mi.flags, FlagRotational|FlagNVMe)
+		cos.ClrFlag(&mi.flags, flagRotational|flagNVMe)
 		_ = mi.String()
 		return
 	}
@@ -358,20 +367,20 @@ func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 	// mountpath is rotational if there's at least one hdd
 	// mountpath is nvme iff all its disks are nvme
 	var (
-		set = FlagNVMe
-		clr = FlagRotational
+		set = flagNVMe
+		clr = flagRotational
 	)
 	mi.info = ""
 	mi.Disks = fsdisks.ToSlice()
 	for _, info := range fsdisks {
 		if info.Flags&ios.FlagRotational != 0 {
-			set = FlagRotational
-			clr = FlagNVMe
+			set = flagRotational
+			clr = flagNVMe
 			break
 		}
 		if info.Flags&ios.FlagNVMe == 0 {
-			clr |= FlagNVMe
-			set &^= FlagNVMe
+			clr |= flagNVMe
+			set &^= flagNVMe
 		}
 	}
 	pf := &mi.flags
@@ -556,7 +565,7 @@ func (mi *Mountpath) _cdf(tcdf *Tcdf) *CDF {
 }
 
 //nolint:staticcheck // making an exception for Warning
-func (mi *Mountpath) RescanDisks() (warn, err error) {
+func (mi *Mountpath) RescanDisks() (warn, _ error) {
 	res := mfs.ios.RescanDisks(mi.Path, mi.Fs, mi.Disks) // TODO: comments inside
 	if res.Fatal != nil {
 		return nil, res.Fatal
@@ -582,7 +591,7 @@ func (mi *Mountpath) RescanDisks() (warn, err error) {
 
 	// TODO: restart target and check its volume
 	mi._setDisks(res.FsDisks)
-	return warn, err
+	return warn, nil
 }
 
 // return mountpath alert (suffix)
@@ -1181,19 +1190,51 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 // capacity management/reporting
 //
 
-// total disk size
-func ComputeDiskSize() {
+// total disk size & media type
+// note: normally, mountpaths do not share underlying devices;
+// `seen` map is used here to handle specific exceptions:
+// - local playground
+// - labeled mountpaths (or "mountpath labels")
+func DiskSizeMedia() {
 	var (
-		totalSize uint64
-		avail     = GetAvail()
+		mediaTy string
+		totalSz uint64
+		flags   = flagNVMe
+		seen    = make(map[cos.FsID]struct{}, len(mfs.fsIDs))
+		avail   = GetAvail()
 	)
 	for _, mi := range avail {
-		totalSize += mi.diskSize()
+		if _, ok := seen[mi.FsID]; ok {
+			continue
+		}
+		seen[mi.FsID] = struct{}{}
+		if mi.IsRotational() {
+			flags = flagRotational
+			mediaTy = _hdd
+		} else if !mi.IsNVMe() && flags != flagRotational {
+			flags = 0
+		}
+		totalSz += mi.diskSize()
 	}
-	mfs.totalSize.Store(totalSize)
+	mfs.totalSize.Store(totalSz)
+
+	// log & flags
+	if len(avail) == 0 {
+		ratomic.StoreUint64(&mfs.flags, 0)
+		nlog.Warningln(cmn.ErrNoMountpaths)
+	} else {
+		ratomic.StoreUint64(&mfs.flags, flags)
+		if mediaTy == "" {
+			mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
+		}
+		nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
+	}
 }
 
 func GetDiskSize() uint64 { return mfs.totalSize.Load() }
+
+func IsRotational() bool { return cos.IsAnySetFlag(&mfs.flags, flagRotational) }
+func IsNVMe() bool       { return cos.IsAnySetFlag(&mfs.flags, flagNVMe) }
 
 // bucket and bucket+prefix on-disk sizing
 func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
@@ -1202,7 +1243,7 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 		sz, err := mi.onDiskSize(bck, prefix)
 		if err != nil {
 			if cmn.Rom.V(4, cos.ModFS) {
-				nlog.Warningln("failed to calculate size on disk:", err, "["+mi.String(), bck.String(), prefix+"]")
+				nlog.Warningln("failed to calculate size on disk:", err, "[", mi.String(), bck.String(), prefix, "]")
 			}
 			return 0
 		}
@@ -1513,29 +1554,4 @@ func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 	}
 	ratio := (util - umin) * 100 / (umax - umin)
 	return time.Duration(100-ratio)*(tmax-tmin)/100 + tmin
-}
-
-/////////
-// MPI //
-/////////
-
-func (mpi MPI) String() string {
-	var (
-		sb   cos.SB
-		i, l int
-	)
-	for key := range mpi {
-		l += len(key) + 1
-	}
-	sb.Init(l + 2)
-	sb.WriteUint8('[')
-	for key := range mpi {
-		sb.WriteString(key)
-		i++
-		if i < l-1 {
-			sb.WriteUint8(' ')
-		}
-	}
-	sb.WriteUint8(']')
-	return sb.String()
 }

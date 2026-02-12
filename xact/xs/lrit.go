@@ -102,10 +102,16 @@ func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags
 		return nil
 	}
 
-	// tuneup number of concurrent workers (heuristic)
-	if numWorkers == nwpDflt {
-		numWorkers = l
+	// tune up: media-aware default + load-based clamping
+	numWorkers, err := tuneNumWorkers(r.parent.Name(), numWorkers, l)
+	if err != nil {
+		return err
 	}
+	if numWorkers == nwpNone {
+		return nil
+	}
+
+	// bump for large workloads when there's parallelism headroom
 	if a := sys.MaxParallelism(); a > numWorkers+8 {
 		var bump bool
 		a <<= 1
@@ -121,19 +127,8 @@ func (r *lrit) init(xctn cos.Stopper, msg *apc.ListRange, bck *meta.Bck, lsflags
 			numWorkers += 2
 		}
 	}
-	n, err := clampNumWorkers(r.parent.Name(), numWorkers, l)
-	if err != nil {
-		return err
-	}
-	if n != numWorkers {
-		nlog.Warningln(r.parent.Name(), "throttle num-workers:", n, "[ from", numWorkers, "]")
-		numWorkers = n
-	}
-	if numWorkers == nwpNone {
-		return nil
-	}
-	debug.Assert(numWorkers > 0 && numWorkers < 9999, numWorkers)
 
+	debug.Assert(numWorkers > 0 && numWorkers < 9999, numWorkers)
 	r._iniNwp(numWorkers, confBurst)
 	return nil
 }

@@ -266,11 +266,6 @@ func (p *blobFactory) Start() (err error) {
 		stats.VlabXkind:  r.Kind(),
 	}
 
-	var (
-		l = fs.NumAvail()
-		n = max(r.numWorkers, l)
-	)
-
 	// Admission check: assess load to determine if we can start
 	r.config = cmn.GCO.Get()
 	r.adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{
@@ -286,13 +281,12 @@ func (p *blobFactory) Start() (err error) {
 		time.Sleep(r.adv.Sleep)
 	}
 
-	if r.numWorkers >= nwpDflt {
-		numWorkers, err := clampNumWorkers(r.Name(), n, l)
-		if err != nil {
-			return err
-		}
-		r.numWorkers = numWorkers
+	l := fs.NumAvail()
+	numWorkers, err := tuneNumWorkers(r.Name(), r.numWorkers, l)
+	if err != nil {
+		return err
 	}
+	r.numWorkers = numWorkers
 	r.calcChunkSize()
 
 	if r.numWorkers != nwpNone {

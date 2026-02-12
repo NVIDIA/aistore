@@ -8,20 +8,14 @@ package xs
 import (
 	"errors"
 	"fmt"
-	"runtime"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/cmn/oom"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -81,76 +75,6 @@ func (rate *tcrate) acquire() {
 	if rate.dst != nil {
 		rate.dst.RetryAcquire(time.Second)
 	}
-}
-
-//
-// num-workers parallelism
-//
-
-// workers (tcb and tco, the latter via lrit)
-const (
-	nwpBurstMult = 48 // shared work channel burst multiplier (channel size = burst * num-workers)
-	nwpBurstMax  = 4096
-)
-const (
-	nwpNone = -1 // no workers at all - iterated LOMs get executed by the (iterating) goroutine
-	nwpMin  = 2  // throttled
-	nwpDflt = 0  // (number of mountpaths)
-)
-
-// clamp the requested number of workers based on node load
-// usage: all list-range type jobs and tcb
-// - xname is xaction name
-// - n is the requested number of workers
-func clampNumWorkers(xname string, n, numMpaths int) (int, error) {
-	const memExtremeMsg = "extreme memory pressure"
-	var (
-		ngr     = runtime.NumGoroutine()
-		ngrLoad = load.Gor(ngr)
-	)
-	// 1. goroutine
-	if ngrLoad == load.Critical {
-		nlog.Warningln(xname, stats.NgrPrompt, ngr)
-		return nwpNone, nil
-	}
-
-	n = min(sys.MaxParallelism()+4, n)
-
-	// yellow alert (high)
-	if ngrLoad == load.High {
-		nlog.Warningln(xname, stats.NgrPrompt, ngr)
-		n = min(n, numMpaths)
-	}
-
-	// 2. memory pressure
-	memLoad := load.Mem()
-	switch memLoad {
-	case load.Critical:
-		oom.FreeToOS(true)
-		if !cmn.Rom.TestingEnv() {
-			return 0, errors.New(xname + ": " + memExtremeMsg + " - not starting")
-		}
-		return nwpNone, nil
-	case load.High:
-		if ngrLoad == load.High {
-			return nwpNone, nil
-		}
-		n = min(nwpMin+1, n)
-	}
-
-	// 3. CPU load averages
-	cpuLoad := load.CPU()
-	if cpuLoad >= load.High {
-		if lv, wm := sys.MaxLoad(), sys.HighLoadWM(); lv >= float64(wm) {
-			nlog.Warningln(xname, "high load [", lv, wm, "]")
-		}
-		if ngrLoad == load.High {
-			return nwpNone, nil
-		}
-		n = min(nwpMin, n)
-	}
-
-	return n, nil
 }
 
 func abortOpcode(r core.Xact, opcode int) error {

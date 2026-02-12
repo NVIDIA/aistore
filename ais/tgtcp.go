@@ -583,9 +583,10 @@ func (t *target) handleMpathReq(w http.ResponseWriter, r *http.Request) {
 		t.fshcMpath(w, r, mpath)
 	default:
 		t.writeErrAct(w, r, msg.Action)
+		return
 	}
 
-	fs.ComputeDiskSize()
+	fs.DiskSizeMedia()
 }
 
 func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {
