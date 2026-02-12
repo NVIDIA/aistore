@@ -65,7 +65,7 @@ const (
 // - hardcoded multiplier (above)
 func _defaultNW(numMpaths int) int {
 	switch {
-	case fs.IsRotational() || fs.IsFuse():
+	case fs.IsRotational() || fs.IsSlow():
 		return numMpaths * nwpMultHDD
 	case fs.IsNVMe():
 		return numMpaths * nwpMultNVMe
@@ -76,10 +76,12 @@ func _defaultNW(numMpaths int) int {
 
 // estimate the requested number of workers given:
 // a) user-specified number, if any
-// b) current load
+// b) current load, and
+// c) media type (NVMe, etc.)
+//
 // used by all list-range type jobs, tcb, and blob-download
 // - xname: xaction name (for logging)
-// - n: requested number of workers
+// - numWorkers (when non-zero): requested number of workers
 // - numMpaths: number of available mountpaths
 func tuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 	const memExtremeMsg = "extreme memory pressure"

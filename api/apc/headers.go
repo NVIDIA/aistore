@@ -31,7 +31,7 @@ const (
 	// GET via x-blob-download
 	HdrBlobDownload = aisPrefix + "Blob-Download" // must be present and must be "true" (or "y", "yes", "on" case-insensitive)
 	HdrBlobChunk    = aisPrefix + "Blob-Chunk"    // optional; e.g., 1mb, 2MIB, 3m, or 1234567 (bytes)
-	HdrBlobWorkers  = aisPrefix + "Blob-Workers"  // optional; the default number of workers is dfltNumWorkers in xs/blob_download.go
+	HdrBlobWorkers  = aisPrefix + "Blob-Workers"  // optional: num concurrent downloading readers (see also: xs/nwp.go, "media type", load.Advice)
 
 	// Bucket props headers
 	HdrBucketProps      = aisPrefix + "Bucket-Props"       // => cmn.Bprops

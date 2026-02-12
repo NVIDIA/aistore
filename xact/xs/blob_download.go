@@ -281,12 +281,14 @@ func (p *blobFactory) Start() (err error) {
 		time.Sleep(r.adv.Sleep)
 	}
 
+	// num-workers parallelism (nwp)
 	l := fs.NumAvail()
 	numWorkers, err := tuneNumWorkers(r.Name(), r.numWorkers, l)
 	if err != nil {
 		return err
 	}
 	r.numWorkers = numWorkers
+
 	r.calcChunkSize()
 
 	if r.numWorkers != nwpNone {

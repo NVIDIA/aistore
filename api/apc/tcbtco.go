@@ -47,9 +47,11 @@ type (
 		CopyBckMsg
 		Transform
 
-		// user-defined number of concurrent workers:
-		// * 0:  number of mountpaths (default)
-		// * -1: single thread, serial execution
+		// optional user-defined number of concurrent workers:
+		// * 0:  auto-computed (see xs/nwp.go, "media type", load.Advice)
+		// * -1:
+		//    - TCO: no additional workers (serial execution in the iterating goroutine);
+		//    - TCB: no additional workers (one jogger per mountpath)
 		NumWorkers int `json:"num-workers,omitempty"`
 
 		ContinueOnError bool `json:"coer,omitempty"`

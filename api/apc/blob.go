@@ -19,7 +19,7 @@ const _bldl = "blob-downloader"
 type BlobMsg struct {
 	ChunkSize  int64 `json:"chunk-size"`  // as in: chunk size
 	FullSize   int64 `json:"full-size"`   // user-specified (full) size of the object to download
-	NumWorkers int   `json:"num-workers"` // number of concurrent downloading workers (readers); `dfltNumWorkers` when zero
+	NumWorkers int   `json:"num-workers"` // number of concurrent workers; auto-computed when zero (see xs/nwp.go, "media type", load.Advice)
 	LatestVer  bool  `json:"latest-ver"`  // when true and in-cluster: check with remote whether (deleted | version-changed)
 }
 

@@ -1103,13 +1103,13 @@ var (
 
 	numWorkersFlag = cli.IntFlag{
 		Name: "num-workers",
-		Usage: "Number of concurrent workers; if omitted or zero defaults to a number of target mountpaths (disks);\n" +
+		Usage: "Number of concurrent workers; auto-computed (from system resources and storage media type) if omitted or zero;\n" +
 			noWorkers +
 			indent4 + "\tany positive value will be adjusted _not_ to exceed the number of target CPUs",
 	}
 	numBlobWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",
-		Usage: "Number of concurrent blob-downloading workers (readers); system default when omitted or zero",
+		Usage: "Number of concurrent blob-downloading workers (readers); auto-computed (from system resources and storage media type) if omitted or zero",
 	}
 	numGenShardWorkersFlag = cli.IntFlag{
 		Name:  "num-workers",

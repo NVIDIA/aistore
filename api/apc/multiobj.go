@@ -22,7 +22,7 @@ type (
 	// swagger:model
 	EvdMsg struct {
 		ListRange
-		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
+		NumWorkers      int  `json:"num-workers,omitempty"` // number of concurrent workers; (-1) none; (0) auto-computed (see xs/nwp.go, "media type", load.Advice)
 		ContinueOnError bool `json:"coer,omitempty"`        // ignore non-critical errors, keep going
 		NonRecurs       bool `json:"non-recurs,omitempty"`  // do not evict (delete) nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`)
 	}
@@ -63,7 +63,7 @@ func (lrm *ListRange) Str(sb *cos.SB, isPrefix bool) {
 type PrefetchMsg struct {
 	ListRange
 	BlobThreshold   int64 `json:"blob-threshold"`       // when greater than threshold prefetch using blob-downloader; otherwise cold GET
-	NumWorkers      int   `json:"num-workers"`          // number of concurrent workers; 0 - number of mountpaths (default); (-1) none
+	NumWorkers      int   `json:"num-workers"`          // number of concurrent workers; (-1) none; (0) auto-computed (see xs/nwp.go, "media type", load.Advice)
 	ContinueOnError bool  `json:"coer"`                 // ignore non-critical errors, keep going
 	LatestVer       bool  `json:"latest-ver"`           // when true & in-cluster: check with remote whether (deleted | version-changed)
 	NonRecurs       bool  `json:"non-recurs,omitempty"` // do not prefetch nested subdirs (see also: `apc.LsNoRecursion`, `apc.CopyBckMsg`, `apc.EvdMsg`)

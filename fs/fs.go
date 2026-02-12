@@ -42,15 +42,17 @@ const (
 	// media type
 	flagRotational
 	flagNVMe
-	flagFuse
+	flagSlow // (unknown|fuse|overlay)
 )
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
 
 const (
-	_ssd  = ", ssd"
-	_hdd  = ", hdd"
-	_nvme = ", nvme"
+	_unknown = ", unknown"
+	_ssd     = ", ssd"
+	_hdd     = ", hdd"
+	_nvme    = ", nvme"
+	_raid    = "/raid"
 )
 
 // Terminology:
@@ -160,23 +162,28 @@ func (mi *Mountpath) IsRotational() bool         { return cos.IsAnySetFlag(&mi.f
 func (mi *Mountpath) IsNVMe() bool               { return cos.IsAnySetFlag(&mi.flags, flagNVMe) }
 
 func (mi *Mountpath) String() string {
-	s := mi.Label.ToLog()
+	lab := mi.Label.ToLog()
 	if mi.info == "" {
-		mediaTy := _ssd
+		mediaTy := _unknown
 		switch {
 		case mi.IsRotational():
 			mediaTy = _hdd
 		case mi.IsNVMe():
 			mediaTy = _nvme
+		case len(mi.Disks) > 0:
+			mediaTy = _ssd
 		}
 		switch len(mi.Disks) {
 		case 0:
-			// where `fs=` is a block device (or its partition) formatted with a given filesystem (e.g., xfs)
-			mi.info = fmt.Sprintf("mp[%s, fs=%s%s%s]", mi.Path, mi.Fs, s, mediaTy)
+			if mi.FsType != "" && mi.FsType != mi.Fs {
+				mi.info = fmt.Sprintf("mp[%s, fs=%s/%s%s%s]", mi.Path, mi.Fs, mi.FsType, lab, mediaTy)
+			} else {
+				mi.info = fmt.Sprintf("mp[%s, fs=%s%s%s]", mi.Path, mi.Fs, lab, mediaTy)
+			}
 		case 1:
-			mi.info = fmt.Sprintf("mp[%s, %s%s%s]", mi.Path, mi.Disks[0], s, mediaTy)
+			mi.info = fmt.Sprintf("mp[%s, %s%s%s]", mi.Path, mi.Disks[0], lab, mediaTy)
 		default:
-			mi.info = fmt.Sprintf("mp[%s, %v%s%s]", mi.Path, mi.Disks, s, mediaTy)
+			mi.info = fmt.Sprintf("mp[%s, %v%s%s%s]", mi.Path, mi.Disks, lab, mediaTy, _raid)
 		}
 	}
 	if !mi.IsAnySet(FlagWaitingDD) {
@@ -1210,9 +1217,12 @@ func DiskSizeMedia() {
 		}
 		seen[mi.FsID] = struct{}{}
 
-		// detect fuse-overlayfs, et al.
-		if strings.Contains(mi.FsType, "fuse") {
-			flags |= flagFuse
+		// detect (slow) fuse and overlay
+		// TODO:
+		// - consider including len(mi.Disks) == 0
+		// - and vice versa, len(mi.Disks) > 1 may indicate "fast" for HDDs
+		if strings.Contains(mi.FsType, "fuse") || mi.FsType == "overlay" || mi.FsType == "aufs" {
+			flags |= flagSlow
 		}
 
 		if mi.IsRotational() {
@@ -1234,8 +1244,8 @@ func DiskSizeMedia() {
 		if mediaTy == "" {
 			mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
 		}
-		if flags&flagFuse != 0 {
-			mediaTy += "(FUSE)"
+		if flags&flagSlow != 0 {
+			mediaTy += "(slow)"
 		}
 		nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
 	}
@@ -1245,7 +1255,7 @@ func GetDiskSize() uint64 { return mfs.totalSize.Load() }
 
 func IsRotational() bool { return cos.IsAnySetFlag(&mfs.flags, flagRotational) }
 func IsNVMe() bool       { return cos.IsAnySetFlag(&mfs.flags, flagNVMe) }
-func IsFuse() bool       { return cos.IsAnySetFlag(&mfs.flags, flagFuse) }
+func IsSlow() bool       { return cos.IsAnySetFlag(&mfs.flags, flagSlow) }
 
 // bucket and bucket+prefix on-disk sizing
 func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
