@@ -42,6 +42,7 @@ const (
 	// media type
 	flagRotational
 	flagNVMe
+	flagFuse
 )
 
 const FlagWaitingDD = FlagBeingDisabled | FlagBeingDetached
@@ -1208,6 +1209,12 @@ func DiskSizeMedia() {
 			continue
 		}
 		seen[mi.FsID] = struct{}{}
+
+		// detect fuse-overlayfs, et al.
+		if strings.Contains(mi.FsType, "fuse") {
+			flags |= flagFuse
+		}
+
 		if mi.IsRotational() {
 			flags = flagRotational
 			mediaTy = _hdd
@@ -1227,6 +1234,9 @@ func DiskSizeMedia() {
 		if mediaTy == "" {
 			mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
 		}
+		if flags&flagFuse != 0 {
+			mediaTy += "(FUSE)"
+		}
 		nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
 	}
 }
@@ -1235,6 +1245,7 @@ func GetDiskSize() uint64 { return mfs.totalSize.Load() }
 
 func IsRotational() bool { return cos.IsAnySetFlag(&mfs.flags, flagRotational) }
 func IsNVMe() bool       { return cos.IsAnySetFlag(&mfs.flags, flagNVMe) }
+func IsFuse() bool       { return cos.IsAnySetFlag(&mfs.flags, flagFuse) }
 
 // bucket and bucket+prefix on-disk sizing
 func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {

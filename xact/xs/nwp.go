@@ -65,10 +65,10 @@ const (
 // - hardcoded multiplier (above)
 func _defaultNW(numMpaths int) int {
 	switch {
+	case fs.IsRotational() || fs.IsFuse():
+		return numMpaths * nwpMultHDD
 	case fs.IsNVMe():
 		return numMpaths * nwpMultNVMe
-	case fs.IsRotational():
-		return numMpaths * nwpMultHDD
 	default: // SSD
 		return numMpaths * nwpMultSSD
 	}
