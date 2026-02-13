@@ -37,6 +37,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO:
+// - [observability] add Prometheus metrics, incl. retransmit (successful|failed)
+
 const (
 	trname = "reb"
 )
@@ -96,28 +99,25 @@ type (
 		mu *sync.Mutex
 		q  map[string]*core.LOM // on the wire, waiting for ACK
 	}
-	joggerBase struct {
-		m    *Reb
-		xreb *xs.Rebalance
-		wg   *sync.WaitGroup
-	}
 	rebJogger struct {
-		joggerBase
-		rargs *rebArgs
+		rargs *rargs
 		opts  fs.WalkOpts
 		ver   int64
+		wg    *sync.WaitGroup
 	}
-	// internal runtime context (compare with caller's ExtArgs{} above)
-	rebArgs struct {
+	// internal runtime context (lifecycle: a single reb.run())
+	rargs struct {
+		m      *Reb
 		smap   *meta.Smap
 		config *cmn.Config
 		xreb   *xs.Rebalance
 		bck    *meta.Bck // advanced usage, limited scope
-		nwp    *nwp      // run rebWorker
+		nwp    *nwp      // num-workers parallelism (when not used read-and-transmit happens in joggers)
 		avail  fs.MPI
 		logHdr string
 		prefix string // ditto, as in: traverse only bck[/prefix]
 		id     int64
+		resent atomic.Int64 // total num retransmits
 		ecUsed bool
 	}
 )
@@ -239,7 +239,8 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	var (
 		bmd = core.T.Bowner().Get()
 		// runtime context (scope: this uniquely ID-ed rebalance)
-		rargs = &rebArgs{
+		rargs = &rargs{
+			m:      reb,
 			id:     extArgs.NID, // == newRMD.Version
 			smap:   smap,
 			config: cmn.GCO.Get(),
@@ -253,7 +254,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 		debug.Assert(!rargs.bck.IsEmpty(), extArgs.Bck)
 		rargs.logHdr += "::" + rargs.bck.Cname(rargs.prefix)
 	}
-	if !_pingall(rargs) {
+	if !rargs.pingall() {
 		return
 	}
 	if reb.rebID() == extArgs.NID {
@@ -345,7 +346,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 //     whether a bucket is erasure coded (goroutine is not used).
 //  2. Multi-bucket rebalance may start both non-EC and EC in parallel.
 //     It then waits until everything finishes.
-func (reb *Reb) run(rargs *rebArgs) error {
+func (reb *Reb) run(rargs *rargs) error {
 	reb.stages.stage.Store(rebStageTraverse)
 
 	// No EC-enabled buckets - run only regular rebalance
@@ -364,19 +365,7 @@ func (reb *Reb) run(rargs *rebArgs) error {
 	return group.Wait()
 }
 
-func _pingall(rargs *rebArgs) bool {
-	debug.Assert(rargs.smap.Version > 0) // validated in _runRe
-
-	// whether other targets are up and running
-	if errCnt := bcast(rargs, _pingTarget); errCnt > 0 {
-		nlog.Errorln(rargs.logHdr, "not starting: ping err-s", errCnt)
-		return false
-	}
-	rargs.avail = fs.GetAvail()
-	return true
-}
-
-func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bool {
+func (reb *Reb) initRenew(rargs *rargs, extArgs *ExtArgs, haveStreams bool) bool {
 	rns := xreg.RenewRebalance(rargs.id, &xreg.RebArgs{Bck: rargs.bck, Prefix: rargs.prefix, Flags: extArgs.Flags})
 	if rns.Err != nil {
 		return false
@@ -412,7 +401,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, extArgs *ExtArgs, haveStreams bool) bo
 	return false
 }
 
-func (reb *Reb) _renew(rargs *rebArgs, xreb *xs.Rebalance, haveStreams bool) error {
+func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error {
 	if xreb.RebID() != rargs.id {
 		return fmt.Errorf("reb-id mismatch: g[%d] != g[%d]", xreb.RebID(), rargs.id)
 	}
@@ -475,7 +464,7 @@ func (reb *Reb) _renew(rargs *rebArgs, xreb *xs.Rebalance, haveStreams bool) err
 	return nil
 }
 
-func (reb *Reb) beginStreams(rargs *rebArgs) error {
+func (reb *Reb) beginStreams(rargs *rargs) error {
 	if reb.stages.stage.Load() != rebStageInit {
 		return fmt.Errorf("%s: cannot begin at stage %d", rargs.logHdr, reb.stages.stage.Load())
 	}
@@ -493,7 +482,7 @@ func (reb *Reb) endStreams(err error) (ok bool, stage uint32) {
 }
 
 // when at least one bucket has EC enabled
-func (reb *Reb) runEC(rargs *rebArgs) error {
+func (reb *Reb) runEC(rargs *rargs) error {
 	nlog.Infoln(rargs.logHdr, "start ec run")
 
 	errCnt := bcast(rargs, reb.rxReady) // ignore timeout
@@ -516,7 +505,8 @@ func (reb *Reb) runEC(rargs *rebArgs) error {
 }
 
 // when not a single bucket has EC enabled
-func (reb *Reb) runNoEC(rargs *rebArgs) error {
+func (reb *Reb) runNoEC(rargs *rargs) error {
+	debug.Assert(rargs.m == reb)
 	nlog.Infoln(rargs.logHdr, "start no-ec run")
 
 	errCnt := bcast(rargs, reb.rxReady) // ignore timeout
@@ -533,9 +523,9 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	)
 	for _, mi := range rargs.avail {
 		rl := &rebJogger{
-			joggerBase: joggerBase{m: reb, xreb: rargs.xreb, wg: wg},
-			rargs:      rargs,
-			ver:        ver,
+			rargs: rargs,
+			ver:   ver,
+			wg:    wg,
 		}
 		wg.Add(1)
 		go rl.jog(mi)
@@ -557,7 +547,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	return nil
 }
 
-func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
+func (reb *Reb) rebWaitAck(rargs *rargs) (errCnt int) {
 	var (
 		cnt   int
 		sleep = rargs.config.Timeout.CplaneOperation.D()
@@ -631,30 +621,23 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		}
 
 		// 9. retransmit if needed
-		cnt = reb.retransmit(rargs)
-		if cnt == 0 || xreb.IsAborted() {
+		numResent := reb.retransmit(rargs)
+		if numResent == 0 || xreb.IsAborted() {
 			break
 		}
-		nlog.Warningln(rargs.logHdr, "retransmitted", cnt, "keeping wack...")
+		rargs.resent.Add(numResent)
+		nlog.Warningln(rargs.logHdr, "retransmitted", numResent, "keeping wack...")
 	}
 
 	return errCnt
 }
 
-func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
+func (reb *Reb) retransmit(rargs *rargs) (cnt int64) {
 	xreb := rargs.xreb
 	if xreb.IsAborted() {
 		return 0
 	}
 	var (
-		rj = &rebJogger{
-			joggerBase: joggerBase{
-				m:    reb,
-				xreb: rargs.xreb,
-				wg:   &sync.WaitGroup{},
-			},
-			rargs: rargs,
-		}
 		loghdr = rargs.logHdr
 	)
 	for _, lomAck := range reb.lomAcks() {
@@ -667,7 +650,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 					}
 				} else {
 					err = cmn.NewErrFailedTo(core.T, "load", lom.Cname(), err)
-					rj.xreb.AddErr(err)
+					xreb.AddErr(err)
 				}
 				delete(lomAck.q, uname)
 				continue
@@ -683,7 +666,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 			// retransmit
 			roc, err := _getReader(lom)
 			if err == nil {
-				err = rj.doSend(lom, tsi, roc)
+				err = rargs.doSend(lom, tsi, roc)
 			}
 			if err == nil {
 				if cmn.Rom.V(4, cos.ModReb) {
@@ -696,7 +679,7 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 					nlog.Errorln(loghdr, "stream term-ed:", err)
 				} else {
 					err = fmt.Errorf("%s: failed to retransmit %s => %s: %w", loghdr, lom, tsi.StringEx(), err)
-					rj.xreb.AddErr(err)
+					xreb.AddErr(err)
 				}
 			}
 
@@ -715,22 +698,23 @@ func (reb *Reb) retransmit(rargs *rebArgs) (cnt int) {
 	return cnt
 }
 
-func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
+func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	var (
 		stats core.Stats
 		qui   = &qui{rargs: rargs, reb: reb}
 		xreb  = rargs.xreb
-		cnt   = xreb.ErrCnt()
+		ecnt  = xreb.ErrCnt()
+		rcnt  = rargs.resent.Load()
 	)
-	if cnt == 0 {
+	if ecnt == 0 && rcnt == 0 {
 		nlog.Infoln(rargs.logHdr, "fini => quiesce")
 	} else {
-		nlog.Warningln(rargs.logHdr, "fini [", cnt, "] => quiesce")
+		nlog.Warningln(rargs.logHdr, "fini [ errors:", ecnt, "retransmit:", rcnt, "] => quiesce")
 	}
 
 	// prior to closing streams
 	que := xreb.Quiesce(rargs.config.Transport.QuiesceTime.D(), qui.quicb)
-	cnt = xreb.ErrCnt()
+	ecnt = xreb.ErrCnt()
 
 	// cleanup markers
 	if que != core.QuiAborted && que != core.QuiTimeout {
@@ -777,12 +761,10 @@ func (reb *Reb) fini(rargs *rebArgs, err error, tstats cos.StatsUpdater) {
 		nlog.Infoln(finStats)
 	}
 	switch {
-	case que != core.QuiAborted && que != core.QuiTimeout && cnt == 0:
+	case que != core.QuiAborted && que != core.QuiTimeout && ecnt == 0:
 		nlog.Infoln(rargs.logHdr, "done", xname)
-	case cnt == 0:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "]", xname)
 	default:
-		nlog.Warningln(rargs.logHdr, "finished with errors: [ que =", que, "errs =", cnt, "]", xname)
+		nlog.Warningln(rargs.logHdr, "finished [ que:", que, "errors:", ecnt, "retransmit:", rcnt, "]", xname)
 	}
 }
 
@@ -813,43 +795,22 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 	rj.opts.Bck.Copy(bck.Bucket())
 	err := fs.Walk(&rj.opts)
+	xreb := rj.rargs.xreb
 	if err == nil {
-		return rj.xreb.IsAborted()
+		return xreb.IsAborted()
 	}
-	if rj.xreb.IsAborted() {
-		nlog.Infoln(rj.xreb.Name(), "aborting traversal")
+	if xreb.IsAborted() {
+		nlog.Infoln(xreb.Name(), "aborting traversal")
 	} else {
-		nlog.Errorln(core.T.String(), rj.xreb.Name(), "failed to traverse", err)
+		nlog.Errorln(core.T.String(), xreb.Name(), "failed to traverse", err)
 	}
 	return true
 }
 
-// send completion
-func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
-	if err == nil {
-		rj.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
-		return
-	}
-
-	// err
-	if cmn.Rom.V(4, cos.ModReb) || !cos.IsErrRetriableConn(err) {
-		switch {
-		case bundle.IsErrDestinationMissing(err):
-			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.rargs.smap.StringEx())
-		case cmn.IsErrStreamTerminated(err):
-			rj.xreb.Abort(err)
-			nlog.Errorln("stream term-ed: [", err, rj.xreb.Name(), "]")
-		default:
-			lom, ok := arg.(*core.LOM)
-			debug.Assert(ok)
-			nlog.Errorf("%s: %s failed to send %s: %v (%T)", core.T, rj.xreb.Name(), lom, err, err) // abort???
-		}
-	}
-}
-
 func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
-	if err := rj.xreb.AbortErr(); err != nil {
-		nlog.Infoln(rj.xreb.Name(), "rj-walk-visit aborted", err)
+	xreb := rj.rargs.xreb
+	if err := xreb.AbortErr(); err != nil {
+		nlog.Infoln(xreb.Name(), "rj-walk-visit aborted", err)
 		return err
 	}
 	if de.IsDir() {
@@ -908,8 +869,9 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	// false-positives, albeit rare, are still possible)
 	uname := lom.UnamePtr()
 	bname := cos.UnsafeBptr(uname)
-	if rj.m.filterGFN.Lookup(*bname) {
-		rj.m.filterGFN.Delete(*bname)
+	m := rj.rargs.m
+	if m.filterGFN.Lookup(*bname) {
+		m.filterGFN.Delete(*bname)
 		return cmn.ErrSkip
 	}
 	// prepare to send: rlock, load, new roc
@@ -919,9 +881,9 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	}
 
 	// transmit (unlock via transport completion => roc.Close)
-	rj.m.addLomAck(lom)
-	if err := rj.doSend(lom, tsi, roc); err != nil {
-		rj.m.cleanupLomAck(lom)
+	m.addLomAck(lom)
+	if err := rj.rargs.doSend(lom, tsi, roc); err != nil {
+		m.cleanupLomAck(lom)
 		return err
 	}
 
@@ -950,9 +912,27 @@ func _getReader(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
 	return lom.NewDeferROC(true /*loaded*/)
 }
 
-func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
+///////////
+// rargs //
+///////////
+
+func (rargs *rargs) pingall() bool {
+	debug.Assert(rargs.smap.Version > 0) // validated in _runRe
+
+	// whether other targets are up and running
+	if errCnt := bcast(rargs, _pingTarget); errCnt > 0 {
+		nlog.Errorln(rargs.logHdr, "not starting: ping err-s", errCnt)
+		return false
+	}
+	rargs.avail = fs.GetAvail()
+	return true
+}
+
+func (rargs *rargs) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
+	debug.Assert(tsi.ID() != core.T.SID(), "unexpected local destination")
 	var (
-		ack    = regularAck{rebID: rj.m.rebID(), daemonID: core.T.SID()}
+		m      = rargs.m
+		ack    = regularAck{rebID: m.rebID(), daemonID: core.T.SID()}
 		o      = transport.AllocSend()
 		opaque = ack.NewPack()
 	)
@@ -961,6 +941,29 @@ func (rj *rebJogger) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClos
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
 	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-	o.SentCB, o.CmplArg = rj.objSentCallback, lom
-	return rj.m.dm.Send(o, roc, tsi)
+	o.SentCB, o.CmplArg = rargs.objSentCallback, lom
+	return m.dm.Send(o, roc, tsi)
+}
+
+// send completion
+func (rargs *rargs) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+	if err == nil {
+		rargs.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
+		return
+	}
+
+	// err
+	if cmn.Rom.V(4, cos.ModReb) || !cos.IsErrRetriableConn(err) {
+		switch {
+		case bundle.IsErrDestinationMissing(err):
+			nlog.Errorf("%s: %v, %s", rargs.xreb.Name(), err, rargs.smap.StringEx())
+		case cmn.IsErrStreamTerminated(err):
+			rargs.xreb.Abort(err)
+			nlog.Errorln("stream term-ed: [", err, rargs.xreb.Name(), "]")
+		default:
+			lom, ok := arg.(*core.LOM)
+			debug.Assert(ok)
+			nlog.Errorf("%s: %s failed to send %s: %v (%T)", core.T, rargs.xreb.Name(), lom, err, err) // abort???
+		}
+	}
 }

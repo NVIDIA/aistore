@@ -25,7 +25,7 @@ import (
 )
 
 type (
-	syncCallback func(tsi *meta.Snode, rargs *rebArgs) (ok bool)
+	syncCallback func(tsi *meta.Snode, rargs *rargs) (ok bool)
 
 	Status struct {
 		Targets     meta.Nodes `json:"targets"`             // targets I'm waiting for ACKs from
@@ -44,7 +44,7 @@ type (
 ////////////////////////////////////////////
 
 // main method
-func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
+func bcast(rargs *rargs, cb syncCallback) (errCnt int) {
 	var (
 		cnt atomic.Int32
 		wg  = cos.NewLimitedWaitGroup(sys.MaxParallelism(), len(rargs.smap.Tmap))
@@ -66,7 +66,7 @@ func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 }
 
 // pingTarget checks if target is running (type syncCallback)
-func _pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
+func _pingTarget(tsi *meta.Snode, rargs *rargs) (ok bool) {
 	const retries = 4
 	var (
 		ver   = rargs.smap.Version
@@ -97,7 +97,7 @@ func _pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 }
 
 // wait for target to get ready to receive objects (type syncCallback)
-func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) bool /*ready*/ {
+func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rargs) bool /*ready*/ {
 	var (
 		curwt time.Duration
 		sleep = cmn.Rom.CplaneOperation() * 2
@@ -133,7 +133,7 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) bool /*ready*/ {
 // wait for the target to reach `rebStageFin` (i.e., finish traversing and sending)
 // if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
 // separately check whether it is waiting for my ACKs
-func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rargs) (ok bool) {
 	var (
 		curwt      time.Duration
 		status     *Status
@@ -188,7 +188,7 @@ func (reb *Reb) waitAcksExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 // returns:
 // - `Status` or nil
 // - OK iff the desiredStage has been reached
-func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32) (status *Status, ok bool) {
+func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rargs, desiredStage uint32) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(rargs.config)
 		query      = url.Values{apc.QparamRebStatus: []string{"true"}}

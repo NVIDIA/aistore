@@ -20,7 +20,7 @@ import (
 const logIval = time.Minute
 
 type qui struct {
-	rargs *rebArgs
+	rargs *rargs
 	reb   *Reb
 	i     time.Duration // to log every logIval
 }

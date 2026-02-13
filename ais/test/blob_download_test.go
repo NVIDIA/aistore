@@ -135,7 +135,7 @@ func TestBlobDownloadAbort(t *testing.T) {
 		bck        = cliBck
 	)
 
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 	initMountpaths(t, proxyURL)
 
 	tests := []struct {

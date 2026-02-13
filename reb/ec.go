@@ -46,7 +46,7 @@ import (
 //        update their metafiles. Targets do not overwrite their metafiles with a new
 //        one. They update only `Daemons` and `FullReplica` fields.
 
-func (reb *Reb) runECjoggers(rargs *rebArgs) {
+func (reb *Reb) runECjoggers(rargs *rargs) {
 	var (
 		wg = &sync.WaitGroup{}
 		b  = rargs.bck // limited scope
@@ -73,7 +73,7 @@ func (reb *Reb) runECjoggers(rargs *rebArgs) {
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs *rebArgs) {
+func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup, rargs *rargs) {
 	defer wg.Done()
 	opts := &fs.WalkOpts{
 		Mi:       mi,
