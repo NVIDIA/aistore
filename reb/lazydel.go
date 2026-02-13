@@ -13,15 +13,19 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const (
-	lazyChanSize = 1024 // NOTE: can become 4096 if we ever hit chanFull
+	lazyDfltChanSize = 1024 // NOTE: may become 4096 if we ever hit chanFull
+	lazyMaxChanSize  = 64 * 1024
 
 	lazyDelayMin = 4 * time.Second
 
-	lazyClipCap = 64
+	lazyClipCap = 128
+
+	lazyMiniBatch = 16
 )
 
 const lazyTag = "lazy-delete"
@@ -33,7 +37,7 @@ type lazydel struct {
 	workCh   chan core.LIF
 	rebID    atomic.Int64
 	running  atomic.Bool
-	chanFull atomic.Bool
+	chanFull atomic.Bool // TODO: consider storing prev. full size instead
 }
 
 // is called via recvRegularAck -> ackLomAck
@@ -45,7 +49,7 @@ func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 		return
 	}
 	l, c := len(r.workCh), cap(r.workCh)
-	debug.Assert(c >= lazyChanSize)
+	debug.Assert(c >= lazyDfltChanSize)
 
 	// (-8) should be enough to prevent racy blocking
 	if l >= c-8 {
@@ -74,10 +78,18 @@ func (r *lazydel) cleanup() {
 		r.get = r.get[:0]
 		r.get = cos.ResetSliceCap(r.get, lazyClipCap) // clip cap
 	}
+	var cnt int
 	for {
 		select {
 		case <-r.workCh:
+			cnt++
+			if cnt >= lazyDfltChanSize {
+				return
+			}
 		default:
+			if cnt > 0 {
+				nlog.Infoln(lazyTag, "cleanup: drained", cnt, "items")
+			}
 			return
 		}
 	}
@@ -93,14 +105,19 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 	const (
 		prompt = "waiting for the previous " + lazyTag
 	)
-	delay, didle, dbusy := lazytimes(config)
+	var (
+		xid                 string
+		delay, didle, dbusy = lazytimes(config)
+		maxWait             = min(delay, 10*time.Second)
+	)
 	if r.running.Load() { // (unlikely)
+		xid = r.xid()
 		r.stop() // redundant no-op
-		nlog.Warningln(prompt, "[", xreb.Name(), "]")
-		r.waitPrev(delay)
+		nlog.Warningln(prompt, "[ curr:", xreb.Name(), "prev: ", xid, "]")
+		r.waitPrev(maxWait)
 	}
 	if !r.running.CAS(false, true) {
-		nlog.Errorln("timed out", prompt, "to exit [", xreb.Name(), "]")
+		nlog.Errorln("timed out", prompt, "to exit [ curr:", xreb.Name(), "prev: ", xid, "timeout:", maxWait, "]")
 		return
 	}
 	if xreb.IsAborted() {
@@ -108,10 +125,10 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 	}
 
 	// (re)init
-	size := max(lazyChanSize, config.Rebalance.Burst)
+	size := max(lazyDfltChanSize, config.Rebalance.Burst)
 	if r.chanFull.Load() {
-		// NOTE: never resetting chanFull (a simplified attempt to avoid one)
-		size <<= 2
+		r.chanFull.Store(false)
+		size = min(size*2, lazyMaxChanSize)
 		delay = max(delay>>1, lazyDelayMin)
 	}
 	if cap(r.put) == 0 {
@@ -174,9 +191,21 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 					core.T.FSHC(err, lom.Mountpath(), lom.FQN)
 				}
 				lom.Unlock(true)
+
+				cnt++
+				if cnt%lazyMiniBatch == 0 {
+					select {
+					case <-r.stopCh.Listen():
+						nlog.Infoln(lazyTag, "stop [", xreb.Name(), cnt, "]")
+						goto fin
+					default:
+					}
+				}
 			}
 
 			// swap for the next round
+			// - r.put (newly enqueued) becomes r.get (ready to delete next tick)
+			// - r.get (just deleted) becomes r.put (ready to accumulate new items)
 			r.get = r.get[:0]
 			r.get, r.put = r.put, r.get
 
@@ -196,11 +225,13 @@ fin:
 	r.running.Store(false)
 }
 
-func (r *lazydel) waitPrev(delay time.Duration) {
+// current rebalance xid
+func (r *lazydel) xid() string { return xact.RebID2S(r.rebID.Load()) }
+
+func (r *lazydel) waitPrev(maxWait time.Duration) {
 	var (
-		total   time.Duration
-		maxWait = min(delay, 10*time.Second)
-		sleep   = cos.ProbingFrequency(maxWait)
+		total time.Duration
+		sleep = cos.ProbingFrequency(maxWait)
 	)
 	for r.running.Load() && total < maxWait {
 		time.Sleep(sleep)
