@@ -216,7 +216,7 @@ func (*term) f(_, value any) bool {
 	if md.uname == nil {
 		return true
 	}
-	lif := LIF{uname: *md.uname, lid: md.lid}
+	lif := LIF{Uname: *md.uname, BID: md.lid.bid()}
 	lom, err := lif.LOM()
 	if err != nil {
 		return true
@@ -393,7 +393,7 @@ func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
 	if md.uname == nil {
 		return
 	}
-	lif := LIF{uname: *md.uname, lid: md.lid}
+	lif := LIF{Uname: *md.uname, BID: md.lid.bid()}
 	lom, err := lif.LOM()
 	if err != nil {
 		return

@@ -50,7 +50,7 @@ func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 	// (-8) should be enough to prevent racy blocking
 	if l >= c-8 {
 		r.chanFull.Store(true)
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Name(), xname, l, "]")
+		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Cname(), xname, l, "]")
 		return
 	}
 	if l == c-c>>2 || l == c-c>>3 {

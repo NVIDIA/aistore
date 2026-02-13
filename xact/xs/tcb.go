@@ -565,7 +565,7 @@ func (worker *tcbworker) do(lif core.LIF, buf []byte) bool {
 	)
 	lom, err := lif.LOM()
 	if err != nil {
-		nlog.Warningln(r.Name(), lif.Name(), err)
+		nlog.Warningln(r.Name(), lif.Cname(), err)
 		r.Abort(err)
 		return true
 	}

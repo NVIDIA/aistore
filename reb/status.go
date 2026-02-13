@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -95,8 +95,8 @@ func (reb *Reb) wackStatus(status *Status, rsmap *meta.Smap) {
 
 func _wackStatusLom(lomAcks *lomAcks, targets meta.Nodes, rsmap *meta.Smap) meta.Nodes {
 outer:
-	for _, lom := range lomAcks.q {
-		tsi, err := rsmap.HrwHash2T(lom.Digest())
+	for _, lif := range lomAcks.q {
+		tsi, err := rsmap.HrwHash2T(lif.Digest)
 		if err != nil {
 			continue
 		}

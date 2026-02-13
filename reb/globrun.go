@@ -58,7 +58,7 @@ const (
 
 const maxWackTargets = 4
 
-const initCapLomAcks = 128
+const initCapLomAcks = 512
 
 type (
 	Reb struct {
@@ -97,7 +97,7 @@ type (
 type (
 	lomAcks struct {
 		mu *sync.Mutex
-		q  map[string]*core.LOM // on the wire, waiting for ACK
+		q  map[string]core.LIF // on the wire, waiting for ACK
 	}
 	rebJogger struct {
 		rargs *rargs
@@ -443,7 +443,7 @@ func (reb *Reb) _renew(rargs *rargs, xreb *xs.Rebalance, haveStreams bool) error
 	}
 	acks := reb.lomAcks()
 	for i := range len(acks) { // init lom acks
-		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]*core.LOM, initCapLomAcks)}
+		acks[i] = &lomAcks{mu: &sync.Mutex{}, q: make(map[string]core.LIF, initCapLomAcks)}
 	}
 
 	// 4. create persistent mark
@@ -571,10 +571,10 @@ func (reb *Reb) rebWaitAck(rargs *rargs) (errCnt int) {
 				if l := len(lomack.q); l > 0 {
 					cnt += l
 					if !logged {
-						for _, lom := range lomack.q {
-							tsi, err := smap.HrwHash2T(lom.Digest())
+						for _, lif := range lomack.q {
+							tsi, err := smap.HrwHash2T(lif.Digest)
 							if err == nil {
-								nlog.Infoln(rargs.logHdr, "waiting for", lom.String(), "ACK from", tsi.StringEx())
+								nlog.Infoln(rargs.logHdr, "waiting for", lif.Cname(), "ACK from", tsi.StringEx())
 								logged = true
 								break
 							}
@@ -642,7 +642,15 @@ func (reb *Reb) retransmit(rargs *rargs) (cnt int64) {
 	)
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
-		for uname, lom := range lomAck.q {
+		for uname, lif := range lomAck.q {
+			lom, err := lif.LOM()
+			if err != nil {
+				delete(lomAck.q, uname)
+				if cmn.Rom.V(4, cos.ModReb) {
+					nlog.Warningln(err)
+				}
+				continue
+			}
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cos.IsNotExist(err) {
 					if cmn.Rom.V(5, cos.ModReb) {
@@ -653,14 +661,16 @@ func (reb *Reb) retransmit(rargs *rargs) (cnt int64) {
 					xreb.AddErr(err)
 				}
 				delete(lomAck.q, uname)
+				core.FreeLOM(lom)
 				continue
 			}
-			tsi, _ := rargs.smap.HrwHash2T(lom.Digest())
+			tsi, _ := rargs.smap.HrwHash2T(lif.Digest)
 			if core.T.HeadObjT2T(lom, tsi) {
 				if cmn.Rom.V(4, cos.ModReb) {
 					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
 				delete(lomAck.q, uname)
+				core.FreeLOM(lom)
 				continue
 			}
 			// retransmit
@@ -965,8 +975,13 @@ func (rargs *rargs) doSend(lom *core.LOM, tsi *meta.Snode, roc cos.ReadOpenClose
 
 // send completion
 func (rargs *rargs) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+	lom, ok := arg.(*core.LOM)
+	debug.Assert(ok)
 	if err == nil {
 		rargs.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
+		if ok {
+			core.FreeLOM(lom)
+		}
 		return
 	}
 
@@ -979,9 +994,10 @@ func (rargs *rargs) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg 
 			rargs.xreb.Abort(err)
 			nlog.Errorln("stream term-ed: [", err, rargs.xreb.Name(), "]")
 		default:
-			lom, ok := arg.(*core.LOM)
-			debug.Assert(ok)
 			nlog.Errorf("%s: %s failed to send %s: %v (%T)", core.T, rargs.xreb.Name(), lom, err, err) // abort???
 		}
+	}
+	if ok {
+		core.FreeLOM(lom)
 	}
 }

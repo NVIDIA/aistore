@@ -131,7 +131,7 @@ func (reb *Reb) lomAcks() *[cos.MultiHashMapCount]*lomAcks { return &reb.lomacks
 func (reb *Reb) addLomAck(lom *core.LOM) {
 	lomAck := reb.lomAcks()[lom.CacheIdx()]
 	lomAck.mu.Lock()
-	lomAck.q[lom.Uname()] = lom
+	lomAck.q[lom.Uname()] = lom.LIF()
 	lomAck.mu.Unlock()
 }
 
@@ -150,17 +150,23 @@ func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64, xreb *xs.Rebalance) {
 
 	lomAck.mu.Lock()
 	uname := lom.Uname()
-	lomOrig, ok := lomAck.q[uname] // via addLomAck() above
+	lif, ok := lomAck.q[uname] // via addLomAck() above
 	if !ok {
 		lomAck.mu.Unlock()
 		return
 	}
+	debug.Assert(uname == lif.Uname)
 	delete(lomAck.q, uname)
 	lomAck.mu.Unlock()
 
-	debug.Assert(uname == lomOrig.Uname())
-	size := lomOrig.Lsize()
-	core.FreeLOM(lomOrig)
+	if lif.BID != lom.Bprops().BID {
+		err := cmn.NewErrObjDefunct(lom.String(), lif.BID, lom.Bprops().BID)
+		nlog.Warningln(err)
+		return
+	}
+	debug.Assert(lif.Digest != 0)
+
+	size := lif.Size
 
 	// counting acknowledged migrations (as initiator)
 	xreb.ObjsAdd(1, size)
@@ -169,6 +175,6 @@ func (reb *Reb) ackLomAck(lom *core.LOM, rebID int64, xreb *xs.Rebalance) {
 	// TODO [feature]: mark "deleted" instead
 	if !cmn.Rom.Features().IsSet(feat.DontDeleteWhenRebalancing) {
 		lom.UncacheDel()
-		reb.lazydel.enqueue(lom.LIF(), xreb.Name(), rebID)
+		reb.lazydel.enqueue(lif, xreb.Name(), rebID)
 	}
 }

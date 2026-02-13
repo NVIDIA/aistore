@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -12,14 +12,18 @@ import (
 )
 
 // LOM In Flight (LIF)
+//
+// core.LIF is a "terminal" value (pure scalars) that fully represents core.LOM across async boundaries
+// (e.g., send => ack => lazydel / retransmit)
+
 type (
 	LIF struct {
-		uname  string
-		lid    lomBID
-		digest uint64
+		Uname  string
+		BID    uint64
+		Digest uint64
+		Size   int64
 	}
 	lifUnlocker interface {
-		CacheIdx() int
 		getLocker() *nlc
 	}
 )
@@ -40,23 +44,24 @@ func (lom *LOM) LIF() (lif LIF) {
 	}
 	debug.Assert(lid.bid() == bprops.BID, lid.bid(), " vs ", bprops.BID)
 	return LIF{
-		uname:  *lom.md.uname,
-		lid:    lid,
-		digest: lom.digest,
+		Uname:  *lom.md.uname,
+		BID:    lid.bid(),
+		Digest: lom.digest,
+		Size:   lom.Lsize(true), // TODO: pass size explicitly in: lom.LIF(size)
 	}
 }
 
-func (lif *LIF) Name() string {
-	b, objName := cmn.ParseUname(lif.uname)
+func (lif *LIF) Cname() string {
+	b, objName := cmn.ParseUname(lif.Uname)
 	return b.Cname(objName)
 }
 
 // LIF => LOM with a check for bucket existence
 func (lif *LIF) LOM() (lom *LOM, err error) {
-	if lif.uname == "" {
+	if lif.Uname == "" {
 		return nil, errEmptyLIF
 	}
-	b, objName := cmn.ParseUname(lif.uname)
+	b, objName := cmn.ParseUname(lif.Uname)
 	lom = AllocLOM(objName)
 	if err = lom.InitCmnBck(&b); err != nil {
 		FreeLOM(lom)
@@ -64,8 +69,8 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 	}
 	bprops := lom.Bprops()
 	debug.Assert(bprops != nil)
-	if bid := lif.lid.bid(); bid != 0 && bid != bprops.BID {
-		err = cmn.NewErrObjDefunct(lom.String(), lif.lid.bid(), bprops.BID)
+	if lif.BID != 0 && lif.BID != bprops.BID {
+		err = cmn.NewErrObjDefunct(lom.String(), lif.BID, bprops.BID)
 		FreeLOM(lom)
 		return nil, err
 	}
@@ -74,13 +79,15 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 }
 
 // deferred unlocking
-
-func (lif *LIF) CacheIdx() int   { return lcacheIdx(lif.digest) }
-func (lif *LIF) getLocker() *nlc { return &g.locker[lif.CacheIdx()] }
+// (compare with lom.getLocker)
+func (lif *LIF) getLocker() *nlc {
+	idx := lcacheIdx(lif.Digest)
+	return &g.locker[idx]
+}
 
 func (lif *LIF) Unlock(exclusive bool) {
 	nlc := lif.getLocker()
-	nlc.Unlock(lif.uname, exclusive)
+	nlc.Unlock(lif.Uname, exclusive)
 }
 
 // non-blocking drain LIF workCh
