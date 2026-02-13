@@ -11,22 +11,29 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // TODO:
-// - add chanFull log
-// - extract/reuse across TCB and global rebalance, maybe more
+// - consider workCh <- core.LIF
 
 type (
 	rebWorker struct {
 		m     *Reb
 		rargs *rargs
 	}
+	// work item
+	wi struct {
+		lom *core.LOM
+		tsi *meta.Snode
+	}
+	// num-workers parallelism
 	nwp struct {
-		workCh  chan *core.LOM
-		workers []rebWorker
-		wg      sync.WaitGroup
+		workCh   chan wi
+		workers  []rebWorker
+		wg       sync.WaitGroup
+		chanFull cos.ChanFull
 	}
 )
 
@@ -45,7 +52,7 @@ func (reb *Reb) runNwp(rargs *rargs) {
 	rargs.nwp = nwp
 
 	chsize := cos.ClampInt(numWorkers*xs.NwpBurstMult, rargs.config.Rebalance.Burst, xs.NwpBurstMax)
-	nwp.workCh = make(chan *core.LOM, chsize)
+	nwp.workCh = make(chan wi, chsize)
 
 	nwp.workers = make([]rebWorker, numWorkers)
 	for i := range numWorkers {
@@ -58,38 +65,32 @@ func (reb *Reb) runNwp(rargs *rargs) {
 	nlog.Infoln(rargs.logHdr, "nwp workers:", numWorkers)
 }
 
-func (w *rebWorker) run() {
+func (worker *rebWorker) run() {
 	var (
-		rargs = w.rargs
+		rargs = worker.rargs
 		xreb  = rargs.xreb
+		nwp   = rargs.nwp
 	)
-	for lom := range rargs.nwp.workCh {
+	for wi := range nwp.workCh {
 		if xreb.IsAborted() {
-			core.FreeLOM(lom)
+			core.FreeLOM(wi.lom)
 			continue // drain
 		}
-		w.do(lom)
+		worker.do(wi)
 	}
-	rargs.nwp.wg.Done()
+	nwp.wg.Done()
 }
 
-func (w *rebWorker) do(lom *core.LOM) {
+func (worker *rebWorker) do(wi wi) {
 	var (
-		m     = w.m
-		rargs = w.rargs
+		m     = worker.m
+		rargs = worker.rargs
 		xreb  = rargs.xreb
 	)
-	tsi, err := rargs.smap.HrwHash2T(lom.Digest())
-	if err != nil {
-		core.FreeLOM(lom)
-		xreb.AddErr(err)
-		return
-	}
-
 	// _getReader: rlock, load, checksum, new roc
-	roc, err := _getReader(lom)
+	roc, err := getROC(wi.lom)
 	if err != nil {
-		core.FreeLOM(lom)
+		core.FreeLOM(wi.lom)
 		if err != cmn.ErrSkip {
 			xreb.AddErr(err)
 		}
@@ -97,11 +98,9 @@ func (w *rebWorker) do(lom *core.LOM) {
 	}
 
 	// transmit
-	m.addLomAck(lom)
-	if err := w.rargs.doSend(lom, tsi, roc); err != nil {
-		m.cleanupLomAck(lom)
-		if !xreb.IsAborted() {
-			xreb.AddErr(err)
-		}
+	m.addLomAck(wi.lom)
+	if err := rargs.doSend(wi.lom, wi.tsi, roc); err != nil {
+		m.cleanupLomAck(wi.lom)
+		xreb.Abort(err) // NOTE: failure to send == abort
 	}
 }

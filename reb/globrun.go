@@ -664,7 +664,7 @@ func (reb *Reb) retransmit(rargs *rargs) (cnt int64) {
 				continue
 			}
 			// retransmit
-			roc, err := _getReader(lom)
+			roc, err := getROC(lom)
 			if err == nil {
 				err = rargs.doSend(lom, tsi, roc)
 			}
@@ -760,6 +760,11 @@ func (reb *Reb) fini(rargs *rargs, err error, tstats cos.StatsUpdater) {
 	if finStats != "" {
 		nlog.Infoln(finStats)
 	}
+	if nwp := rargs.nwp; nwp != nil {
+		if a := nwp.chanFull.Load(); a > 0 {
+			nlog.Warningln(rargs.logHdr, "work channel full (final)", a)
+		}
+	}
 	switch {
 	case que != core.QuiAborted && que != core.QuiTimeout && ecnt == 0:
 		nlog.Infoln(rargs.logHdr, "done", xname)
@@ -839,17 +844,20 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	if lom.ECEnabled() {
 		return filepath.SkipDir
 	}
+
+	rargs := rj.rargs
+
 	// limited scope
-	if rj.rargs.prefix != "" {
-		debug.Assert(rj.rargs.bck != nil)
-		if !cmn.ObjHasPrefix(lom.ObjName, rj.rargs.prefix) {
+	if rargs.prefix != "" {
+		debug.Assert(rargs.bck != nil)
+		if !cmn.ObjHasPrefix(lom.ObjName, rargs.prefix) {
 			//
 			// TODO: unify via (fs.WalkBck => validateCb => cmn.DirHasOrIsPrefix)
 			//
 			i := strings.IndexByte(lom.ObjName, filepath.Separator)
-			if i > 0 && !cmn.DirHasOrIsPrefix(lom.ObjName[:i], rj.rargs.prefix) {
+			if i > 0 && !cmn.DirHasOrIsPrefix(lom.ObjName[:i], rargs.prefix) {
 				if cmn.Rom.V(4, cos.ModReb) {
-					nlog.Warningln(rj.rargs.logHdr, "skip-dir", lom.ObjName, "prefix", rj.rargs.prefix)
+					nlog.Warningln(rargs.logHdr, "skip-dir", lom.ObjName, "prefix", rargs.prefix)
 				}
 				return filepath.SkipDir
 			}
@@ -857,7 +865,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 		}
 	}
 
-	tsi, err := rj.rargs.smap.HrwHash2T(lom.Digest())
+	tsi, err := rargs.smap.HrwHash2T(lom.Digest())
 	if err != nil {
 		return err
 	}
@@ -869,21 +877,31 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 	// false-positives, albeit rare, are still possible)
 	uname := lom.UnamePtr()
 	bname := cos.UnsafeBptr(uname)
-	m := rj.rargs.m
+	m := rargs.m
 	if m.filterGFN.Lookup(*bname) {
 		m.filterGFN.Delete(*bname)
 		return cmn.ErrSkip
 	}
-	// prepare to send: rlock, load, new roc
+
+	// nwp: delegate to a worker
+	if nwp := rargs.nwp; nwp != nil {
+		l, c := len(nwp.workCh), cap(nwp.workCh)
+		nwp.chanFull.Check(l, c) // TODO: consider to-jogger "fallback" when full
+		nwp.workCh <- wi{lom, tsi}
+		return nil
+	}
+
+	// no workers: jogger does everything
 	var roc cos.ReadOpenCloser
-	if roc, err = _getReader(lom); err != nil {
+	if roc, err = getROC(lom); err != nil { // rlock, load, new roc
 		return err
 	}
 
 	// transmit (unlock via transport completion => roc.Close)
 	m.addLomAck(lom)
-	if err := rj.rargs.doSend(lom, tsi, roc); err != nil {
+	if err := rargs.doSend(lom, tsi, roc); err != nil {
 		m.cleanupLomAck(lom)
+		rargs.xreb.Abort(err) // NOTE: failure to send == abort
 		return err
 	}
 
@@ -891,7 +909,7 @@ func (rj *rebJogger) _lwalk(lom *core.LOM, fqn string) error {
 }
 
 // takes rlock and keeps it _iff_ successful
-func _getReader(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
+func getROC(lom *core.LOM) (roc cos.ReadOpenCloser, err error) {
 	lom.Lock(false)
 	if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		lom.Unlock(false)
