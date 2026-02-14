@@ -439,6 +439,7 @@ func TestETLInline(t *testing.T) {
 
 			tlog.Logln("PUT object")
 			objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+				Context:  t.Context(),
 				ProxyURL: proxyURL,
 				Bck:      bck,
 				ObjCnt:   1,

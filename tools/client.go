@@ -5,6 +5,7 @@
 package tools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -60,6 +61,7 @@ const (
 )
 
 type PutObjectsArgs struct {
+	Context            context.Context
 	ProxyURL           string
 	Bck                cmn.Bck
 	ObjPath            string
@@ -500,11 +502,21 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 		putCnt = atomic.NewInt32(0)
 
 		workerCnt = 40 // Default worker count.
-		group     = &errgroup.Group{}
-		objNames  = make([]string, 0, args.ObjCnt)
-		bp        = BaseAPIParams(args.ProxyURL)
-	)
 
+		group *errgroup.Group
+		ctx   context.Context
+
+		objNames = make([]string, 0, args.ObjCnt)
+		bp       = BaseAPIParams(args.ProxyURL)
+	)
+	if args.IgnoreErr {
+		group, ctx = &errgroup.Group{}, args.Context // testing.Context
+	} else {
+		group, ctx = errgroup.WithContext(args.Context)
+	}
+	if args.CksumType == "" {
+		args.CksumType = cos.ChecksumNone
+	}
 	if args.WorkerCnt > 0 {
 		workerCnt = args.WorkerCnt
 	}
@@ -522,12 +534,12 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	for i := 0; i < len(objNames); i += chunkSize {
 		end := min(i+chunkSize, len(objNames))
 		group.Go(func() error {
-			return putObjectBatch(bp, objNames, i, end, &args, putCnt, errCnt)
+			return _putObjectBatch(ctx, bp, objNames, i, end, &args, putCnt, errCnt)
 		})
 	}
 
 	err := group.Wait()
-	cos.Assert(err != nil || len(objNames) == int(putCnt.Load()))
+	cos.Assert(err != nil || args.IgnoreErr || len(objNames) == int(putCnt.Load()))
 	return objNames, int(errCnt.Load()), err
 }
 
@@ -556,7 +568,6 @@ func putSingleObject(bp api.BaseParams, objName string, size uint64, args *PutOb
 		SkipVC:     args.SkipVC,
 	})
 
-	putCnt.Inc()
 	if err != nil {
 		if args.IgnoreErr {
 			errCnt.Inc()
@@ -564,22 +575,22 @@ func putSingleObject(bp api.BaseParams, objName string, size uint64, args *PutOb
 		}
 		return err
 	}
+	putCnt.Inc()
 	return nil
 }
 
-func putObjectBatch(bp api.BaseParams, objNames []string, start, end int,
+func _putObjectBatch(ctx context.Context, bp api.BaseParams, objNames []string, start, end int,
 	args *PutObjectsArgs, putCnt, errCnt *atomic.Int32) error {
 	for _, objName := range objNames[start:end] {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		size := GetRandSize(args.ObjSizeRange, args.ObjSize, args.FixedSize)
 
-		if args.CksumType == "" {
-			args.CksumType = cos.ChecksumNone
-		}
-
-		var err error
 		if args.MultipartNumChunks > 0 {
-			err = PutMultipartObject(bp, args.Bck, objName, size, args)
-			putCnt.Inc()
+			err := PutMultipartObject(bp, args.Bck, objName, size, args)
 			if err != nil {
 				if args.IgnoreErr {
 					errCnt.Inc()
@@ -587,6 +598,7 @@ func putObjectBatch(bp api.BaseParams, objNames []string, start, end int,
 				}
 				return err
 			}
+			putCnt.Inc()
 		} else {
 			if err := putSingleObject(bp, objName, size, args, putCnt, errCnt); err != nil {
 				return err

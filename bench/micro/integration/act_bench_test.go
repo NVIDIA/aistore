@@ -45,6 +45,7 @@ var (
 func fillBucket(tb testing.TB, proxyURL string, bck cmn.Bck, objSize uint64, objCount int) {
 	tlog.Logf("PUT %d objects of size %d into bucket %s...\n", objCount, objSize, bck.String())
 	_, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+		Context:   tb.Context(),
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    objCount,

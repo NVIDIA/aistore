@@ -332,7 +332,9 @@ func TestObjChunkedOverride(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
-				testChunkedOverride(t, baseParams, bck.Clone(), tc.firstUploadChunks, tc.overrideChunks)
+				b := bck.Clone()
+				tools.CheckSkip(t, &tools.SkipTestArgs{NotCloudBck: true, Bck: b}) // takes too much CI time
+				testChunkedOverride(t, baseParams, b, tc.firstUploadChunks, tc.overrideChunks)
 			})
 		})
 	}

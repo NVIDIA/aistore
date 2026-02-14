@@ -370,10 +370,10 @@ func (ups *ups) _put(args *partArgs) (etag string, ecode int, err error) {
 		sgl.Free()
 	default:
 		// high memory pressure
-		time.Sleep(cos.PollSleepLong) // wait for memory pressure to decrease
-		if t.gmm.Pressure() >= memsys.PressureHigh {
-			e := fmt.Errorf("memory pressure is too high: %d, put part rejected", t.gmm.Pressure())
-			nlog.Errorln(e)
+		time.Sleep(cos.PollSleepLong) // throttle
+		if a := t.gmm.Pressure(); a >= memsys.PressureExtreme {
+			s := cos.Ternary(a == memsys.PressureExtreme, "extreme memory pressure", "OOM")
+			e := fmt.Errorf("%s: rejecting put-part [upload %q, part-num %d] => %s", s, uploadID, args.partNum, lom.Cname())
 			err = cmn.NewErrTooManyRequests(e, http.StatusTooManyRequests)
 			ecode = http.StatusTooManyRequests
 			break

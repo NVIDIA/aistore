@@ -1011,7 +1011,7 @@ func TestBucketReadOnly(t *testing.T) {
 		num:             10,
 		numGetsEachFile: 2,
 	}
-	m.init(true /*cleanup*/)
+	m.init(false /*cleanup*/)
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	bp := tools.BaseAPIParams()
 
@@ -1027,11 +1027,12 @@ func TestBucketReadOnly(t *testing.T) {
 	_, err = api.SetBucketProps(bp, m.bck, &cmn.BpropsToSet{Access: apc.Ptr(aattrs)})
 	tassert.CheckFatal(t, err)
 
-	m.init(true /*cleanup*/)
+	m.init(false /*cleanup*/)
 	m.puts(true /*ignoreErr*/)
 	tassert.Fatalf(t, m.numPutErrs == m.num, "num failed PUTs %d, expecting %d", m.numPutErrs, m.num)
 
 	// restore write access
+	tlog.Logfln("restore write access to %s", m.bck.Cname(""))
 	_, err = api.SetBucketProps(bp, m.bck, &cmn.BpropsToSet{Access: apc.Ptr(p.Access)})
 	tassert.CheckFatal(t, err)
 

@@ -269,6 +269,7 @@ func TestRenameObjects(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+		Context:   t.Context(),
 		ProxyURL:  proxyURL,
 		Bck:       bck,
 		ObjCnt:    100,

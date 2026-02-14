@@ -2365,6 +2365,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	}
 
 	_, _, err = tools.PutRandObjs(tools.PutObjectsArgs{
+		Context:   t.Context(),
 		ProxyURL:  proxyURL,
 		Bck:       bckReg,
 		ObjPath:   ecTestDir,

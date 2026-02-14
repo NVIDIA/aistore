@@ -268,6 +268,7 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		tlog.Logfln("PUT %d objects%s => %s", m.num, s, m.bck.Cname(m.prefix))
 	}
 	putArgs := tools.PutObjectsArgs{
+		Context:      m.t.Context(),
 		ProxyURL:     m.proxyURL,
 		Bck:          m.bck,
 		ObjPath:      m.prefix,
