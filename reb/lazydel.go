@@ -51,16 +51,15 @@ func (r *lazydel) enqueue(lif core.LIF, xname string, rebID int64) {
 	l, c := len(r.workCh), cap(r.workCh)
 	debug.Assert(c >= lazyDfltChanSize)
 
-	// (-8) should be enough to prevent racy blocking
-	if l >= c-8 {
-		r.chanFull.Store(true)
-		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Cname(), xname, l, "]")
-		return
-	}
 	if l == c-c>>2 || l == c-c>>3 {
 		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "[", xname, l, "]")
 	}
-	r.workCh <- lif
+	select {
+	case r.workCh <- lif:
+	default:
+		r.chanFull.Store(true)
+		nlog.Warningln(lazyTag, cos.ErrWorkChanFull, "- dropping [", lif.Cname(), xname, "]")
+	}
 }
 
 func (r *lazydel) init() { r.stopCh = cos.NewStopCh() }
@@ -159,6 +158,12 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 			if xreb.IsAborted() {
 				nlog.Infoln(lazyTag, "abort [", xreb.Name(), cnt, "]")
 				goto fin
+			}
+			select {
+			case <-r.stopCh.Listen():
+				nlog.Infoln(lazyTag, "stop [", xreb.Name(), cnt, "]")
+				goto fin
+			default:
 			}
 			if len(r.put) == 0 && len(r.get) == 0 {
 				fintime := xreb.EndTime()
