@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -1198,20 +1199,30 @@ func _loadXattrID(mpath string) (daeID string, err error) {
 // capacity management/reporting
 //
 
-// total disk size & media type
+const (
+	volSizeMin  = 10 * cos.MiB
+	volSizeZero = "zero-size volume"
+)
+
+// set media type and volume size - all mountpaths (all disks)
 // note: normally, mountpaths do not share underlying devices;
-// `seen` map is used here to handle specific exceptions:
+// `seen` map to handle specific exceptions:
 // - local playground
 // - labeled mountpaths (or "mountpath labels")
-func DiskSizeMedia() {
+func SetVolSizeMedia() error {
 	var (
 		mediaTy string
 		totalSz uint64
 		flags   = flagNVMe
 		seen    = make(map[cos.FsID]struct{}, len(mfs.fsIDs))
 		avail   = GetAvail()
+		cnt     int
 	)
 	for _, mi := range avail {
+		if mi.IsAnySet(FlagWaitingDD) {
+			continue
+		}
+		cnt++
 		if _, ok := seen[mi.FsID]; ok {
 			continue
 		}
@@ -1219,7 +1230,7 @@ func DiskSizeMedia() {
 
 		// detect (slow) fuse and overlay
 		// TODO:
-		// - consider including len(mi.Disks) == 0
+		// - consider factoring-in len(mi.Disks) == 0
 		// - and vice versa, len(mi.Disks) > 1 may indicate "fast" for HDDs
 		if strings.Contains(mi.FsType, "fuse") || mi.FsType == "overlay" || mi.FsType == "aufs" {
 			flags |= flagSlow
@@ -1236,22 +1247,38 @@ func DiskSizeMedia() {
 	mfs.totalSize.Store(totalSz)
 
 	// log & flags
-	if len(avail) == 0 {
+	if cnt == 0 {
 		ratomic.StoreUint64(&mfs.flags, 0)
-		nlog.Warningln(cmn.ErrNoMountpaths)
-	} else {
-		ratomic.StoreUint64(&mfs.flags, flags)
-		if mediaTy == "" {
-			mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
-		}
-		if flags&flagSlow != 0 {
-			mediaTy += "(slow)"
-		}
-		nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
+		return cmn.ErrNoMountpaths
 	}
+	if totalSz == 0 {
+		return fmt.Errorf("%s (mountpaths: %d/%d)", volSizeZero, cnt, len(avail))
+	}
+	ratomic.StoreUint64(&mfs.flags, flags)
+	if mediaTy == "" {
+		mediaTy = cos.Ternary(flags == flagNVMe, _nvme, _ssd)
+	}
+	if flags&flagSlow != 0 {
+		mediaTy += "(slow)"
+	}
+	nlog.Infof("volume: [%s%s]", cos.ToSizeIEC(int64(totalSz), 2), mediaTy)
+	return nil
 }
 
-func GetDiskSize() uint64 { return mfs.totalSize.Load() }
+func GetVolSize() (volSize uint64, err error) {
+	if volSize = mfs.totalSize.Load(); volSize < volSizeMin {
+		if volSize == 0 {
+			err = errors.New(volSizeZero)
+		} else {
+			err = fmt.Errorf("volume size (%d bytes) below expected minimum (%s)", volSize, cos.IEC(volSizeMin, 0))
+			if cmn.Rom.TestingEnv() {
+				nlog.Warningln(err)
+				err = nil
+			}
+		}
+	}
+	return
+}
 
 func IsRotational() bool { return cos.IsAnySetFlag(&mfs.flags, flagRotational) }
 func IsNVMe() bool       { return cos.IsAnySetFlag(&mfs.flags, flagNVMe) }
@@ -1261,6 +1288,9 @@ func IsSlow() bool       { return cos.IsAnySetFlag(&mfs.flags, flagSlow) }
 func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 	avail := GetAvail()
 	for _, mi := range avail {
+		if mi.IsAnySet(FlagWaitingDD) {
+			continue
+		}
 		sz, err := mi.onDiskSize(bck, prefix)
 		if err != nil {
 			if cmn.Rom.V(4, cos.ModFS) {

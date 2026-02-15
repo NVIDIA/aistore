@@ -219,7 +219,7 @@ func (d *Snode) Validate() error {
 		return errors.New("invalid Snode: missing node " + d.StrURLs())
 	}
 	if d.DaeType != apc.Proxy && d.DaeType != apc.Target {
-		cos.Assertf(false, "invalid Snode type %q", d.DaeType)
+		return fmt.Errorf("invalid Snode type %q", d.DaeType)
 	}
 	return nil
 }

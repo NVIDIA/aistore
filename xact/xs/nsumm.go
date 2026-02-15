@@ -39,11 +39,11 @@ type (
 		_str    string
 		buckets []*meta.Bck
 		xact.BckJog
-		oneRes        cmn.BsummResult
-		ctlmsg        string
-		totalDiskSize uint64
-		single        bool
-		listRemote    bool
+		oneRes     cmn.BsummResult
+		ctlmsg     string
+		volSize    uint64
+		single     bool
+		listRemote bool
 	}
 )
 
@@ -81,11 +81,13 @@ func (*nsummFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	r = &XactNsumm{p: p}
 
-	r.totalDiskSize = fs.GetDiskSize()
-	if r.totalDiskSize < cos.KiB {
-		err = fmt.Errorf("invalid disk size (%d bytes)", r.totalDiskSize)
-		debug.AssertNoErr(err)
-		return nil, err
+	r.volSize, err = fs.GetVolSize()
+	if err != nil {
+		// refresh once
+		_ = fs.SetVolSizeMedia()
+		if r.volSize, err = fs.GetVolSize(); err != nil {
+			return nil, err
+		}
 	}
 
 	listRemote := lsoIsRemote(p.Bck, p.msg.ObjCached)
@@ -275,9 +277,9 @@ func (r *XactNsumm) initResQbck() (cmn.Bcks, *meta.Bck) {
 }
 
 func (r *XactNsumm) initRes(res *cmn.BsummResult, bck *meta.Bck) {
-	debug.Assert(r.totalDiskSize > 0)
+	debug.Assert(r.volSize > 0)
 	res.Bck = bck.Clone()
-	res.TotalSize.Disks = r.totalDiskSize
+	res.TotalSize.Disks = r.volSize
 	res.ObjSize.Min = math.MaxInt64
 }
 
@@ -322,10 +324,10 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 	if dst.ObjCount.Present > 0 {
 		dst.ObjSize.Avg = int64(cos.DivRoundU64(dst.TotalSize.PresentObjs, dst.ObjCount.Present))
 	}
-	debug.Assert(r.totalDiskSize == src.TotalSize.Disks || (src.TotalSize.Disks == 0 && cmn.Rom.TestingEnv()),
-		r.totalDiskSize, " vs ", src.TotalSize.Disks)
-	dst.TotalSize.Disks = r.totalDiskSize
-	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.totalDiskSize)
+	debug.Assert(r.volSize == src.TotalSize.Disks || (src.TotalSize.Disks == 0 && cmn.Rom.TestingEnv()),
+		r.volSize, " vs ", src.TotalSize.Disks)
+	dst.TotalSize.Disks = r.volSize
+	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.volSize)
 }
 
 func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {

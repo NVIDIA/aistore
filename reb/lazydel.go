@@ -66,7 +66,7 @@ func (r *lazydel) init() { r.stopCh = cos.NewStopCh() }
 func (r *lazydel) stop() { r.stopCh.Close() }
 
 // drop and drain
-func (r *lazydel) cleanup() {
+func (r *lazydel) reuse() {
 	if cap(r.put) > 0 {
 		clear(r.put)
 		r.put = r.put[:0]
@@ -87,7 +87,7 @@ func (r *lazydel) cleanup() {
 			}
 		default:
 			if cnt > 0 {
-				nlog.Infoln(lazyTag, "cleanup: drained", cnt, "items")
+				nlog.Infoln(lazyTag, "reuse: drained", cnt, "items")
 			}
 			return
 		}
@@ -101,24 +101,17 @@ func lazytimes(config *cmn.Config) (delay, idle, busy time.Duration) {
 }
 
 func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
-	const (
-		prompt = "waiting for the previous " + lazyTag
-	)
 	var (
-		xid                 string
 		delay, didle, dbusy = lazytimes(config)
-		maxWait             = min(delay, 10*time.Second)
 	)
-	if r.running.Load() { // (unlikely)
-		xid = r.xid()
-		r.stop() // redundant no-op
-		nlog.Warningln(prompt, "[ curr:", xreb.Name(), "prev: ", xid, "]")
-		r.waitPrev(maxWait)
-	}
 	if !r.running.CAS(false, true) {
-		nlog.Errorln("timed out", prompt, "to exit [ curr:", xreb.Name(), "prev: ", xid, "timeout:", maxWait, "]")
+		r.stop()
+		nlog.Warningln(lazyTag, "skip start:", xreb.Name(), "prev:", r.xid())
 		return
 	}
+	r.rebID.Store(rebID)
+	defer r.cleanup()
+
 	if xreb.IsAborted() {
 		return
 	}
@@ -134,11 +127,10 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 		r.put = make([]core.LIF, 0, size)
 	} else {
 		// reuse both slices
-		r.cleanup()
+		r.reuse()
 	}
 	r.workCh = make(chan core.LIF, size)
 	r.stopCh = cos.NewStopCh()
-	r.rebID.Store(rebID)
 
 	ticker := time.NewTicker(delay)
 
@@ -226,21 +218,13 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 fin:
 	ticker.Stop()
 	r.rebID.Store(0)
-	r.cleanup()
+	r.reuse()
+}
+
+func (r *lazydel) cleanup() {
+	r.rebID.Store(0)
 	r.running.Store(false)
 }
 
 // current rebalance xid
 func (r *lazydel) xid() string { return xact.RebID2S(r.rebID.Load()) }
-
-func (r *lazydel) waitPrev(maxWait time.Duration) {
-	var (
-		total time.Duration
-		sleep = cos.ProbingFrequency(maxWait)
-	)
-	for r.running.Load() && total < maxWait {
-		time.Sleep(sleep)
-		total += sleep
-		sleep += sleep >> 1
-	}
-}

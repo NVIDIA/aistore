@@ -586,7 +586,9 @@ func (t *target) handleMpathReq(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fs.DiskSizeMedia()
+	if err := fs.SetVolSizeMedia(); err != nil {
+		nlog.Errorln(err)
+	}
 }
 
 func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath string) {

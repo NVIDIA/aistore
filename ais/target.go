@@ -281,7 +281,9 @@ func (t *target) init(config *cmn.Config) {
 		RandomTID:     generated,
 	}
 	newVol := volume.Init(t, config, vini)
-	fs.DiskSizeMedia()
+	if err := fs.SetVolSizeMedia(); err != nil {
+		nlog.Errorln(err) // TODO: standby
+	}
 
 	t.initHostIP(config)
 	daemon.rg.add(t)
