@@ -7,6 +7,7 @@
 package backend
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -53,8 +54,12 @@ type (
 	}
 )
 
-func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int, err error) {
+func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (string, int, error) {
 	cloudBck := lom.Bck().RemoteBck()
+	sess, e := gsbp.getSess(context.Background(), cloudBck)
+	if e != nil {
+		return "", 0, e
+	}
 
 	reqArgs := cmn.AllocHra()
 	{
@@ -75,7 +80,7 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int
 		return "", http.StatusInternalServerError, err
 	}
 
-	resp, err := gsbp.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req)
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 
@@ -91,7 +96,7 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int
 	}
 
 	var result initiateMptUploadResult
-	if err = xml.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", http.StatusInternalServerError, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -104,6 +109,10 @@ func (gsbp *gsbp) StartMpt(lom *core.LOM, _ *http.Request) (id string, ecode int
 
 func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Request, uploadID string, size int64, partNum int32) (string, int, error) {
 	cloudBck := lom.Bck().RemoteBck()
+	sess, e := gsbp.getSess(context.Background(), cloudBck)
+	if e != nil {
+		return "", 0, e
+	}
 
 	reqArgs := cmn.AllocHra()
 	{
@@ -128,7 +137,7 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 	}
 	req.ContentLength = size
 
-	resp, err := gsbp.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req)
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 	cos.Close(r)
@@ -158,6 +167,10 @@ func (gsbp *gsbp) PutMptPart(lom *core.LOM, r cos.ReadOpenCloser, _ *http.Reques
 
 func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _ []byte, parts apc.MptCompletedParts) (version, etag string, _ int, _ error) {
 	cloudBck := lom.Bck().RemoteBck()
+	sess, e := gsbp.getSess(context.Background(), cloudBck)
+	if e != nil {
+		return "", "", 0, e
+	}
 
 	// Build XML body with completed parts
 	completeMpt := completeMultipartUpload{
@@ -196,7 +209,7 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _
 		return "", "", http.StatusInternalServerError, err
 	}
 
-	resp, err := gsbp.httpClient.Do(req)
+	resp, err := sess.httpClient.Do(req)
 	cmn.FreeHra(reqArgs)
 	cmn.HreqFree(req)
 
@@ -212,14 +225,14 @@ func (gsbp *gsbp) CompleteMpt(lom *core.LOM, _ *http.Request, uploadID string, _
 	}
 
 	var result completeMptUploadResult
-	if err = xml.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := xml.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", "", http.StatusInternalServerError, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Decode ETag
+	// ETag
 	if result.ETag != "" {
-		if e, ok := cmn.BackendHelpers.Google.EncodeETag(result.ETag); ok {
-			etag = e
+		if encoded, ok := cmn.BackendHelpers.Google.EncodeETag(result.ETag); ok {
+			etag = encoded
 		} else {
 			etag = result.ETag
 		}

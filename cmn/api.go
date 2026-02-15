@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -19,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // In this source: bucket props and assorted control messages that contain buckets, including:
@@ -69,13 +72,13 @@ type (
 
 	ExtraProps struct {
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
-		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"` // NOTE: obsolete; rm with meta-version
 		AWS  ExtraPropsAWS  `json:"aws,omitempty" list:"omitempty"`
+		GCP  ExtraPropsGCP  `json:"gcp,omitempty" list:"omitempty"`
 	}
 	ExtraToSet struct { // ref. bpropsFilterExtra
-		AWS  *ExtraPropsAWSToSet  `json:"aws"`
-		HTTP *ExtraPropsHTTPToSet `json:"http"`
-		HDFS *ExtraPropsHDFSToSet `json:"hdfs"` // ditto
+		AWS  *ExtraPropsAWSToSet  `json:"aws,omitempty"`
+		HTTP *ExtraPropsHTTPToSet `json:"http,omitempty"`
+		GCP  *ExtraPropsGCPToSet  `json:"gcp,omitempty"`
 	}
 
 	ExtraPropsAWS struct {
@@ -112,20 +115,21 @@ type (
 		MultiPartSize *cos.SizeIEC `json:"multipart_size,omitempty"`
 	}
 
+	ExtraPropsGCP struct {
+		// GCP service-account credentials JSON file.
+		// Overrides the global GOOGLE_APPLICATION_CREDENTIALS environment.
+		ApplicationCreds string `json:"application_creds,omitempty"`
+	}
+	ExtraPropsGCPToSet struct {
+		ApplicationCreds *string `json:"application_creds,omitempty"`
+	}
+
 	ExtraPropsHTTP struct {
 		// Original URL prior to hashing.
 		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
 	}
 	ExtraPropsHTTPToSet struct {
 		OrigURLBck *string `json:"original_url"`
-	}
-
-	ExtraPropsHDFS struct {
-		// Reference directory.
-		RefDirectory string `json:"ref_directory,omitempty"`
-	}
-	ExtraPropsHDFSToSet struct {
-		RefDirectory *string `json:"ref_directory"`
 	}
 
 	// Once validated, BpropsToSet are copied to Bprops.
@@ -304,16 +308,38 @@ func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
 	return
 }
 
-func (c *ExtraProps) ValidateAsProps(arg ...any) error {
+const (
 	// part sizes to allow for multipart upload, consistent with Amazon S3 limits
-	const (
-		minPartSizeAWS = 5 * cos.MiB
-		maxPartSizeAWS = 5 * cos.GiB
+	minPartSizeAWS = 5 * cos.MiB
+	maxPartSizeAWS = 5 * cos.GiB
 
-		maxAWSProfileLen = 256
-		maxAWSRegionLen  = 64
-	)
+	maxAWSProfileLen = 256
+	maxAWSRegionLen  = 64
+)
 
+func (c *ExtraProps) UnmarshalJSON(data []byte) error {
+	type Alias ExtraProps // not to recurs
+	var tmp Alias
+	errCurr := cos.JSON.Unmarshal(data, &tmp)
+	if errCurr == nil {
+		*c = ExtraProps(tmp)
+		return nil
+	}
+
+	// [backward compatibility] ExtraPropsHDFS removed in v4.3
+	type withHDFS struct {
+		Alias
+		HDFS jsoniter.RawMessage `json:"hdfs,omitempty"`
+	}
+	var legacy withHDFS
+	if errLegacy := cos.JSON.Unmarshal(data, &legacy); errLegacy != nil {
+		return fmt.Errorf("failed to unmarshal bucket ExtraProps (current: %v; legacy-with-hdfs: %v)", errCurr, errLegacy)
+	}
+	*c = ExtraProps(legacy.Alias)
+	return nil
+}
+
+func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
 
@@ -324,59 +350,86 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 		}
 
 	case apc.AWS:
-		// multipart_size
-		size := c.AWS.MultiPartSize
-		if size != -1 && size != 0 && (size < minPartSizeAWS || size > maxPartSizeAWS) {
-			a, b := cos.IEC(minPartSizeAWS, 0), cos.IEC(maxPartSizeAWS, 0)
-			return fmt.Errorf("invalid extra.aws.multipart_size %d (expecting -1 (single-part), 0 (default), or range %s to %s)", size, a, b)
-		}
+		return c.AWS.validate()
+	case apc.GCP:
+		return c.GCP.validate()
+	}
+	return nil
+}
 
-		// max_pagesize
-		// - 0 means default (backend-specific)
-		// - allow up to AIS max (SwiftStack etc. can do 10k)
-		if v := c.AWS.MaxPageSize; v < 0 || v > apc.MaxPageSizeAIS {
-			return fmt.Errorf("invalid extra.aws.max_pagesize %d (expecting 0 (default) or range 1..%d)", v, apc.MaxPageSizeAIS)
-		}
+func (conf *ExtraPropsAWS) validate() error {
+	// multipart_size
+	size := conf.MultiPartSize
+	if size != -1 && size != 0 && (size < minPartSizeAWS || size > maxPartSizeAWS) {
+		a, b := cos.IEC(minPartSizeAWS, 0), cos.IEC(maxPartSizeAWS, 0)
+		return fmt.Errorf("invalid extra.aws.multipart_size %d (expecting -1 (single-part), 0 (default), or range %s to %s)", size, a, b)
+	}
 
-		// profile
-		if p := c.AWS.Profile; p != "" {
-			if strings.TrimSpace(p) != p {
-				return errors.New("invalid extra.aws.profile: leading/trailing whitespace")
-			}
-			if len(p) > maxAWSProfileLen {
-				return fmt.Errorf("invalid extra.aws.profile: too long (%d > %d)", len(p), maxAWSProfileLen)
-			}
-		}
+	// max_pagesize
+	// - 0 means default (backend-specific)
+	// - allow up to AIS max (SwiftStack etc. can do 10k)
+	if v := conf.MaxPageSize; v < 0 || v > apc.MaxPageSizeAIS {
+		return fmt.Errorf("invalid extra.aws.max_pagesize %d (expecting 0 (default) or range 1..%d)", v, apc.MaxPageSizeAIS)
+	}
 
-		// cloud_region
-		if r := c.AWS.CloudRegion; r != "" {
-			if strings.TrimSpace(r) != r {
-				return errors.New("invalid extra.aws.cloud_region: leading/trailing whitespace")
-			}
-			if len(r) > maxAWSRegionLen {
-				return fmt.Errorf("invalid extra.aws.cloud_region: too long (%d > %d)", len(r), maxAWSRegionLen)
-			}
+	// profile
+	if p := conf.Profile; p != "" {
+		if strings.TrimSpace(p) != p {
+			return errors.New("invalid extra.aws.profile: leading/trailing whitespace")
 		}
-
-		// endpoint
-		if ep := c.AWS.Endpoint; ep != "" {
-			const etag = "invalid extra.aws.endpoint"
-			if strings.TrimSpace(ep) != ep {
-				return fmt.Errorf("%s %q: leading/trailing whitespace", etag, ep)
-			}
-			u, err := url.Parse(ep)
-			if err != nil {
-				return fmt.Errorf("%s %q: %v", etag, ep, err)
-			}
-			if u.Scheme != "http" && u.Scheme != "https" {
-				return fmt.Errorf("%s %q: unsupported scheme %q (expecting http or https)", etag, ep, u.Scheme)
-			}
-			if u.Host == "" {
-				return fmt.Errorf("%s %q", etag, ep)
-			}
+		if len(p) > maxAWSProfileLen {
+			return fmt.Errorf("invalid extra.aws.profile: too long (%d > %d)", len(p), maxAWSProfileLen)
 		}
 	}
 
+	// cloud_region
+	if r := conf.CloudRegion; r != "" {
+		if strings.TrimSpace(r) != r {
+			return errors.New("invalid extra.aws.cloud_region: leading/trailing whitespace")
+		}
+		if len(r) > maxAWSRegionLen {
+			return fmt.Errorf("invalid extra.aws.cloud_region: too long (%d > %d)", len(r), maxAWSRegionLen)
+		}
+	}
+
+	// endpoint
+	if ep := conf.Endpoint; ep != "" {
+		const etag = "invalid extra.aws.endpoint"
+		if strings.TrimSpace(ep) != ep {
+			return fmt.Errorf("%s %q: leading/trailing whitespace", etag, ep)
+		}
+		u, err := url.Parse(ep)
+		if err != nil {
+			return fmt.Errorf("%s %q: %v", etag, ep, err)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return fmt.Errorf("%s %q: unsupported scheme %q (expecting http or https)", etag, ep, u.Scheme)
+		}
+		if u.Host == "" {
+			return fmt.Errorf("%s %q", etag, ep)
+		}
+	}
+	return nil
+}
+
+func (conf *ExtraPropsGCP) validate() error {
+	const (
+		etag = "invalid extra.gcp.application_creds"
+	)
+	path := conf.ApplicationCreds
+	if path == "" {
+		return nil
+	}
+	if err := cos.ValidatePrefix(etag, path); err != nil { // disallow "../" and "~/"
+		return err
+	}
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("%s %q must be absolute", etag, path)
+	}
+	if clean := filepath.Clean(path); clean != path {
+		nlog.Warningln("extra.gcp.application_creds: filepath.Clean produces change:", path, "vs", clean)
+		conf.ApplicationCreds = clean
+	}
 	return nil
 }
 

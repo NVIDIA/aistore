@@ -95,7 +95,7 @@ const (
 // see also:  bprops Extra.AWS.MaxPageSize
 const (
 	MaxPageSizeAIS   = 10000
-	MaxPageSizeAWS   = 1000
+	MaxPageSizeAWS   = 1000 // note: SwiftStack/AWS = 10_000
 	MaxPageSizeGCP   = 1000
 	MaxPageSizeAzure = 5000
 	MaxPageSizeOCI   = 1000

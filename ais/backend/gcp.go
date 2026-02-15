@@ -2,7 +2,7 @@
 
 // Package backend contains core/backend interface implementations for supported backend providers.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -45,34 +46,43 @@ const (
 
 type (
 	gsbp struct {
-		t          core.TargetPut
-		projectID  string
-		httpClient *http.Client // for raw requests
+		t        core.TargetPut
+		dfltSess gcpSess
 		base
+	}
+	gcpSess struct {
+		client     *storage.Client
+		httpClient *http.Client
+		projectID  string
 	}
 )
 
 var (
-	// quoting Google SDK:
-	//    "Clients should be reused instead of created as needed. The methods of Client
-	//     are safe for concurrent use by multiple goroutines.
-	//     The default scope is ScopeFullControl."
-	gcpClient *storage.Client
-
-	// interface guard
-	_ core.Backend = (*gsbp)(nil)
+	appSess sync.Map // additional [credPath => *gcpSess]
 )
 
-func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (_ core.Backend, err error) {
+// interface guard
+var _ core.Backend = (*gsbp)(nil)
+
+func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
 	var (
 		projectID     string
-		credProjectID = readCredFile()
+		credProjectID string
 		envProjectID  = os.Getenv(projectIDEnvVar)
 	)
+	credPath := os.Getenv(credPathEnvVar)
+	if credPath != "" {
+		var err error
+		if credProjectID, err = readCredFile(credPath); err != nil {
+			nlog.Warningf("failed to load application creds %q: %v", credPath, err)
+		}
+	}
+
 	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
 		return nil, fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
 			projectIDEnvVar, credPathEnvVar, projectIDField)
 	}
+
 	switch {
 	case credProjectID != "":
 		projectID = credProjectID
@@ -80,49 +90,27 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (_ core.Bac
 	case envProjectID != "":
 		projectID = envProjectID
 		nlog.Infof("%s: %q (using %q env)", projectIDField, projectID, projectIDEnvVar)
-	default:
-		nlog.Warningln("unauthenticated client")
 	}
 
 	bp := &gsbp{
-		t:         t,
-		projectID: projectID,
-		base:      base{provider: apc.GCP},
+		t:        t,
+		dfltSess: gcpSess{projectID: projectID},
+		base:     base{provider: apc.GCP},
 	}
+
+	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
+	if projectID == "" {
+		nlog.Warningln("unauthenticated client")
+		opts = append(opts, option.WithoutAuthentication())
+	}
+	if err := bp.dfltSess.init(context.Background(), opts); err != nil {
+		return nil, err
+	}
+
 	// register metrics
 	bp.base.init(t.Snode(), tstats, startingUp)
 
-	gcpClient, err = bp.createClient(context.Background())
-
-	return bp, err
-}
-
-// TODO: use config.Net.HTTP.IdleConnTimeout and friends
-
-func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
-	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
-	if gsbp.projectID == "" {
-		opts = append(opts, option.WithoutAuthentication())
-	}
-	// create HTTP transport
-	transport, err := htransport.NewTransport(ctx, cmn.NewTransport(cmn.TransportArgs{}), opts...)
-	if err != nil {
-		if strings.Contains(err.Error(), "credentials") {
-			details := fmt.Sprintf("%s Hint: check your %q and %q environment settings for project ID=%q.",
-				err, projectIDEnvVar, credPathEnvVar, gsbp.projectID)
-			return nil, errors.New(details)
-		}
-		return nil, cmn.NewErrFailedTo(nil, "gcp-backend: create", "http transport", err)
-	}
-	// Store authenticated HTTP client for raw requests (e.g., multipart uploads)
-	gsbp.httpClient = tracing.NewTraceableClient(&http.Client{Transport: transport})
-	opts = append(opts, option.WithHTTPClient(gsbp.httpClient))
-	// create HTTP client
-	client, err := storage.NewClient(ctx, opts...)
-	if err != nil {
-		return nil, cmn.NewErrFailedTo(nil, "gcp-backend: create", "client", err)
-	}
-	return client, nil
+	return bp, nil
 }
 
 // as core.Backend --------------------------------------------------------------
@@ -131,37 +119,45 @@ func (gsbp *gsbp) createClient(ctx context.Context) (*storage.Client, error) {
 // HEAD BUCKET
 //
 
-func (*gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, ecode int, err error) {
+func (gsbp *gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
-	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(ctx)
-	if err != nil {
-		ecode, err = gcpErrorToAISError(err, cloudBck)
-		return
+	client, e := gsbp.getClient(ctx, cloudBck)
+	if e != nil {
+		return nil, 0, e
+	}
+	if _, err := client.Bucket(cloudBck.Name).Attrs(ctx); err != nil {
+		ecode, err := gcpErrorToAISError(err, cloudBck)
+		return nil, ecode, err
 	}
 	//
 	// NOTE: return a few assorted fields, specifically to fill-in vendor-specific `cmn.ExtraProps`
 	//
-	bckProps = make(cos.StrKVs)
+	bckProps := make(cos.StrKVs)
 	bckProps[apc.HdrBackendProvider] = apc.GCP
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
 	bckProps[apc.HdrBucketVerEnabled] = "true"
-	return
+	return bckProps, 0, nil
 }
 
 //
 // LIST OBJECTS
 //
 
-func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
+	client, e := gsbp.getClient(context.Background(), cloudBck)
+	if e != nil {
+		return 0, e
+	}
+
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 
 	// in re: `apc.LsNoDirs` and `apc.LsNoRecursion`, see:
@@ -177,7 +173,7 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, 
 	}
 
 	var (
-		it    = gcpClient.Bucket(cloudBck.Name).Objects(context.Background(), query)
+		it    = client.Bucket(cloudBck.Name).Objects(context.Background(), query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
@@ -236,14 +232,14 @@ func (*gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, 
 //
 
 func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
-	if gsbp.projectID == "" {
+	if gsbp.dfltSess.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
 			errors.New("empty project ID: cannot list GCP buckets with no authentication")
 	}
 	var (
 		bcks = make(cmn.Bcks, 0, 16)
-		it   = gcpClient.Buckets(context.Background(), gsbp.projectID)
+		it   = gsbp.dfltSess.client.Buckets(context.Background(), gsbp.dfltSess.projectID)
 	)
 	for {
 		battrs, err := it.Next()
@@ -266,14 +262,18 @@ func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
 // HEAD OBJECT
 //
 
-func (*gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
+func (gsbp *gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
 	var (
 		h        = cmn.BackendHelpers.Google
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	attrs, err := gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
+	client, e := gsbp.getClient(ctx, cloudBck)
+	if e != nil {
+		return nil, 0, e
+	}
+	attrs, err := client.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
-		ecode, errV := handleObjectError(ctx, gcpClient, err, cloudBck)
+		ecode, errV := handleObjectError(ctx, client, err, cloudBck)
 		return nil, ecode, errV
 	}
 
@@ -332,13 +332,17 @@ func (gsbp *gsbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 	return 0, err
 }
 
-func (*gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
+func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64) (res core.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
 		cloudBck = lom.Bck().RemoteBck()
-		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
+	client, e := gsbp.getClient(ctx, cloudBck)
+	if e != nil {
+		return core.GetReaderResult{Err: e}
+	}
+	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
 	attrs, res.Err = o.Attrs(ctx)
 	if res.Err != nil {
 		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
@@ -430,9 +434,14 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 	var (
 		cloudBck            = lom.Bck().RemoteBck()
 		cksumType, cksumVal = lom.Checksum().Get()
-		gcpObj              = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
-		wc                  = gcpObj.NewWriter(ctx)
 	)
+	client, e := gsbp.getClient(ctx, cloudBck)
+	if e != nil {
+		return 0, e
+	}
+
+	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
+	wc := o.NewWriter(ctx)
 	wc.Metadata = map[string]string{
 		gcpChecksumType: cksumType,
 		gcpChecksumVal:  cksumVal,
@@ -450,9 +459,9 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 		return gcpErrorToAISError(err, cloudBck)
 	}
 
-	attrs, errV := gcpObj.Attrs(ctx)
+	attrs, errV := o.Attrs(ctx)
 	if errV != nil {
-		return handleObjectError(ctx, gcpClient, errV, cloudBck)
+		return handleObjectError(ctx, client, errV, cloudBck)
 	}
 
 	_ = setCustomGs(lom, attrs)
@@ -466,38 +475,121 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 // DELETE OBJECT
 //
 
-func (*gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error) {
-	var (
-		cloudBck = lom.Bck().RemoteBck()
-		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
-	)
-	if err = o.Delete(ctx); err != nil {
-		ecode, err = handleObjectError(ctx, gcpClient, err, cloudBck)
-		return
+func (gsbp *gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
+	cloudBck := lom.Bck().RemoteBck()
+	client, e := gsbp.getClient(ctx, cloudBck)
+	if e != nil {
+		return 0, e
+	}
+	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
+	if err := o.Delete(ctx); err != nil {
+		return handleObjectError(ctx, client, err, cloudBck)
 	}
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[delete_object] %s", lom)
 	}
-	return
+	return 0, nil
 }
 
 //
 // static helpers
 //
 
-func readCredFile() (projectID string) {
-	credFile, err := os.Open(os.Getenv(credPathEnvVar))
-	if err != nil {
-		return
+func readCredFile(path string) (string, error) {
+	fh, e := os.Open(path)
+	if e != nil {
+		return "", e
 	}
-	b, err := cos.ReadAll(credFile)
-	credFile.Close()
+	b, err := cos.ReadAll(fh)
+	fh.Close()
 	if err != nil {
-		return
+		return "", err
 	}
-	projectID, _ = jsoniter.Get(b, projectIDField).GetInterface().(string)
-	return
+	v := jsoniter.Get(b, projectIDField).GetInterface()
+	projectID, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected projectID type (%T)", v)
+	}
+	debug.Assert(projectID != "")
+	return projectID, nil
 }
+
+func createSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, error) {
+	debug.Assert(credPath != "") // via bprops "extra.gcp.application_creds"
+	var (
+		projectID string
+		opts      = []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
+		err       error
+	)
+	projectID, err = readCredFile(credPath)
+	if projectID == "" {
+		var s string
+		if bck != nil {
+			s = bck.Cname("")
+		}
+		return nil, fmt.Errorf("failed to load application creds %q for bucket %q: %v", credPath, s, err)
+	}
+	opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, credPath))
+
+	sess := &gcpSess{projectID: projectID}
+	return sess, sess.init(ctx, opts)
+}
+
+func (sess *gcpSess) init(ctx context.Context, opts []option.ClientOption) error {
+	// HTTP transport
+	transport, err := htransport.NewTransport(ctx, cmn.NewTransport(cmn.TransportArgs{}), opts...)
+	if err != nil {
+		return cmn.NewErrFailedTo(nil, "gcp-backend: create", "http transport", err)
+	}
+
+	// HTTP client for raw (multipart upload) requests
+	sess.httpClient = tracing.NewTraceableClient(&http.Client{Transport: transport})
+	opts = append(opts, option.WithHTTPClient(sess.httpClient))
+
+	// cloud.google.com/go/storage client
+	client, err := storage.NewClient(ctx, opts...)
+	if err != nil {
+		return cmn.NewErrFailedTo(nil, "gcp-backend: create", "client", err)
+	}
+
+	sess.client = client
+	return nil
+}
+
+func (gsbp *gsbp) getClient(ctx context.Context, bck *cmn.Bck) (*storage.Client, error) {
+	sess, err := gsbp.getSess(ctx, bck)
+	if err != nil {
+		return nil, err
+	}
+	return sess.client, nil
+}
+
+func (gsbp *gsbp) getSess(ctx context.Context, bck *cmn.Bck) (*gcpSess, error) {
+	var credPath string
+	if bck != nil && bck.Props != nil {
+		credPath = bck.Props.Extra.GCP.ApplicationCreds
+	}
+	if credPath == "" {
+		return &gsbp.dfltSess, nil
+	}
+
+	// fast path
+	if v, loaded := appSess.Load(credPath); loaded {
+		return v.(*gcpSess), nil
+	}
+
+	// slow path - once per unique creds
+	sess, err := createSess(ctx, credPath, bck)
+	if err != nil {
+		return nil, err
+	}
+	appSess.Store(credPath, sess)
+	return sess, nil
+}
+
+//
+// errors
+//
 
 const gcpErrPrefix = "gcp-error"
 
