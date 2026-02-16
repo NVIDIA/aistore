@@ -217,7 +217,6 @@ func (r *lazydel) run(xreb *xs.Rebalance, config *cmn.Config, rebID int64) {
 
 fin:
 	ticker.Stop()
-	r.rebID.Store(0)
 	r.reuse()
 }
 
