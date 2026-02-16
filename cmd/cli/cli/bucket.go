@@ -199,7 +199,7 @@ func _lsTip(c *cli.Context, qbck cmn.QueryBcks) {
 		fmt.Fprintln(c.App.Writer, what1)
 		return
 	}
-	if flagIsSet(c, bckSummaryFlag) {
+	if flagIsSet(c, bckSummaryFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		fmt.Fprintf(c.App.Writer, what2+"\n", qbck)
 	} else {
 		fmt.Fprintf(c.App.Writer, what2+" "+h1+"\n", qbck, qflprn(allObjsOrBcksFlag))

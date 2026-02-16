@@ -312,7 +312,6 @@ func (t *target) enableBackend(w http.ResponseWriter, r *http.Request, provider,
 			bp, err = backend.NewOCI(t, t.statsT, false /*starting up*/)
 		}
 		if err != nil {
-			debug.AssertNoErr(err) // (unlikely)
 			t.writeErr(w, r, err)
 			return
 		}

@@ -44,6 +44,10 @@ const (
 	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS" //nolint:gosec // false positive G101
 )
 
+const (
+	fmtErrLoadCreds = "gcp: failed to load application creds"
+)
+
 type (
 	gsbp struct {
 		t        core.TargetPut
@@ -74,7 +78,10 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 	if credPath != "" {
 		var err error
 		if credProjectID, err = readCredFile(credPath); err != nil {
-			nlog.Warningf("failed to load application creds %q: %v", credPath, err)
+			// alternatively, return NewDummyBackend() and a (new) typed error
+			// see also: target.initBuiltTagged
+
+			return nil, fmt.Errorf("%s '%s=%s': %v", fmtErrLoadCreds, credPathEnvVar, credPath, err)
 		}
 	}
 
@@ -525,9 +532,9 @@ func createSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, e
 	if projectID == "" {
 		var s string
 		if bck != nil {
-			s = bck.Cname("")
+			s = " for bucket " + bck.Cname("")
 		}
-		return nil, fmt.Errorf("failed to load application creds %q for bucket %q: %v", credPath, s, err)
+		return nil, fmt.Errorf("%s from %q%s: %v", fmtErrLoadCreds, credPath, s, err)
 	}
 	opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, credPath))
 

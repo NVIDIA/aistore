@@ -101,9 +101,39 @@ func (*target) interruptedRestarted() (i, r bool) {
 	return i, r
 }
 
+// Backend initialization and resolution ===============================================
 //
-// backends
+// Each backend provider (aws, gcp, azure, oci, ht) goes through a 3-way classification
+// at startup:
+//   - configured + built:          enabled, fully operational
+//   - configured + not built:      FATAL (ErrInitBackend/ErrMissingBackend)
+//   - not configured + built:      disabled - present in binary but not in config
+//   - not configured + not built:  mock/dummy backend (ErrInitBackend)
 //
+// Each configured backend MUST (currently) successfully initialize at startup.
+// Initialization semantics are backend-specific. Some providers
+// (e.g., GCP) validate global credentials at startup and will FAIL target
+// startup if credentials are missing or invalid. Other providers
+// (e.g., AWS, Azure) defer credential resolution to the SDK and may fail
+// lazily on first use.
+//
+// Per-bucket credentials (e.g., `extra.aws.profile`, `extra.gcp.application_creds`)
+// override the global defaults at runtime but do not affect startup initialization.
+//
+// The same initBuiltTagged logic runs via `ais advanced enable-backend`
+// and `ais advanced disable-backend` CLI/API, allowing runtime (re)configuration
+// of backends without cluster restart.
+//
+// Backend() helper below resolves the correct backend for a given bucket:
+//
+// 1) remote AIS buckets always use the AIS backend
+// 2) for cloud buckets, the provider is determined from bucket props
+//    (which may differ from bck.Provider when backend_bck is set)
+// 3) if the provider is configured, return the real backend (with optional
+//    rate-limiting wrapper); if configured but nil - the provider was in
+//    the config but not linked into the binary
+// 4) fallback: Dummy backend that returns descriptive errors
+// =====================================================================================
 
 func (t *target) Backend(bck *meta.Bck) core.Backend { // as core.Target
 	if bck.IsRemoteAIS() {
@@ -204,6 +234,9 @@ func (t *target) initBuiltTagged(config *cmn.Config, startingUp bool) error {
 		case err == nil && !configured:
 			disabled = append(disabled, provider)
 		case err != nil && configured:
+			// the place to maybe introduce and support a less-strict policy
+			// (to allow startup when a given configured backend fails to initialize)
+
 			if !cmn.IsErrInitMissingBackend(err) {
 				// as is
 				return fmt.Errorf(fmtErrFailed, t, provider, err)

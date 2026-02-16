@@ -427,8 +427,7 @@ func (conf *ExtraPropsGCP) validate() error {
 		return fmt.Errorf("%s %q must be absolute", etag, path)
 	}
 	if clean := filepath.Clean(path); clean != path {
-		nlog.Warningln("extra.gcp.application_creds: filepath.Clean produces change:", path, "vs", clean)
-		conf.ApplicationCreds = clean
+		return fmt.Errorf("%s %q: expecting clean path %q", etag, path, clean)
 	}
 	return nil
 }
