@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"reflect"
 	"sort"
 	"strings"
@@ -306,22 +307,76 @@ func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
 func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 	// part sizes to allow for multipart upload, consistent with Amazon S3 limits
 	const (
-		maxPartSizeAWS = 5 * cos.GiB
 		minPartSizeAWS = 5 * cos.MiB
+		maxPartSizeAWS = 5 * cos.GiB
+
+		maxAWSProfileLen = 256
+		maxAWSRegionLen  = 64
 	)
+
 	provider, ok := arg[0].(string)
 	debug.Assert(ok)
+
 	switch provider {
 	case apc.HT:
 		if c.HTTP.OrigURLBck == "" {
 			return errors.New("original bucket URL must be set for an HTTP provider bucket")
 		}
+
 	case apc.AWS:
+		// multipart_size
 		size := c.AWS.MultiPartSize
 		if size != -1 && size != 0 && (size < minPartSizeAWS || size > maxPartSizeAWS) {
-			return fmt.Errorf("invalid aws.multipart_size %d (expecting -1 (single-part), 0 (default), or range 5MiB to 5GiB)", size)
+			a, b := cos.IEC(minPartSizeAWS, 0), cos.IEC(maxPartSizeAWS, 0)
+			return fmt.Errorf("invalid extra.aws.multipart_size %d (expecting -1 (single-part), 0 (default), or range %s to %s)", size, a, b)
+		}
+
+		// max_pagesize
+		// - 0 means default (backend-specific)
+		// - allow up to AIS max (SwiftStack etc. can do 10k)
+		if v := c.AWS.MaxPageSize; v < 0 || v > apc.MaxPageSizeAIS {
+			return fmt.Errorf("invalid extra.aws.max_pagesize %d (expecting 0 (default) or range 1..%d)", v, apc.MaxPageSizeAIS)
+		}
+
+		// profile
+		if p := c.AWS.Profile; p != "" {
+			if strings.TrimSpace(p) != p {
+				return errors.New("invalid extra.aws.profile: leading/trailing whitespace")
+			}
+			if len(p) > maxAWSProfileLen {
+				return fmt.Errorf("invalid extra.aws.profile: too long (%d > %d)", len(p), maxAWSProfileLen)
+			}
+		}
+
+		// cloud_region
+		if r := c.AWS.CloudRegion; r != "" {
+			if strings.TrimSpace(r) != r {
+				return errors.New("invalid extra.aws.cloud_region: leading/trailing whitespace")
+			}
+			if len(r) > maxAWSRegionLen {
+				return fmt.Errorf("invalid extra.aws.cloud_region: too long (%d > %d)", len(r), maxAWSRegionLen)
+			}
+		}
+
+		// endpoint
+		if ep := c.AWS.Endpoint; ep != "" {
+			const etag = "invalid extra.aws.endpoint"
+			if strings.TrimSpace(ep) != ep {
+				return fmt.Errorf("%s %q: leading/trailing whitespace", etag, ep)
+			}
+			u, err := url.Parse(ep)
+			if err != nil {
+				return fmt.Errorf("%s %q: %v", etag, ep, err)
+			}
+			if u.Scheme != "http" && u.Scheme != "https" {
+				return fmt.Errorf("%s %q: unsupported scheme %q (expecting http or https)", etag, ep, u.Scheme)
+			}
+			if u.Host == "" {
+				return fmt.Errorf("%s %q", etag, ep)
+			}
 		}
 	}
+
 	return nil
 }
 
