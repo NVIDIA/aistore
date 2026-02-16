@@ -629,7 +629,8 @@ func _gcpErr(gcpError error) error {
 }
 
 func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
-	if objErr != storage.ErrObjectNotExist {
+	// TODO: consider additionally checking for `*googleapi.Error{Code:404}`
+	if !errors.Is(objErr, storage.ErrObjectNotExist) {
 		return http.StatusBadRequest, _gcpErr(objErr)
 	}
 

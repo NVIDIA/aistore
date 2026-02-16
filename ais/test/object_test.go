@@ -569,9 +569,12 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, hargs)
-	if !isErrNotFound(err) {
-		t.Errorf("Local file %s not deleted", fileName1)
+	if err == nil {
+		t.Errorf("Object %s not deleted", fileName1)
+	} else if !isErrNotFound(err) {
+		t.Errorf("HEAD(deleted-object %q) returns a wrong error type: %v (%T)", fileName1, err, err)
 	}
+
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2, hargs)
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 		t.Errorf("Local file %s not deleted", fileName2)
@@ -689,8 +692,10 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	// Check that cloud object is deleted
 	_, err = api.HeadObject(baseParams, bckRemote, fileName, api.HeadArgs{FltPresence: apc.FltExistsOutside})
-	if !isErrNotFound(err) {
-		t.Errorf("Remote file %s not deleted", fileName)
+	if err == nil {
+		t.Errorf("Remote object %s not deleted", fileName)
+	} else if !isErrNotFound(err) {
+		t.Errorf("HEAD(deleted-remote-object %q) returns a wrong error type: %v (%T)", fileName, err, err)
 	}
 
 	// Set Props Object
@@ -1976,8 +1981,10 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		}
 
 		_, err = api.HeadObject(baseParams, bck, fileName, api.HeadArgs{FltPresence: apc.FltExists})
-		if !isErrNotFound(err) {
+		if err == nil {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
+		} else if !isErrNotFound(err) {
+			t.Errorf("HEAD(non-existing-object) returns a wrong error type: %v (%T)", err, err)
 		}
 		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)
 		oah, err := api.PutObject(&putArgs)
