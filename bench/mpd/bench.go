@@ -94,7 +94,7 @@ func main() {
 	for i := range *iterations {
 		file, _ := os.CreateTemp("", "stream-*.bin")
 		start := time.Now()
-		r, err := api.MultipartDownloadStream(bp, bck, objName, &api.MpdStreamArgs{
+		r, _, err := api.MultipartDownloadStream(bp, bck, objName, &api.MpdStreamArgs{
 			NumWorkers: *workers,
 			ChunkSize:  *chunk,
 			ObjectSize: *size,

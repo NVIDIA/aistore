@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -50,6 +50,7 @@ const (
 	opUpdateExisting // {GET followed by PUT(same name, same size)} combo
 	opPutMultipart   // multipart upload operation
 	opGetBatch       // get-batch
+	opGetMpdStream   // multipart download stream
 )
 
 type (
@@ -89,6 +90,9 @@ func postNewWorkOrder() (err error) {
 	case runParams.getBatchSize > 0:
 		// when GET becomes GET(batch)
 		op = opGetBatch
+	case runParams.mpdStreamPct > 0 && shouldUsePercentage(runParams.mpdStreamPct):
+		// when a percentage of GETs becomes MPD stream
+		op = opGetMpdStream
 	case runParams.updateExistingPct > 0 && shouldUsePercentage(runParams.updateExistingPct):
 		// when a percentage of GET(foo) is followed up by PUT(foo)
 		op = opUpdateExisting
@@ -103,6 +107,8 @@ func postNewWorkOrder() (err error) {
 		wo, err = newMultipartWorkOrder()
 	case opGet, opUpdateExisting:
 		wo, err = newGetWorkOrder(op)
+	case opGetMpdStream:
+		wo, err = newMpdStreamWorkOrder()
 	default:
 		debug.Assert(op == opGetBatch, op)
 		wo, err = newGetBatchWorkOrder()
@@ -229,6 +235,18 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		}
 		// No SGL cleanup needed for multipart operations
 
+	case opGetMpdStream:
+		mpdStreamPending--
+		intervalStats.statsd.GetMpdStream.AddPending(mpdStreamPending)
+		if wo.err == nil {
+			intervalStats.getMpdStream.Add(wo.size, elapsed)
+			intervalStats.statsd.GetMpdStream.Add(wo.size, elapsed)
+		} else {
+			fmt.Fprintln(os.Stderr, "MPD stream failed:", wo.err)
+			intervalStats.getMpdStream.AddErr()
+			intervalStats.statsd.GetMpdStream.AddErr()
+		}
+
 	case opGetBatch:
 		getBatchPending--
 		intervalStats.statsd.GetBatch.AddPending(getBatchPending)
@@ -283,16 +301,7 @@ func doPut(wo *workOrder) {
 		return
 	}
 
-	url := runParams.proxyURL
-	if runParams.randomProxy {
-		debug.Assert(!isDirectS3())
-		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "PUT(wo) err:", err, wo.String())
-			os.Exit(1)
-		}
-		url = psi.URL(cmn.NetPublic)
-	}
+	url := getProxyURL("PUT", wo.String())
 	if !traceHTTPSig.Load() {
 		if isDirectS3() {
 			wo.err = s3put(runParams.bck, wo.objName, r)
@@ -311,34 +320,12 @@ func doPut(wo *workOrder) {
 }
 
 func doMultipart(wo *workOrder) {
-	var url = runParams.proxyURL
-
-	if runParams.randomProxy {
-		debug.Assert(!isDirectS3())
-		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Multipart PUT(wo) err:", err, wo.String())
-			os.Exit(1)
-		}
-		url = psi.URL(cmn.NetPublic)
-	}
-
+	url := getProxyURL("Multipart PUT", wo.String())
 	wo.err = putMultipart(url, runParams.bck, wo.objName, wo.size, runParams.multipartChunks, wo.cksumType)
 }
 
 func doGet(wo *workOrder) {
-	var (
-		url = runParams.proxyURL
-	)
-	if runParams.randomProxy {
-		debug.Assert(!isDirectS3())
-		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "GET(wo) err:", err, wo.String())
-			os.Exit(1)
-		}
-		url = psi.URL(cmn.NetPublic)
-	}
+	url := getProxyURL("GET", wo.String())
 	if !traceHTTPSig.Load() {
 		if isDirectS3() {
 			wo.size, wo.err = s3getDiscard(runParams.bck, wo.objName)
@@ -353,18 +340,7 @@ func doGet(wo *workOrder) {
 }
 
 func doGetBatch(wo *workOrder) {
-	var url = runParams.proxyURL
-
-	if runParams.randomProxy {
-		debug.Assert(!isDirectS3())
-		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "GetBatch(wo):", err, wo.String())
-			os.Exit(1)
-		}
-		url = psi.URL(cmn.NetPublic)
-	}
-
+	url := getProxyURL("GetBatch", wo.String())
 	// build GetBatch request from wo.batch
 	// (earlier objnameGetter.PickBatch())
 	debug.Assert(wo.moss != nil && len(wo.moss.In) > 0)
@@ -374,6 +350,11 @@ func doGetBatch(wo *workOrder) {
 
 	// do
 	wo.size, wo.err = getBatchDiscard(url, runParams.bck, wo.moss)
+}
+
+func doGetMpdStream(wo *workOrder) {
+	url := getProxyURL("GET(MPD stream)", wo.String())
+	wo.size, wo.err = getMpdStreamDiscard(url, wo, runParams)
 }
 
 func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {
@@ -405,6 +386,9 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doMultipart(wo)
 		case opGetBatch:
 			doGetBatch(wo)
+		case opGetMpdStream:
+			doGetMpdStream(wo)
+			numGets.Inc()
 		default:
 			debug.Assert(false, wo.op)
 		}
@@ -528,6 +512,34 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 	return wo, nil
 }
 
+func newMpdStreamWorkOrder() (*workOrder, error) {
+	if objnameGetter.Len() == 0 {
+		return nil, errors.New("no objects in bucket")
+	}
+
+	mpdStreamPending++
+	wo := allocWO(opGetMpdStream)
+	name := objnameGetter.Pick()
+	wo.objName, wo.archpath = decodeArchName(name)
+
+	return wo, nil
+}
+
+// getProxyURL returns the proxy URL for I/O; when randomProxy is set, picks a random gateway.
+func getProxyURL(opLabel, woStr string) string {
+	url := runParams.proxyURL
+	if runParams.randomProxy {
+		debug.Assert(!isDirectS3())
+		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, opLabel+"(wo) err:", err, woStr)
+			os.Exit(1)
+		}
+		url = psi.URL(cmn.NetPublic)
+	}
+	return url
+}
+
 func (wo *workOrder) String() string {
 	var opName, s string
 	switch wo.op {
@@ -544,6 +556,8 @@ func (wo *workOrder) String() string {
 		if wo.moss != nil && len(wo.moss.In) > 0 {
 			s = ", batch " + strconv.Itoa(len(wo.moss.In))
 		}
+	case opGetMpdStream:
+		opName = "GET-MPDSTREAM"
 	}
 	cname := runParams.bck.Cname(wo.objName)
 	if wo.start == 0 {

@@ -430,8 +430,8 @@ func (c *MpdCounter) finish() { c.done = true }
 // MultipartDownloadStream //
 ////////////////////////////
 
-// MultipartDownloadStream performs concurrent range-based download and returns an io.ReadCloser.
-func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *MpdStreamArgs) (io.ReadCloser, error) {
+// MultipartDownloadStream performs concurrent range-based download and returns an io.ReadCloser
+func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *MpdStreamArgs) (r io.ReadCloser, oah ObjAttrs, err error) {
 	if args == nil {
 		args = &MpdStreamArgs{}
 	}
@@ -449,15 +449,19 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		chunkSize = defaultMptDownloadChunkSize
 	}
 	if objectSize <= 0 {
-		opV2, err := HeadObjectV2(bp, bck, objName, apc.GetPropsSize, HeadArgs{})
+		opV2, err := HeadObjectV2(bp, bck, objName, apc.GetPropsSize+apc.LsPropsSepa+apc.GetPropsChecksum, HeadArgs{})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get object size: %w", err)
+			return nil, oah, fmt.Errorf("head %s: %w", bck.Cname(objName), err)
 		}
 		objectSize = opV2.Size
+		oah.wrespHeader = make(http.Header, 4)
+		cmn.ToHeaderV2(&opV2.ObjAttrs, oah.wrespHeader, true /*cksum*/, false, false, false)
 		if objectSize <= 0 {
-			return nil, fmt.Errorf("invalid object size: %d", objectSize)
+			return nil, oah, fmt.Errorf("invalid object size: %d", objectSize)
 		}
 	}
+	oah.n = objectSize
+
 	if chunkSize < minMpdChunkSize {
 		chunkSize = minMpdChunkSize
 	}
@@ -468,9 +472,9 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 	if chunkSize >= objectSize {
 		reader, _, err := GetObjectReader(bp, bck, objName, nil)
 		if err != nil {
-			return nil, err
+			return nil, oah, err
 		}
-		return reader, nil
+		return reader, oah, nil
 	}
 	numChunks := int((objectSize + chunkSize - 1) / chunkSize)
 	if numWorkers > numChunks {
@@ -483,7 +487,7 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 		bufferSize = int64(numWorkers) * chunkSize
 	}
 	if bufferSize < chunkSize {
-		return nil, fmt.Errorf("BufferSize (%d) must be >= ChunkSize (%d)", bufferSize, chunkSize)
+		return nil, oah, fmt.Errorf("BufferSize (%d) must be >= ChunkSize (%d)", bufferSize, chunkSize)
 	}
 	numSlots := int(bufferSize / chunkSize) // round down
 	if numWorkers > numSlots {
@@ -526,7 +530,7 @@ func MultipartDownloadStream(bp BaseParams, bck cmn.Bck, objName string, args *M
 
 	go reader.produce()
 
-	return reader, nil
+	return reader, oah, nil
 }
 
 ///////////////

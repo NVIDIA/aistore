@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -552,6 +552,52 @@ func getBatchDiscard(proxyURL string, bck cmn.Bck, req *apc.MossReq) (int64, err
 			batchSize, num, cos.ToSizeIEC(size, 2))
 	}
 	return size, err
+}
+
+func getMpdStreamDiscard(proxyURL string, wo *workOrder, p *params) (int64, error) {
+	bp := api.BaseParams{
+		URL:    proxyURL,
+		Client: runParams.bp.Client,
+		Token:  runParams.bp.Token,
+		UA:     runParams.bp.UA,
+	}
+
+	// Configure MPD stream args
+	args := &api.MpdStreamArgs{
+		ChunkSize:  p.mpdStreamChunkSize,
+		NumWorkers: p.mpdStreamWorkers,
+		// ObjectSize: 0 - let API auto-detect via HEAD
+	}
+
+	rc, oah, err := api.MultipartDownloadStream(bp, p.bck, wo.objName, args)
+	if err != nil {
+		return 0, fmt.Errorf("MPD stream %s: %w", p.bck.Cname(wo.objName), err)
+	}
+	defer rc.Close()
+
+	mpdCksum := oah.Attrs().Cksum
+
+	var mpdCksumType string
+	if p.verifyHash && !cos.NoneC(mpdCksum) {
+		mpdCksumType = mpdCksum.Type()
+	}
+
+	n, cksum, err := cos.CopyAndChecksum(io.Discard, rc, nil, mpdCksumType)
+	if err != nil {
+		return 0, fmt.Errorf("MPD stream %s: %v", p.bck.Cname(wo.objName), err)
+	}
+
+	if p.verifyHash && !cos.NoneC(mpdCksum) {
+		var cksumValue string
+		if cksum != nil {
+			cksumValue = cksum.Value()
+		}
+		if mpdCksum.Value() != cksumValue {
+			return 0, cmn.NewErrInvalidCksum(mpdCksum.Value(), cksumValue)
+		}
+	}
+
+	return n, nil
 }
 
 func listObjCallback(ctx *api.LsoCounter) {

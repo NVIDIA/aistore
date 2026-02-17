@@ -160,7 +160,7 @@ func TestMultipartDownloadStream(t *testing.T) {
 			origMD5 := md5.Sum(origBuf.Bytes())
 
 			// Download via MultipartDownloadStream
-			streamReader, err := api.MultipartDownloadStream(baseParams, bck, name, &api.MpdStreamArgs{
+			streamReader, oah, err := api.MultipartDownloadStream(baseParams, bck, name, &api.MpdStreamArgs{
 				NumWorkers: tc.workers,
 				ChunkSize:  tc.chunkSize,
 				ObjectSize: tc.size,
@@ -178,6 +178,14 @@ func TestMultipartDownloadStream(t *testing.T) {
 
 			downloadedMD5 := md5.Sum(downloadBuf.Bytes())
 			tassert.Fatalf(t, origMD5 == downloadedMD5, "content mismatch: MD5 differs")
+
+			// Validate returned checksum (if any)
+			returnedCksum := oah.Attrs().Cksum
+			if !cos.NoneC(returnedCksum) {
+				computed := cos.ChecksumB2S(downloadBuf.Bytes(), returnedCksum.Type())
+				tassert.Fatalf(t, computed == returnedCksum.Value(),
+					"returned checksum mismatch: expected %s, got %s (type %s)", returnedCksum.Value(), computed, returnedCksum.Type())
+			}
 
 			tlog.Logfln("  OK: content verified")
 		})
@@ -310,14 +318,14 @@ func TestMultipartDownloadStreamClose(t *testing.T) {
 
 	t.Run("close-immediately", func(t *testing.T) {
 		tlog.Logfln("Open stream and close immediately")
-		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		r, _, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
 		tassert.CheckFatal(t, err)
 		tassert.CheckFatal(t, r.Close())
 	})
 
 	t.Run("close-after-partial-read", func(t *testing.T) {
 		tlog.Logfln("Read partial content then close")
-		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		r, _, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
 		tassert.CheckFatal(t, err)
 
 		buf := make([]byte, 2*cos.MiB)
@@ -331,7 +339,7 @@ func TestMultipartDownloadStreamClose(t *testing.T) {
 
 	t.Run("close-while-reading", func(t *testing.T) {
 		tlog.Logfln("Close from another goroutine while reading")
-		r, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
+		r, _, err := api.MultipartDownloadStream(baseParams, bck, objName, streamArgs)
 		tassert.CheckFatal(t, err)
 
 		// Let the reader start consuming

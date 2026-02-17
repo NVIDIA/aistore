@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -274,6 +274,18 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 			pb(s.get.TotalBytes())+" ("+pb(t.get.TotalBytes())+")",
 			pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
 			ps(s.get.Throughput(s.get.Start(), time.Now()))+" ("+ps(t.get.Throughput(t.get.Start(), time.Now()))+")",
+			errs)
+	}
+	errs = "-"
+	if t.getMpdStream.TotalErrs() != 0 {
+		errs = pn(s.getMpdStream.TotalErrs()) + " (" + pn(t.getMpdStream.TotalErrs()) + ")"
+	}
+	if s.getMpdStream.Total() != 0 {
+		p(to, statsPrintHeader, pt(), "GET-MPDSTREAM",
+			pn(s.getMpdStream.Total())+" ("+pn(t.getMpdStream.Total())+")",
+			pb(s.getMpdStream.TotalBytes())+" ("+pb(t.getMpdStream.TotalBytes())+")",
+			pl(s.getMpdStream.MinLatency(), s.getMpdStream.AvgLatency(), s.getMpdStream.MaxLatency()),
+			ps(s.getMpdStream.Throughput(s.getMpdStream.Start(), time.Now()))+" ("+ps(t.getMpdStream.Throughput(t.getMpdStream.Start(), time.Now()))+")",
 			errs)
 	}
 	errs = "-"

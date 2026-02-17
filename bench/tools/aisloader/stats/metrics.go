@@ -14,6 +14,7 @@ const (
 	get              = "get"
 	put              = "put"
 	getBatch         = "getbatch"
+	getMpdStream     = "getmpdstream"
 	throughput       = "throughput"
 	latency          = "latency"
 	latencyProxy     = "latency.proxy"
@@ -48,11 +49,12 @@ type (
 		metrics map[string]*MetricLatAgg
 	}
 	Metrics struct {
-		Put      MetricAgg
-		Get      MetricAgg
-		GetBatch MetricAgg
-		PutLat   MetricLatsAgg
-		GetLat   MetricLatsAgg
+		Put          MetricAgg
+		Get          MetricAgg
+		GetBatch     MetricAgg
+		GetMpdStream MetricAgg
+		PutLat       MetricLatsAgg
+		GetLat       MetricLatsAgg
 	}
 )
 
@@ -61,6 +63,7 @@ func NewStatsdMetrics(start time.Time) Metrics {
 	m.Get.start = start
 	m.Put.start = start
 	m.GetBatch.start = start
+	m.GetMpdStream.start = start
 	return m
 }
 
@@ -203,8 +206,9 @@ func (m *Metrics) SendAll(c *statsd.Client) {
 	m.Get.Send(c, get, generalMetricsGet, aggCntGet)
 	m.Put.Send(c, put, generalMetricsPut, aggCntPut)
 
-	// GetBatch has its own series; no per-name latencies yet (TODO)
+	// GetBatch and GetMpdStream have their own series
 	m.GetBatch.Send(c, getBatch, nil, 0)
+	m.GetMpdStream.Send(c, getMpdStream, nil, 0)
 }
 
 func ResetMetricsGauges(c *statsd.Client) {
@@ -235,6 +239,19 @@ func ResetMetricsGauges(c *statsd.Client) {
 	)
 
 	c.Send(getBatch, 1,
+		statsd.Metric{
+			Type:  statsd.Gauge,
+			Name:  throughput,
+			Value: 0,
+		},
+		statsd.Metric{
+			Type:  statsd.Gauge,
+			Name:  pending,
+			Value: 0,
+		},
+	)
+
+	c.Send(getMpdStream, 1,
 		statsd.Metric{
 			Type:  statsd.Gauge,
 			Name:  throughput,

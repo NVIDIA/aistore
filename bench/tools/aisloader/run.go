@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 
 // `aisloader` is a benchmarking tool to measure storage performance. It's a load
@@ -75,11 +75,12 @@ const (
 type (
 	// sts records accumulated puts/gets information.
 	sts struct {
-		statsd   stats.Metrics
-		put      stats.HTTPReq
-		get      stats.HTTPReq
-		getBatch stats.HTTPReq
-		putMPU   stats.HTTPReq // multipart upload operations
+		statsd       stats.Metrics
+		put          stats.HTTPReq
+		get          stats.HTTPReq
+		getBatch     stats.HTTPReq
+		putMPU       stats.HTTPReq // multipart upload operations
+		getMpdStream stats.HTTPReq // multipart download stream operations
 	}
 
 	jsonStats struct {
@@ -109,10 +110,11 @@ var (
 	// by the single-threaded producer (main) loop. Do NOT access from
 	// worker goroutines - or switch to atomics or refactor accordingly.
 	// ===========================================================
-	getPending      int64  // main-loop only
-	putPending      int64  // main-loop only
-	totalWOs        uint64 // main-loop only (used for deterministic hashing)
-	getBatchPending int64  // main-loop only
+	getPending       int64  // main-loop only
+	putPending       int64  // main-loop only
+	totalWOs         uint64 // main-loop only (used for deterministic hashing)
+	getBatchPending  int64  // main-loop only
+	mpdStreamPending int64  // main-loop only
 
 	traceHTTPSig atomic.Bool
 
@@ -536,10 +538,11 @@ func printArguments(set *flag.FlagSet) {
 // newStats returns a new stats object with given time as the starting point
 func newStats(t time.Time) sts {
 	return sts{
-		put:      stats.NewHTTPReq(t),
-		get:      stats.NewHTTPReq(t),
-		putMPU:   stats.NewHTTPReq(t),
-		getBatch: stats.NewHTTPReq(t),
+		put:          stats.NewHTTPReq(t),
+		get:          stats.NewHTTPReq(t),
+		putMPU:       stats.NewHTTPReq(t),
+		getBatch:     stats.NewHTTPReq(t),
+		getMpdStream: stats.NewHTTPReq(t),
 		// StatsD is deprecated
 		statsd: stats.NewStatsdMetrics(t),
 	}
@@ -551,6 +554,7 @@ func (s *sts) aggregate(other *sts) {
 	s.put.Aggregate(other.put)
 	s.putMPU.Aggregate(other.putMPU)
 	s.getBatch.Aggregate(other.getBatch)
+	s.getMpdStream.Aggregate(other.getMpdStream)
 }
 
 func setupBucket(runParams *params, created *bool) error {

@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package aisloader
 
@@ -122,6 +122,13 @@ type (
 		multipartPct    int // percentage of PUTs using multipart (0-100)
 	}
 
+	// Multipart download stream settings
+	mpdStreamParams struct {
+		mpdStreamChunkSize int64 // chunk size for multipart download stream
+		mpdStreamWorkers   int   // number of concurrent workers for MPD stream (0 = use API default: 16)
+		mpdStreamPct       int   // percentage of GETs using MPD stream (0-100)
+	}
+
 	// ETL (Extract, Transform, Load) configuration
 	etlParams struct {
 		etlName     string // predefined ETL to apply (e.g., 'tar2tf', 'md5', 'echo')
@@ -171,6 +178,7 @@ type (
 		namingParams    // object naming strategy
 		readParams      // read operations
 		multipartParams // multipart upload
+		mpdStreamParams // multipart download stream
 		etlParams       // ETL config
 		loaderParams    // fleet coordination
 		statsParams     // monitoring
@@ -263,6 +271,11 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	// ============ Multipart ============
 	f.IntVar(&p.multipartChunks, "multipart-chunks", 0, "number of chunks for multipart upload (0 - disabled, >0 - use multipart upload with specified number of chunks)")
 	f.IntVar(&p.multipartPct, "pctmultipart", 0, "percentage of PUT operations that use multipart upload (0-100, only applies when multipart-chunks > 0)")
+
+	// ============ Multipart Download Stream ============
+	f.Int64Var(&p.mpdStreamChunkSize, "mpdstream-chunk-size", 0, "chunk size for multipart download stream. default is 8 MiB")
+	f.IntVar(&p.mpdStreamWorkers, "mpdstream-workers", 0, "number of concurrent workers for multipart download stream (0 - use API default: 16, >0 - use specified number)")
+	f.IntVar(&p.mpdStreamPct, "pctmpdstream", 0, "percentage of GET operations that use multipart download stream (0-100)")
 
 	// ============ ETL ============
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
@@ -514,6 +527,20 @@ func (p *params) validate() error {
 	}
 	if p.multipartChunks == 0 && p.multipartPct != 0 {
 		fmt.Fprintf(os.Stderr, "Warning: pctmultipart=%d is ignored when multipart-chunks=0\n", p.multipartPct)
+	}
+
+	// Multipart download stream validation
+	if p.mpdStreamWorkers < 0 {
+		return fmt.Errorf("invalid option: mpdstream-workers %d (must be >= 0)", p.mpdStreamWorkers)
+	}
+	if p.mpdStreamPct < 0 || p.mpdStreamPct > 100 {
+		return fmt.Errorf("invalid option: pctmpdstream %d (must be 0-100)", p.mpdStreamPct)
+	}
+	if p.mpdStreamPct > 0 && p.putPct > 0 {
+		return fmt.Errorf("cannot combine pctmpdstream %d with pctput %d (GET-only vs PUT workload)", p.mpdStreamPct, p.putPct)
+	}
+	if p.mpdStreamPct > 0 && p.getBatchSize > 0 {
+		return fmt.Errorf("cannot combine pctmpdstream %d with batch-size %d (both are GET variants)", p.mpdStreamPct, p.getBatchSize)
 	}
 
 	if p.skipList && p.fileList != "" {
