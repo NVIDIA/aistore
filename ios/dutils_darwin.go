@@ -14,6 +14,10 @@ import (
 // TODO: NIY
 
 type (
+	DiskInfo struct {
+		Size  uint32
+		Flags uint32
+	}
 	blockDev  struct{}
 	BlockDevs []*blockDev
 )
@@ -28,5 +32,8 @@ func fs2disks(string, string, cos.MountpathLabel, BlockDevs, int, bool) (FsDisks
 		return nil, err
 	}
 	drive := driveStats[0]
-	return FsDisks{drive.Name: drive.BlockSize}, nil
+	info := DiskInfo{
+		Size: uint32(drive.BlockSize),
+	}
+	return FsDisks{drive.Name: info}, nil
 }
