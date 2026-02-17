@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -170,15 +171,38 @@ func TestInitFromDisk(t *testing.T) {
 	compareSecret(t, cm, envSecret)
 }
 
-func TestGetConfDir(t *testing.T) {
+func TestGetDBType(t *testing.T) {
 	base := newBaseConfig()
 	path := writeConfToDisk(t, base)
 	cm := config.NewConfManager()
 	cm.Init(path)
+	tassert.Errorf(t, cm.GetDBType() == "", "expected empty db type, got %s", cm.GetDBType())
+	// Test DB from config is loaded
+	expected := "customDB"
+	base.Server.DBConf = authn.DatabaseConf{DBType: expected}
+	path = writeConfToDisk(t, base)
+	cm2 := config.NewConfManager()
+	cm2.Init(path)
+	got := cm2.GetDBType()
+	tassert.Errorf(t, got == expected, "expected type %s, got %s", expected, got)
+}
 
-	expectedDir := filepath.Dir(path)
-	got := cm.GetConfDir()
-	tassert.Errorf(t, got == expectedDir, "expected %q, got %q", expectedDir, got)
+func TestGetDBPath(t *testing.T) {
+	base := newBaseConfig()
+	path := writeConfToDisk(t, base)
+	cm := config.NewConfManager()
+	cm.Init(path)
+	expected := filepath.Join(filepath.Dir(path), fname.AuthNDB)
+	got := cm.GetDBPath()
+	tassert.Errorf(t, got == expected, "expected %q, got %q", expected, got)
+	// Test with custom path
+	expected = "/custom/path/file.db"
+	base.Server.DBConf = authn.DatabaseConf{Filepath: expected}
+	path = writeConfToDisk(t, base)
+	cm2 := config.NewConfManager()
+	cm2.Init(path)
+	got = cm2.GetDBPath()
+	tassert.Errorf(t, got == expected, "expected %q, got %q", expected, got)
 }
 
 func TestGetLogFlushInterval(t *testing.T) {

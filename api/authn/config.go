@@ -70,7 +70,12 @@ type (
 		Expire cos.Duration `json:"expiration_time"`
 		PubKey *string      `json:"public_key"`
 		// Size of RSA private key to generate
-		RSAKeyBits int `json:"rsa_key_bits"`
+		RSAKeyBits int          `json:"rsa_key_bits"`
+		DBConf     DatabaseConf `json:"db"`
+	}
+	DatabaseConf struct {
+		DBType   string `json:"type"`
+		Filepath string `json:"filepath"`
 	}
 
 	// TimeoutConf sets the default timeout for the HTTP client used by the auth manager

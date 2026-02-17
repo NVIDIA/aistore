@@ -9,17 +9,15 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/authn/config"
+	"github.com/NVIDIA/aistore/cmd/authn/kvdb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/fname"
-	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -50,7 +48,7 @@ func main() {
 	installSignalHandler()
 	cm := config.NewConfManager()
 	cm.Init(*cfgPath)
-	driver := createDB(cm.GetConfDir())
+	driver := kvdb.CreateDriver(cm)
 	mgr, code, err := newMgr(cm, driver)
 	if err != nil {
 		cos.ExitLogf("Failed to init manager: %v(%d)", err, code)
@@ -70,15 +68,6 @@ func main() {
 	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}
-}
-
-func createDB(configDir string) *kvdb.BuntDriver {
-	dbPath := filepath.Join(configDir, fname.AuthNDB)
-	driver, err := kvdb.NewBuntDB(dbPath)
-	if err != nil {
-		cos.ExitLogf("Failed to init local database: %v", err)
-	}
-	return driver
 }
 
 func installSignalHandler() {

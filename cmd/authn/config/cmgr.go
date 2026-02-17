@@ -174,10 +174,6 @@ func (cm *ConfManager) saveToDisk() error {
 	return jsp.SaveMeta(cm.filePath, cm.conf.Load(), nil)
 }
 
-func (cm *ConfManager) GetConfDir() string {
-	return filepath.Dir(cm.filePath)
-}
-
 func (cm *ConfManager) GetLogFlushInterval() time.Duration {
 	return cm.conf.Load().Log.FlushInterval.D()
 }
@@ -330,6 +326,18 @@ func (cm *ConfManager) GetPublicKeyString() *string {
 
 func (cm *ConfManager) GetKeySet() jwk.Set {
 	return cm.jwks
+}
+
+func (cm *ConfManager) GetDBType() string {
+	return cm.conf.Load().Server.DBConf.DBType
+}
+
+func (cm *ConfManager) GetDBPath() string {
+	dbConf := cm.conf.Load().Server.DBConf
+	if fp := dbConf.Filepath; fp != "" {
+		return fp
+	}
+	return filepath.Join(filepath.Dir(cm.filePath), fname.AuthNDB)
 }
 
 // Sets jwks for the manager, must be called under lock when creating RSA
