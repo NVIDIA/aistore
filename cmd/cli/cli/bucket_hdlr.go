@@ -74,7 +74,8 @@ const createBucketUsage = "" +
 	indent1 + "\t- ais create s3://mybucket\t- add existing cloud (S3) bucket; normally AIS would auto-add it on first access;\n" +
 	indent1 + "\t- ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'\t- add S3 bucket using a non-default cloud profile;\n" +
 	indent1 + "\t- ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'\t- attach S3-compatible bucket via namespace '#myaccount';\n" +
-	indent1 + "\t- ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'\t- advanced: register bucket without verifying its existence/accessibility (use with care).\n"
+	indent1 + "\t- ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'\t- advanced: register bucket without verifying its existence/accessibility (use with care);\n" +
+	indent1 + "\t- ais create gs://mybucket --skip-lookup --props='extra.gcp.application_creds=/mnt/vault/sa.json'\t- GCS bucket with per-bucket service-account credentials."
 
 // ais cp
 //

@@ -80,8 +80,8 @@ NAME:
      - ais create s3://mybucket                                                                               - add existing cloud (S3) bucket; normally AIS would auto-add it on first access;
      - ais create s3://mybucket --props='extra.aws.profile=prod extra.aws.multipart_size=333M'                - add S3 bucket using a non-default cloud profile;
      - ais create s3://#myaccount/mybucket --props='extra.aws.profile=swift extra.aws.endpoint=$S3_ENDPOINT'  - attach S3-compatible bucket via namespace '#myaccount';
-     - ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'                                 - advanced: register bucket without verifying its existence/accessibility (use with care).
-
+     - ais create s3://mybucket --skip-lookup --props='extra.aws.profile=...'                                 - advanced: register bucket without verifying its existence/accessibility (use with care);
+     - ais create gs://mybucket --skip-lookup --props='extra.gcp.application_creds=/mnt/vault/sa.json'        - GCS bucket with per-bucket service-account credentials.
 
 USAGE:
    ais create BUCKET [BUCKET...] [command options]
@@ -166,6 +166,8 @@ Create bucket "aws://bucket_name" failed: creating a bucket for any of the cloud
 
 * [AIS Buckets: Design and Operations: Part II](/docs/bucket.md#part-ii-how-to)
 * [Blog: The Many Lives of a Dataset Called "data"](https://aistore.nvidia.com/blog/2025/12/15/s3-data-with-namespace)
+- [GCP Per-Bucket Credentials](/docs/cli/gcp_creds.md)
+- [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
 
 ## Delete bucket
 

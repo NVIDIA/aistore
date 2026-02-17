@@ -20,6 +20,8 @@ For supported backends (that include, but are not limited, to AWS S3), see also:
 - [When bucket does not exist](#when-bucket-does-not-exist)
 - [Configuring custom AWS S3 endpoint](#configuring-custom-aws-s3-endpoint)
 - [Multipart size threshold](#multipart-size-threshold)
+- [Disabling MultiPart Uploads](#disabling-multipart-uploads)
+- [References](#references)
 
 ## Viewing vendor-specific properties
 
@@ -239,3 +241,9 @@ extra.aws.multipart_size  -1
 ```
 
 **NOTE:** Setting this to false will result in much slower "single-part" uploads
+
+## References
+
+- [GCP Per-Bucket Credentials](/docs/cli/gcp_creds.md)
+- [Bucket Properties](/docs/bucket.md#bucket-properties)
+- [Namespaced Buckets](/docs/bucket.md#namespaces)

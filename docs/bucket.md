@@ -223,7 +223,7 @@ At the top level:
 | `chunks`       | `ChunksConf`      | Chunked-object layout and multipart-upload behavior.                        |
 | `lru`          | `LRUConf`         | LRU caching policy: watermarks, enable/disable.                             |
 | `rate_limit`   | `RateLimitConf`   | Frontend and backend rate limiting (bursty/adaptive shaping).               |
-| `extra`        | `ExtraProps`      | Provider-specific extras (e.g., `extra.aws.profile`, `extra.aws.endpoint`). |
+| `extra`        | `ExtraProps`      | Provider-specific: `extra.aws.{profile,endpoint,region}` for S3-compatible, `extra.gcp.application_creds` for GCS. |
 | `access`       | `AccessAttrs`     | Bucket access mask (GET, PUT, DELETE, etc.).                                |
 | `features`     | `feat.Flags`      | [Feature flags](#feature-flags) to flip assorted defaults (e.g., S3 path-style). |
 | `bid`          | `uint64`          | Unique bucket ID (assigned by AIS, read-only).                              |
@@ -636,6 +636,40 @@ Namespaces give you direct access with minimal overhead. Backend buckets add a l
 Note that Option B requires the namespaced S3 bucket to exist first. You can't skip straight to `backend_bck=s3://data` with custom credentials - AIS needs to resolve the backend bucket, which requires proper credentials already in place. Create the namespaced cloud bucket first, then front it with an AIS bucket if needed.
 
 > See also: [AWS Profiles and S3 Endpoints](/docs/cli/aws_profile_endpoint.md)
+
+### GCP / Google Cloud Storage
+
+| Property | Description |
+|----------|-------------|
+| `extra.gcp.application_creds` | Absolute path to a GCP service-account JSON key file; overrides the global `GOOGLE_APPLICATION_CREDENTIALS` for this bucket |
+
+```console
+# Inspect GCP-specific knobs (JSON shows all fields, "-" means unset)
+$ ais bucket props show gs://my-bucket extra.gcp --json
+{
+    "extra": {
+        "gcp": {
+            "application_creds": "-"
+        }
+    }
+}
+
+# Assign per-bucket credentials
+ais bucket props set gs://my-bucket \
+  extra.gcp.application_creds=/etc/ais/sa-team-b.json
+
+# Register a bucket the default service account cannot reach
+ais create gs://restricted --skip-lookup \
+  --props="extra.gcp.application_creds=/etc/ais/sa-restricted.json"
+
+# Two GCS buckets, different GCP projects
+ais create gs://#proj-a/data --skip-lookup \
+  --props="extra.gcp.application_creds=/etc/ais/sa-proj-a.json"
+ais create gs://#proj-b/data --skip-lookup \
+  --props="extra.gcp.application_creds=/etc/ais/sa-proj-b.json"
+```
+
+> See also: [GCP Per-Bucket Credentials](/docs/cli/gcp_creds.md)
 
 ---
 
