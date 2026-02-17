@@ -348,7 +348,7 @@ func (ci *cluWarnNodes) GetDetailedStatus() string {
 		return fgreen("All nodes operational")
 	}
 
-	var b strings.Builder
+	var b = &strings.Builder{}
 	b.Grow(256)
 	b.WriteString(fblue("CLUSTER HEALTH DETAILS:"))
 	b.WriteString("\n")
@@ -359,7 +359,7 @@ func (ci *cluWarnNodes) GetDetailedStatus() string {
 		}
 		nodeList := strings.Join(nodes, ", ")
 		label := fmt.Sprintf("%s (%d/%d):", issueType, len(nodes), ci.totalNodes)
-		b.WriteString(fmt.Sprintf("%-20s %s\n", colorFn(label), nodeList))
+		fmt.Fprintf(b, "%-20s %s\n", colorFn(label), nodeList)
 	}
 
 	addIssue("Alerts", fred, ci.alerts)

@@ -82,19 +82,19 @@ func (d downloadingResult) String() string {
 	}
 
 	var (
-		sb strings.Builder
+		sb = &strings.Builder{}
 		l  = 1024
 	)
 	sb.Grow(l)
 	if d.totalFiles > 0 {
-		sb.WriteString(fmt.Sprintf("Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles))
+		fmt.Fprintf(sb, "Downloaded %d out of %d files.", d.finishedFiles, d.totalFiles)
 	} else {
-		sb.WriteString(fmt.Sprintf("Downloaded %d files.", d.finishedFiles))
+		fmt.Fprintf(sb, "Downloaded %d files.", d.finishedFiles)
 	}
 	if len(d.downloadingErrors) > 0 {
 		sb.WriteString("\nFollowing files caused downloading errors:")
 		for file, err := range d.downloadingErrors {
-			sb.WriteString(fmt.Sprintf("\n\t%s: %s", file, err))
+			fmt.Fprintf(sb, "\n\t%s: %s", file, err)
 		}
 	}
 

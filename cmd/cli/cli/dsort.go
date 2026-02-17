@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles commands that interact with objects in the cluster
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -270,12 +270,12 @@ func (d dsortResult) String() string {
 	}
 
 	var (
-		sb strings.Builder
+		sb = &strings.Builder{}
 		l  = 1024
 	)
 	sb.Grow(l)
 
-	sb.WriteString(fmt.Sprintf("Created %d new shards. Job duration: %s", d.created, d.dur))
+	fmt.Fprintf(sb, "Created %d new shards. Job duration: %s", d.created, d.dur)
 	if len(d.errors) > 0 {
 		sb.WriteString("\nFollowing errors occurred during execution: ")
 		sb.WriteString(strings.Join(d.errors, ","))
