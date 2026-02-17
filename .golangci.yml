@@ -90,7 +90,7 @@ linters:
         - name: superfluous-else
         # name: time-naming
         - name: time-date
-        - name: var-naming
+        # name: var-naming
         - name: var-declaration
         - name: unconditional-recursion
         - name: unexported-naming
@@ -156,7 +156,7 @@ linters:
       # By default, all analyzers are enabled.
       disable:
         - omitzero
-        # stringscut
+        - stringscut
 
     depguard:
       rules:

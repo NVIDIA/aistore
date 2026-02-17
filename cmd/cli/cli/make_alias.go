@@ -69,11 +69,11 @@ func makeAlias(cmd *cli.Command, opts *mkaliasOpts) cli.Command {
 	if len(opts.addFlags) > 0 || len(opts.delFlags) > 0 {
 		var nflags []cli.Flag
 		if cmd.Flags != nil {
-			nflags = make([]cli.Flag, len(cmd.Flags))
 			if len(opts.delFlags) > 0 {
 				nflags = rmFlags(cmd.Flags, opts.delFlags...)
 			} else {
-				copy(nflags, cmd.Flags)
+				nflags = make([]cli.Flag, 0, len(cmd.Flags)+len(opts.addFlags))
+				nflags = append(nflags, cmd.Flags...)
 			}
 		} else {
 			debug.Assert(len(opts.delFlags) == 0, "no flags to remove")

@@ -28,7 +28,7 @@ import (
 // LOM
 const (
 	// backward compat v3.31 and prior
-	MetaverLOM_V1 = 1 //nolint:revive // readability
+	MetaverLOM_V1 = 1
 
 	// current
 	MetaverLOM = 2

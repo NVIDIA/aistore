@@ -304,7 +304,7 @@ func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = apc.URLPathdSortRemove.Join(managerUUID)
 	responses = bcast(http.MethodDelete, path, nil, nil, smap)
-	var failed []string //nolint:prealloc // will remain not allocated when no errors
+	var failed []string
 	for _, r := range responses {
 		if r.statusCode == http.StatusOK {
 			continue

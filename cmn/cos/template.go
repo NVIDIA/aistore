@@ -211,7 +211,8 @@ func (pt *ParsedTemplate) Next() (string, bool) {
 		return pt.buf.String(), false
 	}
 
-	pt.buf.Reset()
+	buf := &pt.buf
+	buf.Reset()
 	for i := pt.rangesCount - 1; i >= 0; i-- {
 		if pt.at[i] > pt.Ranges[i].End {
 			if i == 0 {
@@ -221,12 +222,12 @@ func (pt *ParsedTemplate) Next() (string, bool) {
 			pt.at[i-1] += pt.Ranges[i-1].Step
 		}
 	}
-	pt.buf.WriteString(pt.Prefix)
+	buf.WriteString(pt.Prefix)
 	for i, tr := range pt.Ranges {
-		pt.buf.WriteString(fmt.Sprintf("%0*d%s", tr.DigitCount, pt.at[i], tr.Gap))
+		fmt.Fprintf(buf, "%0*d%s", tr.DigitCount, pt.at[i], tr.Gap)
 	}
 	pt.at[pt.rangesCount-1] += pt.Ranges[pt.rangesCount-1].Step
-	return pt.buf.String(), true
+	return buf.String(), true
 }
 
 //

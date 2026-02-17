@@ -532,14 +532,11 @@ func readCredFile(path string) (string, error) {
 	return projectID, nil
 }
 
+// once (on demand), via bprops "extra.gcp.application_creds"
 func createSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, error) {
-	debug.Assert(credPath != "") // via bprops "extra.gcp.application_creds"
-	var (
-		projectID string
-		opts      = []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
-		err       error
-	)
-	projectID, err = readCredFile(credPath)
+	debug.Assert(credPath != "")
+
+	projectID, err := readCredFile(credPath)
 	if projectID == "" {
 		var s string
 		if bck != nil {
@@ -547,8 +544,11 @@ func createSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, e
 		}
 		return nil, fmt.Errorf("%s from %q%s: %v", fmtErrLoadCreds, credPath, s, err)
 	}
-	opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, credPath))
 
+	opts := []option.ClientOption{
+		option.WithScopes(storage.ScopeFullControl),
+		option.WithAuthCredentialsFile(option.ServiceAccount, credPath),
+	}
 	sess := &gcpSess{projectID: projectID}
 	return sess, sess.init(ctx, opts)
 }
