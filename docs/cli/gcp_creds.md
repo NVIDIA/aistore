@@ -13,6 +13,7 @@ bucket's operations.
 
 * [The `extra.gcp` section](#the-extragcp-section)
 * [Setting per-bucket credentials](#setting-per-bucket-credentials)
+  - [Example: validate per-bucket credentials on first access](#example-validate-per-bucket-credentials-on-first-access)
 * [Credentials file format](#credentials-file-format)
 * [Registering a bucket that the default credentials cannot reach](#registering-a-bucket-that-the-default-credentials-cannot-reach)
 * [Multiple buckets, multiple GCP projects](#multiple-buckets-multiple-gcp-projects)
@@ -51,16 +52,43 @@ $ ais bucket props show gs://abc extra.gcp --json
 ## Setting per-bucket credentials
 
 ```console
-$ ais bucket props set gs://abc extra.gcp.application_creds /etc/ais/sa-team-b.json
-"extra.gcp.application_creds" set to: "/etc/ais/sa-team-b.json" (was: "")
+$ ais bucket props set gs://abc extra.gcp.application_creds /mnt/vault/sa-team-b.json
+"extra.gcp.application_creds" set to: "/mnt/vault/sa-team-b.json" (was: "")
 ```
 
 From this point on, every operation on `gs://abc` - GET, PUT, HEAD, LIST - will
-authenticate using the service account in `/etc/ais/sa-team-b.json` instead of the
+authenticate using the service account in `/mnt/vault/sa-team-b.json` instead of the
 cluster-wide default.
 
 The path must be **absolute and clean** (no `..` components). AIS validates this when the
 property is set and returns an error if the path is relative or malformed.
+
+### Example: validate per-bucket credentials on first access
+
+Create bucket with non-default creds bypassing lookup:
+
+```console
+$ ais create gs://abc --skip-lookup --props='extra.gcp.application_creds=/tmp/GOOD_gcp_creds.json'
+"gs://abc" created
+
+# first access resolves creds and establishes a session
+$ ais ls gs://abc
+
+NAME                     SIZE     CACHED
+README.md                ...      no
+...
+Listed 778503 names (in-cluster: none)
+```
+
+On the other hand, if the credentials file is invalid or missing:
+
+```console
+$ ais create gs://abc --skip-lookup --props='extra.gcp.application_creds=/tmp/BAD_gcp_creds.json'
+"gs://abc" created
+
+$ ais ls gs://abc
+Error: gcp: failed to load application creds from ... for bucket ...
+```
 
 ## Credentials file format
 
@@ -92,11 +120,11 @@ volumes:
       secretName: team-b-gcp-sa
 volumeMounts:
   - name: gcp-sa
-    mountPath: /etc/ais/sa
+    mountPath: /mnt/vault/sa
     readOnly: true
 ```
 
-which makes `/etc/ais/sa/key.json` a normal readable file from AIS's perspective.
+which makes `/mnt/vault/sa/key.json` a normal readable file from AIS's perspective.
 
 ## Registering a bucket that the default credentials cannot reach
 
@@ -105,7 +133,7 @@ to bypass the initial `HEAD` check:
 
 ```console
 $ ais create gs://team-b-data --skip-lookup \
-  --props="extra.gcp.application_creds=/etc/ais/sa-team-b.json"
+  --props="extra.gcp.application_creds=/mnt/vault/sa-team-b.json"
 "gs://team-b-data" created
 ```
 
@@ -126,10 +154,10 @@ NAME             SIZE
 
 ```console
 $ ais create gs://#proj-a/dataset --skip-lookup \
-  --props="extra.gcp.application_creds=/etc/ais/sa-proj-a.json"
+  --props="extra.gcp.application_creds=/mnt/vault/sa-proj-a.json"
 
 $ ais create gs://#proj-b/dataset --skip-lookup \
-  --props="extra.gcp.application_creds=/etc/ais/sa-proj-b.json"
+  --props="extra.gcp.application_creds=/mnt/vault/sa-proj-b.json"
 ```
 
 `gs://#proj-a/dataset` and `gs://#proj-b/dataset` are distinct BMD entries with separate
@@ -158,7 +186,7 @@ To revert a bucket to the cluster-wide default:
 ```console
 $ ais bucket props set gs://abc extra.gcp.application_creds ""
 
-"extra.gcp.application_creds" set to: "" (was: "/etc/ais/sa-team-b.json")
+"extra.gcp.application_creds" set to: "" (was: "/mnt/vault/sa-team-b.json")
 ```
 
 ## See also
