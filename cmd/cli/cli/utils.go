@@ -788,71 +788,186 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 	return diff
 }
 
-// showSectionNotFoundError displays error when a config section is not found
+// section == "": lists root-level sections
+// section != "":
+// - if found: list immediate children under the requested prefix when possible
+// - otherwise, print "not found" and a scoped list of available sections
 func showSectionNotFoundError(c *cli.Context, section string, config any, helpCmd string) {
-	availableSections := extractAvailableSections(config)
-	actionWarn(c, fmt.Sprintf("config section %q not found. Available sections: %s",
-		section, strings.Join(availableSections, ", ")))
-	actionNote(c, helpCmd)
+	var (
+		available []string
+		label     string
+	)
+
+	if section == "" {
+		available = _extractRootSections(config)
+		label = "Available sections"
+	} else {
+		available = _extractChildSections(config, section)
+		if len(available) == 0 {
+			// Fallback: root-level (better than nothing)
+			available = _extractRootSections(config)
+			label = "Available sections"
+		} else {
+			label = "Available subsections"
+		}
+	}
+
+	actionWarn(c, fmt.Sprintf("config section %q not found. %s: %s",
+		section, label, strings.Join(available, ", ")))
+
+	if helpCmd != "" {
+		actionNote(c, helpCmd)
+	}
 }
 
-// extractAvailableSections extracts root-level configuration sections from any config structure
-func extractAvailableSections(config any) []string {
-	var availableSections []string
-	seen := make(map[string]bool, 16)
-	opts := cmn.IterOpts{VisitAll: true, OnlyRead: true}
+// _extractRootSections returns the unique top-level sections (first tag component).
+func _extractRootSections(config any) []string {
+	seen := make(map[string]bool, 32)
+	opts := cmn.IterOpts{VisitAll: true, IncludeOmitEmpty: true, OnlyRead: true}
 
-	cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
+	_ = cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
 		root := strings.Split(tag, ".")[0]
-		if !seen[root] {
-			availableSections = append(availableSections, root)
+		if root != "" {
 			seen[root] = true
 		}
 		return nil, false
 	}, opts)
 
-	sort.Strings(availableSections)
-	return availableSections
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
-func printSectionJSON(c *cli.Context, in any, section string) bool {
-	var result any
-	found := false
+// _extractChildSections returns immediate children under the requested prefix
+// e.g.:
+// - prefix "extra"     => ["extra.aws", "extra.gcp", "extra.http"]
+// - prefix "extra.gcp" => ["extra.gcp.application_creds"]
+func _extractChildSections(config any, prefix string) []string {
+	seen := make(map[string]bool, 32)
+	opts := cmn.IterOpts{VisitAll: true, IncludeOmitEmpty: true, OnlyRead: true}
 
-	if section == "" {
-		// Show entire config
-		result = in
-		found = true
-	} else {
-		// Find specific section
-		opts := cmn.IterOpts{VisitAll: true, OnlyRead: true}
-		cmn.IterFields(in, func(tag string, field cmn.IterField) (error, bool) {
-			if tag == section {
-				found = true
-				result = field.Value()
-				return nil, true // Stop after finding exact match
-			}
-			return nil, false
-		}, opts)
-
-		// Wrap the result with the section name as the root key
-		if found {
-			result = map[string]any{section: result}
-		}
+	pfx := prefix
+	if !strings.HasSuffix(pfx, ".") {
+		pfx += "."
 	}
 
-	if !found {
+	_ = cmn.IterFields(config, func(tag string, _ cmn.IterField) (error, bool) {
+		if !strings.HasPrefix(tag, pfx) {
+			return nil, false
+		}
+		rest := strings.TrimPrefix(tag, pfx)
+		if rest == "" {
+			return nil, false
+		}
+		child := strings.Split(rest, ".")[0]
+		if child == "" {
+			return nil, false
+		}
+		seen[prefix+"."+child] = true
+		return nil, false
+	}, opts)
+
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// marshal and print JSON for the given config section
+// return:
+// - true if the section was found and printed
+// - false otherwise
+func printSectionJSON(c *cli.Context, in any, section string) bool {
+	if section == "" {
+		data, err := jsonMarshalIndent(in)
+		if err != nil {
+			actionWarn(c, fmt.Sprintf("failed to marshal config: %v", err))
+			return false
+		}
+		fmt.Fprintln(c.App.Writer, string(data))
+		return true
+	}
+
+	// consider the section "found" if:
+	// - exact tag exists (container or leaf), OR
+	// - there is at least one leaf under it.
+	var (
+		foundExact bool
+		foundLeaf  bool
+		rootObj    = map[string]any{} // content under "section"
+	)
+
+	pfx := section
+	if !strings.HasSuffix(pfx, ".") {
+		pfx += "."
+	}
+
+	opts := cmn.IterOpts{VisitAll: true, IncludeOmitEmpty: true, OnlyRead: true}
+	_ = cmn.IterFields(in, func(tag string, field cmn.IterField) (error, bool) {
+		if tag == section {
+			foundExact = true
+			return nil, false
+		}
+		if !strings.HasPrefix(tag, pfx) {
+			return nil, false
+		}
+
+		rest := strings.TrimPrefix(tag, pfx)
+		if rest == "" {
+			return nil, false
+		}
+
+		// build nested object for any depth under section
+		parts := strings.Split(rest, ".")
+		m := rootObj
+		for i := range len(parts) - 1 {
+			k := parts[i]
+			nxt, ok := m[k].(map[string]any)
+			if !ok {
+				nxt = map[string]any{}
+				m[k] = nxt
+			}
+			m = nxt
+		}
+
+		val := field.Value()
+		if s, ok := val.(string); ok && s == "" {
+			val = teb.NotSetVal
+		} else if val == nil {
+			val = teb.NotSetVal
+		}
+		m[parts[len(parts)-1]] = val
+		foundLeaf = true
+		return nil, false
+	}, opts)
+
+	if !foundExact && !foundLeaf {
 		return false
 	}
 
-	data, err := jsonMarshalIndent(result)
+	// wrap as nested JSON
+	out := _wrapNestedJSON(section, rootObj)
+	data, err := jsonMarshalIndent(out)
 	if err != nil {
 		actionWarn(c, fmt.Sprintf("failed to marshal section %q: %v", section, err))
 		return false
 	}
-
 	fmt.Fprintln(c.App.Writer, string(data))
 	return true
+}
+
+func _wrapNestedJSON(path string, v any) any {
+	parts := strings.Split(path, ".")
+	m := v
+	for i := len(parts) - 1; i >= 0; i-- {
+		m = map[string]any{parts[i]: m}
+	}
+	return m
 }
 
 // First, request cluster's config from the primary node that contains

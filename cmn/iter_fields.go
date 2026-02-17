@@ -47,11 +47,17 @@ type (
 	IterOpts struct {
 		// Skip fields based on allowed tag
 		Allowed string
-		// Visits all the fields, not only the leaves.
-		VisitAll bool
+
 		// Read-only walk is true by default (compare with `UpdateFieldValue`)
 		// Note that `tagOmitempty` is limited to read-only - has no effect when `OnlyRead == false`.
 		OnlyRead bool
+
+		// Visit all fields, not only leaves
+		// (note: will still skip `list:"omitempty"` zero-value unless IncludeOmitEmpty)
+		VisitAll bool
+
+		// When VisitAll: include fields even if tagged list:"omitempty" and zero-value
+		IncludeOmitEmpty bool
 	}
 
 	updateFunc func(uniqueTag string, field IterField) (error, bool)
@@ -166,8 +172,9 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 			}
 		}
 
-		// Read-only walk skips empty (zero) fields.
-		if opts.OnlyRead && listTag == tagOmitempty && srcValField.IsZero() {
+		// Read-only walk skips "omitempty" zero-value fields
+		// unless IncludeOmitEmpty is set.
+		if opts.OnlyRead && listTag == tagOmitempty && srcValField.IsZero() && !opts.IncludeOmitEmpty {
 			continue
 		}
 

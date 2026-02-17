@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -329,11 +329,16 @@ func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) (
 	if section != "" {
 		tmpPropList := propList[:0]
 		for _, v := range propList {
-			if strings.HasPrefix(v.Name, section) {
+			if v.Name == section || strings.HasPrefix(v.Name, section+".") {
 				tmpPropList = append(tmpPropList, v)
 			}
 		}
 		propList = tmpPropList
+		if len(propList) == 0 {
+			hint := fmt.Sprintf("no non-default values in section %q; try '--json' to see all supported properties", section)
+			actionNote(c, hint)
+			return nil
+		}
 	}
 
 	if colored {
