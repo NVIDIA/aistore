@@ -52,6 +52,8 @@ type (
 	gsbp struct {
 		t        core.TargetPut
 		dfltSess gcpSess
+		dfltOnce sync.Once
+		dfltErr  error
 		base
 	}
 	gcpSess struct {
@@ -69,25 +71,37 @@ var (
 var _ core.Backend = (*gsbp)(nil)
 
 func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backend, error) {
+	bp := &gsbp{
+		t:    t,
+		base: base{provider: apc.GCP},
+	}
+	// register metrics
+	bp.base.init(t.Snode(), tstats, startingUp)
+
+	return bp, nil
+}
+
+// lazy (on demand) initialization
+func (gsbp *gsbp) initDfltSess() {
 	var (
 		projectID     string
 		credProjectID string
 		envProjectID  = os.Getenv(projectIDEnvVar)
+		opts          = []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
 	)
 	credPath := os.Getenv(credPathEnvVar)
 	if credPath != "" {
 		var err error
 		if credProjectID, err = readCredFile(credPath); err != nil {
-			// alternatively, return NewDummyBackend() and a (new) typed error
-			// see also: target.initBuiltTagged
-
-			return nil, fmt.Errorf("%s '%s=%s': %v", fmtErrLoadCreds, credPathEnvVar, credPath, err)
+			gsbp.dfltErr = fmt.Errorf("%s '%s=%s': %v", fmtErrLoadCreds, credPathEnvVar, credPath, err)
+			return
 		}
+		opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, credPath))
 	}
-
 	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
-		return nil, fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
+		gsbp.dfltErr = fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
 			projectIDEnvVar, credPathEnvVar, projectIDField)
+		return
 	}
 
 	switch {
@@ -99,25 +113,18 @@ func NewGCP(t core.TargetPut, tstats stats.Tracker, startingUp bool) (core.Backe
 		nlog.Infof("%s: %q (using %q env)", projectIDField, projectID, projectIDEnvVar)
 	}
 
-	bp := &gsbp{
-		t:        t,
-		dfltSess: gcpSess{projectID: projectID},
-		base:     base{provider: apc.GCP},
-	}
-
-	opts := []option.ClientOption{option.WithScopes(storage.ScopeFullControl)}
-	if projectID == "" {
-		nlog.Warningln("unauthenticated client")
+	if projectID == "" && credPath == "" {
+		nlog.Warningf("unauthenticated client: not set %s env and empty project ID", credPathEnvVar)
 		opts = append(opts, option.WithoutAuthentication())
 	}
-	if err := bp.dfltSess.init(context.Background(), opts); err != nil {
-		return nil, err
-	}
 
-	// register metrics
-	bp.base.init(t.Snode(), tstats, startingUp)
+	gsbp.dfltSess.projectID = projectID
+	gsbp.dfltErr = gsbp.dfltSess.init(context.Background(), opts)
+}
 
-	return bp, nil
+func (gsbp *gsbp) getDfltSess() (*gcpSess, error) {
+	gsbp.dfltOnce.Do(gsbp.initDfltSess)
+	return &gsbp.dfltSess, gsbp.dfltErr
 }
 
 // as core.Backend --------------------------------------------------------------
@@ -239,14 +246,18 @@ func (gsbp *gsbp) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (
 //
 
 func (gsbp *gsbp) ListBuckets(_ cmn.QueryBcks) (cmn.Bcks, int, error) {
-	if gsbp.dfltSess.projectID == "" {
+	sess, err := gsbp.getDfltSess()
+	if err != nil {
+		return nil, 0, err
+	}
+	if sess.projectID == "" {
 		// NOTE: empty `projectID` results in obscure: "googleapi: Error 400: Invalid argument"
 		return nil, http.StatusBadRequest,
-			errors.New("empty project ID: cannot list GCP buckets with no authentication")
+			errors.New("empty project ID: cannot list GCP buckets without project ID")
 	}
 	var (
 		bcks = make(cmn.Bcks, 0, 16)
-		it   = gsbp.dfltSess.client.Buckets(context.Background(), gsbp.dfltSess.projectID)
+		it   = sess.client.Buckets(context.Background(), sess.projectID)
 	)
 	for {
 		battrs, err := it.Next()
@@ -577,7 +588,7 @@ func (gsbp *gsbp) getSess(ctx context.Context, bck *cmn.Bck) (*gcpSess, error) {
 		credPath = bck.Props.Extra.GCP.ApplicationCreds
 	}
 	if credPath == "" {
-		return &gsbp.dfltSess, nil
+		return gsbp.getDfltSess()
 	}
 
 	// fast path

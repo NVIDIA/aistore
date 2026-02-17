@@ -110,15 +110,14 @@ func (*target) interruptedRestarted() (i, r bool) {
 //   - not configured + built:      disabled - present in binary but not in config
 //   - not configured + not built:  mock/dummy backend (ErrInitBackend)
 //
-// Each configured backend MUST (currently) successfully initialize at startup.
-// Initialization semantics are backend-specific. Some providers
-// (e.g., GCP) validate global credentials at startup and will FAIL target
-// startup if credentials are missing or invalid. Other providers
-// (e.g., AWS, Azure) defer credential resolution to the SDK and may fail
-// lazily on first use.
+// Backend credentials initialization is lazy: NewGCP, NewAWS, etc. register the
+// provider and set up lightweight state but defer credential validation
+// and client creation to first use.
+// A misconfigured global credential (e.g., bad GOOGLE_APPLICATION_CREDENTIALS)
+// will not prevent target (or cluster) startup.
 //
 // Per-bucket credentials (e.g., `extra.aws.profile`, `extra.gcp.application_creds`)
-// override the global defaults at runtime but do not affect startup initialization.
+// bypass global defaults entirely and are resolved independently on demand.
 //
 // The same initBuiltTagged logic runs via `ais advanced enable-backend`
 // and `ais advanced disable-backend` CLI/API, allowing runtime (re)configuration

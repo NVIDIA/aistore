@@ -570,7 +570,7 @@ test:short:aws:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "aws://ais-cicd"
-  timeout: 1h
+  timeout: 70m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual
@@ -585,7 +585,7 @@ test:short:gcp:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "gs://ais-ci"
-  timeout: 1h
+  timeout: 70m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual
@@ -600,7 +600,7 @@ test:short:azure:
   <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "az://ais-ci"
-  timeout: 1h
+  timeout: 70m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/'
       when: manual
